@@ -54,19 +54,23 @@ from engine.nba.pipeline import evaluate_prop, run_nba_slate
 
 # --- minutes engine ---------------------------------------------------------
 def test_base_minutes_weights_recent_role():
-    # Last 5 at 34, games 6-10 at 30, 11-20 at 24 → 0.5/0.3/0.2 blend.
+    # Last 5 at 34, games 6-10 at 30, 11-20 at 24 → the NBA's measured
+    # 0.60/0.25/0.15 blend (2026-11-04; 0.50/0.30/0.20 was the spec's).
     mins = [34.0] * 5 + [30.0] * 5 + [24.0] * 10
-    assert abs(base_minutes(mins) - (0.5 * 34 + 0.3 * 30 + 0.2 * 24)) < 1e-9
+    assert abs(base_minutes(mins) - (0.60 * 34 + 0.25 * 30 + 0.15 * 24)) < 1e-9
     assert base_minutes([30.0, 31.0]) is None       # thin sample
 
 
 def test_blowout_asymmetry_favors_the_dog():
-    # Spec: favorite's starters take the full haircut, dog ~60% of it.
+    # Favorite's starters take the full haircut, the dog ~60% of it
+    # (measured 0.58-0.70). The size is measured too (2026-11-04): a
+    # 12-point favourite's starters lose 3%, not the spec's 9%.
     fav = blowout_mult(-12.0, is_starter=True, is_favorite=True)
     dog = blowout_mult(12.0, is_starter=True, is_favorite=False)
-    assert fav == 0.91 and fav < dog < 1.0
-    # Bench players GAIN minutes in blowouts.
-    assert blowout_mult(-14.5, is_starter=False, is_favorite=True) == 1.20
+    assert fav == 0.97 and fav < dog < 1.0
+    # Rotation bench players do NOT gain minutes in a projected blowout
+    # (the spec gave them +20%; measured, about -1%).
+    assert blowout_mult(-14.5, is_starter=False, is_favorite=True) == 0.99
 
 
 def test_blowout_prob_matches_spec_table():
@@ -81,7 +85,7 @@ def test_vacancy_cap_and_rest():
                            vacancy_minutes=12.0, recent_high=30.0)
     assert proj == 38.0
     road_b2b = project_minutes(30.0, 0.0, True, False, rest="b2b_road")
-    assert road_b2b == 27.9                        # ×0.93
+    assert road_b2b == 29.7                        # ×0.99, measured (the spec's ×0.93 was 2-8% light)
 
 
 def test_minutes_grades_gate_bets():

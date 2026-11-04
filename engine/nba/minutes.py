@@ -3,13 +3,17 @@
 ~70% of prop outcome variance traces back to minutes played, so minutes
 are modeled explicitly before any stat projection:
 
-    ProjMIN = BaseMIN × M_blowout × M_rest (+ vacancy), capped
+    ProjMIN = BaseMIN × M_blowout × M_rest × M_role (+ vacancy), capped
 
-* BaseMIN weights the current role only: last 5 games ×0.50, games 6-10
-  ×0.30, games 11-20 ×0.20.
+* BaseMIN weights the current role only (`LeagueTuning.recency_weights`;
+  the NBA's measured 2026-11-04: last 5 games ×0.60, games 6-10 ×0.25,
+  games 11-20 ×0.15).
 * M_blowout is ASYMMETRIC: the favorite's starters lose more minutes than
   the dog's, because trailing teams keep starters in chasing the game —
-  the underdog takes ~60% of the haircut.
+  the underdog takes ~60% of the haircut (measured 0.58-0.70). The NBA's
+  tables, M_rest and M_role are measured on two full seasons (see
+  `hoops.NBA`); the module constants below are the written spec's, kept
+  for the record.
 * Vacancy minutes are capped: nobody projects more than +8 over their
   recent high. Coaches are more conservative than models.
 * Every prop gets a Minutes Confidence Grade (A-D) that gates the stake:
@@ -188,8 +192,11 @@ def project_minutes(base: float, spread: float, is_starter: bool,
     """Tonight's minutes: the base, tonight's blowout and rest multipliers
     each divided by what the base's own games carried (`context_norms`),
     and any vacancy minutes."""
+    # His role's own measured correction (`hoops.LeagueTuning.role_minutes_mult`):
+    # a bench player's recent minutes overstate his next game's (NBA x0.98).
+    role = (tune.role_minutes_mult or {}).get("starter" if is_starter else "bench", 1.0)
     proj = base * blowout_mult(spread, is_starter, is_favorite, tune) / (blowout_norm or 1.0) \
-        * tune.rest_mult.get(rest, 1.0) / (rest_norm or 1.0) + vacancy_minutes
+        * tune.rest_mult.get(rest, 1.0) / (rest_norm or 1.0) * role + vacancy_minutes
     if recent_high is not None:
         proj = min(proj, recent_high + tune.vacancy_cap_over_high)
     # Nobody plays more minutes than the game has. Obvious, and the reason

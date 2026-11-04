@@ -130,6 +130,50 @@ there, so its two reads are the raw one. About seven minutes.
   is always a half point now (the same fix as the calibration's, below).
   Rerun that way the verdict is the same: ready for the refit.
 
+## The minutes model, measured (the game script)
+
+Ethan, 2026-11-04: *"I want to make sure we're picking the right bets,
+reading the right scripts, picking the right models ... everything's tuned
+in."* Minutes are most of a prop's outcome, and the board's minutes model
+(`engine/nba/minutes`) carried a written spec's numbers for rest and
+blowouts that had never been checked. Every player-game of both seasons
+went through the board's own minutes code: each game's rest label from
+`nba_build.rest_from`, and for blowouts his minutes by his club's FINAL
+margin, read through the board's own margin ~ Normal(spread, 11.5), so no
+historical spreads were needed (the history database stores none for the
+NBA, and no free source has them). Players who would carry props (15+
+minutes a game), fitted on 2024-25, judged on 2025-26:
+
+| Minutes model | Error on 2025-26 |
+|---|---|
+| As built (the spec) | 6.404 |
+| Rest measured | 6.314 |
+| + blowouts measured | 6.263 |
+| + the newest games weighted more (0.60 / 0.25 / 0.15) | 6.228 |
+| + a bench player's minutes trimmed 2% | 6.209 |
+
+- **Rest.** A man who suits up on a back-to-back or a third game in four
+  nights plays about his usual minutes, 0.99-1.03 of them (both seasons the
+  same). The spec cut 4-8%, on a third of the schedule, which is an under
+  lean. A long break (no game in six days) costs about 4%. Every
+  back-to-back was labelled "home" by the build, so the road haircuts never
+  ran; with one measured value for both, the label no longer matters.
+- **Blowouts.** Starters play about 6% over their usual in close games and
+  9-14% under it in 25-30 point blowouts. Through the spread, a favourite's
+  starters lose 1% at 6 points and 5% at 15, not the spec's 2% and 14%; the
+  underdog's share of the haircut measured 0.58-0.70 (0.6 stands); rotation
+  bench players gain nothing, where the spec gave them up to +20%.
+- **The stats.** Rate times these minutes, judged on 2025-26: points 0.81%
+  closer, rebounds 0.80%, assists 0.72%, PRA 1.32%, and the average miss
+  roughly halved.
+- **Pace** (`engine/nba/context.env_factor`, tonight's total against the
+  league's average) helps by 0.1-0.2%. Read against the totals of his own
+  recent games instead (his rate already carries his club's pace), 0.02-0.04%
+  more: real, too small to need the pre-game totals the box does not store.
+
+The WNBA inherits the measured haircuts (it has no sample of its own) and
+keeps its own recency weights.
+
 ## Measured, and not built
 
 The same honesty the NFL's refusals get:

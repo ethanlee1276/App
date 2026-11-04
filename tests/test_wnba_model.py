@@ -172,7 +172,7 @@ def test_the_recency_windows_do_not_double_count_the_last_five_games():
 
 
 def test_the_nba_keeps_its_own_recency_weights():
-    assert hoops.NBA.recency_weights == (0.50, 0.30, 0.20)
+    assert hoops.NBA.recency_weights == (0.60, 0.25, 0.15)      # measured 2026-11-04
     assert hoops.WNBA.recency_weights == (0.40, 0.30, 0.20)
     mins = [40.0] * 5 + [20.0] * 5 + [10.0] * 10
     assert M.base_minutes(mins, hoops.NBA) != M.base_minutes(mins, hoops.WNBA)

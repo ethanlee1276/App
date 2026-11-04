@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-04",
+      "kind": "model",
+      "title": "NBA minutes stop being cut on back-to-backs and in blowouts more than they really are",
+      "body": "The NBA board's minutes numbers for back-to-backs and blowouts came from a written plan and had never been checked. Measured on two full seasons, a player who suits up on a back-to-back or a third game in four nights plays about his usual minutes, not the 4 to 8% fewer the board assumed. A 15-point favourite's starters lose about 5% in a likely blowout, not 14%, and the rotation players off the bench gain nothing, not the 20% the board gave them. The board now uses the measured numbers, leans a little more on a player's last five games, and trims a bench player's minutes 2%, because his recent stretch tends to overstate his next game. On a season it had never seen, minutes landed 3% closer and points, rebounds, assists and PRA 0.7 to 1.3% closer. The old numbers had leaned picks toward the under on busy nights and against heavy favourites."
+    },
+    {
+      "date": "2026-11-04",
       "kind": "fix",
       "title": "Basketball's corrections stop leaning to the over on rebounds, assists and threes",
       "body": "Each week the NBA board re-learns how far to trust its own chances by replaying every game at a practice line: the player's recent average, rounded. Half the time that was a whole number, and a rebound or assist total lands exactly on a whole number about one time in five. Those pushes were left out, but the chance being corrected never allowed for them, so the correction learned that overs hit more often than they do. Checked on a full season it had never seen, it made rebound, assist and three-point overs about four points likelier than they hit, worse than no correction at all. The practice line is now always a half point, like the lines books post, and on the same season the corrected chances land within one to two points. It reaches the board with the next weekly refit."

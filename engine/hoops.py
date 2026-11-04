@@ -96,6 +96,10 @@ class LeagueTuning:
     # 10 at 30%" reads as overlapping windows, and implementing it that way
     # would count the last five games twice at 70%.
     recency_weights: tuple = (0.50, 0.30, 0.20)
+    # His projected minutes by his role (his newest game's: started or came
+    # off the bench), after every haircut: 1.0 = the base as read. See the
+    # NBA's measured values below.
+    role_minutes_mult: dict = field(default_factory=lambda: {"starter": 1.0, "bench": 1.0})
     # --- market structure ----------------------------------------------------
     # Which markets are worth betting, and how hard each has to clear.
     # Empty tier map = this league gates on points-edge alone (the NBA's
@@ -190,6 +194,38 @@ NBA = LeagueTuning(
     sd_power={"pts": (7.318, 0.698), "reb": (1.679, 0.914), "ast": (1.508, 0.897),
               "pra": (13.328, 0.548), "pts_reb": (10.487, 0.607),
               "pts_ast": (8.548, 0.651), "reb_ast": (2.768, 0.760)},
+    # THE MINUTES MODEL, MEASURED (2026-11-04, docs/NBA_LAB.md). The values
+    # above in the class were a written spec's, never fitted. On two full
+    # seasons through the board's own minutes code (every player-game with
+    # 15+ minutes a game), fitted on 2024-25 and judged on 2025-26:
+    #
+    #   * REST. A man who suits up on a back-to-back or a third game in four
+    #     nights plays about his usual minutes (0.99-1.03 of them), not the
+    #     spec's 0.92-0.96: the board was projecting those nights 2-8% light,
+    #     on a third of the schedule, which leans every pick to the under.
+    #     After a long break (no game in six days) he plays about 4% fewer.
+    #   * BLOWOUTS, from his minutes by his club's FINAL margin, read through
+    #     the board's own margin ~ Normal(spread, 11.5): a favourite's
+    #     starters lose 1% at a 6-point spread and 5% at 15, not the spec's
+    #     2% and 14%; rotation bench players gain nothing (the spec gave
+    #     them up to +20%). The underdog's share of the haircut measured
+    #     0.58-0.70: the 0.6 stands.
+    #   * THE BASE weights his newest games more: last five 0.60, games 6-10
+    #     0.25, the rest 0.15 (0.50/0.30/0.20 before).
+    #   * A BENCH PLAYER'S recent minutes overstate his next game's by about
+    #     2%, every season (he was picked out by a good stretch): x0.98.
+    #
+    # Minutes error 6.404 -> 6.209 (-3.0%) on the season they never saw;
+    # points -0.8%, rebounds -0.8%, assists -0.7%, PRA -1.3%. The numbers
+    # here are refitted on both seasons.
+    rest_mult={"2plus": 0.96, "1day": 1.00, "b2b_home": 0.99, "b2b_road": 0.99,
+               "b2b_road_30plus": 0.99, "3in4": 1.01, "4in6_road": 1.00},
+    blowout_starter=((4.5, 1.00), (7.5, 0.99), (10.5, 0.98), (13.5, 0.97),
+                     (float("inf"), 0.95)),
+    blowout_bench=((4.5, 1.00), (7.5, 1.00), (10.5, 1.00), (13.5, 1.00),
+                   (float("inf"), 0.99)),
+    recency_weights=(0.60, 0.25, 0.15),
+    role_minutes_mult={"starter": 1.00, "bench": 0.98},
 )
 
 # 40 minutes, not 48 — so every minutes-denominated number is scaled by
@@ -199,6 +235,9 @@ NBA = LeagueTuning(
 # threshold, and while WNBA teams score ~72% of an NBA team's total, I have
 # no WNBA blowout sample to say whether the rotation response starts at the
 # same margin. Inheriting a number and admitting it beats inventing one.
+# Since 2026-11-04 the minutes numbers it inherits (rest, blowout, the bench
+# correction) are the NBA's MEASURED ones, not the spec's; its recency
+# weights stay its own spec's.
 _MIN_SCALE = 40 / 48
 
 # §7 — the WNBA's own beatability order, which is NOT the NBA's. Count
