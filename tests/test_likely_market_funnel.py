@@ -60,7 +60,11 @@ def test_the_page_prints_it_under_the_board():
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
     assert "function likelyMarketFunnel(" in app
     i = app.index("function renderLikely(")
-    assert "likelyMarketFunnel(state.data.likely_census_by_kind)" in app[i:i + 4000]
+    # The whole renderer, not its first 4,000 characters: the funnel is
+    # printed by renderLikely wherever in it, and a fixed window failed the
+    # day two honest lines (the hidden-picks note, 2026-11-04) moved it 31
+    # characters down.
+    assert "likelyMarketFunnel(state.data.likely_census_by_kind)" in app[i:app.index("\nfunction ", i + 10)]
     k = app.index("function likelyMarketFunnel(")
     body = app[k:app.index("\nfunction ", k + 10)]
     for word in ("offered", "priced", "shown"):
