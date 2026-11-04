@@ -174,6 +174,107 @@ minutes a game), fitted on 2024-25, judged on 2025-26:
 The WNBA inherits the measured haircuts (it has no sample of its own) and
 keeps its own recency weights.
 
+## The scout, and the rotation's news
+
+Ethan, 2026-11-04: *"I don't know much about NBA, so I want to make sure
+we're picking the right bets."* The football scout (engine/scout) names the
+spots a football person hesitates in; `engine/nba/scout` is the same for
+basketball: fourteen situations (a starter's over in a projected blowout,
+an under in a projected shootout, an over on a back-to-back, an under while
+a regular teammate sits, an over the night one returns, a minutes jump, a
+minutes drop, his first game back, a hot three-point run, games that swing
+widely, a man barely into his season, a line far from his last five), with
+every threshold written down before any was measured.
+
+**How each was measured.** Every game a man of 15+ minutes a game played,
+5+ games for his club first, both seasons; counted as a book settles it (a
+man who played two minutes is action; my first pass kept only 10+ minute
+games, which leans to the over and was thrown out). At a half-point line
+off his last five: first BEFORE ANY MODEL (does the flagged side hit less
+than the same side unflagged?), then AFTER OURS (do flagged picks hit less
+than our number said, against unflagged picks on the same side?).
+
+**What it found** (after our number, flagged against unflagged, 2024-25 /
+2025-26; before the new rules):
+
+| Flag | Before any model | After ours |
+|---|---|---|
+| under, a regular teammate sits | -6.8% / -6.3% | -7.2% / -6.6% |
+| over, a regular returns | -4.7% / -4.4% | -4.0% / -3.8% |
+| under, his minutes just jumped | +2.6% / +1.9% | -3.7% / -4.3% |
+| over, his minutes just dropped | +1.4% / +1.1% | -4.8% / -5.5% |
+| over, his first game back | -4.8% / -3.6% | -6.1% / -5.5% |
+| under, a projected shootout (total 236+) | -3.9% / -3.6% | -2.2% / -3.4% |
+| over, a hot three-point run | -6.0% / -7.1% | +4.7% / -1.5% |
+| over, a starter in a projected blowout | +1.6% / +1.4% | +2.3% / +3.0% |
+| over, a back-to-back | +0.2% / +1.6% | -1.2% / +1.1% |
+| games that swing widely (either side) | — | -1.3% / -1.4% |
+
+Most of what goes wrong after our number is MINUTES the board did not
+read, so four candidate minutes rules were written, each with its bar set
+before its run: fitted on one season (beside a level factor, because the
+calibration downstream corrects the board's overall level and a rule must
+not take credit for it), judged on the other, kept only if the squared
+error of minutes AND points fell in the games it touches in both seasons.
+
+| Rule (the board's value) | Minutes, 2024-25 / 2025-26 held out | Points |
+|---|---|---|
+| First game back, 1 missed (x0.96) | -1.3% / -2.4% | -0.5% / -1.0% |
+| First game back, 2-4 missed (x0.92) | -5.3% / -7.9% | -1.4% / -2.3% |
+| First game back, 5+ missed (x0.84) | -19.7% / -35.2% | -8.2% / -8.6% |
+| Second game back after 2+ missed (x0.96) | -0.3% / -2.6% | -0.4% / -0.7% |
+| A role that jumped: base 40% to the newest three | -7.0% / -4.8% | -1.6% / -1.7% |
+| A regular's return: a quarter of his minutes back | -1.2% / -2.4% | -1.0% / -0.5% |
+| A role that dropped (0.2-0.4 toward the newest three) | **+0.6%** / -5.0% | **+0.5%** / -1.5% |
+| Teammates' rate up when a regular sits | fitted 0 both ways | — |
+
+(Negative is better.) The drop failed 2024-25 and is not built; the rate
+term found nothing to fit. The other four are on (`hoops.NBA`; the WNBA
+keeps them off, unmeasured). Together, each season scored on values fitted
+on the other (vacancy off, as the board runs until the box saves it):
+minutes error 6.17 to 6.09 and 6.20 to 6.11 over every priced game; points
+0.6% / 0.6% closer, rebounds 0.5% / 0.7%, assists 0.3% / 0.6%, threes 0.3% /
+0.2%, PRA 0.9% / 1.0%; Brier at the half-point line 0.2280 to 0.2272 and
+0.2279 to 0.2270. With the vacancy at k 0.30 under them, about the same
+again on top of what the vacancy gives (minutes 6.15 to 6.07, 6.21 to 6.12;
+PRA 1.0% / 1.2%). `nbarules.py` asks the box's own seasons the same question
+at the board's values, read-only (on the replica: every rule better in both
+seasons, minutes 1.8-10.1%, points 0.2-2.4%).
+
+**The flags after the rules**, as the board runs them (the four rules on,
+the role-drop rule not; teammate-out minutes off / on at k 0.30), and their
+verdicts (`scout.VERDICT`):
+
+- **Warnings, on the card** (both seasons the same way):
+  - an under while a regular teammate sits: -6.7% / -6.3% with the vacancy
+    off, -3.1% / -2.9% with it on;
+  - an over after his minutes dropped: -4.1% / -4.8% (-3.9% / -4.7%). The
+    drop mostly holds, as the role-drop rule said, but that rule hurt one
+    season's squared error, so the card says it instead of the number;
+  - an over the night a regular returns: -2.6% / -2.8% (-2.4% / -2.4%),
+    after the return rule took out about half of it;
+  - an under in a projected shootout: -2.5% / -3.4% (-1.5% / -2.9%);
+  - games that swing widely: -0.9% / -1.2% (-0.6% / -1.1%);
+  - a man under five games into his season: -1.9% (-1.7%), one season.
+  Each card says what it measured, as a "Scout:" line, for the side and
+  rung that card takes.
+- **Priced**, so the card does not warn twice: his first games back
+  (-0.8% / -1.7% after, from -6% before), a role jump (+0.3% / -0.4%), a
+  hot shooting run (the shooting read: +3.6% / -2.6%).
+- **Refused**, not warnings at all: a starter's over in a projected blowout
+  (+2.4% / +3.1%: it hits MORE often than our number says), an over on a
+  back-to-back (-0.7% / +0.9%).
+- **Unmeasured**: a line far above or below his last five (the seasons hold
+  no book lines; at the lab's own line these only mark low counts rounding
+  up or down), an over in a projected grind (515 picks in one season, none
+  in the other).
+
+**The vacancy, held out on the lab's seasons.** `nbavacancy.py --heldout`
+against the replica of the two seasons: k 0.30 fitted on the other season
+both ways, minutes 5.8% / 5.3% closer and points 2.7% / 2.5% in fresh-absence
+games: HOLDS. The board fills the slot only once the box saves its own
+verdict (runbook JZ), and it is the largest NBA change still waiting.
+
 ## Measured, and not built
 
 The same honesty the NFL's refusals get:
@@ -241,6 +342,18 @@ about that, measured on the replica with `calibrate.fit` itself:
 
 ## Next
 
+- Runbook JZ: `nbavacancy.py --heldout` then `--save` if it holds (the
+  teammate-out minutes), and `nbarules.py` (the rotation's rules on the
+  box's own seasons).
+- A teammate sitting still costs unders 3% after the vacancy: the minutes
+  go somewhere specific (his backup, the next man in his position) and the
+  shots to the stars, where the vacancy shares both by base minutes. The
+  floor data would say who inherits what; the Most Likely record's own
+  correction (likelycal) lowers what keeps over-claiming meanwhile.
+- The NFL's scout corrections learn from the graded record
+  (`engine/likelyctx`, held out). The NBA's flags are on the cards; the same
+  record-learning for them needs each settled pick's situation rebuilt
+  from the box's logs, which is the next piece.
 - Run `nbalabcheck.py` on the box (runbook JY). Then switch the spread on
   with an NBA refit, if its last line says `spread: ready for the refit`.
   Its "through today's stored calibration" ladder lines show the second

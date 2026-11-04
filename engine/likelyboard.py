@@ -901,6 +901,19 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
             _ctx.apply(_rows, sport)
     except Exception:                                        # noqa: BLE001
         pass
+    # THE NBA SCOUT'S READ (engine/nba/scout; Ethan, 2026-11-04: "I don't
+    # know much about NBA ... make sure we're picking the right bets"): the
+    # basketball spots two seasons measured to still go wrong after our
+    # number — an under while a regular teammate sits, an under in a
+    # projected shootout, a man whose games swing, a man barely into his
+    # season — on the side and line each row takes. Moves no number; the
+    # record's own correction (likelycal) lowers what keeps over-claiming.
+    if sport == "nba":
+        try:
+            from .nba import scout as _nsc
+            _nsc.annotate([pool[k] for k in order])
+        except Exception:                                    # noqa: BLE001
+            pass
     # THE INVENTIONS, ONCE PROVEN (engine/ideagate; Ethan, 2026-10-17: "make
     # sure we are wrapping all the features into the most likely bets and
     # edge bets where it makes sense"). A reading whose held-out bar holds

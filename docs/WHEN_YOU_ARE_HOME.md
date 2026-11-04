@@ -9305,6 +9305,95 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JZ. The NBA board reads the rotation, and a scout says what still goes
+wrong** (steps 360 to 366; you, 2026-11-04: "I want to make sure we're all
+ready to go for NBA. I don't know much about NBA, so I want to make sure
+we're picking the right bets, reading the right scripts, picking the right
+models").
+
+- **Minutes, measured.** About 70% of a prop's outcome is the minutes he
+  plays, and the board's minutes rules were a written spec's, never
+  fitted. On two full seasons through the board's own code: a man who
+  suits up on a back-to-back plays his usual minutes (the board was
+  cutting 4-8%, a third of the schedule, leaning picks to the under), and
+  a blowout costs a favourite's starters 1-5%, not 9-14%. Minutes error
+  fell 3% on the season it never saw.
+- **The rotation's news, three new rules.** Each written before its run,
+  fitted on one season, judged on the other, kept only if minutes AND
+  points both landed closer in both:
+  - his **first game back** plays light, more so the longer he was out
+    (x0.96 after one missed game, x0.92 after two to four, x0.84 after five
+    or more), and his second game back after two or more a little (x0.96);
+  - a **role that just jumped** (his last three games 20%+ over the seven
+    before) mostly holds, so his base moves 40% of the way there (a role
+    that dropped did not pass and moves nothing);
+  - a **regular's return** (24+ minutes a game, back from missing two or
+    more) takes a quarter of his minutes back from the men who covered.
+  Together: minutes error 6.17 to 6.09 and 6.20 to 6.11 on the season each
+  never saw; points 0.6% closer, points-rebounds-assists 0.9-1.0%, and the
+  games they touch (about one in five) far more (a man back from five or
+  more missed games: minutes error down 20-35%). The card says when one
+  moved a man ("First game back after missing 3 games — minutes x0.92").
+- **The scout.** Fourteen spots a basketball person checks before trusting
+  a pick, every threshold written down before any was measured, then each
+  measured on both seasons, before any model and after ours. Six still go
+  wrong after our number, and they now show on the cards as "Scout:"
+  lines, on the Edge card and in Most Likely's "Why?": an under while a
+  regular teammate sits (3-7% under what we said), an over after his
+  minutes dropped (4-5%), an over the night a regular returns (2-3%), an
+  under in a game the books expect to be high-scoring (2-3%), a man whose
+  games swing widely (about 1%), and a man barely into his season (about
+  2%). The rest are already in our number (first games back, a role jump,
+  a hot shooting run) or were measured not to be problems at all: a
+  starter's over in a projected blowout hits more often than we say, and an
+  over on a back-to-back as often as any other. A scout line moves no
+  number; it is there so you can skip a pick the record says goes wrong.
+- **Still off: the minutes a teammate's absence opens.** The board has had
+  this rule since October (`engine/nba/vacancy`) and it switches on only
+  once your box's own test holds. On the lab's two seasons it holds: k 0.30,
+  minutes 5.3-5.8% closer and points 2.5-2.7% in those games. It is the
+  biggest NBA fix still waiting, and the scout's top warning (unders while a
+  regular sits) is half what it is without it.
+
+Run these on the box, top to bottom. The first is read-only (a few
+minutes):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbavacancy.py --heldout
+```
+
+Only if its last line says `HOLDS`, keep the verdict (it writes one file,
+data/models/nba_vacancy.json, and the next NBA build fills the slot):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbavacancy.py --heldout --save
+```
+
+Then the three new rules on the box's own seasons (read-only, a minute or
+two; it replays every stored NBA game through the board with each rule
+taken out in turn):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbarules.py
+```
+
+Expect `THE BAR (...): HOLDS — the board keeps all three.` If it says `DOES
+NOT HOLD`, turn the three off and send me the output:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_NBA_ROTATION 0 && sudo systemctl restart qellys
+```
+
+Nothing else to run: the rules and the scout are in the code, and the next
+NBA build uses them. If step JY's check is still waiting, run it too.
+
+The check in one go (both read-only reports; the `--save` above stays a
+hand-run):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JZ 2>&1 | tee /tmp/jz.txt
+```
+
 **JY. NBA points and threes read shot volume, and a better spread waits
 for one check** (steps 354 to 356; you, 2026-11-04: "work on the nba most
 likely and edge bets. Let's find and invent more tools and data and sources

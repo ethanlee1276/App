@@ -38,6 +38,10 @@ judged on the next.
 | Play-by-play read into who was on the field | Done *(11-04)* | `engine/nba/stints`: who was on the floor every second, from the substitutions, and every box score it derives matches the final. Research for now; the box already downloads this play-by-play for the shot charts |
 | A rate's luck taken out (the NFL's touchdown and catch-rate regressions) | Done *(11-04)* | `engine/nba/shooting`: points and threes from shot volume at his long-run percentages, shrunk toward the league's. Threes 1.68% closer, points 0.99%, the points combos 0.6–0.9%. The pick shows the step "Shooting, luck taken out" |
 | A spread fitted to the player, not one size for all | Waiting *(11-04)* | `hoops.NBA.sd_power`: variance = a × projection^c, 0.8–2.1% better on Brier in seven markets. Off (`QB_NBA_SPREAD`) until `nbalabcheck.py` runs on the box and the NBA refit learns on it (runbook JY) |
+| The minutes model measured | Done *(11-04)* | Rest and blowout haircuts fitted on two seasons (a back-to-back costs a man who suits up nothing; a blowout 1-5% for a favourite's starters, not 9-14%), the newest games weighted more, a bench player's minutes trimmed 2%: minutes error 6.40 to 6.21 on the season it never saw (`hoops.NBA`) |
+| The rotation's news in the number (the NFL's first-game-back and role reads) | Done *(11-04)* | `engine/nba/minutes`: his first game back x0.96 / 0.92 / 0.84 by games missed, his second back x0.96, a minutes jump 40% held, a regular's return taking a quarter of his minutes back from the rest. Each held out both ways; `nbarules.py` asks the box's own seasons (runbook JZ). `QB_NBA_ROTATION 0` turns them off |
+| The scout's flags on the card (`engine/scout`, `likelyctx.annotate`) | Done *(11-04)* | `engine/nba/scout`: fourteen spots written before measuring, each measured before any model and after ours; the six still over-claimed after our number ride the Edge card and Most Likely's "Why?" as "Scout:" lines, for the side each takes |
+| The scout's flags corrected by the record (`likelyctx.fit`, `scouthist`) | Not yet | Needs each settled NBA pick's situation rebuilt from the box's logs. Until then the flags are notes and `likelycal` (by maker and side) is the record's correction |
 | Ideas measured and not built | Done *(11-04)* | Back-to-backs and home or away on the rate, last five over last twenty, rebound chances, the referees, and a player's own record with and without a teammate: none helped on the season it never saw. Listed in the changelog as a refusal |
 
 ## Offense against defense — the matchup scan
@@ -63,7 +67,7 @@ judged on the next.
 | The injury report read by the build | Done | ESPN's injury board. Out and doubtful players are held; questionable players are graded down |
 | A player every book took down counts as out | Done | The slate's pulled players, in the build and the scan |
 | What a missing teammate opens | Done *(10-20)* | `engine/nba/onoff` measures what his teammates did when he sat; a read counts it only when the logs measured it. A player's own with/without record, from whole games or from every minute the teammate sat, was too noisy to move a number on two full seasons *(11-04, docs/NBA_LAB.md)* |
-| The teammate-out step moving the number | Different | The card shows it (the lineup card). It moves the number only once `engine/nba/onoff` passes its edge test |
+| The teammate-out step moving the number | Waiting *(11-04)* | `engine/nba/vacancy`: k x the absent regulars' minutes, shared by base minutes. Holds on the lab's two seasons (k 0.30; minutes 5.3-5.8% closer, points 2.5-2.7% in those games); on once the box saves its own verdict, `nbavacancy.py --heldout --save` (runbook JZ). The card shows the absence either way |
 | What if he sits | Done | `engine/nba/whatif`: the record behind each teammate's absence |
 | Starting QB change | Not possible | No basketball equivalent; a star out is the teammate rows above |
 

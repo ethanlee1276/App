@@ -6,7 +6,10 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-04, after the NBA lab put points and threes on shot
+Last updated 2026-11-04, after the NBA board learned to read the rotation
+(a man's first games back, a role that jumped, a regular's return) and a
+scout started naming the spots that still go wrong (step JZ: item 1k), the
+NBA lab put points and threes on shot
 volume and left a better spread waiting for one check (step JY: item 1j),
 NBA Most Likely came back on the page and
 the plan started saying where the month's credits went (step JW: item
@@ -347,6 +350,32 @@ Also fixed, nothing to run: the NBA's corrections leaned to the over on
 rebounds, assists and threes (about 4 points, worse than none) because the
 weekly refit practised on whole-number lines where those push. It practises
 on half points now; Wednesday's refit picks it up.
+
+## 1k. A quiet evening: the teammate-out minutes, and the rotation's three rules (step JZ)
+
+You, 2026-11-04: "I want to make sure we're all ready to go for NBA ...
+picking the right bets, reading the right scripts, picking the right
+models". The minutes model is measured now (back-to-backs and blowouts stop
+cutting minutes they don't), three new rules read the rotation (his first
+games back play light, a minutes jump mostly holds, a regular's return
+takes minutes back), and a scout puts the six spots that still go wrong
+after our number on the cards. All in the code; nothing to switch on. Two
+read-only checks on the box's own seasons, a few minutes:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JZ 2>&1 | tee /tmp/jz.txt
+```
+
+Paste it back. The first part should end `HOLDS — the board fills the slot
+at k ...`; if it does, switch the teammate-out minutes on (one file; the
+lab's two seasons say k 0.30):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbavacancy.py --heldout --save
+```
+
+The second part should end `HOLDS — the board keeps all three.` If it says
+`DOES NOT HOLD`, step JZ has the one line that turns the three off.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

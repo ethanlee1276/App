@@ -1941,6 +1941,9 @@ def _row_from(row: dict, market: str, sport: str, bettable, prob,
         "matchup_card": row.get("matchup_card"),
         "qb_card": row.get("qb_card"),
         "mate_card": row.get("mate_card"),
+        # The NBA scout's side-free facts (engine/nba/scout), so the board
+        # names the spots measured to go wrong for THIS row's side and line.
+        "scout_ctx": row.get("scout_ctx"),
         "game_script": row.get("game_script"),
         "ripples": row.get("ripples") or [],
         "recent_values": row.get("recent_values") or [],

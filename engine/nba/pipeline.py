@@ -12,7 +12,8 @@ from __future__ import annotations
 
 from ..hoops import NBA, LeagueTuning
 from .minutes import (base_minutes, project_minutes, minutes_grade,
-                      blowout_prob, role_minutes, context_norms, GRADE_STAKE)
+                      blowout_prob, role_minutes, context_norms, role_jump,
+                      back_multiplier, GRADE_STAKE)
 from .prob import (p_over, sd_for, devig, market_hold, humility_clamp,
                    approval_gate, required_edge, break_even, ev_per_unit,
                    sharp_fair, _dec, CLAMP_W_DEFAULT, HIGH_HOLD)
@@ -73,6 +74,11 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     rate = _rate_per_min(minutes, values)
     if base is None or rate is None:
         return {"skip": "thin sample — under 3 usable games"}
+    # A ROLE THAT JUST JUMPED (engine/nba/minutes.role_jump, measured
+    # 2026-11-04): newest three games well above the seven before move the
+    # base toward them. Read from every game he played, as measured.
+    jumped_from = base
+    base = role_jump(base, minutes, tune)
 
     # §5 — a volatile role is unbettable at any modeled edge. This comes
     # before the pricing on purpose: the whole projection is minutes × a
@@ -98,12 +104,20 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     kept = [i for i in range(len(minutes)) if i not in left_out]
     b_norm, r_norm = context_norms(prop.get("margins"), prop.get("rests"), kept,
                                    prop.get("is_starter", False), tune)
+    # A REGULAR'S RETURN (nba_build.return_for, measured 2026-11-04) rides
+    # the vacancy slot signed negative: his teammates give some back. HIS
+    # OWN RETURN (``missed_games``, ``second_game_back``) is the minutes
+    # multiplier `back_multiplier` reads. Both 0 / absent leave the minutes
+    # exactly as before.
+    vacancy = float(prop.get("vacancy_minutes") or 0.0) - float(prop.get("return_minutes") or 0.0)
     proj_min = project_minutes(base, spread, prop.get("is_starter", False),
                                prop.get("is_favorite", False),
                                prop.get("rest", "1day"),
-                               vacancy_minutes=float(prop.get("vacancy_minutes") or 0.0),
+                               vacancy_minutes=vacancy,
                                recent_high=max(minutes) if minutes else None,
-                               tune=tune, blowout_norm=b_norm, rest_norm=r_norm)
+                               tune=tune, blowout_norm=b_norm, rest_norm=r_norm,
+                               missed_games=prop.get("missed_games"),
+                               second_back=bool(prop.get("second_game_back")))
     # Player memory (engine/playerfit.py): the record's earned correction
     # for players this model persistently misreads — same store, same
     # restraints (shrinkage, ±15% clamp, causal adoption) as every sport.
@@ -159,6 +173,23 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     if base_list is not minutes:
         context_notes.append(f"Minutes read from his {len(base_list)} games this season, "
                              f"not last season's end (measured: they read closer)")
+    # THE ROTATION'S NEWS, said where it moved his minutes (measured
+    # 2026-11-04, `hoops.NBA`).
+    if base != jumped_from:
+        context_notes.append(
+            f"His minutes just jumped ({sum(minutes[:3]) / 3:.0f} a game over his last three) — "
+            f"his base reads {base:.1f}, not {jumped_from:.1f} (measured: a jump like that mostly holds)")
+    _back = back_multiplier(prop.get("missed_games"), bool(prop.get("second_game_back")), tune)
+    if _back != 1.0:
+        _n = int(prop.get("missed_games") or 0)
+        context_notes.append(
+            (f"First game back after missing {_n} game{'s' if _n != 1 else ''} — minutes "
+             if _n else "Second game back after time out — minutes ")
+            + f"x{_back:.2f} (measured: men back from missed games play fewer)")
+    if float(prop.get("return_minutes") or 0.0) > 0:
+        context_notes.append(
+            f"A regular is back tonight ({prop.get('return_names') or 'a teammate'}) — "
+            f"{float(prop['return_minutes']):.1f} of his minutes given back (measured)")
     from ..exitfit import exits as _exits, RECENT as _RECENT
     from .minutes import EXIT_ROLE_MINUTES
     _ex = _exits([float(m) for m in minutes], EXIT_ROLE_MINUTES)
@@ -717,6 +748,10 @@ def shared_recommendations(props: list[dict],
             reasons.append(prop["lineup_note"])
         opps = list(prop.get("opps") or [])
         homes = list(prop.get("homes") or [])
+        # THE SCOUT'S READ (engine/nba/scout): the spots measured to still go
+        # wrong after our number, for this card's side. Moves nothing.
+        from .scout import read as _scout_read
+        scout_flags, scout_notes = _scout_read(prop.get("scout_ctx"), r["market"], r["side"], r["line"])
         out.append({
             "player": r["player"], "team": r.get("team", ""),
             "opponent": r.get("opponent", ""),
@@ -783,6 +818,10 @@ def shared_recommendations(props: list[dict],
                      "vs_opponent": None},
             "mate_card": prop.get("mate_card"),
             "chain": r.get("chain"),
+            # The side-free facts rides along, so Most Likely reads the
+            # flags for the side and rung it takes (likelyboard).
+            "scout_ctx": prop.get("scout_ctx"),
+            "scout_flags": scout_flags, "scout_notes": scout_notes,
         })
     # Shared ordering: recommended first, then confidence, then edge.
     out.sort(key=lambda x: (x["recommended"], x["confidence"], x["edge"]),

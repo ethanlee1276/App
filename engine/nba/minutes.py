@@ -3,7 +3,7 @@
 ~70% of prop outcome variance traces back to minutes played, so minutes
 are modeled explicitly before any stat projection:
 
-    ProjMIN = BaseMIN × M_blowout × M_rest × M_role (+ vacancy), capped
+    ProjMIN = (BaseMIN × M_blowout × M_rest × M_role (+ vacancy)), capped, × M_back
 
 * BaseMIN weights the current role only (`LeagueTuning.recency_weights`;
   the NBA's measured 2026-11-04: last 5 games ×0.60, games 6-10 ×0.25,
@@ -15,7 +15,11 @@ are modeled explicitly before any stat projection:
   `hoops.NBA`); the module constants below are the written spec's, kept
   for the record.
 * Vacancy minutes are capped: nobody projects more than +8 over their
-  recent high. Coaches are more conservative than models.
+  recent high. Coaches are more conservative than models. A REGULAR'S
+  RETURN rides the same slot, signed negative (his teammates give some
+  back), and a role that just jumped moves the base itself (`role_jump`).
+* M_back is HIS OWN RETURN (`back_multiplier`): his first game back after
+  missed games, and his second after two or more — measured 2026-11-04.
 * Every prop gets a Minutes Confidence Grade (A-D) that gates the stake:
   A full, B 0.75×, C 0.5×, D = no bet.
 
@@ -183,15 +187,85 @@ def context_norms(margins, rests, kept, is_starter: bool,
     return round(b_norm, 4), round(r_norm, 4)
 
 
+#: THE ROTATION'S NEWS (2026-11-04, `hoops.NBA`, docs/NBA_LAB.md "The
+#: scout"): a returning REGULAR is one of this many minutes a game over his
+#: last ten for the club, back from missing this many of its games in a row
+#: or more. The same definitions the measurement used.
+RETURN_REGULAR_MIN = 24.0
+RETURN_MISSED = 2
+
+
+def rotation_on() -> bool:
+    """The three rules' switch: on unless ``QB_NBA_ROTATION`` says 0 / off —
+    for the box, if its own seasons (nbarules.py) ever disagree with the
+    lab's."""
+    import os
+    return str(os.environ.get("QB_NBA_ROTATION", "1")).strip().lower() not in ("0", "off", "false", "no")
+
+
+def role_jump(base: float | None, minutes, tune: LeagueTuning = NBA) -> float | None:
+    """His base after a role that just JUMPED: when his newest three games'
+    minutes run ``tune.role_jump_ratio`` x or more the seven before them,
+    the base moves ``tune.role_jump_weight`` of the way to the newest three.
+
+    Measured on two full seasons (`hoops.NBA`): after a jump like that the
+    new minutes mostly hold, and a base still two-fifths made of the old
+    role read him low — the unders it made hit 4% less often than they
+    said. A role that just DROPPED did not pass the same test (it hurt one
+    season) and moves nothing. ``minutes`` newest first, every game he
+    played; the base as `base_minutes` read it."""
+    ratio = float(getattr(tune, "role_jump_ratio", 0.0) or 0.0)
+    weight = float(getattr(tune, "role_jump_weight", 0.0) or 0.0)
+    mins = [float(m or 0.0) for m in (minutes or [])]
+    if base is None or ratio <= 0 or weight <= 0 or len(mins) < 6 or not rotation_on():
+        return base
+    newest = sum(mins[:3]) / 3
+    before = mins[3:10]
+    prior = sum(before) / len(before)
+    if prior <= 0 or newest < ratio * prior:
+        return base
+    return round(base + weight * (newest - base), 2)
+
+
+def back_multiplier(missed=None, second_back: bool = False,
+                    tune: LeagueTuning = NBA) -> float:
+    """Tonight's minutes multiplier for HIS RETURN: his first game back
+    after missing ``missed`` of his club's games in a row, by the
+    ``tune.back_mult`` table, or his second game back after missing two or
+    more (``second_back``). 1.0 for a man who played the club's last game
+    and is past his second, or a league with no table.
+
+    Measured (`hoops.NBA`): in his first game back he plays about 1 minute
+    under his old role after one missed game, 2 after two to four, 3.5-6
+    after five or more — a minutes restriction, every season."""
+    if not rotation_on():
+        return 1.0
+    try:
+        n = int(missed or 0)
+    except (TypeError, ValueError):
+        n = 0
+    if n > 0:
+        for most, mult in getattr(tune, "back_mult", ()) or ():
+            if n <= most:
+                return float(mult)
+        return 1.0
+    if second_back:
+        return float(getattr(tune, "second_back_mult", 1.0) or 1.0)
+    return 1.0
+
+
 def project_minutes(base: float, spread: float, is_starter: bool,
                     is_favorite: bool, rest: str = "1day",
                     vacancy_minutes: float = 0.0,
                     recent_high: float | None = None,
                     tune: LeagueTuning = NBA,
-                    blowout_norm: float = 1.0, rest_norm: float = 1.0) -> float:
+                    blowout_norm: float = 1.0, rest_norm: float = 1.0,
+                    missed_games=None, second_back: bool = False) -> float:
     """Tonight's minutes: the base, tonight's blowout and rest multipliers
     each divided by what the base's own games carried (`context_norms`),
-    and any vacancy minutes."""
+    and any vacancy minutes (a teammate's absence adds them; a regular's
+    return, signed negative, takes them back) — then, for his own return,
+    `back_multiplier`."""
     # His role's own measured correction (`hoops.LeagueTuning.role_minutes_mult`):
     # a bench player's recent minutes overstate his next game's (NBA x0.98).
     role = (tune.role_minutes_mult or {}).get("starter" if is_starter else "bench", 1.0)
@@ -202,7 +276,11 @@ def project_minutes(base: float, spread: float, is_starter: bool,
     # Nobody plays more minutes than the game has. Obvious, and the reason
     # it matters: the NBA cap applied to a 40-minute game would have let a
     # projection sail past regulation without anything objecting.
-    return round(min(proj, float(tune.game_minutes)), 1)
+    proj = min(proj, float(tune.game_minutes))
+    # His own return, after the caps (as measured): a multiplier of 1.0 or
+    # less, so it can never lift him past them.
+    proj *= back_multiplier(missed_games, second_back, tune)
+    return round(max(proj, 0.0), 1)
 
 
 def minutes_grade(is_starter: bool, spread: float, sample_games: int,

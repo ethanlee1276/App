@@ -1220,5 +1220,9 @@ SH
 run JY "NBA shooting and the spread, replayed on the box's own games" 2400 <<'SH'
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbalabcheck.py
 SH
+run JZ "NBA: the teammate-out minutes held out, and the rotation's three rules on the box's seasons" 1200 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbavacancy.py --heldout
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbarules.py
+SH
 
 echo "===== done in $((SECONDS / 60)) min"

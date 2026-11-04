@@ -46,7 +46,14 @@ def _prop(**kw):
 def test_when_chosen_only_the_minutes_base_reads_this_season():
     old = P.project(_prop(), NBA)
     new = P.project(_prop(base_games=4), NBA)
-    assert old["base"] < 30 and new["base"] == 34.0, (old["base"], new["base"])
+    # The twenty-game base mixes last season's role in. Since 2026-11-04 a
+    # role that just jumped (his newest three well above the seven before)
+    # moves that base part of the way toward the newest three (measured,
+    # engine/nba/minutes.role_jump) — so the mix reads under 30 only with
+    # that rule off; the season's own base reads 34 either way.
+    from dataclasses import replace as _replace
+    flat = P.project(_prop(), _replace(NBA, role_jump_weight=0.0))
+    assert flat["base"] < 30 and old["base"] < new["base"] == 34.0, (flat["base"], old["base"], new["base"])
     # Everything else neutral here, so the projection over its minutes is the rate.
     assert round(old["projection"] / old["proj_min"], 2) == round(new["projection"] / new["proj_min"], 2), \
         "the per-minute rate keeps all twenty games"

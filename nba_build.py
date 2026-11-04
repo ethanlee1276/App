@@ -334,29 +334,153 @@ def vacancy_for(player: str, team: str, gone: dict, hist: dict, listed: dict, k:
         return 0.0
     cache = {} if cache is None else cache
     if team not in cache:
-        from engine.nba.minutes import base_minutes, role_minutes
         from engine.nba.vacancy import shares
-        from engine.hoops import NBA
-        out = {n for n, _m in away}
-        days = set()
-        for h in hist.values():
-            if h.get("team") == team:
-                days.update((h.get("by_week") or {}).keys())
-        recent = set(sorted(days, reverse=True)[:NEW_ABSENCE_GAMES])
-        rotation = {}
-        for name, h in hist.items():
-            if h.get("team") != team or name in out:
-                continue
-            if str((listed.get(name) or {}).get("status") or "").strip().lower() in OUT_STATUSES:
-                continue
-            if not recent & set((h.get("by_week") or {}).keys()):
-                continue
-            mins = [float(m) for m in (h.get("minutes") or [])]
-            if len(mins) < 3:
-                continue
-            rotation[name] = base_minutes(role_minutes(mins)[0], tune or NBA) or 0.0
+        rotation = _rotation(team, hist, listed, {n for n, _m in away}, tune)
         cache[team] = shares(sum(m for _n, m in away), rotation, k)
     return float(cache[team].get(player) or 0.0)
+
+
+def _rotation(team: str, hist: dict, listed: dict, out: set, tune=None,
+              extra: tuple = ()) -> dict:
+    """``{player: base minutes}`` — his club's rotation tonight: the men who
+    played in its last `NEW_ABSENCE_GAMES` games and are neither in ``out``
+    nor ruled out, with three or more games; plus the men in ``extra``."""
+    from engine.nba.minutes import base_minutes, role_minutes
+    from engine.hoops import NBA
+    days = set()
+    for h in hist.values():
+        if h.get("team") == team:
+            days.update((h.get("by_week") or {}).keys())
+    recent = set(sorted(days, reverse=True)[:NEW_ABSENCE_GAMES])
+    rotation = {}
+    for name, h in hist.items():
+        if h.get("team") != team or name in out:
+            continue
+        if str((listed.get(name) or {}).get("status") or "").strip().lower() in OUT_STATUSES:
+            continue
+        if name not in extra and not recent & set((h.get("by_week") or {}).keys()):
+            continue
+        mins = [float(m) for m in (h.get("minutes") or [])]
+        if len(mins) < 3:
+            continue
+        rotation[name] = base_minutes(role_minutes(mins)[0], tune or NBA) or 0.0
+    return rotation
+
+
+# --- THE ROTATION'S NEWS (2026-11-04; engine/nba/minutes, hoops.NBA) ----------
+# Measured on two full seasons, each rule's bar written before its run: a
+# man's first game back plays light (by how many games he missed), so does
+# his second after a longer absence, and a regular's return takes minutes
+# back from the men who covered for him. These read who missed what from
+# the logs the board already holds.
+
+def club_days(hist: dict, before: str) -> dict:
+    """``{team: [the club's game dates before ``before``, newest first]}`` —
+    the union of its men's logged games (a club game that none of tonight's
+    roster played in is the only one this can miss)."""
+    days: dict = {}
+    for h in hist.values():
+        for d in (h.get("by_week") or {}):
+            if str(d) < before:
+                days.setdefault(h.get("team"), set()).add(str(d))
+    return {t: sorted(ds, reverse=True) for t, ds in days.items()}
+
+
+def return_read(h: dict, days: list, before: str) -> tuple:
+    """``(missed, second_back)`` for one man: how many of his club's games
+    in a row he missed before tonight (None for a man with no game for it),
+    and whether tonight is his second game back after missing
+    `RETURN_MISSED` or more — `engine/nba/minutes.back_multiplier`'s
+    inputs. A game he logged with no minutes is a game he missed."""
+    from engine.nba.minutes import RETURN_MISSED
+    played = {str(d) for d, s in (h.get("by_week") or {}).items()
+              if str(d) < before and float((s or {}).get("min", 1.0) or 0.0) > 0}
+    if not played or not days:
+        return None, False
+    missed = 0
+    for d in days:
+        if d in played:
+            break
+        missed += 1
+    else:
+        return None, False
+    if missed:
+        return missed, False
+    run = 0
+    for d in days[1:]:
+        if d in played:
+            break
+        run += 1
+    else:
+        return 0, False
+    return 0, run >= RETURN_MISSED
+
+
+def returning(hist: dict, days_by_team: dict, before: str, listed: dict,
+              priced: set) -> dict:
+    """``{team: [(player, usual minutes), ...]}`` — tonight's RETURNING
+    REGULARS: a man of `RETURN_REGULAR_MIN` or more minutes a game over his
+    last ten for the club, back from missing `RETURN_MISSED` or more of its
+    games in a row, whom a book prices tonight (the books post a man they
+    expect to play) and no injury report rules out."""
+    from engine.nba.minutes import RETURN_MISSED, RETURN_REGULAR_MIN
+    out: dict = {}
+    for name, h in hist.items():
+        if name not in priced:
+            continue
+        if str((listed.get(name) or {}).get("status") or "").strip().lower() in OUT_STATUSES:
+            continue
+        missed, _second = return_read(h, days_by_team.get(h.get("team")) or [], before)
+        if not missed or missed < RETURN_MISSED:
+            continue
+        mins = [float(m) for m in (h.get("minutes") or [])[:10]]
+        if len(mins) < 3 or sum(mins) / len(mins) < RETURN_REGULAR_MIN:
+            continue
+        out.setdefault(h["team"], []).append((name, round(sum(mins) / len(mins), 1)))
+    return out
+
+
+def return_for(player: str, team: str, back: dict, hist: dict, listed: dict,
+               share: float, tune=None, cache: dict | None = None) -> float:
+    """The minutes tonight's returning regulars take back from ``player``:
+    ``share`` x their usual minutes, split over his club's rotation (the
+    returning men counted in it) by each man's base minutes — the vacancy
+    rule run backwards (engine/nba/vacancy.shares). 0.0 for a returning
+    man himself, with nobody back, or with ``share`` 0."""
+    mine = (back or {}).get(team) or []
+    if not share or not mine or player in {n for n, _m in mine}:
+        return 0.0
+    cache = {} if cache is None else cache
+    if team not in cache:
+        from engine.nba.vacancy import shares
+        names = tuple(n for n, _m in mine)
+        rotation = _rotation(team, hist, listed, set(), tune, extra=names)
+        cache[team] = shares(sum(m for _n, m in mine), rotation, share)
+    return float(cache[team].get(player) or 0.0)
+
+
+def scout_context(player: str, market: str, h: dict, spread, total, rest, missed,
+                  gone: dict, back: dict, league: str, season: int) -> dict:
+    """The side-free facts engine/nba/scout's flags read for one prop: his
+    club's spread (negative = favoured) and the game total, tonight's rest,
+    his last ten in the market and in minutes, his games for the club this
+    season, whether he missed its last game, and whether a regular
+    teammate sits (24+ minutes a game, ruled out) or returns tonight."""
+    from engine.nba import window as _w
+    from engine.nba.minutes import RETURN_REGULAR_MIN
+    team = h.get("team")
+    games = None
+    if season:
+        try:
+            games = _w.this_season(h.get("dates"), league, season)
+        except Exception:                                   # noqa: BLE001
+            games = None
+    return {"starter": bool(h.get("starter")), "spread": spread, "total": total, "rest": rest,
+            "values": [float(v) for v in (h.get(market) or [])[:10]],
+            "minutes": [float(m) for m in (h.get("minutes") or [])[:10]],
+            "games_season": games, "missed_last": bool(missed),
+            "mate_out": any(m >= RETURN_REGULAR_MIN for n, m in (gone or {}).get(team, []) if n != player),
+            "mate_back": any(n != player for n, _m in (back or {}).get(team, []))}
 
 
 def lineup_note(player: str, market: str, team: str, gone: dict, hist: dict,
@@ -1215,6 +1339,17 @@ def main() -> None:
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  shooting read skipped: {exc}")
             _shoot_long, _shoot_lg = {}, {}
+        # THE ROTATION'S NEWS (engine/nba/minutes; measured 2026-11-04): who
+        # missed what, from the logs above. A man the books price tonight
+        # who missed his club's last two or more is a returning regular
+        # (24+ minutes a game) whose minutes come back from the rest.
+        from engine.nba.minutes import rotation_on as _rotation_on
+        _days = club_days(hist, args.date)
+        _back = returning(hist, _days, args.date, listed, {pp.player for pp in slate.props})
+        _ret_cache: dict = {}
+        if any(_back.values()):
+            print("Returning tonight: " + "; ".join(
+                f"{t} {', '.join(n for n, _m in v)}" for t, v in sorted(_back.items()) if v))
         census = {"no_real_price": 0, "no_history": 0}
         props = []
         _onoff_cache: dict = {}
@@ -1236,6 +1371,10 @@ def main() -> None:
             _inj = listed.get(prop.player) or {}
             _status = str(_inj.get("status") or "").strip()
             _vac_min = vacancy_for(prop.player, h["team"], gone, hist, listed, _vac_k, tune, _vac_cache)
+            _missed, _second = return_read(h, _days.get(h["team"]) or [], args.date)
+            _ret_min = return_for(prop.player, h["team"], _back, hist, listed,
+                                  getattr(tune, "return_share", 0.0) if _rotation_on() else 0.0,
+                                  tune, _ret_cache)
             _mate = lineup_card(prop.player, prop.market, h["team"], gone, hist, _onoff_cache)
             if _mate and _vac_min:
                 _mate["note"] = _mate["note"].replace(
@@ -1245,6 +1384,20 @@ def main() -> None:
             props.append({
                 "dvp_mult": _dm, "dvp_note": _dn,
                 "vacancy_minutes": _vac_min,
+                # His own return and a regular's (engine/nba/minutes).
+                "missed_games": _missed or 0, "second_game_back": bool(_second),
+                "return_minutes": _ret_min,
+                "return_names": ", ".join(n for n, _m in _back.get(h["team"], []) if n != prop.player),
+                # THE SCOUT'S READ (engine/nba/scout): the side-free facts its
+                # flags need, so each card — the Edge side here, Most Likely's
+                # own side later — names the spots measured to go wrong.
+                "scout_ctx": (scout_context(prop.player, prop.market, h,
+                                            spread_by_team.get(h["team"], (None,))[0],
+                                            total_by_team.get(h["team"]),
+                                            density.get(h["team"], {}).get("rest"),
+                                            _missed, gone, _back, args.league,
+                                            minutes_window.get("season") or 0)
+                              if args.league == "nba" else None),
                 # THE INJURY BOARD ON THE PROP: ruled out is a grade-D
                 # restriction (no bet, the card says why); listed and
                 # playable is held until the lineup confirms, on the Edge

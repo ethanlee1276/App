@@ -100,6 +100,23 @@ class LeagueTuning:
     # off the bench), after every haircut: 1.0 = the base as read. See the
     # NBA's measured values below.
     role_minutes_mult: dict = field(default_factory=lambda: {"starter": 1.0, "bench": 1.0})
+    # THE ROTATION'S NEWS (engine/nba/minutes: `role_jump`, `back_multiplier`,
+    # `return_minutes`). Off by default — every value below leaves the
+    # minutes exactly as read; the NBA's measured ones are set on it.
+    #   A ROLE THAT JUST JUMPED: his newest three games' minutes at least
+    #   ``role_jump_ratio`` x the seven before them move his base
+    #   ``role_jump_weight`` of the way to the newest three.
+    role_jump_ratio: float = 0.0
+    role_jump_weight: float = 0.0
+    #   HIS FIRST GAME BACK: tonight's minutes x the multiplier for how many
+    #   of his club's games in a row he missed before it, ((most missed,
+    #   multiplier), ...) in order; and his SECOND game back after missing
+    #   two or more.
+    back_mult: tuple = ()
+    second_back_mult: float = 1.0
+    #   A REGULAR'S RETURN: the share of a returning regular's usual minutes
+    #   his teammates give back, split by their own base minutes.
+    return_share: float = 0.0
     # --- market structure ----------------------------------------------------
     # Which markets are worth betting, and how hard each has to clear.
     # Empty tier map = this league gates on points-edge alone (the NBA's
@@ -226,6 +243,37 @@ NBA = LeagueTuning(
                    (float("inf"), 0.99)),
     recency_weights=(0.60, 0.25, 0.15),
     role_minutes_mult={"starter": 1.00, "bench": 0.98},
+    # THE ROTATION'S NEWS, MEASURED (2026-11-04, docs/NBA_LAB.md, "The
+    # scout"). Each rule's bar was written before its run: fitted on one
+    # season beside a level factor (the calibration corrects the board's
+    # overall level; a rule must not take credit for it), judged on the
+    # other, both ways, and kept only if the squared error of minutes AND
+    # points fell in the games it touches in BOTH held-out seasons:
+    #
+    #   * HIS FIRST GAME BACK. He plays fewer minutes than his old role
+    #     reads, more so the longer he was out: 1 game missed x0.96, 2-4
+    #     x0.92, 5 or more x0.84 (minutes error -1% to -35% in those
+    #     games, points -0.5% to -8.6%). His second game back after two or
+    #     more missed: x0.96 (-0.3% / -2.6%, points -0.4% / -0.7%).
+    #   * A ROLE THAT JUST JUMPED (newest three games 20%+ above the seven
+    #     before): the jump mostly holds, so the base moves 40% of the way
+    #     to the newest three (minutes -7.0% / -4.8%, points -1.6% / -1.7%).
+    #     A role that just DROPPED did not pass (it hurt 2024-25): no rule;
+    #     the scout's card warns on overs after a drop instead
+    #     (engine/nba/scout: they hit 4-5% under what we said).
+    #   * A REGULAR'S RETURN (24+ minutes a game, back from missing his
+    #     club's last two or more): his teammates give back a quarter of
+    #     his usual minutes, by their base minutes (minutes -1.2% / -2.4%,
+    #     points -1.0% / -0.5%).
+    #
+    # Together, on each season with the values fitted on the other:
+    # minutes error 6.17 -> 6.09 and 6.20 -> 6.11 over every priced game;
+    # points 0.6% closer, PRA 0.9-1.0%; Brier at a half-point line 0.2280 ->
+    # 0.2272 and 0.2279 -> 0.2270.
+    role_jump_ratio=1.20, role_jump_weight=0.40,
+    back_mult=((1, 0.96), (4, 0.92), (float("inf"), 0.84)),
+    second_back_mult=0.96,
+    return_share=0.25,
 )
 
 # 40 minutes, not 48 — so every minutes-denominated number is scaled by
@@ -266,6 +314,11 @@ WNBA = replace(
     vacancy_cap_over_high=round(NBA.vacancy_cap_over_high * _MIN_SCALE, 2),
     # §5 — last 5 · games 6-10 · rest of season, nested.
     recency_weights=(0.40, 0.30, 0.20),
+    # The rotation's news (a role jump, his first games back, a regular's
+    # return) was measured on the NBA's seasons only: off here until the
+    # WNBA's own are.
+    role_jump_ratio=0.0, role_jump_weight=0.0, back_mult=(), second_back_mult=1.0,
+    return_share=0.0,
     market_tier=WNBA_TIERS,
     tier_min_edge=WNBA_TIER_MIN_EDGE,
     grade_weights=WNBA_GRADE_WEIGHTS,

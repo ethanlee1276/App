@@ -4,6 +4,18 @@
     {
       "date": "2026-11-04",
       "kind": "model",
+      "title": "NBA minutes read the rotation: a player's first games back, a minutes jump, a regular's return",
+      "body": "Minutes decide most of an NBA prop, and the board read a player's minutes only from his recent games. Three things it did not know, each measured on two full seasons before it moved a number (fitted on one season, judged on the other, kept only if minutes and points both landed closer in both): a player in his first game back plays fewer minutes than his old role, about 4% fewer after one missed game, 8% after two to four, 16% after five or more, and his second game back after a longer absence about 4% fewer; when his minutes have just jumped well above his usual, the jump mostly holds, so his projection moves most of the way there; and when a regular who has missed two or more games comes back, the players who covered for him give back about a quarter of his minutes. In the games they touch, minutes land 1% to 35% closer and points 0.5% to 8.6%. The pick says when one moved a player."
+    },
+    {
+      "date": "2026-11-04",
+      "kind": "feature",
+      "title": "A scout's warnings on NBA picks: the spots that still go wrong",
+      "body": "NBA picks now carry the scout's read: the situations a basketball person checks before trusting a pick, each measured on two full seasons against our own number. Six still go wrong often enough to say so, and the pick card says which, with what it measured: an under while a regular teammate sits out, an over after his minutes dropped, an over the night a regular returns, an under in a game the books expect to be high-scoring, a player whose games swing widely, and a player barely into his season. Situations the number already handles, or that measured as no problem at all (an over in a projected blowout, an over on the second night of a back-to-back), are not flagged. A warning moves no number; it is there so you can pass on a pick the record says goes wrong."
+    },
+    {
+      "date": "2026-11-04",
+      "kind": "model",
       "title": "NBA minutes stop being cut on back-to-backs and in blowouts more than they really are",
       "body": "The NBA board's minutes numbers for back-to-backs and blowouts came from a written plan and had never been checked. Measured on two full seasons, a player who suits up on a back-to-back or a third game in four nights plays about his usual minutes, not the 4 to 8% fewer the board assumed. A 15-point favourite's starters lose about 5% in a likely blowout, not 14%, and the rotation players off the bench gain nothing, not the 20% the board gave them. The board now uses the measured numbers, leans a little more on a player's last five games, and trims a bench player's minutes 2%, because his recent stretch tends to overstate his next game. On a season it had never seen, minutes landed 3% closer and points, rebounds, assists and PRA 0.7 to 1.3% closer. The old numbers had leaned picks toward the under on busy nights and against heavy favourites."
     },
