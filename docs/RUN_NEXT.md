@@ -89,7 +89,7 @@ so instead of "nothing priced".
 spends nearly all of it on purpose (left-over credits expire). This month
 opened with a college Saturday, an NFL Sunday (the dearest day, about 5,250
 for the NFL alone) and a Monday night. About 10,000 by the 4th is on the
-plan; its table allowed about 15,000 for those days. Read-only, it prints
+plan; its table allowed about 12,500 for those days. Read-only, it prints
 the plan with a new "this month so far" line, then every day since the
 renewal by sport:
 

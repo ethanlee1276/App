@@ -9332,7 +9332,7 @@ page or the most likely page").
   5,250 for the NFL alone with its headroom), and this month opened with a
   Saturday's college slate, a Sunday and a Monday night. So about 10,000 by
   the morning of the 4th is on the plan, not ahead of it. The plan's own
-  table allowed about 15,000 for those days, and Election Day had no
+  table allowed about 12,500 for those days, and Election Day had no
   basketball. The plan recomputes from the real balance every cycle and
   never plans more than the pool holds.
 - **What changed.** The plan now opens with the month so far: used against
