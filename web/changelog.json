@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-11-04",
+      "kind": "model",
+      "title": "NBA points and threes read a player's shot volume, not his hot streak",
+      "body": "The NBA board projected points and threes from the last twenty games' makes. A three-point percentage over the hundred or so threes a starter takes in twenty games swings five points either way on luck alone, so a hot shooter's over looked like an edge the market had already discounted. Points and threes now come from his attempts a minute, which are his role, at his shooting percentages over his last sixty games pulled toward the league's. Points+rebounds, points+assists and PRA move only through their points. Measured on a full season of NBA games it had never seen, the projections landed closer for threes (1.7%), points (1.0%) and the three points combos (0.6 to 0.9%). Each pick's breakdown shows it as its own step, \"Shooting, luck taken out\"."
+    },
+    {
+      "date": "2026-11-04",
+      "kind": "refuse",
+      "title": "Six NBA ideas the play-by-play could not back",
+      "body": "Rebuilding who was on the floor every second of two full NBA seasons let us test ideas a box score cannot. Each was fitted on one season and judged on the next, and these did not improve the picks, so they are not on the board: a player's own record with and without an injured teammate (too noisy: it cost more accuracy than the bias it removed), the referees' crew, back-to-backs and home or away on a player's rate, his last five games over his last twenty, his share of the rebound chances, and the opponent's defence per possession instead of per game. The minutes a teammate's absence opens are still read, as before."
+    },
+    {
+      "date": "2026-11-04",
       "kind": "fix",
       "title": "Live scores keep moving on a night a game's feed fails",
       "body": "The live pass reads each game's play-by-play four at a time. On a night one game's feed failed, the half-finished read could be cleaned up later on a thread that was just starting, and on the Python the site runs that thread waited on itself: the live scores and play rows sat still until the three-minute limit on each pass gave up on it, instead of moving every twelve seconds. Each batch of four now finishes and closes before its results are used, so nothing is left open to wait on. The same hang is what turned the code's own checks red on GitHub's Python 3.12 run."

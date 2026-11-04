@@ -128,6 +128,11 @@ class SettledProp:
         if over is None:
             return None
         return over if (self.side or "OVER").upper() == "OVER" else 1 - over
+    #: Which game this was, when the caller knows ("day|player" in the
+    #: basketball replay): two replays of one history — a model change off
+    #: and on — are scored on the props BOTH priced (nbalabcheck.py), never
+    #: on two different sets. "" when not recorded.
+    key: str = ""
 
 
 @dataclass

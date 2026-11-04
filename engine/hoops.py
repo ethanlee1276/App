@@ -70,6 +70,24 @@ class LeagueTuning:
         # Poisson CVs; the pricer never prices a count tighter than
         # Poisson (`prob.p_over_negbin`), so a low one costs nothing.
         "tov": 0.60})
+    # THE SPREAD THAT FOLLOWS THE PROJECTION (2026-11-04, the NBA lab):
+    # variance = a × mean^c per stat, so a 5-point bench line and a
+    # 28-point star line no longer share one width (one CV per stat made
+    # the star's too wide and the bench's too narrow). Measured on two
+    # full seasons of the league's play-by-play, fit on 2024-25 and judged
+    # on 2025-26 (15+ minute projections, lines from half the projection
+    # to one and a half times it): Brier 0.8-2.1% better in every market
+    # below, and the overs on lines well under a player — Most Likely's
+    # bets — said within a point of how often they hit (PRA 80.3% said,
+    # 80.3% happened), where the CV fitted the box's way said 3-6 points
+    # under. Threes stay on their CV (no better there). Replayed through the
+    # board's own pricer at the CVs `hoops_fit` fits from those seasons
+    # (nbalabcheck.py): Brier on those overs lower in all seven markets, and
+    # the overs it called 80% or more hit within 3 points of that in all
+    # seven, where the fitted CV's 82% points overs hit 60%. Read only when
+    # QB_NBA_SPREAD=1 (`prob.spread_on`): the board's stored calibration
+    # curves were fit on the CV spread, so the switch goes on with a refit.
+    sd_power: dict = field(default_factory=dict)
     max_picks_per_slate: int = 4
     max_picks_per_game: int = 2
     thin_sample: int = 10
@@ -168,6 +186,10 @@ NBA = LeagueTuning(
     key="nba", name="NBA",
     game_minutes=48, roster_size=15, season_games=82, personal_fouls=6,
     calibrated=True,
+    # (a, c) in variance = a × mean^c, from the lab (see `sd_power`).
+    sd_power={"pts": (7.318, 0.698), "reb": (1.679, 0.914), "ast": (1.508, 0.897),
+              "pra": (13.328, 0.548), "pts_reb": (10.487, 0.607),
+              "pts_ast": (8.548, 0.651), "reb_ast": (2.768, 0.760)},
 )
 
 # 40 minutes, not 48 — so every minutes-denominated number is scaled by
@@ -215,6 +237,8 @@ WNBA = replace(
     # over-concentration with worse fills, not just variance.
     cap_per_play=0.02, cap_per_game=0.05, cap_per_slate=0.12,
     calibrated=False,
+    # The NBA lab measured the NBA's spreads; the WNBA keeps its CVs.
+    sd_power={},
     inherited_from="nba",
     note=("Market tiers, tier minimums, the 0-100 grade, the role-stability "
           "filter and the bankroll caps are the WNBA spec's own. What is "

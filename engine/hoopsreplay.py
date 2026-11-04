@@ -128,13 +128,31 @@ def _quotes(conn, sport: str, market: str) -> dict:
 
 def _entries(hist: dict, market: str) -> list:
     """`histories` in the walk's entry shape (`db.hoops_entries`): one
-    entry per player, oldest first, None where the box stored no row."""
+    entry per player, oldest first, None where the box stored no row.
+    ``games`` keeps each game as stored, for the shooting read."""
     return [{"name": player,
              "dates": [day for day, _, _ in rows],
              "starters": [bool(s) for _, s, _ in rows],
              "minutes": [float(g.get("min", 0.0)) for _, _, g in rows],
-             "values": [g.get(market) for _, _, g in rows]}
+             "values": [g.get(market) for _, _, g in rows],
+             "games": [g for _, _, g in rows]}
             for player, rows in hist.items()]
+
+
+def _shooting(e: dict, i: int, sport: str, market: str):
+    """The shooting read for game ``i`` as the live build makes it
+    (`nba_build`: his twenty games before it, and his last LONG_GAMES), or
+    None — off, unmeasured for this league or market, or no shot columns."""
+    from .nba import shooting as SH
+    if sport not in SH.LEAGUES or market not in SH.MOVED or not SH.enabled():
+        return None
+    games = e.get("games") or []
+    if not games:
+        return None
+    recent = games[max(0, i - WINDOW):i][::-1]
+    longrun = [g for g in games[max(0, i - SH.LONG_GAMES * 2):i][::-1]
+               if SH.game_shots(g) is not None][:SH.LONG_GAMES]
+    return SH.bundle(recent, longrun)
 
 
 def _todo(entries: list, min_history: int, cap: int) -> list:
@@ -174,10 +192,13 @@ def _window(e: dict, i: int, market: str) -> tuple[list, list, bool]:
 def settled_props(hist: dict, market: str, sport: str = "nba",
                   quotes: dict | None = None,
                   min_history: int = MIN_HISTORY,
-                  cap: int = MAX_PER_MARKET) -> tuple[list, dict]:
-    """Price every eligible player-game; ``(settled, counts)``."""
+                  cap: int = MAX_PER_MARKET, tune=None) -> tuple[list, dict]:
+    """Price every eligible player-game; ``(settled, counts)``. ``tune``
+    defaults to the league's inherited numbers; nbalabcheck.py passes the
+    tuning the live build fits (`hoops_fit.fitted_tuning`), whose spreads
+    are the ones the board prices with."""
     from .nba.pipeline import evaluate_prop
-    tune = _tune(sport)
+    tune = tune or _tune(sport)
     quotes = quotes or {}
     entries = _entries(hist, market)
     settled, counts = [], {"priced": 0, "skipped": 0, "book": 0, "naive": 0}
@@ -200,7 +221,8 @@ def settled_props(hist: dict, market: str, sport: str = "nba",
         prop = {"player": player, "market": market, "minutes": minutes,
                 "values": values, "line": line, "over_odds": over,
                 "under_odds": under, "is_starter": starter,
-                "spread": 0.0, "rest": "1day", "book": "replay"}
+                "spread": 0.0, "rest": "1day", "book": "replay",
+                "shooting": _shooting(entries[n], i, sport, market)}
         try:
             out = evaluate_prop(prop, tune)
         except Exception:                                    # noqa: BLE001
@@ -215,7 +237,7 @@ def settled_props(hist: dict, market: str, sport: str = "nba",
             hit_prob=float(out["p_model"]), projection=float(out["projection"]),
             actual=actual, recommended=out.get("kind") == "pick",
             stake_units=float(out.get("stake_units") or 0.0),
-            side=out["side"], basis=basis))
+            side=out["side"], basis=basis, key=f"{day}|{player}"))
     return settled, counts
 
 
@@ -252,7 +274,8 @@ def walk(entries: list, market: str, sport: str = "nba",
         line = _naive_line(played)
         mult = float(player_adjust(player)) if player_adjust else None
         prop = {"player": player, "market": market, "minutes": minutes, "values": values,
-                "is_starter": starter, "spread": 0.0, "rest": "1day"}
+                "is_starter": starter, "spread": 0.0, "rest": "1day",
+                "shooting": _shooting(entries[n], i, sport, market)}
         if mult is not None:
             prop["player_mult"] = mult
         try:
@@ -280,15 +303,15 @@ def walk(entries: list, market: str, sport: str = "nba",
 
 def replay(conn, sport: str = "nba", markets=MARKETS,
            seasons: list | None = None,
-           min_history: int = MIN_HISTORY) -> list:
+           min_history: int = MIN_HISTORY, tune=None) -> list:
     """``[(market, BacktestReport, counts), ...]`` for every market that
-    priced anything."""
+    priced anything (``tune``: see `settled_props`)."""
     hist = histories(conn, sport, seasons)
     out = []
     for market in markets:
         settled, counts = settled_props(hist, market, sport,
                                         _quotes(conn, sport, market),
-                                        min_history=min_history)
+                                        min_history=min_history, tune=tune)
         if not settled:
             continue
         rep: BacktestReport = evaluate(settled)

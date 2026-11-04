@@ -128,7 +128,16 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # box 2026-09-27: what it allows in this stat, at the share of its lean
     # that reaches one player. 1.0 when no rating reached this prop.
     dvp_m = float(prop.get("dvp_mult") or 1.0)
-    proj = round(rate * proj_min * pmult * env_m * lay_m * dvp_m, 2)
+    # SHOOTING, LUCK TAKEN OUT (engine/nba/shooting, 2026-11-04): points and
+    # threes rebuilt from his shot volume at his long-run percentages, not
+    # his last twenty games' makes. Measured on two full seasons of the
+    # league's play-by-play, fit on 2024-25 and judged on 2025-26: threes
+    # 1.68% closer, points 0.99%, the points combos 0.6–0.9%. 1.0 when the
+    # prop carries no shot read, the market holds no points or threes, or
+    # the league was not measured (the WNBA).
+    from .shooting import projection_mult as _shoot_mult
+    shoot_m, shoot_note = _shoot_mult(stat, rate, prop.get("shooting"), tune.key)
+    proj = round(rate * proj_min * pmult * env_m * lay_m * dvp_m * shoot_m, 2)
     # THE WALK FROM BASE TO FINAL (engine/chain), as the NFL's and MLB's
     # projections publish it: the pick page draws it, and the one board's
     # matchup check reads its measured Matchup step (engine/likelyboard).
@@ -143,9 +152,10 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
         _chain.step("environment", env_m, env_note or ""),
         _chain.step("rest", lay_m, lay_note or ""),
         _chain.step("matchup", dvp_m, prop.get("dvp_note") or "") if read_matchup else None,
+        _chain.step("shooting", shoot_m, shoot_note) if shoot_m != 1.0 else None,
     ], proj, rate_per_min=round(rate, 4), minutes=proj_min)
     context_notes = [n for n in (env_note, lay_note, prop.get("dvp_note"),
-                                 prop.get("lineup_note")) if n]
+                                 shoot_note, prop.get("lineup_note")) if n]
     if base_list is not minutes:
         context_notes.append(f"Minutes read from his {len(base_list)} games this season, "
                              f"not last season's end (measured: they read closer)")

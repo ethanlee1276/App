@@ -140,6 +140,9 @@ def player_history(conn, teams: set[str], sport: str = "nba",
         weeks = sorted(p["by_week"], reverse=True)[:20]
         p["minutes"] = [p["by_week"][w].get("min", 0.0) for w in weeks]
         p["dates"] = weeks                      # ISO dates, newest first
+        # Each of those games as stored, shot columns and all: the shooting
+        # read rebuilds his points and threes from them (engine/nba/shooting).
+        p["games"] = [p["by_week"][w] for w in weeks]
         p["opps"] = [p["faced"].get(w, ("", 1))[0] for w in weeks]
         p["homes"] = [p["faced"].get(w, ("", 1))[1] for w in weeks]
         for stat in ("pts", "reb", "ast", "fg3m"):
@@ -785,6 +788,13 @@ def main() -> None:
             _fc.close()
         if _fit_report["fitted"]:
             print(describe(_fit_report))
+        # THE SPREAD THAT FOLLOWS THE PROJECTION (`hoops.NBA.sd_power`): with
+        # QB_NBA_SPREAD=1 those markets are priced by it, so the fitted CVs
+        # printed above are not read for them — said, not left to be guessed.
+        from engine.nba.prob import spread_on as _spread_on
+        if _spread_on() and getattr(tune, "sd_power", None):
+            print(f"  Spread: {', '.join(sorted(tune.sd_power))} priced by the projection-following "
+                  f"spread (QB_NBA_SPREAD=1); their fitted CVs are not read")
     except Exception as exc:  # noqa: BLE001 — a failed fit must not stop a build
         print(f"⚠️  Tuning fit unavailable — using inherited numbers.\n   {exc}")
     # ESPN FOR BOTH LEAGUES (the NBA since 2026-10-14: the league's own CDN
@@ -1188,6 +1198,23 @@ def main() -> None:
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  matchup ratings skipped: {exc}")
             _dvp0, _dvp_rating = None, {}
+        # SHOOTING, LUCK TAKEN OUT (engine/nba/shooting): every priced
+        # player's last 60 games with shot columns, any club, and the
+        # league's percentages over the last year — two reads for the slate.
+        _shoot_long, _shoot_lg = {}, {}
+        try:
+            from engine.nba import shooting as _shooting
+            if args.league in _shooting.LEAGUES and _shooting.enabled():
+                _shoot_long = _shooting.longrun(conn, args.league,
+                                                {pp.player for pp in slate.props if pp.player in hist})
+                _since = (datetime.date.fromisoformat(args.date) - datetime.timedelta(days=365)).isoformat()
+                _shoot_lg = _shooting.league_pcts(conn, args.league, since=_since)
+                print(f"Shooting read: {len(_shoot_long)} player(s) with shot history; league "
+                      + (f"3P% {_shoot_lg['p3']:.1%}, 2P% {_shoot_lg['p2']:.1%}, FT% {_shoot_lg['pf']:.1%}"
+                         if _shoot_lg else "percentages from the fallback (too few stored shots)"))
+        except Exception as exc:                            # noqa: BLE001
+            print(f"⚠️  shooting read skipped: {exc}")
+            _shoot_long, _shoot_lg = {}, {}
         census = {"no_real_price": 0, "no_history": 0}
         props = []
         _onoff_cache: dict = {}
@@ -1245,6 +1272,12 @@ def main() -> None:
                                 for ln in (getattr(prop, "sharp_lines", None) or [])],
                 "book": book, "minutes": h["minutes"],
                 "values": h[prop.market], "is_starter": bool(h["starter"]),
+                # His shots over the same games as his rate, and over his last
+                # 60: the read `pipeline.project` rebuilds points and threes
+                # from (None when the logs carry too few shot columns).
+                "shooting": (_shooting.bundle(h.get("games") or [], _shoot_long.get(prop.player),
+                                              _shoot_lg)
+                             if _shoot_long or _shoot_lg else None),
                 "spread": spread, "is_favorite": fav,
                 # What his history's games carried (`history_context`).
                 "margins": h.get("margins"), "rests": h.get("rests"),

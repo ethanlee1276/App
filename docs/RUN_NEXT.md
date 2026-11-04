@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-04, after NBA Most Likely came back on the page and
+Last updated 2026-11-04, after the NBA lab put points and threes on shot
+volume and left a better spread waiting for one check (step JY: item 1j),
+NBA Most Likely came back on the page and
 the plan started saying where the month's credits went (step JW: item
 00), and Long Shots got its faces back (step JX: item 00), and on 2026-11-03 after Most Likely learned by market and side too
 (step JV: item 1h2), Caesars got its backup-book test (step JU:
@@ -319,6 +321,27 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU 2>&1 | tee /tmp/ju.txt
 
 Paste it back. Each sport ends with `holds` or `does not hold` and why.
 Nothing changes on the boards either way; a `holds` comes back to you.
+
+## 1j. A quiet evening: the NBA's two changes, replayed on the box (step JY)
+
+You, 2026-11-04: "work on the nba most likely and edge bets ... find and
+invent more tools and data". Two full seasons of the NBA's own play-by-play,
+every idea fitted on one season and judged on the next (docs/NBA_LAB.md).
+One change is on now: points and threes read a player's shot volume at his
+long-run percentages, not his hot or cold streak (threes 1.68% closer,
+points 0.99%). The other, a spread that follows the projection, is off
+until this check says so: replayed through the board on two seasons, it
+called 18,600 points overs 86% that hit 85%, where today's spread, before
+its calibration, calls them 74%. Read-only, it replays every stored NBA game six
+times and writes nothing; perhaps half an hour:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JY 2>&1 | tee /tmp/jy.txt
+```
+
+Paste it back. It ends with `shooting: projections closer in N of 5
+markets` and either `spread: ready for the refit` or `spread: not yet` and
+why. If ready, step JY has the refit and then the switch, in that order.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

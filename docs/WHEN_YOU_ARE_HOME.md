@@ -9305,6 +9305,95 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JY. NBA points and threes read shot volume, and a better spread waits
+for one check** (steps 354 to 356; you, 2026-11-04: "work on the nba most
+likely and edge bets. Let's find and invent more tools and data and sources
+too make better picks ... look at how we kept looking for data and tools
+and resources for nfl").
+
+- **What we did.** The NFL got better by measuring every idea on games the
+  model never saw before it moved a number. The NBA now has the same: two
+  full seasons of the league's own play-by-play (2024-25 and 2025-26, every
+  game), a tool that rebuilds who was on the floor every second
+  (`engine/nba/stints.py`, every final score matched), and every idea fitted
+  on one season and judged on the next. docs/NBA_LAB.md has all of it.
+- **On now: shooting, luck taken out.** Points and threes come from a
+  player's shot volume at his long-run percentages, not his last twenty
+  games' makes. A 3P% over the hundred threes a starter takes in twenty
+  games swings five points either way on luck alone. On the season it never
+  saw, projections landed closer for threes (1.68%), points (0.99%) and the
+  points combos (0.6 to 0.9%). Each pick shows it as its own step, "Shooting,
+  luck taken out". It reads the shot columns the box has stored since 20
+  October; a player without them keeps his old number.
+- **Waiting: the spread that follows the projection.** One spread size per
+  stat makes a star's line too wide and a bench line too narrow. The box
+  fits that one size wide (about 0.72 for points), so the board can't tell
+  a 93% over from a 75% one. Replayed through the board itself on two
+  seasons: the new spread called 18,600 points overs 80% or more (86% on
+  average) and they hit 85%; today's spread, before its calibration, calls
+  those same overs 74%, never more than 78%. Brier on Most Likely's kind of
+  over 1 to 4% better in all seven markets, and no worse near the line. It
+  is OFF (`QB_NBA_SPREAD`): the stored calibration was fitted on the old
+  spread, and could stretch the new one a second time.
+- **Measured, not built:** a player's own record with and without a teammate
+  who sits (too noisy), the referees, back-to-backs and home or away on the
+  rate, last five over last twenty, rebound chances, and the opponent per
+  possession. The changelog lists them.
+
+Read-only (it replays every stored NBA game through the board with each
+change off and then on, six times over, at the spreads the board really
+uses; it writes nothing). Eight minutes on two seasons in the build session,
+so perhaps half an hour on the box. On its own, safe from a dropped
+connection:
+
+```
+cd /srv/qellys && sudo -u qellys nohup nice -n 19 python3 -u nbalabcheck.py > /tmp/jy.txt 2>&1 &
+tail -f /tmp/jy.txt
+```
+
+or the catch-up's copy, which runs it last (and stops it at 40 minutes):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbalabcheck.py
+```
+
+Paste it back. What to expect: "shooting: projections closer in 5 of 5
+markets", and a last line that says `spread: ready for the refit` or
+`spread: not yet` with the reason. Ready means, raw: the Brier on Most
+Likely's kind of over lower in at least 5 of 7 markets, the overs it calls
+80% or more hitting within 3 points of that in 5 of 7, and no market worse
+near the line. The reads "through today's calibration" can be worse; that
+is the calibration fitted on the old spread, and the reason for the refit.
+
+Then, **only if the last line says `spread: ready for the refit`**, the NBA
+refit on the new spread first (it rewrites the NBA's temperatures and
+player memory, the files Wednesday's refit writes anyway):
+
+```
+cd /srv/qellys && sudo -u qellys env QB_NBA_SPREAD=1 nohup nice -n 19 python3 -u -m engine.deepfit nba > /tmp/deepfit_nba_spread.log 2>&1 &
+tail -f /tmp/deepfit_nba_spread.log
+```
+
+When its last line names the temperatures (`N market(s) moved` or `nothing
+adopted`), Ctrl-C the tail and switch the spread on:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_NBA_SPREAD 1 && sudo systemctl restart qellys
+```
+
+In that order: the board reads the refit's numbers. The weekly refit runs
+inside the service, so it keeps learning on the new spread after this. To
+take it back: `cd /srv/qellys && sudo ./deploy/setenv.sh --unset
+QB_NBA_SPREAD && sudo systemctl restart qellys`, then the refit above
+without `env QB_NBA_SPREAD=1`. The shooting read has its own switch:
+`QB_NBA_SHOOTING 0` turns it off the same way.
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JY 2>&1 | tee /tmp/jy.txt
+```
+
 **JX. Long Shots wear their players' faces again** (step 352; you,
 2026-11-04, NBA Long Shots with Achiuwa and Wiggins drawn as initials:
 "Also the long shot page is missing headshots for every sport").

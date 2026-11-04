@@ -23,6 +23,12 @@ Counted from the hosts the engine fetches (`engine/` and `engine/sources/`),
 | Open-Meteo | Game-day weather | Free |
 | Polymarket, Kalshi public APIs | The prediction desk | Free |
 
+### Research only: not read by the site
+
+| Source | What it was used for | Paid? |
+| --- | --- | --- |
+| `shufinskiy/nba_data` on GitHub (the `cdnnba_2024` and `cdnnba_2025` files) | The NBA lab (docs/NBA_LAB.md, 2026-11-04): two full seasons of the league's own play-by-play, in the format the build already reads from `cdn.nba.com`, to measure ideas on games the model never saw. Downloaded once into a scratch folder; nothing on the box reads it and nothing in the repo carries it | Free, public |
+
 ## The alternatives the paper priced
 
 - **BALLDONTLIE**: NBA, WNBA, NFL, MLB, college football and MMA, with

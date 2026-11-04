@@ -26,6 +26,20 @@ marked *(10-20)* were built in this round.
 | Board corrections that learn on their own | Done | `likelycal` refits every league after each settle; NBA calibration and player memory on top |
 | One bet never argued both ways | Done *(10-20)* | `python3 -m engine.contradictions --sport nba` reads Edge, Most Likely, the one board, matchup picks and the reads against each other |
 
+## The projection, measured on two full seasons *(11-04)*
+
+The NFL's numbers got better by measuring every idea on games the model
+never saw. `docs/NBA_LAB.md` does that for the NBA: the league's own
+play-by-play for 2024-25 and 2025-26, every idea fitted on one season and
+judged on the next.
+
+| NFL tool | NBA | How |
+|---|---|---|
+| Play-by-play read into who was on the field | Done *(11-04)* | `engine/nba/stints`: who was on the floor every second, from the substitutions, and every box score it derives matches the final. Research for now; the box already downloads this play-by-play for the shot charts |
+| A rate's luck taken out (the NFL's touchdown and catch-rate regressions) | Done *(11-04)* | `engine/nba/shooting`: points and threes from shot volume at his long-run percentages, shrunk toward the league's. Threes 1.68% closer, points 0.99%, the points combos 0.6–0.9%. The pick shows the step "Shooting, luck taken out" |
+| A spread fitted to the player, not one size for all | Waiting *(11-04)* | `hoops.NBA.sd_power`: variance = a × projection^c, 0.8–2.1% better on Brier in seven markets. Off (`QB_NBA_SPREAD`) until `nbalabcheck.py` runs on the box and the NBA refit learns on it (runbook JY) |
+| Ideas measured and not built | Done *(11-04)* | Back-to-backs and home or away on the rate, last five over last twenty, rebound chances, the referees, and a player's own record with and without a teammate: none helped on the season it never saw. Listed in the changelog as a refusal |
+
 ## Offense against defense — the matchup scan
 
 | NFL tool | NBA | How |
@@ -48,7 +62,7 @@ marked *(10-20)* were built in this round.
 |---|---|---|
 | The injury report read by the build | Done | ESPN's injury board. Out and doubtful players are held; questionable players are graded down |
 | A player every book took down counts as out | Done | The slate's pulled players, in the build and the scan |
-| What a missing teammate opens | Done *(10-20)* | `engine/nba/onoff` measures what his teammates did when he sat; a read counts it only when the logs measured it |
+| What a missing teammate opens | Done *(10-20)* | `engine/nba/onoff` measures what his teammates did when he sat; a read counts it only when the logs measured it. A player's own with/without record, from whole games or from every minute the teammate sat, was too noisy to move a number on two full seasons *(11-04, docs/NBA_LAB.md)* |
 | The teammate-out step moving the number | Different | The card shows it (the lineup card). It moves the number only once `engine/nba/onoff` passes its edge test |
 | What if he sits | Done | `engine/nba/whatif`: the record behind each teammate's absence |
 | Starting QB change | Not possible | No basketball equivalent; a star out is the teammate rows above |
@@ -60,7 +74,7 @@ marked *(10-20)* were built in this round.
 | Schedule spots (rest, travel) | Done | Back-to-backs, three games in four nights, four in six on the road; in the reads and the report |
 | Game script | Done *(10-20)* | A starter facing a spread of 10 points or more gets the blowout line; the points his team is expected to score count in his read |
 | Weather, kick physics, altitude | Not possible | Basketball is played indoors |
-| Officials | Different | Each game's crew is stored from ESPN's summaries (`engine/officials`). Nothing moves a number until a season of closing totals is stored to test it against. Showing tonight's crew before tip-off is one of the D questions waiting on you |
+| Officials | Different | Each game's crew is stored from ESPN's summaries (`engine/officials`). Nothing moves a number until a season of closing totals is stored to test it against. Showing tonight's crew before tip-off is one of the D questions waiting on you. Measured on two full seasons of play-by-play *(11-04)*: the crew's free-throw rate moved no player's points, rebounds or assists on the season it never saw (docs/NBA_LAB.md) |
 
 ## The market
 
@@ -109,7 +123,14 @@ These are football feeds, and the NBA has nothing to match them yet:
   defense allows per game, so a fast team's defense reads a little worse
   than it is. Possessions are now stored (step 150), so a per-100 version
   can be measured with `hoopsdvpfit.py`. It replaces the per-game one only
-  if it measures better.
+  if it measures better. The lab measured it on two full seasons *(11-04)*:
+  per game read as well or better for points, rebounds and assists. For
+  threes, the three-point attempts a defense allows per possession added
+  0.1% beyond the shooting read: the one per-possession number worth
+  trying in `hoopsdvpfit.py`.
+- **The floor data on the box.** Store each game's stints from the
+  play-by-play the nightly already downloads, so the lab's floor reads can
+  be re-measured on our own games.
 
 ## How to check it on the box
 

@@ -56,6 +56,9 @@ STEP_LABELS = {
     "rest": "Rest and layoff",
     "power_play": "Power play",
     "air": "The air a kick flies through",
+    # Basketball's points and threes from shot volume at his long-run
+    # percentages, not his recent makes (engine/nba/shooting, 2026-11-04).
+    "shooting": "Shooting, luck taken out",
 }
 
 #: Where the multiplying starts.

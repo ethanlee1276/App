@@ -31,6 +31,7 @@ longshots by the 2-3 points that flip a bet.
 from __future__ import annotations
 
 import math
+import os
 
 from ..hoops import NBA, LeagueTuning
 
@@ -70,7 +71,26 @@ def break_even(odds: int) -> float:
     return round(1.0 / _dec(odds), 4)
 
 
+def spread_on() -> bool:
+    """The projection-following spread (`hoops.LeagueTuning.sd_power`) is
+    read only with ``QB_NBA_SPREAD=1``: the stored calibration curves were
+    fit on the one-CV spread, so it goes on with an NBA refit."""
+    return os.environ.get("QB_NBA_SPREAD", "0").strip() in ("1", "on", "true", "yes")
+
+
+def _power_sd(stat: str, mean: float, tune: LeagueTuning):
+    """The projection-following SD, sqrt(a × mean^c), or None for the CV."""
+    ac = (getattr(tune, "sd_power", None) or {}).get(stat)
+    if not ac or not spread_on() or mean <= 0:
+        return None
+    a, c = ac
+    return math.sqrt(float(a) * float(mean) ** float(c))
+
+
 def sd_for(stat: str, mean: float, tune: LeagueTuning = NBA) -> float:
+    sd = _power_sd(stat, mean, tune)
+    if sd is not None:
+        return max(0.1, sd)
     return max(0.1, tune.sd_cv.get(stat, 0.35) * mean)
 
 
@@ -114,7 +134,8 @@ def p_over(stat: str, proj: float, line: float,
            tune: LeagueTuning = NBA) -> float:
     """P(stat crosses the line), exact for low-count discrete stats —
     normal approximation there is off by the 2-4 points that ARE the edge."""
-    cv = tune.sd_cv.get(stat, 0.35)
+    psd = _power_sd(stat, proj, tune)
+    cv = psd / proj if psd is not None else tune.sd_cv.get(stat, 0.35)
     if stat in DISCRETE and line < 25:
         return round(p_over_negbin(proj, line, cv), 4)
     return round(p_over_normal(proj, line, sd_for(stat, proj, tune)), 4)

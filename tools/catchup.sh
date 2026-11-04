@@ -1217,5 +1217,8 @@ SH
 run JU "Caesars tried as a backup sharp book, every book beside it" 900 <<'SH'
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.anchortest
 SH
+run JY "NBA shooting and the spread, replayed on the box's own games" 2400 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbalabcheck.py
+SH
 
 echo "===== done in $((SECONDS / 60)) min"

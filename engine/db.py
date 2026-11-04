@@ -1527,8 +1527,14 @@ def hoops_entries(conn, sport: str, market: str, min_games: int = 8,
     Replaced `entries_for_sum` (2026-10-14), which summed the parts but
     dropped the minutes the board's model is built on."""
     from .hoops import SUMS
+    from .nba import shooting as _SH
     parts = tuple(SUMS.get(market, (market,)))
     want = ("min",) + tuple(p for p in parts if p != "min")
+    # The shot columns, for the shooting read the board's projection makes
+    # of points and threes (engine/nba/shooting): only where it moves one.
+    shots = sport in _SH.LEAGUES and market in _SH.MOVED
+    if shots:
+        want = want + tuple(k for k in _SH.SHOT_KEYS + ("pts",) if k not in want)
     q = ("SELECT player, season, period, team, opponent, home, position, market, value "
          "FROM player_game_logs WHERE sport=? AND market IN (%s)" % ",".join("?" * len(want)))
     args: list = [sport, *want]
@@ -1555,7 +1561,8 @@ def hoops_entries(conn, sport: str, market: str, min_games: int = 8,
                     "starters": [by_day[d]["starter"] for d in days],
                     "teams": [by_day[d]["team"] for d in days],
                     "opps": [by_day[d]["opp"] for d in days],
-                    "homes": [by_day[d]["home"] for d in days]})
+                    "homes": [by_day[d]["home"] for d in days],
+                    **({"games": [by_day[d]["got"] for d in days]} if shots else {})})
     return out
 
 
