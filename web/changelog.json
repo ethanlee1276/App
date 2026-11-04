@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-04",
+      "kind": "model",
+      "title": "NBA: when a regular sits, his minutes go to the bench, not the stars",
+      "body": "When a regular is ruled out, the board's teammate-out step hands his minutes to the rest of the rotation. It used to share them in proportion to each man's own minutes, so the stars took the most. Measured on two full seasons, each judged on the one it never saw, the minutes really go to the men with room to play more: the bench and the back of the rotation, while a star near his ceiling gains little. Shared that way, a teammate's minutes land 6-8% closer and his points 1-2% closer in those games than shared by minutes, and 10-12% and 3.5% closer than with no step at all. What moves: the projected minutes, and so every prop, of the teammates of a ruled-out regular; it switches on by itself once the server's own weekly check holds on its stored games."
+    },
+    {
+      "date": "2026-11-04",
       "kind": "ship",
       "title": "The NBA board switches on its own measured improvements",
       "body": "Three NBA changes our lab measured on two full seasons were waiting for someone to run a check on the server: a spread that follows each player's projection (it fixes Most Likely calling picks 62% that have hit 66%), the minutes a sitting regular opens up for his teammates, and the rotation's rules for a player's first games back, a jump in his minutes and a regular's return. The server now runs all three checks itself every week, against the same bars, on its own stored games, right before the NBA's weekly refit. A change switches on only when its check passes, and the spread only after the refit has fitted its probabilities to it; a check that stops passing switches it back off."

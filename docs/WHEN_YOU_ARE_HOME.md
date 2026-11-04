@@ -9343,6 +9343,14 @@ same bars the commands printed:
   only after that refit runs clean is the spread switched on, the order
   step JY gave.
 
+Also measured the same day (docs/NBA_LAB.md, "Who inherits a sitting
+regular's minutes"): when a regular sits, his minutes go to the men with
+room to play more (the bench), not to the stars, who are near their
+ceiling. Shared that way the teammate-out minutes land 6-8% closer than
+shared by each man's minutes, and the box's own check above now tests that
+rule (on the lab's seasons: minutes 10-12% closer and points 3.5% against
+no step at all).
+
 The heartbeat shows where each stands (`nba_switches`: on or off, the
 verdict and its date). A setting on the box still decides first:
 `QB_NBA_SPREAD=0` or `QB_NBA_ROTATION=0` in the service's environment

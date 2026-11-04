@@ -173,7 +173,8 @@ def cases(clubs: dict, sport: str, tune=None) -> list:
     board projected for him and what it would have with a vacancy:
     ``[{season, min, pts, proj_min, proj_pts, base, starter, high, absent, share}]``.
     ``absent`` is the absent regulars' usual minutes summed; ``share`` his
-    base minutes over the base minutes of every teammate who played."""
+    claim on them over every teammate's who played (engine/nba/vacancy.weight:
+    the room he has to play more, since 2026-11-04)."""
     from engine import playerfit
     from engine.hoops import for_league
     from engine.nba import pipeline
@@ -213,9 +214,12 @@ def cases(clubs: dict, sport: str, tune=None) -> list:
                                      "proj_min": float(pj["proj_min"]), "proj_pts": float(pj["projection"]),
                                      "base": float(base), "starter": bool(prior[0][1].get("starter")),
                                      "high": max(mins) if mins else None, "absent": absent})
-                    tot = sum(r["base"] for r in rows if r["base"] > 0)
+                    # Each man's claim as the board shares it (engine/nba/
+                    # vacancy.weight: the room he has to play more).
+                    from engine.nba.vacancy import weight
+                    tot = sum(weight(r["base"]) for r in rows)
                     for r in rows:
-                        r["share"] = (r["base"] / tot) if tot > 0 and r["base"] > 0 else 0.0
+                        r["share"] = (weight(r["base"]) / tot) if tot > 0 else 0.0
                         out.append(r)
                 for name, s in game.items():
                     hist.setdefault(name, []).append((d, s))
@@ -273,7 +277,8 @@ def heldout(rows: list, sport: str = "nba", tune=None) -> dict:
                       "points_gain": round(1 - pk / p0, 4) if p0 else 0.0}
     holds = len(by) >= 2 and all(v["k"] > 0 and v["minutes_gain"] > 0 and v["points_gain"] > 0
                                  for v in by.values())
-    return {"holds": holds, "k": fit(rows) if rows else 0.0, "by_season": by, "n": len(rows),
+    from engine.nba.vacancy import RULE
+    return {"holds": holds, "k": fit(rows) if rows else 0.0, "by_season": by, "n": len(rows), "rule": RULE,
             "bar": "every held-out season: squared error of minutes AND points falls against the empty slot"}
 
 

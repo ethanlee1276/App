@@ -46,9 +46,14 @@ class _Models:
         shutil.rmtree(self.dir)
 
 
-def test_the_vacated_minutes_are_shared_by_each_mans_own_minutes():
+def test_the_vacated_minutes_go_to_the_men_with_room_to_play_more():
+    # Measured 2026-11-04 (docs/NBA_LAB.md, "Who inherits"): by base x (34 - base),
+    # not by base — the stars were near their ceiling already.
     got = V.shares(30.0, {"Wing": 30.0, "Big": 20.0, "Bench": 0.0}, 0.5)
-    assert got == {"Wing": 9.0, "Big": 6.0}, got
+    assert got == {"Wing": 4.5, "Big": 10.5}, got
+    assert V.shares(30.0, {"Star": 36.0, "Big": 20.0}, 0.5) == {"Big": 15.0}, "a man past the cap takes none"
+    assert V.shares(30.0, {"Wing": 30.0, "Big": 20.0}, 0.5, rule="base") == {"Wing": 9.0, "Big": 6.0}, \
+        "the return still runs the old rule backwards, as it was measured"
     assert V.shares(30.0, {"Wing": 30.0}, 0.0) == {} and V.shares(0.0, {"Wing": 30.0}, 0.5) == {}
 
 
@@ -58,6 +63,8 @@ def test_the_slot_stays_empty_until_a_saved_verdict_holds():
         V.save("nba", {"holds": False, "k": 0.6})
         assert V.k_for("nba") == 0.0
         V.save("nba", {"holds": True, "k": 0.6})
+        assert V.k_for("nba") == 0.0, "a verdict fitted on base minutes means nothing under the room rule"
+        V.save("nba", {"holds": True, "k": 0.6, "rule": V.RULE})
         assert V.k_for("nba") == 0.6
         assert json.load(open(os.path.join(m.dir, V.STORE)))["nba"]["k"] == 0.6
         assert V.k_for("wnba") == 0.0, "each league earns its own"
@@ -139,7 +146,7 @@ def test_the_build_gives_the_vacancy_to_the_rotation_and_no_one_else():
     cache = {}
     wing = nba_build.vacancy_for("Wing", "BOS", gone, hist, listed, 0.6, cache=cache)
     big = nba_build.vacancy_for("Big", "BOS", gone, hist, listed, 0.6, cache=cache)
-    assert wing > big > 0 and abs(wing / big - 1.5) < 0.05, (wing, big)
+    assert big > wing > 0, ("the man with room to play more takes more of the minutes", wing, big)
     assert abs(wing + big - 0.6 * (34.0 + 25.0)) < 0.05, "all of k × the vacated minutes, no more"
     assert nba_build.vacancy_for("Star", "BOS", gone, hist, listed, 0.6, cache=cache) == 0.0
     assert nba_build.vacancy_for("Hurt", "BOS", gone, hist, listed, 0.6, cache=cache) == 0.0

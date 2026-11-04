@@ -35,19 +35,50 @@ STORE = "nba_vacancy.json"
 #: The shares tried for ``k``: none of the vacated minutes to all of them.
 K_GRID = tuple(round(0.05 * i, 2) for i in range(21))
 
+#: WHO TAKES THE MINUTES (2026-11-04, measured on the lab's two seasons,
+#: each held out: docs/NBA_LAB.md, "Who inherits"). Shared by base minutes,
+#: a sitting regular's minutes went mostly to the stars, who were already
+#: near their ceiling; on the floor they go to the men with room to play
+#: more — the bench and the back of the rotation. Weighted base × (ROOM_CAP
+#: − base), the minutes error in fresh-absence games fell 7.6% / 6.4% and
+#: points 1.3% / 1.5% against sharing by base, in both seasons, with the
+#: same cap and k (0.40) fitted on the other season both ways. A man of
+#: ROOM_CAP minutes or more takes none; the most goes to a man of about half
+#: of it.
+ROOM_CAP = 34.0
+#: The rule a verdict was fitted under rides with it (`save` callers file
+#: it): a k fitted under one rule means nothing under the other, so a
+#: verdict filed under another rule leaves the slot empty until the box's
+#: own check refits it (`k_for`).
+RULE = "room"
 
-def shares(absent_minutes: float, rotation: dict, k: float) -> dict:
+
+def weight(base, rule: str = RULE) -> float:
+    """One rotation man's claim on the vacated minutes: ``room`` (the
+    vacancy, since 2026-11-04) or ``base`` (the rule before it, which a
+    regular's return still runs backwards — nba_build.return_for, measured
+    that way)."""
+    try:
+        b = float(base or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    if b <= 0:
+        return 0.0
+    return b * max(0.0, ROOM_CAP - b) if rule == "room" else b
+
+
+def shares(absent_minutes: float, rotation: dict, k: float, rule: str = RULE) -> dict:
     """``{player: vacancy minutes}`` — ``k`` × the absent minutes, split by
-    each rotation player's own base minutes. Empty when nothing is owed."""
+    each rotation player's claim (`weight`). Empty when nothing is owed."""
     try:
         absent_minutes, k = float(absent_minutes or 0.0), float(k or 0.0)
     except (TypeError, ValueError):
         return {}
-    tot = sum(float(b) for b in rotation.values() if b and float(b) > 0)
+    claims = {p: weight(b, rule) for p, b in rotation.items()}
+    tot = sum(claims.values())
     if k <= 0 or absent_minutes <= 0 or tot <= 0:
         return {}
-    return {p: round(k * absent_minutes * float(b) / tot, 2)
-            for p, b in rotation.items() if b and float(b) > 0}
+    return {p: round(k * absent_minutes * w / tot, 2) for p, w in claims.items() if w > 0}
 
 
 def _path() -> str:
@@ -82,9 +113,11 @@ def verdict(sport: str) -> dict:
 
 def k_for(sport: str) -> float:
     """The share the board applies: the saved ``k`` once its held-out
-    verdict holds, else 0.0 (the empty slot, as before)."""
+    verdict holds under today's sharing rule, else 0.0 (the empty slot, as
+    before). A verdict filed before the rule rode with it was fitted on base
+    minutes."""
     v = verdict(sport)
-    if not v.get("holds"):
+    if not v.get("holds") or str(v.get("rule") or "base") != RULE:
         return 0.0
     try:
         return max(0.0, min(1.0, float(v.get("k") or 0.0)))

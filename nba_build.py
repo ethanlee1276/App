@@ -327,8 +327,9 @@ def vacancy_for(player: str, team: str, gone: dict, hist: dict, listed: dict, k:
     """The minutes tonight's absences open for ``player`` (engine/nba/vacancy):
     ``k`` × the ruled-out regulars' usual minutes, shared over his club's
     rotation — the men who played in its last `NEW_ABSENCE_GAMES` games and
-    are not ruled out — by each one's own base minutes. 0.0 with ``k`` 0
-    (the verdict has not held) or nobody out, so the slot stays empty."""
+    are not ruled out — by the room each has to play more (`vacancy.weight`,
+    measured 2026-11-04). 0.0 with ``k`` 0 (the verdict has not held) or
+    nobody out, so the slot stays empty."""
     away = (gone or {}).get(team) or []
     if not k or not away:
         return 0.0
@@ -455,7 +456,9 @@ def return_for(player: str, team: str, back: dict, hist: dict, listed: dict,
         from engine.nba.vacancy import shares
         names = tuple(n for n, _m in mine)
         rotation = _rotation(team, hist, listed, set(), tune, extra=names)
-        cache[team] = shares(sum(m for _n, m in mine), rotation, share)
+        # By base minutes, as the return was measured (2026-11-04); the
+        # vacancy itself shares by room (engine/nba/vacancy.weight).
+        cache[team] = shares(sum(m for _n, m in mine), rotation, share, rule="base")
     return float(cache[team].get(player) or 0.0)
 
 

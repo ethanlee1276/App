@@ -86,6 +86,8 @@ def cases(clubs: dict, tune, k_vac: float = 0.0) -> list:
                 if len(prior) >= 3:
                     bases[n] = base_minutes(role_minutes([p.get("min", 0.0) for _d, p in prior])[0], tune) or 0.0
             total = sum(b for b in bases.values() if b > 0)
+            from engine.nba.vacancy import weight
+            claims = sum(weight(b) for b in bases.values())
             back_names = {n for n, _m in back}
             back_total = sum(m for _n, m in back)
             for n in played:
@@ -113,12 +115,15 @@ def cases(clubs: dict, tune, k_vac: float = 0.0) -> list:
                         run = 0
                     second = run >= RETURN_MISSED
                 share = (bases.get(n, 0.0) / total) if total > 0 else 0.0
+                # The vacancy shares by room (engine/nba/vacancy.weight); the
+                # return runs it backwards by base minutes, as it was measured.
+                claim = (weight(bases.get(n, 0.0)) / claims) if claims > 0 else 0.0
                 ret = (tune.return_share * back_total * share) if back and n not in back_names else 0.0
                 prop = {"player": n, "market": "pts", "minutes": mins,
                         "values": [p.get("pts", 0.0) for _d, p in prior],
                         "is_starter": bool(prior[0][1].get("starter")), "spread": 0.0,
                         "is_favorite": False, "rest": "1day", "player_mult": 1.0,
-                        "vacancy_minutes": k_vac * absent * share,
+                        "vacancy_minutes": k_vac * absent * claim,
                         "missed_games": missed, "second_game_back": second, "return_minutes": ret}
                 base = base_minutes(role_minutes(mins)[0], tune)
                 touched = set()

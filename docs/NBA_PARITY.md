@@ -67,7 +67,7 @@ judged on the next.
 | The injury report read by the build | Done | ESPN's injury board. Out and doubtful players are held; questionable players are graded down |
 | A player every book took down counts as out | Done | The slate's pulled players, in the build and the scan |
 | What a missing teammate opens | Done *(10-20)* | `engine/nba/onoff` measures what his teammates did when he sat; a read counts it only when the logs measured it. A player's own with/without record, from whole games or from every minute the teammate sat, was too noisy to move a number on two full seasons *(11-04, docs/NBA_LAB.md)* |
-| The teammate-out step moving the number | Waiting *(11-04)* | `engine/nba/vacancy`: k x the absent regulars' minutes, shared by base minutes. Holds on the lab's two seasons (k 0.30; minutes 5.3-5.8% closer, points 2.5-2.7% in those games); on once the box saves its own verdict, which the weekly deep refit now does itself (`nbavacancy.py nba --heldout --save`, runbook KC). The card shows the absence either way |
+| The teammate-out step moving the number | Waiting *(11-04)* | `engine/nba/vacancy`: k x the absent regulars' minutes, shared by the room each man has to play more (base x (34 - base), measured held out: minutes 6-8% closer than by base). Holds on the lab's two seasons against the empty slot (k 0.40; minutes 10.3-12.0% closer, points 3.5-3.6% in those games); on once the box saves its own verdict, which the weekly deep refit now does itself (`nbavacancy.py nba --heldout --save`, runbook KC). The card shows the absence either way |
 | What if he sits | Done | `engine/nba/whatif`: the record behind each teammate's absence |
 | Starting QB change | Not possible | No basketball equivalent; a star out is the teammate rows above |
 

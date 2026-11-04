@@ -276,6 +276,35 @@ games: HOLDS. The board fills the slot only once the box saves its own
 verdict: the weekly deep refit runs that check itself since 4 November
 (runbook KC), and the slot fills the week its test holds on the box.
 
+## Who inherits a sitting regular's minutes
+
+The teammate-out minutes (`engine/nba/vacancy`) handed k x the absent
+regulars' minutes to the rotation in proportion to each man's own base
+minutes, so the stars took the most. On the floor it goes the other way:
+a star is already near his ceiling, and the minutes go to the men with room
+to play more, the bench and the back of the rotation. Four rules for who
+takes them, each fitted on one season (its constant and k) and judged on
+the other, against sharing by base minutes on the same 23,690
+teammate-games in 2,351 fresh absences (the board's own minutes model,
+`nbavacancy.py`'s rows):
+
+| Rule (who takes the minutes) | Minutes, 2024-25 / 2025-26 held out | Points |
+|---|---|---|
+| Room: base x (34 - base), k 0.40 | **+7.6% / +6.4%** | **+1.3% / +1.5%** |
+| A bench man when a starter sits (x4), k 0.30-0.35 | +3.1% / +2.8% | +0.4% / +0.9% |
+| A man like him (rebounds, assists, threes a minute) | +0.3% / +0.5% | +0.2% / +0.2% |
+| Bench man and a man like him together | +3.1% / +3.2% | +0.7% / +0.9% |
+
+(Positive is better than sharing by base.) Room won both ways with the
+same cap and k fitted on either season, and it is on (`vacancy.weight`).
+Against the empty slot, the box's own check (`nbavacancy.py --heldout`)
+now reads minutes 12.0% / 10.3% closer and points 3.6% / 3.5% in those
+games, against 4.7% / 4.2% and 2.3% / 2.1% shared by base minutes. A
+verdict filed under the old rule no longer fills the slot (`vacancy.k_for`
+reads the rule it was fitted under); the weekly deep refit refits it (runbook
+KC). A regular's return still takes its minutes back by base minutes, as
+that rule was measured.
+
 ## Measured, and not built
 
 The same honesty the NFL's refusals get:
