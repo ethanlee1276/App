@@ -9334,7 +9334,7 @@ lands exactly on the measurement's floor (15 yards) fell a hair under it
 and were dropped. The sums are exact now (`math.fsum`) and a blend on the
 floor counts, so every Python from 3.9 to 3.13 gives the same numbers, and
 they are the ones that shipped. The snap-ranked table the board uses when
-it has snap counts (`python3 matefit.py --snaps`) had gone stale since the
+it has snap counts (`matefit.py --snaps`) had gone stale since the
 backs fix of 12 October and was measured again: thirteen multipliers, none
 moving more than 0.006. Both are now checked against the box scores
 whenever they are cached.
