@@ -1509,8 +1509,13 @@ def reconcile_session(conn, user_id: int, session_id: str) -> dict:
     return status_for(conn, user_id)
 
 
-def status_for(conn, user_id: int, describe_with=None) -> dict:
+def status_for(conn, user_id: int, describe_with=None, now: float | None = None) -> dict:
     """What the page shows. Never a promise the database cannot back.
+
+    ``now``: the clock `entitled` reads (None, the default, is the real
+    one). A test that fixes its own "now" passes it, or it reads tomorrow's
+    clock against yesterday's fixture: a day's grace from a failure written
+    for 2 November ran out on the real clock on 3 November (2026-11-03).
 
     `describe_with` is how the PROCESSOR gets to write its own sentence
     for a status this module has no wording for. Paddle's `paused` is the
@@ -1546,7 +1551,7 @@ def status_for(conn, user_id: int, describe_with=None) -> dict:
         note = TRIAL_REFUSED
     return {"status": st, "period_end": end, "plan": plan,
             "plan_name": (PLANS[plan]["name"] if plan in PLANS else None),
-            "entitled": entitled(st, end, cancel_at_end=cancel, started_at=began, failed_at=failed),
+            "entitled": entitled(st, end, now=now, cancel_at_end=cancel, started_at=began, failed_at=failed),
             "note": note,
             "customer_id": row["customer_id"],
             # Not `live`: /api/billing/status already says `live` for

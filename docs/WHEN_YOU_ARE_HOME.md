@@ -9481,7 +9481,7 @@ cd /srv/qellys && sudo -u qellys python3 tools/book_keys.py
   from the logged forecasts against the settled highs. The last section
   grades the shadow calls since the pause, which is what un-pausing waits
   on.
-- **Also fixed:** `python3 launch.py --desk` read the locked public copy of
+- **Also fixed:** the owner's desk probe (`launch.py --desk`) read the locked public copy of
   the desk's file and printed zeros; it reads the full copy now, and says
   when the weather desk is paused.
 

@@ -132,7 +132,7 @@ def test_a_failed_first_charge_is_marked_and_told_once_by_phone_and_email():
             "SELECT status, failed_at, failed_from FROM subscriptions WHERE user_id = ?", (uid,)).fetchone()
         assert st == "past_due" and was == "trialing", (st, was)
         assert abs(failed_at - (NOW - 10 * 60)) < 1, "when Stripe made the event, not the second one"
-        assert BI.status_for(conn, uid)["entitled"] is True, "a day of grace from the failure"
+        assert BI.status_for(conn, uid, now=NOW)["entitled"] is True, "a day of grace from the failure"
         box = []
         assert LC.payment_failed(conn, now=NOW, send=lambda *a: box.append(a), site=SITE, log=QUIET) == 1
         (to, subject, text, html), = box
@@ -178,7 +178,7 @@ def test_a_renewal_that_fails_after_the_card_was_fixed_is_told_again():
         _apply(conn, "customer.subscription.updated", {
             "id": f"sub_{uid}", "customer": f"cus_{uid}", "status": "active",
             "items": {"data": [{"current_period_end": NOW + 60}]}}, at=NOW - 29 * DAY)
-        assert BI.status_for(conn, uid)["entitled"] is True
+        assert BI.status_for(conn, uid, now=NOW)["entitled"] is True
         # A month later the renewal fails: a new failure, a renewal's words.
         _fail(conn, uid, at=NOW)
         assert conn.execute("SELECT failed_from FROM subscriptions WHERE user_id = ?", (uid,)).fetchone()[0] == "active"
@@ -245,7 +245,7 @@ def test_once_the_day_is_over_the_notice_says_access_is_paused():
         box = []
         assert LC.payment_failed(conn, now=NOW, send=lambda *a: box.append(a), site=SITE, log=QUIET) == 1
         assert "Your access is paused until the payment goes through." in box[0][2], "the day already ran out"
-        assert BI.status_for(conn, uid)["entitled"] is False
+        assert BI.status_for(conn, uid, now=NOW)["entitled"] is False
 
 
 def test_the_billing_sweep_runs_it_and_the_policy_names_it():
