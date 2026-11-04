@@ -350,10 +350,26 @@ about that, measured on the replica with `calibrate.fit` itself:
   shots to the stars, where the vacancy shares both by base minutes. The
   floor data would say who inherits what; the Most Likely record's own
   correction (likelycal) lowers what keeps over-claiming meanwhile.
-- The NFL's scout corrections learn from the graded record
-  (`engine/likelyctx`, held out). The NBA's flags are on the cards; the same
-  record-learning for them needs each settled pick's situation rebuilt
-  from the box's logs, which is the next piece.
+- Done 2026-11-04 (runbook KB): the record-learning that grades the NFL's
+  flags (`engine/likelyctx`, held out, by the board learning every few
+  hours) grades the NBA's. `engine/nba/scoutrecord` rebuilds each settled
+  NBA Most Likely pick's situation from the stored games, the way the
+  board read it: his twenty games before the day for the club he played
+  for, his season's games, whether he missed the club's last game, the
+  club's rest, a regular who sat and one who came back (read off who
+  played, as the lab read them), and the books' last pre-game spread and
+  total. Every flag a pick raised is fitted, the card's six and the rest:
+  a refused flag the record proves gets its number too. On the lab's
+  seasons it reads 1,200 picks in under four seconds. The NBA build now
+  keeps each game's spread and total (`engine/lineledger`), so the
+  game-script flags can be graded from 4 November on.
+- The record so far (4 November): Most Likely 714-373 (65.7%) claimed at
+  62.0%, both sides beating their claims, and every market in profit.
+  The record's corrections (likelycal by maker and side, likelyctx by
+  flag) only ever pull a claim toward its price, so an under-claiming
+  board is left alone. Raising a claim the record says is too low is a
+  different correction with its own bar, and two weeks is too little to
+  set one.
 - Run `nbalabcheck.py` on the box (runbook JY). Then switch the spread on
   with an NBA refit, if its last line says `spread: ready for the refit`.
   Its "through today's stored calibration" ladder lines show the second

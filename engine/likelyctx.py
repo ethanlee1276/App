@@ -66,6 +66,20 @@ SOURCE = {"likely_live": "list", "likely": "list", "board": "board", "td_scenari
 #: joined 2026-10-09 with its own thresholds (scout.LEAGUE): the same reads
 #: and the same held-out bar, fitted on college's own record only.
 SPORTS = ("nfl", "cfb")
+#: Leagues whose flags the RECORD learns: football's, and the NBA's
+#: (2026-11-04). The NBA's flags are engine/nba/scout's, put on the board by
+#: its own `annotate` (likelyboard); each settled pick's situation is rebuilt
+#: from the stored games by engine/nba/scoutrecord. The same fit, the same
+#: five folds by game, the same bar; fitted on the NBA's own record only.
+LEARNS = SPORTS + ("nba",)
+
+
+def note(code: str, sport: str = "nfl") -> str:
+    """A flag in words, from its own league's scout."""
+    if sport == "nba":
+        from .nba import scout as _nba_scout
+        return _nba_scout.FLAGS.get(code, code)
+    return SC.note(code, sport)
 
 
 # --- the record, in its football context ----------------------------------------
@@ -250,6 +264,9 @@ def context(pick: dict, games: dict, by_team: dict, logs: dict, sport: str = "nf
 def flagged_journal(ledger, hist, sport: str = "nfl") -> list[dict]:
     """The journal with each pick's situation and flags attached."""
     rows = journal(ledger, sport)
+    if sport == "nba":
+        from .nba import scoutrecord
+        return scoutrecord.flagged(rows, hist, sport)
     games, by_team, logs = history_index(hist, {r["player"] for r in rows}, sport)
     for r in rows:
         r["ctx"] = context(r, games, by_team, logs, sport)
@@ -558,13 +575,17 @@ def apply(rows: list[dict], sport: str, store: dict | None = None, history: dict
         that flag on this market and side, never below its price.
 
     Returns how many moved. The chance before rides along as
-    ``ctx_raw_prob`` and the reason as ``ctx_note``."""
+    ``ctx_raw_prob`` and the reason as ``ctx_note``.
+
+    An NBA row carries every flag it raised as ``scout_all`` beside the card's
+    measured warnings (engine/nba/scout.annotate): the record is fitted on
+    all of them, so it is applied on all of them."""
     from . import scouthist
     ks = ((store if store is not None else load()).get(sport) or {}).get("flags") or {}
     hist = history if history is not None else scouthist.load(sport=sport)
     moved = 0
     for r in rows:
-        codes = r.get("scout_flags") or []
+        codes = r.get("scout_all") or r.get("scout_flags") or []
         q = price_chance(r.get("odds"))
         if not codes or r.get("model_prob") is None or q is None:
             continue
@@ -582,12 +603,12 @@ def apply(rows: list[dict], sport: str, store: dict | None = None, history: dict
         # the next fit judges what we said, never its own correction.
         r.setdefault("board_raw_prob", raw)
         if by_history <= by_record:
-            r["ctx_note"] = (f"{SC.note(hflag, sport)}: in 2021+ games picks like this hit {abs(shift):.0%} less "
+            r["ctx_note"] = (f"{note(hflag, sport)}: in 2021+ games picks like this hit {abs(shift):.0%} less "
                              f"often than usual, so this shows {adj:.0%} (it was {raw:.0%})")
         else:
             worst = min(codes, key=lambda f: (ks.get(f) or {}).get("k", 1.0))
             g = ks[worst]
-            r["ctx_note"] = (f"picks like this one ({SC.note(worst, sport)}) have hit {g['hit']:.0%} of {g['n']} where "
+            r["ctx_note"] = (f"picks like this one ({note(worst, sport)}) have hit {g['hit']:.0%} of {g['n']} where "
                              f"we said {g['claimed']:.0%}, so this shows {adj:.0%} (it was {raw:.0%})")
         moved += 1
     return moved

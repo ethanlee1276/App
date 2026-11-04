@@ -9324,6 +9324,30 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KB. The NBA's graded record grades the scout's flags** (step 367;
+nothing to run). The six NBA warnings on the cards were measured on two
+seasons of box scores. The record-learning that already grades the NFL's
+and college's flags on our own picks (`engine/likelyctx`, run by the
+board learning every few hours) now reads the NBA's too: each settled NBA
+Most Likely pick's situation is rebuilt from the stored games
+(`engine/nba/scoutrecord`: who sat and who came back, read off who
+played; his rest, form and minutes; the books' last spread and total
+before the tip), and every flag it raised is graded against what we
+claimed. A flag lowers a chance only once the record proves, on games
+the fit never saw, that picks carrying it over-claim; until then nothing
+moves. The Record page's "What it learned" shows the NBA's flags under
+the NBA once fifteen graded picks carry one.
+
+The NBA build also stores each game's spread and total now
+(`engine/lineledger`, as the NFL, college and MLB builds always have), so
+the two game-script flags (an under in a projected shootout, an over in a
+projected blowout) can be graded from 4 November on; picks before that
+have no stored line and never raise them. The record so far, for the
+reader: NBA Most Likely went 714-373 (65.7%) through 4 November where it
+claimed 62.0%, up 11.8 units, and both overs and unders beat their
+claims; the record's corrections only ever lower a claim, so they leave
+it alone.
+
 **JZ. The NBA board reads the rotation, and a scout says what still goes
 wrong** (steps 360 to 366; you, 2026-11-04: "I want to make sure we're all
 ready to go for NBA. I don't know much about NBA, so I want to make sure

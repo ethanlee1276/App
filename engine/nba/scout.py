@@ -227,29 +227,41 @@ def notes(codes: list[str]) -> list[str]:
             for c in codes if c in FLAGS and c in VERDICT]
 
 
+def every(ctx: dict | None, market: str, side: str, line=None) -> list[str]:
+    """Every flag one pick raises — measured, refused or not — from the
+    side-free facts the build put on its row (``scout_ctx``,
+    nba_build.scout_context) or the record rebuilt after the game
+    (engine/nba/scoutrecord). The card shows `card_flags` of these; the
+    record's own correction (engine/likelyctx) reads them all, because the
+    graded record may prove a flag two seasons of box scores did not."""
+    if not isinstance(ctx, dict) or not market or not side:
+        return []
+    return flags(situation(market, side, line, ctx.get("values"), ctx.get("minutes"), ctx.get("starter"),
+                           ctx.get("spread"), ctx.get("total"), ctx.get("rest"), ctx.get("games_season"),
+                           ctx.get("missed_last"), ctx.get("mate_out"), ctx.get("mate_back")))
+
+
 def read(ctx: dict | None, market: str, side: str, line=None) -> tuple[list, list]:
     """``(card flags, card sentences)`` for one pick, from the side-free facts
     the build put on its row (``scout_ctx``, nba_build.scout_context).
     Empty for a row the build gave none (another league, an old board)."""
-    if not isinstance(ctx, dict) or not market or not side:
-        return [], []
-    s = situation(market, side, line, ctx.get("values"), ctx.get("minutes"), ctx.get("starter"),
-                  ctx.get("spread"), ctx.get("total"), ctx.get("rest"), ctx.get("games_season"),
-                  ctx.get("missed_last"), ctx.get("mate_out"), ctx.get("mate_back"))
-    codes = card_flags(flags(s))
+    codes = card_flags(every(ctx, market, side, line))
     return codes, notes(codes)
 
 
 def annotate(rows: list[dict]) -> int:
     """Put ``scout_flags`` and ``scout_notes`` on every row that carries a
     ``scout_ctx``, for the side and line the row itself takes (a Most Likely
-    row may take the other side of the Edge card, or a rung of its ladder).
-    Moves no number; returns how many rows carry a caution."""
+    row may take the other side of the Edge card, or a rung of its ladder),
+    and ``scout_all``, every flag it raises, for the record's correction
+    (engine/likelyctx.apply). Moves no number; returns how many rows carry
+    a caution."""
     n = 0
     for r in rows or []:
         if not isinstance(r, dict) or not isinstance(r.get("scout_ctx"), dict):
             continue
-        codes, said = read(r["scout_ctx"], r.get("market") or "", str(r.get("side") or ""), r.get("line"))
-        r["scout_flags"], r["scout_notes"] = codes, said
+        allf = every(r["scout_ctx"], r.get("market") or "", str(r.get("side") or ""), r.get("line"))
+        codes = card_flags(allf)
+        r["scout_flags"], r["scout_notes"], r["scout_all"] = codes, notes(codes), allf
         n += bool(codes)
     return n

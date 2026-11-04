@@ -170,7 +170,7 @@ def learn_sport(lconn, hconn, sport: str, log=print) -> dict:
     elif _drop(likelycal, sport):
         log(f"  board learning ({sport}): the record no longer proves its correction — removed")
     entry["calibration"] = {**_verdict(cal), "groups": cal.get("groups") or {}}
-    if sport in likelyctx.SPORTS and hconn is not None:
+    if sport in likelyctx.LEARNS and hconn is not None:
         flagged = likelyctx.flagged_journal(lconn, hconn, sport)
         ctx = likelyctx.fit(lconn, hconn, sport, flagged=flagged)
         if ctx["passed"]:
@@ -204,9 +204,8 @@ def learn_sport(lconn, hconn, sport: str, log=print) -> dict:
         for r in found:
             for f in r["flags"]:
                 by_flag[f].append(r)
-        from . import scout
         entry["scout"] = {**_verdict(ctx), "matched": len(found), "too_common": ctx.get("too_common") or [],
-                          "flags": sorted(({"key": f, "note": scout.note(f, sport), **grade(v)}
+                          "flags": sorted(({"key": f, "note": likelyctx.note(f, sport), **grade(v)}
                                            for f, v in by_flag.items() if len(v) >= MIN_SLICE),
                                           key=lambda s: s["z"]),
                           "fitted": ctx.get("flags") or {}}

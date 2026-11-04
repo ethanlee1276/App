@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-04",
+      "kind": "ship",
+      "title": "The NBA's own graded picks now grade the scout's warnings",
+      "body": "The six NBA warnings on the cards were measured on two seasons of box scores. From today the site also checks them against its own NBA picks, every few hours, the way it already does for the NFL and college: for each settled Most Likely pick it rebuilds the situation the pick was taken in (who sat, who came back, his rest and recent games, the game's spread and total) and compares how often picks carrying each warning hit with how often we said they would. A warning lowers a chance only once our own record proves, on games the check never saw, that picks carrying it come in under their claim; until then nothing moves. The Record page's \"What it learned\" shows each warning's record under the NBA once fifteen graded picks carry it. The NBA board also keeps each game's spread and total as it prices them now, so the shootout and blowout warnings can be graded from today on."
+    },
+    {
+      "date": "2026-11-04",
       "kind": "model",
       "title": "NBA minutes read the rotation: a player's first games back, a minutes jump, a regular's return",
       "body": "Minutes decide most of an NBA prop, and the board read a player's minutes only from his recent games. Three things it did not know, each measured on two full seasons before it moved a number (fitted on one season, judged on the other, kept only if minutes and points both landed closer in both): a player in his first game back plays fewer minutes than his old role, about 4% fewer after one missed game, 8% after two to four, 16% after five or more, and his second game back after a longer absence about 4% fewer; when his minutes have just jumped well above his usual, the jump mostly holds, so his projection moves most of the way there; and when a regular who has missed two or more games comes back, the players who covered for him give back about a quarter of his minutes. In the games they touch, minutes land 1% to 35% closer and points 0.5% to 8.6%. The pick says when one moved a player."

@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-04, after a deploy learned to wait for the weekly jobs
+Last updated 2026-11-04, after the NBA's graded record started grading the
+scout's flags and the NBA build started keeping each game's spread and
+total (step KB: nothing to run, item 1k), a deploy learned to wait for the weekly jobs
 instead of killing them (step KA: items 1f and 1g), the NBA board learned to read the rotation
 (a man's first games back, a role that jumped, a regular's return) and a
 scout started naming the spots that still go wrong (step JZ: item 1k), the
@@ -390,6 +392,12 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbavacancy.py --heldout --sa
 
 The second part should end `HOLDS — the board keeps all three.` If it says
 `DOES NOT HOLD`, step JZ has the one line that turns the three off.
+
+Nothing to run for the next part (step KB): the board learning that grades
+the NFL's flags on our own picks now grades the NBA's too, every few hours
+by itself. Record page → What it learned → NBA shows each flag once fifteen
+graded picks carry one; a flag moves a number only once the record proves
+it on games the fit never saw.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

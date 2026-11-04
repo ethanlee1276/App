@@ -1294,6 +1294,21 @@ def main() -> None:
             if g.total is not None:
                 total_by_team[g.home] = float(g.total)
                 total_by_team[g.away] = float(g.total)
+        # THE GAME LINES, KEPT (engine/lineledger; 2026-11-04). The NFL,
+        # college and MLB builds store each game's spread and total as they
+        # price it; this one never did, so the graded record could not say
+        # which NBA pick sat in a projected shootout or a blowout (the
+        # scout's flags, engine/nba/scoutrecord) and nothing held an NBA
+        # close to grade a game line on. Free: the numbers are on the slate.
+        # The date rides on each row: it is the game's day in the tape's key.
+        try:
+            from engine import lineledger as _lineledger
+            print(_lineledger.record_note(conn, args.league, [
+                {"home": g.home, "away": g.away, "date": args.date, "kickoff": g.kickoff,
+                 "spread": g.spread, "total": g.total, "home_ml": g.home_ml, "away_ml": g.away_ml}
+                for g in slate.games]))
+        except Exception as _exc:                             # noqa: BLE001 — telemetry, never the board
+            print(f"  ⚠️  {args.league.upper()} line ledger skipped: {_exc}")
 
         defense = defense_ratings(conn, args.league)
         density = {t: schedule_density(sched_days, t, args.date) for t in teams}

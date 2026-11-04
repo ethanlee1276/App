@@ -906,12 +906,18 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
     # basketball spots two seasons measured to still go wrong after our
     # number — an under while a regular teammate sits, an under in a
     # projected shootout, a man whose games swing, a man barely into his
-    # season — on the side and line each row takes. Moves no number; the
-    # record's own correction (likelycal) lowers what keeps over-claiming.
+    # season — on the side and line each row takes. A flag lowers a chance
+    # only where the NBA's own graded record has proven, on games the fit
+    # never saw, that picks carrying it over-claim (engine/likelyctx, each
+    # settled pick's situation rebuilt by engine/nba/scoutrecord); until
+    # that store holds an NBA entry the flags are notes and nothing moves.
     if sport == "nba":
         try:
             from .nba import scout as _nsc
-            _nsc.annotate([pool[k] for k in order])
+            _nrows = [pool[k] for k in order]
+            _nsc.annotate(_nrows)
+            from . import likelyctx as _nctx
+            _nctx.apply(_nrows, sport)
         except Exception:                                    # noqa: BLE001
             pass
     # THE INVENTIONS, ONCE PROVEN (engine/ideagate; Ethan, 2026-10-17: "make
