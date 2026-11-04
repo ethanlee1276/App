@@ -1045,10 +1045,9 @@ function leagueBadge(sport) {
 const MAX_CREDIBLE_EDGE = 0.10;
 
 function shrinkArtefact(r) {
-  const rv = (r || {}).raw_prob, fv = (r || {}).fair_prob;
+  const { raw_prob: rv, fair_prob: fv } = r || {};
   if (rv == null || fv == null || rv === "" || fv === "") return false;
-  const raw = Number(rv);
-  const fair = Number(fv);
+  const raw = Number(rv), fair = Number(fv);
   if (!Number.isFinite(raw) || !Number.isFinite(fair)) return false;
   return Math.abs(raw - fair) > MAX_CREDIBLE_EDGE;
 }
@@ -10239,18 +10238,13 @@ function capWipeoutNote() {
    back, which is ours to fix and not a quiet night. "" when the board has
    no pick at all, and the census sentence stands. */
 function likelyHiddenWhy(d) {
-  const ml = ((d || {}).most_likely || []).filter(Boolean);
-  if (!ml.length) return "";
-  const started = ml.filter((r) => rowStarted(r)).length;
-  const one = ml.length === 1;
-  if (started === ml.length) {
-    return `Tonight’s ${plural(ml.length, "pick")} ${one ? "is" : "are"} under way, so ${one ? "it has" : "they have"}
-      come off the board — the Live tab follows ${one ? "it" : "them"} to the final.`;
-  }
-  const held = ml.length - started;
-  return `Tonight’s board has ${plural(ml.length, "pick")}, and this page could not show
-    ${held === ml.length ? (one ? "it" : "any of them") : `${held} of them`}${started ? ` (${started} more under way)` : ""}.
-    That is a fault on our side, not a quiet slate — refresh in a minute, and tell us if they stay hidden.`;
+  const n = ((d || {}).most_likely || []).filter(Boolean).length;
+  if (!n) return "";
+  const on = d.most_likely.filter((r) => r && rowStarted(r)).length, held = n - on;
+  return on === n
+    ? `Tonight’s ${plural(n, "pick")} ${pluralWord(n, "is", "are")} under way: follow ${pluralWord(n, "it", "them")} on the Live tab.`
+    : `Tonight’s board has ${plural(n, "pick")}, and this page could not show ${held === n ? "them" : `${held} of them`}${
+      on ? ` (${on} more under way)` : ""}. That’s our fault, not a quiet slate: refresh in a minute.`;
 }
 
 function likelyEmptyWhy(census, d) {
@@ -10511,10 +10505,9 @@ function renderLikely() {
   const dropped = shown.filter(likelyDropped);
   if (!shown.length) {
     host.innerHTML = "";
-    const hiddenWhy = likelyHiddenWhy(state.data);
     note.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
-      <div class="es-title">${hiddenWhy ? "No pick to show right now" : "Nothing to rank yet"}</div>
-      <div class="es-sub">${hiddenWhy || likelyEmptyWhy(state.data.likely_census, state.data)}</div>${boardEmptyFacts()}${boardEmptyDoors("likely")}</div>`;
+      <div class="es-title">Nothing to rank yet</div>
+      <div class="es-sub">${likelyHiddenWhy(state.data) || likelyEmptyWhy(state.data.likely_census, state.data)}</div>${boardEmptyFacts()}${boardEmptyDoors("likely")}</div>`;
     bindEmptyDoors(note);
     return;
   }

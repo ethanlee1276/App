@@ -165,19 +165,20 @@ def test_the_empty_state_says_when_the_page_held_picks_back():
         return
     assert none == "", "no pick at all: the census sentence stands"
     held = _hidden_why({"most_likely": rows})
-    assert "board has 3 picks" in held and "could not show\n    any of them" in held, held
-    assert "fault on our side" in held, held
+    assert "board has 3 picks, and this page could not show them." in held, held
+    assert "our fault, not a quiet slate" in held, held
     some = _hidden_why({"most_likely": rows}, started=("A",))
-    assert "2 of them" in some and "(1 more under way)" in some, some
+    assert "could not show 2 of them (1 more under way)" in some, some
     gone = _hidden_why({"most_likely": rows}, started=("A", "B", "C"))
-    assert "3 picks are under way" in gone and "Live tab" in gone and "fault" not in gone, gone
+    assert "3 picks are under way: follow them on the Live tab" in gone and "fault" not in gone, gone
+    one = _hidden_why({"most_likely": rows[:1]}, started=("A",))
+    assert "1 pick is under way: follow it on the Live tab" in one, one
 
 
 def test_both_empty_states_read_it_first():
     top, page = _fn("renderLikelyTop"), _fn("renderLikely")
     assert "likelyHiddenWhy(state.data) || likelyEmptyWhy(state.data.likely_census, state.data)" in top
-    assert "const hiddenWhy = likelyHiddenWhy(state.data);" in page
-    assert "${hiddenWhy || likelyEmptyWhy(state.data.likely_census, state.data)}" in page
+    assert "${likelyHiddenWhy(state.data) || likelyEmptyWhy(state.data.likely_census, state.data)}" in page
 
 
 def test_the_home_draws_the_one_board_with_no_shelf():
