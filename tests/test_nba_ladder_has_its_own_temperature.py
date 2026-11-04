@@ -9,7 +9,8 @@ they landed. Pinned here:
 
   * the walk also prices every game, raw, at half-point rungs one and one
     and a half curve-widths either side of the projection (the board's own
-    `sd_for`), oldest first, as ``ladder_pairs``;
+    `sd_for`), oldest first, as ``ladder_pairs`` — when the temperature
+    fit asks (``ladder=True``), so the other fits' walks cost what they did;
   * calibrate.py fits those under ``<market>@ladder`` beside the market's
     own key, stamped as the history fitter's, and stores none below its
     sample floor;
@@ -108,7 +109,10 @@ def test_the_walk_prices_the_ladder_too_raw_and_oldest_first():
     conn = db.connect(str(path))
     entries = logwalk.load_entries(conn, "nba", "pts", min_games=6)
     with cal.disabled():
-        raw = logwalk.walk("nba", entries, "pts")
+        raw = logwalk.walk("nba", entries, "pts", ladder=True)
+        plain = logwalk.walk("nba", entries, "pts")
+    assert plain.ladder_pairs == [] and plain.pairs == raw.pairs, \
+        "only the temperature fit asks for the rungs: the other fits' walks are unchanged"
     games = len(raw.settled)
     assert games and games <= len(raw.ladder_pairs) <= 4 * games, (games, len(raw.ladder_pairs))
     assert all(0.0 <= p <= 1.0 and y in (0, 1) for p, y in raw.ladder_pairs)
@@ -123,7 +127,7 @@ def test_the_walk_prices_the_ladder_too_raw_and_oldest_first():
     # Raw whatever is stored: the fit must learn on the uncorrected number.
     with _Store({"nba:pts@ladder": {"temperature": 0.5, "intercept": 0.0},
                  "nba:pts": {"temperature": 2.0, "intercept": 0.0}}):
-        stored = logwalk.walk("nba", entries, "pts")
+        stored = logwalk.walk("nba", entries, "pts", ladder=True)
     assert stored.ladder_pairs == raw.ladder_pairs
     # Only the walk carries them; the Lab's replay at real lines does not.
     assert hoopsreplay.evaluate([]).ladder_pairs == []
@@ -158,7 +162,7 @@ def test_the_fitter_stores_the_ladder_key_beside_the_market():
     conn = db.connect(str(path))
     entries = logwalk.load_entries(conn, "nba", "pts", min_games=10)
     with cal.disabled():
-        rep = logwalk.walk("nba", entries, "pts")
+        rep = logwalk.walk("nba", entries, "pts", ladder=True)
     assert lad["samples"] == len(rep.ladder_pairs) > got["nba:pts"]["samples"]
     # Below its own floor no ladder key: the rungs keep the market's.
     few = _fit(path, len(rep.ladder_pairs) + 1)

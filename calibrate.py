@@ -26,7 +26,7 @@ import datetime as _dt
 
 from engine import calibrate as cal
 from engine import db as _db
-from engine.logwalk import walk
+from engine.logwalk import HOOPS, walk
 from engine.mlb.models import MARKET_LABELS as _MLB_LABELS
 from engine.models import MARKET_LABELS as _GEN_LABELS
 
@@ -95,8 +95,11 @@ def fit_market(conn, market: str, min_history, min_samples: int,
     # Fit on the model's RAW probabilities. With the existing calibration still
     # applied, each run would learn a correction for already-corrected input and
     # then apply it to raw input, compounding every time it's re-run.
+    # The basketball walk prices the alternate rungs too, for their own key
+    # (`calibrate.LADDER`); only this fit asks for them.
+    rungs = {"ladder": True} if sport in HOOPS else {}
     with cal.disabled():
-        report = walk(sport, entries, market, min_history=min_history)
+        report = walk(sport, entries, market, min_history=min_history, **rungs)
     if not report.pairs:
         return None, "no settled predictions (need more games per player)"
     c = cal.fit(report.pairs, sport=sport, market=market, min_samples=min_samples)
