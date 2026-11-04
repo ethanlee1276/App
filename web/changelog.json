@@ -2,6 +2,18 @@
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
     {
+      "date": "2026-11-04",
+      "kind": "fix",
+      "title": "Basketball's Most Likely picks are on the page again",
+      "body": "The NBA board built its Most Likely picks every day, and they were recorded and graded, but the page showed none of them. A check meant to hide a pick built on a broken number read a missing number as a claim of 0%, and NBA and NHL picks carry no such number, so every one was hidden. A missing number is now no claim, as the engine always read it, and the page lets through exactly the picks the engine posts. If a board ever has picks the page cannot show, the page now says so instead of saying the slate had nothing priced."
+    },
+    {
+      "date": "2026-11-04",
+      "kind": "ship",
+      "title": "The odds plan says where the month's credits went",
+      "body": "The plan's report now opens with the month so far: the credits used against the month's quota, how much of the month has gone, and how much of the month's spending the plan's own table puts in those days, so a month that opens with an NFL Sunday reads as on its pace and not as running away. A new day-by-day view lists what each day spent by sport, closing lines and slip checks, with the API's own count beside our ledger's. The day the plan renews is now read from the API's own count falling back to zero rather than estimated. How the credits are spent is unchanged."
+    },
+    {
       "date": "2026-11-03",
       "kind": "fix",
       "title": "Most Likely learns from each market's record",

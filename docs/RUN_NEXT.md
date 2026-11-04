@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-03, after Most Likely learned by market and side too
+Last updated 2026-11-04, after NBA Most Likely came back on the page and
+the plan started saying where the month's credits went (step JW: item
+00), and on 2026-11-03 after Most Likely learned by market and side too
 (step JV: item 1h2), Caesars got its backup-book test (step JU:
 item 1i), the weekly backup zip was fixed and a cleanup
 written for after tonight's backup (step JT: item 0), Fliff took the tenth
@@ -72,6 +74,37 @@ JI). Before that, Who's on now became the desk's first card (step JH). Done:
   tip records alone on games it never saw.
 - **IX:** showed Duke's lead back at 52% with no receivers anywhere. That's
   fixed (step JC), and item 3 checks it.
+
+## 00. First, when you're home: NBA Most Likely is back, and where the credits went (step JW)
+
+**NBA Most Likely.** The board had the picks the whole time (92 this
+morning, journaled and graded every day: 1,087 settled at 65.7%). The page
+hid every one. NBA picks carry no raw model number, the page read that
+empty number as 0%, and it hid them as broken. Fixed in the page; nothing
+to run. Once the box has this commit, open the NBA page and Most Likely.
+If the board ever has picks the page can't show, the empty box now says
+so instead of "nothing priced".
+
+**Credits.** Nothing ran away. 100,000 a month is 3,333 a day, and the plan
+spends nearly all of it on purpose (left-over credits expire). This month
+opened with a college Saturday, an NFL Sunday (the dearest day, about 5,250
+for the NFL alone) and a Monday night. About 10,000 by the 4th is on the
+plan; its table allowed about 15,000 for those days. Read-only, it prints
+the plan with a new "this month so far" line, then every day since the
+renewal by sport:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan --month
+```
+
+Or both checks in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW 2>&1 | tee /tmp/jw.txt
+```
+
+Paste it back. "on its pace ✓" is what to expect; "AHEAD" means the day
+lines show where.
 
 ## 0. Tomorrow, after the 04:00 UTC backup: offsite works, then clear about 13 GB (steps JT, JG)
 

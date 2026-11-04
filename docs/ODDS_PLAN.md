@@ -142,6 +142,25 @@ share of its need that covers, and today's need, ceiling and spend:
 
 ## Not running through credits
 
+**Is the month on its pace?** (Ethan, 2026-11-04: "we've already ran
+through almost 10,000 credits ... Seems like we'll run out pretty soon.")
+The report's fourth line answers it: `this month so far: 10,323 of 100,000
+used (10%) with 3.6 of 30 days gone (12%); the plan's table puts 13% of the
+month's spending in those days — on its pace ✓`. The days aren't equal. An
+NFL Sunday is the dearest day of the week (about 5,250 for the NFL alone
+with its headroom), so a month that opens with a Saturday's college slate,
+a Sunday and a Monday night is ahead of a straight line and still on its
+plan. The comparison that matters is with the table, not the calendar.
+`AHEAD of its table ⚠️` means the month has spent more than the table
+allows for those days.
+
+**Where it went:** `python3 -m engine.oddsplan --month` prints the plan,
+then every day since the renewal: what it spent, the table's most for that
+day, and each sport, the closing lines and the slip checks. Then what the
+calls bought (player props, game lines, closing lines), and the API's own
+count of credits used beside the ledger's. A gap there is spend the ledger
+never saw. Read-only.
+
 * **Every ceiling is a day's share of the month**, worked out from what's
   really left, so no sport can spend next week's credits today.
 * **The pace line** counts every credit spent over the last seven days of
@@ -202,11 +221,17 @@ The plan spends to the day your Odds API month renews. **If your plan
 doesn't renew on the 1st**, the plan has to know, or late in the calendar
 month it would spend credits meant to last until the real renewal.
 
-It works the day out on its own: it walks back through the spend ledger
-until it reaches what the API says this month has used. The report's
-second line says which way it knows:
+It works the day out on its own. Every call books the API's own count of
+credits used (since 2026-10-30), so the call where that count fell back to
+zero is the renewal, seen exactly. The API turns over at midnight UTC,
+which is 8pm Eastern on the 31st, so the day is read in UTC. Without such a
+call it walks back through the spend ledger until it reaches what the API
+says this month has used. The report's second line says which way it knows:
 
-* `renewal day measured: …`: worked out from the ledger.
+* `renewal day seen: …`: the API's own count fell back to zero that day.
+* `renewal day measured: …`: worked out from the ledger. The ledger is
+  dated in Eastern, so a plan renewing at midnight UTC on the 1st measured
+  as the 31st ("renews Nov 30" on 2026-11-03); seen, it reads the 1st.
 * `renewal day set by QB_ODDS_RESET_DAY`: you set it.
 * `renewal day ASSUMED — the 1st`: it couldn't tell (two keys with
   credits on the ring, a fresh month with under 100 credits used, or no

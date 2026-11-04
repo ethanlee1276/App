@@ -388,6 +388,61 @@ def measured_start(used: int, rows: list, today: _dt.date) -> _dt.date | None:
     return None
 
 
+def seen_start(rows: list, today: _dt.date) -> _dt.date | None:
+    """The day the API's own meter went back to zero, read off the ledger.
+
+    Every live call since 2026-10-30 books the API's `x-requests-used`
+    after it (`used`, beside `billed`), so a renewal is in the ledger as
+    the call whose count fell below half the one before it, from a count
+    worth trusting (`MIN_USED`): 99,412 then 26 is a new month, not an
+    estimate. The latest such fall within a month of ``today``. None when
+    the ledger shows none — a month that began before the request path
+    booked the count — and then the renewal is measured instead
+    (`measured_start`). Only asked with one key on the ring: two keys'
+    counts interleave in one ledger, and a switch between them is a fall
+    that is no renewal.
+
+    THE DAY IS THE API'S, IN UTC. The API turns its month over at midnight
+    UTC, which is 8pm Eastern on the 31st — and the box's ledger is dated
+    in Eastern, so November's first call was booked on October 31 and
+    the ledger walk (`measured_start`) read a plan that renews on the 1st
+    as one renewing on the 31st ("renews Nov 30", 2026-11-03). The call
+    that fell is dated by its own clock in UTC; its local date only when a
+    row has no clock."""
+    got = _fall(rows, today)
+    return got[1] if got else None
+
+
+def _fall(rows: list, today: _dt.date):
+    """(the clock, the UTC day) of the first call after the API's count last
+    fell back to zero, within a month of ``today`` — or None (`seen_start`)."""
+    seq = []
+    for r in rows or []:
+        u = r.get("used")
+        if u is None:
+            continue
+        try:
+            ts = float(r.get("ts") or 0)
+            day = (_dt.datetime.fromtimestamp(ts, _dt.timezone.utc).date().isoformat()
+                   if ts > 0 else str(r.get("iso", ""))[:10])
+            seq.append((ts, int(u), day))
+        except (TypeError, ValueError, OverflowError, OSError):
+            continue
+    seq.sort()
+    fell, prev = None, None
+    for ts, u, day in seq:
+        if prev is not None and prev >= MIN_USED and u < prev * 0.5:
+            fell = (ts, day)
+        prev = u
+    if not fell:
+        return None
+    try:
+        d = _dt.date.fromisoformat(fell[1])
+    except ValueError:
+        return None
+    return (fell[0], d) if 0 <= (today - d).days <= 31 else None
+
+
 #: Below this many credits used, a billing month is too young to measure:
 #: any stray ledger row would match it.
 MIN_USED = 100
@@ -397,19 +452,25 @@ READING_MAX_AGE_DAYS = 3
 
 def reset_day(state=None, rows=None, today: _dt.date | None = None) -> tuple[int, str]:
     """(the day of the month the plan renews, how that is known): "set"
-    (`RESET_DAY_ENV`), "measured" (`measured_start`, one key on the ring —
-    two keys' spend is one ledger and their resets are two dates), or
-    "assumed" (the 1st, the calendar month the pacer always used)."""
+    (`RESET_DAY_ENV`), "seen" (the API's own count falling back to zero in
+    the ledger, `seen_start`), "measured" (`measured_start`) — those two
+    with one key on the ring: two keys' spend is one ledger and their
+    resets are two dates — or "assumed" (the 1st, the calendar month the
+    pacer always used)."""
     import os
     raw = os.environ.get(RESET_DAY_ENV, "").strip()
     if raw.isdigit() and 1 <= int(raw) <= 31:
         return int(raw), "set"
     today = today or _dt.date.today()
     try:
+        keys = [v for v in _ring(state) if int(v.get("remaining") or 0) > 0]
+        if len(keys) <= 1:
+            fell = seen_start(rows, today)
+            if fell is not None:
+                return fell.day, "seen"
         # `used` is the API's count AT ITS LAST READING, so the ledger is
         # walked back from that day — and a reading days old is not used.
         seen = _dt.date.fromisoformat(str(state.last_seen_iso)[:10])
-        keys = [v for v in _ring(state) if int(v.get("remaining") or 0) > 0]
         if len(keys) <= 1 and 0 <= (today - seen).days <= READING_MAX_AGE_DAYS:
             used = int(keys[0].get("used", 0) or 0) if keys else int(state.used or 0)
             start = measured_start(used, rows, seen)
@@ -647,21 +708,27 @@ def envelope(league: str, games_today: dict | None = None,
 
 
 # --- the report ---------------------------------------------------------------
+def _lane(r: dict) -> str:
+    """Whose money a ledger row spent: its league, the harvest, the slip
+    lane, or "other"."""
+    from .oddsbudget import HARVEST_KINDS, SLIP_KINDS, budget_sport
+    kind = str(r.get("kind", "") or "")
+    return ("harvest" if kind in HARVEST_KINDS else
+            "slips" if kind in SLIP_KINDS else
+            budget_sport(str(r.get("sport", "") or "")) or "other")
+
+
 def month_spend(rows: list, start: _dt.date, end: _dt.date | None = None) -> dict:
     """Credits by league from ``start`` (the billing month's first day) to
     ``end`` (excluded; open when not given), the harvest and the slip lane
     apart. Rows are the spend ledger's.
     """
-    from .oddsbudget import HARVEST_KINDS, SLIP_KINDS, budget_sport
     first, stop = start.isoformat(), end.isoformat() if end else "9999"
     out: dict = {}
     for r in rows:
         if not first <= str(r.get("iso", ""))[:10] < stop:
             continue
-        kind = str(r.get("kind", "") or "")
-        key = ("harvest" if kind in HARVEST_KINDS else
-               "slips" if kind in SLIP_KINDS else
-               budget_sport(str(r.get("sport", "") or "")) or "other")
+        key = _lane(r)
         try:
             out[key] = out.get(key, 0) + int(r.get("credits", 0) or 0)
         except (TypeError, ValueError):
@@ -672,6 +739,7 @@ def month_spend(rows: list, start: _dt.date, end: _dt.date | None = None) -> dic
 #: What the report says about the renewal day, by how it is known.
 RESET_WORDS = {
     "set": f"set by {RESET_DAY_ENV}",
+    "seen": "seen: the API's own count of used credits fell back to zero that day",
     "measured": "measured: the ledger's spend since then matches what the "
                 "API says this month has used",
     "assumed": f"ASSUMED — the 1st; if your plan renews another day, set "
@@ -681,7 +749,7 @@ RESET_WORDS = {
 
 def report(plan: Plan, spent_month: dict | None = None,
            spent_today: dict | None = None, pool_now: int | None = None,
-           recent: dict | None = None, recent_days: int = 7) -> str:
+           recent: dict | None = None, recent_days: int = 7, month: str = "") -> str:
     """The plan in words a phone screen holds.
 
     Each sport's line is its MONTH: what it has spent since the renewal
@@ -689,6 +757,7 @@ def report(plan: Plan, spent_month: dict | None = None,
     share of its need that covers, then today's ceiling. ``recent`` is a
     day's spend by lane over the last ``recent_days`` full days
     (`recent_daily`), and the pace line says how long the pool lasts at it.
+    ``month`` is `month_line`'s sentence, printed under the pool's.
     """
     spent_month = spent_month or {}
     spent_today = spent_today or {}
@@ -701,6 +770,7 @@ def report(plan: Plan, spent_month: dict | None = None,
              + ("" if plan.headroom else " · no headroom until it is known"),
              f"  pool {plan.pool:,} at the start of today"
              + (f" ({pool_now:,} now)" if pool_now is not None else ""),
+             *([month] if month else []),
              f"  held back: reserve {plan.reserve:,} · closing lines "
              f"{plan.harvest:,} ({HARVEST_DAY} a day) · buffer {plan.buffer:,} "
              f"({int(BUFFER_SHARE * 100)}%)",
@@ -806,8 +876,231 @@ def recent_daily(rows: list, today: _dt.date, days: int = 7) -> dict:
     return {k: int(round(v / days)) for k, v in got.items()}
 
 
-def main() -> int:
-    """`python3 -m engine.oddsplan` — today's plan beside the real spend."""
+# --- where the month's credits went ----------------------------------------------
+# Ethan, 2026-11-04: "it's now November 4th, so it's a new month, and we've
+# already ran through almost 10,000 credits, so we need to work on our
+# budgeting and stuff, because maybe something's not working. That seems
+# like a lot. Seems like we'll run out pretty soon."
+#
+# WHAT THE MONTH LOOKED LIKE. 100,000 credits over a thirty-day month is
+# 3,333 a day, and the plan is built to spend nearly all of it — credits
+# left at the renewal expire — keeping back the reserve and the buffer.
+# The days are not equal: an NFL Sunday is the dearest day of the week by
+# far (the table's 3,500 for the NFL alone, half again with its headroom),
+# so a month whose first days hold a Sunday and a Monday night is ahead of
+# a straight line and on its plan. Nothing said that; the report printed
+# a month's budget per sport and left the reader to do the sum.
+#
+# So the report now opens with the month so far — used beside the share
+# of the month gone and beside the share of the month's spending the
+# plan's own table puts in those days — and `--month` prints where every
+# credit went, day by day and lane by lane, beside the API's own count.
+
+#: What a ledger row's kind bought, in the report's words.
+KIND_WORDS = {"live_event": "player props", "live_board": "game lines",
+              "live_events": "event lists", "hist_event": "closing lines",
+              "hist_events": "closing lines", "hist_board": "closing lines",
+              "slip_event": "slip checks"}
+
+#: The month line's slack before "ahead of the plan's table": a tenth over
+#: the table's share, and two points of the month on top for a young month
+#: whose first pulls are the day's dearest.
+AHEAD_SLACK = 1.10
+AHEAD_POINTS = 0.02
+
+
+def daily_spend(rows: list, start: _dt.date, end: _dt.date | None = None) -> dict:
+    """{"YYYY-MM-DD": {lane: credits}} from ``start`` to ``end`` (excluded;
+    open when not given) — `month_spend`'s lanes, one day at a time."""
+    first, stop = start.isoformat(), end.isoformat() if end else "9999"
+    out: dict = {}
+    for r in rows or []:
+        day = str(r.get("iso", ""))[:10]
+        if not first <= day < stop:
+            continue
+        try:
+            n = int(r.get("credits", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        lanes = out.setdefault(day, {})
+        k = _lane(r)
+        lanes[k] = lanes.get(k, 0) + n
+    return out
+
+
+def kind_spend(rows: list, start: _dt.date, end: _dt.date | None = None) -> dict:
+    """Credits by what the call bought (`KIND_WORDS`) over the same days."""
+    first, stop = start.isoformat(), end.isoformat() if end else "9999"
+    out: dict = {}
+    for r in rows or []:
+        if not first <= str(r.get("iso", ""))[:10] < stop:
+            continue
+        kind = str(r.get("kind", "") or "")
+        k = KIND_WORDS.get(kind, kind or "other")
+        try:
+            out[k] = out.get(k, 0) + int(r.get("credits", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def table_day(day: _dt.date, over=()) -> int:
+    """What the plan's tables let ``day`` spend at full fill: every league
+    in season at its target cadence with its headroom on top, and the
+    closing-line harvest's day cap — the most a day of the table costs."""
+    total = float(HARVEST_DAY)
+    for lg in PRIORITY:
+        if lg in over:
+            continue
+        rate = 1.0 + (NFL_HEADROOM if lg == "nfl" else HEADROOM)
+        total += day_need(lg, day) * rate
+    return int(round(total))
+
+
+def since(plan: Plan, rows: list | None = None) -> float:
+    """The instant this billing month began: the first call after the API's
+    count fell back to zero, when the ledger shows that within a day of the
+    plan's first day (`_fall` — 8pm Eastern on the 31st for a plan that
+    renews at midnight UTC on the 1st), else the first day's midnight in
+    the box's clock."""
+    start = plan.starts or period(plan.day)[0]
+    got = _fall(rows, plan.day) if rows else None
+    if got and abs((got[1] - start).days) <= 1:
+        return got[0]
+    return _dt.datetime.combine(start, _dt.time()).timestamp()
+
+
+def _in_month(r: dict, since_ts: float, start: _dt.date) -> bool:
+    """A ledger row of this billing month: by its clock where it has one,
+    by its date where it does not."""
+    try:
+        ts = float(r.get("ts") or 0)
+    except (TypeError, ValueError):
+        ts = 0.0
+    if ts > 0:
+        return ts >= since_ts
+    return str(r.get("iso", ""))[:10] >= start.isoformat()
+
+
+def month_line(plan: Plan, used, remaining, now: float | None = None, over=(),
+               since_ts: float | None = None) -> str:
+    """The month so far in one line: credits used against the month's
+    quota, the share of the month gone, and the share of the month's
+    spending the plan's own table puts in those days ("" when the meter
+    has not been read). ``since_ts``: the instant the month began
+    (`since`); the first day's midnight when not given."""
+    try:
+        used, remaining = int(used or 0), int(remaining or 0)
+    except (TypeError, ValueError):
+        return ""
+    quota = used + remaining
+    if used <= 0 or quota <= 0:
+        return ""
+    start = plan.starts or period(plan.day)[0]
+    end = plan.ends or period(plan.day)[1]
+    total = max(1, (end - start).days)
+    now = time.time() if now is None else now
+    if since_ts is None:
+        since_ts = _dt.datetime.combine(start, _dt.time()).timestamp()
+    gone = min(float(total), max(0.0, (now - since_ts) / 86400.0))
+    tab = [table_day(start + _dt.timedelta(days=i), over) for i in range(total)]
+    whole = int(gone)
+    so_far = sum(tab[:whole]) + (tab[whole] * (gone - whole) if whole < total else 0)
+    t_share = so_far / sum(tab) if sum(tab) else gone / total
+    u_share = used / quota
+    head = (f"  this month so far: {used:,} of {quota:,} used ({u_share:.0%}) with "
+            f"{gone:.1f} of {total} days gone ({gone / total:.0%}); the plan's table puts "
+            f"{t_share:.0%} of the month's spending in those days")
+    if u_share <= t_share * AHEAD_SLACK + AHEAD_POINTS:
+        return head + " — on its pace ✓"
+    return (head + " — AHEAD of its table ⚠️ (python3 -m engine.oddsplan --month "
+            "says where it went)")
+
+
+def month_report(plan: Plan, rows: list, used=None, now: float | None = None,
+                 over=(), since_ts: float | None = None) -> str:
+    """`python3 -m engine.oddsplan --month`: where this billing month's
+    credits went — the API's count beside the ledger's, then day by day
+    (what the day spent, the table's most for it, and each lane), then by
+    what the calls bought. Read-only. The month runs from the instant it
+    began (`since`), so a renewal at 8pm on the 31st counts that evening's
+    calls and not that morning's."""
+    start = plan.starts or period(plan.day)[0]
+    end = plan.ends or period(plan.day)[1]
+    if since_ts is None:
+        since_ts = since(plan, rows)
+    rows = [r for r in rows or [] if _in_month(r, since_ts, start)]
+    began = _dt.datetime.fromtimestamp(since_ts)
+    by_day = daily_spend(rows, _dt.date(1970, 1, 1))
+    booked = sum(sum(v.values()) for v in by_day.values())
+    first = min([began.date()] + [_dt.date.fromisoformat(k) for k in by_day])
+    lines = [f"WHERE THIS MONTH'S CREDITS WENT · {began.strftime('%a %b')} {began.day}"
+             + (f" from {began.strftime('%H:%M')}" if began.time() != _dt.time() else "")
+             + f" to today · renews {end.strftime('%b')} {end.day}"]
+    try:
+        used = int(used) if used is not None else None
+    except (TypeError, ValueError):
+        used = None
+    if used:
+        gap = used - booked
+        lines.append(f"  the API counts {used:,} used this month; the ledger books {booked:,}"
+                     + (f" — {gap:,} the ledger never saw ⚠️" if gap > max(100, used * 0.05) else ""))
+    else:
+        lines.append(f"  the ledger books {booked:,} this month")
+    lines.append("  each day: spent (the table's most for it) · then each lane")
+    d, today_t = first, plan.day
+    tab_sum = 0
+    while d <= today_t:
+        lanes = by_day.get(d.isoformat(), {})
+        spent = sum(lanes.values())
+        tab = table_day(d, over)
+        if d == began.date() and began.time() != _dt.time():
+            # The month's first evening: the share of the day it had.
+            left = 1.0 - (began.hour * 3600 + began.minute * 60 + began.second) / 86400.0
+            tab = int(round(tab * left))
+        tab_sum += tab
+        parts = " · ".join(f"{_lane_word(k)} {v:,}" for k, v in
+                           sorted(lanes.items(), key=lambda t: -t[1]) if v)
+        lines.append(f"  {d.strftime('%a %b')} {d.day:>2}{' (so far)' if d == today_t else ''}: "
+                     f"{spent:,} ({tab:,})" + (f" · {parts}" if parts else ""))
+        d += _dt.timedelta(days=1)
+    kinds = kind_spend(rows, first)
+    if kinds:
+        lines.append("  by what the calls bought: " + " · ".join(
+            f"{k} {v:,}" for k, v in sorted(kinds.items(), key=lambda t: -t[1]) if v))
+    lines.append(f"  so far: {booked:,} against the table's {tab_sum:,} for these days — "
+                 "the table is the most each day may spend with every sport at its headroom; "
+                 "a night with fewer games than the table spends less")
+    return "\n".join(lines)
+
+
+def _lane_word(k: str) -> str:
+    return {"harvest": "closing lines", "slips": "slip checks"}.get(k, LABEL.get(k, k))
+
+
+def meter(state) -> tuple:
+    """(used, remaining) on the API's own meter for this month, or
+    (None, None) with two keys on the ring — each renews on its own day,
+    so there is no one month to read."""
+    keys = [v for v in _ring(state) if int(v.get("remaining") or 0) > 0]
+    if len(keys) > 1:
+        return None, None
+    if keys:
+        return int(keys[0].get("used") or 0), int(keys[0].get("remaining") or 0)
+    return int(getattr(state, "used", 0) or 0), int(getattr(state, "remaining", 0) or 0)
+
+
+def main(argv=None) -> int:
+    """`python3 -m engine.oddsplan` — today's plan beside the real spend.
+    ``--month``: then where this billing month's credits went, day by day.
+    Read-only: it reads the budget state and the spend ledger, writes
+    nothing."""
+    import argparse
+    ap = argparse.ArgumentParser(prog="python3 -m engine.oddsplan",
+                                 description="The month's odds plan beside the real spend.")
+    ap.add_argument("--month", action="store_true",
+                    help="also print where this billing month's credits went, day by day")
+    args = ap.parse_args(argv)
     from . import oddsbudget as ob
     try:
         import launch
@@ -821,13 +1114,17 @@ def main() -> int:
         return 1
     rows = ob.read_spend()
     start = plan.starts or period(plan.day)[0]
+    state = ob.load()
+    used, left = meter(state)
     # The pace is this billing month's: the last days of the one before
     # it were spent to another month's plan.
     n = min(7, (plan.day - start).days)
     text = report(plan, month_spend(rows, start), month_spend(rows, plan.day),
-                  pool_now=int(ob.load().remaining),
+                  pool_now=int(state.remaining),
                   recent=recent_daily(rows, plan.day, n) if n else None,
-                  recent_days=n or 7)
+                  recent_days=n or 7,
+                  month=month_line(plan, used, left, over=tuple(over or ()),
+                                   since_ts=since(plan, rows)))
     note = shell_note(plan)
     if note:                              # under the renewal day's line
         lines = text.splitlines()
@@ -838,6 +1135,9 @@ def main() -> int:
     bill = ob.bill_line(ob.billing_check(rows, since=time.time() - 86400))
     if bill:
         print(bill)
+    if args.month:
+        print()
+        print(month_report(plan, rows, used=used, over=tuple(over or ())))
     return 0
 
 

@@ -661,6 +661,10 @@ SH
 run FU "Your fantasy lineup, live" 30 <<'SH'
 curl -s https://qellysbook.com/js/chat.js | grep -c 'function ffLiveLoad('
 SH
+run JW "NBA Most Likely on the page, and where the month's credits went" 120 <<'SH'
+curl -s https://qellysbook.com/js/app.js | grep -c 'function rawBarExempt('
+cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan --month
+SH
 run JV "Most Likely learns by market and side too" 300 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport nfl --dry-run
 cd /srv/qellys && sudo -u qellys python3 -m engine.likelycal fit --sport cfb --dry-run

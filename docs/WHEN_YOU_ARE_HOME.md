@@ -9305,6 +9305,67 @@ The check in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IR 2>&1 | tee /tmp/ir.txt
 ```
 
+**JW. NBA Most Likely shows on the page again, and where the month's
+credits went** (steps 350 and 351; you, 2026-11-04: "we've already ran
+through almost 10,000 credits ... Seems like we'll run out pretty soon.
+And second, we still don't have any most likely picks showing on the NBA
+page or the most likely page").
+
+- **NBA Most Likely: the page hid every pick.** The board had them: 92 that
+  morning, journaled and graded every day (1,087 settled, 65.7%, +11.76
+  units). The page has a check that hides a pick when the model's raw number
+  sits more than ten points from the book's, which is meant for a pick built
+  on a broken number. NBA (and NHL) picks carry no raw number at all; the
+  file says "null", and the page read null as a claim of 0%, 58 points from
+  the book. So it hid all of them, then told you the slate had nothing
+  priced. Now a missing number is no claim, as the engine always read it.
+  The page also lets through the two kinds of pick the engine lets through
+  and the page never did: a ladder rung priced from the sharp book or the
+  market, and a real find. And if the board ever has picks the page doesn't
+  show, the empty box says so ("Tonight's board has 92 picks, and this page
+  could not show any of them") instead of blaming the slate. That was what
+  you were seeing, so you'd have spotted it at once.
+- **Credits: nothing ran away.** 100,000 a month is 3,333 a day, and the
+  plan is built to spend nearly all of it, because credits left at the
+  renewal expire. It keeps back the 500 reserve and a 5% buffer. The days
+  aren't equal. An NFL Sunday is by far the dearest day of the week (about
+  5,250 for the NFL alone with its headroom), and this month opened with a
+  Saturday's college slate, a Sunday and a Monday night. So about 10,000 by
+  the morning of the 4th is on the plan, not ahead of it. The plan's own
+  table allowed about 15,000 for those days, and Election Day had no
+  basketball. The plan recomputes from the real balance every cycle and
+  never plans more than the pool holds.
+- **What changed.** The plan now opens with the month so far: used against
+  the quota, the share of the month gone, and the share of the month's
+  spending the plan's table puts in those days, then "on its pace ✓" or
+  "AHEAD of its table ⚠️". `--month` prints every day since the renewal:
+  what it spent, the table's most for that day, and each sport, the closing
+  lines and the slip checks. It also lists what the calls bought (player
+  props, game lines, closing lines) and the API's own count beside the
+  ledger's; a gap there is spend the ledger never saw. The renewal day is
+  now SEEN: every call books the API's count of credits used, so the day
+  that count fell back to zero is the renewal, exactly. Before, it was
+  worked out by adding the ledger back until it matched. Nothing about how
+  the credits are spent changed.
+
+Nothing to run for the NBA fix: open the NBA page and Most Likely after the
+box has this commit. Read-only, any time (prints the plan, then where this
+month's credits went):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.oddsplan --month
+```
+
+Paste it back. The line to read is "this month so far"; if it ever says
+AHEAD, the day lines say which sport and which day.
+
+The check in one go:
+
+```
+curl -s https://qellysbook.com/js/app.js | grep -c 'function rawBarExempt('
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW 2>&1 | tee /tmp/jw.txt
+```
+
 **JV. Most Likely learns by market and side too** (step 348; you,
 2026-11-03: "2, yes").
 
