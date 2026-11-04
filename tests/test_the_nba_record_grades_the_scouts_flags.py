@@ -167,6 +167,37 @@ def test_a_proven_nba_flag_lowers_its_picks_whether_or_not_the_card_shows_it():
     assert block.index("_nsc.annotate(_nrows)") < block.index("_nctx.apply(_nrows, sport)")
 
 
+def test_the_nba_board_applies_a_proven_flag_inside_its_own_build():
+    # The board's NBA block swallows its errors so a scout can never take
+    # the board down; this is the check that the correction really runs there.
+    from engine import likely as L
+    from engine import likelyboard as LB
+    ctx = {"starter": True, "spread": -3.0, "total": 230.0, "rest": "b2b_home", "values": [6, 7, 5, 6, 7, 6],
+           "minutes": [30.0] * 10, "games_season": 8, "missed_last": False, "mate_out": False, "mate_back": False}
+    games = [{"home": "BOS", "away": "NYK", "date": "2099-11-04", "kickoff": "2099-11-05T00:00Z", "live": None}]
+    rows = []
+    for i, (mk, side) in enumerate((("reb", "OVER"), ("ast", "UNDER"))):
+        rec = {"player": f"Player {i}", "team": "BOS", "opponent": "NYK", "market": mk, "market_label": mk,
+               "side": side, "line": 5.5, "odds": -140, "book": "DraftKings", "hit_prob": 0.64, "fair_prob": 0.58,
+               "projection": 6.0, "reasons": ["because"], "recent_values": [6, 7, 5, 6], "injury_status": "",
+               "scout_ctx": ctx}
+        rows.append(L._row_from(rec, mk, "nba", lambda m: True, 0.64, shown=0.64, source="model"))
+    result = {"most_likely": rows, "games": games, "recommendations": [], "scan_reads": {}}
+    C.save({"sport": "nba", "flags": {}, "held_out": {"n": 0}, "fitted_at": "2026-11-04T00:00:00"})
+    quiet = {r["player"]: r for r in LB.build(result, record={}, sport="nba", band_verdict=None)["rows"]}
+    assert quiet["Player 0"]["model_prob"] == 0.64 and not quiet["Player 0"].get("ctx_note"), "no proof, no move"
+    C.save({"sport": "nba", "flags": {"b2b_over": {"k": 0.5, "n": 40, "hit": 0.5, "claimed": 0.66}},
+            "held_out": {"n": 400}, "fitted_at": "2026-11-04T00:00:00"})
+    try:
+        got = {r["player"]: r for r in LB.build(result, record={}, sport="nba", band_verdict=None)["rows"]}
+    finally:
+        C.save({"sport": "nba", "flags": {}, "held_out": {"n": 0}, "fitted_at": "2026-11-04T00:00:00"})
+    over, under = got["Player 0"], got["Player 1"]
+    assert over["scout_all"] == ["b2b_over"] and over["model_prob"] < 0.64 and over["ctx_raw_prob"] == 0.64
+    assert S.FLAGS["b2b_over"] in over["ctx_note"]
+    assert under["model_prob"] == 0.64 and not under.get("ctx_note"), "an under on a back-to-back raises nothing"
+
+
 def test_the_nba_build_keeps_each_games_spread_and_total():
     game = {"home": "BOS", "away": "NYK", "date": TONIGHT, "kickoff": "2026-11-04T00:30Z",
             "spread": -6.5, "total": 236.5, "home_ml": 0, "away_ml": 0}
