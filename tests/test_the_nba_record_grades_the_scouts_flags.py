@@ -220,7 +220,16 @@ def test_the_nba_build_keeps_each_games_spread_and_total():
 
 
 if __name__ == "__main__":
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            fn()
-            print(f"ok  {name}")
+    fails = 0
+    tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+    for name, f in tests:
+        try:
+            f()
+            print(f"  ok  {name}")
+        except Exception as exc:                                    # noqa: BLE001
+            import traceback
+            fails += 1
+            print(f"FAIL  {name}: {type(exc).__name__}: {exc}")
+            traceback.print_exc(limit=4)
+    print(f"\n{len(tests) - fails} tests passed." if not fails else f"\n{fails} failed.")
+    sys.exit(1 if fails else 0)
