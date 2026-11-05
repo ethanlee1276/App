@@ -592,8 +592,46 @@ on the box's own seasons in its own column and files its own verdict
 (engine/nba/switches `starters`), apart from the rotation's three. Runbook
 KG prints it.
 
+## First basket, the men who play *(11-05)*
+
+The first-basket board (engine/firstbasket, the NBA's Long Shots) shares
+each team's first basket over its candidates — every man with a shot in
+the first three minutes of one of its last five games — by his share of
+those opening shots. It never asked who plays tonight, so a man in street
+clothes kept his seat and every teammate who played was shorted.
+
+Both lab seasons replayed in date order through the board's own `shares`
+(this season's opening shots plus last season's at half weight, the EPS
+floor), scored on the team that scored first by the log loss of its
+actual scorer's share:
+
+| Season | Team first baskets | A candidate not playing | As built | Men not playing taken out | In those games |
+|---|---|---|---|---|---|
+| 2024-25 | 1,214 | 61% | 1.842 | **1.678** | 1.950 → **1.669** |
+| 2025-26 | 1,216 | 60% | 1.819 | **1.644** | 1.907 → **1.606** |
+
+Nothing is fitted, so there is nothing to hold out: the same rule in both
+seasons, 9-10% off the log loss overall and 14-16% in the games with a
+man out. The board now takes out every candidate the injury report rules
+out (`nba_build.OUT_STATUSES`, doubtful included) before the shares are
+drawn; a price on one of them is no pick. A shot row that carries only
+an initial ("J. Tatum") is matched by initial and surname; a full name
+that is not on the list plays.
+
+The lab took out every man not in the box, the injury report's news read
+after the game; on the board it is the report alone, so a late scratch
+still keeps his seat until the next build. The scorer was a candidate
+90-91% of the time either way: the men the five's news says start
+tonight, who have no opening shots yet, are the next step.
+
 ## Next
 
+- Done 2026-11-05: first basket takes out the men ruled out tonight
+  (above); nothing to run.
+- First basket for the man who starts tonight in a sitting starter's
+  place: he has no opening shots in his last five, so he is no candidate
+  at all (the scorer was a candidate 90-91% of the time). The starting
+  five's news (engine/nba/starters) can seat him.
 - Done 2026-11-05 (runbook KG): who starts tonight, read before the tip —
   the injury report on his club's last five, a starter coming back, his
   own starts lately — moves his minutes (above).

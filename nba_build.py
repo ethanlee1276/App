@@ -1805,8 +1805,12 @@ def main() -> None:
             if args.league == "nba":
                 try:
                     from engine import firstbasket as _fbk
+                    # Never a seat for a man ruled out tonight: his opening
+                    # shots go to the men who play (measured, engine/firstbasket).
+                    _fb_out = {n for n, inj in (injuries or {}).items()
+                               if str((inj or {}).get("status") or "").strip().lower() in OUT_STATUSES}
                     _fb = _fbk.board(first_basket_quotes, out.get("games") or [], date=args.date,
-                                     why=odds_note)
+                                     why=odds_note, out=_fb_out)
                     out["first_basket"] = _fb
                     out["long_shots"] = _fb["picks"]
                     print(_fbk.report(_fb))

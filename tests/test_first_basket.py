@@ -91,6 +91,32 @@ def test_the_shots_give_the_tip_record_and_the_openers():
     assert abs(sum(r["prob"] for r in rows) - 1.0) < 1e-9
 
 
+def test_a_man_ruled_out_tonight_has_no_seat_and_the_men_who_play_share_his_shots():
+    """2026-11-05, measured on the lab's two seasons (docs/NBA_LAB.md, "First
+    basket, the men who play"): a candidate sat in 60% of team first baskets,
+    and taking the men not in the box out cut the scorer's log loss 9-10%."""
+    conn = _history()
+    _games(conn)
+    data = FB.read(conn, 2026)
+    full = {r["player"]: r for r in FB.game_probs(data, "BOS", "NYK")}
+    sat = {r["player"]: r for r in FB.game_probs(data, "BOS", "NYK", out={"jayson tatum"})}
+    assert "Jayson Tatum" in full and "Jayson Tatum" not in sat
+    assert sat["Derrick White"]["share"] == 1.0 and sat["Derrick White"]["prob"] > full["Derrick White"]["prob"]
+    assert sat["Jalen Brunson"]["prob"] == full["Jalen Brunson"]["prob"], "the other club is untouched"
+    assert abs(sum(r["prob"] for r in sat.values()) - 1.0) < 1e-9
+    assert FB.game_probs(data, "BOS", "NYK", out=set()) == FB.game_probs(data, "BOS", "NYK")
+
+
+def test_a_play_by_play_initial_is_matched_and_a_different_full_name_is_not():
+    full, short = FB._sitting({"Jayson Tatum", "Jaylin Williams"})
+    assert FB._sits("J. Tatum", full, short), "the play-by-play's own spelling"
+    assert FB._sits("Jayson Tatum", full, short)
+    assert not FB._sits("Jalen Williams", full, short), "a full name not on the list plays"
+    assert FB._sits("J. Williams", full, short), "an initial alone cannot tell them apart: it sits"
+    assert not FB._sits("Derrick White", full, short)
+    assert FB._sitting(None) == (set(), set())
+
+
 # --- the board -------------------------------------------------------------------------
 def _quote(player, home, away, odds, book="DraftKings"):
     return {"player": player, "home": home, "away": away,
@@ -182,8 +208,22 @@ def test_the_journal_and_the_record_know_the_market():
     assert "n_fb = _fb.settle(lconn, hconn)" in src
 
 
+def test_a_price_on_a_man_ruled_out_is_never_a_pick():
+    conn = _history()
+    _games(conn)
+    games = [{"home": "BOS", "away": "NYK", "date": "2026-10-31", "kickoff": "2026-10-31T23:30:00Z"}]
+    quotes = {"a": _quote("Jayson Tatum", "BOS", "NYK", 300), "b": _quote("Derrick White", "BOS", "NYK", 400)}
+    b = FB.board(quotes, games, conn=conn, date="2026-10-31", out={"jayson tatum"})
+    assert [r["player"] for r in b["rows"]] == ["Derrick White"], b["rows"]
+    assert all(p["player"] != "Jayson Tatum" for p in b["picks"])
+    ours = FB.board({}, games, conn=conn, date="2026-10-31", out={"jayson tatum"})["ours"]
+    assert "Jayson Tatum" not in {r["player"] for r in ours}
+
+
 def test_the_nba_build_makes_the_board_and_journals_its_picks():
     src = open(os.path.join(ROOT, "nba_build.py"), encoding="utf-8").read()
+    assert "why=odds_note, out=_fb_out)" in src, "the build hands the board tonight's ruled-out men"
+    assert "in OUT_STATUSES}" in src[src.index("_fb_out = "):src.index("_fb_out = ") + 300]
     assert 'first_basket_quotes = getattr(res, "first_basket", None) or {}' in src
     assert 'out["first_basket"] = _fb' in src and 'out["long_shots"] = _fb["picks"]' in src
     assert "_ls_n = ledger.log_longshots(lconn," in src

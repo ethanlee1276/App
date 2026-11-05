@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-05",
+      "kind": "model",
+      "title": "NBA first basket: no chance for a player who is not playing",
+      "body": "Our first-basket picks give each player a share of his team's first basket from his shots in the first three minutes of its recent games. They never asked who plays tonight, so a player ruled out kept his share and every teammate who played was shorted. On two full seasons replayed, at least one such player was in the pool for 60% of teams' first baskets. Taking the players who did not play out of the pool made the chance on the actual first scorer 9-10% sharper overall, and 14-16% sharper in those games, in both seasons. The board now takes out everyone the injury report rules out before the chances are drawn, and a price on one of them is never a pick."
+    },
+    {
+      "date": "2026-11-05",
       "kind": "fix",
       "title": "Picks stay on the board until the game really starts",
       "body": "The 7pm NBA games on 4 November tipped around 7:10. The site took their picks off the board at 7:00, by the printed time, while the Live tab, which follows the scoreboard, had nothing on those games until the ball went up. For those ten minutes the picks were on neither page, though the books were still taking bets on them. Now, for up to 45 minutes past a game's printed time, a scoreboard read from the last three minutes that still says the game has not started keeps its picks on the board, and they move to Live the moment it tips. If the scoreboard goes quiet, the printed time decides as before, so a pick is never held on the board through a game."

@@ -35,6 +35,15 @@ THE MODEL:
     candidates — every player with a first-three-minute shot in one of its
     last RECENT_GAMES games.
   * P(he scores first) = P(his team scores first) × his share.
+  * WHO PLAYS TONIGHT (2026-11-05). A candidate the injury report rules
+    out is taken out before the shares are drawn, and the rest share his
+    opening shots. Measured on the lab's two full seasons through
+    `shares` (docs/NBA_LAB.md, "First basket, the men who play"): a
+    candidate sat in 60% of team first baskets, and taking out the men not
+    in the box cut the log loss of the actual scorer's share from 1.842 to
+    1.678 (2024-25) and 1.819 to 1.644 (2025-26) — 14-16% in the games
+    with one sitting. The board was handing a seat to men in street
+    clothes and shorting every teammate who played.
 
 A PICK is a priced player our chance puts clearly above the price: MIN_EV at
 the best bettable price, inside FIRST_BASKET_ODDS, one a game — the same bar
@@ -194,20 +203,49 @@ def read(conn, season: int, before: str | None = None) -> dict:
     return {"teams": teams, "usage": usage, "recent": recent}
 
 
-def candidates(data: dict, team: str) -> dict:
+def _norm(name: str) -> str:
+    from .sources.oddsapi import normalize_name
+    return normalize_name(str(name or ""))
+
+
+def _sitting(out) -> tuple:
+    """``out`` as the two keys a shot row's name is matched on: the full
+    normalised names, and (initial, surname) for a row that carries only the
+    initial ("J. Tatum", the play-by-play's own spelling when the box score
+    had no name for him)."""
+    full = {_norm(n) for n in (out or ()) if n}
+    short = {(n.split()[0][:1], n.split()[-1]) for n in full if len(n.split()) >= 2}
+    return full, short
+
+
+def _sits(name: str, full: set, short: set) -> bool:
+    n = _norm(name)
+    if n in full:
+        return True
+    parts = n.split()
+    # Only an initial is matched by initial: a full name that is not on the
+    # list plays — Jalen Williams is not Jaylin Williams.
+    return len(parts) >= 2 and len(parts[0]) == 1 and (parts[0], parts[-1]) in short
+
+
+def candidates(data: dict, team: str, out=None) -> dict:
     """{player: weighted first-three-minute shots} for this team's candidates:
     its recent openers, or before it has a game this season, last season's
-    eight busiest."""
+    eight busiest — never a man in ``out`` (the names the injury report
+    rules out tonight)."""
     t = _canon(team)
     u = data.get("usage", {}).get(t, {})
     rec = data.get("recent", {}).get(t)
+    full, short = _sitting(out)
+    plays = (lambda p: not _sits(p, full, short)) if full else (lambda p: True)
     if rec:
-        return {p: u.get(p, 0.0) for p in rec}
-    return dict(sorted(u.items(), key=lambda kv: -kv[1])[:8])
+        return {p: u.get(p, 0.0) for p in rec if plays(p)}
+    return dict(sorted(((p, v) for p, v in u.items() if plays(p)), key=lambda kv: -kv[1])[:8])
 
 
-def game_probs(data: dict, home: str, away: str) -> list:
-    """Every candidate's chance of scoring the game's first points."""
+def game_probs(data: dict, home: str, away: str, out=None) -> list:
+    """Every candidate's chance of scoring the game's first points, the men
+    in ``out`` (normalised names ruled out tonight) taken out first."""
     th = data.get("teams", {}).get(_canon(home), {"first": 0, "games": 0})
     ta = data.get("teams", {}).get(_canon(away), {"first": 0, "games": 0})
     q = home_shoots_first(first_shot_rate(th["first"], th["games"]),
@@ -215,7 +253,7 @@ def game_probs(data: dict, home: str, away: str) -> list:
     ph = home_scores_first(q)
     rows = []
     for team, pt in ((home, ph), (away, 1.0 - ph)):
-        for name, s in shares(candidates(data, team)).items():
+        for name, s in shares(candidates(data, team, out)).items():
             rows.append({"player": name, "team": team, "prob": pt * s,
                          "team_first": round(pt, 4), "first_shot": round(q if team == home else 1 - q, 4),
                          "share": round(s, 4)})
@@ -240,14 +278,17 @@ def _who(name: str, team_rows: list):
     return None
 
 
-def board(quotes: dict, games: list, conn=None, date: str = "", why: str = "") -> dict:
+def board(quotes: dict, games: list, conn=None, date: str = "", why: str = "",
+          out=None) -> dict:
     """The NBA's Long Shots board, in engine/firsttd.board's shape:
     {"rows", "picks", "games", "quoted", "ours", "ours_games", "why"}.
 
     ``quotes`` is {key: {"player", "home", "away", "quotes"}} (the first
     basket market, `oddsapi.FIRST_BASKET_ODDS_TO_MARKET`); ``games`` the
     board's games (home, away, date, kickoff). Shots come from the history
-    database (`read`), this season and last at half weight."""
+    database (`read`), this season and last at half weight. ``out`` is the
+    normalised names the injury report rules out tonight: none of them is a
+    candidate, and a price on one is no pick."""
     from .sources.oddsapi import best_scorer_price
     if conn is None:
         from . import db as _db
@@ -264,7 +305,7 @@ def board(quotes: dict, games: list, conn=None, date: str = "", why: str = "") -
         season = season_of(g.get("date") or date)
         if season not in cache:
             cache[season] = read(conn, season, before=str(g.get("date") or date)[:10] or None)
-        ranked = game_probs(cache[season], home, away)
+        ranked = game_probs(cache[season], home, away, out)
         qs = by_pair.get((_canon(home), _canon(away))) or []
         common = {"market": MARKET, "market_label": LABEL, "game": f"{away}@{home}",
                   "matchup": f"{away} @ {home}", "game_date": g.get("date"),
