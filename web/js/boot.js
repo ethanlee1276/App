@@ -99,6 +99,46 @@ try {
   })();
 } catch (e) {}
 
+/* THE BAR AND THE PICKER (Ethan, 2026-11-05, his iPhone Duo at 7:11 with the
+   tab bar circled halfway up the Home page, right under "Sort: Start Time":
+   "the menu bar is moving around fix that"). That sort is a <select>, and an
+   iPhone opens its wheel, like the keyboard, from the foot of the screen
+   without shrinking the page: it scrolls the page to keep the field in view,
+   the fixed tab bar rides up on what is left, over the page, and it can stay
+   up there after the wheel goes, until the page next moves. A phone app
+   takes its tab bar away while a picker or a keyboard is up, and so does
+   this page (html.field-up, styles.css "THE BAR AND THE PICKER"). When the
+   field lets go and none other has taken it, the page is moved a pixel and
+   back, which hands the bar back to the screen's foot. iPhone only: an
+   Android keyboard does not carry the page's fixed layers up with it. */
+try {
+  (function () {
+    if (!/iPhone|iPod/.test(navigator.userAgent || "")) return;
+    var root = document.documentElement, wait = 0;
+    /* A field is whatever brings up the wheel or the keyboard: its type as
+       the browser reads it ("select-one", "textarea", an unknown type read
+       as "text"), or a block that edits like a text box. */
+    function field(el) {
+      return !!el && (/^(text(area)?|search|email|url|tel|number|password|date(time-local)?|month|week|time|select-(one|multiple))$/.test(el.type) ||
+        el.isContentEditable === true);
+    }
+    function on(e) {
+      if (!field(e.target)) return;
+      clearTimeout(wait);
+      if (e.type === "focusin") return root.classList.add("field-up");
+      wait = setTimeout(function () {
+        if (field(document.activeElement)) return;
+        root.classList.remove("field-up");
+        var y = scrollY;
+        scrollTo({ top: y ? y - 1 : 1, behavior: "instant" });
+        scrollTo({ top: y, behavior: "instant" });
+      }, 350);
+    }
+    document.addEventListener("focusin", on, true);
+    document.addEventListener("focusout", on, true);
+  })();
+} catch (e) {}
+
 /* THE SIDEBAR SLID AWAY, before the first paint (app.js sidebarSlide;
    styles.css "THE SIDEBAR SLIDES AWAY"): only where it stands beside the
    page does the class do anything. */

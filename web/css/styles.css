@@ -10537,6 +10537,15 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
     right: calc(var(--strip-w) + 12px); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   html.side-rail-left .crash-note, html.side-rail-left.store-ios .crash-note, html.side-rail-left.ios-home .crash-note {
     right: 12px; left: calc(var(--strip-w) + 12px); }
+  /* THE BAR AND THE PICKER (Ethan, 2026-11-05, his iPhone with the tab bar
+     circled halfway up the Home page: "the menu bar is moving around fix
+     that"). An iPhone's <select> wheel and its keyboard rise from the foot of
+     the screen without shrinking the page, and the fixed bar rode up over the
+     page with them and could stay there after. While one is up (boot.js sets
+     html.field-up on an iPhone) the bar and the pill above it step aside, as a
+     phone app's do; when the field lets go they come back at the foot. Every
+     way the bar is drawn on a phone, in the strip beside the clock too. */
+  html.field-up .tabbar, html.field-up .riding-tray { display: none !important; }
 }
 
 /* YOUR TEAM'S COLOURS, THROUGH THE BAR AND OUT OF IT (Ethan, 2026-10-28,

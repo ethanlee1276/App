@@ -292,7 +292,16 @@ APP_JS_BUDGET_KB = 290
 #: the tip. 767 B gz of code in app.js (freshTipState, tipTeams, tipWatch;
 #: the kickoff parse moved, not added): 384,995 -> 385,762 B, 738 over 376.
 #: It cannot load later: the first board drawn is the one it decides.
-BOOT_BUDGET_KB = 377
+#: 377 -> 378 on 2026-11-05, for Ethan's iPhone Duo with the tab bar circled
+#: halfway up Home, under "Sort: Start Time": "the menu bar is moving
+#: around fix that". The sort's wheel, like the keyboard, carried the fixed
+#: bar up the screen; the bar now steps aside while a picker or keyboard
+#: is up and comes back at the foot (boot.js and styles.css, THE BAR AND
+#: THE PICKER). 316 B gz, cut from 404 by reading each field's type as the
+#: browser does and folding the rule into the strip's phone block:
+#: 385,762 -> 386,078 B, 30 over 377. It cannot load later: the first
+#: page drawn holds the sort. Told to Ethan.
+BOOT_BUDGET_KB = 378
 
 
 def _gz_trimmed(rel: str) -> int:

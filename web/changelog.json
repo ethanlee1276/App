@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-05",
+      "kind": "fix",
+      "title": "On an iPhone, the tab bar stays at the bottom when a menu or the keyboard opens",
+      "body": "On an iPhone, the Home page's Sort menu opens a picker from the bottom of the screen, as the keyboard does, without making the page any shorter. The tab bar, pinned to the bottom of the screen, rode up with the picker and could stay halfway up the page after it closed, over the games. Now, while a picker or the keyboard is up, the tab bar and the bets-riding strip above it step aside, as an app's own bar does, and when it closes they come back at the bottom. Other phones keep their bar as before."
+    },
+    {
+      "date": "2026-11-05",
       "kind": "model",
       "title": "NBA first basket: which team scores first, by the two players who jump",
       "body": "A first-basket chance is the chance his team scores first times his share of it. The team half came from each team's record of taking the game's first shot, with a lean toward the home team. Replayed on two full seasons, it was worse than a coin flip at picking who shoots first. The home lean was too strong (home teams took the first shot about half the time), and a team's record changes with whoever jumps for it. We now keep every game's opening jump ball, and the board reads tonight's two jumpers: how often each one's side has won the tip, with a small home lean, and the team that wins the tip takes the first shot 88% of the time. With every setting chosen on the other season, it was clearly better than a coin and better than the old way in both seasons. Each pick's card names the jumper. Games played before today are read back a batch each night."
