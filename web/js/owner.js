@@ -197,6 +197,37 @@ function woTick() {
   }, WO_EVERY_MS);
 }
 
+/* EVERY ACCOUNT (engine/owneraccounts.listed). Ethan, 2026-11-05, this card
+   circled: "I should have a list of all accounts on the website in this
+   section". Each by its number, newest first: where its membership stands,
+   when it joined and when it was last here. Who it is shows when it is
+   opened, in Accounts at the top (oaOpen), one account at a time, as the
+   Privacy Policy (§2.14) tells members. The newest OD_LIST_SHOWN show; the
+   rest fold away, and the fold stays open across the minute's redraw. */
+const OD_LIST_SHOWN = 10;
+let _odAllOpen = false;
+function odSeen(t) {
+  if (!t) return "never back";
+  const days = Math.floor((Date.now() / 1000 - Number(t)) / 86400);
+  return days < 1 ? "here today" : days < 2 ? "here yesterday" : days < 30 ? `here ${days} days ago` : `last here ${oaDay(t)}`;
+}
+function odAcctRow(a) {
+  const id = Number(a.id) || 0;
+  return `<li><button type="button" class="oa-hit" data-oa-open="${id}"><span class="oa-hit-t"><b>Account #${id}</b></span>
+    <span class="oa-hit-s">${oaChip(a.status, a.entitled, a.suspended)}<span class="od-mute">joined ${oaDay(a.joined)} · ${odSeen(a.seen)}</span></span></button></li>`;
+}
+function odEveryHTML(a) {
+  if (a.list_error) return `<p class="od-note">Could not list the accounts: ${escapeHtml(a.list_error)}</p>`;
+  const list = a.list || [];
+  if (!list.length) return "";
+  const rest = list.slice(OD_LIST_SHOWN);
+  return `<h3 class="wo-h">Every account, newest first</h3><ul class="oa-hits">${list.slice(0, OD_LIST_SHOWN).map(odAcctRow).join("")}</ul>${
+    rest.length ? `<details class="od-all"${_odAllOpen ? " open" : ""}><summary>The other ${odN(rest.length)}</summary><ul class="oa-hits">${
+      rest.map(odAcctRow).join("")}</ul></details>` : ""}${
+    a.total > list.length ? `<p class="od-note">The newest ${odN(list.length)} of ${odN(a.total)}; find any other in Accounts at the top.</p>` : ""}
+    <p class="od-note">Tap one to open it in Accounts at the top, where its email and username show, one account at a time.</p>`;
+}
+
 function odAccountsHTML(a) {
   if (!a || a.error) return odCard("Accounts", odErr(a));
   const b1 = a.back_day1 || {}, b7 = a.back_week1 || {};
@@ -205,7 +236,7 @@ function odAccountsHTML(a) {
     <ul class="od-list">${odRow("New, last 30 days", odN(a.new_30d))}${odRow("Signed in today", odN(a.seen_today))}${
       odRow("Signed in, last 7 days", odN(a.seen_7d))}${odRow("Signed in, last 30 days", odN(a.seen_30d))}${
       odRow("Came back after their first day", `${odN(b1.back)} of ${odN(b1.of)} · ${odPct(b1.back, b1.of)}`)}${
-      odRow("Came back after their first week", `${odN(b7.back)} of ${odN(b7.of)} · ${odPct(b7.back, b7.of)}`)}</ul>`);
+      odRow("Came back after their first week", `${odN(b7.back)} of ${odN(b7.of)} · ${odPct(b7.back, b7.of)}`)}</ul>${odEveryHTML(a)}`);
 }
 
 function odMoneyHTML(m) {
@@ -543,8 +574,8 @@ function odHTML(d) {
     ${odNoticeHTML(d.notice)}${waiting ? reps : ""}${odPicksHTML(d.picks)}${odMoneyHTML(d.money)}${odAccountsHTML(d.accounts)}
     ${odHealthHTML(d.health)}${odRoomHTML(d.community)}${waiting ? "" : reps}${odSwitchesHTML(d.switches, d.alerts)}
     <p class="od-foot">Only this account can open this page. Who’s on now names only the members the Privacy Policy’s notice
-      has reached who left “Show me in Who’s on now” on, and Accounts shows one account at a time, for support and the Terms;
-      everything else here is a count or the business’s own number.</p>`;
+      has reached who left “Show me in Who’s on now” on, and Accounts shows who an account is one at a time, for support and the
+      Terms; the list of every account names each by its number alone, and everything else here is a count or the business’s own number.</p>`;
 }
 
 async function odFill() {
@@ -642,9 +673,10 @@ document.addEventListener("click", (e) => {
   const b = e.target && e.target.closest && e.target.closest("[data-od-mod]");
   if (b && !b.disabled) odMod(b);
 });
-// The hidden list stays open across the minute's redraw.
+// The hidden reports and the rest of the accounts stay open across the minute's redraw.
 document.addEventListener("toggle", (e) => {
   if (e.target && e.target.classList && e.target.classList.contains("od-hid")) _odHidOpen = e.target.open;
+  if (e.target && e.target.classList && e.target.classList.contains("od-all")) _odAllOpen = e.target.open;
 }, true);
 
 function odTick() {

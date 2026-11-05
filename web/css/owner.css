@@ -68,8 +68,9 @@
 .od-rep.hid p { color: var(--text-dim); }
 .od-rep-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .od-rep-acts .btn { padding: 6px 12px; font-size: var(--fs-sm); }
-.od-hid { margin-top: 10px; }
-.od-hid summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; color: var(--text-dim); padding: 4px 0 8px; }
+.od-hid, .od-all { margin-top: 10px; }
+.od-all .oa-hits { margin-top: 2px; }
+.od-hid summary, .od-all summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; color: var(--text-dim); padding: 4px 0 8px; }
 /* Needs you: what engine/owneralerts would push, at the top of the desk. */
 .od-needs { background: color-mix(in oklab, var(--bad) 12%, var(--panel)); }
 .od-needs .od-h { color: var(--bad); }

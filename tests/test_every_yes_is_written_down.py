@@ -56,7 +56,8 @@ def test_a_choice_is_written_once_with_the_policy_s_date():
     assert not CS.record(c, None, "alerts", "on", NOW) and not CS.record(c, 0, "terms", "x", NOW), "no account"
     log = CS.history(c, 1)
     assert [x["choice"] for x in log] == ["on: posted", "off on a phone", "on: posted"]
-    assert all(x["policy"] == "2026-11-02" and x["kind"] == "alerts" for x in log), log
+    # The live policy's date, 5 November 2026 since the owner desk's list of accounts (§2.14).
+    assert all(x["policy"] == "2026-11-05" and x["kind"] == "alerts" for x in log), log
     assert [x["at"] for x in log] == [NOW, NOW + 120, NOW + 180]
     assert CS.latest(c, 1, "alerts") == "on: posted" and CS.latest(c, 1, "terms") is None
     assert CS.history(c, 2) == []
@@ -72,7 +73,7 @@ def test_the_version_is_the_policy_s_own_last_updated():
     os.utime(p, ns=(1, 1))
     assert CS.policy_version(p) == ""
     assert CS.policy_version(Path("/nonexistent/privacy.html")) == ""
-    assert CS.policy_version() == "2026-11-02", "the live policy's date"
+    assert CS.policy_version() == "2026-11-05", "the live policy's date"
 
 
 def test_signing_up_writes_the_terms_and_the_account_carries_the_log():

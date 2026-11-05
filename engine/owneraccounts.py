@@ -134,6 +134,35 @@ def find(conn, q, limit: int = FIND_LIMIT) -> list[dict]:
     return [_row(conn, r) for r in rows]
 
 
+#: The desk's list of every account (`listed`): newest first, this many at most.
+LIST_LIMIT = 500
+
+
+def listed(conn, limit: int = LIST_LIMIT) -> list[dict]:
+    """Every account by its NUMBER alone, newest first: when it joined, when
+    it was last here and where its membership stands. Never its email, phone
+    number or username.
+
+    Ethan, 2026-11-05, the desk's Accounts card circled: "I should have a list
+    of all accounts on the website in this section". The Privacy Policy
+    (§2.14) tells members the owner looks an account up one at a time, so
+    who an account is shows only when the owner opens it (`card`), the
+    look-up it describes; the list says how the accounts are doing."""
+    from . import billing as BI
+    rows = conn.execute("SELECT id, created_at, last_seen, suspended_at FROM users "
+                        "ORDER BY created_at DESC, id DESC LIMIT ?", (int(limit),)).fetchall()
+    out = []
+    for r in rows:
+        try:
+            st = BI.status_for(conn, int(r["id"]))
+        except Exception:                                    # noqa: BLE001 — a row still lists
+            st = {}
+        out.append({"id": int(r["id"]), "joined": r["created_at"], "seen": r["last_seen"],
+                    "suspended": bool(r["suspended_at"]), "status": st.get("status") or "none",
+                    "entitled": bool(st.get("entitled"))})
+    return out
+
+
 def _row(conn, r) -> dict:
     from . import billing as BI
     st = {}

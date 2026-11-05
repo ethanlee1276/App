@@ -96,6 +96,14 @@ def accounts(conn, now: float | None = None) -> dict:
         row = conn.execute("SELECT COUNT(*), SUM(CASE WHEN last_seen >= created_at + ? THEN 1 ELSE 0 END) "
                            "FROM users WHERE created_at <= ?", (after * DAY_S, t - (after + 1) * DAY_S)).fetchone()
         out[key] = {"of": row[0] or 0, "back": row[1] or 0}
+    # Every account by its number (Ethan, 2026-11-05: "a list of all accounts
+    # on the website in this section"); who each is shows when it is opened.
+    # Its own guard: a list that cannot be read never takes the counts down.
+    try:
+        from . import owneraccounts as OA
+        out["list"] = OA.listed(conn)
+    except Exception as exc:                                 # noqa: BLE001
+        out["list"], out["list_error"] = [], f"{type(exc).__name__}: {exc}"
     return out
 
 

@@ -83,6 +83,40 @@ def test_accounts_are_counts_by_the_sites_day():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def test_every_account_is_listed_by_its_number_alone():
+    """Ethan, 2026-11-05, the Accounts card circled: "I should have a list of
+    all accounts on the website in this section". Every account, newest
+    first, by its number: when it joined, when it was last here, where its
+    membership stands. Never an email, a phone number or a username: the
+    Privacy Policy (§2.14) promises members the owner sees who an account is
+    one at a time, when it is opened."""
+    from engine import owneraccounts as OA
+    d = Path(tempfile.mkdtemp())
+    conn = A.connect(str(d / "a.db"))
+    try:
+        old = _user(conn, "oldest@example.com", made=NOW - 40 * 86400, seen=NOW - 2 * 86400, handle="oldtimer")
+        mid = _user(conn, "middle@example.com", made=NOW - 3 * 86400, seen=None, handle="midway")
+        new = _user(conn, "newest@example.com", made=NOW - 3600, seen=NOW - 60)
+        conn.execute("UPDATE users SET suspended_at = ? WHERE id = ?", (NOW - 100, mid))
+        conn.commit()
+        rows = OD.accounts(conn, NOW)["list"]
+        assert [r["id"] for r in rows] == [new, mid, old], rows
+        assert all(set(r) == {"id", "joined", "seen", "suspended", "status", "entitled"} for r in rows), rows
+        said = json.dumps(rows)
+        for who in ("example.com", "oldtimer", "midway", "oldest", "newest"):
+            assert who not in said, (who, said)
+        by = {r["id"]: r for r in rows}
+        assert by[mid]["suspended"] and by[mid]["seen"] is None and not by[new]["suspended"], by
+        assert by[old]["joined"] == NOW - 40 * 86400 and by[old]["status"] == "none" and not by[old]["entitled"], by[old]
+        assert [r["id"] for r in OA.listed(conn, limit=2)] == [new, mid], "newest first, as many as it is asked"
+    finally:
+        conn.close()
+        shutil.rmtree(d, ignore_errors=True)
+    priv = " ".join(READ("web", "privacy.html").split())
+    assert "lists every account by its number alone, newest first" in priv and "Last updated 5 November 2026" in priv
+    assert "the list of every account names each by its number alone" in " ".join(READ("web", "js", "owner.js").split())
+
+
 def test_money_counts_who_pays_and_what_a_month_brings():
     d = Path(tempfile.mkdtemp())
     conn = A.connect(str(d / "a.db"))
@@ -361,7 +395,11 @@ def test_the_desk_page_draws_what_it_is_sent():
     sample = {"at": NOW, "now": {"members": 3, "visitors": 7, "pages": 4},
               "accounts": {"total": 120, "new_today": 4, "new_7d": 19, "new_30d": 61, "seen_today": 22, "seen_7d": 70,
                            "seen_30d": 95, "signups": [{"day": "2026-11-0%d" % (i % 9 + 1), "n": i % 5} for i in range(14)],
-                           "back_day1": {"of": 100, "back": 41}, "back_week1": {"of": 80, "back": 22}},
+                           "back_day1": {"of": 100, "back": 41}, "back_week1": {"of": 80, "back": 22},
+                           # The newest twelve of 120 by number (the list's cap stands in for LIST_LIMIT).
+                           "list": [{"id": 120 - i, "joined": NOW - i * 86400, "seen": NOW - 60 if i % 3 else None,
+                                     "suspended": i == 4, "status": "active" if i % 2 else "none", "entitled": i % 2 == 1}
+                                    for i in range(12)]},
               "money": {"paying": 31, "trialing": 6, "cancelling": 2, "past_due": 1, "mrr": 742.5, "new_7d": 4,
                         "lapsed_30d": 3, "renewing_7d": 9, "by_plan": {"monthly": 25, "yearly": 6},
                         "plans": {"monthly": "Monthly", "yearly": "Yearly"}},
@@ -404,8 +442,14 @@ def test_the_desk_page_draws_what_it_is_sent():
                  # The reports queue: words escaped, a way to the game, the three buttons.
                  "Reports to review", "Game-chat message", "2 reports · abuse", "you &lt;b&gt;all&lt;/b&gt; stink",
                  'href="#pbp/nfl/401873033"', 'data-od-mod="1" data-where="chat" data-kind="message" data-id="7"',
-                 "Keep it up", "Restore", "hidden by hand", "Hidden from everybody · 1"):
+                 "Keep it up", "Restore", "hidden by hand", "Hidden from everybody · 1",
+                 # Every account by its number: the newest ten, the other two folded, each opening its look-up.
+                 "Every account, newest first", 'data-oa-open="120"', "Account #120", "Account #109", "The other 2",
+                 "The newest 12 of 120", "Tap one to open it in Accounts at the top", "Suspended", "Paying",
+                 "never back", "here today"):
         assert want in html, want
+    rows = html[html.index("Every account, newest first"):]
+    assert rows.index("Account #111") < rows.index("The other 2") < rows.index("Account #110"), "ten shown, the rest folded"
     assert html.index("Reports to review") < html.index("Today's picks"), "reports waiting go near the top"
 
 
