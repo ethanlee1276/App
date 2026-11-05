@@ -92,7 +92,7 @@ The NFL is the reference toolkit. College has its own checklist
 |---|---|
 | RBI, runs, hits + runs + RBI, walks, stolen bases | **Parked, for the winter** (H): in the game log the box already pulls; each costs odds credits and is measured before it is posted |
 | Sprint speed and pop time (steals), team defence (hits allowed) | **Parked, for the winter** (H): Savant publishes them on the site we already read |
-| Travel and rest (cross-country trips, a day game after a night game, getaway days) | **Parked**: in the model's spec (`docs/MLB_MODEL.md` §7), not in the code. It needs no new source, only the stored schedule and parks. The public game-log files tried today were not reachable from the sandbox; the box's own stored seasons are where this gets measured |
+| Travel and rest (cross-country trips, a day game after a night game, getaway days) | **Box run** (KN, `mlbtravelcheck.py`): in the model's spec (`docs/MLB_MODEL.md` §7), not in the code. MLB's own schedule is not reachable from the sandbox, so the box measures it: four seasons, each situation against a runs model (offence, defence, park, home) and the stored closing totals, on the NFL's bar. Built only where it holds |
 
 ## Prediction markets (Polymarket, Kalshi)
 
@@ -117,6 +117,7 @@ never blend, and risk is a gate.
 | | Status |
 |---|---|
 | Discovery, order flow, holder concentration, mint/freeze authority, LP lock, wash flags, the exit channel | **Built** (free tier) |
+| The radar's own record (`engine/memeledger`): every coin on either channel at the price seen, marked at 1 hour, 6 hours, a day and a week, its peak and trough, and a coin that vanishes kept as an outcome | **Built** (since 19 August) |
 | Smart-money wallets, holder velocity, bundle and sniper detection, dev-wallet sells, bonding-curve stage | **Parked**: each needs a paid firehose feed; the page says so rather than scoring the gap as safe |
 | Every venue (GeckoTerminal, DexScreener, RugCheck, Solana RPC) | **Not reachable** from the build sandbox; the box reads them live |
 

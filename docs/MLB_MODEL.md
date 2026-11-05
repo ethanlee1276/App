@@ -317,6 +317,11 @@ directly with the lineup-confirmation rule), long stretches without an off
 day, time-zone changes, and doubleheaders (roster churn, a 27th man, bullpen
 strain). **Why:** small, persistent effects that rarely make a bet alone but
 regularly tip graded bets across a threshold.
+**Status (2026-11-05): measured before it is built.** `mlbtravelcheck.py`
+(runbook KN, read-only) reads four seasons of MLB's own schedule and judges
+each situation against a runs model (offence, defence, park, home) and the
+box's stored closing totals, on the NFL's bar: two standard errors pooled,
+the same side in three or more seasons. Only what holds is built.
 
 ### Team Aggression & the Stolen Base Engine
 **Team aggression:** stolen-base attempt rate, running-game aggressiveness,

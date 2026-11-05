@@ -9324,6 +9324,32 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KN. MLB travel and rest, measured before anything is built** (step 400;
+one read-only check, about a minute; you, 2026-11-05: "Go through ... mlb
+... make sure we have all the tools and data we can be using"). The MLB
+spec's travel engine (`docs/MLB_MODEL.md` §7: a day game after a night
+game, time zones, cross-country trips, getaway days, long stretches
+without a day off, doubleheaders) was in the spec and never in the code.
+Nothing reached from the build sandbox carries MLB's start times, so this
+one is measured on the box. The check reads MLB's own schedule for 2023
+to 2026 (one request a season, the source the nightly already reads,
+nothing cached or written). It fits each season's runs (every club's
+offence and defence, every park, home field) and measures each situation
+against that: the runs a club scored and allowed, and its wins against the
+expected chance. Then it reads the box's stored closing totals, read-only,
+to see whether the market already moved with it.
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 mlbtravelcheck.py
+```
+
+Its last block is one verdict a situation, against the NFL's bar (two
+standard errors with the seasons pooled, the same side in three or more
+seasons): `holds — worth building` or `too small to use`. Paste the
+whole output back. A situation that holds gets built into the MLB board
+before Opening Day, measured the same way; the rest stay out, and the
+reason is kept.
+
 **KM. The WNBA's spread, measured on its own six seasons** (step 399; one
 read-only check, a few minutes; you, 2026-11-05: "Go through ... wnba ...
 make sure we have all the tools and data we can be using like how we just

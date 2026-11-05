@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after the WNBA's spread was measured on its own
+Last updated 2026-11-05, after MLB's travel and rest got a read-only
+measurement (step KN: item 1t), after the WNBA's spread was measured on its own
 six seasons and set to follow the NBA's switch (step KM: item 1s, one
 read-only check), after the owner's desk started listing this file's
 commands with a Copy button, after hockey's games started getting the crowd's
@@ -527,6 +528,22 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 ```
 
 The same two with `--sport nfl` and `--sport cfb` re-read football's.
+
+## 1t. Any time after this push: MLB travel and rest, measured (step KN)
+
+The MLB spec's travel and rest engine was never built: a day game after a
+night game, time zones, long trips, getaway days, a long run without a day
+off, doubleheaders. This read-only check measures each of them on four
+seasons of MLB's own schedule against a runs model, and against the box's
+stored closing totals (about a minute):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 mlbtravelcheck.py
+```
+
+The last block says, for each one, `holds — worth building` or `too small
+to use`. Paste it all back; whatever holds goes into the MLB board before
+Opening Day.
 
 ## 1s. Any time after this push: the WNBA's spread, on the box's own games (step KM)
 

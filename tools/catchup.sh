@@ -1186,6 +1186,9 @@ run KL "Hockey's crowd prices: which venues' NHL markets are real, and the board
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 crowdprobe.py nhl nba wnba
 cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine import gate; d = json.load(open(gate.board_source('web/data/nhl.json'))); print(d.get('crowd_census'), d.get('polymarket_tags'))"
 SH
+run KN "MLB travel and rest, measured on four seasons before anything is built" 300 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 mlbtravelcheck.py
+SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('
 curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d.get('players', []) if r.get('position') == 'DEF'))"
