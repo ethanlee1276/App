@@ -4,6 +4,12 @@
     {
       "date": "2026-11-05",
       "kind": "ship",
+      "title": "The owner's desk sees the business, the backups and the sign-ins",
+      "body": "The owner's desk gained six things the server already kept but never showed. Each sport's books: picks journaled today and the last 7 and 30 days won-lost and units, with a warning when a league plays today and nothing has posted. The way to paying: visits, accounts made, plan buttons tapped and subscriptions started this month, and how many of the trials that have ended turned paying, with the business kept day by day from now on. How people use the site, from the usage counts the Privacy Policy describes in section 2.5. The odds credits each league spent today and this month. The backups: how old the newest nightly copy of each database is, whether it reached the offsite copy, and the weekly zip. And the security log as counts: sign-ins, failures, the rate limit and Stripe's signatures. A late backup, a missed offsite copy, fifty failed sign-ins in an hour or Stripe's messages failing their signature now go under Needs you and to the owner's phones. The account list can be filtered by where each account stands. All of it is counts and the business's own numbers; no one is named."
+    },
+    {
+      "date": "2026-11-05",
+      "kind": "ship",
       "title": "The owner's desk lists every account",
       "body": "The Accounts card on the owner's desk now lists every account, newest first, by its number: where its membership stands, when it joined and when it was last here. Who an account is shows only when the owner opens it, one account at a time, as the Privacy Policy has always said; its section 2.14 now describes the list as well."
     },

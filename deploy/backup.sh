@@ -137,11 +137,22 @@ remote_kind() {
   fi
 }
 
+# THE OWNER'S DESK READS THIS (engine/ownerdesk.backups): when the last run
+# finished and whether its offsite leg landed — ok, failed, or none when no
+# remote is set — so a backup that stops reaching offsite says so on the
+# desk and on the owner's phone instead of in a log nobody opens. Written
+# beside the copies, atomically; it can never fail the run.
+note_run() {
+  { printf '{"at": %s, "offsite": "%s"}\n' "$(date +%s)" "$1" > "$DEST/last_run.json.tmp" \
+      && mv -f "$DEST/last_run.json.tmp" "$DEST/last_run.json"; } 2>/dev/null || true
+}
+
 push_remote() {
   if [[ -z "${QB_BACKUP_REMOTE:-}" ]]; then
     echo "NOTE: QB_BACKUP_REMOTE is not set — these backups are on the same"
     echo "      disk as the databases, which does not survive losing the box."
     echo "      ./deploy/backup.sh --test-remote once you have set one."
+    note_run none
     return 0
   fi
   local kind; kind="$(remote_kind "$QB_BACKUP_REMOTE")"
@@ -154,16 +165,18 @@ push_remote() {
   if [[ "$kind" == "rclone" ]]; then
     if ! command -v rclone >/dev/null 2>&1; then
       echo "  FAILED: rclone is not installed. apt install rclone"
+      note_run failed
       return 1
     fi
     rclone sync --config "${QB_RCLONE_CONFIG:-/root/.config/rclone/rclone.conf}" \
       "$DEST/" "$QB_BACKUP_REMOTE/" || {
-        echo "  FAILED: rclone could not sync. Backups are LOCAL ONLY."; return 1; }
+        echo "  FAILED: rclone could not sync. Backups are LOCAL ONLY."; note_run failed; return 1; }
   else
     rsync -az --delete "$DEST/" "$QB_BACKUP_REMOTE/" || {
-      echo "  FAILED: rsync could not reach it. Backups are LOCAL ONLY."; return 1; }
+      echo "  FAILED: rsync could not reach it. Backups are LOCAL ONLY."; note_run failed; return 1; }
   fi
   echo "  offsite copy updated"
+  note_run ok
 }
 
 if [[ "${1:-}" == "--test-remote" ]]; then

@@ -55,6 +55,25 @@
 /* Units by their sign (app.js toneOf). */
 .od-tbl td.pos { color: var(--good); }
 .od-tbl td.neg { color: var(--bad); }
+.od-tbl span.pos { color: var(--good); }
+.od-tbl span.neg { color: var(--bad); }
+/* Each sport: one small table a league; the totals row in bold. */
+.od-sport { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.od-sports tfoot th, .od-sports tfoot td { font-weight: 800; }
+/* The way to paying: five steps, left to right, wrapping on a phone. */
+.od-flow { list-style: none; margin: 4px 0 6px; padding: 0; display: grid; gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); }
+.od-flow li { padding: 8px 10px; border-radius: var(--radius-sm); background: color-mix(in oklab, var(--brand) 10%, transparent);
+  display: grid; gap: 2px; }
+.od-flow li b { font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
+.od-flow li span { font-size: var(--fs-xs); color: var(--text-mute); line-height: var(--lh-snug); }
+/* The account list's filters. */
+.od-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+.od-chip { font: inherit; font-size: var(--fs-xs); font-weight: 700; padding: 5px 10px; border: 0; border-radius: 999px;
+  cursor: pointer; color: var(--text-dim); background: color-mix(in oklab, var(--text) 8%, transparent); }
+.od-chip b { font-weight: 800; color: var(--text); margin-left: 2px; }
+.od-chip.on { color: var(--on-brand, #fff); background: var(--brand); }
+.od-chip.on b { color: inherit; }
 /* Reports to review: tinted rows, no lines (tests/test_no_hard_lines). */
 .od-count { margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 800;
   background: color-mix(in oklab, var(--warn) 20%, transparent); color: var(--warn); vertical-align: 2px; }
@@ -143,3 +162,4 @@
   line-height: var(--lh-snug); background: color-mix(in oklab, var(--text) 5%, transparent); overflow-wrap: anywhere; }
 .oa-says b { display: block; font-size: var(--fs-xs); color: var(--text-mute); font-weight: 700; margin-bottom: 2px; }
 .oa-lab { font-size: var(--fs-xs); font-weight: 700; color: var(--text-dim); }
+.od-sports td { vertical-align: top; line-height: 1.35; }

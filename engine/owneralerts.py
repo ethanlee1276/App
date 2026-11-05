@@ -16,6 +16,13 @@ puts the same list at its top under "Needs you":
   odds      fewer than ODDS_LEFT odds credits with two or more days of the
             month to go: the boards price less until the first
   crashes   CRASHES_24H or more script errors on readers' screens in a day
+  backup    the newest nightly copy of the accounts or the journal is
+            ownerdesk.NIGHTLY_LATE_H hours old (deploy/backup.sh, 4am)
+  offsite   last night's run made its copy but not the offsite one
+  weekly-zip  no weekly zip of the small files in ownerdesk.WEEKLY_LATE_D days
+  signins   ownerdesk.SPRAY_HOUR failed sign-ins in the last hour
+  webhook   ownerdesk.WEBHOOK_BAD Stripe messages failing their signature in
+            a day: the webhook secret may have changed, and payments with it
 
 Each at most once an Eastern day (its id carries the problem and the day),
 queued as an `account` notice (engine/pushalerts.ACCOUNT): it reaches every
@@ -26,7 +33,8 @@ softer failures, the ones a running site can see in itself. The box's own
 state and counts — never a member.
 
 Run from engine/pushmine.run_once every OWNER_EVERY_S. Costs one query when
-the account has no phone with alerts on.
+the account has no phone with alerts on — and, phones or no, writes the
+day's totals the desk's trend reads (engine/ownerdesk.snapshot).
 """
 from __future__ import annotations
 
@@ -125,6 +133,43 @@ def problems(h: dict, data_dir: Path | None = None, now: float | None = None) ->
     if low:
         out.append({"key": "odds", "title": f"{int(o['remaining']):,} odds credits left",
                     "body": f"With {int(o['days_left'])} days of the month to go, the boards price less until the 1st."})
+    # The backups (engine/ownerdesk.backups): the nightly copies of the two
+    # databases that cannot be rebuilt, the offsite leg, the weekly zip.
+    # A weekly zip went missing for four weeks in October with nothing to
+    # say so (docs/RUN_NEXT.md, BU1).
+    from . import ownerdesk as OD
+    b = h.get("backups") if isinstance(h.get("backups"), dict) else {}
+    late = [float(v.get("age_h") or 0) for k, v in (b.get("dbs") or {}).items()
+            if k in ("accounts", "ledger") and float(v.get("age_h") or 0) >= OD.NIGHTLY_LATE_H]
+    if late:
+        out.append({"key": "backup", "title": f"The nightly backup is {_hours(max(late) * 3600)} hours old",
+                    "body": "The newest copy of the accounts or the bet journal. deploy/backup.sh runs at 4am "
+                            "from root's cron; the desk has each database's age."})
+    run = b.get("run") or {}
+    try:
+        recent = float(run.get("age_h")) < 30
+    except (TypeError, ValueError):
+        recent = False
+    if run.get("offsite") == "failed" and recent:
+        out.append({"key": "offsite", "title": "Last night's backup did not reach the offsite copy",
+                    "body": "The copy on this disk was made; the offsite leg failed. "
+                            "./deploy/backup.sh --test-remote on the box says why."})
+    w = b.get("weekly") or {}
+    if w and float(w.get("age_d") or 0) >= OD.WEEKLY_LATE_D:
+        out.append({"key": "weekly-zip", "title": f"No weekly backup zip in {int(float(w['age_d']))} days",
+                    "body": "The Sunday zip of the small files (the UFC dossiers, the device profiles) has stopped. "
+                            "The chores' log says why."})
+    # The security log (engine/ownerdesk.security).
+    sec = h.get("security") if isinstance(h.get("security"), dict) else {}
+    if int(sec.get("fails_hour") or 0) >= OD.SPRAY_HOUR:
+        out.append({"key": "signins", "title": f"{int(sec['fails_hour']):,} failed sign-ins in the last hour",
+                    "body": (f"Up to {int(sec.get('fails_one_network') or 0):,} from one network and "
+                             f"{int(sec.get('fails_one_account') or 0):,} on one account. Somebody may be trying "
+                             "passwords; the rate limit slows each network.")})
+    if int(sec.get("webhook_bad_day") or 0) >= OD.WEBHOOK_BAD:
+        out.append({"key": "webhook", "title": "Stripe's messages are failing their signature check",
+                    "body": (f"{int(sec['webhook_bad_day']):,} in a day. If the webhook's signing secret changed "
+                             "in Stripe, payments stop reaching the site until STRIPE_WEBHOOK_SECRET matches it.")})
     n = int(h.get("crashes") or 0)
     if n >= CRASHES_24H:
         top = ((h.get("crash_top") or [{}])[0] or {}).get("m") or ""
@@ -140,6 +185,12 @@ def alerts_pass(conn, now: float | None = None, health: dict | None = None, data
     from . import pushmine as PM
     from . import siteowners as SO
     t = time.time() if now is None else float(now)
+    # The business day by day (engine/ownerdesk.snapshot): the day's totals,
+    # written every pass so the day's last write is its close, phones or no.
+    try:
+        OD.snapshot(conn, t)
+    except Exception:                                        # noqa: BLE001 — the alerts still go
+        pass
     # The site's owners' phones (engine/siteowners: the listed accounts; until
     # there are any, the verified Qellys_Book account's).
     uids = [u for u in SO.desk_accounts(conn) if PM.asked(conn, u, PA.ACCOUNT)]

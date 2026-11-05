@@ -206,6 +206,16 @@ function woTick() {
    rest fold away, and the fold stays open across the minute's redraw. */
 const OD_LIST_SHOWN = 10;
 let _odAllOpen = false;
+/* The list's filters, by what the list already shows of each account. */
+const OD_FILTERS = [["all", "All", () => true],
+  ["paying", "Paying", (a) => a.entitled && a.status === "active"],
+  ["trial", "On a trial", (a) => a.entitled && a.status === "trialing"],
+  ["failing", "Payment failed", (a) => a.status === "past_due" || a.status === "unpaid"],
+  ["free", "Free access", (a) => a.entitled && !["active", "trialing", "past_due"].includes(a.status)],
+  ["ended", "Plan ended", (a) => !a.entitled && ["canceled", "cancelled", "incomplete_expired"].includes(a.status)],
+  ["never", "Never back", (a) => !a.seen],
+  ["suspended", "Suspended", (a) => !!a.suspended]];
+let _odFilter = "all";
 function odSeen(t) {
   if (!t) return "never back";
   const days = Math.floor((Date.now() / 1000 - Number(t)) / 86400);
@@ -218,10 +228,18 @@ function odAcctRow(a) {
 }
 function odEveryHTML(a) {
   if (a.list_error) return `<p class="od-note">Could not list the accounts: ${escapeHtml(a.list_error)}</p>`;
-  const list = a.list || [];
-  if (!list.length) return "";
+  const every = a.list || [];
+  if (!every.length) return "";
+  const [, , pick] = OD_FILTERS.find((f) => f[0] === _odFilter) || OD_FILTERS[0];
+  const list = every.filter(pick);
+  const chips = OD_FILTERS.map(([key, word, fn]) => {
+    const n = every.filter(fn).length;
+    return n || key === _odFilter || key === "all" ? `<button type="button" class="od-chip${key === _odFilter ? " on" : ""}" data-od-filter="${key}"
+      aria-pressed="${key === _odFilter}">${word} <b>${odN(n)}</b></button>` : "";
+  }).join("");
   const rest = list.slice(OD_LIST_SHOWN);
-  return `<h3 class="wo-h">Every account, newest first</h3><ul class="oa-hits">${list.slice(0, OD_LIST_SHOWN).map(odAcctRow).join("")}</ul>${
+  return `<h3 class="wo-h">Every account, newest first</h3><div class="od-chips" role="group" aria-label="Show">${chips}</div>${
+    list.length ? `<ul class="oa-hits">${list.slice(0, OD_LIST_SHOWN).map(odAcctRow).join("")}</ul>` : `<p class="od-note">None of these.</p>`}${
     rest.length ? `<details class="od-all"${_odAllOpen ? " open" : ""}><summary>The other ${odN(rest.length)}</summary><ul class="oa-hits">${
       rest.map(odAcctRow).join("")}</ul></details>` : ""}${
     a.total > list.length ? `<p class="od-note">The newest ${odN(list.length)} of ${odN(a.total)}; find any other in Accounts at the top.</p>` : ""}
@@ -239,7 +257,153 @@ function odAccountsHTML(a) {
       odRow("Came back after their first week", `${odN(b7.back)} of ${odN(b7.of)} · ${odPct(b7.back, b7.of)}`)}</ul>${odEveryHTML(a)}`);
 }
 
-function odMoneyHTML(m) {
+/* THE SECOND PASS (Ethan, 2026-11-05: "figure out what other features we can
+   add to the owners desk"): each sport's books, the way from a visit to
+   paying and the business day by day, how people use the site, the
+   backups and the security log — counts and the business's own numbers,
+   read by engine/ownerdesk. */
+const odWL = (w, l, p) => `${odN(w || 0)}-${odN(l || 0)}${p ? `-${odN(p)}` : ""}`;
+const odU = (u) => `<span class="${toneOf(u)}">${odUnits(u)}</span>`;
+/* A row of bars, the newest on the right: any day-by-day count. */
+function odBarsOf(rows, key, label, fmt) {
+  const f = fmt || odN;
+  const top = Math.max(1, ...rows.map((d) => Number(d[key]) || 0));
+  return `<div class="od-bars" role="img" aria-label="${escapeAttr(`${label}: ${rows.map((d) => f(d[key])).join(", ")}`)}">${
+    rows.map((d) => `<i style="height:${Math.max(4, Math.round((100 * (Number(d[key]) || 0)) / top))}%" title="${
+      escapeAttr(`${d.day}: ${f(d[key])}`)}"></i>`).join("")}</div>`;
+}
+
+/* Two lines a cell, so four columns fit a phone: the record, then its units. */
+function odSportRow(b, tag) {
+  return `<tr><${tag} scope="row">${escapeHtml(b.book)}</${tag}><td>${odN(b.today)}${b.open ? `<br><span class="od-mute">${odN(b.open)} open</span>` : ""}</td>
+    <td>${odWL(b.w7, b.l7)}<br>${odU(b.u7)}</td><td>${odWL(b.w30, b.l30, b.p30)}<br>${odU(b.u30)}${
+      b.roi30 != null ? ` <span class="od-mute">${(b.roi30 * 100).toFixed(1)}%</span>` : ""}</td></tr>`;
+}
+function odSportsHTML(s) {
+  if (!s || s.error) return odCard("Each sport", odErr(s));
+  const list = s.sports || [];
+  if (!list.length) return odCard("Each sport", `<p class="od-note">No picks journaled in the last 30 days.</p>`);
+  const blocks = list.map((sp) => {
+    const books = sp.books || [];
+    const all = books.find((b) => b.book === "All") || {};
+    const rows = books.filter((b) => b.book !== "All");
+    const name = OD_LEAGUES[sp.sport] || String(sp.sport || "").toUpperCase();
+    const pill = sp.playing ? (all.today ? `<span class="od-pill">plays today</span>`
+      : `<span class="od-pill warn">plays today · nothing journaled yet</span>`) : "";
+    return `<h3 class="wo-h od-sport">${escapeHtml(name)} ${pill}</h3>
+      <div class="tbl-scroll"><table class="od-tbl od-sports"><thead><tr><th scope="col">Book</th><th scope="col">Today</th>
+      <th scope="col">7 days</th><th scope="col">30 days</th></tr></thead><tbody>${rows.map((b) => odSportRow(b, "th")).join("")}</tbody>${
+      rows.length > 1 ? `<tfoot>${odSportRow(all, "th")}</tfoot>` : ""}</table></div>${
+      sp.last ? `<p class="od-note">Last pick journaled ${escapeHtml(String(sp.last).replace("T", " ").slice(0, 16))}.</p>` : ""}`;
+  }).join("");
+  return odCard("Each sport", `${blocks}<p class="od-note">By the site’s day: picks journaled today, then won-lost and units over the
+    last 7 and 30 days (settled bets, each book’s own stakes, the percentage its return on them). A sport whose league plays today
+    with nothing journaled is the one to look at. The public record since it began is on the Record page.</p>`,
+    `<a class="od-more" href="#record">Record →</a>`);
+}
+
+/* The way to paying: the month's flow (engine/analytics' counts) beside the
+   accounts and subscriptions themselves, and the business day by day. */
+function odFlowHTML(m, u, a) {
+  const f = (u && !u.error && u.flow) || {};
+  const s = m.started_30d || {};
+  const e = m.ended_trials || {};
+  const step = (v, k) => `<li><b>${odN(v)}</b><span>${k}</span></li>`;
+  return `<h3 class="wo-h">From a visit to paying, last 30 days</h3>
+    <ol class="od-flow">${u && !u.error ? step(f.visit || 0, "visits") : ""}${step(a && !a.error ? a.new_30d : null, "accounts made")}${
+      u && !u.error ? step(f.checkout_click || 0, "plan buttons tapped") : ""}${step(s.n, "subscriptions started")}${
+      step(s.paying, "of them paying now")}</ol>
+    <ul class="od-list">${odRow(`Trials that have ended, started the ${odN(e.days || 30)} days before`,
+      `${odN(e.paying)} of ${odN(e.n)} paying · ${odPct(e.paying || 0, e.n)}`, e.n && !e.paying ? "warn" : "")}${
+      u && !u.error ? odRow("Trials begun · trials turned paying", `${odN(f.trial_started || 0)} · ${odN(f.trial_converted || 0)}`) +
+        odRow("Straight to paying · renewals · cancellations", `${odN(f.subscribed || 0)} · ${odN(f.renewed || 0)} · ${odN(f.canceled || 0)}`) : ""}</ul>`;
+}
+function odTrendHTML(t) {
+  const days = (t && !t.error && t.days) || [];
+  if (days.length < 2) {
+    return `<p class="od-note">The business day by day starts today: each day’s paying members, trials and month’s revenue are
+      kept from now on, and draw here from tomorrow.</p>`;
+  }
+  const a = days[0], z = days[days.length - 1];
+  const d = (k) => { const v = (Number(z[k]) || 0) - (Number(a[k]) || 0); return v ? ` (${v > 0 ? "+" : "−"}${Math.abs(Math.round(v * 100) / 100).toLocaleString()})` : ""; };
+  return `<h3 class="wo-h">Day by day, last ${odN(days.length)} days</h3>${odBarsOf(days, "paying", "Paying members a day")}
+    <ul class="od-list">${odRow("Paying members", `${odN(a.paying)} → ${odN(z.paying)}${d("paying")}`)}${
+      odRow("A month, recurring", `${odMoney(a.mrr)} → ${odMoney(z.mrr)}`)}${
+      odRow("On a trial", `${odN(a.trialing)} → ${odN(z.trialing)}`)}${odRow("All accounts", `${odN(a.accounts)} → ${odN(z.accounts)}${d("accounts")}`)}${
+      odRow("Signed in a day, on average", odN(Math.round(days.reduce((n, x) => n + (Number(x.seen) || 0), 0) / days.length)))}</ul>`;
+}
+
+/* How people use the site (engine/analytics: counts by day, page, source). */
+const OD_SOURCES = { direct: "Typed in or a bookmark", search: "A search engine", social: "Social media", referral: "Another site",
+  campaign: "A campaign link", alert: "One of our alerts", unknown: "Not known" };
+const OD_DID_SHOWN = 8;
+function odUsageHTML(u) {
+  if (!u || u.error) return odCard("How people use the site", odErr(u));
+  if (!u.first) {
+    return odCard("How people use the site", `<p class="od-note">${u.on ? "Counting has just begun: the first counts draw here within the day."
+      : "The usage counts are switched off (QB_ANALYTICS), so there is nothing to draw."}</p>`);
+  }
+  const days = u.days || [];
+  const sum = (k) => days.slice(-7).reduce((n, x) => n + (Number(x[k]) || 0), 0);
+  const pages = (u.pages || []).map(([p, n]) => odRow(escapeHtml(p), odN(n))).join("");
+  const src = (u.sources || []).map((x) => odRow(escapeHtml(OD_SOURCES[x.source] || x.source),
+    `${odN(x.visits)}${x.checkout ? ` · ${odN(x.checkout)} plan taps (${odPct(x.checkout, x.visits)})` : ""}`)).join("");
+  const conv = (u.checkout_from || []).map(([p, n]) => odRow(escapeHtml(p), odN(n))).join("");
+  const al = u.alerts || {};
+  const did = (u.did || []).slice(0, OD_DID_SHOWN).map((x) => odRow(escapeHtml(x.k), odN(x.n))).join("");
+  return odCard("How people use the site", `<div class="od-tiles">${odTile(odN(sum("visits")), "Visits, 7 days")}${
+    odTile(odN(sum("members")), "By members")}${odTile(odN(sum("views")), "Pages opened")}</div>
+    ${odBarsOf(days, "visits", `Visits a day, last ${days.length} days`)}
+    ${pages ? `<h3 class="wo-h">The pages opened most, 7 days</h3><ul class="od-list">${pages}</ul>` : ""}
+    ${src ? `<h3 class="wo-h">Where visits came from, 7 days</h3><ul class="od-list">${src}</ul>` : ""}
+    ${conv ? `<h3 class="wo-h">The page a plan button was tapped on</h3><ul class="od-list">${conv}</ul>` : ""}
+    ${al.sent ? `<h3 class="wo-h">Alerts, 7 days</h3><ul class="od-list">${odRow("Reached phones", odN(al.sent))}${
+      odRow("Visits from tapping one", `${odN(al.opened)} · ${odPct(al.opened || 0, al.sent)}`)}${
+      (al.kinds || []).map(([k, n]) => odRow(escapeHtml(k), odN(n))).join("")}</ul>` : ""}
+    ${did ? `<h3 class="wo-h">What readers did, 7 days</h3><ul class="od-list">${did}</ul>` : ""}
+    <p class="od-note">Counts only, by the server’s day (UTC): no account, address or device in them (Privacy Policy §2.5).${
+      u.on ? "" : " Counting is switched off now; these are the counts kept before."}</p>`);
+}
+
+/* The backups: deploy/backup.sh's nightly copies, its offsite leg, the weekly zip. */
+const OD_DBS = { accounts: "Accounts", ledger: "The bet journal", zeno: "Zeno’s tickets", history: "Games and odds history" };
+function odBackupsHTML(b) {
+  if (!b || b.error) return odCard("Backups", odErr(b));
+  if (!b.found && !b.weekly) return odCard("Backups", `<p class="od-note">No backups folder on this box to read.</p>`);
+  const dbs = Object.entries(b.dbs || {}).map(([k, v]) => odRow(escapeHtml(OD_DBS[k] || k),
+    `${v.age_h < 1 ? "under an hour" : `${odN(Math.round(v.age_h))} h`} old · ${v.mb} MB · ${odN(v.kept)} kept`,
+    (k === "accounts" || k === "ledger") && v.age_h >= 36 ? "bad" : "")).join("");
+  const run = b.run || null;
+  const off = run ? ({ ok: ["reached the offsite copy", "good"], failed: ["did NOT reach the offsite copy", "bad"],
+    none: ["no offsite copy is set up", "warn"] }[run.offsite] || [run.offsite || "—", ""]) : null;
+  const w = b.weekly || null;
+  return odCard("Backups", `<ul class="od-list">${dbs || odRow("Nightly copies", "none found", "warn")}${
+    off ? odRow(`The last run, ${odN(Math.round(run.age_h))} h ago`, off[0], off[1]) : ""}${
+    w ? odRow("The weekly zip of the small files", `${w.age_d < 1 ? "today" : `${odN(Math.round(w.age_d))} days old`} · ${w.mb} MB`,
+      w.age_d >= 9 ? "warn" : "") : ""}</ul>
+    <p class="od-note">deploy/backup.sh copies the databases at 4am every night and sends them offsite; the weekly zip keeps the
+      files the nightly does not. A copy of the accounts or the journal older than a day and a half, or a run that misses the
+      offsite copy, is put under Needs you and sent to this account’s phones.</p>`);
+}
+
+/* Sign-ins and the security log (engine/seclog), as counts. */
+function odSecurityHTML(s) {
+  if (!s || s.error) return odCard("Sign-ins and security", odErr(s));
+  const lines = (s.lines || []).map((x) => `<tr><th scope="row">${escapeHtml(x.k)}</th><td>${odN(x.day)}</td><td>${odN(x.week)}</td></tr>`).join("");
+  const spray = (s.fails_hour || 0) >= 50;
+  return odCard("Sign-ins and security", `${lines ? `<div class="tbl-scroll"><table class="od-tbl"><thead><tr><th scope="col">What</th>
+    <th scope="col">24 h</th><th scope="col">7 days</th></tr></thead><tbody>${lines}</tbody></table></div>`
+    : `<p class="od-note">Nothing in the security log this week.</p>`}
+    <ul class="od-list">${odRow("Failed sign-ins in the last hour", odN(s.fails_hour), spray ? "bad" : "")}${
+      odRow("The day’s worst hour", odN(s.fails_worst_hour))}${
+      odRow("Most from one network, 24 h", `${odN(s.fails_one_network)} (of ${odN(s.networks_failing)})`)}${
+      odRow("The most on one account, 24 h", odN(s.fails_one_account), (s.fails_one_account || 0) >= 20 ? "warn" : "")}${
+      odRow("Stripe messages failing their signature, 24 h", odN(s.webhook_bad_day), (s.webhook_bad_day || 0) >= 3 ? "bad" : "")}</ul>
+    <p class="od-note">Counts from the security log — never the network or the account behind a line. Fifty failed sign-ins in an
+      hour, or three Stripe messages failing their signature in a day, go under Needs you.</p>`);
+}
+
+function odMoneyHTML(m, u, a, t) {
   if (!m || m.error) return odCard("Money", odErr(m));
   const plans = Object.entries(m.by_plan || {}).map(([k, n]) => odRow(`On ${escapeHtml((m.plans || {})[k] || k)}`, odN(n))).join("");
   return odCard("Money", `<div class="od-tiles">${odTile(odN(m.paying), "Paying")}${odTile(odN(m.trialing), "On a trial")}${
@@ -247,7 +411,8 @@ function odMoneyHTML(m) {
     <ul class="od-list">${plans}${odRow("New paying, last 7 days", odN(m.new_7d))}${odRow("Renewing in the next 7 days", odN(m.renewing_7d))}${
       odRow("Cancelling at the period's end", odN(m.cancelling), m.cancelling ? "warn" : "")}${
       odRow("Payment failing", odN(m.past_due), m.past_due ? "bad" : "")}${odRow("Lapsed, last 30 days", odN(m.lapsed_30d))}</ul>
-    <p class="od-note">“A month, recurring” is every paying plan's price spread over its months: a yearly member counts a twelfth of the year.</p>`);
+    <p class="od-note">“A month, recurring” is every paying plan's price spread over its months: a yearly member counts a twelfth of the year.</p>
+    ${odFlowHTML(m, u, a)}${odTrendHTML(t)}`);
 }
 
 function odPicksHTML(p) {
@@ -263,6 +428,7 @@ function odPicksHTML(p) {
     : `<p class="od-note">Nothing on today's boards yet.</p>`}${rec}`, `<a class="od-more" href="#record">Record →</a>`);
 }
 
+const OD_LANES = { harvest: "The closing-price harvest", slips: "Slip checks", other: "Other calls" };
 function odHealthHTML(h) {
   if (!h || h.error) return odCard("The site's health", odErr(h));
   const stale = Object.entries(h.stale || {});
@@ -281,6 +447,8 @@ function odHealthHTML(h) {
       odRow("Running version", escapeHtml(h.commit || (u && u.commit) || "—"))}${
       odRow("Bets last graded", odAgo(h.settled_ago_s))}${
       o ? odRow("Odds credits left this month", `${odN(o.remaining)} · ${odN(o.per_day)} a day for ${odN(o.days_left)} days`, o.remaining < 2000 ? "warn" : "") : ""}${
+      Array.isArray(h.odds_by) ? h.odds_by.map((x) => odRow(`&nbsp;&nbsp;${escapeHtml(OD_LANES[x.lane] || OD_LEAGUES[x.lane] || x.lane)}`,
+        `${odN(x.today)} today · ${odN(x.month)} this month`)).join("") : ""}${
       h.disk ? odRow("Disk", `${h.disk.free_gb} GB free · ${h.disk.used_pct}% used`, h.disk.used_pct > 90 ? "bad" : h.disk.used_pct > 80 ? "warn" : "") : ""}${
       (h.builds_warned || []).length ? odRow("Builds with warnings", escapeHtml(h.builds_warned.join(", ")), "warn") : ""}</ul>
     ${u && u.note ? `<p class="od-note od-mono">${escapeHtml(u.note)}</p>` : ""}
@@ -571,8 +739,10 @@ function odHTML(d) {
   const reps = odReportsHTML(d.reports);
   return `${odNeedsHTML(d.needs)}<section class="od-card od-who" id="od-who" aria-label="Who’s on now">${odWhoInner(d.now)}</section>
     <section class="od-card od-acct" id="od-acct" aria-label="Accounts">${oaInner()}</section>
-    ${odNoticeHTML(d.notice)}${waiting ? reps : ""}${odPicksHTML(d.picks)}${odMoneyHTML(d.money)}${odAccountsHTML(d.accounts)}
-    ${odHealthHTML(d.health)}${odRoomHTML(d.community)}${waiting ? "" : reps}${odSwitchesHTML(d.switches, d.alerts)}
+    ${odNoticeHTML(d.notice)}${waiting ? reps : ""}${odPicksHTML(d.picks)}${odSportsHTML(d.sports)}${
+      odMoneyHTML(d.money, d.usage, d.accounts, d.trend)}${odUsageHTML(d.usage)}${odAccountsHTML(d.accounts)}
+    ${odHealthHTML(d.health)}${odBackupsHTML(d.health && d.health.backups)}${odSecurityHTML(d.health && d.health.security)}${
+      odRoomHTML(d.community)}${waiting ? "" : reps}${odSwitchesHTML(d.switches, d.alerts)}
     <p class="od-foot">Only this account can open this page. Who’s on now names only the members the Privacy Policy’s notice
       has reached who left “Show me in Who’s on now” on, and Accounts shows who an account is one at a time, for support and the
       Terms; the list of every account names each by its number alone, and everything else here is a count or the business’s own number.</p>`;
@@ -667,6 +837,13 @@ document.addEventListener("click", (e) => {
       return;
     }
     oaAct(key);
+    return;
+  }
+  const chip = t && t.closest("[data-od-filter]");
+  if (chip) {
+    _odFilter = chip.dataset.odFilter || "all";
+    const host = document.getElementById("owner-body");
+    if (host && _odLast) host.innerHTML = odHTML(_odLast);
     return;
   }
   if (e.target && e.target.id === "od-clear") odNotice({ clear: true });

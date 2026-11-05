@@ -15,6 +15,20 @@ picks are the books' own record; health is the box's. Nothing names a member
 Each section is read on its own and fails on its own: a missing table, an
 unreadable file or a module that raises leaves that section `{"error": ...}`
 and the rest of the desk drawn.
+
+THE SECOND PASS (Ethan, 2026-11-05: "figure out what other features we can
+add to the owners desk"). What the box already kept and only printed over
+ssh, or kept and never showed: how people use the site (engine/analytics'
+counts: visits a day, the pages, where visits come from, which page a
+checkout click came from, alerts sent and opened), the way from a visit to
+paying (the month's flow, and how many of the trials that have ended are
+paying), the business day by day (`desk_days`: the day's totals, written
+by the push loop's owner pass), each sport's books over 7 and 30 days, the
+odds credits each league spent, the backups (deploy/backup.sh's nightly
+copies and its offsite leg, the weekly zip), and the security log
+(engine/seclog: sign-ins, failures, the rate limit, Stripe's signatures) —
+counts, and the business's own numbers, like the rest. `desk_days` holds
+the day's totals and nothing about any account.
 """
 from __future__ import annotations
 
@@ -108,19 +122,32 @@ def accounts(conn, now: float | None = None) -> dict:
 
 
 # --- money --------------------------------------------------------------------
+#: A subscription started this many days ago has had its trial (three days)
+#: and a day's grace; the desk asks how many of a month of those are paying.
+TRIAL_DONE_DAYS = 4
+COHORT_DAYS = 30
+
+
 def money(conn, now: float | None = None) -> dict:
     """Who is paying, on which plan, and what that is worth a month."""
     from . import billing as B
     t = time.time() if now is None else float(now)
     if not _has(conn, "subscriptions"):
         return {"paying": 0, "trialing": 0, "cancelling": 0, "past_due": 0, "by_plan": {}, "mrr": 0.0,
-                "new_7d": 0, "lapsed_30d": 0, "renewing_7d": 0, "statuses": {}}
+                "new_7d": 0, "lapsed_30d": 0, "renewing_7d": 0, "statuses": {},
+                "started_30d": {"n": 0, "paying": 0, "trialing": 0},
+                "ended_trials": {"n": 0, "paying": 0, "days": COHORT_DAYS}}
     have = {r[1] for r in conn.execute("PRAGMA table_info(subscriptions)")}
     col = lambda c: c if c in have else "NULL"  # noqa: E731
     rows = conn.execute(f"SELECT status, period_end, {col('plan')} AS plan, {col('cancel_at_end')} AS cae, "
                         f"{col('started_at')} AS started, updated_at FROM subscriptions").fetchall()
     out = {"paying": 0, "trialing": 0, "cancelling": 0, "past_due": 0, "by_plan": {}, "mrr": 0.0,
            "new_7d": 0, "lapsed_30d": 0, "renewing_7d": 0, "statuses": {}}
+    # The way to paying: subscriptions started this month and where they
+    # stand, and of those started TRIAL_DONE_DAYS or more ago (their trial
+    # over, a day's grace past it), how many are paying now.
+    out["started_30d"] = {"n": 0, "paying": 0, "trialing": 0}
+    out["ended_trials"] = {"n": 0, "paying": 0, "days": COHORT_DAYS}
     for st, end, plan, cae, started, updated in rows:
         status = str(st or "none").lower()
         out["statuses"][status] = out["statuses"].get(status, 0) + 1
@@ -146,6 +173,18 @@ def money(conn, now: float | None = None) -> dict:
                 out["new_7d"] += 1
         elif status in ("canceled", "cancelled", "unpaid", "incomplete_expired") and updated and float(updated) >= t - 30 * DAY_S:
             out["lapsed_30d"] += 1
+        try:
+            began = float(started) if started else None
+        except (TypeError, ValueError):
+            began = None
+        paying_now = bool(live) and status != "trialing"
+        if began is not None and began >= t - 30 * DAY_S:
+            out["started_30d"]["n"] += 1
+            out["started_30d"]["paying"] += paying_now
+            out["started_30d"]["trialing"] += bool(live) and status == "trialing"
+        if began is not None and t - (COHORT_DAYS + TRIAL_DONE_DAYS) * DAY_S <= began <= t - TRIAL_DONE_DAYS * DAY_S:
+            out["ended_trials"]["n"] += 1
+            out["ended_trials"]["paying"] += paying_now
     out["mrr"] = round(out["mrr"], 2)
     out["plans"] = {pid: B.PLANS[pid]["name"] for pid in B.PLAN_ORDER}
     return out
@@ -179,6 +218,15 @@ def picks(lconn, now: float | None = None, record_path: Path | None = None) -> d
 
 
 # --- the box ------------------------------------------------------------------
+def _league_playing(league: str, unknown: bool = True) -> bool:
+    """Has the league games on its scoreboard (web/data/live_<league>.json)?"""
+    try:
+        got = json.loads((ROOT / "web" / "data" / f"live_{league}.json").read_text(encoding="utf-8"))
+        return bool(got.get("games"))
+    except (OSError, ValueError, AttributeError):
+        return unknown                                       # unknown: judged by its age alone
+
+
 def health(now: float | None = None) -> dict:
     """The box's own state: crashes, builds, stale boards, the updater, the
     settle pass, odds credits, disk. The service journal is not read from a
@@ -189,12 +237,7 @@ def health(now: float | None = None) -> dict:
     crashes = scan.get("crashes") or []
     # A board is stale only while its league is playing: one with no game on
     # its scoreboard (MLB in November) is resting, not broken.
-    def playing(league: str) -> bool:
-        try:
-            got = json.loads((ROOT / "web" / "data" / f"live_{league}.json").read_text(encoding="utf-8"))
-            return bool(got.get("games"))
-        except (OSError, ValueError, AttributeError):
-            return True                                      # unknown: judged by its age alone
+    playing = _league_playing
     old_boards = scan.get("stale") or {}
     out = {"crashes": sum(g.get("n", 0) for g in crashes), "crash_kinds": len(crashes),
            "crash_top": [{"m": str(g.get("m") or "")[:120], "n": g.get("n", 0)} for g in crashes[:3]],
@@ -233,7 +276,350 @@ def health(now: float | None = None) -> dict:
         except OSError:
             continue
     out["boards"] = ages
+    out["odds_by"] = _section(odds_by_league, t)
+    out["backups"] = _section(backups, t)
+    out["security"] = _section(security, t)
     return out
+
+
+# --- files read again only when they change ---------------------------------------
+_LINES: dict = {}
+
+
+def _parsed_lines(f: Path, parse) -> list:
+    """Each line of ``f`` through ``parse`` (None drops it), read again only
+    when the file's size or date changes: the desk is redrawn every minute
+    and these logs grow all month."""
+    try:
+        st = f.stat()
+    except OSError:
+        return []
+    key = (st.st_size, st.st_mtime, parse)
+    hit = _LINES.get(str(f))
+    if hit and hit[0] == key:
+        return hit[1]
+    rows = []
+    try:
+        with f.open(encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                try:
+                    got = parse(json.loads(line))
+                except (ValueError, KeyError, TypeError, AttributeError):
+                    continue
+                if got is not None:
+                    rows.append(got)
+    except OSError:
+        return []
+    _LINES[str(f)] = (key, rows)
+    return rows
+
+
+# --- odds credits by league -----------------------------------------------------------
+def odds_by_league(now: float | None = None, path: Path | None = None) -> list:
+    """Credits each league spent today and this billing month (engine/oddsplan's
+    lanes: a league, the harvest, the slips), the most first."""
+    from . import oddsbudget as OB
+    from . import oddsplan as OP
+    t = time.time() if now is None else float(now)
+    rows = _parsed_lines(Path(path or OB.SPEND_LOG), _spend_row)
+    today = _dt.date.fromtimestamp(t)                        # the pacer's own day (the box's clock)
+    try:
+        start = OP.renewal(today, OB.load())[0]
+    except Exception:                                        # noqa: BLE001 — the 1st, as the plan assumes
+        start = today.replace(day=1)
+    month = OP.month_spend(rows, start)
+    day = OP.month_spend(rows, today)
+    return sorted(({"lane": k, "today": int(day.get(k, 0)), "month": int(v)} for k, v in month.items() if v),
+                  key=lambda r: -r["month"])
+
+
+def _spend_row(r: dict):
+    return {"iso": str(r["iso"]), "kind": r.get("kind"), "sport": r.get("sport"), "credits": int(r.get("credits") or 0)}
+
+
+# --- the backups ---------------------------------------------------------------------
+#: The databases deploy/backup.sh copies every night, the two that cannot be
+#: rebuilt first.
+NIGHTLY_DBS = ("accounts", "ledger", "zeno", "history")
+#: A nightly copy of the accounts or the journal older than this needs the owner.
+NIGHTLY_LATE_H = 36
+#: And a weekly zip (engine/maintenance) older than this.
+WEEKLY_LATE_D = 9
+
+
+def backups(now: float | None = None, nightly: Path | None = None, weekly: Path | None = None) -> dict:
+    """How old the newest nightly copy of each database is, whether the last
+    run reached the offsite copy (the note deploy/backup.sh leaves beside
+    them, `last_run.json`), and the weekly zip of the small files."""
+    t = time.time() if now is None else float(now)
+    d = Path(nightly or os.environ.get("QB_BACKUP_DIR", "").strip() or ROOT / "backups")
+    out = {"dbs": {}, "run": None, "weekly": None, "found": d.is_dir()}
+    if out["found"]:
+        for name in NIGHTLY_DBS:
+            got = []
+            for f in d.glob(f"{name}-*.db.gz"):
+                try:
+                    st = f.stat()
+                except OSError:
+                    continue
+                got.append((st.st_mtime, st.st_size))
+            if got:
+                m, size = max(got)
+                out["dbs"][name] = {"age_h": round((t - m) / 3600, 1), "mb": round(size / 1e6, 1), "kept": len(got)}
+        try:
+            run = json.loads((d / "last_run.json").read_text(encoding="utf-8"))
+            out["run"] = {"age_h": round((t - float(run["at"])) / 3600, 1), "offsite": str(run.get("offsite") or "")}
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    try:
+        from . import maintenance as M
+        zips = []
+        for f in Path(weekly or M.BACKUP_DIR).glob("backup_*.zip"):
+            st = f.stat()
+            zips.append((st.st_mtime, st.st_size))
+        if zips:
+            m, size = max(zips)
+            out["weekly"] = {"age_d": round((t - m) / DAY_S, 1), "mb": round(size / 1e6, 1), "kept": len(zips)}
+    except Exception:                                        # noqa: BLE001 — the nightly half still reads
+        pass
+    return out
+
+
+# --- sign-ins and the security log -----------------------------------------------------
+#: (kind, outcome, words), in the order the desk lists them: engine/seclog's lines.
+SEC_LINES = (("login", "ok", "Sign-ins"), ("login", "fail", "Failed sign-ins"),
+             ("passkey_login", "ok", "Passkey sign-ins"), ("passkey_login", "fail", "Failed passkey sign-ins"),
+             ("phone_verify", "ok", "Phone codes accepted"), ("phone_verify", "fail", "Phone codes refused"),
+             ("signup", "ok", "Accounts made"), ("signup", "fail", "Sign-ups refused"),
+             ("password_reset_request", "asked", "Password resets asked for"),
+             ("password_reset", "ok", "Passwords reset"),
+             ("rate_limit", "blocked", "Requests slowed by the rate limit"),
+             ("owner_token", "refused", "Owner doors refused"), ("founder", "refused", "Founder doors refused"),
+             ("webhook", "bad_signature", "Stripe messages failing their signature"),
+             ("redeem", "refused", "Codes refused"),
+             ("account_delete", "wrong_password", "Deletes with a wrong password"))
+#: Failed sign-ins in the last hour that need the owner: somebody trying passwords.
+SPRAY_HOUR = 50
+#: Stripe messages failing their signature in a day: the webhook's secret may
+#: have changed, and payments stop reaching the site until it matches.
+WEBHOOK_BAD = 3
+
+
+def _sec_row(j: dict):
+    return (_dt.datetime.fromisoformat(str(j["ts"])).timestamp(), str(j.get("kind") or ""),
+            str(j.get("outcome") or ""), j.get("net"), j.get("who"))
+
+
+def security(now: float | None = None, path: Path | None = None) -> dict:
+    """The security log's day and week as counts (engine/seclog), and what
+    a password-spraying run would look like: failed sign-ins this hour and
+    in the day's worst hour, and the most from one network or on one
+    account — counts, never the network or the account."""
+    from . import seclog as SL
+    t = time.time() if now is None else float(now)
+    p = Path(path or SL.path())
+    rows = [r for f in (p.with_suffix(p.suffix + ".1"), p) for r in _parsed_lines(f, _sec_row) if r[0] >= t - 7 * DAY_S]
+    counts: dict = {}
+    for ts, kind, outcome, _net, _who in rows:
+        c = counts.setdefault((kind, outcome), [0, 0])
+        c[1] += 1
+        if ts >= t - DAY_S:
+            c[0] += 1
+    hours: dict = {}
+    nets: dict = {}
+    whos: dict = {}
+    for ts, kind, outcome, net, who in rows:
+        if ts < t - DAY_S or outcome != "fail" or kind not in ("login", "passkey_login"):
+            continue
+        h = int((t - ts) // 3600)
+        hours[h] = hours.get(h, 0) + 1
+        if net:
+            nets[net] = nets.get(net, 0) + 1
+        if who:
+            whos[who] = whos.get(who, 0) + 1
+    return {"lines": [{"k": words, "day": counts[(k, o)][0], "week": counts[(k, o)][1], "kind": k, "outcome": o}
+                      for k, o, words in SEC_LINES if (k, o) in counts],
+            "fails_hour": hours.get(0, 0), "fails_worst_hour": max(hours.values(), default=0),
+            "fails_one_network": max(nets.values(), default=0), "networks_failing": len(nets),
+            "fails_one_account": max(whos.values(), default=0),
+            "webhook_bad_day": counts.get(("webhook", "bad_signature"), [0, 0])[0]}
+
+
+# --- how people use the site ----------------------------------------------------------
+#: Visits a day for this many days; the pages, sources and events for a week;
+#: the way from a visit to paying for a month.
+USAGE_DAYS = 14
+USAGE_WEEK = 7
+FLOW_DAYS = 30
+#: The month's flow, in order: engine/analytics' client and server events.
+FLOW = ("visit", "signup", "checkout_click", "trial_started", "subscribed", "trial_converted", "canceled", "renewed")
+#: The research's events (docs/RETENTION.md §7) the desk counts, with their words.
+DID = (("signup", "Accounts made"), ("bet_logged", "Bets put in My Bets"), ("game_view", "Game pages opened"),
+       ("sweat", "Game pages showing the reader's own bets"), ("push_on", "Alerts turned on"),
+       ("push_prompt", "Alerts asked for"), ("installed", "Added to a home screen"), ("ask", "Questions to Ask"),
+       ("kelly", "Kelly calculator used"), ("billing_portal", "Billing page opened"),
+       ("discord", "Discord invite tapped"), ("onboarding", "“Make it yours” answered"),
+       ("limit_set", "Limits or breaks set"), ("second_screen", "Second-screen mode"))
+
+
+def usage(now: float | None = None, path: Path | None = None) -> dict:
+    """engine/analytics' counts (Privacy Policy §2.5: a day, an event, a page,
+    a broad source, signed in or not — no identifier) as the desk reads them.
+    Its days are the server's (UTC), as the counts are kept."""
+    from . import analytics as AN
+    t = time.time() if now is None else float(now)
+    p = Path(path or AN.DB_PATH)
+    today = _dt.datetime.fromtimestamp(t, _dt.timezone.utc).date()
+    ago = lambda k: (today - _dt.timedelta(days=k)).isoformat()  # noqa: E731
+    out = {"on": bool(AN.enabled()), "first": None, "days": [], "pages": [], "sources": [], "checkout_from": [],
+           "alerts": {"sent": 0, "opened": 0, "kinds": []}, "did": [], "flow": {}}
+    if not p.is_file():
+        return out
+    conn = sqlite3.connect(str(p), timeout=5)
+    try:
+        rows = conn.execute("SELECT day, event, page, source, who, n FROM counts WHERE day >= ?",
+                            (ago(FLOW_DAYS - 1),)).fetchall()
+        out["first"] = conn.execute("SELECT MIN(day) FROM counts").fetchone()[0]
+    finally:
+        conn.close()
+    by_day = {ago(k): {"day": ago(k), "visits": 0, "members": 0, "views": 0} for k in range(USAGE_DAYS - 1, -1, -1)}
+    week = ago(USAGE_WEEK - 1)
+    pages: dict = {}
+    src: dict = {}
+    conv: dict = {}
+    kinds: dict = {}
+    did: dict = {}
+    flow: dict = {}
+    did_keys = {e for e, _w in DID}
+    for day, event, page, source, who, n in rows:
+        n = int(n or 0)
+        if event in FLOW:
+            flow[event] = flow.get(event, 0) + n
+        b = by_day.get(day)
+        if b is not None and event == "visit":
+            b["visits"] += n
+            b["members"] += n if who in ("member", "subscriber") else 0
+        elif b is not None and event == "view":
+            b["views"] += n
+        if day < week:
+            continue
+        if event == "view":
+            pages[page or "?"] = pages.get(page or "?", 0) + n
+        if event in ("visit", "checkout_click"):
+            s = src.setdefault(source or "unknown", [0, 0])
+            s[event == "checkout_click"] += n
+        if event == "checkout_click":
+            conv[page or "?"] = conv.get(page or "?", 0) + n
+        if event == "push_sent":
+            kinds[page or "?"] = kinds.get(page or "?", 0) + n
+        if event in did_keys:
+            did[event] = did.get(event, 0) + n
+    top = lambda d, k: sorted(d.items(), key=lambda kv: (-kv[1], kv[0]))[:k]  # noqa: E731
+    out.update({"days": list(by_day.values()), "pages": top(pages, 10),
+                "sources": [{"source": k, "visits": v[0], "checkout": v[1]}
+                            for k, v in sorted(src.items(), key=lambda kv: (-kv[1][0], kv[0]))],
+                "checkout_from": top(conv, 6),
+                "alerts": {"sent": sum(kinds.values()), "opened": (src.get("alert") or [0, 0])[0], "kinds": top(kinds, 8)},
+                "did": [{"event": e, "k": w, "n": did[e]} for e, w in DID if did.get(e)], "flow": flow})
+    return out
+
+
+# --- each sport --------------------------------------------------------------------------
+SPORT_DAYS = 30
+
+
+def sports(lconn, now: float | None = None) -> list:
+    """Each sport's books: picks journaled today and still open, the last 7
+    and 30 days won-lost and units (settled bets, each book's own stakes),
+    and when its board last journaled one — the most active sport first."""
+    t = time.time() if now is None else float(now)
+    today, d7, d30 = _day(t), _day(t - 6 * DAY_S), _day(t - (SPORT_DAYS - 1) * DAY_S)
+    book_of = {c: name for name, cats in BOOKS for c in cats}
+    settled = "status IN ('won','lost','push')"
+    q = (f"SELECT sport, category, game_day, COUNT(*), SUM(status='won'), SUM(status='lost'), SUM(status='push'), "
+         f"SUM(status='open'), COALESCE(SUM(CASE WHEN {settled} THEN pnl_units END), 0), "
+         f"COALESCE(SUM(CASE WHEN {settled} THEN stake_units END), 0) FROM bets WHERE game_day >= ? "
+         f"GROUP BY sport, category, game_day")
+    acc: dict = {}
+    for sport, cat, gd, n, w, lo, pu, op, u, st in lconn.execute(q, (d30,)).fetchall():
+        book = book_of.get(cat)
+        if not book:
+            continue
+        for key in (book, "All"):
+            c = acc.setdefault(str(sport or "?").lower(), {}).setdefault(key, {
+                "book": key, "n30": 0, "today": 0, "open": 0, "w7": 0, "l7": 0, "u7": 0.0,
+                "w30": 0, "l30": 0, "p30": 0, "u30": 0.0, "s30": 0.0})
+            c["n30"] += n
+            if gd == today:
+                c["today"] += n
+                c["open"] += op or 0
+            if gd >= d7:
+                c["w7"] += w or 0
+                c["l7"] += lo or 0
+                c["u7"] += float(u or 0)
+            c["w30"] += w or 0
+            c["l30"] += lo or 0
+            c["p30"] += pu or 0
+            c["u30"] += float(u or 0)
+            c["s30"] += float(st or 0)
+    last = {str(s or "?").lower(): ts for s, ts in lconn.execute(
+        "SELECT sport, MAX(ts) FROM bets WHERE game_day >= ? GROUP BY sport", (d30,)).fetchall()}
+    out = []
+    for sp, books in acc.items():
+        rows = []
+        for name in [b for b, _c in BOOKS] + ["All"]:
+            c = books.get(name)
+            if not c:
+                continue
+            c["roi30"] = round(c["u30"] / c["s30"], 4) if c["s30"] else None
+            c["u7"], c["u30"] = round(c["u7"], 2), round(c["u30"], 2)
+            del c["s30"]
+            rows.append(c)
+        out.append({"sport": sp, "playing": _league_playing(sp, unknown=False), "last": last.get(sp), "books": rows})
+    out.sort(key=lambda s: (-s["books"][-1]["n30"], s["sport"]))
+    return out
+
+
+# --- the business, day by day ----------------------------------------------------------------
+#: How many of the site's days the trend carries.
+TREND_DAYS = 90
+_DAY_COLS = ("accounts", "new", "seen", "paying", "trialing", "mrr", "past_due", "cancelling")
+
+
+def _days_table(conn) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS desk_days (day TEXT PRIMARY KEY, at REAL NOT NULL, accounts INTEGER, "
+                 "new INTEGER, seen INTEGER, paying INTEGER, trialing INTEGER, mrr REAL, past_due INTEGER, "
+                 "cancelling INTEGER)")
+
+
+def snapshot(conn, now: float | None = None) -> dict:
+    """Write the site's day's totals (written again through the day, so the
+    day's last write is its close): accounts, new, signed in, and the money
+    card's numbers. The business's own numbers; no account in them."""
+    t = time.time() if now is None else float(now)
+    m = midnight(t)
+    one = lambda q, *a: conn.execute(q, a).fetchone()[0] or 0  # noqa: E731
+    mon = money(conn, t)
+    row = {"day": _day(t), "at": t, "accounts": one("SELECT COUNT(*) FROM users"),
+           "new": one("SELECT COUNT(*) FROM users WHERE created_at >= ?", m),
+           "seen": one("SELECT COUNT(*) FROM users WHERE last_seen >= ?", m),
+           **{k: mon.get(k) or 0 for k in ("paying", "trialing", "mrr", "past_due", "cancelling")}}
+    _days_table(conn)
+    conn.execute(f"INSERT OR REPLACE INTO desk_days (day, at, {', '.join(_DAY_COLS)}) VALUES (?, ?{', ?' * len(_DAY_COLS)})",
+                 (row["day"], row["at"], *[row[k] for k in _DAY_COLS]))
+    conn.commit()
+    return row
+
+
+def trend(conn, now: float | None = None, days: int = TREND_DAYS) -> list:
+    """The kept days, oldest first; today's is written if the push loop has
+    not yet (a fresh box, or the first read of the day)."""
+    t = time.time() if now is None else float(now)
+    if not _has(conn, "desk_days") or not conn.execute("SELECT 1 FROM desk_days WHERE day=?", (_day(t),)).fetchone():
+        snapshot(conn, t)
+    cols = ("day",) + _DAY_COLS
+    return [dict(zip(cols, r)) for r in conn.execute(
+        f"SELECT {', '.join(cols)} FROM desk_days WHERE day >= ? ORDER BY day", (_day(t - (days - 1) * DAY_S),)).fetchall()]
 
 
 # --- the room -----------------------------------------------------------------
@@ -368,13 +754,24 @@ def desk(conn, lconn=None, now: float | None = None) -> dict:
                 "picks": _section(picks, lconn, t) if lconn is not None else {"error": "the ledger is not readable"},
                 "health": h, "needs": _section(_needs, h, t), "alerts": _section(_alerts, conn),
                 "community": _section(community, conn, t), "reports": _section(reports, conn),
-                "switches": _section(switches), "notice": _section(_notice)}
+                "switches": _section(switches), "notice": _section(_notice),
+                "usage": _section(usage, t), "trend": _section(_trend, conn, t),
+                "sports": (_section(_sports, lconn, t) if lconn is not None
+                           else {"error": "the ledger is not readable"})}
     finally:
         if own and lconn is not None:
             try:
                 lconn.close()
             except sqlite3.Error:
                 pass
+
+
+def _trend(conn, t: float) -> dict:
+    return {"days": trend(conn, t)}
+
+
+def _sports(lconn, t: float) -> dict:
+    return {"sports": sports(lconn, t)}
 
 
 def _needs(h: dict, t: float) -> list:
