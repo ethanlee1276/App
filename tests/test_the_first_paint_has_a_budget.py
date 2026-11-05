@@ -286,7 +286,13 @@ APP_JS_BUDGET_KB = 290
 #: code in visuals.js, which draws every face on the first page
 #: (383,228 -> 384,374 B, 374 over 375). It cannot load later: a face that
 #: misses as the page opens is the case it exists for. Told to Ethan.
-BOOT_BUDGET_KB = 376
+#: 376 -> 377 on 2026-11-05, for Ethan's 7pm NBA games that tipped at 7:10:
+#: "They showed 7pm on the site but didn't start till around 7:10" — their
+#: picks left the board at the printed time while the Live tab waited for
+#: the tip. 767 B gz of code in app.js (freshTipState, tipTeams, tipWatch;
+#: the kickoff parse moved, not added): 384,995 -> 385,762 B, 738 over 376.
+#: It cannot load later: the first board drawn is the one it decides.
+BOOT_BUDGET_KB = 377
 
 
 def _gz_trimmed(rel: str) -> int:
