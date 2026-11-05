@@ -9328,6 +9328,77 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KS. NBA player tracking, held out: does it beat the board's number?**
+(step 411; one read-only command, a few minutes, after KR's backfill has
+finished). For assists, rebounds and points, it replays the board's own
+projection for every stored game of the two seasons KR fetched, and fits
+two models of his rate a minute on one season: the board's number alone,
+and the board's number with his tracking over the same twenty games. Each
+is judged on the other season. The bar, written before the first run:
+with tracking, the root squared error at least 0.5% lower on each season
+judged, neither Brier (near the line, and Most Likely's ladder) worse, and
+2,000 or more games a season. It writes nothing.
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbatrackcheck.py
+```
+
+Paste it back. Each market ends `MEASURES on every season judged` or
+`does not measure: ...` with the reasons. If one measures, reading it on
+the board is a separate change, and your call on the terms (below, KR); if
+none does, `sudo rm /srv/qellys/data/research/nba_tracking.db` deletes the
+research copy and nothing else changes.
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KS 2>&1 | tee /tmp/ks.txt
+```
+
+**KR. NBA player tracking, fetched for research** (step 411; one probe,
+then one long fetch that writes only its own research database; you, 5
+November: "do it"). The league's tracking dashboard (potential assists,
+passes, touches, drives, rebound chances: the chances behind the box
+score) is the one NBA source the lab could not reach. It is fetched on the
+box one game day at a time for the last two finished seasons, into
+`data/research/nba_tracking.db`, which nothing on the site reads; KS then
+says whether it is worth reading. NBA.com's terms of use allow personal,
+non-commercial use, so this stays research unless a market measures and
+you decide.
+
+First the probe: one request for the newest stored game day, two or more
+days back. It stores nothing and prints the row count and the columns, or
+why the league did not answer (it refuses many cloud servers' addresses
+outright, and then this item ends here):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.nba.tracking --probe
+```
+
+If it says `ok`, the fetch: about 1,320 requests, one every 4 to 6
+seconds, so a little under two hours. It stops at 120 minutes, at the
+league's first refusal, or after three failures in a row, and a second run
+resumes where the first stopped. It prints a line every 40 days stored:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.nba.tracking --backfill --minutes 120
+```
+
+Read-only, any time: what is stored, season by season, against the game
+days the box has:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.nba.tracking --status
+```
+
+Paste back the probe, the fetch's last line and the status.
+
+The check in one go (the probe and the status; it never fetches):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KR 2>&1 | tee /tmp/kr.txt
+```
+
 **KQ. The Lab opens to free accounts** (step 410; nothing to run; you, 5
 November, on the seven pages a free account could not open: "do all of
 them"). Six of the seven had opened on 28 October (step HI: Why Us, About,

@@ -818,8 +818,50 @@ from the box, where every feed the site uses is read.
 | Referee assignments (`official.nba.com`, mornings) | Tonight's crew | **Not needed**: the crew's free-throw rate moved no player's numbers on a season it never saw (above) |
 | `pbpstats.com` | Possessions, on/off, lineups | **Nothing new**: built from the same play-by-play the box already downloads, which `engine/nba/stints` rebuilds itself |
 | Basketball-Reference | Box scores and advanced stats | **Not used**: its terms bar scraping, and every number it has comes from feeds the board already reads |
-| `stats.nba.com` player tracking: touches, drives, passes, potential assists | The one kind of data the lab could not get. Potential assists and touches might read assists and usage more steadily than the box score does | **Parked, your call**: not reachable from the build sandbox; NBA.com's terms of use allow personal, non-commercial use, the same question `cdn.nba.com` raises; and measuring it first needs two seasons of each game's tracking backfilled on the box (about 2,460 requests, spread out) |
+| `stats.nba.com` player tracking: touches, drives, passes, potential assists | The one kind of data the lab could not get. Potential assists and touches might read assists and usage more steadily than the box score does | **Built for research, waiting on the box** (you, 5 November: "do it"; runbook KR): `engine/nba/tracking` backfills two seasons into a research database of its own, one game day a request (about 1,320), and `nbatrackcheck.py` decides, held out (below). Nothing on the site reads it; the terms question stays open until a market measures |
 | Contracts, for contract-year spots | Who plays for his next deal | **Not possible** free: nflverse has the NFL's, and nothing free covers the NBA's |
+
+## Player tracking, measured before anything reads it (5 November)
+
+You, 5 November, on the parked source: "do it". The league's tracking
+dashboard (`leaguedashptstats`, the JSON behind nba.com's tracking pages)
+answers one game day at a time for every player who played: passing
+(potential assists, passes, secondary assists, assist points created),
+possessions (touches, front-court and paint touches, time of possession),
+drives (and the free throws off them) and rebounding (rebound chances,
+contested rebounds). The build sandbox cannot reach it, so the request
+follows the open-source `nba_api` client (1.12.0, MIT) read line by line,
+and the box fetches it: `python3 -m engine.nba.tracking --probe` asks once
+and stores nothing, `--backfill` fetches the last two finished seasons into
+`data/research/nba_tracking.db` (one request every 4 to 6 seconds, about
+1,320 in all, resumable, stopped by the league's first refusal), and
+`--status` says what is stored. The league refuses many cloud servers'
+addresses outright; the probe says whether the box's is one.
+
+THE TEST (`nbatrackcheck.py`, read-only), written before the first box run.
+For assists, rebounds and points, the board's own projection for each
+stored game (his twenty games before it, the fitted tuning, the player
+memory held at 1.0, a neutral spread and rest, as the Lab replays it)
+against the same number plus his tracking over those twenty games, each a
+model of his rate a minute fitted on one season and judged on the other.
+The board-alone model is refitted the same way, so tracking takes credit
+only for what it adds. The bar: the root squared error at least 0.5% lower
+with tracking on each season judged, neither the Brier at a half-point
+line near his number nor the ladder's Brier (lines a half point over 0.5,
+0.65 and 0.8 of the board's number) worse, 2,000 or more games a season.
+On synthetic seasons where assists land at random off a passer's potential
+assists, it finds them (1.1-1.4% off the error, both Briers better); where
+the tracking is noise, it refuses (`tests/test_nba_tracking_is_research_only.py`).
+Run end to end on a replica of the box's store (the lab's two seasons,
+about 47,000 priced games a market), it takes under two minutes, and with
+stand-in tracking that carries nothing past the box score it says `does not
+measure` for all three markets, as it should.
+
+If a market measures, reading it on the board is a separate change: the
+current season's tracking each morning (four requests a day), the measured
+weights in the board's rate, and your call on the terms (NBA.com allows
+personal, non-commercial use; `docs/DATA_SOURCES.md`). If none does, the
+research database can be deleted and nothing else changes.
 
 ## Next
 

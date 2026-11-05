@@ -1199,6 +1199,10 @@ SH
 run KQ "The Lab open to free accounts: is this version live" 30 <<'SH'
 curl -s https://qellysbook.com/js/more.js | grep -c 'async function labWalled('
 SH
+run KR "NBA player tracking: does the league answer the box, and what is stored" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.nba.tracking --probe
+cd /srv/qellys && sudo -u qellys python3 -m engine.nba.tracking --status
+SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('
 curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d.get('players', []) if r.get('position') == 'DEF'))"
@@ -1261,6 +1265,9 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 nhllabcheck.py
 SH
 run KM "WNBA: the spread measured on its own seasons, on the box's WNBA games" 900 <<'SH'
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbalabcheck.py --league wnba
+SH
+run KS "NBA player tracking, held out: does it beat the board's number" 900 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbatrackcheck.py
 SH
 
 echo "===== done in $((SECONDS / 60)) min"

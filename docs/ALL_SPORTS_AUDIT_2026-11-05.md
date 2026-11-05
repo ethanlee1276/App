@@ -72,7 +72,7 @@ alternate rungs' own correction.
 | The spread that follows the projection | **Box run** (JY): waits for its refit and the switch |
 | The weekly refit's verdicts on the rotation rules and the starters | **Box run** (KC/KG): file themselves |
 | The confirmed five before the tip, first basket's opening tips, the closes re-read | **Box run** (KH, KI, KJ) |
-| The data hunt: every reachable source | **Done** (`docs/NBA_LAB.md`, the data hunt): each source the box reads or could, and what it adds. The one left is the league's player tracking (`stats.nba.com`), parked on its terms and a backfill: your call. The revenge game was measured on two seasons, up in most markets but under two standard errors: not built |
+| The data hunt: every reachable source | **Done** (`docs/NBA_LAB.md`, the data hunt): each source the box reads or could, and what it adds. The one left, the league's player tracking (`stats.nba.com`), is built for research at your word (5 November, "do it"): a backfill on the box and a held-out test before anything reads it (runbook KR). The revenge game was measured on two seasons, up in most markets but under two standard errors: not built |
 
 ## NFL and college football (in season)
 

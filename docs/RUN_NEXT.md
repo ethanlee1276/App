@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after the Lab opened to free accounts with its
+Last updated 2026-11-05, after NBA player tracking was built for research at
+your word, a probe, a two-hour fetch into a research database and a held-out
+test (steps KR and KS: item 1u), after the Lab opened to free accounts with its
 public summary, at your word on the seven pages (step KQ: nothing to run;
 its live check is in Start here), after a Start here section put every waiting check in one
 run, after the licensed scores feed and its timer were built and
@@ -138,15 +140,16 @@ Everything below that only reads, in one go (a few minutes; it writes
 nothing). Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JX JT KO JH JL IQ JM JN JO JP JQ JR JV KF KG KI KL KN JD IX IU IT JA IP KP KQ 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JX JT KO JH JL IQ JM JN JO JP JQ JR JV KF KG KI KL KN JD IX IU IT JA IP KP KQ KR 2>&1 | tee /tmp/now.txt
 ```
 
-The three long ones, on a quiet evening (up to about 45 minutes together;
-still read-only): Caesars as a backup sharp book, the NHL lab and the
-WNBA's spread on the box's own games:
+The long ones, on a quiet evening (up to about an hour together; still
+read-only): Caesars as a backup sharp book, the NHL lab, the WNBA's spread
+on the box's own games, and NBA player tracking held out (KS, once item
+1u's fetch has finished; before that it says nothing is stored):
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM KS 2>&1 | tee /tmp/long.txt
 ```
 
 One that has its moment: any NBA night, about 30 minutes before the
@@ -158,7 +161,8 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KH 2>&1 | tee /tmp/kh.txt
 
 The ones that write, each with its own item below: item 1p's close lines
 for the NFL and college (the dry run first, then `--apply`; the NBA's is
-done). Not commands: alerts on your phone (item 1).
+done), and item 1u's tracking fetch (into its own research database only).
+Not commands: alerts on your phone (item 1).
 
 **Done 5 November:** item 0's cleanup (20 GB free now), item 1p's NBA
 close lines (1,537 re-read at the sportsbooks' number), and item 8's key
@@ -693,6 +697,46 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 ```
 
 The same two with `--sport nfl` and `--sport cfb` re-read football's.
+
+## 1u. Any evening: NBA player tracking, fetched and measured (steps KR, KS)
+
+You said "do it" to the league's player tracking (potential assists,
+passes, touches, drives, rebound chances). It is built for research only:
+nothing on the site reads it. First, does the league answer the box at all
+(one request, stores nothing; it refuses many cloud servers, and then this
+item ends here):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.nba.tracking --probe
+```
+
+If it says `ok`: the fetch, a little under two hours, one request every 4
+to 6 seconds, into `data/research/nba_tracking.db` only. It stops itself at
+120 minutes or at the league's first refusal; run it again and it resumes:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.nba.tracking --backfill --minutes 120
+```
+
+What is stored (read-only):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.nba.tracking --status
+```
+
+Once it is all stored, the held-out test (read-only, a few minutes): for
+assists, rebounds and points, the board's number with and without his
+tracking, each fitted on one season and judged on the other:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbatrackcheck.py
+```
+
+Paste back the probe, the fetch's last line, the status and the test. A
+market that ends `MEASURES on every season judged` is worth a separate
+change to read it on the board, and that is your call on NBA.com's terms
+(personal, non-commercial use); if none does, the research copy can be
+deleted and nothing else changes.
 
 ## 1t. Any time after this push: MLB travel and rest, measured (step KN)
 
