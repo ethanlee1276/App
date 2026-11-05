@@ -113,7 +113,7 @@ def refit_sport(sport: str, db: str = "data/history.db", say=None) -> list[str]:
 
 def _refit_sport(sport: str, db: str = "data/history.db", say=None,
                  deadline: float | None = None, skip=(), on_done=None,
-                 clean_before: bool = True) -> tuple[list[str], bool]:
+                 clean_before: bool = True, last: str | None = None) -> tuple[list[str], bool]:
     """`refit_sport`, and whether all three fitters ran to an answer.
 
     ``deadline`` (a time.monotonic() reading) bounds every fitter by what
@@ -133,7 +133,10 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
     ("ok", "failed" or "cut_off"), so the round writes it down at once (the
     reaper may stop the job before this returns). ``clean_before`` is
     False when a fitter failed in an earlier run of the round, so the
-    NBA's switch still waits for a clean refit."""
+    NBA's switch still waits for a clean refit. ``last`` is a fitter cut
+    off earlier in the round: it goes last, so one fitter that outgrows a
+    run cannot keep the other two from theirs (the board keeps reading its
+    previous fit meanwhile)."""
     import time as _time
     lines = []
     finished = True
@@ -153,7 +156,8 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
             env = dict(os.environ, QB_NBA_SPREAD="1" if want else "0")
             lines.append(f"deep refit: nba fits with the spread that follows the projection "
                          f"{'ON' if want else 'OFF'}, as the box's own check asks")
-    for label, script in REFIT_ORDER:
+    order = [f for f in REFIT_ORDER if f[0] != last] + [f for f in REFIT_ORDER if f[0] == last]
+    for label, script in order:
         if label in skip:
             lines.append(f"deep refit: {sport} {label} — done earlier this round")
             continue
@@ -623,7 +627,7 @@ def _run_check(piece: str, deadline: float | None = None, say=None) -> tuple[lis
 
 
 def _run_piece(piece: str, db: str, deadline: float, say=None, skip=(), on_done=None,
-               clean_before: bool = True) -> tuple[list[str], bool]:
+               clean_before: bool = True, last: str | None = None) -> tuple[list[str], bool]:
     """One piece: (its log lines, whether it ran to an answer). ``skip``,
     ``on_done`` and ``clean_before`` reach a sport's fitters (`_refit_sport`)."""
     if piece in NBA_CHECKS:
@@ -634,7 +638,7 @@ def _run_piece(piece: str, db: str, deadline: float, say=None, skip=(), on_done=
         except Exception as exc:                          # noqa: BLE001
             return [f"⚠️  {piece} failed: {type(exc).__name__}: {exc}"], True
     return _refit_sport(piece, db, say=say, deadline=deadline, skip=skip, on_done=on_done,
-                        clean_before=clean_before)
+                        clean_before=clean_before, last=last)
 
 
 def _part_way(pieces: dict, left: list, start: str, today: str) -> list[str]:
@@ -709,7 +713,14 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
                 cur = {"round": start, "done": []}
             e.setdefault("fitter_seconds", {})[label] = round(secs)
             if status == "cut_off":
-                e["cut_off"] = {"fitter": label, "after_s": round(secs), "on": today.isoformat()}
+                # The longest cut today names the fitter that outgrew the
+                # run; one cut a few minutes later, only because the run's
+                # time was nearly gone, must not take its place.
+                was = e.get("cut_off") or {}
+                if not (was.get("round") == start and was.get("on") == today.isoformat()
+                        and float(was.get("after_s") or 0) >= secs):
+                    e["cut_off"] = {"fitter": label, "after_s": round(secs), "on": today.isoformat(),
+                                    "round": start}
             else:
                 if label not in cur["done"]:
                     cur["done"].append(label)
@@ -717,8 +728,10 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
                     cur["failed"].append(label)
             e["fitters_done"] = cur
             _write_state(path, st)
+        cut = e.get("cut_off") or {}
         return _run_piece(p, db_, deadline_, say_, skip=skip, on_done=on_done,
-                          clean_before=not (mine and fd.get("failed")))
+                          clean_before=not (mine and fd.get("failed")),
+                          last=cut.get("fitter") if cut.get("round") == start else None)
     while left:
         # Chosen afresh after every piece: one that waited on another
         # (PREREQS) may run as soon as that one is done.

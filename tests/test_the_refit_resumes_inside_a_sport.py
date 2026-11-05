@@ -97,6 +97,49 @@ def test_the_next_run_starts_at_the_first_fitter_not_done_and_finishes_the_sport
     assert st["left"] == [] and lines[-1].startswith("deep refit: round of 2026-11-04 complete")
 
 
+def test_a_fitter_that_outgrew_a_run_goes_last_so_the_others_get_theirs():
+    """The dial is cut by its own 45 minutes, the memory five minutes later
+    only because the run's time was nearly gone: the dial is the one that
+    outgrew the run, and the next run takes the memory first."""
+    import time as _t
+    now = [10_000.0]
+    cost = {"formfit.py": 2700.0, "playerfit.py": 300.0, "calibrate.py": 0.0}
+
+    class _Timed(_Fitters):
+        def __call__(self, cmd, **kw):
+            now[0] += cost[Path(cmd[1]).name]
+            return super().__call__(cmd, **kw)
+    real = _t.monotonic
+    _t.monotonic = lambda: now[0]
+    try:
+        tmp = Path(tempfile.mkdtemp())
+        _, st = _round(tmp, THU, _Timed(cut={"formfit.py", "playerfit.py"}))
+        nfl = st["pieces"]["nfl"]
+        assert nfl["cut_off"]["fitter"] == "recency dial" and nfl["cut_off"]["after_s"] == 2700, nfl
+        assert nfl["fitters_done"]["done"] == ["temperatures"], nfl
+        g = _Timed()
+        lines, st = _round(tmp, FRI, g)
+    finally:
+        _t.monotonic = real
+    assert g.ran == ["playerfit.py", "formfit.py"], g.ran
+    assert st["pieces"]["nfl"]["done"] == FRI.isoformat()
+
+
+def test_the_cut_off_fitter_is_taken_last_the_next_time():
+    tmp = Path(tempfile.mkdtemp())
+    cut = {"nfl": {"cut_off": {"fitter": "recency dial", "after_s": 2700, "on": "2026-11-05",
+                               "round": "2026-11-04"}}}
+    f = _Fitters()
+    _round(tmp, FRI, f, pieces=cut)
+    assert f.ran == ["playerfit.py", "calibrate.py", "formfit.py"], f.ran
+    tmp2 = Path(tempfile.mkdtemp())
+    old = {"nfl": {"cut_off": {"fitter": "recency dial", "after_s": 2700, "on": "2026-10-29",
+                               "round": "2026-10-28"}}}
+    g = _Fitters()
+    _round(tmp2, FRI, g, pieces=old)
+    assert g.ran == ["formfit.py", "playerfit.py", "calibrate.py"], "another round's cut-off is not this round's"
+
+
 def test_a_new_round_starts_every_fitter_again():
     tmp = Path(tempfile.mkdtemp())
     stale = {"nfl": {"fitters_done": {"round": "2026-10-28", "done": ["recency dial", "player memory"]}}}
