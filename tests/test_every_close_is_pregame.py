@@ -251,7 +251,11 @@ def test_a_stamped_snapshot_close_beats_an_unverifiable_harvested_one():
 def test_the_backfill_applies_the_same_cut():
     src = inspect.getsource(ledger.repair_closing_odds)
     assert "_pregame_close(" in src
-    assert "_pregame_close(" in inspect.getsource(ledger.settle_from_history)
+    # The closing line is cut in one helper since 2026-11-05, which settling
+    # and the line repair both call (`_close_line_of`).
+    assert "_pregame_close(" in inspect.getsource(ledger._close_line_of)
+    assert "_close_line_of(" in inspect.getsource(ledger.settle_from_history)
+    assert "_close_line_of(" in inspect.getsource(ledger.repair_closing_lines)
 
 
 # --- the free snapshots ------------------------------------------------------

@@ -2737,8 +2737,8 @@ def _backup_before_repair(what: str = "repair", disk=None):
     """Copy both databases somewhere safe. Returns the directory or None.
 
     EVERY `--apply` THAT REWRITES THE JOURNAL comes through here first
-    (audit A2-4): --repair-premature, --repair-closes, --void-unplayed and
-    --resize-unstaked. Each caller stops rather than edit with no way back
+    (audit A2-4): --repair-premature, --repair-closes, --repair-close-lines,
+    --void-unplayed and --resize-unstaked. Each caller stops rather than edit with no way back
     when this returns None.
 
     Through SQLite's backup API, not a file copy: both databases run in
@@ -10017,6 +10017,45 @@ def repair_closes(apply: bool = False, sport: str | None = None) -> None:
         print("\n  DRY RUN — nothing written. Add --apply to commit it.\n")
 
 
+def repair_close_lines(apply: bool = False, sport: str | None = None) -> None:
+    """Re-read every settled player prop's closing LINE by today's rule:
+    each book's last pre-game quote at the sportsbooks' number, never an
+    exchange's ladder rung (`ledger.repair_closing_lines`). Dry run unless
+    --apply; a close this pass cannot find is kept, never cleared, and
+    grades are never touched.
+
+    The receipts, 2026-11-05: 1,062 of 2,537 settled NBA picks carried a
+    close 3 or more away from their own line, Zach Edey's rebounds at 9.5
+    and 10.5 "closing" at 19.5 — an exchange's top rung, stored last."""
+    from engine import db as hist_db
+    from engine import ledger
+    conn = ledger.connect()
+    if apply and not _backed_up("repair-close-lines"):
+        return
+    r = ledger.repair_closing_lines(conn, apply=apply, hist_conn=hist_db.connect(), sport=sport)
+    print(f"\n{'='*70}\n  SETTLED PROPS' CLOSING LINES, RE-READ AT THE SPORTSBOOKS' NUMBER"
+          f"{f' — {sport.upper()} ONLY' if sport else ''}\n{'='*70}")
+    print(f"  {r['settled']} settled bets examined")
+    print(f"  {r['agreed']:>5} already right — left alone")
+    print(f"  {r['filled']:>5} FILLED      had no close, gains one")
+    print(f"  {r['overwritten']:>5} OVERWRITTEN had a close, gets the sportsbooks' one")
+    print(f"  {r['unchecked']:>5} KEPT        no close found today, the old one stays")
+
+    def _rows(label, sample):
+        if not sample:
+            return
+        print(f"\n  {label}")
+        for date, player, side, market, line, had, want in sample:
+            print(f"    {date}  {str(player)[:20]:<20} {str(side or '')[:5]:<5} {str(market)[:10]:<10} "
+                  f"{line}   {'(none)' if had is None else had} -> {want}")
+    _rows("OVERWRITTEN — check these before applying:", r["overwritten_sample"])
+    _rows("filled (a sample; these are pure coverage):", r["sample"])
+    if r["applied"]:
+        print("\n  written. The site's record picks it up at the next settle.\n")
+    else:
+        print("\n  DRY RUN — nothing written. Add --apply to commit it.\n")
+
+
 def fill_game_closes(apply: bool = False, sport: str | None = None) -> None:
     """Give every settled moneyline, total and spread that has no close
     the one the settle would bank today. Fill-only — a close already
@@ -10863,7 +10902,7 @@ KNOWN_FLAGS = frozenset({
     "--prescan", "--print-env", "--probe-live", "--probe-weighins",
     "--promo-new", "--promos", "--promos-setup", "--recreate", "--refit",
     "--refresh", "--refresh-rosters", "--relearn", "--renders",
-    "--repair-closes", "--repair-journal", "--repair-premature",
+    "--repair-close-lines", "--repair-closes", "--repair-journal", "--repair-premature",
     "--reset-budget", "--resize-unstaked", "--ripple", "--seal",
     "--settle", "--shape", "--side-bias",
     # Consumed by `for flag in ("--sport", "--since")` — invisible to any
@@ -11449,6 +11488,13 @@ def main() -> None:
         return
     if "--void-unplayed" in argv:
         show_unplayed(apply="--apply" in argv)
+        return
+    if "--repair-close-lines" in argv:
+        # One sport at a time, as --repair-closes below.
+        _rl = None
+        if "--sport" in argv and argv.index("--sport") + 1 < len(argv):
+            _rl = argv[argv.index("--sport") + 1].lower()
+        repair_close_lines(apply="--apply" in argv, sport=_rl)
         return
     if "--repair-closes" in argv:
         # `--sport nfl` repairs one sport, reading only its closes — the

@@ -294,7 +294,15 @@ def test_settling_reads_the_snapshots_of_its_own_bets_only():
     i = src.index("def settle_from_history(")
     body = src[i:src.index("\ndef ", i + 10)]
     assert '_want = {(normalize_name(b["player"]), b["market"]) for b in _open_rows}' in body
-    assert body.count("_snapshot_closes(_want)") == 2 and "_snapshot_close_odds(want=_want)" in body
+    # Every snapshot read in the settle path is its own bets' (`_want`). Since
+    # 2026-11-05 the closing line is read through `_close_line_of`, which takes
+    # the settle path's one lazy reader, so the call appears once, not twice.
+    assert body.count("_snapshot_closes(") == body.count("_snapshot_closes(_want)") >= 1
+    assert "_snapshot_close_odds(want=_want)" in body and "_close_line_of(" in body
+    j = src.index("def repair_closing_lines(")
+    repair = src[j:src.index("\ndef ", j + 10)]
+    assert repair.count("_snapshot_closes(") == repair.count("_snapshot_closes(_want)") == 1, \
+        "the line repair reads its own bets' snapshots too"
 
 
 def test_the_close_readers_keep_only_what_a_close_is_cut_from():

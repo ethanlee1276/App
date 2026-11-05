@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-05, after NBA first basket started reading which
+Last updated 2026-11-05, after closing lines started coming from the
+sportsbooks' number, never an exchange's ladder rung (step KJ: item 1p, a
+dry run, then a write), after NBA first basket started reading which
 team scores first by tonight's two jumpers (step KI: item 1o, one read-only
 check after a night or two), after it started sharing each
 team's first basket among tonight's likely five, and a probe asks whether
@@ -492,6 +494,27 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KI 2>&1 | tee /tmp/ki.txt
 
 `read by tip` with an agreement near 0.88 is right; paste it back either
 way.
+
+## 1p. Any time after this push: re-read the settled NBA closes (step KJ)
+
+Closing lines now come from the sportsbooks' number, never an exchange's
+ladder rung: 1,062 of 2,537 settled NBA picks had a close 3 or more off
+their own line. The picks settled before today keep their old close until
+this re-reads them. First the dry run, read-only, a few minutes:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nba > /tmp/closelines.txt 2>&1; echo "exit $?"; head -40 /tmp/closelines.txt
+```
+
+Paste back what it prints. Once I've read it, or if its OVERWRITTEN lines
+read like `19.5 -> 9.5`, the write (it backs up both databases first, and
+never touches a grade):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nba --apply 2>&1 | tail -12
+```
+
+The same two with `--sport nfl` and `--sport cfb` re-read football's.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

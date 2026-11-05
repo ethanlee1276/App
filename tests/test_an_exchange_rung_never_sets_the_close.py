@@ -127,6 +127,53 @@ def test_a_settled_nba_bet_banks_the_sportsbooks_close():
         ledger.DEFAULT_DB = saved
 
 
+def _settled(closing_line):
+    t = Path(tempfile.mkdtemp())
+    L = ledger.connect(t / "l.db")
+    L.execute("INSERT INTO bets (ts, sport, date, game_day, player, market, side, line, odds, stake_units, "
+              "stake_dollars, status, category, team, book, actual, pnl_units, closing_line) VALUES "
+              "(?, 'nba', ?, ?, 'Zach Edey', 'reb', 'OVER', 9.5, -110, 1, 10, 'won', 'likely', 'MEM', "
+              "'DraftKings', 12, 0.91, ?)", (f"{DAY}T12:00:00", DAY, DAY, closing_line))
+    L.commit()
+    return L, db.connect(t / "h.db")
+
+
+def test_the_repair_rereads_a_settled_close_at_the_sportsbooks_number():
+    L, H = _settled(19.5)                          # what the old reader banked
+    _quotes(H, [("22", "DraftKings", 9.5, -115, -105),
+                ("22", "FanDuel", 9.5, -110, -110),
+                ("23", "Novig", 19.5, 900, -2000)])
+    dry = ledger.repair_closing_lines(L, apply=False, hist_conn=H, sport="nba")
+    assert (dry["overwritten"], dry["agreed"], dry["applied"]) == (1, 0, False), dry
+    assert dry["overwritten_sample"][0][-2:] == (19.5, 9.5), dry["overwritten_sample"]
+    assert L.execute("SELECT closing_line FROM bets").fetchone()[0] == 19.5, "a dry run writes nothing"
+    done = ledger.repair_closing_lines(L, apply=True, hist_conn=H, sport="nba")
+    assert done["overwritten"] == 1 and done["applied"], done
+    row = L.execute("SELECT closing_line, status, pnl_units FROM bets").fetchone()
+    assert (row["closing_line"], row["status"], row["pnl_units"]) == (9.5, "won", 0.91), \
+        "the close changes, the grade and the money never do"
+    again = ledger.repair_closing_lines(L, apply=False, hist_conn=H, sport="nba")
+    assert (again["agreed"], again["overwritten"]) == (1, 0), again
+
+
+def test_a_close_the_repair_cannot_find_is_kept():
+    L, H = _settled(7.5)
+    r = ledger.repair_closing_lines(L, apply=True, hist_conn=H, sport="nba")
+    assert (r["unchecked"], r["overwritten"], r["filled"]) == (1, 0, 0), r
+    assert L.execute("SELECT closing_line FROM bets").fetchone()[0] == 7.5
+
+
+def test_settling_and_the_line_repair_read_one_rule():
+    import inspect
+    settle = inspect.getsource(ledger.settle_from_history)
+    repair = inspect.getsource(ledger.repair_closing_lines)
+    assert "_close_line_of(" in settle and "_close_line_of(" in repair
+    launch = (Path(__file__).resolve().parents[1] / "launch.py").read_text(encoding="utf-8")
+    assert '"--repair-close-lines"' in launch and 'repair_close_lines(apply="--apply" in argv' in launch
+    i = launch.index("def repair_close_lines(")
+    assert '_backed_up("repair-close-lines")' in launch[i:i + 1500], "an --apply that edits the journal backs it up first"
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

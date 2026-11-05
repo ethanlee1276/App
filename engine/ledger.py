@@ -3888,6 +3888,31 @@ def _snapshot_closes(want=None) -> dict:
         return {}
 
 
+def _close_line_of(b, dates, who, harvested: dict, snaps_of) -> tuple:
+    """``(harvested close or None, closing line or None)`` for one settled
+    player prop: THE ONE RULE settling (`settle_from_history`) and the line
+    repair (`repair_closing_lines`) both read.
+
+    The harvested close first, never from after the bet's own kickoff
+    (audit P0-2); one that nothing proves pre-game gives way to a snapshot
+    close cut at a RECORDED start, which is proven. No harvested close:
+    our own recorded snapshots, so CLV accrues without spending credits.
+    ``snaps_of`` hands back the snapshot index, so a caller that holds it
+    lazily reads it only when a close needs it. Both indexes take a day's
+    close at the sportsbooks' number, never an exchange's ladder
+    (`db.close_quote`, `linemoves.closing_lines_by_date`)."""
+    close = _pregame_close(close_at(harvested or {}, who, dates), b)
+    if close is not None and not _close_proven(close, b):
+        stamped = getattr(snaps_of(), "stamped", ())
+        if any((who, b["market"], d) in stamped for d in dates):
+            close = None
+    if close:
+        return close, float(close["line"])
+    snap = snaps_of()
+    return None, next((v for v in (snap.get(_leg_key(snap, (who, b["market"], d), b))
+                                   for d in dates) if v is not None), None)
+
+
 def _close_odds_from(close: dict | None, bet_line, side: str | None):
     """The bet's side of a HARVESTED close, or None if it isn't its close.
 
@@ -5757,28 +5782,14 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         # and narrows an NFL week to the one day he played.
         _team = row["team"] if "team" in row.keys() else None
         _dates = close_dates(hist_conn, b, _team)
-        close = close_at(closes_cache[ck], normalize_name(b["player"]), _dates)
-        # Never a price from after this bet's own kickoff (audit P0-2).
-        close = _pregame_close(close, b)
         _who = normalize_name(b["player"])
-        if close is not None and not _close_proven(close, b):
-            # Nothing proves this harvested row is pre-game. A free snapshot
-            # close cut at a RECORDED start is proven, so it wins.
+
+        def _snaps():
+            # Our own snapshots, read once and only when a close needs them.
             if "_snapshots" not in closes_cache:
                 closes_cache["_snapshots"] = _snapshot_closes(_want)
-            _stamped = getattr(closes_cache["_snapshots"], "stamped", ())
-            if any((_who, b["market"], _d) in _stamped for _d in _dates):
-                close = None
-        close_line = float(close["line"]) if close else None
-        if close_line is None:
-            # No harvested close for this date — fall back to our own
-            # recorded snapshots, so CLV accrues without spending credits.
-            if "_snapshots" not in closes_cache:
-                closes_cache["_snapshots"] = _snapshot_closes(_want)
-            _snap = closes_cache["_snapshots"]
-            close_line = next(
-                (v for v in (_snap.get(_leg_key(_snap, (_who, b["market"], _d), b))
-                             for _d in _dates) if v is not None), None)
+            return closes_cache["_snapshots"]
+        close, close_line = _close_line_of(b, _dates, _who, closes_cache[ck], _snaps)
         # The closing PRICE, which is the only thing that moves on a
         # fixed-line market.
         #
@@ -6423,6 +6434,77 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None, sport: str | 
             "filled": filled, "cleared": cleared, "kept": kept,
             "sample": changes, "overwritten_sample": over_sample,
             "cleared_sample": clear_sample, "applied": apply}
+
+
+def repair_closing_lines(conn, apply: bool = False, hist_conn=None, sport: str | None = None) -> dict:
+    """Re-read every settled player prop's closing LINE by the rule the
+    settle path reads it by today (`_close_line_of`).
+
+    WHY (2026-11-05). Until today both close readers let an exchange's
+    ladder in (`db.close_quote`, `linemoves.closing_lines_by_date`): on the
+    public receipts 1,062 of 2,537 settled NBA picks carried a close 3 or
+    more away from their own line, Zach Edey's rebounds at 9.5 and 10.5
+    "closing" at 19.5. A settled bet never settles again, so those values
+    sit in `closing_line` for ever, and the Record page's closing-line value
+    and the audits read them.
+
+    Unlike the price repair, a close this pass cannot find is KEPT, not
+    cleared: a line was never read off the wrong side or the wrong number,
+    so the old value is as likely right as wrong, and losing a right one
+    costs coverage for nothing. Only a close found and different is
+    rewritten, and a missing one filled. Game lines are left alone (their
+    close is banked at settle off the board's game lines). Grades, stakes
+    and P&L are never touched.
+
+    One sport at a time when asked (``sport``), for the reason the price
+    repair gives (the all-sport run outgrew the box's memory). Returns a
+    summary; writes only when `apply` is true."""
+    from .sources.oddsapi import normalize_name
+    harvested = _harvested_closes(hist_conn, sport)
+    rows = conn.execute(
+        "SELECT id, sport, player, market, date, side, line, closing_line, ts, lead_min, "
+        "leg, book, game_day FROM bets WHERE status IN ('won','lost','push')"
+        + (" AND sport=?" if sport else ""), (sport,) if sport else ()).fetchall()
+    # Only these bets' snapshot rows, as the settle path reads them (`_wanted_rows`).
+    _want = {(normalize_name(b["player"]), b["market"]) for b in rows if b["market"] not in GAME_MARKETS}
+    snaps: dict = {}
+
+    def _snaps():
+        if "s" not in snaps:
+            snaps["s"] = _snapshot_closes(_want)
+        return snaps["s"]
+    agreed = overwritten = filled = unchecked = 0
+    over_sample: list = []
+    fill_sample: list = []
+    for b in rows:
+        if b["market"] in GAME_MARKETS:
+            continue
+        dates = close_dates(hist_conn, b)
+        _close, want = _close_line_of(b, dates, normalize_name(b["player"]),
+                                      harvested.get((b["sport"], b["market"]), {}), _snaps)
+        had = b["closing_line"]
+        if want is None:
+            unchecked += had is not None
+            continue
+        if had is not None and abs(float(had) - float(want)) < 1e-9:
+            agreed += 1
+            continue
+        row = (b["date"], b["player"], b["side"], b["market"], b["line"], had, want)
+        if had is None:
+            filled += 1
+            if len(fill_sample) < 6:
+                fill_sample.append(row)
+        else:
+            overwritten += 1
+            if len(over_sample) < 12:
+                over_sample.append(row)
+        if apply:
+            conn.execute("UPDATE bets SET closing_line=? WHERE id=?", (float(want), b["id"]))
+    if apply:
+        conn.commit()
+    return {"settled": len(rows), "agreed": agreed, "overwritten": overwritten,
+            "filled": filled, "unchecked": unchecked, "overwritten_sample": over_sample,
+            "sample": fill_sample, "applied": apply}
 
 
 def _bet_price_clv(b) -> float | None:

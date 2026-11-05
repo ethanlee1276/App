@@ -9324,6 +9324,41 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KJ. Closing lines at the sportsbooks' number, and the settled ones re-read**
+(step 389; one read-only dry run, then one write once you have read it;
+found on the public receipts, 2026-11-05). Every settled pick banks the
+market's closing line, which the Record page's closing-line value and the
+audits read. An exchange (Novig, ProphetX) posts a ladder of lines for a
+player where a sportsbook posts one, and both readers of the close let the
+ladder in: the purchased history kept whichever quote was written last
+(the prop tape writes a book only when its number moves, and an exchange
+moves most), and our own snapshots took the median of every quote, rungs
+and all. On the receipts 1,062 of 2,537 settled NBA picks carried a close
+3 or more from their own line; Zach Edey's rebounds at 9.5 and 10.5
+"closed" at 19.5. From this push the close is each book's last pre-game
+quote at the sportsbooks' number, an exchange's only when no sportsbook
+quoted, the rule the board has priced by since 25 September. Grades never
+read it. Picks settled before today keep their old close until this
+re-reads them. The dry run, read-only, a few minutes (not in the catch-up,
+which never runs a `--repair`):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nba > /tmp/closelines.txt 2>&1; echo "exit $?"; head -40 /tmp/closelines.txt
+```
+
+Its OVERWRITTEN lines should read like `19.5 -> 9.5`, an exchange's rung
+giving way to the sportsbooks' number. A close it cannot find today is
+kept, never cleared, and grades, stakes and P&L are never touched. If
+they look right, the write (both databases are backed up first):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nba --apply 2>&1 | tail -12
+```
+
+The same two with `--sport nfl` and `--sport cfb` re-read football's:
+its exchanges hang ladders too (the 25 September fix began with an NFL
+one).
+
 **KI. NBA first basket: which team scores first, by tonight's two jumpers**
 (step 386; nothing to run first, one read-only check after a night or two;
 you, 2026-11-04: "keep going on the NBA model"). A first-basket chance is
