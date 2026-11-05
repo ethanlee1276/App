@@ -1024,6 +1024,7 @@ def desk(conn, lconn=None, now: float | None = None) -> dict:
                 "usage": _section(usage, t), "trend": _section(_trend, conn, t),
                 "retention": _section(retention, conn, t), "prefs": _section(prefs),
                 "morning": _section(morning, conn, lconn, t), "run_next": _section(run_next),
+                "weekly": _section(weekly, t),
                 "sports": (_section(_sports, lconn, t) if lconn is not None
                            else {"error": "the ledger is not readable"})}
     finally:
@@ -1032,6 +1033,77 @@ def desk(conn, lconn=None, now: float | None = None) -> dict:
                 lconn.close()
             except sqlite3.Error:
                 pass
+
+
+#: THE WEEKLY JOBS (2026-11-05, Ethan: "add more features for the site and
+#: for me"). The deep refit, the Lab, board learning and the rest run beside
+#: the boards, each with an hour, and what each did was read off the public
+#: heartbeat or the box's logs: the Lab's page went five weeks unchanged and
+#: the refit had not reached the NFL since August before anyone saw. Each
+#: job's last run as engine.maintenance kept it, the refit's round (what it
+#: still owes, where a run's time ran out) and the date each sport's Lab
+#: replay is from. The box's own state, like the health card: no person.
+WEEKLY_JOB_ORDER = ("deepfit", "lab", "boardlearn", "inventionfit", "bugscan", "backupzip")
+_JSON: dict = {}
+
+
+def _json_cached(path) -> dict:
+    """A JSON file, read again only when its size or date changes (the desk
+    is redrawn every minute; the Lab's page is not small)."""
+    p = Path(path)
+    try:
+        st = p.stat()
+    except OSError:
+        return {}
+    key = (st.st_size, st.st_mtime)
+    hit = _JSON.get(str(p))
+    if hit and hit[0] == key:
+        return hit[1]
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        d = {}
+    d = d if isinstance(d, dict) else {}
+    _JSON[str(p)] = (key, d)
+    return d
+
+
+def weekly(now: float | None = None, jobs: dict | None = None, deep_path=None, lab_path=None,
+           attempts_path=None) -> dict:
+    """``{"jobs": [...], "deep": {...} | None, "lab": {...} | None}``."""
+    from . import maintenance as M
+    t = time.time() if now is None else float(now)
+    jobs = M.weekly_jobs_status() if jobs is None else jobs
+    keep = ("started", "ended", "minutes", "exit", "cut_off", "running", "last")
+    by = {str(m).rsplit(".", 1)[-1]: e for m, e in (jobs or {}).items() if isinstance(e, dict)}
+    order = [j for j in WEEKLY_JOB_ORDER if j in by] + sorted(j for j in by if j not in WEEKLY_JOB_ORDER)
+    out: dict = {"jobs": [{"job": j, **{k: by[j].get(k) for k in keep}} for j in order]}
+    # The deep refit's round: what it still owes, and where a run's time ran out.
+    from . import deepfit as D
+    st = _json_cached(deep_path or D.STATE_PATH)
+    if st:
+        start = str(st.get("round") or "")
+        pieces = st.get("pieces") or {}
+        left = [str(x) for x in (st.get("left") or [])]
+        today = _dt.datetime.fromtimestamp(t, ET).date().isoformat()
+        done = [k for k in D.PIECE_ORDER if k not in left and isinstance(pieces.get(k), dict)
+                and str(pieces[k].get("done") or "") >= start]
+        out["deep"] = {"round": start or None, "left": left, "done": done,
+                       "part_way": D._part_way(pieces, left, start, today)}
+    else:
+        out["deep"] = None
+    # The Lab: the date each sport's numbers on the page are from, and when a
+    # run last started each one.
+    from . import gate, lab as LB
+    page = _json_cached(gate.board_source(Path(lab_path or LB.LAB_PATH)))
+    tried = _json_cached(attempts_path or LB.ATTEMPTS_PATH)
+    sports = []
+    for sp in LB.SPORT_ORDER:
+        blob = (page.get("sports") or {}).get(sp) or {}
+        sports.append({"sport": sp, "replayed": str(blob.get("replayed_at") or page.get("generated_at") or "")[:10] or None,
+                       "tried": str(tried.get(sp) or "")[:10] or None})
+    out["lab"] = {"sports": sports, "every_days": LB.LAB_EVERY_DAYS} if (page or tried) else None
+    return out
 
 
 #: THE COMMANDS WAITING FOR THE OWNER (2026-11-05, Ethan: "add more

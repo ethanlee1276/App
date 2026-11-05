@@ -547,6 +547,59 @@ function odHealthHTML(h) {
     ${crashes ? `<ul class="od-crash">${crashes}</ul>` : ""}`);
 }
 
+/* THE WEEKLY JOBS (engine/ownerdesk.weekly): each one's last run, the deep
+   refit's round, and the date each sport's Lab numbers are from. What the
+   public heartbeat said in a line of JSON, on the phone in words. */
+const OD_JOBS = { deepfit: "The deep refit", lab: "The Lab’s replay", boardlearn: "Board learning",
+  inventionfit: "The inventions’ fit", bugscan: "The bug scan", backupzip: "The weekly zip",
+  lineup: "The lineup check", posspread: "Position spreads", scouthist: "Scout history" };
+const OD_PIECES = { yardage_mixture: "yardage shapes", td_scale: "touchdown scale", touchdowns: "touchdowns",
+  cfb_touchdowns: "college touchdowns", nfl_props: "NFL book-line props", ladder: "the grade ladder",
+  nba_rules: "NBA rotation rules", nba_vacancy: "NBA minutes left open", nba_rates: "NBA rates", nba_spread: "NBA spread" };
+const odPiece = (k) => escapeHtml(OD_PIECES[k] || OD_LEAGUES[k] || k);
+function odWhen(iso) {
+  if (!iso) return "—";
+  const d = new Date(String(iso).slice(0, 19));
+  if (isNaN(d)) return escapeHtml(String(iso));
+  return `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })} ${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+}
+function odJobState(j) {
+  const m = j.minutes == null ? null : Number(j.minutes);
+  const took = m == null ? "" : m < 1 ? " in under a minute" : ` in ${odN(m)} min`;
+  if (j.running) return [`running since ${odWhen(j.started)}`, "warn"];
+  if (j.cut_off) return [`cut off after ${odN(m)} min`, "bad"];
+  if (j.exit != null && Number(j.exit) !== 0) return [`failed (exit ${escapeHtml(String(j.exit))})`, "bad"];
+  return [j.ended ? `finished${took}` : "—", j.ended ? "good" : "mute"];
+}
+function odWeeklyHTML(w, day) {
+  const title = "Weekly jobs";
+  if (!w || w.error) return odCard(title, odErr(w));
+  const jobs = (w.jobs || []).map((j) => {
+    const [state, tone] = odJobState(j);
+    return `${odRow(`${escapeHtml(OD_JOBS[j.job] || j.job)} · ${odWhen(j.started)}`, state, tone)}${
+      j.last ? `<li class="od-last"><span class="od-mono">${escapeHtml(j.last)}</span></li>` : ""}`;
+  }).join("");
+  const dp = w.deep || null;
+  const deep = dp ? `<ul class="od-list">${odRow(`The deep refit’s round of ${escapeHtml(dp.round || "—")}`,
+      (dp.left || []).length ? `${odN(dp.left.length)} still owed` : "complete", (dp.left || []).length ? "warn" : "good")}${
+      (dp.done || []).length ? odRow("Done this round", dp.done.map(odPiece).join(", ")) : ""}${
+      (dp.left || []).length ? odRow("Still owed", dp.left.map(odPiece).join(", ")) : ""}${
+      (dp.part_way || []).length ? odRow("Part-way", escapeHtml(dp.part_way.join("; ")), "warn") : ""}</ul>` : "";
+  const lab = w.lab || null;
+  const today = day ? new Date(`${day}T12:00:00`) : new Date();
+  const pills = lab ? (lab.sports || []).map((x) => {
+    const age = x.replayed ? Math.round((today - new Date(`${x.replayed}T12:00:00`)) / 864e5) : null;
+    const late = age == null || age > (lab.every_days || 7) + 1;
+    return `<span class="od-pill${late ? " warn" : ""}">${escapeHtml(OD_LEAGUES[x.sport] || x.sport)} ${
+      x.replayed ? odWeek(x.replayed) : "never"}</span>`;
+  }).join("") : "";
+  return odCard(title, `<ul class="od-list">${jobs || odRow("No weekly job has run on this box yet", "—", "mute")}</ul>
+    ${deep}${pills ? `<p class="od-note">The Lab’s numbers, the date each sport’s are from (replayed every
+      ${odN(lab.every_days || 7)} days; amber is late):</p><div class="od-pills" aria-label="The Lab’s date per sport">${pills}</div>` : ""}
+    <p class="od-note">Each runs beside the boards with an hour; one cut off picks up where it stopped on its next run.
+      The last line is what the job printed last.</p>`);
+}
+
 function odRoomHTML(c) {
   if (!c || c.error) return odCard("The room", odErr(c));
   return odCard("The room", `<ul class="od-list">${odRow("Posts today", odN(c.posts_today))}${odRow("Comments today", odN(c.comments_today))}${
@@ -834,7 +887,7 @@ function odHTML(d) {
     ${odNoticeHTML(d.notice)}${waiting ? reps : ""}${odPicksHTML(d.picks)}${odSportsHTML(d.sports)}${
       odMoneyHTML(d.money, d.usage, d.accounts, d.trend)}${odUsageHTML(d.usage)}${odRetentionHTML(d.retention)}${
       odAccountsHTML(d.accounts)}
-    ${odHealthHTML(d.health)}${odBackupsHTML(d.health && d.health.backups)}${odSecurityHTML(d.health && d.health.security)}${
+    ${odHealthHTML(d.health)}${odWeeklyHTML(d.weekly, d.day)}${odBackupsHTML(d.health && d.health.backups)}${odSecurityHTML(d.health && d.health.security)}${
       odMailHTML(d.health && d.health.mail)}${odRoomHTML(d.community)}${waiting ? "" : reps}${
       odMorningHTML(d.morning, d.prefs)}${odRunNextHTML(d.run_next)}${odExportsHTML()}${odSwitchesHTML(d.switches, d.alerts)}
     <p class="od-foot">Only this account can open this page. Who’s on now names only the members the Privacy Policy’s notice

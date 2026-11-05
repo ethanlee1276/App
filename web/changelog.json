@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-05",
+      "kind": "ship",
+      "title": "The owner's desk shows the weekly jobs",
+      "body": "The deep refit, the Lab's replay, board learning and the backups each run once a week beside the boards, and what each did could only be read off the server. The owner's desk now has a card for them: each one's last run, how long it took, whether its hour ran out and the last thing it said; how far the refit's round has got and what it still owes; and the date each sport's Lab numbers are from, in amber when they are late."
+    },
+    {
+      "date": "2026-11-05",
       "kind": "fix",
       "title": "The Lab's baseball replay fits its weekly run",
       "body": "The Lab replays the model over stored history once a week, and its baseball replay walked every stored season for three markets, which on its own outran the run's hour, so baseball could not publish. It now walks the latest two seasons, which is what the page is about, and stops between markets when the time runs short. A market it didn't reach keeps last week's numbers, marked with the date they were replayed, and the page names the seasons it covers."

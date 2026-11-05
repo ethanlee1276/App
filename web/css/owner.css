@@ -168,6 +168,8 @@
 .od-chips a.od-chip { text-decoration: none; display: inline-block; }
 
 /* The commands waiting for the owner (docs/RUN_NEXT.md), each with a copy button. */
+.od-list li.od-last { display: block; border-top: 0; padding: 0 0 8px; }
+.od-list li.od-last span { color: var(--text-mute); }
 .od-run { border-top: var(--hairline) solid var(--border-soft); padding: 8px 0; }
 .od-run summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; line-height: var(--lh-tight); }
 .od-cmd { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; }
