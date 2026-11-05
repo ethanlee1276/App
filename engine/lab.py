@@ -78,6 +78,17 @@ GAME_SPORTS = ("nfl", "mlb", "cfb", "nba", "wnba")
 #: A walk-forward needs a real history before its numbers mean anything.
 MIN_HISTORY = 8
 
+#: THE MLB REPLAY FITS ITS RUN (2026-11-05). On 4 November MLB alone ran
+#: past 85 minutes, every stored season walked for three markets, against
+#: a run's ceiling of an hour (engine.maintenance.WEEKLY_JOB_TIMEOUT_S),
+#: the other sports and MLB's own game lines still to come. The page is
+#: about the latest two seasons, so those are what it walks; a market
+#: starts only while the time left covers it, at the pace of the market
+#: before; a market the run did not reach keeps the numbers of the last
+#: run that measured it, dated (carry_forward).
+LAB_MLB_PROPS_BUDGET_S = 30 * 60
+LAB_MLB_SEASONS = 2
+
 #: Sports with no player-prop harness, and the honest reason. Absence
 #: rendered as an explicit row beats a sport quietly missing from a page.
 NO_PROP_HARNESS = {
@@ -179,30 +190,85 @@ def report_to_dict(report, market: str = "", label: str = "") -> dict:
 
 # --- player props ------------------------------------------------------------
 def mlb_props(conn, markets=MLB_MARKETS, min_history: int = MIN_HISTORY,
-              log=print) -> list[dict]:
+              log=print, seasons=None) -> list[dict]:
     """Replay MLB props over ingested logs, priced against harvested closes
     wherever one exists (see engine.mlb.backtest.settled_props_from_logs)."""
+    return _mlb_markets(conn, markets, min_history, log, seasons, None)[0]
+
+
+def _mlb_markets(conn, markets, min_history, log, seasons, deadline):
+    """``(market dicts, markets not reached)``. With a ``deadline`` a
+    market starts only while the time left covers its games at the pace
+    the market before it walked; the first always starts."""
+    import time as _time
     from . import db as _db
     from .mlb.backtest import backtest_from_logs
     from .mlb.models import MARKET_LABELS
 
-    out = []
-    for market in markets:
+    out, missed = [], []
+    pace = None                                    # seconds per game walked
+    for k, market in enumerate(markets):
+        t0 = _time.monotonic()
         try:
             entries = _db.entries_for_market(conn, "mlb", market,
-                                             min_games=min_history + 1)
+                                             min_games=min_history + 1,
+                                             seasons=seasons)
             if not entries:
                 continue
+            games = sum(len(e["values"]) for e in entries)
+            if deadline is not None:
+                left = deadline - _time.monotonic()
+                need = pace * games if pace is not None else 0.0
+                if left <= 0 or need > left:
+                    missed = list(markets[k:])
+                    log(f"  lab: mlb stopped at the run's time limit: "
+                        f"{', '.join(missed)} not replayed this run "
+                        f"({left / 60:.0f} min left, {need / 60:.0f} needed)")
+                    break
             real = _db.closing_odds_by_date(conn, "mlb", market)
             rep = backtest_from_logs(entries, market,
                                      min_history=min_history,
                                      real_lines=real or {})
+            took = _time.monotonic() - t0
+            pace = took / games if games else pace
+            if deadline is not None:
+                log(f"  lab: mlb {market} replayed: {games:,} games in {took / 60:.0f} min")
             if rep.n:
                 out.append(report_to_dict(
                     rep, market, MARKET_LABELS.get(market, market)))
         except Exception as exc:                   # noqa: BLE001
             log(f"  lab: mlb {market} skipped — {exc}")
-    return out
+    return out, missed
+
+
+def latest_seasons(conn, sport: str, n: int) -> list[int]:
+    """The ``n`` latest seasons the history file holds for ``sport``,
+    oldest first; empty when it holds none or cannot be read."""
+    try:
+        rows = conn.execute("SELECT DISTINCT season FROM player_game_logs WHERE sport=? "
+                            "ORDER BY season DESC LIMIT ?", (sport, int(n))).fetchall()
+    except Exception:                              # noqa: BLE001
+        return []
+    return sorted(int(r[0]) for r in rows if r[0] is not None)
+
+
+def mlb_section(conn, log=print, budget_s: float | None = None,
+                seasons_back: int | None = LAB_MLB_SEASONS) -> dict:
+    """MLB's props section: the latest ``seasons_back`` seasons, the
+    markets reached inside ``budget_s``, and the ones not reached named
+    (``not_reached``) so the page keeps their last numbers, dated."""
+    import time as _time
+    seasons = latest_seasons(conn, "mlb", seasons_back) if seasons_back else []
+    deadline = _time.monotonic() + budget_s if budget_s else None
+    markets, missed = _mlb_markets(conn, MLB_MARKETS, MIN_HISTORY, log,
+                                   seasons or None, deadline)
+    sec: dict = ({"markets": markets} if markets else
+                 {"unavailable": "no ingested game logs deep enough to replay yet"})
+    if seasons:
+        sec["seasons"] = seasons
+    if missed:
+        sec["not_reached"] = missed
+    return sec
 
 
 def hoops_props(conn, sport: str, log=print) -> list[dict]:
@@ -596,9 +662,7 @@ def build_sport(sport: str, hconn, log=print, nfl: bool = True) -> dict:
     (``replayed_at``) — each sport carries its own date now that a run
     publishes them one at a time."""
     if sport == "mlb":
-        props = mlb_props(hconn, log=log)
-        blob = {"props": {"markets": props} if props else
-                {"unavailable": "no ingested game logs deep enough to replay yet"},
+        blob = {"props": mlb_section(hconn, log=log, budget_s=LAB_MLB_PROPS_BUDGET_S),
                 "game_lines": game_lines(hconn, "mlb", log=log)}
     elif sport == "nfl":
         blob = {"props": nfl_props(log=log, conn=hconn, budget_s=LAB_NFL_PROPS_BUDGET_S)
@@ -797,9 +861,11 @@ def run_if_due(hconn=None, log=print, path: Path | str | None = None,
         hconn = _db.connect()
         close = True
     done, failed = [], []
+    import time as _time
     try:
         for sport in todo:
             _mark_attempt(ap, sport, today)
+            t0 = _time.monotonic()
             # The line the reaper keeps when a run is cut off: which sport
             # the hour ran out in (python -u, so it is on disk at once).
             log(f"  lab: replaying {sport} ({len(done) + len(failed) + 1} of {len(todo)})…")
@@ -816,7 +882,7 @@ def run_if_due(hconn=None, log=print, path: Path | str | None = None,
             page, kept = merge_sport(page, sport, blob)
             gate.publish(page, p, p.name)
             done.append(sport)
-            log(f"  lab: {sport} replayed → {p}"
+            log(f"  lab: {sport} replayed in {(_time.monotonic() - t0) / 60:.0f} min → {p}"
                 + (f" (kept {', '.join(kept)} from the last run that measured them)" if kept else ""))
     finally:
         if close:
@@ -867,6 +933,18 @@ def carry_forward(out: dict, previous: dict) -> list[str]:
         for section in ("props", "game_lines"):
             now_sec = blob.get(section) or {}
             old_sec = was.get(section) or {}
+            # A MARKET THE RUN'S TIME DID NOT REACH (mlb_section) keeps its
+            # last measurement beside the ones this run made, each dated.
+            if now_sec.get("markets") and now_sec.get("not_reached") and old_sec.get("markets"):
+                have = {m.get("market") for m in now_sec["markets"]}
+                for om in old_sec["markets"]:
+                    mk = om.get("market")
+                    if mk in now_sec["not_reached"] and mk not in have:
+                        c = dict(om)
+                        c["carried_from"] = om.get("carried_from") or old_sec.get("carried_from") or stamp
+                        now_sec["markets"].append(c)
+                        kept.append(f"{sport}/{section}/{mk}")
+                continue
             if now_sec.get("markets") or not old_sec.get("markets"):
                 continue
             carried = dict(old_sec)

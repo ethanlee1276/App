@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after the weekly refit started resuming inside a
+Last updated 2026-11-05, after the Lab's MLB replay started fitting its run
+too (item 1f, nothing new to run), after the weekly refit started resuming inside a
 sport and the Lab's NFL replay started fitting its run (items 1f and 1g,
 nothing new to run), after MLB's travel and rest got a read-only
 measurement (step KN: item 1t), after the WNBA's spread was measured on its own
@@ -289,6 +290,14 @@ sports go first and publish as they finish. A push no longer stops a job
 in progress. Still, MLB alone ran past 85 minutes, so when its turn comes
 it will likely be cut off at the hour; the check below says so, and that
 is the line to paste.
+
+**Update, 5 November, MLB too (nothing for you to paste):** MLB's replay
+walked every stored season for three markets. It now walks the latest
+two, starts a market only while the time left covers it at the pace of
+the market before, and stops at 30 minutes. A market it didn't reach
+keeps last week's numbers on the page, dated, and the run's log names
+it (`lab: mlb stopped at the run's time limit: ...`). Each sport's line
+now says how long it took (`lab: mlb replayed in N min`).
 
 The Lab's page has been stamped 29 September since then: its run built every
 sport and published only at the end, and was cut off each night at the

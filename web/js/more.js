@@ -403,6 +403,7 @@ function labPropCard(m, note) {
     <div class="lab-head"><strong>${escapeHtml(m.label)}</strong>
       <span class="chip ${naive ? "warn" : outcomes ? "" : "good"}">${naive ? "naive lines" : outcomes ? "outcomes only" : m.basis === "mixed" ? "mixed basis" : "real closes"}</span>
       <span class="mini">${m.n.toLocaleString()} settled props</span></div>
+    ${labReachNote(m)}
     <div class="stats rec-kpis">
       ${labSkillTile(m)}
       ${recTile("Projection error", m.mae != null ? m.mae.toFixed(2) : "—",
@@ -428,6 +429,32 @@ function labPropCard(m, note) {
     ${labBins(m)}
     ${seg ? `<div class="lab-rows"><div class="lab-rows-head">Priced against</div>${seg}</div>` : ""}
   </div>`;
+}
+
+/* WHAT A RUN WITH A TIME LIMIT REACHED (engine/lab, 2026-11-05). The
+   NFL's walk takes the newest weeks first and stops at its budget; MLB
+   stops between markets, and a market it did not reach keeps the last
+   run's numbers. Either way the card says which: a partial walk shown
+   as a whole one would be the quiet version of an empty page. */
+function labReachNote(m) {
+  if (m.carried_from) {
+    return `<p class="mini" style="opacity:.75">Replayed ${escapeHtml(String(m.carried_from))} —
+      kept from that run (this week’s ran out of time before this market)</p>`;
+  }
+  if (m.stopped_early && Array.isArray(m.weeks) && m.weeks.length === 2) {
+    return `<p class="mini" style="opacity:.75">Weeks ${Number(m.weeks[0])}–${Number(m.weeks[1])}
+      only — the newest first, until the run’s time ran out</p>`;
+  }
+  return "";
+}
+
+/* "2026 season", or "2025–2026 seasons" for a sport that walks the
+   latest two (MLB). */
+function labSeasonWord(props) {
+  if (props.season) return `${props.season} season`;
+  const ss = Array.isArray(props.seasons) ? props.seasons : [];
+  if (!ss.length) return "";
+  return ss.length === 1 ? `${ss[0]} season` : `${ss[0]}–${ss[ss.length - 1]} seasons`;
 }
 
 /* A section the last run could not measure keeps the previous run's
@@ -515,7 +542,7 @@ async function renderLab() {
     const cards = (props.markets || []).map((m) => labPropCard(m, d.basis_note)).join("");
     return `<div class="lab-sport">
       <div class="section-title">${sport.toUpperCase()}
-        ${props.season || s.replayed_at ? `<span class="sub">— ${[props.season ? `${props.season} season` : "",
+        ${labSeasonWord(props) || s.replayed_at ? `<span class="sub">— ${[escapeHtml(labSeasonWord(props)),
           /* Each sport carries its own replay date since 2026-11-03: a run
              publishes them one at a time (engine/lab.SPORT_ORDER). */
           s.replayed_at ? `replayed ${escapeHtml(formatStamp(s.replayed_at))}` : ""].filter(Boolean).join(" · ")}</span>` : ""}</div>

@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-05",
+      "kind": "fix",
+      "title": "The Lab's baseball replay fits its weekly run",
+      "body": "The Lab replays the model over stored history once a week, and its baseball replay walked every stored season for three markets, which on its own outran the run's hour, so baseball could not publish. It now walks the latest two seasons, which is what the page is about, and stops between markets when the time runs short. A market it didn't reach keeps last week's numbers, marked with the date they were replayed, and the page names the seasons it covers."
+    },
+    {
+      "date": "2026-11-05",
       "kind": "ship",
       "title": "The owner's desk lists the commands waiting on the server",
       "body": "Every command waiting to be run on the site's server is written down in one file, in the order to run it, and reading that file meant opening it somewhere else on a phone. The owner's desk now has a card for it: each step folded under its heading, each command with a Copy button, so nothing gets typed by hand. It reads the same file the site was built from, so it changes when the list does."
