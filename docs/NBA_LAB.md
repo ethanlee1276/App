@@ -400,6 +400,12 @@ The same honesty the NFL's refusals get:
   judged on the other): points +0.33% / +0.18%, assists +0.36% / +0.18%,
   rebounds and threes nothing, and the best power was 0 or 1 (equal shares
   or a flat bump), never "to the stars". Too small to move a number.
+- **First basket's per-start rate, the newest starts weighted more**
+  (2026-11-05). Each club game multiplying every man's opening shots and
+  starts by 0.99 down to 0.88 before adding its own: the multi-class
+  Brier rose with every step in both seasons (0.8270 -> 0.8271 ... 0.8302;
+  0.8206 -> 0.8208 ... 0.8242). A man's opening shots per start hold
+  steady over a season; the whole season's rate stays.
 - **A regular's return given back by room** (2026-11-05). The vacancy hands
   an absent man's minutes out by room (above); a regular's return still
   takes them back by base minutes. Replayed through the box check's own
