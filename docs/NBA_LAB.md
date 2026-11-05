@@ -406,6 +406,26 @@ The same honesty the NFL's refusals get:
   Brier rose with every step in both seasons (0.8270 -> 0.8271 ... 0.8302;
   0.8206 -> 0.8208 ... 0.8242). A man's opening shots per start hold
   steady over a season; the whole season's rate stays.
+- **First basket by how often he makes them** (2026-11-05). The first
+  basket is the first MAKE, and the five are weighted by opening shots.
+  Each man's rate times his make rate over the league's, raised to a
+  power, the make rate pulled toward the league by k attempts (his field
+  goals; all his attempts, free throws counted; or his opening shots
+  alone), power and k chosen on one season and scored on the other: the
+  scorer's Brier 0.8206 -> 0.8195-0.8204 and 0.8270 -> 0.8268-0.8270.
+  Counting opening MAKES a start instead of shots is worse (0.8376 and
+  0.8346): makes are too few to read. Opening shots per start already
+  say nearly all of it. Not built.
+- **Who scores first after the first shot, by the clubs' scoring**
+  (2026-11-05). The side that takes the first shot scores first 72.5% /
+  68.7% of the time; the board uses 71.9% for every game. Each side's
+  points a possession, its offence against the other's defence (this
+  season and last at half weight, pulled toward the league by 5 to 40
+  games), as a step on that 71.9%, fitted on one season and scored on
+  the other: log loss 0.5883 -> 0.5904-0.5911 and 0.6242 -> 0.6274-0.6278,
+  worse than the flat 71.9% every time, and the fitted step was five
+  times larger in one season than in the other. Over one or two trips a
+  club's season scoring rate is noise. Not built.
 - **A regular's return given back by room** (2026-11-05). The vacancy hands
   an absent man's minutes out by room (above); a regular's return still
   takes them back by base minutes. Replayed through the box check's own
