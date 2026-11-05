@@ -109,10 +109,13 @@ def _run(ua: str) -> dict:
                 page.focus("#t-txt")
                 page.wait_for_timeout(500)
                 out["next_field"] = page.evaluate(STATE)
-                page.evaluate("document.activeElement.blur()")
+                page.evaluate("() => document.activeElement.blur()")
                 page.wait_for_timeout(100)
                 out["just_after"] = page.evaluate(STATE)
-                page.wait_for_function("!document.documentElement.classList.contains('field-up')", timeout=3000)
+                # A function, not a bare expression: Playwright's polling builds a bare one with
+                # eval, which the server's script-src 'self' refuses.
+                page.wait_for_function("() => !document.documentElement.classList.contains('field-up')",
+                                       timeout=3000)
                 out["after"] = page.evaluate(STATE)
                 for sel in ("#t-chk", "#t-btn"):
                     page.focus(sel)
