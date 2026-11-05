@@ -9324,6 +9324,37 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KM. The WNBA's spread, measured on its own six seasons** (step 399; one
+read-only check, a few minutes; you, 2026-11-05: "Go through ... wnba ...
+make sure we have all the tools and data we can be using like how we just
+added for nba"). The WNBA priced every prop with one CV per stat, which
+gives a bench line and a star line the same relative width. The NBA lab's
+fix, variance = a × projection^c, was measured on the WNBA's own six
+seasons of box scores (`docs/WNBA_LAB.md`): fitted on one season and
+judged on the next, the Brier was lower in every judged season for points,
+rebounds, assists, PRA and the three two-stat combos. Threes keep their
+CV. It sits behind the NBA's spread switch: when the NBA's own check and
+refit turn it on, the WNBA's goes on with it, and the weekly refit fits
+the WNBA after the NBA in that same round. Nothing to switch by hand.
+
+The check replays the box's own stored WNBA games through the board's
+replay with the spread off and on (the box check the NBA's spread already
+has, pointed at the WNBA). Read-only, and it files no verdict:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbalabcheck.py --league wnba
+```
+
+On a copy built from the lab's six seasons (559 game dates, no stored
+calibration) it took three and a half minutes and its last line read
+`wnba spread: ready for the refit — Brier lower on Most Likely's kind of
+over in 7 of 7 markets, its 80%-and-up overs honest in 7 of 7, and no
+market worse near the line`. On points overs at lines under his
+projection, the CV the build fits (0.83 on those logs) called 24 overs
+80% or more, and 46% hit; the new spread called 13,533 at 85%, and 83%
+hit. The box's WNBA logs are its own seasons; if the last line says `not
+yet`, paste the whole output back.
+
 **KL. Hockey's games get the crowd's price, and the WNBA reads what its
 own seasons measured** (steps 395 and 397; one read-only check after the
 next NHL build; you, 2026-11-05: "Go through ... pollymarkwt ... and wnba

@@ -14,7 +14,10 @@ the change by hand. The weekly deep refit now runs each check itself
                   or NOT YET. The NBA's refit then fits its calibration on
                   the spread the verdict asks for, and only once that refit
                   has run clean does ``on`` follow it — the runbook's order,
-                  the refit and then the switch.
+                  the refit and then the switch. The WNBA reads the same
+                  switch for its own measured spread (hoops.WNBA.sd_power,
+                  2026-11-05): the weekly refit fits the WNBA after the NBA,
+                  so its calibration is refitted on it in the same round.
   * ``rotation``  nbarules.py --save records whether the three rules still
                   hold on the box's own seasons; ``on`` follows at once (the
                   rules are on unless the box's seasons say otherwise).

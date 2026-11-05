@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after hockey's games started getting the crowd's
+Last updated 2026-11-05, after the WNBA's spread was measured on its own
+six seasons and set to follow the NBA's switch (step KM: item 1s, one
+read-only check), after the owner's desk started listing this file's
+commands with a Copy button, after hockey's games started getting the crowd's
 price and the WNBA started reading three minutes pieces its own six
 seasons measured (step KL: item 1r, one read-only check after an NHL
 build), after the NHL model was measured on three seasons
@@ -524,6 +527,23 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 ```
 
 The same two with `--sport nfl` and `--sport cfb` re-read football's.
+
+## 1s. Any time after this push: the WNBA's spread, on the box's own games (step KM)
+
+The WNBA's props were priced with one spread per stat, the same relative
+width for a bench line and a star line. The NBA's fix was measured on six
+WNBA seasons and was better in every season held out for points,
+rebounds, assists, PRA and the combos. It goes on with the NBA's spread
+switch, by itself. This read-only check replays the box's own WNBA games
+with it off and on (a few minutes):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbalabcheck.py --league wnba
+```
+
+The last line should read `wnba spread: ready for the refit — ...`, as it
+did on a copy built from the lab's six seasons. Paste it back if it says
+`not yet`.
 
 ## 1r. After the next NHL build: hockey's crowd prices (step KL)
 

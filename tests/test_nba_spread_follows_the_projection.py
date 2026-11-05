@@ -12,7 +12,8 @@ behind QB_NBA_SPREAD=1 because the stored calibration curves were fit on
 the CV spread. These hold:
 
   * off by default: the board prices exactly as before;
-  * on: SD = sqrt(a × μ^c) for the seven markets, threes and the WNBA untouched;
+  * on: SD = sqrt(a × μ^c) for the seven markets, threes untouched; the WNBA
+    reads its own values, measured on its own seasons (2026-11-05);
   * a bench line's relative spread is wider than a star's;
   * the counts still go through the negative binomial at that spread;
   * nbalabcheck.py replays both changes off and on, writes nothing, and
@@ -58,13 +59,15 @@ def test_off_by_default_the_board_prices_as_before():
 
 
 def test_on_the_seven_markets_follow_the_projection_and_nothing_else_moves():
-    assert set(NBA.sd_power) == set(SEVEN) and WNBA.sd_power == {}
+    assert set(NBA.sd_power) == set(SEVEN) and set(WNBA.sd_power) == set(SEVEN)
     with _env(QB_NBA_SPREAD="1"):
         for stat in SEVEN:
             a, c = NBA.sd_power[stat]
             assert abs(P.sd_for(stat, 12.0, NBA) - math.sqrt(a * 12.0 ** c)) < 1e-9, stat
         assert P.sd_for("fg3m", 2.5, NBA) == max(0.1, NBA.sd_cv["fg3m"] * 2.5), "threes keep their CV"
-        assert P.sd_for("pts", 20, WNBA) == max(0.1, WNBA.sd_cv["pts"] * 20), "the WNBA keeps its CVs"
+        a, c = WNBA.sd_power["pts"]
+        assert abs(P.sd_for("pts", 20, WNBA) - math.sqrt(a * 20 ** c)) < 1e-9, "the WNBA reads its own"
+        assert P.sd_for("fg3m", 2.5, WNBA) == max(0.1, WNBA.sd_cv["fg3m"] * 2.5), "its threes keep their CV"
 
 
 def test_a_bench_line_is_wider_than_a_stars_for_its_size():

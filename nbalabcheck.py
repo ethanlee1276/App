@@ -78,29 +78,30 @@ NEAR_SLACK = 0.005
 MIN_BOOK = 30
 
 
-def board_tune(conn):
+def board_tune(conn, league: str = "nba"):
     """The NBA's tuning as the live build prices with it
     (`hoops_fit.fitted_tuning`: the spreads fitted from the box's own
     logs), or the inherited numbers if the fit fails, as the build does.
     The replay's own default is the inherited numbers, which are not the
     spread the board uses: the comparison has to be against the real one."""
-    from engine.hoops import NBA
+    from engine.hoops import for_league
     try:
         from engine.hoops_fit import fitted_tuning
-        return fitted_tuning(conn, "nba")[0]
+        return fitted_tuning(conn, league)[0]
     except Exception:                                        # noqa: BLE001
-        return NBA
+        return for_league(league)
 
 
-def _run(conn, markets, shooting: bool, spread: bool, calib: bool = True, tune=None) -> dict:
+def _run(conn, markets, shooting: bool, spread: bool, calib: bool = True, tune=None,
+         league: str = "nba") -> dict:
     from engine import calibrate, hoopsreplay
     os.environ["QB_NBA_SHOOTING"] = "1" if shooting else "0"
     os.environ["QB_NBA_SPREAD"] = "1" if spread else "0"
     if calib:
-        out = hoopsreplay.replay(conn, "nba", markets, tune=tune)
+        out = hoopsreplay.replay(conn, league, markets, tune=tune)
     else:
         with calibrate.disabled():
-            out = hoopsreplay.replay(conn, "nba", markets, tune=tune)
+            out = hoopsreplay.replay(conn, league, markets, tune=tune)
     return {m: (rep, counts) for m, rep, counts in out}
 
 
@@ -175,7 +176,7 @@ def _compare(title: str, markets, off: dict, on: dict, show_rmse: bool) -> dict:
     return got
 
 
-def _ladder(conn, markets, tune) -> tuple[dict, dict]:
+def _ladder(conn, markets, tune, league: str = "nba") -> tuple[dict, dict]:
     """``(through today's calibration, raw)``, each ``{market: {"n", "hit",
     "off": read, "on": read}}`` with a read ``{"brier", "said", "top": (n,
     said, hit)}``: overs at lines LADDER × his projection over every game
@@ -184,10 +185,10 @@ def _ladder(conn, markets, tune) -> tuple[dict, dict]:
     both: the projection does not depend on the spread or the calibration."""
     from engine import calibrate, hoopsreplay as HR
     from engine.nba.prob import p_over
-    hist = HR.histories(conn, "nba")
+    hist = HR.histories(conn, league)
     cal, raw = {}, {}
     for m in markets:
-        rep = HR.walk(HR._entries(hist, m), m, "nba", tune=tune)
+        rep = HR.walk(HR._entries(hist, m), m, league, tune=tune)
         rows = []
         for s in rep.settled:
             for k in LADDER:
@@ -255,22 +256,33 @@ def _ready(near_raw: dict, ladder_raw: dict) -> tuple[bool, str]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--part", choices=("all", "shooting", "spread"), default="all")
+    ap.add_argument("--league", choices=("nba", "wnba"), default="nba",
+                    help="wnba: the spread measured on the WNBA's own seasons (hoops.WNBA.sd_power), read "
+                         "on the box's WNBA games; shooting is the NBA's alone, and no verdict is filed")
     ap.add_argument("--save-verdict", action="store_true",
                     help="file the spread's verdict for the NBA refit to act on (engine/nba/switches); "
                          "the weekly deep refit runs it this way")
     args = ap.parse_args(argv)
+    league = args.league
+    if league == "wnba" and args.save_verdict:
+        print("--save-verdict files the NBA's verdict: the WNBA's spread follows the NBA's switch and is "
+              "refitted after it in the same round, so it files none of its own.")
+        return 2
+    if league == "wnba":
+        args.part = "spread"
     from engine import calibrate
     from engine.db import connect
     saved = {k: os.environ.get(k) for k in ("QB_NBA_SHOOTING", "QB_NBA_SPREAD")}
     conn = connect()
     try:
-        n = conn.execute("SELECT COUNT(DISTINCT period) FROM player_game_logs WHERE sport='nba'").fetchone()[0]
-        span = conn.execute("SELECT MIN(period), MAX(period) FROM player_game_logs WHERE sport='nba'").fetchone()
-        print(f"NBA logs: {n} game dates, {span[0]} to {span[1]}")
+        n = conn.execute("SELECT COUNT(DISTINCT period) FROM player_game_logs WHERE sport=?", (league,)).fetchone()[0]
+        span = conn.execute("SELECT MIN(period), MAX(period) FROM player_game_logs WHERE sport=?",
+                            (league,)).fetchone()
+        print(f"{league.upper()} logs: {n} game dates, {span[0]} to {span[1]}")
         if not n:
-            print("No NBA logs stored: nothing to replay.")
+            print(f"No {league.upper()} logs stored: nothing to replay.")
             return 1
-        tune = board_tune(conn)
+        tune = board_tune(conn, league)
         print("The board's spreads (one CV per stat, as the build fits them): "
               + ", ".join(f"{m} {tune.sd_cv.get(m, 0):.3f}" for m in SPREAD + ("fg3m",)))
         verdicts = []
@@ -282,16 +294,16 @@ def main(argv=None) -> int:
             closer = sum(1 for p in got.values() if p["rmse"][1] < p["rmse"][0])
             verdicts.append(f"shooting: projections closer in {closer} of {len(got)} markets")
         if args.part in ("all", "spread"):
-            off = _run(conn, SPREAD, shooting=True, spread=False, tune=tune)
-            on = _run(conn, SPREAD, shooting=True, spread=True, tune=tune)
+            off = _run(conn, SPREAD, shooting=True, spread=False, tune=tune, league=league)
+            on = _run(conn, SPREAD, shooting=True, spread=True, tune=tune, league=league)
             near_cal = _compare("THE SPREAD THAT FOLLOWS THE PROJECTION, near the line — through today's "
                                 "stored calibration", SPREAD, off, on, show_rmse=False)
-            off_r = _run(conn, SPREAD, shooting=True, spread=False, calib=False, tune=tune)
-            on_r = _run(conn, SPREAD, shooting=True, spread=True, calib=False, tune=tune)
+            off_r = _run(conn, SPREAD, shooting=True, spread=False, calib=False, tune=tune, league=league)
+            on_r = _run(conn, SPREAD, shooting=True, spread=True, calib=False, tune=tune, league=league)
             near_raw = _compare("THE SPREAD THAT FOLLOWS THE PROJECTION, near the line — raw, before any "
                                 "calibration", SPREAD, off_r, on_r, show_rmse=False)
             os.environ["QB_NBA_SHOOTING"] = "1"
-            cal, raw = _ladder(conn, SPREAD, tune=tune)
+            cal, raw = _ladder(conn, SPREAD, tune=tune, league=league)
             lad_cal = _print_ladder("MOST LIKELY'S KIND OF OVER (lines at 0.5, 0.65 and 0.8 of his "
                                     "projection) — through today's stored calibration", cal)
             lad_raw = _print_ladder("MOST LIKELY'S KIND OF OVER — raw, before any calibration", raw)
@@ -307,7 +319,8 @@ def main(argv=None) -> int:
                             f"its {TOP:.0%}-and-up overs honest in "
                             f"{sum(1 for _, h in lad_raw.values() if h)} of {len(lad_raw)} raw")
             ready, why = _ready(near_raw, lad_raw)
-            verdicts.append(("spread: ready for the refit — " if ready else "spread: not yet — ") + why)
+            verdicts.append((f"{'' if league == 'nba' else league + ' '}spread: ready for the refit — "
+                             if ready else f"{'' if league == 'nba' else league + ' '}spread: not yet — ") + why)
             if args.save_verdict:
                 # The verdict only: the switch follows once the NBA refit has
                 # fitted its calibration on it (engine/deepfit, the runbook's

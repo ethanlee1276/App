@@ -382,8 +382,28 @@ WNBA = replace(
     # over-concentration with worse fills, not just variance.
     cap_per_play=0.02, cap_per_game=0.05, cap_per_slate=0.12,
     calibrated=False,
-    # The NBA lab measured the NBA's spreads; the WNBA keeps its CVs.
-    sd_power={},
+    # THE SPREAD THAT FOLLOWS THE PROJECTION, MEASURED ON THE WNBA'S OWN
+    # SEASONS (2026-11-05, docs/WNBA_LAB.md). Every regular-season
+    # player-game 2021-2026 (wehoop box scores, 122,600 stat-games) through
+    # the board's own projection at this tuning; variance around it by
+    # decile of the projection, fitted on one season and judged on the next,
+    # against the CV the box's own fit sets (`hoops_fit`'s rule on the same
+    # season). On over lines at 0.5 to 1.5 of his projection the Brier was
+    # lower in every one of the five judged seasons in all seven markets
+    # below: points 1.1-1.9%, rebounds 0.5-1.7%, assists 1.1-2.3%, PRA
+    # 1.3-2.4%, the two-stat combos 0.9-2.3%. The overs it called 80% or
+    # more hit within a few points of that; the CV's few such calls on
+    # points hit 69-80% in seasons it said 81%. Threes stay on their CV
+    # (better in three seasons of five, worse in two), as the NBA's do.
+    # The values are the fit on all six seasons. Read only when the
+    # spread's switch is on (`prob.spread_on`, engine/nba/switches): the
+    # NBA's verdict throws it after the NBA's refit, and the weekly refit
+    # fits the WNBA after the NBA, so its calibration is refitted on this
+    # spread in the same round. `nbalabcheck.py --league wnba` reads it on
+    # the box's own WNBA games.
+    sd_power={"pts": (5.927, 0.735), "reb": (1.407, 0.987), "ast": (1.447, 0.845),
+              "pra": (8.429, 0.650), "pts_reb": (6.847, 0.711),
+              "pts_ast": (6.308, 0.711), "reb_ast": (2.114, 0.833)},
     inherited_from="nba",
     note=("Market tiers, tier minimums, the 0-100 grade, the role-stability "
           "filter and the bankroll caps are the WNBA spec's own. What is "

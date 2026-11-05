@@ -1246,5 +1246,8 @@ SH
 run KK "NHL: the lab's constants and back-to-backs, on the box's own games" 900 <<'SH'
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 nhllabcheck.py
 SH
+run KM "WNBA: the spread measured on its own seasons, on the box's WNBA games" 900 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbalabcheck.py --league wnba
+SH
 
 echo "===== done in $((SECONDS / 60)) min"

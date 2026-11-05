@@ -56,7 +56,8 @@ said so. Lab: `docs/WNBA_LAB.md`, six seasons of box scores.
 |---|---|
 | The starting five's news, his first game back, and the NBA's weights on his newest games | **Built today**. Better in minutes and points in all six seasons; minutes error 2.6–3.3% lower |
 | The role jump, his second game back, a regular's return | **Measured, left off**: each made points worse in at least one season |
-| The spread that follows the projection (variance = a × mean^c) | **Parked**: the same files can fit it; the WNBA still prices one CV per stat |
+| The spread that follows the projection (variance = a × mean^c) | **Built today**, behind the NBA's spread switch: fitted on one season and judged on the next, the Brier lower in every judged season for points, rebounds, assists, PRA and the combos; threes keep their CV. It goes on when the NBA's check and refit turn the NBA's on, and the refit fits the WNBA right after |
+| The spread re-read on the box's own WNBA games | **Box run** (KM, `nbalabcheck.py --league wnba`) |
 | Calibration | **Parked**: `calibrated=False` until next season's graded picks |
 
 ## NBA (in season)
