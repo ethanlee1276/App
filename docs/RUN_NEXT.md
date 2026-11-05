@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after the licensed scores feed and its timer were built and
+Last updated 2026-11-05, after a Start here section put every waiting check in one
+run, after the licensed scores feed and its timer were built and
 left asleep until you choose to get a key (step KP: item 8, your call), after
 your desk's three alerts: the backup now says why its
 offsite copy failed (step KO: item 0b, one read-only check after the next
@@ -128,6 +129,35 @@ JI). Before that, Who's on now became the desk's first card (step JH). Done:
   tip records alone on games it never saw.
 - **IX:** showed Duke's lead back at 52% with no receivers anywhere. That's
   fixed (step JC), and item 3 checks it.
+
+## 000. Start here: every waiting check in one run (5 November)
+
+Everything below that only reads, in one go (a few minutes; it writes
+nothing). Paste the whole file back:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JX JT KO JH JL IQ JM JN JO JP JQ JR JV KF KG KI KL KN JD IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
+```
+
+The three long ones, on a quiet evening (up to about 45 minutes together;
+still read-only): Caesars as a backup sharp book, the NHL lab and the
+WNBA's spread on the box's own games:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long.txt
+```
+
+One that has its moment: any NBA night, about 30 minutes before the
+first tip (item 1n):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KH 2>&1 | tee /tmp/kh.txt
+```
+
+The ones that write, each with its own item below and only when it says:
+item 0's cleanup (only after a night that ends `offsite copy updated`),
+item 1p's close lines (the dry run first, then `--apply`), and item 8 (only
+if you want the licensed feed). Not commands: alerts on your phone (item 1).
 
 ## 00. First, when you're home: NBA Most Likely is back, and where the credits went (step JW)
 
