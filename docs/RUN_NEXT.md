@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after MLB's travel and rest got its first read off
+Last updated 2026-11-05, after the weekly refit's walks got faster and its
+recency dial started keeping each market it fits (item 1g, nothing new to
+run), after MLB's travel and rest got its first read off
 the box, on five seasons of game logs (item 1t: nothing held; the command is
 unchanged and now reads 2018 on), after the owner's desk got a Weekly jobs
 card, after the Lab's MLB replay started fitting its run
@@ -326,6 +328,19 @@ that refresh (its log says `CFB results not stored this build`). If `cfb`
 shows up there again, paste the line.
 
 ## 1g. Thursday: the models' weekly refit reaches the NFL (step JQ)
+
+**Update, 5 November, evening:** why the NFL kept running out of time, and
+two fixes, with nothing new to run. Replayed here on four NFL seasons, a
+market's walk asked the disk about six of the models' settings files on
+every game (125,000 asks), and asked whether the temperature curve could
+only name one side four times a game, 51 checks each. Each is now asked
+once a walk: the same numbers to the last digit on five markets, the
+whole recency dial in 257 s here instead of 388, and the walks that price
+with the temperatures on (the Lab's, the rank fit's, the board's own) two
+to three times faster. The dial also writes each market
+the moment it is fitted, so a run that runs out of time keeps what it did
+and the next run of the round starts at the next market; the refit's line
+says `N market(s) fitted earlier this round, kept`.
 
 **Update, 5 November (read off the public heartbeat):** this morning's run
 took 68 minutes and finished nothing: `round of 2026-11-04: nothing done

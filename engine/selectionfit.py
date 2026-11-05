@@ -707,18 +707,21 @@ def refresh(lconn, path=None, min_settled: int = MIN_SETTLED,
     if not dry_run:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(out, indent=2))
+        from .storecache import forget
+        forget(path)
         reset_cache()
     return out
 
 
 def load(path=None) -> dict:
     """The store, cached on mtime."""
-    path = Path(path if path is not None else DEFAULT_PATH)
-    try:
-        mtime = path.stat().st_mtime
-    except OSError:
+    from .storecache import mtime as _mtime
+    path = DEFAULT_PATH if path is None else path
+    mtime = _mtime(path)
+    if mtime is None:
         _cache.pop(str(path), None)
         return {}
+    path = Path(path)
     hit = _cache.get(str(path))
     if hit and hit[0] == mtime:
         return hit[1]

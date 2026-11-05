@@ -194,6 +194,15 @@ def settled_props_from_logs(entries: list[dict], market: str,
     the league's rate over every entry, the book's 0.5, and the
     opponent's takeaway rating built from ``allowed`` — so the AUC the
     store keeps is the number the board will put up, opponent and all."""
+    from .storecache import frozen
+    with frozen():
+        return _settled_props(entries, market, sport, min_history, limit, form_weights,
+                              player_adjust, player_record, allowed)
+
+
+def _settled_props(entries, market, sport, min_history, limit, form_weights,
+                   player_adjust, player_record, allowed) -> list[SettledProp]:
+    """`settled_props_from_logs`, inside one read of the stores."""
     game, opp = _neutral()
     settled: list[SettledProp] = []
     companion = COMPANION.get(market)
@@ -286,18 +295,24 @@ def walk(sport: str, entries: list[dict], market: str,
     minutes model at all. Everything else walks through the generic one.
     The fitters (formfit, playerfit, calibrate) call this instead of
     choosing a harness themselves, so adding a sport's harness is one
-    branch here rather than an edit in three fitters."""
-    if sport == "mlb":
-        from .mlb.backtest import backtest_from_logs as mlb_bt
-        return mlb_bt(entries, market,
-                      min_history=8 if min_history is None else min_history,
-                      **hooks)
-    # What `load_entries` loaded beside the entries rides along unasked.
-    for k, v in (getattr(entries, "aux", None) or {}).items():
-        hooks.setdefault(k, v)
-    if sport in HOOPS:
-        from .hoopsreplay import walk as hoops_walk
-        return hoops_walk(entries, market, sport=sport, min_history=min_history, **hooks)
-    return backtest_from_logs(entries, market, sport=sport,
-                              min_history=4 if min_history is None else min_history,
-                              **hooks)
+    branch here rather than an edit in three fitters.
+
+    Every harness walks inside one read of the stores
+    (engine/storecache): a file's time is asked once a walk, not once a
+    game."""
+    from .storecache import frozen
+    with frozen():
+        if sport == "mlb":
+            from .mlb.backtest import backtest_from_logs as mlb_bt
+            return mlb_bt(entries, market,
+                          min_history=8 if min_history is None else min_history,
+                          **hooks)
+        # What `load_entries` loaded beside the entries rides along unasked.
+        for k, v in (getattr(entries, "aux", None) or {}).items():
+            hooks.setdefault(k, v)
+        if sport in HOOPS:
+            from .hoopsreplay import walk as hoops_walk
+            return hoops_walk(entries, market, sport=sport, min_history=min_history, **hooks)
+        return backtest_from_logs(entries, market, sport=sport,
+                                  min_history=4 if min_history is None else min_history,
+                                  **hooks)

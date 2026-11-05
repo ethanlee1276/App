@@ -82,10 +82,14 @@ SPORTS = ("nfl", "cfb")
 CARRY_BY = {"nfl": 17, "cfb": 12}
 
 
-def _store(sport: str = "nfl") -> Path:
+def _store_path(sport: str = "nfl") -> str:
     """The NFL's store keeps its original name, so the box's file is read
     as it is; every other league has its own."""
-    return Path(modelstate.path("position_spread.json" if sport == "nfl" else f"{sport}_position_spread.json"))
+    return modelstate.path("position_spread.json" if sport == "nfl" else f"{sport}_position_spread.json")
+
+
+def _store(sport: str = "nfl") -> Path:
+    return Path(_store_path(sport))
 
 
 def load(path=None) -> dict:
@@ -104,11 +108,9 @@ def width_mult(position: str, market: str, sport: str = "nfl") -> float:
     the launcher is long-lived and the weekly refit writes from a child."""
     if sport not in SPORTS:
         return 1.0
-    p = _store(sport)
-    try:
-        stamp = (str(p), p.stat().st_mtime)
-    except OSError:
-        stamp = (str(p), None)
+    from .storecache import mtime
+    p = _store_path(sport)
+    stamp = (p, mtime(p))
     cell = _CACHE.setdefault(sport, {})
     if cell.get("stamp") != stamp:
         store = load(p)
@@ -285,6 +287,8 @@ def save(res: dict, path=None, sport: str = "nfl") -> None:
     tmp.write_text(json.dumps({"version": STORE_VERSION, "widths": widths, "at": _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
                                .isoformat(timespec="seconds")}, indent=1), encoding="utf-8")
     tmp.replace(p)
+    from .storecache import forget
+    forget(p)
     _CACHE.clear()
 
 

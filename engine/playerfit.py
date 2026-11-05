@@ -178,6 +178,8 @@ def save(fits: dict[str, PlayerFit], path=None) -> Path:
     stored.update({k: f.to_dict() for k, f in fits.items()})
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(stored, indent=1))
+    from .storecache import forget
+    forget(p)
     return p
 
 
@@ -185,15 +187,16 @@ _cache: dict = {}
 
 
 def _load(path=None) -> dict:
-    p = Path(path if path is not None else DEFAULT_PATH)
-    try:
-        key = (str(p), p.stat().st_mtime)
-    except OSError:
+    from .storecache import mtime
+    p = DEFAULT_PATH if path is None else path
+    m = mtime(p)
+    if m is None:
         return {}
+    key = (str(p), m)
     if key in _cache:
         return _cache[key]
     try:
-        raw = json.loads(p.read_text())
+        raw = json.loads(Path(p).read_text())
         out = raw if isinstance(raw, dict) else {}
     except (OSError, ValueError):
         out = {}

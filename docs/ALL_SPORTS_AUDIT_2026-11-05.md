@@ -82,7 +82,7 @@ The NFL is the reference toolkit. College has its own checklist
 | | Status |
 |---|---|
 | College's lineup step (who is out, what it opens) | **Measuring**: x1.00 until college's own games clear the NFL's bar (2 SE, 3+ seasons) |
-| The deep refit, which reaches the NFL again in pieces | **In progress** (DF2) |
+| The deep refit, which reaches the NFL again in pieces | **In progress** (DF2): it resumes inside a sport, and now inside the recency dial (each market kept as it is fitted); its walks ask the disk once a walk, not once a game (the dial 257 s here instead of 388, the same numbers). Confirmed when the heartbeat's round reaches the NFL |
 | The Lab's weekly replay, stuck at 29 September | **In progress** (LW1) |
 | A college target count | **Not possible** honestly: the feed leaves some incompletions unnamed |
 

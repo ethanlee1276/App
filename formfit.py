@@ -163,6 +163,9 @@ def main() -> None:
                          "(default: the sport's own floor)")
     ap.add_argument("--show", action="store_true",
                     help="print the current fits and exit")
+    ap.add_argument("--resume-after", default=None, metavar="DATE",
+                    help="keep each market whose stored dial was fitted on or after DATE "
+                         "(the weekly refit passes its round's first day) and fit the rest")
     args = ap.parse_args()
 
     if args.show:
@@ -189,11 +192,26 @@ def main() -> None:
     min_games = (args.min_history or (8 if sport == "mlb" else 4)) + 2
 
     fits: dict[str, ff.FormFit] = {}
+    # EACH MARKET IS WRITTEN THE MOMENT IT IS FITTED, and a run of the same
+    # round keeps it (2026-11-05). The NFL's four markets were one write at
+    # the end: on the box the deep refit's hour ran out in the dial on
+    # 4 November, and all four markets' walks went with it, so the next
+    # run began at the first market again and the NFL's dial stayed dated
+    # late August. Each market is its own walk, so writing it early and
+    # keeping it changes no number the others fit.
+    stored = ff._load(ff.DEFAULT_PATH) if args.resume_after else {}
+    kept = []
     print(f"Fitting the {sport} recency dial from {args.db}")
     print(f"(one walk-forward per grid point — {len(ff.GRID)} per market; "
           "this is the slow fit)\n")
     for market in markets:
         label = MARKET_LABELS.get(market, market)
+        prior = stored.get(f"{sport}:{market}") if args.resume_after else None
+        when = str((prior or {}).get("fitted") or "") if isinstance(prior, dict) else ""
+        if when and when >= args.resume_after:
+            print(f"  {label:16} kept — fitted {when[:16].replace('T', ' ')}, earlier this round")
+            kept.append(market)
+            continue
         from engine.logwalk import load_entries
         entries = load_entries(conn, sport, market, min_games=min_games)
         if not entries:
@@ -207,15 +225,18 @@ def main() -> None:
         print(f"  {label:16} {f.samples:>6,} settled   "
               f"Brier {f.brier_default:.4f} → {f.brier_fitted:.4f}   "
               f"r = {f.r:+.1f}")
-        print(f"  {'':16} {f.verdict}")
+        print(f"  {'':16} {f.verdict}", flush=True)
         fits[f"{sport}:{market}"] = f
+        path = ff.save({f"{sport}:{market}": f}, ff.DEFAULT_PATH)
 
     if not fits:
+        if kept:
+            print("\nEvery market was fitted earlier this round; nothing left to fit.")
+            return
         print("\nNothing fitted. Ingest history first, e.g.:\n"
               "  python3 ingest.py mlb --from 2026-04-01 --to 2026-07-01")
         return
 
-    path = ff.save(fits, ff.DEFAULT_PATH)
     print(f"\nWrote {path}")
     if any(f.adopted for f in fits.values()):
         print("Adopted weights change the model — refit its temperature "

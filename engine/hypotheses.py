@@ -527,15 +527,16 @@ _cache: dict = {}
 
 
 def load(path=None) -> dict:
-    p = Path(path if path is not None else DEFAULT_PATH)
-    try:
-        key = (str(p), p.stat().st_mtime)
-    except OSError:
+    from .storecache import mtime
+    p = DEFAULT_PATH if path is None else path
+    m = mtime(p)
+    if m is None:
         return {}
+    key = (str(p), m)
     if key in _cache:
         return _cache[key]
     try:
-        raw = json.loads(p.read_text())
+        raw = json.loads(Path(p).read_text())
         out = raw if isinstance(raw, dict) else {}
     except (OSError, ValueError):
         out = {}
@@ -560,6 +561,8 @@ def save(store: dict, path=None) -> Path:
     p = Path(path if path is not None else DEFAULT_PATH)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(store, indent=1))
+    from .storecache import forget
+    forget(p)
     _cache.clear()
     try:
         _cache[(str(p), p.stat().st_mtime)] = store

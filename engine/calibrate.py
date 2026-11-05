@@ -674,6 +674,8 @@ _curves: dict | None = None
 
 #: How many points across [0, 1] `one_sided` samples a correction at.
 SIDE_PROBE = 51
+#: `one_sided`'s answer per (sport, market, path), with the stores it read.
+_sided: dict = {}
 
 
 def _apply_raw(sport: str, market: str, p: float, path=None) -> float:
@@ -742,6 +744,19 @@ def one_sided(sport: str, market: str, path=None) -> bool:
     """
     if not _enabled:
         return False
+    # ASKED ONCE A MARKET (2026-11-05). The answer reads nothing but the
+    # stored corrections, which change only through `reset_cache`, so it
+    # is kept until then. Before, every price asked it again — four times
+    # a prop, 51 probes each — and in the fitters' walk that was over half
+    # the time a market took: 83,388 asks for one NFL market's 20,847
+    # games, on a deep refit the box could not finish inside its hour.
+    # Each answer is kept with the two stores it was read from and served
+    # only while those are still the ones loaded, so a store swapped in
+    # place (as two test files do) is asked afresh, not served stale.
+    key = (sport, market, None if path is None else str(path))
+    hit = _sided.get(key)
+    if hit is not None and hit[1] is _cache and hit[2] is _curves:
+        return hit[0]
     # YES-ONLY MARKETS ARE EXEMPT, and missing that made this veto wrong
     # on its first real run. A home-run or anytime-touchdown prop has no
     # UNDER to bet — books quote the Yes alone — so a correction that
@@ -759,18 +774,20 @@ def one_sided(sport: str, market: str, path=None) -> bool:
     # imported by nearly all of it.
     try:
         from .maintenance import HOLD_MARKETS
-        if (sport, market) in HOLD_MARKETS:
-            return False
     except Exception:                                      # noqa: BLE001
-        pass
+        HOLD_MARKETS = None     # not known this time: answered, not kept
+    if HOLD_MARKETS is not None and (sport, market) in HOLD_MARKETS:
+        _sided[key] = (False, _cache, _curves)
+        return False
     lo = hi = None
     for i in range(SIDE_PROBE):
         q = _apply_raw(sport, market, i / (SIDE_PROBE - 1.0), path)
         lo = q if lo is None else min(lo, q)
         hi = q if hi is None else max(hi, q)
-    if lo is None:
-        return False
-    return not (hi > 0.5 > lo)
+    got = False if lo is None else not (hi > 0.5 > lo)
+    if HOLD_MARKETS is not None:
+        _sided[key] = (got, _cache, _curves)
+    return got
 
 
 def calibrated(sport: str, market: str, p: float,
@@ -803,8 +820,11 @@ def calibrated(sport: str, market: str, p: float,
         # correction_for neutralises a boundary fit; a curve fitted on the
         # same unreliable market must not sneak past that veto.
         curve = _curves.get(f"{sport}:{market}")
-        stored = load(DEFAULT_PATH if path is None else path).get(
-            f"{sport}:{market}")
+        # The stored value as `correction_for` just loaded it, not the
+        # file read again: that read ran on every price of every market
+        # with no correction of its own (2026-11-05), the whole store
+        # parsed per prop on the board and per game in the fitters' walks.
+        stored = (_cache or {}).get(f"{sport}:{market}")
         if stored and stored[0] in (GRID_MIN, GRID_MAX):
             return float(p)
         if curve:
@@ -937,3 +957,4 @@ def reset_cache() -> None:
     _curves = None
     global _cache
     _cache = None
+    _sided.clear()

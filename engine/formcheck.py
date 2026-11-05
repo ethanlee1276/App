@@ -517,6 +517,8 @@ def save_scoreboard(results: list, sport: str = "nfl", path=None) -> str:
     os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
     with open(p, "w") as fh:
         json.dump(stored, fh, indent=1)
+    from .storecache import forget
+    forget(p)
     return p
 
 
@@ -527,10 +529,9 @@ def _scoreboard(p: str) -> dict:
     """The stored scoreboard, re-read only when the file changes: every
     projection on a build asks (`formfit.weights_for`)."""
     import json
-    import os
-    try:
-        stamp = os.stat(p).st_mtime
-    except OSError:
+    from .storecache import mtime
+    stamp = mtime(p)
+    if stamp is None:
         return {}
     hit = _board_cache.get(p)
     if hit and hit[0] == stamp:

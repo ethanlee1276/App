@@ -60,6 +60,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as _dt
 import json
+import os
 from pathlib import Path
 
 from . import modelstate as _modelstate
@@ -252,7 +253,16 @@ def save(fits: dict[str, FormFit], path=None) -> Path:
         stored = {}
     stored.update({k: f.to_dict() for k, f in fits.items()})
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(stored, indent=1))
+    # WHOLE OR NOT AT ALL (2026-11-05). formfit.py writes after every
+    # market now, and the weekly refit's time limit kills it wherever it
+    # is: a kill inside a plain write would leave half a file, which reads
+    # as no dial at all, for every sport, and the next save would keep
+    # only what it fitted.
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(stored, indent=1))
+    os.replace(tmp, p)
+    from .storecache import forget
+    forget(p)
     return p
 
 
@@ -276,6 +286,8 @@ def retire(sport: str, path=None) -> list[str]:
         for k in gone:
             stored.pop(k, None)
         p.write_text(json.dumps(stored, indent=1))
+        from .storecache import forget
+        forget(p)
         _cache.clear()
     return gone
 
@@ -284,15 +296,16 @@ _cache: dict = {}
 
 
 def _load(path=None) -> dict:
-    p = Path(path if path is not None else DEFAULT_PATH)
-    try:
-        key = (str(p), p.stat().st_mtime)
-    except OSError:
+    from .storecache import mtime
+    p = DEFAULT_PATH if path is None else path
+    m = mtime(p)
+    if m is None:
         return {}
+    key = (str(p), m)
     if key in _cache:
         return _cache[key]
     try:
-        raw = json.loads(p.read_text())
+        raw = json.loads(Path(p).read_text())
         out = raw if isinstance(raw, dict) else {}
     except (OSError, ValueError):
         out = {}

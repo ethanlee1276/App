@@ -146,9 +146,11 @@ def decide(shelves: list[dict], alpha: float = FDR_ALPHA) -> dict:
 
 
 def save(result: dict, path=None) -> Path:
+    from .storecache import forget
     p = Path(path if path is not None else DEFAULT_PATH)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(result, indent=1))
+    forget(p)
     return p
 
 
@@ -159,15 +161,16 @@ _cache: dict = {}
 
 
 def load(path=None) -> dict:
-    p = Path(path if path is not None else DEFAULT_PATH)
-    try:
-        key = (str(p), p.stat().st_mtime)
-    except OSError:
+    from .storecache import mtime
+    p = DEFAULT_PATH if path is None else path
+    m = mtime(p)
+    if m is None:
         return {}
+    key = (str(p), m)
     if key in _cache:
         return _cache[key]
     try:
-        raw = json.loads(p.read_text())
+        raw = json.loads(Path(p).read_text())
         out = raw if isinstance(raw, dict) else {}
     except (OSError, ValueError):
         out = {}

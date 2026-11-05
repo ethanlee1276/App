@@ -113,7 +113,8 @@ def refit_sport(sport: str, db: str = "data/history.db", say=None) -> list[str]:
 
 def _refit_sport(sport: str, db: str = "data/history.db", say=None,
                  deadline: float | None = None, skip=(), on_done=None,
-                 clean_before: bool = True, last: str | None = None) -> tuple[list[str], bool]:
+                 clean_before: bool = True, last: str | None = None,
+                 round_of: str | None = None) -> tuple[list[str], bool]:
     """`refit_sport`, and whether all three fitters ran to an answer.
 
     ``deadline`` (a time.monotonic() reading) bounds every fitter by what
@@ -136,7 +137,12 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
     NBA's switch still waits for a clean refit. ``last`` is a fitter cut
     off earlier in the round: it goes last, so one fitter that outgrows a
     run cannot keep the other two from theirs (the board keeps reading its
-    previous fit meanwhile)."""
+    previous fit meanwhile).
+
+    ``round_of`` is the round's first day. The recency dial is handed it
+    (``--resume-after``): the dial writes each market as it is fitted and
+    keeps the ones fitted since then, so a run cut off inside the dial
+    loses only the market it was walking."""
     import time as _time
     lines = []
     finished = True
@@ -162,6 +168,8 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
             lines.append(f"deep refit: {sport} {label} — done earlier this round")
             continue
         cmd = [sys.executable, script, "--from-db", db, "--sport", sport]
+        if round_of and script == "formfit.py":
+            cmd += ["--resume-after", round_of]
         t0 = _time.monotonic()
         bound = TIMEOUT_S if deadline is None else min(TIMEOUT_S, deadline - t0)
         if bound < 1:
@@ -202,12 +210,18 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
         # nightly log. What matters is which markets MOVED.
         moved = [ln.strip() for ln in (r.stdout or "").splitlines()
                  if "the record moved" in ln or "adopted" in ln.lower()]
+        # The dial's markets fitted in an earlier run of the round, kept.
+        kept = [ln for ln in (r.stdout or "").splitlines() if " kept — fitted " in ln]
+        fitted_now = [ln for ln in (r.stdout or "").splitlines() if " settled " in ln and "Brier" in ln]
+        if kept:
+            lines.append(f"deep refit: {sport} {label} — {len(kept)} market(s) fitted earlier "
+                         f"this round, kept")
         if moved:
             lines.append(f"deep refit: {sport} {label} — {len(moved)} "
                          f"market(s) moved")
             for m in moved[:4]:
                 lines.append(f"    {m}")
-        else:
+        elif fitted_now or not kept:
             lines.append(f"deep refit: {sport} {label} — nothing adopted "
                          f"(the record did not beat the default)")
     if env is not None and finished and clean:
@@ -627,9 +641,11 @@ def _run_check(piece: str, deadline: float | None = None, say=None) -> tuple[lis
 
 
 def _run_piece(piece: str, db: str, deadline: float, say=None, skip=(), on_done=None,
-               clean_before: bool = True, last: str | None = None) -> tuple[list[str], bool]:
+               clean_before: bool = True, last: str | None = None,
+               round_of: str | None = None) -> tuple[list[str], bool]:
     """One piece: (its log lines, whether it ran to an answer). ``skip``,
-    ``on_done`` and ``clean_before`` reach a sport's fitters (`_refit_sport`)."""
+    ``on_done``, ``clean_before``, ``last`` and ``round_of`` reach a sport's
+    fitters (`_refit_sport`)."""
     if piece in NBA_CHECKS:
         return _run_check(piece, deadline, say)
     if piece in EXTRAS:
@@ -638,7 +654,7 @@ def _run_piece(piece: str, db: str, deadline: float, say=None, skip=(), on_done=
         except Exception as exc:                          # noqa: BLE001
             return [f"⚠️  {piece} failed: {type(exc).__name__}: {exc}"], True
     return _refit_sport(piece, db, say=say, deadline=deadline, skip=skip, on_done=on_done,
-                        clean_before=clean_before, last=last)
+                        clean_before=clean_before, last=last, round_of=round_of)
 
 
 def _part_way(pieces: dict, left: list, start: str, today: str) -> list[str]:
@@ -731,7 +747,8 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
         cut = e.get("cut_off") or {}
         return _run_piece(p, db_, deadline_, say_, skip=skip, on_done=on_done,
                           clean_before=not (mine and fd.get("failed")),
-                          last=cut.get("fitter") if cut.get("round") == start else None)
+                          last=cut.get("fitter") if cut.get("round") == start else None,
+                          round_of=start)
     while left:
         # Chosen afresh after every piece: one that waited on another
         # (PREREQS) may run as soon as that one is done.
