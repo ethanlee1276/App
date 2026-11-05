@@ -708,7 +708,8 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
                         real_lines: dict | None = None,
                         usage_conn=None,
                         log=None, carry: bool = False,
-                        rows_out: list | None = None) -> BacktestReport:
+                        rows_out: list | None = None, deadline: float | None = None,
+                        newest_first: bool = False) -> BacktestReport:
     """Walk-forward backtest over real nflverse weeks.
 
     For each week, projections are built from prior weeks only, then settled
@@ -737,6 +738,17 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
     week, player, team, position, market, projection, line, actual — for a
     caller that grades the projection by role or game (carrycheck.py). The
     report itself keeps only the totals.
+
+    INSIDE A RUN'S TIME (2026-11-05). The Lab's weekly run was cut off
+    after 99 minutes in this walk, on its first sport, and published
+    nothing. ``deadline`` (a time.monotonic() reading) stops the walk
+    before the next week once it has passed; ``newest_first`` takes the
+    weeks newest first, so a walk stopped early keeps the weeks that say
+    the most about the board today. Each week is built from the weeks
+    before it alone, so the order changes no week's answer. The report
+    names what it covered (``weeks_covered``) and whether it stopped
+    (``stopped_early``). A week the feed has no rows for (not played yet)
+    settles nothing, so its slate is not built at all.
     """
     from .models import ANYTIME_TD
     from .sources.nflverse import (
@@ -747,6 +759,13 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
 
     config = config or RuleConfig()
     stats = load_weekly_stats(season)
+    played = {int(_f(row, "week", default=0)) for row in stats} if stats else set()
+    if played:
+        weeks = [w for w in weeks if int(w) in played]
+    if newest_first:
+        weeks = sorted(weeks, key=int, reverse=True)
+    covered: list = []
+    stopped = False
 
     # NFL Phase 2. Team context is rebuilt for EVERY week from weeks
     # STRICTLY BEFORE it. Reusing one season-average profile across the
@@ -782,6 +801,11 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
     import time as _time
     started = _time.monotonic()
     for i, w in enumerate(weeks, 1):
+        if deadline is not None and _time.monotonic() >= deadline:
+            stopped = True
+            if log:
+                log(f"  stopped at the run's time limit: {len(covered)} of {len(weeks)} weeks replayed")
+            break
         if log:
             log(f"  week {w} ({i}/{len(weeks)}) … "
                 f"{_time.monotonic() - started:.0f}s elapsed, "
@@ -842,6 +866,7 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
                                      "actual": actuals[key]})
         td_settled.extend(settle_recommendations(
             longshot_recs(result.get("long_shots")), actuals))
+        covered.append(int(w))
 
     if log:
         # Two DIFFERENT denominators, so both are named. `all_settled`
@@ -855,6 +880,7 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
             f"{repriced:,} of {props_seen:,} slate props had a real close")
     report = evaluate(all_settled)
     report.used_real_lines, report.total_priced = repriced, props_seen
+    report.weeks_covered, report.stopped_early = sorted(covered), stopped
     if td_settled:
         report.longshots = evaluate(td_settled)
         report.longshots.used_real_lines = sum(

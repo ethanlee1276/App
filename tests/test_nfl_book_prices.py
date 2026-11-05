@@ -477,7 +477,7 @@ def test_the_lab_actually_passes_the_closes_it_loads():
     assert "conn" in inspect.signature(lab.nfl_props).parameters
     # Each sport is built by build_sport since 2026-11-03 (one at a time).
     src = inspect.getsource(lab.build_sport)
-    assert "nfl_props(log=log, conn=hconn)" in src
+    assert "nfl_props(log=log, conn=hconn" in src      # and, since 2026-11-05, its time budget
 
 
 def test_the_close_loader_keeps_the_market_in_the_key():

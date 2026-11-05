@@ -112,18 +112,33 @@ def refit_sport(sport: str, db: str = "data/history.db", say=None) -> list[str]:
 
 
 def _refit_sport(sport: str, db: str = "data/history.db", say=None,
-                 deadline: float | None = None) -> tuple[list[str], bool]:
+                 deadline: float | None = None, skip=(), on_done=None,
+                 clean_before: bool = True) -> tuple[list[str], bool]:
     """`refit_sport`, and whether all three fitters ran to an answer.
 
     ``deadline`` (a time.monotonic() reading) bounds every fitter by what
     is left of the weekly job's budget as well as by TIMEOUT_S, so a piece
     stops itself before the chores' reaper stops the whole job. A fitter
     cut off by either bound leaves the sport unfinished: the round keeps
-    it, and the next run tries it again."""
+    it, and the next run tries it again.
+
+    RESUMED INSIDE THE SPORT (2026-11-05). The live heartbeat that morning:
+    the round ran 68 minutes and finished nothing, the NFL first in line,
+    its fits still dated late August. A sport's three fitters were one
+    piece, so a run that finished the recency dial and was cut off in the
+    player memory threw the dial's work away and began again at the dial:
+    a sport whose three fitters outgrow one run could never finish.
+    ``skip`` names the fitters already done this round, which are not run
+    again; ``on_done(label, seconds, status)`` hears each fitter as it ends
+    ("ok", "failed" or "cut_off"), so the round writes it down at once (the
+    reaper may stop the job before this returns). ``clean_before`` is
+    False when a fitter failed in an earlier run of the round, so the
+    NBA's switch still waits for a clean refit."""
     import time as _time
     lines = []
     finished = True
-    clean = True
+    clean = clean_before
+    tell = on_done or (lambda *_a: None)
     note = say or (lambda _l: None)
     # THE NBA FITS ON WHAT ITS OWN CHECK DECIDED (engine/nba/switches): the
     # spread its verdict asks for, so the calibration is fitted on the board
@@ -139,6 +154,9 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
             lines.append(f"deep refit: nba fits with the spread that follows the projection "
                          f"{'ON' if want else 'OFF'}, as the box's own check asks")
     for label, script in REFIT_ORDER:
+        if label in skip:
+            lines.append(f"deep refit: {sport} {label} — done earlier this round")
+            continue
         cmd = [sys.executable, script, "--from-db", db, "--sport", sport]
         t0 = _time.monotonic()
         bound = TIMEOUT_S if deadline is None else min(TIMEOUT_S, deadline - t0)
@@ -156,6 +174,7 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
                          f"{bound:.0f}s — skipped")
             note(lines[-1])
             finished = False
+            tell(label, _time.monotonic() - t0, "cut_off")
             continue
         note(f"  {sport} {label}: done in {_time.monotonic() - t0:.0f}s")
         if r.returncode != 0:
@@ -163,7 +182,9 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
                     or ["no output"])[-1]
             lines.append(f"⚠️  {sport} {label} failed: {tail}")
             clean = False
+            tell(label, _time.monotonic() - t0, "failed")
             continue
+        tell(label, _time.monotonic() - t0, "ok")
         # A fit the sport's board has nothing for (formfit.NO_DIAL: the
         # basketball projection has no recency dial) says so, not "nothing
         # adopted" as if the record had been asked and said no.
@@ -601,8 +622,10 @@ def _run_check(piece: str, deadline: float | None = None, say=None) -> tuple[lis
     return [f"{piece}: {ln}" for ln in keep] or [f"{piece}: ran (no verdict line printed)"], True
 
 
-def _run_piece(piece: str, db: str, deadline: float, say=None) -> tuple[list[str], bool]:
-    """One piece: (its log lines, whether it ran to an answer)."""
+def _run_piece(piece: str, db: str, deadline: float, say=None, skip=(), on_done=None,
+               clean_before: bool = True) -> tuple[list[str], bool]:
+    """One piece: (its log lines, whether it ran to an answer). ``skip``,
+    ``on_done`` and ``clean_before`` reach a sport's fitters (`_refit_sport`)."""
     if piece in NBA_CHECKS:
         return _run_check(piece, deadline, say)
     if piece in EXTRAS:
@@ -610,7 +633,26 @@ def _run_piece(piece: str, db: str, deadline: float, say=None) -> tuple[list[str
             return list(EXTRAS[piece](db) or []), True
         except Exception as exc:                          # noqa: BLE001
             return [f"⚠️  {piece} failed: {type(exc).__name__}: {exc}"], True
-    return _refit_sport(piece, db, say=say, deadline=deadline)
+    return _refit_sport(piece, db, say=say, deadline=deadline, skip=skip, on_done=on_done,
+                        clean_before=clean_before)
+
+
+def _part_way(pieces: dict, left: list, start: str, today: str) -> list[str]:
+    """``["nfl (recency dial done; player memory cut off after 45 min)"]``:
+    each owed sport that is part-way through this round, and where this
+    run's time ran out in it."""
+    out = []
+    for p in left:
+        e = pieces.get(p) or {}
+        fd = e.get("fitters_done") or {}
+        done = list(fd.get("done") or []) if fd.get("round") == start else []
+        cut = e.get("cut_off") or {}
+        bits = [f"{', '.join(done)} done"] if done else []
+        if cut.get("on") == today and cut.get("fitter"):
+            bits.append(f"{cut['fitter']} cut off after {max(1, round(cut.get('after_s', 0) / 60))} min")
+        if bits:
+            out.append(f"{p} ({'; '.join(bits)})")
+    return out
 
 
 def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | None = None,
@@ -622,7 +664,7 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
     clock = clock or _time.monotonic
     today = today or _dt.date.today()
     path = state_path or STATE_PATH
-    run_piece = run_piece or _run_piece
+    custom = run_piece
     out: list[str] = []
 
     def emit(line: str) -> None:
@@ -650,6 +692,33 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
     left = list(st.get("left") or [])
     deadline = clock() + budget_s
     done_now: list[str] = []
+
+    def run_piece(p, db_, deadline_, say_):
+        """The piece, resumed where this round left it (`_refit_sport`):
+        each fitter written down the moment it ends."""
+        if custom is not None:
+            return custom(p, db_, deadline_, say_)
+        e = pieces.setdefault(p, {})
+        fd = e.get("fitters_done") or {}
+        mine = fd.get("round") == start
+        skip = set(fd.get("done") or []) if mine else set()
+
+        def on_done(label, secs, status):
+            cur = e.get("fitters_done") or {}
+            if cur.get("round") != start:
+                cur = {"round": start, "done": []}
+            e.setdefault("fitter_seconds", {})[label] = round(secs)
+            if status == "cut_off":
+                e["cut_off"] = {"fitter": label, "after_s": round(secs), "on": today.isoformat()}
+            else:
+                if label not in cur["done"]:
+                    cur["done"].append(label)
+                if status == "failed" and label not in cur.setdefault("failed", []):
+                    cur["failed"].append(label)
+            e["fitters_done"] = cur
+            _write_state(path, st)
+        return _run_piece(p, db_, deadline_, say_, skip=skip, on_done=on_done,
+                          clean_before=not (mine and fd.get("failed")))
     while left:
         # Chosen afresh after every piece: one that waited on another
         # (PREREQS) may run as soon as that one is done.
@@ -675,6 +744,8 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
             break
         entry.update({"done": today.isoformat(), "seconds": round(clock() - t0),
                       "rows": rows.get(p)})
+        entry.pop("fitters_done", None)
+        entry.pop("cut_off", None)
         left.remove(p)
         st["left"] = left
         _write_state(path, st)
@@ -682,8 +753,10 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
     st["left"] = left
     _write_state(path, st)
     if left:
+        part = _part_way(pieces, left, start, today.isoformat())
         emit(f"deep refit: round of {start}: {', '.join(done_now) or 'nothing'} done this run; "
-             f"left for the next: {', '.join(left)}")
+             f"left for the next: {', '.join(left)}"
+             + (f"; part-way: {', '.join(part)}" if part else ""))
     else:
         emit(f"deep refit: round of {start} complete"
              + (f" — {', '.join(done_now)} this run" if done_now else ""))

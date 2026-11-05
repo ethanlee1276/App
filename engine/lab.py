@@ -310,8 +310,17 @@ def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
     return out
 
 
+#: THE NFL REPLAY'S SHARE OF THE LAB'S RUN (2026-11-05). The live heartbeat
+#: that morning: the run cut off after 99 minutes in "lab: replaying nfl (1
+#: of 6)", publishing nothing, as every night since 29 September. The walk
+#: rebuilds a full slate per week, twelve weeks, on one niced vCPU beside
+#: the boards. It now stops at this and publishes the weeks it reached,
+#: newest first, so the NFL lands and the run moves on to the next sport.
+LAB_NFL_PROPS_BUDGET_S = 30 * 60
+
+
 def nfl_replay(season: int | None, weeks: list, real: dict, log=print,
-               progress=None):
+               progress=None, deadline: float | None = None):
     """``(report, season, tried)`` — the newest season that produced one.
 
     ONE implementation, because the second one was wrong. The `--bets`
@@ -329,7 +338,8 @@ def nfl_replay(season: int | None, weeks: list, real: dict, log=print,
                 progress(f"replaying {candidate} weeks "
                          f"{weeks[0]}-{weeks[-1]} …")
             rep = backtest_from_stats(candidate, weeks, real_lines=real,
-                                      log=progress)
+                                      log=progress, deadline=deadline,
+                                      newest_first=deadline is not None)
         except DataUnavailable as exc:
             tried.append(f"{candidate}: {str(exc).split(chr(10))[0]}")
             continue
@@ -345,7 +355,7 @@ def nfl_replay(season: int | None, weeks: list, real: dict, log=print,
 
 
 def nfl_props(season: int | None = None, weeks=None, log=print,
-              conn=None) -> dict:
+              conn=None, budget_s: float | None = None) -> dict:
     """Replay NFL props walk-forward. The weekly-stats feed is release-gated,
     so "no CSV on this machine" is the normal state and reported as such.
 
@@ -376,13 +386,22 @@ def nfl_props(season: int | None = None, weeks=None, log=print,
     # season, and a run in week 2 wants last season too (six weeks of
     # priors do not exist yet). Both are "the current season produced
     # nothing", so both are the same fallback.
-    rep, season, tried = nfl_replay(season, weeks, real, log=log)
+    import time as _time
+    deadline = _time.monotonic() + budget_s if budget_s else None
+    rep, season, tried = nfl_replay(season, weeks, real, log=log,
+                                    progress=log if budget_s else None, deadline=deadline)
     if rep is None:
         return {"unavailable": "; ".join(tried) or "nothing to replay",
                 "season": season}
+    covered = list(getattr(rep, "weeks_covered", None) or [])
+    span = [covered[0], covered[-1]] if covered else [weeks[0], weeks[-1]]
     d = report_to_dict(rep, "all", "All prop markets")
     d["season"] = season
-    d["weeks"] = [weeks[0], weeks[-1]]
+    d["weeks"] = span
+    if covered:
+        d["weeks_replayed"] = len(covered)
+    if getattr(rep, "stopped_early", False):
+        d["stopped_early"] = True
     markets = [d]
     # THE TOUCHDOWN BOARD, REPORTED APART. A +450 scorer market and a
     # -110 yardage market do not share a meaningful win rate, and one
@@ -391,7 +410,7 @@ def nfl_props(season: int | None = None, weeks=None, log=print,
     if rep.longshots is not None and rep.longshots.n:
         td = report_to_dict(rep.longshots, "anytime_td", "Anytime touchdown")
         td["season"] = season
-        td["weeks"] = [weeks[0], weeks[-1]]
+        td["weeks"] = span
         markets.append(td)
     return {"markets": markets, "season": season}
 
@@ -582,7 +601,8 @@ def build_sport(sport: str, hconn, log=print, nfl: bool = True) -> dict:
                 {"unavailable": "no ingested game logs deep enough to replay yet"},
                 "game_lines": game_lines(hconn, "mlb", log=log)}
     elif sport == "nfl":
-        blob = {"props": nfl_props(log=log, conn=hconn) if nfl else {"unavailable": "skipped"},
+        blob = {"props": nfl_props(log=log, conn=hconn, budget_s=LAB_NFL_PROPS_BUDGET_S)
+                if nfl else {"unavailable": "skipped"},
                 "game_lines": game_lines(hconn, "nfl", log=log),
                 # The usage ripple against the close — the pricing half of
                 # Ethan's Pacheco question, measured here weekly so the

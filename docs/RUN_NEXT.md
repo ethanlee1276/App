@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after MLB's travel and rest got a read-only
+Last updated 2026-11-05, after the weekly refit started resuming inside a
+sport and the Lab's NFL replay started fitting its run (items 1f and 1g,
+nothing new to run), after MLB's travel and rest got a read-only
 measurement (step KN: item 1t), after the WNBA's spread was measured on its own
 six seasons and set to follow the NBA's switch (step KM: item 1s, one
 read-only check), after the owner's desk started listing this file's
@@ -271,6 +273,15 @@ Before 6 December the college line reads `False [] None` — that's right.
 
 ## 1f. The day after tomorrow: the Lab's first pieces, and why (step JP)
 
+**Update, 5 November (read off the public heartbeat, nothing for you to
+paste):** last night's run was cut off after 99 minutes, still on its
+first sport (`lab: replaying nfl (1 of 6)`), so nothing published again.
+The NFL's walk rebuilt a full slate for each of twelve weeks. It now
+skips the weeks not played yet, takes the newest weeks first, and stops at
+30 minutes with the weeks it reached, so the NFL publishes and the run
+moves on. The check below is the same; its first line should stop saying
+`'cut_off': True` in `nfl`.
+
 **Wednesday's run was killed by my pushes, not by the hour** (step KA): it
 was 85 minutes into MLB, the first sport, when a push restarted the site at
 16:59 UTC. MLB goes to the back of tomorrow's line, so the other five
@@ -303,6 +314,17 @@ that refresh (its log says `CFB results not stored this build`). If `cfb`
 shows up there again, paste the line.
 
 ## 1g. Thursday: the models' weekly refit reaches the NFL (step JQ)
+
+**Update, 5 November (read off the public heartbeat):** this morning's run
+took 68 minutes and finished nothing: `round of 2026-11-04: nothing done
+this run; left for the next: nfl, cfb, ...`. A sport's three fitters were
+one piece, so a run cut off in the second threw the first one's work
+away, and the NFL's three together outgrow a run. Each fitter is now
+written down as it ends, the next run starts at the first one not done,
+and the run's last line names the one the time ran out in (`part-way: nfl
+(recency dial done; player memory cut off after 45 min)`), so the
+heartbeat says where the time goes without a command. The check below is
+the same.
 
 **Wednesday's round was killed two minutes in by my push at 17:30 UTC**
 (step KA), on its first piece of twelve (`yardage_mixture`); the NFL's fits
