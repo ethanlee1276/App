@@ -204,7 +204,9 @@ def test_each_check_files_its_verdict():
     assert "--save-verdict" in lab and "switches.record_check('spread', ready, why)" in lab, \
         "the spread's verdict is filed, its switch waits for the refit"
     rules = (ROOT / "nbarules.py").read_text(encoding="utf-8")
-    assert '"--save" in argv' in rules and "switches.record_check('rotation', ok," in rules and "follow=True" in rules
+    assert '"--save" in argv' in rules and "switches.record_check(name, ok," in rules and "follow=True" in rules
+    assert 'for name, rules in (("rotation", RULES), ("starters", (FIVE,))):' in rules, \
+        "the rotation's verdict and the starting five's, each filed apart"
     vac = (ROOT / "nbavacancy.py").read_text(encoding="utf-8")
     assert '"--save" in flags' in vac and "vacancy.save(sport, res)" in vac
 

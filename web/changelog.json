@@ -2,6 +2,12 @@
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
     {
+      "date": "2026-11-05",
+      "kind": "model",
+      "title": "NBA: who starts tonight moves his minutes",
+      "body": "About one NBA game in eleven, a player does the other thing from his last game: the bench man starts, or the starter comes off the bench. Those games carried a sixth of our minutes misses: a bench man who starts played 3.6 minutes over our number, a starter sent to the bench about 4 under. The starting five is only confirmed half an hour before the tip, but a good part of it is known earlier, and the board now reads it: the injury report on each club's last starting five (a bench man starts about a quarter of the time when one of them is ruled out), a regular coming back who started before he sat (the man who filled in usually goes back to the bench), and each player's own starts over his last ten. Fitted on one season and tested on the other, both ways, it took 1.3-1.7% off the minutes error over every priced game and 0.3% off points, and 2.3-3.4% off minutes in the games it moves. The card says when it moved a player. The box re-checks it every week on its own seasons and turns it off by itself if it ever stops paying."
+    },
+    {
       "date": "2026-11-04",
       "kind": "model",
       "title": "NBA: the chances on Most Likely's alternate lines say what they land",

@@ -14,6 +14,7 @@ from ..hoops import NBA, LeagueTuning
 from .minutes import (base_minutes, project_minutes, minutes_grade,
                       blowout_prob, role_minutes, context_norms, role_jump,
                       back_multiplier, GRADE_STAKE)
+from .starters import minutes as starter_minutes, note as starter_note
 from .prob import (p_over, sd_for, devig, market_hold, humility_clamp,
                    approval_gate, required_edge, break_even, ev_per_unit,
                    sharp_fair, _dec, CLAMP_W_DEFAULT, HIGH_HOLD)
@@ -110,6 +111,13 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # multiplier `back_multiplier` reads. Both 0 / absent leave the minutes
     # exactly as before.
     vacancy = float(prop.get("vacancy_minutes") or 0.0) - float(prop.get("return_minutes") or 0.0)
+    # THE STARTING FIVE'S NEWS (engine/nba/starters, measured 2026-11-04):
+    # the role tonight's news says he is moving to — the injury report on
+    # his club's last five, a starter coming back, his own starts lately —
+    # rides the same slot, its caps included. 0.0 with his starts unknown.
+    five_min = starter_minutes(prop.get("starts"), prop.get("five_out"),
+                               prop.get("five_back"), tune)
+    vacancy += five_min
     proj_min = project_minutes(base, spread, prop.get("is_starter", False),
                                prop.get("is_favorite", False),
                                prop.get("rest", "1day"),
@@ -206,6 +214,9 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
         context_notes.append(
             f"A regular is back tonight ({prop.get('return_names') or 'a teammate'}) — "
             f"{float(prop['return_minutes']):.1f} of his minutes given back (measured)")
+    _five_note = starter_note(prop.get("starts"), prop.get("five_out"), prop.get("five_back"), five_min)
+    if _five_note:
+        context_notes.append(_five_note)
     from ..exitfit import exits as _exits, RECENT as _RECENT
     from .minutes import EXIT_ROLE_MINUTES
     _ex = _exits([float(m) for m in minutes], EXIT_ROLE_MINUTES)

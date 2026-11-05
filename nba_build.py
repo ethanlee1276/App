@@ -136,10 +136,16 @@ def player_history(conn, teams: set[str], sport: str = "nba",
         p["faced"].setdefault(r["period"], (canon(r["opponent"]), 1 if r["home"] in (1, True, "1") else 0))
         if p["starter"] is None and r["market"] == "min":
             p["starter"] = r["position"] == "S"
+        # WHO STARTED EACH GAME (engine/nba/starters, 2026-11-04): the
+        # starting five's news reads his starts over his last ten, and his
+        # club's last five from them.
+        if r["market"] == "min":
+            p.setdefault("started", {})[r["period"]] = r["position"] == "S"
     for p in hist.values():
         weeks = sorted(p["by_week"], reverse=True)[:20]
         p["minutes"] = [p["by_week"][w].get("min", 0.0) for w in weeks]
         p["dates"] = weeks                      # ISO dates, newest first
+        p["starts"] = [bool((p.get("started") or {}).get(w)) for w in weeks]
         # Each of those games as stored, shot columns and all: the shooting
         # read rebuilds his points and threes from them (engine/nba/shooting).
         p["games"] = [p["by_week"][w] for w in weeks]
@@ -1382,6 +1388,18 @@ def main() -> None:
         if any(_back.values()):
             print("Returning tonight: " + "; ".join(
                 f"{t} {', '.join(n for n, _m in v)}" for t, v in sorted(_back.items()) if v))
+        # THE STARTING FIVE'S NEWS (engine/nba/starters, measured 2026-11-04):
+        # which of each club's last starting five the injury report rules
+        # out tonight, and which returning regulars started before they sat.
+        from engine.nba import starters as _starters
+        _five = {t: _starters.club_news(t, hist, _days.get(t) or [], gone, _back)
+                 for t in sorted({h.get("team") for h in hist.values() if h.get("team")})}
+        if any(o or b for o, b in _five.values()):
+            print("Starting five's news: " + "; ".join(
+                f"{t} " + ", ".join(x for x in (f"out {', '.join(o)}" if o else "",
+                                                f"back {', '.join(b)}" if b else "") if x)
+                for t, (o, b) in sorted(_five.items()) if o or b)
+                  + ("" if _starters.on() else "  (switched off: not applied)"))
         census = {"no_real_price": 0, "no_history": 0}
         props = []
         _onoff_cache: dict = {}
@@ -1457,6 +1475,12 @@ def main() -> None:
                                 for ln in (getattr(prop, "sharp_lines", None) or [])],
                 "book": book, "minutes": h["minutes"],
                 "values": h[prop.market], "is_starter": bool(h["starter"]),
+                # Who started each of those games, and his club's starting
+                # five's news tonight (engine/nba/starters): himself never
+                # counted in either.
+                "starts": list(h.get("starts") or []),
+                "five_out": len([n for n in _five.get(h["team"], ([], []))[0] if n != prop.player]),
+                "five_back": len([n for n in _five.get(h["team"], ([], []))[1] if n != prop.player]),
                 # His shots over the same games as his rate, and over his last
                 # 60: the read `pipeline.project` rebuilds points and threes
                 # from (None when the logs carry too few shot columns).

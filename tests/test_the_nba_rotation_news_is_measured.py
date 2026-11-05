@@ -10,7 +10,9 @@ kept only if minutes AND points error fell in both):
 
   * his FIRST GAME BACK plays light, more so the longer he was out
     (x0.96 / 0.92 / 0.84 for 1 / 2-4 / 5+ missed), and his SECOND after
-    two or more missed a little (x0.96);
+    two or more missed a little (x0.96, x0.97 since 2026-11-04: refitted
+    beside the starting five's news, engine/nba/starters, which took over
+    part of it);
   * a ROLE THAT JUST JUMPED (newest three 20%+ over the seven before)
     mostly holds: the base moves 40% of the way to the newest three — a
     role that dropped did not pass and moves nothing;
@@ -39,7 +41,7 @@ NBA, WNBA = hoops.NBA, hoops.WNBA
 def test_the_measured_values_are_the_nbas_and_the_wnba_keeps_them_off():
     assert (NBA.role_jump_ratio, NBA.role_jump_weight) == (1.20, 0.40)
     assert NBA.back_mult == ((1, 0.96), (4, 0.92), (float("inf"), 0.84))
-    assert NBA.second_back_mult == 0.96 and NBA.return_share == 0.25
+    assert NBA.second_back_mult == 0.97 and NBA.return_share == 0.25
     assert (WNBA.role_jump_weight, WNBA.back_mult, WNBA.second_back_mult, WNBA.return_share) == (0.0, (), 1.0, 0.0)
     spec = hoops.LeagueTuning(key="x", name="x")
     assert (spec.role_jump_weight, spec.back_mult, spec.return_share) == (0.0, (), 0.0), "off by default"
@@ -58,14 +60,14 @@ def test_a_role_that_jumped_moves_the_base_toward_his_newest_three():
 
 def test_his_first_and_second_games_back_play_light():
     assert [M.back_multiplier(n) for n in (0, 1, 2, 4, 5, 40)] == [1.0, 0.96, 0.92, 0.92, 0.84, 0.84]
-    assert M.back_multiplier(0, True) == 0.96 and M.back_multiplier(3, True) == 0.92, \
+    assert M.back_multiplier(0, True) == 0.97 and M.back_multiplier(3, True) == 0.92, \
         "a first game back reads its own table, not the second's"
     assert M.back_multiplier(None) == 1.0 and M.back_multiplier("x") == 1.0
     assert M.back_multiplier(6, tune=WNBA) == 1.0 and M.back_multiplier(0, True, WNBA) == 1.0
     # After the caps, so a return can never lift him past them.
     assert M.project_minutes(30.0, 0.0, True, False, "1day") == 30.0
     assert M.project_minutes(30.0, 0.0, True, False, "1day", missed_games=3) == 27.6
-    assert M.project_minutes(30.0, 0.0, True, False, "1day", second_back=True) == 28.8
+    assert M.project_minutes(30.0, 0.0, True, False, "1day", second_back=True) == 29.1
     capped = M.project_minutes(30.0, 0.0, True, False, "1day", vacancy_minutes=30.0, recent_high=31.0,
                                missed_games=1)
     assert capped == round((31.0 + NBA.vacancy_cap_over_high) * 0.96, 1)

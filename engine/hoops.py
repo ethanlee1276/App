@@ -117,6 +117,10 @@ class LeagueTuning:
     #   A REGULAR'S RETURN: the share of a returning regular's usual minutes
     #   his teammates give back, split by their own base minutes.
     return_share: float = 0.0
+    #   THE STARTING FIVE'S NEWS (engine/nba/starters): minutes for each of
+    #   the six terms the role he is moving to tonight reads as, before the
+    #   tip. Empty leaves the minutes exactly as read.
+    starter_news: dict = field(default_factory=dict)
     # --- market structure ----------------------------------------------------
     # Which markets are worth betting, and how hard each has to clear.
     # Empty tier map = this league gates on points-edge alone (the NBA's
@@ -203,6 +207,23 @@ def carried(games, stat: str) -> int:
         n += 1
     return n
 
+#: THE STARTING FIVE'S NEWS (engine/nba/starters, measured 2026-11-04): the
+#: minutes each term adds to his projection, fitted on the lab's two seasons
+#: beside a level the calibration owns (docs/NBA_LAB.md, "Who starts
+#: tonight"). A man who came off the bench in his newest game:
+#:   ``bench_after_starts`` x the share of his last ten he started (his base
+#:   still carries a fill-in's minutes), ``bench_one_out`` when one of his
+#:   club's last starting five is ruled out tonight and ``bench_two_out``
+#:   more when two or more are.
+#: A man who started his newest game:
+#:   ``start_after_bench`` x the share of his last ten he did NOT start (a
+#:   new starter plays more than a base made partly of bench games),
+#:   ``start_one_back`` when a regular who started before he sat returns
+#:   tonight, and ``fill_in_one_back`` x that same share on top: the fill-in
+#:   is the one who goes back to the bench.
+STARTER_NEWS_NBA = {"bench_after_starts": -3.83, "bench_one_out": 0.89, "bench_two_out": 1.41,
+                    "start_after_bench": 1.22, "start_one_back": 0.58, "fill_in_one_back": -3.19}
+
 NBA = LeagueTuning(
     key="nba", name="NBA",
     game_minutes=48, roster_size=15, season_games=82, personal_fouls=6,
@@ -254,7 +275,14 @@ NBA = LeagueTuning(
     #     reads, more so the longer he was out: 1 game missed x0.96, 2-4
     #     x0.92, 5 or more x0.84 (minutes error -1% to -35% in those
     #     games, points -0.5% to -8.6%). His second game back after two or
-    #     more missed: x0.96 (-0.3% / -2.6%, points -0.4% / -0.7%).
+    #     more missed: x0.96 (-0.3% / -2.6%, points -0.4% / -0.7%), x0.97
+    #     since the starting five's news (below) took over part of it: a
+    #     second game back is often a role change too. nbarules.py's own
+    #     measure of the haircut's points gain at 0.96 fell to +0.29% /
+    #     -0.02% with the vacancy off (a failed bar by a hair); refitted
+    #     beside it on a grid, 0.97 took the most off in both seasons with
+    #     the vacancy on (+0.53% / +0.31%) and was within 0.07% of the best
+    #     with it off (+0.35% / +0.15%).
     #   * A ROLE THAT JUST JUMPED (newest three games 20%+ above the seven
     #     before): the jump mostly holds, so the base moves 40% of the way
     #     to the newest three (minutes -7.0% / -4.8%, points -1.6% / -1.7%).
@@ -272,8 +300,19 @@ NBA = LeagueTuning(
     # 0.2272 and 0.2279 -> 0.2270.
     role_jump_ratio=1.20, role_jump_weight=0.40,
     back_mult=((1, 0.96), (4, 0.92), (float("inf"), 0.84)),
-    second_back_mult=0.96,
+    second_back_mult=0.97,
     return_share=0.25,
+    # THE STARTING FIVE'S NEWS, MEASURED (2026-11-04, docs/NBA_LAB.md, "Who
+    # starts tonight"; engine/nba/starters says what each term reads). One
+    # game in eleven a man does the other thing from his newest game — the
+    # bench man starts, the starter comes off the bench — and those games
+    # carry a sixth of the board's squared minutes error. What the board
+    # knows before the tip (the injury report on his club's last starting
+    # five, the returning regulars, his own starts) took, with these fitted
+    # on the other season: minutes error 1.7% / 1.3% and points 0.34% /
+    # 0.35% over every priced game, in both held-out seasons (3.4% / 2.3%
+    # and 1.0% / 0.8% in the games it moves). Refitted on both.
+    starter_news=STARTER_NEWS_NBA,
 )
 
 # 40 minutes, not 48 — so every minutes-denominated number is scaled by
@@ -319,6 +358,7 @@ WNBA = replace(
     # WNBA's own are.
     role_jump_ratio=0.0, role_jump_weight=0.0, back_mult=(), second_back_mult=1.0,
     return_share=0.0,
+    starter_news={},
     market_tier=WNBA_TIERS,
     tier_min_edge=WNBA_TIER_MIN_EDGE,
     grade_weights=WNBA_GRADE_WEIGHTS,

@@ -248,6 +248,16 @@ def _window(e: dict, i: int, market: str) -> tuple[list, list, bool]:
     return minutes, values, bool(starters[i - 1]) if 0 < i <= len(starters) else False
 
 
+def _starts(e: dict, i: int) -> list:
+    """Who started each game of `_window`'s twenty, newest first, aligned
+    with its minutes: the starting five's news reads his own starts
+    (engine/nba/starters). His club's news that night — which of its five
+    sat, who came back — is not read here and stays 0, as the vacancy and a
+    regular's return do."""
+    lo = max(0, i - WINDOW)
+    return [bool(s) for s in (e.get("starters") or [])[lo:i]][::-1]
+
+
 def settled_props(hist: dict, market: str, sport: str = "nba",
                   quotes: dict | None = None,
                   min_history: int = MIN_HISTORY,
@@ -279,7 +289,7 @@ def settled_props(hist: dict, market: str, sport: str = "nba",
             line, over, under, basis = _naive_line(played), -110, -110, "naive"
         prop = {"player": player, "market": market, "minutes": minutes,
                 "values": values, "line": line, "over_odds": over,
-                "under_odds": under, "is_starter": starter,
+                "under_odds": under, "is_starter": starter, "starts": _starts(entries[n], i),
                 "spread": 0.0, "rest": "1day", "book": "replay",
                 "shooting": _shooting(entries[n], i, sport, market),
                 "rates": _rates(entries[n], i, sport)}
@@ -342,7 +352,7 @@ def walk(entries: list, market: str, sport: str = "nba",
         line = _naive_line(played)
         mult = float(player_adjust(player)) if player_adjust else None
         prop = {"player": player, "market": market, "minutes": minutes, "values": values,
-                "is_starter": starter, "spread": 0.0, "rest": "1day",
+                "is_starter": starter, "starts": _starts(entries[n], i), "spread": 0.0, "rest": "1day",
                 "shooting": _shooting(entries[n], i, sport, market),
                 "rates": _rates(entries[n], i, sport)}
         if mult is not None:

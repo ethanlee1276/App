@@ -9324,6 +9324,44 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KG. NBA: who starts tonight moves his minutes** (step 382; nothing to
+run; you, 2026-11-04: "keep going on the NBA model"). The board reads a
+man's minutes from his last twenty games and his role from his newest
+one, started or came off the bench. About one game in eleven he does the
+other thing tonight, and those games carried a sixth of the board's
+minutes error: a bench man who starts played 3.6 minutes over our number,
+a starter sent to the bench about 4 under. Knowing the starting five
+outright would take 5.5-6.0% off the minutes error, but it is only
+confirmed half an hour before the tip. What is known before then measured
+too, and the board now reads it (engine/nba/starters): the injury report
+on his club's last starting five (a bench man starts about a quarter of
+the time when one of them is ruled out), a regular coming back who
+started before he sat (the man who filled in usually goes back to the
+bench), and his own starts over his last ten (a man back on the bench
+after filling in still carries the starter's minutes in his base, and
+plays under it). Fitted on one season and judged on the other, both ways:
+minutes error 1.7% and 1.3% lower over every priced game, points 0.3%, and
+in the 46% of games it moves, 3.4% / 2.3% and 1.0% / 0.8%. The card says
+when it moved a man ("Back on the bench after starting 6 of his last
+10 ..."). His second game back after two or more missed now plays x0.97,
+not x0.96: the new rule covers part of what that haircut did, and refitted
+beside it 0.97 took the most off in both seasons (docs/NBA_LAB.md, "Who
+starts tonight").
+
+On from today. The weekly refit's NBA check (`nbarules.py --save`, item 1g)
+replays it on the box's own seasons beside the rotation's rules, in its
+own column (`the starting five`), and files its own verdict: a season where
+it stops paying turns it off by itself, without touching the rotation's
+three. `QB_NBA_STARTERS=0` in /etc/qellys/env turns it off by hand. This
+prints the switch, the box's last verdict, when, and why:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine.nba import switches as w; e = w.entry('starters'); print('starters', 'on' if w.is_on('starters') else 'off', e.get('verdict'), e.get('checked'), e.get('why'))"
+```
+
+Before the first weekly run it prints `starters on None None None` (no
+verdict yet, on as measured).
+
 **KF. The NBA's alternate lines get their own correction** (step 379;
 nothing to run; you, 2026-11-04: "We want to make our NBA model as
 proficient as possible ... I want you to just do it"). Most Likely prices

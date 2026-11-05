@@ -6,7 +6,10 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-04, after the NBA's alternate lines got their own
+Last updated 2026-11-05, after the NBA board started reading who starts
+tonight before the tip (step KG: nothing to run, item 1m shows the box's
+own verdict once the weekly refit has run it), and on 2026-11-04 after
+the NBA's alternate lines got their own
 correction (step KF: nothing to run, item 1l shows it once the weekly refit
 has fitted it), every NBA rate started reading past a
 player's last twenty games, checked on the box's seasons every week by
@@ -437,6 +440,24 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KF 2>&1 | tee /tmp/kf.txt
 ```
 
 If no line ends `@ladder` after the round has done the NBA, paste it back.
+
+## 1m. After the NBA's piece of the weekly refit: who starts tonight, the box's own verdict (step KG)
+
+Nothing to run first. The NBA board now reads who is likely to start
+before the tip (the injury report on each club's last starting five, a
+regular coming back who started before he sat, each man's own starts
+lately) and moves his minutes for it; it is on from this push. The weekly
+refit's NBA check (`nbarules.py --save`, item 1g's round) re-measures it on
+the box's own seasons and files its own verdict. Once that round has done
+the NBA, this prints the switch, the verdict, when and why:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KG 2>&1 | tee /tmp/kg.txt
+```
+
+`starters on ready ...` is what it should say. If it says `off` or
+`not yet`, paste it back with JZ's table (item 1k), which shows the rule's
+own column, `the starting five`, season by season.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

@@ -5194,7 +5194,7 @@ def _nba_switches_public() -> dict:
         from engine.nba import switches
         from engine.nba.vacancy import verdict as _vacancy
         out = {}
-        for name in ("spread", "rotation", "rates"):
+        for name in ("spread", "rotation", "rates", "starters"):
             e = switches.entry(name)
             out[name] = {"on": switches.is_on(name), "set_on_box": switches.env_says(name) is not None,
                          **{k: e.get(k) for k in ("verdict", "checked", "since") if e.get(k) is not None}}

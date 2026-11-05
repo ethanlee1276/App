@@ -490,8 +490,119 @@ Steals and blocks barely move either way.
 Nothing to run: the next weekly refit fits both keys (runbook KF), and
 until it has, every rung prices exactly as it did.
 
+## Who starts tonight *(11-05)*
+
+The board reads a man's minutes from his last twenty games whatever he
+did in them, and his role from his newest one: started, or came off the
+bench. On the replica's two seasons, every priced player-game (15+ minutes
+a game over his last ten) through the board's own projection, the vacancy
+at k 0.40 and a regular's return included:
+
+| His newest game → tonight | 2024-25: share of games, miss (played − ours) | 2025-26 |
+|---|---|---|
+| Bench → started | 4.6%, **+3.6** min | 4.9%, **+3.6** |
+| Started → bench | 4.7%, **−4.2** | 4.9%, **−3.8** |
+| Bench → bench | 34.2%, −1.9 | 35.3%, −1.8 |
+| Started → started | 56.5%, −0.0 | 54.9%, −0.2 |
+
+The one game in eleven where he does the other thing carries a sixth of
+the board's squared minutes error. Knowing tonight's five outright (the
+oracle: each role's miss fitted on the other season as a shift) takes
+**6.0% / 5.5%** off the minutes error over every priced game and
+**1.2% / 0.9%** off points, against a level-only shift fitted the same
+way. The five is confirmed half an hour before the tip, after most of the
+board's prices are posted, so the question was how much of that is known
+earlier. A good deal of it:
+
+| Before the tip | 2024-25 | 2025-26 |
+|---|---|---|
+| Bench last game, one of his club's last five not playing tonight: started | 27.5% | 27.0% |
+| Bench last game, the five all playing: started | 3.1% | 3.3% |
+| Started last game, a regular back who started before he sat: to the bench | 19.6% | 18.8% |
+| Started last game, nobody like that back: to the bench | 6.1% | 6.7% |
+
+And his own starts lately say which way his base is wrong: a man back on
+the bench who started half or more of his last ten played 2.6-4.0 minutes
+under the board (his base still carries the starter's minutes), and a man
+who started his newest game after mostly coming off the bench played over
+it (a base made partly of bench games).
+
+THE RULE (engine/nba/starters), six terms fitted by least squares on the
+board's miss beside a level the calibration owns, and applied without the
+level, through the vacancy's slot (its caps included):
+
+| Term | Who | Minutes (fitted on both) |
+|---|---|---|
+| `bench_after_starts` | bench last game, x the share of his last ten he started | −3.83 |
+| `bench_one_out` | bench last game, one of his club's last five ruled out | +0.89 |
+| `bench_two_out` | ... two or more of them (on top) | +1.41 |
+| `start_after_bench` | started last game, x the share of his last ten he did not start | +1.22 |
+| `start_one_back` | started last game, a regular back who started before he sat | +0.58 |
+| `fill_in_one_back` | ... x the share of his last ten he did not start (on top) | −3.19 |
+
+THE BAR, written before the run: each season held out in turn (the six
+fitted on the other), and the squared error of minutes AND points over
+every priced game lower with the rule than with the level alone, in both.
+HELD, through the board's own projection:
+
+| Held out | Minutes, every priced game | Points | In the games it moves (46%) | Points Brier at the fitters' line |
+|---|---|---|---|---|
+| 2024-25 | **1.72%** | **0.34%** | 3.43% / 0.96% | 0.2434 → 0.2428 |
+| 2025-26 | **1.28%** | **0.35%** | 2.31% / 0.81% | 0.2428 → 0.2421 |
+
+So about a third of what the confirmed five is worth is in the board now.
+
+ITS OVERLAP WITH THE VACANCY. Both give a bench man minutes when a starter
+sits, so they were fitted together: the six at each vacancy k on a grid,
+each season held out. A lower k leaves more to the six (k 0.25: minutes
+2.0% / 1.7% off, points 0.19% / 0.23%) and k 0.40 the most on points
+(0.30% / 0.35%, minutes 1.4% / 1.3%) — points are what is bet, so the six
+run at the vacancy's own k, which the box keeps fitting (nbavacancy.py).
+The coefficients fitted on either season alone sit close to these
+(`bench_after_starts` −3.1 / −4.6, `fill_in_one_back` −2.6 / −3.8, the
+others within 0.3).
+
+ITS OVERLAP WITH HIS SECOND GAME BACK. A second game back after two or
+more missed is often a role change too (in his first game back he came off
+the bench, or started in another man's place), and with the new rule on,
+nbarules.py's own measure of the x0.96 haircut fell to +0.29% / −0.02% on
+points with the vacancy off: a failed bar by a hair, which would have
+switched the rotation's three rules off on a box whose vacancy is not
+holding. Refitted beside the new rule on a grid (0.96, 0.97, 0.98, 1.0),
+the haircut is x0.97: the most off in both seasons with the vacancy on
+(points +0.53% / +0.31%), and within 0.07% of the best with it off
+(+0.35% / +0.15%). Every rule's bar holds in every season, both ways.
+
+Measured, and not built:
+
+- A base read only from his games in his newest game's role: 5.7-8.0%
+  WORSE on minutes. One game in eleven the flag is wrong, and then that
+  base is off by the whole gap between his two roles (6.6-7.5 minutes);
+  the board's base across both roles is a hedge worth keeping.
+- A logistic chance he starts (Brier 0.093-0.098 → 0.064-0.067 against
+  his newest flag) mixing his two role bases: −0.1% to +1.1% on minutes,
+  0.2-0.3% on points, under the six terms.
+- A bench-wide level (−0.8 minutes for every bench man, 0.3% more on
+  minutes): left out. The replay holds the spread at zero, so a bench
+  man's base still carries his blowout minutes with nothing tonight to
+  answer them; the board's blowout norms answer them on the real board.
+
+On the box: `nbarules.py` (the weekly refit's `nba_rules` piece) replays it
+on the box's own seasons in its own column and files its own verdict
+(engine/nba/switches `starters`), apart from the rotation's three. Runbook
+KG prints it.
+
 ## Next
 
+- Done 2026-11-05 (runbook KG): who starts tonight, read before the tip —
+  the injury report on his club's last five, a starter coming back, his
+  own starts lately — moves his minutes (above).
+- The confirmed five: the rest of the oracle's 5.5-6.0% (minutes) and
+  0.9-1.2% (points) needs tonight's lineup, confirmed about half an hour
+  before the tip, and a board rebuild after it. Neither the league's
+  daily lineups page nor ESPN's game summary is reachable from the lab;
+  a read-only probe on the box comes first, then the rebuild's timing
+  against when picks post.
 - Done 2026-11-04 (runbook KF): the alternate rungs carry their own
   correction, fitted at the rungs by the weekly refit (above); the main
   line keeps the market's.
@@ -537,9 +648,6 @@ until it has, every rung prices exactly as it did.
   line, so the NFL and college count markets (receptions, attempts,
   completions) likely carry the same lean. Football has its own fits and
   its own rules; measure it there before changing it.
-- A correction for Most Likely's lines that is not the near-the-line one:
-  the walk priced at the ladder's lines too, or a correction that knows
-  how far the line is from his projection.
 - The Lab's weekly replay prices with the inherited spreads, not the ones
   the board uses; handing it `hoops_fit`'s would make its NBA numbers the
   board's.

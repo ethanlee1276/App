@@ -130,8 +130,11 @@ def test_each_game_is_priced_off_the_twenty_before_it_as_the_build_hands_them():
     for market in ("pts", "pts_reb", "pra", "stl", "blk"):
         entries = logwalk.load_entries(full, "nba", market, min_games=6)
         rep = hoopsreplay.walk(entries, market, tune=hoops.NBA, cap=1, player_adjust=lambda _n: 1.0)
+        # His starts too (engine/nba/starters): the walk reads his own, as
+        # the build hands them; his club's news that night is not read.
         want = pipeline.project({"player": "Guard One", "market": market, "minutes": h["minutes"],
                                  "values": h[market], "is_starter": bool(h["starter"]),
+                                 "starts": h["starts"],
                                  "spread": 0.0, "rest": "1day", "player_mult": 1.0,
                                  "rates": rread}, hoops.NBA)
         assert len(rep.settled) == 1, market
@@ -148,6 +151,7 @@ def test_each_game_is_priced_off_the_twenty_before_it_as_the_build_hands_them():
         pipeline.evaluate_prop = keep
     last = seen[-1]
     assert len(last["minutes"]) == 20 and len(last["values"]) == 5, (len(last["minutes"]), len(last["values"]))
+    assert last["starts"] == h["starts"], "the Lab's replay hands it his starts the same way"
 
 
 def test_the_entries_carry_minutes_starts_sums_and_the_fitted_tuning():

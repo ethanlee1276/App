@@ -27,6 +27,13 @@ not. If one does not hold, ``QB_NBA_ROTATION=0`` in /etc/qellys/env turns
 all three off at the next build (`engine/nba/minutes.rotation_on`), and
 the result belongs in the lab's notes.
 
+THE STARTING FIVE'S NEWS (engine/nba/starters, 2026-11-04) is replayed
+beside them on the same rows — who started each game is in the logs, the
+club's last five not in tonight's box stand for the injury report's news,
+and a returning regular's last start says he started before he sat — and
+judged by the same bar in its own column. Its verdict is filed apart
+(engine/nba/switches ``starters``), so the two never switch each other.
+
 Opened read-only. Changes nothing. Standard library only.
 """
 from __future__ import annotations
@@ -46,6 +53,12 @@ PRIOR_GAMES = 5
 #: The bar's floor: a season with fewer touched games is shown, not judged.
 MIN_TOUCHED = 100
 RULES = ("role jump", "first game back", "second game back", "a regular's return")
+#: THE STARTING FIVE'S NEWS (engine/nba/starters, 2026-11-04) is judged the
+#: same way and files its own verdict (engine/nba/switches ``starters``), so
+#: a season where it stops paying cannot take the rotation's three with it.
+FIVE = "the starting five"
+#: A verdict with no season to judge, which files nothing.
+NOT_JUDGED = "no season has enough games a rule touches to judge"
 
 
 def _ro(path):
@@ -63,10 +76,13 @@ def cases(clubs: dict, tune, k_vac: float = 0.0) -> list:
     return, the vacancy at ``k_vac``), ``touched`` the rules that read it."""
     from engine.nba.minutes import (RETURN_MISSED, RETURN_REGULAR_MIN, base_minutes,
                                     role_jump, role_minutes)
+    from engine.nba.starters import read as _five_read
+    five_coef = dict(getattr(tune, "starter_news", None) or {})
     out = []
     for (season, _team), games in sorted(clubs.items()):
         dates = sorted(games)
         hist: dict = {}
+        last_five: set = set()
         for i, d in enumerate(dates):
             game = games[d]
             prior_dates = dates[:i]
@@ -90,6 +106,11 @@ def cases(clubs: dict, tune, k_vac: float = 0.0) -> list:
             claims = sum(weight(b) for b in bases.values())
             back_names = {n for n, _m in back}
             back_total = sum(m for _n, m in back)
+            # THE STARTING FIVE'S NEWS: the club's last five not in tonight's
+            # box (the injury report's news, as the box read it after), and
+            # the returning regulars who started before they sat.
+            five_gone = {n for n in last_five if n not in played}
+            five_backs = {n for n, _m in back if hist.get(n) and hist[n][-1][1].get("starter")}
             for n in played:
                 past = hist.get(n, [])
                 prior = list(reversed(past[-20:]))
@@ -119,12 +140,15 @@ def cases(clubs: dict, tune, k_vac: float = 0.0) -> list:
                 # return runs it backwards by base minutes, as it was measured.
                 claim = (weight(bases.get(n, 0.0)) / claims) if claims > 0 else 0.0
                 ret = (tune.return_share * back_total * share) if back and n not in back_names else 0.0
+                starts = [bool(p.get("starter")) for _d, p in prior]
                 prop = {"player": n, "market": "pts", "minutes": mins,
                         "values": [p.get("pts", 0.0) for _d, p in prior],
                         "is_starter": bool(prior[0][1].get("starter")), "spread": 0.0,
                         "is_favorite": False, "rest": "1day", "player_mult": 1.0,
                         "vacancy_minutes": k_vac * absent * claim,
-                        "missed_games": missed, "second_game_back": second, "return_minutes": ret}
+                        "missed_games": missed, "second_game_back": second, "return_minutes": ret,
+                        "starts": starts, "five_out": len(five_gone - {n}),
+                        "five_back": len(five_backs - {n})}
                 base = base_minutes(role_minutes(mins)[0], tune)
                 touched = set()
                 if base is not None and role_jump(base, mins, tune) != base:
@@ -135,11 +159,15 @@ def cases(clubs: dict, tune, k_vac: float = 0.0) -> list:
                     touched.add("second game back")
                 if ret > 0:
                     touched.add("a regular's return")
+                if five_coef and abs(sum(float(five_coef.get(k, 0.0) or 0.0) * v for k, v in
+                                         _five_read(starts, prop["five_out"], prop["five_back"]).items())) > 1e-9:
+                    touched.add(FIVE)
                 out.append({"season": season, "min": game[n].get("min", 0.0), "pts": game[n].get("pts", 0.0),
                             "prop": prop, "touched": touched})
             for n, s in game.items():
                 if s.get("min", 0.0) > 0:
                     hist.setdefault(n, []).append((d, s))
+            last_five = {n for n in played if game[n].get("starter")}
     return out
 
 
@@ -150,6 +178,8 @@ def _without(rule: str, tune, prop: dict):
         return replace(tune, back_mult=()), prop
     if rule == "second game back":
         return replace(tune, second_back_mult=1.0), prop
+    if rule == FIVE:
+        return replace(tune, starter_news={}), prop
     return tune, dict(prop, return_minutes=0.0)
 
 
@@ -164,7 +194,7 @@ def measure(rows: list, tune) -> dict:
         if "skip" in full:
             continue
         got = {"full": (float(full["proj_min"]), float(full["projection"]))}
-        for rule in RULES:
+        for rule in (*RULES, FIVE):
             t, p = _without(rule, tune, r["prop"])
             pj = project(p, t)
             got[rule] = (float(pj["proj_min"]), float(pj["projection"])) if "skip" not in pj else got["full"]
@@ -174,12 +204,12 @@ def measure(rows: list, tune) -> dict:
         rs = [r for r in rows if r["season"] == season and id(r) in preds]
         res = {"n": len(rs)}
         levels = {}
-        for key in ("full", *RULES):
+        for key in ("full", *RULES, FIVE):
             for j, stat in ((0, "min"), (1, "pts")):
                 num = sum(r[stat] * preds[id(r)][key][j] for r in rs)
                 den = sum(preds[id(r)][key][j] ** 2 for r in rs)
                 levels[(key, j)] = num / den if den else 1.0
-        for rule in RULES:
+        for rule in (*RULES, FIVE):
             sub = [r for r in rs if rule in r["touched"]]
             cell = {"n": len(sub)}
             for j, stat, name in ((0, "min", "minutes"), (1, "pts", "points")):
@@ -191,11 +221,13 @@ def measure(rows: list, tune) -> dict:
     return out
 
 
-def verdict(res: dict) -> tuple[bool, list]:
+def verdict(res: dict, rules: tuple = RULES) -> tuple[bool, list]:
+    """``(holds, why not)`` for ``rules``: the rotation's three by default,
+    ``(FIVE,)`` for the starting five's news."""
     why = []
     judged = 0
     for season, by in sorted(res.items()):
-        for rule in RULES:
+        for rule in rules:
             c = by.get(rule) or {}
             if c.get("n", 0) < MIN_TOUCHED:
                 continue
@@ -203,7 +235,7 @@ def verdict(res: dict) -> tuple[bool, list]:
             if not (c["minutes"] > 0 and c["points"] > 0):
                 why.append(f"{rule} in {season}: minutes {100 * c['minutes']:+.2f}%, points {100 * c['points']:+.2f}%")
     if not judged:
-        return False, ["no season has enough games a rule touches to judge"]
+        return False, [NOT_JUDGED]
     return not why, why
 
 
@@ -211,10 +243,10 @@ def report(res: dict, k_vac: float) -> list:
     lines = ["NBA ROTATION RULES ON THIS BOX'S OWN SEASONS — the board's values, each rule taken out in turn",
              f"(every game a man of {PRICED_MIN:.0f}+ minutes a game played; the vacancy at k {k_vac:g}; "
              "squared error the rule takes off in the games it touches, each side on its own level)", ""]
-    lines.append(f"{'season':<8}{'games':>8}  " + "".join(f"{r:>30}" for r in RULES))
+    lines.append(f"{'season':<8}{'games':>8}  " + "".join(f"{r:>30}" for r in (*RULES, FIVE)))
     for season, by in sorted(res.items()):
         cells = []
-        for rule in RULES:
+        for rule in (*RULES, FIVE):
             c = by.get(rule) or {}
             cells.append(f"n {c.get('n', 0):5d} min {100 * c.get('minutes', 0):+5.1f}% pts {100 * c.get('points', 0):+5.1f}%"
                          if c.get("n") else "—")
@@ -224,6 +256,13 @@ def report(res: dict, k_vac: float) -> list:
               + ("HOLDS — the board keeps all three." if ok else
                  "DOES NOT HOLD: " + "; ".join(why[:6])
                  + " — set QB_NBA_ROTATION=0 in /etc/qellys/env to turn the three off, and send this.")]
+    ok5, why5 = verdict(res, (FIVE,))
+    lines += [f"THE STARTING FIVE'S NEWS (engine/nba/starters), the same bar: "
+              + ("HOLDS — the board keeps it." if ok5 else
+                 "NOT JUDGED: no season has enough games it touches — its switch stays as it is."
+                 if why5 == [NOT_JUDGED] else
+                 "DOES NOT HOLD: " + "; ".join(why5[:6])
+                 + " — the weekly refit's run turns it off; QB_NBA_STARTERS=0 in /etc/qellys/env does it by hand.")]
     lines.append("Read-only: nothing was changed.")
     return lines
 
@@ -235,6 +274,7 @@ def main(argv=None) -> int:
     # the run that decides the switch.
     import os
     os.environ["QB_NBA_ROTATION"] = "1"
+    os.environ["QB_NBA_STARTERS"] = "1"
     from engine import db
     import nbavacancy
     conn = _ro(db.DEFAULT_DB)
@@ -268,12 +308,13 @@ def main(argv=None) -> int:
         # The weekly deep refit runs it this way: the rules follow the box's
         # own seasons at once (engine/nba/switches), on or off. A season too
         # thin to judge leaves the switch as it was.
-        ok, why = verdict(res)
-        if why == ["no season has enough games a rule touches to judge"]:
-            print("rotation verdict not filed: no season has enough games a rule touches")
-        else:
-            from engine.nba import switches
-            print(f"rotation verdict filed: {switches.record_check('rotation', ok, '; '.join(why[:6]) or 'holds in every season judged', follow=True)}")
+        from engine.nba import switches
+        for name, rules in (("rotation", RULES), ("starters", (FIVE,))):
+            ok, why = verdict(res, rules)
+            if why == [NOT_JUDGED]:
+                print(f"{name} verdict not filed: no season has enough games a rule touches")
+            else:
+                print(f"{name} verdict filed: {switches.record_check(name, ok, '; '.join(why[:6]) or 'holds in every season judged', follow=True)}")
     return 0
 
 

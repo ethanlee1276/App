@@ -1173,6 +1173,9 @@ SH
 run KF "NBA: the alternate lines' own correction, once the weekly refit has fitted it" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine import calibrate as c; d = json.load(open(c.DEFAULT_PATH)); [print(k, v.get('temperature'), 'curve' if v.get('curve') else '', v.get('samples'), v.get('fitted_at')) for k, v in sorted(d.items()) if k.startswith('nba:')]"
 SH
+run KG "NBA: who starts tonight, its switch and the box's verdict" 30 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "from engine.nba import switches as w; e = w.entry('starters'); print('starters', 'on' if w.is_on('starters') else 'off', e.get('verdict'), e.get('checked'), e.get('why'))"
+SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('
 curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d.get('players', []) if r.get('position') == 'DEF'))"
