@@ -242,6 +242,16 @@ scored on the last (Ethan's paste, 2026-10-31):
 - His share = 0.02 + his share of his team's first-three-minute shots (this
   season, last at half weight), normalised over the team's openers (anyone
   with a first-three-minute shot in its last five games).
+- **Tonight's five (2026-11-05).** Once the club has a game this season,
+  the share is drawn among tonight's likely starting five instead: its last
+  starting five less the men ruled out, plus a returning starter priced
+  tonight for the club, filled to five by the busiest openers. Each man's
+  weight is his opening shots per start, (shots + 12 × 0.9) / (starts + 12);
+  an opener outside the five keeps 5% of his; the floor is 0.01. Measured
+  on two full seasons, each season's settings fitted on the other: the
+  scorer's multi-class Brier 0.858 → 0.827 and 0.856 → 0.821 (docs/NBA_LAB.md,
+  "First basket, tonight's five"). A season's count of opening shots mixed
+  how often a man starts with how much he shoots when he does.
 - P(he scores first) = P(his team) × his share.
 
 A pick needs a 10%+ expected return at the best price, +250 to +2500, one a

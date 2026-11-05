@@ -622,16 +622,89 @@ The lab took out every man not in the box, the injury report's news read
 after the game; on the board it is the report alone, so a late scratch
 still keeps his seat until the next build. The scorer was a candidate
 90-91% of the time either way: the men the five's news says start
-tonight, who have no opening shots yet, are the next step.
+tonight, who have no opening shots yet, are the next step (below).
+
+## First basket, tonight's five *(11-05)*
+
+The first basket almost always falls to one of the five on the floor at
+the tip, and the board never asked who they are. Its weight — a season's
+COUNT of opening shots — mixes how often a man starts with how much he
+shoots when he does: a new starter, or a man back from a month out, read
+as a small share, and a man sent to the bench kept a starter's. The old
+board's shares were badly calibrated at both ends (each season's own
+figure, the two given as a range):
+
+| The old board's share | Its scorer scored first |
+|---|---|
+| 3-4% | 5-7% |
+| 22% | 18-19% |
+| 34% | 25% |
+| 50% | 23-28% |
+
+THE RULE, written before the fit. Tonight's LIKELY FIVE, read before the
+tip: the club's last starting five (the box scores' starter flags) less
+the men who do not play, plus each RETURNING STARTER (he started his last
+game for the club and missed its last one), filled to five by the
+busiest candidates. The first basket is shared among them by OPENING
+SHOTS PER START, this season and last at half weight, pulled toward a
+league rate by a few starts; a candidate outside the five keeps a small
+part of his rate. Scored on the team that scored first, by the
+multi-class Brier score of the scorer (bounded, no floor), the floored
+log loss, and how often the scorer had any share at all:
+
+| Season | Variant | Scorer has a share | Floored log loss | Brier |
+|---|---|---|---|---|
+| 2024-25 | As built, men not playing out | 90.9% | 2.152 | 0.858 |
+| | + returning starters | 91.9% | 2.114 | 0.855 |
+| | + the last five who play | 93.7% | 2.056 | 0.854 |
+| | **Tonight's five, per start** | 93.7% | **1.964** | **0.827** |
+| | Tonight's actual five (oracle) | 93.7% | 1.888 | 0.815 |
+| 2025-26 | As built, men not playing out | 90.0% | 2.172 | 0.856 |
+| | + returning starters | 91.3% | 2.119 | 0.852 |
+| | + the last five who play | 93.8% | 2.018 | 0.844 |
+| | **Tonight's five, per start** | 93.8% | **1.962** | **0.821** |
+| | Tonight's actual five (oracle) | 93.8% | 1.874 | 0.808 |
+
+The bold rows are held out: the four settings (starts of pull, the rate
+it pulls toward, the bench's part, the floor) chosen on the other season.
+Both seasons chose 12 starts toward 0.9 opening shots a start and a floor
+of 0.01; the bench's part was flat from 2% to 10% (5% on the board).
+The per-start rate is the gain: the same five weighted by the count
+scores 0.856 and 0.849, and an equal split 0.836 and 0.833. The new
+shares are calibrated where the old ones were not — 13% scored 12-13%,
+18% scored 16-17%, 22% scored 21-22%, 27% scored 26-27% — except a
+club whose five is only partly on file (2-4 men known, about 1.5% of
+team games, early in a season), where a share of 40%+ overstates him:
+those scored 8-19%; falling back to the board as built for them scores
+worse, so they stay. The 33% bin is mixed (22% and 36%, 144 and 155
+men). The predicted five held 92% of the actual starters; the oracle
+rows weight the actual five instead, the same candidates and settings.
+
+On the board (`engine/firstbasket.five`): the last five and every man's
+starts come from `player_game_logs` (position "S", this season and last);
+the men who do not play are the injury report's (`nba_build.OUT_STATUSES`);
+a returning starter counts only when tonight's slate carries him with the
+club (the build's props, filed by the clubs' current rosters) and the
+report does not rule him out, and a man the slate files with another club
+is no candidate for his old one. A club with no game this season keeps the board as built. The
+card's line says whether he is in tonight's likely five and his opening
+shots a start. The lab knew who played from the box; the board knows the
+injury report, so a late scratch keeps his seat until the next build.
+
+The board's own code, replayed on both seasons from a scratch history (the
+play-by-play's first-quarter shots as `nba_shots`, the stints' starters as
+`player_game_logs`, the men not in the box as the ruled-out list), gives
+the same numbers: Brier 0.858 → 0.827 and 0.856 → 0.821, the as-built
+path 0.858 and 0.856 exactly, in under two minutes for both seasons.
 
 ## Next
 
-- Done 2026-11-05: first basket takes out the men ruled out tonight
-  (above); nothing to run.
-- First basket for the man who starts tonight in a sitting starter's
-  place: he has no opening shots in his last five, so he is no candidate
-  at all (the scorer was a candidate 90-91% of the time). The starting
-  five's news (engine/nba/starters) can seat him.
+- Done 2026-11-05: first basket takes out the men ruled out tonight, and
+  shares the first basket among tonight's likely five by opening shots
+  per start (above); nothing to run.
+- First basket at the confirmed five: knowing tonight's five outright
+  takes the Brier another 0.012-0.013 (the oracle rows above). The same
+  probe as the minutes' confirmed five (below) would serve both.
 - Done 2026-11-05 (runbook KG): who starts tonight, read before the tip —
   the injury report on his club's last five, a starter coming back, his
   own starts lately — moves his minutes (above).

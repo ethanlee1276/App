@@ -4,6 +4,12 @@
     {
       "date": "2026-11-05",
       "kind": "model",
+      "title": "NBA first basket: shared among tonight's likely starting five",
+      "body": "The first basket almost always goes to one of the five players on the floor at the tip. Our first-basket chances counted each player's shots in the first three minutes over the season, which mixes how often he starts with how much he shoots when he does. A new starter, or a starter back from injury, looked like a small chance, and a player moved to the bench kept a starter's. Stars were overstated: players we gave a 34% share scored 25% of their team's first baskets. The board now reads tonight's likely starting five before the tip: the team's last starting five without anyone ruled out, plus a starter coming back, filled to five. It shares the first basket among them by each player's opening shots per start. Replayed on two full seasons, with each season's settings chosen on the other, the chances were sharper in both (multi-class Brier 0.858 to 0.827 and 0.856 to 0.821) and match how often players actually scored first. Each pick's card says whether he is in tonight's likely five."
+    },
+    {
+      "date": "2026-11-05",
+      "kind": "model",
       "title": "NBA first basket: no chance for a player who is not playing",
       "body": "Our first-basket picks give each player a share of his team's first basket from his shots in the first three minutes of its recent games. They never asked who plays tonight, so a player ruled out kept his share and every teammate who played was shorted. On two full seasons replayed, at least one such player was in the pool for 60% of teams' first baskets. Taking the players who did not play out of the pool made the chance on the actual first scorer 9-10% sharper overall, and 14-16% sharper in those games, in both seasons. The board now takes out everyone the injury report rules out before the chances are drawn, and a price on one of them is never a pick."
     },

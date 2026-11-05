@@ -1809,8 +1809,13 @@ def main() -> None:
                     # shots go to the men who play (measured, engine/firstbasket).
                     _fb_out = {n for n, inj in (injuries or {}).items()
                                if str((inj or {}).get("status") or "").strip().lower() in OUT_STATUSES}
+                    # Tonight's five (engine/firstbasket.five, measured): the
+                    # slate's men by club (the current rosters) confirm a
+                    # returning starter and keep a man who moved off his old
+                    # club's five.
                     _fb = _fbk.board(first_basket_quotes, out.get("games") or [], date=args.date,
-                                     why=odds_note, out=_fb_out)
+                                     why=odds_note, out=_fb_out,
+                                     plays={pp.player: pp.team for pp in slate.props if pp.team})
                     out["first_basket"] = _fb
                     out["long_shots"] = _fb["picks"]
                     print(_fbk.report(_fb))

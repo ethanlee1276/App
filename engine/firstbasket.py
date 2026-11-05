@@ -44,6 +44,28 @@ THE MODEL:
     1.678 (2024-25) and 1.819 to 1.644 (2025-26) — 14-16% in the games
     with one sitting. The board was handing a seat to men in street
     clothes and shorting every teammate who played.
+  * TONIGHT'S FIVE, BY HIS SHOTS PER START (2026-11-05). The first basket
+    almost always falls to one of the five on the floor at the tip, and a
+    season's COUNT of opening shots mixes how often a man starts with how
+    much he shoots when he does: a new starter, or a man back from a month
+    out, read as a small share, and a man sent to the bench kept a
+    starter's. Now, wherever the club's last starting five is on file
+    (the box scores' starter flags, `player_game_logs`), the board reads
+    TONIGHT'S LIKELY FIVE before the tip — that five less the men ruled
+    out, plus a RETURNING STARTER (he started his last game for the club,
+    missed its last one, is on tonight's slate with it and not ruled out),
+    filled to five by the busiest candidates — and shares the first basket
+    among them by OPENING SHOTS PER START (this season and last at half
+    weight, pulled toward PRIOR_RATE by PRIOR_STARTS starts); a candidate
+    outside the five keeps BENCH of his rate. Measured on the lab's two
+    seasons, each season's settings fitted on the other (docs/NBA_LAB.md,
+    "First basket, tonight's five"): the multi-class Brier score of the
+    scorer's team fell from 0.858 to 0.827 (2024-25) and 0.856 to 0.821
+    (2025-26), the floored log loss from 2.15 to 1.96 and 2.17 to 1.96,
+    and the shares are calibrated where the old ones were not (the old
+    board's 34% men scored 25% of the time; the new 13-27% bins land
+    within two points). A club with no game this season keeps the board
+    as built.
 
 A PICK is a priced player our chance puts clearly above the price: MIN_EV at
 the best bettable price, inside FIRST_BASKET_ODDS, one a game — the same bar
@@ -79,6 +101,18 @@ EPS = 0.02
 RECENT_GAMES = 5
 #: Smoothing for a team's first-shot rate: (first shots + PRIOR) / (games + 2·PRIOR).
 PRIOR = 2
+
+#: TONIGHT'S FIVE (2026-11-05; fitted held out on the lab's two seasons,
+#: docs/NBA_LAB.md "First basket, tonight's five"). The men at the tip.
+FIVE = 5
+#: His opening shots per start are pulled toward PRIOR_RATE by this many
+#: starts — a new starter reads as a league starter until he shows otherwise.
+PRIOR_STARTS = 12.0
+PRIOR_RATE = 0.9
+#: A candidate outside tonight's likely five keeps this much of his rate.
+BENCH = 0.05
+#: The floor every candidate's share starts from on the five's path.
+FIVE_EPS = 0.01
 
 #: The price window and the bar, the football boards' own (engine/firsttd).
 FIRST_BASKET_ODDS = _ftd.FIRST_TD_ODDS
@@ -127,11 +161,12 @@ def home_scores_first(q: float) -> float:
     return q * FIRST_SHOT_SCORES + (1 - q) * (1 - FIRST_SHOT_SCORES)
 
 
-def shares(players: dict) -> dict:
-    """{player: share of his team's first baskets} for one team: EPS plus his
-    share of its first-three-minute shots, normalised to one."""
+def shares(players: dict, eps: float = EPS) -> dict:
+    """{player: share of his team's first baskets} for one team: ``eps`` plus
+    his share of its weights (first-three-minute shots on the board as built),
+    normalised to one."""
     tot = sum(max(0.0, float(v)) for v in players.values())
-    raw = {p: EPS + (max(0.0, float(v)) / tot if tot > 0 else 0.0) for p, v in players.items()}
+    raw = {p: eps + (max(0.0, float(v)) / tot if tot > 0 else 0.0) for p, v in players.items()}
     z = sum(raw.values()) or 1.0
     return {p: s / z for p, s in raw.items()}
 
@@ -200,7 +235,59 @@ def read(conn, season: int, before: str | None = None) -> dict:
     for t, lst in by_team_games.items():
         lst.sort()
         recent[t] = set().union(*(s for _d, _g, s in lst[-RECENT_GAMES:])) if lst else set()
-    return {"teams": teams, "usage": usage, "recent": recent}
+    return {"teams": teams, "usage": usage, "recent": recent, **lineups(conn, season, before)}
+
+
+def lineups(conn, season: int, before: str | None = None) -> dict:
+    """Who starts, from the box scores' starter flags (`player_game_logs`,
+    position "S"), before ``before``:
+
+      ``starts``     {team: {normalised name: starts}} this season, last at
+                     half weight — the per-start rate's denominator, the same
+                     window as the opening shots it divides;
+      ``last_five``  {team: [normalised names]} the starters of the club's
+                     newest game this season;
+      ``last_game``  {team: {normalised name: (date, started)}} each man's
+                     newest game for the club this season;
+      ``club_last``  {team: date} the club's newest game;
+      ``names``      {team: {normalised name: his name as the logs write it}}.
+
+    Every key empty where the table is missing or holds nothing yet — the
+    board as built."""
+    out: dict = {"starts": {}, "last_five": {}, "last_game": {}, "club_last": {}, "names": {}}
+    q = ("SELECT season, period, player, team, position, value FROM player_game_logs "
+         "WHERE sport='nba' AND market='min' AND season IN (?, ?)")
+    args: list = [season, season - 1]
+    if before:
+        q += " AND period < ?"
+        args.append(str(before)[:10])
+    try:
+        rows = conn.execute(q, args).fetchall()
+    except Exception:                                         # noqa: BLE001
+        return out
+    games: dict = {}
+    for s, day, player, team, pos, mins in rows:
+        try:
+            if float(mins or 0.0) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        n, t = _norm(player), _canon(team)
+        if not n or not t:
+            continue
+        started = str(pos or "").strip().upper() == "S"
+        if started:
+            st = out["starts"].setdefault(t, {})
+            st[n] = st.get(n, 0.0) + (1.0 if int(s) == int(season) else LAST_SEASON)
+        if int(s) == int(season):
+            games.setdefault(t, {}).setdefault(n, {})[str(day)[:10]] = started
+            out["names"].setdefault(t, {})[n] = str(player)
+    for t, men in games.items():
+        last = max(d for g in men.values() for d in g)
+        out["club_last"][t] = last
+        out["last_five"][t] = sorted(n for n, g in men.items() if g.get(last))
+        out["last_game"][t] = {n: (max(g), g[max(g)]) for n, g in men.items()}
+    return out
 
 
 def _norm(name: str) -> str:
@@ -228,11 +315,10 @@ def _sits(name: str, full: set, short: set) -> bool:
     return len(parts) >= 2 and len(parts[0]) == 1 and (parts[0], parts[-1]) in short
 
 
-def candidates(data: dict, team: str, out=None) -> dict:
-    """{player: weighted first-three-minute shots} for this team's candidates:
-    its recent openers, or before it has a game this season, last season's
-    eight busiest — never a man in ``out`` (the names the injury report
-    rules out tonight)."""
+def _as_built(data: dict, team: str, out=None) -> dict:
+    """{player: weighted first-three-minute shots}: the team's recent
+    openers, or before it has a game this season, last season's eight
+    busiest — never a man in ``out``."""
     t = _canon(team)
     u = data.get("usage", {}).get(t, {})
     rec = data.get("recent", {}).get(t)
@@ -243,9 +329,81 @@ def candidates(data: dict, team: str, out=None) -> dict:
     return dict(sorted(((p, v) for p, v in u.items() if plays(p)), key=lambda kv: -kv[1])[:8])
 
 
-def game_probs(data: dict, home: str, away: str, out=None) -> list:
+def five(data: dict, team: str, out=None, plays=None):
+    """Tonight's likely five and every candidate's weight, or None where the
+    club's last starting five is not on file (the board as built).
+
+    ``{"w": {player: weight}, "five": {players}, "rate": {player: opening
+    shots per start}}``. The five is the club's last starting five less the
+    men in ``out`` (ruled out tonight), plus each RETURNING STARTER — he
+    started his newest game for the club, missed its newest one, and
+    ``plays`` ({name: team}, the men on tonight's slate, filed by the clubs'
+    current rosters) puts him with this club tonight — filled to FIVE by the
+    busiest candidates. A man ``plays`` puts with another club tonight is no
+    candidate here. Weights: opening shots
+    per start, pulled toward PRIOR_RATE by PRIOR_STARTS; BENCH of that off
+    the five."""
+    t = _canon(team)
+    last = (data.get("last_five") or {}).get(t)
+    if not last:
+        return None
+    u = data.get("usage", {}).get(t, {})
+    shown: dict = {}
+    by_norm: dict = {}
+    for p, v in u.items():
+        n = _norm(p)
+        shown.setdefault(n, p)
+        by_norm[n] = by_norm.get(n, 0.0) + float(v or 0.0)
+    logs = (data.get("names") or {}).get(t) or {}
+    show = lambda n: shown.get(n) or logs.get(n) or n                       # noqa: E731
+    where = {_norm(k): _canon(v) for k, v in (plays or {}).items() if k}
+    full, short = _sitting(out)
+    pool = {_norm(p) for p in (data.get("recent", {}).get(t) or ())} | set(last)
+    likely = set(last)
+    club_last = (data.get("club_last") or {}).get(t) or ""
+    for n, (day, started) in ((data.get("last_game") or {}).get(t) or {}).items():
+        if started and str(day) < str(club_last) and where.get(n) == t:
+            likely.add(n)
+    pool |= likely
+    pool = {n for n in pool if not (full and _sits(show(n), full, short))
+            and not (n in where and where[n] != t)}
+    likely &= pool
+    filled = set(likely)
+    for n in sorted(pool - likely, key=lambda n: (-by_norm.get(n, 0.0), n)):
+        if len(filled) >= FIVE:
+            break
+        filled.add(n)
+    st = (data.get("starts") or {}).get(t) or {}
+    rate = {n: (by_norm.get(n, 0.0) + PRIOR_STARTS * PRIOR_RATE) / (float(st.get(n, 0.0)) + PRIOR_STARTS)
+            for n in pool}
+    return {"w": {show(n): rate[n] * (1.0 if n in filled else BENCH) for n in pool},
+            "five": {show(n) for n in filled}, "rate": {show(n): rate[n] for n in pool}}
+
+
+def candidates(data: dict, team: str, out=None, plays=None) -> dict:
+    """{player: weight} for this team's candidates — never a man in ``out``
+    (the names the injury report rules out tonight). Tonight's five's
+    weights where the club's last starting five is on file (`five`), else
+    the board as built: its recent openers' first-three-minute shots, or
+    before it has a game this season, last season's eight busiest."""
+    f = five(data, team, out, plays)
+    return f["w"] if f is not None else _as_built(data, team, out)
+
+
+def team_shares(data: dict, team: str, out=None, plays=None) -> tuple:
+    """``(shares, five)`` for one team: tonight's five's path where it can
+    be read, ``five`` None on the board as built."""
+    f = five(data, team, out, plays)
+    if f is not None:
+        return shares(f["w"], eps=FIVE_EPS), f
+    return shares(_as_built(data, team, out)), None
+
+
+def game_probs(data: dict, home: str, away: str, out=None, plays=None) -> list:
     """Every candidate's chance of scoring the game's first points, the men
-    in ``out`` (normalised names ruled out tonight) taken out first."""
+    in ``out`` (normalised names ruled out tonight) taken out first and
+    ``plays`` ({name: team} on tonight's slate) confirming a returning
+    starter."""
     th = data.get("teams", {}).get(_canon(home), {"first": 0, "games": 0})
     ta = data.get("teams", {}).get(_canon(away), {"first": 0, "games": 0})
     q = home_shoots_first(first_shot_rate(th["first"], th["games"]),
@@ -253,10 +411,15 @@ def game_probs(data: dict, home: str, away: str, out=None) -> list:
     ph = home_scores_first(q)
     rows = []
     for team, pt in ((home, ph), (away, 1.0 - ph)):
-        for name, s in shares(candidates(data, team, out)).items():
-            rows.append({"player": name, "team": team, "prob": pt * s,
-                         "team_first": round(pt, 4), "first_shot": round(q if team == home else 1 - q, 4),
-                         "share": round(s, 4)})
+        sh, f = team_shares(data, team, out, plays)
+        for name, s in sh.items():
+            row = {"player": name, "team": team, "prob": pt * s,
+                   "team_first": round(pt, 4), "first_shot": round(q if team == home else 1 - q, 4),
+                   "share": round(s, 4)}
+            if f is not None:
+                row["in_five"] = name in f["five"]
+                row["per_start"] = round(f["rate"][name], 2)
+            rows.append(row)
     rows.sort(key=lambda r: -r["prob"])
     return rows
 
@@ -279,7 +442,7 @@ def _who(name: str, team_rows: list):
 
 
 def board(quotes: dict, games: list, conn=None, date: str = "", why: str = "",
-          out=None) -> dict:
+          out=None, plays=None) -> dict:
     """The NBA's Long Shots board, in engine/firsttd.board's shape:
     {"rows", "picks", "games", "quoted", "ours", "ours_games", "why"}.
 
@@ -288,7 +451,9 @@ def board(quotes: dict, games: list, conn=None, date: str = "", why: str = "",
     board's games (home, away, date, kickoff). Shots come from the history
     database (`read`), this season and last at half weight. ``out`` is the
     normalised names the injury report rules out tonight: none of them is a
-    candidate, and a price on one is no pick."""
+    candidate, and a price on one is no pick. ``plays`` is {name: team} for
+    the men on tonight's slate: a returning starter joins tonight's five
+    only when it names him with the club (`five`)."""
     from .sources.oddsapi import best_scorer_price
     if conn is None:
         from . import db as _db
@@ -305,7 +470,7 @@ def board(quotes: dict, games: list, conn=None, date: str = "", why: str = "",
         season = season_of(g.get("date") or date)
         if season not in cache:
             cache[season] = read(conn, season, before=str(g.get("date") or date)[:10] or None)
-        ranked = game_probs(cache[season], home, away, out)
+        ranked = game_probs(cache[season], home, away, out, plays)
         qs = by_pair.get((_canon(home), _canon(away))) or []
         common = {"market": MARKET, "market_label": LABEL, "game": f"{away}@{home}",
                   "matchup": f"{away} @ {home}", "game_date": g.get("date"),
@@ -346,8 +511,7 @@ def board(quotes: dict, games: list, conn=None, date: str = "", why: str = "",
                              f"{team} take the game's first shot {hit['first_shot']:.0%} of the time by both "
                              f"teams' tip records this season, and the team with the first shot scores first "
                              f"{FIRST_SHOT_SCORES:.0%} of the time (1,471 games).",
-                             f"He takes {hit['share']:.0%} of {team}'s shots in the first three minutes of "
-                             f"its games — the share that picks the first scorer best.",
+                             _share_reason(hit, team),
                              f"Our chance {p:.1%} against {imp:.1%} in the price ({ev:+.0%} expected return).",
                          ]})
     rows.sort(key=lambda r: -r["prob"])
@@ -365,6 +529,19 @@ def board(quotes: dict, games: list, conn=None, date: str = "", why: str = "",
     if not rows:
         out["why"] = why_empty(why)
     return out
+
+
+def _share_reason(hit: dict, team: str) -> str:
+    """The card's line for his share: tonight's five's words on its path."""
+    if "in_five" not in hit:
+        return (f"He takes {hit['share']:.0%} of {team}'s shots in the first three minutes of "
+                f"its games — the share that picks the first scorer best.")
+    if hit["in_five"]:
+        return (f"He is in {team}'s likely starting five tonight and takes {hit['per_start']:.1f} of its "
+                f"shots in the first three minutes a start — {hit['share']:.0%} of its first baskets "
+                f"by our numbers.")
+    return (f"He is not in {team}'s likely starting five tonight, so his share of its first baskets "
+            f"is small: {hit['share']:.0%}.")
 
 
 WHY_BUDGET = ("No first-basket prices were bought for tonight's games yet: the odds budget "

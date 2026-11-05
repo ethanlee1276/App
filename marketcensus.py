@@ -392,10 +392,11 @@ def render() -> str:
             "play-by-play; college's box score, from ESPN's scoring plays), not through the prop "
             "chain above.",
             "- **First basket** (NBA, since 2026-10-31): the NBA's Long Shots board. Priced by its "
-            "own model — both teams' tip records for who takes the first shot, his share of his "
-            "team's shots in the first three minutes for the player (`engine/firstbasket`, the box "
-            "study in docs/FIRST_TD_RESEARCH.md) — and graded off the game's first made shot or free "
-            "throw in the box's shots.", ""]
+            "own model — both teams' tip records for who takes the first shot, and for the player "
+            "his share among tonight's likely starting five by his shots in the first three minutes "
+            "a start (`engine/firstbasket`, the box study in docs/FIRST_TD_RESEARCH.md and "
+            "docs/NBA_LAB.md) — and graded off the game's first made shot or free throw in the box's "
+            "shots.", ""]
     out += ["## What is not bought, and why", "",
             "- **Longest completion / rush / reception, last touchdown, touchdowns over:** "
             "no model, no measurement; a book's vig on a longest-play market is the widest on the menu.",

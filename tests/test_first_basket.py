@@ -117,6 +117,131 @@ def test_a_play_by_play_initial_is_matched_and_a_different_full_name_is_not():
     assert FB._sitting(None) == (set(), set())
 
 
+# --- tonight's five (2026-11-05) -----------------------------------------------------------
+BOS_FIVE_BEFORE = ("Jayson Tatum", "Derrick White", "Jaylen Brown", "Jrue Holiday", "Kristaps Porzingis")
+BOS_FIVE_LAST = ("Jayson Tatum", "Jaylen Brown", "Jrue Holiday", "Sam Hauser", "Payton Pritchard")
+NYK_FIVE = ("Jalen Brunson", "Josh Hart", "Karl-Anthony Towns", "Mikal Bridges", "OG Anunoby")
+
+
+def _logs(conn, rows):
+    conn.execute("CREATE TABLE IF NOT EXISTS player_game_logs (sport TEXT, season INTEGER, period TEXT, "
+                 "game_id TEXT, player TEXT, team TEXT, opponent TEXT, position TEXT, home INTEGER, "
+                 "market TEXT, value REAL, PRIMARY KEY (sport, season, period, game_id, player, market))")
+    for gid, day, player, team, pos in rows:
+        conn.execute("INSERT INTO player_game_logs VALUES ('nba', 2026, ?, ?, ?, ?, '', ?, 0, 'min', 30)",
+                     (day, gid, player, team, pos))
+
+
+def _lineup_games(conn):
+    """Five BOS-NYK games. BOS start the same five in the first four; in the
+    newest, Porzingis misses it, White comes off the bench and Hauser and
+    Pritchard start. Tatum takes three opening shots a game, White one in each
+    game he started, Hauser one in his start; Brown and Holiday never shoot
+    early."""
+    logs = []
+    for i in range(5):
+        gid, day = f"g{i}", f"2026-10-{20 + i:02d}"
+        a = 1
+        for who, n in (("Jayson Tatum", 3), ("Derrick White", 1 if i < 4 else 0),
+                       ("Sam Hauser", 1 if i == 4 else 0)):
+            for _ in range(n):
+                _shot(conn, gid, a, day, who, "BOS", "NYK", 1, f"11:{50 - a:02d}", 0)
+                a += 1
+        for who, n in (("Jalen Brunson", 3), ("Josh Hart", 1)):
+            for _ in range(n):
+                _shot(conn, gid, a, day, who, "NYK", "BOS", 0, f"11:{50 - a:02d}", 0)
+                a += 1
+        _shot(conn, gid, a, day, "Jayson Tatum", "BOS", "NYK", 1, "10:30", 1)
+        five = BOS_FIVE_BEFORE if i < 4 else BOS_FIVE_LAST
+        bench = ("Sam Hauser", "Payton Pritchard") if i < 4 else ("Derrick White",)
+        logs += [(gid, day, p, "BOS", "S") for p in five] + [(gid, day, p, "BOS", "B") for p in bench]
+        logs += [(gid, day, p, "NYK", "S") for p in NYK_FIVE]
+    _logs(conn, logs)
+
+
+def test_the_box_scores_give_each_club_its_last_starting_five():
+    conn = _history()
+    _lineup_games(conn)
+    lu = FB.lineups(conn, 2026, "2026-10-31")
+    assert lu["last_five"]["BOS"] == sorted(FB._norm(p) for p in BOS_FIVE_LAST)
+    assert lu["club_last"]["BOS"] == "2026-10-24"
+    assert lu["starts"]["BOS"][FB._norm("Jayson Tatum")] == 5.0
+    assert lu["starts"]["BOS"][FB._norm("Derrick White")] == 4.0
+    assert lu["last_game"]["BOS"][FB._norm("Kristaps Porzingis")] == ("2026-10-23", True)
+    assert lu["last_game"]["BOS"][FB._norm("Derrick White")] == ("2026-10-24", False)
+    assert FB.lineups(conn, 2026, "2026-10-24")["last_five"]["BOS"] == sorted(FB._norm(p) for p in BOS_FIVE_BEFORE), \
+        "nothing on or after tonight is read"
+    assert FB.lineups(_history(), 2026, "2026-10-31")["last_five"] == {}, "no logs: the board as built"
+
+
+def test_tonights_five_shares_the_first_basket_by_opening_shots_per_start():
+    """Measured on the lab's two seasons (docs/NBA_LAB.md, "First basket,
+    tonight's five"): the scorer's multi-class Brier 0.858 -> 0.827 and
+    0.856 -> 0.821, each season's settings fitted on the other."""
+    conn = _history()
+    _lineup_games(conn)
+    data = FB.read(conn, 2026, before="2026-10-31")
+    f = FB.five(data, "BOS")
+    assert f["five"] == set(BOS_FIVE_LAST), f["five"]
+    sh, _f = FB.team_shares(data, "BOS")
+    assert abs(sum(sh.values()) - 1.0) < 1e-9
+    # A new starter is a starter: Hauser's one opening shot in one start is a
+    # league starter's rate, not a twentieth of the club's count.
+    assert abs(f["rate"]["Sam Hauser"] - (1 + FB.PRIOR_STARTS * FB.PRIOR_RATE) / (1 + FB.PRIOR_STARTS)) < 1e-9
+    assert sh["Sam Hauser"] > 0.15, sh
+    # A starter who never shoots early still starts: a seat at the prior.
+    assert "Jaylen Brown" in sh and sh["Jaylen Brown"] > 0.1
+    # The man sent to the bench keeps BENCH of his rate.
+    assert abs(f["w"]["Derrick White"] - FB.BENCH * f["rate"]["Derrick White"]) < 1e-9
+    assert sh["Derrick White"] < 0.03 < sh["Payton Pritchard"]
+    # The star still leads, and no longer takes three in four.
+    assert max(sh, key=sh.get) == "Jayson Tatum" and 0.25 < sh["Jayson Tatum"] < 0.5, sh
+    old = FB.shares(FB._as_built(data, "BOS"))
+    assert old["Jayson Tatum"] > 0.7 and "Jaylen Brown" not in old and old["Derrick White"] > sh["Derrick White"]
+    rows = FB.game_probs(data, "BOS", "NYK")
+    assert abs(sum(r["prob"] for r in rows) - 1.0) < 1e-9
+    top = rows[0]
+    assert top["player"] == "Jayson Tatum" and top["in_five"] is True and top["per_start"] > 1.0
+
+
+def test_a_returning_starter_joins_the_five_only_when_priced_with_his_club():
+    conn = _history()
+    _lineup_games(conn)
+    data = FB.read(conn, 2026, before="2026-10-31")
+    assert "Kristaps Porzingis" not in FB.candidates(data, "BOS"), "nothing says he plays tonight"
+    back = FB.five(data, "BOS", plays={"Kristaps Porzingis": "BOS", "Jayson Tatum": "BOS"})
+    assert "Kristaps Porzingis" in back["five"] and len(back["five"]) == 6
+    moved = FB.five(data, "BOS", plays={"Kristaps Porzingis": "DAL", "Payton Pritchard": "DAL"})
+    assert "Kristaps Porzingis" not in moved["w"] and "Payton Pritchard" not in moved["w"], \
+        "a man priced with another club tonight is no candidate here"
+    assert "Derrick White" in moved["five"], "the five is filled from the busiest candidates"
+
+
+def test_a_starter_ruled_out_leaves_the_five_and_the_busiest_candidate_fills_it():
+    conn = _history()
+    _lineup_games(conn)
+    data = FB.read(conn, 2026, before="2026-10-31")
+    f = FB.five(data, "BOS", out={"jaylen brown"})
+    assert "Jaylen Brown" not in f["w"]
+    assert f["five"] == {"Jayson Tatum", "Jrue Holiday", "Sam Hauser", "Payton Pritchard", "Derrick White"}
+    assert FB.five(data, "NYK")["five"] == set(NYK_FIVE)
+    assert FB.five(FB.read(_history(), 2026), "BOS") is None, "no box scores: the board as built"
+
+
+def test_a_pick_on_tonights_five_says_so():
+    conn = _history()
+    _lineup_games(conn)
+    games = [{"home": "BOS", "away": "NYK", "date": "2026-10-31", "kickoff": "2026-10-31T23:30:00Z"}]
+    quotes = {"a": _quote("Sam Hauser", "BOS", "NYK", 1600)}
+    b = FB.board(quotes, games, conn=conn, date="2026-10-31")
+    row = b["rows"][0]
+    assert row["player"] == "Sam Hauser" and "likely starting five tonight" in row["reasons"][1], row["reasons"]
+    assert [p["player"] for p in b["picks"]] == ["Sam Hauser"], "his starter's chance against a bench man's price"
+    bench = FB.board({"a": _quote("Derrick White", "BOS", "NYK", 1600)}, games, conn=conn, date="2026-10-31")
+    assert "not in BOS's likely starting five" in bench["rows"][0]["reasons"][1]
+    assert bench["picks"] == []
+
+
 # --- the board -------------------------------------------------------------------------
 def _quote(player, home, away, odds, book="DraftKings"):
     return {"player": player, "home": home, "away": away,
@@ -222,7 +347,9 @@ def test_a_price_on_a_man_ruled_out_is_never_a_pick():
 
 def test_the_nba_build_makes_the_board_and_journals_its_picks():
     src = open(os.path.join(ROOT, "nba_build.py"), encoding="utf-8").read()
-    assert "why=odds_note, out=_fb_out)" in src, "the build hands the board tonight's ruled-out men"
+    assert "why=odds_note, out=_fb_out," in src, "the build hands the board tonight's ruled-out men"
+    assert "plays={pp.player: pp.team for pp in slate.props if pp.team})" in src, \
+        "and the men it prices tonight, by club (a returning starter's confirmation)"
     assert "in OUT_STATUSES}" in src[src.index("_fb_out = "):src.index("_fb_out = ") + 300]
     assert 'first_basket_quotes = getattr(res, "first_basket", None) or {}' in src
     assert 'out["first_basket"] = _fb' in src and 'out["long_shots"] = _fb["picks"]' in src
