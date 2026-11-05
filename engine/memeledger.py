@@ -26,11 +26,25 @@ between a number that means something and a number that flatters.
    -12%" — which is the actual shape of this market and is invisible in
    a table of closing returns.
 
-3. A COIN THAT VANISHES IS AN OUTCOME, NOT A GAP. Mints leave the feed
-   because liquidity died. Dropping them would quietly delete the losses
-   and leave a board of survivors — the single easiest way to build a
-   fake track record in this asset class. A call whose coin stops
-   appearing is marked `gone` and keeps its last mark.
+3. A COIN THAT VANISHES IS AN OUTCOME, NOT A GAP. Dropping the dead
+   ones would quietly delete the losses and leave a board of survivors —
+   the single easiest way to build a fake track record in this asset
+   class. A call is `gone` when a price lookup finds no pool quoting its
+   coin, and it keeps its last mark.
+
+   LEAVING THE SCAN IS NOT DYING (2026-11-05). This first read "a mint
+   missing from this build" as "liquidity died". The build scans 60
+   coins and fresh pools push the older ones out within minutes, so 99%
+   of the rocket calls (80,104 of 80,834) were called gone while their
+   coins traded on, the median peak and close read exactly 0%, and only
+   the coins still trending got their later marks: survivorship, the
+   thing this module exists to prevent, by another door. A late
+   sighting also stamped every horizon it had passed with that one
+   price, so a coin seen again at hour five carried a "1h" mark from
+   hour five. Now each call owed a mark whose coin has left the scan is
+   priced by its own lookup (`due`, `stamp`); a mark counts only inside
+   its on-time window (`_late`); and the published record counts calls
+   from `MEASURED_FROM`, the first day every call is followed.
 
 4. THE HEADLINE IS THE MEDIAN. One 50x makes any mean meaningless, and a
    mean is what a promoter would quote. Median return, hit rate, and the
@@ -61,6 +75,20 @@ HORIZONS = (("1h", 3600), ("6h", 6 * 3600),
 #: grace period has passed. Nothing is deleted; it simply stops costing
 #: work on every build.
 SETTLE_AFTER_S = 8 * 24 * 3600
+
+#: The first moment the record follows every call: 6 November 2026, 00:00
+#: UTC. Calls before it were followed only while their coin stayed on the
+#: 60-coin scan (see the module note), so they stay in the database and
+#: out of the published numbers.
+MEASURED_FROM = 1793923200.0
+
+
+def _late(secs: int) -> int:
+    """How long after a horizon a mark may still be taken and count as
+    that horizon's: 15 minutes for the hour, a quarter of the horizon
+    after that, a day at most (the week's mark lands inside the 8 days a
+    call is followed)."""
+    return min(24 * 3600, max(15 * 60, secs // 4))
 
 #: THE PATH SUMMARY AND THE HORIZON TABLE MUST DESCRIBE THE SAME CALLS.
 #: The horizon rows only contain calls old enough to have matured; the
@@ -186,48 +214,111 @@ def _open_calls(conn, now: float):
         "WHERE c.ts > ? ORDER BY c.ts", (now - SETTLE_AFTER_S,)).fetchall()
 
 
+def _follow(conn, c, price: float, now: float) -> int:
+    """One priced sighting of an open call: the path moves (last price,
+    peak and trough since the call) and each horizon inside its on-time
+    window is stamped, once. Returns how many marks were stamped."""
+    peak = max(c["peak"] or price, price)
+    trough = min(c["trough"] or price, price)
+    conn.execute(
+        "UPDATE meme_path SET last_ts=?, last_price=?, peak=?, "
+        "peak_ts=CASE WHEN ?>peak THEN ? ELSE peak_ts END, trough=?, "
+        "trough_ts=CASE WHEN ?<trough THEN ? ELSE trough_ts END, "
+        "seen=seen+1, gone_ts=NULL WHERE call_id=?",
+        (now, price, peak, price, now, trough, price, now, c["id"]))
+    age = now - c["ts"]
+    n = 0
+    for name, secs in HORIZONS:
+        if age < secs:
+            break
+        if age > secs + _late(secs):
+            continue                    # too late to be this horizon's mark
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO meme_marks (call_id, horizon, ts, "
+            "price, pct) VALUES (?,?,?,?,?)",
+            (c["id"], name, now, price, (price / c["price"]) - 1.0))
+        n += cur.rowcount
+    return n
+
+
 def mark(conn, board: dict, now: float | None = None) -> dict:
-    """Update every open call against the prices on this build.
+    """Update every open call whose coin is on this build.
 
     Two things happen per call. The PATH is updated — last price, and the
     peak and trough since the call, which is what lets the record describe
-    the shape of a move rather than only its end. And any HORIZON that has
-    matured since the last build is stamped once, permanently.
+    the shape of a move rather than only its end. And any HORIZON inside
+    its on-time window is stamped once, permanently.
 
-    A call whose mint is not in this build is marked `gone` and left
-    alone. That is not a missing data point; for a memecoin it is usually
-    the answer.
+    A call whose coin is not on this build is left for `due`: the build
+    scans 60 coins and rotates them out within minutes, so its absence
+    says nothing about the coin. ``gone`` stays in the result, always 0,
+    for the build's log line.
     """
     now = time.time() if now is None else now
     by_mint = {c.get("mint"): c for c in (board.get("coins") or [])}
     out = {"marked": 0, "stamped": 0, "gone": 0}
     for c in _open_calls(conn, now):
-        row = by_mint.get(c["mint"])
-        price = _price(row or {})
+        price = _price(by_mint.get(c["mint"]) or {})
         if price is None:
-            if c["gone_ts"] is None:
-                conn.execute("UPDATE meme_path SET gone_ts=? WHERE call_id=?",
-                             (now, c["id"]))
-                out["gone"] += 1
             continue
-        peak = max(c["peak"] or price, price)
-        trough = min(c["trough"] or price, price)
-        conn.execute(
-            "UPDATE meme_path SET last_ts=?, last_price=?, peak=?, "
-            "peak_ts=CASE WHEN ?>peak THEN ? ELSE peak_ts END, trough=?, "
-            "trough_ts=CASE WHEN ?<trough THEN ? ELSE trough_ts END, "
-            "seen=seen+1, gone_ts=NULL WHERE call_id=?",
-            (now, price, peak, price, now, trough, price, now, c["id"]))
         out["marked"] += 1
-        age = now - c["ts"]
-        for name, secs in HORIZONS:
-            if age < secs:
-                break
-            cur = conn.execute(
-                "INSERT OR IGNORE INTO meme_marks (call_id, horizon, ts, "
-                "price, pct) VALUES (?,?,?,?,?)",
-                (c["id"], name, now, price, (price / c["price"]) - 1.0))
-            out["stamped"] += cur.rowcount
+        out["stamped"] += _follow(conn, c, price, now)
+    conn.commit()
+    return out
+
+
+def due(conn, present=(), now: float | None = None, limit: int = 120,
+        since: float | None = None) -> list:
+    """The calls owed a mark now whose coin is not on this build: a horizon
+    that has come, inside its on-time window, not yet stamped, on a call
+    whose coin no lookup has found gone. Oldest first, at most ``limit``
+    coins. The build prices these straight from the exchange feed, so a
+    call is marked whether or not its coin is still trending."""
+    now = time.time() if now is None else now
+    since = MEASURED_FROM if since is None else since
+    present = set(present or ())
+    picked: dict = {}
+    for name, secs in HORIZONS:
+        rows = conn.execute(
+            "SELECT c.id, c.ts, c.mint, c.price, p.peak, p.trough FROM meme_calls c "
+            "JOIN meme_path p ON p.call_id = c.id "
+            "WHERE c.ts BETWEEN ? AND ? AND c.ts >= ? AND p.gone_ts IS NULL "
+            "AND NOT EXISTS (SELECT 1 FROM meme_marks m WHERE m.call_id = c.id "
+            "AND m.horizon = ?) ORDER BY c.ts",
+            (now - secs - _late(secs), now - secs, since, name)).fetchall()
+        for r in rows:
+            if r["mint"] not in present:
+                picked.setdefault(r["id"], r)
+    calls = sorted(picked.values(), key=lambda r: r["ts"])
+    out, mints = [], set()
+    for r in calls:
+        if r["mint"] not in mints and len(mints) >= limit:
+            continue
+        mints.add(r["mint"])
+        out.append(r)
+    return out
+
+
+def stamp(conn, calls, prices: dict, now: float | None = None) -> dict:
+    """Mark the calls `due` returned with the prices the build looked up.
+
+    ``prices`` maps each coin a lookup ANSWERED to its price, or to None
+    when the answer carried no pool for it: that call is gone, its last
+    mark kept. A coin missing from ``prices`` was not answered (the
+    lookup failed) and waits for the next build."""
+    now = time.time() if now is None else now
+    out = {"looked_up": 0, "stamped": 0, "gone": 0}
+    for c in calls:
+        if c["mint"] not in prices:
+            continue
+        out["looked_up"] += 1
+        price = prices[c["mint"]]
+        if price is None:
+            conn.execute("UPDATE meme_path SET gone_ts=COALESCE(gone_ts, ?) "
+                         "WHERE call_id=?", (now, c["id"]))
+            out["gone"] += 1
+            continue
+        out["stamped"] += _follow(conn, c, price, now)
     conn.commit()
     return out
 
@@ -291,23 +382,30 @@ def _summarise(rows: list[sqlite3.Row]) -> dict:
     }
 
 
-def report(conn, now: float | None = None) -> dict:
-    """The record, per channel per horizon, plus the path summary."""
+def report(conn, now: float | None = None, since: float | None = None) -> dict:
+    """The record, per channel per horizon, plus the path summary: the
+    calls filed from ``since`` (`MEASURED_FROM` unless told), each mark
+    counted only when it was taken inside its on-time window."""
     now = time.time() if now is None else now
+    since = MEASURED_FROM if since is None else since
     out = {"generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
-           "horizons": [h for h, _ in HORIZONS], "channels": {}}
+           "horizons": [h for h, _ in HORIZONS], "channels": {},
+           "measured_from": datetime.datetime.utcfromtimestamp(since).strftime("%Y-%m-%d")}
     total = conn.execute("SELECT COUNT(*) FROM meme_calls").fetchone()[0]
     out["calls_total"] = total
+    out["calls_before"] = conn.execute(
+        "SELECT COUNT(*) FROM meme_calls WHERE ts < ?", (since,)).fetchone()[0]
     for channel in ("rocket", "exit"):
         ch: dict = {"marks": {}}
         ch["calls"] = conn.execute(
-            "SELECT COUNT(*) FROM meme_calls WHERE channel=?",
-            (channel,)).fetchone()[0]
-        for name, _ in HORIZONS:
+            "SELECT COUNT(*) FROM meme_calls WHERE channel=? AND ts >= ?",
+            (channel, since)).fetchone()[0]
+        for name, secs in HORIZONS:
             rows = conn.execute(
                 "SELECT m.pct FROM meme_marks m JOIN meme_calls c "
-                "ON c.id=m.call_id WHERE c.channel=? AND m.horizon=?",
-                (channel, name)).fetchall()
+                "ON c.id=m.call_id WHERE c.channel=? AND m.horizon=? "
+                "AND c.ts >= ? AND m.ts - c.ts <= ?",
+                (channel, name, since, secs + _late(secs))).fetchall()
             ch["marks"][name] = _summarise(rows)
         # The shape of the move, over EVERY call — including the ones
         # whose coin vanished before we could mark it even once.
@@ -324,8 +422,8 @@ def report(conn, now: float | None = None) -> dict:
             "       (p.last_price / c.price) - 1.0 AS last, "
             "       p.seen AS seen, p.gone_ts IS NOT NULL AS gone "
             "FROM meme_path p JOIN meme_calls c ON c.id=p.call_id "
-            "WHERE c.channel=? AND c.ts <= ?",
-            (channel, now - PATH_MIN_AGE_S)).fetchall()
+            "WHERE c.channel=? AND c.ts <= ? AND c.ts >= ?",
+            (channel, now - PATH_MIN_AGE_S, since)).fetchall()
         # The medians describe the calls we could actually follow. The
         # `gone` count sits beside them rather than being folded in as
         # -100%: a dead pool is unsellable, which is not quite the same
@@ -376,8 +474,8 @@ def recent(conn, limit: int = 40, now: float | None = None) -> list[dict]:
     return out
 
 
-def export_json(conn, path, now: float | None = None) -> str:
-    doc = report(conn, now)
+def export_json(conn, path, now: float | None = None, since: float | None = None) -> str:
+    doc = report(conn, now, since)
     doc["recent"] = recent(conn, 40, now)
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)

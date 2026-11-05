@@ -210,6 +210,24 @@ that did nothing.
 | Launcher: refresh each cycle + `--memes` probe + doctor rows | `launch.py` |
 | The page (nav "Meme Coins", `#memes`) | `web/index.html`, `web/js/app.js::renderMemes` |
 | Tests (fixtures, both hard rules, wash thresholds, tape pruning) | `tests/test_memecoins.py` |
+| The radar's own record: every call at the price seen, marked at 1h/6h/24h/7d | `engine/memeledger.py`, `memes_build.follow_due`, `tests/test_memeledger.py` |
+
+**The record follows every call (fixed 5 November).** It first read "this
+coin is not on this build" as "its pool died". The build scans 60 coins
+and new pools push the older ones out within minutes, so on 5 November
+80,104 of the 80,834 rocket calls read gone, the median peak and close
+were exactly 0%, and only the coins still trending got their 6-hour and
+later marks. A coin seen again late also filled every horizon it had
+passed with that one price. Now each call owed a mark is priced by its own
+DexScreener lookup when its coin has left the scan (`memeledger.due`,
+`stamp`; at most 120 coins a build, four of the 30-coin batches the scan
+already makes), a mark counts only inside its on-time window (15 minutes
+after the hour, a quarter of the horizon after that, a day after the
+week), and a call is gone only when a lookup finds no pool quoting its
+coin. The published record counts calls from 6 November 2026, 00:00 UTC
+(`MEASURED_FROM`); the calls before it (268,699 by the afternoon of 5
+November) stay in the database, and the page says why they are not in its
+numbers.
 
 The sandbox that wrote the parsers cannot reach either provider (403 at
 the proxy — the same story as statsapi and Savant, both of which work on

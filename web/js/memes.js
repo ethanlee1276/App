@@ -274,7 +274,7 @@ function memeRecordRow(r) {
     <span class="mr-n">${memePct(r.peak)}</span>
     <span class="mr-n">${memePct(r.last)}</span>
     <span class="mr-tag">${r.gone
-      ? `<span class="chip warn" title="The coin stopped appearing in the feed — for a memecoin that usually means the pool is dead">gone</span>`
+      ? `<span class="chip warn" title="No pool was quoting the coin when we looked its price up">gone</span>`
       : ""}</span>
   </div>`;
 }
@@ -306,8 +306,8 @@ function memeChannelHTML(name, label, ch, horizons) {
     <p class="mr-path">Over the ${p.n} call(s) at least an hour old — the
       same set the table above measures — the median peaked
       ${memePct(p.median_peak)}, bottomed ${memePct(p.median_trough)} and
-      sits at ${memePct(p.median_last)}${p.gone ? ` · <b>${p.gone}</b> of
-      them left the feed entirely` : ""}${p.never_marked ? `, and
+      sits at ${memePct(p.median_last)}${p.gone ? ` · no pool was quoting
+      <b>${p.gone}</b> of them when we looked` : ""}${p.never_marked ? `, and
       ${p.never_marked} vanished before we could mark them once — counted
       here, never folded into the median as an invented −100%` : ""}.</p>
   </div>`;
@@ -357,6 +357,25 @@ function memeDistBars(dist, total) {
    cannot support the claim. */
 const MEME_MIN_CALLS = 20;
 
+/* COUNTED FROM 6 NOVEMBER (2026-11-05). Before it a call was followed
+   only while its coin stayed on the 60-coin scan, so nearly every coin
+   read "gone" and only the ones still trending reached their later
+   checks. Those calls stay in the database; the page says why they are
+   not in its numbers rather than quietly starting over. */
+function memeCountedFrom(rec) {
+  const iso = (rec && rec.measured_from) || "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return "";
+  const month = ["January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December"][Number(m[2]) - 1];
+  const before = Number(rec.calls_before || 0);
+  return `<p class="rv-from">Counted from ${Number(m[3])} ${month}${
+    before ? `. The ${before.toLocaleString()} calls before it were followed only while
+    their coin stayed on our scan, which left the later checks to the coins
+    still trending and counted nearly every other one as gone, so they are kept
+    but not counted` : ""}.</p>`;
+}
+
 function memeVerdictHTML(rec) {
   const chans = (rec && rec.channels) || {};
   const r = (chans.rocket || {}).path || {};
@@ -391,6 +410,7 @@ function memeVerdictHTML(rec) {
     <div class="section-title">The verdict
       <span class="sub">— what happened to the coins this page called, including
       the ones that went to zero</span></div>
+    ${memeCountedFrom(rec)}
     <div class="rv-tiles md-tiles">
       ${tile("calls", String(r.n || 0),
              followed ? `${followed} followable` : "none old enough yet")}
@@ -423,9 +443,10 @@ function memeRecordHTML(rec) {
     return `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
       <h3>The record starts with the next build</h3>
       <p>Every coin this page puts on the rocket list or flags for exit is
-      filed at the price shown, then re-checked on every refresh — 1 hour,
-      6 hours, 24 hours and a week later. Nothing here is back-filled and
-      nothing is ever removed, including the coins that go to zero.</p></div>`;
+      filed at the price shown, then priced again 1 hour, 6 hours, 24 hours
+      and a week later, whether or not it is still on our scan. Nothing here
+      is back-filled and nothing is ever removed, including the coins that go
+      to zero.</p></div>`;
   }
   const hz = rec.horizons || ["1h", "6h", "24h", "7d"];
   const recent = (rec.recent || []).slice(0, 30);

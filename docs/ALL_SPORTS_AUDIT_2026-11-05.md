@@ -150,7 +150,8 @@ never blend, and risk is a gate.
 | | Status |
 |---|---|
 | Discovery, order flow, holder concentration, mint/freeze authority, LP lock, wash flags, the exit channel | **Built** (free tier) |
-| The radar's own record (`engine/memeledger`): every coin on either channel at the price seen, marked at 1 hour, 6 hours, a day and a week, its peak and trough, and a coin that vanishes kept as an outcome | **Built** (since 19 August) |
+| The radar's own record (`engine/memeledger`): every coin on either channel at the price seen, marked at 1 hour, 6 hours, a day and a week, its peak and trough, and a coin that vanishes kept as an outcome | **Fixed today**: it called a coin gone when it left the 60-coin scan (99% of rocket calls, 80,104 of 80,834, while their coins traded on), so only coins still trending got their later marks, and a late sighting filled earlier horizons. Each owed call is now priced by its own lookup, marks count only on time, gone means no pool quoting it, and the record counts from 6 November (`docs/MEMECOIN_MODEL.md` §6) |
+| Do the radar's scores mean anything: momentum, rank and risk against what the coins did | **Parked** until the fixed record has a week of followed calls; every call stores its momentum, risk and rank, so the split is a read of data already kept |
 | Smart-money wallets, holder velocity, bundle and sniper detection, dev-wallet sells, bonding-curve stage | **Parked**: each needs a paid firehose feed; the page says so rather than scoring the gap as safe |
 | Every venue (GeckoTerminal, DexScreener, RugCheck, Solana RPC) | **Not reachable** from the build sandbox; the box reads them live |
 

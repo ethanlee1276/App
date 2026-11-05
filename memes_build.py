@@ -48,6 +48,35 @@ RUGCHECK_LOOKUPS = 15
 SPARK_POINTS = 120
 
 
+#: Coins priced per build for the record when their call is owed a mark
+#: and the coin has left the scan: four of DexScreener's 30-coin batches
+#: at most, beside the two to four the scan itself makes every build.
+FOLLOW_MAX = 120
+
+
+def follow_due(mconn, board: dict, now: float | None = None) -> dict:
+    """Price each call owed a mark whose coin has left the scan
+    (`memeledger.due`) straight from DexScreener, so the record marks every
+    call on time rather than only the coins still trending. A coin a batch
+    answered without a pool is gone; a batch that failed waits for the
+    next build (`memeledger.stamp`)."""
+    from engine import memeledger
+    present = {c.get("mint") for c in (board.get("coins") or [])
+               if memeledger._price(c) is not None}
+    calls = memeledger.due(mconn, present, now=now, limit=FOLLOW_MAX)
+    mints = sorted({c["mint"] for c in calls})
+    prices: dict = {}
+    for i in range(0, len(mints), 30):
+        chunk = mints[i:i + 30]
+        try:
+            got = parse_dex_pairs(fetch_pairs_for(chunk))
+        except DataUnavailable:
+            continue
+        for m in chunk:
+            prices[m] = memeledger._price(got.get(m) or {})
+    return memeledger.stamp(mconn, calls, prices, now=now)
+
+
 def _tracked_mints(discovered: list[str],
                    history: dict) -> tuple[list[str], set[str]]:
     """Discovery order, then CARRIED coins — mints with a live tape that
@@ -267,12 +296,15 @@ def _build(args) -> int:
             try:
                 new_calls = memeledger.log_calls(mconn, board)
                 marks = memeledger.mark(mconn, board)
+                # Every call owed a mark is priced, on the scan or off it.
+                off = follow_due(mconn, board)
                 memeledger.export_json(mconn, "web/data/memerecord.json")
             finally:
                 mconn.close()
             print(f"  Record: {new_calls} new call(s), "
-                  f"{marks['marked']} re-marked, {marks['stamped']} horizon(s) "
-                  f"stamped, {marks['gone']} coin(s) gone from the feed.")
+                  f"{marks['marked']} re-marked on the scan, {off['looked_up']} "
+                  f"looked up off it, {marks['stamped'] + off['stamped']} horizon(s) "
+                  f"stamped, {off['gone']} coin(s) with no pool quoting them.")
         except Exception as exc:                               # noqa: BLE001
             print(f"  ⚠️  Record skipped — {exc}")
     else:

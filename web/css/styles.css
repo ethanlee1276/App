@@ -5474,6 +5474,7 @@ body.has-rail .shell {
   background: var(--panel-2); border: var(--hairline) solid transparent;
   color: var(--text-body); font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .rv-early b { color: var(--text); }
+.rv-from { margin: 4px 0 12px; font-size: var(--fs-sm); color: var(--text-mute); }
 
 /* The money/paper sentence. Quieter than `.rv-early`, which is a warning
    with a panel behind it — this is not a caveat, it is the SCOPE of the

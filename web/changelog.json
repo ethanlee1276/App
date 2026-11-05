@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-05",
+      "kind": "fix",
+      "title": "Rocket Radar's record follows every call",
+      "body": "The radar's record called a coin gone the moment it left the 60 coins we scan, and new pools push the older ones out within minutes. So nearly every call read gone while its coin was still trading, and only the coins still trending got their 6-hour and later checks: a record of survivors. Every call is now priced at 1 hour, 6 hours, 24 hours and a week by its own lookup, on our scan or off it; a check counts only when it is taken on time; and gone means no pool was quoting the coin when we looked. The record counts calls from 6 November. The calls before it are kept, and the page says why they are not in its numbers."
+    },
+    {
+      "date": "2026-11-05",
       "kind": "model",
       "title": "College props are corrected on the model's own number",
       "body": "Each week we measure how far every market's probabilities run hot or cold and correct them. For college football, and for the NFL's recency and player-memory settings, that measurement was taken on probabilities already pulled toward the betting line, while the board applies the correction before that pull. Replayed on four NFL seasons, learned on 2022-24 and judged on 2025, the correction learned on the model's own number beat the old one on all four markets, and the old one did worse than no correction at all on three. From each sport's next weekly refit, college's corrections and the NFL's and college's recency and player-memory settings are learned the right way. Where the old correction was stretching college's probabilities, its edges will come out smaller. The NFL's yardage and catch markets keep their corrections learned against real sportsbook lines."
