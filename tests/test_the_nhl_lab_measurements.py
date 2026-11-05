@@ -136,6 +136,33 @@ def test_the_rest_line_on_a_card():
     assert not [x for x in r2["reasons"] if x.startswith("Rest:")]
 
 
+GOALIE = {"position": "G", "games": [{"date": f"2025-10-{i:02d}", "toi": 60.0, "saves": 26.0, "shots_against": 29.0,
+                                      "started": 1.0} for i in range(20, 0, -1)]}
+
+
+def test_the_saves_model_is_scaled_to_what_a_starter_faces_with_its_measured_spread():
+    """Every start of two seasons: the projection ran 5-6% high and its
+    spread 22% narrow (squared z 1.55); fitted on one season and judged on
+    the other, the saves ladder's log loss fell 0.011 and 0.021."""
+    assert (M.SAVES_LEVEL, M.SAVES_SD_SCALE) == (0.943, 1.22)
+    assert M.B2B_SAVES > 1.0 > M.B2B_SAVES_OPP, "a tired team lets more shots through; a tired opponent takes fewer"
+    teams = {"EDM": {"sog_against": 29.0, "n": 82}, "CGY": {"sog_for": 29.0, "n": 82}}
+    league = {"sv": 0.900}
+    base = M.goalie_projection(GOALIE, league, teams, "EDM", "CGY")
+    assert abs(base["mean"] - base["shots"] * base["sv"]) < 0.01, "the card's arithmetic holds: shots × save rate"
+    raw_shots = 29.0 * M.opp_factor(teams, "CGY", "sog_for")
+    assert abs(base["shots"] - raw_shots * M.SAVES_LEVEL) < 0.01
+    tired = M.goalie_projection(GOALIE, league, teams, "EDM", "CGY", rest="tired")
+    fresh_v_tired = M.goalie_projection(GOALIE, league, teams, "EDM", "CGY", rest="opp_tired")
+    assert abs(tired["mean"] / base["mean"] - M.B2B_SAVES) < 1e-3 and tired["rest"] == "tired"
+    assert abs(fresh_v_tired["mean"] / base["mean"] - M.B2B_SAVES_OPP) < 1e-3
+    assert base["rest"] is None and base["rest_factor"] == 1.0
+    # The spread: the old one times the measured scale.
+    sv = base["sv"]
+    old_sd = (raw_shots * M.SOG_DISPERSION * sv * sv + raw_shots * sv * (1 - sv)) ** 0.5
+    assert abs(base["sd"] - old_sd * M.SAVES_SD_SCALE) < 0.01
+
+
 def test_the_box_check_reads_what_the_board_reads_and_writes_nothing():
     """nhllabcheck.py's team replay is the board's team_profiles (as of the
     morning after the last stored game), its history file is opened

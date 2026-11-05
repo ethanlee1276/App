@@ -4,6 +4,12 @@
     {
       "date": "2026-11-05",
       "kind": "model",
+      "title": "NHL saves: the right level and the right spread",
+      "body": "We replayed every start of two NHL seasons through the saves model. It projected 5–6% more saves than goalies made, because a starter does not face every shot his team allows: some nights he is pulled, and the empty net takes the rest. It was also about 22% too sure of itself, so the misses landed wider than it said. Both are fixed, and the night after a team played moves the shots a goalie faces: more against a tired team, fewer from one. Measured on the season each fix never saw, the saves chances got better by more than any other change in the NHL lab. Every saves card now reads from the corrected model."
+    },
+    {
+      "date": "2026-11-05",
+      "kind": "model",
       "title": "WNBA: three minutes pieces measured on the WNBA's own six seasons",
       "body": "The WNBA board runs the NBA's code with its own settings, and the NBA's measured minutes pieces were switched off for it until WNBA games said so. We replayed six WNBA regular seasons (2021 to 2026) through the board's own projection. Three pieces made minutes and points better in every one of the six. The first is the starting five's news: before the tip, who of a club's last starting five is ruled out, who is back, and each player's own starts. The second is a player's first game back after missing games. The third weights his newest games more heavily. Together they cut the minutes error by about 3% in every season. The role jump, the second game back and a regular's return each made points worse in at least one season, so they stay off for the WNBA. The board plays again in May."
     },

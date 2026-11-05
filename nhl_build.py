@@ -327,10 +327,10 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
     if them.get("b2b"):
         reasons.append(f"{opponent} is on the second night of a back-to-back")
     rf = proj.get("rest_factor") or 1.0
-    if not goalie and abs(rf - 1.0) >= 0.005:
+    if abs(rf - 1.0) >= 0.005:
         who = prop.team if proj.get("rest") == "tired" else opponent
-        reasons.append(f"Rest: {who} on the second night moves his number {rf - 1:+.1%} "
-                       f"(measured over two seasons of back-to-backs)")
+        reasons.append(f"Rest: {who} on the second night moves his {'saves' if goalie else 'number'} "
+                       f"{rf - 1:+.1%} (measured over two seasons of back-to-backs)")
     if flags or passes:
         reasons.append("Risk factors: " + "; ".join(flags + passes))
     eh = EH.assess_prop(prop.market, side, line, win, fair, edge, odds, book, credible, proj, p,
@@ -689,7 +689,8 @@ def price_slate(slate: _Slate, games: list[dict], players: dict, league: dict, t
             if not me.get("starter_sure") or me.get("starter") != prop.player:
                 census["starter_unconfirmed"] += 1
                 continue
-            proj = M.goalie_projection(p, league, teams, prop.team, opp) if p else None
+            proj = M.goalie_projection(p, league, teams, prop.team, opp,
+                                       rest=M.rest_of(me.get("b2b"), them.get("b2b"))) if p else None
         else:
             sure = them.get("starter_sure")
             opp_sv = them.get("sv") if sure else None

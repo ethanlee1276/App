@@ -549,10 +549,11 @@ minutes):
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 nhllabcheck.py
 ```
 
-Its last four lines should read like `skaters: the shipped constants
+Its last five lines should read like `skaters: the shipped constants
 better in 5 of 5 markets`, `back-to-backs: ... in 10 of 10`, `game lines:
-better after` and `goalies: backup named right 80% ...`. Paste it back if
-any of them reads the other way.
+better after`, `saves: better after ..., squared z 1.0..., level 1.00...`
+and `goalies: backup named right 80% ...`. Paste it back if any of them
+reads the other way.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

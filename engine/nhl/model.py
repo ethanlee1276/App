@@ -32,7 +32,10 @@ A GOALIE'S SAVES. The probable starter only (the goalie who started most
 of his team's last STARTER_WINDOW games — nobody confirms starters this
 early, and the card says so). Shots against are his team's recent shots
 allowed times the opponent's shot rate; his save rate is shrunk toward the
-league by PRIOR_SHOTS. Saves are shots × save rate, with the spread of both.
+league by PRIOR_SHOTS. Saves are shots × save rate, with the spread of both,
+scaled to the shots a starter faces (SAVES_LEVEL, measured: the pulled
+nights and the empty net) and widened to the misses measured
+(SAVES_SD_SCALE).
 
 THE GAMES. Each team's goals for and against a game, decay-weighted over
 its recent games and shrunk toward the league, give each side an expected
@@ -662,7 +665,29 @@ def scalpy_grade(prob: float, flags=()) -> str:
     return "Pass"
 
 
-def goalie_projection(p: dict, league: dict, teams: dict, team: str, opponent: str) -> dict | None:
+#: THE SAVES MODEL, MEASURED (2026-11-05, docs/NHL_LAB.md): every start of
+#: two seasons (5,183) priced walk-forward at a ladder of saves lines, each
+#: factor fitted on one season and judged on the other. Two things were
+#: wrong in both seasons: the projection ran 5-6% high (0.936 and 0.950 of
+#: what happened — a starter does not face every shot his team allows: the
+#: nights he is pulled, the empty net), and its spread ran 22% narrow (the
+#: misses' squared z averaged 1.55, where an honest spread reads 1.0).
+#: Fixed: ladder log loss -0.0107 on 2025-26 with the factors fitted on
+#: 2024-25, -0.0214 the other way. A back-to-back moves his shots too (his
+#: team on its second night: more against him; the opponent on its second:
+#: fewer), at three-quarters of the pooled measurement, as the skaters'.
+SAVES_LEVEL = 0.943
+SAVES_SD_SCALE = 1.22
+B2B_SAVES = 1.036
+B2B_SAVES_OPP = 0.974
+
+
+def goalie_projection(p: dict, league: dict, teams: dict, team: str, opponent: str,
+                      rest: str | None = None) -> dict | None:
+    """His saves tonight: shots against × his regressed save rate, scaled
+    to what a starter faces (SAVES_LEVEL) with the measured spread
+    (SAVES_SD_SCALE). ``rest`` (rest_of) is tonight's back-to-back: "tired"
+    is his own team on its second night (more shots against him)."""
     games = [g for g in p["games"] if g.get("shots_against", 0) > 0]
     if len(games) < 3:
         return None
@@ -673,10 +698,14 @@ def goalie_projection(p: dict, league: dict, teams: dict, team: str, opponent: s
     own = (teams.get(team) or {}).get("sog_against")
     avg = _league_avg(teams, "sog_against") or 30.0
     shots = (own if own is not None else avg) * opp_factor(teams, opponent, "sog_for")
-    mean = shots * sv
     var = shots * SOG_DISPERSION * sv * sv + shots * sv * (1 - sv)
-    return {"mean": round(mean, 3), "sd": round(math.sqrt(var), 3), "shots": round(shots, 2), "sv": round(sv, 4),
-            "n": len(games), "recent": [g.get("saves", 0.0) for g in games[:12]]}
+    rf = B2B_SAVES if rest == "tired" else B2B_SAVES_OPP if rest == "opp_tired" else 1.0
+    shots_faced = shots * SAVES_LEVEL * rf
+    mean = shots_faced * sv
+    sd = math.sqrt(var) * SAVES_SD_SCALE * math.sqrt(rf)
+    return {"mean": round(mean, 3), "sd": round(sd, 3), "shots": round(shots_faced, 2), "sv": round(sv, 4),
+            "n": len(games), "recent": [g.get("saves", 0.0) for g in games[:12]],
+            "rest": rest if rf != 1.0 else None, "rest_factor": round(rf, 3)}
 
 
 def goalie_prob(proj: dict, line: float, side: str) -> float:

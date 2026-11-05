@@ -9378,7 +9378,12 @@ other, and changed what held up both ways:
   more blocks for it); the card says `Rest: ...`;
 - last night's starting goalie starts again 9% of the time, so he was
   already unsettled (no saves bet); the card now names the backup, who
-  starts 78% of those nights.
+  starts 78% of those nights;
+- the saves model ran 5-6% high (a starter does not face every shot his
+  team allows) and its spread 22% narrow, so every saves pick was too
+  sure of itself. Both are fixed, and a back-to-back moves his shots
+  too. Saves log loss fell 0.012 and 0.022 held out, the lab's biggest
+  gain.
 
 The check replays the box's own stored NHL games, this season's included,
 the constants before against after, the back-to-back ratios beside the
@@ -9391,9 +9396,10 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 nhllabcheck.py
 
 On a copy built from the lab's three seasons it printed `skaters: the
 shipped constants better in 5 of 5 markets`, `back-to-backs: the box's
-games lean the shipped way in 10 of 10`, `game lines: better after`, and
-`goalies: backup named right 80% of 727 nights`. If the box's last lines
-read the other way on any of the four, paste it back.
+games lean the shipped way in 10 of 10`, `game lines: better after`,
+`saves: better after (-0.01593 a line), squared z 1.02, level 1.002` and
+`goalies: backup named right 80% of 739 nights`. If the box's last lines
+read the other way on any of the five, paste it back.
 
 **KJ. Closing lines at the sportsbooks' number, and the settled ones re-read**
 (step 389; one read-only dry run, then one write once you have read it;

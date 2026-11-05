@@ -148,6 +148,38 @@ recent starts), with *starts about 78% of those nights*. He is still not
 already carries his effect: it was measured with no goalie read, and is
 larger on these backup nights (goals 1.073) than on the others (1.037).
 
+**The saves model** (`SAVES_LEVEL` 0.943, `SAVES_SD_SCALE` 1.22, new
+`B2B_SAVES` 1.036 and `B2B_SAVES_OPP` 0.974). Every start of the two
+seasons (5,183) was priced through `goalie_projection` at a ladder of
+saves lines, 19.5 to 33.5. Two things were wrong in both seasons:
+
+- **It ran high.** Goalies made 0.936 and 0.950 of the saves projected.
+  A starter does not face every shot his team allows: some nights he is
+  pulled, and the empty net takes the rest.
+- **Its spread ran narrow.** The misses' squared z averaged 1.55 in both
+  seasons, where an honest spread reads 1.0. Saves land about 22% wider
+  than the model said, so it was too sure of every saves pick.
+
+A back-to-back moves his shots too, both seasons the same way. His team
+on its second night lets more through (1.03 and 1.06 of rested); an
+opponent on its second night takes fewer (0.975 and 0.955). Each factor
+was fitted on one season and judged on the other. Ladder log loss
+change:
+
+| | 2024-25 → 2025-26 | 2025-26 → 2024-25 |
+|---|---|---|
+| The level | −0.0046 | −0.0185 |
+| + the spread | −0.0107 | −0.0214 |
+| + the back-to-back (¾) | **−0.0120** | **−0.0216** |
+
+These are the largest gains in the lab, larger than any skater
+market's. The pooled values ship. Through the model itself, the misses'
+squared z is now 0.98 and 1.00 and the level 0.99 and 1.01. The prior on
+his save rate (600 shots) barely mattered (2,400 was 0.0002 better) and
+stays: it also sets the opposing goalie's read for every skater's goal
+markets, which this lab did not replay. A saves card on a back-to-back
+says so: `Rest: EDM on the second night moves his saves +3.6%`.
+
 ## On the box
 
 `nhllabcheck.py` (step KK of `docs/WHEN_YOU_ARE_HOME.md`, read-only)
@@ -167,7 +199,10 @@ and agreed with the lab:
 - the back-to-back ratios leaned the shipped way in 10 of 10;
 - the game lines were better (−0.0015 a line, totals the most);
 - the named backup started 80% of 727 such nights, and last night's
-  starter 8%.
+  starter 8%;
+- saves (7,560 starts over all three seasons): log loss 0.56503 →
+  0.54909, the misses' squared z 1.58 → 1.02, actual ÷ projected 0.949 →
+  1.002.
 
 ## Next
 

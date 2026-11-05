@@ -32,6 +32,8 @@ included (the lab's files stopped at last April), three ways:
    again on data the lab never had.
 3. THE GAME LINES: moneyline, puck line and a totals ladder, the team
    constants before against after, and the goalie rule's two rates.
+4. SAVES: every start through model.goalie_projection, before and after
+   the measured level, spread and back-to-back factors.
 
 The last lines say whether the box's games agree with the lab. Under a
 few hundred games a part says it has too few rather than guess.
@@ -55,12 +57,14 @@ from engine.nhl import model as M          # noqa: E402
 #: The constants as they stood before the lab, for the side-by-side.
 BEFORE = {"RATE_HALF_LIFE": 12.0, "TOI_HALF_LIFE": 6.0, "RECENT_GAMES": 40, "TEAM_HALF_LIFE": 25.0,
           "TEAM_PRIOR_GAMES": 15.0, "B2B_FACTOR": 0.97, "B2B_OPP_FACTOR": 1.0,
-          "B2B_SKATER": {}, "B2B_SKATER_OPP": {}}
+          "B2B_SKATER": {}, "B2B_SKATER_OPP": {},
+          "SAVES_LEVEL": 1.0, "SAVES_SD_SCALE": 1.0, "B2B_SAVES": 1.0, "B2B_SAVES_OPP": 1.0}
 SHIPPED = {k: getattr(M, k) for k in BEFORE}
 MARKETS = ("sog", "points", "goals", "assists", "blocks")
 LADDER = {"sog": (0.5, 1.5, 2.5, 3.5, 4.5), "blocks": (0.5, 1.5, 2.5), "points": (0.5, 1.5),
           "assists": (0.5,), "goals": (0.5,)}
 TOTALS = (4.5, 5.5, 6.5, 7.5)
+SAVES_LADDER = (19.5, 22.5, 24.5, 26.5, 28.5, 30.5, 33.5)
 MIN_HISTORY = 5
 MIN_GAMES = 300
 
@@ -214,6 +218,46 @@ def game_lines(games: list, played: dict, cfg: dict) -> dict:
             "all": (acc["ml"] + acc["pl"] + acc["tot"]) / (3 * n)}
 
 
+def saves(players: dict, games: list, played: dict, cfg: dict) -> dict:
+    """Every start priced through model.goalie_projection from his starts
+    before it, the teams as of that morning and the league's save rate
+    before that date: the saves ladder's log loss, the squared z of the
+    misses (1.0 = an honest spread) and actual ÷ projected (1.0 = level)."""
+    from engine.nhl.backtest import _league_by_date
+    _apply(cfg)
+    league_on = _league_by_date(players)
+    acc = defaultdict(float)
+    cache: dict = {}
+    for p in players.values():
+        if p["position"] != "G":
+            continue
+        gs = p["games"]
+        for i, g in enumerate(gs):
+            if not g.get("started") or g.get("shots_against", 0) <= 0:
+                continue
+            prior = [x for x in gs[:i][::-1] if x.get("shots_against", 0) > 0][:M.RECENT_GAMES]
+            if len(prior) < 3:
+                continue
+            d = g["date"]
+            if d not in cache:
+                cache[d] = _profiles(games, d)
+            me = _day_before(d) in played.get(g["team"], ())
+            them = _day_before(d) in played.get(g.get("opponent"), ())
+            pj = M.goalie_projection({"position": "G", "games": prior}, league_on[d], cache[d], g["team"],
+                                     g.get("opponent") or "", rest=M.rest_of(me, them))
+            if not pj or not pj["sd"]:
+                continue
+            for line in SAVES_LADDER:
+                acc["ll"] += _ll(M.goalie_prob(pj, line, "OVER"), 1 if g.get("saves", 0) > line else 0)
+            acc["n"] += 1
+            acc["z2"] += ((g.get("saves", 0) - pj["mean"]) / pj["sd"]) ** 2
+            acc["act"] += g.get("saves", 0)
+            acc["proj"] += pj["mean"]
+    n = acc["n"] or 1
+    return {"n": int(acc["n"]), "ll": acc["ll"] / (n * len(SAVES_LADDER)), "z2": acc["z2"] / n,
+            "level": (acc["act"] / acc["proj"]) if acc["proj"] else 0.0}
+
+
 def goalies(players: dict, played: dict) -> dict:
     """How often the probable starter who started last night starts again,
     and how often model.backup_goalie's choice starts instead."""
@@ -303,6 +347,15 @@ def main(argv=None) -> int:
         print(f"   {ga['n']} games priced")
         verdicts.append(f"game lines: {'better' if ga['all'] < gb['all'] else 'worse'} after "
                         f"({ga['all'] - gb['all']:+.5f} a line)")
+        print("\n4. SAVES — every start, the ladder's log loss, the misses' squared z (1.0 = an honest "
+              "spread) and actual ÷ projected (1.0 = level)")
+        sb, sa = saves(players, games, played, BEFORE), saves(players, games, played, SHIPPED)
+        for name, r in (("before", sb), ("after", sa)):
+            print(f"   {name:6} log loss {r['ll']:.5f}  squared z {r['z2']:.3f}  actual/projected {r['level']:.4f}"
+                  f"  ({r['n']} starts)")
+        if sa["n"]:
+            verdicts.append(f"saves: {'better' if sa['ll'] < sb['ll'] else 'worse'} after "
+                            f"({sa['ll'] - sb['ll']:+.5f} a line), squared z {sa['z2']:.2f}, level {sa['level']:.3f}")
         gt = goalies(players, played)
         a, b = gt["again"], gt["backup"]
         if a[1]:
