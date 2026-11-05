@@ -233,7 +233,7 @@ SLATE_TZ = "America/New_York"
 
 
 #: What the two close readers read off a snapshot, and all they keep.
-_LINE_KEYS = ("ts", "line", "start_ts")
+_LINE_KEYS = ("ts", "line", "start_ts", "book")
 _ODDS_KEYS = ("ts", "line", "start_ts", "over_odds", "under_odds")
 
 
@@ -486,6 +486,7 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
     every paid pull with no extra spend. (On fixed-line markets like 0.5 HR
     the line never moves, so CLV there reads 0 — honest, if unexciting.)"""
     import datetime as _dt
+    from .odds import is_exchange
     from .sources.oddsapi import normalize_name
 
     grouped: dict[tuple, list[dict]] = {}
@@ -513,8 +514,15 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
             if not pre:
                 continue
             last = max(float(r["ts"]) for r in pre)
-            val = _median([float(r["line"]) for r in pre
-                           if float(r["ts"]) == last])
+            at = [r for r in pre if float(r["ts"]) == last]
+            # THE SPORTSBOOKS' LINES, an exchange's only when none quoted
+            # (2026-11-05). An exchange posts a ladder under its main
+            # market (`odds.is_exchange`), and its rungs went into this
+            # median beside the sportsbooks' one number each: the NBA's
+            # receipts carried closes at twice a pick's line. The board
+            # never prices off a rung, and neither does the close.
+            books = [r for r in at if not is_exchange(r.get("book") or "")]
+            val = _median([float(r["line"]) for r in (books or at)])
             if n == 1:
                 out[key] = val
                 if start is not None:

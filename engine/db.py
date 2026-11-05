@@ -1390,18 +1390,52 @@ def closing_odds_by_date(conn, sport: str, market: str) -> dict:
     q = ("SELECT player, book, line, over_odds, under_odds, taken_at"
          f"{_commence_sql(conn)} "
          "FROM odds_history WHERE sport=? AND market=? ORDER BY taken_at")
-    out: dict = {}
+    # EACH BOOK'S LAST QUOTE, THEN THE MARKET'S NUMBER AMONG THEM
+    # (2026-11-05). This kept the day's last row, from whichever book
+    # wrote last. The prop tape writes a book only when its number moves,
+    # and an exchange moves most, so the last row was often an exchange's.
+    # An exchange posts a LADDER under its main market (`odds.is_exchange`),
+    # and one quote per book per snapshot keeps whichever rung was written
+    # last. The public receipts showed it: 1,062 of 2,537 settled NBA picks
+    # had a close 3+ away from their own line, Zach Edey's rebounds at 9.5
+    # and 10.5 "closing" at 19.5. The board already refuses an exchange's
+    # rung (tests/test_an_exchange_rung_never_prices_the_row.py); the close
+    # now does too: the quote at the sportsbooks' number (`odds.market_centre`),
+    # an exchange's only when no sportsbook quoted.
+    last: dict = {}
     for r in conn.execute(q, (sport, market)):
         if _in_play(r):
             continue
         date = str(r["taken_at"])[:10]
-        # Ordered by taken_at, so later same-date rows overwrite earlier ones.
-        out[(r["player"], date)] = {
+        # Ordered by taken_at, so a book's later same-date quote replaces its earlier one.
+        last[(r["player"], date, r["book"])] = {
             "line": r["line"], "over_odds": r["over_odds"],
             "under_odds": r["under_odds"], "book": r["book"],
             "taken_at": r["taken_at"], "commence_time": _commence_of(r),
         }
-    return out
+    grouped: dict = {}
+    for (player, date, _book), quote in last.items():
+        grouped.setdefault((player, date), []).append(quote)
+    return {key: close_quote(quotes) for key, quotes in grouped.items()}
+
+
+def close_quote(quotes: list) -> dict:
+    """The one quote that stands for a day's close among each book's last
+    quote: the sportsbooks' number (`odds.market_centre`), and an exchange's
+    ladder only when no sportsbook quoted. Among the quotes at that number,
+    the latest (then the book's name, so the answer never depends on the
+    order the rows came back in)."""
+    from types import SimpleNamespace
+
+    from .odds import is_exchange, market_centre
+    books = [q for q in quotes if not is_exchange(q.get("book") or "")]
+    pool = books or list(quotes)
+    centre = market_centre([SimpleNamespace(book=q.get("book"), line=q.get("line"),
+                                            over_odds=q.get("over_odds"), under_odds=q.get("under_odds"))
+                            for q in pool if q.get("line") is not None])
+    at = [q for q in pool if centre is not None and q.get("line") is not None
+          and float(q["line"]) == centre] or pool
+    return max(at, key=lambda q: (str(q.get("taken_at") or ""), str(q.get("book") or "")))
 
 
 def closing_odds_all_books(conn, sport: str, market: str) -> dict:

@@ -4,6 +4,12 @@
     {
       "date": "2026-11-05",
       "kind": "fix",
+      "title": "Closing lines come from the sportsbooks' number, not an exchange's ladder",
+      "body": "Every settled pick records the market's closing line, which is how the Record page measures whether a pick beat the close. Exchanges like Novig and ProphetX post a ladder of lines for a player where a sportsbook posts one, and the two places that read the close let those rungs in: one kept whichever quote was stored last, the other took the middle of every quote, rungs and all. On 1,062 of 2,537 settled NBA picks the recorded close was 3 or more away from the pick's own line; Zach Edey's rebounds at 9.5 and 10.5 'closed' at 19.5. The close is now each book's last quote before the game, at the sportsbooks' number, and an exchange's only when no sportsbook quoted. Grades and results never read it. Picks settled before today keep the close they were given."
+    },
+    {
+      "date": "2026-11-05",
+      "kind": "fix",
       "title": "On an iPhone, the tab bar stays at the bottom when a menu or the keyboard opens",
       "body": "On an iPhone, the Home page's Sort menu opens a picker from the bottom of the screen, as the keyboard does, without making the page any shorter. The tab bar, pinned to the bottom of the screen, rode up with the picker and could stay halfway up the page after it closed, over the games. Now, while a picker or the keyboard is up, the tab bar and the bets-riding strip above it step aside, as an app's own bar does, and when it closes they come back at the bottom. Other phones keep their bar as before."
     },
