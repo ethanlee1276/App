@@ -842,6 +842,14 @@ scorer's whole chance 2.7586 -> 2.7509 and 2.7472 -> 2.7438 nats.
   board is left alone. Raising a claim the record says is too low is a
   different correction with its own bar, and two weeks is too little to
   set one.
+- The Edge side on the same public receipts (5 November): 38-59 (39.2%)
+  where the model claimed 49.4% and the prices taken implied 43.7%, −5.1
+  units on 69.5 staked, 97 picks from 21 October to 2 November; 21-21 at
+  +100 to +130 and 12-27 past +130 (no stake past +130 since 31 October).
+  None has posted since 3 November: the 4 November board's census had
+  1,276 props short of the edge it needs and 101 where model and market
+  disagree too far to trust. Most Likely (+11.8 units) is where the NBA
+  board earns.
 - Done 2026-11-04 (runbook KC): the box runs `nbalabcheck.py --part spread
   --save-verdict` itself every week; on `spread: ready for the refit` the
   NBA's refit fits its calibration with the spread on and only then throws
