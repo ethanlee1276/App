@@ -134,7 +134,20 @@ def test_each_sport_by_book_over_seven_and_thirty_days():
         assert (tot["n30"], tot["today"], tot["w30"], tot["l30"]) == (6, 2, 2, 2), tot
         nfl = got[1]["books"]
         assert [b["book"] for b in nfl] == ["Edge", "All"] and nfl[0]["w30"] == 1, "a category no book owns is left out"
-        assert got[0]["last"] and got[0]["playing"] is False, got[0]
+        assert got[0]["last"], got[0]
+        # "Plays today" is a game today (Eastern) on the league's scoreboard, not
+        # a week's games on it: the NFL's carries Thursday to Monday.
+        root = OD.ROOT
+        try:
+            OD.ROOT = d
+            (d / "web" / "data").mkdir(parents=True)
+            start = lambda days: dt.datetime.fromtimestamp(NOW + days * 86400, dt.timezone.utc).isoformat()  # noqa: E731
+            (d / "web" / "data" / "live_nba.json").write_text(json.dumps({"games": [{"live": {"start_time": start(0)}}]}))
+            (d / "web" / "data" / "live_nfl.json").write_text(json.dumps({"games": [{"live": {"start_time": start(3)}}]}))
+            playing = {s["sport"]: s["playing"] for s in OD.sports(L, NOW)}
+            assert playing == {"nba": True, "nfl": False}, playing
+        finally:
+            OD.ROOT = root
     finally:
         L.close()
         shutil.rmtree(d, ignore_errors=True)

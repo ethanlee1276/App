@@ -218,13 +218,13 @@ def picks(lconn, now: float | None = None, record_path: Path | None = None) -> d
 
 
 # --- the box ------------------------------------------------------------------
-def _league_playing(league: str, unknown: bool = True) -> bool:
+def _league_playing(league: str) -> bool:
     """Has the league games on its scoreboard (web/data/live_<league>.json)?"""
     try:
         got = json.loads((ROOT / "web" / "data" / f"live_{league}.json").read_text(encoding="utf-8"))
         return bool(got.get("games"))
     except (OSError, ValueError, AttributeError):
-        return unknown                                       # unknown: judged by its age alone
+        return True                                          # unknown: judged by its age alone
 
 
 def health(now: float | None = None) -> dict:
@@ -532,6 +532,7 @@ def sports(lconn, now: float | None = None) -> list:
     """Each sport's books: picks journaled today and still open, the last 7
     and 30 days won-lost and units (settled bets, each book's own stakes),
     and when its board last journaled one — the most active sport first."""
+    from . import owneralerts as OA
     t = time.time() if now is None else float(now)
     today, d7, d30 = _day(t), _day(t - 6 * DAY_S), _day(t - (SPORT_DAYS - 1) * DAY_S)
     book_of = {c: name for name, cats in BOOKS for c in cats}
@@ -575,7 +576,11 @@ def sports(lconn, now: float | None = None) -> list:
             c["u7"], c["u30"] = round(c["u7"], 2), round(c["u30"], 2)
             del c["s30"]
             rows.append(c)
-        out.append({"sport": sp, "playing": _league_playing(sp, unknown=False), "last": last.get(sp), "books": rows})
+        # A game TODAY (Eastern), not a week's games on the scoreboard: the
+        # NFL's carries Thursday to Monday, and a Tuesday is not a day off
+        # the board forgot.
+        out.append({"sport": sp, "playing": OA.playing_today(sp, ROOT / "web" / "data", t),
+                    "last": last.get(sp), "books": rows})
     out.sort(key=lambda s: (-s["books"][-1]["n30"], s["sport"]))
     return out
 
@@ -616,7 +621,12 @@ def trend(conn, now: float | None = None, days: int = TREND_DAYS) -> list:
     not yet (a fresh box, or the first read of the day)."""
     t = time.time() if now is None else float(now)
     if not _has(conn, "desk_days") or not conn.execute("SELECT 1 FROM desk_days WHERE day=?", (_day(t),)).fetchone():
-        snapshot(conn, t)
+        try:
+            snapshot(conn, t)
+        except sqlite3.Error:                                # a busy write: the kept days still read
+            pass
+    if not _has(conn, "desk_days"):
+        return []
     cols = ("day",) + _DAY_COLS
     return [dict(zip(cols, r)) for r in conn.execute(
         f"SELECT {', '.join(cols)} FROM desk_days WHERE day >= ? ORDER BY day", (_day(t - (days - 1) * DAY_S),)).fetchall()]
