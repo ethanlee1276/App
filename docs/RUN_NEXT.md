@@ -6,6 +6,10 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
+The owner's desk shows this same list on your phone, under **Commands
+waiting for you**: each step folded under its heading, each command with a
+Copy button.
+
 Last updated 2026-11-05, after hockey's games started getting the crowd's
 price and the WNBA started reading three minutes pieces its own six
 seasons measured (step KL: item 1r, one read-only check after an NHL

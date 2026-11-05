@@ -1023,7 +1023,7 @@ def desk(conn, lconn=None, now: float | None = None) -> dict:
                 "switches": _section(switches), "notice": _section(_notice),
                 "usage": _section(usage, t), "trend": _section(_trend, conn, t),
                 "retention": _section(retention, conn, t), "prefs": _section(prefs),
-                "morning": _section(morning, conn, lconn, t),
+                "morning": _section(morning, conn, lconn, t), "run_next": _section(run_next),
                 "sports": (_section(_sports, lconn, t) if lconn is not None
                            else {"error": "the ledger is not readable"})}
     finally:
@@ -1032,6 +1032,37 @@ def desk(conn, lconn=None, now: float | None = None) -> dict:
                 lconn.close()
             except sqlite3.Error:
                 pass
+
+
+#: THE COMMANDS WAITING FOR THE OWNER (2026-11-05, Ethan: "add more
+#: features for the site and for me"): docs/RUN_NEXT.md is where every box
+#: command waiting on him lives, and reading it meant opening GitHub on a
+#: phone. The desk lists its numbered sections, each with the commands in
+#: its code blocks, newest first as the file keeps them. Read from the
+#: running site's own checkout: the file a deploy pulled is the list.
+RUN_NEXT_PATH = ROOT / "docs" / "RUN_NEXT.md"
+RUN_NEXT_MAX = 40
+
+
+def run_next(path=None) -> dict:
+    """``{"items": [{"title", "commands": [...]}], "n", "updated"}`` off
+    docs/RUN_NEXT.md: every ``##`` section with a command in it."""
+    import re as _re
+    text = Path(path or RUN_NEXT_PATH).read_text(encoding="utf-8")
+    items, cur, fence = [], None, False
+    for line in text.splitlines():
+        if line.startswith("## ") and not fence:
+            cur = {"title": line[3:].strip(), "commands": []}
+            items.append(cur)
+            continue
+        if line.strip().startswith("```"):
+            fence = not fence
+            continue
+        if fence and cur is not None and line.strip():
+            cur["commands"].append(line.rstrip())
+    items = [i for i in items if i["commands"]]
+    hit = _re.search(r"Last updated (\d{4}-\d{2}-\d{2})", text)
+    return {"items": items[:RUN_NEXT_MAX], "n": len(items), "updated": hit.group(1) if hit else ""}
 
 
 def _trend(conn, t: float) -> dict:

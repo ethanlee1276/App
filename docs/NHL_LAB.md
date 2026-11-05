@@ -204,14 +204,34 @@ and agreed with the lab:
   0.54909, the misses' squared z 1.58 → 1.02, actual ÷ projected 0.949 →
   1.002.
 
+## Measured, and not built
+
+**Who takes a missing regular's ice time.** An absent regular is a skater
+with 16+ minutes a game over his last ten who played in one of his club's
+last three games and is not in tonight's box. His teammates in the same
+position group read clearly in both seasons. With one forward regular
+out, the other forwards played 3.2% more and shot 3.4% more; with two or
+more out, 8.6% more ice time and 13.5% more points. Defencemen showed the
+same pattern: +2.8% ice time with one out, +5.4% with two.
+
+As a multiplier on every teammate's number, though, it barely moved the
+ladder, and it went the wrong way on one season for shots and blocks:
+
+| Fitted on → judged on | Shots | Points | Goals | Assists | Blocks |
+|---|---|---|---|---|---|
+| 2024-25 → 2025-26 (¾) | −0.00004 | −0.00002 | −0.00003 | −0.00002 | −0.00001 |
+| 2025-26 → 2024-25 (¾) | **+0.00008** | −0.00005 | −0.00002 | −0.00000 | **+0.00009** |
+
+The extra ice time goes to the man who moves up a line, not to everyone
+in the group evenly, so a flat multiplier is the wrong shape. It stays
+off. A second pass would read who moves up from the shift charts' line
+combinations (`engine/nhl/lines`), as the NBA's vacancy reads who inherits
+the minutes.
+
 ## Next
 
-- **Who takes a scratched regular's ice time.** The dataset carries every
-  game's scratches and rosters. The NBA's version (vacancy) measured well,
-  and hockey's top-six and top-four roles make it a natural fit.
-- **The saves model.** `goalie_projection` hasn't been replayed. Shots
-  against a backup, a tired team's shots allowed, and the save-rate prior
-  (600 shots) are all measurable on these files.
+- **Who moves up when a regular is out**, read from the line combinations
+  (above: the flat version did not hold).
 - **Line combinations and the power play** are already read live from
   the shift charts (`engine/nhl/lines`, `xg.power_play`). The lab could
   measure how much of a skater's rate follows his line rather than him.

@@ -41,7 +41,9 @@ The lab (`docs/NHL_LAB.md`) used three seasons of every NHL box score.
 | The goalie on a back-to-back: last night's starter starts again 9% of the time, the backup 78%; the card names him | **Built today**. Still no saves bet on an unsettled starter |
 | **The crowd's price on every hockey game**: the board called the crowd hook, but neither Polymarket's nor Kalshi's reader listed the NHL, so no hockey game ever had a prediction-market price | **Built today**. Both readers list it. Kalshi's spread and total names wait for `crowdprobe.py nhl` on the box, as every other league's did |
 | The lab's changes re-read on the box's own games, this season's included | **Box run** (KK, `nhllabcheck.py`) |
-| Who takes a scratched regular's ice time; the saves model replayed; line combinations measured | **Parked**: the lab's files carry the scratches; next in `docs/NHL_LAB.md` |
+| **The saves model**: it ran 5–6% high (a starter does not face every shot his team allows) and its spread 22% narrow, so every saves pick was too sure of itself | **Built today**. Saves log loss 0.012 and 0.022 better held out, the lab's biggest gain |
+| The goalie board names the likely backup the night after a starter played | **Built today** |
+| Who takes a missing regular's ice time | **Measured, left off**: the raw lift is clear (+3% ice time per regular out), but a flat multiplier did not hold on the ladder in one season. The next pass reads who moves up from the line combinations |
 | The league's own API (api-web.nhle.com) | **Not possible** from the build sandbox; the box reads it, as it always has |
 
 ## WNBA (off season; next tip in May)

@@ -166,3 +166,11 @@
 /* Who stays: the signup weeks, two lines a cell like the sport rows. */
 .od-weeks td { vertical-align: top; line-height: var(--lh-tight); }
 .od-chips a.od-chip { text-decoration: none; display: inline-block; }
+
+/* The commands waiting for the owner (docs/RUN_NEXT.md), each with a copy button. */
+.od-run { border-top: var(--hairline) solid var(--border-soft); padding: 8px 0; }
+.od-run summary { cursor: pointer; font-weight: 600; line-height: var(--lh-tight); }
+.od-cmd { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; }
+.od-cmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-2xs); background: var(--bg);
+  border-radius: var(--radius-sm); padding: 6px 8px; }
+.od-copy { flex: none; }

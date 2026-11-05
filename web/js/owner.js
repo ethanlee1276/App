@@ -459,6 +459,24 @@ function odMorningHTML(mo, prefs) {
     <p class="od-note">${on ? `This line goes to this account’s phones a little after ${odN((mo && mo.hour) || 8)}am Eastern, once a
       day, and waits out your quiet hours.` : "Off: nothing goes out in the morning. A problem still reaches your phones."}</p>`);
 }
+// The commands waiting for the owner, off docs/RUN_NEXT.md, each with a copy
+// button: the box is a terminal on a phone, and typing them is how mistakes happen.
+let _odRunOpen = null;     // null until the owner folds or opens one; then the titles left open
+function odRunNextHTML(r) {
+  const title = "Commands waiting for you";
+  if (!r || r.error) return odCard(title, odErr(r));
+  if (!(r.items || []).length) return odCard(title, `<p class="od-note">Nothing waiting on the box.</p>`);
+  const items = r.items.map((it, i) => {
+    const open = _odRunOpen ? _odRunOpen.has(it.title) : i === 0;
+    const cmds = (it.commands || []).map((c) => `<div class="od-cmd"><code>${escapeHtml(c)}</code>
+      <button type="button" class="od-chip od-copy" data-od-copy="${escapeHtml(c)}">Copy</button></div>`).join("");
+    return `<details class="od-run" data-title="${escapeHtml(it.title)}"${open ? " open" : ""}><summary>${escapeHtml(it.title)}</summary>${cmds}</details>`;
+  }).join("");
+  const shown = r.items.length < r.n ? `the first ${odN(r.items.length)} of ${odN(r.n)}` : odN(r.n);
+  return odCard(title, `<p class="od-note">${shown} from docs/RUN_NEXT.md${r.updated ? `, last updated ${escapeHtml(r.updated)}` : ""}.
+    Top to bottom, as the file has them; paste back anything that errors or looks off.</p>${items}`);
+}
+
 function odExportsHTML() {
   return odCard("Download the numbers", `<div class="od-chips">${OD_EXPORTS.map(([what, word]) =>
     `<a class="od-chip" href="/api/owner/export?what=${what}" download>${escapeHtml(word)}</a>`).join("")}</div>
@@ -818,7 +836,7 @@ function odHTML(d) {
       odAccountsHTML(d.accounts)}
     ${odHealthHTML(d.health)}${odBackupsHTML(d.health && d.health.backups)}${odSecurityHTML(d.health && d.health.security)}${
       odMailHTML(d.health && d.health.mail)}${odRoomHTML(d.community)}${waiting ? "" : reps}${
-      odMorningHTML(d.morning, d.prefs)}${odExportsHTML()}${odSwitchesHTML(d.switches, d.alerts)}
+      odMorningHTML(d.morning, d.prefs)}${odRunNextHTML(d.run_next)}${odExportsHTML()}${odSwitchesHTML(d.switches, d.alerts)}
     <p class="od-foot">Only this account can open this page. Who’s on now names only the members the Privacy Policy’s notice
       has reached who left “Show me in Who’s on now” on, and Accounts shows who an account is one at a time, for support and the
       Terms; the list of every account names each by its number alone, and everything else here is a count or the business’s own number.</p>`;
@@ -922,6 +940,14 @@ document.addEventListener("click", (e) => {
     if (host && _odLast) host.innerHTML = odHTML(_odLast);
     return;
   }
+  const cp = t && t.closest("[data-od-copy]");
+  if (cp) {
+    const done = (word) => { cp.textContent = word; setTimeout(() => { cp.textContent = "Copy"; }, 1600); };
+    try {
+      navigator.clipboard.writeText(cp.dataset.odCopy).then(() => done("Copied"), () => done("Select it"));
+    } catch (err) { done("Select it"); }
+    return;
+  }
   const mor = t && t.closest("#od-morning");
   if (mor) { odMorningSet(mor.dataset.on !== "1"); return; }
   if (e.target && e.target.id === "od-clear") odNotice({ clear: true });
@@ -932,6 +958,13 @@ document.addEventListener("click", (e) => {
 document.addEventListener("toggle", (e) => {
   if (e.target && e.target.classList && e.target.classList.contains("od-hid")) _odHidOpen = e.target.open;
   if (e.target && e.target.classList && e.target.classList.contains("od-all")) _odAllOpen = e.target.open;
+  if (e.target && e.target.classList && e.target.classList.contains("od-run")) {
+    if (!_odRunOpen) {           // the first toggle starts from what is open on the page now
+      _odRunOpen = new Set();
+      document.querySelectorAll("details.od-run[open]").forEach((d) => _odRunOpen.add(d.dataset.title));
+    }
+    if (e.target.open) _odRunOpen.add(e.target.dataset.title); else _odRunOpen.delete(e.target.dataset.title);
+  }
 }, true);
 
 function odTick() {
