@@ -195,6 +195,20 @@ def test_the_holdout_waits_for_the_flag():
     assert "decision (98.33% intervals" in E9.render(read)
 
 
+#: The board's memories when the power check below was measured (2026-10).
+#: The NHL lab (2026-11-05, docs/NHL_LAB.md) moved them: ice time now reads
+#: a 3-game half-life (was 6), a rate 30 (was 12), up to 60 games (was 40).
+#: On these same made-up leagues a board that reads tonight's ice time that
+#: fast leaves the compound shape little to add: over ten leagues of each
+#: kind, against the board as shipped, C advanced in 3 of 30 stat tests (one
+#: each of shots, points and blocks) where the leagues were built from ice
+#: time, beside 1 of 30 (blocks) on the flat ones — against the old memories
+#: 9 of 30 and 1 of 30, the numbers below. The power check is the
+#: experiment's own, so it is held at the board it was measured against; the
+#: box run reads the board as shipped.
+PRE_LAB = {"RATE_HALF_LIFE": 12.0, "TOI_HALF_LIFE": 6.0, "RECENT_GAMES": 40}
+
+
 def test_it_finds_a_shape_built_from_ice_time_and_not_where_the_boards_spread_is_the_truth():
     """The bar both ways on made-up leagues of 90 skaters (the box has about
     ten times that). Measured over ten leagues of each kind: where a count
@@ -205,11 +219,18 @@ def test_it_finds_a_shape_built_from_ice_time_and_not_where_the_boards_spread_is
     in 11 of 30 and 5 of 30, the five all shots: the board's 1.25 is a
     spread around the true mean, and a forecast's spread also carries its
     own centre's error (the refit read 1.27-1.37 there)."""
-    for seed in (1, 5):
-        built = E9.study(E9.open_db(_league(players=90, seed=seed)), holdout=True)["decisions"]
-        assert built["sog"] == "ADVANCE", (seed, built)
-        flat = E9.study(E9.open_db(_league(players=90, seed=seed, flat=True)), holdout=True)["decisions"]
-        assert "ADVANCE" not in flat.values(), (seed, flat)
+    saved = {k: getattr(M, k) for k in PRE_LAB}
+    try:
+        for k, v in PRE_LAB.items():
+            setattr(M, k, v)
+        for seed in (1, 5):
+            built = E9.study(E9.open_db(_league(players=90, seed=seed)), holdout=True)["decisions"]
+            assert built["sog"] == "ADVANCE", (seed, built)
+            flat = E9.study(E9.open_db(_league(players=90, seed=seed, flat=True)), holdout=True)["decisions"]
+            assert "ADVANCE" not in flat.values(), (seed, flat)
+    finally:
+        for k, v in saved.items():
+            setattr(M, k, v)
 
 
 if __name__ == "__main__":

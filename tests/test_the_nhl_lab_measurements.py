@@ -183,5 +183,5 @@ if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and inspect.isfunction(f)]
     for name, fn in fns:
         fn()
-        print("ok", name)
-    print(f"{len(fns)} passed")
+        print(f"  ok  {name}")
+    print(f"\n{len(fns)} tests passed.")
