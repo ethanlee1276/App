@@ -91,7 +91,15 @@ def test_the_record_never_raises_and_ignores_a_reader_leaving():
         assert B.record_server("request", BrokenPipeError()) is False
         assert B.record_server("request", ConnectionResetError()) is False
         B.SERVER_LOG = "/proc/no-such-dir/x.jsonl"
-        assert B.record_server("fail", ValueError("x")) is False, "an unwritable log is a False, not a crash"
+        keep = list(B._UNWRITTEN)
+        B._UNWRITTEN.clear()
+        try:
+            with redirect_stderr(io.StringIO()) as err:
+                assert B.record_server("fail", ValueError("x")) is False, "an unwritable log is a False, not a crash"
+                B.record_server("fail", ValueError("y"))
+        finally:
+            B._UNWRITTEN[:] = keep
+        assert err.getvalue().count("server error record not written") == 1, "said once a process, never silent"
         B.SERVER_LOG = log.path
         assert log.rows() == []
 

@@ -191,8 +191,21 @@ def record_server(kind: str, exc: BaseException | None = None, where: str = "",
             with open(path, "w", encoding="utf-8") as fh:
                 fh.writelines(reversed(keep))
         return True
-    except Exception:                                            # noqa: BLE001
+    except Exception as exc:                                     # noqa: BLE001
+        # A lost line must never cost the response it describes, but a
+        # missing line reads on the owner's desk like a quiet day: the
+        # first failure in a process says so in the service's own log.
+        if not _UNWRITTEN:
+            _UNWRITTEN.append(1)
+            try:
+                import sys
+                sys.stderr.write(f"  server error record not written ({type(exc).__name__}: {exc})\n")
+            except Exception:                                    # noqa: BLE001
+                pass
         return False
+
+
+_UNWRITTEN: list = []
 
 
 def server_errors(hours: float = 24, path: str | None = None, now: float | None = None) -> list:

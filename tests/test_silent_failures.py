@@ -152,6 +152,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # day, so the first failure in a process prints "mail log not
         # written (<error>)" to the service's log, which no quiet day does.
         "note_send",
+        # THE SITE'S OWN ERROR RECORD (engine/bugscan.record_server,
+        # 2026-11-05), caught by this sweep the hour it was written, the
+        # same shape as the mail log: a lost line must never cost the
+        # request it describes, and the first failure in a process prints
+        # "server error record not written (<error>)" to the service's log.
+        "record_server",
         # THE JOURNAL'S DROP DIARY (ledger._insert_bet, audit A2-5): the
         # INSERT itself runs outside the guard and raises as it always did;
         # only the note about a refused re-quote is swallowed, and the
