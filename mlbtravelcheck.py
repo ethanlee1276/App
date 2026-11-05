@@ -205,8 +205,8 @@ def fit(rows: list[dict], rounds: int = 25) -> None:
         return mu * off[r["team"]] * dfn[r["opp"]] * park[r["park"]] * (h if r["home"] else 1.0)
 
     for _ in range(rounds):
-        for key, table, pick in (("team", off, lambda r: r["team"]), ("opp", dfn, lambda r: r["opp"]),
-                                 ("park", park, lambda r: r["park"])):
+        for table, pick in ((off, lambda r: r["team"]), (dfn, lambda r: r["opp"]),
+                            (park, lambda r: r["park"])):
             num, den = defaultdict(float), defaultdict(float)
             for r in rows:
                 k = pick(r)
