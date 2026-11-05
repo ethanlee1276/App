@@ -24,6 +24,10 @@ puts the same list at its top under "Needs you":
   webhook   ownerdesk.WEBHOOK_BAD Stripe messages failing their signature in
             a day: the webhook secret may have changed, and payments with it
   mail      ownerdesk.MAIL_FAILS emails failing to send in a day, more than went
+  lab       a sport's numbers on the Lab page ownerdesk.LAB_LATE_D days old (its
+            weekly replay missed twice; the page stood five weeks in October)
+  deepfit   a sport the weekly refit owes this round, last fitted
+            ownerdesk.DEEP_LATE_D days ago or never (the NFL, August to November)
 
 And, from `morning_pass` (its own pass, not a problem): yesterday in a line
 after 8am Eastern, while the desk's "Morning summary" switch is on.
@@ -174,6 +178,45 @@ def problems(h: dict, data_dir: Path | None = None, now: float | None = None) ->
         out.append({"key": "webhook", "title": "Stripe's messages are failing their signature check",
                     "body": (f"{int(sec['stripe_bad_day']):,} in a day. If the webhook's signing secret changed "
                              "in Stripe, payments stop reaching the site until STRIPE_WEBHOOK_SECRET matches it.")})
+    # The weekly jobs (engine/ownerdesk.weekly): the Lab's numbers and the
+    # deep refit, each of which stood still for weeks with nothing to say so.
+    wk = h.get("weekly") if isinstance(h.get("weekly"), dict) else {}
+    today = _eastern_day(t)
+
+    def _days(iso):
+        try:
+            import datetime as _dt
+            return (_dt.date.fromisoformat(today) - _dt.date.fromisoformat(str(iso)[:10])).days
+        except (TypeError, ValueError):
+            return None
+    lab_late = sorted(((_days(x.get("replayed")), str(x.get("sport") or ""))
+                       for x in ((wk.get("lab") or {}).get("sports") or []) if x.get("replayed")),
+                      reverse=True)
+    lab_late = [(d, sp) for d, sp in lab_late if d is not None and d >= OD.LAB_LATE_D]
+    if lab_late:
+        d, sp = lab_late[0]
+        out.append({"key": "lab", "title": f"The Lab's {LABELS.get(sp, sp.upper())} numbers are {d} days old",
+                    "body": ("Late: " + ", ".join(f"{LABELS.get(s, s.upper())} ({n} days)" for n, s in lab_late)
+                             + ". Each sport replays every seven days; the desk's Weekly jobs card has the "
+                               "Lab's last run.")})
+    deep = wk.get("deep") if isinstance(wk.get("deep"), dict) else {}
+    owed = []
+    for sp, last in sorted((deep.get("last_done") or {}).items()):
+        d = _days(last) if last else None
+        if d is None or d >= OD.DEEP_LATE_D:
+            owed.append((sp, d))
+    if owed:
+        # The oldest first; a sport with no finished fit on record before all.
+        owed.sort(key=lambda x: (x[1] is None, x[1] or 0), reverse=True)
+        sp, d = owed[0]
+        out.append({"key": "deepfit", "title": (f"The deep refit has not fitted the {LABELS.get(sp, sp.upper())} in "
+                                                f"{d} days" if d is not None else
+                                                f"The deep refit has no finished {LABELS.get(sp, sp.upper())} fit on record"),
+                    "body": ("Owed this round: " + ", ".join(
+                        f"{LABELS.get(s, s.upper())} ({f'{n} days' if n is not None else 'none on record'})"
+                        for s, n in owed)
+                             + (". Part-way: " + "; ".join(deep.get("part_way") or []) if deep.get("part_way") else "")
+                             + ". The desk's Weekly jobs card has the refit's round.")})
     # The emails (engine/ownerdesk.mail): sends failing, and more than went.
     ml = h.get("mail") if isinstance(h.get("mail"), dict) else {}
     bad = int(ml.get("failed_day") or 0)

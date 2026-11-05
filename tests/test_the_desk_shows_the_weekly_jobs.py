@@ -16,6 +16,9 @@ reached the NFL since August before anyone saw. What this holds:
   * a box with no refit round or no Lab page leaves that part out, and the
     desk carries the card as its own section;
   * a file is read again only when it changes;
+  * a sport's Lab numbers two turns late, or a sport the refit owes last
+    fitted two weeks ago or never, go under Needs you and to the owner's
+    phones (engine/owneralerts), once a day like the rest;
   * the page names each job in words, marks a running, cut-off or failed
     one, a late Lab sport in amber, and draws a job's last line as text.
 
@@ -94,6 +97,33 @@ def test_the_refit_says_what_it_did_what_it_owes_and_where_the_time_ran_out():
     assert deep["round"] == "2026-11-04" and deep["left"] == ["nfl", "touchdowns"]
     assert deep["done"] == ["cfb", "nba"], "mlb's fit is from an earlier round"
     assert deep["part_way"] == ["nfl (recency dial done; player memory cut off after 45 min)"], deep["part_way"]
+    assert deep["last_done"] == {"nfl": None}, "the sports still owed, each with its last finished fit"
+
+
+def _alerts(weekly):
+    from engine import owneralerts as OA
+    return [p for p in OA.problems({"weekly": weekly}, now=NOW) if p["key"] in ("lab", "deepfit")]
+
+
+def test_a_lab_two_turns_late_or_a_sport_the_refit_left_behind_needs_the_owner():
+    lab = {"sports": [{"sport": "nfl", "replayed": "2026-09-29"}, {"sport": "mlb", "replayed": "2026-11-04"},
+                      {"sport": "cfb", "replayed": "2026-10-21"}]}
+    got = _alerts({"lab": lab})
+    assert [p["key"] for p in got] == ["lab"], got
+    assert got[0]["title"] == "The Lab's NFL numbers are 37 days old", got[0]
+    assert "NFL (37 days), college football (15 days)" in got[0]["body"] and "MLB" not in got[0]["body"]
+    assert _alerts({"lab": {"sports": [{"sport": "nfl", "replayed": "2026-10-22"}]}}) == [], "under two turns"
+    deep = {"last_done": {"nfl": "2026-08-27", "cfb": "2026-11-04", "nba": None},
+            "part_way": ["nfl (recency dial done; player memory cut off after 45 min)"]}
+    got = _alerts({"deep": deep})
+    assert [p["key"] for p in got] == ["deepfit"], got
+    assert got[0]["title"] == "The deep refit has no finished NBA fit on record", got[0]
+    assert "NBA (none on record), NFL (70 days)" in got[0]["body"] and "Part-way: nfl (recency dial" in got[0]["body"]
+    assert "college" not in got[0]["body"], "fitted yesterday"
+    got = _alerts({"deep": {"last_done": {"nfl": "2026-08-27"}}})
+    assert got[0]["title"] == "The deep refit has not fitted the NFL in 70 days"
+    assert _alerts({"deep": {"last_done": {"nfl": "2026-11-01"}}}) == []
+    assert _alerts({}) == [] and _alerts({"error": "x"}) == []
 
 
 def test_the_lab_says_the_date_each_sports_numbers_are_from():
@@ -109,7 +139,8 @@ def test_a_box_without_a_round_or_a_lab_page_leaves_that_part_out():
     w = _weekly(jobs={}, deep=None, page=None, tried=None)
     assert w == {"jobs": [], "deep": None, "lab": None}, w
     src = READ("engine", "ownerdesk.py")
-    assert '"weekly": _section(weekly, t)' in src, "the desk assembles it through its per-section guard"
+    assert 'out["weekly"] = _section(weekly, t)' in src, "health carries it through its per-section guard"
+    assert '"weekly": h.get("weekly") if isinstance(h, dict) else None' in src, "the desk reads it from there"
 
 
 def test_a_file_is_read_again_only_when_it_changes():

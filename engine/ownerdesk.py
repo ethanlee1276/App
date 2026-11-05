@@ -288,6 +288,7 @@ def health(now: float | None = None) -> dict:
     out["backups"] = _section(backups, t)
     out["security"] = _section(security, t)
     out["mail"] = _section(mail, t)
+    out["weekly"] = _section(weekly, t)
     return out
 
 
@@ -1024,7 +1025,7 @@ def desk(conn, lconn=None, now: float | None = None) -> dict:
                 "usage": _section(usage, t), "trend": _section(_trend, conn, t),
                 "retention": _section(retention, conn, t), "prefs": _section(prefs),
                 "morning": _section(morning, conn, lconn, t), "run_next": _section(run_next),
-                "weekly": _section(weekly, t),
+                "weekly": h.get("weekly") if isinstance(h, dict) else None,
                 "sports": (_section(_sports, lconn, t) if lconn is not None
                            else {"error": "the ledger is not readable"})}
     finally:
@@ -1044,6 +1045,13 @@ def desk(conn, lconn=None, now: float | None = None) -> dict:
 #: still owes, where a run's time ran out) and the date each sport's Lab
 #: replay is from. The box's own state, like the health card: no person.
 WEEKLY_JOB_ORDER = ("deepfit", "lab", "boardlearn", "inventionfit", "bugscan", "backupzip")
+#: A sport's Lab numbers this many days old go under Needs you: two of its
+#: seven-day turns missed (the page stood at 29 September for five weeks).
+LAB_LATE_D = 15
+#: A sport the refit owes this round, last fitted this many days ago or
+#: never (the NFL went from late August to November).
+DEEP_LATE_D = 15
+DEEP_SPORTS = ("nfl", "cfb", "nba", "mlb", "wnba")
 _JSON: dict = {}
 
 
@@ -1089,7 +1097,9 @@ def weekly(now: float | None = None, jobs: dict | None = None, deep_path=None, l
         done = [k for k in D.PIECE_ORDER if k not in left and isinstance(pieces.get(k), dict)
                 and str(pieces[k].get("done") or "") >= start]
         out["deep"] = {"round": start or None, "left": left, "done": done,
-                       "part_way": D._part_way(pieces, left, start, today)}
+                       "part_way": D._part_way(pieces, left, start, today),
+                       "last_done": {k: (str((pieces.get(k) or {}).get("done") or "")[:10] or None)
+                                     for k in left if k in DEEP_SPORTS}}
     else:
         out["deep"] = None
     # The Lab: the date each sport's numbers on the page are from, and when a
