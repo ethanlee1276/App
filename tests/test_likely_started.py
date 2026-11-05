@@ -59,12 +59,21 @@ def _fn(name):
     raise AssertionError(f"{name} never closes")
 
 
+def _started_src():
+    """The started check with everything it reads (2026-11-04): the late-tip
+    constants and caches, `tipTeams`, `freshTipState`, `kickoffEpoch` and
+    `likelyStarted` itself, one contiguous stretch of app.js."""
+    i = JS.index("/* THE REAL TIP, NOT THE PRINTED ONE.")
+    j = JS.index(_fn("likelyStarted"), i) + len(_fn("likelyStarted"))
+    return JS[i:j] + "\n"
+
+
 # --- the rule -----------------------------------------------------------------
 def test_the_started_check_behaves_across_every_shape_a_row_carries():
     """Executed, not read. The parsing is the part that can be quietly
     wrong, and a rule about time that is only source-pinned is a rule
     nobody has run."""
-    prog = _fn("likelyStarted") + """
+    prog = _started_src() + """
 const past = new Date(Date.now() - 3600e3).toISOString();
 const soon = new Date(Date.now() + 3600e3).toISOString();
 const cases = [
@@ -106,8 +115,9 @@ def test_a_kickoff_with_no_timezone_is_not_a_verdict():
     guessing the reader's is how a 1pm kickoff reads as "under way" in
     London three hours early. No offset, no verdict — the same rule
     `boardlint._started` takes when `t.tzinfo is None`."""
-    src = _fn("likelyStarted")
+    src = _fn("kickoffEpoch")
     assert "Z|[+-]" in src, "the timezone guard is gone"
+    assert "kickoffEpoch(r)" in _fn("likelyStarted"), "the started check reads the printed time through it"
     py = open(os.path.join(ROOT, "engine", "boardlint.py"), encoding="utf-8").read()
     i = py.index("def _started")
     assert "if t.tzinfo is None:" in py[i:i + 700], \
@@ -142,7 +152,7 @@ def test_football_kickoffs_are_read_in_eastern_time():
     if not shutil.which("node"):
         print("  SKIP node is not installed")
         return
-    prog = _fn("likelyStarted") + _fn("rowStarted") + """
+    prog = _started_src() + _fn("rowStarted") + """
 const state = {data: {games: [
   {home: "MIA", away: "KC", date: "2026-09-27", kickoff: "13:00", live: {state: "pre"}},
   {home: "GB", away: "ATL", date: "2026-09-27", kickoff: "20:15", live: {state: "pre"}},
@@ -168,6 +178,73 @@ console.log(bad.length ? "FAIL " + bad.join(", ") : "OK");
     out = subprocess.run(["node", "-e", prog], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-400:]
     assert out.stdout.strip() == "OK", out.stdout.strip()
+
+
+def test_a_late_tip_keeps_its_picks_until_the_scoreboard_says_the_ball_is_up():
+    """Ethan, 2026-11-04, the 7pm NBA games: "They showed 7pm on the site
+    but didn't start till around 7:10." The clock alone took their picks off
+    the board at 7:00 while the Live tab, which follows the scoreboard, had
+    nothing until the tip. A FRESH scoreboard read saying the game has not
+    begun outranks the printed time for TIP_GRACE_MS; a stale read, a read
+    for another league, or a game past the grace leaves the clock in charge,
+    so a stopped feed never holds a pick through a game."""
+    if not shutil.which("node"):
+        print("  SKIP node is not installed")
+        return
+    prog = _started_src() + _fn("rowStarted") + _fn("gameKickedOff") + """
+const state = {sport: "nba", data: {games: [
+  {home: "DET", away: "PHI", date: "2026-11-04", kickoff: "2026-11-05T00:00Z", live: {state: "scheduled"}}]}};
+let _pbpStrip = {league: "", at: 0, games: []};
+const at = (iso) => { Date.now = () => Date.parse(iso); };
+const read = (when, st, league) => { _tipRead = {league: league || "nba", at: Date.parse(when),
+  games: [{home: "DET", away: "PHI", live: {state: st}}]}; };
+const bad = [];
+const want = (name, got, exp) => { if (got !== exp) bad.push(name); };
+const prop = {team: "PHI", game_date: "2026-11-04"};
+at("2026-11-04T23:59:00Z");
+want("6:59, before the printed time", rowStarted(prop), false);
+at("2026-11-05T00:04:00Z");
+want("7:04 with no read: the clock", rowStarted(prop), true);
+read("2026-11-05T00:03:30Z", "scheduled");
+want("7:04, a fresh read says scheduled", rowStarted(prop), false);
+want("the game too", gameKickedOff(state.data.games[0]), false);
+want("a row by its own teams", likelyStarted({kickoff: "2026-11-05T00:00Z", game: "PHI@DET"}), false);
+read("2026-11-05T00:03:30Z", "pre");
+want("pre reads the same", rowStarted(prop), false);
+read("2026-11-05T00:00:30Z", "scheduled");
+want("a read 3.5 minutes old says nothing", rowStarted(prop), true);
+read("2026-11-05T00:03:30Z", "scheduled", "nhl");
+want("another league's read says nothing", rowStarted(prop), true);
+read("2026-11-05T00:09:50Z", "live");
+at("2026-11-05T00:10:00Z");
+want("7:10, the scoreboard says live", rowStarted(prop), true);
+read("2026-11-05T00:49:00Z", "scheduled");
+at("2026-11-05T00:50:00Z");
+want("50 minutes past: the clock again", rowStarted(prop), true);
+state.data.games[0].live = {state: "live"};
+read("2026-11-05T00:03:30Z", "scheduled");
+at("2026-11-05T00:04:00Z");
+want("the board's own copy saying live wins", rowStarted(prop), true);
+console.log(bad.length ? "FAIL " + bad.join(", ") : "OK");
+"""
+    out = subprocess.run(["node", "-e", prog], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr[-600:]
+    assert out.stdout.strip() == "OK", out.stdout.strip()
+
+
+def test_a_board_watches_a_late_tip_and_draws_again_when_it_goes_up():
+    src = _fn("tipWatch")
+    assert "LIVE_FAST[state.sport]" in src and "TIP_GRACE_MS" in src and "PREGAME_STATES" in src
+    assert "kickoffEpoch(" in src, "the printed time read the started check's way"
+    assert "gameKickedOff(g)" in src and "renderAll()" in src, "draws again only when a verdict changes"
+    assert "_tipRead = { league: sport, at: Date.now()" in src
+    assert "tipWatch();" in _fn("manageAutoRefresh"), "every board load arms the watch"
+    fresh = _fn("freshTipState")
+    for cache in ("_pbpStrip", "_liveAll", "_deckFast", "_tipRead"):
+        assert cache in fresh, cache
+    assert "TIP_FRESH_MS" in fresh
+    for fn in ("rowStarted", "gameKickedOff"):
+        assert "away: g.away, home: g.home" in _fn(fn), fn
 
 
 def test_the_shared_filter_stays_kickoff_blind():

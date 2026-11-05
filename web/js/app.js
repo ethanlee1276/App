@@ -1828,16 +1828,67 @@ function ridingWhen(b) {
    Same rule as `boardlint._started`, deliberately: `live` first, then a
    timezone-aware kickoff in the past. A naive or unparseable timestamp
    answers false — an unknown kickoff is not a started game. */
-function likelyStarted(r) {
-  if (!r) return false;
-  // A row's `live` is a flag; a game's is the scoreboard's object, whose
-  // "pre" state is not a started game.
-  const lv = r.live;
-  if (lv === true) return true;
-  if (lv && typeof lv === "object"
-      && !["scheduled", "pre", "upcoming"].includes(String(lv.state || "scheduled"))) return true;
-  const k = String(r.kickoff || r.game_kickoff || "");
-  if (!k) return false;
+/* THE REAL TIP, NOT THE PRINTED ONE. Ethan, 2026-11-04, the 7pm NBA games:
+   "They showed 7pm on the site but didn't start till around 7:10". The
+   clock alone took every pick on them off the board at 7:00, and the Live
+   tab — which follows the scoreboard — had nothing until the ball went
+   up, so for ten minutes a pick was on neither page while the books were
+   still taking pre-game bets on it. A FRESH scoreboard read that still says
+   the game has not begun now outranks the printed time, for TIP_GRACE_MS
+   past it; a stale read, no read, or a game further past its time falls
+   back to the clock, so a stopped feed can never hold a pick on the board
+   through a game. The board's own copy of the scoreboard is never the
+   fresh read: it is what the build saw, minutes before. */
+const TIP_GRACE_MS = 45 * 60 * 1000;
+//: A scoreboard read older than this says nothing about a tip.
+const TIP_FRESH_MS = 3 * 60 * 1000;
+//: How often a page watching a late tip asks the scoreboard again.
+const TIP_POLL_MS = 30 * 1000;
+const PREGAME_STATES = ["scheduled", "pre", "upcoming"];
+//: The board pages' own read of the league's fast scoreboard, taken only
+//: while one of its games is past its printed time and not yet under way.
+let _tipRead = { league: "", at: 0, games: [] };
+
+/* [away, home] for a row or a game: its own two teams, or its "AWAY@HOME". */
+function tipTeams(r) {
+  if (!r) return ["", ""];
+  if (r.away && r.home) return [String(r.away), String(r.home)];
+  const [a, h] = String(r.game || "").split("@");
+  return a && h ? [a, h] : ["", ""];
+}
+
+/* The freshest scoreboard state for one of this league's games — the Live
+   tab's read, the home deck's, the dashboard strip's or the board pages'
+   own — or null when none of them is TIP_FRESH_MS young. Each cache is
+   read inside its own try: the later ones are declared further down the
+   file, and a page that renders while the file is still evaluating must
+   not trip over one. */
+function freshTipState(away, home) {
+  if (!away || !home || typeof state === "undefined") return null;
+  const key = `${away}@${home}`, now = Date.now(), reads = [];
+  const sport = state.sport;
+  try { if (_pbpStrip.league === sport) reads.push([_pbpStrip.at, _pbpStrip.games]); } catch (e) {}
+  try { reads.push([_liveAll.at, (_liveAll.all || []).filter((e) => e && e.sport === sport).map((e) => e.g)]); } catch (e) {}
+  try { reads.push([_deckFast.at, (_deckFast.games || []).filter((e) => e && e.sport === sport).map((e) => e.g)]); } catch (e) {}
+  try { if (_tipRead.league === sport) reads.push([_tipRead.at, _tipRead.games]); } catch (e) {}
+  let best = null;
+  for (const [at, games] of reads) {
+    if (!at || now - at > TIP_FRESH_MS) continue;
+    const g = (games || []).find((x) => x && `${x.away}@${x.home}` === key);
+    const st = g && g.live && g.live.state;
+    if (st && (!best || at > best[0])) best = [at, String(st)];
+  }
+  return best ? best[1] : null;
+}
+
+/* His game's printed start as epoch milliseconds, or NaN: a timezone-aware
+   ISO time, or the football boards' bare Eastern "13:00" beside its date.
+   A naive or unparseable stamp is NaN — an unknown kickoff is not a started
+   game. Split out of `likelyStarted` (2026-11-04) so the late-tip watch
+   reads the printed time the same way. */
+function kickoffEpoch(r) {
+  const k = String((r && (r.kickoff || r.game_kickoff)) || "");
+  if (!k) return NaN;
   // A bare local timestamp cannot be compared against a clock in another
   // zone, and guessing the reader's is how a 1pm kickoff reads as
   // started in London. No offset, no verdict.
@@ -1851,7 +1902,7 @@ function likelyStarted(r) {
     // the 1pm games over and their picks still on Top Picks.
     const m = /^(\d{1,2}):(\d{2})$/.exec(k.trim());
     const d = String(r.game_date || r.date || "");
-    if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+    if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return NaN;
     let off = /-(0[4-9]|10)-/.test(d) ? "-04:00" : "-05:00";   // EDT Apr–Oct, else EST
     // The East's offset on a date is remembered: every row of every board
     // asks, and the formatter that answers is the expensive part.
@@ -1869,7 +1920,27 @@ function likelyStarted(r) {
     }
     t = Date.parse(`${d}T${m[1].padStart(2, "0")}:${m[2]}:00${off}`);
   }
-  return Number.isFinite(t) && t <= Date.now();
+  return t;
+}
+
+function likelyStarted(r) {
+  if (!r) return false;
+  // A row's `live` is a flag; a game's is the scoreboard's object, whose
+  // "pre" state is not a started game.
+  const lv = r.live;
+  if (lv === true) return true;
+  if (lv && typeof lv === "object"
+      && !PREGAME_STATES.includes(String(lv.state || "scheduled"))) return true;
+  const t = kickoffEpoch(r);
+  if (!(Number.isFinite(t) && t <= Date.now())) return false;
+  // Past its printed time — unless a fresh scoreboard says the ball is not
+  // up yet (see TIP_GRACE_MS above).
+  if (Date.now() - t <= TIP_GRACE_MS) {
+    const [away, home] = tipTeams(r);
+    const st = freshTipState(away, home);
+    if (st && PREGAME_STATES.includes(st)) return false;
+  }
+  return true;
 }
 
 /* OFF THE BOARD AT KICKOFF. Ethan, 2026-09-27, the 1pm games finished and
@@ -1889,7 +1960,7 @@ function rowStarted(r) {
     && ((ga && gh && x.away === ga && x.home === gh)
         || (r.home && r.away && x.home === r.home && x.away === r.away)
         || (r.team && (x.home === r.team || x.away === r.team))));
-  return !!g && likelyStarted({ live: g.live, kickoff: g.kickoff, game_date: g.date });
+  return !!g && likelyStarted({ live: g.live, kickoff: g.kickoff, game_date: g.date, away: g.away, home: g.home });
 }
 
 /* THE PLAYER BOARDS CLEAR AT KICKOFF TOO. Ethan, 2026-10-05: "we need to
@@ -1901,7 +1972,7 @@ function rowStarted(r) {
    teams, against the board's own scoreboard. The game page keeps its own
    game's reads: that page is about the one game, before and after. */
 function gameKickedOff(g) {
-  return !!g && likelyStarted({ live: g.live, kickoff: g.kickoff, game_date: g.date });
+  return !!g && likelyStarted({ live: g.live, kickoff: g.kickoff, game_date: g.date, away: g.away, home: g.home });
 }
 function gameKeyStarted(key) {
   const [away, home] = String(key || "").split("@");
@@ -2631,6 +2702,46 @@ function manageAutoRefresh() {
   // The ticker runs regardless so the age stays honest between loads.
   if (!state.tickTimer) state.tickTimer = setInterval(updateAgo, 1000);
   updateAgo();
+  tipWatch();
+}
+
+/* A LATE TIP, WATCHED (see TIP_GRACE_MS). While one of this board's games
+   is past its printed time and its board copy still reads not started,
+   the page asks the league's small fast scoreboard every TIP_POLL_MS —
+   at once the first time, so a page opened at 7:03 does not draw the
+   7pm picks gone and then bring them back — and draws again the moment a
+   game's started-ness changes, so the picks leave at the real tip, not
+   at the next board load. Nothing is asked when no game is in that
+   window, which is nearly always. */
+let _tipTimer = null;
+function tipWatch() {
+  clearTimeout(_tipTimer);
+  _tipTimer = null;
+  if (state.static) return;
+  let url = "";
+  try { url = LIVE_FAST[state.sport] || ""; } catch (e) { url = ""; }
+  if (!url) return;
+  const now = Date.now();
+  const near = ((state.data || {}).games || []).some((g) => {
+    const t = kickoffEpoch({ kickoff: g && g.kickoff, game_date: g && g.date });
+    return Number.isFinite(t) && t <= now && now - t <= TIP_GRACE_MS
+      && PREGAME_STATES.includes(String(((g && g.live) || {}).state || "scheduled"));
+  });
+  if (!near) return;
+  const due = _tipRead.league === state.sport ? Math.max(0, _tipRead.at + TIP_POLL_MS - now) : 0;
+  _tipTimer = setTimeout(async () => {
+    const sport = state.sport;
+    const verdicts = () => (((state.data || {}).games || []).map((g) => gameKickedOff(g) ? 1 : 0)).join("");
+    const before = verdicts();
+    try {
+      const r = await boardFetch(url, { cache: "no-cache" });
+      if (r.ok) _tipRead = { league: sport, at: Date.now(), games: ((await r.json()).games || []) };
+    } catch (e) { /* the clock decides until a read lands */ }
+    if (state.sport === sport && verdicts() !== before) {
+      try { renderAll(); } catch (e) {}
+    }
+    tipWatch();
+  }, due);
 }
 
 // WHAT "STALE" MEANS HERE IS MEASURED, NOT ASSUMED.

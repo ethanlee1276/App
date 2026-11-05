@@ -188,10 +188,18 @@ def test_the_counter_reads_the_ladder_once_and_a_quiet_redraw_counts_nothing():
 
 
 # --- the date helpers ---------------------------------------------------------
+def _started_src():
+    """`likelyStarted` with what it reads since the late-tip fix (2026-11-04):
+    one contiguous stretch of app.js, constants to the function's end."""
+    i = APP.index("/* THE REAL TIP, NOT THE PRINTED ONE.")
+    body = _fn("likelyStarted")
+    return APP[i:APP.index(body, i) + len(body)] + "\n"
+
+
 def test_the_remembered_dates_read_exactly_as_before():
     prog = """
       const tzOpts = (o) => Object.assign({ timeZone: "America/New_York" }, o);
-      """ + _fn("formatGameDate") + _fn("tzTime") + _fn("likelyWhen") + _fn("likelyStarted") + """
+      """ + _fn("formatGameDate") + _fn("tzTime") + _fn("likelyWhen") + _started_src() + """
       const days = ["2026-10-09", "2026-10-12", "2026-01-04", "2026-10-09"];
       const plainDate = (s) => { const m = /^(\\d{4})-(\\d{2})-(\\d{2})/.exec(s);
         return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); };

@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-05",
+      "kind": "fix",
+      "title": "Picks stay on the board until the game really starts",
+      "body": "The 7pm NBA games on 4 November tipped around 7:10. The site took their picks off the board at 7:00, by the printed time, while the Live tab, which follows the scoreboard, had nothing on those games until the ball went up. For those ten minutes the picks were on neither page, though the books were still taking bets on them. Now, for up to 45 minutes past a game's printed time, a scoreboard read from the last three minutes that still says the game has not started keeps its picks on the board, and they move to Live the moment it tips. If the scoreboard goes quiet, the printed time decides as before, so a pick is never held on the board through a game."
+    },
+    {
+      "date": "2026-11-05",
       "kind": "model",
       "title": "NBA: who starts tonight moves his minutes",
       "body": "About one NBA game in eleven, a player does the other thing from his last game: the bench man starts, or the starter comes off the bench. Those games carried a sixth of our minutes misses: a bench man who starts played 3.6 minutes over our number, a starter sent to the bench about 4 under. The starting five is only confirmed half an hour before the tip, but a good part of it is known earlier, and the board now reads it: the injury report on each club's last starting five (a bench man starts about a quarter of the time when one of them is ruled out), a regular coming back who started before he sat (the man who filled in usually goes back to the bench), and each player's own starts over his last ten. Fitted on one season and tested on the other, both ways, it took 1.3-1.7% off the minutes error over every priced game and 0.3% off points, and 2.3-3.4% off minutes in the games it moves. The card says when it moved a player. The box re-checks it every week on its own seasons and turns it off by itself if it ever stops paying."

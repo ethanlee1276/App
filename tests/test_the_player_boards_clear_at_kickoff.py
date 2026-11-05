@@ -41,8 +41,13 @@ def _run(body):
     if not node:
         print("  (node not installed — skipped)")
         return None
-    prog = "\n".join(_fn(n) for n in ("likelyStarted", "rowStarted", "gameKickedOff", "gameKeyStarted",
-                                      "scanTopRows")) + "\n" + body
+    # The started check with what it reads since the late-tip fix
+    # (2026-11-04): its constants, `tipTeams`, `freshTipState` and
+    # `kickoffEpoch`, one stretch of app.js ending at `likelyStarted`.
+    i = JS.index("/* THE REAL TIP, NOT THE PRINTED ONE.")
+    started = JS[i:JS.index(_fn("likelyStarted"), i) + len(_fn("likelyStarted"))]
+    prog = started + "\n" + "\n".join(_fn(n) for n in ("rowStarted", "gameKickedOff", "gameKeyStarted",
+                                                        "scanTopRows")) + "\n" + body
     out = subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=30)
     assert out.returncode == 0, out.stderr
     return json.loads(out.stdout)
