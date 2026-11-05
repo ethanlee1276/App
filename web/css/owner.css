@@ -169,7 +169,7 @@
 
 /* The commands waiting for the owner (docs/RUN_NEXT.md), each with a copy button. */
 .od-run { border-top: var(--hairline) solid var(--border-soft); padding: 8px 0; }
-.od-run summary { cursor: pointer; font-weight: 600; line-height: var(--lh-tight); }
+.od-run summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; line-height: var(--lh-tight); }
 .od-cmd { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; }
 .od-cmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-2xs); background: var(--bg);
   border-radius: var(--radius-sm); padding: 6px 8px; }
