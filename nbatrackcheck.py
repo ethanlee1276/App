@@ -260,7 +260,7 @@ def measure(by_market: dict, tune) -> dict:
         names = FEATURES[market]
         have = [r for r in rows if r["f"] is not None]
         use, dropped = [], []
-        for k, name in enumerate(names):
+        for k in range(len(names)):
             share = (sum(1 for r in have if r["f"][k] is not None) / len(have)) if have else 0.0
             (use if share >= PRESENT else dropped).append(k)
         have = [r for r in have if all(r["f"][k] is not None for k in use)]
