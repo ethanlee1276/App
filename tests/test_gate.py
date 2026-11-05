@@ -949,9 +949,11 @@ NOT_A_BOARD_WRITER = {
                          "writes are its own state file — events reach the "
                          "public path through feed.publish -> gate.publish",
     "engine/bugscan.py": "names the six boards only to read how old each "
-                         "is (os.path.getmtime); its only write is its own "
+                         "is (os.path.getmtime); its only writes are its own "
                          "crash log, data/logs/client_errors.jsonl, which "
-                         "tests/test_the_bug_scan.py pins",
+                         "tests/test_the_bug_scan.py pins, and the site's own "
+                         "error record, data/logs/server_errors.jsonl "
+                         "(tests/test_the_site_keeps_its_own_error_record.py)",
     "engine/pushalerts.py": "reads the boards through gate.board_source only to count picks "
                             "for an alert, and writes only its own data/push/ files",
     "engine/firstlook.py": "READS the public copy of day_top_pick.json, again "

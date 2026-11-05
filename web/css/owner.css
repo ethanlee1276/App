@@ -1,5 +1,9 @@
 /* THE OWNER'S DESK (js/owner.js) — loaded with it. Same tokens as the sheet. */
 .od-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); margin: 0 0 var(--sp-2); }
+/* Four tiles (the health card with the server's own errors): two by two on a
+   phone, one row from a tablet up. */
+.od-tiles.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 560px) { .od-tiles.four { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .od-tile { background: var(--panel); border-radius: var(--radius); padding: 12px 8px; text-align: center; min-width: 0; }
 .od-card .od-tile { background: color-mix(in oklab, var(--text) 5%, transparent); }
 .od-tile b { display: block; font-size: var(--fs-xl); font-weight: 800; font-variant-numeric: tabular-nums; line-height: var(--lh-tight);

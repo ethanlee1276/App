@@ -531,7 +531,11 @@ function odHealthHTML(h) {
   const u = h.update || null;
   const o = h.odds || null;
   const crashes = (h.crash_top || []).map((c) => `<li class="od-mono">×${c.n} ${escapeHtml(c.m)}</li>`).join("");
-  return odCard("The site's health", `<div class="od-tiles">${odTile(odN(h.crashes), "Crashes, 24 h", h.crashes ? "warn" : "good")}${
+  // The site's own record of what broke inside it (engine/bugscan.record_server).
+  const own = (h.server_top || []).map((c) => `<li class="od-mono">×${c.n} ${escapeHtml(c.m)}${
+    c.src ? ` · ${escapeHtml(c.src)}` : ""}</li>`).join("");
+  return odCard("The site's health", `<div class="od-tiles${h.server_errors != null ? " four" : ""}">${odTile(odN(h.crashes), "Crashes, 24 h", h.crashes ? "warn" : "good")}${
+    h.server_errors != null ? odTile(odN(h.server_errors), "Server errors, 24 h", h.server_errors ? "warn" : "good") : ""}${
     odTile(odN((h.builds_warned || []).length), "Builds warned", (h.builds_warned || []).length ? "warn" : "good")}${
     odTile(odN(stale.length), "Boards stale", stale.length ? "bad" : "good")}</div>
     ${boards ? `<div class="od-pills" aria-label="How old each board is">${boards}</div>` : ""}
@@ -544,7 +548,8 @@ function odHealthHTML(h) {
       h.disk ? odRow("Disk", `${h.disk.free_gb} GB free · ${h.disk.used_pct}% used`, h.disk.used_pct > 90 ? "bad" : h.disk.used_pct > 80 ? "warn" : "") : ""}${
       (h.builds_warned || []).length ? odRow("Builds with warnings", escapeHtml(h.builds_warned.join(", ")), "warn") : ""}</ul>
     ${u && u.note ? `<p class="od-note od-mono">${escapeHtml(u.note)}</p>` : ""}
-    ${crashes ? `<ul class="od-crash">${crashes}</ul>` : ""}`);
+    ${crashes ? `<ul class="od-crash">${crashes}</ul>` : ""}
+    ${own ? `<p class="od-note">Inside the site, the commonest:</p><ul class="od-crash">${own}</ul>` : ""}`);
 }
 
 /* THE WEEKLY JOBS (engine/ownerdesk.weekly): each one's last run, the deep

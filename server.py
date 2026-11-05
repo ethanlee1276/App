@@ -1152,6 +1152,11 @@ class Handler(BaseHTTPRequestHandler):
         upstream URLs, SDK request ids, file paths — and it reached the
         page verbatim on a dozen error paths."""
         sys.stderr.write(f"  {where}: {type(exc).__name__}: {exc}\n")
+        if status >= 500:
+            # The site's own record (engine/bugscan.record_server): the box's
+            # weekly scan cannot read the journal this line goes to.
+            from engine import bugscan
+            bugscan.record_server("fail", exc, where)
         return self._send(status, json.dumps({"error": sentence}).encode(), ".json")
 
     def handle_one_request(self):
@@ -7173,6 +7178,20 @@ class BoundedHTTPServer(ThreadingHTTPServer):
         super().__init__(*a, **kw)
         self._slots = threading.Semaphore(MAX_INFLIGHT)
         self.shed = 0
+        # A thread that dies leaves a line in the site's own record
+        # (engine/bugscan): the journal is not readable to the weekly scan.
+        from engine import bugscan
+        bugscan.install_thread_hook()
+
+    def handle_error(self, request, client_address):
+        """A request that raised: the site's own record first (never the
+        caller's address), then socketserver's traceback to the journal."""
+        try:
+            from engine import bugscan
+            bugscan.record_server("request", sys.exc_info()[1])
+        except Exception:                                    # noqa: BLE001
+            pass
+        super().handle_error(request, client_address)
 
     def process_request(self, request, client_address):
         if not self._slots.acquire(blocking=False):

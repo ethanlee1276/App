@@ -27,6 +27,14 @@ WHAT IT READS, all on the box, nothing fetched:
               during the season is a build that keeps failing quietly.
   updates     data/autoupdate.json: the box pulling and restarting itself.
   service     the site's error lines in the journal, where journalctl runs.
+  server      data/logs/server_errors.jsonl, the site's own record of what
+              broke inside it (`record_server`): a request that raised, a
+              failure answered with a 500, a thread that died. The journal
+              is not readable to the site's own user on the box (every
+              weekly scan said "not readable here"), so the site writes
+              this itself: the exception's type, the place in our code, and
+              its message with anything quoted, any long number and any
+              address taken out. Never the caller, the page or the account.
 
 A section that cannot be read says so; it is never an empty "all clear".
 Exit 1 when anything is broken, so a cron line or the daily pass can act.
@@ -47,6 +55,9 @@ LOG_DIR = os.path.join(ROOT, "data", "logs")
 #: The crash log, and the size past which its older half is dropped.
 CLIENT_LOG = os.path.join(LOG_DIR, "client_errors.jsonl")
 CLIENT_LOG_MAX = 2 * 1024 * 1024
+#: The site's own record of what broke inside it, and its size cap.
+SERVER_LOG = os.path.join(LOG_DIR, "server_errors.jsonl")
+SERVER_LOG_MAX = 1024 * 1024
 #: The boards the site publishes, as launch.BOARD_FILES names them.
 BOARDS = {"nfl": "web/data/recommendations.json", "cfb": "web/data/cfb.json",
           "mlb": "web/data/mlb_recommendations.json", "nba": "web/data/nba.json",
@@ -117,6 +128,117 @@ def record_client(body: dict, ua: str = "", path: str | None = None, now: float 
     except OSError:
         pass
     return True
+
+
+_QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
+_LONGNUM = re.compile(r"\d{6,}")
+_ADDRESS = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+_SECRET = re.compile(r"(?i)\b(api[_-]?key|apikey|access[_-]?token|token|secret|password|key)=([^&\s]+)")
+
+
+def scrub_message(text, n: int = 200) -> str:
+    """An exception's message fit to keep: anything quoted (where a reader's
+    own words turn up: a handle, a search, a header), any long number (an
+    id), any address and any secret in a query string taken out."""
+    s = _clean(text, 400)
+    s = _SECRET.sub(lambda m: f"{m.group(1)}=…", s)
+    s = _ADDRESS.sub("…@…", s)
+    s = _QUOTED.sub("'…'", s)
+    s = _LONGNUM.sub("…", s)
+    return s[:n]
+
+
+def _our_frame(tb) -> str:
+    """The deepest frame of the traceback that is our own code, as
+    ``path:line in function`` relative to the repo; "" when none is."""
+    best = ""
+    root = os.path.abspath(ROOT) + os.sep
+    while tb is not None:
+        f = tb.tb_frame.f_code.co_filename
+        # "<frozen os>", "<string>": not a file, and abspath would put it
+        # inside whatever directory is current.
+        ap = "" if f.startswith("<") else os.path.abspath(f)
+        if ap.startswith(root) and os.sep + "tests" + os.sep not in ap[len(root) - 1:]:
+            best = f"{ap[len(root):]}:{tb.tb_lineno} in {tb.tb_frame.f_code.co_name}"
+        tb = tb.tb_next
+    return best
+
+
+def record_server(kind: str, exc: BaseException | None = None, where: str = "",
+                  path: str | None = None, now: float | None = None) -> bool:
+    """Append one of the site's own errors; never raises (an error log that
+    can break the response it is logging is worse than none)."""
+    try:
+        if exc is None or isinstance(exc, (BrokenPipeError, ConnectionResetError, KeyboardInterrupt)):
+            return False
+        row = {"at": int(now or time.time()), "kind": re.sub(r"[^a-z]", "", str(kind).lower())[:12] or "error",
+               "type": _clean(type(exc).__name__, 60), "m": scrub_message(exc),
+               "src": _clean(_our_frame(exc.__traceback__), 160), "where": scrub_message(where, 60)}
+        path = path or SERVER_LOG
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row) + "\n")
+        if os.path.getsize(path) > SERVER_LOG_MAX:
+            # The newest half kept, as the crash log does.
+            with open(path, encoding="utf-8") as fh:
+                lines = fh.readlines()
+            keep, size = [], 0
+            for ln in reversed(lines):
+                size += len(ln.encode("utf-8"))
+                if size > SERVER_LOG_MAX // 2:
+                    break
+                keep.append(ln)
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.writelines(reversed(keep))
+        return True
+    except Exception:                                            # noqa: BLE001
+        return False
+
+
+def server_errors(hours: float = 24, path: str | None = None, now: float | None = None) -> list:
+    """[{type, m, src, n, kinds, first, last}] busiest first."""
+    since = (now or time.time()) - hours * 3600
+    groups: dict = {}
+    try:
+        fh = open(path or SERVER_LOG, encoding="utf-8")
+    except OSError:
+        return []
+    with fh:
+        for line in fh:
+            try:
+                r = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(r, dict) or r.get("at", 0) < since:
+                continue
+            g = groups.setdefault((r.get("type"), r.get("m"), r.get("src")), {
+                "type": r.get("type"), "m": r.get("m"), "src": r.get("src"), "n": 0,
+                "first": r["at"], "last": r["at"], "kinds": defaultdict(int)})
+            g["n"] += 1
+            g["first"], g["last"] = min(g["first"], r["at"]), max(g["last"], r["at"])
+            g["kinds"][r.get("kind") or "?"] += 1
+    return sorted(groups.values(), key=lambda g: -g["n"])
+
+
+_HOOKED: list = []
+
+
+def install_thread_hook(record=None) -> None:
+    """A thread that dies leaves a line in the site's own record, then the
+    usual traceback. Installed once per process; ``record`` is for tests."""
+    import threading
+    if _HOOKED:
+        return
+    rec = record or record_server
+    prior = threading.excepthook
+
+    def hook(args):
+        try:
+            rec("thread", args.exc_value, getattr(args.thread, "name", "") or "")
+        finally:
+            prior(args)
+    threading.excepthook = hook
+    _HOOKED.append(hook)
 
 
 def crashes(hours: float = 24, path: str | None = None, now: float | None = None) -> list:
@@ -211,10 +333,11 @@ def scan(hours: float = 24, now: float | None = None, journal=service_errors) ->
     stale = stale_boards(now=now)
     upd = update_state()
     svc = journal(hours)
+    own = server_errors(hours, now=now)
     broken = (len(rows) + sum(1 for v in builds.values() if any(ln.startswith("Traceback") for ln in v))
-              + (1 if upd and upd.get("ok") is False else 0) + (len(svc) if svc else 0))
+              + (1 if upd and upd.get("ok") is False else 0) + (len(svc) if svc else 0) + len(own))
     return {"hours": hours, "crashes": rows, "builds": builds, "stale": stale, "update": upd,
-            "service": svc, "broken": broken}
+            "service": svc, "server": own, "broken": broken}
 
 
 def report(got: dict) -> list:
@@ -239,6 +362,12 @@ def report(got: dict) -> list:
     s = got["service"]
     out.append("\nSITE ERRORS IN THE JOURNAL: " + ("not readable here" if s is None else str(len(s))))
     out += [f"  {ln[:150]}" for ln in (s or [])[-10:]]
+    own = got.get("server") or []
+    out.append(f"\nERRORS IN THE SITE'S OWN RECORD: {sum(g['n'] for g in own)} report(s), {len(own)} distinct")
+    for g in own[:15]:
+        kinds = ", ".join(f"{k} ×{v}" for k, v in sorted(g["kinds"].items(), key=lambda kv: -kv[1]))
+        out.append(f"  ×{g['n']:<3} {g['type']}: {str(g['m'] or '')[:100]}")
+        out.append(f"        at {g['src'] or '?'} · {kinds} · {when(g['first'])} to {when(g['last'])} UTC")
     return out
 
 

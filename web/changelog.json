@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-05",
+      "kind": "fix",
+      "title": "The site keeps its own record of what breaks inside it",
+      "body": "When something broke on our server, the only trace was a line in the server's system log, which our daily bug scan cannot read. The site now writes its own note: the kind of error and where in our code it happened, with anything a reader typed taken out, and never an address, an account or a page. The bug scan reads it, and the owner's desk counts the day's errors and shows the commonest. The Privacy Policy says so in its section on crash reports."
+    },
+    {
+      "date": "2026-11-05",
       "kind": "ship",
       "title": "The owner's desk shows the weekly jobs",
       "body": "The deep refit, the Lab's replay, board learning and the backups each run once a week beside the boards, and what each did could only be read off the server. The owner's desk now has a card for them: each one's last run, how long it took, whether its hour ran out and the last thing it said; how far the refit's round has got and what it still owes; and the date each sport's Lab numbers are from, in amber when they are late."

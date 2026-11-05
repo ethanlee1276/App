@@ -252,6 +252,11 @@ def health(now: float | None = None) -> dict:
            "builds_warned": sorted((scan.get("builds") or {}).keys()),
            "stale": {k: v for k, v in old_boards.items() if playing(k)},
            "resting": sorted(k for k in old_boards if not playing(k)), "commit": BS.running_commit()}
+    # The site's own record of what broke inside it (engine/bugscan.record_server).
+    own = scan.get("server") or []
+    out.update(server_errors=sum(g.get("n", 0) for g in own), server_kinds=len(own),
+               server_top=[{"m": f"{g.get('type') or 'Error'}: {g.get('m') or ''}"[:140],
+                            "src": str(g.get("src") or "")[:120], "n": g.get("n", 0)} for g in own[:3]])
     upd = scan.get("update") or {}
     out["update"] = {"ok": upd.get("ok"), "at": upd.get("at"), "commit": upd.get("commit"),
                      "note": str(upd.get("note") or "")[:200]} if upd else None

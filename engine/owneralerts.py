@@ -16,6 +16,8 @@ puts the same list at its top under "Needs you":
   odds      fewer than ODDS_LEFT odds credits with two or more days of the
             month to go: the boards price less until the first
   crashes   CRASHES_24H or more script errors on readers' screens in a day
+  server    SERVER_ERRORS_24H or more errors inside the site in a day, from its
+            own record (engine/bugscan.record_server)
   backup    the newest nightly copy of the accounts or the journal is
             ownerdesk.NIGHTLY_LATE_H hours old (deploy/backup.sh, 4am)
   offsite   last night's run made its copy but not the offsite one
@@ -57,6 +59,7 @@ GRADE_H = 2
 DISK_PCT = 90
 ODDS_LEFT = 2000
 CRASHES_24H = 50
+SERVER_ERRORS_24H = 25
 OWNER_EVERY_S = 15 * 60
 LABELS = {"nfl": "NFL", "cfb": "college football", "nba": "NBA", "wnba": "WNBA", "nhl": "NHL", "mlb": "MLB",
           "ufc": "UFC"}
@@ -230,6 +233,13 @@ def problems(h: dict, data_dir: Path | None = None, now: float | None = None) ->
         top = ((h.get("crash_top") or [{}])[0] or {}).get("m") or ""
         out.append({"key": "crashes", "title": f"{n:,} script errors on readers' screens in a day",
                     "body": (f"Most often: {top[:120]}" if top else "The desk lists the most common.")})
+    n = int(h.get("server_errors") or 0)
+    if n >= SERVER_ERRORS_24H:
+        top = (h.get("server_top") or [{}])[0] or {}
+        out.append({"key": "server", "title": f"{n:,} errors inside the site in a day",
+                    "body": (f"Most often: {str(top.get('m') or '')[:110]}"
+                             + (f" at {top['src']}" if top.get("src") else "") if top.get("m")
+                             else "The desk lists the most common.")})
     return out
 
 
