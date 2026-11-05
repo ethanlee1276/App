@@ -253,6 +253,16 @@ scored on the last (Ethan's paste, 2026-10-31):
   "First basket, tonight's five"). A season's count of opening shots mixed
   how often a man starts with how much he shoots when he does.
 - P(he scores first) = P(his team) × his share.
+- **The opening tip by its jumpers (2026-11-05).** Once any final's opening
+  jump is stored, P(home takes the first shot) comes from tonight's two
+  jumpers instead of the clubs' records: each jumper's tips gained, pulled
+  toward even by 6 jumps, a home lean of 0.507 on the tip, and the side
+  that gains the tip shooting first 88.1% of the time. On two full seasons
+  the clubs' records with the 0.587 home lean read worse than a coin on
+  who shoots first (0.708 and 0.698 against 0.693; the home side shot
+  first 49.9% and 52.4% of the time); the jumpers, every setting fitted on
+  the other season, 0.676 and 0.664 (docs/NBA_LAB.md, "First basket, the
+  opening tip").
 
 A pick needs a 10%+ expected return at the best price, +250 to +2500, one a
 game, the same bar as first touchdown. Picks are graded off the box's shots:

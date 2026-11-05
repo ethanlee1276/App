@@ -4,6 +4,12 @@
     {
       "date": "2026-11-05",
       "kind": "model",
+      "title": "NBA first basket: which team scores first, by the two players who jump",
+      "body": "A first-basket chance is the chance his team scores first times his share of it. The team half came from each team's record of taking the game's first shot, with a lean toward the home team. Replayed on two full seasons, it was worse than a coin flip at picking who shoots first. The home lean was too strong (home teams took the first shot about half the time), and a team's record changes with whoever jumps for it. We now keep every game's opening jump ball, and the board reads tonight's two jumpers: how often each one's side has won the tip, with a small home lean, and the team that wins the tip takes the first shot 88% of the time. With every setting chosen on the other season, it was clearly better than a coin and better than the old way in both seasons. Each pick's card names the jumper. Games played before today are read back a batch each night."
+    },
+    {
+      "date": "2026-11-05",
+      "kind": "model",
       "title": "NBA first basket: shared among tonight's likely starting five",
       "body": "The first basket almost always goes to one of the five players on the floor at the tip. Our first-basket chances counted each player's shots in the first three minutes over the season, which mixes how often he starts with how much he shoots when he does. A new starter, or a starter back from injury, looked like a small chance, and a player moved to the bench kept a starter's. Stars were overstated: players we gave a 34% share scored 25% of their team's first baskets. The board now reads tonight's likely starting five before the tip: the team's last starting five without anyone ruled out, plus a starter coming back, filled to five. It shares the first basket among them by each player's opening shots per start. Replayed on two full seasons, with each season's settings chosen on the other, the chances were sharper in both (multi-class Brier 0.858 to 0.827 and 0.856 to 0.821) and match how often players actually scored first. Each pick's card says whether he is in tonight's likely five."
     },

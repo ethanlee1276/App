@@ -9324,6 +9324,36 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KI. NBA first basket: which team scores first, by tonight's two jumpers**
+(step 386; nothing to run first, one read-only check after a night or two;
+you, 2026-11-04: "keep going on the NBA model"). A first-basket chance is
+his team's chance to score first times his share of it. The team half read
+each club's own record of taking the first shot with a strong home lean,
+and on two full seasons that was worse than a coin at who shoots first
+(log loss 0.708 and 0.698 against 0.693): the home side shot first about
+half the time, and a club's record changes with whoever jumps for it. The
+nightly now keeps every final's opening jump ball beside its shots
+(`nba_tips`: the two jumpers and the club of the third man ESPN names),
+reads back the finals stored before today a few hundred a night, and the
+board reads tonight's two jumpers: each one's record of tips his side
+gained, a small home lean, and the side that gains the tip shooting first
+88% of the time. Every setting fitted on the other season: 0.676 and 0.664
+on the first shot, who scores first 0.694 to 0.687 and 0.688 to 0.685
+(docs/NBA_LAB.md, "First basket, the opening tip"). The third man ESPN
+names is read as who the tip went to only once 30 stored games agree with
+who shot first 80% of the time; until then each jump is read by the first
+shot. After a night or two, this prints how many tips are stored, which
+reading the board uses and that agreement:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import datetime; from engine import db, firstbasket as fb; t = fb.read(db.connect(), fb.season_of(datetime.date.today().isoformat()))['tip']; print('tips', t['games'], 'read by', t['source'] or 'nothing yet', 'agree', t['agree'])"
+```
+
+`read by tip` with an agreement near 0.88 is right. `read by first shot`
+with an agreement near 0.5 means ESPN names the three men in another
+order: paste it back and the fold gets the order fixed. Before the first
+night it prints `tips 0 read by nothing yet agree None`.
+
 **KH. NBA first basket reads tonight's five, and can the box read the
 confirmed five?** (step 385; one read-only command, any NBA night about
 half an hour before the first tip; you, 2026-11-04: "keep going on the NBA

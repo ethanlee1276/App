@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-05, after NBA first basket started sharing each
+Last updated 2026-11-05, after NBA first basket started reading which
+team scores first by tonight's two jumpers (step KI: item 1o, one read-only
+check after a night or two), after it started sharing each
 team's first basket among tonight's likely five, and a probe asks whether
 the box can read the confirmed five (step KH: item 1n, one read-only
 command half an hour before a tip), after the NBA board started reading who starts
@@ -476,6 +478,20 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KH 2>&1 | tee /tmp/kh.txt
 Paste back what it prints. Also from this push, nothing to run: NBA first
 basket now shares each team's first basket among tonight's likely starting
 five by opening shots per start (step KH's first paragraph).
+
+## 1o. After a night or two: NBA first basket's opening tips (step KI)
+
+Nothing to run first: the nightly now keeps every final's opening jump
+ball and reads back the older ones, and first basket's which-team-scores-
+first reads tonight's two jumpers once any are stored. Read-only, a few
+seconds:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KI 2>&1 | tee /tmp/ki.txt
+```
+
+`read by tip` with an agreement near 0.88 is right; paste it back either
+way.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

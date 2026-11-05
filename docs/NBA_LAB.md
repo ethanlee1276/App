@@ -697,11 +697,67 @@ play-by-play's first-quarter shots as `nba_shots`, the stints' starters as
 the same numbers: Brier 0.858 → 0.827 and 0.856 → 0.821, the as-built
 path 0.858 and 0.856 exactly, in under two minutes for both seasons.
 
+## First basket, the opening tip *(11-05)*
+
+First basket's team half — which club scores first — read each club's own
+record of taking the game's first shot (this season, pulled toward even by
+two games each way) with a home lean of 0.587, what the box study's 53.8%
+home first-scorers implied. Replayed on the lab's two full seasons, game
+by game from the games before each:
+
+| | 2024-25 | 2025-26 |
+|---|---|---|
+| The home side took the first shot | 49.9% | 52.4% |
+| The side that gained the opening tip took it | 88.7% | 87.6% |
+| The first shot's side scored first | 68.7% | 72.5% |
+
+Log loss of who takes the first shot and who scores first (a coin is
+0.6931 on both):
+
+| | 2024-25 first shot | scores first | 2025-26 first shot | scores first |
+|---|---|---|---|---|
+| The board as built | 0.7076 | 0.6938 | 0.6983 | 0.6877 |
+| The clubs' records, home lean and pull refitted | 0.6825 | 0.6901 | 0.6806 | 0.6885 |
+| **Tonight's two jumpers** | **0.6760** | **0.6872** | **0.6640** | **0.6846** |
+
+The board as built was worse than a coin on the first shot: the home lean
+was too strong (the home side shot first about half the time), and two
+games of pull let a club that took the first shot in its first three games
+read as a two-in-three side to score first against one that took none.
+A club's record also changes with the man who jumps for it. THE RULE,
+written before the fit: each club's jumper tonight is the man who jumped
+for it most in its last ten opening tips and is not ruled out; his record
+is the share of his jumps his side gained, pulled toward even by a few
+jumps (last season's at half weight); P(home gains the tip) is the home
+lean plus the difference of the two jumpers' records on the log-odds
+scale; the side that gains it takes the first shot most of the time. Each
+season's row above has every setting fitted on the other season: the home
+side gained the tip 48.6% / 52.8%, the tip's side shot first 88.7% /
+87.6%, the pull 6 / 3 jumps. The board uses both seasons pooled (home
+0.507, 88.1%, 6 jumps). Scoring each jumper by which side took the first
+shot instead of who gained the tip reads 0.6862 and 0.6910: better than
+the board, worse than the tip itself.
+
+On the box (`nba_tips`): each final's opening jump ball is kept with its
+shots from ESPN's summary (`engine/nba/shots.fold_espn_tip`) — the first
+two men the play names, one from each club, and the club of the third man
+it names, who has been the man the tip went to on every sample read so
+far. That order is not promised, so the board reads the third man as the
+tip only once 30 stored games agree with who shot first 80% of the time (a
+right reading agrees about 88%, a wrong one about half); until then each
+jump is read by the first shot. The finals stored before 5 November are
+read back a budget a night (`backfill_tips`). Until any tip is stored the
+board keeps the clubs' records. The board's own code, replayed on both
+seasons from a scratch history with the opening jumps stored, gives who
+scores first 0.6936 -> 0.6869 and 0.6881 -> 0.6830, and the actual
+scorer's whole chance 2.7586 -> 2.7509 and 2.7472 -> 2.7438 nats.
+
 ## Next
 
-- Done 2026-11-05: first basket takes out the men ruled out tonight, and
+- Done 2026-11-05: first basket takes out the men ruled out tonight,
   shares the first basket among tonight's likely five by opening shots
-  per start (above); nothing to run.
+  per start, and reads the opening tip by tonight's two jumpers (above);
+  runbook KI checks the stored tips.
 - First basket at the confirmed five: knowing tonight's five outright
   takes the Brier another 0.012-0.013 (the oracle rows above). The same
   probe as the minutes' confirmed five (below) would serve both.

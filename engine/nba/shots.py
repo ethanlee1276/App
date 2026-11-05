@@ -52,6 +52,8 @@ FREE_THROW = "freethrow"
 SHOT_COLS = ["game_id", "action", "season", "date", "person_id", "player", "team", "opponent", "home",
              "period", "clock", "kind", "made", "shot", "descriptor", "distance", "x", "y", "zone",
              "area", "assist", "blocked", "quals"]
+#: Each final's opening jump ball (`nba_tips`, engine/db).
+TIP_COLS = ["game_id", "season", "date", "home", "away", "home_jumper", "away_jumper", "third"]
 
 #: The league's shot zones, in the order the page lists them.
 ZONES = (("ra", "Restricted area"), ("paint", "In the paint"), ("mid", "Mid-range"),
@@ -257,6 +259,99 @@ def fold_espn(summary: dict, date: str, game_id: str = "") -> list[dict]:
     return [r for r in out if r["player"] and r["person_id"]]
 
 
+# --- the opening tip (2026-11-05) -------------------------------------------------
+# FIRST BASKET'S TEAM HALF (engine/firstbasket): who wins the opening tip is
+# a trait of the two men who jump, not of the club — a club's tip record
+# changes with its centre. Each final's opening jump ball is kept beside its
+# shots: the two jumpers, one a club, and the club of the third man the play
+# names. ESPN's jump ball names three (the box's one sample, sources/espnplays):
+# the two jumpers, then — by every reading so far — the man it went to. That
+# order is not promised, so the board checks the third man's club against
+# who took the first shot before it reads him as the tip (firstbasket.tips).
+# A play's written text is never read; the type's label is a category.
+def _is_jump(label) -> bool:
+    return str(label or "").strip().lower().replace(" ", "") == "jumpball"
+
+
+def fold_espn_tip(summary: dict, date: str, game_id: str = "") -> dict | None:
+    """One ESPN final's opening jump ball as an `nba_tips` row, or None
+    when it cannot be read: no jump ball in the first period, or its first
+    two men not one from each club."""
+    from .. import divisions
+    from ..seasons import season_of
+    comp = (((summary or {}).get("header") or {}).get("competitions") or [{}])[0]
+    gid = str(((summary or {}).get("header") or {}).get("id") or comp.get("id") or game_id or "")
+    club, side = {}, {}
+    for c in comp.get("competitors") or []:
+        t = c.get("team") or {}
+        tid, ab = str(t.get("id") or ""), divisions.canonical("nba", str(t.get("abbreviation") or ""))
+        if tid and ab:
+            club[tid] = ab
+            side[c.get("homeAway")] = ab
+    home, away = side.get("home", ""), side.get("away", "")
+    if not gid or not date or not home or not away:
+        return None
+    names, of = {}, {}
+    for block in ((summary.get("boxscore") or {}).get("players")) or []:
+        t = block.get("team") or {}
+        ab = club.get(str(t.get("id") or "")) or divisions.canonical("nba", str(t.get("abbreviation") or ""))
+        for group in block.get("statistics") or []:
+            for ath in group.get("athletes") or []:
+                a = ath.get("athlete") or {}
+                if a.get("id"):
+                    if a.get("displayName"):
+                        names[str(a["id"])] = str(a["displayName"])
+                    of[str(a["id"])] = ab
+    for play in summary.get("plays") or []:
+        if _int((play.get("period") or {}).get("number")) != 1 or not _is_jump((play.get("type") or {}).get("text")):
+            continue
+        who = [str(((q or {}).get("athlete") or {}).get("id") or "") for q in play.get("participants") or []]
+        if len(who) < 2:
+            return None
+        clubs = [of.get(who[0]), of.get(who[1])]
+        if sorted(c or "" for c in clubs) != sorted((home, away)) or not (names.get(who[0]) and names.get(who[1])):
+            return None
+        hj = names[who[clubs.index(home)]]
+        aj = names[who[clubs.index(away)]]
+        third = of.get(who[2], "") if len(who) > 2 else ""
+        return {"game_id": gid, "season": season_of("nba", date), "date": date, "home": home, "away": away,
+                "home_jumper": hj, "away_jumper": aj, "third": third if third in (home, away) else ""}
+    return None
+
+
+def fold_tip(pbp: dict, box: dict, date: str = "") -> dict | None:
+    """The league's own play-by-play (cdn.nba.com) folded the same way: its
+    jump ball names the two jumpers outright and files the action under the
+    club that recovered it."""
+    from ..seasons import season_of
+    game = (box or {}).get("game") or {}
+    gid = str(game.get("gameId") or ((pbp or {}).get("game") or {}).get("gameId") or "")
+    home = str((game.get("homeTeam") or {}).get("teamTricode") or "")
+    away = str((game.get("awayTeam") or {}).get("teamTricode") or "")
+    date = date or _date_of(game)
+    if not gid or not date or not home or not away:
+        return None
+    names, of = {}, {}
+    for key, ab in (("homeTeam", home), ("awayTeam", away)):
+        for pl in (game.get(key) or {}).get("players") or []:
+            pid = _int(pl.get("personId"))
+            if pid:
+                names[pid] = str(pl.get("name") or "")
+                of[pid] = ab
+    for a in ((pbp or {}).get("game") or {}).get("actions") or []:
+        if str(a.get("actionType") or "").lower() != "jumpball" or _int(a.get("period")) != 1:
+            continue
+        won, lost = _int(a.get("jumpBallWonPersonId")), _int(a.get("jumpBallLostPersonId"))
+        jumpers = {of.get(won): won, of.get(lost): lost}
+        if set(jumpers) != {home, away} or not (names.get(won) and names.get(lost)):
+            return None
+        third = str(a.get("teamTricode") or "")
+        return {"game_id": gid, "season": season_of("nba", date), "date": date, "home": home, "away": away,
+                "home_jumper": names[jumpers[home]], "away_jumper": names[jumpers[away]],
+                "third": third if third in (home, away) else ""}
+    return None
+
+
 def read_espn(game_id: str):
     """ESPN's summary of one final, or None — read without keeping a file
     this read wrote; one the results ingest already holds stays."""
@@ -360,6 +455,11 @@ def ingest_games(conn, games: list, read=None, workers: int = 4, chunk: int = CH
                     continue
                 out["shots"] += db.upsert_nba_shots(conn, rows)
                 out["games"] += 1
+                tip = (fold_espn_tip(pbp, g.get("date") or "", str(g["game_id"])) if espn
+                       else fold_tip(pbp, box, g.get("date") or ""))
+                if tip:
+                    db.upsert_nba_tips(conn, [tip])
+                    out["tips"] = out.get("tips", 0) + 1
             pairs = None
     return out
 
@@ -387,6 +487,55 @@ def backfill(conn, today, budget: int = BACKFILL_PER_NIGHT, read=None) -> dict:
         got = ingest_games(conn, take, read=read, espn=True)
         for k in ("games", "shots", "failed"):
             out[k] += got[k]
+    out["left"] = max(0, len(todo) - out["games"] - out["failed"])
+    return out
+
+
+#: Finals' opening tips read a night for the games whose shots came before
+#: the tips were kept (2026-11-05), newest first, this season then last.
+TIPS_PER_NIGHT = 300
+
+
+def tip_stored(conn) -> set:
+    try:
+        return {str(r[0]) for r in conn.execute("SELECT game_id FROM nba_tips")}
+    except Exception:                                              # noqa: BLE001
+        return set()
+
+
+def backfill_tips(conn, today, budget: int = TIPS_PER_NIGHT, read=None) -> dict:
+    """The opening tip of every final whose shots are stored and whose tip is
+    not, ``budget`` games at a time, newest first, off ESPN's summaries. A
+    summary with no readable jump ball still files a row (no jumpers), so it
+    is not asked again. ``{"games", "tips", "failed", "left"}``."""
+    from .. import db
+    from ..seasons import window, season_of
+    cur = season_of("nba", today.isoformat())
+    first = window("nba", cur - 1)[0]
+    shots, tips = stored(conn), tip_stored(conn)
+    todo = [g for g in espn_finals(conn, first, today.isoformat())
+            if g["game_id"] in shots and g["game_id"] not in tips]
+    out = {"games": 0, "tips": 0, "failed": 0, "left": 0}
+    read = read or read_espn
+    take = todo[:max(0, int(budget))]
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        # A chunk at a time, as the shots are read (CHUNK has the why).
+        for i in range(0, len(take), CHUNK):
+            part = take[i:i + CHUNK]
+            for g, summ in zip(part, pool.map(lambda g: read(str(g["game_id"])), part)):
+                if not summ:
+                    out["failed"] += 1
+                    continue
+                tip = fold_espn_tip(summ, g["date"], str(g["game_id"]))
+                if tip is None:
+                    tip = {"game_id": str(g["game_id"]), "season": season_of("nba", g["date"]),
+                           "date": g["date"], "home": "", "away": "", "home_jumper": "", "away_jumper": "",
+                           "third": ""}
+                else:
+                    out["tips"] += 1
+                db.upsert_nba_tips(conn, [tip])
+                out["games"] += 1
     out["left"] = max(0, len(todo) - out["games"] - out["failed"])
     return out
 

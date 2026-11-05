@@ -482,6 +482,16 @@ CREATE INDEX IF NOT EXISTS nba_shots_player ON nba_shots (person_id, season);
 CREATE INDEX IF NOT EXISTS nba_shots_name ON nba_shots (player);
 CREATE INDEX IF NOT EXISTS nba_shots_league ON nba_shots (season, zone, made);
 CREATE INDEX IF NOT EXISTS nba_shots_opp ON nba_shots (season, opponent, zone, made);
+-- THE OPENING TIP (engine/nba/shots.fold_espn_tip, 2026-11-05): each final's
+-- opening jump ball — the two men who jumped, one a club, and the club of
+-- the third man the play names (who it went to, where the feed lists him;
+-- engine/firstbasket checks that against who shot first before it trusts
+-- it). First basket's team half reads who wins the tip by its jumpers.
+CREATE TABLE IF NOT EXISTS nba_tips (
+    game_id TEXT PRIMARY KEY, season INTEGER, date TEXT, home TEXT, away TEXT,
+    home_jumper TEXT, away_jumper TEXT, third TEXT
+);
+CREATE INDEX IF NOT EXISTS nba_tips_season ON nba_tips (season, date);
 -- THE LEAGUE'S PASSING TRACKING NUMBERS (nextgen_stats/ngs_passing): one
 -- row per player-week, week 0 the season line, passers past the league's
 -- minimum — time to throw, completion % above expectation, aggressiveness
@@ -1261,6 +1271,12 @@ def upsert_nba_shots(conn, rows: list[dict]) -> int:
     """Every shot on the NBA shot chart (engine/nba/shots.py)."""
     from .nba.shots import SHOT_COLS
     return _upsert(conn, "nba_shots", SHOT_COLS, rows)
+
+
+def upsert_nba_tips(conn, rows: list[dict]) -> int:
+    """Each final's opening jump ball (engine/nba/shots.fold_espn_tip)."""
+    from .nba.shots import TIP_COLS
+    return _upsert(conn, "nba_tips", TIP_COLS, rows)
 
 
 def upsert_game_starters(conn, rows: list[dict]) -> int:

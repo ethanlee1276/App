@@ -2286,6 +2286,14 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                     f"{got['shots'] + back['shots']:,} shots"
                     + (f", {back['left']:,} older left" if back.get("left") else "")
                     + (f" (last season's files are {back['last_season']})" if back.get("last_season") else ""))
+            # THE OPENING TIP (first basket's team half, engine/firstbasket):
+            # each final's jump ball, kept with its shots from 2026-11-05 and
+            # read back for the finals stored before then, a budget a night.
+            tipped = _nshots.backfill_tips(_sc, today)
+            if tipped["games"] or tipped["failed"]:
+                log(f"  nba opening tips: {tipped['tips']} of {tipped['games']} final(s) read"
+                    + (f", {tipped['failed']} unread" if tipped["failed"] else "")
+                    + (f", {tipped['left']:,} older left" if tipped["left"] else ""))
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  nba shots failed: {exc}")
 
