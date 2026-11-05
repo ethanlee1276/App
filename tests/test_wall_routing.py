@@ -152,8 +152,14 @@ def test_the_pages_that_stay_open_are_named_once():
                           # Each rendered as a free account with body.walled
                           # set: the tab bar there with Live, not a wall
                           # screen (tests/test_the_free_side_opens_its_
-                          # reference_pages.py). The Lab stays walled.
+                          # reference_pages.py).
                           "why", "about", "features", "methodology", "status", "alerts",
+                          # The Lab (2026-11-05, Ethan: "do all of them"): a
+                          # free account gets the replay's public summary off
+                          # the free record and a lock where each market's
+                          # replay would be; the sealed file is never asked
+                          # for (tests/test_the_lab_opens_to_free_accounts.py).
+                          "lab",
                           # The Pick of the Day, every league (2026-10-30,
                           # Ethan: "make the picks of the day free. just the
                           # pick of the day"): the public file carries the

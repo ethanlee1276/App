@@ -10,9 +10,9 @@ it read the sealed backtest. What these hold:
     market by market (its simulated bets, grades and bins) is in
     backtest.json, paid whole (engine/gate PAID_FILES);
   * a reader without a plan gets the replay's public summary, read off the
-    free record.json (`replay`, engine/lab.replay_summary: priced, Brier,
-    skill, calibration error, basis), and the page's own lock where the rest
-    would be, never a number from behind it;
+    free record (`replay`, engine/lab.replay_summary: priced, Brier, skill,
+    calibration error, basis) through the site's one record loader, and the
+    page's own lock where the rest would be, never a number from behind it;
   * the sign-up's table and the plans' line say so, and the Terms' §2 list of
     free features names it, with a dated note that the change only adds;
   * in a browser, a free account lands on the Lab (not the plans), sees each
@@ -68,8 +68,11 @@ def test_a_reader_without_a_plan_gets_the_summary_and_the_lock():
     # the answer is the boot's status when there is one, else the server's.
     assert "isWalled()" in who and "_pwStatus" in who and "await paywallCheck()" in who
     assert "s.paywall && !s.entitled" in who
-    assert 'boardFetch("data/record.json"' in free and ".replay" in free
-    assert 'memberLockHTML("The replay, market by market, is for members"' in free
+    # The site's one record loader: cached, the slim copy first, adopted
+    # like every other reader (tests/test_the_record_is_one_record).
+    assert "await loadRecordOnce()" in free and "rec.replay" in free
+    assert "boardFetch(" not in free and "paidFetch(" not in free
+    assert 'memberLockHTML("Market by market, the replay is for members"' in free
     # Nothing in it reads a field the sealed file carries (the lock's own
     # words may name them; the code may not touch them).
     touched = re.findall(r"\.(roi|n_bets|win_rate|bins|segments|markets)\b", free)
@@ -129,6 +132,7 @@ def _visit() -> dict:
                 page.route("**/api/account/me*", ful(json.dumps(who)))
                 page.route("**/api/billing/status*", ful(json.dumps(bill)))
                 page.route("**/api/board/**", ful('{"error":"subscription required"}', 402))
+                page.route("**/data/record_head.json*", ful(record))
                 page.route("**/data/record.json*", ful(record))
                 page.route("**/data/backtest.json*", ful(sealed))
                 page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');}catch(e){}")
@@ -156,7 +160,7 @@ def test_in_a_browser_a_free_account_lands_on_the_lab_with_the_summary_and_the_l
     assert got["view"] == "lab" and got["walled"] and not got["wall"], got
     assert got["rows"] == 2, got
     assert "NBA" in got["text"] and "18,420" in got["text"] and "+4.1%" in got["text"], got["text"][:400]
-    assert "The replay, market by market, is for members" in got["text"]
+    assert "Market by market, the replay is for members" in got["text"]
     assert "SEALED-MARKET" not in got["text"], "nothing from the sealed file"
     assert not any("backtest.json" in u for u in out["asked"]), "a free reader is never sent for it"
     assert not out["errs"], out["errs"]

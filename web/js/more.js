@@ -518,19 +518,21 @@ function labGameTable(games) {
 }
 
 /* THE LAB, OPEN TO FREE ACCOUNTS (Ethan, 2026-11-05: "do all of them").
-   The replay market by market, its simulated bets, grades and bins, stays in
+   Each market's replay, its simulated bets, grades and bins, stays in
    backtest.json, sealed (engine/gate PAID_FILES, audit B1-1). A reader
    without a plan gets the replay's public summary, the numbers the Record
-   already shows (record.json `replay`, engine/lab.replay_summary): how many
-   props each sport's model priced over stored history, its Brier score, its
-   skill over always guessing the base rate, how far its chances ran from
-   what happened, and a lock where the market-by-market replay would be.
-   Never a number from behind the lock. */
+   already shows (record.json `replay`, engine/lab.replay_summary, carried
+   in the slim record_head.json too), read through the site's one record
+   loader (loadRecordOnce, cached and adopted like every other reader): how
+   many props each sport's model priced over stored history, its Brier
+   score, its skill over always guessing the base rate, how far its chances
+   ran from what happened, and a lock where the market-by-market replay
+   would be. Never a number from behind the lock. */
 const LAB_SPORT_NAMES = { mlb: "MLB", nfl: "NFL", cfb: "College football", nba: "NBA", wnba: "WNBA",
   nhl: "NHL", ufc: "UFC" };
 async function labFreeHTML() {
-  const got = await fetchJSON(() => boardFetch("data/record.json", { cache: "no-cache" }), "record");
-  const rp = ((got.data || {}).replay) || {};
+  const rec = (typeof loadRecordOnce === "function" ? await loadRecordOnce() : null) || {};
+  const rp = rec.replay || {};
   const pct = (x) => x == null ? "—" : `${x > 0 ? "+" : x < 0 ? "\u2212" : ""}${Math.abs(x * 100).toFixed(1)}%`;
   const num = (x) => x == null ? "—" : Number(x).toFixed(3);
   const basisWord = { book: "against book lines", naive: "against a trailing-average line",
@@ -538,14 +540,14 @@ async function labFreeHTML() {
   const rows = Object.keys(LAB_SPORT_NAMES).filter((k) => rp[k] && rp[k].n).map((k) => {
     const r = rp[k];
     const good = r.skill != null && r.skill > 0;
-    return `<tr><td>${escapeHtml(LAB_SPORT_NAMES[k])}</td><td>${Number(r.n).toLocaleString()}</td>
-      <td>${num(r.brier)}</td><td style="color:var(--${good ? "good" : "warn"})">${pct(r.skill)}</td>
-      <td>${num(r.ece)}</td><td>${escapeHtml(basisWord[r.basis] || r.basis || "—")}</td></tr>`;
+    return `<tr><td>${escapeHtml(LAB_SPORT_NAMES[k])}</td><td class="num">${Number(r.n).toLocaleString()}</td>
+      <td class="num">${num(r.brier)}</td><td class="num" style="color:var(--${good ? "good" : "warn"})">${pct(r.skill)}</td>
+      <td class="num">${num(r.ece)}</td><td>${escapeHtml(basisWord[r.basis] || r.basis || "—")}</td></tr>`;
   }).join("");
-  const table = rows ? `<table class="agate lab-free"><thead><tr><th>Sport</th><th>Props priced</th>
-      <th>Brier</th><th>Skill</th><th>Calibration error</th><th>Graded</th></tr></thead>
+  const table = rows ? `<table class="agate lab-free"><thead><tr><th>Sport</th><th class="num">Props priced</th>
+      <th class="num">Brier</th><th class="num">Skill</th><th class="num">Calibration error</th><th>Graded</th></tr></thead>
       <tbody>${rows}</tbody></table>`
-    : `<p class="mini">${got.failed ? "The summary could not be read just now; try again in a minute."
+    : `<p class="mini">${!Object.keys(rec).length ? "The summary could not be read just now; try again in a minute."
       : "No replay has been published yet; it appears here after the next run."}</p>`;
   return `
     ${recDisclosure("What this page is, and what it isn’t", `The Record grades the picks we
@@ -561,7 +563,7 @@ async function labFreeHTML() {
       (lower is better). Skill is how much better than always guessing the base rate; above
       zero means the forecasts carry information. Calibration error is how far the chances ran
       from what happened, on average.</p>
-    ${memberLockHTML("The replay, market by market, is for members", "Each market’s replay, the "
+    ${memberLockHTML("Market by market, the replay is for members", "Each market’s replay, the "
       + "bets it would have made at the price with their grades and calibration bins, and the "
       + "game lines graded against real closing numbers come with a membership.")}`;
 }

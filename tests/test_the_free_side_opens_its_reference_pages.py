@@ -9,8 +9,11 @@ most sense with that").
   * Alerts opens too: a free account's own switches (kickoff, big moments,
     final scores) and its watches live there, and the server hands it no
     pick on that page. What is a member's there says so, once.
-  * The Lab stays a member's: it reads the paid backtest, so for a free
-    account it would be an empty page.
+  * The Lab stayed a member's then: it reads the paid backtest, so for a
+    free account it would have been an empty page. It opened on 5 November
+    (Ethan: "do all of them") with the replay's public summary off the free
+    record, and the sealed file stays sealed
+    (tests/test_the_lab_opens_to_free_accounts.py).
 
 Run directly: `python3 tests/test_the_free_side_opens_its_reference_pages.py`
 """
@@ -40,10 +43,10 @@ def _fn(src: str, name: str) -> str:
     return src[i:src.index("\n}\n", i)]
 
 
-def test_the_six_open_and_the_lab_does_not():
+def test_the_six_open_and_the_lab_with_its_summary():
     open_ = _list("WALL_OPEN")
     assert set(OPENED) <= open_, set(OPENED) - open_
-    assert "lab" not in open_, "the Lab reads the paid backtest"
+    assert "lab" in open_, "the Lab opened on 5 November with its public summary"
     assert set(OPENED) - {"alerts"} <= _list("QUIET_FOOTER_VIEWS") and "QUIET_FOOTER_VIEWS = new Set(" in APP, \
         "the reference pages show no pick, price or bet"
 
@@ -61,8 +64,14 @@ def test_what_each_page_reads_is_free():
         body = MORE[MORE.index(f"function {name}("):]
         body = body[:body.index("\n}\n")]
         assert "paidFetch(" not in body and "fetch(" not in body.replace("boardFetch(", ""), name
+    # The Lab: a reader without a plan gets the free record's summary, and
+    # only a member is sent for the sealed file.
     lab = MORE[MORE.index("async function renderLab("):]
-    assert 'paidFetch("backtest.json")' in lab[:lab.index("\n}\n")], "why the Lab stays a member's"
+    lab = lab[:lab.index("\n}\n")]
+    assert lab.index("await labWalled()") < lab.index('paidFetch("backtest.json")')
+    free = MORE[MORE.index("async function labFreeHTML("):]
+    free = free[:free.index("\n}\n")]
+    assert "await loadRecordOnce()" in free and "paidFetch(" not in free
 
 
 def test_alerts_gives_a_free_account_its_own_and_no_pick():
@@ -118,6 +127,7 @@ def _visit(entitled: bool, views) -> dict:
                     got[view] = page.evaluate("""() => ({ hash: location.hash,
                       edge: !!document.querySelector('#al-kind option[value="edge"]'),
                       lock: !!document.querySelector('#alerts-body .member-lock'),
+                      labLock: !!document.querySelector('#lab-body .member-lock'),
                       locked: [...document.querySelectorAll('.sport-btn[data-kind="tool"].nav-locked')].map((b) => b.dataset.sport) })""")
                     ctx.close()
             finally:
@@ -127,7 +137,7 @@ def _visit(entitled: bool, views) -> dict:
     return {"views": got, "errs": errs}
 
 
-def test_in_a_browser_a_free_account_opens_them_and_the_lab_asks_for_a_plan():
+def test_in_a_browser_a_free_account_opens_them_all_and_the_lab_shows_its_lock():
     if os.environ.get("QB_BROWSER_TESTS") != "1":
         print("      (skipped: set QB_BROWSER_TESTS=1)")
         return
@@ -140,11 +150,14 @@ def test_in_a_browser_a_free_account_opens_them_and_the_lab_asks_for_a_plan():
     assert not free["errs"], free["errs"]
     for v in OPENED:
         assert free["views"][v]["hash"] == f"#{v}", (v, free["views"][v])
-    assert free["views"]["lab"]["hash"] == "#paywall", free["views"]["lab"]
+    # The Lab opened on 5 November: it stays on its page, with the lock where
+    # each market's replay would be (tests/test_the_lab_opens_to_free_accounts).
+    lab = free["views"]["lab"]
+    assert lab["hash"] == "#lab" and lab["labLock"], lab
     a = free["views"]["alerts"]
     assert not a["edge"] and a["lock"], a
     locked = set(a["locked"])
-    assert "lab" in locked and not locked & set(OPENED), locked
+    assert not locked & (set(OPENED) | {"lab"}), locked
     member = _visit(True, ("alerts",))
     m = member["views"]["alerts"]
     assert m["edge"] and not m["lock"] and not m["locked"], m

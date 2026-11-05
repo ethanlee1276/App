@@ -812,7 +812,12 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
                       # opening each as a free account in a browser: the tab
                       # bar there, no wall screen, no lock on its menu entry
                       # (test_the_free_side_opens_the_facts).
-                      "standings", "rosters", "injuries", "weather", "team", "race"}, (
+                      "standings", "rosters", "injuries", "weather", "team", "race",
+                      # 2026-11-05 (Ethan: "do all of them"): the Lab, with
+                      # its public summary only. Way back confirmed in a
+                      # browser as a free account: the Lab drawn, not the plans
+                      # (tests/test_the_lab_opens_to_free_accounts).
+                      "lab"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 

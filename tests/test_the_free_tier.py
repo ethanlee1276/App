@@ -70,8 +70,13 @@ def test_no_page_that_lists_picks_is_open():
     """The list Ethan named: props, picks, Most Likely, Edge — and every
     other page whose whole content is the model's output."""
     for page in ("recommended", "prop", "props", "edge", "likely", "longshots",
-                 "tonight", "scanner", "futures", "ask", "intel", "lab", "bankroll"):
+                 "tonight", "scanner", "futures", "ask", "intel", "bankroll"):
         assert page not in _open(), f"{page} opened with the free tier"
+    # The Lab opened on 2026-11-05 (Ethan: "do all of them") with its public
+    # summary only: a free account never reaches the sealed replay, the bets
+    # it would have made (tests/test_the_lab_opens_to_free_accounts).
+    from engine import gate
+    assert "backtest.json" in gate.PAID_FILES
 
 
 def test_the_paid_boards_are_still_paid():
