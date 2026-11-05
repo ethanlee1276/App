@@ -187,7 +187,18 @@ def test_in_a_browser_the_top_runs_on_as_one():
                                 break
                         page.wait_for_timeout(400)                   # its slide is over
                         g = page.evaluate(ROW)
-                    shot = page.screenshot(clip={"x": 0, "y": 0, "width": w, "height": 120})
+                    # SAMPLED AGAIN WHILE A SLIDE MAY STILL BE RUNNING (gate 27,
+                    # 2026-11-05: the Duo read the page's black under the clock
+                    # once, under the gate's load, and passed three times alone).
+                    # Up to six looks, 300 ms apart; a top that never paints
+                    # still fails on the last one.
+                    for look in range(6):
+                        shot = page.screenshot(clip={"x": 0, "y": 0, "width": w, "height": 120})
+                        under = _row(shot, 4)[0]
+                        if not under or min(sum(p) for p in under) >= 90 or look == 5:
+                            break
+                        page.wait_for_timeout(300)
+                        g = page.evaluate(ROW)
                     # 4 points down: under the clock, above every word. And on
                     # the Duo, a row through the site's bar and the score bar
                     # (between the wordmark's end and the bar's back button),
