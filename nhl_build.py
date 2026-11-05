@@ -284,7 +284,10 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         else:
             flags.append("opposing starter unsure")
             reasons.append(f"Goalie impact: {opponent}'s starter is not settled — read from the team's "
-                           f"goals allowed instead")
+                           f"goals allowed instead"
+                           + (f"; {them['starter']} started last night, and {them['likely_backup']} starts "
+                              f"about {them['likely_backup_rate']:.0%} of those nights"
+                              if them.get("likely_backup") and them.get("likely_backup_rate") else ""))
     if not goalie:
         swing = proj.get("toi_swing") or 0.0
         dressed = sum(1 for g in games if g.get("date") in (me.get("last10") or ()))
@@ -323,6 +326,11 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         flags.append("second night of a back-to-back")
     if them.get("b2b"):
         reasons.append(f"{opponent} is on the second night of a back-to-back")
+    rf = proj.get("rest_factor") or 1.0
+    if not goalie and abs(rf - 1.0) >= 0.005:
+        who = prop.team if proj.get("rest") == "tired" else opponent
+        reasons.append(f"Rest: {who} on the second night moves his number {rf - 1:+.1%} "
+                       f"(measured over two seasons of back-to-backs)")
     if flags or passes:
         reasons.append("Risk factors: " + "; ".join(flags + passes))
     eh = EH.assess_prop(prop.market, side, line, win, fair, edge, odds, book, credible, proj, p,
@@ -630,8 +638,17 @@ def scalpy_context(games: list[dict], players: dict, league: dict, teams: dict, 
                 sure = not (b2b and starter in started_yday)
             else:
                 sure = bool(starter) and share >= M.STARTER_SHARE and not (b2b and starter in started_yday)
+            # WHO STARTS INSTEAD (measured, docs/NHL_LAB.md): when the
+            # probable starter started last night, his team's other goalie
+            # starts 78% of those nights. Named for the card; still not
+            # "sure", so no goalie-dependent bet rides on it.
+            backup = None
+            if b2b and starter in started_yday and source != "confirmed":
+                backup = M.backup_goalie(players, team, starter)
             ctx[team] = {"opponent": opp, "home": home, "starter": starter, "starter_share": round(share, 2),
                          "starter_sure": sure, "starter_source": source, "b2b": b2b,
+                         "likely_backup": backup,
+                         "likely_backup_rate": M.BACKUP_B2B_STARTS if backup else None,
                          "sv": M.regressed_sv(players.get(starter), league) if starter else None,
                          "raw_sv": M.raw_sv(players.get(starter)) if starter else None,
                          "team_sv": M.team_sv(players, team, league),
@@ -677,9 +694,12 @@ def price_slate(slate: _Slate, games: list[dict], players: dict, league: dict, t
             sure = them.get("starter_sure")
             opp_sv = them.get("sv") if sure else None
             pp = ((pp_teams.get(prop.team) or {}).get("players") or {}).get(prop.player)
+            # BACK-TO-BACKS (measured, docs/NHL_LAB.md): his number on his
+            # team's second night, or against a team on its second night.
             proj = M.skater_projection(p, prop.market, league, teams, opp, opp_sv=opp_sv,
                                        xp=xplayers.get(prop.player),
-                                       opp_skill=them.get("gskill") if sure else None, pp=pp) if p else None
+                                       opp_skill=them.get("gskill") if sure else None, pp=pp,
+                                       rest=M.rest_of(me.get("b2b"), them.get("b2b"))) if p else None
             if proj is not None and prop.player in xplayers:
                 proj["xg_player"] = xplayers[prop.player]
             if proj is not None and pp:
@@ -865,7 +885,7 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     # play-by-play — None until `ingest.py nhl --shots` has run and a model
     # is fitted, and then every number below reads as it did without it.
     from engine.nhl import xg as X
-    xs = X.board_summaries(conn, seasons=seasons, window=M.RECENT_GAMES)
+    xs = X.board_summaries(conn, seasons=seasons, window=M.XG_WINDOW)
     M.attach_xg(teams, (xs or {}).get("teams"))
     out["shot_quality"] = bool(xs)
     if starters is None:

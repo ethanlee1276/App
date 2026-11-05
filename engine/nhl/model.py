@@ -51,18 +51,37 @@ mixes expected goals for and against into goals for and against
 of his output moved by the power-play chances tonight's opponent concedes
 (pp_factor). With no shot data everything reads as before.
 
-Nothing here is fitted to a backtest: every constant below is a plain
-prior, written down, and the record and the walk-forward ranking measure
-(engine.rankfit, which turns each market's Most Likely shelf on by itself)
-are what judge it. Standard library only.
+BACK-TO-BACKS. The second night of a back-to-back moves a skater's number
+(rest_factor: fewer shots and goals for the tired side, more against it)
+and both sides' expected goals (B2B_FACTOR, B2B_OPP_FACTOR); the probable
+starter who started last night is not the probable starter — his team's
+backup starts 78% of those nights (backup_goalie).
+
+Until 2026-11-05 nothing here was fitted to a backtest: every constant was
+a plain prior. The NHL lab (docs/NHL_LAB.md) has since measured the rate
+and ice-time memories, the team constants and the back-to-backs on two
+held-out seasons, and each one it changed says so beside it; the rest are
+still priors, and the record and the walk-forward ranking (engine.rankfit,
+which turns each market's Most Likely shelf on by itself) judge them.
+Standard library only.
 """
 from __future__ import annotations
 
 import math
 
-RATE_HALF_LIFE = 12.0
-TOI_HALF_LIFE = 6.0
-RECENT_GAMES = 40
+# MEASURED 2026-11-05 (docs/NHL_LAB.md): three seasons of every NHL box
+# score (sportsdataverse's fastRhockey files), each skater-game priced
+# walk-forward through skater_projection, fitted on one season and judged
+# on the other. A rate reads a longer memory than the first guess (12
+# games), ice time a shorter one (6), and both directions agreed:
+# ladder log loss 0.42843 -> 0.42652 fitting 2024-25, 0.42394 -> 0.42235
+# on 2025-26 held out, every market better.
+RATE_HALF_LIFE = 30.0
+TOI_HALF_LIFE = 3.0
+RECENT_GAMES = 60
+#: The shot-quality summaries' window (engine/nhl/xg.board_summaries) —
+#: kept at the 40 games they were built on; the lab had no xG to measure.
+XG_WINDOW = 40
 PRIOR_MINUTES = 120.0
 OPP_PRIOR_GAMES = 20.0
 OPP_CAP = 0.15
@@ -72,8 +91,16 @@ PRIOR_SHOTS = 600.0
 LEAGUE_SV = 0.900
 HOME_EDGE = 1.04
 OT_HOME = 0.52
-TEAM_HALF_LIFE = 25.0
-TEAM_PRIOR_GAMES = 15.0
+# MEASURED 2026-11-05 (docs/NHL_LAB.md): the game lines replayed on both
+# seasons, each knob swept on one and judged on the other. A team's
+# strength was believed far too fast — 15 games of shrinkage became 100
+# (each season's best: 70 and 150), its memory 25 games became 40; with
+# the back-to-back factors below, moneyline, puck line and totals log loss
+# all fell in both seasons (0.63428 -> 0.63077 on 2024-25, 0.63166 ->
+# 0.62866 on 2025-26). HOME_EDGE was left alone: one season wanted 1.06,
+# the other 1.02, and each choice did worse on the other season.
+TEAM_HALF_LIFE = 40.0
+TEAM_PRIOR_GAMES = 100.0
 MAX_GOALS = 14
 
 # --- Scalpy NHL 1.0 (Ethan, 2026-10-03) -------------------------------------
@@ -90,8 +117,30 @@ GOALIE_CAP = 0.20
 #: at five games and say Team A is massively better".
 SEASON_BLEND = ((6, 0.25), (12, 0.35), (25, 0.50), (29, 0.60))
 SEASON_BLEND_LATE = 0.70
-#: Second night of a back-to-back: the tired side's expected goals.
-B2B_FACTOR = 0.97
+#: Second night of a back-to-back: the tired side's expected goals, and
+#: its rested opponent's. MEASURED 2026-11-05 on 568 such games (docs/
+#: NHL_LAB.md): the tired side scored 0.93 of what the model expected
+#: against the rested games' ratio (0.89 in 2024-25, 0.96 in 2025-26), its
+#: rested opponent 1.04 (1.05, 1.03) — the first guess, 0.97 on the tired
+#: side alone, missed half the effect. Both sides tired: no factor (the two
+#: seasons disagreed, 1.00 and 0.92).
+B2B_FACTOR = 0.93
+B2B_OPP_FACTOR = 1.04
+#: A skater's number on the second night of HIS team's back-to-back
+#: ("tired", the opponent rested) and against a team on its second night
+#: ("opp_tired", his team rested). MEASURED 2026-11-05 on 468,205 priced
+#: skater-games: actual ÷ projected against the rested games' ratio, pooled
+#: over both seasons, taken at three-quarters strength because the full
+#: size fitted on one season overshot the other in one market (goals);
+#: three-quarters made every market better in both directions held out.
+#: Ice time does not move (1.00) — the legs do: fewer shots and goals for
+#: the tired side, more against it, and a tired side blocks more.
+B2B_SKATER = {"sog": 0.975, "points": 0.942, "goals": 0.933, "assists": 0.947, "blocks": 1.017}
+B2B_SKATER_OPP = {"sog": 1.031, "points": 1.054, "goals": 1.045, "assists": 1.058, "blocks": 0.975}
+#: The probable starter who started last night starts again 9% of the time
+#: (49 of 527 such nights over two seasons); the team's other goalie — the
+#: one with the most of its other recent starts — starts 78% (413 of 527).
+BACKUP_B2B_STARTS = 0.78
 #: A role is "unstable" when his last 5 games' ice time is this far off the
 #: 10 before them, or he dressed in fewer than ROLE_MIN_GAMES of his last 10
 #: team games — Scalpy passes the prop.
@@ -434,9 +483,31 @@ def opp_factor(teams: dict, opponent: str, kind: str) -> float:
 
 
 # --- skaters ------------------------------------------------------------------
+def rest_factor(market: str, rest: str | None) -> float:
+    """A skater's back-to-back multiplier: ``rest`` "tired" (his team's
+    second night, the other side rested) or "opp_tired" (the other way
+    round); anything else — both rested, both tired, unknown — is 1.0."""
+    stat = _STAT.get(market, market)
+    if rest == "tired":
+        return B2B_SKATER.get(stat, 1.0)
+    if rest == "opp_tired":
+        return B2B_SKATER_OPP.get(stat, 1.0)
+    return 1.0
+
+
+def rest_of(me_b2b, them_b2b) -> str | None:
+    """The ``rest`` label from the two sides' back-to-back flags."""
+    if me_b2b and not them_b2b:
+        return "tired"
+    if them_b2b and not me_b2b:
+        return "opp_tired"
+    return None
+
+
 def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent: str,
                       opp_sv: float | None = None, xp: dict | None = None,
-                      opp_skill: float | None = None, pp: dict | None = None) -> dict | None:
+                      opp_skill: float | None = None, pp: dict | None = None,
+                      rest: str | None = None) -> dict | None:
     """{"mean", "disp", "toi", "rate60", "opp", "n", ...} for one skater and
     market. ``opp_sv`` is the opposing probable starter's regressed save%:
     when given, a goal-driven market reads shots allowed × that goalie in
@@ -450,7 +521,10 @@ def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent:
     which replaces both the shots-allowed tilt and the save rate. The
     chances read are 5-on-5; the power play is its own step: ``pp`` is his
     engine.nhl.xg.power_play row, and pp_factor moves only the power-play
-    share of his output by the chances the opponent concedes shorthanded."""
+    share of his output by the chances the opponent concedes shorthanded.
+
+    ``rest`` (rest_of) is tonight's back-to-back: his number moves by
+    rest_factor — measured, docs/NHL_LAB.md."""
     games = [g for g in p["games"] if g.get("toi", 0) > 0]
     if len(games) < 3:
         return None
@@ -498,6 +572,8 @@ def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent:
         sh = (g_n + (xsh if xsh is not None else lsh) * SH_PRIOR_SHOTS) / (s_n + SH_PRIOR_SHOTS)
         mean = sog60 * toi / 60.0 * sh * opp
         rate60 = sog60 * sh
+    rf = rest_factor(market, rest)
+    mean *= rf
     vals = [g.get(stat, 0.0) for g in games]
     disp = 1.0
     if market in ("sog", "blocks") and len(vals) >= 5:
@@ -516,7 +592,8 @@ def skater_projection(p: dict, market: str, league: dict, teams: dict, opponent:
             "xsh": round(xsh, 4) if xsh is not None else None,
             "shot_model": "xg" if goal_market and opp_skill is not None
             and (teams.get(opponent) or {}).get("xga_ev") is not None else "shots",
-            "pp_unit": (pp or {}).get("unit"), "pp_factor": round(ppf, 3)}
+            "pp_unit": (pp or {}).get("unit"), "pp_factor": round(ppf, 3),
+            "rest": rest if rf != 1.0 else None, "rest_factor": round(rf, 3)}
 
 
 def skater_prob(proj: dict, market: str, line: float, side: str) -> float:
@@ -542,6 +619,27 @@ def probable_starter(players: dict, team: str) -> str | None:
     for _d, name in sorted(dates, reverse=True)[:STARTER_WINDOW]:
         starts[name] = starts.get(name, 0) + 1
     return max(starts, key=starts.get) if starts else None
+
+
+def backup_goalie(players: dict, team: str, starter: str | None) -> str | None:
+    """The goalie who starts when ``starter`` cannot: the most of his
+    team's other recent starts (the newest STARTER_WINDOW), else the most
+    recent other starter in the three windows before. None when the team
+    has started nobody else."""
+    team_starts = []
+    for n, p in players.items():
+        if p["position"] == "G" and p["team"] == team:
+            team_starts += [(g["date"], n) for g in p["games"] if g.get("started")]
+    team_starts.sort(reverse=True)
+    recent = [n for _d, n in team_starts[:STARTER_WINDOW] if n != starter]
+    if recent:
+        counts: dict = {}
+        for n in recent:
+            counts[n] = counts.get(n, 0) + 1
+        best = max(counts.values())
+        return next(n for n in recent if counts[n] == best)   # ties: the more recent
+    older = [n for _d, n in team_starts[STARTER_WINDOW:STARTER_WINDOW * 4] if n != starter]
+    return older[0] if older else None
 
 
 def starter_share(players: dict, team: str, name: str) -> float:
@@ -589,7 +687,8 @@ def goalie_prob(proj: dict, line: float, side: str) -> float:
 # --- games ------------------------------------------------------------------
 def team_lambdas(teams: dict, home: str, away: str, rested: dict | None = None) -> tuple[float, float] | None:
     """Expected regulation goals (home, away). ``rested`` = {team: False}
-    marks the second night of a back-to-back (B2B_FACTOR) — an adjustment,
+    marks the second night of a back-to-back: the tired side's goals take
+    B2B_FACTOR and its rested opponent's B2B_OPP_FACTOR — an adjustment,
     never a thesis on its own."""
     avg = _league_avg(teams, "gf")
     h, a = teams.get(home), teams.get(away)
@@ -610,8 +709,10 @@ def team_lambdas(teams: dict, home: str, away: str, rested: dict | None = None) 
     rested = rested or {}
     if rested.get(home) is False and rested.get(away) is not False:
         lh *= B2B_FACTOR
+        la *= B2B_OPP_FACTOR
     if rested.get(away) is False and rested.get(home) is not False:
         la *= B2B_FACTOR
+        lh *= B2B_OPP_FACTOR
     return lh, la
 
 

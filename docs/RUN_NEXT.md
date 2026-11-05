@@ -6,7 +6,9 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-05, after closing lines started coming from the
+Last updated 2026-11-05, after the NHL model was measured on three seasons
+of box scores and back-to-backs started counting on both sides (step KK:
+item 1q, one read-only check), after closing lines started coming from the
 sportsbooks' number, never an exchange's ladder rung (step KJ: item 1p, a
 dry run, then a write), after NBA first basket started reading which
 team scores first by tonight's two jumpers (step KI: item 1o, one read-only
@@ -515,6 +517,25 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 ```
 
 The same two with `--sport nfl` and `--sport cfb` re-read football's.
+
+## 1q. Any time after this push: the NHL lab, on the box's own games (step KK)
+
+The NHL model's constants were measured for the first time, on three
+seasons of box scores. Its rates and ice time now read different
+memories, team strength is believed more slowly, and back-to-backs count
+on both sides. The card also names the backup goalie the night after a
+starter played. This one read-only check replays the box's own stored
+NHL games, this season's included, which the lab never had (a few
+minutes):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nhllabcheck.py
+```
+
+Its last four lines should read like `skaters: the shipped constants
+better in 5 of 5 markets`, `back-to-backs: ... in 10 of 10`, `game lines:
+better after` and `goalies: backup named right 80% ...`. Paste it back if
+any of them reads the other way.
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

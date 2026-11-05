@@ -9324,6 +9324,44 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KK. The NHL model measured on three seasons, and back-to-backs on both
+sides** (step 396; one read-only check, a few minutes; you, 2026-11-05: "Go
+through nfl and CFB and nba and mlb and wnba and nhl ... make sure we have
+all the tools and data we can be using like how we just added for nba").
+Every NHL constant had been a first guess since 3 October. The NHL lab
+(`docs/NHL_LAB.md`) replayed three seasons of every NHL box score through
+the board's own model, each setting fitted on one season and judged on the
+other, and changed what held up both ways:
+
+- a skater's rate reads a 30-game half-life (was 12), his ice time 3 (was
+  6), from up to 60 games (was 40): every prop market better held out;
+- a team's strength reads 40 games (was 25), shrunk by 100 games of
+  average (was 15): moneyline, puck line and totals better in both
+  seasons;
+- the second night of a back-to-back takes the tired side's goals to 0.93
+  of the model's (was 0.97) and its rested opponent's to 1.04 (was
+  nothing), and every skater's number moves by three-quarters of what was
+  measured (fewer shots and goals for the tired side, more against it,
+  more blocks for it); the card says `Rest: ...`;
+- last night's starting goalie starts again 9% of the time, so he was
+  already unsettled (no saves bet); the card now names the backup, who
+  starts 78% of those nights.
+
+The check replays the box's own stored NHL games, this season's included,
+the constants before against after, the back-to-back ratios beside the
+shipped factors, and the goalie rule's two rates. Read-only: it opens the
+history file read-only and writes nothing.
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nhllabcheck.py
+```
+
+On a copy built from the lab's three seasons it printed `skaters: the
+shipped constants better in 5 of 5 markets`, `back-to-backs: the box's
+games lean the shipped way in 10 of 10`, `game lines: better after`, and
+`goalies: backup named right 80% of 727 nights`. If the box's last lines
+read the other way on any of the four, paste it back.
+
 **KJ. Closing lines at the sportsbooks' number, and the settled ones re-read**
 (step 389; one read-only dry run, then one write once you have read it;
 found on the public receipts, 2026-11-05). Every settled pick banks the

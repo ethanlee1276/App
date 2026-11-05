@@ -1239,5 +1239,8 @@ SH
 run KD "NBA: the rates read past the last twenty games, on the box's seasons" 900 <<'SH'
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbarates.py
 SH
+run KK "NHL: the lab's constants and back-to-backs, on the box's own games" 900 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 nhllabcheck.py
+SH
 
 echo "===== done in $((SECONDS / 60)) min"
