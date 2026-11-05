@@ -85,6 +85,10 @@ def tape(home: str, away: str, teams: dict, ctx: dict) -> dict:
             "starter": c.get("starter"), "starter_sv": c.get("sv"), "starter_share": c.get("starter_share"),
             "starter_sure": bool(c.get("starter_sure")), "starter_source": c.get("starter_source") or "",
             "b2b": bool(c.get("b2b")),
+            # Who starts instead when the probable starter started last
+            # night (measured: his team's other goalie, 78% of those nights).
+            "likely_backup": c.get("likely_backup") or None,
+            "likely_backup_rate": c.get("likely_backup_rate"),
             "xg": round(c["xg"], 2) if c.get("xg") is not None else None,
             "season_weight": prof.get("season_weight"), "gp_season": prof.get("gp_season"),
         }

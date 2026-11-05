@@ -915,7 +915,8 @@
         if (!s || !s.starter) continue;
         out.push({ team, opp, home: team === g.home, goalie: s.starter, sure: !!s.starter_sure,
                    source: s.starter_source || "", sv: s.starter_sv, gsax: s.starter_gsax, share: s.starter_share,
-                   b2b: !!s.b2b, faces: o && o.xg != null ? o.xg : null });
+                   b2b: !!s.b2b, faces: o && o.xg != null ? o.xg : null,
+                   backup: s.likely_backup || "", backupRate: s.likely_backup_rate == null ? null : s.likely_backup_rate });
       }
     }
     return out.sort((a, b) => (b.gsax == null ? -1e9 : b.gsax) - (a.gsax == null ? -1e9 : a.gsax));
@@ -931,7 +932,10 @@
     }
     const li = rows.map((r) => {
       const [tone, word] = SOURCE_WORD[r.source] || (r.sure ? ["good", "Expected"] : ["", "Unsure"]);
-      return `<tr><td><span class="xt-gk">${mark(r.team, sport)}<span><b>${esc(r.goalie)}</b><small>${esc(r.team)} ${r.home ? "vs" : "at"} ${esc(r.opp)}</small></span></span></td>
+      // The night after he started: who usually takes it (measured, the NHL lab).
+      const backup = r.backup ? `<small class="xt-gk-backup">Started last night · ${esc(r.backup)} starts
+        ${r.backupRate == null ? "most" : pctTxt(r.backupRate, 0)} of these nights</small>` : "";
+      return `<tr><td><span class="xt-gk">${mark(r.team, sport)}<span><b>${esc(r.goalie)}</b><small>${esc(r.team)} ${r.home ? "vs" : "at"} ${esc(r.opp)}</small>${backup}</span></span></td>
         <td><em class="xt-chip t-${tone || "none"}">${word}</em>${r.b2b ? ` <em class="xt-chip t-bad">B2B</em>` : ""}</td>
         <td>${r.gsax == null ? "—" : `<b class="${r.gsax >= 0 ? "pos" : "neg"}">${r.gsax > 0 ? "+" : r.gsax < 0 ? "−" : ""}${Math.abs(r.gsax).toFixed(1)}</b>`}</td>
         <td>${r.sv == null ? "—" : Number(r.sv).toFixed(3).replace(/^0/, "")}</td>

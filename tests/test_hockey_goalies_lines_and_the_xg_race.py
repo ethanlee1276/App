@@ -112,6 +112,9 @@ def test_the_tape_says_how_sure_the_start_is():
            "CGY": {"starter": "Dustin Wolf", "starter_sure": True, "starter_source": "confirmed"}}
     t = scan.tape("EDM", "CGY", teams, ctx)
     assert t["sides"]["EDM"]["starter_source"] == "recent starts" and t["sides"]["CGY"]["starter_source"] == "confirmed"
+    ctx["EDM"].update(likely_backup="Calvin Pickard", likely_backup_rate=0.78)
+    t = scan.tape("EDM", "CGY", teams, ctx)
+    assert t["sides"]["EDM"]["likely_backup"] == "Calvin Pickard" and t["sides"]["CGY"]["likely_backup"] is None
 
 
 def _node(body: str):
@@ -128,16 +131,18 @@ def _node(body: str):
     return json.loads(out.stdout)
 
 
-def _side(starter, gsax, src, sure=True, b2b=False, xg=3.0):
+def _side(starter, gsax, src, sure=True, b2b=False, xg=3.0, backup=None):
     return {"starter": starter, "starter_sv": 0.91, "starter_gsax": gsax, "starter_share": 0.7,
-            "starter_sure": sure, "starter_source": src, "b2b": b2b, "xg": xg}
+            "starter_sure": sure, "starter_source": src, "b2b": b2b, "xg": xg,
+            "likely_backup": backup, "likely_backup_rate": 0.78 if backup else None}
 
 
 def test_the_goalie_board_and_the_lines_card():
     board = {"games": [{"home": "BOS", "away": "NYR", "nhl_tape": {"sides": {
                 "BOS": _side("Jeremy Swayman", 4.2, "confirmed", xg=3.1), "NYR": _side("Igor Shesterkin", 7.9, "probable", xg=2.7)}}},
                        {"home": "EDM", "away": "CGY", "nhl_tape": {"sides": {
-                "EDM": _side("Stuart Skinner", None, "recent starts", sure=False, b2b=True), "CGY": _side("Dustin Wolf", -1.0, "confirmed")}}},
+                "EDM": _side("Stuart Skinner", None, "recent starts", sure=False, b2b=True, backup="Calvin Pickard"),
+                "CGY": _side("Dustin Wolf", -1.0, "confirmed")}}},
                        {"home": "SEA", "away": "VAN"}],
              "lines": {"EDM": {"forwards": [dict(LINE, xgf=1.4, xga=0.6, xgf_pct=0.7, att_for=18, att_against=9)],
                                "defence": []}}}
@@ -153,6 +158,9 @@ def test_the_goalie_board_and_the_lines_card():
     html = got["html"]
     assert "Probable" in html and "Confirmed" in html and "Our guess" in html and "B2B" in html
     assert "+7.9" in html and ".910" in html
+    # The night after he started, the board names who usually takes it (the NHL lab).
+    assert "Started last night · Calvin Pickard starts" in html and "78%" in html
+    assert html.count("Started last night") == 1, "only the goalie who started last night"
     assert "CGY @ EDM" in got["lines"] and "70%" in got["lines"] and "C1 · L1 · R1" in got["lines"]
     assert "Context only, and small" in got["lines"]
     assert "No starters on the board yet" in got["none"] and "No lines read yet" in got["nolines"]
