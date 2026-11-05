@@ -9324,6 +9324,44 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KP. A licensed scores feed, timed against ESPN's, if you want to try
+it** (step 239; your call first, then three commands; the research paper's
+data item). Every league's live scores but MLB's come from ESPN's public
+scoreboard, which nobody licensed to us (docs/DATA_SOURCES.md keeps the
+risk on the record). BALLDONTLIE sells the NBA's, the NFL's and MLB's
+scores under a key ($39.99 a sport a month for the full plan, by the
+paper's figures; check app.balldontlie.io for what each plan includes and
+its requests a minute). The client and a side-by-side timer are built
+and asleep: with a key, while an NBA or NFL game is on, the box reads
+both feeds each few seconds and writes down which showed each score
+first. Nothing a member sees changes; moving a league onto the licensed
+feed is a separate change, made only where it measures as fast or faster.
+
+The key, typed at the prompt; then what its plan answers (the probe never
+prints the key); then the restart that starts the timer:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh BALLDONTLIE_API_KEY
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^BALLDONTLIE_API_KEY=' /etc/qellys/env | xargs) python3 -m engine.sources.balldontlie --probe
+cd /srv/qellys && sudo systemctl restart qellys
+```
+
+Paste the probe back: one line per call, `ok` with the fields it sent, or
+the refusal. A plan with few requests a minute (the probe shows the
+limits it was told) reads more slowly, which the report allows for:
+`sudo ./deploy/setenv.sh QB_FEEDLATENCY_EVERY_S 30`, then the restart.
+
+After a night of NBA games or an NFL Sunday, the report, read-only:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.feedlatency
+```
+
+Each league reads `collecting (N of 200 score changes)` until it has
+enough, then `BALLDONTLIE as fast or faster ... a switch candidate` or
+`ESPN faster by N s ... keep ESPN`. Paste it back. To turn the timer off:
+`sudo ./deploy/setenv.sh --unset BALLDONTLIE_API_KEY`, then the restart.
+
 **KO. The backup says why its offsite copy failed** (step 408; one
 read-only check, under a minute; the owner's desk, 5 November: "Last
 night's backup did not reach the offsite copy"). The nightly backup made

@@ -5404,6 +5404,22 @@ def _live_scores_refresher() -> None:
         time.sleep(wait)
 
 
+def _feed_latency_watcher() -> None:
+    """ESPN's scoreboard and BALLDONTLIE's, read side by side while an NBA
+    or NFL game is on (engine/feedlatency, RS6): which shows a score first.
+    Started only when there is a BALLDONTLIE key; nothing on the site reads
+    the licensed feed, so this costs the boards nothing and changes no
+    score a member sees."""
+    from engine import feedlatency as _fl
+    while True:
+        wait = _fl.IDLE_S
+        try:
+            wait = _fl.watch_once()
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(wait)
+
+
 #: How often the billing sweep wakes. Each pass re-reads only the rows
 #: Stripe has not been asked about in billing.SWEEP_EVERY_S (six hours).
 BILLING_SWEEP_S = 30 * 60
@@ -11723,6 +11739,16 @@ def main() -> None:
         print(f"  MLB and NFL/CFB/NBA/WNBA/NHL live scores: every {SCORES_FAST_S}s "
               f"asleep between passes while a game is on, one process, "
               f"keyless — no odds credits.")
+        # The licensed scores feed, read beside ESPN's to time them (RS6).
+        # Asleep without a key: no thread, no request, no file.
+        try:
+            from engine.sources import balldontlie as _bdl
+            if _bdl.enabled():
+                threading.Thread(target=_feed_latency_watcher, daemon=True, name="feedlatency").start()
+                print("  Feed latency: ESPN and BALLDONTLIE read side by side while an NBA or NFL "
+                      "game is on (python3 -m engine.feedlatency for the report).")
+        except Exception:      # noqa: BLE001 — a missing feed never stops the site
+            pass
         # Members' saved slips: the last leg noted, and emailed where asked.
         threading.Thread(target=_slip_watcher, daemon=True, name="slipwatch").start()
         print(f"  Saved slips: every {SLIP_WATCH_S}s, a slip down to its last leg "

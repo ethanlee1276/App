@@ -43,21 +43,36 @@ Counted from the hosts the engine fetches (`engine/` and `engine/sources/`),
 ## What waits, and on what
 
 The paper's data item was a BALLDONTLIE client and a feed-latency logger
-that compares the two sources game by game, off until there is a key. It is
-not built yet:
+that compares the two sources game by game, off until there is a key.
+**Built 2026-11-05, off until a key** (step KP in docs/WHEN_YOU_ARE_HOME.md):
 
-- **The API's documentation could not be read from the build session.**
-  `docs.balldontlie.io` does not resolve there (it is outside the session's
-  allowed network domains), and a client written against an API nobody has
-  read would be a guess. Allowing that domain in the session's network
-  settings, or a key on the box, is the first step.
-- **Which sport first.** The paper's own logic says start where a paid
-  product leans hardest on an unofficial feed: the live scores and box
-  scores that grade bets and drive the Live tab (ESPN, every league but
-  MLB), then MLB.
-- **The latency test decides the switch.** With both feeds running, the
-  logger records when each first shows a score change, and the swap
-  happens only for a league where the licensed feed is as fast or faster.
+- **The client** (`engine/sources/balldontlie.py`) follows BALLDONTLIE's
+  own Python SDK (PyPI `balldontlie` 0.1.6, MIT), read line by line,
+  because `docs.balldontlie.io` is outside the build session's network.
+  The key goes bare in `Authorization`, lists repeat as `name[]`, pages
+  run by cursor, and the games endpoint gives each game's status, period,
+  clock and score for the NBA, the NFL and MLB. The WNBA, college football
+  and MMA the paper listed are not in the SDK, so they are not in the
+  client. `python3 -m engine.sources.balldontlie --probe` says what a
+  key's plan answers, without printing the key.
+- **The logger** (`engine/feedlatency.py`) runs on its own thread, started
+  only when `BALLDONTLIE_API_KEY` is set. While an NBA or NFL game is on
+  in ESPN's scoreboard, each tick reads that scoreboard (the copy the
+  score loop already fetched, so ESPN is asked no more often) and
+  BALLDONTLIE's games for the same dates, one request a league, and writes
+  down the first time each feed shows each new score
+  (`data/cache/feedlatency/`, 60 days kept). The report compares the
+  middle of each feed's reading gap, so a feed read more often is not
+  credited with being faster. MLB's live scores come from MLB's own feed,
+  not ESPN's, and its season is over, so it waits.
+- **The latency test decides the switch.** `python3 -m engine.feedlatency`
+  gives each league's verdict after 200 score changes both feeds showed:
+  `BALLDONTLIE as fast or faster ... a switch candidate`, or `ESPN faster
+  by N s ... keep ESPN`. Nothing on the site reads the licensed feed yet;
+  moving a league onto it is a separate change, made only on that verdict.
+- **Which sport first** stays the paper's: the live scores and box scores
+  that grade bets and drive the Live tab (ESPN, every league but MLB),
+  then MLB.
 
-Until then, nothing changes: the free feeds keep the site running, and
-this page is the record of the risk.
+Until there is a key, nothing changes: the free feeds keep the site
+running, and this page is the record of the risk.

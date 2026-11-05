@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after your desk's three alerts: the backup now says why its
+Last updated 2026-11-05, after the licensed scores feed and its timer were built and
+left asleep until you choose to get a key (step KP: item 8, your call), after
+your desk's three alerts: the backup now says why its
 offsite copy failed (step KO: item 0b, one read-only check after the next
 04:00 UTC run), the Lab's run fits its hour (item 1f, nothing to run), and
 the refit's alert reads each sport's real last fit (item 1g, nothing to
@@ -790,3 +792,28 @@ finished games had their first scorer marked:
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh IX 2>&1 | tee /tmp/ix.txt
 ```
+
+## 8. Your call, any time: a licensed scores feed, timed against ESPN's (step KP)
+
+Every league's live scores but MLB's come from ESPN's public scoreboard,
+which nobody licensed to us. BALLDONTLIE sells the NBA's, the NFL's and
+MLB's under a key. The client and a timer that reads both feeds side by
+side during NBA and NFL games are built and asleep; nothing a member sees
+changes. **Only if you want to try it**: sign up at app.balldontlie.io,
+then (the key is typed at the prompt, and the probe never prints it):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh BALLDONTLIE_API_KEY
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^BALLDONTLIE_API_KEY=' /etc/qellys/env | xargs) python3 -m engine.sources.balldontlie --probe
+cd /srv/qellys && sudo systemctl restart qellys
+```
+
+Paste the probe back. After a night of NBA games or an NFL Sunday:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KP 2>&1 | tee /tmp/kp.txt
+```
+
+Each league says `collecting` until 200 score changes, then whether the
+licensed feed is as fast or faster. A league moves onto it only on that
+verdict, and only as its own change.
