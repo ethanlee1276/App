@@ -153,7 +153,8 @@ def test_the_better_jumper_wins_more_tips_and_a_sitting_one_is_passed_over():
     assert abs(q - (FB.TIP_SHOOTS * p + (1 - FB.TIP_SHOOTS) * (1 - p))) < 1e-9
     assert 0.6 < q < 0.8 and who["BOS"] == ("Kristaps Porzingis", 30.0, 40.0)
     q_out, who_out = FB.tip_read(data, "BOS", "NYK", out={"kristaps porzingis"})
-    assert who_out["BOS"][0] == "" and abs(q_out - 0.5) < abs(q - 0.5), "no jumper of theirs: read as even"
+    # Measured: 0.170 from even without him against 0.281 with him.
+    assert who_out["BOS"][0] == "" and abs(q_out - 0.5) < abs(q - 0.5) * 0.8, "no jumper of theirs: read as even"
     q_moved, _w = FB.tip_read(data, "BOS", "NYK", plays={"Karl-Anthony Towns": "MIN"})
     assert q_moved < q, "a jumper filed with another club tonight is not theirs"
     assert FB.tip_read(FB.read(_tip_history(n=0), 2026), "BOS", "NYK") is None, "nothing stored"

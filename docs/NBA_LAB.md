@@ -400,6 +400,17 @@ The same honesty the NFL's refusals get:
   judged on the other): points +0.33% / +0.18%, assists +0.36% / +0.18%,
   rebounds and threes nothing, and the best power was 0 or 1 (equal shares
   or a flat bump), never "to the stars". Too small to move a number.
+- **A regular's return given back by room** (2026-11-05). The vacancy hands
+  an absent man's minutes out by room (above); a regular's return still
+  takes them back by base minutes. Replayed through the box check's own
+  cases on the lab replica (`nbarules.cases`, the board's projection), on
+  the same 2,275 / 2,340 teammate-games of a club with a returning
+  regular, against no return at all: by base minutes at the board's 0.25
+  of his usual minutes, minutes +3.15% / +3.57% and points +1.36% /
+  +0.81%; by room, +3.33% / +3.05% and +0.71% / +0.62%. The men who give
+  minutes back are not the men with room. Not built. The share itself:
+  0.28-0.30 edges 0.25 in both seasons by less than 0.2% of those games'
+  minutes error (0.01% over every priced game); left at 0.25.
 - **The other club short-handed** (2026-11-04). The opponent's fresh
   absences (its absent minutes, or the absent men's share of the stat, or of
   steals and blocks) as a step on every player's number, on top of a defence
