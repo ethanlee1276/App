@@ -350,7 +350,7 @@ def test_the_desk_page_draws_the_new_cards_and_filters_the_list():
     if not node:
         return
     sample = {"at": NOW, "now": {"members": 1, "visitors": 2, "pages": 1},
-              "accounts": {"total": 6, "new_today": 1, "new_7d": 2, "new_30d": 5, "seen_today": 1, "seen_7d": 2, "seen_30d": 3,
+              "accounts": {"total": 7, "new_today": 1, "new_7d": 2, "new_30d": 5, "seen_today": 1, "seen_7d": 2, "seen_30d": 3,
                            "signups": [{"day": "2026-11-05", "n": 1}], "back_day1": {"of": 2, "back": 1}, "back_week1": {"of": 1, "back": 0},
                            "list": [{"id": 6, "joined": NOW, "seen": NOW, "suspended": False, "status": "active", "entitled": True},
                                     {"id": 5, "joined": NOW, "seen": None, "suspended": False, "status": "trialing", "entitled": True},
@@ -432,6 +432,8 @@ def test_the_desk_page_draws_the_new_cards_and_filters_the_list():
     every = trial[trial.index("Every account, newest first"):]
     assert "Account #5" in every and "Account #6" not in every and "Account #4" not in every, "the filter shows only its own"
     assert 'class="od-chip on" data-od-filter="trial"' in every
+    assert "The newest 6 of 7" in every and "The newest 1 of" not in every, \
+        "the note counts the list the desk was sent, whatever the filter shows"
 
 
 def test_a_fresh_trend_says_when_it_starts():

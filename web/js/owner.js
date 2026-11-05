@@ -242,7 +242,7 @@ function odEveryHTML(a) {
     list.length ? `<ul class="oa-hits">${list.slice(0, OD_LIST_SHOWN).map(odAcctRow).join("")}</ul>` : `<p class="od-note">None of these.</p>`}${
     rest.length ? `<details class="od-all"${_odAllOpen ? " open" : ""}><summary>The other ${odN(rest.length)}</summary><ul class="oa-hits">${
       rest.map(odAcctRow).join("")}</ul></details>` : ""}${
-    a.total > list.length ? `<p class="od-note">The newest ${odN(list.length)} of ${odN(a.total)}; find any other in Accounts at the top.</p>` : ""}
+    a.total > every.length ? `<p class="od-note">The newest ${odN(every.length)} of ${odN(a.total)}; find any other in Accounts at the top.</p>` : ""}
     <p class="od-note">Tap one to open it in Accounts at the top, where its email and username show, one account at a time.</p>`;
 }
 
