@@ -136,6 +136,7 @@ def test_each_leagues_game_in_one_shape():
 
 
 def _reset():
+    B.RATE.clear()
     FL._LAST.clear()
     FL._SEEN_AT.clear()
     FL._SEEDED.clear()
@@ -226,6 +227,69 @@ def test_codes_or_names_match_the_two_feeds_games():
                                   "away_name": "Washington Commanders"}])
     assert FL.match("nba", {"home": "GSW", "away": "NYK"}, [{"home": "GS", "away": "NY"}])
     assert FL.match("nba", {"home": "GSW", "away": "NYK"}, [{"home": "NYK", "away": "GSW"}]) is None
+
+
+def test_the_timer_paces_itself_to_the_plans_own_rate():
+    """Ethan's probe on the box, 2026-11-05: the free key allows 5 requests a
+    minute, and the timer asked every 8 s. It reads the plan's limit off the
+    answers and keeps to 80% of it across the live leagues."""
+    _reset()
+    assert FL.every_s(1) == FL.FAST_S, "no limit heard yet: the score loop's own rhythm"
+    B.note_rate({"X-RateLimit-Limit": "5", "X-RateLimit-Remaining": "4", "X-RateLimit-Reset": "1793918129"})
+    assert B.RATE == {"limit": 5, "remaining": 4, "reset": 1793918129.0}
+    assert FL.every_s(1) == 15.0 and FL.every_s(2) == 30.0
+    B.note_rate({"x-ratelimit-limit": "600"})
+    assert FL.every_s(1) == FL.FAST_S and FL.every_s(2) == FL.FAST_S
+    B.note_rate({"x-ratelimit-reset": "20", "x-ratelimit-limit": "five"})
+    assert 0 < B.RATE["reset"] - __import__("time").time() <= 20.5 and B.RATE["limit"] == 600, \
+        "a reset in seconds from now, and a bad number leaves the old one"
+    _reset()
+    B.note_rate({"x-ratelimit-limit": "5"})
+    nba_only = lambda s: ([_row(2, 0)], 1.0) if s == "nba" else ([], 0.0)   # noqa: E731
+    both = lambda s: ([_row(2, 0)], 1.0)                                       # noqa: E731
+    assert FL.watch_once(espn=nba_only, bdl=lambda s, d: ([], 1.0), root=Path(tempfile.mkdtemp())) == 15.0
+    assert FL.watch_once(espn=both, bdl=lambda s, d: ([], 1.0), root=Path(tempfile.mkdtemp())) == 30.0
+
+
+def test_a_429_waits_for_the_minute_and_espn_is_still_read():
+    _reset()
+    root = Path(tempfile.mkdtemp())
+    t = [5000.0]
+    B.RATE["reset"] = 5040.0
+
+    def limited(s, d):
+        raise B.BDLRateLimited("429")
+    FL.watch_once(espn=lambda s: ([_row(2, 0)], t[0]) if s == "nba" else ([], 0.0), bdl=limited,
+                  now=lambda: t[0], root=root)
+    assert FL._PAUSE[0] == 5040.0, "until the plan's minute turns over"
+    asked = []
+    t[0] = 5010.0
+    FL.watch_once(espn=lambda s: ([_row(2, 3)], t[0]) if s == "nba" else ([], 0.0),
+                  bdl=lambda s, d: asked.append(s) or ([_bdl(2, 3)], t[0]), now=lambda: t[0], root=root)
+    assert asked == [], "paused"
+    recs = FL.read_day("2026-11-05", root)
+    assert [(r["feed"], tuple(r["score"])) for r in recs] == [("espn", (2, 0)), ("espn", (2, 3))], \
+        "ESPN's sightings go on while BALLDONTLIE waits"
+    t[0] = 5041.0
+    FL.watch_once(espn=lambda s: ([_row(2, 3)], t[0]) if s == "nba" else ([], 0.0),
+                  bdl=lambda s, d: asked.append(s) or ([_bdl(2, 3)], t[0]), now=lambda: t[0], root=root)
+    assert asked == ["nba"] and FL.read_day("2026-11-05", root)[-1]["feed"] == "bdl"
+
+
+def test_the_probe_says_a_plan_without_an_endpoint_is_not_a_bad_key():
+    def op(req, timeout=None):
+        if "box_scores/live" in req.full_url:
+            raise urllib.error.HTTPError(req.full_url, 401, "no", {}, io.BytesIO(b"{}"))
+        return _Resp({"data": [{"id": 1, "status_state": "pre"}]}, {"X-RateLimit-Limit": "5"})
+    lines = B.probe(key=KEY, opener=op, today="2026-11-05")
+    assert lines[-1] == "nba/v1/box_scores/live: not in this key's plan (401); the key itself works", lines[-1]
+    assert all("ok, 1 row(s)" in ln for ln in lines[:3])
+
+    def refuse_all(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 401, "no", {}, io.BytesIO(b"{}"))
+    assert all("refused the key" in ln for ln in B.probe(key=KEY, opener=refuse_all, today="2026-11-05"))
+    assert B.state_of("7:00 pm ET", 0, "in_progress") == "live" and B.state_of("", 4, "post") == "final"
+    assert B.state_of("Q2 5:00", 2, "") == "live" and B.state_of("x", 0, "pre") == "pre"
 
 
 def _write(root, recs):

@@ -154,10 +154,13 @@ first tip (item 1n):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh KH 2>&1 | tee /tmp/kh.txt
 ```
 
-The ones that write, each with its own item below and only when it says:
-item 0's cleanup (only after a night that ends `offsite copy updated`),
-item 1p's close lines (the dry run first, then `--apply`), and item 8 (only
-if you want the licensed feed). Not commands: alerts on your phone (item 1).
+The ones that write, each with its own item below: item 1p's close lines
+for the NFL and college (the dry run first, then `--apply`; the NBA's is
+done). Not commands: alerts on your phone (item 1).
+
+**Done 5 November:** item 0's cleanup (20 GB free now), item 1p's NBA
+close lines (1,537 re-read at the sportsbooks' number), and item 8's key
+(the timer is on; its report is in the run above as KP).
 
 ## 00. First, when you're home: NBA Most Likely is back, and where the credits went (step JW)
 
@@ -201,6 +204,9 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JX 2>&1 | tee /tmp/jx.txt
 ```
 
 ## 0. Tomorrow, after the 04:00 UTC backup: offsite works, then clear about 13 GB (steps JT, JG)
+
+**Done 5 November:** you ran the cleanup; the disk has 20 GB free (58%
+used). Item 0b still says whether the offsite copy lands.
 
 You fixed Backblaze's cap and lifecycle and deleted the October 15
 leftover. Why there's been no weekly zip since 8 October: the 15 October
@@ -661,6 +667,12 @@ way.
 
 ## 1p. Any time after this push: re-read the settled NBA closes (step KJ)
 
+**Done for the NBA, 5 November:** 3,166 settled bets read, 1,411 already
+right, 1,537 re-read at the sportsbooks' number, 103 kept; written, and
+the record picks it up at the next settle. Left: the NFL and college, the
+same two commands with `--sport nfl` and then `--sport cfb` (dry run
+first, paste it back, then `--apply`).
+
 Closing lines now come from the sportsbooks' number, never an exchange's
 ladder rung: 1,062 of 2,537 settled NBA picks had a close 3 or more off
 their own line. The picks settled before today keep their old close until
@@ -824,6 +836,11 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh IX 2>&1 | tee /tmp/ix.txt
 ```
 
 ## 8. Your call, any time: a licensed scores feed, timed against ESPN's (step KP)
+
+**Done 5 November:** you set the key and restarted; the timer is on. The
+free plan answers the games endpoint at 5 requests a minute, and the timer
+now paces itself to that by itself. Only the report is left, after a night
+of NBA games (KP, also in the Start here run):
 
 Every league's live scores but MLB's come from ESPN's public scoreboard,
 which nobody licensed to us. BALLDONTLIE sells the NBA's, the NFL's and

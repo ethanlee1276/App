@@ -63,7 +63,11 @@ that compares the two sources game by game, off until there is a key.
   down the first time each feed shows each new score
   (`data/cache/feedlatency/`, 60 days kept). The report compares the
   middle of each feed's reading gap, so a feed read more often is not
-  credited with being faster. MLB's live scores come from MLB's own feed,
+  credited with being faster. It paces itself to the plan's own limit,
+  read off every answer: the key on the box since 5 November is the free
+  plan, 5 requests a minute, so it reads every 15 seconds with one league
+  on (the games endpoint is in the free plan; the live box scores are
+  not). MLB's live scores come from MLB's own feed,
   not ESPN's, and its season is over, so it waits.
 - **The latency test decides the switch.** `python3 -m engine.feedlatency`
   gives each league's verdict after 200 score changes both feeds showed:

@@ -9347,9 +9347,17 @@ cd /srv/qellys && sudo systemctl restart qellys
 ```
 
 Paste the probe back: one line per call, `ok` with the fields it sent, or
-the refusal. A plan with few requests a minute (the probe shows the
-limits it was told) reads more slowly, which the report allows for:
-`sudo ./deploy/setenv.sh QB_FEEDLATENCY_EVERY_S 30`, then the restart.
+the refusal. A call the plan does not include says `not in this key's
+plan (401); the key itself works`. The timer reads the plan's limit off
+every answer and keeps to 80% of it, so nothing needs setting: on the free
+plan's 5 requests a minute it reads every 15 seconds with one league on
+and every 30 with two, and the report allows for the slower reading.
+
+**Done 5 November:** you set the key and restarted. The probe: the games
+endpoint answers for the NBA, the NFL and MLB on the free plan (5 requests
+a minute); the live box scores are not in it, and the timer does not use
+them. The same evening the timer learned to pace itself to that limit
+(it had been asking every 8 seconds).
 
 After a night of NBA games or an NFL Sunday, the report, read-only:
 

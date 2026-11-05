@@ -58,11 +58,25 @@ _PRUNED = [""]
 _SEEDED: set = set()
 
 
-def every_s() -> float:
+#: The share of the plan's requests a minute the timer may use, so a
+#: probe by hand or a retry still fits.
+RATE_SHARE = 0.8
+
+
+def every_s(leagues: int = 1) -> float:
+    """The tick: FAST_S (or QB_FEEDLATENCY_EVERY_S), slowed to fit
+    RATE_SHARE of the plan's requests a minute when the plan has said its
+    limit (one request a live league a tick): on the free plan's 5, every
+    15 s with one league on and every 30 s with two."""
     try:
-        return max(5.0, float(os.environ.get("QB_FEEDLATENCY_EVERY_S") or FAST_S))
+        base = max(5.0, float(os.environ.get("QB_FEEDLATENCY_EVERY_S") or FAST_S))
     except ValueError:
-        return float(FAST_S)
+        base = float(FAST_S)
+    from .sources import balldontlie as B
+    lim = B.RATE.get("limit")
+    if lim and lim > 0:
+        base = max(base, 60.0 * max(1, leagues) / (RATE_SHARE * lim))
+    return base
 
 
 def _norm(name: str) -> str:
@@ -184,9 +198,9 @@ def prune(today: str, root: Path | None = None) -> int:
 
 
 def watch_once(espn=None, bdl=None, now=None, root: Path | None = None, log=print) -> float:
-    """One tick. Returns the wait before the next: `every_s()` while either
-    league has a live game in ESPN's scoreboard, IDLE_S otherwise.
-    ``espn(sport) -> (rows, fetched_at)`` and ``bdl(sport, dates) ->
+    """One tick. Returns the wait before the next: `every_s()` for the
+    leagues with a live game in ESPN's scoreboard, IDLE_S when there are
+    none. ``espn(sport) -> (rows, fetched_at)`` and ``bdl(sport, dates) ->
     (games, answered_at)`` are for tests."""
     from .sources import balldontlie as B
     espn = espn or _espn_rows
@@ -194,7 +208,7 @@ def watch_once(espn=None, bdl=None, now=None, root: Path | None = None, log=prin
     clock = now or time.time
     if _OFF[0]:
         return IDLE_S
-    live_any = False
+    on = []
     for sport in LEAGUES:
         try:
             rows, te = espn(sport)
@@ -207,33 +221,39 @@ def watch_once(espn=None, bdl=None, now=None, root: Path | None = None, log=prin
             _SEEN_AT.pop(("espn", sport), None)
             _SEEN_AT.pop(("bdl", sport), None)
             continue
-        live_any = True
-        if clock() < _PAUSE[0]:
-            continue
-        dates = sorted({d for d in (_et_date(getattr(r["live"], "start_time", "")) for r in live) if d})
-        if not dates:
-            continue
-        try:
-            games, tb = bdl(sport, dates)
-        except B.BDLRateLimited:
-            _PAUSE[0] = clock() + BACKOFF_S
-            continue
-        except B.BDLUnavailable as exc:
-            if "refused the key" in str(exc):
-                _OFF[0] = True
-                log(f"  feed latency: {exc} Asleep until the next restart.")
-                return IDLE_S
-            continue
-        prev_e, prev_b = _SEEN_AT.get(("espn", sport)), _SEEN_AT.get(("bdl", sport))
-        iv_e = None if prev_e is None or te <= prev_e else te - prev_e
-        iv_b = None if prev_b is None else tb - prev_b
-        stale = 6 * every_s()          # a gap this long is a pause, not a reading's rhythm
+        on.append((sport, live, te))
+    if not on:
+        return IDLE_S
+    tick = every_s(len(on))
+    stale = 6 * tick                   # a gap this long is a pause, not a reading's rhythm
+    for sport, live, te in on:
+        prev_e = _SEEN_AT.get(("espn", sport))
         fresh_e = prev_e is None or te > prev_e
+        iv_e = (te - prev_e) if prev_e is not None and te > prev_e else None
         iv_e = None if iv_e is not None and iv_e > stale else iv_e
-        iv_b = None if iv_b is not None and iv_b > stale else iv_b
-        _SEEN_AT[("bdl", sport)] = tb
         if fresh_e:
             _SEEN_AT[("espn", sport)] = te
+        games, tb = None, None
+        dates = sorted({d for d in (_et_date(getattr(r["live"], "start_time", "")) for r in live) if d})
+        if dates and clock() >= _PAUSE[0]:
+            try:
+                games, tb = bdl(sport, dates)
+            except B.BDLRateLimited:
+                # Wait for the plan's minute to turn over when it said when.
+                reset = B.RATE.get("reset")
+                _PAUSE[0] = (max(clock() + 5.0, reset) if reset and reset > clock()
+                             else clock() + BACKOFF_S)
+            except B.BDLUnavailable as exc:
+                if "refused the key" in str(exc):
+                    _OFF[0] = True
+                    log(f"  feed latency: {exc} Asleep until the next restart.")
+                    return IDLE_S
+        iv_b = None
+        if games is not None:
+            prev_b = _SEEN_AT.get(("bdl", sport))
+            iv_b = None if prev_b is None else tb - prev_b
+            iv_b = None if iv_b is not None and iv_b > stale else iv_b
+            _SEEN_AT[("bdl", sport)] = tb
         for r in live:
             lv = r["live"]
             day = _et_date(getattr(lv, "start_time", ""))
@@ -242,14 +262,17 @@ def watch_once(espn=None, bdl=None, now=None, root: Path | None = None, log=prin
             _seed(day, root)
             prune(day, root)
             game = f"{day}:{r.get('away')}@{r.get('home')}"
-            if fresh_e:                    # a copy already read cannot show anything new
+            # ESPN's sightings go on while BALLDONTLIE waits out its minute:
+            # a copy already read cannot show anything new.
+            if fresh_e:
                 _sight("espn", sport, game, (lv.away_score, lv.home_score), te, iv_e,
                        getattr(lv, "period", ""), getattr(lv, "clock", ""), root)
-            g = match(sport, r, games)
-            if g is not None:
-                _sight("bdl", sport, game, (g.get("away_score"), g.get("home_score")), tb, iv_b,
-                       g.get("period"), g.get("clock"), root)
-    return every_s() if live_any else IDLE_S
+            if games is not None:
+                g = match(sport, r, games)
+                if g is not None:
+                    _sight("bdl", sport, game, (g.get("away_score"), g.get("home_score")), tb, iv_b,
+                           g.get("period"), g.get("clock"), root)
+    return tick
 
 
 def _mid(rec: dict) -> float:

@@ -41,6 +41,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -56,6 +57,32 @@ PER_PAGE = 100
 #: A day's games are one page; the cap only stops a cursor that loops.
 MAX_PAGES = 5
 TIMEOUT_S = 15
+
+
+#: THE PLAN'S OWN RATE, read off every answer (``x-ratelimit-limit``,
+#: ``-remaining``, ``-reset``): the free plan allows 5 requests a minute
+#: (Ethan's probe, 2026-11-05), the paid ones more. engine/feedlatency
+#: paces itself by it rather than by a number someone has to set.
+RATE: dict = {}
+
+
+def note_rate(headers) -> None:
+    """Keep what the answer said about the plan's rate; a header that is
+    missing or not a number leaves its old value alone."""
+    try:
+        h = {str(k).lower(): v for k, v in (headers.items() if headers else [])}
+    except Exception:                                         # noqa: BLE001
+        return
+    for name, key, kind in (("x-ratelimit-limit", "limit", int),
+                            ("x-ratelimit-remaining", "remaining", int),
+                            ("x-ratelimit-reset", "reset", float)):
+        try:
+            if h.get(name) is not None:
+                v = kind(float(h[name]))
+                # A reset given as seconds from now rather than a clock time.
+                RATE[key] = (time.time() + v) if key == "reset" and v < 1e9 else v
+        except (TypeError, ValueError):
+            pass
 
 
 class BDLUnavailable(DataUnavailable):
@@ -117,7 +144,9 @@ def get(path: str, params: dict | None = None, key: str | None = None,
         with (opener or urllib.request.urlopen)(req, timeout=TIMEOUT_S) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             hdrs = {h.lower(): v for h, v in (resp.headers.items() if resp.headers else [])}
+        note_rate(hdrs)
     except urllib.error.HTTPError as exc:
+        note_rate(getattr(exc, "headers", None))
         if exc.code == 401:
             raise BDLUnavailable(f"BALLDONTLIE refused the key (401). Check {KEY_ENV}.") from exc
         if exc.code == 429:
@@ -154,9 +183,19 @@ _LIVE_WORDS = re.compile(r"qtr|quarter|half|progress|overtime|\bot\b|top|bot|mid
                          re.I)
 
 
-def state_of(status: str, period) -> str:
+def state_of(status: str, period, status_state: str | None = None) -> str:
     """``pre``, ``live`` or ``final`` from the feed's own words. A game not
-    started reads its tip time as its status; a final says Final."""
+    started reads its tip time as its status; a final says Final. The NBA's
+    games also carry ``status_state`` (seen on the box's probe), read first
+    when it says something plain."""
+    st = str(status_state or "").lower()
+    if st:
+        if "post" in st or "final" in st:
+            return "final"
+        if st in ("in", "live") or "progress" in st:
+            return "live"
+        if st in ("pre", "scheduled"):
+            return "pre"
     s = str(status or "")
     if "final" in s.lower():
         return "final"
@@ -179,7 +218,8 @@ def normalize(sport: str, g: dict) -> dict:
     period = g.get("period")
     return {
         "id": g.get("id"), "sport": sport, "date": str(g.get("date") or "")[:10],
-        "status": str(g.get("status") or ""), "state": state_of(g.get("status"), period),
+        "status": str(g.get("status") or ""),
+        "state": state_of(g.get("status"), period, g.get("status_state")),
         "period": _num(period), "clock": str(clock or ""),
         "home": str(home.get("abbreviation") or ""), "away": str(away.get("abbreviation") or ""),
         "home_name": str(home.get("full_name") or home.get("display_name") or g.get("home_team_name") or ""),
@@ -213,6 +253,13 @@ def probe(key: str | None = None, opener=None, today: str | None = None) -> list
                          + (f"; {limits}" if limits else ""))
         except BDLUnavailable as exc:
             lines.append(f"{path}: {exc}")
+    # A 401 on one call while another answered is the plan, not the key:
+    # the free plan has the games and not the live box scores (Ethan's
+    # probe, 2026-11-05, read "refused the key" there with a good key).
+    if any(": ok," in ln for ln in lines):
+        lines = [ln.replace("BALLDONTLIE refused the key (401). Check BALLDONTLIE_API_KEY.",
+                            "not in this key's plan (401); the key itself works")
+                 for ln in lines]
     return lines
 
 
