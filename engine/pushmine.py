@@ -928,6 +928,11 @@ def run_once(entitled=None, log=print, connect=None, now: float | None = None, w
                 told += _oa.alerts_pass(conn, now=t, data_dir=Path(web) / "data")
             except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
                 log(f"  ⚠️  owner alerts: {type(exc).__name__}: {exc}")
+            # And the owner's morning summary: yesterday in a line, after 8am.
+            try:
+                told += _oa.morning_pass(conn, now=t)
+            except Exception as exc:                              # noqa: BLE001 — the rest of the minute still runs
+                log(f"  ⚠️  owner morning summary: {type(exc).__name__}: {exc}")
         # Remind me (engine/gamechat): games starting in ten minutes.
         from engine import gamechat as _gc
         try:

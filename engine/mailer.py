@@ -31,10 +31,16 @@ value.
 
 from __future__ import annotations
 
+import datetime as _dt
+import json
 import os
+import re
 import smtplib
 import ssl
+import sys
+import threading
 from email.message import EmailMessage
+from pathlib import Path
 
 #: Read from the environment, never from a file in the repo. The repo is
 #: public; the relay password is not.
@@ -168,7 +174,74 @@ def _unsub_from(text: str) -> str:
     return ""
 
 
+# --- every send, counted ---------------------------------------------------------
+#: THE SENDS, COUNTED (the owner's desk, 2026-11-05: Ethan asked for the
+#: emails sent and failed). One line per message this site tried to send:
+#: when, which part of the site sent it (the module that called `send`),
+#: and whether it went, with a refusal's reason — any address in it taken
+#: out. Never the address, the subject or the words: nothing here is about
+#: anyone. Read as counts by engine/ownerdesk.mail; QB_MAILLOG moves it.
+MAIL_LOG = Path(__file__).resolve().parent.parent / "data" / "logs" / "mail.jsonl"
+MAIL_LOG_BYTES = 1024 * 1024
+#: The part of the site each sender module is, in the owner's words.
+SENDERS = {"engine.lifecycle": "Membership emails", "engine.trialnote": "Trial notes",
+           "engine.policynotice": "Policy notices", "engine.digest": "Email digests",
+           "engine.slipwatch": "Saved-slip emails", "engine.alert": "Alerts to the owner",
+           # server.py's one send is the password reset (the service runs
+           # launch.py, which imports it as `server`).
+           "server": "Password resets"}
+_EMAIL = re.compile(r"[^\s<>\"'@,;:()\[\]]+@[^\s<>\"'@,;:()\[\]]+")
+_LOG_LOCK = threading.Lock()
+
+
+def mail_log() -> Path:
+    return Path(os.environ.get("QB_MAILLOG") or MAIL_LOG)
+
+
+def _caller(depth: int = 2) -> str:
+    try:
+        return str(sys._getframe(depth).f_globals.get("__name__") or "?")
+    except ValueError:
+        return "?"
+
+
+def note_send(sender: str, ok: bool, why: str = "") -> None:
+    """Write one send's line. Never raises: counting must not cost the email."""
+    try:
+        line = {"ts": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+                "kind": SENDERS.get(sender, "Other"), "ok": bool(ok)}
+        if not ok:
+            line["why"] = _EMAIL.sub("<address>", str(why or ""))[:160]
+        f = mail_log()
+        with _LOG_LOCK:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                if f.stat().st_size > MAIL_LOG_BYTES:
+                    os.replace(f, f.with_suffix(f.suffix + ".1"))
+            except OSError:
+                pass
+            with f.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(line) + "\n")
+    except Exception:                                        # noqa: BLE001
+        pass
+
+
 def send(to: str, subject: str, text: str, html: str = "") -> None:
+    """Deliver one message (see `_deliver`), and count it: which part of the
+    site sent it and whether it went (`note_send`). A phone account's
+    placeholder address is refused before anything is tried, and is not a
+    send."""
+    sender = _caller()
+    try:
+        _deliver(to, subject, text, html)
+    except Exception as exc:
+        if not str(to or "").lower().endswith(".invalid"):
+            note_send(sender, False, f"{type(exc).__name__}: {exc}")
+        raise
+    note_send(sender, True)
+
+
+def _deliver(to: str, subject: str, text: str, html: str = "") -> None:
     """Deliver one message, or raise saying what is missing.
 
     Raises RuntimeError naming the absent environment variables — never

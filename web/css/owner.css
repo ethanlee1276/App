@@ -163,3 +163,6 @@
 .oa-says b { display: block; font-size: var(--fs-xs); color: var(--text-mute); font-weight: 700; margin-bottom: 2px; }
 .oa-lab { font-size: var(--fs-xs); font-weight: 700; color: var(--text-dim); }
 .od-sports td { vertical-align: top; line-height: var(--lh-tight); }
+/* Who stays: the signup weeks, two lines a cell like the sport rows. */
+.od-weeks td { vertical-align: top; line-height: var(--lh-tight); }
+.od-chips a.od-chip { text-decoration: none; display: inline-block; }

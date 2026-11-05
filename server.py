@@ -1259,6 +1259,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._whoson_get()
         if parsed.path in ("/api/owner/desk", "/api/owner/desk/"):
             return self._owner_desk_get()
+        if parsed.path in ("/api/owner/export", "/api/owner/export/"):
+            return self._owner_export_get(parse_qs(parsed.query))
         if parsed.path in ("/api/owner/accounts", "/api/owner/accounts/"):
             return self._owner_accounts_get(parse_qs(parsed.query))
         if parsed.path.startswith("/api/board/"):
@@ -1590,6 +1592,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._here()
         if parsed.path in ("/api/owner/notice", "/api/owner/notice/"):
             return self._owner_notice_post()
+        if parsed.path in ("/api/owner/prefs", "/api/owner/prefs/"):
+            return self._owner_prefs_post()
         if parsed.path in ("/api/owner/hide", "/api/owner/hide/"):
             return self._owner_hide_post()
         if parsed.path in ("/api/owner/account", "/api/owner/account/"):
@@ -2847,6 +2851,60 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, json.dumps(OD.desk(conn)).encode(), ".json")
         finally:
             conn.close()
+
+    def _owner_export_get(self, qs):
+        """One of the desk's tables as a spreadsheet (engine/ownerdesk.export_csv):
+        ?what=days|sports|usage|retention. The same door as the desk."""
+        from engine import ownerdesk as OD
+        from engine import ledger as L
+        what = str((qs.get("what") or [""])[0])
+        A = _acct()
+        conn = A.connect()
+        lconn = None
+        try:
+            if not self._site_door(conn):
+                return
+            if what not in OD.EXPORTS:
+                return self._send(400, b'{"error":"Which table?"}', ".json")
+            if what == "sports":
+                try:
+                    lconn = L.connect()
+                except Exception:                                    # noqa: BLE001
+                    lconn = None
+            got = OD.export_csv(conn, lconn, what)
+            if got is None:
+                return self._send(503, b'{"error":"That table cannot be read right now."}', ".json")
+            name, text = got
+            return self._send(200, text.encode("utf-8"), ".csv",
+                              headers=[("Content-Disposition", f'attachment; filename="{name}"')])
+        finally:
+            conn.close()
+            if lconn is not None:
+                lconn.close()
+
+    def _owner_prefs_post(self):
+        """The desk's own switches (engine/ownerdesk.set_prefs): {morning: bool}."""
+        from engine import ownerdesk as OD
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 2000 else b""
+        A = _acct()
+        conn = A.connect()
+        try:
+            if not self._site_door(conn):
+                return
+        finally:
+            conn.close()
+        try:
+            got = json.loads(body or b"{}")
+        except ValueError:
+            got = None
+        if not isinstance(got, dict):
+            return self._send(400, b'{"error":"body must be a JSON object"}', ".json")
+        code, out = OD.set_prefs(got)
+        return self._send(code, json.dumps(out).encode(), ".json")
 
     def _owner_notice_post(self):
         """Stand a notice across the top of every page, or clear it

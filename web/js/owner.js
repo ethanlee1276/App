@@ -403,6 +403,80 @@ function odSecurityHTML(s) {
       hour, or three Stripe messages failing their signature in a day, go under Needs you.</p>`);
 }
 
+/* ROUND TWO (Ethan, 2026-11-05: "Yes keep going"): who stays and what a paying
+   member is worth, the emails sent and failed, the morning summary on the
+   owner's phones and the desk's tables as spreadsheets. */
+const odWeek = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+function odRetentionHTML(r) {
+  if (!r || r.error) return odCard("Who stays", odErr(r));
+  const weeks = (r.weeks || []).slice().reverse();
+  const rows = weeks.map((w) => `<tr><th scope="row">${escapeHtml(odWeek(w.week))}</th><td>${odN(w.joined)}</td>
+    <td>${w.joined ? `${odN(w.back)}<br><span class="od-mute">${odPct(w.back, w.joined)}</span>` : "—"}</td>
+    <td>${w.joined ? `${odN(w.recent)}<br><span class="od-mute">${odPct(w.recent, w.joined)}</span>` : "—"}</td>
+    <td>${w.joined ? odN(w.paying) : "—"}</td></tr>`).join("");
+  const rate = r.monthly_cancel_rate;
+  return odCard("Who stays", `<div class="tbl-scroll"><table class="od-tbl od-weeks"><thead><tr><th scope="col">Week of</th>
+    <th scope="col">Joined</th><th scope="col">Came back</th><th scope="col">This week</th><th scope="col">Paying</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>
+    <ul class="od-list">${odRow("A paying member, a month", r.arpu != null ? `$${Number(r.arpu).toFixed(2)}` : "—")}${
+      odRow("Paid plans cancelled, last 90 days", odN(r.cancels_90d))}${
+      odRow("Paying members who cancel, a month", rate != null ? `about ${(rate * 100).toFixed(1)}%` : "too few yet to say",
+        rate != null && rate > 0.15 ? "warn" : "")}${
+      odRow("What a paying member is worth", r.lifetime_value != null ? `about ${odMoney(r.lifetime_value)}` : "—")}</ul>
+    <p class="od-note">Each week’s new accounts: how many came back after their first day, how many were here in the last seven
+      days and how many pay now. A plan cancelled on its free trial counts as a trial, not a lost member. What a member is worth
+      is a month’s revenue divided by the monthly rate of cancelling: an estimate, and a rough one until there are more paying
+      months to read.</p>`);
+}
+
+/* The emails the site sent and the ones that failed (engine/mailer's log). */
+function odMailHTML(m) {
+  if (!m || m.error) return odCard("Emails", odErr(m));
+  const kinds = (m.kinds || []).map((k) => `<tr><th scope="row">${escapeHtml(k.kind)}</th><td>${odN(k.sent_day)}</td>
+    <td class="${k.failed_day ? "neg" : ""}">${odN(k.failed_day)}</td><td>${odN(k.sent_week)}</td>
+    <td class="${k.failed_week ? "neg" : ""}">${odN(k.failed_week)}</td></tr>`).join("");
+  const lf = m.last_fail || null;
+  return odCard("Emails", `<div class="od-tiles">${odTile(odN(m.sent_day), "Sent, 24 h")}${
+    odTile(odN(m.failed_day), "Failed, 24 h", m.failed_day ? "bad" : "good")}${odTile(odN(m.sent_week), "Sent, 7 days")}</div>
+    ${m.configured ? "" : `<p class="od-live warn">Email is not set up on the box, so nothing can be sent (docs/EMAIL.md).</p>`}
+    ${kinds ? `<div class="tbl-scroll"><table class="od-tbl"><thead><tr><th scope="col">What</th><th scope="col">Sent 24 h</th>
+      <th scope="col">Failed</th><th scope="col">Sent 7 days</th><th scope="col">Failed</th></tr></thead><tbody>${kinds}</tbody></table></div>`
+      : `<p class="od-note">No email sent or tried this week.</p>`}
+    ${lf ? `<p class="od-note">The last failure, ${odN(Math.round(lf.ago_h))} h ago (${escapeHtml(lf.kind)}): <span class="od-mono">${escapeHtml(lf.why)}</span></p>` : ""}
+    <p class="od-note">Counted as they go, by the part of the site that sent them, never the address or the words.${
+      m.transport ? ` Sent through ${m.transport === "resend" ? "Resend" : "SMTP"}.` : ""}</p>`);
+}
+
+/* The morning summary (engine/owneralerts.morning_pass) and the downloads. */
+const OD_EXPORTS = [["days", "Day by day"], ["sports", "Each sport"], ["usage", "Usage"], ["retention", "Signup weeks"]];
+function odMorningHTML(mo, prefs) {
+  const on = !!(prefs && !prefs.error ? prefs.morning : mo && mo.on);
+  const line = mo && !mo.error && mo.body
+    ? `<p class="od-live${on ? "" : " warn"}"><b>${escapeHtml(mo.title || "")}</b><br>${escapeHtml(mo.body)}</p>` : odErr(mo);
+  return odCard("Morning summary", `${line}
+    <div class="od-form-row"><button type="button" class="btn${on ? "" : " primary"}" id="od-morning" data-on="${on ? 1 : 0}"
+      aria-pressed="${on}">${on ? "Turn the morning summary off" : "Turn the morning summary on"}</button></div>
+    <p class="od-note">${on ? `This line goes to this account’s phones a little after ${odN((mo && mo.hour) || 8)}am Eastern, once a
+      day, and waits out your quiet hours.` : "Off: nothing goes out in the morning. A problem still reaches your phones."}</p>`);
+}
+function odExportsHTML() {
+  return odCard("Download the numbers", `<div class="od-chips">${OD_EXPORTS.map(([what, word]) =>
+    `<a class="od-chip" href="/api/owner/export?what=${what}" download>${escapeHtml(word)}</a>`).join("")}</div>
+    <p class="od-note">Each as a spreadsheet (CSV) of what the desk shows: counts and the business’s own numbers.</p>`);
+}
+async function odMorningSet(on) {
+  try {
+    const r = await fetch("/api/owner/prefs", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ morning: on }) });
+    const got = await r.json().catch(() => ({}));
+    if (r.ok && _odLast) {
+      _odLast.prefs = got.prefs || { morning: on };
+      const host = document.getElementById("owner-body");
+      if (host) host.innerHTML = odHTML(_odLast);
+    }
+  } catch (e) { /* the next minute's redraw says where it stands */ }
+}
+
 function odMoneyHTML(m, u, a, t) {
   if (!m || m.error) return odCard("Money", odErr(m));
   const plans = Object.entries(m.by_plan || {}).map(([k, n]) => odRow(`On ${escapeHtml((m.plans || {})[k] || k)}`, odN(n))).join("");
@@ -740,9 +814,11 @@ function odHTML(d) {
   return `${odNeedsHTML(d.needs)}<section class="od-card od-who" id="od-who" aria-label="Who’s on now">${odWhoInner(d.now)}</section>
     <section class="od-card od-acct" id="od-acct" aria-label="Accounts">${oaInner()}</section>
     ${odNoticeHTML(d.notice)}${waiting ? reps : ""}${odPicksHTML(d.picks)}${odSportsHTML(d.sports)}${
-      odMoneyHTML(d.money, d.usage, d.accounts, d.trend)}${odUsageHTML(d.usage)}${odAccountsHTML(d.accounts)}
+      odMoneyHTML(d.money, d.usage, d.accounts, d.trend)}${odUsageHTML(d.usage)}${odRetentionHTML(d.retention)}${
+      odAccountsHTML(d.accounts)}
     ${odHealthHTML(d.health)}${odBackupsHTML(d.health && d.health.backups)}${odSecurityHTML(d.health && d.health.security)}${
-      odRoomHTML(d.community)}${waiting ? "" : reps}${odSwitchesHTML(d.switches, d.alerts)}
+      odMailHTML(d.health && d.health.mail)}${odRoomHTML(d.community)}${waiting ? "" : reps}${
+      odMorningHTML(d.morning, d.prefs)}${odExportsHTML()}${odSwitchesHTML(d.switches, d.alerts)}
     <p class="od-foot">Only this account can open this page. Who’s on now names only the members the Privacy Policy’s notice
       has reached who left “Show me in Who’s on now” on, and Accounts shows who an account is one at a time, for support and the
       Terms; the list of every account names each by its number alone, and everything else here is a count or the business’s own number.</p>`;
@@ -846,6 +922,8 @@ document.addEventListener("click", (e) => {
     if (host && _odLast) host.innerHTML = odHTML(_odLast);
     return;
   }
+  const mor = t && t.closest("#od-morning");
+  if (mor) { odMorningSet(mor.dataset.on !== "1"); return; }
   if (e.target && e.target.id === "od-clear") odNotice({ clear: true });
   const b = e.target && e.target.closest && e.target.closest("[data-od-mod]");
   if (b && !b.disabled) odMod(b);

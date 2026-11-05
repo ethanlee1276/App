@@ -23,6 +23,10 @@ puts the same list at its top under "Needs you":
   signins   ownerdesk.SPRAY_HOUR failed sign-ins in the last hour
   webhook   ownerdesk.WEBHOOK_BAD Stripe messages failing their signature in
             a day: the webhook secret may have changed, and payments with it
+  mail      ownerdesk.MAIL_FAILS emails failing to send in a day, more than went
+
+And, from `morning_pass` (its own pass, not a problem): yesterday in a line
+after 8am Eastern, while the desk's "Morning summary" switch is on.
 
 Each at most once an Eastern day (its id carries the problem and the day),
 queued as an `account` notice (engine/pushalerts.ACCOUNT): it reaches every
@@ -170,12 +174,50 @@ def problems(h: dict, data_dir: Path | None = None, now: float | None = None) ->
         out.append({"key": "webhook", "title": "Stripe's messages are failing their signature check",
                     "body": (f"{int(sec['stripe_bad_day']):,} in a day. If the webhook's signing secret changed "
                              "in Stripe, payments stop reaching the site until STRIPE_WEBHOOK_SECRET matches it.")})
+    # The emails (engine/ownerdesk.mail): sends failing, and more than went.
+    ml = h.get("mail") if isinstance(h.get("mail"), dict) else {}
+    bad = int(ml.get("failed_day") or 0)
+    if bad >= OD.MAIL_FAILS and bad > int(ml.get("sent_day") or 0):
+        last = ml.get("last_fail") or {}
+        out.append({"key": "mail", "title": f"{bad:,} emails failed to send in a day",
+                    "body": (f"The last: {last.get('kind') or 'an email'} — {str(last.get('why') or '')[:110]}"
+                             if last else "The desk's Emails card has the reasons.")})
     n = int(h.get("crashes") or 0)
     if n >= CRASHES_24H:
         top = ((h.get("crash_top") or [{}])[0] or {}).get("m") or ""
         out.append({"key": "crashes", "title": f"{n:,} script errors on readers' screens in a day",
                     "body": (f"Most often: {top[:120]}" if top else "The desk lists the most common.")})
     return out
+
+
+#: The days this process has already queued its morning summary (a restart
+#: asks again; pushmine.tell never queues one id twice).
+_MORNING_DONE: set = set()
+
+
+def morning_pass(conn, now: float | None = None) -> int:
+    """The owner's morning summary (engine/ownerdesk.morning): yesterday in a
+    line, once an Eastern day from ownerdesk.MORNING_HOUR, to the site's
+    owners' phones, while the desk's switch for it is on. Queued as an
+    `account` notice like the problems, so it waits out the owner's quiet
+    hours."""
+    from . import ownerdesk as OD
+    from . import pushalerts as PA
+    from . import pushmine as PM
+    from . import siteowners as SO
+    from . import activity as ACT
+    t = time.time() if now is None else float(now)
+    day = _eastern_day(t)
+    if day in _MORNING_DONE or ACT.eastern(t).hour < OD.MORNING_HOUR or not OD.prefs()["morning"]:
+        return 0
+    uids = [u for u in SO.desk_accounts(conn) if PM.asked(conn, u, PA.ACCOUNT)]
+    if not uids:
+        return 0
+    mo = OD.morning(conn, None, t)
+    told = sum(bool(PM.tell(conn, uid, f"owner:morning:{day}", PA.ACCOUNT, mo["title"], mo["body"], "/#owner", now=t))
+               for uid in uids)
+    _MORNING_DONE.add(day)
+    return told
 
 
 def alerts_pass(conn, now: float | None = None, health: dict | None = None, data_dir: Path | None = None) -> int:

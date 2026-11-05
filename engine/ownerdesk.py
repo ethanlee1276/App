@@ -29,6 +29,14 @@ copies and its offsite leg, the weekly zip), and the security log
 (engine/seclog: sign-ins, failures, the rate limit, Stripe's signatures) —
 counts, and the business's own numbers, like the rest. `desk_days` holds
 the day's totals and nothing about any account.
+
+ROUND TWO (Ethan, the same day: "Yes keep going"). Who stays (each signup
+week's accounts, back after their first day, here this week, paying; the
+paid plans cancelled and what a paying member is worth), the emails sent
+and failed (engine/mailer's log: by the part of the site that sent them,
+never an address), the morning summary (yesterday in a line, pushed to the
+owners' phones by engine/owneralerts.morning_pass while `prefs` says so)
+and the desk's tables as spreadsheets (`export_csv`, behind the same door).
 """
 from __future__ import annotations
 
@@ -279,6 +287,7 @@ def health(now: float | None = None) -> dict:
     out["odds_by"] = _section(odds_by_league, t)
     out["backups"] = _section(backups, t)
     out["security"] = _section(security, t)
+    out["mail"] = _section(mail, t)
     return out
 
 
@@ -657,6 +666,228 @@ def trend(conn, now: float | None = None, days: int = TREND_DAYS) -> list:
         f"SELECT {', '.join(cols)} FROM desk_days WHERE day >= ? ORDER BY day", (_day(t - (days - 1) * DAY_S),)).fetchall()]
 
 
+# --- the emails --------------------------------------------------------------------------
+#: Failed sends in a day that need the owner, when they also outnumber the ones that went.
+MAIL_FAILS = 3
+
+
+def _mail_row(j: dict):
+    return (_dt.datetime.fromisoformat(str(j["ts"])).timestamp(), str(j.get("kind") or "Other"),
+            bool(j.get("ok")), str(j.get("why") or ""))
+
+
+def mail(now: float | None = None, path: Path | None = None) -> dict:
+    """The emails the site sent and the ones that failed, today and this
+    week, by the part of the site that sent them (engine/mailer's log: never
+    an address), with the last failure's reason."""
+    from . import mailer as MA
+    t = time.time() if now is None else float(now)
+    p = Path(path or MA.mail_log())
+    rows = [r for f in (p.with_suffix(p.suffix + ".1"), p) for r in _parsed_lines(f, _mail_row) if r[0] >= t - 7 * DAY_S]
+    kinds: dict = {}
+    for ts, kind, ok, _why in rows:
+        k = kinds.setdefault(kind, {"kind": kind, "sent_day": 0, "failed_day": 0, "sent_week": 0, "failed_week": 0})
+        word = "sent" if ok else "failed"
+        k[f"{word}_week"] += 1
+        if ts >= t - DAY_S:
+            k[f"{word}_day"] += 1
+    fails = [r for r in rows if not r[2]]
+    last = max(fails, key=lambda r: r[0]) if fails else None
+    try:
+        on, how = bool(MA.configured()), MA.transport()
+    except Exception:                                        # noqa: BLE001
+        on, how = False, ""
+    total = lambda key: sum(k[key] for k in kinds.values())  # noqa: E731
+    return {"configured": on, "transport": how,
+            "kinds": sorted(kinds.values(), key=lambda k: (-(k["sent_week"] + k["failed_week"]), k["kind"])),
+            "sent_day": total("sent_day"), "failed_day": total("failed_day"),
+            "sent_week": total("sent_week"), "failed_week": total("failed_week"),
+            "last_fail": ({"ago_h": round(max(0.0, t - last[0]) / 3600, 1), "kind": last[1], "why": last[3]}
+                          if last else None)}
+
+
+# --- who stays ----------------------------------------------------------------------------
+#: Weeks of signups the retention table carries, Monday to Sunday, the site's days.
+RETENTION_WEEKS = 8
+#: A cancelled plan whose paid-through date came within this many days of
+#: its start ended on its free trial: the trial card's number, not a lost member.
+TRIAL_ONLY_DAYS = 7
+
+
+def retention(conn, now: float | None = None) -> dict:
+    """Who stays, from what every account already has (when it joined, when it
+    was last here, its membership): each of the last RETENTION_WEEKS weeks'
+    new accounts, how many came back after their first day, how many were
+    here this past week and how many pay now; then the paying members'
+    side — a month's revenue each, the paid plans cancelled over 90 days,
+    the monthly rate that makes and the lifetime value it implies (revenue a
+    month ÷ the rate, engine/engagement's reckoning). Counts only."""
+    from . import billing as B
+    t = time.time() if now is None else float(now)
+    today = _dt.datetime.fromtimestamp(t, ET).date()
+    monday = today - _dt.timedelta(days=today.weekday())
+    paying: set = set()
+    cancels = 0
+    if _has(conn, "subscriptions"):
+        have = {r[1] for r in conn.execute("PRAGMA table_info(subscriptions)")}
+        col = lambda c: c if c in have else "NULL"  # noqa: E731
+        for uid, st, end, cae, started, updated in conn.execute(
+                f"SELECT user_id, status, period_end, {col('cancel_at_end')}, {col('started_at')}, updated_at "
+                f"FROM subscriptions").fetchall():
+            status = str(st or "none").lower()
+            if B.entitled(status, end, t, bool(cae), started) and status != "trialing":
+                paying.add(int(uid))
+            if status in ("canceled", "cancelled", "unpaid") and updated and float(updated) >= t - 90 * DAY_S:
+                trial_only = (started is not None and end is not None
+                              and float(end) - float(started) <= TRIAL_ONLY_DAYS * DAY_S)
+                cancels += 0 if trial_only else 1
+    weeks = []
+    for k in range(RETENTION_WEEKS - 1, -1, -1):
+        start = monday - _dt.timedelta(weeks=k)
+        a = _dt.datetime.combine(start, _dt.time(0), tzinfo=ET).timestamp()
+        b = _dt.datetime.combine(start + _dt.timedelta(days=7), _dt.time(0), tzinfo=ET).timestamp()
+        rows = conn.execute("SELECT id, created_at, last_seen FROM users WHERE created_at >= ? AND created_at < ?",
+                            (a, b)).fetchall()
+        weeks.append({"week": start.isoformat(), "joined": len(rows),
+                      "back": sum(1 for _i, c, s in rows if s and float(s) >= float(c) + DAY_S),
+                      "recent": sum(1 for _i, _c, s in rows if s and float(s) >= t - 7 * DAY_S),
+                      "paying": sum(1 for i, _c, _s in rows if int(i) in paying)})
+    mon = money(conn, t)
+    arpu = round(mon["mrr"] / mon["paying"], 2) if mon.get("paying") else None
+    exposure = (mon.get("paying") or 0) * 3 + cancels * 1.5     # member-months over the 90 days
+    rate = round(cancels / exposure, 4) if exposure >= 10 else None
+    return {"weeks": weeks, "paying": mon.get("paying") or 0, "arpu": arpu, "cancels_90d": cancels,
+            "member_months": exposure, "monthly_cancel_rate": rate,
+            "lifetime_value": round(arpu / rate, 2) if arpu and rate else None}
+
+
+# --- the owner's own switches, and the morning summary ---------------------------------------
+#: What the owner has switched on the desk (data/cache: gitignored, the box's own).
+PREFS_PATH = ROOT / "data" / "cache" / "owner_desk.json"
+PREFS = {"morning": True}
+#: The morning summary goes from this hour, Eastern (engine/owneralerts.morning_pass).
+MORNING_HOUR = 8
+
+
+def prefs() -> dict:
+    try:
+        got = json.loads(Path(PREFS_PATH).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        got = {}
+    return {k: bool(got.get(k, v)) for k, v in PREFS.items()}
+
+
+def set_prefs(changes: dict) -> tuple[int, dict]:
+    if not isinstance(changes, dict) or not [k for k in changes if k in PREFS]:
+        return 400, {"error": "Nothing to change."}
+    now = prefs()
+    now.update({k: bool(v) for k, v in changes.items() if k in PREFS})
+    p = Path(PREFS_PATH)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    part = p.with_suffix(".tmp")
+    part.write_text(json.dumps(now), encoding="utf-8")
+    os.replace(part, p)
+    return 200, {"prefs": now}
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n:,} {word}{'' if n == 1 else 's'}"
+
+
+def morning(conn, lconn=None, now: float | None = None) -> dict:
+    """Yesterday in one line (the site's day), for the owner's phones and the
+    desk: accounts made, subscriptions started, paying members and the
+    day's change, the month's recurring revenue, the picks' record, and
+    reports waiting. The ledger is opened read-only when not given."""
+    t = time.time() if now is None else float(now)
+    m0 = midnight(t)
+    y0 = midnight(m0 - 3600)
+    yday, before = _day(y0 + 3600), _day(y0 - 3600)
+    one = lambda q, *a: conn.execute(q, a).fetchone()[0] or 0  # noqa: E731
+    parts = [_plural(one("SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?", y0, m0),
+                     "new account")]
+    if _has(conn, "subscriptions") and "started_at" in {r[1] for r in conn.execute("PRAGMA table_info(subscriptions)")}:
+        n = one("SELECT COUNT(*) FROM subscriptions WHERE started_at >= ? AND started_at < ?", y0, m0)
+        if n:
+            parts.append(_plural(n, "subscription") + " started")
+    mon = money(conn, t)
+    change = ""
+    if _has(conn, "desk_days"):
+        got = dict(conn.execute("SELECT day, paying FROM desk_days WHERE day IN (?, ?)", (yday, before)).fetchall())
+        if yday in got and before in got and got[yday] is not None and got[before] is not None:
+            d = int(got[yday]) - int(got[before])
+            change = f" ({'+' if d > 0 else '−' if d < 0 else '±'}{abs(d)})"
+    parts.append(f"{mon['paying']:,} paying{change}")
+    parts.append(f"${mon['mrr']:,.0f} a month")
+    own = lconn is None
+    try:
+        if own:
+            from . import ledger as L
+            p = Path(L.DEFAULT_DB)
+            lconn = sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=5) if p.is_file() else None
+        if lconn is not None:
+            cats = [c for _n, cs in BOOKS for c in cs]
+            w, lo, u = lconn.execute(
+                f"SELECT SUM(status='won'), SUM(status='lost'), COALESCE(SUM(CASE WHEN status IN ('won','lost','push') "
+                f"THEN pnl_units END), 0) FROM bets WHERE game_day = ? AND category IN ({','.join('?' * len(cats))})",
+                (yday, *cats)).fetchone()
+            if (w or 0) + (lo or 0):
+                parts.append(f"picks {int(w or 0)}-{int(lo or 0)}, {'+' if (u or 0) >= 0 else '−'}{abs(float(u or 0)):.2f}u")
+    except sqlite3.Error:
+        pass
+    finally:
+        if own and lconn is not None:
+            lconn.close()
+    try:
+        waiting = int(community(conn, t).get("reports_open") or 0)
+    except sqlite3.Error:
+        waiting = 0
+    if waiting:
+        parts.append(_plural(waiting, "report") + " waiting")
+    return {"day": yday, "title": "Yesterday on Qellys Book", "body": " · ".join(parts),
+            "on": prefs()["morning"], "hour": MORNING_HOUR}
+
+
+# --- the numbers, as a spreadsheet ------------------------------------------------------------
+EXPORTS = ("days", "sports", "usage", "retention")
+
+
+def export_csv(conn, lconn, what: str, now: float | None = None) -> tuple[str, str] | None:
+    """(file name, CSV text) of one of the desk's tables, or None: the
+    business day by day, each sport's books, the usage counts by day, the
+    signup weeks. Counts and the business's own numbers only, as on the desk."""
+    import csv
+    import io
+    t = time.time() if now is None else float(now)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    if what == "days":
+        w.writerow(("day",) + _DAY_COLS)
+        for r in trend(conn, t, days=3650):
+            w.writerow([r["day"]] + [r[c] for c in _DAY_COLS])
+    elif what == "sports":
+        if lconn is None:
+            return None
+        w.writerow(("sport", "book", "picks today", "open today", "won 7d", "lost 7d", "units 7d",
+                    "won 30d", "lost 30d", "pushed 30d", "units 30d", "return 30d"))
+        for sp in sports(lconn, t):
+            for b in sp["books"]:
+                w.writerow((sp["sport"], b["book"], b["today"], b["open"], b["w7"], b["l7"], b["u7"],
+                            b["w30"], b["l30"], b["p30"], b["u30"], b["roi30"]))
+    elif what == "usage":
+        u = usage(t)
+        w.writerow(("day (UTC)", "visits", "visits by members", "pages opened"))
+        for d in u["days"]:
+            w.writerow((d["day"], d["visits"], d["members"], d["views"]))
+    elif what == "retention":
+        w.writerow(("week from", "accounts made", "came back after day one", "here in the last 7 days", "paying now"))
+        for wk in retention(conn, t)["weeks"]:
+            w.writerow((wk["week"], wk["joined"], wk["back"], wk["recent"], wk["paying"]))
+    else:
+        return None
+    return f"qellys-{what}-{_day(t)}.csv", buf.getvalue()
+
+
 # --- the room -----------------------------------------------------------------
 def community(conn, now: float | None = None) -> dict:
     t = time.time() if now is None else float(now)
@@ -791,6 +1022,8 @@ def desk(conn, lconn=None, now: float | None = None) -> dict:
                 "community": _section(community, conn, t), "reports": _section(reports, conn),
                 "switches": _section(switches), "notice": _section(_notice),
                 "usage": _section(usage, t), "trend": _section(_trend, conn, t),
+                "retention": _section(retention, conn, t), "prefs": _section(prefs),
+                "morning": _section(morning, conn, lconn, t),
                 "sports": (_section(_sports, lconn, t) if lconn is not None
                            else {"error": "the ledger is not readable"})}
     finally:
