@@ -43,7 +43,7 @@ The lab (`docs/NHL_LAB.md`) used three seasons of every NHL box score.
 | The lab's changes re-read on the box's own games, this season's included | **Box run** (KK, `nhllabcheck.py`) |
 | **The saves model**: it ran 5–6% high (a starter does not face every shot his team allows) and its spread 22% narrow, so every saves pick was too sure of itself | **Built today**. Saves log loss 0.012 and 0.022 better held out, the lab's biggest gain |
 | The goalie board names the likely backup the night after a starter played | **Built today** |
-| Who takes a missing regular's ice time | **Measured, left off**: the raw lift is clear (+3% ice time per regular out), but a flat multiplier did not hold on the ladder in one season. The next pass reads who moves up from the line combinations |
+| Who takes a missing regular's ice time | **Measured twice, left off**: the depth chart moving up predicts his teammates' ice time 4–5% better in both seasons, but the prices got worse: the minutes go down the depth chart while the scoring goes to the forwards above (+5% to +10% points, +9% to +14% goals). A scoring lift holds only on a projection whose level is right, and the skaters' level moves by several percent between seasons. Next: the absent man's power-play time (`docs/NHL_LAB.md`) |
 | The league's own API (api-web.nhle.com) | **Not possible** from the build sandbox; the box reads it, as it always has |
 
 ## WNBA (off season; next tip in May)

@@ -224,14 +224,56 @@ ladder, and it went the wrong way on one season for shots and blocks:
 
 The extra ice time goes to the man who moves up a line, not to everyone
 in the group evenly, so a flat multiplier is the wrong shape. It stays
-off. A second pass would read who moves up from the shift charts' line
-combinations (`engine/nhl/lines`), as the NBA's vacancy reads who inherits
-the minutes.
+off.
+
+**The second pass (5 November): who moves up, and where the scoring goes.**
+3,357 team-games had an absent regular (20,483 skater-games in them).
+Three shapes for his ice time, each fitted on one season and judged on
+the other:
+
+- *the depth chart moves up*: rank the group by the board's projected
+  ice time with the absent men in it, and each man below an absent one
+  moves toward the slot above him (a fitted share, 0.37 to 0.41 in both
+  seasons, forwards and defencemen alike);
+- *one mover*: only the man directly below takes the absent man's slot;
+- *flat*: every teammate by the same share.
+
+The depth chart is the right shape for ice time: its squared error is
+4.6% (forwards) and 5.1% (defence) lower than the board's in 2025-26,
+4.4% and 5.5% in 2024-25, ahead of flat (3.5%, 1.9%) and one mover
+(under 2%). It still made the prices worse: shots, points, goals and
+assists were worse on the ladder in both seasons, and only blocks better.
+
+The reason is where the scoring goes. Against games without an absence,
+the forwards the depth chart moves up produced about their usual points
+(1.02 of normal in both seasons) on their extra minutes, while the
+forwards above the absent regular, whose ice time barely moves, scored
+4.8% to 9.6% more points and 8.9% to 13.9% more goals. The minutes
+go down the depth chart; the scoring goes to the stars above it, likely
+through the absent man's power-play time, which these box scores do not
+split out.
+
+A production lift by group (mostly +1% to +6% with one regular out, up
+to +17% with two) does improve every market in both seasons, but only on
+a projection whose level is right. The board's skater projections run
+mostly 1% to 6% high in games with no one missing, and that level moves
+from season to season (shots for forwards 0.948 of the projection in
+2024-25, 0.980 in 2025-26), so a level fitted on one season made the
+other worse. On the board as it is, the lift was better in four of the
+ten market-seasons and worse in the other six. A level that follows the
+season as it goes (each day's games against the season's earlier ones)
+helped shots and blocks a little and nothing else. All of it stays off.
 
 ## Next
 
-- **Who moves up when a regular is out**, read from the line combinations
-  (above: the flat version did not hold).
+- **The absent man's power-play time**: where the stars' extra scoring
+  comes from (above). The live board reads each unit off the shift charts
+  (`xg.power_play`); the lab's box scores have no power-play ice time, so
+  this needs the shift charts' seasons.
+- **The skaters' level**: the projections run mostly 1% to 6% high and
+  the gap moves between seasons. The refit's calibration has an intercept for
+  this per market, fitted from graded picks; the NHL's picks will say
+  whether it is enough once there are a few hundred graded.
 - **Line combinations and the power play** are already read live from
   the shift charts (`engine/nhl/lines`, `xg.power_play`). The lab could
   measure how much of a skater's rate follows his line rather than him.
