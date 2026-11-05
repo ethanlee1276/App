@@ -257,12 +257,23 @@ def _settled_props(entries, market, sport, min_history, limit, form_weights,
                 player_record(e["name"], proj.mean / (mult or 1.0), actual)
             rec = evaluate_prop(prop, proj, allow_synthetic_line=True,
                                 game=game_i, sport=sport)
+            # THE RAW CHANCE RIDES ALONG (2026-11-05), as it does in MLB's
+            # walk and the basketball one: the board corrects the model's
+            # raw chance and shrinks toward the market after, so every fit
+            # here (temperatures, the dial, player memory, the rank fit)
+            # learns on the raw one (`backtest._raw_over`). Without it the
+            # pairs were the chance already shrunk toward this walk's -110
+            # proxy, a band of 0.28-0.68 where the board's raw chance runs
+            # 0.01-0.90; fitted on 2022-24 NFL seasons and judged on 2025
+            # as the board applies it, the shrunk fit lost to the raw fit
+            # on all four yardage and catch markets, and to no correction
+            # at all on three (docs/ALL_SPORTS_AUDIT_2026-11-05.md).
             settled.append(SettledProp(
                 player=e["name"], market=market, line=line, odds=rec.odds,
                 hit_prob=rec.hit_prob, projection=rec.projection,
                 actual=actual, recommended=(rec.grade != "Pass"),
                 stake_units=rec.stake_units, side=rec.side, basis="naive",
-                grade=rec.grade,
+                grade=rec.grade, raw_prob=rec.raw_prob,
             ))
     return settled
 

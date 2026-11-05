@@ -85,6 +85,39 @@ The NFL is the reference toolkit. College has its own checklist
 | The deep refit, which reaches the NFL again in pieces | **In progress** (DF2): it resumes inside a sport, and now inside the recency dial (each market kept as it is fitted); its walks ask the disk once a walk, not once a game (the dial 257 s here instead of 388, the same numbers). Confirmed when the heartbeat's round reaches the NFL |
 | The Lab's weekly replay, stuck at 29 September | **In progress** (LW1) |
 | A college target count | **Not possible** honestly: the feed leaves some incompletions unnamed |
+| The fits learn on the model's raw chance, as MLB's and basketball's do | **Fixed** (below); college's temperatures and the NFL's dial and player memory move at the next round |
+
+### The NFL and college fits were learning on the shrunk chance (fixed 5 November)
+
+The board takes the model's raw chance, corrects it with the stored
+temperature, and only then shrinks it toward the market. The fitters'
+walk for the NFL and college (`engine/logwalk`) handed every fit the
+chance after the shrink instead: shrunk toward the walk's own -110 proxy,
+it ran 0.28-0.68 where the board's raw chance runs 0.01-0.90. MLB's walk
+and basketball's carried the raw chance already (`backtest._raw_over`
+reads it). Replayed here on four NFL seasons, each correction fitted on
+2022-24 and judged on 2025 the way the board applies it, to the raw
+chance (Brier / log loss, lower is better):
+
+| Market | Judged on | Raw, no correction | Fitted on the shrunk chance (before) | Fitted on the raw chance (now) |
+|---|---|---|---|---|
+| Passing yards | 396 | 0.2495 / 0.6922 | 0.2576 / 0.7107 (T 0.52) | 0.2495 / 0.6922 (T 1.00, none) |
+| Rushing yards | 4,053 | 0.1606 / 0.4805 | 0.1389 / 0.4427 | **0.1320 / 0.4007** |
+| Receiving yards | 4,049 | 0.2330 / 0.6543 | 0.2279 / 0.6881 | **0.2128 / 0.6063** |
+| Receptions | 3,825 | 0.2123 / 0.6058 | 0.2246 / 0.6692 (T 0.48) | **0.2078 / 0.5958** (T 1.12) |
+
+The old fit lost to the new on all four and did worse than no correction
+on three. A temperature near 0.5 doubled the raw chance's distance from
+even before the board shrank it, which is also why the curves fitted in
+August flattened out past the narrow band they were fitted on. On the raw
+chance, rushing and receiving yards' curves still top out under 50% (0.41
+and 0.48), so the one-sided check keeps them unapplied and both markets
+stay shut, as they are for losing to real books (AUC 0.47). What moves at
+the next round: college's eight markets (fitted only through this walk),
+the NFL's and college's recency dial and player memory, and the rank fit.
+The NFL's four yardage and catch markets keep a fit against real book
+lines wherever `engine/propcal` made one (it read the raw chance already,
+and the store never lets another fitter overwrite it).
 
 ## MLB (off season; Opening Day in March)
 

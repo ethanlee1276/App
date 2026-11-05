@@ -13,7 +13,11 @@ probes each (83,388 asks, over half). What these hold:
   * inside a walk a store's file time is asked once, and a store written
     inside one is read again; outside a walk it is asked every time, as
     before, so the board sees a store the moment a fitter rewrites it;
-  * a walk inside one read prices every game exactly as before;
+  * a walk inside one read prices every game exactly as before, and hands
+    every fit the model's raw chance, as MLB's and basketball's walks do
+    (fitted on the chance already shrunk toward the walk's -110 proxy, the
+    NFL's temperatures lost to the raw fit on all four markets held out,
+    and to no correction at all on three);
   * the one-sided answer is kept per market until the stores reload,
     never kept from a store swapped in place, never when the yes-only
     registry could not be read, and never while calibration is off;
@@ -114,6 +118,39 @@ def test_a_walk_inside_one_read_prices_every_game_as_before_and_asks_the_disk_li
     assert st.n < 40, f"{st.n} file checks for {len(once)} games: a store is being asked per game"
     import inspect
     assert "with frozen():" in inspect.getsource(LW.walk), "every harness walks inside one read"
+
+
+def test_the_walk_hands_every_fit_the_raw_chance_as_the_other_walks_do():
+    """The board corrects the model's raw chance and shrinks toward the
+    market after; the fits must learn on the raw one. MLB's walk and the
+    basketball one carried it; this one handed over the shrunk chance."""
+    from engine import calibrate as cal, logwalk as LW
+    from engine.backtest import evaluate
+    entries = _entries()
+    raws = []
+    real = LW.evaluate_prop
+
+    def seen(*a, **k):
+        r = real(*a, **k)
+        raws.append(r.raw_prob)
+        return r
+    LW.evaluate_prop = seen
+    try:
+        with cal.disabled():
+            settled = LW.settled_props_from_logs(entries, "rec_yds", sport="nfl")
+    finally:
+        LW.evaluate_prop = real
+    assert len(raws) == len(settled) >= 300
+    assert all(s.raw_prob == r for s, r in zip(settled, raws)), "each game keeps the board's raw chance"
+    pairs = evaluate(settled).pairs
+    want = [((s.raw_prob if (s.side or "OVER").upper() == "OVER" else 1 - s.raw_prob), s.over_hit)
+            for s in settled if s.over_hit is not None]
+    assert pairs == want
+    wide = max(p for p, _ in pairs) - min(p for p, _ in pairs)
+    shrunk = [(s.hit_prob if (s.side or "OVER").upper() == "OVER" else 1 - s.hit_prob) for s in settled]
+    assert wide > max(shrunk) - min(shrunk), "the raw chance spreads wider than the shrunk one"
+    import inspect
+    assert "raw_prob=rec.raw_prob" in inspect.getsource(LW._settled_props)
 
 
 def _curve_store(knots):

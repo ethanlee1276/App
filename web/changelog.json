@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-05",
+      "kind": "model",
+      "title": "College props are corrected on the model's own number",
+      "body": "Each week we measure how far every market's probabilities run hot or cold and correct them. For college football, and for the NFL's recency and player-memory settings, that measurement was taken on probabilities already pulled toward the betting line, while the board applies the correction before that pull. Replayed on four NFL seasons, learned on 2022-24 and judged on 2025, the correction learned on the model's own number beat the old one on all four markets, and the old one did worse than no correction at all on three. From each sport's next weekly refit, college's corrections and the NFL's and college's recency and player-memory settings are learned the right way. Where the old correction was stretching college's probabilities, its edges will come out smaller. The NFL's yardage and catch markets keep their corrections learned against real sportsbook lines."
+    },
+    {
+      "date": "2026-11-05",
       "kind": "fix",
       "title": "The weekly refit runs faster and keeps its place",
       "body": "Our weekly refit, which re-learns each sport from its whole history, had not finished the NFL since late August: its recency step ran past the hour on our server and lost all four markets' work each time. Each fit now reads the model's settings once rather than on every game it replays, with the same numbers to the last digit, and the recency step keeps each market the moment it is fitted, so a run that runs out of time picks up at the next market. The board prices props a little faster for the same reason."

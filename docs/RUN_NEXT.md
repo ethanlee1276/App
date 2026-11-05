@@ -10,8 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after the weekly refit's walks got faster and its
-recency dial started keeping each market it fits (item 1g, nothing new to
+Last updated 2026-11-05, after the weekly refit's walks got faster, its
+recency dial started keeping each market it fits, and the NFL and college
+fits started learning on the model's raw chance (item 1g, nothing new to
 run), after MLB's travel and rest got its first read off
 the box, on five seasons of game logs (item 1t: nothing held; the command is
 unchanged and now reads 2018 on), after the owner's desk got a Weekly jobs
@@ -341,6 +342,18 @@ to three times faster. The dial also writes each market
 the moment it is fitted, so a run that runs out of time keeps what it did
 and the next run of the round starts at the next market; the refit's line
 says `N market(s) fitted earlier this round, kept`.
+
+The same replay found the NFL and college fits learning on the wrong
+number: the walk handed them the chance after it had been shrunk toward
+the betting line, while the board applies the correction before that.
+Fitted on 2022-24 and judged on 2025, the right way beat the old way on
+all four NFL markets, and the old way did worse than no correction at all
+on three (`docs/ALL_SPORTS_AUDIT_2026-11-05.md`, NFL and college). Fixed
+in the walk; it takes effect as each piece of the round refits: college's
+temperatures, and the NFL's and college's recency dial and player memory.
+On the replay the dial stopped pinning itself at the edge (rushing yards
++0.8, receiving +0.4, both +1.0 before). Nothing to run; the JQ check
+below shows the new fitted dates once the round reaches them.
 
 **Update, 5 November (read off the public heartbeat):** this morning's run
 took 68 minutes and finished nothing: `round of 2026-11-04: nothing done
