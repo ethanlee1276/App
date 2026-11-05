@@ -341,10 +341,35 @@ def _spend_row(r: dict):
 #: The databases deploy/backup.sh copies every night, the two that cannot be
 #: rebuilt first.
 NIGHTLY_DBS = ("accounts", "ledger", "zeno", "history")
+#: Where the nightly copies may be: QB_BACKUP_DIR when this process has it,
+#: then the folder deploy/README.md step 6 gives the app user's cron
+#: (outside the checkout), then backup.sh's own default beside the code
+#: (root's cron). The one holding the newest copy is the one in use; a
+#: folder an older setup left behind never sets off an alarm.
+NIGHTLY_DIRS = (Path("/var/backups/qellys"),)
 #: A nightly copy of the accounts or the journal older than this needs the owner.
 NIGHTLY_LATE_H = 36
 #: And a weekly zip (engine/maintenance) older than this.
 WEEKLY_LATE_D = 9
+
+
+def _newest_copy(d: Path) -> float:
+    try:
+        return max((f.stat().st_mtime for f in d.glob("*-*.db.gz")), default=0.0)
+    except OSError:
+        return 0.0
+
+
+def _nightly_dir() -> Path:
+    """The nightly copies' folder: of the places they may be, the one with
+    the newest copy (the first that exists when none has one)."""
+    env = os.environ.get("QB_BACKUP_DIR", "").strip()
+    places = [Path(env)] if env else []
+    places += [q for q in (*NIGHTLY_DIRS, ROOT / "backups") if q not in places]
+    there = [q for q in places if q.is_dir()]
+    if not there:
+        return places[0]
+    return max(there, key=lambda q: (_newest_copy(q), -there.index(q)))
 
 
 def backups(now: float | None = None, nightly: Path | None = None, weekly: Path | None = None) -> dict:
@@ -352,8 +377,8 @@ def backups(now: float | None = None, nightly: Path | None = None, weekly: Path 
     run reached the offsite copy (the note deploy/backup.sh leaves beside
     them, `last_run.json`), and the weekly zip of the small files."""
     t = time.time() if now is None else float(now)
-    d = Path(nightly or os.environ.get("QB_BACKUP_DIR", "").strip() or ROOT / "backups")
-    out = {"dbs": {}, "run": None, "weekly": None, "found": d.is_dir()}
+    d = Path(nightly) if nightly else _nightly_dir()
+    out = {"dbs": {}, "run": None, "weekly": None, "found": d.is_dir(), "dir": str(d)}
     if out["found"]:
         for name in NIGHTLY_DBS:
             got = []

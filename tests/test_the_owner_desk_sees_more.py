@@ -239,9 +239,34 @@ def test_the_backups_from_the_files_own_dates():
         keys = [p["key"] for p in OA.problems({"backups": OD.backups(NOW, nightly=night, weekly=week)}, now=NOW)]
         assert keys[:3] == ["backup", "offsite", "weekly-zip"], keys
         gone = OD.backups(NOW, nightly=d / "nowhere", weekly=d / "nowhere")
-        assert gone == {"dbs": {}, "run": None, "weekly": None, "found": False}, gone
+        assert gone == {"dbs": {}, "run": None, "weekly": None, "found": False, "dir": str(d / "nowhere")}, gone
         assert not OA.problems({"backups": gone}, now=NOW), "a folder this box cannot see is not an alarm"
     finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_the_nightly_copies_are_read_where_the_newest_are():
+    """deploy/README.md step 6 puts them in /var/backups/qellys for the app
+    user's cron; backup.sh's own default (root's cron) is beside the code.
+    The box keeps one job (2026-10-04), and a folder the other one left
+    behind must never read as a backup gone stale."""
+    d = Path(tempfile.mkdtemp())
+    root, dirs, env = OD.ROOT, OD.NIGHTLY_DIRS, os.environ.pop("QB_BACKUP_DIR", None)
+    try:
+        OD.ROOT, OD.NIGHTLY_DIRS = d, (d / "var-backups",)
+        _aged(d / "backups" / "accounts-20261001T040000Z.db.gz", 35 * 24)     # the old job's leftovers
+        _aged(d / "var-backups" / "accounts-20261104T040000Z.db.gz", 11)       # the job in use
+        b = OD.backups(NOW, weekly=d / "none")
+        assert b["dir"] == str(d / "var-backups") and b["dbs"]["accounts"]["age_h"] == 11.0, b
+        os.environ["QB_BACKUP_DIR"] = str(d / "elsewhere")                    # set, but nothing there yet
+        assert OD.backups(NOW, weekly=d / "none")["dir"] == str(d / "var-backups")
+        _aged(d / "elsewhere" / "ledger-20261105T040000Z.db.gz", 2)
+        assert OD.backups(NOW, weekly=d / "none")["dir"] == str(d / "elsewhere"), "the newest copy decides"
+    finally:
+        OD.ROOT, OD.NIGHTLY_DIRS = root, dirs
+        os.environ.pop("QB_BACKUP_DIR", None)
+        if env is not None:
+            os.environ["QB_BACKUP_DIR"] = env
         shutil.rmtree(d, ignore_errors=True)
 
 

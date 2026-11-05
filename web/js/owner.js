@@ -383,7 +383,7 @@ function odBackupsHTML(b) {
       w.age_d >= 9 ? "warn" : "") : ""}</ul>
     <p class="od-note">deploy/backup.sh copies the databases at 4am every night and sends them offsite; the weekly zip keeps the
       files the nightly does not. A copy of the accounts or the journal older than a day and a half, or a run that misses the
-      offsite copy, is put under Needs you and sent to this account’s phones.</p>`);
+      offsite copy, is put under Needs you and sent to this account’s phones.${b.dir ? ` Read from <span class="od-mono">${escapeHtml(b.dir)}</span>.` : ""}</p>`);
 }
 
 /* Sign-ins and the security log (engine/seclog), as counts. */
