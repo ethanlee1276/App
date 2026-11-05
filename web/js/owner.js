@@ -557,11 +557,14 @@ const OD_PIECES = { yardage_mixture: "yardage shapes", td_scale: "touchdown scal
   cfb_touchdowns: "college touchdowns", nfl_props: "NFL book-line props", ladder: "the grade ladder",
   nba_rules: "NBA rotation rules", nba_vacancy: "NBA minutes left open", nba_rates: "NBA rates", nba_spread: "NBA spread" };
 const odPiece = (k) => escapeHtml(OD_PIECES[k] || OD_LEAGUES[k] || k);
+// The box writes its jobs' times as its own wall clock (Eastern, no zone in
+// the text): read them as written, never through the browser's zone.
+const OD_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function odWhen(iso) {
-  if (!iso) return "—";
-  const d = new Date(String(iso).slice(0, 19));
-  if (isNaN(d)) return escapeHtml(String(iso));
-  return `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })} ${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(iso || ""));
+  if (!m) return iso ? escapeHtml(String(iso)) : "—";
+  const h = Number(m[4]);
+  return `${Number(m[3])} ${OD_MONTHS[Number(m[2]) - 1] || ""} ${h % 12 || 12}:${m[5]}${h >= 12 ? "pm" : "am"} ET`;
 }
 function odJobState(j) {
   const m = j.minutes == null ? null : Number(j.minutes);

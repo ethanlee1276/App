@@ -20,7 +20,9 @@ reached the NFL since August before anyone saw. What this holds:
     fitted two weeks ago or never, go under Needs you and to the owner's
     phones (engine/owneralerts), once a day like the rest;
   * the page names each job in words, marks a running, cut-off or failed
-    one, a late Lab sport in amber, and draws a job's last line as text.
+    one, a late Lab sport in amber, and draws a job's last line as text;
+    a job's time is the box's own Eastern clock as written, never moved
+    through the browser's zone (and never formatted outside tzTime).
 
 Run directly: `python3 tests/test_the_desk_shows_the_weekly_jobs.py`
 """
@@ -191,7 +193,8 @@ def test_the_page_names_each_job_and_marks_what_needs_a_look():
     html = _draw({"w": w}, "process.stdout.write(odWeeklyHTML(D.w, '2026-11-05'));")
     if html is None:
         return
-    for want in ("Weekly jobs", "The deep refit", "The Lab’s replay", "Board learning", "running since",
+    for want in ("Weekly jobs", "The deep refit", "The Lab’s replay", "Board learning",
+                 "running since 5 Nov 10:49am ET", "The Lab’s replay · 5 Nov 12:46am ET",
                  "cut off after 99 min", "failed (exit 2)", "finished in 25 min",
                  "The deep refit’s round of 2026-11-04", "2 still owed", "Still owed", "NFL, touchdowns",
                  "Done this round", "College, NBA", "nfl (recency dial done; player memory cut off after 45 min)",
