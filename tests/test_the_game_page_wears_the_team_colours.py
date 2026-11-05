@@ -538,7 +538,12 @@ def test_the_page_in_a_browser_at_a_phones_width():
                     page.wait_for_selector(".gp .pbp-hero", timeout=20000)
                     # Polled, not slept: under a loaded machine (the gate runs
                     # eight files at once) a fixed wait is a coin toss.
-                    g = _until(page, lambda g: g["field"] and g["line"] == 2 and g["view"] and g["body"])
+                    # The tab row's place too: gate #23 (5 November) read it at
+                    # 645px, above the screen's foot, while the cards over it
+                    # were still coming in; alone, and on the gate before, it
+                    # sits below it.
+                    g = _until(page, lambda g: g["field"] and g["line"] == 2 and g["view"] and g["body"]
+                               and g["tabRow"] and g["tabRow"]["t"] > SCREEN_H)
                     g = page.evaluate(GEOM)
                     at = f"{theme}:"
                     assert g["view"] and g["body"], f"{at} the wash is on"
