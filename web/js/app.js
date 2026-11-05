@@ -19347,8 +19347,9 @@ function brandMarkHTML(size = 28) {
    story ("No premium tier" on one, "Unlock the edge" on another); this is
    the story all three now tell. */
 const FREE_VS_PLAN = "Free: the Record — every pick graded, wins and losses — every game live, the Pick of "
-  + "the Day in every league, and the standings, rosters, injuries, weather and playoff races. The plan adds "
-  + "tonight’s picks and prices on every board, our chances in the races, Ask Qellys, Zeno’s bets and the tools.";
+  + "the Day in every league, the standings, rosters, injuries, weather and playoff races, and the Lab’s "
+  + "summary of how well each model forecast past games. The plan adds tonight’s picks and prices on every "
+  + "board, our chances in the races, the Lab market by market, Ask Qellys, Zeno’s bets and the tools.";
 
 function freeVsPlanHTML(cls = "") {
   return `<p class="free-vs-plan${cls ? ` ${cls}` : ""}">${escapeHtml(FREE_VS_PLAN)}</p>`;
@@ -23751,8 +23752,16 @@ const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
                    // Alerts holds the free account's own switches (kickoff, big
                    // moments, final scores) and watches; the server gives it no
                    // pick there (server._alerts_feed is empty without a plan).
-                   // The Lab stays a member's: it reads the paid backtest.
                    "why", "about", "features", "methodology", "status", "alerts",
+                   // THE LAB (Ethan, 2026-11-05: "do all of them"). A reader
+                   // without a plan gets the replay's public summary, the
+                   // numbers the Record already shows (record.json `replay`):
+                   // how well each sport's model forecast stored history. The
+                   // replay market by market, its simulated bets and grades,
+                   // stays in backtest.json, sealed (engine/gate PAID_FILES,
+                   // audit B1-1), with the page's own lock in its place
+                   // (more.js labFreeHTML).
+                   "lab",
                    // THE PICK OF THE DAY (Ethan, 2026-10-30: "make the picks
                    // of the day free. just the pick of the day"): every
                    // league's card, and a free account's Home (_switchViewNow).

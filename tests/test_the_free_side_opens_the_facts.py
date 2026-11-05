@@ -44,6 +44,15 @@ OPENED = ("standings", "rosters", "injuries", "weather", "team", "race")
 FLAT = lambda s: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", s))  # noqa: E731
 
 
+
+def _dated_from(terms: str, y: int, m: int, d: int) -> bool:
+    """The Terms' "Last updated" line is this change's date or a later one, so
+    the next change to the Terms does not have to rewrite this test."""
+    import datetime as _dt
+    import re as _re
+    hit = _re.search(r'class="legal-date">Last updated (\d{1,2} \w+ \d{4})<', terms)
+    return bool(hit) and _dt.datetime.strptime(hit.group(1), "%d %B %Y").date() >= _dt.date(y, m, d)
+
 def _list(name: str) -> set:
     i = APP.index(f"const {name} = ")
     block = re.sub(r"//[^\n]*", "", APP[i:i + 9000])
@@ -58,7 +67,9 @@ def _fn(src: str, name: str) -> str:
 def test_the_six_open_and_no_pick_page_does():
     open_ = _list("WALL_OPEN")
     assert set(OPENED) <= open_, set(OPENED) - open_
-    for page in ("recommended", "props", "edge", "likely", "longshots", "futures", "ask", "scanner", "lab", "parlays"):
+    # The Lab opened on 2026-11-05 with its public summary only
+    # (tests/test_the_lab_opens_to_free_accounts.py).
+    for page in ("recommended", "props", "edge", "likely", "longshots", "futures", "ask", "scanner", "parlays"):
         assert page not in open_, page
 
 
@@ -93,7 +104,7 @@ def test_the_plans_and_the_signup_say_so():
 def test_the_terms_list_them_dated_and_only_adding():
     terms = (ROOT / "web" / "terms.html").read_text(encoding="utf-8")
     flat = FLAT(terms)
-    assert "Last updated 3 November 2026" in terms
+    assert _dated_from(terms, 2026, 11, 3), "the Terms are dated this change or a later one"
     note = flat[flat.index("When this version applies."):flat.index("1. Who we are")]
     assert "The change of 3 November 2026 adds to §2’s list of what an account gets free" in note
     assert "it takes nothing away and applies to every account from that day" in note

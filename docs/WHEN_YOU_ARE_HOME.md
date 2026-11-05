@@ -7032,6 +7032,9 @@ Alerts are locked for free accounts today (a tap opens the plans), so they
 show the lock now. If you want any of them open to free accounts, say
 which and they come off the list.
 
+**Answered 5 November:** "do all of them". Six had opened on 28 October
+(step HI); the Lab opened on 5 November with its public summary (step KQ).
+
 Nothing to run. Read-only check, any time; it prints `1` once this version
 is live:
 
@@ -7494,7 +7497,8 @@ think makes the most sense with that"). My call:
   member's and is not offered, and what is a member's (line moves, the
   prediction desk) says so on one card with the plans.
 * The Lab stays a member's: it reads the paid backtest, so a free account
-  would get an empty page. The menu keeps its lock.
+  would get an empty page. The menu keeps its lock. (Opened on 5 November
+  with the replay's public summary, at your word: step KQ.)
 * The plans page's table gains "Alerts for your teams: kickoff, big
   moments, final scores" on the free side; the member line now reads "pick
   alerts".
@@ -9323,6 +9327,39 @@ starts until the restart lands; one held back that way starts right
 after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
+
+**KQ. The Lab opens to free accounts** (step 410; nothing to run; you, 5
+November, on the seven pages a free account could not open: "do all of
+them"). Six of the seven had opened on 28 October (step HI: Why Us, About,
+Features, Methodology, Status and Alerts); the Lab had stayed a member's
+because it reads the replay file, which is sealed whole. What changed:
+
+* The Lab is on the free list. A free account sees each sport's summary
+  row, read off the free record file: how many props the replay priced,
+  the Brier score, the skill over guessing the base rate, the calibration
+  error and what it was graded against. Under it, the page's own lock:
+  the replay market by market, the bets it would have made at the price
+  with their grades, and the game lines against real closing numbers stay
+  a member's.
+* The sealed file stays sealed. A free account is never sent for it, and
+  a link straight to the Lab asks the server who is reading before it
+  chooses the page (it used to draw before the plan check and go for the
+  sealed file).
+* The sign-up's free list, the plans' line and the Terms' list of free
+  features say so. The Terms are dated 5 November with a note that the
+  change only adds, like 3 November's, so no notice is owed.
+
+Read-only check, any time; it prints `1` once this version is live:
+
+```
+curl -s https://qellysbook.com/js/more.js | grep -c 'async function labWalled('
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KQ 2>&1 | tee /tmp/kq.txt
+```
 
 **KP. A licensed scores feed, timed against ESPN's, if you want to try
 it** (step 239; your call first, then three commands; the research paper's

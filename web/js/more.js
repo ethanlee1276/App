@@ -517,9 +517,79 @@ function labGameTable(games) {
   return `<div class="hd-card lab-rows">${rows}</div>`;
 }
 
+/* THE LAB, OPEN TO FREE ACCOUNTS (Ethan, 2026-11-05: "do all of them").
+   The replay market by market, its simulated bets, grades and bins, stays in
+   backtest.json, sealed (engine/gate PAID_FILES, audit B1-1). A reader
+   without a plan gets the replay's public summary, the numbers the Record
+   already shows (record.json `replay`, engine/lab.replay_summary): how many
+   props each sport's model priced over stored history, its Brier score, its
+   skill over always guessing the base rate, how far its chances ran from
+   what happened, and a lock where the market-by-market replay would be.
+   Never a number from behind the lock. */
+const LAB_SPORT_NAMES = { mlb: "MLB", nfl: "NFL", cfb: "College football", nba: "NBA", wnba: "WNBA",
+  nhl: "NHL", ufc: "UFC" };
+async function labFreeHTML() {
+  const got = await fetchJSON(() => boardFetch("data/record.json", { cache: "no-cache" }), "record");
+  const rp = ((got.data || {}).replay) || {};
+  const pct = (x) => x == null ? "—" : `${x > 0 ? "+" : x < 0 ? "\u2212" : ""}${Math.abs(x * 100).toFixed(1)}%`;
+  const num = (x) => x == null ? "—" : Number(x).toFixed(3);
+  const basisWord = { book: "against book lines", naive: "against a trailing-average line",
+    outcomes: "against who scored", mixed: "partly against book lines" };
+  const rows = Object.keys(LAB_SPORT_NAMES).filter((k) => rp[k] && rp[k].n).map((k) => {
+    const r = rp[k];
+    const good = r.skill != null && r.skill > 0;
+    return `<tr><td>${escapeHtml(LAB_SPORT_NAMES[k])}</td><td>${Number(r.n).toLocaleString()}</td>
+      <td>${num(r.brier)}</td><td style="color:var(--${good ? "good" : "warn"})">${pct(r.skill)}</td>
+      <td>${num(r.ece)}</td><td>${escapeHtml(basisWord[r.basis] || r.basis || "—")}</td></tr>`;
+  }).join("");
+  const table = rows ? `<table class="agate lab-free"><thead><tr><th>Sport</th><th>Props priced</th>
+      <th>Brier</th><th>Skill</th><th>Calibration error</th><th>Graded</th></tr></thead>
+      <tbody>${rows}</tbody></table>`
+    : `<p class="mini">${got.failed ? "The summary could not be read just now; try again in a minute."
+      : "No replay has been published yet; it appears here after the next run."}</p>`;
+  return `
+    ${recDisclosure("What this page is, and what it isn’t", `The Record grades the picks we
+      actually made, going forward. This page grades the <em>model</em>, by replaying it over
+      history it never saw at the time: projections for each game are built only from the
+      games before it, through the same pricer the boards use, then settled against what
+      happened. It measures forecasting, not profit.`)}
+    <div class="section-title">How well each model forecast past games
+      <span class="sub">— every prop it would have priced${rp.generated_at
+        ? `, replayed ${escapeHtml(rp.generated_at)}` : ""}</span></div>
+    ${table}
+    <p class="mini" style="opacity:.7;margin-top:8px">Brier is the squared miss of each chance
+      (lower is better). Skill is how much better than always guessing the base rate; above
+      zero means the forecasts carry information. Calibration error is how far the chances ran
+      from what happened, on average.</p>
+    ${memberLockHTML("The replay, market by market, is for members", "Each market’s replay, the "
+      + "bets it would have made at the price with their grades and calibration bins, and the "
+      + "game lines graded against real closing numbers come with a membership.")}`;
+}
+
+/* WHO IS ASKING, ANSWERED BEFORE THE PAGE IS CHOSEN (2026-11-05). A link
+   straight to #lab draws before the boot's plan check has put the wall up
+   (app.js adds `walled` once /api/billing/status has answered), and the
+   members' branch would then go for the sealed file and show its outage
+   to a free reader. So the Lab asks for the answer itself when there is
+   none yet: the status the boot already read when it has one, the server
+   when it has not (the sign-up's flPaint waits the same way). */
+async function labWalled() {
+  if (typeof isWalled !== "function") return false;
+  if (isWalled()) return true;
+  const s = typeof _pwStatus !== "undefined" ? _pwStatus : null;
+  if (!s && typeof paywallCheck === "function") {
+    try { return !!(await paywallCheck()); } catch (e) { return false; }
+  }
+  return !!(s && s.paywall && !s.entitled);
+}
+
 async function renderLab() {
   const host = document.getElementById("lab-body");
   if (!host) return;
+  if (await labWalled()) {
+    host.innerHTML = await labFreeHTML();
+    return;
+  }
   const got = await fetchJSON(() => paidFetch("backtest.json"), "backtest");
   const d = got.data;
   if (!d || !d.sports) {

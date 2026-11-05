@@ -2983,6 +2983,9 @@ const FL_ROWS = [
   ["Fantasy lineups and start/sit help, your bet tracker", 1],
   ["Alerts for your teams: kickoff, big moments, final scores", 1],
   ["The Record — every pick we post, graded", 1],
+  // Open since 2026-11-05 (app.js WALL_OPEN, more.js labFreeHTML): the
+  // Lab's summary; the replay market by market stays a member's.
+  ["The Lab — how well each model forecast past games", 1],
   ["Every other pick tonight — props, parlays, the whole board", 0],
   ["Most Likely — every pick, tiered by its chance", 0],
   ["Ask Qellys, the AI, on any team or player", 0],

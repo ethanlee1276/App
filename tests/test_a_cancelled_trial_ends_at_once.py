@@ -43,6 +43,15 @@ DAY = 86400
 RULE = B.TRIAL_CANCEL_ENDS_ACCESS_FROM
 
 
+
+def _dated_from(terms: str, y: int, m: int, d: int) -> bool:
+    """The Terms' "Last updated" line is this change's date or a later one, so
+    the next change to the Terms does not have to rewrite this test."""
+    import datetime as _dt
+    import re as _re
+    hit = _re.search(r'class="legal-date">Last updated (\d{1,2} \w+ \d{4})<', terms)
+    return bool(hit) and _dt.datetime.strptime(hit.group(1), "%d %B %Y").date() >= _dt.date(y, m, d)
+
 def _read(*parts):
     with open(os.path.join(ROOT, *parts), encoding="utf-8") as fh:
         return fh.read()
@@ -151,7 +160,7 @@ def test_everything_that_offers_or_reminds_says_what_cancelling_does():
     assert "access ends when you cancel" in note and "cannot start another trial" in note, "the reminder email"
     assert "its access ends when you cancel" in _read("engine", "lifecycle.py"), "its phone version"
     terms = _read("web", "terms.html")
-    assert "Last updated 3 November 2026" in terms
+    assert _dated_from(terms, 2026, 11, 3), "the Terms are dated this change or a later one"
     flat = _flat(terms)
     assert "If you cancel during the trial, its access ends when you cancel" in flat, "Terms §5.3"
     assert "The changes of 2 November 2026" in flat and "a trial started earlier keeps the rule it started under" in flat

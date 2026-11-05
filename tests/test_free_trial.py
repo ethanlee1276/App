@@ -87,8 +87,10 @@ def test_nothing_advertises_the_walled_pages_as_free():
     # standings, rosters and injuries opened on 2026-11-03 with the weather,
     # a team's page and the races (the audit's "open the free side"): the
     # sign-up's table, the plans' line and the Terms' §2 list now say so —
-    # tests/test_the_free_side_opens_the_facts.py.
-    for shut in ("bankroll", "props", "edge", "likely", "lab"):
+    # tests/test_the_free_side_opens_the_facts.py. The Lab opened on
+    # 2026-11-05 with its public summary, its replay market by market still
+    # a member's — tests/test_the_lab_opens_to_free_accounts.py.
+    for shut in ("bankroll", "props", "edge", "likely"):
         assert shut not in openable, (
             "%s is reachable unpaid; if that is deliberate this test needs "
             "updating, and so does whatever page says it is not" % shut)

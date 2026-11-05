@@ -38,6 +38,15 @@ NOON = dt.datetime(2026, 11, 4, 12, tzinfo=PN.ET).timestamp()     # Wednesday, n
 FLAT = lambda h: re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", h))  # noqa: E731
 
 
+
+def _dated_from(terms: str, y: int, m: int, d: int) -> bool:
+    """The Terms' "Last updated" line is this change's date or a later one, so
+    the next change to the Terms does not have to rewrite this test."""
+    import datetime as _dt
+    import re as _re
+    hit = _re.search(r'class="legal-date">Last updated (\d{1,2} \w+ \d{4})<', terms)
+    return bool(hit) and _dt.datetime.strptime(hit.group(1), "%d %B %Y").date() >= _dt.date(y, m, d)
+
 def test_it_is_the_third_change_and_goes_to_older_accounts_with_an_address():
     assert PN.ORDER == (PN.NOTICE, PN.WHOSON, PN.TRIALS) and PN.TRIALS == "2026-11-02"
     assert dt.datetime.fromtimestamp(PN.TRIALS_SINCE, PN.ET).strftime("%-d %B %Y %H:%M") == "3 November 2026 00:00"
@@ -89,7 +98,7 @@ def test_the_terms_carry_the_new_section_and_say_when_it_applies():
     assert "The same day’s change to §5.7" in note and "an account made from 3 November 2026" in note
     assert "on 2 December 2026" in note and "30 days after we email the account’s address about it" in note
     assert "Until then §5.7 applies to it as it read before: “If a renewal charge fails" in note
-    assert 'id="failed-payments"' in terms and "Last updated 3 November 2026" in terms
+    assert 'id="failed-payments"' in terms and _dated_from(terms, 2026, 11, 3)
 
 
 def test_the_runbook_arms_it_with_the_other_two():

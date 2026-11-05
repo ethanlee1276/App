@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-05",
+      "kind": "ship",
+      "title": "The Lab opens to free accounts",
+      "body": "A free account can now open the Lab and see how well each sport's model forecast games it never saw: how many props the replay priced, the Brier score, the skill over guessing the base rate and the calibration error, sport by sport. The replay market by market, with the bets it would have made at the price and their grades, stays with a membership. About, Methodology, Status, Why Us, Features and Alerts were already open to free accounts; the Lab was the last of the seven. The Terms' list of free features names it."
+    },
+    {
+      "date": "2026-11-05",
       "kind": "fix",
       "title": "The Lab's replay fits its night again",
       "body": "The Lab replays each model over the games it has stored and publishes how well it forecast them, one sport at a time. Its nightly run was being stopped at its hour inside the first sport, so the page stayed dated 29 September. The run now has a time limit of its own: a sport starts only while there is time to finish it, the NBA and WNBA stop between markets at the pace the last one took, and a market not reached keeps last week's numbers, dated. The sports left over go first the next night, so each sport's numbers come back within a few nights and stay within a week after that."

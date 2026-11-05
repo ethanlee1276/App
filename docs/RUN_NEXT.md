@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after a Start here section put every waiting check in one
+Last updated 2026-11-05, after the Lab opened to free accounts with its
+public summary, at your word on the seven pages (step KQ: nothing to run;
+its live check is in Start here), after a Start here section put every waiting check in one
 run, after the licensed scores feed and its timer were built and
 left asleep until you choose to get a key (step KP: item 8, your call), after
 your desk's three alerts: the backup now says why its
@@ -136,7 +138,7 @@ Everything below that only reads, in one go (a few minutes; it writes
 nothing). Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JX JT KO JH JL IQ JM JN JO JP JQ JR JV KF KG KI KL KN JD IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JX JT KO JH JL IQ JM JN JO JP JQ JR JV KF KG KI KL KN JD IX IU IT JA IP KP KQ 2>&1 | tee /tmp/now.txt
 ```
 
 The three long ones, on a quiet evening (up to about 45 minutes together;
