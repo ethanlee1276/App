@@ -259,6 +259,39 @@ def test_the_zone_rate_produces_a_number_not_just_a_call():
     assert got == 0.75, f"expected a real rate, got {got!r}"
 
 
+def test_every_defence_from_one_pass_is_what_each_asked_alone_gives():
+    """2026-11-05: the board asked one opponent at a time and read the
+    season's ~49 MB file again for each new one. One pass groups each play
+    with the side(s) `_defends` names; each team's numbers are unchanged."""
+    teams = {t for r in ROWS for t in np._game_teams(r)}
+    assert np.coverage_by_defence(ROWS) == {t: np.coverage_rates(ROWS, t) for t in teams}
+    odd = [_play("2022_02_KC_DEN", "", "ZONE_COVERAGE", "6", "4")] * 3   # no offence named
+    got = np.coverage_by_defence(odd)
+    assert got == {t: np.coverage_rates(odd, t) for t in ("KC", "DEN")}
+
+
+def test_the_board_reads_a_season_once_for_every_defence():
+    from engine import pipeline as pl
+
+    class G:
+        date = "2026-10-12"
+    rows = ([_play("2026_01_NE_SF", "NE", "ZONE_COVERAGE", "6", "4")] * 150
+            + [_play("2026_01_NE_SF", "NE", "MAN_COVERAGE", "7", "5")] * 100
+            + [_play("2026_01_NE_SF", "SF", "ZONE_COVERAGE", "6", "4")] * 210
+            + [_play("2026_02_BUF_LA", "BUF", "MAN_COVERAGE", "7", "5")] * 30)
+    import engine.sources.nflpart as npart
+    orig, reads = npart.load_participation, []
+    npart.load_participation = lambda season: reads.append(season) or rows
+    pl._ZONE_CACHE.clear()
+    try:
+        got = {t: pl._opp_zone_rate(G(), {"opponent": t}) for t in ("SF", "NE", "LA", "BUF", "LAR")}
+    finally:
+        npart.load_participation = orig
+        pl._ZONE_CACHE.clear()
+    assert reads == [2026], f"one read for five opponents, not {len(reads)}"
+    assert got == {"SF": 0.6, "NE": 1.0, "LA": None, "BUF": None, "LAR": None}, got
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

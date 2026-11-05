@@ -201,6 +201,25 @@ def personnel_rates(rows, team: str | None = None) -> dict:
             else {}}
 
 
+def coverage_by_defence(rows) -> dict:
+    """``{team: coverage_rates(rows, team)}`` for every defence in the
+    rows, from one pass over them (2026-11-05).
+
+    The board asked `coverage_rates` one opponent at a time and read the
+    season's ~49 MB file again for each new one: 32 reads a season, three
+    quarters of the time the NFL's book-line replay took. Each play is put
+    with the side or sides `_defends` names, so every team's numbers are
+    the ones `coverage_rates(rows, team)` gives."""
+    groups: dict = {}
+    for r in rows:
+        poss = (r.get("possession_team") or "").strip()
+        for t in _game_teams(r):
+            g = groups.setdefault(t, [])       # every team in the file, defending or not
+            if t != poss:
+                g.append(r)
+    return {t: coverage_rates(g, t) for t, g in groups.items()}
+
+
 def teams_in(rows) -> list[str]:
     """Every team appearing as the offence, so a probe can list what it has."""
     return sorted({(r.get("possession_team") or "").strip()

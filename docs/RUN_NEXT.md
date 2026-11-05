@@ -341,7 +341,11 @@ with the temperatures on (the Lab's, the rank fit's, the board's own) two
 to three times faster. The dial also writes each market
 the moment it is fitted, so a run that runs out of time keeps what it did
 and the next run of the round starts at the next market; the refit's line
-says `N market(s) fitted earlier this round, kept`.
+says `N market(s) fitted earlier this round, kept`. The NFL's book-line
+replay (the round's `nfl_props` piece and the Lab's NFL replay) spent three
+quarters of its time reading one 49 MB coverage file again for each
+defence; it reads it once a season now, every number the same, two weeks
+of games in 6 s here instead of 40. The NFL board's builds read it once too.
 
 The same replay found the NFL and college fits learning on the wrong
 number: the walk handed them the chance after it had been shrunk toward

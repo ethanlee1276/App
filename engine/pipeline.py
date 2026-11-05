@@ -798,7 +798,8 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
 
 #: (season, opponent) → zone rate. A season's participation file is ~49 MB
 #: and every prop on the slate asks the same question about the same dozen
-#: defences, so the answer is computed once per opponent per build.
+#: defences, so the file is read once per season per build and every
+#: defence's answer kept from that one read.
 _ZONE_CACHE: dict = {}
 
 
@@ -842,16 +843,21 @@ def _opp_zone_rate(g, d):
     key = (season, opp)
     if key in _ZONE_CACHE:
         return _ZONE_CACHE[key]
+    if (season, None) in _ZONE_CACHE:            # read already; not a team in it
+        _ZONE_CACHE[key] = None
+        return None
     rate = None
     try:
-        from .sources.nflpart import coverage_rates, load_participation
-        rows = load_participation(int(season))
-        c = coverage_rates(rows, opp)
-        # The floor is not decoration. A defence with 40 labelled snaps
-        # has played about a game and a half, and its zone rate is a
-        # statement about two afternoons.
-        if c["n_labelled"] >= 200:
-            rate = c["zone_rate"]
+        from .sources.nflpart import coverage_by_defence, load_participation
+        # EVERY DEFENCE FROM ONE READ (2026-11-05): the file was read again
+        # for each new opponent, 32 reads of ~49 MB a season per build.
+        for team, c in coverage_by_defence(load_participation(int(season))).items():
+            # The floor is not decoration. A defence with 40 labelled snaps
+            # has played about a game and a half, and its zone rate is a
+            # statement about two afternoons.
+            _ZONE_CACHE[(season, team)] = c["zone_rate"] if c["n_labelled"] >= 200 else None
+        _ZONE_CACHE[(season, None)] = None
+        rate = _ZONE_CACHE.get(key)
     except Exception:                                         # noqa: BLE001
         rate = None
     _ZONE_CACHE[key] = rate

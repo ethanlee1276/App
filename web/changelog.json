@@ -11,7 +11,7 @@
       "date": "2026-11-05",
       "kind": "fix",
       "title": "The weekly refit runs faster and keeps its place",
-      "body": "Our weekly refit, which re-learns each sport from its whole history, had not finished the NFL since late August: its recency step ran past the hour on our server and lost all four markets' work each time. Each fit now reads the model's settings once rather than on every game it replays, with the same numbers to the last digit, and the recency step keeps each market the moment it is fitted, so a run that runs out of time picks up at the next market. The board prices props a little faster for the same reason."
+      "body": "Our weekly refit, which re-learns each sport from its whole history, had not finished the NFL since late August: its recency step ran past the hour on our server and lost all four markets' work each time. Each fit now reads the model's settings once rather than on every game it replays, with the same numbers to the last digit, and the recency step keeps each market the moment it is fitted, so a run that runs out of time picks up at the next market. The board prices props a little faster for the same reason, and each NFL board build reads the league's defensive-coverage file once instead of once for every opponent."
     },
     {
       "date": "2026-11-05",
