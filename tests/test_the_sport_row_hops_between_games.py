@@ -203,9 +203,16 @@ def test_tapping_the_leagues_in_a_browser():
                 tap("nhl")
                 until("document.getElementById('view-live').classList.contains('active')", "NHL: the Live tab")
                 assert page.evaluate(LIT) == ["nhl"]
-                page.wait_for_timeout(500)
-                chip = page.evaluate("""(() => { const c = document.querySelector('[data-chip].active, [data-chip][aria-pressed="true"]');
-                                                  return c ? c.dataset.chip : null; })()""")
+                # The chips draw after the Live tab's own read of the
+                # scoreboards; a fixed half second lost that race when eight
+                # browser files shared the machine (gate #19, 2026-11-05).
+                CHIP = """(() => { const c = document.querySelector('[data-chip].active, [data-chip][aria-pressed="true"]');
+                                   return c ? c.dataset.chip : null; })()"""
+                for _ in range(150):
+                    if page.evaluate(CHIP) == "nhl":
+                        break
+                    page.wait_for_timeout(100)
+                chip = page.evaluate(CHIP)
                 assert chip == "nhl", f"the Live tab on hockey, not {chip}"
                 # Opened from the college board and left again: the game's own
                 # league while its page is open, the board never switched, and
