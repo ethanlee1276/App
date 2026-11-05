@@ -398,7 +398,7 @@ function odSecurityHTML(s) {
       odRow("The day’s worst hour", odN(s.fails_worst_hour))}${
       odRow("Most from one network, 24 h", `${odN(s.fails_one_network)} (of ${odN(s.networks_failing)})`)}${
       odRow("The most on one account, 24 h", odN(s.fails_one_account), (s.fails_one_account || 0) >= 20 ? "warn" : "")}${
-      odRow("Stripe messages failing their signature, 24 h", odN(s.webhook_bad_day), (s.webhook_bad_day || 0) >= 3 ? "bad" : "")}</ul>
+      odRow("Stripe messages failing their signature, 24 h", odN(s.stripe_bad_day), (s.stripe_bad_day || 0) >= 3 ? "bad" : "")}</ul>
     <p class="od-note">Counts from the security log — never the network or the account behind a line. Fifty failed sign-ins in an
       hour, or three Stripe messages failing their signature in a day, go under Needs you.</p>`);
 }

@@ -72,7 +72,7 @@
 .od-chip { font: inherit; font-size: var(--fs-xs); font-weight: 700; padding: 5px 10px; border: 0; border-radius: 999px;
   cursor: pointer; color: var(--text-dim); background: color-mix(in oklab, var(--text) 8%, transparent); }
 .od-chip b { font-weight: 800; color: var(--text); margin-left: 2px; }
-.od-chip.on { color: var(--on-brand, #fff); background: var(--brand); }
+.od-chip.on { color: var(--brand-ink); background: var(--brand); }
 .od-chip.on b { color: inherit; }
 /* Reports to review: tinted rows, no lines (tests/test_no_hard_lines). */
 .od-count { margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 800;
@@ -162,4 +162,4 @@
   line-height: var(--lh-snug); background: color-mix(in oklab, var(--text) 5%, transparent); overflow-wrap: anywhere; }
 .oa-says b { display: block; font-size: var(--fs-xs); color: var(--text-mute); font-weight: 700; margin-bottom: 2px; }
 .oa-lab { font-size: var(--fs-xs); font-weight: 700; color: var(--text-dim); }
-.od-sports td { vertical-align: top; line-height: 1.35; }
+.od-sports td { vertical-align: top; line-height: var(--lh-tight); }

@@ -166,9 +166,9 @@ def problems(h: dict, data_dir: Path | None = None, now: float | None = None) ->
                     "body": (f"Up to {int(sec.get('fails_one_network') or 0):,} from one network and "
                              f"{int(sec.get('fails_one_account') or 0):,} on one account. Somebody may be trying "
                              "passwords; the rate limit slows each network.")})
-    if int(sec.get("webhook_bad_day") or 0) >= OD.WEBHOOK_BAD:
+    if int(sec.get("stripe_bad_day") or 0) >= OD.WEBHOOK_BAD:
         out.append({"key": "webhook", "title": "Stripe's messages are failing their signature check",
-                    "body": (f"{int(sec['webhook_bad_day']):,} in a day. If the webhook's signing secret changed "
+                    "body": (f"{int(sec['stripe_bad_day']):,} in a day. If the webhook's signing secret changed "
                              "in Stripe, payments stop reaching the site until STRIPE_WEBHOOK_SECRET matches it.")})
     n = int(h.get("crashes") or 0)
     if n >= CRASHES_24H:

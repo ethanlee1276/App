@@ -313,11 +313,11 @@ def test_the_security_log_as_counts_and_a_spraying_hour_needs_the_owner():
         assert got[("login", "ok")] == (1, 2) and got[("login", "fail")] == (55, 55), got
         assert got[("signup", "ok")] == (1, 1) and got[("webhook", "bad_signature")] == (1, 1), got
         assert (s["fails_hour"], s["fails_worst_hour"], s["networks_failing"]) == (55, 55, 2), s
-        assert (s["fails_one_network"], s["fails_one_account"], s["webhook_bad_day"]) == (28, 19, 1), s
+        assert (s["fails_one_network"], s["fails_one_account"], s["stripe_bad_day"]) == (28, 19, 1), s
         assert "203.0.113" not in json.dumps(s) and "w1" not in json.dumps(s), "counts, never the network or the account"
         keys = [p["key"] for p in OA.problems({"security": s}, now=NOW)]
         assert "signins" in keys and "webhook" not in keys, keys
-        s["webhook_bad_day"] = OD.WEBHOOK_BAD
+        s["stripe_bad_day"] = OD.WEBHOOK_BAD
         assert "webhook" in [p["key"] for p in OA.problems({"security": s}, now=NOW)]
         assert OD.security(NOW, path=d / "none.jsonl")["lines"] == []
     finally:
@@ -388,7 +388,7 @@ def test_the_desk_page_draws_the_new_cards_and_filters_the_list():
                                      "run": {"age_h": 11.0, "offsite": "failed"}, "weekly": {"age_d": 3.0, "mb": 1.5, "kept": 6}},
                          "security": {"lines": [{"k": "Failed sign-ins", "day": 55, "week": 70, "kind": "login", "outcome": "fail"}],
                                       "fails_hour": 55, "fails_worst_hour": 55, "fails_one_network": 28, "networks_failing": 2,
-                                      "fails_one_account": 19, "webhook_bad_day": 0}},
+                                      "fails_one_account": 19, "stripe_bad_day": 0}},
               "community": {"posts_today": 0, "comments_today": 0, "chat_today": 0, "reports_open": 0},
               "switches": [], "notice": {}, "reports": {"open": [], "open_n": 0, "hidden": [], "hidden_n": 0}}
     stubs = """

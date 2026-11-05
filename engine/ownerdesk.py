@@ -467,7 +467,7 @@ def security(now: float | None = None, path: Path | None = None) -> dict:
             "fails_hour": hours.get(0, 0), "fails_worst_hour": max(hours.values(), default=0),
             "fails_one_network": max(nets.values(), default=0), "networks_failing": len(nets),
             "fails_one_account": max(whos.values(), default=0),
-            "webhook_bad_day": counts.get(("webhook", "bad_signature"), [0, 0])[0]}
+            "stripe_bad_day": counts.get(("webhook", "bad_signature"), [0, 0])[0]}
 
 
 # --- how people use the site ----------------------------------------------------------
