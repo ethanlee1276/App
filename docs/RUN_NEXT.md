@@ -168,6 +168,19 @@ Not commands: alerts on your phone (item 1).
 close lines (1,537 re-read at the sportsbooks' number), and item 8's key
 (the timer is on; its report is in the run above as KP).
 
+**Your answers, 5 November, kept so nothing is asked twice:**
+
+- The seven pages a free account could not open: all open (six since 28
+  October, the Lab on 5 November with its summary; step KQ).
+- NBA player tracking: built for research (item 1u; steps KR and KS).
+- The yearly offer and Gift a month (step HJ): not now. Both stay off.
+- Phone sign-in through Twilio (step EC): not yet, until the money
+  supports it.
+- Retire the free-year code: no, it stays.
+- SharpAPI's Pro plan for the betting splits (step DK): no.
+- The legal items (the postal address in the Privacy Policy, a lawyer's
+  read of both pages; docs/LAUNCH.md): not yet.
+
 ## 00. First, when you're home: NBA Most Likely is back, and where the credits went (step JW)
 
 **NBA Most Likely.** The board had the picks the whole time (92 this

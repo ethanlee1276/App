@@ -3608,7 +3608,7 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh DE DJ 2>&1 | tee /tmp/dj.txt
 
 - **SharpAPI: "This endpoint requires Pro tier or higher."** The key
   works; the free plan doesn't include splits. Pro is $229 a month on
-  their pricing page. Your call. Until then the builds ask at most once
+  their pricing page. Your call (5 November: no, so the splits stay off). Until then the builds ask at most once
   a day, since a refusal is remembered for 24 hours. If you upgrade, run
   the DJ probe once (it always asks, and clears the memory), then `sudo
   systemctl restart qellys`. If you'd rather it never ask:
@@ -4764,6 +4764,9 @@ To put the right one in (it replaces the old value), then restart:
 cd /srv/qellys && sudo ./deploy/setenv.sh TWILIO_VERIFY_SID
 sudo systemctl restart qellys
 ```
+
+**Not yet (you, 5 November: "we dont make enough money yet").** Email
+sign-up carries on; the phone option stays hidden until you set it up.
 
 **It needs a paid Twilio account** (2026-10-27: a free trial shows only
 the Account SID, the Auth Token and an API key, no Verify service). A
@@ -7522,6 +7525,9 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh HI 2>&1 | tee /tmp/hi.txt
 2026-10-28: "yes set up both"). FY and FZ say what each one does; this is
 tonight's order, with one restart at the end.
 
+**Not now (you, 5 November: "3 not done, 4 not done").** Both stay built
+and off; nothing below needs running until you say so.
+
 First, the two prices the yearly offer reads. Each line should say `set`;
 if one is missing or says it looks like a placeholder, stop and paste it
 back:
@@ -8561,6 +8567,10 @@ new redemptions stop:
 ```
 cd /srv/qellys && sudo ./deploy/setenv.sh --unset QB_CODES
 ```
+
+**Answered 5 November: keep it** (you: "6 no"). The code stays live, so
+neither command here needs running; the comp list above still keeps your
+own account free without it.
 
 Or, to keep a code for friends, a new one only you know instead of that:
 make one up, 3 to 32 letters and numbers, and paste it at this prompt as
