@@ -9330,10 +9330,15 @@ one read-only check, about a minute; you, 2026-11-05: "Go through ... mlb
 spec's travel engine (`docs/MLB_MODEL.md` §7: a day game after a night
 game, time zones, cross-country trips, getaway days, long stretches
 without a day off, doubleheaders) was in the spec and never in the code.
-Nothing reached from the build sandbox carries MLB's start times, so this
-one is measured on the box. The check reads MLB's own schedule for 2023
-to 2026 (one request a season, the source the nightly already reads,
-nothing cached or written). It fits each season's runs (every club's
+MLB's own schedule is not reachable from the build sandbox, so this one
+is measured on the box. The check reads MLB's own schedule for 2018 to
+2025, 2020 left out (one request a season, the source the nightly already
+reads, nothing cached or written), and skips games scheduled for seven
+innings (2021's doubleheaders). A first read off the box, on Retrosheet's
+game logs for 2018, 2019 and 2021 to 2023, found nothing over the bar; the
+closest were 1,500+ miles without a day off (-5.8% runs scored) and the
+first home game after a long road trip (+3% runs allowed), both the same
+side in all five seasons. It fits each season's runs (every club's
 offence and defence, every park, home field) and measures each situation
 against that: the runs a club scored and allowed, and its wins against the
 expected chance. Then it reads the box's stored closing totals, read-only,

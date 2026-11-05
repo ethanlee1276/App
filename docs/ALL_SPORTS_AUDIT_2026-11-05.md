@@ -92,7 +92,7 @@ The NFL is the reference toolkit. College has its own checklist
 |---|---|
 | RBI, runs, hits + runs + RBI, walks, stolen bases | **Parked, for the winter** (H): in the game log the box already pulls; each costs odds credits and is measured before it is posted |
 | Sprint speed and pop time (steals), team defence (hits allowed) | **Parked, for the winter** (H): Savant publishes them on the site we already read |
-| Travel and rest (cross-country trips, a day game after a night game, getaway days) | **Box run** (KN, `mlbtravelcheck.py`): in the model's spec (`docs/MLB_MODEL.md` §7), not in the code. MLB's own schedule is not reachable from the sandbox, so the box measures it: four seasons, each situation against a runs model (offence, defence, park, home) and the stored closing totals, on the NFL's bar. Built only where it holds |
+| Travel and rest (cross-country trips, a day game after a night game, getaway days) | **Measured, nothing over the bar** on five seasons of Retrosheet's game logs (`docs/MLB_MODEL.md` §7); the closest are 1,500+ miles without a day off (−5.8% runs scored) and the first home game after a long trip (+3% allowed), the same side in all five. **Box run** (KN, `mlbtravelcheck.py`) adds 2024-25 and the stored closing totals. Built only where it holds |
 
 ## Prediction markets (Polymarket, Kalshi)
 

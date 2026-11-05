@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after the Lab's MLB replay started fitting its run
+Last updated 2026-11-05, after MLB's travel and rest got its first read off
+the box, on five seasons of game logs (item 1t: nothing held; the command is
+unchanged and now reads 2018 on), after the owner's desk got a Weekly jobs
+card, after the Lab's MLB replay started fitting its run
 too (item 1f, nothing new to run), after the weekly refit started resuming inside a
 sport and the Lab's NFL replay started fitting its run (items 1f and 1g,
 nothing new to run), after MLB's travel and rest got a read-only
@@ -564,9 +567,9 @@ The same two with `--sport nfl` and `--sport cfb` re-read football's.
 
 The MLB spec's travel and rest engine was never built: a day game after a
 night game, time zones, long trips, getaway days, a long run without a day
-off, doubleheaders. This read-only check measures each of them on four
-seasons of MLB's own schedule against a runs model, and against the box's
-stored closing totals (about a minute):
+off, doubleheaders. This read-only check measures each of them on MLB's own
+schedule, 2018 to 2025 (2020 left out), against a runs model, and against
+the box's stored closing totals (about a minute):
 
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 mlbtravelcheck.py
@@ -575,6 +578,17 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 mlbtravelcheck.py
 The last block says, for each one, `holds — worth building` or `too small
 to use`. Paste it all back; whatever holds goes into the MLB board before
 Opening Day.
+
+**Update, 5 November (nothing new for you to paste):** I ran the same check
+myself on five seasons of Retrosheet's game logs (2018, 2019, 2021 to
+2023). Nothing cleared the bar, the day game after a night game included
+(1% fewer runs allowed, inside the noise). The two closest, the same side
+in all five seasons but short of two standard errors: 1,500+ miles without
+a day off (5.8% fewer runs scored) and the first home game after a long
+road trip (3% more runs allowed). The box's run adds 2024 and 2025 and the
+market part, so those are the two lines to read. It now also skips games
+scheduled for seven innings: 2021's seven-inning doubleheaders had made
+the second game of a doubleheader look like it held.
 
 ## 1s. Any time after this push: the WNBA's spread, on the box's own games (step KM)
 

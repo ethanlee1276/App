@@ -317,11 +317,32 @@ directly with the lineup-confirmation rule), long stretches without an off
 day, time-zone changes, and doubleheaders (roster churn, a 27th man, bullpen
 strain). **Why:** small, persistent effects that rarely make a bet alone but
 regularly tip graded bets across a threshold.
-**Status (2026-11-05): measured before it is built.** `mlbtravelcheck.py`
-(runbook KN, read-only) reads four seasons of MLB's own schedule and judges
-each situation against a runs model (offence, defence, park, home) and the
-box's stored closing totals, on the NFL's bar: two standard errors pooled,
-the same side in three or more seasons. Only what holds is built.
+**Status (2026-11-05): measured, nothing built yet.** `mlbtravelcheck.py`
+(runbook KN, read-only) reads MLB's own schedule, 2018 to 2025 with 2020
+left out, and judges each situation against a runs model (offence,
+defence, park, home) and the box's stored closing totals, on the NFL's
+bar: two standard errors pooled, the same side in three or more seasons.
+Only what holds is built.
+
+The first read, off the box, on Retrosheet's game logs (2018, 2019,
+2021-2023, 12,031 games through the same check):
+
+| Situation | Runs | z | Seasons on that side |
+|---|---|---|---|
+| A day game after a night game | allowed −1.0% | −1.1 | 4 of 5 |
+| 2+ time zones east, no day off | scored −3.9% | −0.8 | 3 of 5 |
+| 2+ time zones west, no day off | scored −3.5% | −1.0 | 4 of 5 |
+| 1,500+ miles, no day off | scored −5.8% | −1.7 | 5 of 5 |
+| The 13th+ day in a row | scored +2.4% | +1.4 | 3 of 5 |
+| A getaway day | allowed −1.3% | −1.1 | 5 of 5 |
+| The second game of a doubleheader | scored −2.2% | −0.6 | 3 of 4 |
+| The first home game after a 6+ game trip | allowed +3.0% | +1.6 | 5 of 5 |
+
+Nothing clears the bar. The long trip and the homecoming are the two to
+watch; the box's run adds 2024 and 2025. The doubleheader's second game
+cleared it only while 2021's seven-inning doubleheaders were counted (0.80
+of the runs that season); games scheduled short of nine innings are
+skipped.
 
 ### Team Aggression & the Stolen Base Engine
 **Team aggression:** stolen-base attempt rate, running-game aggressiveness,

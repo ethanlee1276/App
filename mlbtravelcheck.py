@@ -44,8 +44,18 @@ THE MARKET PART. Where the box stored a closing total (the `games` table's
 MLB rows), the games carrying a situation are compared with the close: if
 the runs move and the close moved with them, the market already prices it.
 
-Run on the box: ``python3 mlbtravelcheck.py`` (default: 2023 to the latest
-season). ``--files a.json b.json`` reads saved schedule payloads instead.
+THE FIRST READ (2026-11-05, off the box): five seasons of Retrosheet game
+logs (2018, 2019, 2021-2023; Chadwick Bureau's copy on GitHub) through this
+same check, 12,031 games. Nothing cleared the bar. The closest: 1,500+ miles
+without a day off scored 5.8% fewer runs (z -1.7, all five seasons), and the
+first home game after a long road trip allowed 3.0% more (z +1.6, all five).
+The second game of a doubleheader cleared it only while 2021's seven-inning
+doubleheaders were in (0.80 that season); a game scheduled short of nine
+innings is skipped now. A day game after a night game: -1.0%, z -1.1.
+
+Run on the box: ``python3 mlbtravelcheck.py`` (default: 2018 to the latest
+season, 2020's sixty games left out). ``--files a.json b.json`` reads saved
+schedule payloads instead.
 """
 from __future__ import annotations
 
@@ -130,6 +140,12 @@ def games_from(payload: dict) -> list[dict]:
         for g in day.get("games") or []:
             st = g.get("status") or {}
             if st.get("abstractGameState") != "Final" or (st.get("codedGameState") or "") in ("D", "C"):
+                continue
+            # A game scheduled short of nine innings (2020-21's seven-inning
+            # doubleheaders) is not the same game: it would read as fewer runs
+            # in whatever situation it falls in (the second game of a
+            # doubleheader read 0.80 in 2021 for that reason alone).
+            if int(g.get("scheduledInnings") or 9) != 9:
                 continue
             t = g.get("teams") or {}
             h, a = t.get("home") or {}, t.get("away") or {}
@@ -379,10 +395,17 @@ def run(payloads: dict, db_path: str | None = None, say=print) -> dict:
     return out
 
 
+def default_seasons(last: int) -> list[int]:
+    """2018 to ``last``, 2020 left out: sixty games, no crowds, a schedule
+    built to avoid travel, so it measures none of this."""
+    return [s for s in range(2018, last + 1) if s != 2020]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--seasons", type=int, nargs="*", default=None,
-                    help="regular seasons to read (default: 2023 to the latest finished one)")
+                    help="regular seasons to read (default: 2018 to the latest finished one, "
+                         "2020 left out)")
     ap.add_argument("--files", nargs="*", default=None, help="saved schedule payloads, one per season")
     ap.add_argument("--db", default=str(ROOT / "data" / "history.db"),
                     help="the history file, opened read-only, for the closing totals")
@@ -396,7 +419,7 @@ def main(argv=None) -> int:
     else:
         today = _dt.date.today()
         last = today.year if today.month >= 10 else today.year - 1
-        for season in (args.seasons or list(range(2023, last + 1))):
+        for season in (args.seasons or default_seasons(last)):
             try:
                 payloads[season] = fetch(season)
             except Exception as exc:                                  # noqa: BLE001

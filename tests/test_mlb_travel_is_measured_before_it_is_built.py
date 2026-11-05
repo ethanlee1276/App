@@ -19,6 +19,9 @@ pooled, and the same side in three or more seasons. What holds:
     one season alone is never enough;
   * the market part reads the box's stored closing totals read-only, and
     the check writes nothing anywhere;
+  * a game scheduled short of nine innings (2021's seven-inning
+    doubleheaders) is not read: it made the second game of a doubleheader
+    look like it held; the box reads 2018 on, 2020's sixty games left out;
   * the runbook, the catch-up and RUN_NEXT carry the command.
 
 Run directly: `python3 tests/test_mlb_travel_is_measured_before_it_is_built.py`
@@ -219,6 +222,20 @@ def test_saved_payloads_run_offline_and_an_empty_read_says_so():
     with contextlib.redirect_stdout(buf):
         rc = T.main(["--files", str(e), "--db", ""])
     assert rc == 1 and "nothing to measure" in buf.getvalue()
+
+
+def test_a_seven_inning_game_is_not_read_and_the_box_reads_2018_on_without_2020():
+    d = lambda n: (dt.date(2021, 6, 1) + dt.timedelta(days=n)).isoformat()   # noqa: E731
+    g1 = _game(1, d(0), "NYY", "BOS", 3, 2, game_number=1)
+    g2 = _game(2, d(0), "NYY", "BOS", 1, 0, game_number=2)
+    nine = _game(3, d(1), "NYY", "BOS", 5, 4)
+    g1["scheduledInnings"] = g2["scheduledInnings"] = 7
+    nine["scheduledInnings"] = 9
+    games = T.games_from(_payload([g1, g2, nine]))
+    assert [g["pk"] for g in games] == [3], games
+    assert [g["pk"] for g in T.games_from(_payload([_game(4, d(2), "NYY", "BOS", 2, 1)]))] == [4], \
+        "a payload without the field is a nine-inning game"
+    assert T.default_seasons(2025) == [2018, 2019, 2021, 2022, 2023, 2024, 2025]
 
 
 def test_the_check_is_read_only_and_names_no_one():
