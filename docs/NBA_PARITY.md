@@ -112,18 +112,22 @@ These are football feeds, and the NBA has nothing to match them yet:
 
 - **Next Gen Stats, FTN charting, PFR advanced stats** are football feeds.
   The basketball equivalent would be the NBA's own tracking numbers
-  (touches, drives, potential assists). **Not yet:** that would be a new
-  source, and it has to be measured before it moves a pick.
+  (touches, drives, potential assists). **Parked, your call** *(11-05)*:
+  `stats.nba.com` is the only source, its terms allow personal,
+  non-commercial use, and measuring it needs two seasons backfilled on the
+  box first (`docs/NBA_LAB.md`, the data hunt).
 - **The practice report and how honest each coach is.** **Not possible:**
   the NBA publishes injury statuses, not practice participation.
 - **The drive simulator, touchdown scenarios and red-zone chances.**
   **Not possible:** football only.
 - **Rookies translated from their college numbers.** **Not possible:** no
   college basketball data is stored.
-- **Player spots: revenge game, contract year, milestones.** **Not yet.**
-  The NFL's contracts come from nflverse, and nothing free covers the NBA.
-  A revenge game (facing a team he played for) could come from our own
-  history, but nobody has measured whether it matters.
+- **Player spots: revenge game, contract year, milestones.** The NFL's
+  contracts come from nflverse, and nothing free covers the NBA's. The
+  revenge game (facing a club he played for) was **measured** *(11-05)* on
+  the lab's two seasons: 232 such games, up in most markets against the
+  board, but nothing reaching two standard errors. Not built
+  (`docs/NBA_LAB.md`).
 
 ## Next, once the box has re-read last season
 

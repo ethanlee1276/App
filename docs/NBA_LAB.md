@@ -445,6 +445,17 @@ The same honesty the NFL's refusals get:
   favourite and a blowout, which the board's own spread prices and the lab
   held neutral. Under 0.35% everywhere. Not built.
 
+- **Facing a club he used to play for** (2026-11-05, the "revenge game").
+  232 player-games against a club he had played for earlier in the two
+  seasons (27 in 2024-25, 205 in 2025-26), the board's projection against
+  what he did, compared with every other game: points +0.12 ± 0.40,
+  rebounds +0.25 ± 0.16, assists +0.17 ± 0.13, threes -0.02 ± 0.08,
+  points + rebounds + assists +0.54 ± 0.51. The first meeting since the
+  move (122 games): rebounds +0.43 ± 0.23, PRA +0.92 ± 0.76. Up in most
+  markets, and the same side in both seasons for rebounds and assists,
+  but nothing reaches two standard errors, and two seasons is all there
+  is. Not built; worth reading again once a third season is stored.
+
 ## The calibration, fitted near the line and applied everywhere
 
 The NBA's stored corrections are fitted by the deep refit on the fitters'
@@ -788,6 +799,27 @@ board keeps the clubs' records. The board's own code, replayed on both
 seasons from a scratch history with the opening jumps stored, gives who
 scores first 0.6936 -> 0.6869 and 0.6881 -> 0.6830, and the actual
 scorer's whole chance 2.7586 -> 2.7509 and 2.7472 -> 2.7438 nats.
+
+## Every NBA source, and what each adds (the data hunt, 2026-11-05)
+
+Every source the board reads, the ones it could, and why the rest are not
+used. The build sandbox reaches only GitHub, so "reachable" below means
+from the box, where every feed the site uses is read.
+
+| Source | What it adds | Status |
+| --- | --- | --- |
+| `cdn.nba.com`: schedule, box scores, play-by-play | Minutes, every rate, shot volume, starters, the floor rebuilt from the substitutions (`engine/nba/stints`), first basket's opening shots | **Read** every night (unofficial; `docs/DATA_SOURCES.md` keeps the risk) |
+| ESPN's site API: scoreboard, game summary, injuries, rosters | Injury statuses, live scores, the opening tip's two jumpers | **Read** (unofficial) |
+| The Odds API: props, alternate lines, game lines, Pinnacle | Every price, the market anchor (Pinnacle's no-vig price), the closes the record is graded against | **Read** (paid) |
+| Kalshi and Polymarket | The crowd's price on each game | **Read** (free); whether it knows anything the books do not waits for 200 finished games (`engine/crowdfit`) |
+| `shufinskiy/nba_data` on GitHub | Two full seasons of the league's own play-by-play, the lab's whole basis | **Research only**: the site does not read it |
+| BALLDONTLIE | Licensed scores, timed against ESPN's | **Built, asleep until a key** (runbook KP) |
+| The league's official injury report | The statuses at the league's own filing times | **Covered**: ESPN's feed carries the statuses the board reads; the confirmed five is the gap, and the KH probe asks whether the box can read it from the league's or ESPN's own feeds |
+| Referee assignments (`official.nba.com`, mornings) | Tonight's crew | **Not needed**: the crew's free-throw rate moved no player's numbers on a season it never saw (above) |
+| `pbpstats.com` | Possessions, on/off, lineups | **Nothing new**: built from the same play-by-play the box already downloads, which `engine/nba/stints` rebuilds itself |
+| Basketball-Reference | Box scores and advanced stats | **Not used**: its terms bar scraping, and every number it has comes from feeds the board already reads |
+| `stats.nba.com` player tracking: touches, drives, passes, potential assists | The one kind of data the lab could not get. Potential assists and touches might read assists and usage more steadily than the box score does | **Parked, your call**: not reachable from the build sandbox; NBA.com's terms of use allow personal, non-commercial use, the same question `cdn.nba.com` raises; and measuring it first needs two seasons of each game's tracking backfilled on the box (about 2,460 requests, spread out) |
+| Contracts, for contract-year spots | Who plays for his next deal | **Not possible** free: nflverse has the NFL's, and nothing free covers the NBA's |
 
 ## Next
 
