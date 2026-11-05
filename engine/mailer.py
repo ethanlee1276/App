@@ -190,6 +190,8 @@ SENDERS = {"engine.lifecycle": "Membership emails", "engine.trialnote": "Trial n
            # server.py's one send is the password reset (the service runs
            # launch.py, which imports it as `server`).
            "server": "Password resets"}
+#: Said once a process when the log cannot be written (`note_send`).
+_LOG_WARNED = False
 _EMAIL = re.compile(r"[^\s<>\"'@,;:()\[\]]+@[^\s<>\"'@,;:()\[\]]+")
 _LOG_LOCK = threading.Lock()
 
@@ -206,7 +208,11 @@ def _caller(depth: int = 2) -> str:
 
 
 def note_send(sender: str, ok: bool, why: str = "") -> None:
-    """Write one send's line. Never raises: counting must not cost the email."""
+    """Write one send's line. Never raises: counting must not cost the email.
+    A line that cannot be written would read on the desk like a quiet day,
+    so the first such failure in a process says so, once, in the service's
+    log."""
+    global _LOG_WARNED
     try:
         line = {"ts": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
                 "kind": SENDERS.get(sender, "Other"), "ok": bool(ok)}
@@ -222,8 +228,11 @@ def note_send(sender: str, ok: bool, why: str = "") -> None:
                 pass
             with f.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(line) + "\n")
-    except Exception:                                        # noqa: BLE001
-        pass
+    except Exception as exc:                                 # noqa: BLE001
+        if not _LOG_WARNED:
+            _LOG_WARNED = True
+            print(f"⚠️  mail log not written ({type(exc).__name__}: {exc}): the owner's desk undercounts emails",
+                  file=sys.stderr)
 
 
 def send(to: str, subject: str, text: str, html: str = "") -> None:

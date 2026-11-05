@@ -146,6 +146,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # must never cost the request it describes. It returns None either
         # way, so there is no value for a quiet day to be confused with.
         "event",
+        # THE MAIL LOG (engine/mailer.note_send, 2026-11-05), caught by this
+        # sweep the hour it was written. A lost line must never cost the
+        # email; but a missing line reads on the owner's desk like a quiet
+        # day, so the first failure in a process prints "mail log not
+        # written (<error>)" to the service's log, which no quiet day does.
+        "note_send",
         # THE JOURNAL'S DROP DIARY (ledger._insert_bet, audit A2-5): the
         # INSERT itself runs outside the guard and raises as it always did;
         # only the note about a refused re-quote is swallowed, and the
