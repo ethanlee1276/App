@@ -171,11 +171,18 @@ def test_the_recency_windows_do_not_double_count_the_last_five_games():
     assert got < (0.70 * recent + 0.30 * older), "last five counted twice"
 
 
-def test_the_nba_keeps_its_own_recency_weights():
+def test_both_leagues_read_the_weights_their_own_seasons_chose():
+    """The NBA's were measured on its seasons (2026-11-04); the WNBA's spec
+    said 0.40/0.30/0.20, and six WNBA seasons replayed through the board
+    (2026-11-05, docs/WNBA_LAB.md) read the NBA's measured weights better
+    in every one, minutes and points both."""
     assert hoops.NBA.recency_weights == (0.60, 0.25, 0.15)      # measured 2026-11-04
-    assert hoops.WNBA.recency_weights == (0.40, 0.30, 0.20)
+    assert hoops.WNBA.recency_weights == (0.60, 0.25, 0.15)     # measured 2026-11-05
+    from dataclasses import replace
     mins = [40.0] * 5 + [20.0] * 5 + [10.0] * 10
-    assert M.base_minutes(mins, hoops.NBA) != M.base_minutes(mins, hoops.WNBA)
+    spec = replace(hoops.WNBA, recency_weights=(0.40, 0.30, 0.20))
+    assert M.base_minutes(mins, hoops.WNBA) > M.base_minutes(mins, spec), \
+        "a man whose newest five ran high reads higher than the spec's weights read him"
 
 
 # --- §8 the grade -----------------------------------------------------------

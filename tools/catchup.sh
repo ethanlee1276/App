@@ -1182,6 +1182,10 @@ SH
 run KI "NBA first basket: the opening tips stored, and how the board reads them" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -c "import datetime; from engine import db, firstbasket as fb; t = fb.read(db.connect(), fb.season_of(datetime.date.today().isoformat()))['tip']; print('tips', t['games'], 'read by', t['source'] or 'nothing yet', 'agree', t['agree'])"
 SH
+run KL "Hockey's crowd prices: which venues' NHL markets are real, and the board's census" 300 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 crowdprobe.py nhl nba wnba
+cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine import gate; d = json.load(open(gate.board_source('web/data/nhl.json'))); print(d.get('crowd_census'), d.get('polymarket_tags'))"
+SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('
 curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d.get('players', []) if r.get('position') == 'DEF'))"

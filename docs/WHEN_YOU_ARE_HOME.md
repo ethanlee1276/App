@@ -9324,6 +9324,39 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KL. Hockey's games get the crowd's price, and the WNBA reads what its
+own seasons measured** (steps 395 and 397; one read-only check after the
+next NHL build; you, 2026-11-05: "Go through ... pollymarkwt ... and wnba
+... make sure we have all the tools and data"). The all-sports audit
+(`docs/ALL_SPORTS_AUDIT_2026-11-05.md`) found two things:
+
+- **Hockey never had a prediction-market price.** The NHL board has
+  called the crowd hook since it was built. The hook asked Polymarket
+  and Kalshi for a league neither reader listed, so no hockey game ever
+  carried their price. The game report had no market section for hockey,
+  and the crowd study had no NHL rows. Both readers list the NHL now.
+  Kalshi's NHL spread and total series are candidates, like every other
+  league's before the probe confirmed them, so they are not wired in yet.
+- **The WNBA reads three of the NBA's measured minutes pieces.** These
+  are the starting five's news, his first game back, and the weights on
+  his newest games. They were measured on six WNBA seasons of box
+  scores (`docs/WNBA_LAB.md`), and each made minutes and points better
+  in every season. Nothing to run: the WNBA plays again in May.
+
+The check, read-only (the probe reads both venues' public APIs and writes
+nothing; the second line reads the NHL board's members' copy):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 crowdprobe.py nhl nba wnba
+cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine import gate; d = json.load(open(gate.board_source('web/data/nhl.json'))); print(d.get('crowd_census'), d.get('polymarket_tags'))"
+```
+
+The probe's NHL block should show Polymarket game moneylines (and
+spreads and totals), and how many markets `KXNHLSPREAD` and `KXNHLTOTAL`
+hold. Paste that back and I wire in whichever are real. After a build
+with hockey games, the second line's census should count `polymarket`
+and `kalshi` games above zero.
+
 **KK. The NHL model measured on three seasons, and back-to-backs on both
 sides** (step 396; one read-only check, a few minutes; you, 2026-11-05: "Go
 through nfl and CFB and nba and mlb and wnba and nhl ... make sure we have

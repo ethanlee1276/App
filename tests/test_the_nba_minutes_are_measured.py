@@ -63,11 +63,13 @@ def test_the_base_and_the_bench_correction():
     assert starter == 25.0 and bench == 24.5
 
 
-def test_the_wnba_inherits_the_measured_haircuts_and_keeps_its_own_weights():
+def test_the_wnba_inherits_the_measured_haircuts_and_its_seasons_chose_the_weights():
     W = hoops.WNBA
     assert W.rest_mult == NBA.rest_mult and W.blowout_starter == NBA.blowout_starter
     assert W.blowout_bench == NBA.blowout_bench and W.role_minutes_mult == NBA.role_minutes_mult
-    assert W.recency_weights == (0.40, 0.30, 0.20)
+    # Measured on six WNBA seasons (docs/WNBA_LAB.md): the NBA's weights read
+    # minutes and points better in every one than the spec's 0.40/0.30/0.20.
+    assert W.recency_weights == (0.60, 0.25, 0.15)
 
 
 def test_the_spec_is_kept_for_the_record_not_used():

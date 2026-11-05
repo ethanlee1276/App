@@ -351,14 +351,27 @@ WNBA = replace(
     season_games=44,
     personal_fouls=5,
     vacancy_cap_over_high=round(NBA.vacancy_cap_over_high * _MIN_SCALE, 2),
-    # §5 — last 5 · games 6-10 · rest of season, nested.
-    recency_weights=(0.40, 0.30, 0.20),
-    # The rotation's news (a role jump, his first games back, a regular's
-    # return) was measured on the NBA's seasons only: off here until the
-    # WNBA's own are.
-    role_jump_ratio=0.0, role_jump_weight=0.0, back_mult=(), second_back_mult=1.0,
+    # MEASURED ON THE WNBA'S OWN SEASONS (2026-11-05, docs/WNBA_LAB.md):
+    # six regular seasons (2021-2026) of the league's public box scores
+    # replayed through the board's own projection (engine/nba/pipeline.
+    # project, nbarules' rows), every one out of sample for values fitted on
+    # the NBA, each on its own season-wide level (the calibration owns the
+    # level). Three of the NBA's measured pieces made minutes AND points
+    # better in all six seasons, each on top of the one before:
+    #   * THE STARTING FIVE'S NEWS (STARTER_NEWS_NBA, in minutes as fitted;
+    #     scaled to a 40-minute game it read worse in every season);
+    #   * HIS FIRST GAME BACK (the NBA's table);
+    #   * THE BASE READ OFF HIS NEWEST GAMES HARDER: the NBA's measured
+    #     0.60/0.25/0.15 (the spec's §5 0.40/0.30/0.20 read him slow).
+    # Together: minutes error 2.6-3.3% lower in every season, points
+    # 0.2-0.5%. The rest stay off: a role that jumped made points worse in
+    # 2026 (and in 2021 on top of the three); the second game back and a
+    # regular's return went both ways season to season. The switches are
+    # the NBA's (engine/nba/switches: "rotation", "starters").
+    recency_weights=(0.60, 0.25, 0.15),
+    role_jump_ratio=0.0, role_jump_weight=0.0, back_mult=NBA.back_mult, second_back_mult=1.0,
     return_share=0.0,
-    starter_news={},
+    starter_news=STARTER_NEWS_NBA,
     market_tier=WNBA_TIERS,
     tier_min_edge=WNBA_TIER_MIN_EDGE,
     grade_weights=WNBA_GRADE_WEIGHTS,

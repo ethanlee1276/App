@@ -12,7 +12,7 @@ each season held out. Pinned here:
     starting five ruled out tonight, and the returning regulars who started
     before they sat — for a bench man and for a starter;
   * the NBA's values move the minutes through the vacancy's slot, caps
-    included, and the card says why; the WNBA has none, the switch
+    included, and the card says why; the WNBA measured the same values, the switch
     (engine/nba/switches ``starters``, QB_NBA_STARTERS) turns it off;
   * the build records who started each game (`player_history`), reads each
     club's news from the injury report and the returning regulars
@@ -76,9 +76,11 @@ def test_the_six_terms_for_a_bench_man_and_a_starter():
     assert S.share([True] * 3) == 1.0, "a short window reads what it has"
 
 
-def test_the_nbas_values_move_his_minutes_and_the_wnba_has_none():
+def test_the_nbas_values_move_his_minutes_and_the_wnba_measured_them_too():
     _fresh()
-    assert tuple(NBA.starter_news) == S.TERMS and WNBA.starter_news == {}
+    # The WNBA's own six seasons (docs/WNBA_LAB.md): the NBA's values, in
+    # minutes as fitted, made minutes and points better in every one.
+    assert tuple(NBA.starter_news) == S.TERMS and WNBA.starter_news == NBA.starter_news
     assert hoops.LeagueTuning(key="x", name="x").starter_news == {}, "off by default"
     c = NBA.starter_news
     assert c["bench_after_starts"] < 0 < c["bench_one_out"] < c["bench_two_out"] and c["fill_in_one_back"] < 0
@@ -90,7 +92,8 @@ def test_the_nbas_values_move_his_minutes_and_the_wnba_has_none():
     assert S.minutes(fill, 0, 1, NBA) == round(0.7 * c["start_after_bench"] + c["start_one_back"]
                                                + 0.7 * c["fill_in_one_back"], 2)
     assert S.minutes([True] * 10, 0, 0, NBA) == 0.0, "a settled starter with no news moves nothing"
-    assert S.minutes(back, 2, 0, WNBA) == 0.0 and S.minutes(None, 2, 1, NBA) == 0.0
+    assert S.minutes(back, 2, 0, WNBA) == S.minutes(back, 2, 0, NBA) and S.minutes(None, 2, 1, NBA) == 0.0
+    assert S.minutes(back, 2, 0, hoops.LeagueTuning(key="x", name="x")) == 0.0, "a league with no values"
 
 
 def test_the_switch_turns_it_off_and_a_verdict_decides_unset():
@@ -137,9 +140,11 @@ def test_the_projection_carries_it_and_the_card_says_so():
     # The vacancy's caps hold it: never past his recent high plus the cap.
     big = pipeline.project(_prop(starts=[False] * 20, five_out=4, vacancy_minutes=30.0), NBA)
     assert big["proj_min"] <= 24.0 + NBA.vacancy_cap_over_high + 1e-9
-    # Unknown starts, the WNBA, or the switch off: exactly as before.
+    # Unknown starts, a league with no values, or the switch off: exactly as before.
     assert pipeline.project(_prop(five_out=3, five_back=2), NBA)["proj_min"] == plain["proj_min"]
-    assert pipeline.project(_prop(starts=starts), WNBA)["proj_min"] == pipeline.project(_prop(), WNBA)["proj_min"]
+    from dataclasses import replace as _replace
+    bare = _replace(WNBA, starter_news={})
+    assert pipeline.project(_prop(starts=starts), bare)["proj_min"] == pipeline.project(_prop(), bare)["proj_min"]
     os.environ["QB_NBA_STARTERS"] = "0"
     try:
         assert pipeline.project(_prop(starts=starts), NBA)["proj_min"] == plain["proj_min"]

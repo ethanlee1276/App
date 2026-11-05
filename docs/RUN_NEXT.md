@@ -6,7 +6,10 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-05, after the NHL model was measured on three seasons
+Last updated 2026-11-05, after hockey's games started getting the crowd's
+price and the WNBA started reading three minutes pieces its own six
+seasons measured (step KL: item 1r, one read-only check after an NHL
+build), after the NHL model was measured on three seasons
 of box scores and back-to-backs started counting on both sides (step KK:
 item 1q, one read-only check), after closing lines started coming from the
 sportsbooks' number, never an exchange's ladder rung (step KJ: item 1p, a
@@ -517,6 +520,20 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 ```
 
 The same two with `--sport nfl` and `--sport cfb` re-read football's.
+
+## 1r. After the next NHL build: hockey's crowd prices (step KL)
+
+No hockey game ever had a Polymarket or Kalshi price. The NHL board asked
+for one, but neither reader listed the league. Both do now. This
+read-only check says which of Kalshi's NHL spread and total markets are
+real, and whether the board's census found games:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 crowdprobe.py nhl nba wnba
+cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine import gate; d = json.load(open(gate.board_source('web/data/nhl.json'))); print(d.get('crowd_census'), d.get('polymarket_tags'))"
+```
+
+Paste it back; I wire in the series that are real.
 
 ## 1q. Any time after this push: the NHL lab, on the box's own games (step KK)
 

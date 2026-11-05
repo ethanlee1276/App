@@ -4,6 +4,18 @@
     {
       "date": "2026-11-05",
       "kind": "model",
+      "title": "WNBA: three minutes pieces measured on the WNBA's own six seasons",
+      "body": "The WNBA board runs the NBA's code with its own settings, and the NBA's measured minutes pieces were switched off for it until WNBA games said so. We replayed six WNBA regular seasons (2021 to 2026) through the board's own projection. Three pieces made minutes and points better in every one of the six. The first is the starting five's news: before the tip, who of a club's last starting five is ruled out, who is back, and each player's own starts. The second is a player's first game back after missing games. The third weights his newest games more heavily. Together they cut the minutes error by about 3% in every season. The role jump, the second game back and a regular's return each made points worse in at least one season, so they stay off for the WNBA. The board plays again in May."
+    },
+    {
+      "date": "2026-11-05",
+      "kind": "ship",
+      "title": "Hockey's games get the prediction markets' price",
+      "body": "Every game page shows the win chance at each prediction market beside the sportsbooks, and every build records it before the game. Hockey asked both markets for its games and never got an answer, because neither reader listed the NHL. Both do now, so an NHL game page shows Polymarket's and Kalshi's price when they list the game. The pregame record that measures whether the crowd knows more than the books starts counting hockey games too."
+    },
+    {
+      "date": "2026-11-05",
+      "kind": "model",
       "title": "NHL: the model measured on three seasons, and back-to-backs priced on both sides",
       "body": "Every NHL setting had been a first guess. We replayed three full seasons of NHL box scores through the board's own model, each setting chosen on one season and judged on the other, and changed only what held up both ways. A skater's scoring rate now reads a longer stretch of his games, and his ice time a shorter one: every prop market got better on the season the fit never saw. A team's strength is believed more slowly, and moneyline, puck line and totals all improved in both seasons. Back-to-backs now count on both sides: a team on its second night scores about 7% fewer goals than the model expected, and its rested opponent about 4% more. The old adjustment covered only the tired side, at 3%. Each skater's number moves with it, by three-quarters of what two seasons measured: fewer shots and goals for the tired side, more against it. His card says so. When the probable goalie started last night, he starts again only 9% of the time. The card now names the goalie who usually takes that night, who starts 78% of the time, and still no saves bet rides on him."
     },

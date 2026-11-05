@@ -45,6 +45,7 @@ SPORT_HINTS = {
     "wnba": ("WNBA",),
     "cfb": ("NCAAF", "CFB"),
     "ufc": ("UFC", "MMA"),
+    "nhl": ("NHL", "HOCKEY"),
 }
 
 #: Candidate game-winner series per sport, fetched DIRECTLY. Found on
@@ -62,6 +63,10 @@ SPORT_SERIES = {
     "nba": ("KXNBAGAME", "KXNBA"),
     "wnba": ("KXWNBAGAME", "KXWNBA"),
     "cfb": ("KXNCAAFGAME",),
+    # 2026-11-05 (the all-sports audit): the NHL board calls the crowd hook
+    # and no series was listed for it. A candidate, like every name here:
+    # the build's per-series report says whether it is real.
+    "nhl": ("KXNHLGAME", "KXNHL"),
 }
 
 

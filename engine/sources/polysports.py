@@ -46,6 +46,12 @@ SPORT_TAGS = {
     "mlb": ("mlb",),
     "nba": ("nba",),
     "wnba": ("wnba",),
+    # 2026-11-05 (the all-sports audit): the NHL board has called the crowd
+    # hook since it was built (nhl_build's after-hooks), and asked for a
+    # league this list did not have, so no hockey game ever carried a
+    # Polymarket price. A candidate like the rest: the build's report says
+    # whether the tag and the /sports series are real.
+    "nhl": ("nhl",),
 }
 
 #: A short timeout: this runs inside a board build that the launcher
@@ -54,7 +60,7 @@ TIMEOUT_S = 12
 
 #: Market words that mean "not the moneyline".
 NOT_ML = re.compile(r"\b(spread|o/u|over|under|total|points|handicap|draw|1st|first|half|quarter|inning|"
-                    r"props?|mvp|yards|touchdowns?|runs?)\b", re.I)
+                    r"props?|mvp|yards|touchdowns?|runs?|goals?|puck|period)\b", re.I)
 
 
 def _jlist(v):
@@ -233,7 +239,7 @@ def parse_lines(ev: dict) -> list[dict]:
 
 #: Polymarket's own league names on its /sports list, per league of ours.
 SPORT_KEYS = {"nfl": ("nfl",), "cfb": ("cfb", "ncaaf"), "mlb": ("mlb",),
-              "nba": ("nba",), "wnba": ("wnba",)}
+              "nba": ("nba",), "wnba": ("wnba",), "nhl": ("nhl",)}
 
 
 def fetch_series_ids(ttl: int = 86400) -> dict:

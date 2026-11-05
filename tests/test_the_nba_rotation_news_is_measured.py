@@ -19,7 +19,7 @@ kept only if minutes AND points error fell in both):
   * a REGULAR'S RETURN (24+ minutes, back from two or more missed) takes a
     quarter of his minutes back from the rest, by their base minutes.
 
-The WNBA keeps all three off: measured on the NBA only.
+The WNBA keeps two of the three off: its own six seasons held only his first game back.
 
 Run directly: `python3 tests/test_the_nba_rotation_news_is_measured.py`
 """
@@ -42,7 +42,11 @@ def test_the_measured_values_are_the_nbas_and_the_wnba_keeps_them_off():
     assert (NBA.role_jump_ratio, NBA.role_jump_weight) == (1.20, 0.40)
     assert NBA.back_mult == ((1, 0.96), (4, 0.92), (float("inf"), 0.84))
     assert NBA.second_back_mult == 0.97 and NBA.return_share == 0.25
-    assert (WNBA.role_jump_weight, WNBA.back_mult, WNBA.second_back_mult, WNBA.return_share) == (0.0, (), 1.0, 0.0)
+    # The WNBA's own six seasons (docs/WNBA_LAB.md): his first game back held
+    # in every one; the role jump, the second game back and a regular's
+    # return did not, and stay off there.
+    assert (WNBA.role_jump_weight, WNBA.back_mult, WNBA.second_back_mult, WNBA.return_share) == \
+        (0.0, NBA.back_mult, 1.0, 0.0)
     spec = hoops.LeagueTuning(key="x", name="x")
     assert (spec.role_jump_weight, spec.back_mult, spec.return_share) == (0.0, (), 0.0), "off by default"
 
@@ -63,7 +67,8 @@ def test_his_first_and_second_games_back_play_light():
     assert M.back_multiplier(0, True) == 0.97 and M.back_multiplier(3, True) == 0.92, \
         "a first game back reads its own table, not the second's"
     assert M.back_multiplier(None) == 1.0 and M.back_multiplier("x") == 1.0
-    assert M.back_multiplier(6, tune=WNBA) == 1.0 and M.back_multiplier(0, True, WNBA) == 1.0
+    assert M.back_multiplier(6, tune=WNBA) == 0.84 and M.back_multiplier(0, True, WNBA) == 1.0, \
+        "the WNBA's first game back is measured; its second is not"
     # After the caps, so a return can never lift him past them.
     assert M.project_minutes(30.0, 0.0, True, False, "1day") == 30.0
     assert M.project_minutes(30.0, 0.0, True, False, "1day", missed_games=3) == 27.6
