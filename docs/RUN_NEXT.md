@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after the weekly refit's walks got faster, its
+Last updated 2026-11-05, after Rocket Radar's record started following
+every call by its own price lookup, counted from 6 November (nothing to
+run; the Meme Coins page's record says so), after the weekly refit's walks got faster, its
 recency dial started keeping each market it fits, and the NFL and college
 fits started learning on the model's raw chance (item 1g, nothing new to
 run), after MLB's travel and rest got its first read off
