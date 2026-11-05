@@ -6,7 +6,10 @@ them top to bottom, and paste back anything that prints an error or looks
 off. When one is done it moves to docs/WHEN_YOU_ARE_HOME.md's history, where
 every command already lives (the letters below are its steps).
 
-Last updated 2026-11-05, after the NBA board started reading who starts
+Last updated 2026-11-05, after NBA first basket started sharing each
+team's first basket among tonight's likely five, and a probe asks whether
+the box can read the confirmed five (step KH: item 1n, one read-only
+command half an hour before a tip), after the NBA board started reading who starts
 tonight before the tip (step KG: nothing to run, item 1m shows the box's
 own verdict once the weekly refit has run it), and on 2026-11-04 after
 the NBA's alternate lines got their own
@@ -458,6 +461,21 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KG 2>&1 | tee /tmp/kg.txt
 `starters on ready ...` is what it should say. If it says `off` or
 `not yet`, paste it back with JZ's table (item 1k), which shows the rule's
 own column, `the starting five`, season by season.
+
+## 1n. Any NBA night, about 30 minutes before the first tip: can the box read the confirmed five? (step KH)
+
+Read-only, under two minutes, stores nothing. The biggest NBA gain left is
+tonight's confirmed starting five (5.5-6.0% off the minutes error), and
+neither ESPN's game summary nor the league's daily lineups file answers
+from where I build. This asks both from the box:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KH 2>&1 | tee /tmp/kh.txt
+```
+
+Paste back what it prints. Also from this push, nothing to run: NBA first
+basket now shares each team's first basket among tonight's likely starting
+five by opening shots per start (step KH's first paragraph).
 
 ## 2. Any time after this push: the parlay study once more (steps JF, JD)
 

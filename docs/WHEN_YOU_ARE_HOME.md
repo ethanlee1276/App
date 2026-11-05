@@ -9324,6 +9324,39 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KH. NBA first basket reads tonight's five, and can the box read the
+confirmed five?** (step 385; one read-only command, any NBA night about
+half an hour before the first tip; you, 2026-11-04: "keep going on the NBA
+model"). First basket almost always goes to one of the five on the floor
+at the tip, and our first-basket chances counted each player's opening
+shots over the season, which mixes how often he starts with how much he
+shoots when he does: the stars were overstated (our 34% shares scored 25%
+of the time) and a new starter barely counted. The board now reads
+tonight's likely five before the tip (his club's last starting five less
+anyone ruled out, a starter coming back, filled to five) and shares the
+first basket among them by opening shots per start. On two full seasons,
+each season's settings chosen on the other, the chances were sharper in
+both (Brier 0.858 to 0.827 and 0.856 to 0.821) and now match how often
+players actually scored first; the board's own code replayed on both
+seasons gives the same numbers (docs/NBA_LAB.md, "First basket, tonight's
+five"). Nothing to run for that; it is on from this push.
+
+The biggest NBA gain left is the CONFIRMED five, posted about half an hour
+before each tip: 5.5-6.0% off the minutes error, 0.9-1.2% off points, and
+more off first basket. Neither ESPN's game summary nor the league's daily
+lineups file answers from where I build, so this asks both from the box.
+It stores nothing; run it about 30 minutes before the night's first tip
+(and, if you like, once more early in the afternoon to see "Expected"):
+
+```
+cd /srv/qellys && sudo -u qellys python3 tools/nbafive_probe.py
+```
+
+Paste back what it prints. Each game shows how long before the tip it
+asked and how many starters ESPN flags per club; the last part is the
+league's file (HTTP 200 with "Confirmed" counts is the one we want; a 403
+means the league blocks the box, as its CDN does).
+
 **KG. NBA: who starts tonight moves his minutes** (step 382; nothing to
 run; you, 2026-11-04: "keep going on the NBA model"). The board reads a
 man's minutes from his last twenty games and his role from his newest
