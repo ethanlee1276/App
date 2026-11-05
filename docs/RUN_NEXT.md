@@ -10,7 +10,11 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after Rocket Radar's record started following
+Last updated 2026-11-05, after your desk's three alerts: the backup now says why its
+offsite copy failed (step KO: item 0b, one read-only check after the next
+04:00 UTC run), the Lab's run fits its hour (item 1f, nothing to run), and
+the refit's alert reads each sport's real last fit (item 1g, nothing to
+run), after Rocket Radar's record started following
 every call by its own price lookup, counted from 6 November (nothing to
 run; the Meme Coins page's record says so), after the weekly refit's walks got faster, its
 recency dial started keeping each market it fits, and the NFL and college
@@ -193,6 +197,27 @@ Paste back both. Right now the nightly skips history.db because the disk
 is too full for its copy; after this, the next night's log should say
 `backed up: data/history.db`.
 
+## 0b. After the next 04:00 UTC backup: why the offsite copy failed (step KO)
+
+Your desk said at 12:34 on 5 November that last night's backup did not
+reach the offsite copy. The copies on the box were made; the upload to
+Backblaze failed, and the reason was only in the backup log, where the JT
+check never printed it. The backup now keeps the tool's last error line in
+its note, the desk's Backups card shows it under **What it said**, and the
+alert on your phone quotes it. The 04:00 UTC run after this push is the
+first to keep it. Read-only, any time after that run:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KO 2>&1 | tee /tmp/ko.txt
+```
+
+Its first line is the note (`'offsite': 'ok'`, or `'failed'` with its
+`'why'`), then the offsite part of the last run's log. Step KO in the
+runbook says what each usual reason means (the cap, an expired key, a
+missing bucket, a dropped connection) and what to change. Paste it back
+either way. Until then item 0's cleanup waits: it needs a night that ends
+`offsite copy updated`.
+
 ## 1. An hour after the restart, or tomorrow: the notices went out, and alerts on your phone (steps JH, JJ)
 
 The notices you armed (JJ, Done above) go out from the push loop between
@@ -282,6 +307,21 @@ Before 6 December the college line reads `False [] None` — that's right.
 
 ## 1f. The day after tomorrow: the Lab's first pieces, and why (step JP)
 
+**Update, 5 November, evening, the whole run (nothing for you to paste):**
+your desk said the Lab's numbers were 37 days old in six sports. MLB and
+the NFL had limits of their own; nothing kept the run as a whole inside
+its hour, and the NBA and WNBA had no limit at all. The run now has 50
+minutes. The first sport always starts; after it, a sport starts only with
+six minutes left, and each is handed what is left less five minutes for
+its game lines and its publish, never more than its own limit. The NBA and
+WNBA stop between markets at the pace the market before took (25 minutes
+at most), and a market not reached keeps last week's numbers on the page,
+dated. A sport not started is not counted as tried, so it is first in the
+next run, and the run's last line names it (`lab: stopped at the run's
+time limit (N min left): ... first in the next run`). The check below is
+the same: each night now publishes the sports that fit in its hour, and
+the rest go first the night after.
+
 **Update, 5 November (read off the public heartbeat, nothing for you to
 paste):** last night's run was cut off after 99 minutes, still on its
 first sport (`lab: replaying nfl (1 of 6)`), so nothing published again.
@@ -331,6 +371,17 @@ that refresh (its log says `CFB results not stored this build`). If `cfb`
 shows up there again, paste the line.
 
 ## 1g. Thursday: the models' weekly refit reaches the NFL (step JQ)
+
+**Update, 5 November, late (nothing for you to paste):** your desk said
+"The deep refit has no finished college football fit on record", and the
+same for the NFL, MLB, the NBA and the WNBA. The round's file only knows
+the fits finished since the round began on 4 November; the fits before it
+are in the models' own files, each stamped with when it was fitted. The
+desk now reads those too: a sport's last fit is the older of its recency
+dial's newest and its player memory's newest (a run cut off between the
+two does not pass for a finished one). So the alert now says how old each
+sport's fit really is, `The deep refit has not fitted the NFL in N days`,
+and it goes away as the round reaches each sport.
 
 **Update, 5 November, evening:** why the NFL kept running out of time, and
 two fixes, with nothing new to run. Replayed here on four NFL seasons, a

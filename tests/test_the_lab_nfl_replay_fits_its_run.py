@@ -138,7 +138,7 @@ def test_the_labs_nfl_section_passes_its_budget_and_says_which_weeks():
 def test_the_lab_builds_the_nfl_with_its_budget():
     import inspect
     src = inspect.getsource(lab.build_sport)
-    assert "budget_s=LAB_NFL_PROPS_BUDGET_S" in src
+    assert "budget_s=cap(LAB_NFL_PROPS_BUDGET_S)" in src
 
 
 if __name__ == "__main__":

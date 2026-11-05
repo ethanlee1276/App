@@ -181,7 +181,7 @@ def test_without_a_limit_nothing_changes_for_the_other_callers():
 
 def test_the_lab_builds_mlb_with_its_budget_and_each_sport_says_how_long():
     import inspect
-    assert "mlb_section(hconn, log=log, budget_s=LAB_MLB_PROPS_BUDGET_S)" in inspect.getsource(lab.build_sport)
+    assert "mlb_section(hconn, log=log, budget_s=cap(LAB_MLB_PROPS_BUDGET_S))" in inspect.getsource(lab.build_sport)
     assert 15 * 60 <= lab.LAB_MLB_PROPS_BUDGET_S <= 40 * 60 and lab.LAB_MLB_SEASONS == 2
     tmp = Path(tempfile.mkdtemp())
     logs = []

@@ -102,6 +102,38 @@ def test_the_refit_says_what_it_did_what_it_owes_and_where_the_time_ran_out():
     assert deep["last_done"] == {"nfl": None}, "the sports still owed, each with its last finished fit"
 
 
+def test_a_sport_the_round_file_never_finished_reads_its_fit_from_the_stores():
+    """The desk on 5 November: five sports "none on record", the round file
+    being new and the fits before it in the stores. The stores' own dates
+    stand in: the older of the dial's newest and the memory's, the
+    journal's memory fits left out, the round file's date where later."""
+    d = Path(tempfile.mkdtemp())
+    form, mem = d / "formfit.json", d / "playerfit.json"
+    form.write_text(json.dumps({
+        "nfl:receiving_yards": {"sport": "nfl", "fitted": "2026-08-27T03:10:00"},
+        "nfl:receptions": {"sport": "nfl", "fitted": "2026-11-05T11:20:00"},   # a cut-off run's first market
+        "mlb:hits": {"sport": "mlb", "fitted": "2026-10-01T02:00:00"}}), encoding="utf-8")
+    mem.write_text(json.dumps({
+        "nfl:receiving_yards": {"sport": "nfl", "fitted": "2026-08-27T03:40:00"},
+        "nba:pts": {"sport": "nba", "fitted": "2026-10-20T05:00:00"},
+        "wnba:pts": {"sport": "wnba", "basis": "journal-mae", "fitted": "2026-11-04T05:00:00"},
+        "mlb:hits": {"sport": "mlb", "fitted": "2026-10-01T02:30:00"}}), encoding="utf-8")
+    assert OD.fit_dates([form, mem]) == {"nfl": "2026-08-27", "mlb": "2026-10-01", "nba": "2026-10-20"}, \
+        "the older of the two stores' newest; basketball has no dial; the journal's fits are not the refit's"
+    deep = dict(DEEP, left=["nfl", "nba", "wnba", "mlb", "touchdowns"])
+    deep["pieces"] = {"mlb": {"done": "2026-10-29"}, "nfl": DEEP["pieces"]["nfl"]}
+    p = _files(deep=deep)
+    w = OD.weekly(now=NOW, jobs=JOBS, deep_path=p["deep"], lab_path=p["lab"], attempts_path=p["tried"],
+                  fit_paths=[form, mem])
+    assert w["deep"]["last_done"] == {"nfl": "2026-08-27", "nba": "2026-10-20", "wnba": None,
+                                      "mlb": "2026-10-29"}, w["deep"]["last_done"]
+    got = _alerts(w)
+    assert got and got[0]["title"] == "The deep refit has no finished WNBA fit on record", got
+    assert "NFL (70 days)" in got[0]["body"] and "NBA (16 days)" in got[0]["body"], got[0]["body"]
+    assert "none on record" not in got[0]["body"].replace("WNBA (none on record)", ""), got[0]["body"]
+    assert OD.fit_dates([d / "missing.json"]) == {}
+
+
 def _alerts(weekly):
     from engine import owneralerts as OA
     return [p for p in OA.problems({"weekly": weekly}, now=NOW) if p["key"] in ("lab", "deepfit")]

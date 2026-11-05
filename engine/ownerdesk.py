@@ -409,6 +409,10 @@ def backups(now: float | None = None, nightly: Path | None = None, weekly: Path 
         try:
             run = json.loads((d / "last_run.json").read_text(encoding="utf-8"))
             out["run"] = {"age_h": round((t - float(run["at"])) / 3600, 1), "offsite": str(run.get("offsite") or "")}
+            # Why a failed offsite leg failed: the tool's own last error line,
+            # cleaned by the script (deploy/backup.sh note_run).
+            if run.get("why"):
+                out["run"]["why"] = str(run["why"])[:240]
         except (OSError, ValueError, KeyError, TypeError):
             pass
     try:
@@ -1081,9 +1085,44 @@ def _json_cached(path) -> dict:
     return d
 
 
+#: THE FIT STORES' OWN DATES (2026-11-05, the owner's desk: "The deep refit
+#: has no finished college football fit on record", five sports "none on
+#: record"). The round file names a sport's last finished fit only from the
+#: rounds run in pieces, since 4 November; the fits before it are in the
+#: stores, each entry stamped with when it was fitted. The recency dial and
+#: the player memory are fitted per sport by the refit (engine/deepfit runs
+#: formfit.py and playerfit.py; `launch.py --relearn` runs the same two by
+#: hand). The journal's own memory fits, in the same store, say so
+#: (`basis: journal-mae`) and are not the refit's.
+FIT_STORES = ("formfit.json", "playerfit.json")
+
+
+def fit_dates(paths=None) -> dict:
+    """``{sport: "YYYY-MM-DD"}``: when each sport's refit last went through
+    its stores — the OLDER of the dial's newest fit and the memory's, so a
+    run cut off after the dial does not pass for a finished one (a store
+    with nothing for the sport, as the dial has nothing for basketball,
+    does not count)."""
+    from . import modelstate as _ms
+    newest: dict = {}
+    for i, p in enumerate(paths if paths is not None else [_ms.path(n) for n in FIT_STORES]):
+        for key, v in _json_cached(p).items():
+            if not isinstance(v, dict) or v.get("basis") == "journal-mae":
+                continue
+            sp = str(v.get("sport") or str(key).split(":", 1)[0])
+            day = str(v.get("fitted") or "")[:10]
+            if len(day) == 10 and day > newest.get((i, sp), ""):
+                newest[(i, sp)] = day
+    out: dict = {}
+    for (_i, sp), day in newest.items():
+        out[sp] = min(out.get(sp, day), day)
+    return out
+
+
 def weekly(now: float | None = None, jobs: dict | None = None, deep_path=None, lab_path=None,
-           attempts_path=None) -> dict:
-    """``{"jobs": [...], "deep": {...} | None, "lab": {...} | None}``."""
+           attempts_path=None, fit_paths=None) -> dict:
+    """``{"jobs": [...], "deep": {...} | None, "lab": {...} | None}``.
+    ``fit_paths``: the fit stores (`fit_dates`), for tests."""
     from . import maintenance as M
     t = time.time() if now is None else float(now)
     jobs = M.weekly_jobs_status() if jobs is None else jobs
@@ -1101,9 +1140,13 @@ def weekly(now: float | None = None, jobs: dict | None = None, deep_path=None, l
         today = _dt.datetime.fromtimestamp(t, ET).date().isoformat()
         done = [k for k in D.PIECE_ORDER if k not in left and isinstance(pieces.get(k), dict)
                 and str(pieces[k].get("done") or "") >= start]
+        # A sport's last finished fit: the round file's, or the stores' own
+        # date where that is later or the round file has none (`fit_dates`).
+        stores = fit_dates(fit_paths)
         out["deep"] = {"round": start or None, "left": left, "done": done,
                        "part_way": D._part_way(pieces, left, start, today),
-                       "last_done": {k: (str((pieces.get(k) or {}).get("done") or "")[:10] or None)
+                       "last_done": {k: max(str((pieces.get(k) or {}).get("done") or "")[:10],
+                                            stores.get(k, "")) or None
                                      for k in left if k in DEEP_SPORTS}}
     else:
         out["deep"] = None

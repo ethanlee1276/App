@@ -238,6 +238,13 @@ def test_the_backups_from_the_files_own_dates():
         _aged(week / "backup_2026-11-02.zip", 12 * 24)
         keys = [p["key"] for p in OA.problems({"backups": OD.backups(NOW, nightly=night, weekly=week)}, now=NOW)]
         assert keys[:3] == ["backup", "offsite", "weekly-zip"], keys
+        # The reason the script kept rides to the desk and the alert.
+        (night / "last_run.json").write_text(json.dumps({"at": NOW - 5 * 3600, "offsite": "failed",
+                                                         "why": "rclone: Failed to sync: Cap exceeded (403)."}))
+        b = OD.backups(NOW, nightly=night, weekly=week)
+        assert b["run"]["why"] == "rclone: Failed to sync: Cap exceeded (403).", b["run"]
+        off = [p for p in OA.problems({"backups": b}, now=NOW) if p["key"] == "offsite"][0]
+        assert "the offsite leg failed: rclone: Failed to sync: Cap exceeded (403). ./deploy" in off["body"], off
         gone = OD.backups(NOW, nightly=d / "nowhere", weekly=d / "nowhere")
         assert gone == {"dbs": {}, "run": None, "weekly": None, "found": False, "dir": str(d / "nowhere")}, gone
         assert not OA.problems({"backups": gone}, now=NOW), "a folder this box cannot see is not an alarm"
@@ -267,6 +274,43 @@ def test_the_nightly_copies_are_read_where_the_newest_are():
         os.environ.pop("QB_BACKUP_DIR", None)
         if env is not None:
             os.environ["QB_BACKUP_DIR"] = env
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_a_failed_offsite_leg_keeps_the_tools_own_reason_clean():
+    """The desk on 5 November said the offsite leg failed and sent the owner
+    to the box for why. The script now keeps the tool's last error line in
+    its note: the line naming the failure, its clock stamp off, nothing in
+    it that could break the JSON, a key-like run blanked, short."""
+    src = READ("deploy", "backup.sh")
+    body = src[src.index("remote_kind() {"):src.index('if [[ "${1:-}" == "--test-remote" ]]')]
+    d = Path(tempfile.mkdtemp())
+    try:
+        (d / "bin").mkdir()
+        (d / "dest").mkdir()
+        fake = d / "bin" / "rclone"
+        fake.write_text("#!/usr/bin/env bash\n"
+                        "echo '2026/11/05 04:12:13 NOTICE : starting' >&2\n"
+                        "echo '2026/11/05 04:12:14 ERROR : x.db.gz: key 0012345abcdef0000000000a1 \"q\" \\\\b' >&2\n"
+                        "echo '2026/11/05 04:12:15 Failed to sync: Cap exceeded (403 storage_cap_exceeded)' >&2\n"
+                        "exit 1\n")
+        fake.chmod(0o755)
+        env = {**os.environ, "PATH": f"{d / 'bin'}:{os.environ.get('PATH', '')}", "DEST": str(d / "dest"),
+               "QB_BACKUP_REMOTE": "b2:bucket/qb"}
+        got = subprocess.run(["bash", "-c", body + "\npush_remote || true"], env=env,
+                             capture_output=True, text=True, timeout=60)
+        assert got.returncode == 0, got.stderr
+        assert "Failed to sync: Cap exceeded" in got.stdout, "the log still gets the tool's own words"
+        note = json.loads((d / "dest" / "last_run.json").read_text())
+        assert note["offsite"] == "failed"
+        assert note["why"] == "rclone: Failed to sync: Cap exceeded (403 storage_cap_exceeded)", note
+        cleaned = subprocess.run(["bash", "-c", body + "\nclean_why \"$1\"", "_",
+                                  'rclone: ERROR : key 0012345abcdef0000000000a1 "q" \\b \u00e9 ' + "ab " * 120],
+                                 capture_output=True, text=True, timeout=60).stdout
+        assert cleaned.startswith("rclone: ERROR : key [...] q b  ab ab"), cleaned
+        assert len(cleaned.strip()) <= 240 and '"' not in cleaned and "\\" not in cleaned, cleaned
+        json.loads('{"why": "%s"}' % cleaned.strip())
+    finally:
         shutil.rmtree(d, ignore_errors=True)
 
 

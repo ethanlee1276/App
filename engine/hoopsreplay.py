@@ -385,15 +385,29 @@ def walk(entries: list, market: str, sport: str = "nba",
 
 def replay(conn, sport: str = "nba", markets=MARKETS,
            seasons: list | None = None,
-           min_history: int = MIN_HISTORY, tune=None) -> list:
+           min_history: int = MIN_HISTORY, tune=None,
+           deadline: float | None = None, missed: list | None = None) -> list:
     """``[(market, BacktestReport, counts), ...]`` for every market that
-    priced anything (``tune``: see `settled_props`)."""
+    priced anything (``tune``: see `settled_props`).
+
+    ``deadline`` (a time.monotonic() reading, the Lab's): a market starts
+    only while the time left covers the time the market before it took —
+    every market walks the same games — and the first always starts. The
+    markets not reached go into ``missed``, in order."""
+    import time as _time
     hist = histories(conn, sport, seasons)
     out = []
-    for market in markets:
+    pace = None
+    for i, market in enumerate(markets):
+        if deadline is not None and pace is not None and pace > deadline - _time.monotonic():
+            if missed is not None:
+                missed.extend(markets[i:])
+            break
+        t0 = _time.monotonic()
         settled, counts = settled_props(hist, market, sport,
                                         _quotes(conn, sport, market),
                                         min_history=min_history, tune=tune)
+        pace = _time.monotonic() - t0
         if not settled:
             continue
         rep: BacktestReport = evaluate(settled)

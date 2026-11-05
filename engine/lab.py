@@ -271,14 +271,19 @@ def mlb_section(conn, log=print, budget_s: float | None = None,
     return sec
 
 
-def hoops_props(conn, sport: str, log=print) -> list[dict]:
+def hoops_props(conn, sport: str, log=print, budget_s: float | None = None,
+                missed: list | None = None) -> list[dict]:
     """The NBA / WNBA board's own pricer replayed over stored logs
-    (engine.hoopsreplay, audit B1-1)."""
+    (engine.hoopsreplay, audit B1-1). With ``budget_s`` a market starts
+    only while the time left covers it (`hoopsreplay.replay`); the ones not
+    reached go into ``missed``."""
+    import time as _time
     from .hoopsreplay import replay
     from .nba.pipeline import MARKET_LABELS
+    deadline = _time.monotonic() + budget_s if budget_s else None
     try:
         return [report_to_dict(rep, m, MARKET_LABELS.get(m, m))
-                for m, rep, _counts in replay(conn, sport)]
+                for m, rep, _counts in replay(conn, sport, deadline=deadline, missed=missed)]
     except Exception as exc:                       # noqa: BLE001
         log(f"  lab: {sport} props skipped — {exc}")
         return []
@@ -383,6 +388,21 @@ def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
 #: the boards. It now stops at this and publishes the weeks it reached,
 #: newest first, so the NFL lands and the run moves on to the next sport.
 LAB_NFL_PROPS_BUDGET_S = 30 * 60
+#: The NBA's and the WNBA's props: every market walks the same games, so the
+#: one before tells how long the next takes (`hoopsreplay.replay`).
+LAB_HOOPS_PROPS_BUDGET_S = 25 * 60
+
+#: THE WHOLE RUN FITS THE HOUR (2026-11-05). The chores stop a weekly child
+#: at its hour, and a sport cut off mid-replay publishes nothing: on 4 and 5
+#: November the run spent 85 and 99 minutes inside its first sport and the
+#: page stayed dated 29 September (the owner's desk: "The Lab's WNBA numbers
+#: are 37 days old", six sports late). Each sport now gets what is left of
+#: this, less `LAB_SPORT_RESERVE_S` for its game lines and its publish, and
+#: no sport starts with under `LAB_SPORT_MIN_S` left: the ones not started
+#: are tomorrow's first, never marked tried.
+LAB_RUN_BUDGET_S = 50 * 60
+LAB_SPORT_MIN_S = 6 * 60
+LAB_SPORT_RESERVE_S = 5 * 60
 
 
 def nfl_replay(season: int | None, weeks: list, real: dict, log=print,
@@ -657,15 +677,19 @@ def _page_shell(sports: dict) -> dict:
     }
 
 
-def build_sport(sport: str, hconn, log=print, nfl: bool = True) -> dict:
+def build_sport(sport: str, hconn, log=print, nfl: bool = True,
+                budget_s: float | None = None) -> dict:
     """One sport's section of the page, stamped with when it was replayed
     (``replayed_at``) — each sport carries its own date now that a run
-    publishes them one at a time."""
+    publishes them one at a time. ``budget_s`` is what the run has left for
+    this sport's props (`run_if_due`); each sport's own limit caps it."""
+    def cap(limit: float) -> float:
+        return limit if budget_s is None else max(60.0, min(limit, budget_s))
     if sport == "mlb":
-        blob = {"props": mlb_section(hconn, log=log, budget_s=LAB_MLB_PROPS_BUDGET_S),
+        blob = {"props": mlb_section(hconn, log=log, budget_s=cap(LAB_MLB_PROPS_BUDGET_S)),
                 "game_lines": game_lines(hconn, "mlb", log=log)}
     elif sport == "nfl":
-        blob = {"props": nfl_props(log=log, conn=hconn, budget_s=LAB_NFL_PROPS_BUDGET_S)
+        blob = {"props": nfl_props(log=log, conn=hconn, budget_s=cap(LAB_NFL_PROPS_BUDGET_S))
                 if nfl else {"unavailable": "skipped"},
                 "game_lines": game_lines(hconn, "nfl", log=log),
                 # The usage ripple against the close — the pricing half of
@@ -676,10 +700,16 @@ def build_sport(sport: str, hconn, log=print, nfl: bool = True) -> dict:
         blob = {"props": cfb_props(log=log, conn=hconn),
                 "game_lines": game_lines(hconn, "cfb", log=log)}
     elif sport in ("nba", "wnba"):
-        props = hoops_props(hconn, sport, log=log)
-        blob = {"props": {"markets": props} if props else
-                {"unavailable": "no ingested game logs deep enough to replay yet"},
-                "game_lines": game_lines(hconn, sport, log=log)}
+        missed: list = []
+        props = hoops_props(hconn, sport, log=log, budget_s=cap(LAB_HOOPS_PROPS_BUDGET_S), missed=missed)
+        sec = ({"markets": props} if props else
+               {"unavailable": "no ingested game logs deep enough to replay yet"})
+        if props and missed:
+            # Kept beside this run's markets from the run that measured them
+            # (`carry_forward`), and named on the page.
+            sec["not_reached"] = missed
+            log(f"  lab: {sport} stopped at its time limit: {', '.join(missed)} not replayed this run")
+        blob = {"props": sec, "game_lines": game_lines(hconn, sport, log=log)}
     elif sport == "ufc":
         blob = {"props": {"unavailable": NO_PROP_HARNESS["ufc"]},
                 "game_lines": {"unavailable": "a fight has no spread or total to "
@@ -839,13 +869,16 @@ def merge_sport(previous: dict, sport: str, blob: dict) -> tuple[dict, list[str]
 def run_if_due(hconn=None, log=print, path: Path | str | None = None,
                force: bool = False, today: _dt.date | None = None,
                nfl: bool = True, attempts_path: Path | str | None = None,
-               build_one=None) -> str:
+               build_one=None, budget_s: float | None = LAB_RUN_BUDGET_S,
+               clock=None) -> str:
     """The automatic lane. Returns a status word rather than raising — the
     settle pass must never fail because a backtest did.
 
     ONE SPORT AT A TIME, EACH PUBLISHED AS IT LANDS (see SPORT_ORDER): a
     run cut off at the chores' ceiling keeps every sport it finished, and
     the next run picks up the rest. ``build_one`` is for tests."""
+    import inspect
+    import time as _time
     from . import gate
     p = Path(path if path is not None else LAB_PATH)
     ap = Path(attempts_path if attempts_path is not None else _attempts_path_for(p))
@@ -855,22 +888,37 @@ def run_if_due(hconn=None, log=print, path: Path | str | None = None,
     if not todo:
         return "already"
     build_one = build_one or build_sport
+    try:
+        takes_budget = "budget_s" in inspect.signature(build_one).parameters
+    except (TypeError, ValueError):
+        takes_budget = False
+    clock = clock or _time.monotonic
+    deadline = clock() + budget_s if budget_s else None
     close = False
     if hconn is None:
         from . import db as _db
         hconn = _db.connect()
         close = True
-    done, failed = [], []
-    import time as _time
+    done, failed, waiting = [], [], []
     try:
-        for sport in todo:
+        for i, sport in enumerate(todo):
+            # The first sport always starts; after it, one starts only with
+            # time enough left to finish (LAB_RUN_BUDGET_S).
+            if deadline is not None and (done or failed) and deadline - clock() < LAB_SPORT_MIN_S:
+                waiting = list(todo[i:])
+                log(f"  lab: stopped at the run's time limit ({max(0.0, deadline - clock()) / 60:.0f} min left): "
+                    f"{', '.join(waiting)} first in the next run")
+                break
             _mark_attempt(ap, sport, today)
-            t0 = _time.monotonic()
+            t0 = clock()
             # The line the reaper keeps when a run is cut off: which sport
             # the hour ran out in (python -u, so it is on disk at once).
             log(f"  lab: replaying {sport} ({len(done) + len(failed) + 1} of {len(todo)})…")
+            kw = {}
+            if takes_budget and deadline is not None:
+                kw["budget_s"] = max(60.0, deadline - clock() - LAB_SPORT_RESERVE_S)
             try:
-                blob = build_one(sport, hconn, log=log, nfl=nfl)
+                blob = build_one(sport, hconn, log=log, nfl=nfl, **kw)
             except Exception as exc:               # noqa: BLE001
                 log(f"  lab: {sport} skipped — {type(exc).__name__}: {exc}")
                 failed.append(sport)
@@ -882,15 +930,16 @@ def run_if_due(hconn=None, log=print, path: Path | str | None = None,
             page, kept = merge_sport(page, sport, blob)
             gate.publish(page, p, p.name)
             done.append(sport)
-            log(f"  lab: {sport} replayed in {(_time.monotonic() - t0) / 60:.0f} min → {p}"
+            log(f"  lab: {sport} replayed in {(clock() - t0) / 60:.0f} min → {p}"
                 + (f" (kept {', '.join(kept)} from the last run that measured them)" if kept else ""))
     finally:
         if close:
             hconn.close()
     if not done:
         return "failed"
-    log(f"  lab: replayed {', '.join(done)}" + (f"; {', '.join(failed)} failed" if failed else ""))
-    return "ok" if not failed else "partial"
+    log(f"  lab: replayed {', '.join(done)}" + (f"; {', '.join(failed)} failed" if failed else "")
+        + (f"; {', '.join(waiting)} wait for the next run" if waiting else ""))
+    return "ok" if not (failed or waiting) else "partial"
 
 
 def _previous_page(public: Path) -> dict:

@@ -142,9 +142,31 @@ remote_kind() {
 # remote is set — so a backup that stops reaching offsite says so on the
 # desk and on the owner's phone instead of in a log nobody opens. Written
 # beside the copies, atomically; it can never fail the run.
+#
+# AND WHY A FAILED ONE FAILED (2026-11-05). The desk said "the offsite leg
+# failed" and sent the owner to the box for the reason, which was in this
+# log and nowhere the desk reads. The tool's own last error line now rides
+# along as `why` (the second argument): printable ASCII only, quotes and
+# backslashes out, so it cannot break the JSON; any run of 20 or more
+# letters and digits (a key, a token) blanked; 240 characters at most.
 note_run() {
-  { printf '{"at": %s, "offsite": "%s"}\n' "$(date +%s)" "$1" > "$DEST/last_run.json.tmp" \
-      && mv -f "$DEST/last_run.json.tmp" "$DEST/last_run.json"; } 2>/dev/null || true
+  { printf '{"at": %s, "offsite": "%s", "why": "%s"}\n' "$(date +%s)" "$1" "$(clean_why "${2:-}")" \
+      > "$DEST/last_run.json.tmp" && mv -f "$DEST/last_run.json.tmp" "$DEST/last_run.json"; } 2>/dev/null || true
+}
+
+clean_why() {
+  printf '%s' "$1" | LC_ALL=C tr -cd '\040-\176' | tr -d '"\\' \
+    | sed -E 's#[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9:]{8} ##; s/[A-Za-z0-9]{20,}/[...]/g' | cut -c1-240
+}
+
+# The line in the tool's own output that says what went wrong: the last
+# one naming an error, else its last line at all.
+offsite_why() {
+  local line=""
+  [[ -n "${1:-}" && -r "$1" ]] || return 0
+  line="$(grep -iE 'error|fail|denied|refused|forbidden|unauthori|no such|not found|quota|cap|timed? ?out' "$1" | tail -1 || true)"
+  [[ -n "$line" ]] || line="$(grep -v '^[[:space:]]*$' "$1" | tail -1 || true)"
+  printf '%s' "$line"
 }
 
 push_remote() {
@@ -162,19 +184,36 @@ push_remote() {
   # written and valid by the time we get here, and exiting non-zero from
   # the middle of a nightly cron is how you find out months later that
   # the whole job stopped.
+  # The tool's complaints go to a file first, then into this log as before,
+  # so the reason can travel to the desk (note_run). No file to be had, a
+  # full disk say, and they come straight here the way they always did.
+  local errf=""
+  errf="$(mktemp 2>/dev/null)" || errf=""
   if [[ "$kind" == "rclone" ]]; then
     if ! command -v rclone >/dev/null 2>&1; then
       echo "  FAILED: rclone is not installed. apt install rclone"
-      note_run failed
+      note_run failed "rclone is not installed on the box"
+      [[ -n "$errf" ]] && rm -f "$errf"
       return 1
     fi
-    rclone sync --config "${QB_RCLONE_CONFIG:-/root/.config/rclone/rclone.conf}" \
-      "$DEST/" "$QB_BACKUP_REMOTE/" || {
-        echo "  FAILED: rclone could not sync. Backups are LOCAL ONLY."; note_run failed; return 1; }
+    if ! rclone sync --config "${QB_RCLONE_CONFIG:-/root/.config/rclone/rclone.conf}" \
+        "$DEST/" "$QB_BACKUP_REMOTE/" 2>"${errf:-/dev/stderr}"; then
+      [[ -n "$errf" ]] && cat "$errf"
+      echo "  FAILED: rclone could not sync. Backups are LOCAL ONLY."
+      note_run failed "rclone: $(offsite_why "$errf")"
+      [[ -n "$errf" ]] && rm -f "$errf"
+      return 1
+    fi
   else
-    rsync -az --delete "$DEST/" "$QB_BACKUP_REMOTE/" || {
-      echo "  FAILED: rsync could not reach it. Backups are LOCAL ONLY."; note_run failed; return 1; }
+    if ! rsync -az --delete "$DEST/" "$QB_BACKUP_REMOTE/" 2>"${errf:-/dev/stderr}"; then
+      [[ -n "$errf" ]] && cat "$errf"
+      echo "  FAILED: rsync could not reach it. Backups are LOCAL ONLY."
+      note_run failed "rsync: $(offsite_why "$errf")"
+      [[ -n "$errf" ]] && rm -f "$errf"
+      return 1
+    fi
   fi
+  [[ -n "$errf" ]] && { cat "$errf"; rm -f "$errf"; }
   echo "  offsite copy updated"
   note_run ok
 }

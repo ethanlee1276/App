@@ -162,9 +162,13 @@ def problems(h: dict, data_dir: Path | None = None, now: float | None = None) ->
     except (TypeError, ValueError):
         recent = False
     if run.get("offsite") == "failed" and recent:
+        why = str(run.get("why") or "").strip().rstrip(".")
         out.append({"key": "offsite", "title": "Last night's backup did not reach the offsite copy",
-                    "body": "The copy on this disk was made; the offsite leg failed. "
-                            "./deploy/backup.sh --test-remote on the box says why."})
+                    "body": (f"The copy on this disk was made; the offsite leg failed: {why[:160]}. "
+                             "./deploy/backup.sh --test-remote on the box tries it again."
+                             if why else
+                             "The copy on this disk was made; the offsite leg failed. "
+                             "./deploy/backup.sh --test-remote on the box says why.")})
     w = b.get("weekly") or {}
     if w and float(w.get("age_d") or 0) >= OD.WEEKLY_LATE_D:
         out.append({"key": "weekly-zip", "title": f"No weekly backup zip in {int(float(w['age_d']))} days",

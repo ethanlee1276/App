@@ -379,6 +379,7 @@ function odBackupsHTML(b) {
   const w = b.weekly || null;
   return odCard("Backups", `<ul class="od-list">${dbs || odRow("Nightly copies", "none found", "warn")}${
     off ? odRow(`The last run, ${odN(Math.round(run.age_h))} h ago`, off[0], off[1]) : ""}${
+    off && run.offsite === "failed" && run.why ? odRow("What it said", `<span class="od-mono">${escapeHtml(run.why)}</span>`, "") : ""}${
     w ? odRow("The weekly zip of the small files", `${w.age_d < 1 ? "today" : `${odN(Math.round(w.age_d))} days old`} · ${w.mb} MB`,
       w.age_d >= 9 ? "warn" : "") : ""}</ul>
     <p class="od-note">deploy/backup.sh copies the databases at 4am every night and sends them offsite; the weekly zip keeps the

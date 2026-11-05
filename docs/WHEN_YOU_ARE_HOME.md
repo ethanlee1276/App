@@ -9324,6 +9324,45 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KO. The backup says why its offsite copy failed** (step 408; one
+read-only check, under a minute; the owner's desk, 5 November: "Last
+night's backup did not reach the offsite copy"). The nightly backup made
+its copies on this disk, then `rclone sync` to Backblaze failed, and the
+desk could only say that it had. rclone's own reason went to the backup
+log, where the JT check never printed it (it shows only the lines naming
+history.db, `offsite copy updated` and `FAILED`). The script now keeps
+rclone's last error line in its note beside the copies (`why`: one line,
+at most 240 characters, any long run of letters and digits such as a key
+blanked), the desk's Backups card shows it under **What it said**, and the
+alert on your phone quotes it. The 04:00 UTC run after this push is the
+first to keep it. Read-only, any time after that run:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import ownerdesk as o; print(o.backups().get('run'))"
+sudo tac /var/log/qellys-backup.log | sed '/syncing to/q' | tac | tail -30
+```
+
+The first line is the note: `'offsite': 'ok'` means the copy landed, and
+`'failed'` comes with its `'why'`. The second prints the offsite part of
+the last run's log, the tool's own words included. What the usual reasons
+mean:
+
+- `Cap exceeded` or `storage_cap_exceeded`: Backblaze's cap is reached
+  again. In Backblaze's web console, under Caps & Alerts, raise it, and
+  check that the bucket's lifecycle rule is "Keep only the last version":
+  each night's sync hides the copies it replaces, and hidden copies count
+  against the cap until that rule removes them.
+- `unauthorized`, `bad_auth_token` or `401`: the application key was
+  deleted or has expired. Make a new one in the console and put it in with
+  `sudo rclone config`.
+- `no such bucket` or `404`: the bucket named in `QB_BACKUP_REMOTE` is not
+  there.
+- A timeout or `connection reset`: the network dropped during the upload,
+  and the next night usually lands. Two nights in a row, paste it.
+
+Paste back both lines either way. `./deploy/backup.sh --test-remote` tries
+the round trip again by hand (it writes one small test file and deletes it).
+
 **KN. MLB travel and rest, measured before anything is built** (step 400;
 one read-only check, about a minute; you, 2026-11-05: "Go through ... mlb
 ... make sure we have all the tools and data we can be using"). The MLB
