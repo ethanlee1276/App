@@ -9338,6 +9338,33 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KW. College's rain, asked of college's own games** (step 426; one
+read-only check, about 10 minutes; you, 6 November: "dive into the weather
+factor for NFL and college football games"). College reads the NFL's rain
+step (a back's carries ×1.069 at the forecast's chance) without ever having
+been measured on college's own games. This asks them, the NFL's way: each
+team's carries against its own earlier games, in rain over the same in domes
+or dry, still, mild games, 2022-2025. Free throughout: kickoff times and
+venues from the college mirror on GitHub, each venue's place from the
+college-data feed the box already reads, and the weather at kickoff from
+Open-Meteo's archive (one request per venue per season, no key). It writes
+nothing:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 wxfit.py --college
+```
+
+Paste it back. The last line is the verdict: `AGREES` (college's own games
+clear and match the NFL's step: nothing changes), `NOT ENOUGH` (neither
+clears nor contradicts it: nothing changes), `DIFFERS` (clears and is not
+the NFL's: college gets its own step, as its own change) or `CONTRADICTS`
+(college's games say otherwise: college drops the step, as its own change).
+The same in the catch-up (it runs last, being long):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KW 2>&1 | tee /tmp/kw.txt
+```
+
 **KV. The weekly refit's round finishes, and the Lab and the refit take
 turns** (steps 423 and 424; nothing new to run; you, 6 November: "keep going
 and keep working ... I don't want to have to pay for any subscriptions").

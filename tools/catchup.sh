@@ -1271,5 +1271,8 @@ SH
 run KM "WNBA: the spread measured on its own seasons, on the box's WNBA games" 900 <<'SH'
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbalabcheck.py --league wnba
 SH
+run KW "College's own carries in rain, 2022-2025 (the mirror, CFBD's venues, Open-Meteo's archive)" 900 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 wxfit.py --college
+SH
 
 echo "===== done in $((SECONDS / 60)) min"

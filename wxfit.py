@@ -5,6 +5,7 @@
     python3 wxfit.py --seasons 2019-2025
     python3 wxfit.py --scale             # forecast wind vs the reported wind (FETCHES)
     python3 wxfit.py --totals            # forecast rain vs the closing total, 2022-2025 (FETCHES)
+    python3 wxfit.py --college           # college's own carries in rain, 2022-2025 (FETCHES)
 
 Reads nflverse's schedule and weekly box scores (downloaded into
 data/cache on first use), and the kickoff sky from nflverse's
@@ -149,6 +150,124 @@ def rain_rows(schedule: list[dict], seasons, fetch=None) -> list[dict]:
     return out
 
 
+#: COLLEGE'S OWN WEATHER (2026-11-06): Open-Meteo's archive of what fell, at
+#: the venue, hour by hour — ERA5 reanalysis, free and keyless. One request
+#: per venue per season.
+COLLEGE_ARCHIVE = ("https://archive-api.open-meteo.com/v1/archive"
+                   "?latitude={lat:.4f}&longitude={lon:.4f}"
+                   "&hourly=temperature_2m,precipitation,snowfall,wind_speed_10m"
+                   "&wind_speed_unit=mph&temperature_unit=fahrenheit&timezone=UTC"
+                   "&start_date={start}&end_date={end}")
+
+
+def college_weather(games: list[dict], fetch=None, pause: float = 0.15) -> dict:
+    """``{(season, game_id): engine.wxfit.game_weather}`` for every outdoor
+    game: one archive request per venue per season, its dates spanning the
+    season's games there (a day past the last, for a late kickoff's window)."""
+    import datetime as _dt
+    import time as _time
+    fetch = fetch or (lambda lat, lon, start, end: _get_json(
+        COLLEGE_ARCHIVE.format(lat=lat, lon=lon, start=start, end=end)))
+    by: dict = {}
+    for g in games:
+        if not g["roofed"]:
+            by.setdefault((round(g["lat"], 4), round(g["lon"], 4), g["season"]), []).append(g)
+    out, failed = {}, 0
+    for (lat, lon, season), gs in sorted(by.items()):
+        days = sorted(g["kickoff"][:10] for g in gs)
+        end = (_dt.date.fromisoformat(days[-1]) + _dt.timedelta(days=1)).isoformat()
+        try:
+            payload = fetch(lat, lon, days[0], end)
+        except Exception as exc:                              # noqa: BLE001
+            failed += 1
+            if failed <= 5:
+                print(f"  {lat},{lon} {season}: {type(exc).__name__}: {exc}")
+            continue
+        for g in gs:
+            w = F.game_weather(payload, g["kickoff"])
+            if w:
+                out[(season, g["game_id"])] = w
+        if pause:
+            _time.sleep(pause)
+    if failed:
+        print(f"  {failed} of {len(by)} venue-seasons did not answer")
+    return out
+
+
+def college_carries(conn, seasons) -> dict:
+    """``{(season, game_id, team): carries}`` from the box's college logs."""
+    seasons = [int(s) for s in seasons]
+    q = ("SELECT season, game_id, team, SUM(value) FROM player_game_logs "
+         "WHERE sport='cfb' AND market='rush_att' AND season IN (%s) "
+         "GROUP BY season, game_id, team" % ",".join("?" * len(seasons)))
+    return {(int(s), str(g), str(t)): float(v or 0.0) for s, g, t, v in conn.execute(q, seasons)}
+
+
+def college_games_all(seasons) -> list[dict]:
+    """Every season's placed FBS games off the mirror, venues from CFBD."""
+    from engine import cfbteams
+    from engine.cfb import wx
+    from engine.sources.cfbfastr import SCHEDULE_URL
+    from engine.sources.fetch import fetch_csv
+    ids = cfbteams.load_ids() or None
+    venues = wx.venue_index(wx.fetch_venues())
+    games = []
+    for s in seasons:
+        rows = fetch_csv(SCHEDULE_URL.format(season=int(s)), f"cfb_schedules_{int(s)}.csv",
+                         ttl=86400 * 7)
+        games += F.college_games(rows, int(s), ids, venues)
+    return games
+
+
+def college_verdict(v: dict | None, nfl: float | None) -> str:
+    """One line: what college's own games say beside the NFL's rain step."""
+    if not v:
+        return "TOO FEW: not enough wet college games with carries to say; the NFL's step stands"
+    step = f"the NFL's ×{nfl:.3f}" if nfl else "no NFL step"
+    near = nfl is not None and abs(v["mult"] - nfl) <= 2 * v["se"]
+    if F.clears(v):
+        if near or nfl is None:
+            return (f"AGREES: college's own carries in rain ×{v['mult']:.3f} ± {v['se']:.3f} clears, "
+                    f"in line with {step}; the step college reads stands")
+        return (f"DIFFERS: college's own ×{v['mult']:.3f} ± {v['se']:.3f} clears and is not {step}; "
+                f"worth college's own step, as its own change")
+    if near:
+        return (f"NOT ENOUGH: college's own ×{v['mult']:.3f} ± {v['se']:.3f} neither clears nor "
+                f"contradicts {step}; the step college reads stands")
+    return (f"CONTRADICTS: college's own games say ×{v['mult']:.3f} ± {v['se']:.3f}, not {step}; "
+            f"college should drop the step, as its own change")
+
+
+def college_report(seasons=F.COLLEGE_SEASONS, games=None, weather=None, carries=None) -> list[str]:
+    """What --college prints. Each input is fetched when not handed in."""
+    games = college_games_all(seasons) if games is None else games
+    weather = college_weather(games) if weather is None else weather
+    if carries is None:
+        from engine import db as _db
+        carries = college_carries(_db.connect(), seasons)
+    outdoor = [g for g in games if not g["roofed"]]
+    read = [weather[(g["season"], g["game_id"])] for g in outdoor
+            if (g["season"], g["game_id"]) in weather]
+    got = F.college_measure(games, weather, carries)
+    lines = [f"college {seasons[0]}-{seasons[-1]}: {len(games)} FBS games placed "
+             f"({len(games) - len(outdoor)} indoors); {len(read)} outdoor with a reading at kickoff, "
+             f"{sum(1 for w in read if w['precip'] == 'rain')} wet, "
+             f"{sum(1 for w in read if w['precip'] == 'snow')} snowy; "
+             f"{len(carries)} team-games with carries in the box's logs",
+             "  a team's carries (every rusher) against its own earlier games, over the same "
+             "in domes or dry, still, mild games:"]
+    names = {"rain": "rain", "snow": "snow", "freeze": "freezing, dry",
+             "8-12": "wind 8-12 mph", "12-18": "wind 12-18 mph", "18+": "wind 18+ mph"}
+    for tier, label in names.items():
+        v = got.get(tier)
+        if v:
+            per = " ".join(f"{s}:{x:.3f}" for s, x in v["per"].items())
+            lines.append(f"  {label:<16} ×{v['mult']:.3f} ± {v['se']:.3f}  n {v['n']:<4} {per}"
+                         + ("   CLEARS" if F.clears(v) else ""))
+    lines.append(college_verdict(got.get("rain"), W.RAIN.get(("rush_att", "RB"))))
+    return lines
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--seasons", default=f"{F.SEASONS[0]}-{F.SEASONS[-1]}")
@@ -158,7 +277,15 @@ def main() -> None:
     ap.add_argument("--totals", action="store_true",
                     help="games forecast wet at kickoff against the closing total, 2022-2025 "
                          "(fetches about 110 small files of Open-Meteo's archived forecasts)")
+    ap.add_argument("--college", action="store_true",
+                    help="college's own carries in rain, 2022-2025: the mirror's kickoffs, CFBD's "
+                         "venues, Open-Meteo's archive (one request a venue a season) and the box's "
+                         "college logs")
     args = ap.parse_args()
+    if args.college:
+        for line in college_report():
+            print(line)
+        return
     if args.totals:
         rows = rain_rows(N.load_schedules(), range(2022, 2026))
         got = F.totals_by_forecast(rows)

@@ -465,6 +465,138 @@ def totals_by_forecast(rows) -> dict:
     return out
 
 
+# --- COLLEGE, ASKED OF ITS OWN GAMES (2026-11-06) -----------------------------
+# Ethan, 6 November: "dive into the weather factor for NFL and college
+# football games". College reads the NFL's table (engine/weather.RAIN). This
+# asks college's own games the NFL's question, the same way: each team's
+# carries against its own earlier games that season, in rain over the same in
+# the base games (domes, or dry, still and above freezing), by `team_samples`,
+# `measure_all` and the house rule (`clears`). The carries are the box's own
+# college logs (the mirror's play-by-play, engine/sources/cfbstats); the
+# weather is Open-Meteo's archive (ERA5: free, no key) at the venue CFBD
+# places (engine/cfb/wx.venue_index), over the kickoff hour and the two after.
+
+#: The seasons asked: the mirror's kickoff times and the box's college logs
+#: both cover them.
+COLLEGE_SEASONS = (2022, 2023, 2024, 2025)
+#: Millimetres over the game's first WINDOW_H hours that make it wet: a
+#: steady light rain, not a passing sprinkle the reanalysis smears.
+RAIN_MM = 1.0
+WINDOW_H = 3
+
+
+def college_games(rows, season: int, id_to_abbr: dict | None, venues: dict) -> list[dict]:
+    """``[{game_id, season, kickoff, home, away, lat, lon, roofed}]``: the
+    mirror's completed regular-season FBS-vs-FBS games with a known kickoff
+    hour at a venue CFBD places. ``game_id`` is the mirror's own number and
+    the teams are keyed as the box keys them (engine/sources/cfbfastr), which
+    is how the box's college logs store them (engine/sources/cfbstats)."""
+    from .sources.cfbdata import name_key
+    from .sources.cfbfastr import _blank, _flag, team_key
+    out = []
+    for r in rows or []:
+        if str(r.get("season_type") or "regular").strip().lower() != "regular":
+            continue
+        if not _flag(r.get("completed")) or _flag(r.get("start_time_tbd")):
+            continue
+        if any(str(r.get(f"{s}_division") or "").strip().lower() != "fbs" for s in ("home", "away")):
+            continue
+        v = venues.get(name_key(str(r.get("venue") or "")))
+        gid, ko = str(r.get("game_id") or "").strip(), str(r.get("start_date") or "").strip()
+        if not v or _blank(gid) or len(ko) < 13:
+            continue
+        home = team_key(r.get("home_id"), id_to_abbr) or team_key(r.get("home_id"), None)
+        away = team_key(r.get("away_id"), id_to_abbr) or team_key(r.get("away_id"), None)
+        if not home or not away or home == away:
+            continue
+        out.append({"game_id": gid, "season": int(season), "kickoff": ko, "home": home,
+                    "away": away, "lat": float(v["lat"]), "lon": float(v["lon"]),
+                    "roofed": bool(v.get("dome"))})
+    return out
+
+
+def game_weather(payload: dict, kickoff: str) -> dict | None:
+    """``{temp, wind, precip}`` at kickoff from an Open-Meteo archive payload
+    (hours in UTC): ``precip`` is "rain", or "snow" when it fell as snow or
+    below freezing, once RAIN_MM fell over WINDOW_H hours from the kickoff
+    hour; else None. None when no reading sits within two hours of kickoff."""
+    from .cfb.wx import nearest_hour
+    i = nearest_hour(payload, kickoff)
+    if i is None:
+        return None
+    hourly = (payload or {}).get("hourly") or {}
+
+    def col(key, j):
+        vals = hourly.get(key) or []
+        return vals[j] if j < len(vals) else None
+    temp, wind = col("temperature_2m", i), col("wind_speed_10m", i)
+    if temp is None or wind is None:
+        return None
+    wet = math.fsum(float(col("precipitation", j) or 0.0) for j in range(i, i + WINDOW_H))
+    snowed = math.fsum(float(col("snowfall", j) or 0.0) for j in range(i, i + WINDOW_H))
+    precip = None
+    if wet >= RAIN_MM:
+        precip = "snow" if snowed > 0 or float(temp) <= FREEZE_F else "rain"
+    return {"temp": float(temp), "wind": float(wind), "precip": precip}
+
+
+def college_conditions(games: list[dict], weather: dict) -> tuple[dict, dict]:
+    """``(cond, number)``. ``cond`` is ``{(season, n, team): {roofed, wind,
+    temp, precip, implied}}`` the tiers read, ``n`` the team's game number
+    that season by kickoff; ``number`` is ``{(season, game_id, team): n}``.
+    ``weather`` is ``{(season, game_id): game_weather}``; an outdoor game
+    with no reading has no condition (it is in no tier)."""
+    by: dict = defaultdict(list)
+    for g in games:
+        for team in (g["home"], g["away"]):
+            by[(g["season"], team)].append(g)
+    cond, number = {}, {}
+    for (season, team), gs in by.items():
+        for n, g in enumerate(sorted(gs, key=lambda x: x["kickoff"]), start=1):
+            number[(season, g["game_id"], team)] = n
+            if g["roofed"]:
+                cond[(season, n, team)] = {"roofed": True, "wind": None, "temp": None,
+                                           "precip": None, "implied": None}
+                continue
+            w = weather.get((season, g["game_id"]))
+            if w:
+                cond[(season, n, team)] = {"roofed": False, "wind": w["wind"], "temp": w["temp"],
+                                           "precip": w["precip"], "implied": None}
+    return cond, number
+
+
+def college_rows(carries: dict, number: dict) -> dict:
+    """``{season: rows}`` for `team_samples`, one row per team-game: its
+    carries under position RB (the one group `TEAM_MARKETS` reads), in the
+    game-number order of `college_conditions`. ``carries`` is ``{(season,
+    game_id, team): n}``; a team-game outside ``number`` (an FCS opponent, a
+    venue CFBD does not place) is left out."""
+    out: dict = defaultdict(list)
+    for (season, gid, team), n in carries.items():
+        k = number.get((season, str(gid), team))
+        if k is not None:
+            out[season].append({"season_type": "REG", "position": "RB", "week": k,
+                                "team": team, "carries": float(n)})
+    return dict(out)
+
+
+def college_measure(games: list[dict], weather: dict, carries: dict) -> dict:
+    """``{tier: {mult, se, n, per} or None}`` for rain, snow, wind (each band)
+    and freeze: a college team's carries, measured as the NFL's are."""
+    cond, number = college_conditions(games, weather)
+    rows = college_rows(carries, number)
+    pts = []
+    for season in sorted(rows):
+        pts += team_samples(season, rows[season], cond)
+    got = measure_all(pts)
+    out = {}
+    for name, res in got.items():
+        for (m, g, tier), v in (res or {}).items():
+            if (m, g) == ("rush_att", "RB") and tier:
+                out[tier] = v
+    return out
+
+
 #: The forecast ranges engine/weather.WIND_FORECAST is kept in, low edges.
 FORECAST_RANGES = ((13.0, "13+"), (10.0, "10-13"), (7.0, "7-10"), (4.0, "4-7"), (0.0, "0-4"))
 

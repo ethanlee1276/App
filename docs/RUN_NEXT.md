@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-06 (afternoon), after the weekly refit's round started
+Last updated 2026-11-06 (afternoon), after college's own rain got a free
+read-only check (step KW: item 1w), after the weekly refit's round started
 finishing what it begins and the Lab and the refit started taking turns on
 the box's one CPU (step KV: item 1g, nothing new to run), and after nothing
 on this list asks you to pay for anything (you, 6 November; item 0b: the
@@ -152,12 +153,12 @@ reads the new note. Paste the whole file back:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JQ JR KF KG KI KL IX IU IT JA IP KP KU 2>&1 | tee /tmp/now.txt
 ```
 
-The long ones, on a quiet evening (up to about an hour together; still
-read-only): Caesars as a backup sharp book, the NHL lab and the WNBA's
-spread on the box's own games:
+The long ones, on a quiet evening (a little over an hour together; still
+read-only): Caesars as a backup sharp book, the NHL lab, the WNBA's spread
+on the box's own games, and college's own rain (KW, new: item 1w):
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM KW 2>&1 | tee /tmp/long.txt
 ```
 
 **The weekly refit, read off the heartbeat (step KV, item 1g):** last night
@@ -919,6 +920,24 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 ```
 
 The same two with `--sport nfl` and `--sport cfb` re-read football's.
+
+## 1w. Any time: college's own rain (step KW)
+
+College reads the NFL's rain step (a back's carries ×1.069 at the
+forecast's chance) and was never measured on its own games. This asks
+college's 2022-2025 games the NFL's question the NFL's way, for free: the
+college mirror's kickoffs and venues, the venues' places from the
+college-data feed the box already reads, and Open-Meteo's archive of the
+weather at kickoff (one request per venue per season, no key). Read-only,
+about 10 minutes (it is also last in the long run above):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 wxfit.py --college
+```
+
+Paste it back. The last line says `AGREES` or `NOT ENOUGH` (nothing
+changes), or `DIFFERS` / `CONTRADICTS` (college gets its own step, or drops
+the NFL's, each as its own change after I read it).
 
 ## 1v. Any time: rain against the closing total (step KU)
 
