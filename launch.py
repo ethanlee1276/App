@@ -10047,9 +10047,10 @@ def repair_closes(apply: bool = False, sport: str | None = None) -> None:
 def repair_close_lines(apply: bool = False, sport: str | None = None) -> None:
     """Re-read every settled player prop's closing LINE by today's rule:
     each book's last pre-game quote at the sportsbooks' number, never an
-    exchange's ladder rung (`ledger.repair_closing_lines`). Dry run unless
-    --apply; a close this pass cannot find is kept, never cleared, and
-    grades are never touched.
+    exchange's ladder rung, never another player's quotes, on the day the
+    player played (`ledger.repair_closing_lines`). Dry run unless --apply;
+    a close this pass cannot find is kept, unless it was another player's
+    quotes, which is cleared; grades are never touched.
 
     The receipts, 2026-11-05: 1,062 of 2,537 settled NBA picks carried a
     close 3 or more away from their own line, Zach Edey's rebounds at 9.5
@@ -10068,6 +10069,11 @@ def repair_close_lines(apply: bool = False, sport: str | None = None) -> None:
     print(f"  {r['overwritten']:>5} OVERWRITTEN had a close, gets the sportsbooks' one")
     print(f"  {r['unchecked']:>5} KEPT        no close found today, the old one stays")
     print(f"  {r.get('never', 0):>5} NONE        no close then and none found today")
+    # ANOTHER PLAYER'S QUOTES (2026-11-06): a quote set the odds adapter
+    # filed under two players with one first initial and surname at once
+    # (A.J. Brown's under Amon-Ra St. Brown's name) is nobody's close.
+    print(f"  {r.get('copied', 0):>5} COPIED      its close was another player's quotes; re-read from his own")
+    print(f"  {r.get('cleared', 0):>5} CLEARED     its close was another player's quotes and he has none of his own")
     print(f"  {r.get('game_lines', 0):>5} game lines  moneylines, spreads, totals: their close is the settle's, left alone")
 
     if r.get("moves"):
@@ -10090,6 +10096,8 @@ def repair_close_lines(apply: bool = False, sport: str | None = None) -> None:
                 print(textwrap.fill(why[i], width=110, initial_indent=" " * 14, subsequent_indent=" " * 16))
     _rows("OVERWRITTEN — check these before applying (each with the books its new close came from):",
           r["overwritten_sample"], r.get("overwritten_why") or ())
+    _rows("COPIED and CLEARED — each close was another player's quotes; its own close now (none: cleared):",
+          r.get("copied_sample") or [], r.get("copied_why") or ())
     _rows("filled (a sample; these are pure coverage):", r["sample"])
     if r["applied"]:
         print("\n  written. The site's record picks it up at the next settle.\n")

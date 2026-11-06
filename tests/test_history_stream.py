@@ -256,13 +256,18 @@ def test_the_settle_path_streams_even_though_it_keeps_everything():
     # parsed (linemoves.stream_wanted, behind ledger._snapshot_stream): the
     # settle pass parsed the whole file up to three times a pass, and the
     # builds that settle at their end ran out their 600 seconds.
-    assert src.count("closing_lines_by_date(_wanted_rows(_snapshot_stream(want), want))") == 1
-    assert src.count("closing_odds_by_date(_wanted_rows(_snapshot_stream(want), want))") == 1
-    assert "return stream_history() if want is None else stream_wanted(want)" in src
+    # And since 2026-11-06 with the wanted players' first-initial-and-surname
+    # kin (``siblings=True``), so a quote set filed under two of them at once
+    # is seen whole and left out (linemoves._Copies).
+    lines = "closing_lines_by_date(_wanted_rows(_snapshot_stream(want, siblings=True), want,"
+    odds = "closing_odds_by_date(_wanted_rows(_snapshot_stream(want, siblings=True), want,"
+    assert src.count(lines) == 1, "the line reader no longer streams the bets' rows and their kin"
+    assert src.count(odds) == 1, "the price reader no longer streams the bets' rows and their kin"
+    assert "return stream_history() if want is None else stream_wanted(want, siblings=siblings)" in src
     assert "closing_lines_by_date(load_history())" not in src
     # And the reason the streaming saving alone was small is recorded where
     # the change is, so nobody re-measures it from scratch to find out.
-    i = src.index("closing_lines_by_date(_wanted_rows(_snapshot_stream(want), want))")
+    i = src.index(lines)
     assert "3 MB" in src[max(0, i - 1400):i], \
         "the measured saving is no longer written down beside the change"
 

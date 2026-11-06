@@ -2087,6 +2087,9 @@ class OddsAttachResult:
     # visible: it means the exact name map is drifting, and the fallback
     # is a safety net rather than a licence to stop maintaining it.
     loose_matched: int = 0
+    # Loose candidates refused because nothing proved the price came from
+    # the prop's own game (2026-11-06: one man's quotes on another's card).
+    loose_refused: int = 0
     # Events the book HAS and we could not place on our slate. Every one of
     # these is a whole game's worth of prices we never looked at, and its
     # props are indistinguishable downstream from props the book never
@@ -2735,6 +2738,17 @@ def _leg_by_commence(legs: list, commence: str):
     return min(legs, key=_dist)
 
 
+def _own_game_proven(prop, pair) -> bool:
+    """Is this price PROVEN to come from the prop's own game? The loose
+    fallback's test (2026-11-06), stricter than `_wrong_game`: an unknown
+    pair or a prop with no team proves nothing, so it is no."""
+    team = str(getattr(prop, "team", "") or "")
+    if not team or not pair:
+        return False
+    home, away = pair
+    return bool(home or away) and team in (home, away)
+
+
 def _wrong_game(prop, pair) -> bool:
     """Is this price from a game the prop's team is not in?
 
@@ -3186,6 +3200,18 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     for (nkey, market), info in menu.items():
         k = f"{_name_key_loose(info['player'])}|{market}"
         loose.setdefault(k, []).append((nkey, market))
+    # ONE ON EACH SIDE, AND HIS OWN GAME PROVEN (2026-11-06). A unique book
+    # entry was not enough: Amon-Ra St. Brown's own quotes were missing from
+    # a Week 1 pull, A.J. Brown's were the only "a brown" on the menu, and
+    # St. Brown's prop took them. The snapshot file kept them under both
+    # names and Ethan's close-line repair read A.J. Brown's 62.0 as St.
+    # Brown's close. Both men were on the slate, so the key was never one
+    # man's; and a price is taken this way only from a game the prop's team
+    # is proven to be in (`_own_game_proven`), never from one it cannot place.
+    slate_loose: dict[str, set] = {}
+    for _p in slate.props:
+        slate_loose.setdefault(f"{_name_key_loose(_p.player)}|{_p.market}", set()).add(
+            normalize_name(_p.player))
 
     scorer_markets = set(scorer_map.values())
     for prop in slate.props:
@@ -3213,9 +3239,14 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         hit_key = (normalize_name(prop.player), prop.market)
         lines = index.get(hit_key)
         if not lines:
-            cands = loose.get(f"{_name_key_loose(prop.player)}|{prop.market}")
-            if cands and len(cands) == 1:
+            lk = f"{_name_key_loose(prop.player)}|{prop.market}"
+            cands = loose.get(lk)
+            if cands and len(cands) == 1 and len(slate_loose.get(lk, ())) == 1:
                 lines = index.get(cands[0])
+                _info = menu.get(cands[0]) or {}
+                if lines and not _own_game_proven(prop, (_info.get("home"), _info.get("away"))):
+                    result.loose_refused += 1
+                    lines = None
                 if lines:
                     hit_key = cands[0]
                     result.loose_matched += 1

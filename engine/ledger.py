@@ -3813,16 +3813,17 @@ def repair_premature(conn, hist_conn, apply: bool = False) -> dict:
     return plan
 
 
-def _snapshot_stream(want):
+def _snapshot_stream(want, siblings: bool = False):
     """The snapshot file for these bets: every row when ``want`` is None,
     else only the lines whose text names a wanted market and player
     (`linemoves.stream_wanted`, which says why: the settle pass parsed the
-    whole file up to three times a pass, and the builds ran out of time)."""
+    whole file up to three times a pass, and the builds ran out of time).
+    ``siblings``: their first-initial-and-surname kin too (`_wanted_rows`)."""
     from .linemoves import stream_history, stream_wanted
-    return stream_history() if want is None else stream_wanted(want)
+    return stream_history() if want is None else stream_wanted(want, siblings=siblings)
 
 
-def _wanted_rows(rows, want):
+def _wanted_rows(rows, want, siblings: bool = False):
     """Only the snapshots of the bets being settled.
 
     THE BOX'S HISTORY IS 2.7 MILLION ROWS (2026-10-08, 444 MB), and the two
@@ -3831,12 +3832,19 @@ def _wanted_rows(rows, want):
     the settle chores were killed for it. ``want`` is the open bets'
     ``{(normalized player, market)}``; every row of those keys is kept, so
     each of their closes, legs and stamps is exactly what the whole file
-    gives. ``None`` keeps everything (a caller that wants the full map)."""
+    gives. ``None`` keeps everything (a caller that wants the full map).
+
+    ``siblings`` (2026-11-06) also keeps, in a wanted market, every player
+    who shares a wanted one's first initial and surname: a close reader
+    sees a quote set filed under two such players only with both halves in
+    hand (`linemoves._Copies`), and the one copied from may hold no bet."""
     if want is None:
         yield from rows
         return
+    from .linemoves import _loose
     from .sources.oddsapi import normalize_name
     markets = {m for _p, m in want}
+    kin = {(_loose(n), m) for n, m in want} if siblings else set()
     names: dict = {}
     for r in rows:
         m = r.get("market")
@@ -3846,7 +3854,7 @@ def _wanted_rows(rows, want):
         n = names.get(p)
         if n is None:
             n = names[p] = normalize_name(p)
-        if (n, m) in want:
+        if (n, m) in want or (kin and (_loose(n), m) in kin):
             yield r
 
 
@@ -3873,7 +3881,10 @@ def _snapshot_closes(want=None) -> dict:
         # `grouped` and keep only the fields the reduce needs. That is a
         # change to the settling path and wants its own measurement.
         from .linemoves import closing_lines_by_date
-        return closing_lines_by_date(_wanted_rows(_snapshot_stream(want), want))
+        # With the wanted players' loose-key kin, so a copy is seen whole
+        # and left out (`linemoves._Copies`, 2026-11-06).
+        return closing_lines_by_date(_wanted_rows(_snapshot_stream(want, siblings=True), want,
+                                                  siblings=True))
     except Exception as exc:     # noqa: BLE001
         # NEVER LET CLV BOOKKEEPING BLOCK SETTLING — and never let it fail
         # in silence either. `{}` here is indistinguishable from "no
@@ -3977,9 +3988,11 @@ def _snapshot_close_odds(markets=None, want=None) -> dict:
             # Only the markets the caller will ask about (the close repair,
             # one sport at a time): the box OOM-killed the all-sport run at
             # 1.37 GB on 2026-10-06.
-            return closing_odds_by_date(r for r in _wanted_rows(_snapshot_stream(want), want)
+            return closing_odds_by_date(r for r in _wanted_rows(_snapshot_stream(want, siblings=True),
+                                                                want, siblings=True)
                                         if r.get("market") in markets)
-        return closing_odds_by_date(_wanted_rows(_snapshot_stream(want), want))
+        return closing_odds_by_date(_wanted_rows(_snapshot_stream(want, siblings=True), want,
+                                                 siblings=True))
     except Exception:            # never let CLV bookkeeping block settling
         return {}
 
@@ -4050,6 +4063,55 @@ def close_dates(hist_conn, b, team: str | None = None) -> list:
         # An unreadable or pre-migration history DB means no bridge, which
         # is the state this code was already in. Never block settling.
         return []
+
+
+def _week_team(hist_conn, b, cache: dict | None = None) -> str | None:
+    """The team on the player's own stat line for an NFL week bet: what the
+    settle path narrows `close_dates` with (its ``row["team"]``), so a
+    repair reads the one day he played, as settling did (2026-11-06).
+
+    A repair read the whole week, latest day first, and a copy filed under
+    his name on another day of it outranked the close settling had banked
+    (Amon-Ra St. Brown's 78.5 became A.J. Brown's 62.0). None for a daily
+    sport's bet, whose date is already the day, and when no stat line is
+    found: the whole week, as before. ``cache`` holds one week's names at
+    a time, so a repair asks the history once a week, not once a bet."""
+    if not _NFL_WEEK_DATE.match(str(b["date"] or "")):
+        return None
+    from .sources.oddsapi import normalize_name
+    where, wargs = _hist_where(b)
+    k = (where, tuple(wargs))
+    book = None if cache is None else cache.get(k)
+    if book is None:
+        exact: dict = {}
+        loose: dict = {}
+        try:
+            for r in hist_conn.execute(f"SELECT player, team FROM player_game_logs WHERE {where}", wargs):
+                if r[1]:
+                    exact.setdefault(r[0], r[1])
+                    loose.setdefault(normalize_name(r[0] or ""), r[1])
+        except Exception:                                      # noqa: BLE001
+            exact, loose = {}, {}
+        book = (exact, loose)
+        if cache is not None:
+            cache[k] = book
+    exact, loose = book
+    return exact.get(b["player"]) or loose.get(normalize_name(b["player"] or ""))
+
+
+def _close_was_copy(snap, b, who: str, dates, had) -> bool:
+    """Did ``had`` come from another player's quotes (`linemoves._Copies`)?
+    True when one of the bet's keys over ``dates`` held a copy and every
+    row's close there, the copy counted, is ``had``."""
+    copied = getattr(snap, "copied", None) or {}
+    if not copied or had is None:
+        return False
+    for d in dates:
+        k = _leg_key(snap, (who, b["market"], d), b)
+        v = copied.get(k)
+        if v is not None and abs(float(v) - float(had)) < 1e-9:
+            return True
+    return False
 
 
 @_audited("backfill_game_days")
@@ -6352,8 +6414,11 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None, sport: str | 
     changes: list = []      # filled: had nothing, gains a close
     over_sample: list = []  # OVERWRITTEN: had a value, gets another
     clear_sample: list = [] # cleared: had a value, loses it
+    _teams: dict = {}
     for b in rows:
-        _dates = close_dates(hist_conn, b)
+        # The day he played, as settling reads it (`_week_team`, 2026-11-06).
+        _team = _week_team(hist_conn, b, _teams)
+        _dates = (close_dates(hist_conn, b, _team) if _team else []) or close_dates(hist_conn, b)
         _who = normalize_name(b["player"])
         # The settle path's cut, so the two never disagree: nothing from
         # after the bet's own kickoff, and a stamped snapshot close beats
@@ -6475,18 +6540,46 @@ def repair_closing_lines(conn, apply: bool = False, hist_conn=None, sport: str |
             snaps["s"] = _snapshot_closes(_want)
         return snaps["s"]
     agreed = overwritten = filled = unchecked = game_lines = never = 0
+    copied = cleared = 0
     over_sample: list = []
     fill_sample: list = []
+    copy_sample: list = []
     why_items: list = []
+    copy_items: list = []
     moves: dict = {}
+    teams: dict = {}
     for b in rows:
         if b["market"] in GAME_MARKETS:
             game_lines += 1
             continue
-        dates = close_dates(hist_conn, b)
-        _close, want = _close_line_of(b, dates, normalize_name(b["player"]),
+        who = normalize_name(b["player"])
+        # THE DAY HE PLAYED, as settling reads it (2026-11-06, `_week_team`):
+        # an NFL week narrowed to his team's game, the whole week only when
+        # no stat line names his team.
+        wide = close_dates(hist_conn, b)
+        team = _week_team(hist_conn, b, teams)
+        dates = (close_dates(hist_conn, b, team) if team else []) or wide
+        _close, want = _close_line_of(b, dates, who,
                                       harvested.get((b["sport"], b["market"]), {}), _snaps)
         had = b["closing_line"]
+        # A CLOSE THAT WAS ANOTHER PLAYER'S QUOTES (2026-11-06,
+        # `linemoves._Copies`): re-read from his own when he has any, and
+        # cleared when he has none. Its old value came from the same copy,
+        # so keeping it, as an unfound close is kept, would keep the copy.
+        was_copy = had is not None and (want is None or abs(float(had) - float(want)) >= 1e-9) \
+            and _close_was_copy(_snaps(), b, who, list(dict.fromkeys(list(dates) + list(wide))), had)
+        if was_copy:
+            if want is None:
+                cleared += 1
+            else:
+                copied += 1
+            if len(copy_sample) < 12:
+                copy_sample.append((b["date"], b["player"], b["side"], b["market"], b["line"], had, want))
+                copy_items.append((b, dates, who, _close))
+            if apply:
+                conn.execute("UPDATE bets SET closing_line=? WHERE id=?",
+                             (None if want is None else float(want), b["id"]))
+            continue
         if want is None:
             if had is None:
                 never += 1
@@ -6506,7 +6599,7 @@ def repair_closing_lines(conn, apply: bool = False, hist_conn=None, sport: str |
             moves.setdefault(b["market"], []).append(abs(float(had) - float(want)))
             if len(over_sample) < 12:
                 over_sample.append(row)
-                why_items.append((b, dates, normalize_name(b["player"]), _close))
+                why_items.append((b, dates, who, _close))
         if apply:
             conn.execute("UPDATE bets SET closing_line=? WHERE id=?", (float(want), b["id"]))
     if apply:
@@ -6516,8 +6609,11 @@ def repair_closing_lines(conn, apply: bool = False, hist_conn=None, sport: str |
     # prop with no close then and none found now has nothing to compare.
     return {"settled": len(rows), "agreed": agreed, "overwritten": overwritten,
             "filled": filled, "unchecked": unchecked, "game_lines": game_lines,
-            "never": never, "overwritten_sample": over_sample,
+            "never": never, "copied": copied, "cleared": cleared,
+            "overwritten_sample": over_sample,
             "overwritten_why": [] if apply else explain_closes(hist_conn, why_items),
+            "copied_sample": copy_sample,
+            "copied_why": [] if apply else explain_closes(hist_conn, copy_items),
             "moves": {m: (len(v), statistics.median(v)) for m, v in sorted(moves.items())},
             "sample": fill_sample, "applied": apply}
 
@@ -6539,7 +6635,8 @@ def explain_closes(hist_conn, items) -> list:
     if want:
         try:
             from .linemoves import closing_books_by_date
-            books = closing_books_by_date(_wanted_rows(_snapshot_stream(want), want))
+            books = closing_books_by_date(_wanted_rows(_snapshot_stream(want, siblings=True), want,
+                                                       siblings=True))
         except Exception:                                      # noqa: BLE001
             books = {}
     out = []
@@ -6586,17 +6683,31 @@ def _harvest_why(hist_conn, b, who, close) -> str:
 def _snapshot_why(books: dict, b, dates, who) -> str:
     import datetime as _dt
     from .odds import is_exchange
+
+    def _at(ts):
+        return _dt.datetime.fromtimestamp(ts, _dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    def _copies(d):
+        # The reads left out as another player's quotes (2026-11-06,
+        # `linemoves._Copies`), with the names they were filed under too.
+        left = (getattr(books, "left", None) or {}).get((who, b["market"], d)) or []
+        return "; ".join(f"{_at(ts)} left out, the same quotes filed under "
+                         f"{' and '.join(n.title() for n in names)} too" for ts, names in left[-2:])
     for d in dates:
         hit = books.get(_leg_key(books, (who, b["market"], d), b))
         if not hit:
+            gone = _copies(d)
+            if gone:
+                return f"snapshots: every pre-game read was another player's quotes too ({gone})"
             continue
         ts, quotes = hit
-        when = _dt.datetime.fromtimestamp(ts, _dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         sb = [f"{bk} {ln:g}" for bk, ln in quotes if not is_exchange(bk)]
         ex = [f"{bk} {ln:g}" for bk, ln in quotes if is_exchange(bk)]
-        line = f"snapshots, last pre-game read {when}: " + (", ".join(sb) or "no sportsbook")
-        return line + (f"; exchange, left out: {', '.join(ex)}" if ex and sb else
-                       f"; exchange only: {', '.join(ex)}" if ex else "")
+        line = f"snapshots, last pre-game read {_at(ts)}: " + (", ".join(sb) or "no sportsbook")
+        line += (f"; exchange, left out: {', '.join(ex)}" if ex and sb else
+                 f"; exchange only: {', '.join(ex)}" if ex else "")
+        gone = _copies(d)
+        return line + (f"; {gone}" if gone else "")
     return "snapshots: this bet's last pre-game read was not found here"
 
 

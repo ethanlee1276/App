@@ -257,6 +257,71 @@ class _CloseIndex(dict):
     def __init__(self, *a, **k):
         super().__init__(*a, **k)
         self.stamped: set = set()
+        #: ``{key: the close every row gave}`` for a key whose rows held a
+        #: copy (`_Copies`): what a reader without the check banked, so a
+        #: repair can tell a close that came from a copy.
+        self.copied: dict = {}
+        #: ``{(player, market, ts): (the other players)}``: each copy left out.
+        self.twins: dict = {}
+
+
+def _loose(n: str) -> str:
+    """First initial and surname of an already normalized name: the key the
+    odds adapter's loose fallback joins on (`oddsapi._name_key_loose`)."""
+    parts = n.split()
+    return f"{parts[0][:1]} {parts[-1]}" if parts else ""
+
+
+class _Copies:
+    """QUOTES FILED UNDER TWO PLAYERS AT ONCE (2026-11-06).
+
+    From 22 August the odds adapter could hand one player's lines to another
+    whose own were missing from a pull, when the two shared a first initial
+    and a surname (`oddsapi`'s loose fallback), and until 15 September
+    nothing checked that the price came from the player's own game. The
+    snapshot writer recorded those lines under both names, from the same
+    pull, at the same instant. Ethan's NFL repair of 6 November showed it:
+    A.J. Brown and Amon-Ra St. Brown ("a brown", both), in different games,
+    at the same four books on the same four numbers, both closing at 62.0.
+
+    A copy is exact (every book, line and price, the one pull's timestamp),
+    so it is found exactly: two names that share that loose key, at one
+    instant in one market, with identical quote sets. Neither keeps it. The
+    rows cannot say whose quotes they were, and an earlier read of the true
+    owner is still a close, where another man's quotes are none."""
+
+    def __init__(self):
+        self._at: dict = {}
+
+    def add(self, name: str, r: dict) -> None:
+        try:
+            ts = float(r["ts"])
+            q = f"{r.get('book') or ''}|{float(r['line']):g}|{r.get('over_odds')}|{r.get('under_odds')}"
+        except (KeyError, TypeError, ValueError):
+            return
+        self._at.setdefault((ts, r.get("market"), _loose(name)), {}).setdefault(name, []).append(q)
+
+    def found(self) -> dict:
+        """``{(player, market, ts): (the other players)}`` for every copy."""
+        out: dict = {}
+        for (ts, market, _key), by in self._at.items():
+            if len(by) < 2:
+                continue
+            sets: dict = {}
+            for name, quotes in by.items():
+                sets.setdefault(tuple(sorted(quotes)), []).append(name)
+            for names in sets.values():
+                if len(names) > 1:
+                    for n in names:
+                        out[(n, market, ts)] = tuple(sorted(x for x in names if x != n))
+        return out
+
+
+def _uncopied(key: tuple, rows: list, twins: dict) -> list:
+    """``rows`` of one (player, market, ...) key without its copies."""
+    if not twins:
+        return rows
+    return [r for r in rows if (key[0], key[1], float(r["ts"])) not in twins]
 
 
 def _slate_day(r: dict) -> str:
@@ -416,7 +481,7 @@ def stream_today(path: str | Path | None = None, now: float | None = None):
     return stream_since(midnight, path)
 
 
-def stream_wanted(want, path: str | Path | None = None):
+def stream_wanted(want, path: str | Path | None = None, siblings: bool = False):
     """The snapshots of these ``{(normalized player, market)}`` only, one
     at a time, parsing a line only when its text says it may be wanted.
 
@@ -430,13 +495,19 @@ def stream_wanted(want, path: str | Path | None = None):
     first (two `str.find`s), and only a line an open bet asks about is
     parsed. A line not in the plain shape is parsed, so nothing wanted is
     ever lost; the caller's own filter still runs on what comes back, so
-    the answer is exactly the old one."""
+    the answer is exactly the old one.
+
+    ``siblings`` also keeps every player who shares a wanted player's first
+    initial and surname (2026-11-06): the close readers need both halves of
+    a copy to see it (`_Copies`), and the man whose quotes were copied may
+    hold no bet at all."""
     from .sources.oddsapi import normalize_name
     path = Path(path) if path else HISTORY_PATH
     if not path.exists():
         return
     markets = {m for _p, m in want}
     people = {n for n, _m in want}
+    kin = {_loose(n) for n in people} if siblings else set()
     names: dict = {}
     # `record_snapshots`' own `json.dumps` shape. Inline rather than a
     # helper: a call per field per line was half the read's time. A field
@@ -457,7 +528,7 @@ def stream_wanted(want, path: str | Path | None = None):
                 n = names.get(who)
                 if n is None:
                     n = names[who] = normalize_name(who) if slash not in who else None
-                if n is not None and n not in people:
+                if n is not None and n not in people and not (kin and _loose(n) in kin):
                     continue
             raw = raw.strip()
             if not raw:
@@ -490,17 +561,23 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
     from .sources.oddsapi import normalize_name
 
     grouped: dict[tuple, list[dict]] = {}
+    copies = _Copies()
     for r in rows:
         try:
             float(r["ts"])
             date = _slate_day(r)
-            key = (normalize_name(r["player"]), r["market"], date)
+            name = normalize_name(r["player"])
+            key = (name, r["market"], date)
             float(r["line"])                       # reject unusable rows early
             grouped.setdefault(key, []).append(_slim(r, _LINE_KEYS))
+            copies.add(name, r)
         except (KeyError, TypeError, ValueError):
             continue
     out = _CloseIndex()
-    for key, items in grouped.items():
+    # ANOTHER PLAYER'S QUOTES ARE NOBODY'S CLOSE (2026-11-06, `_Copies`).
+    out.twins = twins = copies.found()
+
+    def _legs(key, items, drop):
         # A price quoted after first pitch is not a closing line — see
         # _pregame_only. Without this cut the last in-play re-price of a
         # staggered slate became the "close", and every CLV computed off
@@ -508,9 +585,12 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
         #
         # One close per GAME (`_pregame_legs`): the plain key is the first
         # game's, as it always was; a doubleheader also files each game
-        # under ``key + (leg,)`` so a leg-two bet reads its own.
+        # under ``key + (leg,)`` so a leg-two bet reads its own. A copy is
+        # left out inside its game, so the games keep their numbers.
         legs = _pregame_legs(items)
+        got = []
         for n, (start, pre) in enumerate(legs, 1):
+            pre = _uncopied(key, pre, drop)
             if not pre:
                 continue
             last = max(float(r["ts"]) for r in pre)
@@ -522,13 +602,21 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
             # receipts carried closes at twice a pick's line. The board
             # never prices off a rung, and neither does the close.
             books = [r for r in at if not is_exchange(r.get("book") or "")]
-            val = _median([float(r["line"]) for r in (books or at)])
+            got.append((n, start, _median([float(r["line"]) for r in (books or at)])))
+        return got, len(legs)
+
+    for key, items in grouped.items():
+        got, nlegs = _legs(key, items, twins)
+        for n, start, val in got:
             if n == 1:
                 out[key] = val
                 if start is not None:
                     out.stamped.add(key)
-            if len(legs) > 1:
+            if nlegs > 1:
                 out[key + (n,)] = val
+        if twins and len(_uncopied(key, items, twins)) != len(items):
+            every, _n = _legs(key, items, None)
+            out.copied[key] = next((v for n, _s, v in every if n == 1), None)
     return out
 
 
@@ -537,23 +625,37 @@ def closing_books_by_date(rows) -> dict:
     the quotes at the instant `closing_lines_by_date` medians, each book
     named. For a person checking a close (``launch.py --repair-close-lines``,
     its dry run); nothing that settles reads it. Same rows, same day, same
-    pre-game cut, so the books listed are the ones the close came from."""
+    pre-game cut, the same copies left out (`_Copies`), so the books listed
+    are the ones the close came from. ``.left`` names, for each key, every
+    pre-game read left out as a copy and whose name it was filed under too:
+    ``{key: [(ts, (other players))]}``."""
     from .sources.oddsapi import normalize_name
 
     grouped: dict = {}
+    copies = _Copies()
     for r in rows:
         try:
             float(r["ts"])
             date = _slate_day(r)
-            key = (normalize_name(r["player"]), r["market"], date)
+            name = normalize_name(r["player"])
+            key = (name, r["market"], date)
             float(r["line"])
             grouped.setdefault(key, []).append(_slim(r, _LINE_KEYS))
+            copies.add(name, r)
         except (KeyError, TypeError, ValueError):
             continue
-    out: dict = {}
+    twins = copies.found()
+    out = _CloseIndex()
+    out.twins = twins
+    out.left = {}
     for key, items in grouped.items():
         legs = _pregame_legs(items)
         for n, (_start, pre) in enumerate(legs, 1):
+            left = sorted({(float(r["ts"]), twins[(key[0], key[1], float(r["ts"]))]) for r in pre
+                           if (key[0], key[1], float(r["ts"])) in twins})
+            pre = _uncopied(key, pre, twins)
+            if left and n == 1:
+                out.left[key] = left
             if not pre:
                 continue
             last = max(float(r["ts"]) for r in pre)
@@ -610,6 +712,7 @@ def closing_odds_by_date(rows: list[dict]) -> dict:
     from .sources.oddsapi import normalize_name
 
     grouped: dict[tuple, list[dict]] = {}
+    copies = _Copies()
     for r in rows:
         try:
             float(r["ts"])                         # reject unusable rows early
@@ -620,17 +723,22 @@ def closing_odds_by_date(rows: list[dict]) -> dict:
                 continue
             date = _slate_day(r)
             ln = round(float(r["line"]), 1)
+            name = normalize_name(r["player"])
             grouped.setdefault(
-                (normalize_name(r["player"]), r["market"], date, ln),
+                (name, r["market"], date, ln),
                 []).append(_slim(r, _ODDS_KEYS))
+            copies.add(name, r)
         except (KeyError, TypeError, ValueError):
             continue
     out = _CloseIndex()
+    # Another player's quotes are nobody's close (`_Copies`, 2026-11-06).
+    out.twins = twins = copies.found()
     for key, items in grouped.items():
         # Per game, as `closing_lines_by_date`: the plain key is the first
         # game's close, and a doubleheader adds ``key + (leg,)``.
         legs = _pregame_legs(items)
         for n, (start, pre) in enumerate(legs, 1):
+            pre = _uncopied(key, pre, twins)
             if not pre:
                 continue
             val = _price_close(pre)
