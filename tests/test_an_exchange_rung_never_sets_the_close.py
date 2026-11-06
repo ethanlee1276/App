@@ -96,6 +96,26 @@ def test_the_snapshot_close_is_the_sportsbooks_median_not_the_ladders():
     assert list(only.values()) == [13.0], "with no sportsbook quoting, the exchanges are the market"
 
 
+def test_the_dry_run_names_the_books_at_the_snapshot_close():
+    """The snapshot half of the dry run's explanation: the books at the day's
+    last pre-game read, the exchange's rungs listed apart."""
+    t = dt.datetime.fromisoformat(f"{DAY}T23:00:00+00:00").timestamp()
+    rows = [_snap(t - 600, "DraftKings", 8.5), _snap(t, "DraftKings", 9.5), _snap(t, "FanDuel", 10.5),
+            _snap(t, "Novig", 12.5), _snap(t, "Novig", 19.5)]
+    books = linemoves.closing_books_by_date(rows)
+    key = (EDEY, "reb", linemoves._slate_day(rows[0]))
+    assert set(books) == set(linemoves.closing_lines_by_date(rows)), "the same keys as the close"
+    assert books[key] == (t, [("DraftKings", 9.5), ("FanDuel", 10.5), ("Novig", 12.5), ("Novig", 19.5)])
+    b = {"sport": "nba", "market": "reb", "leg": None}
+    why = ledger._snapshot_why(books, b, [key[2]], EDEY)
+    assert why.startswith("snapshots, last pre-game read ") and "DraftKings 9.5, FanDuel 10.5" in why, why
+    assert why.endswith("; exchange, left out: Novig 12.5, Novig 19.5"), why
+    assert ledger._snapshot_why(books, b, ["2001-01-01"], EDEY).startswith("snapshots: this bet's"), \
+        "a day with no read says so"
+    lone = linemoves.closing_books_by_date([_snap(t, "Novig", 12.5)])
+    assert ledger._snapshot_why(lone, b, [key[2]], EDEY).endswith("no sportsbook; exchange only: Novig 12.5")
+
+
 def test_a_settled_nba_bet_banks_the_sportsbooks_close():
     t = Path(tempfile.mkdtemp())
     saved = ledger.DEFAULT_DB
@@ -146,9 +166,16 @@ def test_the_repair_rereads_a_settled_close_at_the_sportsbooks_number():
     dry = ledger.repair_closing_lines(L, apply=False, hist_conn=H, sport="nba")
     assert (dry["overwritten"], dry["agreed"], dry["applied"]) == (1, 0, False), dry
     assert dry["overwritten_sample"][0][-2:] == (19.5, 9.5), dry["overwritten_sample"]
+    # The dry run names the books behind the new close (6 November), and
+    # how far the closes move, by market.
+    why = dry["overwritten_why"][0]
+    assert why.startswith(f"harvest {DAY}: DraftKings 9.5 (-115/-105), FanDuel 9.5 (-110/-110)*"), why
+    assert why.endswith("Novig 19.5 (+900/-2000) [exchange]"), why
+    assert dry["moves"] == {"reb": (1, 10.0)}, dry["moves"]
     assert L.execute("SELECT closing_line FROM bets").fetchone()[0] == 19.5, "a dry run writes nothing"
     done = ledger.repair_closing_lines(L, apply=True, hist_conn=H, sport="nba")
     assert done["overwritten"] == 1 and done["applied"], done
+    assert done["overwritten_why"] == [], "the write reads nothing more"
     row = L.execute("SELECT closing_line, status, pnl_units FROM bets").fetchone()
     assert (row["closing_line"], row["status"], row["pnl_units"]) == (9.5, "won", 0.91), \
         "the close changes, the grade and the money never do"
@@ -171,7 +198,8 @@ def test_settling_and_the_line_repair_read_one_rule():
     launch = (Path(__file__).resolve().parents[1] / "launch.py").read_text(encoding="utf-8")
     assert '"--repair-close-lines"' in launch and 'repair_close_lines(apply="--apply" in argv' in launch
     i = launch.index("def repair_close_lines(")
-    assert '_backed_up("repair-close-lines")' in launch[i:i + 1500], "an --apply that edits the journal backs it up first"
+    assert '_backed_up("repair-close-lines", history=False)' in launch[i:i + 1500], \
+        "an --apply that edits the journal backs it up first (the journal alone: it never writes history.db)"
 
 
 if __name__ == "__main__":

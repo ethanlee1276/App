@@ -532,6 +532,39 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
     return out
 
 
+def closing_books_by_date(rows) -> dict:
+    """``{(normalized player, market, YYYY-MM-DD[, leg]): (ts, [(book, line), ...])}``:
+    the quotes at the instant `closing_lines_by_date` medians, each book
+    named. For a person checking a close (``launch.py --repair-close-lines``,
+    its dry run); nothing that settles reads it. Same rows, same day, same
+    pre-game cut, so the books listed are the ones the close came from."""
+    from .sources.oddsapi import normalize_name
+
+    grouped: dict = {}
+    for r in rows:
+        try:
+            float(r["ts"])
+            date = _slate_day(r)
+            key = (normalize_name(r["player"]), r["market"], date)
+            float(r["line"])
+            grouped.setdefault(key, []).append(_slim(r, _LINE_KEYS))
+        except (KeyError, TypeError, ValueError):
+            continue
+    out: dict = {}
+    for key, items in grouped.items():
+        legs = _pregame_legs(items)
+        for n, (_start, pre) in enumerate(legs, 1):
+            if not pre:
+                continue
+            last = max(float(r["ts"]) for r in pre)
+            at = sorted((str(r.get("book") or "?"), float(r["line"])) for r in pre if float(r["ts"]) == last)
+            if n == 1:
+                out[key] = (last, at)
+            if len(legs) > 1:
+                out[key + (n,)] = (last, at)
+    return out
+
+
 def closing_odds_by_date(rows: list[dict]) -> dict:
     """``{(player, market, YYYY-MM-DD, line): {"over": px, "under": px}}``
 

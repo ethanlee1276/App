@@ -2733,13 +2733,22 @@ REPAIR_COPY_FLOOR_PCT = 15
 REPAIR_COPY_MEASURE_BYTES = 200 * 1024 ** 2
 
 
-def _backup_before_repair(what: str = "repair", disk=None):
-    """Copy both databases somewhere safe. Returns the directory or None.
+def _backup_before_repair(what: str = "repair", disk=None, history: bool = True):
+    """Copy the databases a repair writes somewhere safe. Returns the
+    directory or None.
 
     EVERY `--apply` THAT REWRITES THE JOURNAL comes through here first
     (audit A2-4): --repair-premature, --repair-closes, --repair-close-lines,
     --void-unplayed and --resize-unstaked. Each caller stops rather than edit with no way back
     when this returns None.
+
+    ONLY WHAT THE REPAIR WRITES (2026-11-06). The journal (ledger.db) is
+    always copied; history.db (6.7 GB) only when ``history``, which only
+    --repair-premature needs: it deletes partial stat rows there. Every
+    other repair reads history.db and writes the journal alone, and copying
+    the history anyway is what refused the NFL and college close-line
+    writes on 6 November ("the copy needs 7.1 GB and 14.3 GB is free"),
+    one day after the NBA's had left a 7 GB copy behind.
 
     Through SQLite's backup API, not a file copy: both databases run in
     WAL mode, and a copy of the main file alone can miss every write
@@ -2755,7 +2764,8 @@ def _backup_before_repair(what: str = "repair", disk=None):
         if pr["removed"]:
             print(f"  old pre-repair copies: {pr['removed']} file(s) removed, "
                   f"{pr['freed'] / 1e9:.1f} GB freed")
-        sources = [s for s in (Path(_led.DEFAULT_DB), Path(_db.DEFAULT_DB)) if s.is_file()]
+        sources = [s for s in (Path(_led.DEFAULT_DB),) + ((Path(_db.DEFAULT_DB),) if history else ())
+                   if s.is_file()]
         need = 0
         for s in sources:
             need += s.stat().st_size
@@ -2787,9 +2797,10 @@ def _backup_before_repair(what: str = "repair", disk=None):
         return None
 
 
-def _backed_up(what: str) -> bool:
-    """Take the pre-repair backup and say so; False means do not write."""
-    backup = _backup_before_repair(what)
+def _backed_up(what: str, history: bool = True) -> bool:
+    """Take the pre-repair backup and say so; False means do not write.
+    ``history``: the repair writes history.db too (see _backup_before_repair)."""
+    backup = _backup_before_repair(what, history=history)
     print(f"  Backup written: {backup}" if backup else
           "  ⚠️  Backup FAILED — stopping rather than editing the journal "
           "with no way back.")
@@ -9986,7 +9997,7 @@ def repair_closes(apply: bool = False, sport: str | None = None) -> None:
     from engine import db as hist_db
     from engine import ledger
     conn = ledger.connect()
-    if apply and not _backed_up("repair-closes"):
+    if apply and not _backed_up("repair-closes", history=False):
         return
     # The HARVESTED closes as well as the free snapshots. This ran on
     # snapshots alone, so it could only recover what our own live pulls
@@ -10046,7 +10057,7 @@ def repair_close_lines(apply: bool = False, sport: str | None = None) -> None:
     from engine import db as hist_db
     from engine import ledger
     conn = ledger.connect()
-    if apply and not _backed_up("repair-close-lines"):
+    if apply and not _backed_up("repair-close-lines", history=False):
         return
     r = ledger.repair_closing_lines(conn, apply=apply, hist_conn=hist_db.connect(), sport=sport)
     print(f"\n{'='*70}\n  SETTLED PROPS' CLOSING LINES, RE-READ AT THE SPORTSBOOKS' NUMBER"
@@ -10056,15 +10067,29 @@ def repair_close_lines(apply: bool = False, sport: str | None = None) -> None:
     print(f"  {r['filled']:>5} FILLED      had no close, gains one")
     print(f"  {r['overwritten']:>5} OVERWRITTEN had a close, gets the sportsbooks' one")
     print(f"  {r['unchecked']:>5} KEPT        no close found today, the old one stays")
+    print(f"  {r.get('never', 0):>5} NONE        no close then and none found today")
+    print(f"  {r.get('game_lines', 0):>5} game lines  moneylines, spreads, totals: their close is the settle's, left alone")
 
-    def _rows(label, sample):
+    if r.get("moves"):
+        # HOW FAR THE CLOSES MOVE, by market (2026-11-06): a rewrite the size
+        # of a market's ordinary close-to-close drift reads as a fix; one
+        # the size of the line itself reads as a mismatch to look into.
+        print("  the rewrites, by market (how many, and the middle move):")
+        for market, (n, mid) in r["moves"].items():
+            print(f"    {str(market)[:16]:<16} {n:>5}   {mid:g}")
+
+    def _rows(label, sample, why=()):
         if not sample:
             return
+        import textwrap
         print(f"\n  {label}")
-        for date, player, side, market, line, had, want in sample:
+        for i, (date, player, side, market, line, had, want) in enumerate(sample):
             print(f"    {date}  {str(player)[:20]:<20} {str(side or '')[:5]:<5} {str(market)[:10]:<10} "
                   f"{line}   {'(none)' if had is None else had} -> {want}")
-    _rows("OVERWRITTEN — check these before applying:", r["overwritten_sample"])
+            if i < len(why) and why[i]:
+                print(textwrap.fill(why[i], width=110, initial_indent=" " * 14, subsequent_indent=" " * 16))
+    _rows("OVERWRITTEN — check these before applying (each with the books its new close came from):",
+          r["overwritten_sample"], r.get("overwritten_why") or ())
     _rows("filled (a sample; these are pure coverage):", r["sample"])
     if r["applied"]:
         print("\n  written. The site's record picks it up at the next settle.\n")
@@ -10085,7 +10110,7 @@ def fill_game_closes(apply: bool = False, sport: str | None = None) -> None:
     from engine import db as hist_db
     from engine import ledger
     conn = ledger.connect()
-    if apply and not _backed_up("fill-game-closes"):
+    if apply and not _backed_up("fill-game-closes", history=False):
         return
     g = ledger.fill_game_closes(conn, hist_db.connect(), apply=apply, sport=sport)
     print(f"\n  GAME LINES (moneyline, total, spread) settled with no close: {g['examined']}")
@@ -10193,7 +10218,7 @@ def show_unplayed(apply: bool = False) -> None:
                   "To write it:\n"
                   "      python3 launch.py --void-unplayed --apply")
             return
-        if not _backed_up("void-unplayed"):
+        if not _backed_up("void-unplayed", history=False):
             return
         n = ledger.void_unplayed(lconn, rows)
         print(f"  Voided {n} pick(s) — no action, 0.00u each.")
@@ -11435,7 +11460,7 @@ def main() -> None:
     if "--repair-journal" in argv:
         from engine import ledger
         conn = ledger.connect()
-        if not _backed_up("repair-journal"):
+        if not _backed_up("repair-journal", history=False):
             return
         before, before_ls = ledger.performance(conn), ledger.longshot_report(conn)
         moved = ledger.move_longshots_out_of_main(conn)
@@ -11479,7 +11504,7 @@ def main() -> None:
                   f"Nothing was written. To write it:\n"
                   f"    python3 launch.py --resize-unstaked --apply")
             return
-        if not _backed_up("resize-unstaked"):
+        if not _backed_up("resize-unstaked", history=False):
             return
         n = ledger.resize_unstaked(conn)
         ledger.export_json(conn, ROOT / "web" / "data" / "record.json")

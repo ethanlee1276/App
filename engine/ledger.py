@@ -25,6 +25,7 @@ import functools as _functools
 import math
 import re
 import sqlite3
+import statistics
 from pathlib import Path
 
 from . import markets as _markets
@@ -6473,18 +6474,24 @@ def repair_closing_lines(conn, apply: bool = False, hist_conn=None, sport: str |
         if "s" not in snaps:
             snaps["s"] = _snapshot_closes(_want)
         return snaps["s"]
-    agreed = overwritten = filled = unchecked = 0
+    agreed = overwritten = filled = unchecked = game_lines = never = 0
     over_sample: list = []
     fill_sample: list = []
+    why_items: list = []
+    moves: dict = {}
     for b in rows:
         if b["market"] in GAME_MARKETS:
+            game_lines += 1
             continue
         dates = close_dates(hist_conn, b)
         _close, want = _close_line_of(b, dates, normalize_name(b["player"]),
                                       harvested.get((b["sport"], b["market"]), {}), _snaps)
         had = b["closing_line"]
         if want is None:
-            unchecked += had is not None
+            if had is None:
+                never += 1
+            else:
+                unchecked += 1
             continue
         if had is not None and abs(float(had) - float(want)) < 1e-9:
             agreed += 1
@@ -6496,15 +6503,101 @@ def repair_closing_lines(conn, apply: bool = False, hist_conn=None, sport: str |
                 fill_sample.append(row)
         else:
             overwritten += 1
+            moves.setdefault(b["market"], []).append(abs(float(had) - float(want)))
             if len(over_sample) < 12:
                 over_sample.append(row)
+                why_items.append((b, dates, normalize_name(b["player"]), _close))
         if apply:
             conn.execute("UPDATE bets SET closing_line=? WHERE id=?", (float(want), b["id"]))
     if apply:
         conn.commit()
+    # EVERY BET COUNTED (2026-11-06): the summary's lines add up to the
+    # bets examined. Game lines are left to the settle's own close, and a
+    # prop with no close then and none found now has nothing to compare.
     return {"settled": len(rows), "agreed": agreed, "overwritten": overwritten,
-            "filled": filled, "unchecked": unchecked, "overwritten_sample": over_sample,
+            "filled": filled, "unchecked": unchecked, "game_lines": game_lines,
+            "never": never, "overwritten_sample": over_sample,
+            "overwritten_why": [] if apply else explain_closes(hist_conn, why_items),
+            "moves": {m: (len(v), statistics.median(v)) for m, v in sorted(moves.items())},
             "sample": fill_sample, "applied": apply}
+
+
+def explain_closes(hist_conn, items) -> list:
+    """WHERE EACH SAMPLED CLOSE CAME FROM (2026-11-06), one line a bet, for
+    the person reading a dry run. ``items`` are ``(bet, dates, normalized
+    player, harvested close or None)``, as `_close_line_of` read them.
+
+    Ethan's NFL dry run would rewrite 3,844 closes, two week-1 receivers'
+    both to 62.0, and a close can only be judged against the books it came
+    from. A harvested close names every book's last pre-game quote that day
+    (the one priced nearest even is the close, marked *); a snapshot close
+    names every book at the day's last pre-game read (the sportsbooks'
+    median is the close; an exchange's rungs are listed apart, since they
+    count only when no sportsbook quoted). Read-only; never raises."""
+    want = {(who, b["market"]) for b, _d, who, close in items if not close}
+    books: dict = {}
+    if want:
+        try:
+            from .linemoves import closing_books_by_date
+            books = closing_books_by_date(_wanted_rows(_snapshot_stream(want), want))
+        except Exception:                                      # noqa: BLE001
+            books = {}
+    out = []
+    for b, dates, who, close in items:
+        try:
+            out.append(_harvest_why(hist_conn, b, who, close) if close
+                       else _snapshot_why(books, b, dates, who))
+        except Exception as exc:                               # noqa: BLE001
+            out.append(f"not readable here ({type(exc).__name__}: {exc})")
+    return out
+
+
+def _px(v) -> str:
+    try:
+        v = int(v)
+    except (TypeError, ValueError):
+        return "-"
+    return f"{v:+d}" if v else "-"
+
+
+def _harvest_why(hist_conn, b, who, close) -> str:
+    import datetime as _dt
+    from . import db as _hist_db
+    from .odds import is_exchange
+    day = str(close.get("taken_at") or "")[:10]
+    nxt = (_dt.date.fromisoformat(day) + _dt.timedelta(days=1)).isoformat()
+    q = ("SELECT book, line, over_odds, under_odds, taken_at" + _hist_db._commence_sql(hist_conn)
+         + " FROM odds_history WHERE sport=? AND market=? AND player=? AND taken_at >= ? AND taken_at < ?"
+         + " ORDER BY taken_at")
+    last: dict = {}
+    for r in hist_conn.execute(q, (b["sport"], b["market"], who, day, nxt)):
+        if _hist_db._in_play(r):
+            continue
+        last[r["book"]] = r
+    if not last:
+        return f"harvest {day}: {close.get('book')} {close.get('line')} (its day's other quotes not found by name)"
+    quotes = sorted(last.values(), key=lambda r: (is_exchange(r["book"] or ""), str(r["book"])))
+    parts = [f"{r['book']} {float(r['line']):g} ({_px(r['over_odds'])}/{_px(r['under_odds'])})"
+             + ("*" if r["book"] == close.get("book") else "")
+             + (" [exchange]" if is_exchange(r["book"] or "") else "") for r in quotes]
+    return f"harvest {day}: " + ", ".join(parts)
+
+
+def _snapshot_why(books: dict, b, dates, who) -> str:
+    import datetime as _dt
+    from .odds import is_exchange
+    for d in dates:
+        hit = books.get(_leg_key(books, (who, b["market"], d), b))
+        if not hit:
+            continue
+        ts, quotes = hit
+        when = _dt.datetime.fromtimestamp(ts, _dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        sb = [f"{bk} {ln:g}" for bk, ln in quotes if not is_exchange(bk)]
+        ex = [f"{bk} {ln:g}" for bk, ln in quotes if is_exchange(bk)]
+        line = f"snapshots, last pre-game read {when}: " + (", ".join(sb) or "no sportsbook")
+        return line + (f"; exchange, left out: {', '.join(ex)}" if ex and sb else
+                       f"; exchange only: {', '.join(ex)}" if ex else "")
+    return "snapshots: this bet's last pre-game read was not found here"
 
 
 def _bet_price_clv(b) -> float | None:

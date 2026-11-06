@@ -312,6 +312,41 @@ def test_a_repair_copy_is_refused_without_room():
             restore()
 
 
+def test_a_repair_copies_only_the_databases_it_writes():
+    """6 November: the NFL and college close-line writes were refused
+    because the copy took history.db's 6.7 GB too, and that repair writes
+    the journal alone. Only --repair-premature writes history.db (it deletes
+    partial stat rows there), so only it copies both."""
+    import sqlite3
+    import inspect
+    from engine import db as _db, ledger
+    with tempfile.TemporaryDirectory() as d:
+        launch, restore = _repair_fixture(Path(d))
+        hist = Path(d) / "history.db"
+        c = sqlite3.connect(hist)
+        c.execute("CREATE TABLE h (x)"); c.commit(); c.close()
+        _db.DEFAULT_DB = hist
+        try:
+            gb = 1024 ** 3
+            room = lambda p: (48 * gb, 20 * gb, 28 * gb)  # noqa: E731
+            alone = launch._backup_before_repair("close-lines", disk=room, history=False)
+            assert sorted(p.name for p in alone.iterdir()) == ["ledger.db"], list(alone.iterdir())
+            both = launch._backup_before_repair("premature", disk=room)
+            assert sorted(p.name for p in both.iterdir()) == ["history.db", "ledger.db"]
+        finally:
+            restore()
+    src = (ROOT / "launch.py").read_text(encoding="utf-8")
+    for what in ("repair-closes", "repair-close-lines", "fill-game-closes", "void-unplayed",
+                 "repair-journal", "resize-unstaked"):
+        assert f'_backed_up("{what}", history=False)' in src, what
+    assert "backup = _backup_before_repair()" in src, "the premature repair keeps both copies"
+    # And the one repair that writes history.db is the one that says so.
+    assert "hist_conn.commit()" in inspect.getsource(ledger.repair_premature)
+    for fn in (ledger.repair_closing_lines, ledger.repair_closing_odds, ledger.fill_game_closes,
+               ledger.void_unplayed, ledger.resize_unstaked, ledger.move_longshots_out_of_main):
+        assert "hist_conn.commit()" not in inspect.getsource(fn), fn.__name__
+
+
 def test_old_pre_repair_copies_are_pruned_and_the_newest_two_kept():
     import time as _t
     with tempfile.TemporaryDirectory() as d:

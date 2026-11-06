@@ -273,7 +273,7 @@ def test_the_wiring():
     assert "KEPT       a moneyline's, total's or spread's close" in launch
     i = launch.index("def fill_game_closes(")
     assert "ledger.fill_game_closes(conn, hist_db.connect(), apply=apply, sport=sport)" in launch[i:i + 3000]
-    assert '_backed_up("fill-game-closes")' in launch[i:i + 3000], "a write takes the backup first"
+    assert '_backed_up("fill-game-closes", history=False)' in launch[i:i + 3000], "a write takes the backup first"
     assert '"--fill-game-closes" in argv' in launch
 
 

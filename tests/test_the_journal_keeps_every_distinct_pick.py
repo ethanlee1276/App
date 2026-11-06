@@ -209,14 +209,14 @@ def test_every_journal_repair_backs_up_before_it_writes():
         return src[i:i + span]
 
     closes = body("def repair_closes(")
-    assert closes.index('_backed_up("repair-closes")') < closes.index("repair_closing_odds(")
+    assert closes.index('_backed_up("repair-closes", history=False)') < closes.index("repair_closing_odds(")
     unplayed = body("def show_unplayed(", 4000)
-    assert unplayed.index('_backed_up("void-unplayed")') < unplayed.index("ledger.void_unplayed(")
+    assert unplayed.index('_backed_up("void-unplayed", history=False)') < unplayed.index("ledger.void_unplayed(")
     resize = body('if "--resize-unstaked" in argv:')
     assert '"--apply" not in argv' in resize, "no dry run"
-    assert resize.index('_backed_up("resize-unstaked")') < resize.index("ledger.resize_unstaked(")
+    assert resize.index('_backed_up("resize-unstaked", history=False)') < resize.index("ledger.resize_unstaked(")
     journal = body('if "--repair-journal" in argv:')
-    assert journal.index('_backed_up("repair-journal")') < journal.index("move_longshots_out_of_main(")
+    assert journal.index('_backed_up("repair-journal", history=False)') < journal.index("move_longshots_out_of_main(")
     premature = body("backup = _backup_before_repair()", 600)
     assert "if not backup:" in premature
 
