@@ -9404,7 +9404,8 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 
 The two new lines count the copies (`COPIED`, `CLEARED`), and the list under
 them names, for each, the read left out and whose name it was filed under
-too; St. Brown's week-1 close reads his own number again. Two different
+too; St. Brown's week-1 close is his own number again (or none, `CLEARED`, if no
+quote of his own survives). Two different
 players never share one book list now. If any rewrite reads odd (a close as
 far from its line as the line itself), paste the dry run back instead of
 writing. Otherwise the write, then college's the same way (each write backs
