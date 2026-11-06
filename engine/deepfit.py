@@ -178,11 +178,23 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
             finished = False
             break
         note(f"  {sport} {label}: running {script} (up to {bound / 60:.0f} min)…")
+        kept_before = _dial_kept(sport, round_of) if label in RESUMES else None
         try:
             r = subprocess.run(cmd, cwd=ROOT, capture_output=True,
                                text=True, timeout=bound, env=env)
         except subprocess.TimeoutExpired:
             ran = _time.monotonic() - t0
+            whole = bound >= TOO_LONG_SHARE * TIMEOUT_S and ran >= TOO_LONG_SHARE * TIMEOUT_S
+            if label in RESUMES and whole and kept_before is not None \
+                    and _dial_kept(sport, round_of) == kept_before:
+                # Its whole time, and not one market more kept: it did not
+                # move. The round counts the stall (STALLS_TO_SET_ASIDE).
+                lines.append(f"⚠️  {sport} {label}: ran the whole {bound / 60:.0f} min a fitter may "
+                             f"have and kept no market it had not kept before — stalled")
+                note(lines[-1])
+                finished = False
+                tell(label, ran, "stalled")
+                continue
             if (label not in RESUMES and bound >= TOO_LONG_SHARE * TIMEOUT_S
                     and ran >= TOO_LONG_SHARE * TIMEOUT_S):
                 # The whole of a fitter's time, and still not done: no run
@@ -526,6 +538,54 @@ TOO_LONG_SHARE = 0.9
 #: over each time and are the ones a run can be too short for.
 RESUMES = ("recency dial",)
 
+#: A RESUMING FITTER THAT KEEPS NOTHING HAS STALLED (2026-11-06). The dial is
+#: tried again after a cut on the belief that a cut-off run "has still
+#: moved": it writes each market as it finishes. That is checked now. A run
+#: that gave the dial its whole time and left no more of the sport's markets
+#: kept this round than it found (`_dial_kept`) is a stall; the round's
+#: second stall sets the dial aside like a fitter no run can finish (its last
+#: fit stands), so one market that outgrows a run cannot keep the sport's
+#: other two fitters, and with them the round, waiting for ever. One stall
+#: alone is a busy night and is tried again.
+STALLS_TO_SET_ASIDE = 2
+
+#: AN UNFINISHED ROUND CARRIES OVER (2026-11-06). Each Wednesday began a new
+#: round whatever the last one still owed, and with it went the dial's kept
+#: markets (`formfit.py --resume-after` the round's first day) and each
+#: sport's fitters done. The round of 4 November still owed nine pieces after
+#: three runs; with one run a night, stalest first, the NFL's turn came about
+#: once a week, so a sport whose three fitters need two of its turns could
+#: never finish. Now a round runs to its end before the next begins (the run
+#: after it ends). Past this many days a new round begins anyway, so nothing
+#: owed for ever can hold every other fit back.
+ROUND_CARRY_MAX_DAYS = 21
+
+
+def _carries(start: str, today: _dt.date) -> bool:
+    """Does the round begun ``start`` carry on past its own week (it owes
+    pieces)? Not once it is older than ROUND_CARRY_MAX_DAYS, nor when its
+    date will not read."""
+    try:
+        return (today - _dt.date.fromisoformat(str(start)[:10])).days <= ROUND_CARRY_MAX_DAYS
+    except ValueError:
+        return False
+
+
+def _dial_kept(sport: str, round_of: str | None, path=None) -> int | None:
+    """How many of ``sport``'s recency-dial markets the store holds fitted on
+    or after ``round_of`` — what `formfit.py --resume-after` keeps — or None
+    when there is no round or the store cannot be read."""
+    if not round_of:
+        return None
+    try:
+        from . import formfit as ff
+        stored = ff._load(ff.DEFAULT_PATH if path is None else path)
+    except Exception:                                     # noqa: BLE001
+        return None
+    return sum(1 for k, v in (stored or {}).items()
+               if str(k).partition(":")[0] == sport and isinstance(v, dict)
+               and str(v.get("fitted") or "") >= round_of)
+
 #: Every piece, in the order a round takes them when they are equally
 #: stale: the sports first (football leads in the autumn; the NBA's checks
 #: right before its fitters), then the extras in the order refit_all always
@@ -701,11 +761,20 @@ def _part_way(pieces: dict, left: list, start: str, today: str) -> list[str]:
     for p in left:
         e = pieces.get(p) or {}
         fd = e.get("fitters_done") or {}
-        done = list(fd.get("done") or []) if fd.get("round") == start else []
+        mine = fd.get("round") == start
+        aside = list(fd.get("too_long") or []) if mine else []
+        done = [f for f in (fd.get("done") or []) if f not in aside] if mine else []
         cut = e.get("cut_off") or {}
         bits = [f"{', '.join(done)} done"] if done else []
+        if aside:
+            bits.append(f"{', '.join(aside)} set aside")
         if cut.get("on") == today and cut.get("fitter"):
-            bits.append(f"{cut['fitter']} cut off after {max(1, round(cut.get('after_s', 0) / 60))} min")
+            stall = e.get("stalled") or {}
+            stalled = (stall.get("round") == start and stall.get("on") == today
+                       and stall.get("fitter") == cut["fitter"])
+            bits.append(f"{cut['fitter']} cut off after {max(1, round(cut.get('after_s', 0) / 60))} min"
+                        + (f", nothing new kept (stall {stall.get('n')} of {STALLS_TO_SET_ASIDE})"
+                           if stalled else ""))
         if bits:
             out.append(f"{p} ({'; '.join(bits)})")
     return out
@@ -734,8 +803,17 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
         return out
     st = _read_state(path)
     pieces = st.setdefault("pieces", {})
-    start = round_start(today).isoformat()
-    if st.get("round") != start:
+    week = round_start(today).isoformat()
+    start = str(st.get("round") or "")
+    if start and start != week and st.get("left") and _carries(start, today):
+        # Last week's round still owes pieces: it runs to its end first,
+        # keeping what each sport has done in it (ROUND_CARRY_MAX_DAYS).
+        emit(f"deep refit: the round of {start} carries on — {len(st['left'])} piece(s) still owed "
+             f"({', '.join(st['left'])}); this week's begins when it is done")
+        if _late_checks(st, start):
+            _write_state(path, st)
+    elif start != week:
+        start = week
         st["round"] = start
         st["left"] = round_pieces(st, rows)
         _write_state(path, st)
@@ -766,6 +844,16 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
             if cur.get("round") != start:
                 cur = {"round": start, "done": []}
             e.setdefault("fitter_seconds", {})[label] = round(secs)
+            s = e.get("stalled") or {}
+            if status == "stalled":
+                # A dial run that kept nothing new in its whole time: counted
+                # for the round, in a row; the STALLS_TO_SET_ASIDE-th sets it
+                # aside (its last fit stands), the ones before are a cut.
+                n = (int(s.get("n") or 0) if s.get("round") == start and s.get("fitter") == label else 0) + 1
+                e["stalled"] = {"round": start, "n": n, "fitter": label, "on": today.isoformat()}
+                status = "too_long" if n >= STALLS_TO_SET_ASIDE else "cut_off"
+            elif s.get("fitter") == label:
+                e.pop("stalled", None)        # it moved, or finished: the count starts again
             if status == "cut_off":
                 # The longest cut today names the fitter that outgrew the
                 # run; one cut a few minutes later, only because the run's
@@ -843,6 +931,7 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
         entry.pop("cut_off", None)
         entry.pop("min_s", None)
         entry.pop("too_long", None)
+        entry.pop("stalled", None)
         left.remove(p)
         st["left"] = left
         _write_state(path, st)

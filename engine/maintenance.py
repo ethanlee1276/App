@@ -1421,6 +1421,8 @@ def settle_open(log=print, state_path: Path | None = None,
                         and state.get("lab_attempted") != today.isoformat():
                     if updater_waiting():
                         _hold(state, state_path, "lab", today, log)
+                    elif heavy_running("lab"):
+                        _hold(state, state_path, "lab", today, log, behind=heavy_running("lab"))
                     else:
                         state["lab_attempted"] = today.isoformat()
                         _save_state(state_path, state)
@@ -1505,14 +1507,53 @@ def updater_waiting(now: float | None = None) -> str:
     return commit
 
 
-def _hold(state: dict, state_path, job: str, today: _dt.date, log) -> None:
+#: ONE OF THE TWO AT A TIME (2026-11-06). The Lab and the deep refit each
+#: want the box's one CPU for most of an hour, and each stops itself on its
+#: own clock (50 minutes). On 6 November the Lab started at 00:20, the refit
+#: at 00:42, board learning at 00:58 and the bug scan at 01:31: niced jobs
+#: and the boards on one vCPU, each with a fraction of the machine, and the
+#: refit spent its 45 minutes inside the NFL's recency dial without a market
+#: kept, where on a machine to itself the dial takes about five (77 seconds
+#: a market, timed on a copy of the NFL's 2022-26 logs). Now whichever of the
+#: two would start second is held (`_hold`) and started by `launch_held` the
+#: cycle after the other ends, the same day.
+HEAVY_WEEKLY = {"deep": "engine.deepfit", "lab": "engine.lab"}
+
+
+def heavy_running(but: str = "") -> str:
+    """The module of the heavy weekly job (HEAVY_WEEKLY) running now, other
+    than ``but``'s, or "": a child this process started and has not reaped,
+    or one an earlier process left a live pid file for. Never raises."""
+    for job, module in HEAVY_WEEKLY.items():
+        if job == but:
+            continue
+        try:
+            c = _CHILDREN.get(module)
+            if c is not None and c["proc"].poll() is None:
+                return module
+            kept = _read_pid_file(module)
+            if kept and _pid_runs(kept["pid"], module):
+                return module
+        except Exception:  # noqa: BLE001
+            continue
+    return ""
+
+
+def _hold(state: dict, state_path, job: str, today: _dt.date, log, behind: str = "") -> None:
     """Hold ``job`` ("deep" or "lab") for `launch_held`: its day's attempt is
-    not spent, so it starts once the restart lands rather than tomorrow."""
+    not spent, so it starts once the restart lands, or once the other heavy
+    job (``behind``) ends, rather than tomorrow."""
     held = dict(state.get("held") or {})
     held[job] = today.isoformat()
     state["held"] = held
     _save_state(state_path, state)
-    log(f"  {'deep refit' if job == 'deep' else 'the Lab'}: held — the box's updater restarts into "
+    name = "deep refit" if job == "deep" else "the Lab"
+    if behind:
+        other = "the Lab" if behind == HEAVY_WEEKLY["lab"] else "the deep refit"
+        log(f"  {name}: held — {other} is running, and the two never share the box's one CPU; "
+            f"it starts the cycle after {other} ends")
+        return
+    log(f"  {name}: held — the box's updater restarts into "
         f"new code once the weekly job in progress ends; it starts right after")
 
 
@@ -1537,12 +1578,19 @@ def launch_held(state_path=None, today: _dt.date | None = None, log=print,
             return out
         day = today.isoformat()
         start = []
+        still = {}
+        # One heavy job at a time (HEAVY_WEEKLY): none starts while the
+        # other runs, and of two held at once only the first starts now.
+        busy = heavy_running()
         for job, when in held.items():
             key = "deep_attempted" if job == "deep" else "lab_attempted"
             if when == day and job in ("deep", "lab") and state.get(key) != day:
+                if busy or start:
+                    still[job] = when
+                    continue
                 state[key] = day
                 start.append(job)
-        state["held"] = {}
+        state["held"] = still
         _save_state(state_path, state)
         for job in start:
             if job == "deep":
@@ -2778,6 +2826,9 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             # job in progress): held, and started the moment it lands
             # (`launch_held`), the same day, its attempt not spent.
             _hold(state, state_path, "deep", today, log)
+        elif heavy_running("deep"):
+            # Nor beside the Lab (HEAVY_WEEKLY): held until it ends.
+            _hold(state, state_path, "deep", today, log, behind=heavy_running("deep"))
         else:
             state["deep_attempted"] = today.isoformat()
             _save_state(state_path, state)
@@ -2948,6 +2999,8 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
     elif state.get("deep_attempted") != today.isoformat() and _deep_due(state_path, today):
         if updater_waiting():
             _hold(state, state_path, "deep", today, log)
+        elif heavy_running("deep"):
+            _hold(state, state_path, "deep", today, log, behind=heavy_running("deep"))
         else:
             state["deep_attempted"] = today.isoformat()
             _save_state(state_path, state)

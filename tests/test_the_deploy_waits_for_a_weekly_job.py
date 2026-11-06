@@ -272,9 +272,15 @@ def test_a_held_job_starts_once_the_restart_lands_the_same_day_its_attempt_unspe
     _with_note(lambda: M.launch_held(sp, wed, lambda *_: None, deep, nxt, lab),
                {"commit": "f00dfeed", "since": time.time()})
     assert ran == []
-    # The restart has landed: both start, once, their attempts marked.
+    # The restart has landed: each starts once, its attempt marked — one at
+    # a time, since the two never share the box's one CPU (2026-11-06,
+    # tests/test_the_refit_round_carries_over_and_the_heavy_jobs_take_turns.py):
+    # the refit now, the Lab on the next cycle (these stand-ins leave no
+    # process running, so nothing holds it longer).
     out = _with_note(lambda: M.launch_held(sp, wed, lambda *_: None, deep, nxt, lab))
-    assert ran == ["deep wednesday", "lab"] and out == ["deep started", "lab started"]
+    assert ran == ["deep wednesday"] and out == ["deep started"], (ran, out)
+    out = _with_note(lambda: M.launch_held(sp, wed, lambda *_: None, deep, nxt, lab))
+    assert ran == ["deep wednesday", "lab"] and out == ["lab started"], (ran, out)
     after = M._load_state(sp)
     assert after["deep_attempted"] == after["lab_attempted"] == "2026-11-04" and not after["held"]
     _with_note(lambda: M.launch_held(sp, wed, lambda *_: None, deep, nxt, lab))
