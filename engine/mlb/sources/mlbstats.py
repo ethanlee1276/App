@@ -411,12 +411,18 @@ def park_weather(park_key: str, first_pitch: str | None = None) -> MLBWeather:
     from ...nflwx import utc_day
     day = utc_day(first_pitch)
     lat, lon = coords
-    url = (f"{METEO_BASE}?latitude={lat}&longitude={lon}"
-           f"&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,"
-           f"wind_direction_10m,precipitation_probability"
-           f"&temperature_unit=fahrenheit&wind_speed_unit=mph"
-           f"&timezone=UTC&start_date={day}&end_date={day}")
-    data = _get_json(url, f"meteo_{park_key}_{day}.json", ttl=1800)
+    from ...sources import nws
+    if nws.source() == "nws":
+        # The National Weather Service (2026-11-06, `engine.sources.nws`):
+        # the same hourly table, every US park; Toronto's is a miss.
+        data = nws.forecast(float(lat), float(lon), ttl=1800)
+    else:
+        url = (f"{METEO_BASE}?latitude={lat}&longitude={lon}"
+               f"&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,"
+               f"wind_direction_10m,precipitation_probability"
+               f"&temperature_unit=fahrenheit&wind_speed_unit=mph"
+               f"&timezone=UTC&start_date={day}&end_date={day}")
+        data = _get_json(url, f"meteo_{park_key}_{day}.json", ttl=1800)
     i = nearest_hour(data, str(first_pitch))
     if i is None:
         return MLBWeather()

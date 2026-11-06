@@ -75,7 +75,15 @@ def venue_index(rows: list) -> dict:
 
 
 def fetch_forecast(lat: float, lon: float, date: str) -> dict:
-    """Open-Meteo's hourly board for one place and day. Keyless."""
+    """The hourly board for one place and day, from the source the boards
+    read (`engine.sources.nws.source`, 2026-11-06): the National Weather
+    Service's (US venues; public domain, commercial use allowed), or
+    Open-Meteo's (keyless; its free API is for non-commercial use). The two
+    come back in one shape, so `pick_hour` reads either. The NFL's kickoff
+    reading comes through here too (`engine.nflwx`)."""
+    from ..sources import nws
+    if nws.source() == "nws":
+        return nws.forecast(lat, lon, ttl=FORECAST_TTL)
     from ..sources.fetch import fetch_json
     url = ("https://api.open-meteo.com/v1/forecast"
            f"?latitude={lat:.4f}&longitude={lon:.4f}"

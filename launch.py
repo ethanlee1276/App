@@ -5858,7 +5858,10 @@ def preflight() -> None:
         ("Polymarket leaderboard", "https://lb-api.polymarket.com/leaderboard?window=all&limit=1"),
         ("Sleeper (fantasy sync)", "https://api.sleeper.app/v1/state/nfl"),
         ("Sportsbook odds (all sports)", "https://api.the-odds-api.com/v4/sports/"),
-        ("Weather (Open-Meteo)", "https://api.open-meteo.com/v1/forecast?latitude=40&longitude=-74&hourly=temperature_2m"),
+        # The boards' forecast (2026-11-06, `engine.sources.nws`): the National
+        # Weather Service, and Open-Meteo until QB_WEATHER_SOURCE names nws.
+        ("Weather (National Weather Service)", "https://api.weather.gov/points/40.8135,-74.0745"),
+        ("Weather (Open-Meteo, until the switch)", "https://api.open-meteo.com/v1/forecast?latitude=40&longitude=-74&hourly=temperature_2m"),
         ("UFC fighter data (ESPN MMA)", "https://site.web.api.espn.com/apis/search/v2?query=jones&limit=1"),
         ("Injury reports (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"),
         ("Meme coins (DexScreener)", "https://api.dexscreener.com/token-boosts/top/v1"),
