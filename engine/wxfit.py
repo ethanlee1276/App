@@ -590,7 +590,7 @@ def college_measure(games: list[dict], weather: dict, carries: dict) -> dict:
         pts += team_samples(season, rows[season], cond)
     got = measure_all(pts)
     out = {}
-    for name, res in got.items():
+    for res in got.values():
         for (m, g, tier), v in (res or {}).items():
             if (m, g) == ("rush_att", "RB") and tier:
                 out[tier] = v
