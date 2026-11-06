@@ -3201,11 +3201,12 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         k = f"{_name_key_loose(info['player'])}|{market}"
         loose.setdefault(k, []).append((nkey, market))
     # ONE ON EACH SIDE, AND HIS OWN GAME PROVEN (2026-11-06). A unique book
-    # entry was not enough: Amon-Ra St. Brown's own quotes were missing from
-    # a Week 1 pull, A.J. Brown's were the only "a brown" on the menu, and
-    # St. Brown's prop took them. The snapshot file kept them under both
-    # names and Ethan's close-line repair read A.J. Brown's 62.0 as St.
-    # Brown's close. Both men were on the slate, so the key was never one
+    # entry was not enough: in Week 1 A.J. Brown played the Wednesday opener,
+    # and on the Sunday his quotes were long gone from the menu while Amon-Ra
+    # St. Brown's were the only "a brown" on it, so A.J. Brown's prop took
+    # them. The snapshot file kept them under both names and Ethan's first
+    # close-line repair read St. Brown's 62.0 as A.J. Brown's close (his own
+    # had been 64.5). Both men were on the slate, so the key was never one
     # man's; and a price is taken this way only from a game the prop's team
     # is proven to be in (`_own_game_proven`), never from one it cannot place.
     slate_loose: dict[str, set] = {}

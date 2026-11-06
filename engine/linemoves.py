@@ -274,8 +274,9 @@ def _loose(n: str) -> str:
 
 #: How near the quotes a player is judged to own must sit to his own reads
 #: (`_Copies`): a tenth of the line, at least a point and a half. A line
-#: moves less than that between one pull and the next; another player's
-#: sits further off (St. Brown's own 78.5 against A.J. Brown's 62.0).
+#: moves less than that between one pull and the next. Near is not enough
+#: on its own: in the real Week 1, A.J. Brown's own 64.5 sat within it of
+#: the 62.0 that was St. Brown's, so the NEAREST own read decides (`_place`).
 _OWN_SHARE, _OWN_FLOOR = 0.10, 1.5
 #: And how far off a man's own reads must sit for the set to be plainly not
 #: his, owner found or not: twice as far, so a line that really moved
@@ -358,8 +359,11 @@ class _Copies:
     each name's own reads do (a read of his own is a quote set no other name
     shares). The owner is the name whose latest read of his own before the
     pull, or failing that his first after it, sits nearest the copied set
-    and near enough to be his (`_place`): A.J. Brown's own 62.5 an hour
-    earlier, against St. Brown's own 78.5. Only the others lose the read.
+    and near enough to be his (`_place`). Only the others lose the read. In
+    the real Week 1 the set was St. Brown's Sunday quotes, handed to A.J.
+    Brown's prop four days after A.J. Brown had played the Wednesday opener:
+    St. Brown's own reads sat beside it, nearer than A.J. Brown's own 64.5
+    from before his game, so A.J. Brown loses it and his close is that 64.5.
     When no name's own reads can say, a name whose own reads sit plainly
     elsewhere still loses it, and the rest keep it (two men whose every read
     is the same quotes, as OKC's Jalen and Jaylin Williams would be if the

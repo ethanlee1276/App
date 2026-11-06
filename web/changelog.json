@@ -11,7 +11,7 @@
       "date": "2026-11-06",
       "kind": "fix",
       "title": "Every closing line is the player's own",
-      "body": "A closing line is the number a bet is measured against at kickoff, and the record's closing-line value is built from them. Early in the season the odds feed could file one player's prices under another's name when the two shared a first initial and a surname and the second man's own prices were missing from that pull: A.J. Brown's Week 1 receiving numbers were also filed under Amon-Ra St. Brown. No close reads such a copy now, a close that came from one is read again from the player's own prices or left empty when he has none, and the feed only fills a missing price from a game it can prove is the player's. Grades and results are unchanged; only closing-line value moves, for the bets it touched."
+      "body": "A closing line is the number a bet is measured against at kickoff, and the record's closing-line value is built from them. Early in the season the odds feed could file one player's prices under another's name when the two shared a first initial and a surname and the second man's own prices were missing from that pull: Amon-Ra St. Brown's Week 1 receiving numbers were also filed under A.J. Brown, four days after A.J. Brown had played the season's opener. No close reads such a copy now, a close that came from one is read again from the player's own prices or left empty when he has none, and the feed only fills a missing price from a game it can prove is the player's. Grades and results are unchanged; only closing-line value moves, for the bets it touched."
     },
     {
       "date": "2026-11-06",

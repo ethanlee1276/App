@@ -9379,18 +9379,23 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KY 2>&1 | tee /tmp/ky.txt
 **KX. A closing line is never another player's quotes** (step 427; your NFL
 close-line write of 6 November). Its dry run showed A.J. Brown and Amon-Ra
 St. Brown, in different games, at the same four books on the same four
-numbers, both closing at 62.0; St. Brown's had been 78.5. From 22 August to
-15 September the odds pull could hand one player's prices to another whose
-own were missing from that pull, when the two shared a first initial and a
-surname ("a brown", both), and the line history kept the copy under both
-names at the same moment. The write read it as St. Brown's close. Now:
+numbers, both closing at 62.0; theirs had been 64.5 and 78.5. From 22 August
+to 15 September the odds pull could hand one player's prices to another
+whose own were missing from that pull, when the two shared a first initial
+and a surname ("a brown", both), and the line history kept the copy under
+both names at the same moment. A.J. Brown, traded to New England, played the
+season's opener on Wednesday 9 September; on the Sunday his quotes were long
+gone, the 17:30 UTC pull handed his prop St. Brown's, and the write read
+them as A.J. Brown's close. Now:
 
 * a quote set filed under two such players at one moment is the close only
-  of the man it belongs to: his own reads either side of it say which (A.J.
-  Brown's own 62.5 an hour before it; St. Brown's own read sat at 78.5), and
-  every close reader leaves it out for the others. When no read can say, it
-  is left out only for a man whose own reads sit plainly elsewhere, so a
-  real close is never taken from the man whose quotes they were;
+  of the man it belongs to: his own reads either side of it say which, the
+  nearest winning (St. Brown's own reads that Sunday sat beside it; A.J.
+  Brown's own last read, 64.5 three hours before his Wednesday kickoff, sat
+  further off), and every close reader leaves it out for the others. When
+  no read can say, it is left out only for a man whose own reads sit plainly
+  elsewhere, so a real close is never taken from the man whose quotes they
+  were;
 * the repairs read the day the player played, as settling does, not the
   whole week latest day first;
 * a close that was a copy is re-read from the player's own quotes
@@ -9408,13 +9413,15 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 
 The two new lines count the copies (`COPIED`, `CLEARED`), and the list under
 them names, for each, the read left out and whose name it was filed under
-too; St. Brown's week-1 close is his own number again (or none, `CLEARED`, if no
-quote of his own survives), and A.J. Brown's 62.0 stays: those were his own
-quotes. Two different
-players never share one book list now. If any rewrite reads odd (a close as
-far from its line as the line itself), paste the dry run back instead of
-writing. Otherwise the write, then college's the same way (each write backs
-up the journal first):
+too. Your run of 6 November evening (4 `COPIED`, 2 `CLEARED`, 407
+`OVERWRITTEN`) put A.J. Brown's two week-1 closes back to his own 64.5 (his
+books three hours before the Wednesday opener) and left St. Brown's 62.0,
+his own quotes, alone. (This step first said the opposite, that A.J. Brown's
+62.0 was his and would stay; it was not, and the check got it right.) Two
+different players never share one book list now. If any rewrite reads odd (a
+close as far from its line as the line itself), paste the dry run back
+instead of writing. Otherwise the write, then college's the same way (each
+write backs up the journal first):
 
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nfl --apply 2>&1 | tail -12

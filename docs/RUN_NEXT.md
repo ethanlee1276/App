@@ -10,7 +10,11 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-06 (evening), after your afternoon paste (the notices
+Last updated 2026-11-06 (night), after your evening paste (the NFL's close
+lines with the copies out: right, A.J. Brown back to his own 64.5, so the
+write is next in item 1p; the weather moved to the National Weather
+Service, item 9 done), after leagues out of season went grey in the league
+row at your word (nothing to run), after your afternoon paste (the notices
 and emails right, 18 GB free, the NFL and college close lines written),
 after the NFL's write showed two receivers on one man's quotes and that
 was fixed (step KX: item 1p, both to run again), after the weather began
@@ -156,7 +160,7 @@ nothing). Best after the 04:00 UTC backup that follows this push, so KO
 reads the new note. Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JQ JR KF KG KI KL IX IU IT JA IP KP KY 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JQ JR KF KG KI KL IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (about an hour together; still
@@ -166,6 +170,22 @@ spread on the box's own games:
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long.txt
 ```
+
+**Your 6 November evening paste, and what changed for it:**
+
+- **The NFL's close lines, with the copies out (item 1p):** right; write it.
+  407 rewrites at the books' own numbers, 4 `COPIED`, 2 `CLEARED`. A.J.
+  Brown's two week-1 closes go from 62.0 back to 64.5, his own books three
+  hours before the Wednesday opener he played for New England. I had told
+  you his 62.0 would stay; that was backwards. The 62.0 was Amon-Ra St.
+  Brown's Sunday quotes, handed to A.J. Brown's prop four days after his
+  game, and the check gave them back to St. Brown. Docs, comments and the
+  public changelog now tell it the right way round, with a test on the real
+  case. The write and the rest of the sports are in item 1p.
+- **The weather (item 9):** done. `SWITCH` on 33 of 33 stadiums (within
+  2.0°F and 1.6 mph of Open-Meteo at the middle, rain chance level), the
+  setting is in, and the heartbeat shows the restart that picked it up.
+  KY is out of the run above.
 
 **Your 6 November afternoon paste, and what changed for it:**
 
@@ -264,9 +284,8 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KH 2>&1 | tee /tmp/kh.txt
 ```
 
 The ones that write, each with its own item below: item 1p's close lines
-again for the NFL and college, then MLB and the WNBA (the dry run first,
-then `--apply`), and the NBA's dry run (its write only if it finds a copy),
-and item 9's weather setting once KY says `SWITCH`. Not
+(the NFL's write, then college, MLB and the WNBA, each dry run first, then
+`--apply`), and the NBA's dry run (its write only if it finds a copy). Not
 commands: the Backblaze settings (item 0b) and alerts on your phone
 (item 1).
 
@@ -935,6 +954,23 @@ way.
 
 ## 1p. Any time after this push: re-read the closes again, with the copies out (steps KX, KJ, KT)
 
+**6 November (evening), your NFL dry run: right, write it.** 8,007 settled
+bets: 7,075 already right, 407 rewritten at the books' own numbers, 4
+`COPIED`, 2 `CLEARED`. A.J. Brown's two week-1 closes go from 62.0 back to
+64.5: he played the Wednesday opener for New England, and 64.5 is his own
+books three hours before it. The 62.0 was St. Brown's Sunday quotes, handed
+to his prop four days after his game. (Below, this item first said A.J.
+Brown's 62.0 would stay. That was backwards, and the check got it right.)
+The NFL's write, then the rest in order:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nfl --apply 2>&1 | tail -12
+```
+
+College, MLB, the WNBA and the NBA as below, each dry run first.
+
+**6 November (afternoon), before that:**
+
 **6 November (afternoon), your writes:** the NFL (8,007 settled bets: 3,844
 rewritten, 81 filled) and college (5,631: 1,490 rewritten) are written. But
 the NFL's dry run had A.J. Brown and Amon-Ra St. Brown, in different games,
@@ -955,12 +991,11 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 ```
 
 The two new lines count the copies, and the list under them names each
-one's left-out read and whose name it was filed under too; St. Brown's
-week-1 close is his own number again (or none, `CLEARED`, if no quote of his
-own survives), and A.J. Brown's 62.0 stays (those were his own quotes; only
-the copies under the other names are left out). If a rewrite reads odd (a close as
-far from its line as the line itself), paste it back instead of writing.
-Otherwise the write, and college's the same way:
+one's left-out read and whose name it was filed under too. (This first said
+A.J. Brown's 62.0 would stay as his own quotes; it was St. Brown's, and the
+dry run put A.J. Brown back to his own 64.5: see above.) If a rewrite reads
+odd (a close as far from its line as the line itself), paste it back
+instead of writing. Otherwise the write, and college's the same way:
 
 ```
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nfl --apply 2>&1 | tail -12
@@ -1363,7 +1398,13 @@ Each league says `collecting` until 200 score changes, then whether the
 licensed feed is as fast or faster. A league moves onto it only on that
 verdict, and only as its own change.
 
-## 9. Any time: the weather moves to the National Weather Service (step KY)
+## 9. Done 6 November: the weather moved to the National Weather Service (step KY)
+
+**6 November (evening), your run:** the compare said `SWITCH`. The NWS
+answered for 33 of 33 stadiums and sat within 2.0°F and 1.6 mph of
+Open-Meteo at the middle (+1.2°F and -0.1 mph on average, rain chance level).
+You set `QB_WEATHER_SOURCE nws` and restarted the service; its heartbeat
+shows the restart. Nothing left to run. What it was:
 
 **You, 6 November: "move the weather to the NWS".** Built: the college, NFL
 and MLB boards can read the National Weather Service's hourly forecast (US

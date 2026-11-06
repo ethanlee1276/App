@@ -3,23 +3,27 @@
 Ethan's NFL close-line repair, 6 November: A.J. Brown and Amon-Ra St. Brown
 played different games in Week 1, and the dry run showed both at the same
 four books on the same four numbers (BetMGM 63.5, DraftKings 61.5, FanDuel
-59.5, Hard Rock 62.5), both "closing" at 62.0. St. Brown's settled close
-had been 78.5.
+59.5, Hard Rock 62.5), both "closing" at 62.0. Their settled closes had
+been 64.5 (A.J. Brown) and 78.5 (St. Brown).
 
 How. From 22 August the odds adapter fell back to a first initial and a
 surname ("a brown", both men) when a player's own quotes were missing from
 a pull, and until 15 September nothing checked the price came from his own
-game. The snapshot writer recorded A.J. Brown's quotes under St. Brown's
-name too, from the same pull at the same instant, and the repair, reading
-the whole week latest day first, took that copy over the close settling had
-banked on the day St. Brown played. What these hold:
+game. A.J. Brown played the season's opener on Wednesday 9 September; on
+the Sunday his quotes were long gone, and the 17:30 UTC pull handed his
+prop St. Brown's. The snapshot writer recorded them under both names, from
+the same pull at the same instant, and the repair, reading the whole week
+latest day first, took that copy for A.J. Brown's close. The owner rule's
+dry run on the box put him back at his own 64.5 (`_the_real_week1`). What
+these hold:
 
   * a quote set filed under two players who share a first initial and a
     surname, at one instant in one market, is the close only of the man it
-    belongs to: his own reads either side of it say which (A.J. Brown's own
-    62.5 an hour before, against St. Brown's own 78.5), and every reader
-    leaves it out for the others, and only that (a different set, a
-    different instant, or two players whose keys differ are left alone);
+    belongs to: his own reads either side of it say which, the nearest
+    (St. Brown's own reads that Sunday, against A.J. Brown's own 64.5 from
+    before his Wednesday game), and every reader leaves it out for the
+    others, and only that (a different set, a different instant, or two
+    players whose keys differ are left alone);
   * when no read can say whose it was, a man whose own reads sit plainly
     elsewhere still loses it and the rest keep it: taking it from every
     name would clear the real close of the man the books priced;
@@ -63,10 +67,12 @@ def _rows(player, quotes, ts, start, market="rec_yds"):
 
 
 def _week1():
-    """A.J. Brown's game at 4:25 p.m. Eastern Sunday, St. Brown's that night.
-    The 17:30 UTC pull, the last before either game, lacked St. Brown's own
-    quotes, and his prop (and an unpriced third "a brown") took A.J. Brown's;
-    each man's own earlier read sits before it."""
+    """THE MIRROR IMAGE of the real Week 1 (`_the_real_week1`, below), kept
+    to pin the rule the other way round: here A.J. Brown is the man the
+    books quoted at 17:30 UTC (his game at 4:25 p.m. Eastern), and St. Brown
+    (his game that night) and an unpriced third "a brown" are the men his
+    quotes were handed to; each man's own earlier read sits before it. In
+    the real week the roles ran the other way."""
     aj_start, arsb_start = T + 3 * 3600 - 300, T + 7 * 3600
     return (_rows(AJ, (("DraftKings", 62.5, -110, -110), ("FanDuel", 62.5, -115, -105)), T - 3600, aj_start)
             + _rows(AJ, COPY, T, aj_start)
@@ -229,7 +235,7 @@ def test_the_readers_see_a_copy_whole_when_the_man_copied_from_holds_no_bet():
     assert idx.copied, "the copy was seen though A.J. Brown holds no bet"
 
 
-def _journal_and_history(bets):
+def _journal_and_history(bets, games=None, logs=None):
     t = Path(tempfile.mkdtemp())
     L = ledger.connect(t / "l.db")
     for player, team, line, close in bets:
@@ -242,12 +248,12 @@ def _journal_and_history(bets):
     H = db.connect(t / "h.db")
     H.executemany("INSERT INTO games (sport, season, period, game_id, home, away, date) VALUES "
                   "('nfl', 2026, '001', ?, ?, ?, ?)",
-                  [("g1", "PHI", "DAL", "2026-09-13"), ("g2", "DET", "CHI", "2026-09-13"),
-                   ("g3", "NYG", "WAS", "2026-09-13"), ("g4", "MIN", "ATL", "2026-09-14")])
+                  games or [("g1", "PHI", "DAL", "2026-09-13"), ("g2", "DET", "CHI", "2026-09-13"),
+                            ("g3", "NYG", "WAS", "2026-09-13"), ("g4", "MIN", "ATL", "2026-09-14")])
     H.executemany("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, "
                   "position, home, market, value) VALUES ('nfl', 2026, '001', ?, ?, ?, ?, 'WR', 1, "
                   "'rec_yds', 90)",
-                  [("g1", AJ, "PHI", "DAL"), ("g2", ARSB, "DET", "CHI"), ("g3", AMARI, "NYG", "WAS")])
+                  logs or [("g1", AJ, "PHI", "DAL"), ("g2", ARSB, "DET", "CHI"), ("g3", AMARI, "NYG", "WAS")])
     H.commit()
     return L, H
 
@@ -261,7 +267,7 @@ def test_the_repair_rereads_a_copied_close_and_clears_one_with_nothing_of_its_ow
     linemoves.HISTORY_PATH = p
     try:
         dry = ledger.repair_closing_lines(L, apply=False, hist_conn=H, sport="nfl")
-        # A.J. Brown's 62.0 was his own quotes: it stands.
+        # In the mirror, A.J. Brown's 62.0 was his own quotes: it stands.
         assert (dry["copied"], dry["cleared"], dry["agreed"]) == (1, 1, 1), dry
         assert dry["settled"] == sum(dry[k] for k in ("agreed", "overwritten", "filled", "unchecked",
                                                       "game_lines", "never", "copied", "cleared")), dry
@@ -279,6 +285,63 @@ def test_the_repair_rereads_a_copied_close_and_clears_one_with_nothing_of_its_ow
         assert all((r[2], r[3]) == ("won", 0.91) for r in rows), "grades and money never move"
         again = ledger.repair_closing_lines(L, apply=False, hist_conn=H, sport="nfl")
         assert (again["agreed"], again["copied"], again["cleared"], again["never"]) == (2, 0, 0, 1), again
+    finally:
+        linemoves.HISTORY_PATH = saved
+
+
+#: THE REAL WEEK 1, as the box's dry run of 6 November and the schedule
+#: tell it. A.J. Brown, traded to New England, played the season's opener at
+#: Seattle on Wednesday 9 September (8:20 p.m. Eastern, 00:20 UTC on the
+#: 10th); his own books' last read before it, at 21:20 UTC, put him at 64.5,
+#: the close settling banked. Amon-Ra St. Brown played that Sunday. Four days
+#: after A.J. Brown's game the 17:30 UTC pull of the 13th handed his prop
+#: St. Brown's quotes (the "a brown" key), the file kept them under both
+#: names, and the first repair (the whole week, latest day first) took them
+#: for A.J. Brown's close. A.J. Brown's own 64.5 sits near enough to that
+#: 62.0 to have been his, so it is St. Brown's nearer read of his own that
+#: places the set: the nearest own read wins, not the first near one. The
+#: books and lines of the two reads are the box's; the prices, St. Brown's
+#: earlier read, his kickoff and his opponent are stand-ins.
+AJ_OPENER = dt.datetime(2026, 9, 10, 0, 20, tzinfo=dt.timezone.utc).timestamp()
+AJ_OWN = (("BetMGM", 65.5, -115, -105), ("DraftKings", 63.5, -110, -110), ("FanDuel", 64.5, -112, -108),
+          ("Hard Rock", 65.5, -115, -105), ("theScore Bet", 64.5, -110, -110))
+
+
+def _the_real_week1():
+    arsb_start = T + 3 * 3600 - 300
+    return (_rows(AJ, AJ_OWN, AJ_OPENER - 3 * 3600, AJ_OPENER)
+            + _rows(ARSB, (("DraftKings", 61.5, -110, -110), ("FanDuel", 62.5, -112, -108)),
+                    T - 3600, arsb_start)
+            # The copy carries the game its price came from: St. Brown's.
+            + _rows(AJ, COPY, T, arsb_start)
+            + _rows(ARSB, COPY, T, arsb_start))
+
+
+def test_the_real_week1_gives_aj_brown_his_own_close_back():
+    """The box's dry run, 6 November: A.J. Brown's two closes 62.0 -> 64.5,
+    COPIED, from his own read three hours before his Wednesday opener; St.
+    Brown's 62.0 left alone, his own quotes; nothing cleared."""
+    rows = _the_real_week1()
+    idx = linemoves.closing_lines_by_date(rows)
+    aj, arsb = normalize_name(AJ), normalize_name(ARSB)
+    assert idx[(aj, "rec_yds", "2026-09-09")] == 64.5, dict(idx)
+    assert idx[(arsb, "rec_yds", "2026-09-13")] == 62.0, dict(idx)
+    assert (aj, "rec_yds", "2026-09-13") not in idx, "four days after his game, nothing of his own"
+    assert idx.copied == {(aj, "rec_yds", "2026-09-13"): 62.0}, idx.copied
+    assert idx.twins == {(aj, "rec_yds", T): (arsb,)}, idx.twins
+    # The journal as the first write left it: 62.0 for both men's bets.
+    L, H = _journal_and_history([(AJ, "NE", 59.5, 62.0), (ARSB, "DET", 77.5, 62.0)],
+                                games=[("g0", "SEA", "NE", "2026-09-09"), ("g2", "DET", "CHI", "2026-09-13")],
+                                logs=[("g0", AJ, "NE", "SEA"), ("g2", ARSB, "DET", "CHI")])
+    saved = linemoves.HISTORY_PATH
+    linemoves.HISTORY_PATH = _file(rows)
+    try:
+        dry = ledger.repair_closing_lines(L, apply=False, hist_conn=H, sport="nfl")
+        assert (dry["copied"], dry["cleared"], dry["agreed"]) == (1, 0, 1), dry
+        assert [(row[1], row[-1]) for row in dry["copied_sample"]] == [(AJ, 64.5)], dry["copied_sample"]
+        ledger.repair_closing_lines(L, apply=True, hist_conn=H, sport="nfl")
+        got = L.execute("SELECT player, closing_line FROM bets ORDER BY id").fetchall()
+        assert [tuple(r) for r in got] == [(AJ, 64.5), (ARSB, 62.0)], got
     finally:
         linemoves.HISTORY_PATH = saved
 
