@@ -555,6 +555,30 @@ function leagueCrests() {
   });
 }
 
+/* A LEAGUE OUT OF SEASON WEARS GREY. Ethan, 2026-11-06, circling the row in
+   a phone screenshot: "whatever sport is no longer going, like the season is over,
+   we should grey out there button up here since there is no point for a
+   user too use the page. Obviously still keep the page accessible and able
+   too click." The heartbeat names the leagues that are out
+   (launch._seasons_public: the season table, and a postseason board that
+   says its season has ended, the same word that takes a league out of the
+   odds plan). Their buttons lose the league's colour (styles.css
+   `.off-season`) and their tooltip says "Season over", which is also what
+   a screen reader reads after the name; every one still opens its page,
+   and nothing about the tap changes. A heartbeat without the list (an
+   older server, a file that would not load) changes nothing. */
+function markSeasons(seasons) {
+  if (!seasons || !Array.isArray(seasons.over)) return;
+  const out = new Set(seasons.over.map((s) => String(s).toLowerCase()));
+  document.querySelectorAll('.sportbar-in .sport-btn[data-kind="league"]').forEach((b) => {
+    if (b.dataset.titleBase === undefined) b.dataset.titleBase = b.getAttribute("title") || "";
+    const off = out.has(b.dataset.sport);
+    b.classList.toggle("off-season", off);
+    const base = b.dataset.titleBase;
+    b.title = off ? (base ? `Season over — ${base}` : "Season over") : base;
+  });
+}
+
 function initMoreMenu() {
   const wrap = document.getElementById("sport-more");
   const btn = document.getElementById("more-toggle");
@@ -2790,6 +2814,7 @@ async function loadHeartbeat() {
     const hb = await res.json();
     const p50 = Number(hb.cycle_p50_s);
     if (isFinite(p50) && p50 > 0) _cycleMs = p50 * 1000;
+    markSeasons(hb.seasons);
   } catch (e) {}
 }
 //: Past this, the site is not slow — it is BROKEN, and quietly. The

@@ -707,6 +707,31 @@ def _seasons_over(day: _dt.date | None = None) -> frozenset:
     return got
 
 
+def _seasons_public(day: _dt.date | None = None) -> dict:
+    """WHICH LEAGUES ARE NOT PLAYING, for the page's league row (2026-11-06).
+
+    Ethan, circling the row in a phone screenshot: "whatever sport is no longer
+    going, like the season is over, we should grey out there button up
+    here since there is no point for a user too use the page. Obviously
+    still keep the page accessible and able too click."
+
+    Out: a league the season table holds outside every phase
+    (`oddsplan.season_phase`: MLB and the WNBA in November), or one in its
+    postseason whose own board says the season has ended (`_seasons_over`,
+    the same word that takes it out of the odds plan, so the row and the
+    credits never disagree). ``{"over": [...]}``, sorted, in the heartbeat;
+    {} when it cannot be worked out, which the page reads as nothing to
+    grey. Read once a minute with the games, as `_seasons_over` is."""
+    try:
+        from engine import oddsplan
+        when = day or _dt.date.fromtimestamp(time.time())
+        over = {lg for lg in oddsplan.SEASONS if oddsplan.season_phase(lg, when) is None}
+        over |= set(_seasons_over(day))
+        return {"over": sorted(over)}
+    except Exception:                                        # noqa: BLE001
+        return {}
+
+
 def _weighted_share(sport: str | None = None) -> float:
     """This league's slice of the day by WEIGHT — the rule before the
     month's plan, and its fallback now (see `_budget_share`).
@@ -5281,6 +5306,9 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
             # THE NBA'S SWITCHES (2026-11-04): what the box's own checks
             # decided, and when — so "is the new spread on yet" is a glance.
             "nba_switches": _nba_switches_public(),
+            # THE LEAGUES OUT OF SEASON (2026-11-06): the page greys their
+            # buttons in the league row and keeps them working.
+            "seasons": _seasons_public(),
         }))
         os.replace(tmp, p)
     except OSError:

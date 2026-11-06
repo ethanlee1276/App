@@ -10780,12 +10780,25 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
 .sportbar-in .sport-btn[data-sport="wnba"] { --hue: var(--lg-wnba); }
 .sportbar-in .sport-btn[data-sport="nhl"] { --hue: var(--lg-nhl); }
 .sportbar-in .sport-btn[data-sport="ufc"] { --hue: var(--lg-ufc); }
+/* A LEAGUE OUT OF SEASON (Ethan, 2026-11-06; app.js `markSeasons`): grey,
+   and still a button. Its colour gives way to grey, so the crest, the
+   hover and the lit state lose the league's hue together. At rest the
+   code sits on the faint tier: the in-season leagues' codes already rest
+   on `--text-mute`, so an off-season code there looked exactly like them
+   on a computer (measured, both rgb(188,184,178)). A hover, a keyboard
+   focus or the open page lifts it back to `--text-mute`, so it still
+   reads as a button the moment it is reached for, and the page behind it
+   stays open. */
+.sportbar-in .sport-btn.off-season { --hue: var(--text-mute); color: var(--text-faint); }
+.sportbar-in .sport-btn.off-season:focus-visible { color: var(--hue); }
 .sportbar-in .sport-btn:hover { color: var(--hue); }
 .sportbar-in .sport-btn.active { color: var(--hue); border-bottom-color: transparent; border-radius: 999px;
   background-color: color-mix(in oklab, var(--hue) 14%, transparent); }
 @media (max-width: 760px) {
   .sportbar-in .sport-btn .crest { border-color: transparent; background: var(--fill-tone);
     color: color-mix(in oklab, var(--hue) 80%, var(--text-dim)); }
+  /* The out-of-season crest's glyph greys with its code (above). */
+  .sportbar-in .sport-btn.off-season:not(.active) .crest { color: var(--text-faint); }
   .sportbar-in .sport-btn.active .crest { outline-color: transparent; color: var(--hue); box-shadow: var(--glow-hue);
     background: color-mix(in oklab, var(--hue) 20%, var(--panel)); }
   .sportbar-in .sport-btn.active { background-color: transparent; }

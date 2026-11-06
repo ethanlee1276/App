@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-06",
+      "kind": "ship",
+      "title": "Leagues out of season are greyed in the league row",
+      "body": "A league whose season is over now shows grey in the row of leagues at the top of the page, so the ones playing tonight stand out: today that is baseball and the WNBA. It is still a button and its page still opens, with everything on it; hovering over it says the season is over. A league turns grey when the season calendar says it is done, or sooner when its own scoreboard shows the last game of the postseason has been played (the same signal that stops the site buying odds for it), and turns back the day its season starts."
+    },
+    {
+      "date": "2026-11-06",
       "kind": "fix",
       "title": "Every closing line is the player's own",
       "body": "A closing line is the number a bet is measured against at kickoff, and the record's closing-line value is built from them. Early in the season the odds feed could file one player's prices under another's name when the two shared a first initial and a surname and the second man's own prices were missing from that pull: A.J. Brown's Week 1 receiving numbers were also filed under Amon-Ra St. Brown. No close reads such a copy now, a close that came from one is read again from the player's own prices or left empty when he has none, and the feed only fills a missing price from a game it can prove is the player's. Grades and results are unchanged; only closing-line value moves, for the bets it touched."
