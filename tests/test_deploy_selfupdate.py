@@ -145,7 +145,10 @@ def test_the_ambient_environment_still_wins():
     sh = _backup_code()
     i = sh.index("QB_ENV_FILE")
     guard = sh[i:i + 400]
-    assert '-z "${QB_BACKUP_REMOTE:-}"' in guard, guard
+    # One loop since 2026-11-06 (the history copies kept are read the same
+    # way): each variable is read from the file only when it is empty.
+    assert 'for _var in QB_BACKUP_REMOTE QB_BACKUP_KEEP_HISTORY' in guard, guard
+    assert '-z "${!_var:-}"' in guard, guard
 
 
 def test_reading_the_env_file_survives_it_being_absent_or_unreadable():

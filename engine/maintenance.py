@@ -1991,7 +1991,15 @@ def _deep_due(state_path, today) -> bool:
 
 
 def _run_lab(log) -> list[str]:
-    """The weekly backtest lab, out of process and detached."""
+    """The weekly backtest lab, out of process and detached. Never in the
+    suite's sandbox (it sets engine.modelstate's directory, which
+    production never does), like the inventions and the bug scan: a real
+    Lab run started by a test replayed every sport in the checkout and
+    wrote its sealed page there, and while it ran, the chores held the deep
+    refit behind it (HEAVY_WEEKLY) in whichever test came next."""
+    from . import modelstate
+    if os.environ.get(modelstate.ENV_VAR):
+        return ["engine.lab: not started in the sandbox"]
     return _spawn_module("engine.lab", log, args=("--auto",))
 
 
