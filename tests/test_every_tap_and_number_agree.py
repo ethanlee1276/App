@@ -200,8 +200,18 @@ const SURFACES = {
         const T = eval(txt);
         const el = [...document.querySelectorAll(sel)][i];
         if (!el) return null;
+        // The pick page paints inside a view transition, so on a busy
+        // host a fixed wait can read it half-drawn (gate 67: the view was
+        // "prop" and its pick line still empty). Mark the card on screen,
+        // tap, then wait for a NEW card with its pick line — the page is
+        // rebuilt whole (host.innerHTML), so the mark never survives.
+        const old = document.querySelector("#prop-body .pp-card");
+        if (old) old.dataset.tapStale = "1";
         el.click();
-        await new Promise((r) => setTimeout(r, 250));
+        const fresh = () => { const c = document.querySelector("#prop-body .pp-card");
+          return c && !c.dataset.tapStale && T(c.querySelector(".pick") || c).trim(); };
+        for (let t = 0; t < 50 && !fresh(); t++) await new Promise((r) => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, 100));
         const q = (s) => { const e = document.querySelector(s); return e ? T(e) : ""; };
         return { view: state.view, pick: q("#prop-body .pp-card .pick"), player: q("#prop-body .pp-card .player"),
                  board: q("#prop-body .pp-board"), body: q("#prop-body").slice(0, 4000) };
