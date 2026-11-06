@@ -76,10 +76,21 @@ SPORT_SERIES = {
 #: A spread market reads "CAR wins by over 20.5 points?" (the club in the
 #: ticker's last segment, the margin its floor strike); a total "over 50.5
 #: points scored" (the floor strike).
+#:
+#: BASKETBALL AND HOCKEY CONFIRMED, 2026-11-06 (Ethan's catch-up, step KL,
+#: crowdprobe.py nhl nba wnba): KXNHLSPREAD 29 events / 134 markets
+#: ("Pittsburgh wins by over 1.5 goals"), KXNHLTOTAL 29 / 261 ("Full Game:
+#: Over 5.5 goals scored"), KXNBASPREAD 8 / 264, KXNBATOTAL 8 / 232, in the
+#: same shape as football's. In September the NBA's were empty (no season
+#: yet), so neither league was wired in; the WNBA's are empty until May.
+#: The trader (engine/kalshitrade) places only on the boards it lists
+#: (football's), so these feed the crowd prices and the money split only.
 LINE_SERIES = {
     "nfl": ("KXNFLSPREAD", "KXNFLTOTAL"),
     "cfb": ("KXNCAAFSPREAD", "KXNCAAFTOTAL"),
     "mlb": ("KXMLBSPREAD", "KXMLBTOTAL"),
+    "nba": ("KXNBASPREAD", "KXNBATOTAL"),
+    "nhl": ("KXNHLSPREAD", "KXNHLTOTAL"),
 }
 
 

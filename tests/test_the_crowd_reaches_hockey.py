@@ -45,8 +45,40 @@ def test_both_readers_list_the_nhl():
     assert kalshi.sport_of(KALSHI[0]) == "nhl"
     assert kalshi.sport_of({"ticker": "KXNBAGAME-26NOV05LALBOS-BOS"}) == "nba", "the others unchanged"
     probe = (ROOT / "crowdprobe.py").read_text(encoding="utf-8")
-    assert '"nhl": ("KXNHLSPREAD", "KXNHLTOTAL")' in probe, "the spread and total names wait for the probe"
-    assert "nhl" not in kalshi.LINE_SERIES, "unconfirmed series are not wired in"
+    assert '"nhl": ("KXNHLSPREAD", "KXNHLTOTAL")' in probe, "the probe still lists them"
+    # The probe confirmed both on the box (6 November), the NBA's too.
+    assert kalshi.LINE_SERIES["nhl"] == ("KXNHLSPREAD", "KXNHLTOTAL")
+    assert kalshi.LINE_SERIES["nba"] == ("KXNBASPREAD", "KXNBATOTAL")
+    assert "wnba" not in kalshi.LINE_SERIES, "empty until May: not wired in"
+    from engine import kalshitrade
+    assert set(kalshitrade.BOARD_FILE) == {"nfl", "cfb"}, "the trader places on football's boards only"
+
+
+def _kx_line(ticker, floor, p):
+    return {"ticker": ticker, "event_ticker": ticker.rsplit("-", 1)[0], "floor_strike": floor,
+            "strike_type": "greater", "prob": p, "price_basis": "book", "spread_cents": 2.0,
+            "volume_24h": 3000.0, "open_interest": 5000.0, "series": ticker.split("-", 1)[0]}
+
+
+def test_a_hockey_game_carries_kalshis_puck_line_and_total():
+    """The puck line is the board's own bet: Calgary at home −1.5 is
+    Kalshi's "Calgary wins by over 1.5 goals"; Edmonton's same strike is a
+    different bet (Edmonton −1.5) and is left out."""
+    g = dict(GAMES[0], spread=1.5, favorite="CGY", total=6.5)
+    kl = [_kx_line("KXNHLSPREAD-26NOV05EDMCGY-EDM2", 1.5, 0.29),
+          _kx_line("KXNHLSPREAD-26NOV05EDMCGY-CGY2", 1.5, 0.31),
+          _kx_line("KXNHLTOTAL-26NOV05EDMCGY-6", 5.5, 0.62),
+          _kx_line("KXNHLTOTAL-26NOV05EDMCGY-7", 6.5, 0.47),
+          _kx_line("KXNHLSPREAD-26NOV04EDMCGY-CGY2", 1.5, 0.90)]
+    got = crowd.kalshi_lines(kl, g)
+    assert got == {"spread_home_line": -1.5, "kalshi_home_cover": 0.31, "total_line": 6.5,
+                   "kalshi_over": 0.47}, got
+    away = dict(g, favorite="EDM")
+    assert crowd.kalshi_lines(kl, away)["kalshi_home_cover"] == round(1 - 0.29, 4), \
+        "Edmonton −1.5: Calgary +1.5 covers when Edmonton does not win by two"
+    board = {"games": [dict(g)]}
+    census = crowd.attach(board, "nhl", KALSHI, [], kl)
+    assert census["kalshi_spread"] == 1 and census["kalshi_total"] == 1, census
 
 
 def test_only_the_winner_is_the_moneyline():
