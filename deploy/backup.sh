@@ -47,7 +47,6 @@ DBS=("data/accounts.db" "data/ledger.db" "data/zeno.db")
 if [[ "${QB_BACKUP_HISTORY:-1}" != "0" ]]; then DBS+=("data/history.db"); fi
 FILES=("data/cache/line_history.jsonl" "data/cache/odds_budget.json"
        "data/forecast_heads.jsonl" "data/feedstate")
-KEEP_BIG="${QB_BACKUP_KEEP_HISTORY:-3}"
 
 # /etc/qellys/env IS WHERE THIS IS CONFIGURED, and until 2026-08-22 this
 # script was the one thing that never read it. `setenv.sh` writes there,
@@ -72,14 +71,24 @@ KEEP_BIG="${QB_BACKUP_KEEP_HISTORY:-3}"
 # would execute whatever is in it and pull every secret into a shell
 # that has no use for them. One `sed` for the one variable we want.
 QB_ENV_FILE="${QB_ENV_FILE:-/etc/qellys/env}"
-if [[ -z "${QB_BACKUP_REMOTE:-}" && -r "$QB_ENV_FILE" ]]; then
-  _from_file="$(sed -n 's/^[[:space:]]*QB_BACKUP_REMOTE[[:space:]]*=[[:space:]]*//p' \
-                "$QB_ENV_FILE" | tail -1)"
-  _from_file="${_from_file%\"}"; _from_file="${_from_file#\"}"
-  _from_file="${_from_file%\'}"; _from_file="${_from_file#\'}"
-  [[ -n "$_from_file" ]] && export QB_BACKUP_REMOTE="$_from_file"
-  unset _from_file
-fi
+# AND HOW MANY HISTORY COPIES (2026-11-06). The way to stay inside
+# Backblaze's free 10 GB is fewer history copies, not a bigger cap, and the
+# runbook sets it the one way it sets everything (`setenv.sh
+# QB_BACKUP_KEEP_HISTORY 2`): read here the same way as the remote, the
+# ambient environment still winning.
+for _var in QB_BACKUP_REMOTE QB_BACKUP_KEEP_HISTORY; do
+  if [[ -z "${!_var:-}" && -r "$QB_ENV_FILE" ]]; then
+    _from_file="$(sed -n "s/^[[:space:]]*${_var}[[:space:]]*=[[:space:]]*//p" \
+                  "$QB_ENV_FILE" | tail -1)"
+    _from_file="${_from_file%\"}"; _from_file="${_from_file#\"}"
+    _from_file="${_from_file%\'}"; _from_file="${_from_file#\'}"
+    [[ -n "$_from_file" ]] && export "$_var=$_from_file"
+    unset _from_file
+  fi
+done
+unset _var
+KEEP_BIG="${QB_BACKUP_KEEP_HISTORY:-3}"
+[[ "$KEEP_BIG" =~ ^[1-9][0-9]*$ ]] || KEEP_BIG=3
 
 mkdir -p "$DEST"
 
@@ -170,8 +179,9 @@ offsite_why() {
 }
 
 # A FULL BUCKET, MEASURED (2026-11-06). What the bucket holds after this
-# run's deletes, and what this box keeps, so the cap can be set above the
-# second (Backblaze: Caps & Alerts). One listing, only when the cap refused.
+# run's deletes, and what this box keeps, so the two can be read against
+# Backblaze's free 10 GB (Ethan, 6 November: nothing paid). One listing,
+# only when the cap refused.
 _gb() {
   [[ -n "${1:-}" ]] && python3 -c 'import sys; print("%.1f GB" % (int(sys.argv[1]) / 1e9))' "$1" 2>/dev/null \
     || echo "an unknown amount"
@@ -186,8 +196,10 @@ cap_sizes() {
     | python3 -c 'import json,sys; print(json.load(sys.stdin).get("bytes", ""))' 2>/dev/null || true)"
   local_b="$(du -sb "$DEST" 2>/dev/null | cut -f1 || true)"
   echo "  the bucket's storage cap is full: it holds $(_gb "$remote_b"), old versions included; this box keeps $(_gb "$local_b")."
-  echo "  Raise the cap above what this box keeps, with a night's room (Backblaze: Caps & Alerts),"
-  echo "  and let the bucket keep only the last version of a file (Backblaze: Lifecycle Settings)."
+  echo "  Backblaze's first 10 GB are free: keep the cap there, and let the bucket keep only the last version"
+  echo "  of a file (Backblaze: Lifecycle Settings), so a copy the sync deletes stops counting a day later."
+  echo "  If this box keeps more than about 8 GB, keep fewer history copies (QB_BACKUP_KEEP_HISTORY=2),"
+  echo "  not a bigger cap: room above the free 10 GB is paid."
 }
 
 push_remote() {

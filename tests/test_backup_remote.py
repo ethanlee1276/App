@@ -231,9 +231,46 @@ def test_a_full_bucket_deletes_first_and_says_how_full_it_is():
         assert "FAILED: rclone could not sync. Backups are LOCAL ONLY." in out, out[-800:]
         assert "the bucket's storage cap is full: it holds 9.8 GB, old versions included; this box keeps" \
             in out, out[-800:]
-        assert "Raise the cap above what this box keeps" in out and "keep only the last version" in out
+        # Nothing paid (Ethan, 6 November): the free 10 GB, the lifecycle
+        # rule, and fewer history copies before ever a bigger cap.
+        assert "first 10 GB are free: keep the cap there" in out and "keep only the last version" in out
+        assert "QB_BACKUP_KEEP_HISTORY=2" in out and "Raise the cap" not in out
         assert [f for f in os.listdir(s.backups) if f.endswith(".db.gz")], "the local backup stays"
         assert got.returncode == 0, "a down offsite leg never fails the nightly script"
+
+
+def test_the_history_copies_kept_are_read_from_the_settings_file():
+    """6 November, nothing paid: the way to stay inside Backblaze's free
+    10 GB is fewer history copies, not a bigger cap, set the way the
+    runbook sets everything (`setenv.sh QB_BACKUP_KEEP_HISTORY 2` writes
+    /etc/qellys/env). The script read only the remote from that file; it
+    reads the copies kept too, and the environment still wins."""
+    with Stub() as s:
+        os.makedirs(os.path.join(s.tree, "data", "cache"), exist_ok=True)
+        with open(os.path.join(s.tree, "data", "cache", "odds_budget.json"), "w", encoding="utf-8") as fh:
+            fh.write("{}")
+        os.makedirs(s.backups, exist_ok=True)
+        for i in range(3):
+            old = os.path.join(s.backups, f"odds_budget_json-2026010{i}T000000Z.tar.gz")
+            open(old, "wb").close()
+            os.utime(old, (1_700_000_000 + i, 1_700_000_000 + i))
+        envf = os.path.join(s.dir, "env")
+        with open(envf, "w", encoding="utf-8") as fh:
+            fh.write("QB_BACKUP_KEEP_HISTORY=1\n")
+        saved = {k: os.environ.get(k) for k in ("QB_ENV_FILE", "QB_BACKUP_KEEP_HISTORY")}
+        os.environ["QB_ENV_FILE"] = envf
+        os.environ.pop("QB_BACKUP_KEEP_HISTORY", None)
+        try:
+            got = s.run(remote=s.remote)
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        kept = [f for f in os.listdir(s.backups) if f.startswith("odds_budget_json-")]
+        assert len(kept) == 1, (kept, got.stdout[-600:])
+        assert got.returncode == 0, got.stdout[-600:]
 
 
 def test_a_missing_rclone_says_how_to_get_it():
