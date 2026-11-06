@@ -20,7 +20,7 @@ Counted from the hosts the engine fetches (`engine/` and `engine/sources/`),
 | nflverse (GitHub releases) | NFL play-by-play, participation, schedules | Free and open |
 | collegefootballdata.com | College football play-by-play and stats | Free tier, keyed |
 | The Odds API | Every price on the boards | Yes, keyed (`ODDS_API_KEY`) |
-| Open-Meteo | Game-day weather | Free |
+| Open-Meteo | Game-day weather | Free, for non-commercial use by its own terms (docs/LAUNCH.md 0.2; RUN_NEXT item 9) |
 | Polymarket, Kalshi public APIs | The prediction desk | Free |
 
 ### Research only: not read by the site

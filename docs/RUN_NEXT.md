@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-06 (afternoon), after college's own rain got a free
+Last updated 2026-11-06 (afternoon), after the weather feed's terms were
+put to you (item 9, no command), after college's own rain got a free
 read-only check (step KW: item 1w), after the weekly refit's round started
 finishing what it begins and the Lab and the refit started taking turns on
 the box's one CPU (step KV: item 1g, nothing new to run), and after nothing
@@ -247,6 +248,8 @@ close lines (1,537 re-read at the sportsbooks' number), and item 8's key
 - Nothing paid (6 November): no subscriptions, plans or upgrades. Nothing on
   this list asks you to buy anything; the offsite backup stays inside
   Backblaze's free 10 GB and the scores timer on BALLDONTLIE's free plan.
+  One free feed has a catch (Open-Meteo's weather: free for non-commercial
+  use by its terms), and its free way out is item 9.
 - The seven pages a free account could not open: all open (six since 28
   October, the Lab on 5 November with its summary; step KQ).
 - NBA player tracking: built for research (item 1u; steps KR and KS).
@@ -1230,3 +1233,21 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KP 2>&1 | tee /tmp/kp.txt
 Each league says `collecting` until 200 score changes, then whether the
 licensed feed is as fast or faster. A league moves onto it only on that
 verdict, and only as its own change.
+
+## 9. Your call, no command: game-day weather from a source a paid site may use
+
+Nothing here costs anything today, and nothing breaks. But one free source
+comes with a catch you should know about, because you said nothing paid:
+Open-Meteo, which the college and MLB boards read for each game's
+forecast (and the weather studies, KU and KW, read for past games), says
+on its own pages that its free API is for non-commercial use, and its
+commercial use is a paid plan. A site that sells memberships is commercial.
+
+The free way out, if you want one: the National Weather Service's own
+forecast (api.weather.gov), which is the US government's, public domain,
+free with no key, and allows commercial use. Every college venue and every
+MLB park but Toronto's is in the US, and Toronto's is roofed. Say "move the
+weather to the NWS" and I'll build it, measured against what the boards
+read today before anything a member sees changes. Or keep Open-Meteo as it
+is, alongside the other feed terms you parked for later (docs/LAUNCH.md
+0.2, where it is now listed).
