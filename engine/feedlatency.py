@@ -197,15 +197,57 @@ def prune(today: str, root: Path | None = None) -> int:
     return n
 
 
+#: WHAT THE WATCHER LAST DID (2026-11-06), written each time it looks,
+#: beside its sightings. The report is run by hand, from a shell that cannot
+#: see the service's settings, and it said "no BALLDONTLIE key on this box"
+#: on a box whose service had the key (Ethan's catch-up, 6 November). The
+#: note is the service's own word: when it last looked, what was on, how
+#: often it reads and at what limit, and whether a refused key put it to
+#: sleep.
+STATE_NAME = "watcher.json"
+_LAST_ON: list = [[]]
+
+
+def _note_state(wait: float, at: float, root: Path | None = None) -> None:
+    from .sources import balldontlie as B
+    d = Path(root) if root else DIR
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        st = {"at": round(at, 1), "on": list(_LAST_ON[0]), "next_s": wait, "asleep": bool(_OFF[0]),
+              "paused_until": _PAUSE[0] if _PAUSE[0] > at else None,
+              "limit": B.RATE.get("limit"), "remaining": B.RATE.get("remaining")}
+        tmp = d / f".{STATE_NAME}.{os.getpid()}.tmp"
+        tmp.write_text(json.dumps(st), encoding="utf-8")
+        os.replace(tmp, d / STATE_NAME)
+    except OSError:
+        pass
+
+
+def read_state(root: Path | None = None):
+    """The watcher's last note, or None when it has never written one here."""
+    try:
+        return json.loads(((Path(root) if root else DIR) / STATE_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def watch_once(espn=None, bdl=None, now=None, root: Path | None = None, log=print) -> float:
     """One tick. Returns the wait before the next: `every_s()` for the
     leagues with a live game in ESPN's scoreboard, IDLE_S when there are
     none. ``espn(sport) -> (rows, fetched_at)`` and ``bdl(sport, dates) ->
-    (games, answered_at)`` are for tests."""
+    (games, answered_at)`` are for tests. Each tick leaves its note
+    (`read_state`)."""
+    clock = now or time.time
+    _LAST_ON[0] = []
+    wait = _tick(espn, bdl, clock, root, log)
+    _note_state(wait, clock(), root)
+    return wait
+
+
+def _tick(espn, bdl, clock, root, log) -> float:
     from .sources import balldontlie as B
     espn = espn or _espn_rows
     bdl = bdl or _bdl_games
-    clock = now or time.time
     if _OFF[0]:
         return IDLE_S
     on = []
@@ -222,6 +264,7 @@ def watch_once(espn=None, bdl=None, now=None, root: Path | None = None, log=prin
             _SEEN_AT.pop(("bdl", sport), None)
             continue
         on.append((sport, live, te))
+    _LAST_ON[0] = [sp for sp, _l, _t in on]
     if not on:
         return IDLE_S
     tick = every_s(len(on))
@@ -330,11 +373,39 @@ def report(days: int = 14, today: str | None = None, root: Path | None = None) -
     return out
 
 
-def report_lines(rep: dict, enabled: bool) -> list:
+def watcher_line(state, enabled: bool, now: float | None = None) -> str:
+    """What the watcher's own note says, in a line. Without a note, why there
+    may be none: run by hand, this shell cannot see the service's settings."""
+    if not state:
+        if enabled:
+            return ("  the watcher: no note from it yet (it leaves one each time it looks, once the "
+                    "service has restarted with the key)")
+        return ("  the watcher: no note from it on this box. It runs inside the service, started only "
+                "when the service has BALLDONTLIE_API_KEY; this shell cannot see the service's settings. "
+                "After the key is set, the restart starts it and it leaves a note here each time it looks")
+    t = time.time() if now is None else now
+    ago = max(0.0, t - float(state.get("at") or 0))
+    when = ("just now" if ago < 90 else f"{ago / 60:.0f} min ago" if ago < 5400 else f"{ago / 3600:.1f} h ago")
+    if ago > 3 * IDLE_S:
+        return (f"  the watcher: its last note is from {when}, when it should look every few minutes — it is "
+                f"not running now (has the service restarted since the key was taken off?)")
+    if state.get("asleep"):
+        return (f"  the watcher: asleep, BALLDONTLIE refused the key (last looked {when}); it wakes at the "
+                f"next restart")
+    rate = f"; the plan allows {state['limit']} a minute" if state.get("limit") else ""
+    on = state.get("on") or []
+    if on:
+        return (f"  the watcher: last looked {when}, with {' and '.join(sp.upper() for sp in on)} on; "
+                f"reading every {float(state.get('next_s') or 0):.0f} s{rate}")
+    return (f"  the watcher: last looked {when}; no NBA or NFL game was on, so it looks every "
+            f"{IDLE_S // 60} minutes{rate}")
+
+
+def report_lines(rep: dict, enabled: bool, state=None, now: float | None = None) -> list:
+    head = [watcher_line(state, enabled, now)]
     if not rep:
-        return ["  feed latency: nothing recorded yet"
-                + ("" if enabled else " (no BALLDONTLIE key on this box, so the watcher is asleep)")]
-    lines = []
+        return head + ["  feed latency: nothing recorded yet"]
+    lines = head
     for sport, r in rep.items():
         lines.append(f"  {sport}: {r['n']} score change(s) both feeds showed, over {r['games']} game(s); "
                      f"BALLDONTLIE first {r['bdl_first']}, ESPN first {r['espn_first']}; "
@@ -356,7 +427,7 @@ def main(argv=None) -> int:
         except (IndexError, ValueError):
             pass
     from .sources import balldontlie as B
-    for line in report_lines(report(days), B.enabled()):
+    for line in report_lines(report(days), B.enabled(), read_state()):
         print(line)
     return 0
 

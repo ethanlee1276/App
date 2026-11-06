@@ -143,6 +143,7 @@ def _reset():
     FL._PAUSE[0] = 0.0
     FL._OFF[0] = False
     FL._PRUNED[0] = ""
+    FL._LAST_ON[0] = []
 
 
 def _row(away_score, home_score, state="live"):
@@ -323,8 +324,47 @@ def test_the_report_compares_the_middles_and_waits_for_enough():
     rep3 = FL.report(days=1, today="2026-11-05", root=root3)["nba"]
     assert rep3["verdict"].startswith("ESPN faster by 12.0 s"), rep3["verdict"]
     lines = FL.report_lines({}, enabled=False)
-    assert "no BALLDONTLIE key" in lines[0]
+    assert "this shell cannot see the service's settings" in lines[0] and "nothing recorded yet" in lines[1]
+    assert "no BALLDONTLIE key on this box" not in " ".join(lines), \
+        "run by hand, the shell's settings say nothing about the service's"
     assert any("→ ESPN faster" in ln for ln in FL.report_lines(FL.report(1, "2026-11-05", root3), True))
+
+
+def test_the_watcher_leaves_a_note_the_report_reads():
+    """6 November: the report, run by hand, said there was no key on a box
+    whose service had one. The watcher now leaves its own note each time it
+    looks, and the report words what that note says."""
+    _reset()
+    root = Path(tempfile.mkdtemp())
+    assert FL.read_state(root) is None
+    B.RATE.update({"limit": 5, "remaining": 4})
+    t = [7000.0]
+    FL.watch_once(espn=lambda s: ([_row(1, 0, state="final")], t[0]), bdl=lambda s, d: ([], t[0]),
+                  now=lambda: t[0], root=root)
+    st = FL.read_state(root)
+    assert st["at"] == 7000.0 and st["on"] == [] and st["next_s"] == FL.IDLE_S and st["asleep"] is False
+    assert st["limit"] == 5 and st["paused_until"] is None
+    line = FL.watcher_line(st, enabled=False, now=7030.0)
+    assert "last looked just now" in line and "no NBA or NFL game was on" in line and "5 a minute" in line
+    FL.watch_once(espn=lambda s: ([_row(2, 0)], t[0]) if s == "nba" else ([], 0.0),
+                  bdl=lambda s, d: ([_bdl(2, 0)], t[0]), now=lambda: t[0], root=root)
+    st = FL.read_state(root)
+    assert st["on"] == ["nba"] and st["next_s"] == FL.every_s(1)
+    assert "with NBA on; reading every" in FL.watcher_line(st, enabled=False, now=7000.0)
+    late = FL.watcher_line(st, enabled=True, now=7000.0 + 4 * FL.IDLE_S)
+    assert "not running now" in late, late
+
+    def refused(s, d):
+        raise B.BDLUnavailable("BALLDONTLIE refused the key (401)")
+    FL.watch_once(espn=lambda s: ([_row(2, 3)], t[0]) if s == "nba" else ([], 0.0), bdl=refused,
+                  now=lambda: t[0], root=root, log=lambda *_: None)
+    st = FL.read_state(root)
+    assert st["asleep"] is True and "asleep, BALLDONTLIE refused the key" in FL.watcher_line(st, True, 7000.0)
+    lines = FL.report_lines({}, enabled=False, state=st, now=7000.0)
+    assert lines[0].startswith("  the watcher: asleep") and "this shell cannot see" not in lines[0]
+    assert not list(root.glob(".*.tmp")), "the note is swapped in whole"
+    assert FL.prune("2026-11-05", root) == 0 and FL.read_state(root), "the note is not a day to drop"
+    _reset()
 
 
 def test_old_days_are_dropped_once_a_day():
