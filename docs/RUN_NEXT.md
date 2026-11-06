@@ -937,7 +937,8 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 The two new lines count the copies, and the list under them names each
 one's left-out read and whose name it was filed under too; St. Brown's
 week-1 close is his own number again (or none, `CLEARED`, if no quote of his
-own survives). If a rewrite reads odd (a close as
+own survives), and A.J. Brown's 62.0 stays (those were his own quotes; only
+the copies under the other names are left out). If a rewrite reads odd (a close as
 far from its line as the line itself), paste it back instead of writing.
 Otherwise the write, and college's the same way:
 

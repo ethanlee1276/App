@@ -10074,7 +10074,8 @@ def repair_close_lines(apply: bool = False, sport: str | None = None) -> None:
     print(f"  {r.get('never', 0):>5} NONE        no close then and none found today")
     # ANOTHER PLAYER'S QUOTES (2026-11-06): a quote set the odds adapter
     # filed under two players with one first initial and surname at once
-    # (A.J. Brown's under Amon-Ra St. Brown's name) is nobody's close.
+    # (A.J. Brown's under Amon-Ra St. Brown's name) is the close only of the
+    # man whose own reads say it was his (`linemoves._Copies`).
     print(f"  {r.get('copied', 0):>5} COPIED      its close was another player's quotes; re-read from his own")
     print(f"  {r.get('cleared', 0):>5} CLEARED     its close was another player's quotes and he has none of his own")
     print(f"  {r.get('game_lines', 0):>5} game lines  moneylines, spreads, totals: their close is the settle's, left alone")

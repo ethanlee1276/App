@@ -9385,8 +9385,12 @@ own were missing from that pull, when the two shared a first initial and a
 surname ("a brown", both), and the line history kept the copy under both
 names at the same moment. The write read it as St. Brown's close. Now:
 
-* a quote set filed under two such players at one moment is nobody's close:
-  every close reader leaves it out, for both;
+* a quote set filed under two such players at one moment is the close only
+  of the man it belongs to: his own reads either side of it say which (A.J.
+  Brown's own 62.5 an hour before it; St. Brown's own read sat at 78.5), and
+  every close reader leaves it out for the others. When no read can say, it
+  is left out only for a man whose own reads sit plainly elsewhere, so a
+  real close is never taken from the man whose quotes they were;
 * the repairs read the day the player played, as settling does, not the
   whole week latest day first;
 * a close that was a copy is re-read from the player's own quotes
@@ -9405,7 +9409,8 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 The two new lines count the copies (`COPIED`, `CLEARED`), and the list under
 them names, for each, the read left out and whose name it was filed under
 too; St. Brown's week-1 close is his own number again (or none, `CLEARED`, if no
-quote of his own survives). Two different
+quote of his own survives), and A.J. Brown's 62.0 stays: those were his own
+quotes. Two different
 players never share one book list now. If any rewrite reads odd (a close as
 far from its line as the line itself), paste the dry run back instead of
 writing. Otherwise the write, then college's the same way (each write backs

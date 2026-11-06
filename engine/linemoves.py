@@ -272,6 +272,71 @@ def _loose(n: str) -> str:
     return f"{parts[0][:1]} {parts[-1]}" if parts else ""
 
 
+#: How near the quotes a player is judged to own must sit to his own reads
+#: (`_Copies`): a tenth of the line, at least a point and a half. A line
+#: moves less than that between one pull and the next; another player's
+#: sits further off (St. Brown's own 78.5 against A.J. Brown's 62.0).
+_OWN_SHARE, _OWN_FLOOR = 0.10, 1.5
+#: And how far off a man's own reads must sit for the set to be plainly not
+#: his, owner found or not: twice as far, so a line that really moved
+#: between two reads of the owner's own is never taken for another man's.
+_FAR_SHARE, _FAR_FLOOR = 0.20, 3.0
+#: Ten points of chance on the over count as one of line, so a 0.5 line (a
+#: touchdown, a home run), the same for every man, is told apart by price.
+_CHANCE_WEIGHT = 10.0
+
+
+def _read_of(quotes) -> tuple | None:
+    """A quote set's middle line and middle over price, as a chance: what
+    two reads of one market are compared on (`_Copies`). The sportsbooks'
+    quotes, an exchange's only when none quoted, as the close is read."""
+    from .odds import implied_or_none, is_exchange
+    rows = []
+    for q in quotes or ():
+        book, line, over = (str(q).split("|") + ["", "", ""])[:3]
+        try:
+            rows.append((book, float(line), implied_or_none(over, parse=lambda x: int(float(x)))))
+        except ValueError:
+            continue
+    rows = [r for r in rows if not is_exchange(r[0])] or rows
+    if not rows:
+        return None
+    chances = [c for _b, _l, c in rows if c is not None]
+    return _median([ln for _b, ln, _c in rows]), (_median(chances) if chances else None)
+
+
+def _gap(a, b) -> float | None:
+    """How far apart two reads of one market sit (`_read_of`), or None."""
+    if a is None or b is None:
+        return None
+    d = abs(a[0] - b[0])
+    if a[1] is not None and b[1] is not None:
+        d += abs(a[1] - b[1]) * _CHANCE_WEIGHT
+    return d
+
+
+def _place(read, refs: dict) -> tuple:
+    """Whose quotes a copied set was, and which names lose it: ``(owner,
+    losers)``. ``refs`` is ``{name: [quote sets of his own]}``. The owner is
+    the one name whose own read sits nearest the set and near enough to be
+    his, and every other name loses it. With no owner (no name's own read is
+    near, or two sit as near) only a name whose own reads sit too far off to
+    be his loses it; the rest keep it, the rows cannot say whose it was."""
+    if read is None:
+        return None, ()
+    gaps = {}
+    for name, sets in refs.items():
+        got = [g for g in (_gap(read, _read_of(q)) for q in sets if q) if g is not None]
+        gaps[name] = min(got) if got else None
+    near = max(_OWN_FLOOR, _OWN_SHARE * abs(read[0]))
+    far = max(_FAR_FLOOR, _FAR_SHARE * abs(read[0]))
+    scored = sorted((g, n) for n, g in gaps.items() if g is not None)
+    if scored and scored[0][0] <= near and (len(scored) == 1 or scored[1][0] - scored[0][0] > 1e-9):
+        owner = scored[0][1]
+        return owner, tuple(n for n in refs if n != owner)
+    return None, tuple(n for n, g in gaps.items() if g is not None and g > far)
+
+
 class _Copies:
     """QUOTES FILED UNDER TWO PLAYERS AT ONCE (2026-11-06).
 
@@ -286,22 +351,51 @@ class _Copies:
 
     A copy is exact (every book, line and price, the one pull's timestamp),
     so it is found exactly: two names that share that loose key, at one
-    instant in one market, with identical quote sets. Neither keeps it. The
-    rows cannot say whose quotes they were, and an earlier read of the true
-    owner is still a close, where another man's quotes are none.
+    instant in one market, with identical quote sets.
+
+    THE OWNER KEEPS HIS QUOTES. One of those names was quoted by the books
+    and the others were handed his lines; the rows do not say which, but
+    each name's own reads do (a read of his own is a quote set no other name
+    shares). The owner is the name whose latest read of his own before the
+    pull, or failing that his first after it, sits nearest the copied set
+    and near enough to be his (`_place`): A.J. Brown's own 62.5 an hour
+    earlier, against St. Brown's own 78.5. Only the others lose the read.
+    When no name's own reads can say, a name whose own reads sit plainly
+    elsewhere still loses it, and the rest keep it (two men whose every read
+    is the same quotes, as OKC's Jalen and Jaylin Williams would be if the
+    books never quoted the bench man): leaving it out for them would take a
+    real close from the man it belongs to, to keep a wrong one from a man
+    the books never quoted. The first version of this check (the same day)
+    left a copy out for every name, and so took the owner's own reads too:
+    a star whose every pull also went to an unquoted namesake on the slate
+    would have had his real closes cleared.
 
     ONE PULL AT A TIME, FOR THE BOX'S MEMORY. A copy only ever shares its
     pull's timestamp, and a pull's rows are written to the file together
     (`record_snapshots`), so each pull is judged when the stream moves past
-    it and then forgotten. A few are held open at once (``KEEP``), because
-    two builds can append to the file at the same time and interleave."""
+    it and then forgotten, but for each name's latest read of his own (one
+    quote set per name and market). A few pulls are held open at once
+    (``KEEP``), because two builds can append to the file at the same time
+    and interleave. A copy no earlier read decides waits for each name's
+    next read of his own and is judged at the end (`found`)."""
 
     KEEP = 8
+    #: Copies held for a later read, at most. Past this the oldest half is
+    #: judged on what has been read so far: a pair the rows can never place
+    #: would otherwise hold one for every pull of a season.
+    WAITING = 20000
 
     def __init__(self):
         self._open: dict = {}
         self._order: list = []
         self._found: dict = {}
+        #: ``{(name, market): quote set}``: each name's latest read of his own.
+        self._last: dict = {}
+        #: Copies no earlier read decided, ``(ts, market, names, read, {name: earlier set})``,
+        #: the ``(name, market)`` they need a later read of, and that read once seen.
+        self._waiting: list = []
+        self._watch: set = set()
+        self._after: dict = {}
 
     def add(self, name: str, r: dict) -> None:
         try:
@@ -319,21 +413,47 @@ class _Copies:
 
     def _judge(self, ts: float) -> None:
         for (market, _key), by in (self._open.pop(ts, None) or {}).items():
-            if len(by) < 2:
-                continue
             sets: dict = {}
             for name, quotes in by.items():
                 sets.setdefault(tuple(sorted(quotes)), []).append(name)
-            for names in sets.values():
-                if len(names) > 1:
-                    for n in names:
-                        self._found[(n, market, ts)] = tuple(sorted(x for x in names if x != n))
+            for qs, names in sets.items():
+                if len(names) == 1:
+                    k = (names[0], market)
+                    self._last[k] = qs                 # a read of his own
+                    if k in self._watch and k not in self._after:
+                        self._after[k] = qs
+                    continue
+                names = sorted(names)
+                before = {n: self._last.get((n, market)) for n in names}
+                read = _read_of(qs)
+                owner, losers = _place(read, {n: [q] for n, q in before.items()})
+                if owner is None:
+                    self._waiting.append((ts, market, names, read, before))
+                    self._watch.update((n, market) for n in names)
+                    if len(self._waiting) > self.WAITING:
+                        self._settle(self.WAITING // 2)
+                    continue
+                self._flag(ts, market, names, losers)
+                self._last[(owner, market)] = qs
+
+    def _flag(self, ts: float, market, names: list, losers) -> None:
+        for n in losers:
+            self._found[(n, market, ts)] = tuple(x for x in names if x != n)
+
+    def _settle(self, upto: int) -> None:
+        """Judge the oldest waiting copies on every read seen so far."""
+        for ts, market, names, read, before in self._waiting[:upto]:
+            _who, losers = _place(read, {n: [before.get(n), self._after.get((n, market))] for n in names})
+            self._flag(ts, market, names, losers)
+        del self._waiting[:upto]
 
     def found(self) -> dict:
-        """``{(player, market, ts): (the other players)}`` for every copy."""
+        """``{(player, market, ts): (the other players)}``: every read left
+        out, a name's copy of another's quotes (never the owner's own)."""
         for ts in self._order:
             self._judge(ts)
         self._order = []
+        self._settle(len(self._waiting))
         return self._found
 
 
