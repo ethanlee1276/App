@@ -184,7 +184,7 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long
   surname). Fixed (step KX): no close reads a copy, the repairs read the
   day the player played, and a close that was a copy is re-read or
   cleared. Both to run again, dry run first; MLB's and the WNBA's for the
-  first time (item 1p).
+  first time, and the NBA's dry run (item 1p).
 - **The weather (item 9):** you said move it to the NWS. One read-only
   check (KY, in the run above), then one setting on its `SWITCH`. KU and
   KW are parked: both read Open-Meteo's history, and the NWS keeps none.
@@ -263,7 +263,8 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KH 2>&1 | tee /tmp/kh.txt
 
 The ones that write, each with its own item below: item 1p's close lines
 again for the NFL and college, then MLB and the WNBA (the dry run first,
-then `--apply`), and item 9's weather setting once KY says `SWITCH`. Not
+then `--apply`), and the NBA's dry run (its write only if it finds a copy),
+and item 9's weather setting once KY says `SWITCH`. Not
 commands: the Backblaze settings (item 0b) and alerts on your phone
 (item 1).
 
@@ -957,6 +958,17 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport mlb --apply 2>&1 | tail -12
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport wnba > /tmp/closelines.txt 2>&1; echo "exit $?"; head -100 /tmp/closelines.txt
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport wnba --apply 2>&1 | tail -12
+```
+
+The NBA's re-read of 5 November came before this check. Its season began
+after 15 September, so a copy there could only be two men in one game (a
+pair like OKC's Jalen and Jaylin Williams). Its dry run says whether any
+was; if its `COPIED` and `CLEARED` lines both read 0 there is nothing to
+write, otherwise the write:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nba > /tmp/closelines.txt 2>&1; echo "exit $?"; head -100 /tmp/closelines.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nba --apply 2>&1 | tail -12
 ```
 
 **Before, 6 November (morning):**

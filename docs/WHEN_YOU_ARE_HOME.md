@@ -9433,6 +9433,17 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport wnba --apply 2>&1 | tail -12
 ```
 
+The NBA's re-read of 5 November came before this check. Its season began
+after 15 September, so a copy there could only be two men in one game (a
+pair like OKC's Jalen and Jaylin Williams). Its dry run says whether any
+was; if its `COPIED` and `CLEARED` lines both read 0 there is nothing to
+write, otherwise the write:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nba > /tmp/closelines.txt 2>&1; echo "exit $?"; head -100 /tmp/closelines.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nba --apply 2>&1 | tail -12
+```
+
 **KW. College's rain, asked of college's own games** (step 426; one
 read-only check, about 10 minutes; you, 6 November: "dive into the weather
 factor for NFL and college football games"). College reads the NFL's rain
