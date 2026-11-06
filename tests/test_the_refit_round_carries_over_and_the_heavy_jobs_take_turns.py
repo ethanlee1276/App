@@ -242,10 +242,20 @@ def _scratch_cache():
 
 
 def _a_job(module):
-    """A live process whose command line names ``module``, with its pid file."""
+    """A live process whose command line names ``module``, with its pid file.
+
+    Popen returns once the child's exec has closed the pipe it waits on,
+    which on Linux is a moment before the kernel fills in the new command
+    line; on a loaded gate (78, eight files at once) the check read an empty
+    one and found no job running. So this waits until the command line says
+    ``module``, as a job started long before any check always does."""
     proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", module])
     M._child_pid_path(module).write_text(json.dumps({"pid": proc.pid, "module": module,
                                                      "started": _t.time()}))
+    for _ in range(200):
+        if M._pid_runs(proc.pid, module):
+            break
+        _t.sleep(0.025)
     return proc
 
 
