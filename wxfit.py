@@ -4,6 +4,7 @@
     python3 wxfit.py                     # 2016-2025
     python3 wxfit.py --seasons 2019-2025
     python3 wxfit.py --scale             # forecast wind vs the reported wind (FETCHES)
+    python3 wxfit.py --totals            # forecast rain vs the closing total, 2022-2025 (FETCHES)
 
 Reads nflverse's schedule and weekly box scores (downloaded into
 data/cache on first use), and the kickoff sky from nflverse's
@@ -102,13 +103,75 @@ def wind_pairs(schedule: list[dict], seasons, fetch=None) -> list[tuple]:
     return out
 
 
+#: The same archive, with the chance of rain the board reads at kickoff.
+PAST_RAIN = ("https://historical-forecast-api.open-meteo.com/v1/forecast"
+             "?latitude={lat:.4f}&longitude={lon:.4f}"
+             "&hourly=temperature_2m,wind_speed_10m,precipitation_probability"
+             "&wind_speed_unit=mph&temperature_unit=fahrenheit&timezone=UTC"
+             "&start_date={start}&end_date={end}")
+
+
+def rain_rows(schedule: list[dict], seasons, fetch=None) -> list[dict]:
+    """``[{season, chance, actual, close}]`` for every played outdoor game
+    with a closing total: one archived-forecast request per home stadium per
+    season, the kickoff hour picked the way the board picks it."""
+    from engine.cfb.wx import pick_hour
+    from engine.fatigue import kickoff_instant
+    from engine.stadiums import STADIUM_COORDS
+    fetch = fetch or (lambda lat, lon, start, end: _get_json(
+        PAST_RAIN.format(lat=lat, lon=lon, start=start, end=end)))
+    by: dict = {}
+    for g in schedule:
+        if (str(g.get("game_type") or "REG") == "REG" and int(g["season"]) in seasons
+                and str(g.get("roof") or "").lower() in ("outdoors", "open")
+                and g.get("total_line") not in (None, "") and g.get("home_score") not in (None, "")
+                and str(g.get("location") or "") != "Neutral"):
+            by.setdefault((g["home_team"], int(g["season"])), []).append(g)
+    out = []
+    for (home, season), games in sorted(by.items()):
+        coords = STADIUM_COORDS.get(home)
+        if not coords:
+            continue
+        days = sorted(g["gameday"] for g in games)
+        try:
+            payload = fetch(coords[0], coords[1], days[0], days[-1])
+        except Exception as exc:                              # noqa: BLE001
+            print(f"  {home} {season}: {type(exc).__name__}: {exc}")
+            continue
+        for g in games:
+            ko = kickoff_instant(g["gameday"], g.get("gametime") or "")
+            got = pick_hour(payload, ko) if ko else None
+            if got is None:
+                continue
+            out.append({"season": season, "chance": got["precip_chance"],
+                        "actual": float(g["home_score"]) + float(g["away_score"]),
+                        "close": float(g["total_line"])})
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--seasons", default=f"{F.SEASONS[0]}-{F.SEASONS[-1]}")
     ap.add_argument("--scale", action="store_true",
                     help="compare Open-Meteo's archived kickoff-hour forecasts with the "
                          "reported wind, 2023-2025 (fetches ~75 small files)")
+    ap.add_argument("--totals", action="store_true",
+                    help="games forecast wet at kickoff against the closing total, 2022-2025 "
+                         "(fetches about 110 small files of Open-Meteo's archived forecasts)")
     args = ap.parse_args()
+    if args.totals:
+        rows = rain_rows(N.load_schedules(), range(2022, 2026))
+        got = F.totals_by_forecast(rows)
+        verdict = got.pop("verdict")
+        print(f"outdoor games 2022-2025 with a forecast at kickoff: {len(rows)}; "
+              f"points minus the closing total, by the forecast's chance of rain")
+        for name, _lo in reversed([(n, lo) for lo, n in F.TOTAL_BUCKETS]):
+            r = got.get(name)
+            if r:
+                print(f"  {name:<10} n {r['n']:<4} {r['mean']:+.2f} ± {r['se']:.2f}   "
+                      + " ".join(f"{s}:{x:+.1f}" for s, x in r["per"].items()))
+        print(verdict)
+        return
     if args.scale:
         pairs = wind_pairs(N.load_schedules(), range(2023, 2026))
         got = F.scale(pairs)
@@ -141,7 +204,7 @@ def main() -> None:
     pts, tds = [], []
     for s in seasons:
         rows = N.load_weekly_stats(s)
-        pts += F.samples(s, rows, cond)
+        pts += F.samples(s, rows, cond) + F.team_samples(s, rows, cond)
         tds += F.td_samples(s, rows, cond)
         del rows
     props, td = F.measure_all(pts), F.measure_td(tds)

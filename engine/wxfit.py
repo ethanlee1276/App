@@ -232,6 +232,56 @@ def samples(season: int, rows, cond: dict) -> list[dict]:
     return out
 
 
+#: A BACK'S CARRIES ARE HIS SHARE OF HIS TEAM'S (2026-11-06). Ethan, the
+#: Thursday night it poured in Jacksonville, on Derrick Henry's rushing
+#: under: "with that rain, I feel like it pushes more towards his over than
+#: his under". Measured, 2016-2025, the way the rest of this file is, and on
+#: the TEAM: its backs' carries in a team-game against the team's own
+#: average over its earlier games that season. A back's share does not move
+#: in rain (the lead back's share of his team's backs' carries: ×0.99 of a
+#: dry day's, 2016-2026), so his carries rise and fall with his team's, and
+#: the team's number is the same fact with every back's game in it once,
+#: not one noisy back at a time — a single back in rain measured ×1.04 ±
+#: .04 (the lead backs ×1.06 ± .04), inside the noise. The team's: ×1.069 ±
+#: .030 over 140 team-games, nine of ten seasons up. Held out by season, the
+#: step took 2.6% off the squared error of a lead back's carries in rain.
+#: YARDS ARE NOT IN IT, on purpose: per carry they fell in rain in eight of
+#: eleven seasons, and a back's rushing yards measured nothing clear (above)
+#: — the extra carries do not reliably add yards. The one-cell conditions
+#: only (freeze, rain, snow): the board reads wind off a forecast through
+#: engine/weather.WIND_FORECAST, which would need the droplet's forecast
+#: archive to measure for carries.
+TEAM_MARKETS = {("rush_att", "RB"): ("carries",)}
+TEAM_KEYS = tuple(sorted(TEAM_MARKETS))
+
+
+def team_samples(season: int, rows, cond: dict) -> list[dict]:
+    """Team-game points for one season: the backs' carries against the team's
+    own average over its earlier games that season (week 4 on, three games
+    before). {season, m, g, e, y, c}, measured with the player points."""
+    out = []
+    for (m, g), cols in TEAM_MARKETS.items():
+        by: dict = defaultdict(float)
+        for r in rows:
+            if str(r.get("season_type") or "REG") not in ("REG", ""):
+                continue
+            if str(r.get("position") or "").upper() != g:
+                continue
+            by[(int(_n(r, "week")), r.get("team") or r.get("recent_team"))] += sum(_n(r, k) for k in cols)
+        for team in sorted({t for _w, t in by if t}):
+            weeks = sorted(w for w, t in by if t == team)
+            for i, wk in enumerate(weeks):
+                if wk < FIRST_WEEK or i < MIN_GAMES:
+                    continue
+                prev = [by[(w, team)] for w in weeks[:i]]
+                e = math.fsum(prev) / len(prev)
+                c = cond.get((season, wk, team))
+                if c is None or e <= 0:
+                    continue
+                out.append({"season": season, "m": m, "g": g, "e": e, "y": by[(wk, team)], "c": c})
+    return out
+
+
 def td_samples(season: int, rows, cond: dict) -> list[dict]:
     """Team-game points for one season: passing and rushing touchdowns and
     the book's implied points."""
@@ -341,17 +391,78 @@ TD_KEYS = (("pass",), ("rush",))
 
 
 def shipped(props: dict, tds: dict) -> dict:
-    """Everything the rule applies, in engine/weather.py's shape."""
+    """Everything the rule applies, in engine/weather.py's shape. The team's
+    carries (TEAM_KEYS) in the one-cell conditions only (see TEAM_MARKETS)."""
+    cell = PROP_KEYS + TEAM_KEYS
     return {
         "wind": wind_table(props["wind"], PROP_KEYS),
-        "freeze": single(props["freeze"], "freeze", PROP_KEYS),
-        "rain": single(props["rain"], "rain", PROP_KEYS),
-        "snow": single(props["snow"], "snow", PROP_KEYS),
+        "freeze": single(props["freeze"], "freeze", cell),
+        "rain": single(props["rain"], "rain", cell),
+        "snow": single(props["snow"], "snow", cell),
         "td_wind": {k[0]: v for k, v in wind_table(tds["wind"], TD_KEYS).items()},
         "td_freeze": {k[0]: v for k, v in single(tds["freeze"], "freeze", TD_KEYS).items()},
         "td_rain": {k[0]: v for k, v in single(tds["rain"], "rain", TD_KEYS).items()},
         "td_snow": {k[0]: v for k, v in single(tds["snow"], "snow", TD_KEYS).items()},
     }
+
+
+#: THE TOTAL IN RAIN, AGAINST THE CLOSE (2026-11-06). Read off the game
+#: book's kickoff sky, 2016-2026: a team in a rain game scored 1.96 points
+#: under the closing line's implied team total (252 team-games), where a
+#: dry outdoor team scored 0.27 over — about 2.2 points a team, 4.5 a game,
+#: and below the dry games in ten of eleven seasons. But the sky at kickoff
+#: is not what anyone knew when they bet: the close may have priced the
+#: rain that was forecast, and missed only the rain that was not. So the
+#: question the board needs is asked of the FORECAST: games forecast wet at
+#: the kickoff hour (Open-Meteo's own archive of its past forecasts, the
+#: same family the board reads, kept from 2022) against the closing total.
+#: `totals_by_forecast` is that table; wxfit.py --totals fetches and prints
+#: it on the droplet. Nothing prices it until it says so.
+TOTAL_BUCKETS = ((0.6, "60%+"), (0.3, "30-60%"), (0.0, "under 30%"))
+
+
+def total_bucket(chance: float) -> str:
+    return next(name for lo, name in TOTAL_BUCKETS if float(chance or 0.0) >= lo)
+
+
+def totals_by_forecast(rows) -> dict:
+    """``rows``: [{season, chance, actual, close}] for outdoor games, the
+    forecast's chance of rain at kickoff and the game's points against its
+    closing total. Returns {bucket: {n, mean, se, per: {season: mean}}} and
+    "verdict": whether games forecast 60%+ wet went under the close by more
+    than the dry ones, by two standard errors of the difference, with more
+    than half of the seasons the same way."""
+    by: dict = defaultdict(list)
+    for r in rows:
+        by[total_bucket(r["chance"])].append(r)
+    out: dict = {}
+    for name, lst in by.items():
+        d = [r["actual"] - r["close"] for r in lst]
+        mu = math.fsum(d) / len(d)
+        se = (math.sqrt(math.fsum((x - mu) ** 2 for x in d) / (len(d) - 1)) / math.sqrt(len(d))
+              if len(d) > 1 else 0.0)
+        per = {}
+        for s in sorted({r["season"] for r in lst}):
+            ds = [r["actual"] - r["close"] for r in lst if r["season"] == s]
+            per[s] = round(math.fsum(ds) / len(ds), 2)
+        out[name] = {"n": len(lst), "mean": round(mu, 2), "se": round(se, 2), "per": per}
+    wet, dry = out.get("60%+"), out.get("under 30%")
+    verdict = "too few games forecast wet to say"
+    if wet and dry and wet["n"] >= MIN_N:
+        gap = wet["mean"] - dry["mean"]
+        se = math.sqrt(wet["se"] ** 2 + dry["se"] ** 2)
+        seasons = [s for s in wet["per"] if s in dry["per"]]
+        under = sum(1 for s in seasons if wet["per"][s] < dry["per"][s])
+        if gap <= -2 * se and 2 * under > len(seasons):
+            verdict = (f"UNDER-PRICED: games forecast 60%+ wet went {abs(gap):.1f} points further under "
+                       f"the close than dry ones (± {se:.1f}; {under} of {len(seasons)} seasons) — "
+                       f"worth a rain step on the board's totals")
+        else:
+            verdict = (f"priced: games forecast wet went {gap:+.1f} points against the dry ones "
+                       f"(± {se:.1f}; {under} of {len(seasons)} seasons under) — the close already "
+                       f"knows the forecast, nothing to add")
+    out["verdict"] = verdict
+    return out
 
 
 #: The forecast ranges engine/weather.WIND_FORECAST is kept in, low edges.

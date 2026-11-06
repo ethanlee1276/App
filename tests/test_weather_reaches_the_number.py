@@ -99,6 +99,90 @@ def test_rain_applies_at_the_forecasts_own_chance():
     assert snow.multipliers[RECEPTIONS] < 1.0 and snow.reasons[0].startswith("Snow 80% likely")
 
 
+def test_rain_raises_a_backs_carries_and_leaves_his_yards_alone():
+    """6 November, the night it poured in Jacksonville (Ethan: "with that
+    rain, I feel like it pushes more towards his over than his under"):
+    teams run more in rain — their backs' carries ×1.069, nine seasons of
+    ten — and a back keeps his share, so his carries go up at the
+    forecast's chance; his rushing yards stay where they were, because per
+    carry they fell in rain in most seasons."""
+    from engine.models import RUSH_ATT
+    e = W.evaluate_weather(_wind(4.0, precip_chance=0.8, rain=True), "RB")
+    assert abs(e.multipliers[RUSH_ATT] - (1 + 0.8 * (W.RAIN[("rush_att", "RB")] - 1))) < 1e-9
+    assert e.multipliers[RUSH_ATT] > 1.05 and e.multipliers[RUSH_YDS] == 1.0
+    assert "carries +7%" in e.reasons[0] and "his rushing yards are left alone" in e.reasons[1]
+    assert W.evaluate_weather(_wind(4.0, precip_chance=0.1), "RB").multipliers[RUSH_ATT] == 1.0
+    wr = W.evaluate_weather(_wind(4.0, precip_chance=0.8, rain=True), "WR")
+    assert wr.multipliers[RUSH_ATT] == 1.0 and not any("per carry" in r for r in wr.reasons)
+    game = W.evaluate_weather(_wind(4.0, precip_chance=1.0, rain=True))
+    assert abs(game.multipliers[RUSH_ATT] - W.RAIN[("rush_att", "RB")]) < 1e-9, "the game-level read sees it"
+
+
+def _team_rows(seasons=range(2016, 2020), teams=12):
+    rows, cond = {}, {}
+    for s in seasons:
+        for t in range(teams):
+            team = f"T{t}"
+            for wk, c, kind in ((1, 20, None), (2, 21, None), (3, 19, None), (4, 24 + t % 3, "rain"),
+                                (5, 20 + t % 2, None), (6, 23 + t % 3, "wind")):
+                rows.setdefault(s, []).append({"season_type": "REG", "position": "RB", "week": wk,
+                                               "team": team, "carries": c})
+                rows[s].append({"season_type": "REG", "position": "QB", "week": wk, "team": team, "carries": 9})
+                cond[(s, wk, team)] = {"roofed": False, "wind": 16.0 if kind == "wind" else 4.0, "temp": 60.0,
+                                       "precip": "rain" if kind == "rain" else None, "implied": 22.0}
+    return rows, cond
+
+
+def test_the_fit_measures_carries_on_the_team_and_ships_them_in_rain_not_wind():
+    rows, cond = _team_rows()
+    pts = []
+    for s in range(2016, 2020):
+        got = F.team_samples(s, rows[s], cond)
+        assert all(p["m"] == "rush_att" and p["g"] == "RB" for p in got), "the backs only, not the QB's runs"
+        assert sorted({p["y"] for p in got if p["c"]["precip"] == "rain"}) == [24, 25, 26]
+        pts += got
+    props = F.measure_all(pts)
+    rain = props["rain"][("rush_att", "RB", "rain")]
+    assert rain["mult"] > 1.15 and F.clears(rain), rain
+    shipped = F.shipped(props, F.measure_td([]))
+    assert ("rush_att", "RB") in shipped["rain"]
+    assert not any(k == ("rush_att", "RB") for k in shipped["wind"]), \
+        "wind is read off a forecast through WIND_FORECAST, which has no carries row"
+    assert ("rush_att", "RB") not in F.PROP_KEYS and F.TEAM_KEYS == (("rush_att", "RB"),)
+    assert W.RAIN[("rush_att", "RB")] > 1.0 and ("rush_yds", "RB") not in W.RAIN
+
+
+def test_the_total_is_asked_of_the_forecast_not_the_sky():
+    """The game book's kickoff sky says rain games went 2.2 points a team
+    under the close (2016-2026, ten seasons of eleven); the board can only
+    use it if games FORECAST wet did — wxfit.py --totals asks that on the
+    droplet, and nothing prices it until it says so."""
+    wet = [{"season": s, "chance": 0.8, "actual": 38.0 + i % 3, "close": 43.0}
+           for s in range(2022, 2026) for i in range(12)]
+    dry = [{"season": s, "chance": 0.1, "actual": 42.0 + i % 5, "close": 44.0}
+           for s in range(2022, 2026) for i in range(100)]
+    got = F.totals_by_forecast(wet + dry)
+    assert got["60%+"]["n"] == 48 and got["verdict"].startswith("UNDER-PRICED"), got["verdict"]
+    priced = [dict(r, actual=r["close"] + i % 5 - 2) for i, r in enumerate(wet)]
+    assert F.totals_by_forecast(priced + dry)["verdict"].startswith("priced")
+    assert F.totals_by_forecast(dry)["verdict"] == "too few games forecast wet to say"
+    assert F.total_bucket(0.45) == "30-60%" and F.total_bucket(0.0) == "under 30%"
+    import wxfit
+    sched = [{"game_type": "REG", "season": "2024", "roof": "outdoors", "total_line": "44.5",
+              "home_score": "17", "away_score": "13", "location": "Home", "home_team": "BUF",
+              "gameday": "2024-10-06", "gametime": "13:00"},
+             {"game_type": "REG", "season": "2024", "roof": "dome", "total_line": "48",
+              "home_score": "30", "away_score": "27", "location": "Home", "home_team": "DET",
+              "gameday": "2024-10-06", "gametime": "13:00"}]
+    payload = {"hourly": {"time": ["2024-10-06T16:00", "2024-10-06T17:00", "2024-10-06T18:00"],
+                          "temperature_2m": [55, 56, 57], "wind_speed_10m": [8, 9, 10],
+                          "precipitation_probability": [40, 85, 90]}}
+    asked = []
+    out = wxfit.rain_rows(sched, range(2024, 2025), fetch=lambda *a: asked.append(a) or payload)
+    assert out == [{"season": 2024, "chance": 0.85, "actual": 30.0, "close": 44.5}], out
+    assert len(asked) == 1, "one request a home stadium a season; the dome is not asked"
+
+
 def test_cold_alone_moves_nothing_and_the_deep_block_stands():
     e = W.evaluate_weather(_wind(4.0, temp_f=12.0), "WR")
     assert all(v == 1.0 for v in e.multipliers.values()) and "no clear effect" in e.reasons[0]

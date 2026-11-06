@@ -73,10 +73,16 @@ def flat_by_construction(sport: str, market: str, step: str) -> str | None:
         return None
     if step == "weather":
         from .weather import RAIN, SNOW, WIND, WIND_FORECAST
-        measured = {m for (m, _g) in list(WIND_FORECAST) + list(WIND) + list(RAIN) + list(SNOW)}
+        windy = {m for (m, _g) in list(WIND_FORECAST) + list(WIND)}
+        measured = windy | {m for (m, _g) in list(RAIN) + list(SNOW)}
         if market not in measured:
             return (f"the weather model (engine/weather) is measured on {', '.join(sorted(measured))} "
                     f"only — no coefficient for this market")
+        # A back's carries (2026-11-06) move in rain or snow only, never in
+        # wind: a dry slate leaves them flat, and that is not a finding.
+        if market not in windy:
+            return ("the weather model moves this market only when rain or snow is forecast "
+                    "(engine/weather.RAIN) — a dry slate leaves it flat")
     if step == "matchup":
         from .defensevs import TRANSFER, TRANSFER_CFB
         table = TRANSFER_CFB if sport == "cfb" else TRANSFER

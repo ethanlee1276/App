@@ -17,7 +17,9 @@ games say, and what changed:
     nothing (×1.00 at 12-18, 1.05 ± .06 at 18+);
   * rain is the biggest weather effect there is — receivers ×0.87 yards
     and ×0.90 catches, quarterbacks ×0.89 yards and ×0.84 touchdowns,
-    backs' catches ×0.84 — and it is applied at the FORECAST'S OWN CHANCE:
+    backs' catches ×0.84; and since 2026-11-06 backs' CARRIES ×1.069 (teams
+    run more in rain; measured on the team, engine/wxfit.TEAM_MARKETS),
+    rushing yards still untouched — and it is applied at the FORECAST'S OWN CHANCE:
     a 70% chance of rain is 70% of the measured effect, the expected
     value over the two outcomes, never the full cut on a forecast;
   * cold on its own measured nothing clear once wind, rain and snow were
@@ -37,7 +39,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .models import Weather, PASS_YDS, PASS_TD, RUSH_YDS, REC_YDS, RECEPTIONS
+from .models import Weather, PASS_YDS, PASS_TD, RUSH_YDS, RUSH_ATT, REC_YDS, RECEPTIONS
 from .wxfit import band as wind_band, forecast_range, FREEZE_F
 
 
@@ -66,6 +68,12 @@ RAIN = {
     ("rec_yds", "WRTE"): 0.869,
     ("receptions", "RB"): 0.841,
     ("receptions", "WRTE"): 0.897,
+    # A BACK'S CARRIES, 2026-11-06 (engine/wxfit.TEAM_MARKETS): teams run
+    # more in rain — their backs' carries ×1.069 ± .030, 140 team-games,
+    # nine of ten seasons up — and a back keeps his share of them. His
+    # rushing YARDS are left alone: per carry they fell in rain in most
+    # seasons, so the extra carries do not reliably add yards.
+    ("rush_att", "RB"): 1.069,
 }
 SNOW = {
     ("rec_yds", "WRTE"): 0.834,
@@ -117,14 +125,14 @@ TD_WIND_FORECAST = {"pass": {"0-4": 1.000, "4-7": 0.991, "7-10": 0.982, "10-13":
 #: at kickoff, holds the games that were given a small chance and stayed dry.
 PRECIP_FLOOR = 0.3
 
-MARKETS = (PASS_YDS, PASS_TD, RUSH_YDS, REC_YDS, RECEPTIONS)
+MARKETS = (PASS_YDS, PASS_TD, RUSH_YDS, RUSH_ATT, REC_YDS, RECEPTIONS)
 _LABEL = {PASS_YDS: "passing yards", PASS_TD: "passing TDs", RUSH_YDS: "rushing yards",
-          REC_YDS: "receiving yards", RECEPTIONS: "catches"}
+          RUSH_ATT: "carries", REC_YDS: "receiving yards", RECEPTIONS: "catches"}
 #: The markets a position's props are priced in, and the group measured for it.
 _POSITION_MARKETS = {"QB": (PASS_YDS, PASS_TD, RUSH_YDS), "WR": (REC_YDS, RECEPTIONS),
-                     "TE": (REC_YDS, RECEPTIONS), "RB": (RUSH_YDS, REC_YDS, RECEPTIONS)}
+                     "TE": (REC_YDS, RECEPTIONS), "RB": (RUSH_YDS, RUSH_ATT, REC_YDS, RECEPTIONS)}
 _GROUP = {"QB": "QB", "WR": "WRTE", "TE": "WRTE", "RB": "RB", "FB": "RB"}
-_DEFAULT_GROUP = {PASS_YDS: "QB", PASS_TD: "QB", RUSH_YDS: "RB", REC_YDS: "WRTE",
+_DEFAULT_GROUP = {PASS_YDS: "QB", PASS_TD: "QB", RUSH_YDS: "RB", RUSH_ATT: "RB", REC_YDS: "WRTE",
                   RECEPTIONS: "WRTE"}
 _WHO = {"QB": "a quarterback's", "WRTE": "a receiver's", "RB": "a back's"}
 
@@ -250,6 +258,12 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
             reasons.append(f"{kind.capitalize()} {p:.0%} likely at kickoff — measured in "
                            f"{kind} (2016-2025): {', '.join(hit)}; at a {p:.0%} chance "
                            f"that is {' and '.join(now) if len(now) < 3 else ', '.join(now)}")
+            if kind == "rain" and RUSH_ATT in markets and RUSH_YDS in markets \
+                    and (RUSH_ATT, _group(RUSH_ATT, position)) in table \
+                    and (RUSH_YDS, _group(RUSH_YDS, position)) not in table:
+                reasons.append("Teams run more in rain and a back keeps his share, so his carries "
+                               "go up; his rushing yards are left alone — per carry they fell in "
+                               "rain in most seasons, so the extra carries do not reliably add yards")
         else:
             reasons.append(f"{kind.capitalize()} {p:.0%} likely at kickoff — no clear "
                            f"effect measured on these markets in {kind}; left alone")
