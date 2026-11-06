@@ -382,8 +382,10 @@ since step KV):
 
 ```
 cd /srv/qellys && sudo ./deploy/setenv.sh QB_BACKUP_KEEP_HISTORY 2
-``` Then the read-only check after the next 04:00 UTC run (KO,
-also in Start here); its first line should say `'offsite': 'ok'`.
+```
+
+Then the read-only check after the next 04:00 UTC run (KO, also in Start
+here); its first line should say `'offsite': 'ok'`.
 
 Your desk said at 12:34 on 5 November that last night's backup did not
 reach the offsite copy. The copies on the box were made; the upload to

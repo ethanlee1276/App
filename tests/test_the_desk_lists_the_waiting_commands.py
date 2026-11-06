@@ -241,6 +241,19 @@ def test_the_style_reads_the_page_s_own_tokens():
     assert "overflow-wrap: anywhere" in block, "a long command wraps on a phone instead of running off it"
 
 
+def test_every_fence_stands_on_a_line_of_its_own():
+    """A fence with words after it does not close its block on GitHub
+    (6 November: RUN_NEXT 0b's "``` Then the read-only check" turned every
+    block after it inside out there), though this card's reader took it as
+    one. A fence is three backticks and at most a language name."""
+    import re
+    for name in ("RUN_NEXT.md", "WHEN_YOU_ARE_HOME.md"):
+        lines = (ROOT / "docs" / name).read_text(encoding="utf-8").splitlines()
+        for n, line in enumerate(lines, 1):
+            if line.lstrip().startswith("```"):
+                assert re.fullmatch(r"\s*```[\w+-]*\s*", line), (name, n, line)
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
