@@ -688,6 +688,11 @@ PRUNABLE_CACHE_PREFIXES = (
     "mma_scoreboard_", "mma_live_", "mma_ev_", "mma_comp_", "mma_cptr_",
     "pm_evt_", "pm_mkt_", "pm_wtrades_", "pm_pnl_", "pm_leaderboard_",
     "nws_pt_", "nws_fc_", "sol_holders_", "sleeper_trend_",
+    # The boards' National Weather Service forecast (engine/sources/nws,
+    # 2026-11-06): a stadium's grid (a week) and its hourly forecast
+    # (hours), keyless refetch; and wxsource.py's side-by-side Open-Meteo
+    # read, an hour. The same class as meteo_ and the desk's nws_*.
+    "nws_grid_", "nws_hourly_", "wxcompare_om_",
     # College kickoff forecasts (engine/cfb/wx.py): hours-long TTL,
     # keyless refetch, tiny — the same class as meteo_ and nws_*.
     "cfb_wx_",
