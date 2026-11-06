@@ -9338,6 +9338,95 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KY. The weather moves to the National Weather Service** (step 428; you,
+6 November: "move the weather to the NWS"). The college, NFL and MLB
+boards' game-day forecast came from Open-Meteo, whose free API is for
+non-commercial use. They can read the National Weather Service's hourly
+forecast instead: the US government's, public domain, free, no key, and
+commercial use is allowed (the weather desk has read it since August). Two
+lookups per stadium, and the answer arrives in the same table the boards
+already read, so nothing downstream changes. One setting chooses, and it
+stays on Open-Meteo until the box's own side-by-side check says the two
+agree. Read-only, a minute or two, every NFL stadium at six hours over the
+next three days:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 wxsource.py --compare
+```
+
+Paste it back. The last line is the verdict: `SWITCH` (the NWS answered for
+the stadiums and sits within a few degrees and miles an hour of Open-Meteo's
+middle) or `CHECK` (what differs, or that the NWS did not answer). On
+`SWITCH`, the setting and a restart:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_WEATHER_SOURCE nws
+cd /srv/qellys && sudo systemctl restart qellys
+```
+
+What members see then: the forecast behind each outdoor game's card is the
+NWS's. A game abroad (London, Munich, Mexico City and the like) shows
+"weather not pulled": the NWS covers the US only, and nothing falls back to
+Open-Meteo. The two weather studies that read past weather, KU (rain against
+the closing total) and KW (college's own rain), ask Open-Meteo's archive,
+and the NWS keeps no history; both are parked. The same check in the
+catch-up:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KY 2>&1 | tee /tmp/ky.txt
+```
+
+**KX. A closing line is never another player's quotes** (step 427; your NFL
+close-line write of 6 November). Its dry run showed A.J. Brown and Amon-Ra
+St. Brown, in different games, at the same four books on the same four
+numbers, both closing at 62.0; St. Brown's had been 78.5. From 22 August to
+15 September the odds pull could hand one player's prices to another whose
+own were missing from that pull, when the two shared a first initial and a
+surname ("a brown", both), and the line history kept the copy under both
+names at the same moment. The write read it as St. Brown's close. Now:
+
+* a quote set filed under two such players at one moment is nobody's close:
+  every close reader leaves it out, for both;
+* the repairs read the day the player played, as settling does, not the
+  whole week latest day first;
+* a close that was a copy is re-read from the player's own quotes
+  (`COPIED`), or cleared when he has none (`CLEARED`): its old value came
+  from the same copy;
+* the pull's fallback fires only when the name is one man's on the board
+  too, and only from a game it can prove is his.
+
+Grades and money never move. The NFL's again, dry run first (the dry run
+writes nothing):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nfl > /tmp/closelines.txt 2>&1; echo "exit $?"; head -100 /tmp/closelines.txt
+```
+
+The two new lines count the copies (`COPIED`, `CLEARED`), and the list under
+them names, for each, the read left out and whose name it was filed under
+too; St. Brown's week-1 close reads his own number again. Two different
+players never share one book list now. If any rewrite reads odd (a close as
+far from its line as the line itself), paste the dry run back instead of
+writing. Otherwise the write, then college's the same way (each write backs
+up the journal first):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nfl --apply 2>&1 | tail -12
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport cfb > /tmp/closelines.txt 2>&1; echo "exit $?"; head -100 /tmp/closelines.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport cfb --apply 2>&1 | tail -12
+```
+
+MLB and the WNBA played through the same weeks and were never re-read; theirs
+the same way, after the two above (MLB's is the biggest journal, a few
+minutes):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport mlb > /tmp/closelines.txt 2>&1; echo "exit $?"; head -100 /tmp/closelines.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport mlb --apply 2>&1 | tail -12
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport wnba > /tmp/closelines.txt 2>&1; echo "exit $?"; head -100 /tmp/closelines.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport wnba --apply 2>&1 | tail -12
+```
+
 **KW. College's rain, asked of college's own games** (step 426; one
 read-only check, about 10 minutes; you, 6 November: "dive into the weather
 factor for NFL and college football games"). College reads the NFL's rain

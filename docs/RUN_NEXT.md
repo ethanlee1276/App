@@ -10,9 +10,14 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-06 (afternoon), after the weather feed's terms were
-put to you (item 9, no command), after college's own rain got a free
-read-only check (step KW: item 1w), after the weekly refit's round started
+Last updated 2026-11-06 (evening), after your afternoon paste (the notices
+and emails right, 18 GB free, the NFL and college close lines written),
+after the NFL's write showed two receivers on one man's quotes and that
+was fixed (step KX: item 1p, both to run again), after the weather began
+moving to the National Weather Service at your word (step KY: item 9),
+after the weather feed's terms were
+put to you (item 9), after college's own rain got a free
+read-only check (step KW: item 1w, parked since), after the weekly refit's round started
 finishing what it begins and the Lab and the refit started taking turns on
 the box's one CPU (step KV: item 1g, nothing new to run), and after nothing
 on this list asks you to pay for anything (you, 6 November; item 0b: the
@@ -151,16 +156,38 @@ nothing). Best after the 04:00 UTC backup that follows this push, so KO
 reads the new note. Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JQ JR KF KG KI KL IX IU IT JA IP KP KU 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JQ JR KF KG KI KL IX IU IT JA IP KP KY 2>&1 | tee /tmp/now.txt
 ```
 
-The long ones, on a quiet evening (a little over an hour together; still
-read-only): Caesars as a backup sharp book, the NHL lab, the WNBA's spread
-on the box's own games, and college's own rain (KW, new: item 1w):
+The long ones, on a quiet evening (about an hour together; still
+read-only): Caesars as a backup sharp book, the NHL lab and the WNBA's
+spread on the box's own games:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM KW 2>&1 | tee /tmp/long.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long.txt
 ```
+
+**Your 6 November afternoon paste, and what changed for it:**
+
+- **The notices and emails (JH):** `1`, `1`, `True`, all three notices 14
+  told and 0 to go, `1`; both emails read right. Only the phone half of
+  item 1 is left.
+- **The old history copy, squeezed (item 0):** 18 GB free (63% used, from
+  14 GB). Tonight's backup has the room to copy history.db again; JT in the
+  run above shows its line.
+- **The NFL and college close lines, written (item 1p):** but the NFL's
+  dry run had A.J. Brown and Amon-Ra St. Brown, in different games, on the
+  same four books at the same four numbers, both closing at 62.0. I told
+  you to write if the books sat around 62.0; two players sharing one list
+  was the real sign, and I missed it. One player's prices had been copied
+  under the other's name in Week 1 (they share a first initial and a
+  surname). Fixed (step KX): no close reads a copy, the repairs read the
+  day the player played, and a close that was a copy is re-read or
+  cleared. Both to run again, dry run first; MLB's and the WNBA's for the
+  first time (item 1p).
+- **The weather (item 9):** you said move it to the NWS. One read-only
+  check (KY, in the run above), then one setting on its `SWITCH`. KU and
+  KW are parked: both read Open-Meteo's history, and the NWS keeps none.
 
 **The weekly refit, read off the heartbeat (step KV, item 1g):** last night
 four hour-long jobs (the Lab, the refit, board learning, the bug scan)
@@ -234,10 +261,11 @@ first tip (item 1n):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh KH 2>&1 | tee /tmp/kh.txt
 ```
 
-The ones that write, each with its own item below: item 0's shrink of
-the old history copy, and item 1p's close lines for the NFL and college
-(the dry run first, then `--apply`; the NBA's is done). Not commands: the
-Backblaze cap (item 0b) and alerts on your phone (item 1).
+The ones that write, each with its own item below: item 1p's close lines
+again for the NFL and college, then MLB and the WNBA (the dry run first,
+then `--apply`), and item 9's weather setting once KY says `SWITCH`. Not
+commands: the Backblaze settings (item 0b) and alerts on your phone
+(item 1).
 
 **Done 5 November:** item 0's cleanup (20 GB free now), item 1p's NBA
 close lines (1,537 re-read at the sportsbooks' number), and item 8's key
@@ -245,6 +273,8 @@ close lines (1,537 re-read at the sportsbooks' number), and item 8's key
 
 **Your answers, 5 November, kept so nothing is asked twice:**
 
+- The weather (6 November): move it to the National Weather Service (item 9,
+  step KY).
 - Nothing paid (6 November): no subscriptions, plans or upgrades. Nothing on
   this list asks you to buy anything; the offsite backup stays inside
   Backblaze's free 10 GB and the scores timer on BALLDONTLIE's free plan.
@@ -303,6 +333,10 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JX 2>&1 | tee /tmp/jx.txt
 ```
 
 ## 0. Any time now: shrink the NBA write's history copy, so the nightly backs up history.db again (steps KT, JT)
+
+**Done 6 November (afternoon):** you squeezed it; `df` read 18 GB free (63%
+used). Tonight's backup has the room to copy history.db again; JT in Start
+here shows its line in the morning.
 
 **6 November:** 14 GB free (72% used). The NBA close-line write of 5
 November copied history.db (6.7 GB) into
@@ -407,6 +441,10 @@ either way. Until then item 0's cleanup waits: it needs a night that ends
 `offsite copy updated`.
 
 ## 1. Alerts on your phone (steps JH, JJ)
+
+**Done 6 November (afternoon):** the check read `1`, `1`, `True`, all three
+notices 14 told and 0 to go, and `1`, and both emails read right. Only the
+phone half below is left (not a command).
 
 **Done 6 November:** all three notices went out: 29 October's, 1
 November's and 2 November's each read 14 told, 0 to go, and the page,
@@ -875,7 +913,51 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KI 2>&1 | tee /tmp/ki.txt
 `read by tip` with an agreement near 0.88 is right; paste it back either
 way.
 
-## 1p. Any time after this push: re-read the settled NFL and college closes (steps KJ, KT)
+## 1p. Any time after this push: re-read the closes again, with the copies out (steps KX, KJ, KT)
+
+**6 November (afternoon), your writes:** the NFL (8,007 settled bets: 3,844
+rewritten, 81 filled) and college (5,631: 1,490 rewritten) are written. But
+the NFL's dry run had A.J. Brown and Amon-Ra St. Brown, in different games,
+on the same four books at the same four numbers, both closing at 62.0
+(St. Brown's had been 78.5). I told you to write if the books sat around
+62.0, and the real sign was two players sharing one list; that was my
+miss. From 22 August to 15 September the odds pull could copy one player's
+prices under another's name when the two shared a first initial and a
+surname and the second man's own were missing from the pull, and the
+write read the copy as his close. Fixed (step KX): no close reads a copy,
+the repairs read the day the player played (as settling does), and a close
+that was a copy is re-read from the player's own quotes (`COPIED`) or
+cleared when he has none (`CLEARED`). Grades and money never move. The
+NFL's again, dry run first:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nfl > /tmp/closelines.txt 2>&1; echo "exit $?"; head -100 /tmp/closelines.txt
+```
+
+The two new lines count the copies, and the list under them names each
+one's left-out read and whose name it was filed under too; St. Brown's
+week-1 close reads his own number again. If a rewrite reads odd (a close as
+far from its line as the line itself), paste it back instead of writing.
+Otherwise the write, and college's the same way:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nfl --apply 2>&1 | tail -12
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport cfb > /tmp/closelines.txt 2>&1; echo "exit $?"; head -100 /tmp/closelines.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport cfb --apply 2>&1 | tail -12
+```
+
+MLB and the WNBA played through the same weeks and were never re-read; the
+same two steps each, after those (MLB's journal is the biggest, a few
+minutes):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport mlb > /tmp/closelines.txt 2>&1; echo "exit $?"; head -100 /tmp/closelines.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport mlb --apply 2>&1 | tail -12
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport wnba > /tmp/closelines.txt 2>&1; echo "exit $?"; head -100 /tmp/closelines.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport wnba --apply 2>&1 | tail -12
+```
+
+**Before, 6 November (morning):**
 
 **6 November:** both writes were refused, rightly, by the disk check:
 every journal repair also copied history.db (7.1 GB), though none writes
@@ -926,7 +1008,13 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 
 The same two with `--sport nfl` and `--sport cfb` re-read football's.
 
-## 1w. Any time: college's own rain (step KW)
+## 1w. Parked: college's own rain (step KW)
+
+**Parked 6 November (step KY):** it reads Open-Meteo's archive of past
+weather, and you moved the weather to the National Weather Service, which
+keeps no history. Nothing to run. If you want it back, the free way is
+NOAA's own station records (public domain); say so and I'll move it there.
+
 
 College reads the NFL's rain step (a back's carries ×1.069 at the
 forecast's chance) and was never measured on its own games. This asks
@@ -944,7 +1032,13 @@ Paste it back. The last line says `AGREES` or `NOT ENOUGH` (nothing
 changes), or `DIFFERS` / `CONTRADICTS` (college gets its own step, or drops
 the NFL's, each as its own change after I read it).
 
-## 1v. Any time: rain against the closing total (step KU)
+## 1v. Parked: rain against the closing total (step KU)
+
+**Parked 6 November (step KY):** it reads Open-Meteo's archive of past
+forecasts, and the NWS keeps none. Nothing to run. The rain step for a
+back's carries is live and stays: it was measured on the league's own
+game-day weather, not Open-Meteo's.
+
 
 You, during Ravens-Jaguars: "with that rain, I feel like it pushes more
 towards his over than his under ... I feel like that would prompt their
@@ -1236,7 +1330,33 @@ Each league says `collecting` until 200 score changes, then whether the
 licensed feed is as fast or faster. A league moves onto it only on that
 verdict, and only as its own change.
 
-## 9. Your call, no command: game-day weather from a source a paid site may use
+## 9. Any time: the weather moves to the National Weather Service (step KY)
+
+**You, 6 November: "move the weather to the NWS".** Built: the college, NFL
+and MLB boards can read the National Weather Service's hourly forecast (US
+government, public domain, free, no key, commercial use allowed), in the
+same table they read today. One setting chooses, and it stays on Open-Meteo
+until the box's own side-by-side check agrees. The check is read-only and in
+Start here (KY); on its own:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 wxsource.py --compare
+```
+
+Its last line says `SWITCH` or `CHECK`. On `SWITCH`:
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_WEATHER_SOURCE nws
+cd /srv/qellys && sudo systemctl restart qellys
+```
+
+On `CHECK`, paste it back. Games abroad (London, Munich, Mexico City) then
+show "weather not pulled": the NWS is US only, and nothing falls back to
+Open-Meteo. KU and KW, which read Open-Meteo's history, are parked (items
+1v, 1w).
+
+**What was asked (6 November), kept for the record:**
+
 
 Nothing here costs anything today, and nothing breaks. But one free source
 comes with a catch you should know about, because you said nothing paid:

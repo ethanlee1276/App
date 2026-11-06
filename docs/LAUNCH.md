@@ -73,7 +73,7 @@ different licences on most of them.
 | Sleeper | fantasy leagues | Read its API terms for commercial use. |
 | Yahoo Fantasy | fantasy leagues | Developer terms — already an approved app, confirm commercial is allowed. |
 | MLB Stats API | scores, lineups | Terms restrict commercial use in practice; confirm. |
-| Open-Meteo | game-day weather (college and MLB boards), the weather studies | Its own pages say the free API is for non-commercial use, and its commercial use is a paid plan. The free way out for US venues is the National Weather Service's forecast (api.weather.gov: public domain, no key, commercial use allowed); Toronto's park is roofed. Owner's call (RUN_NEXT item 9). |
+| Open-Meteo | game-day weather (college, NFL and MLB boards), the weather studies | Its own pages say the free API is for non-commercial use, and its commercial use is a paid plan. **Moving off it** (the owner, 6 November): the boards read the National Weather Service's forecast (api.weather.gov: public domain, no key, commercial use allowed) once the box's side-by-side check says SWITCH (runbook KY); the studies that read its archive are parked. |
 | Polymarket / Kalshi | prediction-market prices | Check both. |
 | CFBD | recruiting layer | Has explicit terms and a paid tier. |
 | Solana / Dexscreener / RugCheck | Rocket Radar | Check if that page ships publicly. |

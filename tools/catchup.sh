@@ -1205,6 +1205,9 @@ SH
 run KU "Rain against the closing total: games forecast wet at kickoff, 2022-2025 (asks Open-Meteo's archive)" 300 <<'SH'
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 wxfit.py --totals
 SH
+run KY "The weather: the National Weather Service against Open-Meteo, every NFL stadium (read-only)" 300 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 wxsource.py --compare
+SH
 run KQ "The Lab open to free accounts: is this version live" 30 <<'SH'
 curl -s https://qellysbook.com/js/more.js | grep -c 'async function labWalled('
 SH

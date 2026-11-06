@@ -20,7 +20,8 @@ Counted from the hosts the engine fetches (`engine/` and `engine/sources/`),
 | nflverse (GitHub releases) | NFL play-by-play, participation, schedules | Free and open |
 | collegefootballdata.com | College football play-by-play and stats | Free tier, keyed |
 | The Odds API | Every price on the boards | Yes, keyed (`ODDS_API_KEY`) |
-| Open-Meteo | Game-day weather | Free, for non-commercial use by its own terms (docs/LAUNCH.md 0.2; RUN_NEXT item 9) |
+| National Weather Service (api.weather.gov) | Game-day weather for US venues (college, NFL, MLB) once the box's check says SWITCH (runbook KY); the weather desk's forecasts | Free, public domain, commercial use allowed |
+| Open-Meteo | Game-day weather until the switch to the NWS (runbook KY); the parked weather studies' archives | Free, for non-commercial use by its own terms (docs/LAUNCH.md 0.2) |
 | Polymarket, Kalshi public APIs | The prediction desk | Free |
 
 ### Research only: not read by the site

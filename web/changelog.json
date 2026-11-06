@@ -4,6 +4,12 @@
     {
       "date": "2026-11-06",
       "kind": "fix",
+      "title": "Every closing line is the player's own",
+      "body": "A closing line is the number a bet is measured against at kickoff, and the record's closing-line value is built from them. Early in the season the odds feed could file one player's prices under another's name when the two shared a first initial and a surname and the second man's own prices were missing from that pull: A.J. Brown's Week 1 receiving numbers were also filed under Amon-Ra St. Brown. No close reads such a copy now, a close that came from one is read again from the player's own prices or left empty when he has none, and the feed only fills a missing price from a game it can prove is the player's. Grades and results are unchanged; only closing-line value moves, for the bets it touched."
+    },
+    {
+      "date": "2026-11-06",
+      "kind": "fix",
       "title": "The models' weekly refit finishes what it starts",
       "body": "The weekly refit re-learns each sport from its whole history, a piece at a time, a little each night. Last night four long jobs shared the server's one processor at once, and the refit ran out its time inside the NFL's first fit without finishing a market, though on its own that fit takes about five minutes. Two of those jobs, the refit and the Lab's replay, now take turns. A week's round of refits also used to start over every Wednesday and throw away what it had finished, so the NFL, whose turn comes about once a week, never got through; a round now runs to its end before the next begins, and a fit that makes no progress in two full runs is set aside so the rest of the sport still refits. Nothing on the board moves until those refits land."
     },
