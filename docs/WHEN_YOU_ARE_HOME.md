@@ -9338,6 +9338,48 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KU. Rain, a green quarterback and the lead back, measured** (steps 419
+to 422; one read-only check; you, 6 November, during Ravens-Jaguars in the
+rain with Baltimore on its third-string quarterback: "with that rain, I feel
+like it pushes more towards his over than his under ... I feel like that
+would prompt their star running back doing better than worse"). The whole
+write-up is `docs/WEATHER_AND_QB_2026-11-06.md`; in short, on nflverse's
+box scores 2016-2026:
+
+* **Rain: teams run more, and a back's carries go up with them.** The
+  team's backs' carries ×1.069 in rain (140 team-games, nine seasons of
+  ten up), and the lead back keeps his share. His **yards do not reliably
+  follow**: per carry he gained less in rain in eight seasons of eleven.
+  So the board now raises a back's **carries** in rain at the forecast's
+  chance (a 70% forecast is 70% of the step), and leaves his **rushing
+  yards** alone, with a line on the card saying why. College reads the
+  same table.
+* **A green quarterback (under 50 passes before): the team runs 5% more and
+  throws 6% less, but on the quarterback's own runs.** The lead back's
+  carries moved +1% and his yards +3%, inside the noise. Nothing in the
+  number moves; a back's QB-change card now says it.
+* **The closing total in rain.** Rain games went about 2.2 points a team
+  further under the close than dry ones, in ten seasons of eleven, and the
+  board's totals use no weather. But that is the sky at kickoff, which
+  nobody knew when they bet. This check asks it of the forecast: games
+  forecast 60%+ wet at the kickoff hour (Open-Meteo's archive of its own
+  past forecasts, 2022-2025, about 110 small requests), against the closing
+  total. It writes nothing:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 wxfit.py --totals
+```
+
+Paste it back. The last line says `UNDER-PRICED: ...` (then the board's
+totals get a rain step, as its own change) or `priced: ...` (the close
+already knows the forecast, and nothing changes).
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh KU 2>&1 | tee /tmp/ku.txt
+```
+
 **KT. Your 6 November catch-up, answered** (steps 412 to 418; you, 6
 November: "ok keep going", with the whole run pasted). What each finding
 changed, and what is left to run (docs/RUN_NEXT.md has the same, item by

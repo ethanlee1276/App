@@ -1202,6 +1202,9 @@ run KO "The backup's offsite leg: the last run's note and the tool's own words" 
 cd /srv/qellys && sudo -u qellys python3 -c "from engine import ownerdesk as o; print(o.backups().get('run'))"
 sudo tac /var/log/qellys-backup.log | sed '/syncing to/q' | tac | tail -30
 SH
+run KU "Rain against the closing total: games forecast wet at kickoff, 2022-2025 (asks Open-Meteo's archive)" 300 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 wxfit.py --totals
+SH
 run KQ "The Lab open to free accounts: is this version live" 30 <<'SH'
 curl -s https://qellysbook.com/js/more.js | grep -c 'async function labWalled('
 SH

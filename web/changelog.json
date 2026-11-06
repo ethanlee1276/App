@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-06",
+      "kind": "model",
+      "title": "A back's carries go up in the rain",
+      "body": "Measured on ten NFL seasons: in rain, teams run more (their running backs' carries were 6.9% higher than usual, in nine seasons of ten), and a back keeps his share of them. So a back's carries now rise when rain is forecast, by the forecast's own chance: a 70% chance of rain is 70% of the step. His rushing yards stay where they were, because per carry backs gained less in rain in most seasons, so the extra carries do not reliably add yards; the card says so. College reads the same table. And a team on an inexperienced quarterback ran about 5% more, but mostly on the quarterback's own runs; the lead back's numbers barely moved, so his card says that and his projection does not change."
+    },
+    {
+      "date": "2026-11-06",
       "kind": "ship",
       "title": "Kalshi's spreads and totals on hockey and basketball games",
       "body": "The game page's market section now carries Kalshi's price on the NHL's puck line and total, and on the NBA's spread and total, beside Polymarket's: the chance the crowd gives the home side to cover the board's own line, and the over on the board's own total. Only the same bet the books quote counts, never a neighbouring line. Kalshi lists both leagues' markets in the same shape as football's, which the box confirmed before they were wired in."

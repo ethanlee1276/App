@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-06, after your 6 November catch-up (what it showed and
+Last updated 2026-11-06, after rain and a green quarterback were measured for
+the lead back at your word during Ravens-Jaguars (step KU: item 1v, one
+read-only check), after your 6 November catch-up (what it showed and
 what changed for it: Start here, below; step KT), and on 2026-11-05 after
 NBA player tracking was built for research at your word, a probe, a two-hour fetch into a research database and a held-out
 test (steps KR and KS: item 1u), after the Lab opened to free accounts with its
@@ -142,7 +144,7 @@ nothing). Best after the 04:00 UTC backup that follows this push, so KO
 reads the new note. Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JQ JR KF KG KI KL IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JQ JR KF KG KI KL IX IU IT JA IP KP KU 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (up to about an hour together; still
@@ -152,6 +154,17 @@ spread on the box's own games:
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long.txt
 ```
+
+**Rain and a green quarterback, measured (step KU, item 1v), your question
+from Thursday night:** rain makes teams run more (their backs' carries
++6.9%, nine seasons of ten), and a back keeps his share, so his carries go
+up; his yards do not reliably follow (per carry he gains less in rain most
+seasons). The board now raises a back's carries in rain at the forecast's
+chance and leaves his rushing yards alone. A third-string quarterback's
+team runs 5% more, but on the quarterback's own runs; the lead back's
+carries move +1%, so nothing changes there except the card. And rain
+games went about 2.2 points a team under the close: KU asks whether the
+forecast knew.
 
 **What your 6 November run showed, and what changed for it (step KT):**
 
@@ -869,6 +882,35 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 ```
 
 The same two with `--sport nfl` and `--sport cfb` re-read football's.
+
+## 1v. Any time: rain against the closing total (step KU)
+
+You, during Ravens-Jaguars: "with that rain, I feel like it pushes more
+towards his over than his under ... I feel like that would prompt their
+star running back doing better than worse." Measured on 2016-2026
+(`docs/WEATHER_AND_QB_2026-11-06.md`):
+
+- **Rain:** teams run more, their backs' carries ×1.069 (140 team-games,
+  nine seasons of ten), and the lead back keeps his share. Per carry he
+  gains less in rain in most seasons, so his yards do not reliably go up.
+  **Changed:** a back's carries take the rain step at the forecast's
+  chance; his rushing yards are left alone, and the card says why.
+- **A green quarterback** (under 50 passes before): the team runs 5% more
+  and throws 6% less, but on the quarterback's own runs; the lead back's
+  carries +1%, yards +3%, inside the noise. **Changed:** only a back's QB
+  card, which now says so.
+- **The closing total:** rain games went 2.2 points a team further under
+  the close than dry ones, ten seasons of eleven, and the board's totals
+  use no weather. That is the sky at kickoff, though. This asks the
+  forecast (Open-Meteo's archive, 2022-2025, about 110 small requests;
+  it writes nothing):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 wxfit.py --totals
+```
+
+Paste it back. `UNDER-PRICED: ...` means the board's totals get a rain
+step, as its own change; `priced: ...` means the close already knows.
 
 ## 1u. Parked: NBA player tracking (steps KR, KS)
 
