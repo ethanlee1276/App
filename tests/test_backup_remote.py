@@ -200,6 +200,42 @@ def test_a_failed_upload_does_not_destroy_the_local_backup():
         assert made, "the local backup was lost when the remote failed"
 
 
+def test_a_full_bucket_deletes_first_and_says_how_full_it_is():
+    """6 November: every night since late October the offsite copy failed
+    with "403 storage_cap_exceeded", and a failed sync deletes nothing, so
+    the bucket never got below its cap again. The sync now deletes what
+    this box no longer keeps BEFORE it uploads (guarded by --max-delete),
+    and a refusal for the cap prints what the bucket holds and what this
+    box keeps."""
+    with Stub() as s:
+        log = os.path.join(s.dir, "rclone.log")
+        path = os.path.join(s.bin, "rclone")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write('#!/bin/sh\n'
+                     'echo "$@" >> "%s"\n'
+                     'case "$1" in\n'
+                     '  sync) echo "ERROR : x.db.gz: Failed to copy: failed to get upload URL: Cannot upload '
+                     'files, storage cap exceeded. See the Caps & Alerts page to increase your cap. '
+                     '(403 storage_cap_exceeded)" >&2; exit 1;;\n'
+                     '  size) echo \'{"count":12,"bytes":9800000000}\'; exit 0;;\n'
+                     'esac\nexit 0\n' % log)
+        os.chmod(path, 0o755)
+        got = s.run(remote="b2:qellys-backups/db")
+        calls = open(log, encoding="utf-8").read().splitlines()
+        sync = [c for c in calls if c.startswith("sync ")]
+        assert sync and "--delete-before" in sync[0] and "--max-delete 250" in sync[0], calls
+        assert sync[0].rstrip().endswith("b2:qellys-backups/db/"), sync[0]
+        assert any(c.startswith("size --json --b2-versions") for c in calls), \
+            "a deleted file is only hidden in B2 and still counts against the cap"
+        out = got.stdout
+        assert "FAILED: rclone could not sync. Backups are LOCAL ONLY." in out, out[-800:]
+        assert "the bucket's storage cap is full: it holds 9.8 GB, old versions included; this box keeps" \
+            in out, out[-800:]
+        assert "Raise the cap above what this box keeps" in out and "keep only the last version" in out
+        assert [f for f in os.listdir(s.backups) if f.endswith(".db.gz")], "the local backup stays"
+        assert got.returncode == 0, "a down offsite leg never fails the nightly script"
+
+
 def test_a_missing_rclone_says_how_to_get_it():
     with Stub() as s:
         got = s.run("--test-remote", remote="b2:nowhere/x", with_rsync=False)

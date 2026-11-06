@@ -169,6 +169,27 @@ offsite_why() {
   printf '%s' "$line"
 }
 
+# A FULL BUCKET, MEASURED (2026-11-06). What the bucket holds after this
+# run's deletes, and what this box keeps, so the cap can be set above the
+# second (Backblaze: Caps & Alerts). One listing, only when the cap refused.
+_gb() {
+  [[ -n "${1:-}" ]] && python3 -c 'import sys; print("%.1f GB" % (int(sys.argv[1]) / 1e9))' "$1" 2>/dev/null \
+    || echo "an unknown amount"
+}
+# OLD VERSIONS COUNT (B2). A file the sync deletes is HIDDEN in a B2 bucket,
+# not removed, and it counts against the cap until the bucket's lifecycle
+# rule removes it, so the size is read with --b2-versions (a backend flag
+# every rclone accepts; it changes nothing on another kind of remote).
+cap_sizes() {
+  local cfg="$1" remote_b="" local_b=""
+  remote_b="$(rclone size --json --b2-versions --config "$cfg" "$QB_BACKUP_REMOTE/" 2>/dev/null \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("bytes", ""))' 2>/dev/null || true)"
+  local_b="$(du -sb "$DEST" 2>/dev/null | cut -f1 || true)"
+  echo "  the bucket's storage cap is full: it holds $(_gb "$remote_b"), old versions included; this box keeps $(_gb "$local_b")."
+  echo "  Raise the cap above what this box keeps, with a night's room (Backblaze: Caps & Alerts),"
+  echo "  and let the bucket keep only the last version of a file (Backblaze: Lifecycle Settings)."
+}
+
 push_remote() {
   if [[ -z "${QB_BACKUP_REMOTE:-}" ]]; then
     echo "NOTE: QB_BACKUP_REMOTE is not set — these backups are on the same"
@@ -196,10 +217,25 @@ push_remote() {
       [[ -n "$errf" ]] && rm -f "$errf"
       return 1
     fi
-    if ! rclone sync --config "${QB_RCLONE_CONFIG:-/root/.config/rclone/rclone.conf}" \
+    local cfg="${QB_RCLONE_CONFIG:-/root/.config/rclone/rclone.conf}"
+    # DELETE BEFORE UPLOADING (2026-11-06). rclone's default deletes AFTER
+    # the transfers, and not at all when one of them failed. So the first
+    # night the bucket reached its storage cap, the copies this box had
+    # already dropped stayed in it, the next night's upload met the same
+    # cap, and the offsite copy stopped for good: "403
+    # storage_cap_exceeded", every night from late October. Deleting first
+    # frees what this box no longer keeps before anything is sent.
+    # --max-delete guards the one case that would hurt: a local folder
+    # emptied by accident would otherwise empty the bucket too. A normal
+    # night deletes about seven files; the first night after this, the
+    # backlog of a few weeks.
+    if ! rclone sync --config "$cfg" --delete-before --max-delete "${QB_BACKUP_MAX_DELETE:-250}" \
         "$DEST/" "$QB_BACKUP_REMOTE/" 2>"${errf:-/dev/stderr}"; then
       [[ -n "$errf" ]] && cat "$errf"
       echo "  FAILED: rclone could not sync. Backups are LOCAL ONLY."
+      if [[ -n "$errf" ]] && grep -qiE 'cap_exceeded|cap exceeded' "$errf"; then
+        cap_sizes "$cfg"
+      fi
       note_run failed "rclone: $(offsite_why "$errf")"
       [[ -n "$errf" ]] && rm -f "$errf"
       return 1
