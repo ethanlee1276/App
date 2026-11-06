@@ -182,6 +182,21 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
             r = subprocess.run(cmd, cwd=ROOT, capture_output=True,
                                text=True, timeout=bound, env=env)
         except subprocess.TimeoutExpired:
+            ran = _time.monotonic() - t0
+            if (label not in RESUMES and bound >= TOO_LONG_SHARE * TIMEOUT_S
+                    and ran >= TOO_LONG_SHARE * TIMEOUT_S):
+                # The whole of a fitter's time, and still not done: no run
+                # can finish it. Set aside for the round so the sport's
+                # other fitters, and what waits on the sport, go ahead; the
+                # store keeps its last fit, and the NBA's switch is not
+                # thrown on a refit missing one.
+                lines.append(f"⚠️  {sport} {label}: ran the whole {bound / 60:.0f} min a fitter "
+                             f"may have and did not finish — too long for a run; set aside for this "
+                             f"round, its last fit stands")
+                note(lines[-1])
+                clean = False
+                tell(label, ran, "too_long")
+                continue
             lines.append(f"⚠️  {sport} {label}: still running after "
                          f"{bound:.0f}s — skipped")
             note(lines[-1])
@@ -489,8 +504,27 @@ NBA_CHECKS = {"nba_rules": ("nbarules.py", ("--save",)),
 #: takes: the spread's replay reads every stored NBA game four times over and
 #: prices a ladder twice (the lab's two seasons took seven minutes on a fast
 #: machine; the box is one niced vCPU beside the boards).
-NBA_CHECK_GUESS_S = {"nba_rules": 10 * 60, "nba_vacancy": 10 * 60, "nba_rates": 10 * 60,
-                     "nba_spread": 35 * 60}
+NBA_CHECK_GUESS_S = {"nba_rules": 10 * 60, "nba_vacancy": 35 * 60, "nba_rates": 10 * 60,
+                     "nba_spread": 45 * 60}
+# The box's own times, 5 November: the rotation's rules 30 minutes (1,823 s)
+# and the rates 11; the teammate-out minutes replay the same games as the
+# rules and were started on the old ten-minute guess with half an hour left,
+# so they were cut off and owed again every run. Their guess is the rules'
+# time now, and the spread's (the heaviest: four replays) a whole run.
+
+#: TOO LONG FOR A RUN (2026-11-06). A piece or a fitter that was given this
+#: share of the most a run can give and still did not finish cannot finish
+#: in any run: it is set aside for the round, its last result stands, and
+#: what waited on it goes ahead. Until then one stuck NBA check kept the
+#: NBA's own fitters waiting all week (their alternate-line correction was
+#: still dated 17 October on 6 November).
+TOO_LONG_SHARE = 0.9
+
+#: Fitters that keep what they fitted when they are cut off (the recency
+#: dial writes each market as it goes, ``--resume-after``): one cut off by
+#: its whole time has still moved, so it is tried again. The others start
+#: over each time and are the ones a run can be too short for.
+RESUMES = ("recency dial",)
 
 #: Every piece, in the order a round takes them when they are equally
 #: stale: the sports first (football leads in the autumn; the NBA's checks
@@ -591,8 +625,10 @@ def _late_checks(st: dict, start: str) -> bool:
     if "nba" not in left:
         return False
     pieces = st.get("pieces") or {}
+    # A check set aside this round as too long for a run is not owed again.
     missing = [c for c in NBA_CHECKS
-               if c not in left and str((pieces.get(c) or {}).get("done") or "") < start]
+               if c not in left and str((pieces.get(c) or {}).get("done") or "") < start
+               and ((pieces.get(c) or {}).get("too_long") or {}).get("round") != start]
     if not missing:
         return False
     i = left.index("nba")
@@ -712,6 +748,8 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
     left = list(st.get("left") or [])
     deadline = clock() + budget_s
     done_now: list[str] = []
+    set_aside: list[str] = []
+    started = 0
 
     def run_piece(p, db_, deadline_, say_):
         """The piece, resumed where this round left it (`_refit_sport`):
@@ -742,6 +780,11 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
                     cur["done"].append(label)
                 if status == "failed" and label not in cur.setdefault("failed", []):
                     cur["failed"].append(label)
+                if status == "too_long" and label not in cur.setdefault("too_long", []):
+                    # Skipped by the rest of the round like a done fitter,
+                    # and named, so the round's line and the desk say so.
+                    cur["too_long"].append(label)
+                    cur.setdefault("failed", []).append(label)
             e["fitters_done"] = cur
             _write_state(path, st)
         cut = e.get("cut_off") or {}
@@ -757,10 +800,16 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
         if not runnable:
             break
         p = runnable[0]
-        took = float((pieces.get(p) or {}).get("seconds") or 0) or float(NBA_CHECK_GUESS_S.get(p, 0))
+        e0 = pieces.get(p) or {}
+        # ITS OWN TIME (2026-11-06): its last full run, its guess before it
+        # has one, and never less than it has already been seen to run
+        # without finishing (``min_s``).
+        took = max(float(e0.get("seconds") or 0) or float(NBA_CHECK_GUESS_S.get(p, 0)),
+                   float(e0.get("min_s") or 0))
         need = min(budget_s * 0.9, max(MIN_PIECE_LEFT_S, 1.2 * took))
-        if done_now and deadline - clock() < need:
+        if started and deadline - clock() < need:
             break
+        started += 1
         entry = pieces.setdefault(p, {})
         entry["attempted"] = today.isoformat()
         _write_state(path, st)
@@ -770,26 +819,45 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
         for ln in lines:
             emit(f"  {ln}")
         if not finished:
+            ran = clock() - t0
+            if p not in rows:
+                # A check or an extra is all or nothing: what it ran is the
+                # least it needs, so it is not started again with less.
+                entry["min_s"] = max(int(entry.get("min_s") or 0), int(round(ran)))
+                if ran >= TOO_LONG_SHARE * min(TIMEOUT_S, budget_s):
+                    entry["too_long"] = {"round": start, "after_s": int(round(ran)),
+                                         "on": today.isoformat()}
+                    left.remove(p)
+                    st["left"] = left
+                    _write_state(path, st)
+                    set_aside.append(p)
+                    emit(f"deep refit: {p} ran {ran / 60:.0f} min, the most a run can give, and did "
+                         f"not finish — too long for a run; set aside for this round (its last result "
+                         f"stands) and what waited on it goes ahead")
+                    continue
             emit(f"deep refit: {p} did not finish in this run — it goes to the back of the line")
             break
         entry.update({"done": today.isoformat(), "seconds": round(clock() - t0),
                       "rows": rows.get(p)})
         entry.pop("fitters_done", None)
         entry.pop("cut_off", None)
+        entry.pop("min_s", None)
+        entry.pop("too_long", None)
         left.remove(p)
         st["left"] = left
         _write_state(path, st)
         done_now.append(p)
     st["left"] = left
     _write_state(path, st)
+    aside = f"; set aside as too long for a run: {', '.join(set_aside)}" if set_aside else ""
     if left:
         part = _part_way(pieces, left, start, today.isoformat())
         emit(f"deep refit: round of {start}: {', '.join(done_now) or 'nothing'} done this run; "
              f"left for the next: {', '.join(left)}"
-             + (f"; part-way: {', '.join(part)}" if part else ""))
+             + (f"; part-way: {', '.join(part)}" if part else "") + aside)
     else:
         emit(f"deep refit: round of {start} complete"
-             + (f" — {', '.join(done_now)} this run" if done_now else ""))
+             + (f" — {', '.join(done_now)} this run" if done_now else "") + aside)
     return out
 
 
