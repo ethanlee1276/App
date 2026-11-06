@@ -9338,6 +9338,97 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KT. Your 6 November catch-up, answered** (steps 412 to 418; you, 6
+November: "ok keep going", with the whole run pasted). What each finding
+changed, and what is left to run (docs/RUN_NEXT.md has the same, item by
+item):
+
+* **The journal repairs copy the journal alone** (step 412). The NFL's
+  and college's close-line writes were refused, "the copy needs 7.1 GB
+  and 14.3 GB is free": every `--apply` that edits the journal copied
+  history.db too, which none of them writes. They copy ledger.db alone
+  now (about 20 MB). The close-line summary also counts every bet it
+  examined: the game lines it leaves to the settle, and the bets that
+  had no close then and have none now, each on a line of its own.
+* **The close-line dry run names the books** (step 418). Under each
+  sampled rewrite, the books its new close came from: for a purchased
+  close, every book's last pre-game quote that day, the one priced
+  nearest even (the close) marked `*`; for a close from our own
+  snapshots, every book at the day's last pre-game read (the close is
+  the sportsbooks' median; an exchange's rungs are listed apart). And
+  for each market, how many it rewrites and the middle move. Your NFL
+  dry run rewrote A.J. Brown's and Amon-Ra St. Brown's week-1 closes
+  both to 62.0; the books under them now say whether that is the books.
+* **The nightly backup's history copy** (no code). The NBA write of 5
+  November copied history.db (6.7 GB) into
+  `data/backups/pre-repair-close-lines-20261105-222817/`. It is the
+  newest copy of history.db there is, so it stays; but the nightly copies
+  history.db only with about 17 GB free, and the box has 14, so it has
+  skipped it. Squeezed in place, the copy is about 1.7 GB.
+* **The offsite copy deletes before it uploads** (step 413). Backblaze
+  refused every upload since late October, `403 storage_cap_exceeded`,
+  and a failed sync deletes nothing, so the bucket stayed over its cap.
+  The sync now deletes what this box no longer keeps first (at most 250
+  files a night, so an emptied folder here can never empty the bucket),
+  and a refusal for the cap adds two lines to the log: what the bucket
+  holds, old versions included (a deleted file is only hidden in B2 and
+  still counts until the bucket's lifecycle rule removes it), and what
+  this box keeps.
+* **The deep refit sets aside what no run can finish** (DF2). Each
+  piece starts only with its own time left, never less than it has been
+  seen to run, and a piece or fitter that runs the most a run can give
+  without finishing is set aside for the round (its last result stands),
+  so what waits on it goes ahead. The NBA's teammate-out check had held
+  the NBA's own fits all week that way.
+* **The latency report reads the watcher's own note** (step 415). It
+  said "no BALLDONTLIE key on this box", run from a shell that cannot see
+  the service's settings. The watcher now writes
+  `data/cache/feedlatency/watcher.json` each time it looks, and the
+  report's first line says what it says.
+* **stats.nba.com refused the box** (step 416), `403` at once. Nothing
+  tries again another way, and the research is parked (KR). The probe
+  says what the refusal's page said.
+* **Kalshi's NHL and NBA spreads and totals are wired in** (KL), as the
+  probe found them real.
+
+The writes, each once. First the history copy, squeezed in place (a few
+minutes; the next night's backup log should say `backed up:
+data/history.db`):
+
+```
+sudo -u qellys nice -n 19 gzip -1 /srv/qellys/data/backups/pre-repair-close-lines-20261105-222817/history.db
+df -h / | tail -1
+```
+
+Then the NFL's close lines: the dry run (read the books under the
+sampled rewrites), the write, and college's the same way:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nfl > /tmp/closelines.txt 2>&1; echo "exit $?"; head -80 /tmp/closelines.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nfl --apply 2>&1 | tail -12
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport cfb > /tmp/closelines.txt 2>&1; echo "exit $?"; head -80 /tmp/closelines.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport cfb --apply 2>&1 | tail -12
+```
+
+Not a command: in Backblaze, the bucket's Lifecycle Settings to "Keep
+only the last version of the file", and a storage cap under Caps &
+Alerts above what the box keeps, with a night's room (KO says both
+figures after the next 04:00 UTC run).
+
+Read-only, any time: the refit's own log, which says what each run did
+and where its time went (also the `JQ2` block of the catch-up, which
+runs with JQ):
+
+```
+sudo -u qellys tail -40 /srv/qellys/data/cache/weekly_deepfit.log
+```
+
+The checks in one go, after the next 04:00 UTC backup:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JT KO JQ KL KP 2>&1 | tee /tmp/kt.txt
+```
+
 **KS. NBA player tracking, held out: does it beat the board's number?**
 (step 411; one read-only command, a few minutes, after KR's backfill has
 finished). For assists, rebounds and points, it replays the board's own
@@ -9359,13 +9450,12 @@ the board is a separate change, and your call on the terms (below, KR); if
 none does, `sudo rm /srv/qellys/data/research/nba_tracking.db` deletes the
 research copy and nothing else changes.
 
-The check in one go:
+Parked with KR (6 November): the catch-up no longer runs it.
 
-```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh KS 2>&1 | tee /tmp/ks.txt
-```
-
-**KR. NBA player tracking, fetched for research** (step 411; one probe,
+**KR. NBA player tracking, fetched for research** (parked on 6 November:
+your probe got `stats.nba.com refused the request (403) (after 0 s)`, so
+nothing was fetched and nothing tries again another way; KT. What follows
+is the step as it stood) (step 411; one probe,
 then one long fetch that writes only its own research database; you, 5
 November: "do it"). The league's tracking dashboard (potential assists,
 passes, touches, drives, rebound chances: the chances behind the box
@@ -9403,11 +9493,9 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.nba.tracking --status
 
 Paste back the probe, the fetch's last line and the status.
 
-The check in one go (the probe and the status; it never fetches):
-
-```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh KR 2>&1 | tee /tmp/kr.txt
-```
+Parked (6 November): the league refused the box, so the catch-up no
+longer runs the probe; nothing asks stats.nba.com again unless you run
+the probe by hand.
 
 **KQ. The Lab opens to free accounts** (step 410; nothing to run; you, 5
 November, on the seven pages a free account could not open: "do all of
@@ -9488,7 +9576,9 @@ enough, then `BALLDONTLIE as fast or faster ... a switch candidate` or
 `ESPN faster by N s ... keep ESPN`. Paste it back. To turn the timer off:
 `sudo ./deploy/setenv.sh --unset BALLDONTLIE_API_KEY`, then the restart.
 
-**KO. The backup says why its offsite copy failed** (step 408; one
+**KO. The backup says why its offsite copy failed** (6 November: it said
+`403 storage_cap_exceeded`; the sync now deletes first and says how full
+the bucket is, KT) (step 408; one
 read-only check, under a minute; the owner's desk, 5 November: "Last
 night's backup did not reach the offsite copy"). The nightly backup made
 its copies on this disk, then `rclone sync` to Backblaze failed, and the
@@ -9622,6 +9712,12 @@ hold. Paste that back and I wire in whichever are real. After a build
 with hockey games, the second line's census should count `polymarket`
 and `kalshi` games above zero.
 
+**6 November:** both are real (`KXNHLSPREAD` 29 games and 134 markets,
+`KXNHLTOTAL` 29 and 261, the NBA's pair 8 games and 264 and 232), and
+both leagues are wired in (KT). The census read Kalshi on 9 of 11 hockey
+games and Polymarket on 11; after the next NHL build, its `kalshi_spread`
+and `kalshi_total` should read above zero too.
+
 **KK. The NHL model measured on three seasons, and back-to-backs on both
 sides** (step 396; one read-only check, a few minutes; you, 2026-11-05: "Go
 through nfl and CFB and nba and mlb and wnba and nhl ... make sure we have
@@ -9667,7 +9763,8 @@ games lean the shipped way in 10 of 10`, `game lines: better after`,
 read the other way on any of the five, paste it back.
 
 **KJ. Closing lines at the sportsbooks' number, and the settled ones re-read**
-(step 389; one read-only dry run, then one write once you have read it;
+(the NBA's written 5 November; the NFL's and college's wait on KT, whose
+dry run names the books behind each rewrite) (step 389; one read-only dry run, then one write once you have read it;
 found on the public receipts, 2026-11-05). Every settled pick banks the
 market's closing line, which the Record page's closing-line value and the
 audits read. An exchange (Novig, ProphetX) posts a ladder of lines for a

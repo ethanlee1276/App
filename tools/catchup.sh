@@ -99,6 +99,9 @@
 # fetches any old season's files it lacks; already run, nothing applied),
 # DM's pushalerts --send (it records and sends what is owed), DN's and DO's
 # Caddyfile install (it reloads the web server).
+# AND NOT HERE BECAUSE THEY ARE PARKED: KR's probe and KS's test of NBA player
+# tracking. stats.nba.com refused the box at once (403, 6 November), and a
+# refusal is the league's answer, so the catch-up does not ask again.
 set -u
 
 ONLY=""
@@ -689,6 +692,9 @@ curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/cache/deepfit_state.json')); print(d['round'], 'left:', d['left']); [print(k, v) for k, v in sorted(d['pieces'].items())]"
 curl -s https://qellysbook.com/data/record.json | python3 -c "import json,sys; t=json.load(sys.stdin)['self_tuning']; [print(k, sorted({(e.get('sport'), (e.get('fitted') or '')[:10]) for e in t.get(k) or []})) for k in ('weights', 'players')]"
 SH
+run JQ2 "The deep refit's own log: what each run did and where its time went" 30 <<'SH'
+sudo -u qellys tail -40 /srv/qellys/data/cache/weekly_deepfit.log
+SH
 run JP "The Lab finishes in pieces, and the heartbeat says why" 60 <<'SH'
 curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('weekly', {}).get('lab')); print({k: v.get('note') for k, v in (d.get('boards') or {}).items() if not v.get('ok')})"
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/backtest.json')); print(d['generated_at']); [print(k, v.get('replayed_at')) for k, v in d['sports'].items()]"
@@ -1199,10 +1205,6 @@ SH
 run KQ "The Lab open to free accounts: is this version live" 30 <<'SH'
 curl -s https://qellysbook.com/js/more.js | grep -c 'async function labWalled('
 SH
-run KR "NBA player tracking: does the league answer the box, and what is stored" 120 <<'SH'
-cd /srv/qellys && sudo -u qellys python3 -m engine.nba.tracking --probe
-cd /srv/qellys && sudo -u qellys python3 -m engine.nba.tracking --status
-SH
 run EZ "The Fantasy room, round one: 101, defenses, your week, pickups" 600 <<'SH'
 curl -s https://qellysbook.com/js/fantasyweek.js | grep -c 'function todo('
 curl -s https://qellysbook.com/data/fantasy_week.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d.get('players', []) if r.get('position') == 'DEF'))"
@@ -1265,9 +1267,6 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 nhllabcheck.py
 SH
 run KM "WNBA: the spread measured on its own seasons, on the box's WNBA games" 900 <<'SH'
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbalabcheck.py --league wnba
-SH
-run KS "NBA player tracking, held out: does it beat the board's number" 900 <<'SH'
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 nbatrackcheck.py
 SH
 
 echo "===== done in $((SECONDS / 60)) min"

@@ -2,6 +2,18 @@
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
     {
+      "date": "2026-11-06",
+      "kind": "ship",
+      "title": "Kalshi's spreads and totals on hockey and basketball games",
+      "body": "The game page's market section now carries Kalshi's price on the NHL's puck line and total, and on the NBA's spread and total, beside Polymarket's: the chance the crowd gives the home side to cover the board's own line, and the over on the board's own total. Only the same bet the books quote counts, never a neighbouring line. Kalshi lists both leagues' markets in the same shape as football's, which the box confirmed before they were wired in."
+    },
+    {
+      "date": "2026-11-06",
+      "kind": "fix",
+      "title": "The models' weekly refit no longer waits on a piece it cannot finish",
+      "body": "The weekly refit re-learns each sport from its whole history in pieces, a few each morning. One of the NBA's checks was started with too little time left and cut off every run, and the NBA's own fits waited on it all week. Each piece now starts only with its own time left, and a piece that runs the most a run can give without finishing is set aside for the week, keeping its last result, so the rest goes ahead."
+    },
+    {
       "date": "2026-11-05",
       "kind": "ship",
       "title": "The Lab opens to free accounts",

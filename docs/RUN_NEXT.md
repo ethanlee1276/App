@@ -10,8 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-05, after NBA player tracking was built for research at
-your word, a probe, a two-hour fetch into a research database and a held-out
+Last updated 2026-11-06, after your 6 November catch-up (what it showed and
+what changed for it: Start here, below; step KT), and on 2026-11-05 after
+NBA player tracking was built for research at your word, a probe, a two-hour fetch into a research database and a held-out
 test (steps KR and KS: item 1u), after the Lab opened to free accounts with its
 public summary, at your word on the seven pages (step KQ: nothing to run;
 its live check is in Start here), after a Start here section put every waiting check in one
@@ -134,23 +135,66 @@ JI). Before that, Who's on now became the desk's first card (step JH). Done:
 - **IX:** showed Duke's lead back at 52% with no receivers anywhere. That's
   fixed (step JC), and item 3 checks it.
 
-## 000. Start here: every waiting check in one run (5 November)
+## 000. Start here: every waiting check in one run (6 November)
 
 Everything below that only reads, in one go (a few minutes; it writes
-nothing). Paste the whole file back:
+nothing). Best after the 04:00 UTC backup that follows this push, so KO
+reads the new note. Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JX JT KO JH JL IQ JM JN JO JP JQ JR JV KF KG KI KL KN JD IX IU IT JA IP KP KQ KR 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JQ JR KF KG KI KL IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (up to about an hour together; still
-read-only): Caesars as a backup sharp book, the NHL lab, the WNBA's spread
-on the box's own games, and NBA player tracking held out (KS, once item
-1u's fetch has finished; before that it says nothing is stored):
+read-only): Caesars as a backup sharp book, the NHL lab and the WNBA's
+spread on the box's own games:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM KS 2>&1 | tee /tmp/long.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long.txt
 ```
+
+**What your 6 November run showed, and what changed for it (step KT):**
+
+- **The NFL and college close-line writes were refused** ("the copy needs
+  7.1 GB and 14.3 GB is free"). Every journal repair copied history.db as
+  well as the journal, though none of them writes history.db. They copy
+  the journal alone now (20 MB), so both writes can run (item 1p). The
+  dry run also names the books behind each sampled rewrite, and how far
+  the closes move in each market, so you can check a rewrite like A.J.
+  Brown's and Amon-Ra St. Brown's (both to 62.0 in week 1) before writing.
+- **The disk:** 14 GB free. The NBA write's history copy (6.7 GB) is
+  what took it, and it keeps the nightly backup from copying history.db
+  (that needs about 17 GB free). One command shrinks it in place (item 0).
+- **The offsite copy:** Backblaze refused the upload, `403
+  storage_cap_exceeded`. A failed sync deleted nothing, so the bucket
+  could never get back under its cap. It now deletes what the box no
+  longer keeps before it uploads, and when the cap refuses it says how
+  full the bucket is (old versions included) against what the box keeps.
+  Your call: the cap (item 0b).
+- **The deep refit** finished yardage, and the NBA's rates and rules
+  checks, then stopped with nine pieces left. The NBA's teammate-out
+  check was started on a ten-minute guess with half an hour left and
+  cut off every run, and the NBA's own fits waited on it all week (their
+  alternate-line correction still reads 17 October, KF). Each piece now
+  starts only with its own time left, and one that runs the most a run
+  can give without finishing is set aside for the round, so what waits
+  on it goes ahead (item 1g).
+- **Hockey's crowd prices:** Kalshi's NHL spreads and totals are real (29
+  games), and so are the NBA's; both are wired in now (item 1r).
+- **NBA player tracking:** stats.nba.com refused the box at once (403).
+  Nothing tries again another way; it is parked (item 1u).
+- **The latency report** said "no BALLDONTLIE key on this box". Run by
+  hand, the shell cannot see the service's settings; the report now reads
+  the watcher's own note instead (item 8).
+- **The weather desk** stays paused: the day fix is in, and the calls it
+  would have made since the pause went 9-27 (won 25%, claimed 49%). Its
+  spread was a first guess (item 1h).
+
+**Done 6 November (nothing more to run):** the notices (all three, 14
+told, 0 to go: item 1); Long Shots' faces (22 of 22); the Lab's free
+version (live); MLB travel and rest (nothing held: item 1t); the parlay
+study (the rule holds: item 2); Most Likely by market and side (both
+leagues pass at the maker level; the by-market split did not beat it).
 
 One that has its moment: any NBA night, about 30 minutes before the
 first tip (item 1n):
@@ -159,10 +203,10 @@ first tip (item 1n):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh KH 2>&1 | tee /tmp/kh.txt
 ```
 
-The ones that write, each with its own item below: item 1p's close lines
-for the NFL and college (the dry run first, then `--apply`; the NBA's is
-done), and item 1u's tracking fetch (into its own research database only).
-Not commands: alerts on your phone (item 1).
+The ones that write, each with its own item below: item 0's shrink of
+the old history copy, and item 1p's close lines for the NFL and college
+(the dry run first, then `--apply`; the NBA's is done). Not commands: the
+Backblaze cap (item 0b) and alerts on your phone (item 1).
 
 **Done 5 November:** item 0's cleanup (20 GB free now), item 1p's NBA
 close lines (1,537 re-read at the sportsbooks' number), and item 8's key
@@ -222,10 +266,32 @@ many first-basket rows have a face:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JX 2>&1 | tee /tmp/jx.txt
 ```
 
-## 0. Tomorrow, after the 04:00 UTC backup: offsite works, then clear about 13 GB (steps JT, JG)
+## 0. Any time now: shrink the NBA write's history copy, so the nightly backs up history.db again (steps KT, JT)
 
-**Done 5 November:** you ran the cleanup; the disk has 20 GB free (58%
-used). Item 0b still says whether the offsite copy lands.
+**6 November:** 14 GB free (72% used). The NBA close-line write of 5
+November copied history.db (6.7 GB) into
+`data/backups/pre-repair-close-lines-20261105-222817/` before it wrote
+the journal, which it never needed: the repair writes only the journal,
+and repairs copy the journal alone from this push (step KT). That copy
+is the newest copy of history.db on the box, so it is kept, but it costs
+the nightly its room: the nightly copies history.db only with about 17
+GB free (the raw copy, its gzip, and 15% of the disk left after), so it
+has skipped history.db every night (`SKIPPED: data/history.db is ...`).
+This squeezes the copy in place to about 1.7 GB, a few minutes; the
+next night's log should say `backed up: data/history.db`, and the
+squeezed copy clears itself a week after two newer repair copies exist
+(the NFL's and college's writes, item 1p):
+
+```
+sudo -u qellys nice -n 19 gzip -1 /srv/qellys/data/backups/pre-repair-close-lines-20261105-222817/history.db
+df -h / | tail -1
+```
+
+Paste back the `df` line. The next morning, JT (in Start here) shows the
+nightly's line.
+
+**Done 5 November:** you ran the cleanup; the disk had 20 GB free (58%
+used) until the NBA write's copy.
 
 You fixed Backblaze's cap and lifecycle and deleted the October 15
 leftover. Why there's been no weekly zip since 8 October: the 15 October
@@ -254,7 +320,29 @@ Paste back both. Right now the nightly skips history.db because the disk
 is too full for its copy; after this, the next night's log should say
 `backed up: data/history.db`.
 
-## 0b. After the next 04:00 UTC backup: why the offsite copy failed (step KO)
+## 0b. The Backblaze cap, then after the next 04:00 UTC backup: does the offsite copy land? (steps KT, KO)
+
+**6 November, your KO run said why:** `Cannot upload files, storage cap
+exceeded ... (403 storage_cap_exceeded)`. Every night since late October
+the upload met the cap, and a sync that fails deletes nothing, so the
+copies this box had already dropped stayed in the bucket and it never got
+back under the cap. From this push the sync deletes those first, at most
+250 files a night (`--max-delete`, so an emptied folder here can never
+empty the bucket), and when the cap still refuses, the log says how much
+the bucket holds, old versions included, against what this box keeps
+(about 5 GB by the last listing: three nightly history copies of 1.7 GB
+each and the small databases; the log prints the exact figures).
+
+**Your call, in Backblaze (not a command):** under the bucket's Lifecycle
+Settings, "Keep only the last version of the file": a file the sync
+deletes is only hidden in B2, and it counts against the cap until the
+lifecycle rule removes it, a day later. Under Caps & Alerts, a storage
+cap above what the box keeps, with a night's room: 20 GB is pennies a
+month at B2's price. If the next KO still says `'failed'`, its last lines
+give both figures: a bucket far above the box's 5 GB is old versions the
+lifecycle setting has not cleared yet, and a cap below the box's figure
+is the cap. Then the read-only check after the next 04:00 UTC run (KO,
+also in Start here); its first line should say `'offsite': 'ok'`.
 
 Your desk said at 12:34 on 5 November that last night's backup did not
 reach the offsite copy. The copies on the box were made; the upload to
@@ -275,7 +363,12 @@ missing bucket, a dropped connection) and what to change. Paste it back
 either way. Until then item 0's cleanup waits: it needs a night that ends
 `offsite copy updated`.
 
-## 1. An hour after the restart, or tomorrow: the notices went out, and alerts on your phone (steps JH, JJ)
+## 1. Alerts on your phone (steps JH, JJ)
+
+**Done 6 November:** all three notices went out: 29 October's, 1
+November's and 2 November's each read 14 told, 0 to go, and the page,
+the policy and the trimmed files all checked (`1`, `1`, `True`, `1`).
+Only the phone half is left, below; it is not a command.
 
 The notices you armed (JJ, Done above) go out from the push loop between
 10:00 and 20:00 Eastern. Who's on now names a member a week after theirs
@@ -364,6 +457,13 @@ Before 6 December the college line reads `False [] None` — that's right.
 
 ## 1f. The day after tomorrow: the Lab's first pieces, and why (step JP)
 
+**6 November, your JP run:** the run it showed (`'cut_off': True`, 99
+minutes, still on the NFL) was 5 November's, which started before the
+evening's fix gave the run its 50 minutes. The page still reads 29
+September. Tonight's run is the first under the new rules; the JP check
+in Start here shows it, and the first line should say `'cut_off': False`
+with the sports it published.
+
 **Update, 5 November, evening, the whole run (nothing for you to paste):**
 your desk said the Lab's numbers were 37 days old in six sports. MLB and
 the NFL had limits of their own; nothing kept the run as a whole inside
@@ -428,6 +528,29 @@ that refresh (its log says `CFB results not stored this build`). If `cfb`
 shows up there again, paste the line.
 
 ## 1g. Thursday: the models' weekly refit reaches the NFL (step JQ)
+
+**6 November, your JQ run, and the fix (step KT):** 5 November's run took
+53 minutes and finished yardage; the round had also finished the NBA's
+rates (11 minutes) and rules (30 minutes), the touchdowns and their scale,
+and college's touchdowns. Nine pieces were left: `nfl, cfb, nba_vacancy,
+nba_spread, nba, mlb, wnba, nfl_props, ladder`. The NBA's teammate-out
+check (`nba_vacancy`) replays the same games as the rules but was started
+on a ten-minute guess with half an hour left, so it was cut off and owed
+again every run, and the NBA's own fits waited on it all week (their
+alternate-line correction still reads 17 October in KF). Now:
+
+- each piece starts only with its own time left (its last full run, or
+  the most it has already run without finishing), except the first of a
+  run, which always starts;
+- a piece that runs the most a run can give (45 minutes) and still does
+  not finish is set aside for the round: its last result stands, what
+  waits on it goes ahead, and the round's last line ends `set aside as
+  too long for a run: ...`. A fitter inside a sport is set aside the
+  same way, and the sport's other fitters go on.
+
+Nothing new to run. The JQ check in Start here now also prints the
+refit's own log (its last 40 lines, the `JQ2` block), which says what
+each run did and where its time went.
 
 **Update, 5 November, late (nothing for you to paste):** your desk said
 "The deep refit has no finished college football fit on record", and the
@@ -515,6 +638,18 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JR 2>&1 | tee /tmp/jr.txt
 
 Paste it back. Its last section fills as the shadow calls settle; in a week
 or two it says whether the desk can come back.
+
+**6 November, your JR run:** 3,552 of 3,696 forecasts had priced the
+wrong day, and the bets placed a day late went 3-540 while claiming 81%.
+That is fixed. But the calls on the right day lost too: those for the
+same day won 35% while claiming 60%, and the ones the desk would have
+made since the pause went 9-27 (won 25%, claimed 49%; 57 still to
+settle). So the day was not the whole story: its forecast spread
+(`SIGMA_BY_LEAD`: 2°F for the same day, 3°F a day ahead) was a first
+guess and is far too sure. It stays paused. The next step is to fit the
+spread and any warm or cold lean from its own 3,696 logged forecasts,
+the way the module's notes always meant to; that is a read-only
+measurement first, on your word.
 
 ## 1h2. Any time after this push: Most Likely learns by market and side (step JV)
 
@@ -684,13 +819,37 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KI 2>&1 | tee /tmp/ki.txt
 `read by tip` with an agreement near 0.88 is right; paste it back either
 way.
 
-## 1p. Any time after this push: re-read the settled NBA closes (step KJ)
+## 1p. Any time after this push: re-read the settled NFL and college closes (steps KJ, KT)
+
+**6 November:** both writes were refused, rightly, by the disk check:
+every journal repair also copied history.db (7.1 GB), though none writes
+it. From this push they copy the journal alone (20 MB), so they fit.
+Your dry runs: the NFL would fill 79 closes and rewrite 3,844 of 7,937
+(3,496 already right), college would rewrite 1,490 of 5,522 (1,150
+right). The rest were game lines and bets with no close, which the
+summary now counts on lines of their own. Before writing, the dry run
+again: each sampled rewrite now names the books behind its new close,
+and each market says how many it rewrites and the middle move. Look at
+week 1's A.J. Brown and Amon-Ra St. Brown (both to 62.0): the books named
+under them should show 62.0 or two books either side of it. Paste the
+NFL's back if they do not:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nfl > /tmp/closelines.txt 2>&1; echo "exit $?"; head -80 /tmp/closelines.txt
+```
+
+If they read right, the write (it backs up the journal first, and never
+touches a grade), then college's dry run and write:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport nfl --apply 2>&1 | tail -12
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport cfb > /tmp/closelines.txt 2>&1; echo "exit $?"; head -80 /tmp/closelines.txt
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lines --sport cfb --apply 2>&1 | tail -12
+```
 
 **Done for the NBA, 5 November:** 3,166 settled bets read, 1,411 already
 right, 1,537 re-read at the sportsbooks' number, 103 kept; written, and
-the record picks it up at the next settle. Left: the NFL and college, the
-same two commands with `--sport nfl` and then `--sport cfb` (dry run
-first, paste it back, then `--apply`).
+the record picks it up at the next settle.
 
 Closing lines now come from the sportsbooks' number, never an exchange's
 ladder rung: 1,062 of 2,537 settled NBA picks had a close 3 or more off
@@ -711,7 +870,19 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 
 The same two with `--sport nfl` and `--sport cfb` re-read football's.
 
-## 1u. Any evening: NBA player tracking, fetched and measured (steps KR, KS)
+## 1u. Parked: NBA player tracking (steps KR, KS)
+
+**6 November, your KR run:** `stats.nba.com refused the request (403)
+(after 0 s)`. The league turned the box away on its first request,
+before anything was stored, the way it turns away many data-centre
+addresses. Nothing here tries again another way: no other headers, no
+other address. A refusal is the league's answer, and the board never
+read this research. So it is parked, and nothing is left to run. The
+probe now also says what the refusal's page said, if you ever run it
+again. If you want the league's tracking one day, the way in is a
+licensed feed, which costs money, and that is your call.
+
+What follows is the plan as it stood, kept for the record:
 
 You said "do it" to the league's player tracking (potential assists,
 passes, touches, drives, rebound chances). It is built for research only:
@@ -751,7 +922,16 @@ change to read it on the board, and that is your call on NBA.com's terms
 (personal, non-commercial use); if none does, the research copy can be
 deleted and nothing else changes.
 
-## 1t. Any time after this push: MLB travel and rest, measured (step KN)
+## 1t. Done: MLB travel and rest, measured (step KN)
+
+**Done 6 November:** your run read 19,345 games, 2018 to 2026, and every
+one of the ten came out `too small to use`. The two closest were the
+same side in all eight seasons but short of two standard errors: 1,500+
+miles without a day off (4.6% fewer runs scored, z −1.7) and the first
+home game after a 6+ game road trip (2.5% more runs allowed, z +1.7),
+the same two the Retrosheet logs pointed to. The market's closing totals
+already sit near both. Nothing is built; the check can run again next
+spring with 2026's games in.
 
 The MLB spec's travel and rest engine was never built: a day game after a
 night game, time zones, long trips, getaway days, a long run without a day
@@ -809,6 +989,16 @@ cd /srv/qellys && sudo -u qellys python3 -c "import json; from engine import gat
 
 Paste it back; I wire in the series that are real.
 
+**Done 6 November:** your probe found Kalshi's `KXNHLSPREAD` (29 games,
+134 markets, "Pittsburgh wins by over 1.5 goals") and `KXNHLTOTAL` (29,
+261, "Over 5.5 goals scored") real, and the NBA's two as well (8 games,
+264 and 232); the WNBA's are empty until May. Both leagues are wired in
+now, by the rule the football ones follow: only the board's own spread
+and total, never a neighbouring one. The census then read Kalshi on 9 of
+11 hockey games and Polymarket on all 11; after the next NHL build its
+`kalshi_spread` and `kalshi_total` should read above zero too (the KL
+check in Start here).
+
 ## 1q. Any time after this push: the NHL lab, on the box's own games (step KK)
 
 The NHL model's constants were measured for the first time, on three
@@ -829,7 +1019,14 @@ better after`, `saves: better after ..., squared z 1.0..., level 1.00...`
 and `goalies: backup named right 80% ...`. Paste it back if any of them
 reads the other way.
 
-## 2. Any time after this push: the parlay study once more (steps JF, JD)
+## 2. Done: the parlay study once more (steps JF, JD)
+
+**Done 6 November: the rule holds.** Two-game parlays made money where
+same-game ones lost: NFL Most Likely two-game +41.0% over 23 (same-game
+−4.1% over 40), college Most Likely two-game +1.7% over 62 (same-game
+−7.2% over 56), MLB Edge two-game +5.8% over 85 (same-game 0 for 14). The
+journal agrees: Most Likely two-game 24-16 (+10.57u), same-game 14-17
+(−3.41u). Money stays on two-game parlays only; nothing to run.
 
 Read-only, about 3 minutes. Section 1 is the board's rule now (every pair
 that makes sense, two of each kind a day); section 4 shows JE's lift rule
@@ -895,6 +1092,17 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh IX 2>&1 | tee /tmp/ix.txt
 ```
 
 ## 8. Your call, any time: a licensed scores feed, timed against ESPN's (step KP)
+
+**6 November, your KP run** said `nothing recorded yet (no BALLDONTLIE key
+on this box, so the watcher is asleep)`, on a box whose service has the
+key. The report is run by hand, and that shell cannot see the service's
+settings, so it guessed. The watcher, which runs inside the service, now
+leaves a note each time it looks (`data/cache/feedlatency/watcher.json`),
+and the report's first line reads it: when it last looked, which leagues
+were on, how often it reads and at what limit, or that it is not
+running. It had nothing to record yet in any case: your run was at 7:02
+p.m. Eastern, before the night's first tip, and the watcher records only
+while an NBA or NFL game is live. KP in Start here shows the first night.
 
 **Done 5 November:** you set the key and restarted; the timer is on. The
 free plan answers the games endpoint at 5 requests a minute, and the timer
