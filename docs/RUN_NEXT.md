@@ -199,6 +199,8 @@ over instead of starting again each Wednesday, and a dial that keeps
 nothing in two full runs is set aside. Nothing new to run; JQ in the run
 above shows it. The Lab itself published last night: its public summary is
 dated 6 November, with MLB, the NFL, college, the NBA and the WNBA on it.
+One NFL dial market alone turned out longer than a run on the box; the dial
+now keeps each setting as it scores it and resumes (item 1g).
 
 **Rain and a green quarterback, measured (step KU, item 1v), your question
 from Thursday night:** rain makes teams run more (their backs' carries
@@ -610,6 +612,23 @@ that refresh (its log says `CFB results not stored this build`). If `cfb`
 shows up there again, paste the line.
 
 ## 1g. Thursday: the models' weekly refit reaches the NFL (step JQ)
+
+**6 November, evening, read off the heartbeat:** last night the jobs did
+take turns (the Lab 00:20 to 01:52, the refit 02:16 to 03:21), and the
+refit still gave the NFL's recency dial its 45 minutes and kept nothing.
+The dial's small market, passing yards (3,187 predictions), was refitted on
+6 November; the three big ones (receiving yards, receptions, rushing yards,
+about 26,000 each) still carry their 25 August fit. Each is 21 replays of
+the whole history, and one alone outgrew a run: a copy of the logs does a
+market in 77 seconds, the box took more than 45 minutes, so something on
+the box (most likely its memory) slows it more than 35 times. Now the dial
+keeps each of its 21 settings the moment it is scored, and a cut-off run
+resumes at the next one, after scoring the default setting again to check
+nothing it reads has changed (if anything has, it starts that market
+afresh), so the dial it ends on is the one an uninterrupted run would fit.
+The refit's log says how many settings each run scored and the clock time
+of the last (the `JQ2` block in Start here), which shows how long one takes
+on the box. Nothing new to run.
 
 **6 November, afternoon, read off the heartbeat (step KV):** the night's run
 ended `nothing done this run ... part-way: nfl (recency dial cut off after

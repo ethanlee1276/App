@@ -182,12 +182,23 @@ def _refit_sport(sport: str, db: str = "data/history.db", say=None,
         try:
             r = subprocess.run(cmd, cwd=ROOT, capture_output=True,
                                text=True, timeout=bound, env=env)
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
             ran = _time.monotonic() - t0
             whole = bound >= TOO_LONG_SHARE * TIMEOUT_S and ran >= TOO_LONG_SHARE * TIMEOUT_S
+            kept_after = _dial_kept(sport, round_of) if label in RESUMES else None
+            if label in RESUMES:
+                # How far it got before the cut, in its own words (formfit.py
+                # says each setting as it is kept, flushed): the log then
+                # shows how long one setting takes on the box.
+                said = [ln.strip() for ln in _timed_out_text(exc).splitlines() if " scored — " in ln]
+                if said:
+                    lines.append(f"deep refit: {sport} {label} — {len(said)} setting(s) scored before "
+                                 f"the cut; the last: {said[-1]}")
+                    note(lines[-1])
             if label in RESUMES and whole and kept_before is not None \
-                    and _dial_kept(sport, round_of) == kept_before:
-                # Its whole time, and not one market more kept: it did not
+                    and (kept_after is None or kept_after <= kept_before):
+                # Its whole time, and not one setting more kept (a market's
+                # grid it had to start afresh counts as none): it did not
                 # move. The round counts the stall (STALLS_TO_SET_ASIDE).
                 lines.append(f"⚠️  {sport} {label}: ran the whole {bound / 60:.0f} min a fitter may "
                              f"have and kept no market it had not kept before — stalled")
@@ -571,20 +582,33 @@ def _carries(start: str, today: _dt.date) -> bool:
         return False
 
 
+def _timed_out_text(exc) -> str:
+    """What a fitter the refit cut off had printed, as text (``run`` hands it
+    back as bytes whatever ``text`` was asked)."""
+    out = getattr(exc, "stdout", None) or getattr(exc, "output", None) or ""
+    return out.decode("utf-8", "replace") if isinstance(out, (bytes, bytearray)) else str(out)
+
+
 def _dial_kept(sport: str, round_of: str | None, path=None) -> int | None:
-    """How many of ``sport``'s recency-dial markets the store holds fitted on
-    or after ``round_of`` — what `formfit.py --resume-after` keeps — or None
-    when there is no round or the store cannot be read."""
+    """How far ``sport``'s recency dial has got this round, in settings
+    scored: each market the store holds fitted on or after ``round_of``
+    (what `formfit.py --resume-after` keeps) counts its whole grid, and a
+    market part-way the settings it has kept (`formfit.GridCheckpoint`,
+    2026-11-06: one NFL market alone outgrew a run, so a run that scored
+    settings without finishing a market has still moved). None when there
+    is no round or the store cannot be read."""
     if not round_of:
         return None
     try:
         from . import formfit as ff
         stored = ff._load(ff.DEFAULT_PATH if path is None else path)
+        part = ff.partial_counts(sport)
     except Exception:                                     # noqa: BLE001
         return None
-    return sum(1 for k, v in (stored or {}).items()
-               if str(k).partition(":")[0] == sport and isinstance(v, dict)
-               and str(v.get("fitted") or "") >= round_of)
+    done = {str(k).partition(":")[2] for k, v in (stored or {}).items()
+            if str(k).partition(":")[0] == sport and isinstance(v, dict)
+            and str(v.get("fitted") or "") >= round_of}
+    return len(ff.GRID) * len(done) + sum(n for m, n in part.items() if m not in done)
 
 #: Every piece, in the order a round takes them when they are equally
 #: stale: the sports first (football leads in the autumn; the NBA's checks

@@ -232,7 +232,7 @@ def _run_dial(store, argv, die_on=None):
     import engine.logwalk as LW
     asked = []
 
-    def fit(entries, market, sport="nfl", min_history=None, base=None):
+    def fit(entries, market, sport="nfl", min_history=None, base=None, checkpoint=None):
         asked.append(market)
         if market == die_on:
             raise KeyboardInterrupt("time limit")

@@ -164,6 +164,11 @@ def test_a_dial_that_ran_its_whole_time_and_kept_nothing_more_has_stalled():
     assert ("recency dial", "stalled") in told, told
     assert not finished, "the sport is not done"
     assert any("kept no market it had not kept before — stalled" in ln for ln in lines), lines
+    # Settings kept, not markets (formfit.GridCheckpoint): a run that had to
+    # start a market's grid afresh and ended with fewer than it found has
+    # not moved either.
+    _lines, _f, told, _r = _dial_cut(kept_after=1)
+    assert ("recency dial", "stalled") in told, told
 
 
 def test_a_dial_that_kept_a_market_or_was_cut_short_has_not():

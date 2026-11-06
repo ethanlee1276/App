@@ -66,6 +66,8 @@ from pathlib import Path
 from . import modelstate as _modelstate
 
 DEFAULT_PATH = Path(_modelstate.path("formfit.json"))
+#: Each market's grid as far as a cut-off run scored it (`GridCheckpoint`).
+PARTIAL_PATH = Path(_modelstate.path("formfit_partial.json"))
 
 #: Settled walk-forward predictions required before a fitted dial may be
 #: applied — same floor the temperature fit uses.
@@ -169,6 +171,89 @@ class FormFit:
                 "fitted": _dt.datetime.now().isoformat(timespec="seconds")}
 
 
+class GridCheckpoint:
+    """ONE MARKET'S GRID, KEPT A SETTING AT A TIME (2026-11-06).
+
+    The NFL's three big markets (receiving yards, receptions, rushing yards,
+    about 26,000 settled predictions each) are 21 walk-forwards apiece, and
+    on the box one market outgrew the 45 minutes the deep refit gives a
+    fitter: the dial was cut off on 6 November having kept nothing, and its
+    big markets still carried their 25 August fit. Writing each market as it
+    finished (`formfit.py --resume-after`) was not enough when one market
+    alone is longer than a run. So each setting's score is kept the moment
+    its walk ends, and the next run scores only the settings still owed.
+
+    NEVER A GRID FROM TWO DIFFERENT WALKS. A setting's score is a function
+    of the market's games and of every store the walk reads (the player
+    memory, the form check, the rank store, ...), and any of them can be
+    refitted between two nights. So a resumed fit first scores the spec
+    curve (r = 0) again and keeps the saved settings only when that score
+    and its count come out exactly as saved: the walk is deterministic, so
+    an exact match means it is the same walk. Anything else, and the saved
+    grid is dropped and scored afresh. The fitted dial is the one an
+    uninterrupted run would have found."""
+
+    def __init__(self, sport: str, market: str, path=None):
+        self.key = f"{sport}:{market}"
+        self.path = Path(path) if path is not None else PARTIAL_PATH
+
+    def _all(self) -> dict:
+        try:
+            got = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return got if isinstance(got, dict) else {}
+
+    def _write(self, entry) -> None:
+        every = self._all()
+        if entry is None:
+            if self.key not in every:
+                return
+            every.pop(self.key, None)
+            if not every:                   # nothing part-way any more: no file
+                self.path.unlink(missing_ok=True)
+                return
+        else:
+            every[self.key] = entry
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_name(self.path.name + ".tmp")
+        tmp.write_text(json.dumps(every, sort_keys=True), encoding="utf-8")
+        os.replace(tmp, self.path)          # a run killed mid-write keeps the last whole file
+
+    def load(self) -> dict:
+        """``{r: (brier, n)}``: the settings scored so far."""
+        out: dict = {}
+        for r, v in ((self._all().get(self.key) or {}).get("scores") or {}).items():
+            try:
+                out[round(float(r), 1)] = (float(v[0]), int(v[1]))
+            except (TypeError, ValueError, IndexError):
+                continue
+        return out
+
+    def put(self, r: float, brier: float, n: int) -> None:
+        scores = dict((self._all().get(self.key) or {}).get("scores") or {})
+        scores[f"{float(r):.1f}"] = [brier, n]
+        self._write({"scores": scores,
+                     "saved": _dt.datetime.now().isoformat(timespec="seconds")})
+
+    def clear(self) -> None:
+        self._write(None)
+
+
+def partial_counts(sport: str, path=None) -> dict:
+    """``{market: settings scored}`` for ``sport``'s markets part-way."""
+    try:
+        got = json.loads(Path(path if path is not None else PARTIAL_PATH).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for k, v in (got if isinstance(got, dict) else {}).items():
+        sp, _, market = str(k).partition(":")
+        if sp == sport and isinstance(v, dict) and isinstance(v.get("scores"), dict):
+            out[market] = len(v["scores"])
+    return out
+
+
 def base_for(sport: str) -> dict:
     """The sport's hand-tuned spec curve — the dial's zero point."""
     from .form import WINDOW_WEIGHTS, MLB_WINDOW_WEIGHTS
@@ -176,7 +261,8 @@ def base_for(sport: str) -> dict:
 
 
 def fit(entries: list[dict], market: str, base: dict | None = None,
-        min_history: int | None = None, sport: str = "mlb") -> FormFit | None:
+        min_history: int | None = None, sport: str = "mlb",
+        checkpoint: GridCheckpoint | None = None) -> FormFit | None:
     """Grid-search the dial by walk-forward Brier on raw probabilities.
 
     ``entries`` are the same player histories calibrate.py fits from. One
@@ -184,6 +270,10 @@ def fit(entries: list[dict], market: str, base: dict | None = None,
     temperature fit), which is why it runs from a CLI/nightly chore and
     never inside a page build. The harness comes from ``logwalk.walk``,
     so any sport with game logs and an engine fits through the same door.
+
+    ``checkpoint`` keeps each setting's score as its walk ends and resumes a
+    grid an earlier run left part-way, only if the spec curve scores exactly
+    as it did then (`GridCheckpoint`).
     """
     from . import calibrate as cal
     from .logwalk import walk
@@ -191,14 +281,26 @@ def fit(entries: list[dict], market: str, base: dict | None = None,
     if base is None:
         base = base_for(sport)
     scores: dict[float, tuple[float, int]] = {}
+    saved = checkpoint.load() if checkpoint is not None else {}
+    # The spec curve first: it is the score a resumed grid is checked on.
     with cal.disabled():
-        for r in GRID:
+        for r in [0.0] + [g for g in GRID if g != 0.0]:
+            if r != 0.0 and r in saved:
+                scores[r] = saved[r]
+                continue
             report = walk(sport, entries, market,
                           min_history=min_history,
                           form_weights=family(base, r))
             if not report.pairs:
                 return None
             scores[r] = (_brier(report.pairs), len(report.pairs))
+            if r == 0.0 and saved:
+                was = saved.get(0.0)
+                if was is None or was[1] != scores[r][1] or abs(was[0] - scores[r][0]) > 1e-12:
+                    saved = {}                  # another walk scored those: start afresh
+                    checkpoint.clear()
+            if checkpoint is not None:
+                checkpoint.put(r, *scores[r])
 
     brier_default, samples = scores[0.0]
     # Ties break toward 0: the spec curve keeps the benefit of the doubt,

@@ -27,6 +27,7 @@ there with an empirical-Bayes rate, so the dial has nothing to act on.
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 
 from engine import calibrate as _cal
 from engine import db as _db
@@ -150,6 +151,21 @@ _HOOPS_NO_DIAL = ("the basketball board's projection is minutes × a per-minute 
 NO_DIAL = {"nba": _HOOPS_NO_DIAL, "wnba": _HOOPS_NO_DIAL}
 
 
+class _ShownGrid(ff.GridCheckpoint):
+    """The round's checkpoint, saying each setting as it is kept (flushed,
+    so a run the refit cuts off still leaves it in the refit's log): how far
+    the run got, and how long one setting takes on the box."""
+
+    def __init__(self, sport: str, market: str, label: str):
+        super().__init__(sport, market)
+        self.label = label
+
+    def put(self, r, brier, n) -> None:
+        super().put(r, brier, n)
+        print(f"  {self.label:16} setting {float(r):+.1f} scored — {len(self.load())} of "
+              f"{len(ff.GRID)} kept, {_dt.datetime.now().strftime('%H:%M:%S')}", flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Fit the recency dial from real outcomes.")
@@ -165,7 +181,8 @@ def main() -> None:
                     help="print the current fits and exit")
     ap.add_argument("--resume-after", default=None, metavar="DATE",
                     help="keep each market whose stored dial was fitted on or after DATE "
-                         "(the weekly refit passes its round's first day) and fit the rest")
+                         "(the weekly refit passes its round's first day) and fit the rest, "
+                         "each setting's score kept as it is scored so a cut-off run resumes")
     args = ap.parse_args()
 
     if args.show:
@@ -217,9 +234,20 @@ def main() -> None:
         if not entries:
             print(f"  {label:16} skipped — no player history in the DB")
             continue
+        # Inside the deep refit's round, each setting's score is kept as its
+        # walk ends, so a market longer than a run finishes over two
+        # (`ff.GridCheckpoint`; resumed only when the spec curve scores as
+        # it did, so the dial is the one an uninterrupted run would fit).
+        ck = _ShownGrid(sport, market, label) if args.resume_after else None
+        had = len(ck.load()) if ck is not None else 0
+        if had:
+            print(f"  {label:16} resuming — {had} of {len(ff.GRID)} settings scored by an earlier "
+                  f"run; the spec curve is scored again to check nothing changed", flush=True)
         f = ff.fit(entries, market, sport=sport,
-                   min_history=args.min_history)
+                   min_history=args.min_history, checkpoint=ck)
         if f is None:
+            if ck is not None:
+                ck.clear()
             print(f"  {label:16} skipped — no settled predictions")
             continue
         print(f"  {label:16} {f.samples:>6,} settled   "
@@ -228,6 +256,8 @@ def main() -> None:
         print(f"  {'':16} {f.verdict}", flush=True)
         fits[f"{sport}:{market}"] = f
         path = ff.save({f"{sport}:{market}": f}, ff.DEFAULT_PATH)
+        if ck is not None:
+            ck.clear()                      # fitted and kept: its grid is done
 
     if not fits:
         if kept:
