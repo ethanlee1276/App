@@ -64,8 +64,10 @@ from __future__ import annotations
 
 import datetime as _dt
 import gzip
+import html as _html
 import json
 import random
+import re
 import sqlite3
 import sys
 import time
@@ -113,7 +115,34 @@ class TrackUnavailable(RuntimeError):
 
 
 class TrackRefused(TrackUnavailable):
-    """403 or 429: the league said no. A run stops at the first one."""
+    """403 or 429: the league said no. A run stops at the first one, and
+    nothing tries again another way (other headers, another address): a
+    refusal is the league's answer. ``said`` is what its page said."""
+
+    def __init__(self, msg: str, said: str = ""):
+        super().__init__(msg)
+        self.said = said
+
+
+def _refusal(exc) -> str:
+    """What a refusal said, in a line, for the record: the server that
+    answered and the first words of its page (an edge network's "Access
+    Denied" page carries its own reference number)."""
+    try:
+        server = str(exc.headers.get("Server") or "") if exc.headers is not None else ""
+    except Exception:                                         # noqa: BLE001
+        server = ""
+    try:
+        text = _body(exc).decode("utf-8", errors="replace")
+    except Exception:                                         # noqa: BLE001
+        text = ""
+    text = _html.unescape(re.sub(r"<[^>]+>", " ", text))
+    text = re.sub(r"\"https?://[^\"]*\"", "\"…\"", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) > 200:
+        text = text[:199] + "…"
+    bits = ([f"server {server}"] if server else []) + ([f"its page: \u201c{text}\u201d"] if text else [])
+    return "; ".join(bits)
 
 
 def season_label(season: int) -> str:
@@ -181,7 +210,7 @@ def fetch(day: str, season: int, measure: str, opener=None, timeout: float = TIM
             body = _body(resp)
     except urllib.error.HTTPError as exc:
         if exc.code in (403, 429):
-            raise TrackRefused(f"stats.nba.com refused the request ({exc.code})") from exc
+            raise TrackRefused(f"stats.nba.com refused the request ({exc.code})", _refusal(exc)) from exc
         raise TrackUnavailable(f"stats.nba.com answered {exc.code}") from exc
     except Exception as exc:                                  # noqa: BLE001
         raise TrackUnavailable(f"stats.nba.com did not answer: {type(exc).__name__}: {exc}") from exc
@@ -305,7 +334,8 @@ def backfill(hist, store, seasons: list, minutes: float = DEFAULT_MINUTES, max_r
         try:
             heads, rows = fetch(day, season, measure, opener=opener)
         except TrackRefused as exc:
-            out["stopped"] = f"{exc}; stopped (the league refuses this address, or asks us to slow down)"
+            out["stopped"] = (f"{exc}; stopped (the league refuses this address, or asks us to slow down)"
+                              + (f". What it said: {exc.said}" if exc.said else ""))
             break
         except TrackUnavailable as exc:
             fails += 1
@@ -377,6 +407,14 @@ def status(hist, store) -> list:
     return lines or ["nothing stored yet"]
 
 
+#: A REFUSAL STANDS (2026-11-06). Ethan's box asked once and stats.nba.com
+#: answered 403 at once. Nothing here tries again another way: no other
+#: header set, no other address. Nothing on the board reads this research,
+#: so it is parked, and the record says why (docs/RUN_NEXT.md item 1u).
+REFUSED_NOTE = ("Nothing stored, and nothing tries again another way: the refusal is the league's answer. "
+                "Nothing on the board reads this research, so it stays parked (docs/RUN_NEXT.md item 1u).")
+
+
 def probe(hist=None, day: str | None = None, opener=None) -> list:
     """One request (Passing) for one stored day, two or more days back: what
     the league answered, the row count and the columns. Stores nothing."""
@@ -393,6 +431,14 @@ def probe(hist=None, day: str | None = None, opener=None) -> list:
     started = time.monotonic()
     try:
         heads, rows = fetch(day, season, "Passing", opener=opener)
+    except TrackRefused as exc:
+        lines = [f"{day} Passing: {exc} (after {time.monotonic() - started:.0f} s)"]
+        if exc.said:
+            lines.append(f"what it said: {exc.said}")
+        if "access denied" in exc.said.lower():
+            lines.append("That is the league's edge network turning this box's address away before the "
+                         "request reaches the stats site; no setting here changes it.")
+        return lines + [REFUSED_NOTE]
     except TrackUnavailable as exc:
         return [f"{day} Passing: {exc} (after {time.monotonic() - started:.0f} s)",
                 "Nothing stored. If it timed out, the league is likely refusing this box's address."]

@@ -233,6 +233,36 @@ def test_the_probe_stores_nothing():
     assert "did not answer" in down[0] and "refusing this box's address" in down[1]
 
 
+def test_a_refusal_is_recorded_in_its_own_words_and_not_tried_another_way():
+    """6 November: Ethan's box asked once and the league answered 403 at
+    once. The probe now says what the refusal's page said, and nothing asks
+    again with other headers: the refusal is the league's answer."""
+    import email.message
+    import io
+    page = (b'<HTML><HEAD><TITLE>Access Denied</TITLE></HEAD><BODY><H1>Access Denied</H1>'
+            b'You don&#39;t have permission to access "http&#58;&#47;&#47;stats&#46;nba&#46;com&#47;stats&#47;'
+            b'leaguedashptstats&#63;x" on this server.<P>Reference&#32;&#35;18&#46;5f3c&#46;1762400000</BODY></HTML>')
+    asked = []
+
+    def refused(req, timeout=None):
+        asked.append(dict(req.header_items()))
+        h = email.message.Message()
+        h["Server"] = "AkamaiGHost"
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", h, io.BytesIO(page))
+    lines = TR.probe(day="2025-01-15", opener=refused)
+    assert len(asked) == 1, "one request, no second header set"
+    assert lines[0].startswith("2025-01-15 Passing: stats.nba.com refused the request (403)")
+    assert lines[1].startswith("what it said: server AkamaiGHost; its page:")
+    assert "Access Denied" in lines[1] and "Reference #18.5f3c.1762400000" in lines[1] and "http" not in lines[1]
+    assert "edge network" in lines[2] and lines[-1] == TR.REFUSED_NOTE
+    hist = _hist([f"2025-01-{d:02d}" for d in range(10, 20)])
+    res = TR.backfill(hist, _store(), [2024], opener=refused, sleep=lambda s: None, today="2025-06-01",
+                      log=lambda *_: None)
+    assert len(asked) == 2 and res["asked"] == 1 and "What it said: server AkamaiGHost" in res["stopped"]
+    src = Path(TR.__file__).read_text(encoding="utf-8")
+    assert src.count("headers=dict(HEADERS)") == 1, "one header set, sent one way"
+
+
 def test_nothing_on_the_site_imports_it():
     pat = re.compile(r"nba\.tracking|nba import tracking|from \.tracking|from \.\.nba\.tracking|import tracking\b")
     files = [p for p in (ROOT / "engine").rglob("*.py") if p != ROOT / "engine" / "nba" / "tracking.py"]
