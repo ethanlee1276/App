@@ -201,7 +201,7 @@ forecast knew.
   could never get back under its cap. It now deletes what the box no
   longer keeps before it uploads, and when the cap refuses it says how
   full the bucket is (old versions included) against what the box keeps.
-  Your call: the cap (item 0b).
+  The cap stays at Backblaze's free 10 GB (item 0b).
 - **The deep refit** finished yardage, and the NBA's rates and rules
   checks, then stopped with nine pieces left. The NBA's teammate-out
   check was started on a ten-minute guess with half an hour left and
