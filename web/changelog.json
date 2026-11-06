@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-06",
+      "kind": "fix",
+      "title": "The models' weekly refit finishes what it starts",
+      "body": "The weekly refit re-learns each sport from its whole history, a piece at a time, a little each night. Last night four long jobs shared the server's one processor at once, and the refit ran out its time inside the NFL's first fit without finishing a market, though on its own that fit takes about five minutes. Two of those jobs, the refit and the Lab's replay, now take turns. A week's round of refits also used to start over every Wednesday and throw away what it had finished, so the NFL, whose turn comes about once a week, never got through; a round now runs to its end before the next begins, and a fit that makes no progress in two full runs is set aside so the rest of the sport still refits. Nothing on the board moves until those refits land."
+    },
+    {
+      "date": "2026-11-06",
       "kind": "model",
       "title": "A back's carries go up in the rain",
       "body": "Measured on ten NFL seasons: in rain, teams run more (their running backs' carries were 6.9% higher than usual, in nine seasons of ten), and a back keeps his share of them. So a back's carries now rise when rain is forecast, by the forecast's own chance: a 70% chance of rain is 70% of the step. His rushing yards stay where they were, because per carry backs gained less in rain in most seasons, so the extra carries do not reliably add yards; the card says so. College reads the same table. And a team on an inexperienced quarterback ran about 5% more, but mostly on the quarterback's own runs; the lead back's numbers barely moved, so his card says that and his projection does not change."

@@ -10,7 +10,12 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-06, after rain and a green quarterback were measured for
+Last updated 2026-11-06 (afternoon), after the weekly refit's round started
+finishing what it begins and the Lab and the refit started taking turns on
+the box's one CPU (step KV: item 1g, nothing new to run), and after nothing
+on this list asks you to pay for anything (you, 6 November; item 0b: the
+offsite backup stays inside Backblaze's free 10 GB), after rain and a green
+quarterback were measured for
 the lead back at your word during Ravens-Jaguars (step KU: item 1v, one
 read-only check), after your 6 November catch-up (what it showed and
 what changed for it: Start here, below; step KT), and on 2026-11-05 after
@@ -155,6 +160,17 @@ spread on the box's own games:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long.txt
 ```
 
+**The weekly refit, read off the heartbeat (step KV, item 1g):** last night
+four hour-long jobs (the Lab, the refit, board learning, the bug scan)
+started within 70 minutes of each other on the box's one CPU, and each stops
+itself on its own clock, so the refit spent its 45 minutes in the NFL's
+recency dial and kept nothing; on a machine to itself that takes about five
+minutes. The Lab and the refit now take turns, an unfinished round carries
+over instead of starting again each Wednesday, and a dial that keeps
+nothing in two full runs is set aside. Nothing new to run; JQ in the run
+above shows it. The Lab itself published last night: its public summary is
+dated 6 November, with MLB, the NFL, college, the NBA and the WNBA on it.
+
 **Rain and a green quarterback, measured (step KU, item 1v), your question
 from Thursday night:** rain makes teams run more (their backs' carries
 +6.9%, nine seasons of ten), and a back keeps his share, so his carries go
@@ -227,6 +243,9 @@ close lines (1,537 re-read at the sportsbooks' number), and item 8's key
 
 **Your answers, 5 November, kept so nothing is asked twice:**
 
+- Nothing paid (6 November): no subscriptions, plans or upgrades. Nothing on
+  this list asks you to buy anything; the offsite backup stays inside
+  Backblaze's free 10 GB and the scores timer on BALLDONTLIE's free plan.
 - The seven pages a free account could not open: all open (six since 28
   October, the Lab on 5 November with its summary; step KQ).
 - NBA player tracking: built for research (item 1u; steps KR and KS).
@@ -346,15 +365,20 @@ the bucket holds, old versions included, against what this box keeps
 (about 5 GB by the last listing: three nightly history copies of 1.7 GB
 each and the small databases; the log prints the exact figures).
 
-**Your call, in Backblaze (not a command):** under the bucket's Lifecycle
-Settings, "Keep only the last version of the file": a file the sync
-deletes is only hidden in B2, and it counts against the cap until the
-lifecycle rule removes it, a day later. Under Caps & Alerts, a storage
-cap above what the box keeps, with a night's room: 20 GB is pennies a
-month at B2's price. If the next KO still says `'failed'`, its last lines
-give both figures: a bucket far above the box's 5 GB is old versions the
-lifecycle setting has not cleared yet, and a cap below the box's figure
-is the cap. Then the read-only check after the next 04:00 UTC run (KO,
+**In Backblaze (not a command), and nothing paid:** under the bucket's
+Lifecycle Settings, "Keep only the last version of the file": a file the
+sync deletes is only hidden in B2, and it counts against the cap until the
+lifecycle rule removes it, a day later. Leave the storage cap at the free
+10 GB (Caps & Alerts); the box keeps about 5 GB. If the next KO still says
+`'failed'`, its last lines give both figures: a bucket far above the box's
+5 GB is old versions the lifecycle rule has not cleared yet (a day or two),
+and a box figure above about 8 GB means keeping two history copies instead
+of three, never a bigger cap (the nightly reads this from the settings file
+since step KV):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_BACKUP_KEEP_HISTORY 2
+``` Then the read-only check after the next 04:00 UTC run (KO,
 also in Start here); its first line should say `'offsite': 'ok'`.
 
 Your desk said at 12:34 on 5 November that last night's backup did not
@@ -541,6 +565,19 @@ that refresh (its log says `CFB results not stored this build`). If `cfb`
 shows up there again, paste the line.
 
 ## 1g. Thursday: the models' weekly refit reaches the NFL (step JQ)
+
+**6 November, afternoon, read off the heartbeat (step KV):** the night's run
+ended `nothing done this run ... part-way: nfl (recency dial cut off after
+45 min)`. The Lab, the refit, board learning and the bug scan had started
+within 70 minutes on the box's one CPU, each on its own 50-minute clock, so
+the refit had a fraction of the machine; on a copy of the NFL's 2022-26 logs
+the dial fits a market in 77 seconds. And each Wednesday began a new round
+whatever the last one owed, so the NFL, whose turn comes about once a week,
+lost its progress every week. Now the Lab and the refit take turns (the
+second waits for the first, the same day), a round runs to its end before
+the next begins, and a dial that keeps nothing in two full runs is set aside
+so the NFL's other two fitters still run. Nothing new to run; JQ shows the
+round (`carries on`, `stall 1 of 2`, `recency dial set aside`).
 
 **6 November, your JQ run, and the fix (step KT):** 5 November's run took
 53 minutes and finished yardage; the round had also finished the NBA's
@@ -921,8 +958,8 @@ addresses. Nothing here tries again another way: no other headers, no
 other address. A refusal is the league's answer, and the board never
 read this research. So it is parked, and nothing is left to run. The
 probe now also says what the refusal's page said, if you ever run it
-again. If you want the league's tracking one day, the way in is a
-licensed feed, which costs money, and that is your call.
+again. The other way in would be a paid feed, and you want nothing paid
+(6 November), so it stays parked for good.
 
 What follows is the plan as it stood, kept for the record:
 
@@ -1146,7 +1183,8 @@ running. It had nothing to record yet in any case: your run was at 7:02
 p.m. Eastern, before the night's first tip, and the watcher records only
 while an NBA or NFL game is live. KP in Start here shows the first night.
 
-**Done 5 November:** you set the key and restarted; the timer is on. The
+**Done 5 November:** you set the key and restarted; the timer is on. It is
+BALLDONTLIE's free plan, and stays on it: nothing here needs a paid one. The
 free plan answers the games endpoint at 5 requests a minute, and the timer
 now paces itself to that by itself. Only the report is left, after a night
 of NBA games (KP, also in the Start here run):

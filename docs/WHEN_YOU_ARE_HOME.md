@@ -9338,6 +9338,49 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KV. The weekly refit's round finishes, and the Lab and the refit take
+turns** (steps 423 and 424; nothing new to run; you, 6 November: "keep going
+and keep working ... I don't want to have to pay for any subscriptions").
+Read off the public heartbeat that night:
+
+* **Four hour-long jobs on one CPU.** The Lab started at 00:20, the deep
+  refit at 00:42, board learning at 00:58 and the bug scan at 01:31, beside
+  the daily chores and the boards. Each stops itself on its own clock, so
+  each did about a quarter of an hour's work: the refit spent its 45
+  minutes inside the NFL's recency dial and kept no market, when on a
+  machine to itself the dial takes about five minutes (77 seconds a market,
+  timed on a copy of the NFL's 2022-26 logs). Now the Lab and the refit
+  never run together: whichever would start second is held, its log line
+  says why, and it starts the cycle after the other ends, the same day.
+* **A round that never ended.** Each Wednesday began a new round whatever
+  the last one owed, and took with it what each sport had finished in it,
+  so the NFL, whose turn came about once a week, could never finish its
+  three fitters. A round now runs to its end before the next begins (up to
+  three weeks; past that a new one starts anyway).
+* **A dial that keeps nothing.** The dial is tried again after a cut
+  because it keeps each market it finishes. A run that gave it its whole
+  time and kept no market more is now a stall; the second in a row sets
+  the dial aside for the round (its last fit stands) so the NFL's player
+  memory and temperatures still get their turn.
+
+The check is the same as before (JQ in the catch-up, read-only); the
+round's line now says `carries on` while last week's round is still going,
+and `stall 1 of 2` or `recency dial set aside` when the dial stalled:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JQ 2>&1 | tee /tmp/jq.txt
+```
+
+**Nothing paid** (you, 6 November). The offsite backup stays inside
+Backblaze's free 10 GB: leave the cap at the free 10 GB and the bucket's
+lifecycle on "Keep only the last version". The box keeps about 5 GB. If
+KO ever says the box itself keeps more than about 8 GB, keep two history
+copies instead of three (the nightly reads it from the settings file now):
+
+```
+cd /srv/qellys && sudo ./deploy/setenv.sh QB_BACKUP_KEEP_HISTORY 2
+```
+
 **KU. Rain, a green quarterback and the lead back, measured** (steps 419
 to 422; one read-only check; you, 6 November, during Ravens-Jaguars in the
 rain with Baltimore on its third-string quarterback: "with that rain, I feel
@@ -9453,9 +9496,12 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-close-lin
 ```
 
 Not a command: in Backblaze, the bucket's Lifecycle Settings to "Keep
-only the last version of the file", and a storage cap under Caps &
-Alerts above what the box keeps, with a night's room (KO says both
-figures after the next 04:00 UTC run).
+only the last version of the file", and the storage cap left at the free
+10 GB (you, 6 November: nothing paid). The box keeps about 5 GB, so it
+fits once the old versions clear; KO says both figures after the next
+04:00 UTC run. If the box's figure is ever above about 8 GB, keep fewer
+history copies (`cd /srv/qellys && sudo ./deploy/setenv.sh QB_BACKUP_KEEP_HISTORY 2`)
+rather than raising the cap.
 
 Read-only, any time: the refit's own log, which says what each run did
 and where its time went (also the `JQ2` block of the catch-up, which
@@ -9644,10 +9690,13 @@ the last run's log, the tool's own words included. What the usual reasons
 mean:
 
 - `Cap exceeded` or `storage_cap_exceeded`: Backblaze's cap is reached
-  again. In Backblaze's web console, under Caps & Alerts, raise it, and
-  check that the bucket's lifecycle rule is "Keep only the last version":
-  each night's sync hides the copies it replaces, and hidden copies count
-  against the cap until that rule removes them.
+  again. Leave the cap at the free 10 GB (nothing paid), and check that
+  the bucket's lifecycle rule is "Keep only the last version": each
+  night's sync hides the copies it replaces, and hidden copies count
+  against the cap until that rule removes them, a day later. If the box
+  itself keeps more than about 8 GB (the last lines say), keep fewer
+  history copies (`cd /srv/qellys && sudo ./deploy/setenv.sh
+  QB_BACKUP_KEEP_HISTORY 2`) instead of a bigger cap.
 - `unauthorized`, `bad_auth_token` or `401`: the application key was
   deleted or has expired. Make a new one in the console and put it in with
   `sudo rclone config`.
