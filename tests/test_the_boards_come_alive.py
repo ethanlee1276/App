@@ -421,7 +421,16 @@ def test_in_a_browser_the_field_board_lights_and_a_touchdown_goes_up():
                     page.wait_for_timeout(800)
                     chip = "document.querySelector('.pbp-chip-time[data-pbp-count]').textContent"
                     tick = [page.evaluate(chip)]
-                    page.wait_for_timeout(1300)
+                    # The page's own one-second timer, given room to fire. A
+                    # fixed 1.3 s wait read the same second twice on a loaded
+                    # machine (gate 75, eight browsers at once: "in 22:57"
+                    # both times, no page code changed). Wait for the change
+                    # itself, up to five seconds; a count that never moves
+                    # still fails below with what it read.
+                    try:
+                        page.wait_for_function(f"(t) => {chip} !== t", arg=tick[0], timeout=5000)
+                    except Exception:                                   # noqa: BLE001
+                        pass
                     tick.append(page.evaluate(chip))
                     g = page.evaluate("""() => {
                       const photo = document.querySelector('.pbp-park .pbp-photo').getBoundingClientRect();
