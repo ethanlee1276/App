@@ -105,6 +105,27 @@ def test_what_is_not_a_copy_is_left_alone():
     assert odds.twins and (normalize_name(AJ), "rec_yds", T) in odds.twins
 
 
+def test_copies_are_judged_a_pull_at_a_time():
+    """For the box's memory: each pull is judged when the stream moves past
+    it and forgotten, a few held open at once because two builds can append
+    to the file together, and a copy is found all the same."""
+    c = linemoves._Copies()
+    aj, arsb, puka = normalize_name(AJ), normalize_name(ARSB), normalize_name("Puka Nacua")
+    for i in range(40):
+        for name in (aj, arsb):
+            for b, ln, o, u in COPY[:2]:
+                c.add(name, {"ts": T + i, "market": "rec_yds", "book": b, "line": ln,
+                             "over_odds": o, "under_odds": u})
+        # Another build's pull, interleaved with this one's.
+        c.add(puka, {"ts": T + 5000 + i, "market": "rec_yds", "book": "FanDuel", "line": 70.5,
+                     "over_odds": -110, "under_odds": -110})
+        assert len(c._open) <= c.KEEP + 1, len(c._open)
+    got = c.found()
+    assert all((aj, "rec_yds", T + i) in got and (arsb, "rec_yds", T + i) in got for i in range(40))
+    assert not any(k[0] == puka for k in got), "a pull with one name in it holds no copy"
+    assert c._open == {}, "everything judged and let go"
+
+
 def _file(rows):
     p = Path(tempfile.mkdtemp()) / "line_history.jsonl"
     p.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")

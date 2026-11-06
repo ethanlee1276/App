@@ -288,10 +288,20 @@ class _Copies:
     so it is found exactly: two names that share that loose key, at one
     instant in one market, with identical quote sets. Neither keeps it. The
     rows cannot say whose quotes they were, and an earlier read of the true
-    owner is still a close, where another man's quotes are none."""
+    owner is still a close, where another man's quotes are none.
+
+    ONE PULL AT A TIME, FOR THE BOX'S MEMORY. A copy only ever shares its
+    pull's timestamp, and a pull's rows are written to the file together
+    (`record_snapshots`), so each pull is judged when the stream moves past
+    it and then forgotten. A few are held open at once (``KEEP``), because
+    two builds can append to the file at the same time and interleave."""
+
+    KEEP = 8
 
     def __init__(self):
-        self._at: dict = {}
+        self._open: dict = {}
+        self._order: list = []
+        self._found: dict = {}
 
     def add(self, name: str, r: dict) -> None:
         try:
@@ -299,12 +309,16 @@ class _Copies:
             q = f"{r.get('book') or ''}|{float(r['line']):g}|{r.get('over_odds')}|{r.get('under_odds')}"
         except (KeyError, TypeError, ValueError):
             return
-        self._at.setdefault((ts, r.get("market"), _loose(name)), {}).setdefault(name, []).append(q)
+        pull = self._open.get(ts)
+        if pull is None:
+            pull = self._open[ts] = {}
+            self._order.append(ts)
+            if len(self._order) > self.KEEP:
+                self._judge(self._order.pop(0))
+        pull.setdefault((r.get("market"), _loose(name)), {}).setdefault(name, []).append(q)
 
-    def found(self) -> dict:
-        """``{(player, market, ts): (the other players)}`` for every copy."""
-        out: dict = {}
-        for (ts, market, _key), by in self._at.items():
+    def _judge(self, ts: float) -> None:
+        for (market, _key), by in (self._open.pop(ts, None) or {}).items():
             if len(by) < 2:
                 continue
             sets: dict = {}
@@ -313,8 +327,14 @@ class _Copies:
             for names in sets.values():
                 if len(names) > 1:
                     for n in names:
-                        out[(n, market, ts)] = tuple(sorted(x for x in names if x != n))
-        return out
+                        self._found[(n, market, ts)] = tuple(sorted(x for x in names if x != n))
+
+    def found(self) -> dict:
+        """``{(player, market, ts): (the other players)}`` for every copy."""
+        for ts in self._order:
+            self._judge(ts)
+        self._order = []
+        return self._found
 
 
 def _uncopied(key: tuple, rows: list, twins: dict) -> list:
