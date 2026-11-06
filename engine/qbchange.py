@@ -73,6 +73,24 @@ TEAM_VOLUME = {
 _VOLUME_WORDS = (("team_pass_att", "pass attempts"), ("team_completions", "completions"),
                  ("team_pass_yds", "passing yards"), ("team_carries", "carries"))
 
+#: WHERE A GREEN QUARTERBACK'S EXTRA RUNS GO (2026-11-06). Ethan, on
+#: Baltimore's third-string quarterback the night it poured in
+#: Jacksonville: "that would prompt their star running back doing better
+#: than worse". Measured on nflverse's box scores, 2016-2026, behind a
+#: starter whose passes in earlier seasons were under 50: his team ran
+#: 4.7% more and threw 6.3% less (341 team-games, both clear), but the
+#: extra runs were mostly the quarterback's own (his and the other
+#: non-backs' carries ×1.10, the backs' ×1.035), and the lead back's
+#: carries moved ×1.012 ± .029 and his yards ×1.032 ± .043 over 222 games,
+#: inside the noise. Shown on a back's card when the starter has under
+#: GREEN_ATTEMPTS passes behind him (this season and last); it moves no
+#: number.
+GREEN_ATTEMPTS = 50
+BACKS_BEHIND_GREEN = ("Behind a quarterback with almost no passes behind him (under 50; 341 team-games, "
+                      "2016–26), teams ran 5% more and threw 6% less, but mostly on the quarterback's "
+                      "own runs: the lead back's carries moved +1% and his yards +3%, inside the noise, "
+                      "so it is left out of his number")
+
 
 def volume_line(tier: str) -> str:
     """The team's own volume behind this kind of replacement, in words —
@@ -377,8 +395,9 @@ def apply_to_slate(slate, chs: dict) -> dict:
     return {"kept": kept, "dropped": before - len(slate.props)}
 
 
-def card(ch: dict, applied: float = 1.0, own: bool = False) -> dict:
-    """What goes under a pick of that team."""
+def card(ch: dict, applied: float = 1.0, own: bool = False, position: str = "") -> dict:
+    """What goes under a pick of that team. A back's card also says where a
+    green quarterback's extra runs go (BACKS_BEHIND_GREEN)."""
     note = ""
     if own and ch.get("status") == "RETURNS":
         note = f"Back as the starter; {ch['starter']} started while he was out"
@@ -391,11 +410,14 @@ def card(ch: dict, applied: float = 1.0, own: bool = False) -> dict:
                 f"receivers lost {round((1 - applied) * 100)}% — applied (×{applied:.2f})")
     else:
         note = "Shown for you. Over four seasons this change did not move this bet enough to price it"
+    volume = "" if ch.get("status") == "RETURNS" else volume_line(ch.get("tier"))
+    if (str(position or "").upper() == "RB" and ch.get("status") != "RETURNS" and ch.get("replacement")
+            and int(ch.get("replacement_attempts") or 0) < GREEN_ATTEMPTS):
+        volume = (volume + ". " if volume else "") + BACKS_BEHIND_GREEN
     return {"team": ch["team"], "starter": ch["starter"], "status": ch["status"],
             "replacement": ch.get("replacement"), "tier": ch["tier"], "headline": headline(ch),
             "detail": detail(ch), "applied": round(applied, 3), "note": note,
-            "reported": ch.get("reported"),
-            "volume": "" if ch.get("status") == "RETURNS" else volume_line(ch.get("tier"))}
+            "reported": ch.get("reported"), "volume": volume}
 
 
 def effect(prop, game) -> tuple:
@@ -413,7 +435,7 @@ def effect(prop, game) -> tuple:
     if mult != 1.0:
         reason = (f"QB change: {headline(ch)} — behind a downgrade at quarterback receivers lost "
                   f"{round((1 - mult) * 100)}% (measured) (×{mult:.2f})")
-    return mult, reason, card(ch, mult)
+    return mult, reason, card(ch, mult, position=getattr(prop, "position", ""))
 
 
 def _college_effect(prop, ch: dict) -> tuple:

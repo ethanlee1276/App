@@ -170,6 +170,26 @@ def test_game_cards_and_ask_say_it():
     assert "report=carry_report, qb_backups=True, games=games)" in build and 'result["qb_changes"] = ' in build
 
 
+def test_a_backs_card_says_where_a_green_quarterbacks_runs_go():
+    """6 November, Baltimore on its third-string quarterback (Ethan: "that
+    would prompt their star running back doing better than worse").
+    Measured 2016-2026: the team runs more, but on the quarterback's own
+    runs; the lead back's carries and yards move inside the noise. A
+    back's card says so; nothing moves."""
+    import inspect
+    green = {"teams": {"BAL": {"starter": "Lamar Jackson", "backup": "Third Stringer"}},
+             "passing": {"Lamar Jackson": (520.0, 4100.0), "Third Stringer": (12.0, 70.0)}}
+    ch = Q.changes(green, [_inj("Lamar Jackson", "BAL", "OUT")])["BAL"]
+    assert ch["replacement"] == "Third Stringer" and ch["replacement_attempts"] < Q.GREEN_ATTEMPTS
+    rb = Q.card(ch, 1.0, position="RB")
+    assert rb["volume"].endswith(Q.BACKS_BEHIND_GREEN) and "lead back's carries moved +1%" in rb["volume"]
+    assert rb["applied"] == 1.0, "shown, not priced"
+    assert Q.BACKS_BEHIND_GREEN not in Q.card(ch, 1.0, position="WR")["volume"], "a receiver's card is as it was"
+    vet = Q.card(Q.changes(QB, [_inj("C.J. Stroud", "HOU", "OUT")])["HOU"], 1.0, position="RB")
+    assert Q.BACKS_BEHIND_GREEN not in vet["volume"], "a backup with 50+ passes behind him is not green"
+    assert 'card(ch, mult, position=getattr(prop, "position", ""))' in inspect.getsource(Q.effect)
+
+
 def test_the_card_draws_under_the_pick():
     node = shutil.which("node")
     if not node:
