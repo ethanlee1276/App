@@ -9354,7 +9354,11 @@ checks with the NBA, the football extras with football; the conviction
 ladder never rests. The desk's Weekly jobs card shows a resting sport's Lab
 date with "at rest" instead of amber, lists the refit's resting leagues on an
 "At rest (out of season)" line instead of under "Still owed", and no alert
-fires for either. Nothing to run. After tonight's refit (it starts around 05:00 UTC), its own log says
+fires for either. And a weekly job's minutes, on the desk and in the
+heartbeat, now end at its log's last line, not when the site noticed it
+gone: the refit of 7 November read 107 minutes for a run inside its 50 (the
+restart that followed it was the first look), and the bug scan, which reads
+a few logs, 38. Nothing to run. After tonight's refit (it starts around 05:00 UTC), its own log says
 which leagues it left out and what it ran instead:
 
 ```

@@ -121,6 +121,57 @@ def test_a_job_an_earlier_process_started_is_kept_too():
         M._pid_runs, os.killpg = keep_runs, keep_kill
 
 
+def test_a_job_reaped_after_a_restart_ends_at_its_last_word():
+    """7 November: "107 minutes" for a refit inside its 50. The site
+    restarted once the job ended (the updater waits for it), and the new
+    process saw it gone an hour later; the job's log stopped when it did."""
+    keep_runs = M._pid_runs
+    try:
+        with _InTemp() as td:
+            t0 = 1_780_000_000.0
+            logp = td / "weekly_deepfit.log"
+            logp.write_text("deep refit: round of 2026-11-04: nothing done this run\n")
+            os.utime(logp, (t0 + 50 * 60, t0 + 50 * 60))
+            (td / "weekly_deepfit.pid").write_text(json.dumps({"pid": 4243, "module": "engine.deepfit",
+                                                               "started": t0}))
+            M._pid_runs = lambda pid, module: False
+            said = M._reap_pid_files(t0 + 107 * 60)
+            fit = M.weekly_jobs_status()["engine.deepfit"]
+            assert fit["minutes"] == 50 and fit["ended"] == M._iso(t0 + 50 * 60), fit
+            assert said[0] == "engine.deepfit: finished in about 50 min", said
+            # A log written outside the run (a clock that jumped) is not
+            # believed: the notice stands, as before.
+            os.utime(logp, (t0 - 60, t0 - 60))
+            (td / "weekly_deepfit.pid").write_text(json.dumps({"pid": 4244, "module": "engine.deepfit",
+                                                               "started": t0}))
+            M._reap_pid_files(t0 + 107 * 60)
+            assert M.weekly_jobs_status()["engine.deepfit"]["minutes"] == 107
+    finally:
+        M._pid_runs = keep_runs
+
+
+def test_a_job_this_process_reaps_a_cycle_late_ends_at_its_last_word_too():
+    """The bug scan reads a few logs; the heartbeat gave it 38 minutes, the
+    cycle that noticed it done. One cut off at the ceiling ends when cut."""
+    with _InTemp() as td:
+        t0 = 1_780_000_000.0
+        logp = td / "weekly_bugscan.log"
+        logp.write_text("bug scan: nothing broken\n")
+        os.utime(logp, (t0 + 40, t0 + 40))
+        M._CHILDREN["engine.bugscan"] = {"proc": _Proc(0), "started": t0, "log": logp, "fh": io.StringIO()}
+        said = M.reap_children(lambda *_: None, now=t0 + 38 * 60)
+        got = M.weekly_jobs_status()["engine.bugscan"]
+        assert got["minutes"] == 1 and got["ended"] == M._iso(t0 + 40) and got["exit"] == 0, got
+        assert said[0] == "engine.bugscan: finished in 1 min with exit 0", said
+        lab = td / "weekly_lab.log"
+        lab.write_text("lab: replaying nba (2 of 6)…\n")
+        os.utime(lab, (t0 + 600, t0 + 600))
+        M._CHILDREN["engine.lab"] = {"proc": _Proc(None), "started": t0, "log": lab, "fh": io.StringIO()}
+        M.reap_children(lambda *_: None, now=t0 + M.WEEKLY_JOB_TIMEOUT_S + 1)
+        got = M.weekly_jobs_status()["engine.lab"]
+        assert got["cut_off"] is True and got["ended"] == M._iso(t0 + M.WEEKLY_JOB_TIMEOUT_S + 1), got
+
+
 def test_a_job_started_is_kept_as_running():
     src = inspect.getsource(M._spawn_module)
     assert "_record_job(module, started=_iso(_time.time()), running=True" in src

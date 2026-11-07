@@ -10,7 +10,12 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-06 (night), after your evening paste (the NFL's close
+Last updated 2026-11-07, after leagues out of season started sitting out
+the weekly refit and the Lab's replay (MLB and the WNBA in November; step
+KZ, item 1g: nothing to run, JQ and JQ2 after tonight's refit), and after a
+weekly job's minutes started ending at its own last line (the refit's "107
+minutes" was the restart after it noticing it gone); on 2026-11-06 (night),
+after your evening paste (the NFL's close
 lines with the copies out: right, A.J. Brown back to his own 64.5, so the
 write is next in item 1p; the weather moved to the National Weather
 Service, item 9 done), after leagues out of season went grey in the league
@@ -632,10 +637,14 @@ shows up there again, paste the line.
 
 ## 1g. Thursday: the models' weekly refit reaches the NFL (step JQ)
 
-**7 November, read off the heartbeat:** last night's run (05:02 to 06:48,
-beside the bug scan for its first 38 minutes) went to the NBA: its recency
-dial done, its player memory set aside as too long for a run, its
-temperatures cut off. The NFL is still first in line, and its dial still
+**7 November, read off the heartbeat:** last night's run (from 05:02) went
+to the NBA: its recency dial done, its player memory set aside as too long
+for a run, its temperatures cut off. The heartbeat gave it 107 minutes, and
+the bug scan beside it 38; neither was its own. Each was when the site
+noticed the job gone: the refit's after the restart that followed it (the
+updater waits for a weekly job, then restarts), the bug scan's a cycle
+late. From this push a weekly job ends at its log's last line, so the desk
+and the heartbeat show its own time. The NFL is still first in line, and its dial still
 carries the 25 August fit for most markets. Two changes since (step KZ): MLB
 and the WNBA, their seasons over, are out of the round, so the NFL, college
 and the NBA share the nights; and the Lab stops replaying them weekly.

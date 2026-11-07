@@ -1785,6 +1785,25 @@ def _spawn_module(module: str, log, args: tuple = ()) -> list[str]:
             f"output in {path.relative_to(ROOT)}"]
 
 
+def _last_word(path, started: float, now: float) -> float:
+    """When a finished weekly job ended: its log's last write, or ``now``
+    when that cannot be read or falls outside the run.
+
+    ITS LAST WORD, NOT OUR NOTICE (2026-11-07). The heartbeat said the
+    refit of 7 November ran 107 minutes on a 50-minute budget, and the bug
+    scan, which reads a few logs, 38: an end was the moment a chores cycle
+    noticed the job gone, a cycle later, or after the restart the updater
+    makes once a weekly job ends, the next process's first look. The log
+    is written as the job speaks (python -u) and by nothing after it."""
+    try:
+        said = Path(path).stat().st_mtime
+        if started <= said <= now:
+            return said
+    except OSError:
+        pass
+    return now
+
+
 def reap_children(log=print, now: float | None = None) -> list[str]:
     """Log every weekly child that has finished since the last cycle, and
     cut off any that has run past its ceiling. Called every cycle."""
@@ -1814,11 +1833,12 @@ def reap_children(log=print, now: float | None = None) -> list[str]:
                     if ln.strip()][-12:]
         except Exception:  # noqa: BLE001
             tail = []
-        mins = (now - c["started"]) / 60.0
+        end = now if cut else _last_word(c["log"], c["started"], now)
+        mins = (end - c["started"]) / 60.0
         out.append(f"{module}: finished in {mins:.0f} min with exit {code}"
                    + ("" if code == 0 else " ⚠️"))
         out.extend(f"  {ln}" for ln in tail)
-        _record_job(module, running=False, ended=_iso(now), minutes=round(mins),
+        _record_job(module, running=False, ended=_iso(end), minutes=round(mins),
                     exit=code, cut_off=cut, last=_last_line(tail))
         del _CHILDREN[module]
         try:
@@ -1858,12 +1878,13 @@ def _reap_pid_files(now: float) -> list[str]:
                         exit=None, cut_off=True, last=_last_line(_log_tail(module)))
         else:
             tail = _log_tail(module)
-            out.append(f"{module}: finished in about {(now - started) / 60.0:.0f} min")
+            end = _last_word(_child_dir() / f"weekly_{module.rsplit('.', 1)[-1]}.log", started, now)
+            out.append(f"{module}: finished in about {(end - started) / 60.0:.0f} min")
             out.extend(f"  {ln}" for ln in tail)
             # No exit code: an earlier process was its parent. The last
             # line says how it ended — the job's own summary, or the step
             # it was on when the kernel stopped it.
-            _record_job(module, running=False, ended=_iso(now), minutes=round((now - started) / 60.0),
+            _record_job(module, running=False, ended=_iso(end), minutes=round((end - started) / 60.0),
                         exit=None, cut_off=False, last=_last_line(tail))
         try:
             pf.unlink()
