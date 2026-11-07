@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LG. The settle pass's other three heavy steps** (step 438; 7 November).
+The first pass that published its phases (15:13 that Saturday, the startup
+pass) spent 1,119 seconds: grading 419, learning 286 (hourly now, LF),
+regrading 240, writing the record 152, the ingest only 13. Three changes,
+none of which changes a grade. Grading: a prop whose player has no row under
+his own name reads the whole day's stat file for its market, and the days
+either side, and compares normalized names; every open prop did that, every
+pass. Now each day and market is read once per pass and kept for the rest of
+it. Regrading: every five minutes it audited every bet the journal ever
+graded; it now audits the last seven days, and the nightly chores still
+audit the whole journal. The record: it rebuilt some thirty blocks over the
+whole journal on every pass that graded anything; it now writes at most
+every ten minutes, owed by any pass that grades, so a grade reaches the
+Record page within about ten minutes and is never left out. Nothing to run;
+the heartbeat's `chores.settle.phases` shows each pass.
+
 **LF. The settle pass learns hourly and says where its time goes** (step
 438; 7 November). The heartbeat that Saturday afternoon had one settle pass
 at 571 seconds (97 in September), and the pass runs every five minutes, so

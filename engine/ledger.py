@@ -26,6 +26,7 @@ import math
 import re
 import sqlite3
 import statistics
+import threading as _threading
 from pathlib import Path
 
 from . import markets as _markets
@@ -340,6 +341,60 @@ def _audited(reason: str):
                 return fn(*args, **kwargs)
         return inner
     return deco
+
+
+#: THE NAME-SHAPE FALLBACK, READ ONCE A PASS (2026-11-07). A prop whose
+#: player has no stat row under his own name reads every row of its day and
+#: market and compares normalized names, and so does its neighbour-day read
+#: and the regrade. A Saturday's open college props asked the same day's
+#: file once per prop, every five-minute settle pass: the grading phase alone
+#: ran 419 seconds on the box. Inside `name_index()` each (day, market) read
+#: is normalized once and kept for the pass; outside it, nothing changes.
+#: Per thread, and keyed by connection as well as by query, so an index
+#: is never shared by two threads or read against another database.
+_NAME_LOCAL = _threading.local()
+_NAME_SQL = ("SELECT player, value, team, game_id FROM player_game_logs "
+             "WHERE {where} AND market=?")
+
+
+def _name_index_now() -> dict | None:
+    """This thread's open name index, or None."""
+    return getattr(_NAME_LOCAL, "index", None)
+
+
+@_contextlib.contextmanager
+def name_index():
+    """Keep the name-shape fallback's reads for the length of this block
+    (the settle pass's grade and regrade). The history file is only read
+    inside one, so its rows cannot change under the index."""
+    outer = _name_index_now()
+    if outer is None:
+        _NAME_LOCAL.index = {}
+    try:
+        yield
+    finally:
+        if outer is None:
+            _NAME_LOCAL.index = None
+
+
+def _name_rows(hist_conn, where: str, wargs, market: str, target: str) -> list:
+    """The stat rows whose normalized player name is ``target`` among this
+    day's ``market`` rows (``where``/``wargs``, as `_hist_where` builds them)."""
+    from .sources.oddsapi import normalize_name
+    sql = _NAME_SQL.format(where=where)
+    args = (*wargs, market)
+    index = _name_index_now()
+    if index is None:
+        return [c for c in hist_conn.execute(sql, args)
+                if normalize_name(c["player"]) == target]
+    key = (id(hist_conn), sql, args)
+    idx = index.get(key)
+    if idx is None:
+        idx = {}
+        for c in hist_conn.execute(sql, args):
+            idx.setdefault(normalize_name(c["player"]), []).append(c)
+        index[key] = idx
+    return list(idx.get(target, ()))
 
 
 DEFAULTS = {"starting_bankroll": "1000", "unit_pct": "1.0",
@@ -5107,11 +5162,7 @@ def _neighbour_day_rows_raw(hist_conn, b, where: str, wargs: list):
         d = (d0 + _dt.timedelta(days=off)).isoformat()
         alt = list(wargs)
         alt[-1] = d
-        rows = [c for c in hist_conn.execute(
-                    f"SELECT player, value, team, game_id "
-                    f"FROM player_game_logs WHERE {where} AND market=?",
-                    (*alt, b["market"]))
-                if normalize_name(c["player"]) == target]
+        rows = _name_rows(hist_conn, where, alt, b["market"], target)
         if rows:
             found.append((rows, alt))
     if len(found) != 1:
@@ -5761,11 +5812,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         if not rows:
             # Name-shape fallback (feeds disagree on accents/suffixes).
             target = normalize_name(b["player"])
-            rows = [c for c in hist_conn.execute(
-                        f"SELECT player, value, team, game_id "
-                        f"FROM player_game_logs WHERE {where} AND market=?",
-                        (*wargs, b["market"]))
-                    if normalize_name(c["player"]) == target]
+            rows = _name_rows(hist_conn, where, wargs, b["market"], target)
         if not rows:
             # A SUMMED MARKET (DERIVED_MARKETS): its parts, added up.
             rows = _derived_rows(hist_conn, b, where, wargs)
@@ -6016,9 +6063,11 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
 
 
 @_audited("regrade")
-def resettle_mismatches(conn, hist_conn) -> list[dict]:
+def resettle_mismatches(conn, hist_conn, since: str | None = None) -> list[dict]:
     """Audit every settled stat bet against the CURRENT history rows and
-    fix any wrong grade.
+    fix any wrong grade. ``since`` (ISO date) audits only bets whose day
+    (`day_expr`) is on or after it: the five-minute settle pass asks about
+    the last week, and the daily chores audit the whole journal.
 
     The premature-settle bug graded bets off partial stat lines from games
     still in progress ("lost" at 0 total bases in the 4th inning). Once the
@@ -6038,9 +6087,10 @@ def resettle_mismatches(conn, hist_conn) -> list[dict]:
     from .sources.oddsapi import normalize_name
     fixed = []
     marks = ", ".join("?" for _ in GAME_MARKETS)
+    recent, rargs = (f" AND {day_expr()} >= ?", (since,)) if since else ("", ())
     for b in conn.execute(
             f"SELECT * FROM bets WHERE status IN ('won','lost','push') "
-            f"AND market IN ({marks})", GAME_MARKETS).fetchall():
+            f"AND market IN ({marks}){recent}", (*GAME_MARKETS, *rargs)).fetchall():
         # NEVER OFF A GAME ROW FROM TODAY OR YESTERDAY (audit P0-1). The
         # games table has held live scores (the NBA parser, above), and a
         # settled total re-graded off a halftime number flips back later —
@@ -6073,7 +6123,7 @@ def resettle_mismatches(conn, hist_conn) -> list[dict]:
                       "actual": actual})
     for b in conn.execute(
             f"SELECT * FROM bets WHERE status IN ('won','lost','push') "
-            f"AND market NOT IN ({marks})", GAME_MARKETS).fetchall():
+            f"AND market NOT IN ({marks}){recent}", (*GAME_MARKETS, *rargs)).fetchall():
         where, wargs = _hist_where(b)
         rows = hist_conn.execute(
             f"SELECT value, team, game_id FROM player_game_logs WHERE {where} "
@@ -6081,11 +6131,7 @@ def resettle_mismatches(conn, hist_conn) -> list[dict]:
             (*wargs, b["market"], b["player"])).fetchall()
         if not rows:
             target = normalize_name(b["player"])
-            rows = [c for c in hist_conn.execute(
-                        f"SELECT player, value, team, game_id "
-                        f"FROM player_game_logs "
-                        f"WHERE {where} AND market=?", (*wargs, b["market"]))
-                    if normalize_name(c["player"]) == target]
+            rows = _name_rows(hist_conn, where, wargs, b["market"], target)
         if len(rows) > 1:
             # Doubleheader day: a bet that knows its leg re-checks against
             # that game's row; without one, ambiguity stays untouchable.

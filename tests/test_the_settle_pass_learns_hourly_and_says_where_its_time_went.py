@@ -97,10 +97,11 @@ def test_a_grading_pass_learns_once_an_hour_and_never_misses_a_grade():
             state = Path(td) / "m.json"
             assert _pass(state, 1000.0) == 3
             assert calls.count("learn") == 1 and "export" in calls
-            # Five minutes on, grading again: graded and exported, not learned.
+            # Five minutes on, grading again: graded, not learned, and the
+            # record owed until EXPORT_EVERY_S has passed (the next test).
             calls.clear()
             assert _pass(state, 1000.0 + M.SETTLE_EVERY_S + 1) == 3
-            assert "grade" in calls and "export" in calls and "learn" not in calls
+            assert "grade" in calls and "learn" not in calls
             assert M._read_state(state).get("learn_owed") is True
             # Past the hour, grading nothing: the owed grade is learned from.
             box["settled"] = 0
@@ -116,6 +117,36 @@ def test_a_grading_pass_learns_once_an_hour_and_never_misses_a_grade():
             assert "learn" not in calls
     finally:
         mp.undo()
+
+
+def test_the_record_is_written_at_most_every_ten_minutes_and_never_skips_a_grade():
+    mp, calls = MP(), []
+    empty = _journal([])
+    box = {"lconn": _journal([TODAY.isoformat()]), "settled": 3}
+    _stub(mp, calls, box)
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            state = Path(td) / "m.json"
+            _pass(state, 1000.0)
+            assert calls.count("export") == 1
+            calls.clear()
+            _pass(state, 1000.0 + M.SETTLE_EVERY_S + 1)            # grades, inside the window
+            assert "export" not in calls and M._read_state(state).get("record_owed") is True
+            # Nothing left open, past the window: the owed record is written.
+            box["lconn"] = empty
+            calls.clear()
+            _pass(state, 1000.0 + M.EXPORT_EVERY_S + 1)
+            assert calls.count("export") == 1, calls
+            saved = M._read_state(state)
+            assert saved.get("record_owed") is False
+            assert saved.get("last_export_ts") == 1000.0 + M.EXPORT_EVERY_S + 1
+            # Nothing owed: nothing written.
+            calls.clear()
+            _pass(state, 1000.0 + 3 * M.EXPORT_EVERY_S)
+            assert "export" not in calls
+    finally:
+        mp.undo()
+    assert 300 <= M.EXPORT_EVERY_S <= 900
 
 
 def test_an_owed_grade_is_learned_even_when_nothing_is_left_open():

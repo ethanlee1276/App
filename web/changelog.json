@@ -4,6 +4,12 @@
     {
       "date": "2026-11-07",
       "kind": "fix",
+      "title": "Grading picks takes the server a fraction of the time",
+      "body": "The pass that grades finished picks read each day's box scores once for every open pick, checked every pick ever graded for corrected stats, and rewrote the whole Record page, every five minutes; its first timed run took over eighteen minutes. It now reads each day once, checks the last week (every night it still checks them all), and updates the Record page every ten minutes. No grade changes."
+    },
+    {
+      "date": "2026-11-07",
+      "kind": "fix",
       "title": "Busy game days leave more of the server for the boards",
       "body": "Every few minutes the server grades the picks whose games have finished, and on a game day it was also refitting six of its learning models on nearly every one of those passes, close to ten minutes of work every five. Picks still grade the moment their games end; the learning models now refit at most once an hour, and never skip a graded pick."
     },

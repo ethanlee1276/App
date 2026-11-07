@@ -10,7 +10,11 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07 (evening), after the settle pass started refitting
+Last updated 2026-11-07 (evening), after the settle pass started reading
+each day's stat file once a pass, regrading the last week (the nightly
+chores still regrade everything) and writing the record every ten minutes
+(its first timed pass: 1,119 seconds; step LG: nothing to run), after the
+settle pass started refitting
 its learners at most hourly and saying where its time goes on the heartbeat
 (it ran 571 seconds every five minutes on a game day; step LF: nothing to
 run), after the weather desk's spread got its

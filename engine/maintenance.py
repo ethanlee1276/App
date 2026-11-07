@@ -673,6 +673,32 @@ SETTLE_LOOKBACK_DAYS = 3
 #: ``learn_owed`` in the state, and the first pass past the hour learns from
 #: it, even one with nothing left open (`settle_open`).
 LEARN_EVERY_S = 3600
+#: How far back the settle pass's regrade looks (days, by `ledger.day_expr`).
+#: The daily chores audit the whole journal (`_run_chores`); the five-minute
+#: pass audited it too, every bet ever graded, 240 seconds a pass on the box
+#: (7 November), to catch a stat line corrected after the grade, which lands
+#: within a day or two of the game.
+RESETTLE_RECENT_DAYS = 7
+#: The record export (web/data/record.json), at most this often from the
+#: settle pass. It builds some thirty blocks over the whole journal, 152
+#: seconds on the box on 7 November, and on a game day nearly every pass
+#: graded something and wrote it again. A pass that grades leaves it owed
+#: (``record_owed``); the first pass past this writes it. The daily chores
+#: write it every night regardless.
+EXPORT_EVERY_S = 600
+
+
+def _export_due(state, now: float) -> bool:
+    """The record is owed and EXPORT_EVERY_S has passed since the last
+    write. The caller writes it, then marks it written (`_exported`)."""
+    last = state.get("last_export_ts")
+    return bool(state.get("record_owed")) and not (
+        isinstance(last, (int, float)) and now - last < EXPORT_EVERY_S)
+
+
+def _exported(state, now: float) -> None:
+    state["record_owed"] = False
+    state["last_export_ts"] = now
 #: What the last settle pass spent, by phase (seconds), with what it graded
 #: and whether it learned. The chores child publishes it beside its own
 #: timing (launch._lane_steps_run), so the heartbeat says WHERE a long pass
@@ -1406,8 +1432,11 @@ def settle_open(log=print, state_path: Path | None = None,
                 phases["learned"] = True
                 lap("learn")
             if ledger.record_dirty():
+                state["record_owed"] = True
+            if _export_due(state, now):
                 ledger.clear_record_dirty()
                 ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+                _exported(state, now)
                 lap("export")
             state["last_settle_ts"] = now
             _save_state(state_path, state)
@@ -1457,7 +1486,10 @@ def settle_open(log=print, state_path: Path | None = None,
         lap("prep")
         res = ingest_for_open_bets(lconn, hconn, days, log)
         lap("ingest")
-        settled = ledger.settle_from_history(lconn, hconn)
+        # Each day's stat file read once for the pass's name lookups
+        # (ledger.name_index), not once per open prop.
+        with ledger.name_index():
+            settled = ledger.settle_from_history(lconn, hconn)
         # FIRST TOUCHDOWN (2026-10-31): no stat row says who scored first, so
         # these grade off the play-by-play's first scorer (engine/firsttd).
         # ESPN's scoring plays first, the night of the game (2026-11-01: a
@@ -1532,8 +1564,12 @@ def settle_open(log=print, state_path: Path | None = None,
             _save_state(state_path, state)
         lap("desk")
         # Self-healing: any bet ever graded off a partial stat line gets
-        # re-graded once the real final number is in.
-        fixed = ledger.resettle_mismatches(lconn, hconn)
+        # re-graded once the real final number is in. The last week here
+        # (RESETTLE_RECENT_DAYS); the daily chores audit the whole journal.
+        with ledger.name_index():
+            fixed = ledger.resettle_mismatches(
+                lconn, hconn,
+                since=(today - _dt.timedelta(days=RESETTLE_RECENT_DAYS - 1)).isoformat())
         lap("resettle")
         if fixed:
             log(f"  ⚠️  corrected {len(fixed)} bet(s) graded off partial "
@@ -1568,9 +1604,14 @@ def settle_open(log=print, state_path: Path | None = None,
             phases["learned"] = True
         lap("learn")
         # `record_dirty`: a build journaled and left the export to this lane.
+        # At most every EXPORT_EVERY_S, never a grade left out (see there).
         if settled or fixed or parlays_moved or ledger.record_dirty():
+            state["record_owed"] = True
+        if _export_due(state, now):
             ledger.clear_record_dirty()
             ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+            _exported(state, now)
+            phases["exported"] = True
         lap("export")
         if settled:
             log(f"  settled {settled} pick(s) from {res['games']} finished "
