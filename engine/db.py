@@ -1374,7 +1374,48 @@ def _in_play(r) -> bool:
     return start is not None and taken is not None and taken >= start
 
 
-def closing_odds_by_date(conn, sport: str, market: str) -> dict:
+def _day_windows(days) -> list | None:
+    """``[(day, the next day)]``, one per ISO day in ``days``: the taken_at
+    range whose rows file under that day (a close is keyed by
+    ``taken_at[:10]``). None when ``days`` is None, for no limit; a value
+    that is not an ISO day names no window, since no row can file under it.
+
+    WHY THE CLOSES READERS TAKE DAYS (2026-11-07). Both scanned the sport's
+    and market's whole tape, every season bought, and the settle pass asked
+    each of them once per market it graded, on every pass: two full reads
+    of the same rows, in Python, to look up the handful of days its open
+    bets fall on. A day's rows are the same rows whether the read is
+    bounded or not, and each key is one day's, so a bounded read answers
+    every key it holds exactly as the whole read does."""
+    if days is None:
+        return None
+    import datetime as _dt
+    out = []
+    for d in sorted({str(x)[:10] for x in days if x}):
+        try:
+            nxt = (_dt.date.fromisoformat(d) + _dt.timedelta(days=1)).isoformat()
+        except ValueError:
+            continue
+        out.append((d, nxt))
+    return out
+
+
+def _closes_rows(conn, sport: str, market: str, days=None):
+    """The closes readers' rows for one sport and market, in taken_at order
+    within each day: the whole tape, or ``days``' rows only (`_day_windows`)."""
+    q = ("SELECT player, book, line, over_odds, under_odds, taken_at"
+         f"{_commence_sql(conn)} "
+         "FROM odds_history WHERE sport=? AND market=?")
+    windows = _day_windows(days)
+    if windows is None:
+        yield from conn.execute(q + " ORDER BY taken_at", (sport, market))
+        return
+    for lo, hi in windows:
+        yield from conn.execute(q + " AND taken_at >= ? AND taken_at < ? ORDER BY taken_at",
+                                (sport, market, lo, hi))
+
+
+def closing_odds_by_date(conn, sport: str, market: str, days=None) -> dict:
     """Latest harvested price per (player, market) on EACH date.
 
     ``closing_odds_for`` below keeps only a player's single most-recent
@@ -1385,11 +1426,10 @@ def closing_odds_by_date(conn, sport: str, market: str) -> dict:
 
     Returns ``{(player, YYYY-MM-DD): {"line", "over_odds", "under_odds",
     "book", "taken_at"}}`` — within each date, the last snapshot wins, which is
-    the closest thing to that day's closing number.
+    the closest thing to that day's closing number. ``days`` (ISO dates)
+    reads only those days' rows, and each of their keys is the same
+    (`_day_windows`); None reads the whole tape.
     """
-    q = ("SELECT player, book, line, over_odds, under_odds, taken_at"
-         f"{_commence_sql(conn)} "
-         "FROM odds_history WHERE sport=? AND market=? ORDER BY taken_at")
     # EACH BOOK'S LAST QUOTE, THEN THE MARKET'S NUMBER AMONG THEM
     # (2026-11-05). This kept the day's last row, from whichever book
     # wrote last. The prop tape writes a book only when its number moves,
@@ -1403,7 +1443,7 @@ def closing_odds_by_date(conn, sport: str, market: str) -> dict:
     # now does too: the quote at the sportsbooks' number (`odds.market_centre`),
     # an exchange's only when no sportsbook quoted.
     last: dict = {}
-    for r in conn.execute(q, (sport, market)):
+    for r in _closes_rows(conn, sport, market, days):
         if _in_play(r):
             continue
         date = str(r["taken_at"])[:10]
@@ -1438,7 +1478,7 @@ def close_quote(quotes: list) -> dict:
     return max(at, key=lambda q: (str(q.get("taken_at") or ""), str(q.get("book") or "")))
 
 
-def closing_odds_all_books(conn, sport: str, market: str) -> dict:
+def closing_odds_all_books(conn, sport: str, market: str, days=None) -> dict:
     """``{(player, date): [quote, ...]}`` — EVERY book, not one of them.
 
     Deliberately a second accessor rather than a wider return from
@@ -1456,13 +1496,11 @@ def closing_odds_all_books(conn, sport: str, market: str) -> dict:
     bet the best price on the screen.
 
     Each list is the latest snapshot for that date, one entry per book.
+    ``days`` reads only those days' rows, as `closing_odds_by_date` does.
     """
-    q = ("SELECT player, book, line, over_odds, under_odds, taken_at"
-         f"{_commence_sql(conn)} "
-         "FROM odds_history WHERE sport=? AND market=? ORDER BY taken_at")
     latest: dict = {}
     out: dict = {}
-    for r in conn.execute(q, (sport, market)):
+    for r in _closes_rows(conn, sport, market, days):
         if _in_play(r):
             continue
         stamp = str(r["taken_at"])

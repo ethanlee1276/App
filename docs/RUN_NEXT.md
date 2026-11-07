@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07 (evening), after the settle pass's grading step
+Last updated 2026-11-07 (evening), after the grading step's two biggest
+reads were cut to the open bets' own lines and days (step LI: nothing to
+run), after the settle pass's grading step
 started saying which of its parts took the time (step LH: nothing to run),
 after the settle pass started reading
 each day's stat file once a pass, regrading the last week (the nightly

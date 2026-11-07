@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LI. The grading step's two biggest reads, cut to what it needs** (step
+438; 7 November). Reading the code behind LH's parts found two reads doing
+far more than their answers need, on every pass that graded a prop. The
+same-book close (the price banked beside each bet, Ethan's 4 October rule)
+parsed every line of our own line-snapshot file, every sport's every pull,
+to keep the handful for the bets in hand; the other two snapshot readers had
+stopped doing that on 15 October. It now parses only the lines whose text
+names an open bet's player and market. And for every sport and market it
+graded, the pass read that market's whole purchased price tape twice (its
+close, then the same book's), every season bought, where the database
+actually walked the sport's whole tape, every market, in time order. Both
+reads now fetch only the days the open bets can close on (a daily sport's
+own date, an NFL week's game days), which the database finds directly. The
+answers are the same, key for key, so no grade, close or CLV moves. Nothing
+to run; LH's `grade_parts` (`snapshot_lines`, `same_book`, `closes`) shows
+the difference on the next passes.
+
 **LH. The grading step says which of its parts took the time** (step 438;
 7 November). LG's changes leave grading as the one step of the settle pass
 whose cost is still a single number: 366 seconds of a 735-second pass that

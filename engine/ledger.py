@@ -4437,6 +4437,29 @@ def _leg_key(index, key: tuple, b) -> tuple:
     return key
 
 
+def _close_days(hist_conn, bets) -> dict:
+    """``{(sport, market): {ISO day}}``: every day these bets' closes can be
+    filed under, the union of each one's `close_dates` (a whole NFL week,
+    which holds the one day a team narrows it to). The settle pass reads
+    the purchased closes for these days only (`db._day_windows`), which
+    answers each of its lookups exactly as the whole tape does. A market
+    with no day found is left out, so its read stays whole."""
+    weeks: dict = {}
+    out: dict = {}
+    for b in bets:
+        if not b["player"] or not b["date"] or b["market"] in GAME_MARKETS:
+            continue
+        wk = (b["sport"], b["date"])
+        if wk not in weeks:
+            try:
+                weeks[wk] = [d for d in close_dates(hist_conn, b) if d]
+            except Exception:                                  # noqa: BLE001
+                weeks[wk] = []
+        if weeks[wk]:
+            out.setdefault((b["sport"], b["market"]), set()).update(weeks[wk])
+    return out
+
+
 def close_at(index: dict, player: str, dates: list):
     """First close found for `player` across `dates`, or None.
 
@@ -5810,6 +5833,10 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     parts["open"] = len(_open_rows)
     # The snapshot closes are read for these bets only (see _wanted_rows).
     _want = {(normalize_name(b["player"]), b["market"]) for b in _open_rows}
+    # And the purchased closes for the days these bets can close on only
+    # (`_close_days`, `db._day_windows`): each bet's close is looked up
+    # under its own `close_dates`, every one of them among these.
+    closes_cache["_close_days"] = _close_days(hist_conn, _open_rows)
     for b in _open_rows:
         # ONE BET AT A TIME, COMMITTED (2026-10-14). The pass used to commit
         # once, after the last bet, so its first grade held the journal's
@@ -5926,7 +5953,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         ck = (b["sport"], b["market"])
         if ck not in closes_cache:
             with _grade_part(parts, "closes"):
-                closes_cache[ck] = hist_db.closing_odds_by_date(hist_conn, *ck)
+                closes_cache[ck] = hist_db.closing_odds_by_date(
+                    hist_conn, *ck, days=closes_cache["_close_days"].get(ck))
         # `row` is this player's stat line, so its team names the fixture
         # and narrows an NFL week to the one day he played.
         _team = row["team"] if "team" in row.keys() else None
@@ -6360,7 +6388,9 @@ def _same_book_close(cache: dict, hist_conn, bets, b, dates, stamped=None):
         sb = cache.get("_samebook")
         if sb is None:
             from .closebook import SameBookCloses
-            sb = SameBookCloses(hist_conn)
+            # The settle pass's open bets' days (`_close_days`); a repair
+            # passes none and reads each market's whole tape.
+            sb = SameBookCloses(hist_conn, days=cache.get("_close_days"))
             sb.prepare([dict(r) for r in bets if r["market"] not in GAME_MARKETS])
             cache["_samebook"] = sb
         # The stamped keys settling already loaded, if it did — never a

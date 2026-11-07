@@ -58,8 +58,11 @@ class SameBookCloses:
     in the snapshots. The snapshot file is streamed once and only rows for
     a bet in hand are kept, so the 1 GB box does not hold the history."""
 
-    def __init__(self, hist, snapshots=None):
+    def __init__(self, hist, snapshots=None, days=None):
         self.hist = hist                     # the history DB connection, or None
+        # ``{(sport, market): {ISO day}}``: the purchased closes read for
+        # these days only (`db._day_windows`), or each market's whole tape.
+        self._days = days or {}
         self._cache: dict = {}
         self._snap_rows = snapshots          # an iterable of snapshot rows, or None = the file
         self._snap: dict | None = None
@@ -93,7 +96,18 @@ class SameBookCloses:
                 want.add((norm(b["player"]), b["market"], round(float(b["line"]), 1)))
         markets = {k[1] for k in want}
         grouped: dict = {}
-        rows = self._snap_rows if self._snap_rows is not None else linemoves.stream_history()
+        if self._snap_rows is not None:
+            rows = self._snap_rows
+        else:
+            # PARSED ONLY WHEN ITS TEXT NAMES A BET IN HAND (2026-11-07).
+            # This read the whole file through `stream_history`, a
+            # `json.loads` for every line of every sport's every pull, on
+            # every settle pass that graded a prop; the settle's own two
+            # snapshot readers had moved to `stream_wanted` on 15 October.
+            # The same lines reach the filter below, so the answer is the
+            # same; the rest are judged from their text and skipped.
+            pairs = {(k[0], k[1]) for k in want}
+            rows = linemoves.stream_wanted(pairs) if pairs else ()
         for r in rows:
             try:
                 if r.get("market") not in markets:
@@ -128,7 +142,8 @@ class SameBookCloses:
         ck = (b["sport"], b["market"])
         if ck not in self._cache:
             try:
-                self._cache[ck] = db.closing_odds_all_books(self.hist, *ck) if self.hist is not None else {}
+                self._cache[ck] = (db.closing_odds_all_books(self.hist, *ck, days=self._days.get(ck))
+                                   if self.hist is not None else {})
             except sqlite3.Error:
                 self._cache[ck] = {}
         who = normalize_name(b["player"])
