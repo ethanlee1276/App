@@ -55,10 +55,19 @@ CATEGORIES = (("a11y", "accessibility", "accessibility"), ("bp", "best-practices
               ("seo", "seo", "SEO"))
 
 
+#: Where the preinstalled Playwright Chromium sits. Playwright renamed the
+#: unpacked directory `chrome-linux` -> `chrome-linux64`, so a box with only
+#: the new layout matched nothing here and the search fell through to a
+#: system Chrome — or, where there is none, skipped Lighthouse and called it
+#: the environment. Both layouts are listed, newest match last.
+PW_GLOBS = ("/opt/pw-browsers/chromium-*/chrome-linux/chrome", "/opt/pw-browsers/chromium/chrome-linux/chrome",
+            "/opt/pw-browsers/chromium-*/chrome-linux64/chrome", "/opt/pw-browsers/chromium/chrome-linux64/chrome")
+
+
 def _chrome() -> str:
     if os.environ.get("CHROME_PATH"):
         return os.environ["CHROME_PATH"]
-    for pat in ("/opt/pw-browsers/chromium-*/chrome-linux/chrome", "/opt/pw-browsers/chromium/chrome-linux/chrome"):
+    for pat in PW_GLOBS:
         hits = sorted(glob.glob(pat))
         if hits:
             return hits[-1]

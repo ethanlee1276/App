@@ -88,6 +88,51 @@ def test_the_other_categories_fail_on_any_point_down_and_name_the_audits():
     assert LC.median([LC.numbers(_report(.7, 1, 1, 0, 1)), n])["a11y"] == 96
 
 
+def test_the_preinstalled_chromium_is_found_in_either_playwright_layout():
+    """Playwright renamed the unpacked directory `chrome-linux` ->
+    `chrome-linux64`, and the search here listed the old name only. On a box
+    carrying just the new layout the globs matched nothing, so `_chrome()`
+    fell through to whatever system Chrome happened to exist — and on a box
+    with none, Lighthouse skipped the night and called it the environment.
+    A silently skipped check is the failure mode worth a test.
+
+    The verdict here may not depend on this machine, and twice over. Ethan's
+    laptop has no /opt/pw-browsers and the cloud box has only the new
+    layout, so a test that looked at the real path would pass on one and
+    fail on the other: plant both layouts in a temp tree and point the
+    search at it. And the cloud box exports CHROME_PATH, which `_chrome()`
+    honours first and which would answer this test instead of the glob —
+    so clear it, or the search under test never runs."""
+    import tempfile
+    for unpacked in ("chrome-linux", "chrome-linux64"):
+        with tempfile.TemporaryDirectory() as tmp:
+            binary = Path(tmp) / "chromium-1243" / unpacked / "chrome"
+            binary.parent.mkdir(parents=True)
+            binary.write_text("")
+            globs, env = LC.PW_GLOBS, dict(os.environ)
+            try:
+                os.environ.pop("CHROME_PATH", None)
+                LC.PW_GLOBS = tuple(g.replace("/opt/pw-browsers", tmp) for g in globs)
+                assert LC._chrome() == str(binary), \
+                    f"the {unpacked} layout is not searched; Lighthouse would skip the night"
+            finally:
+                LC.PW_GLOBS = globs
+                os.environ.clear()
+                os.environ.update(env)
+
+
+def test_chrome_path_still_wins_over_the_preinstalled_browser():
+    """The override the nightly and the deploy gate both use. Adding
+    patterns above must not quietly take it away."""
+    old = dict(os.environ)
+    try:
+        os.environ["CHROME_PATH"] = "/somewhere/else/chrome"
+        assert LC._chrome() == "/somewhere/else/chrome"
+    finally:
+        os.environ.clear()
+        os.environ.update(old)
+
+
 def test_no_browser_or_no_npx_is_the_environment_not_the_page():
     old = dict(os.environ)
     try:
