@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LJ. Every open bet's own lookups, every pass** (step 438; 7 November).
+The pass at 16:20 that Saturday graded nothing and still spent 124 seconds
+grading: whatever else it does, every pass asks, for every open bet, where
+its stat row is and whether its game is over. Two of those asks read far
+more than their answers. A points-rebounds-assists prop (and the NBA's
+other summed markets) read the whole day's rows of its parts and compared
+every name, once per prop, every pass; that day's parts are now read once a
+pass, as LG did for names. And the games table had no index on a day
+without its season, so every daily sport's "is his team's game final" (the
+college absent-player rule's too) walked that sport's every stored season;
+it has one now, built by the service itself the first time it opens the
+file after this lands (a second on a table that size). `grade_parts` gains
+`stat_rows` (the search for each bet's row), `absent` (the absent-player
+rule), `too_early` (the finished-game guard) and `game_rows` (a game bet's
+own evidence), so what is left of the grading reads by name. No grade
+changes; nothing to run.
+
 **LI. The grading step's two biggest reads, cut to what it needs** (step
 438; 7 November). Reading the code behind LH's parts found two reads doing
 far more than their answers need, on every pass that graded a prop. The

@@ -407,7 +407,12 @@ def _grade_part(parts: dict, name: str):
     try:
         yield
     finally:
-        parts[name] = parts.get(name, 0.0) + (_time.monotonic() - t0)
+        _add_part(parts, name, t0)
+
+
+def _add_part(parts: dict, name: str, t0: float) -> None:
+    """Add the seconds since ``t0`` (a `time.monotonic`) to ``parts[name]``."""
+    parts[name] = parts.get(name, 0.0) + (_time.monotonic() - t0)
 
 
 def _name_rows(hist_conn, where: str, wargs, market: str, target: str) -> list:
@@ -5682,12 +5687,28 @@ def _derived_rows(hist_conn, b, where: str, wargs: list) -> list:
     from .sources.oddsapi import normalize_name
     target = normalize_name(b["player"] or "")
     marks = ",".join("?" * len(parts))
+    sql = (f"SELECT player, market, value, team, game_id FROM player_game_logs "
+           f"WHERE {where} AND market IN ({marks})")
+    args = (*wargs, *parts)
+    index = _name_index_now()
+    if index is None:
+        mine = [r for r in hist_conn.execute(sql, args)
+                if normalize_name(r["player"]) == target]
+    else:
+        # THE DAY'S PARTS READ ONCE A PASS (2026-11-07), as `_name_rows`
+        # does: every open prop in a summed market read the whole day's
+        # rows of its parts and normalized every name, waiting or not,
+        # every pass. Same rows, in the same order, for each name.
+        key = (id(hist_conn), sql, args)
+        idx = index.get(key)
+        if idx is None:
+            idx = {}
+            for c in hist_conn.execute(sql, args):
+                idx.setdefault(normalize_name(c["player"]), []).append(c)
+            index[key] = idx
+        mine = idx.get(target, ())
     games: dict = {}
-    for r in hist_conn.execute(
-            f"SELECT player, market, value, team, game_id FROM player_game_logs "
-            f"WHERE {where} AND market IN ({marks})", (*wargs, *parts)):
-        if normalize_name(r["player"]) != target:
-            continue
+    for r in mine:
         g = games.setdefault(r["game_id"], {"team": r["team"], "game_id": r["game_id"],
                                             "parts": {}})
         g["parts"][r["market"]] = float(r["value"] or 0.0)
@@ -5849,6 +5870,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             conn.commit()
         where, wargs = _hist_where(b)
         if b["market"] in GAME_MARKETS:
+            t_game = _time.monotonic()
             rows, actual_fn = _game_bet_evidence(hist_conn, b, where, wargs)
             if not rows and b["sport"] == "cfb":
                 # Hawaii-UNLV, 2026-09-05 Eastern, is the games row dated
@@ -5858,6 +5880,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                 if nrows:
                     rows, actual_fn = nrows, nfn
             g, verdict = _pick_dh_game(rows, b, actual_fn)
+            _add_part(parts, "game_rows", t_game)
             if verdict == "void":
                 conn.execute("UPDATE bets SET status='void', pnl_units=0, "
                              "pnl_dollars=0 WHERE id=?", (b["id"],))
@@ -5870,6 +5893,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             _settle_one(conn, b, actual_fn(g), _cl, closing_odds=_co)
             settled += 1
             continue
+        t_rows = _time.monotonic()
         rows = hist_conn.execute(
             f"SELECT value, team, game_id FROM player_game_logs WHERE {where} "
             f"AND market=? AND player=?",
@@ -5896,12 +5920,15 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             # than an open bet because nothing downstream can tell it from a
             # right one.
             rows, wargs = _neighbour_day_rows(hist_conn, b, where, wargs)
+        _add_part(parts, "stat_rows", t_rows)
         if not rows:
             # THE PLAYER IS NOT IN THE FILE. Until 2026-09-14 that left the
             # bet open forever; sixteen Sunday rows and eight college rows
             # sat that way beside complete stat files. `_absent_player_verdict`
             # says which of two things it means — see it for the rule.
+            t_absent = _time.monotonic()
             verdict = _absent_player_verdict(hist_conn, b)
+            _add_part(parts, "absent", t_absent)
             if verdict == "void":
                 conn.execute("UPDATE bets SET status='void', pnl_units=0, "
                              "pnl_dollars=0, why_note=? WHERE id=?",
@@ -5919,7 +5946,10 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         # ingested stays OPEN rather than being graded — visible, honest,
         # and surfaced by the doctor's stuck-bets check, where a wrong grade
         # is invisible and permanent.
-        if _too_early_to_grade(hist_conn, where, wargs, rows[0], b["date"]):
+        t_early = _time.monotonic()
+        early = _too_early_to_grade(hist_conn, where, wargs, rows[0], b["date"])
+        _add_part(parts, "too_early", t_early)
+        if early:
             continue
         if len(rows) > 1:
             # DOUBLEHEADER day: one stat row per leg (game_id suffix -G2 on

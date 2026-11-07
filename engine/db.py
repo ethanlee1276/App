@@ -178,6 +178,14 @@ CREATE INDEX IF NOT EXISTS idx_logs_lookup
     ON player_game_logs (sport, market, player, season, period);
 CREATE INDEX IF NOT EXISTS idx_games_lookup
     ON games (sport, season, period);
+-- A DAY'S GAMES WITHOUT ITS SEASON (2026-11-07). Every daily sport's bet
+-- locates its day as `sport=? AND period=?` (ledger._hist_where), and the
+-- settle pass asks the games table about it once per open bet per pass:
+-- is his team's game final, is it in play, is the day in. `season` sits
+-- between the two in the index above, so each of those walked the sport's
+-- every stored season. This makes each one a lookup.
+CREATE INDEX IF NOT EXISTS idx_games_period
+    ON games (sport, period);
 -- The context joins below key on (sport, period, ...), which is NOT a prefix
 -- of either table's primary key — those lead with season. Without these,
 -- SQLite falls back to matching on sport alone and re-scans the whole

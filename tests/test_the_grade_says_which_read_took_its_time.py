@@ -31,7 +31,8 @@ from engine import ledger                                          # noqa: E402
 from engine import maintenance as M                                # noqa: E402
 
 KNOWN = {"open", "closes", "snapshot_lines", "snapshot_prices", "same_book",
-         "game_close", "noshow", "causes", "total"}
+         "game_close", "game_rows", "stat_rows", "absent", "too_early", "noshow",
+         "causes", "total"}
 
 
 def _journal_and_history():
@@ -64,7 +65,8 @@ def test_a_grading_pass_says_where_its_time_went():
     assert conn.execute("SELECT status FROM bets").fetchone()["status"] == "won"
     parts = ledger.take_grade_parts()
     assert set(parts) <= KNOWN, set(parts) - KNOWN
-    for k in ("open", "closes", "same_book", "noshow", "causes", "total"):
+    for k in ("open", "stat_rows", "too_early", "closes", "same_book", "noshow", "causes",
+              "total"):
         assert k in parts, (k, parts)
     assert parts["open"] == 1
     secs = {k: v for k, v in parts.items() if k != "open"}
