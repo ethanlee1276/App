@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LN. The absent rule's last slow read: a teamless college prop's school**
+(step 438; 7 November). With LJ's day files live, the 18:10 pass still spent
+37.6 of its 38.7 grading seconds in the absent-player rule. A college prop
+with no team on it looks for his school on his own stat rows of the 45 days
+before its date, and that read names no season: no index serves a day range
+without one, so it walked every college stat row the box keeps, every season
+and market, then sorted them, once for each distinct date among the
+teamless props still waiting, every pass. The pass now notes one span
+covering every such prop's window and reads it once, through the season
+(the way LJ's day files are read). Every bet rules exactly as before (a test
+settles the same journal both ways). `grade_parts` gains `absent_cfb` and
+`absent_nfl` (the rule's seconds by half), `absent_n_cfb` and
+`absent_n_nfl` (how many bets reached it) and `absent_team_reads` (one a
+pass). Nothing to run.
+
 **LM. Every college game on the board, not the first 25** (step 439; 7
 November). You, that Saturday: "we are missing so many cfb teams. i dont see
 the michigan vs michigan state game on our app." At 6 PM Eastern the college

@@ -32,7 +32,12 @@ from engine import maintenance as M                                # noqa: E402
 
 KNOWN = {"open", "closes", "snapshot_lines", "snapshot_prices", "same_book",
          "game_close", "game_rows", "stat_rows", "absent", "too_early", "noshow",
-         "causes", "total"}
+         "causes", "total",
+         # The absent rule by half (seconds and bets), and its team reads.
+         "absent_nfl", "absent_cfb", "absent_n_nfl", "absent_n_cfb", "absent_team_reads"}
+#: Counts, and parts that sit inside another part.
+COUNTS = {"open", "absent_n_nfl", "absent_n_cfb", "absent_team_reads"}
+INSIDE = {"absent_nfl", "absent_cfb"}
 
 
 def _journal_and_history():
@@ -69,7 +74,7 @@ def test_a_grading_pass_says_where_its_time_went():
               "total"):
         assert k in parts, (k, parts)
     assert parts["open"] == 1
-    secs = {k: v for k, v in parts.items() if k != "open"}
+    secs = {k: v for k, v in parts.items() if k not in COUNTS | INSIDE}
     assert all(isinstance(v, float) and v >= 0.0 for v in secs.values()), secs
     # Each part is rounded to 0.1 s on its own, so the sum may pass the
     # whole by a rounding step per part.

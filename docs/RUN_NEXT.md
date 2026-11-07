@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07 (evening), after every college game started
+Last updated 2026-11-07 (evening), after the absent-player rule's last
+slow read (a teamless college prop's school) started being read once a
+pass (step LN: nothing to run), after every college game started
 reaching the board, not the first 25 ESPN hands back (step LM: one
 read-only check in the run below), after Sunday's NFL picks started
 posting on Saturday (the NFL's and college's boards buy tomorrow's slate

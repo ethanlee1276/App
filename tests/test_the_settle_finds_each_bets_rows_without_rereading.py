@@ -92,7 +92,8 @@ class _CountingTeams:
         self.conn, self.reads = conn, 0
 
     def execute(self, sql, args=()):
-        if sql == ledger._CFB_TEAM_SQL:
+        if sql == ledger._CFB_TEAM_SQL or sql.startswith(
+                ledger._CFB_TEAM_SPAN_SQL.split("{marks}")[0]):
             self.reads += 1
         return self.conn.execute(sql, args)
 

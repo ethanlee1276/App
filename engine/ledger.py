@@ -5409,14 +5409,58 @@ _CFB_TEAM_SQL = ("SELECT player, team, period FROM player_game_logs WHERE sport=
                  "ORDER BY period DESC")
 
 
+#: THE SAME WINDOW THROUGH THE SEASON, for the settle pass. `_CFB_TEAM_SQL`
+#: names no season, and no index serves a day range without one: it plans
+#: as a walk of every college stat row the box keeps, every season and
+#: market, then a sort. Inside a name index it ran once per distinct bet
+#: date every pass, for each teamless college prop still waiting (37.6 of
+#: the 18:10 pass's 38.7 grading seconds on 7 November, after the day
+#: files were fixed). This reads one span through the primary key
+#: (sport, season, period), the seasons a day in it can carry (its own year
+#: and the one before, as `_cfb_day_files`), each player's team per day once.
+_CFB_TEAM_SPAN_SQL = ("SELECT DISTINCT player, team, period FROM player_game_logs "
+                      "WHERE sport='cfb' AND season IN ({marks}) AND period BETWEEN ? AND ? "
+                      "AND team IS NOT NULL AND team != '' ORDER BY period DESC, team")
+
+#: How far back a teamless college prop looks for his team (`_college_absent`).
+CFB_TEAM_LOOKBACK_DAYS = 45
+
+
+def _cfb_team_span(open_rows) -> tuple | None:
+    """``(since, until)`` covering every open teamless college prop's own
+    window (`CFB_TEAM_LOOKBACK_DAYS` before its date, to its date), or None
+    when there is none: the one span the settle pass reads."""
+    lo = hi = None
+    for b in open_rows:
+        if b["sport"] != "cfb" or b["market"] in GAME_MARKETS:
+            continue
+        if b["category"] in GRADED_ELSEWHERE:
+            continue
+        if ("team" in b.keys() and b["team"]):
+            continue
+        try:
+            d0 = datetime.date.fromisoformat(b["date"] or "")
+        except ValueError:
+            continue
+        since = (d0 - datetime.timedelta(days=CFB_TEAM_LOOKBACK_DAYS)).isoformat()
+        until = d0.isoformat()
+        lo = since if lo is None or since < lo else lo
+        hi = until if hi is None or until > hi else hi
+    return (lo, hi) if lo else None
+
+
 def _recent_cfb_team(hist_conn, since: str, until: str, target: str):
     """The team on ``target``'s newest college stat row between the two
     days, or None: the first such row in ``_CFB_TEAM_SQL``'s order.
 
-    Inside a name index (the settle pass) the window is read once and each
-    name's first team kept, so every teamless open college prop asks a
-    dict instead of walking six weeks of stat rows (every market, every
-    player) and normalizing each name, on every pass while it waits."""
+    Inside a name index (the settle pass) one span is read once a pass
+    (`_CFB_TEAM_SPAN_SQL`: the pass's own span, `cfb_team_span`, when the
+    settle noted one that holds this window, else this window), each name
+    normalized once, and every teamless open college prop asks a dict. On
+    a day two rows of one name name two teams, the span keeps them in team
+    order where the plain read keeps its scan's; a name is one player's
+    nearly always, and the settle grades a prop only off a final game of
+    that team."""
     from .sources.oddsapi import normalize_name
     index = _name_index_now()
     if index is None:
@@ -5424,18 +5468,30 @@ def _recent_cfb_team(hist_conn, since: str, until: str, target: str):
             if normalize_name(r["player"]) == target:
                 return r["team"]
         return None
-    key = (id(hist_conn), _CFB_TEAM_SQL, (since, until))
-    teams = index.get(key)
-    if teams is None:
-        teams, names = {}, {}
-        for r in hist_conn.execute(_CFB_TEAM_SQL, (since, until)):
-            raw = r["player"]
-            n = names.get(raw)
-            if n is None:
-                n = names[raw] = normalize_name(raw)
-            teams.setdefault(n, r["team"])
-        index[key] = teams
-    return teams.get(target)
+    span = index.get("cfb_team_span")
+    lo, hi = span if span and span[0] <= since and until <= span[1] else (since, until)
+    key = (id(hist_conn), "cfb_team_rows", lo, hi)
+    days = index.get(key)
+    if days is None:
+        try:
+            years = {int(lo[:4]), int(hi[:4])}
+        except ValueError:
+            years = set()
+        seasons = sorted(years | {y - 1 for y in years})
+        days, names = {}, {}
+        if seasons:
+            sql = _CFB_TEAM_SPAN_SQL.format(marks=",".join("?" * len(seasons)))
+            for raw, team, period in hist_conn.execute(sql, (*seasons, lo, hi)):
+                n = names.get(raw)
+                if n is None:
+                    n = names[raw] = normalize_name(raw)
+                days.setdefault(n, []).append((period, team))
+        index[key] = days
+        index["cfb_team_reads"] = index.get("cfb_team_reads", 0) + 1
+    for period, team in days.get(target, ()):
+        if since <= period <= until:
+            return team
+    return None
 
 
 def _cfb_roster_team(hist_conn, player: str, season: int):
@@ -5522,7 +5578,7 @@ def _college_absent(hist_conn, b, target):
     # now carries it.
     team = (b["team"] if "team" in b.keys() else None) or None
     if not team:
-        since = (d0 - datetime.timedelta(days=45)).isoformat()
+        since = (d0 - datetime.timedelta(days=CFB_TEAM_LOOKBACK_DAYS)).isoformat()
         team = _recent_cfb_team(hist_conn, since, d0.isoformat(), target)
     if not team:
         # THE ROSTER FILE, third. A first appearance has no history and
@@ -5957,6 +6013,13 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     # (`_close_days`, `db._day_windows`): each bet's close is looked up
     # under its own `close_dates`, every one of them among these.
     closes_cache["_close_days"] = _close_days(hist_conn, _open_rows)
+    # One span of college stat rows for every teamless college prop's team
+    # (`_recent_cfb_team`), read once inside the pass's name index.
+    _index = _name_index_now()
+    if _index is not None:
+        _span = _cfb_team_span(_open_rows)
+        if _span:
+            _index["cfb_team_span"] = _span
     for b in _open_rows:
         # ONE BET AT A TIME, COMMITTED (2026-10-14). The pass used to commit
         # once, after the last bet, so its first grade held the journal's
@@ -6028,6 +6091,10 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             t_absent = _time.monotonic()
             verdict = _absent_player_verdict(hist_conn, b)
             _add_part(parts, "absent", t_absent)
+            if b["sport"] in ABSENT_RULE_SPORTS:
+                # Which half of the rule, and over how many bets.
+                _add_part(parts, f"absent_{b['sport']}", t_absent)
+                parts[f"absent_n_{b['sport']}"] = parts.get(f"absent_n_{b['sport']}", 0) + 1
             if verdict == "void":
                 conn.execute("UPDATE bets SET status='void', pnl_units=0, "
                              "pnl_dollars=0, why_note=? WHERE id=?",
@@ -6261,6 +6328,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             pass                 # a tagging hiccup must never block settling
     if closes_cache.get("_line_opens") is not None:
         closes_cache["_line_opens"].close()
+    if _index is not None and _index.get("cfb_team_reads"):
+        parts["absent_team_reads"] = _index["cfb_team_reads"]
     parts["total"] = _time.monotonic() - t_call
     return settled + voided
 
