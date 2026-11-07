@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LF. The settle pass learns hourly and says where its time goes** (step
+438; 7 November). The heartbeat that Saturday afternoon had one settle pass
+at 571 seconds (97 in September), and the pass runs every five minutes, so
+it ran back to back, niced but beside the board builds and the weekly refit
+on the box's one CPU. On every pass that graded anything it also refitted
+six learners in line: the loss patterns, the journal fitters, the selection
+haircut, the correlation priors, the game-line calibration and the
+hypotheses. On a game day that is nearly every pass. Now grades still land
+and the record still exports on the pass that makes them, and the learners
+run at most once an hour, never missing a grade (a pass that grades leaves
+it owed; the first pass past the hour learns from it, even with nothing
+left open). Each pass also records what it spent by phase, and the public
+heartbeat carries it under `chores.settle.phases` (prep, ingest, grade,
+desk, resettle, parlays, learn, export, with what it graded and whether it
+learned), so where a long pass goes is readable without a command. Nothing
+to run.
+
 **LE. The weather desk fits its own spread** (step 437; 7 November). Your
 6 November JR said the day was not the whole story: the calls on the right
 day lost too, so the desk's spread (2°F for the same day, 3°F a day ahead)

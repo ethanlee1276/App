@@ -660,6 +660,32 @@ DESK_EVERY_S = 900
 # chores handle anything older (and reach CATCH_UP_DAYS), so this only has
 # to cover "tonight, and last night if the launcher was closed".
 SETTLE_LOOKBACK_DAYS = 3
+#: THE LEARNING STEPS, AT MOST HOURLY (2026-11-07). On every pass that graded
+#: anything, the settle pass refitted its learners in line: the loss
+#: patterns, the journal fitters, the selection haircut and its bands, the
+#: correlation priors, the game-line calibration and the hypotheses. On a
+#: game day that is nearly every pass, every SETTLE_EVERY_S, and the
+#: heartbeat that Saturday afternoon had one pass at 571 seconds (97 in
+#: September), so the settle child ran back to back beside the board builds
+#: and the weekly refit on the box's one CPU. Grades still land, and the
+#: record still exports, on the pass that makes them; the learners run at
+#: most this often, and never miss a grade: a pass that grades leaves
+#: ``learn_owed`` in the state, and the first pass past the hour learns from
+#: it, even one with nothing left open (`settle_open`).
+LEARN_EVERY_S = 3600
+#: What the last settle pass spent, by phase (seconds), with what it graded
+#: and whether it learned. The chores child publishes it beside its own
+#: timing (launch._lane_steps_run), so the heartbeat says WHERE a long pass
+#: went: ``chores.settle.phases``.
+LAST_SETTLE_PHASES: dict = {}
+
+
+def _learn_due(state, now: float) -> bool:
+    """A grade is waiting to be learned from and the last learning was at
+    least LEARN_EVERY_S ago."""
+    last = state.get("last_learn_ts")
+    return bool(state.get("learn_owed")) and not (
+        isinstance(last, (int, float)) and now - last < LEARN_EVERY_S)
 
 
 def _open_bet_days(lconn, today: _dt.date, lookback: int) -> list[str]:
@@ -1157,188 +1183,25 @@ def settle_open(log=print, state_path: Path | None = None,
         return 0
 
     settled = 0
+    # WHERE THE PASS WENT, by phase (LAST_SETTLE_PHASES).
+    phases: dict = {"graded": 0, "learned": False}
+    clock = [_time.monotonic()]
+
+    def lap(name: str) -> None:
+        t = _time.monotonic()
+        phases[name] = round(phases.get(name, 0.0) + t - clock[0], 1)
+        clock[0] = t
     try:
         from . import db, ingest, ledger
         lconn = ledger.connect()
         hconn = db.connect()
-        # PLACE THE STRANDED ROWS FIRST, on every pass, before the window is
-        # built from them. `_open_bet_days` reads `game_day`, and a row
-        # without one sits under its week label outside every window — it
-        # is not merely ungraded, it stops this function from running the
-        # results ingest at all (see `_open_bet_days`). The stamping at the
-        # journal door was fixed on 2026-09-11, but 134 rows were already
-        # stranded on the droplet and the repair was a command a person
-        # had to run by hand: `--backfill-days --apply`. Ethan, 2026-09-14,
-        # from work: "None of the nfl edge or most likely bets settled" —
-        # he could not run it, and a repair that waits for a keyboard is
-        # not a repair. `backfill_game_days` only ever fills a NULL and
-        # never touches `date`, the settle key, so running it every cycle
-        # cannot unsettle anything; it scans `game_day IS NULL` and is
-        # cheap when there is nothing to do.
-        try:
-            bf = ledger.backfill_game_days(lconn, hconn)
-            if bf.get("filled"):
-                log(f"  placed {bf['filled']} journal row(s) on their game "
-                    f"day ({bf.get('unresolved', 0)} still on a week label)")
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  game-day backfill skipped: {exc}")
-        days = _open_bet_days(lconn, today, SETTLE_LOOKBACK_DAYS)
-        if not days:
-            # Nothing to do — still stamp the clock so we don't re-check
-            # the journal every single cycle. A build that journaled since
-            # the last pass left the record to this lane (ledger.
-            # settle_and_export), so it is exported here even so.
-            if ledger.record_dirty():
-                ledger.clear_record_dirty()
-                ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
-            state["last_settle_ts"] = now
-            _save_state(state_path, state)
-            return 0
-        # One ingest spanning the open days; it is idempotent, and games
-        # still in progress simply aren't returned as finished yet.
-        #
-        # Its OWN try: a fetch hiccup (blocked host, rate limit, a corrupt
-        # cache file) must not skip the settle below. Everything already in
-        # the history DB can still grade tonight's bets — letting one bad
-        # response strand the whole journal is how bets sat open for days.
-        # Re-file hoops bets journaled under the other league FIRST — a
-        # WNBA pick stored as 'nba' can never meet its results, and the
-        # ingest below decides which sports to fetch from the bets' own
-        # labels, so relabeling after it wastes a pass.
-        try:
-            moved = ledger.relabel_cross_league(lconn, hconn)
-            if moved:
-                log(f"  re-filed {moved} hoops bet(s) under the league "
-                    f"that actually played them")
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  league relabel skipped: {exc}")
-        # And the football half of the same problem: NFL stale-line flags
-        # journalled as baseball by a defaulted sport. Same placement and
-        # the same reason as the relabel above — a bet under the wrong
-        # league can never meet its results, and the ingest below picks
-        # which sports to fetch from the bets' own labels.
-        try:
-            refiled = ledger.repair_football_filed_as_baseball(lconn)
-            if refiled:
-                log(f"  re-filed {refiled} football bet(s) out of the "
-                    f"baseball book")
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  football re-file skipped: {exc}")
-        # Long-shot markets (home runs, anytime TDs) may NEVER sit in the
-        # headline record — the journal gate refuses them at the door, and
-        # this sweep re-files any stray that got in some other way, so the
-        # main record can only ever describe picks the model stands behind.
-        try:
-            strays = ledger.move_longshots_out_of_main(lconn)
-            if strays:
-                log(f"  re-filed {strays} long-shot bet(s) out of the "
-                    f"headline record into their own bucket")
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  long-shot re-file skipped: {exc}")
-        res = ingest_for_open_bets(lconn, hconn, days, log)
-        settled = ledger.settle_from_history(lconn, hconn)
-        # FIRST TOUCHDOWN (2026-10-31): no stat row says who scored first, so
-        # these grade off the play-by-play's first scorer (engine/firsttd).
-        # ESPN's scoring plays first, the night of the game (2026-11-01: a
-        # Sunday hit sat open into Tuesday on the overnight file alone); the
-        # file for whatever ESPN cannot say.
-        try:
-            from . import firsttd as _ftd
-            n_ftd = 0
-            try:
-                n_ftd += _ftd.settle_espn(lconn)
-            except Exception as exc:                         # noqa: BLE001
-                log(f"  ⚠️  first-touchdown ESPN grade skipped: {exc}")
-            n_ftd += _ftd.settle(lconn)
-            if n_ftd:
-                log(f"  First-touchdown bets graded: {n_ftd}")
-                settled += n_ftd
-        except Exception as exc:                             # noqa: BLE001
-            log(f"  ⚠️  first-touchdown settle skipped: {exc}")
-        # FIRST BASKET (2026-10-31), the NBA's: the game's first made shot or
-        # free throw in the box's shots (engine/firstbasket).
-        try:
-            from . import firstbasket as _fb
-            n_fb = _fb.settle(lconn, hconn)
-            if n_fb:
-                log(f"  First-basket bets graded: {n_fb}")
-                settled += n_fb
-        except Exception as exc:                             # noqa: BLE001
-            log(f"  ⚠️  first-basket settle skipped: {exc}")
-        # Postponed MLB games void themselves (audit O4, roadmap #44). After
-        # the grading pass, so a final that landed late grades first; the
-        # guards (baseball only, three days old) live with the function.
-        try:
-            voided = ledger.auto_void_unplayed(lconn, hconn, today.isoformat())
-            if voided:
-                log(f"  voided {len(voided)} pick(s) on unplayed MLB game(s): "
-                    + ", ".join(sorted({f"{r['team']} {r['date']}" for r in voided})))
-                settled += len(voided)
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  unplayed-game void skipped: {exc}")
-        # THE FIGHTS, on the same clock (2026-10-13). `settle_ufc` ran only
-        # inside the UFC board's build, and only on a build with an odds
-        # key — a card's picks graded whenever that board next rebuilt, not
-        # when the bout ended. Its lookups are cached; asking every pass
-        # while a pick is open costs disk reads, not requests.
-        try:
-            if lconn.execute("SELECT 1 FROM bets WHERE status='open' "
-                             "AND sport='ufc' LIMIT 1").fetchone():
-                n_ufc = ledger.settle_ufc(lconn)
-                if n_ufc:
-                    log(f"  UFC: {n_ufc} fight pick(s) graded")
-                settled += n_ufc
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  UFC settle skipped: {exc}")
-        # THE DESK, every quarter hour (DESK_EVERY_S). Its tickets grade
-        # against the exchange, not the history database, and until
-        # 2026-09-15 nothing on any clock asked the exchange (see
-        # `ledger.settle_predmarket`).
-        last_desk = state.get("last_desk_ts")
-        if not (isinstance(last_desk, (int, float)) and now - last_desk < DESK_EVERY_S):
-            try:
-                dk = ledger.settle_predmarket(lconn)
-                if dk.get("error"):
-                    log(f"  ⚠️  desk settle skipped: {dk['error']}")
-                elif dk["settled"] or dk["voided"]:
-                    log(f"  desk: {dk['settled']} ticket(s) graded, "
-                        f"{dk['voided']} voided, of {dk['checked']} asked")
-                settled += dk["settled"] + dk["voided"]
-            except Exception as exc:  # noqa: BLE001
-                log(f"  ⚠️  desk settle failed: {exc}")
-            state["last_desk_ts"] = now
-            _save_state(state_path, state)
-        # Self-healing: any bet ever graded off a partial stat line gets
-        # re-graded once the real final number is in.
-        fixed = ledger.resettle_mismatches(lconn, hconn)
-        if fixed:
-            log(f"  ⚠️  corrected {len(fixed)} bet(s) graded off partial "
-                "stats: " + "; ".join(
-                    f"{f['player']} {f['market']} {f['was']}→{f['now']}"
-                    for f in fixed[:5]))
-        # Parlay tickets grade off their legs' verdicts in the singles
-        # journal — AFTER the settle above, or every ticket finds its legs
-        # still open. This used to live only in the manual --settle handler,
-        # so tickets journaled nightly and then sat "waiting" until someone
-        # happened to run that command by hand. The auto-settle is the thing
-        # that actually keeps the journal current; the tickets belong to it.
-        parlays_moved = 0
-        try:
-            from . import parlayledger
-            pr = parlayledger.settle(lconn)
-            rp = parlayledger.resettle(lconn)
-            parlays_moved = pr["settled"] + len(rp["fixed"]) + rp["reopened"]
-            if pr["settled"]:
-                log(f"  parlays: graded {pr['settled']} ticket(s)")
-            if rp["fixed"] or rp["reopened"]:
-                log(f"  ⚠️  parlays re-audited: {len(rp['fixed'])} re-graded,"
-                    f" {rp['reopened']} reopened with their legs")
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  parlay settle skipped: {exc}")
         # The learning step: every fresh grade re-mines the journal for
         # loss patterns, so a slice that just crossed the evidence bar
-        # starts vetoing picks on the very next build — no human runs it.
-        if settled or fixed:
+        # starts vetoing picks on a build soon after — no human runs it.
+        # At most every LEARN_EVERY_S, and never a grade missed (see there).
+        def learn():
+            state["learn_owed"] = False
+            state["last_learn_ts"] = now
             try:
                 from . import losspatterns
                 lp = losspatterns.refresh(lconn)
@@ -1508,10 +1371,207 @@ def settle_open(log=print, state_path: Path | None = None,
                             log(f"  {line}")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  backtest lab skipped: {exc}")
+        # PLACE THE STRANDED ROWS FIRST, on every pass, before the window is
+        # built from them. `_open_bet_days` reads `game_day`, and a row
+        # without one sits under its week label outside every window — it
+        # is not merely ungraded, it stops this function from running the
+        # results ingest at all (see `_open_bet_days`). The stamping at the
+        # journal door was fixed on 2026-09-11, but 134 rows were already
+        # stranded on the droplet and the repair was a command a person
+        # had to run by hand: `--backfill-days --apply`. Ethan, 2026-09-14,
+        # from work: "None of the nfl edge or most likely bets settled" —
+        # he could not run it, and a repair that waits for a keyboard is
+        # not a repair. `backfill_game_days` only ever fills a NULL and
+        # never touches `date`, the settle key, so running it every cycle
+        # cannot unsettle anything; it scans `game_day IS NULL` and is
+        # cheap when there is nothing to do.
+        try:
+            bf = ledger.backfill_game_days(lconn, hconn)
+            if bf.get("filled"):
+                log(f"  placed {bf['filled']} journal row(s) on their game "
+                    f"day ({bf.get('unresolved', 0)} still on a week label)")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  game-day backfill skipped: {exc}")
+        days = _open_bet_days(lconn, today, SETTLE_LOOKBACK_DAYS)
+        lap("prep")
+        if not days:
+            # Nothing to do — still stamp the clock so we don't re-check
+            # the journal every single cycle. A build that journaled since
+            # the last pass left the record to this lane (ledger.
+            # settle_and_export), so it is exported here even so. A grade
+            # an earlier pass made and has not yet learned from is learned
+            # from here, or it would wait for the next open pick.
+            if _learn_due(state, now):
+                learn()
+                phases["learned"] = True
+                lap("learn")
+            if ledger.record_dirty():
+                ledger.clear_record_dirty()
+                ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+                lap("export")
+            state["last_settle_ts"] = now
+            _save_state(state_path, state)
+            _publish_phases(phases, now)
+            return 0
+        # One ingest spanning the open days; it is idempotent, and games
+        # still in progress simply aren't returned as finished yet.
+        #
+        # Its OWN try: a fetch hiccup (blocked host, rate limit, a corrupt
+        # cache file) must not skip the settle below. Everything already in
+        # the history DB can still grade tonight's bets — letting one bad
+        # response strand the whole journal is how bets sat open for days.
+        # Re-file hoops bets journaled under the other league FIRST — a
+        # WNBA pick stored as 'nba' can never meet its results, and the
+        # ingest below decides which sports to fetch from the bets' own
+        # labels, so relabeling after it wastes a pass.
+        try:
+            moved = ledger.relabel_cross_league(lconn, hconn)
+            if moved:
+                log(f"  re-filed {moved} hoops bet(s) under the league "
+                    f"that actually played them")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  league relabel skipped: {exc}")
+        # And the football half of the same problem: NFL stale-line flags
+        # journalled as baseball by a defaulted sport. Same placement and
+        # the same reason as the relabel above — a bet under the wrong
+        # league can never meet its results, and the ingest below picks
+        # which sports to fetch from the bets' own labels.
+        try:
+            refiled = ledger.repair_football_filed_as_baseball(lconn)
+            if refiled:
+                log(f"  re-filed {refiled} football bet(s) out of the "
+                    f"baseball book")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  football re-file skipped: {exc}")
+        # Long-shot markets (home runs, anytime TDs) may NEVER sit in the
+        # headline record — the journal gate refuses them at the door, and
+        # this sweep re-files any stray that got in some other way, so the
+        # main record can only ever describe picks the model stands behind.
+        try:
+            strays = ledger.move_longshots_out_of_main(lconn)
+            if strays:
+                log(f"  re-filed {strays} long-shot bet(s) out of the "
+                    f"headline record into their own bucket")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  long-shot re-file skipped: {exc}")
+        lap("prep")
+        res = ingest_for_open_bets(lconn, hconn, days, log)
+        lap("ingest")
+        settled = ledger.settle_from_history(lconn, hconn)
+        # FIRST TOUCHDOWN (2026-10-31): no stat row says who scored first, so
+        # these grade off the play-by-play's first scorer (engine/firsttd).
+        # ESPN's scoring plays first, the night of the game (2026-11-01: a
+        # Sunday hit sat open into Tuesday on the overnight file alone); the
+        # file for whatever ESPN cannot say.
+        try:
+            from . import firsttd as _ftd
+            n_ftd = 0
+            try:
+                n_ftd += _ftd.settle_espn(lconn)
+            except Exception as exc:                         # noqa: BLE001
+                log(f"  ⚠️  first-touchdown ESPN grade skipped: {exc}")
+            n_ftd += _ftd.settle(lconn)
+            if n_ftd:
+                log(f"  First-touchdown bets graded: {n_ftd}")
+                settled += n_ftd
+        except Exception as exc:                             # noqa: BLE001
+            log(f"  ⚠️  first-touchdown settle skipped: {exc}")
+        # FIRST BASKET (2026-10-31), the NBA's: the game's first made shot or
+        # free throw in the box's shots (engine/firstbasket).
+        try:
+            from . import firstbasket as _fb
+            n_fb = _fb.settle(lconn, hconn)
+            if n_fb:
+                log(f"  First-basket bets graded: {n_fb}")
+                settled += n_fb
+        except Exception as exc:                             # noqa: BLE001
+            log(f"  ⚠️  first-basket settle skipped: {exc}")
+        # Postponed MLB games void themselves (audit O4, roadmap #44). After
+        # the grading pass, so a final that landed late grades first; the
+        # guards (baseball only, three days old) live with the function.
+        try:
+            voided = ledger.auto_void_unplayed(lconn, hconn, today.isoformat())
+            if voided:
+                log(f"  voided {len(voided)} pick(s) on unplayed MLB game(s): "
+                    + ", ".join(sorted({f"{r['team']} {r['date']}" for r in voided})))
+                settled += len(voided)
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  unplayed-game void skipped: {exc}")
+        # THE FIGHTS, on the same clock (2026-10-13). `settle_ufc` ran only
+        # inside the UFC board's build, and only on a build with an odds
+        # key — a card's picks graded whenever that board next rebuilt, not
+        # when the bout ended. Its lookups are cached; asking every pass
+        # while a pick is open costs disk reads, not requests.
+        try:
+            if lconn.execute("SELECT 1 FROM bets WHERE status='open' "
+                             "AND sport='ufc' LIMIT 1").fetchone():
+                n_ufc = ledger.settle_ufc(lconn)
+                if n_ufc:
+                    log(f"  UFC: {n_ufc} fight pick(s) graded")
+                settled += n_ufc
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  UFC settle skipped: {exc}")
+        lap("grade")
+        # THE DESK, every quarter hour (DESK_EVERY_S). Its tickets grade
+        # against the exchange, not the history database, and until
+        # 2026-09-15 nothing on any clock asked the exchange (see
+        # `ledger.settle_predmarket`).
+        last_desk = state.get("last_desk_ts")
+        if not (isinstance(last_desk, (int, float)) and now - last_desk < DESK_EVERY_S):
+            try:
+                dk = ledger.settle_predmarket(lconn)
+                if dk.get("error"):
+                    log(f"  ⚠️  desk settle skipped: {dk['error']}")
+                elif dk["settled"] or dk["voided"]:
+                    log(f"  desk: {dk['settled']} ticket(s) graded, "
+                        f"{dk['voided']} voided, of {dk['checked']} asked")
+                settled += dk["settled"] + dk["voided"]
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  desk settle failed: {exc}")
+            state["last_desk_ts"] = now
+            _save_state(state_path, state)
+        lap("desk")
+        # Self-healing: any bet ever graded off a partial stat line gets
+        # re-graded once the real final number is in.
+        fixed = ledger.resettle_mismatches(lconn, hconn)
+        lap("resettle")
+        if fixed:
+            log(f"  ⚠️  corrected {len(fixed)} bet(s) graded off partial "
+                "stats: " + "; ".join(
+                    f"{f['player']} {f['market']} {f['was']}→{f['now']}"
+                    for f in fixed[:5]))
+        # Parlay tickets grade off their legs' verdicts in the singles
+        # journal — AFTER the settle above, or every ticket finds its legs
+        # still open. This used to live only in the manual --settle handler,
+        # so tickets journaled nightly and then sat "waiting" until someone
+        # happened to run that command by hand. The auto-settle is the thing
+        # that actually keeps the journal current; the tickets belong to it.
+        parlays_moved = 0
+        try:
+            from . import parlayledger
+            pr = parlayledger.settle(lconn)
+            rp = parlayledger.resettle(lconn)
+            parlays_moved = pr["settled"] + len(rp["fixed"]) + rp["reopened"]
+            if pr["settled"]:
+                log(f"  parlays: graded {pr['settled']} ticket(s)")
+            if rp["fixed"] or rp["reopened"]:
+                log(f"  ⚠️  parlays re-audited: {len(rp['fixed'])} re-graded,"
+                    f" {rp['reopened']} reopened with their legs")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  parlay settle skipped: {exc}")
+        lap("parlays")
+        phases["graded"] = settled
+        if settled or fixed:
+            state["learn_owed"] = True
+        if _learn_due(state, now):
+            learn()
+            phases["learned"] = True
+        lap("learn")
         # `record_dirty`: a build journaled and left the export to this lane.
         if settled or fixed or parlays_moved or ledger.record_dirty():
             ledger.clear_record_dirty()
             ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+        lap("export")
         if settled:
             log(f"  settled {settled} pick(s) from {res['games']} finished "
                 f"game(s) ({days[0]}"
@@ -1520,7 +1580,15 @@ def settle_open(log=print, state_path: Path | None = None,
         log(f"  ⚠️  auto-settle failed: {exc}")
     state["last_settle_ts"] = now
     _save_state(state_path, state)
+    _publish_phases(phases, now)
     return settled
+
+
+def _publish_phases(phases: dict, now: float) -> None:
+    """LAST_SETTLE_PHASES, replaced whole: what this pass spent where."""
+    LAST_SETTLE_PHASES.clear()
+    LAST_SETTLE_PHASES.update(phases)
+    LAST_SETTLE_PHASES["at"] = _dt.datetime.fromtimestamp(now).isoformat(timespec="seconds")
 
 
 def _last_result_day(hconn, sport: str) -> _dt.date | None:

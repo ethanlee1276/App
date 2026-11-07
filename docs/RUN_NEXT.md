@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07 (evening), after the weather desk's spread got its
+Last updated 2026-11-07 (evening), after the settle pass started refitting
+its learners at most hourly and saying where its time goes on the heartbeat
+(it ran 571 seconds every five minutes on a game day; step LF: nothing to
+run), after the weather desk's spread got its
 fit from the desk's own record (step LE: item 1h, one read-only check, JR2),
 after the Lab's NFL replay started reading its closing lines once and
 inside its own half hour (step LD: item 1f, nothing to run), after a league

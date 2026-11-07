@@ -4,6 +4,12 @@
     {
       "date": "2026-11-07",
       "kind": "fix",
+      "title": "Busy game days leave more of the server for the boards",
+      "body": "Every few minutes the server grades the picks whose games have finished, and on a game day it was also refitting six of its learning models on nearly every one of those passes, close to ten minutes of work every five. Picks still grade the moment their games end; the learning models now refit at most once an hour, and never skip a graded pick."
+    },
+    {
+      "date": "2026-11-07",
+      "kind": "fix",
       "title": "The weather desk measures how sure it should be",
       "body": "The weather desk is still paused. Its forecasts were right about the day but too sure about the degree: it priced every city's high as if the forecast were rarely more than two degrees off. It now measures that from its own record, each forecast it logged beside the bracket that actually won that day, and grades the calls it would make with the measured spread, out of sight, until they win about what they claim."
     },

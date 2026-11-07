@@ -4519,6 +4519,15 @@ def _lane_steps_run(lane: str, force_settle: bool, st: dict, publish=None) -> No
         except Exception as exc:                     # noqa: BLE001
             print(f"  ⚠️  chore {name} failed: {exc}")
         st["last_s"][name] = round(time.time() - t, 1)
+        if name == "autosettle":
+            # Where the pass went (engine/maintenance.LAST_SETTLE_PHASES):
+            # the heartbeat's chores.settle.phases.
+            try:
+                from engine import maintenance as _maint
+                if _maint.LAST_SETTLE_PHASES:
+                    st["phases"] = dict(_maint.LAST_SETTLE_PHASES)
+            except Exception:                        # noqa: BLE001
+                pass
     st.update(step=None, since=None)
     if publish:
         publish()
@@ -4618,7 +4627,10 @@ def _lane_child(lane: str, force_settle: bool, st: dict) -> None:
                   f"{kid.get('step') or 'a step'}{why}; rests {rest // 60} min before it runs again")
             st["rest_until"] = time.time() + rest
             st["killed"] = {"at": round(time.time()), "step": kid.get("step") or "", "signal": -code}
-    st["last_s"].update(_read_child_state(lane).get("last_s") or {})
+    kid = _read_child_state(lane)
+    st["last_s"].update(kid.get("last_s") or {})
+    if kid.get("phases"):
+        st["phases"] = dict(kid["phases"])
 
 
 def _lane_run(lane: str, force_settle: bool = False) -> None:
@@ -4790,6 +4802,8 @@ def _chores_status(now: float | None = None) -> dict:
         cur = {"step": step, "running_s": round(now - since) if step and since else None,
                "done_epoch": round(st["done_at"]) if st.get("done_at") else None,
                "last_s": dict(st.get("last_s") or {}), "stuck": False}
+        if st.get("phases"):
+            cur["phases"] = dict(st["phases"])
         if (st.get("rest_until") or 0) > now:
             cur["resting_until_epoch"] = round(st["rest_until"])
             if st.get("killed"):
