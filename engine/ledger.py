@@ -27,6 +27,7 @@ import re
 import sqlite3
 import statistics
 import threading as _threading
+import time as _time
 from pathlib import Path
 
 from . import markets as _markets
@@ -375,6 +376,38 @@ def name_index():
     finally:
         if outer is None:
             _NAME_LOCAL.index = None
+
+
+#: WHERE A GRADING PASS'S TIME GOES (2026-11-07). The settle pass's phases
+#: on the heartbeat put a game day's grading at six minutes of every pass,
+#: and the phase is one call. `settle_from_history` keeps, per thread, the
+#: seconds its costly reads took this pass: the purchased closes
+#: (`closes`, one read of odds_history per sport and market graded), our
+#: own snapshot file (`snapshot_lines`, `snapshot_prices` and `same_book`,
+#: each a stream of it), the game lines' closes, the no-show sweep and the
+#: loss tagging, beside how many bets were open and the whole call
+#: (`total`); what the named parts leave is finding each bet's stat row.
+#: The settle pass carries them to the heartbeat (chores.settle.phases
+#: .grade_parts) through `take_grade_parts`.
+_GRADE_LOCAL = _threading.local()
+
+
+def take_grade_parts() -> dict:
+    """This thread's last grading pass by part (seconds, to 0.1), and
+    forget it: ``{}`` when no pass has run since the last take."""
+    parts = getattr(_GRADE_LOCAL, "parts", None) or {}
+    _GRADE_LOCAL.parts = None
+    return {k: (round(v, 1) if isinstance(v, float) else v) for k, v in parts.items()}
+
+
+@_contextlib.contextmanager
+def _grade_part(parts: dict, name: str):
+    """Add this block's seconds to ``parts[name]``."""
+    t0 = _time.monotonic()
+    try:
+        yield
+    finally:
+        parts[name] = parts.get(name, 0.0) + (_time.monotonic() - t0)
 
 
 def _name_rows(hist_conn, where: str, wargs, market: str, target: str) -> list:
@@ -5770,7 +5803,11 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
 
     closes_cache: dict = {}
     settled = 0
+    parts: dict = {}
+    _GRADE_LOCAL.parts = parts
+    t_call = _time.monotonic()
     _open_rows = conn.execute(q, args).fetchall()
+    parts["open"] = len(_open_rows)
     # The snapshot closes are read for these bets only (see _wanted_rows).
     _want = {(normalize_name(b["player"]), b["market"]) for b in _open_rows}
     for b in _open_rows:
@@ -5801,7 +5838,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
                 continue
             if g is None:
                 continue
-            _cl, _co = _game_close(closes_cache, hist_conn, b, g, n_games=len(rows))
+            with _grade_part(parts, "game_close"):
+                _cl, _co = _game_close(closes_cache, hist_conn, b, g, n_games=len(rows))
             _settle_one(conn, b, actual_fn(g), _cl, closing_odds=_co)
             settled += 1
             continue
@@ -5887,7 +5925,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
 
         ck = (b["sport"], b["market"])
         if ck not in closes_cache:
-            closes_cache[ck] = hist_db.closing_odds_by_date(hist_conn, *ck)
+            with _grade_part(parts, "closes"):
+                closes_cache[ck] = hist_db.closing_odds_by_date(hist_conn, *ck)
         # `row` is this player's stat line, so its team names the fixture
         # and narrows an NFL week to the one day he played.
         _team = row["team"] if "team" in row.keys() else None
@@ -5897,7 +5936,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         def _snaps():
             # Our own snapshots, read once and only when a close needs them.
             if "_snapshots" not in closes_cache:
-                closes_cache["_snapshots"] = _snapshot_closes(_want)
+                with _grade_part(parts, "snapshot_lines"):
+                    closes_cache["_snapshots"] = _snapshot_closes(_want)
             return closes_cache["_snapshots"]
         close, close_line = _close_line_of(b, _dates, _who, closes_cache[ck], _snaps)
         # The closing PRICE, which is the only thing that moves on a
@@ -5932,7 +5972,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             # our own recorded snapshots, which cost nothing and accrue on
             # every pull that was already paid for.
             if "_snapshot_odds" not in closes_cache:
-                closes_cache["_snapshot_odds"] = _snapshot_close_odds(want=_want)
+                with _grade_part(parts, "snapshot_prices"):
+                    closes_cache["_snapshot_odds"] = _snapshot_close_odds(want=_want)
             _sides = closes_cache["_snapshot_odds"].get(_leg_key(
                 closes_cache["_snapshot_odds"],
                 (_who, b["market"], b["date"],
@@ -5971,7 +6012,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         # book's quote, or the median of them, beside the best price on the
         # screen — which reads as the market moving toward us when nothing
         # moved. The fair close (`close_fair`) stays the market's, as it was.
-        _px = _same_book_close(closes_cache, hist_conn, _open_rows, b, _dates)
+        with _grade_part(parts, "same_book"):
+            _px = _same_book_close(closes_cache, hist_conn, _open_rows, b, _dates)
         if _px is not None:
             close_odds = _px
         _settle_one(conn, b, float(row["value"]), close_line,
@@ -5999,6 +6041,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     # this sweep saw "no stat row" and voided REAL open positions — found
     # 2026-08-18 when the doctor promised to void 104 live desk tickets
     # as scratched lineup players.
+    t_noshow = _time.monotonic()
     NEVER_NOSHOW = GRADED_ELSEWHERE
     day_state: dict = {}
     day_players: dict = {}
@@ -6049,16 +6092,19 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         voided += 1
 
     conn.commit()
+    parts["noshow"] = _time.monotonic() - t_noshow
     # Tag each fresh loss with its measured cause (blowout / short run /
     # variance) while the history rows are at hand — the nightly
     # postmortem narrates these tags instead of guessing at causes.
-    try:
-        from .causes import backfill as _tag_loss_causes
-        _tag_loss_causes(conn, hist_conn)
-    except Exception:                              # noqa: BLE001
-        pass                 # a tagging hiccup must never block settling
+    with _grade_part(parts, "causes"):
+        try:
+            from .causes import backfill as _tag_loss_causes
+            _tag_loss_causes(conn, hist_conn)
+        except Exception:                              # noqa: BLE001
+            pass                 # a tagging hiccup must never block settling
     if closes_cache.get("_line_opens") is not None:
         closes_cache["_line_opens"].close()
+    parts["total"] = _time.monotonic() - t_call
     return settled + voided
 
 

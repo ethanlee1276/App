@@ -1491,6 +1491,9 @@ def settle_open(log=print, state_path: Path | None = None,
         with ledger.name_index():
             settled = ledger.settle_from_history(lconn, hconn)
         lap("grade")
+        # And where inside the grade (ledger.take_grade_parts): the closes,
+        # the snapshot file's streams, the no-show sweep, the rest.
+        phases["grade_parts"] = ledger.take_grade_parts()
         # FIRST TOUCHDOWN (2026-10-31): no stat row says who scored first, so
         # these grade off the play-by-play's first scorer (engine/firsttd).
         # ESPN's scoring plays first, the night of the game (2026-11-01: a

@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LH. The grading step says which of its parts took the time** (step 438;
+7 November). LG's changes leave grading as the one step of the settle pass
+whose cost is still a single number: 366 seconds of a 735-second pass that
+afternoon, before LG landed. The heartbeat's `chores.settle.phases` now
+splits it. `grade` is the stat-row grading alone, beside `first_td`,
+`first_basket` and `voids_ufc`, and `grade_parts` says where inside the
+grading the seconds went: the purchased closes (`closes`, one read of the
+odds file per sport and market graded), the three streams of our own
+line-snapshot file (`snapshot_lines`, `snapshot_prices`, `same_book`), the
+game lines' closes (`game_close`), the no-show sweep (`noshow`) and the loss
+tags (`causes`), with how many bets were open (`open`) and the whole
+(`total`); what the named parts leave is finding each bet's stat row. No
+grade changes and nothing to run: it is how the next speed-up gets chosen by
+measurement instead of by guess.
+
 **LG. The settle pass's other three heavy steps** (step 438; 7 November).
 The first pass that published its phases (15:13 that Saturday, the startup
 pass) spent 1,119 seconds: grading 419, learning 286 (hourly now, LF),
