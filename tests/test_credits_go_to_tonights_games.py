@@ -16,6 +16,12 @@ One rule each:
   * a league playing tonight is metered at tonight's games;
   * a paid pull on a board that holds the week (the NFL's, college's) buys
     tonight's games and reads the rest from the cache;
+  * THE DAY BEFORE (Ethan, 2026-11-07, a Saturday: "we need to be show
+    picks a day before games"): those two boards also buy TOMORROW's slate,
+    so Sunday's NFL picks are up on Saturday; with nothing tonight a
+    day-before slate brings its own DAY_BEFORE_PULLS pulls, capped at
+    DAY_BEFORE_SHARE_CAP of the day; two days ahead is still nothing, and the
+    daily boards keep tonight alone;
   * the month's plan funds tonight's games first and its report says who
     plays (engine/oddsplan; the plan's own tests are tests/test_the_odds_plan.py).
 
@@ -92,8 +98,16 @@ def _board(games: list) -> str:
 
 
 def _ask(path: str, sport: str = "nfl", **kw):
-    """`launch._odds_affordable` with the pacer and the ledger stubbed:
-    (verdict, the pacer's calls, the decisions written)."""
+    """`launch._odds_affordable` with the pacer and the ledger stubbed and a
+    quarter of the day's budget: (verdict, the pacer's calls, the decisions
+    written)."""
+    import launch
+    with _Swap(launch, "_budget_share", lambda sport=None: 0.25):
+        return _ask_raw(path, sport, **kw)
+
+
+def _ask_raw(path: str, sport: str = "nfl", **kw):
+    """`_ask` without its budget share: the caller sets one."""
     import launch
     asked, written = [], []
 
@@ -105,22 +119,91 @@ def _ask(path: str, sport: str = "nfl", **kw):
         written.append(dict(extra, lane=lane, ok=ok, reason=reason, credits=credits))
 
     with _Swap(launch, "_with_odds", lambda: True), \
-            _Swap(launch, "_budget_share", lambda sport=None: 0.25), \
             _Swap(ob, "should_refresh", pacer), _Swap(ob, "log_decision", log):
         ok = launch._odds_affordable(path, True, sport=sport, **kw)
     return ok, asked, written
 
 
 def test_a_league_with_no_game_tonight_buys_nothing():
-    far = [{"kickoff": _iso(ob.tonight_ends() + 9 * 3600)}] * 13     # 2 PM tomorrow
-    path = _board(far)
-    for lane in ("nfl", "nfl_lines", "nba", "nba_lines", "cfb_lines"):
-        ok, asked, written = _ask(path, lane)
+    tomorrow = [{"kickoff": _iso(ob.tonight_ends() + 9 * 3600)}] * 13     # 2 PM tomorrow
+    later = [{"kickoff": _iso(ob.tonight_ends() + 33 * 3600)}] * 13       # 2 PM the day after
+    cases = [(tomorrow, lane) for lane in ("nba", "nba_lines")]           # a daily board: tonight only
+    cases += [(later, lane) for lane in ("nfl", "nfl_lines", "cfb_lines")]  # two days ahead: nothing
+    for games, lane in cases:
+        ok, asked, written = _ask(_board(games), lane)
         assert ok is False and not asked, (lane, "the pacer was never asked")
         league = ob.budget_sport(lane).upper()
         assert written and written[0]["ok"] is False and written[0]["tonight"] == 0, written
         assert written[0]["reason"] == (f"no {league} game tonight — credits go to the leagues "
                                         f"playing tonight"), written
+
+
+def test_the_nfl_and_college_buy_tomorrows_slate_the_day_before():
+    """Ethan, Saturday 7 November: "its saturday and we are not showing any
+    nfl picks for sunday ... we need to be show picks a day before games"."""
+    import launch
+    tomorrow = [{"kickoff": _iso(ob.tonight_ends() + 8 * 3600)}] * 13     # 1 PM tomorrow
+    per = ob.credits_per_event("nfl")
+    with _Swap(ob, "daily_allowance", lambda state=None, today=None, **k: 10_000), \
+            _Swap(ob, "load", lambda path=None: object()), \
+            _Swap(launch, "_budget_share", lambda sport=None: 0.0):
+        ok, asked, written = _ask_raw(_board(tomorrow), "nfl")
+    assert ok is True and len(asked) == 1, "a day-before slate goes to the pacer"
+    assert asked[0]["credits"] == (13 + 1) * per, ("metered at tomorrow's games", asked)
+    want = min(ob.DAY_BEFORE_SHARE_CAP, ob.DAY_BEFORE_PULLS * (13 + 1) * per / 10_000)
+    assert abs(asked[0]["share"] - want) < 1e-9, ("its own pulls, not the plan's nothing", asked)
+    assert written[0]["tonight"] == 0 and written[0]["tomorrow"] == 13, written
+    # Capped: a slate whose pulls would take more than the cap gets the cap.
+    with _Swap(ob, "daily_allowance", lambda state=None, today=None, **k: 500), \
+            _Swap(ob, "load", lambda path=None: object()), \
+            _Swap(launch, "_budget_share", lambda sport=None: 0.0):
+        ok, asked, _w = _ask_raw(_board(tomorrow), "cfb_lines", credits=3)
+    assert ok is True and asked[0]["share"] == min(ob.DAY_BEFORE_SHARE_CAP, 2 * 3 / 500)
+    # Playing tonight too: tonight's games and tomorrow's, at the plan's share.
+    both = [{"kickoff": _iso(ob.tonight_ends() - 3600)}] + tomorrow
+    ok, asked, written = _ask(_board(both), "nfl")
+    assert ok is True and asked[0]["credits"] == (1 + 13 + 1) * per and asked[0]["share"] == 0.25
+    assert written[0]["tonight"] == 1 and written[0]["tomorrow"] == 13
+    # A daily board, with games tonight and tomorrow, buys tonight's alone.
+    ok, asked, written = _ask(_board(both), "nba")
+    assert ok is True and asked[0]["credits"] == (1 + 1) * ob.credits_per_event("nba")
+    assert written[0].get("tomorrow") is None, "a daily board counts no tomorrow"
+
+
+def test_a_day_before_pull_is_never_narrowed_to_six_hours():
+    """A Saturday's six hours ahead hold none of Sunday's slate, and the
+    plan's share the narrowing is judged on is the nothing it owes a league
+    with no game today: a narrowed pull (`--active-odds`) bought nothing."""
+    import launch
+    tomorrow = [{"kickoff": _iso(ob.tonight_ends() + 8 * 3600)}] * 13     # 1 PM tomorrow
+    both = [{"kickoff": _iso(ob.tonight_ends() - 3600)}] + tomorrow
+    with _Swap(ob, "wide_pull_affordable", lambda *a, **k: False):
+        assert launch._narrow_pull(_board(tomorrow), "nfl") is False, "tomorrow's slate is bought"
+        assert launch._narrow_pull(_board(both), "nfl") is True, "playing tonight: as before"
+        assert launch._narrow_pull(_board(tomorrow), "mlb") is True, "a daily league: as before"
+    assert launch._day_before_pull(_board(tomorrow), "nfl_lines") is True
+    assert launch._day_before_pull(_board(both), "nfl") is False
+    assert launch._day_before_pull(_board([]), "nfl") is False
+    assert launch._day_before_pull(_board([{"kickoff": "TBD"}]), "nfl") is False
+    src = _fn(LAUNCH, "_narrow_pull")
+    assert src.index("_day_before_pull(") < src.index("wide_pull_affordable(_games")
+
+
+def test_the_day_before_window_is_tomorrows_slate():
+    sat_6pm = _at(2026, 11, 7, 18)
+    sun_1pm, sun_820pm, mon_815pm = _at(2026, 11, 8, 13), _at(2026, 11, 8, 20, 20), _at(2026, 11, 9, 20, 15)
+    kicks = [sun_1pm, sun_820pm, mon_815pm]
+    assert ob.tonight_games(kicks, sat_6pm) == 0 and ob.tomorrow_games(kicks, sat_6pm) == 2
+    assert ob.tomorrow_games(kicks, _at(2026, 11, 8, 2)) == 2, "2 AM Sunday is still Saturday night"
+    assert ob.tomorrow_games(kicks, _at(2026, 11, 8, 9)) == 1, "on Sunday, Monday's game is tomorrow's"
+    assert ob.tomorrow_games([], sat_6pm) is None
+    assert ob.pick_window_ends(sat_6pm) == _at(2026, 11, 9, 5)
+    assert ob.pick_window_ends(_at(2026, 11, 8, 2)) == _at(2026, 11, 9, 5)
+    # Across the clock change (1 November 2026): still 5 AM Eastern.
+    assert ob.pick_window_ends(_at(2026, 10, 31, 12)) == _at(2026, 11, 2, 5)
+    assert dt.datetime.fromtimestamp(ob.pick_window_ends(_at(2026, 10, 31, 12)), ET).hour == 5
+    assert set(ob.DAY_BEFORE_LEAGUES) == {"nfl", "cfb"}
+    assert 0 < ob.DAY_BEFORE_SHARE_CAP <= 0.5 and ob.DAY_BEFORE_PULLS >= 1
 
 
 def test_a_league_playing_tonight_is_metered_at_tonights_games():
@@ -147,8 +230,8 @@ def test_a_league_playing_tonight_is_metered_at_tonights_games():
 
 def test_the_gate_stands_before_the_pacer_and_every_paid_lane_passes_it():
     gate = _fn(LAUNCH, "_odds_affordable")
-    assert gate.index("if tonight == 0:") < gate.index("should_refresh(")
-    assert "tonight=tonight)" in gate, "every decision records tonight's count"
+    assert gate.index("if tonight == 0 and not ahead:") < gate.index("should_refresh(")
+    assert "tonight=tonight, tomorrow=" in gate, "every decision records tonight's count"
     for fn in ("refresh_nfl", "refresh_cfb", "refresh_mlb", "refresh_nba", "refresh_nhl",
                "refresh_wnba", "refresh_ufc"):
         body = _fn(LAUNCH, fn)
@@ -236,14 +319,17 @@ def test_college_puts_tonights_games_first_and_buys_only_them():
 def test_the_launcher_hands_tonights_end_to_the_weekly_builds():
     nfl, cfb = _fn(LAUNCH, "refresh_nfl"), _fn(LAUNCH, "refresh_cfb")
     paid = nfl[nfl.index('args.append("--odds")'):]
-    assert paid.index("args += _tonight_args()") < paid.index("elif _with_odds():"), \
-        "the NFL's paid pull carries tonight's bound"
-    assert '"--out", CFB_OUT] + _tonight_args()' in cfb, "college's every build: tonight first"
-    assert "_tonight_until(now)" in _fn(LAUNCH, "_cfb_player_pull_possible")
-    assert "_tonight_until(now)" in _fn(LAUNCH, "_cfb_player_events_affordable")
+    assert paid.index('args += _tonight_args("nfl")') < paid.index("elif _with_odds():"), \
+        "the NFL's paid pull carries its bound (tonight's and tomorrow's)"
+    assert '"--out", CFB_OUT] + _tonight_args("cfb")' in cfb, "college's every build: tonight first"
+    assert '_pick_until("cfb", now)' in _fn(LAUNCH, "_cfb_player_pull_possible")
+    assert '_pick_until("cfb", now)' in _fn(LAUNCH, "_cfb_player_events_affordable")
     import launch
     until = launch._tonight_until()
-    assert launch._tonight_args() == ["--price-until", str(int(until))]
+    assert launch._tonight_args() == ["--price-until", str(int(until))], "no league: tonight's"
+    assert launch._tonight_args("nba") == ["--price-until", str(int(until))]
+    for lg in ("nfl", "cfb", "nfl_lines"):
+        assert launch._tonight_args(lg) == ["--price-until", str(int(ob.pick_window_ends()))], lg
     for build in ("nfl_build.py", "cfb_build.py"):
         src = (ROOT / build).read_text(encoding="utf-8")
         assert 'ap.add_argument("--price-until", type=float' in src, build

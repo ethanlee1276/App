@@ -9338,6 +9338,54 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LL. Sunday's NFL picks on Saturday: the day before** (step 440; 7
+November). You, that Saturday evening: "its saturday and we are not showing
+any nfl picks for sunday ... we need to be show picks a day before games."
+The board had the week's fifteen games and no price it would show on
+fourteen of them: every prop "no real book price", the game lines 37 hours
+old. The cause was the tonight rule (IP, 30 October): a league bought prices
+only on a night it played, so on a Saturday the NFL bought nothing, and
+Sunday's picks could not post until Sunday's first pull. A second rule
+finished the job: an allowed background pull, for a league whose share of
+the day was small, priced only the next six hours, and on a Saturday those
+hold none of Sunday's games.
+
+Now the NFL's and college's boards (their books post lines days ahead)
+also buy tomorrow's slate, the day before: Saturday prices Sunday's games
+and Sunday night's, Sunday prices Monday night's, Wednesday Thursday
+night's, Friday college's Saturday. Tonight's games still come first (the
+month's plan funds tonight's leagues as before); a day with nothing tonight
+lets tomorrow's slate bring its own two pulls, never more than a quarter of
+the day's credits; two days ahead is still nothing, and a day-before pull
+is never narrowed to six hours. The daily leagues (NBA, NHL) keep tonight
+alone: their props post on the day. Read-only, any time after it lands: the
+pacer's decisions that counted tomorrow's games over the last 18 hours, and
+the NFL board's priced games and picks:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+import time
+from collections import Counter
+from engine import oddsbudget as ob
+rows = [r for r in ob.decisions(since=time.time() - 18 * 3600) if r.get('tomorrow')]
+print('asked with games tomorrow (last 18h):', dict(Counter((r.get('lane'), 'ok' if r.get('ok') else 'held') for r in rows)) or 'none yet')
+for r in rows[-8:]: print(' ', r.get('iso'), r.get('lane'), 'ok' if r.get('ok') else 'held', 'tonight', r.get('tonight'), 'tomorrow', r.get('tomorrow'), str(r.get('reason', ''))[:90])
+"
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+b = json.load(open('data/recommendations.json'))
+g, lk, gc = b.get('games') or [], b.get('locked') or {}, b.get('gate_census') or {}
+n = lambda k: len(b.get(k) or []) or lk.get(k, 0)
+print('NFL games', len(g), '| prices shown:', sum(1 for x in g if not x.get('price_stale')), '| props with no real price:', gc.get('no_real_price'), '| Edge picks', gc.get('recommended'), '| Most Likely', n('most_likely'))
+"
+```
+
+The checks in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh LL 2>&1 | tee /tmp/ll.txt
+```
+
 **LK. The Record page's information test, the same numbers in a fifth of
 the time** (step 438; 7 November). Writing the record (every ten minutes on
 a game day since LG) took 192 seconds at 16:20 that Saturday. Profiled here

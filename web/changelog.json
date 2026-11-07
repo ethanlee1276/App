@@ -1,6 +1,7 @@
 {
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
+    {"date": "2026-11-07", "kind": "fix", "title": "NFL and college picks post the day before the games", "body": "Saturday's NFL board showed Sunday's games without prices, so no Sunday picks: prices were bought only on a night a league played. The NFL's and college's boards now buy tomorrow's games the day before, so Sunday's picks are up on Saturday, Monday night's on Sunday, Thursday night's on Wednesday and college's Saturday on Friday. Tonight's games still come first. The NBA and NHL boards stay on the day: their books post player lines that day."},
     {
       "date": "2026-11-07",
       "kind": "fix",

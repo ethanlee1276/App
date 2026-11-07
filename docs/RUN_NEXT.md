@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07 (evening), after the Record page's information
+Last updated 2026-11-07 (evening), after Sunday's NFL picks started
+posting on Saturday (the NFL's and college's boards buy tomorrow's slate
+the day before; step LL: one read-only check in the run below), after the
+Record page's information
 test started giving the same numbers in a fifth of the time (step LK:
 nothing to run), after every open bet's own lookups
 stopped rereading the day (step LJ: nothing to run), after the grading
@@ -206,7 +209,7 @@ Everything below that only reads, in one go (a few minutes; it writes
 nothing). Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP LL KP 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (about an hour together; still
@@ -219,6 +222,12 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long
 
 **Your 7 November catch-up, and what changed for it:**
 
+- **Sunday's NFL picks on Saturday (step LL):** the tonight rule bought a
+  league's prices only on a night it played, so Saturday's NFL board showed
+  no price on Sunday's games and no picks. The NFL's and college's boards
+  now buy tomorrow's slate the day before (tonight's games still first; with
+  nothing tonight, two pulls and at most a quarter of the day). LL, in the
+  run above, shows the pulls and the board's priced games.
 - **The close lines (item 1p): all written, nothing left.** Your NFL write
   changed nothing: 7,486 already right is the evening dry run's 7,075
   plus its 407 rewrites and 4 copies, so the writes had gone in that

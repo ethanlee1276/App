@@ -792,8 +792,9 @@ def _cfb_player_pull_possible(kickoffs: list, now: float | None = None) -> bool:
         from cfb_build import PLAYER_WINDOW_HOURS as hours
     except Exception:                                    # noqa: BLE001
         hours = 36
-    # …and before tonight's slate ends: a later game is read, not bought.
-    until = min(now + hours * 3600, _tonight_until(now) or float("inf"))
+    # …and before tomorrow's slate ends (the day before, `_pick_until`):
+    # a later game is read, not bought.
+    until = min(now + hours * 3600, _pick_until("cfb", now) or float("inf"))
     return any(isinstance(k, (int, float)) and now < k <= until
                for k in kickoffs or [])
 
@@ -808,7 +809,7 @@ def _cfb_player_events_affordable(kickoffs: list, now: float | None = None) -> b
         from cfb_build import PLAYER_WINDOW_HOURS as hours, player_event_cap
     except Exception:                                    # noqa: BLE001
         return True
-    until = min(now + hours * 3600, _tonight_until(now) or float("inf"))
+    until = min(now + hours * 3600, _pick_until("cfb", now) or float("inf"))
     kicks = [k for k in kickoffs or []
              if isinstance(k, (int, float)) and now < k <= until]
     return player_event_cap(kicks, now) >= 1
@@ -824,11 +825,26 @@ def _tonight_until(now: float | None = None) -> float | None:
         return None
 
 
-def _tonight_args() -> list:
+def _pick_until(sport: str | None = None, now: float | None = None) -> float | None:
+    """Where a league's paid pull stops pricing: the end of tonight's slate,
+    or for a league priced the day before (`oddsbudget.DAY_BEFORE_LEAGUES`,
+    the NFL and college) the end of tomorrow's. None when the clock cannot
+    say."""
+    try:
+        from engine.oddsbudget import DAY_BEFORE_LEAGUES, budget_sport, pick_window_ends
+        if sport and budget_sport(sport) in DAY_BEFORE_LEAGUES:
+            return pick_window_ends(now)
+    except Exception:                                        # noqa: BLE001
+        pass
+    return _tonight_until(now)
+
+
+def _tonight_args(sport: str | None = None) -> list:
     """``--price-until`` for a build whose board holds the week (the NFL's,
-    college's): a paid pull buys tonight's games and reads the rest from
+    college's): a paid pull buys tonight's games, and tomorrow's for a
+    league priced the day before (`_pick_until`), and reads the rest from
     the cache (`_odds_affordable`'s tonight rule)."""
-    until = _tonight_until()
+    until = _pick_until(sport)
     return ["--price-until", str(int(until))] if until else []
 
 
@@ -874,14 +890,38 @@ def _narrow_pull(out_path: str, sport: str | None = None) -> bool:
 
     Fails to the OLD behaviour if the budget cannot be read: narrowing
     spends less, and a broken import must not be a way to overspend.
+
+    NEVER ON A DAY-BEFORE PULL (`_day_before_pull`): with no game tonight,
+    the six hours ahead hold none of tomorrow's slate, so a narrowed pull
+    buys nothing at all — and the plan's share it is judged on is the
+    nothing the plan owes a league with no game today. `_odds_affordable`
+    sized that pull to tomorrow's games already.
     """
     try:
         from engine.oddsbudget import wide_pull_affordable, credits_per_event
+        if _day_before_pull(out_path, sport):
+            return False
         return not wide_pull_affordable(_games_on_slate(out_path) + 1,
                                         share=_budget_share(sport),
                                         per_event=credits_per_event(sport))
     except Exception:                                        # noqa: BLE001
         return True
+
+
+def _day_before_pull(out_path: str, sport: str | None = None,
+                     now: float | None = None) -> bool:
+    """Is this league's paid pull a day-before one — a league priced the day
+    before (`oddsbudget.DAY_BEFORE_LEAGUES`), no game on tonight's slate and
+    some on tomorrow's? False when the board's times cannot be read."""
+    try:
+        from engine.oddsbudget import (DAY_BEFORE_LEAGUES, budget_sport,
+                                       tomorrow_games, tonight_games)
+        if budget_sport(sport) not in DAY_BEFORE_LEAGUES:
+            return False
+        kicks = _slate_kickoffs(out_path)
+        return tonight_games(kicks, now) == 0 and bool(tomorrow_games(kicks, now))
+    except Exception:                                        # noqa: BLE001
+        return False
 
 
 #: `_odds_affordable`'s "count tonight's games off the board" (UFC's board
@@ -932,15 +972,29 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
     # know their real credit price say it directly (oddsbudget.
     # refresh_credits).
     kicks = _slate_kickoffs(out_path)
+    from_board = tonight is _FROM_BOARD
     try:
         from engine.oddsbudget import tonight_games
-        tonight = tonight_games(kicks) if tonight is _FROM_BOARD else tonight
+        tonight = tonight_games(kicks) if from_board else tonight
     except Exception:                                        # noqa: BLE001
         tonight = None
-    # What a per-game pull buys: tonight's games (a board that holds the
-    # week buys tonight's and reads the rest, `_tonight_args`), or every
-    # game on the board when tonight cannot be counted.
-    priced = tonight if tonight else _games_on_slate(out_path)
+    # THE DAY BEFORE (oddsbudget.DAY_BEFORE_LEAGUES; Ethan, 2026-11-07: "we
+    # need to be show picks a day before games"): the NFL's and college's
+    # boards also buy TOMORROW's slate. Counted off the board only — a
+    # caller's own count (UFC's card) is tonight's alone.
+    ahead = 0
+    try:
+        from engine.oddsbudget import DAY_BEFORE_LEAGUES, budget_sport, tomorrow_games
+        if from_board and tonight is not None and budget_sport(sport) in DAY_BEFORE_LEAGUES:
+            ahead = tomorrow_games(kicks) or 0
+    except Exception:                                        # noqa: BLE001
+        ahead = 0
+    # What a per-game pull buys: tonight's games, and tomorrow's for a
+    # day-before league (a board that holds the week buys those and reads
+    # the rest, `_tonight_args`), or every game on the board when tonight
+    # cannot be counted.
+    window = (tonight or 0) + ahead
+    priced = window if window else _games_on_slate(out_path)
     # THE PRICE IS STATED IN CREDITS FOR EVERY LEAGUE NOW. The pacer's
     # generic per-event price is eight; the NFL's twelve-market call is
     # not (engine/oddsbudget.credits_per_event), and a caller that lets
@@ -948,7 +1002,7 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
     if credits is None and cost is None:
         from engine.oddsbudget import credits_per_event
         credits = (priced + 1) * credits_per_event(sport)
-    if tonight == 0:
+    if tonight == 0 and not ahead:
         from engine.oddsbudget import budget_sport
         league = (budget_sport(sport) or "this league").upper()
         reason = (f"no {league} game tonight — credits go to the leagues "
@@ -963,9 +1017,25 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
         except Exception:                                    # noqa: BLE001
             pass
         return False
+    share = _budget_share(sport)
+    if tonight == 0 and ahead:
+        # A day-before slate, with nothing tonight: the month's plan owes
+        # this league nothing today (it funds tonight's leagues), so the
+        # slate brings its own DAY_BEFORE_PULLS pulls, never more than
+        # DAY_BEFORE_SHARE_CAP of the day's allowance.
+        try:
+            from engine.oddsbudget import (DAY_BEFORE_PULLS, DAY_BEFORE_SHARE_CAP,
+                                           daily_allowance, load, refresh_credits)
+            allowance = daily_allowance(load())
+            need = DAY_BEFORE_PULLS * refresh_credits(
+                cost if cost is not None else priced + 1, credits)
+            if allowance > 0:
+                share = max(share, min(DAY_BEFORE_SHARE_CAP, need / allowance))
+        except Exception:                                    # noqa: BLE001
+            pass
     ok, reason = should_refresh(cost if cost is not None else priced + 1,
                                 kickoffs=kicks,
-                                sport=sport, share=_budget_share(sport),
+                                sport=sport, share=share,
                                 credits=credits, prices_stale=prices_stale)
     if not quiet:
         print(f"       {reason}")
@@ -976,8 +1046,8 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
         log_decision(sport, ok, reason,
                      credits=credits if credits is not None else None,
                      cost_events=cost, games=_games_on_slate(out_path),
-                     kickoffs=len(kicks), share=round(_budget_share(sport), 3),
-                     tonight=tonight)
+                     kickoffs=len(kicks), share=round(share, 3),
+                     tonight=tonight, tomorrow=ahead or None)
     except Exception:                                        # noqa: BLE001
         pass
     # NOTE: the refresh clock is NOT stamped here. Authorization is not a
@@ -1294,7 +1364,7 @@ def refresh_nfl(quiet: bool = False) -> bool:
     lines_before = ""
     if spend:
         args.append("--odds")
-        args += _tonight_args()        # tonight's games bought, the week's read
+        args += _tonight_args("nfl")   # tonight's and tomorrow's bought, the week's read
         if quiet and _narrow_pull(out, "nfl"):
             args.append("--active-odds")
     elif _with_odds():
@@ -1645,7 +1715,7 @@ def refresh_cfb(quiet: bool = False) -> bool:
     """
     # Tonight's games first on every build, so a cached one reads the
     # games the paid one bought (`_tonight_args`).
-    args = ["cfb_build.py", _slate_date(), "--out", CFB_OUT] + _tonight_args()
+    args = ["cfb_build.py", _slate_date(), "--out", CFB_OUT] + _tonight_args("cfb")
     # IN CREDITS, NOT IN EVENTS. `should_refresh`'s first parameter is an
     # event count it multiplies by CREDITS_PER_EVENT, so passing 63 through
     # it authorised college against 504 — eight times its real price, on a

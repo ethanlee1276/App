@@ -145,13 +145,14 @@ def test_a_full_college_pull_is_only_offered_inside_the_player_window():
     # The rule itself, run: a Saturday slate seen on Tuesday is outside
     # the window; the same slate on Friday afternoon is inside; a game
     # already kicked off does not count; garbage kickoffs do not crash it.
-    assert "_tonight_until(now)" in gate, "and only tonight's games (the tonight rule)"
+    assert '_pick_until("cfb", now)' in gate, \
+        "and only tonight's and tomorrow's games (the tonight rule, the day before)"
     ns: dict = {}
     # The module's own lazy annotations come with the functions lifted out
     # of it: on Python 3.9 `float | None` is evaluated at definition time
     # without them, and the lifted copy raised TypeError before it ran.
     exec("from __future__ import annotations\nimport time\n"            # noqa: S102
-         + _fn(LAUNCH, "_tonight_until") + gate, ns)
+         + _fn(LAUNCH, "_tonight_until") + _fn(LAUNCH, "_pick_until") + gate, ns)
     fn = ns["_cfb_player_pull_possible"]
     now = 1_800_000_000.0
     sat = now + 4 * 86400
@@ -160,16 +161,21 @@ def test_a_full_college_pull_is_only_offered_inside_the_player_window():
     assert fn([sat], now=sat + 60) is False
     assert fn([None, "x", sat], now=sat - 3600) is True
     assert fn([], now=now) is False
-    # Ethan, 2026-10-30: "pulling credits just for those sports" — inside
-    # the 36-hour window but on tomorrow's slate is not tonight's game.
+    # Ethan, 2026-10-30: "pulling credits just for those sports"; and
+    # 2026-11-07: "we need to be show picks a day before games" — inside
+    # the 36-hour window, tonight's slate and tomorrow's are bought (the
+    # day before); the day after tomorrow's is not.
     import datetime as _d
     from zoneinfo import ZoneInfo
     et = ZoneInfo("America/New_York")
+    thu_3pm = _d.datetime(2026, 11, 5, 15, tzinfo=et).timestamp()
     fri_3pm = _d.datetime(2026, 11, 6, 15, tzinfo=et).timestamp()
     fri_7pm = _d.datetime(2026, 11, 6, 19, tzinfo=et).timestamp()
     sat_noon = _d.datetime(2026, 11, 7, 12, tzinfo=et).timestamp()
-    assert fn([sat_noon], now=fri_3pm) is False, "Saturday's game is bought on Saturday"
+    assert fn([sat_noon], now=fri_3pm) is True, "Saturday's game is bought on Friday, the day before"
     assert fn([fri_7pm, sat_noon], now=fri_3pm) is True
+    sat_11pm = _d.datetime(2026, 11, 7, 23, tzinfo=et).timestamp()
+    assert fn([sat_11pm], now=thu_3pm) is False, "two days ahead: not yet"
 
 
 def test_a_full_college_pull_is_only_offered_when_the_build_would_buy_a_game():

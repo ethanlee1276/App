@@ -1164,6 +1164,48 @@ def tonight_ends(now: float | None = None) -> float:
     return roll.timestamp()
 
 
+#: THE DAY BEFORE. Ethan, 2026-11-07, a Saturday: "its saturday and we are
+#: not showing any nfl picks for sunday ... we need to be show picks a day
+#: before games". The tonight rule above bought a league's prices only on a
+#: night it played, so all of Saturday the NFL board carried Thursday's
+#: prices for Sunday and posted nothing until Sunday morning. The two weekly
+#: boards, whose books post their lines days ahead, now also price TOMORROW's
+#: slate. Tonight's games still come first: the month's plan funds tonight's
+#: leagues as before, and a day-before slate draws its own DAY_BEFORE_PULLS
+#: pulls, never more than DAY_BEFORE_SHARE_CAP of the day (`launch.
+#: _odds_affordable`). Two days ahead is still nothing: the Friday that
+#: priced Sunday (30 October, 661 credits) stays dark. The daily boards keep
+#: tonight alone; their props post on the day.
+DAY_BEFORE_LEAGUES = ("nfl", "cfb")
+DAY_BEFORE_PULLS = 2
+DAY_BEFORE_SHARE_CAP = 0.25
+
+
+def tomorrow_games(kickoffs, now: float | None = None) -> int | None:
+    """How many of ``kickoffs`` (epochs) are on TOMORROW's slate (the slate
+    after tonight's, by the same 5 AM Eastern roll). None when not one
+    kickoff time is known, as `tonight_games`."""
+    known = [k for k in (kickoffs or [])
+             if isinstance(k, (int, float)) and not isinstance(k, bool)]
+    if not known:
+        return None
+    day = _dt.date.fromisoformat(slate_day(time.time() if now is None else now))
+    nxt = (day + _dt.timedelta(days=1)).isoformat()
+    return sum(1 for k in known if slate_day(k) == nxt)
+
+
+def pick_window_ends(now: float | None = None) -> float:
+    """The end of tomorrow's slate: `tonight_ends` a day later, on the wall
+    clock (5 AM Eastern the morning after tomorrow, across a clock change
+    too). A paid pull on a day-before board prices the games before it."""
+    from .slateday import ROLL_HOUR
+    t = _local(time.time() if now is None else now)
+    roll = t.replace(hour=ROLL_HOUR, minute=0, second=0, microsecond=0)
+    if t >= roll:
+        roll = roll + _dt.timedelta(days=1)
+    return (roll + _dt.timedelta(days=1)).timestamp()
+
+
 def touchpoint_due(state: "BudgetState", sport: str | None, now: float):
     """The touchpoint this sport still owes, or None.
 

@@ -855,6 +855,23 @@ print('held, no game tonight (last 18h):', dict(held) or 'none yet')
 print('allowed to buy (last 18h):', dict(Counter(r.get('lane') for r in rows if r.get('ok'))) or 'none')
 "
 SH
+run LL "Picks a day before: the NFL's and college's boards buy tomorrow's slate" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "
+import time
+from collections import Counter
+from engine import oddsbudget as ob
+rows = [r for r in ob.decisions(since=time.time() - 18 * 3600) if r.get('tomorrow')]
+print('asked with games tomorrow (last 18h):', dict(Counter((r.get('lane'), 'ok' if r.get('ok') else 'held') for r in rows)) or 'none yet')
+for r in rows[-8:]: print(' ', r.get('iso'), r.get('lane'), 'ok' if r.get('ok') else 'held', 'tonight', r.get('tonight'), 'tomorrow', r.get('tomorrow'), str(r.get('reason', ''))[:90])
+"
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+b = json.load(open('data/recommendations.json'))
+g, lk, gc = b.get('games') or [], b.get('locked') or {}, b.get('gate_census') or {}
+n = lambda k: len(b.get(k) or []) or lk.get(k, 0)
+print('NFL games', len(g), '| prices shown:', sum(1 for x in g if not x.get('price_stale')), '| props with no real price:', gc.get('no_real_price'), '| Edge picks', gc.get('recommended'), '| Most Likely', n('most_likely'))
+"
+SH
 run IO "A finished game is ESPN's page; the chat bar at the foot" 30 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -cF '${lv.state === "final" ? "" : `<div class="card pbp-parkcard">'
 curl -s https://qellysbook.com/js/hoopscast.js | grep -cF 'const viewFor = (d) => (S.view === "live"'
