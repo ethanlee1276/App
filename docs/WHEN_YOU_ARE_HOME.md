@@ -9338,6 +9338,31 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LE. The weather desk fits its own spread** (step 437; 7 November). Your
+6 November JR said the day was not the whole story: the calls on the right
+day lost too, so the desk's spread (2°F for the same day, 3°F a day ahead)
+was too sure. It is now fitted from the desk's own record, nothing bought:
+every forecast it logged (each a forecast of its own day, so even the
+day-late ones count) beside the bracket Kalshi settled YES that day, which
+holds the real high. One spread per lead and one warm or cold lean shared by
+all, judged on the newest third of the days against the old numbers, and
+kept only when it beats them there. The service refits once a day and the
+paused desk grades the calls it would make with it, out of sight; nothing
+reaches a member, and the desk stays paused until you say otherwise.
+`QB_WX_FIT=0` in the service's settings turns it off. Read-only (it saves
+nothing), a minute:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.kalshiwxfit
+```
+
+What right looks like: `saved (... days paired; held out from ...: log loss
+... fitted vs ... the priors) — bias +x°F, sigma 0d ...°F, 1d ...°F`, wider
+than the priors, and the line under it: the bracket holding the forecast
+won about 31% of days where the priors gave it about 38% and the fit gives
+it about the same as it won. JR's audit then shows the would-be calls made
+since the fit, as they settle.
+
 **LD. The Lab's NFL replay ends inside its hour** (step 434; 7 November).
 Why the NFL kept waiting: a sport the Lab's hour runs out in goes to the
 back of the next night's line, so one that cannot finish never blocks the

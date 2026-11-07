@@ -190,7 +190,15 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
                 mu = kw.nws_high(meta["lat"], meta["lon"], d)
                 if mu is not None:
                     highs[(series, d)] = mu
-        weather_rows = kw.weather_board(by_series, highs, today=today)
+        # The spread fitted from the desk's own record, refitted once a
+        # day; None (the priors) until a fit beats them held out.
+        fit = None
+        try:
+            from engine import kalshiwxfit
+            fit = kalshiwxfit.refit_if_due(conn, today=today)
+        except Exception as exc:                   # noqa: BLE001
+            print(f"⚠️  weather spread fit skipped: {exc}")
+        weather_rows = kw.weather_board(by_series, highs, today=today, fit=fit)
         kw.log_forecasts(conn, weather_rows)
         if kw.PAUSED:
             # What it would have recommended, graded in the history db

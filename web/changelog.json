@@ -4,6 +4,12 @@
     {
       "date": "2026-11-07",
       "kind": "fix",
+      "title": "The weather desk measures how sure it should be",
+      "body": "The weather desk is still paused. Its forecasts were right about the day but too sure about the degree: it priced every city's high as if the forecast were rarely more than two degrees off. It now measures that from its own record, each forecast it logged beside the bracket that actually won that day, and grades the calls it would make with the measured spread, out of sight, until they win about what they claim."
+    },
+    {
+      "date": "2026-11-07",
+      "kind": "fix",
       "title": "The Lab's football replay fits inside its nightly hour",
       "body": "The Lab's NFL numbers have been dated 29 September because the replay ran past the hour the server gives it and published nothing. It now reads its closing lines once, inside its own half hour, and starts a week only when there is time to finish it, so the NFL section is written before the hour is up."
     },

@@ -82,6 +82,8 @@ FITS = (
      "re-measures the inventions every Thursday; their gates (engine/ideagate) read the verdicts"),
     ("engine.selectionfit", "number", ("engine.betting",), "the selection correction on Edge's claimed edge"),
     ("engine.pmfit", "number", ("engine.predmarket",), "the informed-flow weights on the prediction-market board"),
+    ("engine.kalshiwxfit", "number", ("pm_build", "engine.kalshiweather"),
+     "the weather desk's spread and lean, refitted daily from its own record; prices the paused desk's shadow calls"),
     ("bridgefit", "number", ("engine.carry",), "the usage bridge leans on last season in the volume role"),
     ("rolewindowfit", "number", ("engine.nflusage",), "the usage bridge weights his games by age (ROLE_HALF_LIFE)"),
     ("seasonpriorfit", "number", ("engine.carry",), "his own last season as the form's prior, week 4 on"),

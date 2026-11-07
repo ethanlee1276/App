@@ -10,7 +10,11 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07 (evening), after a league at rest started keeping
+Last updated 2026-11-07 (evening), after the weather desk's spread got its
+fit from the desk's own record (step LE: item 1h, one read-only check, JR2),
+after the Lab's NFL replay started reading its closing lines once and
+inside its own half hour (step LD: item 1f, nothing to run), after a league
+at rest started keeping
 its board six hours instead of rebuilding it every sweep (MLB's empty slate
 took about three minutes of every one; step LC: nothing to run), after the
 refit's four runs in one day
@@ -187,7 +191,7 @@ Everything below that only reads, in one go (a few minutes; it writes
 nothing). Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR KF KG KI KL IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (about an hour together; still
@@ -915,6 +919,23 @@ guess and is far too sure. It stays paused. The next step is to fit the
 spread and any warm or cold lean from its own 3,696 logged forecasts,
 the way the module's notes always meant to; that is a read-only
 measurement first, on your word.
+
+**7 November (evening): the measurement is built (step LE).** Each logged
+forecast beside the bracket that won its day (Kalshi's own results, free),
+one spread per lead and one lean, judged on the newest third of the days
+against the old numbers. Read-only, a minute; it saves nothing:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JR2 2>&1 | tee /tmp/jr2.txt
+```
+
+So the measure for coming back starts now, the service also refits once a
+day and the paused desk grades the calls it would make with the fit, out of
+sight (nothing reaches a member; JR's audit shows those calls as they
+settle). If you would rather it waited for your word, `QB_WX_FIT=0` in the
+service's settings turns that off. **Your call, later:** when JR shows the
+calls made since the fit winning about what they claim over a hundred or
+so, say "un-pause the weather desk"; until then it stays paused.
 
 ## 1h2. Any time after this push: Most Likely learns by market and side (step JV)
 

@@ -166,14 +166,20 @@ def _market_date(m: dict) -> str | None:
 
 
 def weather_board(markets_by_series: dict, highs: dict,
-                  today: str | None = None) -> list[dict]:
+                  today: str | None = None, fit: dict | None = None) -> list[dict]:
     """Price every readable bracket against the forecast. Pure — tested
     offline with fixture markets and fixed forecast numbers.
 
     ``markets_by_series``: {series_ticker: [parsed market rows]} (the
     kalshi source's parse_markets shape). ``highs``: {(series, date): °F}.
+    ``fit``: the spread fitted from the desk's own record
+    (engine/kalshiwxfit, saved only when it beats these priors held out):
+    a sigma per lead and one bias added to the forecast. Without it, the
+    priors. The row keeps the raw NWS forecast either way, so the log the
+    next fit reads never holds a corrected number.
     """
     today = today or _dt.date.today().isoformat()
+    bias = float((fit or {}).get("bias_f") or 0.0)
     rows = []
     for series, markets in (markets_by_series or {}).items():
         meta = CITIES.get(series)
@@ -192,7 +198,10 @@ def weather_board(markets_by_series: dict, highs: dict,
             if mu is None or bracket is None:
                 continue
             sigma = SIGMA_BY_LEAD.get(lead, SIGMA_BY_LEAD[MAX_LEAD_DAYS])
-            p = bracket_prob(bracket[0], bracket[1], mu, sigma)
+            fitted = ((fit or {}).get("sigma_by_lead") or {}).get(str(lead))
+            if fitted:
+                sigma = float(fitted)
+            p = bracket_prob(bracket[0], bracket[1], mu + bias, sigma)
             edge_pts = round((p - m["prob"]) * 100, 1)
             # Net of Kalshi's fee (audit 2026-09-30, B7-1), on the side
             # the gap points to; the gross gap stays on the row.
@@ -214,7 +223,7 @@ def weather_board(markets_by_series: dict, highs: dict,
                 "city": meta["city"], "date": date, "lead_days": lead,
                 "title": m.get("title", ""), "subtitle": m.get("subtitle", ""),
                 "bracket": list(bracket), "forecast_f": round(mu, 1),
-                "sigma_f": sigma, "model_p": round(p, 4),
+                "bias_f": bias, "sigma_f": sigma, "model_p": round(p, 4),
                 "prob": m["prob"], "price_basis": m.get("price_basis"),
                 "volume_24h": m.get("volume_24h"),
                 "spread_cents": m.get("spread_cents"),
@@ -345,14 +354,18 @@ def settle_shadow(conn, results: dict) -> int:
     return n
 
 
-def _shadow_report(hconn) -> dict:
+def _shadow_report(hconn, since: str | None = None) -> dict:
+    """The paused desk's would-be picks, graded; ``since`` (ISO date) keeps
+    those made on or after it."""
     import sqlite3
+    cut, args = ("AND made >= ?", (since,)) if since else ("", ())
     try:
         rows = hconn.execute(
             "SELECT side, claimed, result, lead_days FROM kalshi_wx_shadow "
-            "WHERE result IN ('yes','no')").fetchall()
+            f"WHERE result IN ('yes','no') {cut}", args).fetchall()
         waiting = hconn.execute(
-            "SELECT COUNT(*) FROM kalshi_wx_shadow WHERE result IS NULL").fetchone()[0]
+            "SELECT COUNT(*) FROM kalshi_wx_shadow WHERE result IS NULL "
+            f"{cut}", args).fetchone()[0]
     except sqlite3.Error:
         return {"graded": {"n": 0}, "by_lead": {}, "waiting": 0}
     graded = [(c, (s or "").lower() == r) for s, c, r, _l in rows]
@@ -387,7 +400,7 @@ def _date_class(ticker: str, priced: str | None) -> str:
     return "desk a day late" if priced > about else "desk a day early"
 
 
-def audit(hconn, lconn) -> dict:
+def audit(hconn, lconn, fit_path=None) -> dict:
     """Why the paused desk lost, from its own log and journal. Read-only.
 
     Every forecast the desk logged, by how the day it priced compares with
@@ -423,10 +436,21 @@ def audit(hconn, lconn) -> dict:
         except (TypeError, ValueError):
             lead = None
         by_lead.setdefault("?" if lead is None else str(lead), []).append(row)
-    return {"logged": dict(logged), "samples": samples,
-            "bets": {k: _grade(v) for k, v in sorted(by_class.items())},
-            "by_lead": {k: _grade(v) for k, v in sorted(by_lead.items())},
-            "shadow": _shadow_report(hconn)}
+    out = {"logged": dict(logged), "samples": samples,
+           "bets": {k: _grade(v) for k, v in sorted(by_class.items())},
+           "by_lead": {k: _grade(v) for k, v in sorted(by_lead.items())},
+           "shadow": _shadow_report(hconn)}
+    # THE SPREAD FIT (engine/kalshiwxfit, 2026-11-07): its last verdict,
+    # and the would-be picks made since a fit first priced them.
+    from . import kalshiwxfit
+    fitdoc = kalshiwxfit._read(fit_path or kalshiwxfit.FIT_PATH)
+    if fitdoc:
+        out["fit"] = {"line": kalshiwxfit.summary(fitdoc),
+                      "checked": fitdoc.get("checked"),
+                      "first_saved": fitdoc.get("first_saved")}
+        if fitdoc.get("verdict") == "saved" and fitdoc.get("first_saved"):
+            out["shadow_fitted"] = _shadow_report(hconn, since=fitdoc["first_saved"])
+    return out
 
 
 def _audit_lines(rep: dict) -> list[str]:
@@ -450,6 +474,15 @@ def _audit_lines(rep: dict) -> list[str]:
                f"{sh['waiting']:,} waiting on a result):")
     out.append(line("all", sh["graded"]))
     out += [line(f"{k} day(s) ahead", g) for k, g in sh["by_lead"].items()]
+    f = rep.get("fit")
+    out.append("  the spread fit (python3 -m engine.kalshiwxfit for the detail): "
+               + (f"{f['line']}, checked {f.get('checked')}" if f else "not run yet"))
+    sf = rep.get("shadow_fitted")
+    if sf:
+        out.append(f"  the picks it would have made since the fit first priced them"
+                   f" ({f['first_saved']}; {sf['waiting']:,} waiting on a result):")
+        out.append(line("all", sf["graded"]))
+        out += [line(f"{k} day(s) ahead", g) for k, g in sf["by_lead"].items()]
     return out
 
 

@@ -687,6 +687,9 @@ run JR "The weather desk is paused, and why it lost" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/kalshi.json')); print('paused:', d.get('weather_paused')); print('weather rows:', len(d.get('weather') or []))"
 cd /srv/qellys && sudo -u qellys python3 -m engine.kalshiweather --audit
 SH
+run JR2 "The weather desk's spread, fitted from its own record" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.kalshiwxfit
+SH
 run JQ "The models' weekly refit reaches every sport again" 60 <<'SH'
 curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys; print(json.load(sys.stdin).get('weekly', {}).get('deepfit'))"
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/cache/deepfit_state.json')); print(d['round'], 'left:', d['left']); [print(k, v) for k, v in sorted(d['pieces'].items())]"
