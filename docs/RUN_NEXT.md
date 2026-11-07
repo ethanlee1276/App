@@ -229,9 +229,15 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long
   they run at 10 now. The "107 minutes" was the site noticing late (the fix
   before this one).
 - **The Lab (item 1f):** the NFL's numbers are still from 29 September; last
-  night it replayed UFC and MLB. With MLB and the WNBA at rest the NFL is
-  the only sport it owes tonight, now at the same full share. JP2 shows its
-  own log tomorrow.
+  night it replayed UFC and MLB. The NFL had run out of hour on 5 November,
+  before it had a limit of its own, and a sport that runs out goes to the
+  back of the next night's line (step LD). With MLB and the WNBA at rest the
+  NFL is the only sport it owes tonight, now at the same full share, and its
+  replay reads its closing lines once, inside its own half hour, and starts
+  a week only with time left for one. JP2 shows its own log tomorrow.
+- **The weather desk (item 1h, step LE):** its spread is now fitted from its
+  own record, each logged forecast beside the bracket that won its day.
+  JR2, in the run above, prints the fit and saves nothing. Still paused.
 - **Everything else read right:** the credits on pace (15% used, 22% of
   the month gone), all ten books answering, the bill at 0.9 of our
   estimate, the races, the free pick, hockey's crowd prices, the opening
