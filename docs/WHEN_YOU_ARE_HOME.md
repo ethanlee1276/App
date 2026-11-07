@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LK. The Record page's information test, the same numbers in a fifth of
+the time** (step 438; 7 November). Writing the record (every ten minutes on
+a game day since LG) took 192 seconds at 16:20 that Saturday. Profiled here
+on a 20,000-bet journal, 29 of its 38 seconds were one panel: the
+information test ("does the model know anything the price doesn't"),
+four bootstraps of 2,000 resamples each. They share a seed and a size, so
+they always drew the same resamples; they now draw them once, take each draw
+straight from the random stream by the rule `randrange` uses, and score a
+resample from counts on scores sorted once instead of sorting it again.
+Every interval is the old one to the last bit (a test holds the old loops
+beside the new), and the export took 9.9 seconds. Nothing to run; the
+heartbeat's `phases.export` shows it on the box.
+
 **LJ. Every open bet's own lookups, every pass** (step 438; 7 November).
 The pass at 16:20 that Saturday graded nothing and still spent 124 seconds
 grading: whatever else it does, every pass asks, for every open bet, where

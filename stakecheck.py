@@ -204,21 +204,128 @@ def _auc(scores: list[float], labels: list[int]) -> float | None:
     return (rank_sum - pos * (pos + 1) / 2.0) / (pos * neg)
 
 
-def _boot_auc(scores, labels, reps: int = 2000, seed: int = 20260809):
-    """Percentile bootstrap CI for one AUC."""
+#: THE BOOTSTRAPS, EXACTLY AS BEFORE AND A FRACTION OF THE WORK (2026-11-07).
+#: The record page's information test (engine/edgehistory.measure, every
+#: record export) ran four of these: one per score and the paired
+#: difference, 2,000 resamples each, every resample a fresh list of draws
+#: and a fresh sort. Profiled on a 20,000-bet journal it was 29 of the
+#: export's 38 seconds. Three things change and the answers do not:
+#:
+#:   * each resample's draws are `rng.randrange(n)`'s own, taken straight
+#:     from `getrandbits` by the same rejection rule (`_randbelow`), so the
+#:     stream is the one it always was (a test holds it to randrange);
+#:   * the four bootstraps share a seed and a size, so they always drew the
+#:     same resamples: `_boot_info` draws them once and scores all four;
+#:   * a resample's AUC is read off the scores sorted once, with each bet's
+#:     count in the resample (`_auc_counts`). Every rank is a whole or half
+#:     number, so its sums are exact in floating point in any order, and
+#:     the result is the old `_auc` of the expanded resample to the bit.
+def _resamples(n: int, reps: int, seed: int, keep_order: bool = False):
+    """``(counts, draws)`` per bootstrap resample: ``counts[i]`` is how many
+    times bet ``i`` was drawn, by the draws `[rng.randrange(n) for _ in
+    range(n)]` would make, resample after resample, from `Random(seed)`;
+    ``draws`` is that list itself when ``keep_order``, else None."""
     import random
     rng = random.Random(seed)
-    n = len(scores)
-    out = []
+    getrandbits = rng.getrandbits
+    k = n.bit_length()
     for _ in range(reps):
-        idx = [rng.randrange(n) for _ in range(n)]
-        a = _auc([scores[i] for i in idx], [labels[i] for i in idx])
-        if a is not None:
-            out.append(a)
+        counts = [0] * n
+        draws = [] if keep_order else None
+        for _ in range(n):
+            r = getrandbits(k)
+            while r >= n:
+                r = getrandbits(k)
+            counts[r] += 1
+            if draws is not None:
+                draws.append(r)
+        yield counts, draws
+
+
+def _auc_groups(scores) -> list | None:
+    """The bets' indices in score order, grouped by equal score (ties
+    share a midrank), or None when a score is NaN (never equal to itself,
+    so it has no place in a tie group; `_auc` is asked directly then)."""
+    if any(x != x for x in scores):
+        return None
+    order = sorted(range(len(scores)), key=scores.__getitem__)
+    groups, i, n = [], 0, len(order)
+    while i < n:
+        j, v = i, scores[order[i]]
+        while j + 1 < n and scores[order[j + 1]] == v:
+            j += 1
+        groups.append(order[i:j + 1])
+        i = j + 1
+    return groups
+
+
+def _auc_counts(groups, labels, counts, n: int) -> float | None:
+    """`_auc` of the resample with these multiplicities (``n`` draws), off
+    the tie groups `_auc_groups` made once."""
+    before, rank_sum, pos = 0, 0.0, 0
+    for g in groups:
+        m = mp = 0
+        for i in g:
+            c = counts[i]
+            if c:
+                m += c
+                if labels[i]:
+                    mp += c
+        if not m:
+            continue
+        if mp:
+            rank_sum += ((before + before + m - 1) / 2.0 + 1.0) * mp
+            pos += mp
+        before += m
+    neg = n - pos
+    if not pos or not neg:
+        return None                   # all winners or all losers: undefined
+    return (rank_sum - pos * (pos + 1) / 2.0) / (pos * neg)
+
+
+def _resample_auc(scores, groups, labels, counts, draws, n: int) -> float | None:
+    if groups is not None:
+        return _auc_counts(groups, labels, counts, n)
+    # A NaN score: the resample in its drawn order, through `_auc`, as before.
+    return _auc([scores[i] for i in draws], [labels[i] for i in draws])
+
+
+def _percentile_ci(out: list, reps: int):
     if len(out) < reps // 2:
         return None, None
     out.sort()
     return out[int(0.025 * len(out))], out[int(0.975 * len(out))]
+
+
+def _boot_info(score_lists, labels, pairs=(), reps: int = 2000,
+               seed: int = 20260809) -> tuple[list, list]:
+    """``([CI per score list], [CI per (a, b) pair of their AUC difference])``
+    from ONE run of resamples: each CI exactly what `_boot_auc` (or
+    `_boot_auc_diff`) gives alone with the same reps and seed."""
+    n = len(labels)
+    lists = [list(sc)[:n] for sc in score_lists]
+    groups = [_auc_groups(sc) for sc in lists]
+    singles: list = [[] for _ in lists]
+    diffs: list = [[] for _ in pairs]
+    for counts, draws in _resamples(n, reps, seed, keep_order=None in groups):
+        aucs = [_resample_auc(sc, g, labels, counts, draws, n)
+                for sc, g in zip(lists, groups)]
+        for out, a in zip(singles, aucs):
+            if a is not None:
+                out.append(a)
+        for out, (a, b) in zip(diffs, pairs):
+            if aucs[a] is not None and aucs[b] is not None:
+                out.append(aucs[a] - aucs[b])
+    return ([_percentile_ci(out, reps) for out in singles],
+            [_percentile_ci(out, reps) for out in diffs])
+
+
+def _boot_auc(scores, labels, reps: int = 2000, seed: int = 20260809):
+    """Percentile bootstrap CI for one AUC."""
+    n = len(scores)
+    (ci,), _ = _boot_info([scores], list(labels)[:n] if len(labels) > n else labels,
+                          reps=reps, seed=seed)
+    return ci
 
 
 def _boot_auc_diff(a_scores, b_scores, labels, reps: int = 2000,
@@ -230,21 +337,9 @@ def _boot_auc_diff(a_scores, b_scores, labels, reps: int = 2000,
     number and the market's, and that correlation is most of what makes
     the difference measurable at this sample size.
     """
-    import random
-    rng = random.Random(seed)
-    n = len(labels)
-    out = []
-    for _ in range(reps):
-        idx = [rng.randrange(n) for _ in range(n)]
-        ys = [labels[i] for i in idx]
-        aa = _auc([a_scores[i] for i in idx], ys)
-        bb = _auc([b_scores[i] for i in idx], ys)
-        if aa is not None and bb is not None:
-            out.append(aa - bb)
-    if len(out) < reps // 2:
-        return None, None
-    out.sort()
-    return out[int(0.025 * len(out))], out[int(0.975 * len(out))]
+    _, (ci,) = _boot_info([a_scores, b_scores], labels, pairs=((0, 1),),
+                          reps=reps, seed=seed)
+    return ci
 
 
 def info_report(rows: list[dict]) -> None:

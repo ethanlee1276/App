@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07 (evening), after every open bet's own lookups
+Last updated 2026-11-07 (evening), after the Record page's information
+test started giving the same numbers in a fifth of the time (step LK:
+nothing to run), after every open bet's own lookups
 stopped rereading the day (step LJ: nothing to run), after the grading
 step's two biggest
 reads were cut to the open bets' own lines and days (step LI: nothing to

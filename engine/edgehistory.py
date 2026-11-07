@@ -65,7 +65,7 @@ def measure(rows: list[dict]) -> dict | None:
     import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))))
-    from stakecheck import _auc, _boot_auc, _boot_auc_diff
+    from stakecheck import _auc, _boot_info
     from .odds import american_to_prob
 
     use = [r for r in rows
@@ -81,10 +81,11 @@ def measure(rows: list[dict]) -> dict | None:
                                  _auc(edge, y))
     if a_model is None or a_market is None or a_edge is None:
         return None      # all winners or all losers: AUC is undefined
-    m_lo, m_hi = _boot_auc(model, y)
-    k_lo, k_hi = _boot_auc(market, y)
-    e_lo, e_hi = _boot_auc(edge, y)
-    d_lo, d_hi = _boot_auc_diff(model, market, y)
+    # ONE RUN OF RESAMPLES FOR ALL FOUR (stakecheck._boot_info): the three
+    # AUCs' intervals and the paired difference's always drew the same
+    # resamples (one seed, one size), and each is what it was alone.
+    ((m_lo, m_hi), (k_lo, k_hi), (e_lo, e_hi)), ((d_lo, d_hi),) = _boot_info(
+        [model, market, edge], y, pairs=((0, 1),))
 
     # THE VERDICT IS DERIVED HERE, ONCE, so the site, the nightly prose and
     # the LLM's evidence pack cannot each invent their own reading of the
