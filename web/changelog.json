@@ -4,6 +4,12 @@
     {
       "date": "2026-11-07",
       "kind": "fix",
+      "title": "The nightly jobs run once a day, as they should",
+      "body": "Two of the server's background routines kept their notes in one file and could overwrite each other's, so a job that had already run that day was sometimes started again: on 7 November the model refit ran four times. Each now records only its own notes, so the nightly jobs run once and the boards keep the server to themselves for the rest of the day."
+    },
+    {
+      "date": "2026-11-07",
+      "kind": "fix",
       "title": "The weekly model refit gets its share of the server",
       "body": "The models' weekly refit and the weekly backtests were running at the very lowest priority on the server, behind every board rebuild, so they got about an eighth of the processor and every large fit was cut off at its time limit: the NFL's recency weights still dated from August, and the backtests had not replayed the NFL since 29 September. They were meant to run level with the board rebuilds, and now they do, with the site itself still first in line."
     },

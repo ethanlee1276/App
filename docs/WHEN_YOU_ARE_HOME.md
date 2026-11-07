@@ -9338,6 +9338,25 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LB. The two chores lanes never undo each other** (step 435; 7 November).
+Your 7 November JQ had four refit pieces each begun as the first of its own
+run on the same day (the NBA's teammate-out check, its spread check, the
+NBA, MLB), about three hours of fitting, where the refit starts once a day.
+The reason was the chores' state file (data/cache/maintenance.json). Two
+lanes keep it, the daily pass (the day's chores, the refit's start, the bug
+scan) and the settle pass (the settle clock, board learning, the Lab's
+start), and each held the copy it loaded for minutes and wrote the whole of
+it back. A settle pass that began before the daily pass marked "the refit
+started today" and finished after put the old file back, so the next sweep
+started the refit again once the last run ended, and the daily chores could
+run twice. The other way round, the daily pass could undo "the Lab started
+today". Now a lane writes only the keys it changed, into the file as it is
+at that moment, under a short lock, and picks up what the other lane wrote.
+With every child now level with the board builds (LA), a refit started
+again in the afternoon would have taken half the CPU from the boards.
+Nothing to run. In tomorrow's JQ (step LA's command), the pieces dated 8
+November should be one run's worth, not four.
+
 **LA. The weekly jobs get their share of the box's one CPU** (step 433; 7
 November). Your 7 November catch-up showed every big fitter in the weekly
 refit cut off at its 45 minutes: the NFL's and college's recency dials on

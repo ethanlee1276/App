@@ -26,6 +26,7 @@ they finish — so the Record page keeps up with the night on its own.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
 import json
 import os
@@ -65,33 +66,105 @@ HARVEST_DAY_BUDGET = 400
 HARVEST_BACKFILL_DAYS = 30
 
 
-def _load_state(path: Path) -> dict:
+class _State(dict):
+    """The chores' state as one process loaded it, with what it loaded
+    (``_base``), so a save writes only what this process changed
+    (`_save_state`)."""
+
+
+def _read_state(path: Path) -> dict:
     # Coerce: a caller passing a plain string used to fall into the bare
     # `except` below (str has no .read_text), get {} back, and so lose the
     # throttle SILENTLY — settle_open would run its full pass on every
     # cycle instead of every fifteen minutes. A path is a path.
     try:
-        return json.loads(Path(path).read_text())
+        got = json.loads(Path(path).read_text())
     except Exception:
         return {}
+    return got if isinstance(got, dict) else {}
+
+
+def _load_state(path: Path) -> dict:
+    import copy
+    got = _read_state(path)
+    st = _State(got)
+    st._base = copy.deepcopy(got)
+    return st
+
+
+@contextlib.contextmanager
+def _state_lock(path: Path):
+    """A short exclusive lock around one read-merge-write of the state file
+    (never the chores lock, which a daily pass holds for its whole run).
+    Where there is no fcntl, unlocked, as before."""
+    fh = None
+    try:
+        import fcntl
+        fh = open(str(path) + ".wlock", "a+")
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+    except Exception:                                         # noqa: BLE001
+        if fh is not None:
+            fh.close()
+        fh = None
+    try:
+        yield
+    finally:
+        if fh is not None:
+            try:
+                import fcntl
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+            except Exception:                                 # noqa: BLE001
+                pass
+            fh.close()
 
 
 def _save_state(path: Path, state: dict) -> None:
     """Written beside, then swapped in. A plain write_text on a full disk
     truncated this file to nothing on 2026-10-01, and with it the record
-    that the backup and the paid harvest had already run today."""
+    that the backup and the paid harvest had already run today.
+
+    ONLY WHAT THIS PROCESS CHANGED (2026-11-07). Two chores lanes keep this
+    file, the daily pass and the settle pass, each holding the copy it
+    loaded for minutes, and each wrote its whole copy back: the settle pass
+    put back the daily pass's marks as they were before it began (the deep
+    refit started, the day's chores done), and the daily pass the settle
+    pass's (the Lab started, the board learning's clock). On 7 November the
+    refit began four runs in one day. A copy from `_load_state` now writes
+    the keys it changed or removed into the file as it is now, under a
+    short lock, and takes back what the other lane wrote meanwhile. A plain
+    dict still replaces the file."""
+    import copy
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    try:
-        tmp.write_text(json.dumps(state))
-        os.replace(tmp, path)
-    except OSError:
+    base = getattr(state, "_base", None)
+    with _state_lock(path):
+        if base is None:
+            out, changed = dict(state), set(state)
+        else:
+            out = _read_state(path)
+            changed = {k for k, v in state.items() if k not in base or base[k] != v}
+            for k in changed:
+                out[k] = state[k]
+            for k in base:
+                if k not in state:
+                    out.pop(k, None)
+        tmp = path.with_suffix(path.suffix + ".tmp")
         try:
-            tmp.unlink()
+            tmp.write_text(json.dumps(out))
+            os.replace(tmp, path)
         except OSError:
-            pass
-        raise
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            raise
+    if base is not None:
+        for k in [k for k in state if k not in out]:
+            state.pop(k)                    # the other lane removed it
+        for k, v in out.items():
+            if k not in changed:
+                state[k] = v                # the other lane wrote it
+        state._base = copy.deepcopy(out)
 
 
 #: Below this many graded college player-games, the CFB touchdown board

@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07 (afternoon), after your catch-up paste: the close
+Last updated 2026-11-07 (evening), after the refit's four runs in one day
+were traced to the two chores lanes writing their whole copies of one state
+file over each other (step LB, item 1g: fixed, nothing to run); before that,
+2026-11-07 (afternoon), after your catch-up paste: the close
 lines are all written (item 1p done: your NFL write had nothing left to
 change, the writes went in on 6 November's evening, and the four dry runs
 found nothing either), the offsite backup still meets Backblaze's cap (item
@@ -204,6 +207,9 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long
   bucket holds 11.1 GB counting old versions; the box keeps 5.8 GB. The one
   fix is a setting in Backblaze, free: the bucket's Lifecycle Settings,
   "Keep only the last version of the file". The cap stays at 10 GB.
+- **The refit's four runs in one day (item 1g, step LB):** two chores lanes
+  wrote their whole copies of one state file over each other, undoing
+  "the refit started today"; each writes only what it changed now.
 - **The weekly refit (item 1g, step LA):** every big fitter was cut off at
   its 45 minutes, the NFL's and college's dials, MLB's without one setting
   scored, the NBA's player memory and spread check. Here the NFL's dial
@@ -719,6 +725,16 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JQ JQ2 JP JP2 2>&1 | tee /tmp
 Right looks like the dial naming its settings as it scores them (`setting
 +0.3 scored — 5 of 21 kept`) and a piece finishing; the Lab's log naming
 the NFL replayed.
+
+**7 November (evening), why the refit ran four times that day (step LB):**
+your JQ had four pieces each begun as the first of its own run on 7
+November, about three hours of fitting where the refit starts once a day.
+The daily pass and the settle pass both keep the chores' state file, and
+each wrote back the whole copy it had loaded minutes before: a settle pass
+spanning the daily pass's "refit started today" put the old file back, and
+the next sweep started the refit again. Each lane now writes only what it
+changed. Nothing to run; in tomorrow's JQ the pieces dated 8 November should
+be one run's worth.
 
 **7 November, read off the heartbeat:** last night's run (from 05:02) went
 to the NBA: its recency dial done, its player memory set aside as too long
