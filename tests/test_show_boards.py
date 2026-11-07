@@ -181,10 +181,15 @@ def test_the_college_build_gets_the_same_ceiling_as_the_mlb_one():
     model boards pass their own. MLB learned that when a board too slow
     for three minutes was killed every cycle and froze at its last write
     — which is the shape CFB has been stuck in. This was the last slate
-    build still on the small ceiling."""
+    build still on the small ceiling. Never below MLB's 600 seconds, and
+    fifteen minutes on a Saturday's full slate (`_cfb_build_timeout`,
+    2026-11-07, once every conference's games reached the board)."""
     import inspect
     src = inspect.getsource(launch.refresh_cfb)
-    assert "_run_build(args, timeout=600)" in src
+    assert "_run_build(args, timeout=_cfb_build_timeout(args[1]))" in src
+    for day in ("2026-11-03", "2026-11-06", "2026-11-07", "2026-11-08", ""):
+        assert launch._cfb_build_timeout(day) >= 600, day
+    assert launch._cfb_build_timeout("2026-11-07") == 900
 
 
 def test_it_is_reachable_from_the_command_line():
