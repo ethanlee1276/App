@@ -179,7 +179,8 @@ def test_the_pass_says_where_its_time_went():
     finally:
         mp.undo()
     ph = dict(M.LAST_SETTLE_PHASES)
-    for k in ("prep", "ingest", "grade", "desk", "resettle", "parlays", "learn", "export"):
+    for k in ("prep", "ingest", "grade", "first_td", "first_basket", "voids_ufc", "desk",
+              "resettle", "parlays", "learn", "export"):
         assert k in ph and ph[k] >= 0.0, (k, ph)
     assert ph["graded"] == 4 and ph["learned"] is True
     assert ph["at"].startswith(dt.datetime.fromtimestamp(1000.0).date().isoformat())

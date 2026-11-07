@@ -1490,6 +1490,7 @@ def settle_open(log=print, state_path: Path | None = None,
         # (ledger.name_index), not once per open prop.
         with ledger.name_index():
             settled = ledger.settle_from_history(lconn, hconn)
+        lap("grade")
         # FIRST TOUCHDOWN (2026-10-31): no stat row says who scored first, so
         # these grade off the play-by-play's first scorer (engine/firsttd).
         # ESPN's scoring plays first, the night of the game (2026-11-01: a
@@ -1508,6 +1509,7 @@ def settle_open(log=print, state_path: Path | None = None,
                 settled += n_ftd
         except Exception as exc:                             # noqa: BLE001
             log(f"  ⚠️  first-touchdown settle skipped: {exc}")
+        lap("first_td")
         # FIRST BASKET (2026-10-31), the NBA's: the game's first made shot or
         # free throw in the box's shots (engine/firstbasket).
         try:
@@ -1518,6 +1520,7 @@ def settle_open(log=print, state_path: Path | None = None,
                 settled += n_fb
         except Exception as exc:                             # noqa: BLE001
             log(f"  ⚠️  first-basket settle skipped: {exc}")
+        lap("first_basket")
         # Postponed MLB games void themselves (audit O4, roadmap #44). After
         # the grading pass, so a final that landed late grades first; the
         # guards (baseball only, three days old) live with the function.
@@ -1543,7 +1546,7 @@ def settle_open(log=print, state_path: Path | None = None,
                 settled += n_ufc
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  UFC settle skipped: {exc}")
-        lap("grade")
+        lap("voids_ufc")
         # THE DESK, every quarter hour (DESK_EVERY_S). Its tickets grade
         # against the exchange, not the history database, and until
         # 2026-09-15 nothing on any clock asked the exchange (see
