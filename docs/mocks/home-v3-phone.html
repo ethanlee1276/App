@@ -1,0 +1,117 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Qellys — v3 prototype</title>
+<link rel="stylesheet" href="../../web/css/styles.css">
+<style>
+/* v3 prototype: the sportsbook genre's pieces in Qellys clothes. Same tokens, same fonts, same venue art. */
+:root{--v3-gold:#FFB000;--v3-gold-soft:rgba(255,176,0,.14);--v3-card:#1B1915;--v3-bg:#111110;--v3-bg2:#161412;--v3-line:#23201A;--v3-line2:#3A352C;--v3-text:#E8E4D9;--v3-dim:#BAB3A6;--v3-mute:#9E988B;--v3-good:#29C878;--v3-bad:#DC5455;--v3-ink:#0A0907}
+html,body{margin:0;background:var(--v3-bg);color:var(--v3-text);font-family:"Archivo Narrow",Arial Narrow,sans-serif}
+.v3{max-width:390px;margin:0 auto;padding:0 16px 120px;position:relative}
+.v3.desk{max-width:none;padding:0}
+.v3-top{display:flex;align-items:center;justify-content:space-between;padding:18px 0 10px}
+.v3-mark{font-family:"Bodoni Moda",serif;font-weight:700;font-size:24px;letter-spacing:.02em}
+.v3-mark small{font-family:"Archivo Narrow";font-weight:600;font-size:10px;letter-spacing:.18em;color:var(--v3-gold);vertical-align:middle;margin-left:6px}
+.v3-ico{display:flex;gap:8px}.v3-ico span{width:36px;height:36px;border-radius:12px;border:1px solid var(--v3-line2);background:var(--v3-bg2);display:grid;place-items:center;font-size:12px;color:var(--v3-dim)}
+.v3-leagues{display:flex;gap:14px;overflow-x:auto;padding:6px 0 14px;scrollbar-width:none}
+.v3-league{display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;font-size:11px;letter-spacing:.08em;font-weight:600;color:var(--v3-mute)}
+.v3-league i{width:52px;height:52px;border-radius:50%;border:1px solid var(--v3-line2);background:var(--v3-card);display:grid;place-items:center;font-style:normal;font-family:"IBM Plex Mono";font-size:12px;color:var(--v3-dim)}
+.v3-league.on{color:var(--v3-gold)}.v3-league.on i{border:2px solid var(--v3-gold);color:var(--v3-text);box-shadow:0 0 0 4px var(--v3-gold-soft)}
+.v3-h{display:flex;justify-content:space-between;align-items:baseline;margin:16px 0 10px;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--v3-dim)}
+.v3-h a{color:var(--v3-gold);text-decoration:none;text-transform:none;letter-spacing:0;font-weight:700}
+.v3-hero{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--v3-line);min-height:210px;background:#000 url(../../web/img/venues/variants/football-blue.jpg) center/cover}
+.v3-hero:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(17,17,16,.1) 0%,rgba(17,17,16,.96) 100%)}
+.v3-hero .in{position:relative;padding:60px 16px 16px;display:flex;flex-direction:column;gap:8px}
+.v3-eyebrow{font-size:11px;letter-spacing:.14em;font-weight:800;text-transform:uppercase;color:var(--v3-gold)}
+.v3-hero h2{margin:0;font-family:"Bodoni Moda",serif;font-weight:700;font-size:26px;line-height:1.1}
+.v3-hero .meta{font-family:"IBM Plex Mono";font-size:12px;color:var(--v3-dim)}
+.v3-cta{align-self:flex-start;background:var(--v3-gold);color:var(--v3-ink);font-weight:700;font-size:13px;padding:8px 14px;border-radius:999px;margin-top:4px}
+.v3-strip{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px}
+.v3-live{flex:0 0 232px;border:1px solid var(--v3-line);border-radius:14px;background:var(--v3-card);padding:12px 14px}
+.v3-live .t{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.1em;font-weight:800;color:var(--v3-mute)}
+.v3-live .t b{color:var(--v3-bad);display:inline-flex;align-items:center;gap:5px}.v3-live .t b:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--v3-bad);box-shadow:0 0 0 3px rgba(220,84,85,.25)}
+.v3-live .r{display:flex;justify-content:space-between;margin-top:8px;font-weight:700;font-size:15px}.v3-live .r b{font-family:"IBM Plex Mono";font-weight:500;font-size:18px}
+.v3-live .f{display:flex;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--v3-mute);font-family:"IBM Plex Mono"}.v3-live .f b{color:var(--v3-gold);font-family:"Archivo Narrow";font-weight:800}
+.v3-wp{height:4px;border-radius:2px;background:var(--v3-line2);margin-top:8px;overflow:hidden}.v3-wp i{display:block;height:100%;width:64%;background:var(--v3-good)}
+.v3-match{flex:0 0 300px;border:1px solid var(--v3-line);border-radius:16px;background:var(--v3-card);overflow:hidden}
+.v3-match .art{height:96px;position:relative;background:#000 url(../../web/img/venues/variants/baseball-red.jpg) center/cover}
+.v3-match .art.fb{background-image:url(../../web/img/venues/variants/football-blue.jpg)}
+.v3-match .art:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 0,rgba(27,25,21,.98) 100%)}
+.v3-chip{position:absolute;left:10px;top:10px;z-index:2;font-family:"IBM Plex Mono";font-size:10px;letter-spacing:.06em;background:var(--v3-bg);border:1px solid var(--v3-line2);border-radius:6px;padding:3px 8px;color:var(--v3-dim)}
+.v3-match .body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px}
+.v3-team{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px}.v3-team i{width:22px;height:22px;border-radius:50%;background:var(--v3-line2);flex:0 0 auto}.v3-team b{margin-left:auto;font-family:"IBM Plex Mono";font-weight:500;color:var(--v3-mute)}
+.v3-odds{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.v3-pill{border:1px solid var(--v3-line2);background:var(--v3-bg);border-radius:10px;padding:6px 8px;text-align:center}
+.v3-pill small{display:block;font-size:11px;color:var(--v3-dim);font-weight:600}.v3-pill b{display:block;font-family:"IBM Plex Mono";font-weight:500;font-size:14px}
+.v3-pill.up b{color:var(--v3-good)}.v3-pill.dn b{color:var(--v3-bad)}
+.v3-foot{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--v3-dim);font-weight:600}
+.v3-model{border:1px solid var(--v3-gold);color:var(--v3-gold);border-radius:999px;padding:4px 9px;font-size:11px;font-weight:700}
+.v3-card{border:1px solid var(--v3-line);border-radius:14px;background:var(--v3-card);padding:4px 14px}
+.v3-card.potd{border-color:var(--v3-gold);padding:12px 14px 4px}
+.v3-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--v3-line)}.v3-row:first-child,.potd .v3-row{border-top:0}
+.v3-row .w b{display:block;font-size:14px;font-weight:700}.v3-row .w span{display:block;margin-top:2px;font-family:"IBM Plex Mono";font-size:11px;color:var(--v3-mute)}
+.v3-num{display:flex;gap:6px;align-items:center;flex:0 0 auto}
+.v3-num .p{font-family:"IBM Plex Mono";font-weight:500;font-size:15px;color:var(--v3-good);border:1px solid rgba(41,200,120,.35);border-radius:10px;padding:5px 9px;background:rgba(41,200,120,.06)}
+.v3-num .o{font-family:"IBM Plex Mono";font-size:13px;color:var(--v3-dim);border:1px solid var(--v3-line2);border-radius:10px;padding:5px 9px;background:var(--v3-bg)}
+.v3-ribbon{display:flex;align-items:center;gap:14px;border:1px solid var(--v3-line);border-radius:16px;background:var(--v3-card);padding:12px 14px}
+.v3-ring{width:56px;height:56px;border-radius:50%;background:conic-gradient(var(--v3-good) 0 58%,var(--v3-line2) 58% 100%);display:grid;place-items:center;flex:0 0 auto}.v3-ring i{width:44px;height:44px;border-radius:50%;background:var(--v3-card);display:grid;place-items:center;font-style:normal;font-family:"IBM Plex Mono";font-size:12px}
+.v3-ribbon .w{flex:1;min-width:0}.v3-ribbon .big{display:flex;gap:10px;font-family:"IBM Plex Mono";font-size:17px;margin:2px 0}.v3-ribbon .big b{font-weight:500;color:var(--v3-good)}.v3-ribbon .sub{font-size:12px;color:var(--v3-dim)}
+.v3-form{display:flex;gap:4px}.v3-form i{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:10px;font-weight:800;color:var(--v3-ink);background:var(--v3-good)}.v3-form i.l{background:var(--v3-bad)}
+.v3-tools{display:grid;grid-template-columns:1fr 1fr;gap:10px}.v3-tool{border:1px solid var(--v3-line);border-radius:12px;background:var(--v3-card);padding:12px}.v3-tool b{display:block;font-size:13px}.v3-tool span{font-size:11px;color:var(--v3-mute)}
+.v3-tray{position:fixed;left:16px;right:16px;bottom:88px;z-index:5;display:flex;align-items:center;gap:10px;border:1px solid var(--v3-gold);border-radius:999px;background:var(--v3-bg2);padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:13px;font-weight:700}
+.v3-tray:before{content:"";width:8px;height:8px;border-radius:50%;background:var(--v3-bad)}.v3-tray span{font-family:"IBM Plex Mono";font-weight:400;font-size:12px;color:var(--v3-dim)}.v3-tray a{margin-left:auto;color:var(--v3-gold);text-decoration:none}
+.v3-tab{position:fixed;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-columns:repeat(5,1fr);align-items:end;padding:8px 4px 14px;background:#151310;border-top:1px solid var(--v3-line)}
+.v3-tab div{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--v3-mute)}.v3-tab i{width:22px;height:22px;border-radius:7px;background:var(--v3-line2)}.v3-tab .on{color:var(--v3-gold)}.v3-tab .on i{background:var(--v3-gold)}
+.v3-tab .c i{width:46px;height:46px;border-radius:50%;margin-top:-26px;background:var(--v3-gold);box-shadow:0 0 0 6px rgba(255,176,0,.18)}
+/* desktop */
+.desk .shell{display:grid;grid-template-columns:208px 1fr;min-height:1200px}
+.desk .side{background:var(--v3-bg2);border-right:1px solid var(--v3-line);padding:18px 14px}
+.desk .side .nav{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;color:var(--v3-dim);font-weight:600;font-size:14px}.desk .side .nav.on{background:var(--v3-card);color:var(--v3-text);border:1px solid var(--v3-line)}.desk .side .nav i{width:14px;height:14px;border-radius:3px;background:var(--v3-line2)}.desk .side .nav.on i{background:var(--v3-gold)}
+.desk .side .grp{margin:16px 12px 4px;font-size:11px;letter-spacing:.14em;color:var(--v3-mute);font-weight:800}
+.desk .main{padding:0 24px 40px}.desk .v3-top{padding:16px 0}
+.desk .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.desk .v3-strip{overflow:visible}.desk .v3-match{flex:1 1 0}.desk .v3-hero{min-height:230px}.desk .v3-hero h2{font-size:32px}
+.desk .v3-tray{position:static;margin:14px 0 0}
+</style></head><body>
+<div id="phone" class="v3">
+  <div class="v3-top"><div class="v3-mark">Qellys<small>BOOK</small></div><div class="v3-ico"><span>⌕</span><span>☺</span></div></div>
+  <div class="v3-leagues">
+    <div class="v3-league on"><i>NFL</i>NFL</div><div class="v3-league"><i>MLB</i>MLB</div><div class="v3-league"><i>CFB</i>CFB</div><div class="v3-league"><i>NBA</i>NBA</div><div class="v3-league"><i>WNBA</i>WNBA</div><div class="v3-league"><i>UFC</i>UFC</div>
+  </div>
+  <div class="v3-hero"><div class="in"><div class="v3-eyebrow">Pick of the day · NFL</div><h2>Josh Jacobs anytime TD</h2><div class="meta">GB @ CHI · 1:00 PM ET · −139 · FanDuel · 62% to hit</div><div class="v3-cta">Why this pick →</div></div></div>
+  <div class="v3-h"><span>Live now</span><a>Live →</a></div>
+  <div class="v3-strip">
+    <div class="v3-live"><div class="t"><span>NFL</span><b>LIVE</b></div><div class="r"><span>Chiefs</span><b>17</b></div><div class="r"><span>Chargers</span><b>14</b></div><div class="v3-wp"><i></i></div><div class="f"><span>Q3 · 8:42 · KC 64% to win</span><b>2 riding</b></div></div>
+    <div class="v3-live"><div class="t"><span>MLB</span><b style="color:#FFB000">DELAY</b></div><div class="r"><span>Yankees</span><b>3</b></div><div class="r"><span>Red Sox</span><b>3</b></div><div class="v3-wp"><i style="width:50%"></i></div><div class="f"><span>Top 6 · rain</span><b>1 riding</b></div></div>
+  </div>
+  <div class="v3-h"><span>Tonight’s games</span><a>All 15 →</a></div>
+  <div class="v3-strip">
+    <div class="v3-match"><div class="art fb"><span class="v3-chip">8:15 PM ET</span></div><div class="body">
+      <div class="v3-team"><i></i>Chiefs<b>—</b></div><div class="v3-team"><i></i>Chargers<b>—</b></div>
+      <div class="v3-odds"><div class="v3-pill"><small>KC −3.5</small><b>−108</b></div><div class="v3-pill"><small>KC ML</small><b>−178</b></div><div class="v3-pill up"><small>O/U 47.5</small><b>−110</b></div></div>
+      <div class="v3-foot"><span class="v3-model">4 picks · best 62%</span><span>SoFi · dome · Game page →</span></div></div></div>
+    <div class="v3-match"><div class="art"><span class="v3-chip">7:05 PM ET</span></div><div class="body">
+      <div class="v3-team"><i></i>Yankees<b>—</b></div><div class="v3-team"><i></i>Red Sox<b>—</b></div>
+      <div class="v3-odds"><div class="v3-pill"><small>NYY +1.5</small><b>−128</b></div><div class="v3-pill dn"><small>BOS ML</small><b>−128</b></div><div class="v3-pill"><small>O/U 8.5</small><b>−110</b></div></div>
+      <div class="v3-foot"><span class="v3-model">3 picks · best 58%</span><span>Fenway · 68° · 9 mph out</span></div></div></div>
+  </div>
+  <div class="v3-h"><span>Most likely to hit</span><a>Top Picks →</a></div>
+  <div class="v3-card potd"><div class="v3-eyebrow">Pick of the day</div><div class="v3-row"><div class="w"><b>Josh Jacobs anytime TD</b><span>GB @ CHI · FanDuel</span></div><div class="v3-num"><span class="o">−139</span><span class="p">62%</span></div></div></div>
+  <div class="v3-card" style="margin-top:8px">
+    <div class="v3-row"><div class="w"><b>Yankees ML</b><span>NYY @ BOS · DraftKings</span></div><div class="v3-num"><span class="o">−125</span><span class="p">58%</span></div></div>
+    <div class="v3-row"><div class="w"><b>Jayden Daniels OVER 245.5 pass yds</b><span>WAS @ DAL · BetMGM</span></div><div class="v3-num"><span class="o">−110</span><span class="p">57%</span></div></div>
+    <div class="v3-row"><div class="w"><b>Chiefs −3.5</b><span>KC vs LAC · FanDuel</span></div><div class="v3-num"><span class="o">−108</span><span class="p">55%</span></div></div>
+  </div>
+  <div class="v3-h"><span>Edge picks</span><a>Value Bets →</a></div>
+  <div class="v3-card">
+    <div class="v3-row"><div class="w"><b>Rams +6.5</b><span>LAR @ SF · FanDuel · A</span></div><div class="v3-num"><span class="o">−105</span><span class="p">+4.2%</span></div></div>
+    <div class="v3-row"><div class="w"><b>Bijan Robinson OVER 82.5 rush yds</b><span>ATL @ CAR · DraftKings · B</span></div><div class="v3-num"><span class="o">−115</span><span class="p">+3.1%</span></div></div>
+    <div class="v3-row"><div class="w"><b>Judge OVER 1.5 total bases</b><span>NYY @ BOS · BetMGM · B</span></div><div class="v3-num"><span class="o">+105</span><span class="p">+2.8%</span></div></div>
+  </div>
+  <div class="v3-h"><span>The record</span><a>Results →</a></div>
+  <div class="v3-ribbon"><div class="v3-ring"><i>58%</i></div><div class="w"><div class="v3-eyebrow" style="color:var(--v3-mute)">Model · graded in public</div><div class="big">92-66-2 <b>+9.5% ROI</b></div><div class="sub">+15.2u · 160 settled · last five</div></div><div class="v3-form"><i>W</i><i class="l">L</i><i>W</i><i>W</i><i class="l">L</i></div></div>
+  <div class="v3-ribbon" style="margin-top:8px"><div class="v3-ring" style="background:conic-gradient(var(--v3-good) 0 55%,var(--v3-line2) 55% 100%)"><i>55%</i></div><div class="w"><div class="v3-eyebrow" style="color:var(--v3-mute)">Zeno · FanDuel · DK</div><div class="big">21-17 <b>+$412.50</b></div><div class="sub">$2,140 risked · 38 settled · 2 open</div></div><div class="v3-form"><i>W</i><i>W</i><i class="l">L</i><i>W</i><i class="l">L</i></div></div>
+  <div class="v3-h"><span>Tools</span></div>
+  <div class="v3-tools"><div class="v3-tool"><b>Fantasy room</b><span>draft kit · calendar</span></div><div class="v3-tool"><b>Props scanner</b><span>every priced prop</span></div><div class="v3-tool"><b>Bet tracker</b><span>log your tickets</span></div><div class="v3-tool"><b>Bankroll</b><span>stakes and limits</span></div></div>
+  <div class="v3-tray">2 riding <span>Kelce 41 / 60.5 · KC +3</span><a>Live →</a></div>
+  <div class="v3-tab"><div class="on"><i></i>Home</div><div><i></i>Picks</div><div class="c"><i></i>Live</div><div><i></i>Results</div><div><i></i>More</div></div>
+</div>
+</body></html>

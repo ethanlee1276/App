@@ -1,0 +1,422 @@
+"""College football — where the edge lives, and what it costs to claim it.
+
+The decision spine is shared with every other sport here: devig, edge,
+haircut, Kelly, CLV. What is rebuilt is everything that makes CFB its own
+market, and one idea drives most of it.
+
+**Attention is the axis.** ~134 FBS teams play 60+ games most Saturdays.
+No book prices a Wednesday MAC game with the care it gives Ohio State –
+Michigan, so the softness is a function of the spotlight. That single fact
+inverts the usual tier order — in the NFL props are the soft spot, in CFB
+the *unwatched full-game markets* are the core product — and it turns the
+haircut from a constant into a dial: assume half your edge is error where
+the market is sharp, far less where the number is genuinely lazy.
+
+Everything else follows from taking young players and thin reporting
+seriously: a QB whose status is unconfirmed cannot be graded final, and in
+December a roster can be gutted by opt-outs and the portal between the
+last game and the bowl. Both are gates, not adjustments — the model
+refuses rather than guesses.
+
+What this module deliberately does NOT do is invent the talent layer.
+Recruiting composites, blue-chip ratio and returning production are real
+edges (§6) and they need a real source; where that data is absent the
+model says the prior is missing rather than substituting a number.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+from dataclasses import dataclass
+
+# --- §8 market tiers, driven by attention ----------------------------------
+MARQUEE, STANDARD, LOW = "marquee", "standard", "low"
+
+# §3.5 — "the haircut is a dial, not a constant". The fraction of the raw
+# edge assumed to be model error. Sharp markets get the full 50%.
+HAIRCUT = {MARQUEE: 0.50, STANDARD: 0.35, LOW: 0.25}
+
+# §3.6 — minimum edge AFTER the haircut.
+#
+# WHAT THESE BARS ACTUALLY PASS, measured 2026-08-27 once college
+# football had closing lines to be graded against (engine/sources/
+# cfblines) and `engine.gamecal` had replaced the flat 0.5 market shrink
+# with a measured one. Every FBS game from 2022-25 with fifteen games of
+# prior history on both sides — 2,055 of them — priced through the real
+# path:
+#
+#     spread      every edge exactly 0.00%   → 0 plays at any tier
+#     total       biggest edge +4.7%         → 73 low, 1 standard, 0 marquee
+#
+# The spread is zero BY CONSTRUCTION: its measured shrink is 0.0, so
+# every disagreement collapses onto the market. That is the honest
+# output of a model whose side beat the college close 48.4% of the time.
+#
+# The 73 that survive on totals went 41-30-2, 57.7% against the 52.4% a
+# -110 line needs, +10.2% ROI. Encouraging and NOT proven: the shrink
+# was fitted on the same games. Re-fitted on 2022-23 alone the slope is
+# +0.088 ± 0.114 — an error bar wider than the estimate — and it selects
+# five plays across 2024-25, which settles nothing either way.
+#
+# So the expectation to hold, and the reason the board is quiet rather
+# than broken: college GAME bets are a couple of low-attention totals a
+# season. The college volume is on the touchdown board.
+#
+# AND THE OBVIOUS FIX WAS TRIED. The reading above is only an argument
+# for a quiet board if the MODEL cannot be made better, so the standard
+# upgrade — opponent-adjusted play efficiency, the success rate and
+# drive stats §5 has always asked for — was built off the newly ingested
+# plays and graded the same way. On 1,273 held-out games its side beat
+# the close 47.5-50.1% depending on the signal, against the 52.4% a -110
+# line needs, and no better in the tail where the board selects. See the
+# note on `engine.coverage`'s play-by-play layer for the table. The
+# closing college number already contains efficiency; the bar stays
+# where it is because lowering it is the only other way to fill a board,
+# and that is not a way.
+MIN_EDGE = {MARQUEE: 0.040, STANDARD: 0.030, LOW: 0.025}
+MIN_EDGE_PROP = 0.040          # every attention tier: thin menus, heavy vig
+
+# §9 — grade weights, summing to 100.
+GRADE_WEIGHTS = {"edge": 40, "information": 20, "attention_fit": 10,
+                 "situational": 10, "matchup": 10, "environment": 10}
+MIN_GRADE = 70                 # "Below 70: no bet, no leans."
+
+# §9 — bankroll caps as fractions of bankroll.
+CAP_PER_PLAY = 0.02
+CAP_PER_GAME = 0.05
+CAP_PER_SLATE = 0.12
+DRAWDOWN_TRIGGER = 0.10        # a 10% drawdown halves stakes
+KELLY_FRACTION = 0.25          # quarter Kelly default
+KELLY_FRACTION_MAX = 0.50      # half Kelly: A+ in a Tier 1 (low-attention) spot
+
+# The power conferences. Everything else is Group of Five or independent,
+# which is where the spec says the soft numbers live.
+#
+# FOUR OF THE ELEVEN CONFERENCES THE FEED CAN NAME, so this set decides
+# far more of a card than "Group of Five" suggests. The seven it leaves
+# out are American, Conference USA, FBS Independents, MAC, Mountain West,
+# Pac-12 and Sun Belt (engine/sources/cfbdata.CONFERENCE_IDS), and on the
+# replay behind the rule below that is 65% of the bets.
+#
+# THE PAC-12 IS THE JUDGEMENT IN HERE, and it was never written down.
+# After the 2024 realignment the league is a rebuilt one, so treating it
+# as non-power is a read on what it is in 2026 rather than a fact about
+# its name — and it is the one member of that list a reader is most
+# likely to be surprised by. Recorded here so that if the read stops
+# being true the set is changed deliberately, by someone who knows they
+# are changing a betting rule, rather than left to age quietly.
+#
+# THIS SET IS THE ATTENTION AXIS AND NOTHING ELSE. It answers "how hard
+# is the market looking at this game", which is what `attention_tier`
+# needs and the only question a conference name can honestly answer.
+POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC"}
+
+#: …and this one answers whether the MONEY follows. Same membership, so
+#: nothing about today's board changes; a different question, so the two
+#: can move apart.
+#:
+#: THEY WERE ONE SET, AND THAT MADE THE PAC-12 QUESTION UNANSWERABLE.
+#: `BET_GROUP_OF_FIVE`'s own note promises "the attention dial is
+#: unchanged: it decides how much of an edge to believe, this decides
+#: whether the money follows" — a real distinction, written down, and
+#: not kept, because both read POWER_CONFERENCES. Measured on the three
+#: shapes a Pac-12 card comes in, adding "Pac-12" to that one set did
+#: two opposite things at once:
+#:
+#:     Pac-12 vs Mountain West   not bet, LOW   ->  bet, STANDARD
+#:     Pac-12 vs Pac-12          not bet, LOW   ->  bet, STANDARD
+#:
+#: It opens the money gate AND tightens the model in the same stroke:
+#: LOW to STANDARD moves the haircut 25% -> 35% and the bar 2.5% -> 3.0%,
+#: so the games it just made bettable are simultaneously harder to bet.
+#: Nobody would ask for those together, and no replay of "should we bet
+#: the Pac-12" could mean anything while one edit did both.
+#:
+#: Split, the question is one dial: put "Pac-12" in the set below and
+#: nowhere else. Whether it belongs there is a money decision and is not
+#: made here.
+#:
+#: AND THE ANSWER IS NO, on evidence, without a replay — because
+#: "Pac-12" does not name one league. Counted off the cfbfastR schedules
+#: 2022-2026 (team-games where the side is FBS):
+#:
+#:     2022   146   a real power conference, twelve schools
+#:     2024    25   two orphans — Oregon State and Washington State
+#:     2026    46   a rebuilt league of eight
+#:
+#: The eight are Boise State, Colorado State, Fresno State, San Diego
+#: State and Utah State — all Mountain West through 2024 — plus Texas
+#: State from the Sun Belt, and the two legacy schools. So FIVE OF THE
+#: EIGHT are Mountain West under a new name, and "should the board bet
+#: the 2026 Pac-12" is very close to "should it bet the Mountain West",
+#: which the Group of Five decision already answered on a 2,902-bet
+#: replay.
+#:
+#: THAT IS ALSO WHY THE OBVIOUS REPLAY WOULD HAVE LIED. Keyed on the
+#: conference LABEL over 2022-25 it would have measured a power
+#: conference for two seasons and two orphan schools for two more, called
+#: the result "the Pac-12", and counted none of the Mountain West history
+#: that six of the eight members actually carry. A number from that is
+#: worse than no number. If the question is ever reopened it has to be
+#: asked per TEAM, not per label.
+#:
+#: The data to run a gate replay does exist, contrary to a previous draft
+#: of this comment: `odds_history` holds 3,012 priced spread closes, 2,987
+#: totals and 4,078 moneylines (one row per team, price in `over_odds`,
+#: `under_odds` NULL by design — a query wanting both on one row reports
+#: zero and is wrong). What does not exist is the harness: nothing here
+#: replays history through these gates, so Phase 8's 2,902 -> 1,324 came
+#: from a one-off that was never checked in. Stored games also carry no
+#: conference — `cfbdata.game_rows` keeps `conference_game` as a bool and
+#: not the names — so any such harness must join the schedule for them.
+BETTABLE_CONFERENCES = set(POWER_CONFERENCES)
+
+#: The sentence both boards show when the rule below refuses a game.
+#:
+#: ONE COPY. It is user-facing text with two producers —
+#: `pipeline.evaluate_play` for the game markets and `tds` for the
+#: touchdown board — and this codebase's most-repeated bug is a rule
+#: written out twice and then changed once.
+#:
+#: IT NAMES THE FOUR RATHER THAN THE CATEGORY, and that is the whole
+#: rewording. "Group of Five game" is what the Ask was called; it is not
+#: what the code TESTS. The test is membership of POWER_CONFERENCES, and
+#: two of the seven conferences that fails are not Group of Five by any
+#: ordinary reading: the Pac-12 (above), and FBS Independents, which is
+#: Notre Dame's conference. The rule was written knowing the second —
+#: CFB_READINESS.md, Phase 8: "an Independents-vs-G5 game stays under
+#: it" — and it is still a sentence a reader would call wrong reading
+#: "Group of Five game" over Notre Dame at Navy.
+#:
+#: Until 2026-09-03 the sentence only ever reached a pass list nothing
+#: rendered, so being loosely worded cost nothing. It is on the card now.
+#: DERIVED FROM THE SET, not typed out beside it. The names were a
+#: literal here, which is the same defect one layer down: add "Pac-12" to
+#: BETTABLE_CONFERENCES and the card would go on refusing games in the
+#: name of a list that no longer matched the rule. "Power" is dropped
+#: from the wording for the same reason it was dropped from "Group of
+#: Five" — the set is whatever this board bets, and calling its members
+#: power conferences is a claim the set does not make.
+NOT_A_POWER_GAME = (
+    "Neither side is in a conference this board bets ("
+    + ", ".join(sorted(BETTABLE_CONFERENCES)) + ") — "
+    "priced and shown, not bet (Ethan, 2026-09-02: \"No\")")
+
+#: Ethan, 2026-09-02, closing the CFB readiness audit's first Ask ("Bet
+#: Group of Five at all? … On this evidence, no"): "1. No". A game in
+#: which NEITHER side is a power-conference team is not bet — priced,
+#: shown with its number and its edge, never a play. The attention dial
+#: is unchanged: it decides how much of an edge to believe, this decides
+#: whether the money follows. (An Independents-vs-G5 game — Navy hosting
+#: Notre Dame — falls under the rule too; a power opponent lifts it out.)
+BET_GROUP_OF_FIVE = False
+
+
+def is_group_of_five(game: dict) -> bool:
+    """Both conferences known, neither a power conference.
+
+    THE NAME IS THE ASK'S, NOT THE TEST'S. What this returns True for is
+    "neither side is in POWER_CONFERENCES", which catches a Pac-12 team
+    and Notre Dame along with the actual Group of Five — see the notes on
+    that set and on `NOT_A_POWER_GAME`, which is the sentence a reader
+    sees and which says what was tested rather than what it is called.
+
+    An UNKNOWN conference is never Group of Five. A side the feed could
+    not name is a side we know nothing about, and refusing a game for a
+    fact we do not have would silently take FCS visitors — and any game
+    at all on a box where the conference join failed — off the board
+    under a rule about conference strength.
+    """
+    home_conf = (game.get("home_conference") or "").strip()
+    away_conf = (game.get("away_conference") or "").strip()
+    if not home_conf or not away_conf:
+        return False
+    # BETTABLE_CONFERENCES, not POWER_CONFERENCES — this is the money
+    # question, and the two sets exist so it can be asked on its own.
+    return not (home_conf in BETTABLE_CONFERENCES
+                or away_conf in BETTABLE_CONFERENCES)
+
+# §7 — situational tags. Named because the spec is explicit that these are
+# priced deliberately rather than narrated after the fact.
+SITUATIONAL_TAGS = ("letdown", "lookahead", "rivalry", "sandwich",
+                    "body_clock", "short_week", "eliminated", "bowl_eligible")
+
+VOLATILITY = ("LOW", "MEDIUM", "HIGH", "EXTREME")
+
+
+def attention_tier(game: dict) -> str:
+    """How hard the market is looking at this game.
+
+    Not a proxy for quality — a proxy for how many sharp dollars have
+    already corrected the number. A ranked SEC game on Saturday afternoon
+    is priced by everyone; a Tuesday MAC game is priced by a model and a
+    few specialists.
+    """
+    home_conf = (game.get("home_conference") or "").strip()
+    away_conf = (game.get("away_conference") or "").strip()
+    both_power = home_conf in POWER_CONFERENCES and away_conf in POWER_CONFERENCES
+    ranked = bool(game.get("home_rank")) + bool(game.get("away_rank"))
+    weeknight = (game.get("weekday") or "").lower() not in ("saturday", "")
+
+    # A weeknight game is a low-attention game almost by definition — that
+    # is why the MACtion slate exists as a betting market at all.
+    if weeknight and ranked < 2:
+        return LOW
+    if both_power and ranked >= 1:
+        return MARQUEE
+    if ranked >= 2:
+        return MARQUEE
+    if both_power:
+        return STANDARD
+    if not home_conf and not away_conf:
+        return STANDARD              # unknown conferences: don't claim softness
+    return LOW if not (home_conf in POWER_CONFERENCES
+                       or away_conf in POWER_CONFERENCES) else STANDARD
+
+
+def haircut_edge(raw_edge: float, tier: str) -> float:
+    """§3.5 — shrink the edge by how sharp this market is."""
+    return round(raw_edge * (1.0 - HAIRCUT.get(tier, 0.5)), 5)
+
+
+def min_edge_for(tier: str, market: str = "side") -> float:
+    """§3.6 — the bar this bet has to clear after the haircut."""
+    if market == "prop":
+        return MIN_EDGE_PROP
+    return MIN_EDGE.get(tier, MIN_EDGE[MARQUEE])
+
+
+# --- §2 the two refusals ----------------------------------------------------
+def december_window(kickoff_iso: str) -> bool:
+    """Bowl season, where a roster can be gutted between the last game and
+    the bowl by opt-outs, the portal and a coaching change."""
+    try:
+        d = _dt.date.fromisoformat((kickoff_iso or "")[:10])
+    except ValueError:
+        return False
+    return d.month == 12 or (d.month == 1 and d.day <= 20)
+
+
+def blocking_conditions(game: dict, market: str = "side") -> list[str]:
+    """Reasons this bet cannot be graded final yet.
+
+    These are gates, not penalties. §2.3 and §2.4 are written as refusals
+    because the alternative — pricing a game whose quarterback might not
+    play — is the error that ends credibility, and it is entirely
+    avoidable by waiting.
+    """
+    out = []
+    qb_relevant = market in ("side", "total", "prop", "team_total")
+    if qb_relevant and not game.get("qb_confirmed"):
+        who = game.get("qb_uncertain_team") or "a starting QB"
+        out.append(f"{who} status unconfirmed — the starter-to-backup gap in "
+                   f"CFB is routinely 4–7+ points, so the whole game reprices")
+    if december_window(game.get("kickoff", "")) and not game.get("participation_verified"):
+        out.append("December game with participation unverified — opt-outs, "
+                   "portal departures and staff changes gut bowl rosters")
+    return out
+
+
+# --- §9 the grade -----------------------------------------------------------
+@dataclass
+class GradeInput:
+    edge_after_haircut: float
+    tier: str
+    information_certainty: float = 0.0   # 0–1: QB/injury/roster confirmed
+    attention_fit: float = 0.0           # 0–1: is the edge plausible here?
+    situational_fit: float = 0.0         # 0–1
+    matchup_fit: float = 0.0             # 0–1
+    environment_fit: float = 0.0         # 0–1
+
+
+def _edge_score(edge: float, tier: str) -> float:
+    """Edge as a 0–1 score, measured against THIS tier's bar.
+
+    Scaling by the tier's own minimum is the point: +2.6% in a Tuesday MAC
+    game has cleared its bar and +2.6% in a marquee game has not, so they
+    must not score the same."""
+    bar = MIN_EDGE.get(tier, MIN_EDGE[MARQUEE])
+    if edge <= 0:
+        return 0.0
+    # At the bar → 0.5; at three times the bar → 1.0.
+    return round(min(1.0, 0.5 * edge / bar if edge < bar else
+                     0.5 + 0.5 * (edge - bar) / (2 * bar)), 4)
+
+
+def grade(g: GradeInput) -> int:
+    """The 0–100 Unified Bet Quality Grade of §9."""
+    parts = {
+        "edge": _edge_score(g.edge_after_haircut, g.tier),
+        "information": max(0.0, min(1.0, g.information_certainty)),
+        "attention_fit": max(0.0, min(1.0, g.attention_fit)),
+        "situational": max(0.0, min(1.0, g.situational_fit)),
+        "matchup": max(0.0, min(1.0, g.matchup_fit)),
+        "environment": max(0.0, min(1.0, g.environment_fit)),
+    }
+    return int(round(sum(parts[k] * w for k, w in GRADE_WEIGHTS.items())))
+
+
+def grade_label(score: int) -> str:
+    if score >= 90:
+        return "A+"
+    if score >= 80:
+        return "A"
+    if score >= 70:
+        return "B+"
+    return "Pass"
+
+
+# --- §9 staking -------------------------------------------------------------
+def _dec(odds: int) -> float:
+    return 1.0 + (odds / 100.0 if odds > 0 else 100.0 / abs(odds))
+
+
+def kelly_stake(p: float, odds: int, tier: str, score: int,
+                drawdown: bool = False) -> float:
+    """Fraction of bankroll to risk. Quarter Kelly, half only for A+ in a
+    Tier 1 spot, capped per play, halved inside a drawdown."""
+    b = _dec(odds) - 1.0
+    if b <= 0:
+        return 0.0
+    full = (p * b - (1 - p)) / b
+    if full <= 0:
+        return 0.0
+    frac = (KELLY_FRACTION_MAX if (score >= 90 and tier == LOW)
+            else KELLY_FRACTION)
+    stake = min(full * frac, CAP_PER_PLAY)
+    # Halve AFTER the cap, not before. "Halve stakes until the peak is
+    # recovered" is about real exposure, and any play whose raw Kelly
+    # already exceeds the 2% ceiling would otherwise be halved to a number
+    # still above it — the drawdown rule doing nothing precisely when it
+    # matters most.
+    if drawdown:
+        stake *= 0.5
+    return round(stake, 5)
+
+
+def apply_caps(plays: list[dict]) -> list[dict]:
+    """§9 — 5% per game and 12% per slate, applied in grade order.
+
+    With 60+ games on the board, the slate cap is the structural defence
+    against this sport's version of volume bleed: eight pretty-good numbers
+    instead of three great ones. Trimming in grade order means the cap
+    costs you the worst play you were going to make, not a random one.
+    """
+    out, per_game, total = [], {}, 0.0
+    for p in sorted(plays, key=lambda x: -x.get("grade", 0)):
+        stake = p.get("stake_fraction", 0.0)
+        gkey = p.get("game_id") or p.get("game") or ""
+        room_game = max(0.0, CAP_PER_GAME - per_game.get(gkey, 0.0))
+        room_slate = max(0.0, CAP_PER_SLATE - total)
+        allowed = round(min(stake, room_game, room_slate), 5)
+        trimmed = allowed < stake - 1e-9
+        if allowed <= 0:
+            out.append({**p, "stake_fraction": 0.0, "capped": True,
+                        "cap_note": "slate or game cap reached — no room left"})
+            continue
+        per_game[gkey] = per_game.get(gkey, 0.0) + allowed
+        total += allowed
+        out.append({**p, "stake_fraction": allowed, "capped": trimmed,
+                    "cap_note": ("trimmed by the game/slate cap" if trimmed
+                                 else "")})
+    return out

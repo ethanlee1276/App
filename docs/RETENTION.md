@@ -1,0 +1,442 @@
+# Retention: what brings people back, and what this site does about it
+
+Ethan, 2026-10-29: *"dive deep more into the science of user retainment and
+being able to keep users and having users come back to the app and feel like
+they need to use our app when there's live games going on ... do research on
+that, look up data research and all that ... build it."* And: *"there needs to
+be a setting for when you first log into the app ... it'll prompt you to turn
+on notifications."*
+
+This is the research, what was built from it, and what was deliberately not
+built. Every number below is cited, and most published numbers in this field
+come from the companies that sell push tools, so they are marked as vendor
+figures. Where the honest answer is "measure it on our own users", the last
+section says how.
+
+---
+
+## 1. What the research says
+
+**Alerts are the lever, and most people say yes or no to them once.**
+
+- A typical iPhone app gets alerts turned on by roughly **45–50%** of users
+  (Airship's 2025 median for iOS: 48.85%; Pushwoosh's 2025 survey of 600+
+  apps puts most iOS apps under 50%). Android is a little higher.
+  Source: [MobiLoud's opt-in benchmarks](https://www.mobiloud.com/blog/push-notification-opt-in-rate),
+  [OneSignal 2024 benchmarks](https://onesignal.com/mobile-app-benchmarks-2024)
+  (category range: 20.6% in games to 48.7% in finance).
+- **Asking in context beats asking cold.** Apple's own guidance is to ask
+  "in a context that helps people understand why your app needs
+  authorization", not on first launch before there is any context, and the
+  system prompt only ever appears once.
+  Source: [Apple, Asking permission to use notifications](https://developer.apple.com/tutorials/data/documentation/usernotifications/asking-permission-to-use-notifications.md).
+- **A primer screen before the system prompt** (our own card first, the
+  phone's prompt only on "yes") lifts opt-in. Evidence is mostly anecdotal and
+  vendor-published: Cluster reported ~60% in social with its own pre-ask
+  screen ([Andrew Chen](https://andrewchen.com/why-people-are-turning-off-push/amp)).
+  Treat it as a direction, not a promise.
+- iOS 12+ also allows **provisional** alerts (delivered quietly to
+  Notification Center with no prompt; the person keeps or turns them off)
+  ([useyourloaf](https://useyourloaf.com/blog/provisional-authorization-of-user-notificatons/)).
+  Capacitor's push plugin does not ask for it today, so it is noted for the
+  native app's next pass, not built.
+
+**Fewer, more relevant alerts keep alerts on.**
+
+- In a Localytics survey of 1,000 US smartphone users, **10%** said they would
+  turn alerts off at one a week, **37%** at 2–5 a week, and **22%** would stop
+  using the app at 2–5 a week (stated intent, not measured behaviour)
+  ([MarketingProfs](https://www.marketingprofs.com/charts/2018/33486/how-many-mobile-push-notifications-are-too-many)).
+- Alerts set off by something the person did or cares about beat broadcasts
+  by a wide margin in every vendor dataset (Segment, 1.5 billion pushes:
+  behaviour-triggered alerts were opened about 8x as often as blasts —
+  [Segment](https://segment.com/blog/push-notification-study-analysis)).
+  Braze reports alerts sent at each person's own best hour drive about 2.6x
+  the opens ([Braze](https://www.braze.com/perspectives/article/two-ways-to-master-push-campaign-timing)).
+  Both are vendor figures without published controls.
+
+**The one peer-reviewed algorithm worth copying is Duolingo's.** Yancey and
+Settles (KDD 2020) chose each person's daily reminder from a pool with a
+"sleeping, recovering" bandit (a template just used is worth less for a
+while) and measured **+0.5% daily active users and +2% new-user retention**
+over a strong baseline
+([paper](https://research.duolingo.com/papers/yancey.kdd20.pdf)). It needs
+volume to learn; at this site's size it would act close to random for
+months, so it is listed in §4, not built.
+
+**Live games are where a sports app is won.**
+
+- Sports apps see users come back more often through the first 30 days than
+  most categories, because events bring them back (Airship's lifecycle
+  benchmarks, sports alongside finance).
+- Fans check their phones about ten times a game, mostly in the breaks (a
+  2026 Snapchat survey of 1,000 UK Gen Z fans, as reported: 46% in natural
+  breaks, 20% during play; the source page could not be opened from here to
+  confirm it). The older, better-known figure is Google's: most people watch
+  with a phone or laptop within reach
+  ([Think with Google](https://thinkwithgoogle.com/consumer-insights/sports-fans-and-the-second-screen)).
+  The design answer is glanceable: the score where they already look, the
+  moment that matters, the chat in the break.
+- **Live Activities** (the score on the lock screen and in the Dynamic
+  Island) are what ESPN, theScore, the NBA's and Yahoo's apps use to own a
+  game on the phone; OneSignal reports apps using them have **23.7% higher
+  30-day retention** (vendor figure)
+  ([OneSignal](https://onesignal.com/blog/best-practices-for-using-live-activities-in-your-ios-app/),
+  [Yahoo Sports](https://help.yahoo.com/kb/SLN37033.html)).
+- Real (the app Ethan named) wins the live game with discussion, predictions
+  and points around each play
+  ([App Store](https://apps.apple.com/us/app/real-sports/id1514546162));
+  reviewers also call its alerts annoying. Our game chat, Call it, trivia in
+  the stoppages, karma, watch parties and the fans' player of the game are
+  that layer already.
+
+**Gambling apps are under a spotlight for exactly this.** In July 2026 the
+National Consumers League asked the FTC to require consent for marketing
+alerts from betting apps (93% of alerts they studied from the big
+sportsbooks were ads, 62% "bet now" calls to action); Colorado banned
+operator-initiated betting pushes outright (SB 26-131); bills are moving in
+New York and Congress
+([NCL](https://nclnet.org/ncl-petitions-ftc-for-sports-betting-prediction-market-notification-controls/),
+[Covers](https://www.covers.com/industry/ncl-report-warns-sportsbooks-using-push-alerts-gambling-harm-august-2025)).
+This site is not a sportsbook, but its alerts are written as if the rule
+were already law: opt-in, every kind its own switch, scores and records and
+the member's own bets — **never "bet now", never a pick on a lock screen**.
+That is also simply what keeps alerts switched on.
+
+---
+
+## 2. What we will not do, and why
+
+**Read how people use other apps, or their phone's settings.** It is not
+possible on an iPhone (every app is sandboxed; there is no API for another
+app's usage) and on Android it needs a special usage-access permission that
+Google Play restricts and users rightly refuse. It would also break this
+site's privacy promise ("we run no advertising, no tracking pixels and no
+third-party scripts ... nothing on this site follows you anywhere else") and
+the laws behind it. What the big apps actually use is **first-party**: what
+a person does inside their own app, when, and whether they tap an alert.
+That is §3 and §5.
+
+**Buy or share data, fingerprint devices, or add third-party trackers.** Same
+promise, same reason.
+
+**"Bet now" alerts, streak guilt or loss-chasing nudges.** See §1: they are
+what regulators are moving against, and they burn the alert switch.
+
+---
+
+## 3. What was built (2026-10-29)
+
+| | What | Runbook |
+|---|---|---|
+| Ask at the right moment | After a sign-in on a phone or in the app, a card asks to turn alerts on (our primer first, then the phone's prompt). Asked again only beside something an alert serves — following a team ("a tap ten minutes before every Packers game"), a bet put in My Bets — three times at most, two weeks apart, never once on or refused, never on a desktop browser. What turns on is personal first: the followed teams' games, big moments and finals, your bets, your watches, last night's record, and the picks going up for **the leagues you follow only**. | HT |
+| The game on the lock screen | On my lock screen on any live game (or within 90 minutes of the start): the score, clock and situation on the lock screen and in the Dynamic Island, kept current by the box every 20 seconds and ended at the final. | HU |
+| Fewer, better picks-up alerts | At most one "picks are up" alert per phone every three hours, and when several leagues are up it is one alert naming them all, not one per league. | HV |
+| Measure it | When analytics is on (QB_ANALYTICS=1, after the privacy wording in docs/AUDIT_2026-09-23.md item 14), daily totals of alerts sent by kind and of visits that came from an alert — never per person. | HV |
+
+Already in place before this round, and part of the same picture: kickoff
+alerts for followed teams, big moments (four a game at most), final scores,
+the parlay on the lock screen, quiet hours (23:00–09:00 Eastern for anything
+not tied to a game), the game chat and watch parties, trivia in the
+stoppages, karma, streaks, pick'em, the Monday recap.
+
+---
+
+## 4. Next, in order of value per unit of work
+
+1. **Provisional alerts in the iPhone app** — quiet delivery with no prompt,
+   so a new install sees what an alert looks like before deciding. Native
+   change (one authorization option) plus an App Store build.
+2. **Each person's own best hour** for the alerts that are not tied to a
+   game (picks up, last night, the Monday recap): learned on the phone from
+   when it opens the app, sent to the box as a setting, never as a log.
+   **Built for the Monday recap, 2026-10-29**, from the activity record
+   instead (members who said yes; the policy's §2.10 already names this
+   use): engine/engagement.usual_hours, pushmine.week_pass. The picks-up
+   alert stays with the board (it is about tonight's games); last night's
+   results could follow the same way.
+3. **A/B the ask's wording** once analytics is on: two versions of the card,
+   split by a coin flip on the phone, compared as daily totals.
+4. **A recovering bandit for recurring alert wording** (Duolingo's method)
+   once the alert volume can teach it something — thousands of sends a week.
+
+---
+
+## 5. How to know it worked
+
+With analytics on, `python3 -m engine.analytics report 30` prints, per day:
+visits, visits from an alert, alerts sent by kind; and the account lines it
+already had: the share of accounts seen again after their first day and
+first week (from `users.last_seen`, already in the privacy policy). The
+numbers to watch, against the benchmarks in §1:
+
+- alerts turned on per sign-in on a phone (target: above the ~45–50% iOS
+  median);
+- visits from alerts per alert sent, by kind (drop or rewrite the kinds
+  that nobody opens);
+- day-7 and day-30 return rate of new accounts, before and after.
+
+---
+
+## 6. Each member's own activity, and what it is for (2026-10-29, round two)
+
+Ethan, the same day: *"I've been seeing research about how apps will use data
+off your phone to see how much worth you are to them, and how to get
+retention rate off of you ... look at other apps' algorithms and what they
+do, and let's start implementing that stuff"* — and *"we can be recording
+what users do on the app, how long they spend on it, and we can base
+notifications off that."*
+
+### What the apps that are good at this actually use
+
+Almost all of it is **first-party usage**: what a person does inside the
+app, when, and whether they open its alerts. Not their other apps (§2).
+
+- **Each person's own hour.** Braze's Intelligent Timing sends each message
+  in the person's "most engaged hour", read from their own session starts
+  and alert opens, with a chosen fallback when there is too little history
+  ([Braze docs](https://www.braze.com/docs/user_guide/brazeai/intelligence/intelligent_timing)).
+- **Who is drifting.** Airship's churn model found how recently and how
+  often someone opened the app, and how many alerts they were sent, the
+  strongest signs (vendor, 2017:
+  [Airship](https://www.airship.com/blog/churn-prediction-our-machine-learning-model/)).
+  A peer-reviewed study of mobile games found long-run frequency the single
+  most important feature among recency, frequency, money, lifetime and
+  intensity ([CRORR, RFM-LIR](https://ojs.srce.hr/crorr/article/view/12125)).
+- **The textbook model for "still a customer?"** when nobody cancels, they
+  just stop coming: Fader, Hardie and Shang's BG/BB, built for exactly this
+  data (a chance to come each day; a hidden moment someone stops for good)
+  ([Marketing Science 2010](https://faculty.wharton.upenn.edu/wp-content/uploads/2012/04/Fader_et_al_mksc_10.pdf)).
+- **Reading engagement as a curve, not one number.** The power-user curve
+  (L28: how many people were active 1, 2 ... 28 days of the last 28) shows
+  whether a core comes back daily, which DAU/MAU averages away
+  ([a16z, Chen and Jin](https://a16z.com/the-power-user-curve-the-best-way-to-understand-your-most-engaged-users/)).
+- **Stopping, not shouting.** Duolingo's reminders end after weeks of being
+  ignored ("These reminders don't seem to be working. We'll stop sending them
+  for now." — as a user reported it,
+  [Medium](https://debugger.medium.com/duolingo-needs-to-chill-8f1832745ca0)).
+- **Value per customer.** Every subscription business divides revenue per
+  member by the cancellation rate for a lifetime value, and segments it.
+  **What we will not copy:** the sportsbooks' "VIP" models that score each
+  bettor's lifetime value and then treat the high scorers differently, the
+  practice now under a US Senate inquiry (Blumenthal's letters, October
+  2026: [SBC Americas](https://sbcamericas.com/2026/10/22/congress-blumenthal-betting-vip-letter/))
+  and in lawsuits; even the industry's own group says no VIP incentives for
+  anyone in a cool-off ([ROGA](https://sbcamericas.com/2025/05/29/roga-sportsbooks-guidelines-vip-players/)).
+  Here value is a figure for the owner, by group, and nobody is treated
+  differently by what they pay or might pay.
+
+### What was built
+
+| | What | Where |
+|---|---|---|
+| Your activity | Per member, a row a day: seconds with the site in front of them (visible and touched in the last two minutes; half an hour on a live game), visits, visits an alert opened, seconds by page, by league and by hour. Kept 120 days, deleted with the account, in the export. | engine/activity.py, web/js/activity.js |
+| Two locks, then a yes | Nothing is kept until `QB_ACTIVITY=1` **and** the Privacy Policy carries the section below (`id="your-activity"`) — and then, for each member, only after **they** say yes: in Settings → Your activity, or with the unticked box on the "Make it yours" card. Settings shows them everything kept, in words; no deletes it all. Each yes and no goes in the consent log with the policy's date. | engine/activity.consented, engine/consent, account.js actHTML / mineSheet |
+| Stages | new · power · regular · casual · lapsing · dormant · gone — "lapsing" measured against the member's **own** rhythm (2.5 × their usual gap, at least a week), so a Sunday-only football fan is not "drifting" on Friday. | engine/engagement.stage |
+| Still around? | BG/BB fitted on our own members; kept only if, on members it never saw, it predicts who comes back better than the stages do (`fit --save`). Checked against simulation: calibrated across every quintile. | engine/engagement.fit |
+| The owner's report | Stages with revenue in each and **revenue at risk**, the power-user curve, DAU/MAU, minutes a day, leagues, busiest hours, share of visits from alerts, new members still here in weeks 1, 2 and 4 by signup week, the model's view, ARPU, monthly churn and lifetime value. `demo` prints it on a made-up population. | `python3 -m engine.engagement report` |
+| While you were away | A member gone longer than their own rhythm (lapsing or dormant, never "gone"), with the switch on, hears once at their own best hour: their team's game today; else the newest thing shipped since they were last here; else today's slate in their league. One a week at most; after three unanswered, none until they come back. | engine/engagement.away_pass |
+| Fewer to the phones that never open them | A phone with 15 picks-up / last-night alerts in a row unopened gets those two kinds once a day at most, until its member opens any alert. Scores and their own alerts are untouched. | engine/pushalerts.IGNORED_N |
+
+### The Privacy Policy wording to approve (it turns the switch on)
+
+**Approved by Ethan on 2026-10-29 ("approve all"), and in the policy as
+§2.10, word for word.** What is below is the record of what he approved.
+
+Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
+
+```html
+<h3 id="your-activity">2.10 Your activity here</h3>
+<p>Only if you say yes — in Settings → Your activity, or on the "Make it
+  yours" card — and while you are signed in, we keep a daily record of your
+  own time on this site: how many
+  seconds a page of it was in front of you (only while the tab is visible and
+  you have used it in the last two minutes, or watched a live game in the last
+  half hour), on which of our pages and for which leagues, in which hours of
+  the day, how many visits you made and how many of them one of our alerts
+  opened; and, on each phone you get alerts on, how many picks-up and
+  last-night alerts it has had since you last opened one of ours. Never your
+  clicks, anything you type, your location, your device, or anything about
+  other apps or sites.
+  (<code>activity_days</code>, <code>activity_prefs</code>,
+  <code>engagement_away</code>, and that count in <code>push_subs</code>)</p>
+<p>We use it for your own alerts — to send the ones not tied to a game at the
+  hour you usually look; to send the picks-up and last-night alerts once a day
+  at most to a phone that has left fifteen in a row unopened, until you open
+  one; and, if you turned on "When I’ve been away", one line a week at most
+  with your team’s next game or what is new — and, as totals, to see how the site is used: for
+  that, it is read beside your My Bets dates and the teams you follow, to
+  count, say, how many members watched a live game here with a bet on it or a
+  team in it, or how many who logged a bet in their first two days were still
+  here a month later. It is
+  never sold, shared, or used for advertising, and nothing about what you pay
+  changes how we treat you. Each day’s row is deleted after 120 days, all of
+  it when you say no or delete your account, and it is in Download my data.
+  Each yes and no you give is kept in the record described in §2.1.</p>
+```
+
+### Before switching it on (the runbook's step HW)
+
+1. Done 2026-10-29: approved, and in the policy as §2.10.
+2. **The App Store privacy label** must say it before the iPhone app ships
+   with it: App Store Connect → App Privacy → Usage Data → **Product
+   Interaction**, "Linked to the user's identity: Yes", purposes **App
+   Functionality** and **Analytics**, "Used for tracking: No"
+   ([OneSignal's guide](https://documentation.onesignal.com/docs/apple-app-privacy-requirements),
+   [Apple's labels](https://www.apple.com/sg/privacy/labels/)).
+3. `sudo ./deploy/setenv.sh QB_ACTIVITY 1` and restart.
+4. After four weeks of rows: `python3 -m engine.engagement fit`, then with
+   `--save` only if it says it holds.
+
+## 7. The second paper: consent first, limits, and the bettor's own record (2026-10-29, round three)
+
+Ethan's "Data, Retention & the ESPN Playbook" (uploaded 2026-10-29). Its
+spine: collect four layers in order of value — what members tell us, what
+they bet, what they do here, what we compute from those — nothing from the
+phone itself, nothing before consent, and a consent record for every
+choice. What it asked for and where it now lives:
+
+| The paper | Built | Where |
+| --- | --- | --- |
+| "A consent log ... what each user agreed to, which policy version, and when" | Every yes and no — the 21+ and Terms at sign-up, alerts on (the kinds) or off, a break, a weekly limit, the activity yes or no — with the Privacy Policy's own "Last updated" date; append-only, in the export, deleted with the account | engine/consent |
+| "Nothing fires before consent" | Activity is opt-in: both locks AND the member's own yes; a yes before the locks open is not written | engine/activity.consented |
+| Layer 1, asked "at the moment each one is needed": what they are here for, their books | "Make it yours", once, on a signed-in reader's second visit, never over another sheet: goals, books, and an unticked activity box while the site keeps any; editable in Settings. Their books lead the Bet it sheet | js/account.js mineSheet, app.js mineTick |
+| "Self-set limits (alert pause, weekly bet cap) — Settings, always visible" and "zero promotional alerts until it ends" | Settings → Limits: a weekly limit in dollars (Monday to Sunday, Eastern) and the way to Alerts → Take a break. My Bets shows the week against it and says so once when a bet crosses it. Reached, no promotional alert (picks up, last night, picks on their players, away, morning, karma, pick'em, kickoff, big moments, finals, close finishes) reaches the member until Monday — shared, their own queue, or what a knocked phone is shown. Their tickets, lineup, reminders and people talking to them still come | engine/limits, pushalerts.send, pushmine.flush, latest_for |
+| `onboarding_completed`, `limit_set` | Counted as daily totals, never per person | engine/analytics |
+
+Not taken, and why:
+
+- **State, "checked against IP"** — we take no bets, so a state gates
+  nothing here, and reading one off an address is the location we promise
+  never to collect. Books' availability by state is not in our data either.
+- **PostHog, session replay** — first-party daily totals only (engine/analytics);
+  no third-party tracker on the site.
+- **"Which modules lead the home screen" from the goals** — the home's order
+  is Ethan's own call (the stadiums, then Most Likely); the goals are kept
+  for the features that ask for them, and Settings says only what they do.
+
+### Pooled content: the members' split and the members against the close
+
+The paper: "Qellys consensus. The share of tracked bets on each side of a
+game" and "Users vs. the market", with "only show a split once it covers
+50+ bets so no one can be picked out. Let users opt out of being counted.
+Never sell user-level data." Built (engine/consensus) behind two locks, the
+way the activity switch is: `QB_SPLIT=1` and a section in the Privacy Policy
+with `id="members-split"`. It is a new use of what members log, so it is
+off until Ethan approves this wording; then everybody is counted unless they
+say no (Settings → Your data → "Count my bets in the members' split"; each
+change in the consent log). What it shows: on a game's page, the share of
+members' open saved-parlay legs on each side (moneyline and spread by team,
+totals over or under), a market only with 50 or more; on the Edge Report,
+the members' pooled closing-line value beside the reader's own, once 50
+legs are in. Never a player prop (one player's line among a few members
+points at somebody), never a name.
+
+Also built, with no lock because nothing new is kept and nothing is pooled
+from other people's bets: the pick'em ranked by beating the close (each
+pick keeps the market's chance for its team when it was made and the last
+before kickoff; Social → Pick'em → "Beat the close").
+
+The wording to approve (a new subsection of §2 in `web/privacy.html`; the
+`id` is the lock). **Approved by Ethan on 2026-10-29 and in the policy as
+§2.11, with one sentence added for the notice its §13 promises: an account
+made before the change is counted only a week after it is emailed about it
+(engine/policynotice; one without an email address, from 6 November 2026).**
+
+```html
+<h3 id="members-split">2.11 The members' split</h3>
+<p>Unless you turn it off in Settings → Your data ("Count my bets in the
+  members' split"), the game-line legs of your open saved parlays — which
+  team on a moneyline or a spread, over or under on a total, from the last
+  three days — are counted with every other member's, and a game's page
+  shows the share on each side once 50 or more are in; and the closing-line
+  value we note for your saved parlays (§2.7) over the last 30 days is
+  pooled with every other member's into one number on the Edge Report, once
+  50 or more legs are in. Only counts and shares are
+  ever shown, never who, and never a player prop. Nothing new is kept for
+  it: it reads what My Bets already syncs and the closing prices in §2.7,
+  and turning it off takes you out of the next count.</p>
+```
+
+## 8. Phone first (2026-10-29, Ethan)
+
+> "a lot of our users are between the ages of 21 and 35 ... maybe a lot of
+> those types of people don't check emails and they'll just check their
+> actual phone notifications more. So the app should be sending these type
+> of email notifications as well."
+
+The rule now: **every message about a member's own membership or their
+week goes to their phone**; email carries only what has to be in writing
+too (a password reset, the trial's charge warning, a renewal notice), and
+never instead of the phone.
+
+| Message | Phone | Email | Silenced by a limit or a pause |
+| --- | --- | --- | --- |
+| Free trial turns into a charge tomorrow | every signed-in phone (`account`) | yes, as before | pause only (it is about money) |
+| A six-month or yearly plan renews in ~21 days (state renewal laws ask 15 to 45 for a yearly plan) | every signed-in phone (`account`) | yes, unless `QB_RENEW_EMAIL=0` (when Stripe's own renewal emails are on) | pause only |
+| A paying member not here in 5 days: their week and the board's, losses included | "When I've been away" (`away`) | no | yes |
+| A plan that ended: what the board did since, days 3, 14 and 30, then never | "When I've been away" (`away`) | no | yes |
+| Every league of the teams they follow has just finished its season: which leagues are on, once | "When I've been away" (`away`) | no | yes |
+| Password reset | — | yes (security) | — |
+
+`account` is not a switch anybody sees: every phone signed in to the account
+wants it, the way a receipt reaches you, and nothing is added to the
+phone's own list. "When I've been away" is now offered to every signed-in
+member (the Alerts page and the sheet after sign-in), whatever the activity
+log's lock, because these recaps read only the account's own last-seen
+day. The recaps go out between 11:00 and 19:00 Eastern and share the away
+alert's one a week. Never "bet now", never a discount, never "we miss you".
+(engine/lifecycle, engine/trialnote)
+
+## 9. The rest of the second paper (2026-10-29, round four)
+
+| The paper | Built | Where |
+| --- | --- | --- |
+| "Sort users into four groups and treat each differently" | The owner report opens with Champions (paying, here in the last 5 days), At-risk payers (paying, not here in 5 or more), Engaged free (never paid, here in the last 7) and Dormant (not paying, not here in 30 or more), with the monthly money in each and what to do; off each account's own last-seen day and plan, so it needs no activity log | engine/engagement.four_groups |
+| "Start with rules, not models" | Four flags, counted for members who said yes to keeping their activity: gone 5+ days while their league plays, this week's bets under half their usual, fewer alerts opened two weeks running, paying with no pick opened in 5 days | engine/engagement.churn_flags |
+| "Smart paywall: shows a free user what paid alerts caught on their teams last week" | The plans page, for a signed-in account without a plan that follows teams: how many picks the board posted on those teams in the last week, how the graded ones went (losses included) and how many are still open. Counts only, never a pick: the same level a free account's own team alert already tells it | engine/smartwall, GET /api/billing/caught, account.js pwCaught |
+| "Morning brief: each user's games, model edges, injuries and line moves" | The morning alert on their teams' games adds who on those teams is out, doubtful or questionable, a spread that moved a point or more since it opened (two at most), and how many picks the board has on those games. Whole sentences only, inside what a lock screen shows | engine/kickoffs.brief_extras |
+| "Season bridge: when a user's sport ends, suggests players to follow in the next one" | When every league of the teams someone follows has just finished (nothing on its board in the next week, its last game 10 to 24 days ago, in a month its season ends in, so an All-Star week or the Super Bowl's bye never reads as an end), "When I've been away" says once which leagues are on and that following a team there brings its games, big moments and finals. And when a league is back after a month off, its fans who have been away a week hear once when their team plays first: the report's "one note at a season's start" for the dormant. Leagues, not players: a player suggestion would be a pick by another name | engine/lifecycle.seasons, season_bridge (season_marks keeps when each league last played) |
+
+## 10. The first paper's mechanics and the owner's numbers (2026-10-29, round five)
+
+| The paper | Built | Where |
+| --- | --- | --- |
+| "A weekly 'your best-graded bet' card is a fine reward" | The Edge Report's best-priced bet this week (last week's on a Monday, or when nothing this week beat the close): graded on the price against the close, win or lose | js/account.js mbEdge |
+| Process marks, "Beat the close", never win streaks | "Weeks you beat the close": of the last eight weeks with a priced bet, how many beat the close on average. A mark on the member's own report, never an alert, never karma (Ethan's rule: karma never pays for bets). The "research streak" is karma's daily streak already: a day here, not a bet | js/account.js mbEdge |
+| North Star: "weekly active sweaters" | In the owner report: members who said yes who opened a live game's page in a week with a bet dated that week or a team or player they follow, this week and the three before | engine/engagement.north_star |
+| The aha moment, "a hypothesis to test" | Of members who said yes and signed up 4 to 12 weeks ago: who logged a bet and watched a live game's page in their first two days, and how many of them and of the rest were here in days 22 to 28. Under ten members it says too few; it says "who did it, not why they stayed" | engine/engagement.aha |
+| RFM | Recency by frequency (days since last here × days here of the last 28), with the paying members in each cell; the four groups above are its money cut | engine/engagement.rfm_lines |
+
+Built after all, 2026-10-29 (Ethan: "approve all. and build leaderboards"):
+
+- **The closing-line leaderboards** (engine/closeboard; My Bets, under the
+  Edge Report). This week and the last 90 days, everyone or friends, ranked
+  by each member's average price against the close over their saved
+  parlays' legs, never by profit. Opt-in (My Bets or Settings → Your data),
+  a username needed, five legs to be ranked in a week and 25 in 90 days.
+  Because a public table invites gaming that a private report did not, a
+  leg counts only at the price taken capped at the best price the books
+  showed when the box first saw it (`bet_clv.first_best`), and only once
+  the box saw its game start with the parlay still saved (`closed`): a
+  parlay deleted mid-move keeps a price that is not a close. Two locks, as
+  the split: `QB_CLOSEBOARD=1` and the policy's §2.12 (id="close-board").
+
+Not built, and why:
+- **The alert-copy bandit.** Telling two wordings apart by a few points of
+  open rate takes thousands of sends of each; no alert kind sends that many
+  a week yet. The daily totals by kind (HV) already say which alerts get
+  opened. Revisit when one kind passes a thousand a week.
+
+## 11. Your month (2026-10-29, round six; Ethan: "keep building")
+
+| What | Built | Where |
+| --- | --- | --- |
+| A month's recap, the reason to come back on the 1st that a week's is on a Monday (Strava's month, Spotify's Wrapped) | The Karma tab's "Your month": live games watched here, days with karma, karma, the pick'em record and Call it record, from the tables the karma already reads; the month just ended for a new month's first week, else this one so far; a picture for the share sheet; the Live card's one line in the first week. Never a bet, a stake or a pick (karma never pays for bets, and a picture of winnings would be an ad for betting); nothing new kept, nothing sent | engine/yourmonth, karma.me `month`, js/karma.js krMonthHTML, krMonthCanvas |
+| Each person's own best hour (§4, item 2) | Monday's "Your week" at the hour a member usually looks, for members who said yes to keeping their activity; nine for everybody else | engine/engagement.usual_hours, pushmine.week_pass |
+
+Not built: a push on the 1st for the month. A new kind of alert is a new
+line in the policy's list of what we send, and the Live card's line and
+What's new already reach the members who come; the members who do not are
+the away alert's.
+

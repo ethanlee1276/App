@@ -1,0 +1,782 @@
+"""First basket — who scores an NBA game's first points, by our numbers.
+
+Ethan, 2026-10-31: "I only want our long shot picks to be stuff like first
+basket score for NBA or first touchdown score for NFL ... We want to be going
+after what the data and tools that we have all put together says, not just off
+of book lines." And, the same day: "still not seeing ... first basket scored
+for NBA yet ... those bets need to show up on the long shot page."
+
+THE RESEARCH (tools/first_basket_study.py over the box's every NBA shot and
+free throw, `nba_shots`; runbook IV, 2026-10-31; docs/FIRST_TD_RESEARCH.md).
+Every figure fitted on the seasons before the last and scored on the last:
+
+  * 1,471 games with a basket. The team with the game's first shot scores
+    the first points 71.9% of the time; the home team 53.8%.
+  * WHO SHOOTS FIRST — the opening tip, mostly — is a lasting team trait:
+    each team's history of taking the first shot beats a coin on the held-out
+    games (log loss 0.6731 against 0.6931).
+  * WHICH PLAYER: his share of his team's shots in the FIRST THREE MINUTES of
+    its games picks the scorer best — 1.9874 nats on 158 held-out team first
+    baskets, against 2.1341 for his share of all its shots, 2.1087 of its
+    made shots, 2.1020 of its first-quarter shots and 2.0542 for a third of
+    each. Who starts and who the first plays run through is the whole game.
+
+THE MODEL:
+
+  * P(home shoots first) = logistic(logit(HOME_FIRST_SHOT) + logit(rh) −
+    logit(ra)), where rh and ra are each team's first-shot rate this season,
+    smoothed toward even ((first shots + 2) / (games + 4)). HOME_FIRST_SHOT is
+    what the two measured rates imply: 0.538 = q × 0.719 + (1 − q) × 0.281
+    gives q = 0.587 for two teams with even tip records.
+  * P(home scores first) = q × FIRST_SHOT_SCORES + (1 − q) × (1 −
+    FIRST_SHOT_SCORES).
+  * His share = EPS + his share of his team's first-three-minute shots this
+    season (last season at half weight), normalised over the team's
+    candidates — every player with a first-three-minute shot in one of its
+    last RECENT_GAMES games.
+  * P(he scores first) = P(his team scores first) × his share.
+  * WHO PLAYS TONIGHT (2026-11-05). A candidate the injury report rules
+    out is taken out before the shares are drawn, and the rest share his
+    opening shots. Measured on the lab's two full seasons through
+    `shares` (docs/NBA_LAB.md, "First basket, the men who play"): a
+    candidate sat in 60% of team first baskets, and taking out the men not
+    in the box cut the log loss of the actual scorer's share from 1.842 to
+    1.678 (2024-25) and 1.819 to 1.644 (2025-26) — 14-16% in the games
+    with one sitting. The board was handing a seat to men in street
+    clothes and shorting every teammate who played.
+  * TONIGHT'S FIVE, BY HIS SHOTS PER START (2026-11-05). The first basket
+    almost always falls to one of the five on the floor at the tip, and a
+    season's COUNT of opening shots mixes how often a man starts with how
+    much he shoots when he does: a new starter, or a man back from a month
+    out, read as a small share, and a man sent to the bench kept a
+    starter's. Now, wherever the club's last starting five is on file
+    (the box scores' starter flags, `player_game_logs`), the board reads
+    TONIGHT'S LIKELY FIVE before the tip — that five less the men ruled
+    out, plus a RETURNING STARTER (he started his last game for the club,
+    missed its last one, is on tonight's slate with it and not ruled out),
+    filled to five by the busiest candidates — and shares the first basket
+    among them by OPENING SHOTS PER START (this season and last at half
+    weight, pulled toward PRIOR_RATE by PRIOR_STARTS starts); a candidate
+    outside the five keeps BENCH of his rate. Measured on the lab's two
+    seasons, each season's settings fitted on the other (docs/NBA_LAB.md,
+    "First basket, tonight's five"): the multi-class Brier score of the
+    scorer's team fell from 0.858 to 0.827 (2024-25) and 0.856 to 0.821
+    (2025-26), the floored log loss from 2.15 to 1.96 and 2.17 to 1.96,
+    and the shares are calibrated where the old ones were not (the old
+    board's 34% men scored 25% of the time; the new 13-27% bins land
+    within two points). A club with no game this season keeps the board
+    as built.
+  * THE OPENING TIP BY ITS JUMPERS (2026-11-05). Replayed on the lab's two
+    full seasons, the team half above — each club's own tip record, with
+    the 0.587 home lean the box study implied — read WORSE than a coin on
+    who takes the first shot (log loss 0.708 and 0.698 against 0.693): the
+    home side took it 49.9% and 52.4% of the time, and a club's record
+    changes with the man who jumps for it. Each final's opening jump is now
+    kept (`nba_tips`, engine/nba/shots.fold_espn_tip), and where any is
+    stored the board reads tonight's two jumpers instead (`tip_read`): each
+    one's record of tips his side gained, pulled toward even by JUMP_PRIOR,
+    the home lean HOME_TIP, and the side that gains the tip shooting first
+    TIP_SHOOTS of the time. Every setting fitted on the other season: who
+    takes the first shot 0.676 and 0.664, who scores first 0.694 -> 0.687
+    and 0.688 -> 0.685; through the board's own code 0.6936 -> 0.6869 and
+    0.6881 -> 0.6830 (docs/NBA_LAB.md, "First basket, the opening tip"). The
+    feed's third man is read as who the tip went to only once enough
+    stored games agree with who shot first (`tips`); until then each jump
+    is read by which side took the first shot.
+
+A PICK is a priced player our chance puts clearly above the price: MIN_EV at
+the best bettable price, inside FIRST_BASKET_ODDS, one a game — the same bar
+as the football boards' first touchdown (engine/firsttd), never the book's
+shortest price. A game with no price on file shows its likeliest first scorers
+by our numbers with the price that would make each a pick.
+
+GRADED off the same table: the game's first made shot or free throw, by
+action order — what the books settle "first basket" on.
+
+Standard library only.
+"""
+from __future__ import annotations
+
+import math
+
+from . import firsttd as _ftd
+
+#: The team with the game's first shot scores first this often (IV, 1,471 games).
+FIRST_SHOT_SCORES = 0.719
+#: The home team scores first this often (IV), and the first-shot rate that
+#: implies for two teams with even tip records.
+HOME_SCORES_FIRST = 0.538
+HOME_FIRST_SHOT = (HOME_SCORES_FIRST - (1 - FIRST_SHOT_SCORES)) / (2 * FIRST_SHOT_SCORES - 1)
+#: The first three minutes of the first quarter, in seconds left on its clock.
+OPENING_S = 12 * 60 - 3 * 60
+#: Last season's shots count this much against this season's.
+LAST_SEASON = 0.5
+#: The floor every candidate's share starts from (the study's 0.02).
+EPS = 0.02
+#: A candidate took a first-three-minute shot in one of his team's last
+#: RECENT_GAMES games — the starters, and whoever the first plays run through.
+RECENT_GAMES = 5
+#: Smoothing for a team's first-shot rate: (first shots + PRIOR) / (games + 2·PRIOR).
+PRIOR = 2
+
+#: TONIGHT'S FIVE (2026-11-05; fitted held out on the lab's two seasons,
+#: docs/NBA_LAB.md "First basket, tonight's five"). The men at the tip.
+FIVE = 5
+#: His opening shots per start are pulled toward PRIOR_RATE by this many
+#: starts — a new starter reads as a league starter until he shows otherwise.
+PRIOR_STARTS = 12.0
+PRIOR_RATE = 0.9
+#: A candidate outside tonight's likely five keeps this much of his rate.
+BENCH = 0.05
+#: The floor every candidate's share starts from on the five's path.
+FIVE_EPS = 0.01
+
+#: THE OPENING TIP BY ITS JUMPERS (2026-11-05; fitted on the lab's two
+#: seasons, docs/NBA_LAB.md "First basket, the opening tip"). Who takes the
+#: first shot is mostly who wins the opening tip, and that is a trait of the
+#: two men who jump: a club's own tip record, with the home lean the box
+#: study implied, read WORSE than a coin on two full seasons.
+#: His club's jumper tonight: the man who jumped most in its last TIP_WINDOW.
+TIP_WINDOW = 10
+#: The home side gains the tip this often between two even jumpers, and the
+#: side that gains it takes the first shot this often.
+HOME_TIP = 0.507
+TIP_SHOOTS = 0.881
+#: A jumper's record is pulled toward even by this many jumps.
+JUMP_PRIOR = 6.0
+#: Where the feed's third man cannot be trusted as the tip (`tips`), each
+#: jumper is read by which side took the first shot: the home lean and the
+#: pull for that reading.
+HOME_SHOT = 0.512
+JUMP_PRIOR_SHOT = 18.0
+#: The third man's club is read as the side that gained the tip once this
+#: many stored games agree with who shot first this often (the tip's side
+#: shot first 88% of the time in the lab's seasons; a wrong reading agrees
+#: about half the time).
+TIP_CHECK_MIN = 30
+TIP_CHECK_AGREE = 0.80
+
+#: The price window and the bar, the football boards' own (engine/firsttd).
+FIRST_BASKET_ODDS = _ftd.FIRST_TD_ODDS
+MIN_EV = _ftd.MIN_EV
+MIN_PROB = _ftd.MIN_PROB
+PER_GAME = _ftd.PER_GAME
+LIMIT = _ftd.LIMIT
+OURS_PER_GAME = _ftd.OURS_PER_GAME
+
+MARKET = "first_basket"
+LABEL = "First Basket"
+
+
+def _logit(p: float) -> float:
+    p = min(max(float(p), 1e-6), 1 - 1e-6)
+    return math.log(p / (1 - p))
+
+
+def _clock_s(clock) -> float:
+    """Seconds left in the period from "11:45" or "PT11M45.00S"; -1 unknown."""
+    c = str(clock or "")
+    try:
+        if c.startswith("PT"):
+            m, s = c[2:].rstrip("S").split("M")
+            return int(m) * 60 + float(s)
+        if ":" in c:
+            m, s = c.split(":")
+            return int(m) * 60 + float(s)
+    except ValueError:
+        pass
+    return -1.0
+
+
+def first_shot_rate(first_shots: int, games: int) -> float:
+    """A team's first-shot rate, smoothed toward even."""
+    return (first_shots + PRIOR) / (games + 2 * PRIOR)
+
+
+def home_shoots_first(rh: float, ra: float) -> float:
+    """P(the home team takes the game's first shot) from both teams' rates."""
+    return 1.0 / (1.0 + math.exp(-(_logit(HOME_FIRST_SHOT) + _logit(rh) - _logit(ra))))
+
+
+def home_scores_first(q: float) -> float:
+    """P(the home team scores the game's first points) from P(first shot)."""
+    return q * FIRST_SHOT_SCORES + (1 - q) * (1 - FIRST_SHOT_SCORES)
+
+
+def shares(players: dict, eps: float = EPS) -> dict:
+    """{player: share of his team's first baskets} for one team: ``eps`` plus
+    his share of its weights (first-three-minute shots on the board as built),
+    normalised to one."""
+    tot = sum(max(0.0, float(v)) for v in players.values())
+    raw = {p: eps + (max(0.0, float(v)) / tot if tot > 0 else 0.0) for p, v in players.items()}
+    z = sum(raw.values()) or 1.0
+    return {p: s / z for p, s in raw.items()}
+
+
+# --- what the shots say (history.db `nba_shots`) ---------------------------------
+def _canon(team: str) -> str:
+    try:
+        from .divisions import canonical
+        return canonical("nba", str(team or "").upper())
+    except Exception:                                         # noqa: BLE001
+        return str(team or "").upper()
+
+
+def season_of(date: str) -> int:
+    """The NBA season a date belongs to, named for the year it starts in
+    (engine/seasons: 2026-10-31 is the 2026 season)."""
+    try:
+        from .seasons import season_of as _so
+        return int(_so("nba", str(date)[:10]))
+    except Exception:                                         # noqa: BLE001
+        y, m = int(str(date)[:4]), int(str(date)[5:7])
+        return y if m >= 9 else y - 1
+
+
+def read(conn, season: int, before: str | None = None) -> dict:
+    """{"teams": {team: {"first": n, "games": n}}, "usage": {team: {player:
+    weighted first-three-minute shots}}, "recent": {team: {players}}} from
+    this season's and last season's first-quarter rows (before ``before``)."""
+    q = ("SELECT season, date, game_id, action, player, team, period, clock "
+         "FROM nba_shots WHERE season IN (?, ?) AND period = 1")
+    args: list = [season, season - 1]
+    if before:
+        q += " AND date < ?"
+        args.append(before)
+    games: dict = {}
+    for r in conn.execute(q, args):
+        g = games.setdefault(r[2], {"season": int(r[0]), "date": str(r[1]), "rows": []})
+        g["rows"].append((int(r[3] or 0), str(r[4] or ""), _canon(r[5]), _clock_s(r[7])))
+    teams: dict = {}
+    usage: dict = {}
+    by_team_games: dict = {}
+    first_shot: dict = {}
+    for gid, g in games.items():
+        rows = sorted(g["rows"])
+        if not rows:
+            continue
+        here = {t for _a, _p, t, _c in rows}
+        if len(here) == 2:
+            first_shot[gid] = rows[0][2]
+        if g["season"] == season and len(here) == 2:
+            first_team = rows[0][2]
+            for t in here:
+                d = teams.setdefault(t, {"first": 0, "games": 0})
+                d["games"] += 1
+                d["first"] += int(t == first_team)
+        w = 1.0 if g["season"] == season else LAST_SEASON
+        opening: dict = {}
+        for _a, p, t, c in rows:
+            if p and c >= OPENING_S:
+                opening.setdefault(t, {}).setdefault(p, 0)
+                opening[t][p] += 1
+        for t, ps in opening.items():
+            u = usage.setdefault(t, {})
+            for p, n in ps.items():
+                u[p] = u.get(p, 0.0) + w * n
+            if g["season"] == season:
+                by_team_games.setdefault(t, []).append((g["date"], gid, set(ps)))
+    recent: dict = {}
+    for t, lst in by_team_games.items():
+        lst.sort()
+        recent[t] = set().union(*(s for _d, _g, s in lst[-RECENT_GAMES:])) if lst else set()
+    return {"teams": teams, "usage": usage, "recent": recent, **lineups(conn, season, before),
+            "tip": tips(conn, season, before, first_shot)}
+
+
+def tips(conn, season: int, before: str | None = None, first_shot: dict | None = None) -> dict:
+    """Every stored opening tip (`nba_tips`) before ``before``, this season
+    and last at half weight, read as each jumper's record:
+
+      ``jumps``         {normalised name: [tips his side gained, jumps]};
+      ``team_jumpers``  {team: [normalised names]} this season, oldest first;
+      ``names``         {normalised name: his name as stored};
+      ``source``        "tip" when the feed's third man has proved to be who
+                        the tip went to (TIP_CHECK_MIN games agreeing with who
+                        shot first TIP_CHECK_AGREE of the time, ``first_shot``
+                        {game_id: club}), else "first shot" — each jump then
+                        read by which side took the first shot;
+      ``games``, ``agree``  how many tips were read, and that agreement.
+
+    Empty where the table is missing or holds nothing yet: the board's team
+    half as built."""
+    out: dict = {"jumps": {}, "team_jumpers": {}, "names": {}, "source": "", "games": 0, "agree": None}
+    q = ("SELECT game_id, season, date, home, away, home_jumper, away_jumper, third FROM nba_tips "
+         "WHERE season IN (?, ?)")
+    args: list = [season, season - 1]
+    if before:
+        q += " AND date < ?"
+        args.append(str(before)[:10])
+    try:
+        rows = [r for r in conn.execute(q, args).fetchall() if r[5] and r[6] and r[3] and r[4]]
+    except Exception:                                         # noqa: BLE001
+        return out
+    if not rows:
+        return out
+    shot = first_shot or {}
+    checked = [(str(r[7]), shot.get(str(r[0]))) for r in rows if r[7] and shot.get(str(r[0]))]
+    agree = sum(a == b for a, b in checked) / len(checked) if checked else None
+    trust = len(checked) >= TIP_CHECK_MIN and agree is not None and agree >= TIP_CHECK_AGREE
+    out["source"], out["agree"] = ("tip" if trust else "first shot"), agree
+    for gid, s, _day, home, away, hj, aj, third in sorted(rows, key=lambda r: (str(r[2]), str(r[0]))):
+        home, away = _canon(home), _canon(away)
+        gained = _canon(third) if (trust and third) else _canon(shot.get(str(gid)) or "")
+        if gained not in (home, away):
+            continue
+        w = 1.0 if int(s) == int(season) else LAST_SEASON
+        for name, club in ((hj, home), (aj, away)):
+            n = _norm(name)
+            rec = out["jumps"].setdefault(n, [0.0, 0.0])
+            rec[0] += w * (gained == club)
+            rec[1] += w
+            out["names"].setdefault(n, str(name))
+            if int(s) == int(season):
+                out["team_jumpers"].setdefault(club, []).append(n)
+        out["games"] += 1
+    return out
+
+
+def tip_read(data: dict, home: str, away: str, out=None, plays=None):
+    """``(P(home takes the first shot), {team: (jumper, tips gained, jumps)})``
+    by tonight's two jumpers, or None where no tip is stored (the board's
+    team half as built). Each club's jumper is the man who jumped most in its
+    last TIP_WINDOW tips, ruled-out men and men ``plays`` files with another
+    club passed over; a club with none reads as even."""
+    import collections
+    t = data.get("tip") or {}
+    if not t.get("games"):
+        return None
+    full, short = _sitting(out)
+    where = {_norm(k): _canon(v) for k, v in (plays or {}).items() if k}
+    names = t.get("names") or {}
+
+    def jumper(team):
+        club = _canon(team)
+        ok = [n for n in ((t.get("team_jumpers") or {}).get(club) or [])[-TIP_WINDOW:]
+              if not (full and _sits(names.get(n, n), full, short)) and not (n in where and where[n] != club)]
+        return collections.Counter(ok).most_common(1)[0][0] if ok else None
+
+    k = JUMP_PRIOR if t.get("source") == "tip" else JUMP_PRIOR_SHOT
+
+    def rate(n):
+        g, j = (t.get("jumps") or {}).get(n, [0.0, 0.0]) if n else (0.0, 0.0)
+        return (g + k * 0.5) / (j + k)
+
+    jh, ja = jumper(home), jumper(away)
+    if t.get("source") == "tip":
+        p = 1.0 / (1.0 + math.exp(-(_logit(HOME_TIP) + _logit(rate(jh)) - _logit(rate(ja)))))
+        q = TIP_SHOOTS * p + (1 - TIP_SHOOTS) * (1 - p)
+    else:
+        q = 1.0 / (1.0 + math.exp(-(_logit(HOME_SHOT) + _logit(rate(jh)) - _logit(rate(ja)))))
+    who = {}
+    for team, n in ((home, jh), (away, ja)):
+        g, j = (t.get("jumps") or {}).get(n, [0.0, 0.0]) if n else (0.0, 0.0)
+        who[team] = (names.get(n, "") if n else "", round(g, 1), round(j, 1))
+    return q, who
+
+
+def lineups(conn, season: int, before: str | None = None) -> dict:
+    """Who starts, from the box scores' starter flags (`player_game_logs`,
+    position "S"), before ``before``:
+
+      ``starts``     {team: {normalised name: starts}} this season, last at
+                     half weight — the per-start rate's denominator, the same
+                     window as the opening shots it divides;
+      ``last_five``  {team: [normalised names]} the starters of the club's
+                     newest game this season;
+      ``last_game``  {team: {normalised name: (date, started)}} each man's
+                     newest game for the club this season;
+      ``club_last``  {team: date} the club's newest game;
+      ``names``      {team: {normalised name: his name as the logs write it}}.
+
+    Every key empty where the table is missing or holds nothing yet — the
+    board as built."""
+    out: dict = {"starts": {}, "last_five": {}, "last_game": {}, "club_last": {}, "names": {}}
+    q = ("SELECT season, period, player, team, position, value FROM player_game_logs "
+         "WHERE sport='nba' AND market='min' AND season IN (?, ?)")
+    args: list = [season, season - 1]
+    if before:
+        q += " AND period < ?"
+        args.append(str(before)[:10])
+    try:
+        rows = conn.execute(q, args).fetchall()
+    except Exception:                                         # noqa: BLE001
+        return out
+    games: dict = {}
+    for s, day, player, team, pos, mins in rows:
+        try:
+            if float(mins or 0.0) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        n, t = _norm(player), _canon(team)
+        if not n or not t:
+            continue
+        started = str(pos or "").strip().upper() == "S"
+        if started:
+            st = out["starts"].setdefault(t, {})
+            st[n] = st.get(n, 0.0) + (1.0 if int(s) == int(season) else LAST_SEASON)
+        if int(s) == int(season):
+            games.setdefault(t, {}).setdefault(n, {})[str(day)[:10]] = started
+            out["names"].setdefault(t, {})[n] = str(player)
+    for t, men in games.items():
+        last = max(d for g in men.values() for d in g)
+        out["club_last"][t] = last
+        out["last_five"][t] = sorted(n for n, g in men.items() if g.get(last))
+        out["last_game"][t] = {n: (max(g), g[max(g)]) for n, g in men.items()}
+    return out
+
+
+def _norm(name: str) -> str:
+    from .sources.oddsapi import normalize_name
+    return normalize_name(str(name or ""))
+
+
+def _sitting(out) -> tuple:
+    """``out`` as the two keys a shot row's name is matched on: the full
+    normalised names, and (initial, surname) for a row that carries only the
+    initial ("J. Tatum", the play-by-play's own spelling when the box score
+    had no name for him)."""
+    full = {_norm(n) for n in (out or ()) if n}
+    short = {(n.split()[0][:1], n.split()[-1]) for n in full if len(n.split()) >= 2}
+    return full, short
+
+
+def _sits(name: str, full: set, short: set) -> bool:
+    n = _norm(name)
+    if n in full:
+        return True
+    parts = n.split()
+    # Only an initial is matched by initial: a full name that is not on the
+    # list plays — Jalen Williams is not Jaylin Williams.
+    return len(parts) >= 2 and len(parts[0]) == 1 and (parts[0], parts[-1]) in short
+
+
+def _as_built(data: dict, team: str, out=None) -> dict:
+    """{player: weighted first-three-minute shots}: the team's recent
+    openers, or before it has a game this season, last season's eight
+    busiest — never a man in ``out``."""
+    t = _canon(team)
+    u = data.get("usage", {}).get(t, {})
+    rec = data.get("recent", {}).get(t)
+    full, short = _sitting(out)
+    plays = (lambda p: not _sits(p, full, short)) if full else (lambda p: True)
+    if rec:
+        return {p: u.get(p, 0.0) for p in rec if plays(p)}
+    return dict(sorted(((p, v) for p, v in u.items() if plays(p)), key=lambda kv: -kv[1])[:8])
+
+
+def five(data: dict, team: str, out=None, plays=None):
+    """Tonight's likely five and every candidate's weight, or None where the
+    club's last starting five is not on file (the board as built).
+
+    ``{"w": {player: weight}, "five": {players}, "rate": {player: opening
+    shots per start}}``. The five is the club's last starting five less the
+    men in ``out`` (ruled out tonight), plus each RETURNING STARTER — he
+    started his newest game for the club, missed its newest one, and
+    ``plays`` ({name: team}, the men on tonight's slate, filed by the clubs'
+    current rosters) puts him with this club tonight — filled to FIVE by the
+    busiest candidates. A man ``plays`` puts with another club tonight is no
+    candidate here. Weights: opening shots
+    per start, pulled toward PRIOR_RATE by PRIOR_STARTS; BENCH of that off
+    the five."""
+    t = _canon(team)
+    last = (data.get("last_five") or {}).get(t)
+    if not last:
+        return None
+    u = data.get("usage", {}).get(t, {})
+    shown: dict = {}
+    by_norm: dict = {}
+    for p, v in u.items():
+        n = _norm(p)
+        shown.setdefault(n, p)
+        by_norm[n] = by_norm.get(n, 0.0) + float(v or 0.0)
+    logs = (data.get("names") or {}).get(t) or {}
+    show = lambda n: shown.get(n) or logs.get(n) or n                       # noqa: E731
+    where = {_norm(k): _canon(v) for k, v in (plays or {}).items() if k}
+    full, short = _sitting(out)
+    pool = {_norm(p) for p in (data.get("recent", {}).get(t) or ())} | set(last)
+    likely = set(last)
+    club_last = (data.get("club_last") or {}).get(t) or ""
+    for n, (day, started) in ((data.get("last_game") or {}).get(t) or {}).items():
+        if started and str(day) < str(club_last) and where.get(n) == t:
+            likely.add(n)
+    pool |= likely
+    pool = {n for n in pool if not (full and _sits(show(n), full, short))
+            and not (n in where and where[n] != t)}
+    likely &= pool
+    filled = set(likely)
+    for n in sorted(pool - likely, key=lambda n: (-by_norm.get(n, 0.0), n)):
+        if len(filled) >= FIVE:
+            break
+        filled.add(n)
+    st = (data.get("starts") or {}).get(t) or {}
+    rate = {n: (by_norm.get(n, 0.0) + PRIOR_STARTS * PRIOR_RATE) / (float(st.get(n, 0.0)) + PRIOR_STARTS)
+            for n in pool}
+    return {"w": {show(n): rate[n] * (1.0 if n in filled else BENCH) for n in pool},
+            "five": {show(n) for n in filled}, "rate": {show(n): rate[n] for n in pool}}
+
+
+def candidates(data: dict, team: str, out=None, plays=None) -> dict:
+    """{player: weight} for this team's candidates — never a man in ``out``
+    (the names the injury report rules out tonight). Tonight's five's
+    weights where the club's last starting five is on file (`five`), else
+    the board as built: its recent openers' first-three-minute shots, or
+    before it has a game this season, last season's eight busiest."""
+    f = five(data, team, out, plays)
+    return f["w"] if f is not None else _as_built(data, team, out)
+
+
+def team_shares(data: dict, team: str, out=None, plays=None) -> tuple:
+    """``(shares, five)`` for one team: tonight's five's path where it can
+    be read, ``five`` None on the board as built."""
+    f = five(data, team, out, plays)
+    if f is not None:
+        return shares(f["w"], eps=FIVE_EPS), f
+    return shares(_as_built(data, team, out)), None
+
+
+def game_probs(data: dict, home: str, away: str, out=None, plays=None) -> list:
+    """Every candidate's chance of scoring the game's first points, the men
+    in ``out`` (normalised names ruled out tonight) taken out first and
+    ``plays`` ({name: team} on tonight's slate) confirming a returning
+    starter."""
+    tipped = tip_read(data, home, away, out, plays)
+    if tipped is not None:
+        q, who = tipped
+    else:
+        th = data.get("teams", {}).get(_canon(home), {"first": 0, "games": 0})
+        ta = data.get("teams", {}).get(_canon(away), {"first": 0, "games": 0})
+        q = home_shoots_first(first_shot_rate(th["first"], th["games"]),
+                              first_shot_rate(ta["first"], ta["games"]))
+        who = None
+    ph = home_scores_first(q)
+    rows = []
+    for team, pt in ((home, ph), (away, 1.0 - ph)):
+        sh, f = team_shares(data, team, out, plays)
+        for name, s in sh.items():
+            row = {"player": name, "team": team, "prob": pt * s,
+                   "team_first": round(pt, 4), "first_shot": round(q if team == home else 1 - q, 4),
+                   "share": round(s, 4)}
+            if who is not None:
+                row["jumper"], row["jumper_won"], row["jumper_jumps"] = who[team]
+            if f is not None:
+                row["in_five"] = name in f["five"]
+                row["per_start"] = round(f["rate"][name], 2)
+            rows.append(row)
+    rows.sort(key=lambda r: -r["prob"])
+    return rows
+
+
+def _who(name: str, team_rows: list):
+    """The candidate row a quoted name belongs to: exact, then (initial, surname)."""
+    from .sources.oddsapi import normalize_name
+    n = normalize_name(name)
+    for r in team_rows:
+        if normalize_name(r["player"]) == n:
+            return r
+    parts = n.split()
+    if len(parts) >= 2:
+        key = (parts[0][:1], parts[-1])
+        for r in team_rows:
+            rp = normalize_name(r["player"]).split()
+            if len(rp) >= 2 and (rp[0][:1], rp[-1]) == key:
+                return r
+    return None
+
+
+def board(quotes: dict, games: list, conn=None, date: str = "", why: str = "",
+          out=None, plays=None) -> dict:
+    """The NBA's Long Shots board, in engine/firsttd.board's shape:
+    {"rows", "picks", "games", "quoted", "ours", "ours_games", "why"}.
+
+    ``quotes`` is {key: {"player", "home", "away", "quotes"}} (the first
+    basket market, `oddsapi.FIRST_BASKET_ODDS_TO_MARKET`); ``games`` the
+    board's games (home, away, date, kickoff). Shots come from the history
+    database (`read`), this season and last at half weight. ``out`` is the
+    normalised names the injury report rules out tonight: none of them is a
+    candidate, and a price on one is no pick. ``plays`` is {name: team} for
+    the men on tonight's slate: a returning starter joins tonight's five
+    only when it names him with the club (`five`)."""
+    from .sources.oddsapi import best_scorer_price
+    if conn is None:
+        from . import db as _db
+        conn = _db.connect()
+    by_pair: dict = {}
+    for qd in (quotes or {}).values():
+        by_pair.setdefault((_canon(qd.get("home")), _canon(qd.get("away"))), []).append(qd)
+    cache: dict = {}
+    rows, n_games, ours, ours_games = [], 0, [], 0
+    for g in games or []:
+        home, away = g.get("home"), g.get("away")
+        if not home or not away:
+            continue
+        season = season_of(g.get("date") or date)
+        if season not in cache:
+            cache[season] = read(conn, season, before=str(g.get("date") or date)[:10] or None)
+        ranked = game_probs(cache[season], home, away, out, plays)
+        qs = by_pair.get((_canon(home), _canon(away))) or []
+        common = {"market": MARKET, "market_label": LABEL, "game": f"{away}@{home}",
+                  "matchup": f"{away} @ {home}", "game_date": g.get("date"),
+                  "game_kickoff": g.get("kickoff")}
+        if not qs:
+            top = [r for r in ranked if r["prob"] > 0][:OURS_PER_GAME]
+            ours_games += int(bool(top))
+            for r in top:
+                p = float(r["prob"])
+                ours.append({"player": r["player"], "team": r["team"],
+                             "opponent": away if r["team"] == home else home, **common,
+                             "prob": round(p, 4), "team_first": r["team_first"], "share": r["share"],
+                             "fair_odds": _ftd.fair_odds(p), "need_odds": _ftd.need_odds(p),
+                             "priced": False})
+            continue
+        n_games += 1
+        for qd in qs:
+            hit = _who(qd.get("player") or "", ranked)
+            if hit is None:
+                continue
+            best = best_scorer_price(qd.get("quotes") or [])
+            if not best:
+                continue
+            p, odds = float(hit["prob"]), int(best["yes_odds"])
+            imp, ev = _ftd.implied(odds), _ftd.expected_return(p, odds)
+            team = hit["team"]
+            rows.append({"player": qd.get("player") or hit["player"], "team": team,
+                         "opponent": away if team == home else home, **common,
+                         "side": "YES", "line": 0.5, "odds": odds, "book": best.get("book", ""),
+                         "prob": round(p, 4), "model_prob": round(p, 4),
+                         "team_first": hit["team_first"], "share": hit["share"],
+                         "implied": round(imp, 4), "implied_prob": round(imp, 4),
+                         "ev": round(ev, 4), "ev_per_unit": round(ev, 4),
+                         "fair_odds": _ftd.fair_odds(p), "need_odds": _ftd.need_odds(p), "priced": True,
+                         "primary_reason": (f"{team} score first {hit['team_first']:.0%} by the tip · "
+                                            f"his share {hit['share']:.0%}"),
+                         "reasons": [
+                             _tip_reason(hit, team),
+                             _share_reason(hit, team),
+                             f"Our chance {p:.1%} against {imp:.1%} in the price ({ev:+.0%} expected return).",
+                         ]})
+    rows.sort(key=lambda r: -r["prob"])
+    # No first-TD ceiling here: that guards a football board against a box
+    # score with no targets, and this one counts every shot.
+    picks = _ftd.pick([dict(r) for r in rows], max_prob=None)
+    for r in picks:
+        r["grade"] = LABEL
+        r["edge"] = round(r["prob"] - r["implied"], 4)
+        r["stake_units"] = 0.1
+        r["expected_opportunities"] = f"{r['share']:.0%}"
+    ours.sort(key=lambda r: (str(r.get("game_kickoff") or ""), r["game"], -r["prob"]))
+    out = {"rows": rows, "picks": picks, "games": n_games, "quoted": len(rows),
+           "ours": ours, "ours_games": ours_games}
+    if not rows:
+        out["why"] = why_empty(why)
+    return out
+
+
+def _tip_reason(hit: dict, team: str) -> str:
+    """The card's line for his team's half: the jumpers' words on their path."""
+    tail = (f", and the team with the first shot scores first {FIRST_SHOT_SCORES:.0%} of the time "
+            f"(1,471 games).")
+    if "jumper" not in hit:
+        return (f"{team} take the game's first shot {hit['first_shot']:.0%} of the time by both "
+                f"teams' tip records this season" + tail)
+    if hit["jumper"]:
+        won, of = hit["jumper_won"], hit["jumper_jumps"]
+        rec = f"{won:g} of {of:g}" if of else "no record yet"
+        return (f"{team} take the game's first shot {hit['first_shot']:.0%} of the time by tonight's two "
+                f"jumpers ({hit['jumper']}: his side gained {rec} of his opening tips)" + tail)
+    return (f"{team} take the game's first shot {hit['first_shot']:.0%} of the time by tonight's two "
+            f"jumpers (no jumper of theirs on file, read as even)" + tail)
+
+
+def _share_reason(hit: dict, team: str) -> str:
+    """The card's line for his share: tonight's five's words on its path."""
+    if "in_five" not in hit:
+        return (f"He takes {hit['share']:.0%} of {team}'s shots in the first three minutes of "
+                f"its games — the share that picks the first scorer best.")
+    if hit["in_five"]:
+        return (f"He is in {team}'s likely starting five tonight and takes {hit['per_start']:.1f} of its "
+                f"shots in the first three minutes a start — {hit['share']:.0%} of its first baskets "
+                f"by our numbers.")
+    return (f"He is not in {team}'s likely starting five tonight, so his share of its first baskets "
+            f"is small: {hit['share']:.0%}.")
+
+
+WHY_BUDGET = ("No first-basket prices were bought for tonight's games yet: the odds budget "
+              "held the player pull. Below, who scores first by our numbers and the price "
+              "that would make each one a pick.")
+WHY_LATER = ("First-basket prices post closer to tip-off. Below, who scores first by our "
+             "numbers and the price that would make each one a pick.")
+
+
+#: Build notes that mean tonight's player prices were never bought: the
+#: pacer said so, or the build ran on a cache holding none of tonight's
+#: games (2026-10-31: "matched 0 props across 0 events (cached)", the
+#: October budget spent, and the board said the prices post later).
+NOT_BOUGHT = ("budget", "held", "capped at 0", "no odds requested", "matched 0 props", "across 0 events")
+
+
+def why_empty(note: str = "") -> str:
+    n = str(note or "").lower()
+    if any(k in n for k in NOT_BOUGHT):
+        return WHY_BUDGET
+    return WHY_LATER
+
+
+def report(b: dict) -> str:
+    """The build log's line."""
+    unpriced = (f"; our top first scorers shown unpriced for {b['ours_games']} game(s)"
+                if b.get("ours_games") else "")
+    if not b.get("games"):
+        return f"  First basket: no first-basket prices on this pull{unpriced}"
+    return (f"  First basket: {b['quoted']} quoted player(s) across {b['games']} game(s); "
+            f"{len(b['picks'])} pick(s) our chance puts {MIN_EV:.0%}+ above the price{unpriced}")
+
+
+# --- grading (maintenance.settle_open) -------------------------------------------
+def first_scorer(conn, team: str, date: str) -> dict | None:
+    """{"player", "team"} for the first made shot or free throw of ``team``'s
+    game on ``date``, by action order; None before the game is on file."""
+    t = _canon(team)
+    rows = conn.execute(
+        "SELECT game_id, action, player, team, made FROM nba_shots WHERE date = ? "
+        "ORDER BY game_id, action", (str(date)[:10],)).fetchall()
+    games: dict = {}
+    for gid, action, player, tm, made in rows:
+        games.setdefault(gid, []).append((int(action or 0), str(player or ""), _canon(tm), int(made or 0)))
+    for shots in games.values():
+        if t not in {tm for _a, _p, tm, _m in shots}:
+            continue
+        for _a, player, tm, made in sorted(shots):
+            if made:
+                return {"player": player, "team": tm}
+        return None
+    return None
+
+
+def settle(lconn, hconn=None) -> int:
+    """Grade every open NBA first-basket bet whose game's shots are on file.
+    It wins when he made the game's first basket; anyone else's loses it.
+    One `ledger.settle` call per slate date — it keys on (player, market)."""
+    from . import ledger as L
+    from .sources.oddsapi import normalize_name
+    rows = lconn.execute("SELECT * FROM bets WHERE status='open' AND market=? "
+                         "AND LOWER(sport)='nba'", (MARKET,)).fetchall()
+    if not rows:
+        return 0
+    if hconn is None:
+        from . import db as _db
+        hconn = _db.connect()
+    actuals: dict = {}
+    for b in rows:
+        keys = b.keys()
+        day = str((b["game_day"] if "game_day" in keys else "") or b["date"] or "")[:10]
+        team = str((b["team"] if "team" in keys else "") or "")
+        if not day or not team:
+            continue
+        first = first_scorer(hconn, team, day)
+        if not first:
+            continue
+        won = normalize_name(first["player"]) == normalize_name(b["player"] or "")
+        actuals.setdefault(b["date"], {})[(b["player"], MARKET)] = 1.0 if won else 0.0
+    return sum(L.settle(lconn, a, sport="nba", date=d) for d, a in actuals.items())
