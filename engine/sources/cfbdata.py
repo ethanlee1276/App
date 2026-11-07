@@ -623,17 +623,91 @@ def weather_rows(games: list[dict]) -> list[dict]:
 
 
 # --- fetch wrappers ---------------------------------------------------------
+#: THE FBS CONFERENCES, by ESPN group id: the table above less the two
+#: entries nobody has confirmed for the scoreboard's group filter ("20",
+#: the American's old guess, which may name an FCS league; 151 is the
+#: American, derived from two slates).
+FBS_CONFERENCE_GROUPS = ("1", "4", "5", "8", "9", "12", "15", "17", "18", "37", "151")
+
+#: AN FBS ANSWER THIS LONG MAY HAVE BEEN CUT. Saturday 7 November 2026, at
+#: 6 PM Eastern: the college board and the live file each held exactly 25
+#: games (twenty in play, five of the noon finals, not one of the evening's,
+#: Michigan and Michigan State among them), asked with ``limit=900``; and the
+#: playoff race's standings, built off the same feed, had Nebraska 1-2 and
+#: Penn State 3-3 in November. ESPN hands back about two dozen events
+#: whatever ``limit`` says. Ethan: "we are missing so many cfb teams". A
+#: conference's own board is under that on any day, so a day whose FBS
+#: answer is this long is asked again conference by conference
+#: (`whole_slate`).
+SCOREBOARD_CUT_AT = 20
+
+
+def _fbs_side(ev: dict) -> bool:
+    """Does one of the event's two teams play in an FBS conference?"""
+    comp = (ev.get("competitions") or [{}])[0] or {}
+    return any(str(((c or {}).get("team") or {}).get("conferenceId") or "")
+               in FBS_CONFERENCE_GROUPS for c in comp.get("competitors") or [])
+
+
+def whole_slate(board: dict, ask) -> dict:
+    """The FBS answer with each conference's own answer joined in, when the
+    FBS one may have been cut (`SCOREBOARD_CUT_AT`).
+
+    ``ask(group_id)`` returns that conference's payload for the same day.
+    Events join by id, the FBS answer's own copy first; a conference's
+    event joins only when one of its teams plays in an FBS conference (a
+    group id that names an FCS league adds nothing). A conference that
+    cannot be fetched is left out and named. The payload gains ``_asked``:
+    ``{"fbs": the FBS answer's count, "added": {group: new events},
+    "missed": [groups]}``. A short answer is returned as it came.
+    """
+    events = list((board or {}).get("events") or [])
+    if len(events) < SCOREBOARD_CUT_AT:
+        return board
+    seen = {str(e.get("id")) for e in events if isinstance(e, dict) and e.get("id")}
+    added: dict = {}
+    missed: list = []
+    for gid in FBS_CONFERENCE_GROUPS:
+        try:
+            page = ask(gid) or {}
+        except Exception:                                    # noqa: BLE001
+            missed.append(gid)
+            continue
+        n = 0
+        for ev in page.get("events") or []:
+            eid = str((ev or {}).get("id") or "") if isinstance(ev, dict) else ""
+            if eid and eid not in seen and _fbs_side(ev):
+                seen.add(eid)
+                events.append(ev)
+                n += 1
+        if n:
+            added[gid] = n
+    out = dict(board)
+    out["events"] = events
+    out["_asked"] = {"fbs": len((board or {}).get("events") or []),
+                     "added": added, "missed": missed}
+    return out
+
+
 def fetch_scoreboard(date: str, ttl: int = 300) -> dict:
     """One day's board. ``date`` is ISO (YYYY-MM-DD).
 
     ``limit`` matters: ESPN defaults to a couple of dozen events and a
     September Saturday has 60+, so the default would silently drop half the
     slate — including exactly the unwatched games this model is built for.
+
+    …AND IT IS NOT ENOUGH: ESPN cuts the answer at about two dozen whatever
+    it says (`SCOREBOARD_CUT_AT`), so a long answer is filled in from each
+    FBS conference's own board for the day (`whole_slate`), each cached
+    beside the FBS one.
     """
     day = date.replace("-", "")
     url = f"{SCOREBOARD}?dates={day}&groups={FBS_GROUP}&limit=900"
-    return fetch_json(url, f"espn_cfb_{day}.json", ttl=ttl,
-                      user_agent=DEFAULT_AGENT)
+    board = fetch_json(url, f"espn_cfb_{day}.json", ttl=ttl,
+                       user_agent=DEFAULT_AGENT)
+    return whole_slate(board, lambda gid: fetch_json(
+        f"{SCOREBOARD}?dates={day}&groups={gid}&limit=900",
+        f"espn_cfb_{day}_g{gid}.json", ttl=ttl, user_agent=DEFAULT_AGENT))
 
 
 RANKINGS = BASE + "/rankings"

@@ -59,6 +59,9 @@ ESPN_SCOREBOARD = {
 #: the entry is absent rather than empty.
 SCOREBOARD_QUERY = {"cfb": f"?groups={FBS_GROUP}&limit=900"}
 
+#: The least a college conference's own live page is held (`fetch_rows`).
+CFB_GROUP_TTL = 60
+
 # ESPN abbreviations that differ from nflverse.
 ESPN_ABBR = {"WSH": "WAS", "LAR": "LA"}
 
@@ -394,10 +397,23 @@ def fetch_rows(league: str = "nfl", ttl: int = 30) -> list[dict]:
     url = ESPN_SCOREBOARD.get(league)
     if not url:
         raise DataUnavailable(f"no ESPN scoreboard configured for {league!r}")
+    base = url
     url += SCOREBOARD_QUERY.get(league, "")
     text = fetch_text(url, f"espn_{league}_scoreboard.json", ttl=ttl,
                       user_agent=DEFAULT_AGENT)
-    return parse_espn_rows(json.loads(text), league)
+    payload = json.loads(text)
+    if league == "cfb":
+        # ESPN CUTS THE COLLEGE ANSWER at about two dozen games whatever
+        # `limit` says (cfbdata.SCOREBOARD_CUT_AT; Saturday 7 November:
+        # 25 of a full slate, Michigan and Michigan State not among them),
+        # so a long one is filled in from each FBS conference's own board.
+        # Those pages hold at least a minute: eleven asks every thirty
+        # seconds is not a rate to put on the host every league reads.
+        from .cfbdata import whole_slate
+        payload = whole_slate(payload, lambda gid: json.loads(fetch_text(
+            f"{base}?groups={gid}&limit=900", f"espn_cfb_scoreboard_g{gid}.json",
+            ttl=max(int(ttl), CFB_GROUP_TTL), user_agent=DEFAULT_AGENT)))
+    return parse_espn_rows(payload, league)
 
 
 def fetch_live() -> dict[frozenset, LiveStatus]:

@@ -9338,6 +9338,50 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LM. Every college game on the board, not the first 25** (step 439; 7
+November). You, that Saturday: "we are missing so many cfb teams. i dont see
+the michigan vs michigan state game on our app." At 6 PM Eastern the college
+board and the live scores each held exactly 25 games: twenty in play, five
+of the noon finals, none of the evening's. ESPN's college scoreboard hands
+back about two dozen games whatever we ask for (we ask for 900), and every
+college reader goes through that one call: the board, the live scores and
+play-by-play, the playoff race's standings (Nebraska 1-2 and Penn State 3-3
+in November), the futures, and the look-back the board reads for letdown
+spots. Now when ESPN's answer is long enough to have been cut, each FBS
+conference's own scoreboard for the day is asked too (eleven of them, each
+under the cap on any day) and the games joined, ESPN's first answer first; a
+game with no FBS team stays out, and a conference that doesn't answer is
+named while the rest still join. The live scores do the same, each
+conference's page held a minute. Nothing to run: the next college build
+after the restart has the whole slate, and the playoff race corrects itself
+as it re-reads the season. Read-only, after that build: 7 November asked
+again (it should list far more than 25 games, Michigan's among them, and say
+what each conference added), then the board's own count and how its slate
+was gathered, and the live file's count:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine.sources import cfbdata
+b = cfbdata.fetch_scoreboard('2026-11-07')
+g = cfbdata.parse_scoreboard(b)
+print('7 November from ESPN:', len(g), 'games |', b.get('_asked'))
+print('Michigan:', [x['away'] + ' @ ' + x['home'] for x in g if 'MICH' in (x['home'], x['away'])])
+"
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+from engine.gate import board_source
+b = json.load(open(board_source('web/data/cfb.json')))
+print('college board:', b.get('date'), len(b.get('games') or []), 'games | feed:', b.get('feed'))
+print('live college games:', len(json.load(open('web/data/live_cfb.json')).get('games') or []))
+"
+```
+
+The checks in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh LM 2>&1 | tee /tmp/lm.txt
+```
+
 **LL. Sunday's NFL picks on Saturday: the day before** (step 440; 7
 November). You, that Saturday evening: "its saturday and we are not showing
 any nfl picks for sunday ... we need to be show picks a day before games."
@@ -9373,10 +9417,10 @@ for r in rows[-8:]: print(' ', r.get('iso'), r.get('lane'), 'ok' if r.get('ok') 
 "
 cd /srv/qellys && sudo -u qellys python3 -c "
 import json
-b = json.load(open('data/recommendations.json'))
-g, lk, gc = b.get('games') or [], b.get('locked') or {}, b.get('gate_census') or {}
-n = lambda k: len(b.get(k) or []) or lk.get(k, 0)
-print('NFL games', len(g), '| prices shown:', sum(1 for x in g if not x.get('price_stale')), '| props with no real price:', gc.get('no_real_price'), '| Edge picks', gc.get('recommended'), '| Most Likely', n('most_likely'))
+from engine.gate import board_source
+b = json.load(open(board_source('web/data/recommendations.json')))
+g, gc = b.get('games') or [], b.get('gate_census') or {}
+print('NFL games', len(g), '| prices shown:', sum(1 for x in g if not x.get('price_stale')), '| props with no real price:', gc.get('no_real_price'), '| Edge picks', gc.get('recommended'), '| Most Likely', len(b.get('most_likely') or []))
 "
 ```
 

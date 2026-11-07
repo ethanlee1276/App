@@ -1690,6 +1690,11 @@ def main() -> None:
     # Published, not merely printed: a log line is gone by the time
     # anyone asks, and the question this answers is always asked later.
     out["feed"] = {"listed": listed, "kept": len(games)}
+    # How the slate was gathered: ESPN's FBS answer, and what each
+    # conference's own board added to it when that answer was cut
+    # (cfbdata.whole_slate; 7 November: 25 of a full Saturday).
+    if isinstance(board, dict) and board.get("_asked"):
+        out["feed"]["asked"] = board["_asked"]
     if listed and not games:
         print(f"CFB {args.date}: the feed listed {listed} game(s) and the "
               f"parser kept none of them — this is a PARSE failure, not an "

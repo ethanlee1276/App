@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07 (evening), after Sunday's NFL picks started
+Last updated 2026-11-07 (evening), after every college game started
+reaching the board, not the first 25 ESPN hands back (step LM: one
+read-only check in the run below), after Sunday's NFL picks started
 posting on Saturday (the NFL's and college's boards buy tomorrow's slate
 the day before; step LL: one read-only check in the run below), after the
 Record page's information
@@ -209,7 +211,7 @@ Everything below that only reads, in one go (a few minutes; it writes
 nothing). Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP LL KP 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP LL LM KP 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (about an hour together; still
@@ -222,6 +224,12 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long
 
 **Your 7 November catch-up, and what changed for it:**
 
+- **Every college game on the board (step LM):** ESPN's college scoreboard
+  hands back about 25 games whatever we ask for, so a Saturday showed 25
+  (no Michigan and Michigan State), and the playoff race's standings missed
+  games all season. A long answer is now filled in from each FBS
+  conference's own scoreboard. LM, in the run above, asks for 7 November
+  again and shows the board's count.
 - **Sunday's NFL picks on Saturday (step LL):** the tonight rule bought a
   league's prices only on a night it played, so Saturday's NFL board showed
   no price on Sunday's games and no picks. The NFL's and college's boards

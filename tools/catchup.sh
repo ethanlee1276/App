@@ -855,6 +855,22 @@ print('held, no game tonight (last 18h):', dict(held) or 'none yet')
 print('allowed to buy (last 18h):', dict(Counter(r.get('lane') for r in rows if r.get('ok'))) or 'none')
 "
 SH
+run LM "Every college game on the board, not the first 25" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine.sources import cfbdata
+b = cfbdata.fetch_scoreboard('2026-11-07')
+g = cfbdata.parse_scoreboard(b)
+print('7 November from ESPN:', len(g), 'games |', b.get('_asked'))
+print('Michigan:', [x['away'] + ' @ ' + x['home'] for x in g if 'MICH' in (x['home'], x['away'])])
+"
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+from engine.gate import board_source
+b = json.load(open(board_source('web/data/cfb.json')))
+print('college board:', b.get('date'), len(b.get('games') or []), 'games | feed:', b.get('feed'))
+print('live college games:', len(json.load(open('web/data/live_cfb.json')).get('games') or []))
+"
+SH
 run LL "Picks a day before: the NFL's and college's boards buy tomorrow's slate" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -c "
 import time
@@ -866,10 +882,10 @@ for r in rows[-8:]: print(' ', r.get('iso'), r.get('lane'), 'ok' if r.get('ok') 
 "
 cd /srv/qellys && sudo -u qellys python3 -c "
 import json
-b = json.load(open('data/recommendations.json'))
-g, lk, gc = b.get('games') or [], b.get('locked') or {}, b.get('gate_census') or {}
-n = lambda k: len(b.get(k) or []) or lk.get(k, 0)
-print('NFL games', len(g), '| prices shown:', sum(1 for x in g if not x.get('price_stale')), '| props with no real price:', gc.get('no_real_price'), '| Edge picks', gc.get('recommended'), '| Most Likely', n('most_likely'))
+from engine.gate import board_source
+b = json.load(open(board_source('web/data/recommendations.json')))
+g, gc = b.get('games') or [], b.get('gate_census') or {}
+print('NFL games', len(g), '| prices shown:', sum(1 for x in g if not x.get('price_stale')), '| props with no real price:', gc.get('no_real_price'), '| Edge picks', gc.get('recommended'), '| Most Likely', len(b.get('most_likely') or []))
 "
 SH
 run IO "A finished game is ESPN's page; the chat bar at the foot" 30 <<'SH'
