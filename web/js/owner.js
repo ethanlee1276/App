@@ -593,14 +593,16 @@ function odWeeklyHTML(w, day) {
       (dp.left || []).length ? `${odN(dp.left.length)} still owed` : "complete", (dp.left || []).length ? "warn" : "good")}${
       (dp.done || []).length ? odRow("Done this round", dp.done.map(odPiece).join(", ")) : ""}${
       (dp.left || []).length ? odRow("Still owed", dp.left.map(odPiece).join(", ")) : ""}${
+      (dp.resting || []).length ? odRow("At rest (out of season)", dp.resting.map(odPiece).join(", "), "mute") : ""}${
       (dp.part_way || []).length ? odRow("Part-way", escapeHtml(dp.part_way.join("; ")), "warn") : ""}</ul>` : "";
   const lab = w.lab || null;
   const today = day ? new Date(`${day}T12:00:00`) : new Date();
   const pills = lab ? (lab.sports || []).map((x) => {
     const age = x.replayed ? Math.round((today - new Date(`${x.replayed}T12:00:00`)) / 864e5) : null;
-    const late = age == null || age > (lab.every_days || 7) + 1;
+    // A sport at rest keeps its last replay until its season comes near.
+    const late = !x.resting && (age == null || age > (lab.every_days || 7) + 1);
     return `<span class="od-pill${late ? " warn" : ""}">${escapeHtml(OD_LEAGUES[x.sport] || x.sport)} ${
-      x.replayed ? odWeek(x.replayed) : "never"}</span>`;
+      x.replayed ? odWeek(x.replayed) : "never"}${x.resting ? " · at rest" : ""}</span>`;
   }).join("") : "";
   return odCard(title, `<ul class="od-list">${jobs || odRow("No weekly job has run on this box yet", "—", "mute")}</ul>
     ${deep}${pills ? `<p class="od-note">The Lab’s numbers, the date each sport’s are from (replayed every

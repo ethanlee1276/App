@@ -34,6 +34,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine import gate, lab                                     # noqa: E402
+# Pinned on any date: whether a sport at rest is replayed again is
+# tests/test_a_league_at_rest_sits_out_the_heavy_nights.py.
+lab._replay_still_holds = lambda sport, replayed, today: False
 
 OLD = "2026-09-29T04:40:09"
 TODAY = dt.date(2026, 11, 3)

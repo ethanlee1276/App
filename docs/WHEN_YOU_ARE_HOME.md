@@ -9338,6 +9338,32 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**KZ. A league at rest sits out the box's heavy nights** (step 431; 7
+November). The weekly refit's round reaches about one piece a night on the
+box's one CPU. On 7 November MLB and the WNBA, their seasons over, held two of
+its seven places, while the NFL, first on every board, still carried its
+25 August fit (last night's run went to the NBA and finished nothing). The
+Lab replayed MLB first every week, half an hour of the same CPU, on a season
+with no new games. Now a league at rest (out of season, with its next season
+more than three weeks off) is left out of the refit's new rounds and taken
+out of the one under way, and the Lab replays it once after its last game,
+then not again until three weeks before its season. Each league comes back
+on its own three weeks before its season starts, to be fitted on everything
+its last season played. A piece rests with every league it serves: the NBA's
+checks with the NBA, the football extras with football; the conviction
+ladder never rests. The desk's Weekly jobs card shows a resting sport's Lab
+date with "at rest" instead of amber, lists the refit's resting leagues on an
+"At rest (out of season)" line instead of under "Still owed", and no alert
+fires for either. Nothing to run. After tonight's refit (it starts around 05:00 UTC), its own log says
+which leagues it left out and what it ran instead:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JQ JQ2 2>&1 | tee /tmp/jq.txt
+```
+
+The log's line reads `deep refit: mlb, wnba at rest (out of season) — left
+out of the round; the last fit stands until 21 days before the season`.
+
 **KY. The weather moves to the National Weather Service** (step 428; you,
 6 November: "move the weather to the NWS"). The college, NFL and MLB
 boards' game-day forecast came from Open-Meteo, whose free API is for

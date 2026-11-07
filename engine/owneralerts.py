@@ -196,8 +196,11 @@ def problems(h: dict, data_dir: Path | None = None, now: float | None = None) ->
             return (_dt.date.fromisoformat(today) - _dt.date.fromisoformat(str(iso)[:10])).days
         except (TypeError, ValueError):
             return None
+    # A sport at rest (out of season, replayed since its last game) keeps
+    # its last replay on purpose until its next season comes near.
     lab_late = sorted(((_days(x.get("replayed")), str(x.get("sport") or ""))
-                       for x in ((wk.get("lab") or {}).get("sports") or []) if x.get("replayed")),
+                       for x in ((wk.get("lab") or {}).get("sports") or [])
+                       if x.get("replayed") and not x.get("resting")),
                       reverse=True)
     lab_late = [(d, sp) for d, sp in lab_late if d is not None and d >= OD.LAB_LATE_D]
     if lab_late:

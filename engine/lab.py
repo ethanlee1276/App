@@ -776,6 +776,21 @@ def _date_of(stamp) -> _dt.date | None:
         return None
 
 
+def _replay_still_holds(sport: str, replayed: _dt.date, today: _dt.date) -> bool:
+    """True when ``sport`` is at rest today and its replay of ``replayed``
+    came after its season ended: nothing has been played since, so the
+    replay stands. Never raises; a calendar that cannot be read holds
+    nothing back."""
+    try:
+        from .oddsplan import resting, season_ended
+        if not resting(sport, today):
+            return False
+        ended = season_ended(sport, today)
+        return ended is not None and replayed > ended
+    except Exception:                                      # noqa: BLE001
+        return False
+
+
 def due_sports(doc: dict, today: _dt.date, attempts: dict | None = None) -> list[str]:
     """The sports a run owes, in the order to take them.
 
@@ -787,7 +802,15 @@ def due_sports(doc: dict, today: _dt.date, attempts: dict | None = None) -> list
     THE ORDER: oldest first by the later of its replay and the last time
     a run STARTED it (``attempts``) — so a sport a run was cut off in goes
     to the back of tomorrow's line, and one harness that cannot finish in
-    the hour never starves the rest."""
+    the hour never starves the rest.
+
+    A SPORT AT REST IS REPLAYED ONCE (2026-11-07). Out of season with its
+    next season more than three weeks off (`oddsplan.resting`), it plays no
+    new games, so a replay says what the last one said: MLB went first every
+    week, half an hour of the box's one CPU, on a season already over. It is
+    owed once more only when its last replay came before its season ended
+    (so the final games are in it), and then not again until it comes near
+    its next season."""
     page = _date_of(doc.get("generated_at"))
     sports = doc.get("sports") if isinstance(doc.get("sports"), dict) else {}
     everything = page is None or not replayed_sports(doc)
@@ -798,6 +821,8 @@ def due_sports(doc: dict, today: _dt.date, attempts: dict | None = None) -> list
             owed.append(sp)
             continue
         stamp = _date_of(blob.get("replayed_at")) or page
+        if _replay_still_holds(sp, stamp, today):
+            continue
         if (today - stamp).days >= LAB_EVERY_DAYS:
             owed.append(sp)
     attempts = attempts or {}

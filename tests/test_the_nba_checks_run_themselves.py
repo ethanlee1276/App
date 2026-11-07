@@ -30,6 +30,9 @@ for _k in ("QB_NBA_SPREAD", "QB_NBA_ROTATION"):
 
 from engine import deepfit as D                                        # noqa: E402
 from engine.nba import switches as W                                    # noqa: E402
+# The round's mechanics, pinned on any date: whether a league at rest sits the
+# round out is tests/test_a_league_at_rest_sits_out_the_heavy_nights.py.
+D.resting_pieces = lambda pieces, today: []
 
 CHECKS = list(D.NBA_CHECKS)
 ROWS = {"cfb": 400_000, "mlb": 900_000, "nba": 250_000, "nfl": 330_000, "wnba": 60_000}

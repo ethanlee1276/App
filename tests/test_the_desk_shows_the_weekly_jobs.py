@@ -123,8 +123,17 @@ def test_a_sport_the_round_file_never_finished_reads_its_fit_from_the_stores():
     deep = dict(DEEP, left=["nfl", "nba", "wnba", "mlb", "touchdowns"])
     deep["pieces"] = {"mlb": {"done": "2026-10-29"}, "nfl": DEEP["pieces"]["nfl"]}
     p = _files(deep=deep)
-    w = OD.weekly(now=NOW, jobs=JOBS, deep_path=p["deep"], lab_path=p["lab"], attempts_path=p["tried"],
-                  fit_paths=[form, mem])
+    # The WNBA and MLB stand in here for any sport owed: on 5 November both
+    # are at rest, which tests/test_a_league_at_rest_sits_out_the_heavy_nights.py
+    # holds; this one holds the stores' dates, so the season rule is off.
+    from engine import deepfit as D
+    keep = D.resting_pieces
+    D.resting_pieces = lambda pieces, today: []
+    try:
+        w = OD.weekly(now=NOW, jobs=JOBS, deep_path=p["deep"], lab_path=p["lab"], attempts_path=p["tried"],
+                      fit_paths=[form, mem])
+    finally:
+        D.resting_pieces = keep
     assert w["deep"]["last_done"] == {"nfl": "2026-08-27", "nba": "2026-10-20", "wnba": None,
                                       "mlb": "2026-10-29"}, w["deep"]["last_done"]
     got = _alerts(w)

@@ -640,6 +640,47 @@ EXTRAS = {"yardage_mixture": refit_yardage_mixture, "td_scale": refit_td_scale,
           "touchdowns": refit_touchdowns, "cfb_touchdowns": refit_cfb_touchdowns,
           "nfl_props": refit_nfl_props, "ladder": _ladder}
 
+#: THE LEAGUES AT REST SIT THE ROUND OUT (2026-11-07). A round reaches about
+#: one piece a night on the box's one CPU, and on 7 November MLB and the WNBA,
+#: their seasons over, held two of its seven places while the NFL, first on
+#: every board, still carried its 25 August fit. A league at rest
+#: (`oddsplan.resting`: out of season, and its next season more than
+#: RESTING_LEAD_DAYS away) is left out of new rounds and taken out of the one
+#: under way; its last fit stands until it comes back, three weeks before its
+#: season, to be fitted on everything its last season played. A piece rests
+#: when every league it serves rests: the NBA's checks with the NBA, each
+#: football extra with its football; the ladder serves every sport and never
+#: rests.
+EXTRA_SPORTS = {"yardage_mixture": ("nfl", "cfb"), "td_scale": ("nfl", "cfb"),
+                "touchdowns": ("nfl",), "cfb_touchdowns": ("cfb",), "nfl_props": ("nfl",)}
+
+
+def _piece_sports(piece: str) -> tuple:
+    """The leagues a piece of the round serves (none: it never rests)."""
+    if piece in NBA_CHECKS:
+        return ("nba",)
+    if piece in EXTRA_SPORTS:
+        return EXTRA_SPORTS[piece]
+    if piece in EXTRAS:
+        return ()
+    return (piece,)
+
+
+def resting_pieces(pieces, today: _dt.date) -> list[str]:
+    """Which of ``pieces`` rest on ``today``: every league each serves is at
+    rest (`oddsplan.resting`). Never raises; a calendar that cannot be read
+    rests nothing."""
+    try:
+        from .oddsplan import resting
+        out = []
+        for p in pieces:
+            sports = _piece_sports(p)
+            if sports and all(resting(sp, today) for sp in sports):
+                out.append(p)
+        return out
+    except Exception:                                      # noqa: BLE001
+        return []
+
 
 def _read_state(path) -> dict:
     try:
@@ -671,12 +712,17 @@ def due(path, today: _dt.date) -> bool:
     st = _read_state(path)
     if not st:
         return False
-    if st.get("left"):
-        return True
+    left = list(st.get("left") or [])
+    if left:
+        # Pieces at rest are not owed: a round left holding only those has
+        # nothing to start for, and the next run drops them anyway.
+        rest = set(resting_pieces(left, today))
+        if any(p not in rest for p in left):
+            return True
     return str(st.get("round") or "") < round_start(today).isoformat()
 
 
-def round_pieces(state: dict, rows: dict) -> list[str]:
+def round_pieces(state: dict, rows: dict, today: _dt.date | None = None) -> list[str]:
     """What a new round owes: every sport with history whose rows have grown
     since its last full fit, and every extra (they read the same history).
 
@@ -698,6 +744,10 @@ def round_pieces(state: dict, rows: dict) -> list[str]:
         out[i:i] = list(NBA_CHECKS)
     if rows:
         out.extend(EXTRAS)
+    if today is not None:
+        # A league at rest is not owed a fit until its season comes near.
+        rest = set(resting_pieces(out, today))
+        out = [p for p in out if p not in rest]
     return out
 
 
@@ -827,6 +877,16 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
         return out
     st = _read_state(path)
     pieces = st.setdefault("pieces", {})
+    rest = resting_pieces(st.get("left") or [], today)
+    if rest:
+        # A round under way gives up the pieces of leagues now at rest before
+        # anything is chosen, so one holding only those is done, and the
+        # week's own round can begin in this same run.
+        st["left"] = [p for p in st["left"] if p not in rest]
+        _write_state(path, st)
+        from .oddsplan import RESTING_LEAD_DAYS
+        emit(f"deep refit: {', '.join(rest)} at rest (out of season) — left out of the round; "
+             f"the last fit stands until {RESTING_LEAD_DAYS} days before the season")
     week = round_start(today).isoformat()
     start = str(st.get("round") or "")
     if start and start != week and st.get("left") and _carries(start, today):
@@ -839,7 +899,7 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
     elif start != week:
         start = week
         st["round"] = start
-        st["left"] = round_pieces(st, rows)
+        st["left"] = round_pieces(st, rows, today)
         _write_state(path, st)
         emit(f"deep refit: the round of {start} owes {len(st['left'])} piece(s): "
              f"{', '.join(st['left']) or 'none'}")

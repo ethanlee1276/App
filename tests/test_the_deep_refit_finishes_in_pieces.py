@@ -37,6 +37,9 @@ sys.path.insert(0, str(ROOT))
 
 from engine import deepfit as D                                  # noqa: E402
 from engine import maintenance                                   # noqa: E402
+# The round's mechanics, pinned on any date: whether a league at rest sits the
+# round out is tests/test_a_league_at_rest_sits_out_the_heavy_nights.py.
+D.resting_pieces = lambda pieces, today: []
 
 WED = dt.date(2026, 11, 4)
 THU = WED + dt.timedelta(days=1)

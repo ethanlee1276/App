@@ -160,7 +160,7 @@ nothing). Best after the 04:00 UTC backup that follows this push, so KO
 reads the new note. Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JQ JR KF KG KI KL IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JQ JQ2 JR KF KG KI KL IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (about an hour together; still
@@ -631,6 +631,20 @@ that refresh (its log says `CFB results not stored this build`). If `cfb`
 shows up there again, paste the line.
 
 ## 1g. Thursday: the models' weekly refit reaches the NFL (step JQ)
+
+**7 November, read off the heartbeat:** last night's run (05:02 to 06:48,
+beside the bug scan for its first 38 minutes) went to the NBA: its recency
+dial done, its player memory set aside as too long for a run, its
+temperatures cut off. The NFL is still first in line, and its dial still
+carries the 25 August fit for most markets. Two changes since (step KZ): MLB
+and the WNBA, their seasons over, are out of the round, so the NFL, college
+and the NBA share the nights; and the Lab stops replaying them weekly.
+Nothing to run. After tonight's run (about 05:00 UTC), its own log says what
+it left out and what it ran:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JQ JQ2 2>&1 | tee /tmp/jq.txt
+```
 
 **6 November, evening, read off the heartbeat:** last night the jobs did
 take turns (the Lab 00:20 to 01:52, the refit 02:16 to 03:21), and the

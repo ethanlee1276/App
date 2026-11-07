@@ -284,6 +284,40 @@ def season_phase(league: str, day: _dt.date) -> str | None:
     return None
 
 
+#: A LEAGUE AT REST (2026-11-07). The box's heavy nightly work (the deep
+#: refit's round, the Lab's replay) skips a league with nothing being played
+#: and no season close enough to fit for: MLB and the WNBA in November had a
+#: night each of a refit round that reaches about one piece a night, while the
+#: NFL, first on every board, still carried its 25 August fit. A league comes
+#: back this many days before its season starts, so its models are fitted on
+#: everything its last season played before the first game is priced (three
+#: weekly rounds of room).
+RESTING_LEAD_DAYS = 21
+
+
+def resting(league: str, day: _dt.date, lead_days: int = RESTING_LEAD_DAYS) -> bool:
+    """True when ``league`` is out of season on ``day`` and stays out for the
+    ``lead_days`` after it: nothing new is played, and its next season is not
+    near enough to fit for. A league the table does not name never rests; it
+    is not skipped for want of a calendar."""
+    if league not in SEASONS:
+        return False
+    return all(season_phase(league, day + _dt.timedelta(days=k)) is None
+               for k in range(lead_days + 1))
+
+
+def season_ended(league: str, day: _dt.date) -> _dt.date | None:
+    """The last day on or before ``day`` that ``league`` was in season (by the
+    table), or None for a league the table does not name."""
+    if league not in SEASONS:
+        return None
+    for k in range(367):
+        d = day - _dt.timedelta(days=k)
+        if season_phase(league, d) is not None:
+            return d
+    return None
+
+
 def price(league: str) -> int:
     """Credits one game costs on this league's event call."""
     if league == "cfb":

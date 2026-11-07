@@ -1137,13 +1137,19 @@ def weekly(now: float | None = None, jobs: dict | None = None, deep_path=None, l
         start = str(st.get("round") or "")
         pieces = st.get("pieces") or {}
         left = [str(x) for x in (st.get("left") or [])]
-        today = _dt.datetime.fromtimestamp(t, ET).date().isoformat()
+        day = _dt.datetime.fromtimestamp(t, ET).date()
+        today = day.isoformat()
+        # A league at rest (deepfit.resting_pieces) is not owed: the next run
+        # takes it out of the round, and until then it is neither "still
+        # owed" nor a late fit to alert on. The card names them instead.
+        resting = D.resting_pieces(D.PIECE_ORDER, day)
+        left = [x for x in left if x not in resting]
         done = [k for k in D.PIECE_ORDER if k not in left and isinstance(pieces.get(k), dict)
                 and str(pieces[k].get("done") or "") >= start]
         # A sport's last finished fit: the round file's, or the stores' own
         # date where that is later or the round file has none (`fit_dates`).
         stores = fit_dates(fit_paths)
-        out["deep"] = {"round": start or None, "left": left, "done": done,
+        out["deep"] = {"round": start or None, "left": left, "done": done, "resting": resting,
                        "part_way": D._part_way(pieces, left, start, today),
                        "last_done": {k: max(str((pieces.get(k) or {}).get("done") or "")[:10],
                                             stores.get(k, "")) or None
@@ -1156,10 +1162,18 @@ def weekly(now: float | None = None, jobs: dict | None = None, deep_path=None, l
     page = _json_cached(gate.board_source(Path(lab_path or LB.LAB_PATH)))
     tried = _json_cached(attempts_path or LB.ATTEMPTS_PATH)
     sports = []
+    lab_day = _dt.datetime.fromtimestamp(t, ET).date()
     for sp in LB.SPORT_ORDER:
         blob = (page.get("sports") or {}).get(sp) or {}
-        sports.append({"sport": sp, "replayed": str(blob.get("replayed_at") or page.get("generated_at") or "")[:10] or None,
-                       "tried": str(tried.get(sp) or "")[:10] or None})
+        replayed = str(blob.get("replayed_at") or page.get("generated_at") or "")[:10] or None
+        try:
+            # At rest (engine/lab `_replay_still_holds`): out of season and
+            # replayed since its last game, so an old date is not late.
+            resting = bool(replayed) and LB._replay_still_holds(sp, _dt.date.fromisoformat(replayed), lab_day)
+        except ValueError:
+            resting = False
+        sports.append({"sport": sp, "replayed": replayed,
+                       "tried": str(tried.get(sp) or "")[:10] or None, "resting": resting})
     out["lab"] = {"sports": sports, "every_days": LB.LAB_EVERY_DAYS} if (page or tried) else None
     return out
 
