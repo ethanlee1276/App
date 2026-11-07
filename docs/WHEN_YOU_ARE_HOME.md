@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LD. The Lab's NFL replay ends inside its hour** (step 434; 7 November).
+Why the NFL kept waiting: a sport the Lab's hour runs out in goes to the
+back of the next night's line, so one that cannot finish never blocks the
+rest. The NFL ran out of hour on 5 November, the night before it had a limit
+of its own, so 6 November replayed college, the NBA and the WNBA, and 7
+November UFC and then MLB, which left too little of the hour for the NFL to
+start. Tonight it is the only sport owed (MLB and the WNBA are at rest, KZ),
+first in line, at the same share of the CPU as a board build (LA). Two
+leaks in its limit are closed as well. Its five markets' closing lines, a
+scan of the history file's NFL tape each, were read before its 30-minute
+clock started, and the usage ripple after it scanned three of the same five
+again; the closes are now read once, inside the 30 minutes, and the ripple
+reuses them. And the walk checked its limit only before each week, so it
+could run a whole week past it; a week now starts only with time left for
+one at the pace of the last. Nothing to run. Tomorrow's JP2 (LA's command)
+shows it: the NFL's week lines (`week 9 (1/4) … 0s elapsed`), then
+`lab: nfl replayed in ... min`.
+
 **LC. A league at rest rebuilds its board every six hours** (step 436; 7
 November). The heartbeat after that afternoon's restart had the MLB board
 taking about three minutes of the box's one CPU, for a slate with no games,

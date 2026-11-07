@@ -4,6 +4,12 @@
     {
       "date": "2026-11-07",
       "kind": "fix",
+      "title": "The Lab's football replay fits inside its nightly hour",
+      "body": "The Lab's NFL numbers have been dated 29 September because the replay ran past the hour the server gives it and published nothing. It now reads its closing lines once, inside its own half hour, and starts a week only when there is time to finish it, so the NFL section is written before the hour is up."
+    },
+    {
+      "date": "2026-11-07",
+      "kind": "fix",
       "title": "Leagues out of season stop rebuilding every few minutes",
       "body": "Baseball's page was being rebuilt every few minutes for a slate with no games, about three minutes of the server's time out of every twenty. A league whose season is over now refreshes every six hours, and that time goes to the leagues being played and to the models' weekly refit."
     },

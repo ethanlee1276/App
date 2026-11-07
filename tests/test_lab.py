@@ -384,7 +384,9 @@ def test_the_lab_measures_the_usage_ripple_and_the_page_shows_the_verdict():
     import inspect
     # Each sport is built by build_sport since 2026-11-03 (one at a time).
     src = inspect.getsource(lab.build_sport)
-    assert '"ripple": ripple_section(hconn, log=log) if nfl else' in src
+    # With the replay's closes since 2026-11-07, read once
+    # (tests/test_the_lab_nfl_replay_fits_its_run.py).
+    assert '"ripple": ripple_section(hconn, log=log, closes=closes or None)' in src
 
     class _Exploding:
         def execute(self, *a, **k):

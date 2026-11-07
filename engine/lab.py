@@ -361,6 +361,29 @@ def _seasons_to_try(season: int | None) -> list:
     return [current, current - 1]
 
 
+def nfl_closes(conn, markets=NFL_MARKETS) -> dict:
+    """``{market: {(player, date): close}}`` — `closing_odds_by_date` for
+    each NFL prop market. Each is a scan of the history file's NFL tape,
+    so the Lab reads them once and hands them on (`nfl_props`'
+    ``closes_out``, `ripple_section`)."""
+    from . import db as _db
+    out: dict = {}
+    for market in markets:
+        try:
+            out[market] = _db.closing_odds_by_date(conn, "nfl", market)
+        except Exception as exc:                   # noqa: BLE001
+            raise RuntimeError(f"nfl {market} closes unreadable — {exc}") from exc
+    return out
+
+
+def _keyed_closes(closes: dict, markets=NFL_MARKETS) -> dict:
+    out: dict = {}
+    for market in markets:
+        for (player, date), quote in (closes.get(market) or {}).items():
+            out[(player, market, date)] = quote
+    return out
+
+
 def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
     """``{(normalized player, market, date): close}`` for the NFL props.
 
@@ -369,16 +392,7 @@ def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
     a receptions close and a receiving-yards close on the same day and
     they are different bets.
     """
-    from . import db as _db
-    out: dict = {}
-    for market in markets:
-        try:
-            for (player, date), quote in _db.closing_odds_by_date(
-                    conn, "nfl", market).items():
-                out[(player, market, date)] = quote
-        except Exception as exc:                   # noqa: BLE001
-            raise RuntimeError(f"nfl {market} closes unreadable — {exc}") from exc
-    return out
+    return _keyed_closes(nfl_closes(conn, markets), markets)
 
 
 #: THE NFL REPLAY'S SHARE OF THE LAB'S RUN (2026-11-05). The live heartbeat
@@ -387,6 +401,12 @@ def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
 #: rebuilds a full slate per week, twelve weeks, on one niced vCPU beside
 #: the boards. It now stops at this and publishes the weeks it reached,
 #: newest first, so the NFL lands and the run moves on to the next sport.
+#: THE CLOSES COUNT AGAINST IT (2026-11-07): the five markets' closes, a
+#: scan of the history file's NFL tape each, were read before the clock
+#: started, and the usage ripple read three of the same five again after
+#: it; the replay now reads them inside this limit and the ripple reuses
+#: them. A week starts only with time left for one at the pace of the
+#: last (`backtest.backtest_from_stats`), so the walk ends inside it too.
 LAB_NFL_PROPS_BUDGET_S = 30 * 60
 #: The NBA's and the WNBA's props: every market walks the same games, so the
 #: one before tells how long the next takes (`hoopsreplay.replay`).
@@ -441,22 +461,29 @@ def nfl_replay(season: int | None, weeks: list, real: dict, log=print,
 
 
 def nfl_props(season: int | None = None, weeks=None, log=print,
-              conn=None, budget_s: float | None = None) -> dict:
+              conn=None, budget_s: float | None = None,
+              closes_out: dict | None = None) -> dict:
     """Replay NFL props walk-forward. The weekly-stats feed is release-gated,
     so "no CSV on this machine" is the normal state and reported as such.
 
     Priced against harvested closes wherever one exists — `conn` is the
     history DB, and without it every prop falls back to the recent-form
-    proxy the way this always did.
+    proxy the way this always did. ``budget_s`` covers the closes' read as
+    well as the walk (LAB_NFL_PROPS_BUDGET_S); ``closes_out``, when given,
+    is filled with them by market (`nfl_closes`) for the usage ripple,
+    left empty when they could not be read.
     """
-    from .backtest import backtest_from_stats
-    from .sources.fetch import DataUnavailable
+    import time as _time
+    deadline = _time.monotonic() + budget_s if budget_s else None
 
     weeks = list(weeks or range(6, 18))
     real: dict = {}
     if conn is not None:
         try:
-            real = nfl_real_lines(conn)
+            closes = nfl_closes(conn)
+            real = _keyed_closes(closes)
+            if closes_out is not None:
+                closes_out.update(closes)
         except Exception as exc:                   # noqa: BLE001
             log(f"  lab: nfl closes unavailable — {exc}")
 
@@ -472,8 +499,6 @@ def nfl_props(season: int | None = None, weeks=None, log=print,
     # season, and a run in week 2 wants last season too (six weeks of
     # priors do not exist yet). Both are "the current season produced
     # nothing", so both are the same fallback.
-    import time as _time
-    deadline = _time.monotonic() + budget_s if budget_s else None
     rep, season, tried = nfl_replay(season, weeks, real, log=log,
                                     progress=log if budget_s else None, deadline=deadline)
     if rep is None:
@@ -627,16 +652,17 @@ def game_lines(conn, sport: str, log=print) -> dict:
 
 
 # --- the whole lab -----------------------------------------------------------
-def ripple_section(hconn, log=print) -> dict:
+def ripple_section(hconn, log=print, closes: dict | None = None) -> dict:
     """Does a same-position teammate's absence carry information the NFL
     close does not? `engine.ripplefit` answers per market, stores the
     verdict where a pricing hook would read it, and this puts the table
     on the Lab page. Minutes, not hours: it joins logs to closes and
-    never rebuilds a slate. A failure is a reason on the page, never a
-    dead Lab."""
+    never rebuilds a slate. ``closes`` are the replay's (`nfl_closes`);
+    without them it reads its own. A failure is a reason on the page,
+    never a dead Lab."""
     try:
         from . import ripplefit
-        return ripplefit.run(hconn, log=log)
+        return ripplefit.run(hconn, log=log, closes=closes)
     except Exception as exc:                                  # noqa: BLE001
         log(f"  lab: usage ripple skipped — {exc}")
         return {"unavailable": f"usage ripple not measured — {exc}"}
@@ -689,13 +715,18 @@ def build_sport(sport: str, hconn, log=print, nfl: bool = True,
         blob = {"props": mlb_section(hconn, log=log, budget_s=cap(LAB_MLB_PROPS_BUDGET_S)),
                 "game_lines": game_lines(hconn, "mlb", log=log)}
     elif sport == "nfl":
-        blob = {"props": nfl_props(log=log, conn=hconn, budget_s=cap(LAB_NFL_PROPS_BUDGET_S))
+        # The closes are read once, inside the replay's limit, and the
+        # ripple reuses them (LAB_NFL_PROPS_BUDGET_S). Built in this order.
+        closes: dict = {}
+        blob = {"props": nfl_props(log=log, conn=hconn, budget_s=cap(LAB_NFL_PROPS_BUDGET_S),
+                                   closes_out=closes)
                 if nfl else {"unavailable": "skipped"},
                 "game_lines": game_lines(hconn, "nfl", log=log),
                 # The usage ripple against the close — the pricing half of
                 # Ethan's Pacheco question, measured here weekly so the
                 # verdict lands on the page without anyone running anything.
-                "ripple": ripple_section(hconn, log=log) if nfl else {"unavailable": "skipped"}}
+                "ripple": ripple_section(hconn, log=log, closes=closes or None)
+                if nfl else {"unavailable": "skipped"}}
     elif sport == "cfb":
         blob = {"props": cfb_props(log=log, conn=hconn),
                 "game_lines": game_lines(hconn, "cfb", log=log)}

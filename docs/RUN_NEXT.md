@@ -628,11 +628,15 @@ Before 6 December the college line reads `False [] None` — that's right.
 ## 1f. The day after tomorrow: the Lab's first pieces, and why (step JP)
 
 **7 November, your JP:** the Lab's NFL numbers are still from 29 September;
-last night it replayed UFC and then MLB for most of its hour. Two changes
-since: MLB and the WNBA are at rest (step KZ), so tonight the NFL is the
-only sport it owes, and the Lab now runs at the same share of the CPU as a
-board build instead of an eighth of it (step LA). Its own log and the day it
-last started each sport, tomorrow morning (JP2, with the refit's JQ2):
+last night it replayed UFC and then MLB for most of its hour. The NFL had
+gone to the back of the line after running out of hour on 5 November, before
+it had a limit of its own (step LD). Three changes since: MLB and the WNBA
+are at rest (step KZ), so tonight the NFL is the only sport it owes; the Lab
+now runs at the same share of the CPU as a board build instead of an eighth
+of it (step LA); and the NFL replay reads its closing lines once, inside its
+own 30 minutes, and starts a week only with time left for one (step LD). Its
+own log and the day it last started each sport, tomorrow morning (JP2, with
+the refit's JQ2):
 
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JQ JQ2 JP JP2 2>&1 | tee /tmp/weekly.txt

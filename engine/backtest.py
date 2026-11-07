@@ -742,7 +742,10 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
     INSIDE A RUN'S TIME (2026-11-05). The Lab's weekly run was cut off
     after 99 minutes in this walk, on its first sport, and published
     nothing. ``deadline`` (a time.monotonic() reading) stops the walk
-    before the next week once it has passed; ``newest_first`` takes the
+    before the next week once it has passed, or once what is left of it
+    would not cover a week at the pace of the last one (2026-11-07: the
+    check alone let the walk run a whole week past its limit, and the
+    Lab's run has an hour, not an hour and a week); ``newest_first`` takes the
     weeks newest first, so a walk stopped early keeps the weeks that say
     the most about the board today. Each week is built from the weeks
     before it alone, so the order changes no week's answer. The report
@@ -800,11 +803,16 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
     # the suite do not want this.
     import time as _time
     started = _time.monotonic()
+    pace = 0.0                      # how long the last week built took
     for i, w in enumerate(weeks, 1):
-        if deadline is not None and _time.monotonic() >= deadline:
+        week_t0 = _time.monotonic()
+        if deadline is not None and (week_t0 >= deadline
+                                     or (covered and week_t0 + pace > deadline)):
             stopped = True
             if log:
-                log(f"  stopped at the run's time limit: {len(covered)} of {len(weeks)} weeks replayed")
+                log(f"  stopped at the run's time limit: {len(covered)} of {len(weeks)} weeks replayed"
+                    f" ({max(0.0, deadline - week_t0) / 60:.0f} min left, a week takes"
+                    f" about {pace / 60:.0f})")
             break
         if log:
             log(f"  week {w} ({i}/{len(weeks)}) … "
@@ -867,6 +875,7 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
         td_settled.extend(settle_recommendations(
             longshot_recs(result.get("long_shots")), actuals))
         covered.append(int(w))
+        pace = _time.monotonic() - week_t0
 
     if log:
         # Two DIFFERENT denominators, so both are named. `all_settled`
