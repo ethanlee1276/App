@@ -190,6 +190,16 @@ def test_the_matchup_read_no_longer_rescues_an_nfl_prop_under_sixty():
     assert B.tightened_reason(backed, "nfl").startswith("held back: our chance is 47%")
 
 
+def test_a_chance_just_under_the_bar_never_reads_as_the_bar():
+    """7 November: three moneylines at 59.7-59.8% were held with "our chance
+    is 60% — the NFL board asks 60%". Where the whole number would meet the
+    bar, one decimal, cut down."""
+    near = _prop("N Near", 0.597)
+    assert B.tightened_reason(near, "nfl").startswith("held back: our chance is 59.7% — the NFL board asks 60%")
+    assert B.tightened_reason(_prop("N Edge", 0.59995), "nfl").startswith("held back: our chance is 59.9%")
+    assert B.tightened_reason(_prop("N Far", 0.594), "nfl").startswith("held back: our chance is 59% —")
+
+
 def test_a_pick_the_board_held_is_not_on_the_list_to_be_staked():
     keep, cut = _prop("A Sixty", 0.63), _prop("B Fifty-seven", 0.57)
     posted = _prop("E Posted", 0.56, locked=True)

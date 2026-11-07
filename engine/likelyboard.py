@@ -282,6 +282,17 @@ def _cfb_tight() -> bool:
     return os.environ.get(CFB_TIGHT_ENV, "").strip().lower() not in ("off", "0", "no", "false")
 
 
+def _below(prob: float, bar: float) -> str:
+    """``prob`` as a percentage that reads below ``bar``. Rounded, 59.7%
+    printed as 60%, and the page said "our chance is 60% — the NFL board
+    asks 60%" (three moneylines on 7 November); one decimal, cut down,
+    where the whole number would meet the bar."""
+    import math
+    if round(prob * 100) < round(bar * 100):
+        return f"{prob:.0%}"
+    return f"{math.floor(prob * 1000) / 10:.1f}%"
+
+
 def tightened_reason(r: dict, sport: str) -> str | None:
     """Why the tightened board holds this pick back, or None. The NFL's whole
     tightening (QB_NFL_TIGHT); college's held-under markets (QB_CFB_TIGHT)."""
@@ -297,7 +308,7 @@ def tightened_reason(r: dict, sport: str) -> str | None:
         return None
     prob = r.get("model_prob")
     if lane_of(r) != "td" and prob is not None and float(prob) < NFL_TIGHT_BAR:
-        return (f"held back: our chance is {float(prob):.0%} — the NFL board asks "
+        return (f"held back: our chance is {_below(float(prob), NFL_TIGHT_BAR)} — the NFL board asks "
                 f"{NFL_TIGHT_BAR:.0%} of a prop or a game line")
     if _side(r) == "under":
         hit = [c for c in (r.get("scout_flags") or ()) if c in NFL_UNDER_CAUTIONS]
