@@ -699,6 +699,10 @@ run JP "The Lab finishes in pieces, and the heartbeat says why" 60 <<'SH'
 curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('weekly', {}).get('lab')); print({k: v.get('note') for k, v in (d.get('boards') or {}).items() if not v.get('ok')})"
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/backtest.json')); print(d['generated_at']); [print(k, v.get('replayed_at')) for k, v in d['sports'].items()]"
 SH
+run JP2 "The Lab's own log: what each run replayed, and the day it last started each sport" 30 <<'SH'
+sudo -u qellys tail -30 /srv/qellys/data/cache/weekly_lab.log
+sudo -u qellys cat /srv/qellys/data/cache/lab_attempts.json
+SH
 run JO "The two brackets: the NBA Cup's and the College Football Playoff's" 60 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/nba_cup.json')); b=d['bracket']; print(b['set'], [s['team'] for c in ('East', 'West') for s in b['conferences'][c]['seeds']], b['champion'], sorted(d['bracket_lines']))"
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/cfp_race.json')); b=d.get('bracket') or {}; print(bool(b), [s['team'] for s in b.get('seeds', [])], b.get('champion'))"

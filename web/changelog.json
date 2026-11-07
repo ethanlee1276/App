@@ -4,6 +4,12 @@
     {
       "date": "2026-11-07",
       "kind": "fix",
+      "title": "The weekly model refit gets its share of the server",
+      "body": "The models' weekly refit and the weekly backtests were running at the very lowest priority on the server, behind every board rebuild, so they got about an eighth of the processor and every large fit was cut off at its time limit: the NFL's recency weights still dated from August, and the backtests had not replayed the NFL since 29 September. They were meant to run level with the board rebuilds, and now they do, with the site itself still first in line."
+    },
+    {
+      "date": "2026-11-07",
+      "kind": "fix",
       "title": "The weekly model refit no longer spends nights on finished seasons",
       "body": "The models re-learn each sport from its whole history a piece at a time, a little each night. On 7 November baseball and the WNBA, their seasons over, held two of the round's places while the NFL's recency weights still dated from August. A league whose season is over, with its next one more than three weeks away, now sits the round out, and the weekly backtests stop replaying it once its last games are in. It comes back three weeks before its season, so its models are fitted on everything it played before the first game is priced."
     },

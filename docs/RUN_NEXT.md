@@ -10,7 +10,16 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07, after leagues out of season started sitting out
+Last updated 2026-11-07 (afternoon), after your catch-up paste: the close
+lines are all written (item 1p done: your NFL write had nothing left to
+change, the writes went in on 6 November's evening, and the four dry runs
+found nothing either), the offsite backup still meets Backblaze's cap (item
+0b: the bucket holds 11.1 GB with old versions, the box keeps 5.8 GB; one
+setting in Backblaze), and the weekly jobs had been running at the lowest
+priority on the box, an eighth of the CPU beside a board build, which is why
+every big fitter was cut off at 45 minutes (step LA, item 1g: fixed, nothing
+to run, JQ JQ2 JP JP2 tomorrow morning). Before that, 2026-11-07, after
+leagues out of season started sitting out
 the weekly refit and the Lab's replay (MLB and the WNBA in November; step
 KZ, item 1g: nothing to run, JQ and JQ2 after tonight's refit), and after a
 weekly job's minutes started ending at its own last line (the refit's "107
@@ -158,14 +167,21 @@ JI). Before that, Who's on now became the desk's first card (step JH). Done:
 - **IX:** showed Duke's lead back at 52% with no receivers anywhere. That's
   fixed (step JC), and item 3 checks it.
 
-## 000. Start here: every waiting check in one run (6 November)
+## 000. Start here: every waiting check in one run (7 November)
 
-Everything below that only reads, in one go (a few minutes; it writes
-nothing). Best after the 04:00 UTC backup that follows this push, so KO
-reads the new note. Paste the whole file back:
+Tomorrow morning, after the night's refit and Lab (they start after
+midnight Eastern), their own logs, the first nights at their full share of
+the CPU (step LA). Paste it back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JQ JQ2 JR KF KG KI KL IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JQ JQ2 JP JP2 2>&1 | tee /tmp/weekly.txt
+```
+
+Everything below that only reads, in one go (a few minutes; it writes
+nothing). Paste the whole file back:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR KF KG KI KL IX IU IT JA IP KP 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (about an hour together; still
@@ -175,6 +191,36 @@ spread on the box's own games:
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long.txt
 ```
+
+**Your 7 November catch-up, and what changed for it:**
+
+- **The close lines (item 1p): all written, nothing left.** Your NFL write
+  changed nothing: 7,486 already right is the evening dry run's 7,075
+  plus its 407 rewrites and 4 copies, so the writes had gone in that
+  evening (the four journal backups from 20:10 to 20:31 on 6 November).
+  College, MLB, the WNBA and the NBA dry runs found nothing to change and
+  no copies. A.J. Brown's 64.5 is in.
+- **The offsite backup (item 0b):** still `403 storage_cap_exceeded`. The
+  bucket holds 11.1 GB counting old versions; the box keeps 5.8 GB. The one
+  fix is a setting in Backblaze, free: the bucket's Lifecycle Settings,
+  "Keep only the last version of the file". The cap stays at 10 GB.
+- **The weekly refit (item 1g, step LA):** every big fitter was cut off at
+  its 45 minutes, the NFL's and college's dials, MLB's without one setting
+  scored, the NBA's player memory and spread check. Here the NFL's dial
+  scores a market in 77 seconds in 46 MB, so it was neither the work nor
+  the memory: the weekly jobs ran at niceness 19, an eighth of the CPU
+  beside a board build, where every child is meant to run at 10. Fixed;
+  they run at 10 now. The "107 minutes" was the site noticing late (the fix
+  before this one).
+- **The Lab (item 1f):** the NFL's numbers are still from 29 September; last
+  night it replayed UFC and MLB. With MLB and the WNBA at rest the NFL is
+  the only sport it owes tonight, now at the same full share. JP2 shows its
+  own log tomorrow.
+- **Everything else read right:** the credits on pace (15% used, 22% of
+  the month gone), all ten books answering, the bill at 0.9 of our
+  estimate, the races, the free pick, hockey's crowd prices, the opening
+  tips (88% agree), the weather desk still paused (its paper calls since
+  the pause 30-67), ESPN's scores 5.2 s ahead of BALLDONTLIE's.
 
 **Your 6 November evening paste, and what changed for it:**
 
@@ -288,11 +334,7 @@ first tip (item 1n):
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh KH 2>&1 | tee /tmp/kh.txt
 ```
 
-The ones that write, each with its own item below: item 1p's close lines
-(the NFL's write, then college, MLB and the WNBA, each dry run first, then
-`--apply`), and the NBA's dry run (its write only if it finds a copy). Not
-commands: the Backblaze settings (item 0b) and alerts on your phone
-(item 1).
+Nothing left that writes: item 1p's close lines are all written (7 November). Not commands: the Backblaze setting (item 0b) and alerts on your phone (item 1).
 
 **Done 5 November:** item 0's cleanup (20 GB free now), item 1p's NBA
 close lines (1,537 re-read at the sportsbooks' number), and item 8's key
@@ -418,6 +460,14 @@ is too full for its copy; after this, the next night's log should say
 `backed up: data/history.db`.
 
 ## 0b. The Backblaze cap, then after the next 04:00 UTC backup: does the offsite copy land? (steps KT, KO)
+
+**7 November, your KO:** still `403 storage_cap_exceeded`, and now with
+both figures: the bucket holds 11.1 GB, old versions included, and this box
+keeps 5.8 GB. So it is the old versions: set the bucket's Lifecycle
+Settings to "Keep only the last version of the file" (below), leave the cap
+at the free 10 GB, and the box's 5.8 GB fits once they clear, a day or two.
+No setting on the box is needed (QB_BACKUP_KEEP_HISTORY is only for a box
+figure above about 8 GB).
 
 **6 November, your KO run said why:** `Cannot upload files, storage cap
 exceeded ... (403 storage_cap_exceeded)`. Every night since late October
@@ -565,6 +615,17 @@ Before 6 December the college line reads `False [] None` — that's right.
 
 ## 1f. The day after tomorrow: the Lab's first pieces, and why (step JP)
 
+**7 November, your JP:** the Lab's NFL numbers are still from 29 September;
+last night it replayed UFC and then MLB for most of its hour. Two changes
+since: MLB and the WNBA are at rest (step KZ), so tonight the NFL is the
+only sport it owes, and the Lab now runs at the same share of the CPU as a
+board build instead of an eighth of it (step LA). Its own log and the day it
+last started each sport, tomorrow morning (JP2, with the refit's JQ2):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JQ JQ2 JP JP2 2>&1 | tee /tmp/weekly.txt
+```
+
 **6 November, your JP run:** the run it showed (`'cut_off': True`, 99
 minutes, still on the NFL) was 5 November's, which started before the
 evening's fix gave the run its 50 minutes. The page still reads 29
@@ -636,6 +697,28 @@ that refresh (its log says `CFB results not stored this build`). If `cfb`
 shows up there again, paste the line.
 
 ## 1g. Thursday: the models' weekly refit reaches the NFL (step JQ)
+
+**7 November (afternoon), your catch-up (step LA):** every big fitter was
+cut off at its 45 minutes: the NFL's and college's recency dials on 6
+November, MLB's on 7 November without one of its 21 settings scored, the
+NBA's player memory and its spread check (both set aside for the round).
+Here the NFL's dial scores a market in 77 seconds, one replay in 46 MB, so
+neither the work nor the memory was the reason. The weekly jobs ran at
+niceness 19: every child the site starts is meant to run at 10, level with
+the board builds, but the nicing added 10 rather than setting it, and the
+weekly jobs are started by the chores process, itself a child at 10. At 19
+the kernel gives them a weight of 15 against a build's 110, and the boards'
+sweeps run nearly end to end. Fixed: every child runs at 10, so a weekly job
+has about four times the CPU it had beside a build, and the server still
+goes first. Nothing to run. Tomorrow morning, the night's logs:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JQ JQ2 JP JP2 2>&1 | tee /tmp/weekly.txt
+```
+
+Right looks like the dial naming its settings as it scores them (`setting
++0.3 scored — 5 of 21 kept`) and a piece finishing; the Lab's log naming
+the NFL replayed.
 
 **7 November, read off the heartbeat:** last night's run (from 05:02) went
 to the NBA: its recency dial done, its player memory set aside as too long
@@ -975,7 +1058,14 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KI 2>&1 | tee /tmp/ki.txt
 `read by tip` with an agreement near 0.88 is right; paste it back either
 way.
 
-## 1p. Any time after this push: re-read the closes again, with the copies out (steps KX, KJ, KT)
+## 1p. Done 7 November: the closes re-read, with the copies out (steps KX, KJ, KT)
+
+**Done 7 November: nothing left to write.** Your NFL write found 7,486 of
+8,007 already right, 0 to change: the evening's writes had gone in on 6
+November (the journal backups from 20:10 to 20:31). The dry runs: college
+2,869 right, MLB 9,141 right (2,111 kept), the WNBA 1,846 right (534 kept),
+the NBA 3,408 right (103 kept), and every one 0 rewritten, 0 copied, 0
+cleared. Kept means no close was found today and the old one stays.
 
 **6 November (evening), your NFL dry run: right, write it.** 8,007 settled
 bets: 7,075 already right, 407 rewritten at the books' own numbers, 4

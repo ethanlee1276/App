@@ -67,7 +67,31 @@ def test_a_real_child_reads_its_own_score_and_niceness_back():
                          preexec_fn=CP.below_server(), timeout=60)
     adj, nice = out.stdout.split()
     assert int(adj) == CP.CHILD_OOM_ADJ, out.stdout
-    assert int(nice) == min(19, os.nice(0) + CP.CHILD_NICE), out.stdout
+    assert int(nice) == max(os.nice(0), CP.CHILD_NICE), out.stdout
+
+
+def test_a_child_of_a_child_is_not_niced_twice():
+    """7 November: the weekly jobs are started by a chores lane, itself a
+    child at 10, and `os.nice` adds; they ran at 19, an eighth of the CPU
+    beside a board build, and the refit's fitters were cut off at 45
+    minutes with nothing kept. Every child sits at CHILD_NICE."""
+    if not hasattr(os, "nice"):
+        print("      (skipped: no os.nice here)")
+        return
+    inner = "import os; print(os.nice(0))"
+    outer = ("import subprocess, sys\n"
+             f"sys.path.insert(0, {str(ROOT)!r})\n"
+             "from engine.childproc import below_server\n"
+             f"subprocess.run([sys.executable, '-c', {inner!r}], preexec_fn=below_server())\n")
+    out = subprocess.run([sys.executable, "-c", outer], capture_output=True, text=True,
+                         preexec_fn=CP.below_server(), timeout=60)
+    assert int(out.stdout.strip()) == max(os.nice(0), CP.CHILD_NICE), (out.stdout, out.stderr)
+    d = tempfile.mkdtemp()
+    f = os.path.join(d, "oom_score_adj")
+    open(f, "w").close()
+    start = os.nice(0)
+    CP.lower_self(nice=start, path=f)
+    assert os.nice(0) == start, "already at the floor: left where it is"
 
 
 if __name__ == "__main__":

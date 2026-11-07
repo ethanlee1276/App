@@ -35,16 +35,30 @@ import os
 #: and a child is chosen over the server unless the server is the far
 #: larger of the two.
 CHILD_OOM_ADJ = 500
-#: The CPU niceness every child already had.
+#: The CPU niceness every child already had, and every child sits at,
+#: however deep it was started (`lower_self`).
 CHILD_NICE = 10
 
 OOM_ADJ_PATH = "/proc/self/oom_score_adj"
 
 
 def lower_self(nice: int = CHILD_NICE, oom_adj: int = CHILD_OOM_ADJ, path: str = OOM_ADJ_PATH) -> None:
-    """Nice this process and raise its OOM score. Never raises."""
+    """Bring this process to niceness ``nice`` and raise its OOM score.
+    Never raises.
+
+    TO ``nice``, NOT BY IT (2026-11-07). `os.nice` adds, and the weekly
+    jobs are started by a chores lane that is itself a child at 10, so the
+    deep refit, the Lab and board learning ran at 19: a weight of 15 against
+    a board build's 110 (the kernel's scheduler), about an eighth of the one
+    CPU while the sweeps that run nearly end to end were building. On the
+    box a recency dial that scores a market in 77 seconds here was cut off
+    at 45 minutes, and the Lab's NFL replay never finished an hour. Every
+    child sits at CHILD_NICE now, however deep it was started: below the
+    server, level with the builds."""
     try:
-        os.nice(int(nice))
+        now = os.nice(0)
+        if now < int(nice):
+            os.nice(int(nice) - now)
     except (OSError, AttributeError):
         pass
     try:

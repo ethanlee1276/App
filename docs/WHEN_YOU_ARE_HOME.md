@@ -9338,6 +9338,43 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LA. The weekly jobs get their share of the box's one CPU** (step 433; 7
+November). Your 7 November catch-up showed every big fitter in the weekly
+refit cut off at its 45 minutes: the NFL's and college's recency dials on
+6 November, MLB's on 7 November without a single one of its 21 settings
+scored, the NBA's player memory and its spread check. Here the NFL's dial
+scores a whole market in 77 seconds, and one replay of it uses 46 MB, so
+neither the work nor the memory was the reason. The niceness was. Every
+child the site starts is meant to sit at nice 10, below the server and level
+with the board builds, but the nicing added 10 rather than setting it, and
+the weekly jobs are started by the chores process, itself a child at 10: the
+refit, the Lab and board learning ran at 19. To the kernel's scheduler that
+is a weight of 15 against a build's 110, about an eighth of the CPU, and the
+boards' sweeps run nearly end to end (a minute's rest between sweeps of
+about twenty). Now every child sits at 10 however deep it was started, so a
+weekly job has about four times the CPU it had beside a build, and the
+server still goes first. The Lab had the same squeeze: its NFL replay has
+not finished an hour since 29 September. Nothing to run. Tomorrow morning,
+after the night's refit and Lab, their own logs say what each ran and where
+the time went:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JQ JQ2 JP JP2 2>&1 | tee /tmp/weekly.txt
+```
+
+`JP2` is the Lab's own log and the day it last started each sport (the
+catch-up's JP block above it is the heartbeat's side):
+
+```
+sudo -u qellys tail -30 /srv/qellys/data/cache/weekly_lab.log
+sudo -u qellys cat /srv/qellys/data/cache/lab_attempts.json
+```
+
+What right looks like: the refit's log names the NFL's dial settings as it
+scores them (`setting +0.3 scored — 5 of 21 kept, 05:41:10`), and the Lab's
+names the NFL (`lab: nfl replayed in ... min`), the only sport it owes
+tonight now that MLB and the WNBA are at rest (KZ).
+
 **KZ. A league at rest sits out the box's heavy nights** (step 431; 7
 November). The weekly refit's round reaches about one piece a night on the
 box's one CPU. On 7 November MLB and the WNBA, their seasons over, held two of
