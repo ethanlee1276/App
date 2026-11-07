@@ -1703,6 +1703,29 @@ def refresh_wnba(quiet: bool = False) -> bool:
     return ok
 
 
+#: THE COLLEGE BUILD'S CEILING ON A SATURDAY (2026-11-07). The 600 seconds
+#: every model board gets was tuned while ESPN's college answer came back
+#: cut at 25 games; with each conference's board joined in
+#: (cfbdata.whole_slate) a Saturday is the full 50-68, and the build's
+#: per-game stages (the look-backs, the touchdown model, each game's
+#: weather and lineups) grow with it. A build killed at its ceiling
+#: publishes nothing that cycle and the board ages, so the full slate's
+#: day gets half as long again; the rest of the week keeps 600, and a hang
+#: still dies either way.
+CFB_BUILD_TIMEOUT_S = 600
+CFB_SATURDAY_TIMEOUT_S = 900
+
+
+def _cfb_build_timeout(slate_date: str | None = None) -> int:
+    """The college build's ceiling for the slate it builds (`_slate_date`,
+    which rolls at 5 AM Eastern): longer on a Saturday's full slate."""
+    try:
+        day = _dt.date.fromisoformat(slate_date or _slate_date())
+    except Exception:                                        # noqa: BLE001
+        return CFB_BUILD_TIMEOUT_S
+    return CFB_SATURDAY_TIMEOUT_S if day.weekday() == 5 else CFB_BUILD_TIMEOUT_S
+
+
 def refresh_cfb(quiet: bool = False) -> bool:
     """College football — one bulk odds request for the whole board.
 
@@ -1770,8 +1793,9 @@ def refresh_cfb(quiet: bool = False) -> bool:
     #
     # A guillotine for a hang, not for honest work. `_run_build` prints a
     # timeout unconditionally, so if ten minutes is also not enough the
-    # journal will say so instead of the board simply stopping.
-    ok, tail = _run_build(args, timeout=600)
+    # journal will say so instead of the board simply stopping. Fifteen on
+    # a Saturday, the full slate's day (`_cfb_build_timeout`).
+    ok, tail = _run_build(args, timeout=_cfb_build_timeout(args[1]))
     _finish_paid_pull(spend, before_seen, ok, tail, "CFB", sport="cfb",
                       bought=(_spent_so_far("cfb") - before_spent) if spend else None,
                       expect=CFB_LINES_COST + CFB_PLAYER_EVENT_COST)

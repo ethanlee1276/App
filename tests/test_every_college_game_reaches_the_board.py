@@ -21,7 +21,8 @@ board is under that on any day. What these hold:
   * the day's fetch asks each conference with its own cache file; the live
     board fills in the same way, its conference pages held at least a
     minute, and the NFL's live board asks once, as before;
-  * the college board records how its slate was gathered.
+  * the college board records how its slate was gathered, and its build
+    gets fifteen minutes instead of ten on a Saturday, the full slate's day.
 
 Run directly: `python3 tests/test_every_college_game_reaches_the_board.py`
 """
@@ -194,6 +195,22 @@ def test_the_live_board_fills_in_the_same_way():
         assert len(livescores.fetch_rows("nfl", ttl=30)) == 1 and len(asked) == 1, asked
     finally:
         livescores.fetch_text = saved
+
+
+def test_the_college_build_gets_longer_on_a_saturday():
+    """The full slate grows the build; a build killed at its ceiling
+    publishes nothing that cycle (launch._cfb_build_timeout)."""
+    import launch
+    assert launch._cfb_build_timeout("2026-11-07") == launch.CFB_SATURDAY_TIMEOUT_S == 900
+    assert launch._cfb_build_timeout("2026-11-06") == launch.CFB_BUILD_TIMEOUT_S == 600
+    assert launch._cfb_build_timeout("2026-11-08") == 600
+    assert launch._cfb_build_timeout("not a day") == 600
+    src = (ROOT / "launch.py").read_text(encoding="utf-8")
+    body = src[src.index("def refresh_cfb("):]
+    body = body[:body.index("\ndef ")]
+    assert "_run_build(args, timeout=_cfb_build_timeout(args[1]))" in body
+    assert body.index('args = ["cfb_build.py", _slate_date()') < \
+        body.index("_cfb_build_timeout(args[1])"), "the slate's own date"
 
 
 def test_the_college_board_records_how_its_slate_was_gathered():

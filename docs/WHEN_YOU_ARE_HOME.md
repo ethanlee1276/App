@@ -9367,7 +9367,9 @@ conference's own scoreboard for the day is asked too (eleven of them, each
 under the cap on any day) and the games joined, ESPN's first answer first; a
 game with no FBS team stays out, and a conference that doesn't answer is
 named while the rest still join. The live scores do the same, each
-conference's page held a minute. Nothing to run: the next college build
+conference's page held a minute. The college build gets fifteen minutes on
+a Saturday instead of ten (a killed build publishes nothing that cycle, and
+the slate is now twice the size). Nothing to run: the next college build
 after the restart has the whole slate, and the playoff race corrects itself
 as it re-reads the season. Read-only, after that build: 7 November asked
 again (it should list far more than 25 games, Michigan's among them, and say
