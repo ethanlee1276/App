@@ -5404,11 +5404,71 @@ def _absent_player_verdict(hist_conn, b):
     return _college_absent(hist_conn, b, target)[0]
 
 
+_CFB_TEAM_SQL = ("SELECT player, team, period FROM player_game_logs WHERE sport='cfb' "
+                 "AND period BETWEEN ? AND ? AND team IS NOT NULL AND team != '' "
+                 "ORDER BY period DESC")
+
+
+def _recent_cfb_team(hist_conn, since: str, until: str, target: str):
+    """The team on ``target``'s newest college stat row between the two
+    days, or None: the first such row in ``_CFB_TEAM_SQL``'s order.
+
+    Inside a name index (the settle pass) the window is read once and each
+    name's first team kept, so every teamless open college prop asks a
+    dict instead of walking six weeks of stat rows (every market, every
+    player) and normalizing each name, on every pass while it waits."""
+    from .sources.oddsapi import normalize_name
+    index = _name_index_now()
+    if index is None:
+        for r in hist_conn.execute(_CFB_TEAM_SQL, (since, until)):
+            if normalize_name(r["player"]) == target:
+                return r["team"]
+        return None
+    key = (id(hist_conn), _CFB_TEAM_SQL, (since, until))
+    teams = index.get(key)
+    if teams is None:
+        teams, names = {}, {}
+        for r in hist_conn.execute(_CFB_TEAM_SQL, (since, until)):
+            raw = r["player"]
+            n = names.get(raw)
+            if n is None:
+                n = names[raw] = normalize_name(raw)
+            teams.setdefault(n, r["team"])
+        index[key] = teams
+    return teams.get(target)
+
+
+def _cfb_roster_team(hist_conn, player: str, season: int):
+    """`cfbroster.team_of`, with the roster file parsed once a season and
+    each school's code resolved once, for the length of a name index.
+
+    Outside one it is `team_of` itself. Inside (the settle pass), the
+    file `roster_schools` parses (every college player, each name
+    normalized) and the season's schedule `school_key` reads stay in hand
+    for the pass: each teamless prop the six-week window cannot place
+    asked both afresh, every pass while it waited."""
+    from .cfbroster import roster_schools, school_key, team_of
+    from .sources.oddsapi import normalize_name
+    index = _name_index_now()
+    if index is None:
+        return team_of(hist_conn, player, season)
+    rk = ("cfb_roster_schools", int(season))
+    schools = index.get(rk)
+    if schools is None:
+        schools = index[rk] = roster_schools(season)
+    school = schools.get(normalize_name(player or ""))
+    if not school:
+        return None
+    sk = ("cfb_school_key", id(hist_conn), int(season), school)
+    if sk not in index:
+        index[sk] = school_key(hist_conn, season, school)
+    return index[sk]
+
+
 def _college_absent(hist_conn, b, target):
     """``(verdict, why)`` — the college half of `_absent_player_verdict`.
     ``why`` names the link that holds the bet open, so the settle check
     can say which one (`absent_blocker`); the verdict is the rule's own."""
-    from .sources.oddsapi import normalize_name
     try:
         d0 = datetime.date.fromisoformat(b["date"] or "")
     except ValueError:
@@ -5420,21 +5480,14 @@ def _college_absent(hist_conn, b, target):
     team = (b["team"] if "team" in b.keys() else None) or None
     if not team:
         since = (d0 - datetime.timedelta(days=45)).isoformat()
-        for r in hist_conn.execute(
-                "SELECT player, team, period FROM player_game_logs WHERE sport='cfb' "
-                "AND period BETWEEN ? AND ? AND team IS NOT NULL AND team != '' "
-                "ORDER BY period DESC", (since, d0.isoformat())):
-            if normalize_name(r["player"]) == target:
-                team = r["team"]
-                break
+        team = _recent_cfb_team(hist_conn, since, d0.isoformat(), target)
     if not team:
         # THE ROSTER FILE, third. A first appearance has no history and
         # a row from before the bet carried its team has no stamp; the
         # cached cfbfastR roster names his school (engine/cfbroster).
         try:
-            from .cfbroster import team_of
-            team = team_of(hist_conn, b["player"] or "",
-                           d0.year if d0.month >= 8 else d0.year - 1)
+            team = _cfb_roster_team(hist_conn, b["player"] or "",
+                                    d0.year if d0.month >= 8 else d0.year - 1)
         except Exception:                                # noqa: BLE001
             team = None
     if not team:

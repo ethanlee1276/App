@@ -13,7 +13,9 @@ season, so every daily sport's "is his team's game final" walked that
 sport's every stored season. What these hold:
 
   * inside a name index a summed market's parts are read once per day and
-    answer every name exactly as outside one; outside, nothing is kept;
+    answer every name exactly as outside one; outside, nothing is kept; so
+    is a teamless college prop's six-week team window, and the roster
+    file read when that window cannot place him;
   * the games table has an index on (sport, period), and the day lookups
     use it;
   * the grade's parts name the stat-row search, the absent-player rule and
@@ -80,6 +82,77 @@ def test_inside_an_index_a_summed_markets_parts_are_read_once_and_answer_the_sam
     assert [r[0]["value"] if r else None for r in plain] == [42.0, 26.0, 55.0, None, None], \
         "a game missing a part is left out, as before"
     assert ledger._name_index_now() is None
+
+
+class _CountingTeams:
+    """A history connection that counts the college team-window reads."""
+    def __init__(self, conn):
+        self.conn, self.reads = conn, 0
+
+    def execute(self, sql, args=()):
+        if sql == ledger._CFB_TEAM_SQL:
+            self.reads += 1
+        return self.conn.execute(sql, args)
+
+
+def test_a_teamless_college_prop_finds_his_team_from_one_read_a_pass():
+    h = db.connect(":memory:")
+    rows = []
+    for day, name, team in (("2026-10-31", "José Núñez", "UNM"), ("2026-10-24", "José Núñez", "BOIS"),
+                            ("2026-10-31", "Chris Olave", "OSU"), ("2026-09-01", "Old Timer", "ARMY")):
+        rows.append({"sport": "cfb", "season": 2026, "period": day, "game_id": f"g{day}{team}",
+                     "player": name, "team": team, "opponent": "X", "position": "WR", "home": 1,
+                     "market": "rec_yds", "value": 10.0})
+    db.upsert_player_logs(h, rows)
+    c = _CountingTeams(h)
+    since, until = "2026-09-23", "2026-11-07"
+    asks = ["jose nunez", "chris olave", "old timer", "nobody"]
+    plain = [ledger._recent_cfb_team(c, since, until, t) for t in asks]
+    assert plain == ["UNM", "OSU", None, None], "his newest row's team; outside the window, none"
+    assert c.reads == len(asks)
+    c.reads = 0
+    with ledger.name_index():
+        kept = [ledger._recent_cfb_team(c, since, until, t) for t in asks]
+        assert c.reads == 1
+    assert kept == plain
+
+
+def test_the_roster_file_is_parsed_once_a_pass_and_names_the_same_team():
+    import json
+    import tempfile
+    from engine import cfbroster
+    season = 2026
+    d = Path(tempfile.mkdtemp())
+    with open(d / f"cfb_rosters_{season}.csv", "w", encoding="utf-8") as fh:
+        fh.write("athlete_id,first_name,last_name,team,position\n")
+        for row in (("1", "DJ", "Miller", "Central Michigan", "WR"),
+                    ("2", "Derek", "Meadows", "Notre Dame", "WR"),
+                    ("3", "Kaleb", "Edwards", "Central Michigan", "RB")):
+            fh.write(",".join(row) + "\n")
+    h = db.connect(":memory:")
+    h.execute("INSERT INTO games (sport, season, period, game_id, date, home, away, home_score, "
+              "away_score, extra) VALUES ('cfb', ?, '2026-11-05', 'COLG@CMU', NULL, 'CMU', 'COLG', "
+              "24, 20, ?)", (season, json.dumps({"home_name": "Central Michigan",
+                                                  "away_name": "Colgate"})))
+    h.commit()
+    saved_dir, saved_parse = cfbroster.CACHE_DIR, cfbroster.roster_schools
+    parses = []
+
+    def counting(season_, cache_dir=None):
+        parses.append(season_)
+        return saved_parse(season_, cache_dir)
+    cfbroster.CACHE_DIR, cfbroster.roster_schools = d, counting
+    try:
+        asks = ["DJ Miller", "Derek Meadows", "Kaleb Edwards", "Nobody Here"]
+        plain = [ledger._cfb_roster_team(h, n, season) for n in asks]
+        assert plain == [cfbroster.team_of(h, n, season) for n in asks] == ["CMU", None, "CMU", None]
+        parses.clear()
+        with ledger.name_index():
+            kept = [ledger._cfb_roster_team(h, n, season) for n in asks]
+            assert parses == [season], "one parse a season a pass"
+        assert kept == plain
+    finally:
+        cfbroster.CACHE_DIR, cfbroster.roster_schools = saved_dir, saved_parse
 
 
 def test_the_games_table_finds_a_day_without_its_season():

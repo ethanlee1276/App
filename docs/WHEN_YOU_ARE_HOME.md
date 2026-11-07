@@ -9366,7 +9366,14 @@ file after this lands (a second on a table that size). `grade_parts` gains
 `stat_rows` (the search for each bet's row), `absent` (the absent-player
 rule), `too_early` (the finished-game guard) and `game_rows` (a game bet's
 own evidence), so what is left of the grading reads by name. No grade
-changes; nothing to run.
+changes; nothing to run. (Later the same evening: the live pass at 16:41 had
+1,081 bets open and spent 120 seconds finding rows, about a tenth of a
+second a bet. One more such read: a college prop with no team on it, rare
+since the writers began stamping one in September, read six weeks of
+college stat rows, every market and player, to find his school, on every
+pass while it waited, and when they could not place him, parsed the whole
+college roster file and the season's schedule; the window, the roster and
+each school's code are now read once a pass as well.)
 
 **LI. The grading step's two biggest reads, cut to what it needs** (step
 438; 7 November). Reading the code behind LH's parts found two reads doing
