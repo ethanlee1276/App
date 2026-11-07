@@ -4,6 +4,12 @@
     {
       "date": "2026-11-07",
       "kind": "fix",
+      "title": "Leagues out of season stop rebuilding every few minutes",
+      "body": "Baseball's page was being rebuilt every few minutes for a slate with no games, about three minutes of the server's time out of every twenty. A league whose season is over now refreshes every six hours, and that time goes to the leagues being played and to the models' weekly refit."
+    },
+    {
+      "date": "2026-11-07",
+      "kind": "fix",
       "title": "The nightly jobs run once a day, as they should",
       "body": "Two of the server's background routines kept their notes in one file and could overwrite each other's, so a job that had already run that day was sometimes started again: on 7 November the model refit ran four times. Each now records only its own notes, so the nightly jobs run once and the boards keep the server to themselves for the rest of the day."
     },

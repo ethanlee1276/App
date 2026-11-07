@@ -212,6 +212,76 @@ def test_the_desks_refit_card_names_the_leagues_at_rest_and_owes_them_nothing():
     assert 'odRow("At rest (out of season)", dp.resting.map(odPiece)' in js
 
 
+# --- the sweep: a board at rest rebuilds every six hours ---------------------------
+def _launch_with_board(age_h: float):
+    import os
+    import time
+    os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
+    import launch as L
+    p = Path(tempfile.mkdtemp()) / "mlb_recommendations.json"
+    p.write_text(json.dumps({"games": [], "most_likely": []}), encoding="utf-8")
+    t = time.time() - age_h * 3600
+    os.utime(p, (t, t))
+    return L, p
+
+
+def test_the_sweep_leaves_a_resting_leagues_board_until_it_is_six_hours_old():
+    """7 November: the MLB board took about three minutes of every sweep for a
+    slate with no games."""
+    L, p = _launch_with_board(1.0)
+    keep = dict(L.BOARD_FILES), L._slate_date
+    try:
+        L.BOARD_FILES["mlb"] = str(p)
+        L._slate_date = lambda: "2026-11-07"
+        assert L._resting_board("mlb"), "an hour old, at rest: left as it is"
+        import os
+        import time
+        old = time.time() - (L.REST_REBUILD_S + 60)
+        os.utime(p, (old, old))
+        assert not L._resting_board("mlb"), "six hours old: rebuilt"
+        L.BOARD_FILES["nfl"] = str(p)
+        assert not L._resting_board("nfl"), "in season: every sweep"
+        L.BOARD_FILES["mlb"] = str(p) + ".missing"
+        assert not L._resting_board("mlb"), "no board: built"
+        L.BOARD_FILES["mlb"] = str(p)
+        L._slate_date = lambda: "2027-03-10"
+        os.utime(p, (time.time(), time.time()))
+        assert not L._resting_board("mlb"), "three weeks before opening day: every sweep"
+    finally:
+        L.BOARD_FILES.clear()
+        L.BOARD_FILES.update(keep[0])
+        L._slate_date = keep[1]
+
+
+def test_a_kept_board_reads_off_season_never_stale():
+    L, p = _launch_with_board(5.0)
+    keep = dict(L.BOARD_FILES), L._BOARD_RUNS.pop("mlb", None)
+    try:
+        L.BOARD_FILES["mlb"] = str(p)
+        L._note_rest("mlb")
+        rec = L._BOARD_RUNS["mlb"]
+        assert rec["offseason"] and rec["resting"] and rec["stale"] is False, rec
+        assert 4.9 < rec["age_h"] < 5.1 and rec["ok"] is True and rec["most_likely"] == 0, rec
+        rec["at"] = "2026-11-07T08:00:00"                 # the last build's record is kept
+        L._note_rest("mlb")
+        assert L._BOARD_RUNS["mlb"]["at"] == "2026-11-07T08:00:00"
+    finally:
+        L.BOARD_FILES.clear()
+        L.BOARD_FILES.update(keep[0])
+        L._BOARD_RUNS.pop("mlb", None)
+        if keep[1] is not None:
+            L._BOARD_RUNS["mlb"] = keep[1]
+
+
+def test_every_league_board_in_the_sweep_asks_first():
+    src = (ROOT / "launch.py").read_text(encoding="utf-8")
+    body = src[src.index("def refresh_all("):src.index('lap("ufc")')]
+    for lg in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl"):
+        ask, build = f'if _resting_board("{lg}"):', f'_note_board("{lg}", refresh_{lg}(quiet=quiet))'
+        assert ask in body and build in body and body.index(ask) < body.index(build), lg
+        assert f'_note_rest("{lg}")' in body, lg
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

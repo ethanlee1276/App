@@ -2216,6 +2216,51 @@ def _kalshi_heartbeat():
         return None
 
 
+#: A LEAGUE AT REST REBUILDS EVERY SIX HOURS, NOT EVERY SWEEP (2026-11-07).
+#: The heartbeat after that afternoon's restart had the MLB board taking
+#: about three minutes of the box's one CPU, for a slate with no games,
+#: in every sweep of about twenty: three hours a day the weekly refit and
+#: the Lab were short of. A league at rest (engine/oddsplan.resting: out of
+#: season, its next season more than three weeks off) keeps its board until
+#: it is this old; in season, or within three weeks of it, every sweep.
+REST_REBUILD_S = 6 * 3600
+
+
+def _resting_board(name: str, now: float | None = None) -> bool:
+    """True when the sweep leaves ``name``'s board as it is: its league at
+    rest and its board written within REST_REBUILD_S. Never raises; any
+    doubt (no board, an unreadable calendar) rebuilds."""
+    try:
+        from engine import oddsplan
+        path = BOARD_FILES.get(name)
+        if not path or not oddsplan.resting(name, _dt.date.fromisoformat(_slate_date())):
+            return False
+        t = time.time() if now is None else float(now)
+        return t - os.path.getmtime(path) < REST_REBUILD_S
+    except Exception:                                         # noqa: BLE001
+        return False
+
+
+def _note_rest(name: str) -> None:
+    """The record of a board its resting league kept: the last build's, its
+    age brought up to now, and off season, so it is never called stale or
+    frozen between its rebuilds. Never raises."""
+    try:
+        from engine import freshness as _fresh
+        path = BOARD_FILES[name]
+        age = time.time() - os.path.getmtime(path)
+        rec = _BOARD_RUNS.get(name)
+        if rec is None:
+            made = time.time() - age
+            rec = _BOARD_RUNS[name] = {"ok": True, "at_epoch": round(made),
+                                       "at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(made))}
+            rec.update(_board_counts(path))
+        rec["offseason"] = rec["resting"] = True
+        rec.update(_fresh.verdict(name, age, offseason=True))
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
 def refresh_all(quiet: bool = False) -> None:
     _lap = [time.time()]
     _STEP_FAIL.clear()
@@ -2227,22 +2272,41 @@ def refresh_all(quiet: bool = False) -> None:
 
     # In SPORT_PRIORITY order — the leagues first, as he ranks them,
     # then the tool boards. See the tuple's own comment.
-    with _isolated("nfl"): _note_board("nfl", refresh_nfl(quiet=quiet))
+    # A league at rest is rebuilt every REST_REBUILD_S, not every sweep.
+    if _resting_board("nfl"):
+        _note_rest("nfl")
+    else:
+        with _isolated("nfl"): _note_board("nfl", refresh_nfl(quiet=quiet))
     lap("nfl")
-    with _isolated("cfb"): _note_board("cfb", refresh_cfb(quiet=quiet))
+    if _resting_board("cfb"):
+        _note_rest("cfb")
+    else:
+        with _isolated("cfb"): _note_board("cfb", refresh_cfb(quiet=quiet))
     lap("cfb")
     # THE KALSHI TRADER (engine/kalshitrade): the football boards have
     # just rebuilt, so their picks go on (or on paper) before the prices
     # move. Not a board; off unless QB_KALSHI_MODE is set.
     with _isolated("kalshi-trader", board=False): _kalshi_trader(quiet=quiet)
     lap("kalshi-trader")
-    with _isolated("mlb"): _note_board("mlb", refresh_mlb(quiet=quiet))
+    if _resting_board("mlb"):
+        _note_rest("mlb")
+    else:
+        with _isolated("mlb"): _note_board("mlb", refresh_mlb(quiet=quiet))
     lap("mlb")
-    with _isolated("nba"): _note_board("nba", refresh_nba(quiet=quiet))
+    if _resting_board("nba"):
+        _note_rest("nba")
+    else:
+        with _isolated("nba"): _note_board("nba", refresh_nba(quiet=quiet))
     lap("nba")
-    with _isolated("wnba"): _note_board("wnba", refresh_wnba(quiet=quiet))
+    if _resting_board("wnba"):
+        _note_rest("wnba")
+    else:
+        with _isolated("wnba"): _note_board("wnba", refresh_wnba(quiet=quiet))
     lap("wnba")
-    with _isolated("nhl"): _note_board("nhl", refresh_nhl(quiet=quiet))
+    if _resting_board("nhl"):
+        _note_rest("nhl")
+    else:
+        with _isolated("nhl"): _note_board("nhl", refresh_nhl(quiet=quiet))
     lap("nhl")
     with _isolated("ufc"): _note_board("ufc", refresh_ufc(quiet=quiet))
     lap("ufc")

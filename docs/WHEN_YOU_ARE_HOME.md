@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LC. A league at rest rebuilds its board every six hours** (step 436; 7
+November). The heartbeat after that afternoon's restart had the MLB board
+taking about three minutes of the box's one CPU, for a slate with no games,
+and every sweep of about twenty did the same: three hours a day the weekly
+refit and the Lab were short of. A league at rest (out of season, its next
+season more than three weeks off, the same rule as KZ) now keeps its board
+until it is six hours old; in season, or within three weeks of it, every
+sweep as before. The heartbeat and the Status page call such a board off
+season, never stale or frozen, and the owner's desk already counts a league
+with no game as resting. Today that is MLB and the WNBA. Nothing to run.
+
 **LB. The two chores lanes never undo each other** (step 435; 7 November).
 Your 7 November JQ had four refit pieces each begun as the first of its own
 run on the same day (the NBA's teammate-out check, its spread check, the

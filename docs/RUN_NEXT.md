@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07 (evening), after the refit's four runs in one day
+Last updated 2026-11-07 (evening), after a league at rest started keeping
+its board six hours instead of rebuilding it every sweep (MLB's empty slate
+took about three minutes of every one; step LC: nothing to run), after the
+refit's four runs in one day
 were traced to the two chores lanes writing their whole copies of one state
 file over each other (step LB, item 1g: fixed, nothing to run); before that,
 2026-11-07 (afternoon), after your catch-up paste: the close
@@ -207,6 +210,9 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long
   bucket holds 11.1 GB counting old versions; the box keeps 5.8 GB. The one
   fix is a setting in Backblaze, free: the bucket's Lifecycle Settings,
   "Keep only the last version of the file". The cap stays at 10 GB.
+- **MLB's board, rebuilt every sweep for an empty slate (step LC):** about
+  three minutes of every twenty; a league at rest keeps its board six hours
+  now, so the refit and the Lab get that CPU too.
 - **The refit's four runs in one day (item 1g, step LB):** two chores lanes
   wrote their whole copies of one state file over each other, undoing
   "the refit started today"; each writes only what it changed now.
