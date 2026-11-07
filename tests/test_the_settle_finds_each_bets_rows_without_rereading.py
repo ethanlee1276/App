@@ -15,7 +15,9 @@ sport's every stored season. What these hold:
   * inside a name index a summed market's parts are read once per day and
     answer every name exactly as outside one; outside, nothing is kept; so
     is a teamless college prop's six-week team window, and the roster
-    file read when that window cannot place him;
+    file read when that window cannot place him; and the college absent
+    rule's box-score, play-file and first-TD checks read each day's files
+    once, through the season, and rule exactly as per bet;
   * the games table has an index on (sport, period), and the day lookups
     use it;
   * the grade's parts name the stat-row search, the absent-player rule and
@@ -153,6 +155,58 @@ def test_the_roster_file_is_parsed_once_a_pass_and_names_the_same_team():
         assert kept == plain
     finally:
         cfbroster.CACHE_DIR, cfbroster.roster_schools = saved_dir, saved_parse
+
+
+class _CountingFiles:
+    """A history connection that counts the college file checks."""
+    def __init__(self, conn):
+        self.conn, self.per_team, self.per_day = conn, 0, 0
+
+    def execute(self, sql, args=()):
+        if sql.startswith("SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN"):
+            self.per_team += 1
+        if sql.startswith("SELECT DISTINCT team, game_id NOT LIKE"):
+            self.per_day += 1
+        return self.conn.execute(sql, args)
+
+
+def test_the_college_absent_rule_reads_each_days_files_once_and_rules_the_same():
+    import datetime as dt
+    today = dt.date.today()
+    day = (today - dt.timedelta(days=1)).isoformat()
+    season = (today - dt.timedelta(days=1)).year if (today - dt.timedelta(days=1)).month >= 8 \
+        else (today - dt.timedelta(days=1)).year - 1
+    h = db.connect(":memory:")
+    for gid, home, away in (("g1", "IOWA", "ISU"), ("g2", "OSU", "MICH"), ("g3", "TEX", "OU")):
+        h.execute("INSERT INTO games (sport, season, period, game_id, date, home, away, home_score, "
+                  "away_score) VALUES ('cfb', ?, ?, ?, ?, ?, ?, 24, 20)", (season, day, gid, day, home, away))
+    h.commit()
+    rows = []
+    # IOWA: box and play file in, first TD marked. OSU: box only. TEX: nothing filed.
+    for gid, team, market in (("g1-box", "IOWA", "rec_yds"), ("g1", "IOWA", "rec_yds"),
+                              ("g1", "IOWA", "first_td"), ("g2-box", "OSU", "rec_yds"),
+                              ("g9-box", "TEX", "rec_yds")):
+        rows.append({"sport": "cfb", "season": season - 3 if team == "TEX" else season,
+                     "period": day if team != "TEX" else "2023-11-04", "game_id": gid,
+                     "player": f"Somebody {team}", "team": team, "opponent": "X",
+                     "position": "WR", "home": 1, "market": market, "value": 1.0})
+    db.upsert_player_logs(h, rows)
+    bets = [{"sport": "cfb", "date": day, "player": "Absent Man", "market": m, "team": t,
+             "category": "main"}
+            for t in ("IOWA", "OSU", "TEX") for m in ("rec_yds", "rush_yds", "first_td")]
+    c = _CountingFiles(h)
+    plain = [ledger._college_absent(c, b, "absent man") for b in bets]
+    assert c.per_team > 0 and c.per_day == 0
+    c.per_team = c.per_day = 0
+    with ledger.name_index():
+        kept = [ledger._college_absent(c, b, "absent man") for b in bets]
+        assert c.per_team == 0 and c.per_day == 1, (c.per_team, c.per_day)
+    assert kept == plain
+    verdicts = {(b["team"], b["market"]): v for b, (v, _why) in zip(bets, plain)}
+    assert verdicts[("IOWA", "rec_yds")] == "void" and verdicts[("IOWA", "first_td")] == "void"
+    assert verdicts[("OSU", "rec_yds")] == "wait", "box in, play file not: a receiver waits"
+    assert verdicts[("OSU", "rush_yds")] == "void" and verdicts[("OSU", "first_td")] is None
+    assert verdicts[("TEX", "rush_yds")] is None, "nothing filed that day: open"
 
 
 def test_the_games_table_finds_a_day_without_its_season():

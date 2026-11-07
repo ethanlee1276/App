@@ -9373,7 +9373,15 @@ since the writers began stamping one in September, read six weeks of
 college stat rows, every market and player, to find his school, on every
 pass while it waited, and when they could not place him, parsed the whole
 college roster file and the season's schedule; the window, the roster and
-each school's code are now read once a pass as well.)
+each school's code are now read once a pass as well. That was not the cost:
+the next live pass still spent 101 seconds there. The rule's other three
+questions were, once a college team's game is final: is its box score in,
+is its play file in, is its first scorer marked. Each asked the stat file
+by day and team with no season, which no index serves, so each walked every
+college stat row the box keeps, every season, and when the answer was "not
+yet" it walked all of them to say so, for every bet waiting on it, every
+pass. Now each day's files are read once a pass through the season, and
+every team's answer comes from that read.)
 
 **LI. The grading step's two biggest reads, cut to what it needs** (step
 438; 7 November). Reading the code behind LH's parts found two reads doing

@@ -5465,6 +5465,49 @@ def _cfb_roster_team(hist_conn, player: str, season: int):
     return index[sk]
 
 
+def _cfb_day_files(hist_conn, periods) -> tuple | None:
+    """``(filed, play file, first TD)``: the teams with any college stat row,
+    with one from the play file (a game id without ``-box``), and with a
+    ``first_td`` row, on these days; read once for the length of a name
+    index, None outside one (the callers ask their own queries then).
+
+    THE SCAN THIS SAVES (2026-11-07). The absent-player rule asks those
+    three things per bet with `sport='cfb' AND period IN (..) AND team=?`.
+    No index covers a day and a team without the season, so each one
+    walked every college stat row the box has stored, every season, and
+    when the answer was no (a box score or a play file not in yet) it
+    walked all of them to say so, for every bet waiting on it, every
+    pass: 54 to 121 seconds of the settle pass on the 7 November evening
+    (grade_parts.absent). This reads the days through the primary key
+    (sport, season, period). A college season is named for the year it
+    starts, so a day's rows carry its own year or the one before, and
+    those two seasons hold every row the per-bet queries could find."""
+    index = _name_index_now()
+    if index is None or not periods:
+        return None
+    try:
+        years = {int(str(p)[:4]) for p in periods}
+    except ValueError:
+        return None
+    key = ("cfb_day_files", id(hist_conn), tuple(periods))
+    got = index.get(key)
+    if got is None:
+        seasons = sorted(years | {y - 1 for y in years})
+        q = ("SELECT DISTINCT team, game_id NOT LIKE '%-box', market='first_td' "
+             "FROM player_game_logs WHERE sport='cfb' "
+             f"AND season IN ({','.join('?' * len(seasons))}) "
+             f"AND period IN ({','.join('?' * len(periods))})")
+        filed, playfile, first_td = set(), set(), set()
+        for team, nonbox, ftd in hist_conn.execute(q, (*seasons, *periods)):
+            filed.add(team)
+            if nonbox:
+                playfile.add(team)
+            if ftd:
+                first_td.add(team)
+        got = index[key] = (filed, playfile, first_td)
+    return got
+
+
 def _college_absent(hist_conn, b, target):
     """``(verdict, why)`` — the college half of `_absent_player_verdict`.
     ``why`` names the link that holds the bet open, so the settle check
@@ -5510,7 +5553,10 @@ def _college_absent(hist_conn, b, target):
                       else f"{team} has {len(fixtures)} final games a day either side — the rule needs one")
     periods = sorted({g["period"] for g in finals})
     marks = ",".join("?" * len(periods))
-    filed = hist_conn.execute(
+    # Inside the settle pass, the three file checks below read the days
+    # once for every team (`_cfb_day_files`); elsewhere, as they were.
+    files = _cfb_day_files(hist_conn, periods)
+    filed = (team in files[0]) if files is not None else hist_conn.execute(
         f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
         f"AND team=? LIMIT 1", (*periods, team)).fetchone()
     if not filed:
@@ -5521,7 +5567,7 @@ def _college_absent(hist_conn, b, target):
         # (cfbdata.mark_first_td). With no such row for the game, the
         # first scorer is unknown, and the bet waits; with them, a man
         # absent from them was not in the box and voids, as any prop.
-        marked = hist_conn.execute(
+        marked = (team in files[2]) if files is not None else hist_conn.execute(
             f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
             f"AND team=? AND market='first_td' LIMIT 1", (*periods, team)).fetchone()
         if not marked:
@@ -5529,7 +5575,7 @@ def _college_absent(hist_conn, b, target):
     if b["market"] in PLAY_FILE_MARKETS and (datetime.date.today() - d0).days < PLAY_FILE_DAYS:
         # The box score is in; the play file, which would show him thrown
         # at, may not be (see PLAY_FILE_MARKETS). Its rows carry no `-box`.
-        read = hist_conn.execute(
+        read = (team in files[1]) if files is not None else hist_conn.execute(
             f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
             f"AND team=? AND game_id NOT LIKE '%-box' LIMIT 1", (*periods, team)).fetchone()
         if not read:
