@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ME. The comparisons count a band without walking every past game**
+(step 455; 8 November). The first NFL build to name its parts (09:16 on
+Sunday) put the pricing stage at 48 seconds, and the prop pricing itself
+at only 4.6 of them. The comparisons took 10.7: for every priced prop
+(about six hundred) they walked every past game in that stat since the
+logs begin, to count the ones where a player came in on similar form (the
+"Comps: 214 past spots with this line and a similar 10-game form went 46%
+to the over" line on a card). The past games are now sorted by form and
+cut into blocks, so a prop's similar-form games are found by halving
+instead of walking, and each block's overs and unders are counted off its
+own sorted list. Timed on 44,000 past games and 3,000 props: 5.21 seconds
+against 0.08. Every count is the same to the digit: over, under, pushes,
+the percentage, and the player's own games. Nothing to run.
+
 **MD. The depth charts are read once per file** (step 454; 8 November).
 The NFL build's depth-chart stage ran 11 to 14 seconds of every build on
 Sunday. The season's depth-chart file is a snapshot of every team's every

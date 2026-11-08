@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after the depth charts started being read once
+Last updated 2026-11-08, after the comparisons on every prop card started
+counting their similar past games without walking every one (step ME:
+nothing to run), after the depth charts started being read once
 per file instead of on every NFL build (step MD: nothing to run), after
 every board started being written with
 the fast JSON encoder, its browser copy made once (step MC: nothing to

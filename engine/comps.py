@@ -143,6 +143,83 @@ def comp_record(index: list[tuple], line: float, form: float,
             "form_hi": round(hi, 3), "own": own}
 
 
+class _BandIndex:
+    """One market's spots sorted by trailing form, for `comp_record`'s
+    counts without its walk.
+
+    EVERY SPOT, FOR EVERY PROP (2026-11-08). `decorate` asked `comp_record`
+    once per priced prop, and each walked its market's whole index — every
+    past player-game since the logs begin — to keep the ones inside a ±15%
+    form band: about six hundred walks of tens of thousands of spots on an
+    NFL Sunday, 10.7 of the pricing stage's 48 seconds at 09:16. Sorted by
+    form, a band is a slice found by bisection; the slice is cut into
+    blocks whose values are kept sorted, so a whole block's over, under and
+    push are three bisects and only the two edge blocks are walked. A
+    player's own spots sit in their own form-sorted list. Every number is a
+    count, so the record is `comp_record`'s, to the digit. A replay's
+    ``before`` cutoff, and a band that is not a number, are handed to
+    `comp_record` itself."""
+
+    BLOCK = 256
+
+    def __init__(self, index: list[tuple]):
+        self.spots = sorted(index, key=lambda s: s[2])
+        self.forms = [s[2] for s in self.spots]
+        self.values = [s[3] for s in self.spots]
+        b = self.BLOCK
+        self.blocks = [sorted(self.values[i:i + b]) for i in range(0, len(self.values), b)]
+        self.own: dict = {}
+        for _key, name, f, value in self.spots:
+            fs, vs = self.own.setdefault(name, ([], []))
+            fs.append(f)
+            vs.append(value)
+
+    def record(self, line: float, form: float, band: float = FORM_BAND, before=None,
+               min_n: int = MIN_COMPS, player: str | None = None) -> dict | None:
+        import bisect
+        lo, hi = _band(form, band)
+        if before is not None or not lo <= hi:
+            return comp_record(self.spots, line, form, band=band, before=before,
+                               min_n=min_n, player=player)
+        i0, i1 = bisect.bisect_left(self.forms, lo), bisect.bisect_right(self.forms, hi)
+        over = under = push = 0
+        b, n = self.BLOCK, len(self.values)
+        i = i0
+        while i < i1:
+            k = i // b
+            block_end = min((k + 1) * b, n)
+            if i == k * b and block_end <= i1:
+                # The whole block is in the band: count it off its sorted values.
+                vals = self.blocks[k]
+                lt, le = bisect.bisect_left(vals, line), bisect.bisect_right(vals, line)
+                under += lt
+                push += le - lt
+                over += len(vals) - le
+                i = block_end
+                continue
+            stop = min(block_end, i1)
+            for v in self.values[i:stop]:
+                if v > line:
+                    over += 1
+                elif v < line:
+                    under += 1
+                else:
+                    push += 1
+            i = stop
+        own = 0
+        if player and player in self.own:
+            fs, vs = self.own[player]
+            j0, j1 = bisect.bisect_left(fs, lo), bisect.bisect_right(fs, hi)
+            own = sum(1 for v in vs[j0:j1] if v != line)
+        decided = over + under
+        if decided < min_n:
+            return None
+        return {"n": decided, "over": over, "under": under, "push": push,
+                "hit_rate": round(over / decided, 4), "line": line,
+                "form": round(form, 3), "form_lo": round(lo, 3),
+                "form_hi": round(hi, 3), "own": own}
+
+
 def _form_of(rec: dict) -> float | None:
     """Tonight's form state, in the same statistic the index was built on:
     the mean of the player's most recent ``WINDOW`` games."""
@@ -166,7 +243,7 @@ def decorate(recommendations: list[dict], conn, sport: str,
 
     Returns a small summary for the board's own diagnostics.
     """
-    indexes: dict[str, list[tuple]] = {}
+    indexes: dict[str, _BandIndex] = {}
     matched = diverged = 0
     for r in recommendations:
         market = r.get("market")
@@ -178,11 +255,13 @@ def decorate(recommendations: list[dict], conn, sport: str,
             continue
         if market not in indexes:
             try:
-                indexes[market] = spot_index(conn, sport, market)
+                indexes[market] = _BandIndex(spot_index(conn, sport, market))
             except Exception:                      # noqa: BLE001
-                indexes[market] = []
-        rec = comp_record(indexes[market], float(line), form, before=before,
-                          min_n=min_n, player=r.get("player"))
+                indexes[market] = _BandIndex([])
+        # The band counted off a form-sorted index (`_BandIndex`): the same
+        # record `comp_record` gives, without walking every past spot.
+        rec = indexes[market].record(float(line), form, band=FORM_BAND, before=before,
+                                     min_n=min_n, player=r.get("player"))
         if not rec:
             continue
         r["comps"] = rec
