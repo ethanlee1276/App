@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LP. The record export says which of its sections took its time** (step
+438; 8 November). With grading and ingest down to seconds, the settle pass's
+slowest phase is writing the record itself: 148.6 seconds at 19:10 on
+Saturday 7 November, every ten minutes on a game day, and it is one call of
+some seventy sections (the profit calendars, the two-leg record, the
+backtests, each board's tables). A thread now looks at that call's stack
+twenty times a second and credits each look to the section running, so the
+heartbeat's `chores.settle.phases` gains `export_parts`: the fifteen slowest
+sections in seconds, the rest summed as `(rest)`. It costs nothing you
+could measure and never stops the export. The next speed fix goes where that
+says. Nothing to run.
+
 **LO. The settle pass's ingest says which pull took its time, and a
 finished game's box score is read half-hourly** (step 438; 7 November).
 With grading down to seconds, the 18:10 pass spent 45.6 seconds ingesting,

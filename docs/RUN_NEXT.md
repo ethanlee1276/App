@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-07 (evening), after the settle pass's ingest started
+Last updated 2026-11-08, after the record export started saying which of
+its sections took its time (step LP: nothing to run), after the settle
+pass's ingest started
 saying which league's pull took its time, and a finished game's box score
 started being read half-hourly instead of every pass (step LO: nothing to
 run), after the absent-player rule's last

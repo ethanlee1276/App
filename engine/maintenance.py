@@ -1213,6 +1213,26 @@ def _nhl_ingester():
 _nhl_day = _nhl_ingester()
 
 
+def _export_record(lconn, phases: dict) -> None:
+    """Write the record (ledger.export_json), and put where its time went on
+    the phases as ``export_parts``: its sections' seconds, sampled
+    (engine/stacksample). The export ran 148.6 seconds on the box on
+    7 November with nothing to say which of its seventy sections; a sampler
+    that fails costs only the parts, never the record."""
+    from . import ledger
+    try:
+        from .stacksample import Sampler
+        sampler = Sampler(ledger.export_json.__code__)
+    except Exception:                                        # noqa: BLE001
+        sampler = None
+    if sampler is None:
+        ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+        return
+    with sampler:
+        ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+    phases["export_parts"] = sampler.seconds()
+
+
 def settle_open(log=print, state_path: Path | None = None,
                 today: _dt.date | None = None, now: float | None = None,
                 force: bool = False) -> int:
@@ -1458,7 +1478,7 @@ def settle_open(log=print, state_path: Path | None = None,
                 state["record_owed"] = True
             if _export_due(state, now):
                 ledger.clear_record_dirty()
-                ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+                _export_record(lconn, phases)
                 _exported(state, now)
                 lap("export")
             state["last_settle_ts"] = now
@@ -1640,7 +1660,7 @@ def settle_open(log=print, state_path: Path | None = None,
             state["record_owed"] = True
         if _export_due(state, now):
             ledger.clear_record_dirty()
-            ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+            _export_record(lconn, phases)
             _exported(state, now)
             phases["exported"] = True
         lap("export")

@@ -156,7 +156,13 @@ def test_a_settle_writes_the_record_page():
     # assertion once failed only because new code pushed the line past
     # character 4000.
     block = src[i:src.index("\ndef ", i + 1)]
-    assert 'export_json(lconn, ROOT / "web" / "data" / "record.json")' in block
+    # The settle pass writes it through _export_record, which times each
+    # of the export's sections (engine/stacksample) and writes the file.
+    assert "_export_record(lconn, phases)" in block
+    j = src.index("def _export_record(")
+    helper = src[j:src.index("\ndef ", j + 1)]
+    assert helper.count('export_json(lconn, ROOT / "web" / "data" / "record.json")') == 2, \
+        "with the sampler and without it, the record page is written"
 
 
 if __name__ == "__main__":
