@@ -4104,8 +4104,10 @@ def _snapshot_close_odds(markets=None, want=None, since: float | None = None) ->
 SNAPSHOT_LEAD_DAYS = 14
 #: An open bet whose last close day is this recent sets where the settle
 #: pass's read of the snapshot file starts (`_snapshot_floor`); an older one
-#: that turns out to be gradable is served by a read of the whole file.
-SNAPSHOT_RECENT_DAYS = 3
+#: that turns out to be gradable is served by a read of the whole file. A
+#: college receiving bet waits up to PLAY_FILE_DAYS (5) for the play file
+#: before it grades, so a week: those never cost a whole read.
+SNAPSHOT_RECENT_DAYS = 7
 #: The most of the snapshot file (by bytes) the settle pass reads in one go
 #: for its three close readers, each holding its rows at once; past it each
 #: reads on its own (`_PassSnapshots._read`). Three readers' slimmed rows on a

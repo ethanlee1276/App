@@ -230,7 +230,9 @@ def test_the_first_day_is_the_earliest_a_recent_bet_can_close_on():
     assert since == dt.datetime(start.year, start.month, start.day, tzinfo=ET).timestamp()
     old = [r for r in rows if r["date"] == _day(30).isoformat()]
     assert ledger._snapshot_floor(H, old, today=TODAY) == (None, None), "nothing recent: no window"
-    assert ledger.SNAPSHOT_LEAD_DAYS >= 7 and ledger.SNAPSHOT_RECENT_DAYS >= 2
+    assert ledger.SNAPSHOT_LEAD_DAYS >= 7
+    assert ledger.SNAPSHOT_RECENT_DAYS > ledger.PLAY_FILE_DAYS, \
+        "a college bet waiting for its play file grades inside the recent read"
 
 
 def test_a_pass_settles_every_bet_exactly_as_the_three_whole_reads_did():
