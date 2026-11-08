@@ -1287,18 +1287,6 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         print(f"  ⚠️  matchup picks skipped: {_exc}")
         _matchups = []
     _t = _clock.lap("run_slate", "matchup picks", _t)
-    # The board's own reads, in the order the payload below always ran them
-    # (each was a call inside it), so each can say its seconds.
-    _gate_census = _census(results, sport="nfl")
-    _bar_status = _bar_notes("nfl", results)
-    _t = _clock.lap("run_slate", "census", _t)
-    _player_stats = statlogs.for_board(results, "nfl")
-    _t = _clock.lap("run_slate", "player stats", _t)
-    _guide = _boards.guide()
-    _shelves = _boards.shelves("nfl", _likely)
-    _t = _clock.lap("run_slate", "guide + shelves", _t)
-    _scan = _market_scan(results, ls, extra=td_scan_rows(slate))
-    _t = _clock.lap("run_slate", "market scan", _t)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -1311,7 +1299,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # to the Long Shots board and never reach this loop, so nothing
         # is excluded here — every row counted is a row this board tried
         # to recommend.
-        "gate_census": _gate_census,
+        "gate_census": _census(results, sport="nfl"),
         # …AND WHETHER THE BAR THE FUNNEL BLAMES CAN BE CLEARED AT ALL.
         # "edge under the minimum" reads as "the model looked and liked
         # nothing", which is one of two very different facts: the
@@ -1319,7 +1307,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # a large enough haircut makes the bar unreachable and a shut
         # market renders exactly like a quiet night. Empty on every
         # normal board; see engine/census.bar_notes.
-        "bar_status": _bar_status,
+        "bar_status": _bar_notes("nfl", results),
         "config": {
             "min_confidence": config.min_confidence,
             "min_edge": config.min_edge,
@@ -1329,7 +1317,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # Every ingested market for tonight's players, not just the one
         # each prop priced — the Players page's market chips
         # (engine/statlogs.py; empty on machines without the history DB).
-        "player_stats": _player_stats,
+        "player_stats": statlogs.for_board(results, "nfl"),
         "game_bets": game_bets,
         "long_shots": ls,
         # The page's five most-likely scorers, off the top of the ranked
@@ -1364,7 +1352,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # and not." The page used to carry those claims as typed prose,
         # including two AUC figures that are really `likely.RANK_AUC` and
         # would have rotted at the next refit. See engine/boards.
-        "board_guide": _guide,
+        "board_guide": _boards.guide(),
         # HOW THE LIKELIHOOD BOARD IS LAID OUT — shelves by the kind of
         # bet someone came to place, not one flat list of every market
         # mixed together. See engine/boards.shelves for why they are NOT
@@ -1372,7 +1360,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # "nfl", matching `gate_census` above: this pipeline is the
         # football one (nfl_build, the backtest, generate.py). Baseball
         # assembles its payload in engine/mlb.
-        "board_shelves": _shelves,
+        "board_shelves": _boards.shelves("nfl", _likely),
         # WHY THE BOARD IS THE SIZE IT IS. Same reason `td_census` below
         # exists: a board that comes up short has several causes and a
         # count that only reaches stdout is one nobody has.
@@ -1393,9 +1381,12 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # missing game lines, or a wiring fault. cfb_build already
         # publishes its equivalent; engine/devigcheck reads both.
         "td_census": td_census,
-        "market_scan": _scan,
+        "market_scan": _market_scan(results, ls, extra=td_scan_rows(slate)),
         "correlation": corr,
     }
+    # The payload's own reads (the census, the player stats, the shelves and
+    # the market scan run inside it, as they always have).
+    _t = _clock.lap("run_slate", "census + player stats + shelves + market scan", _t)
     # End-of-year incentive money: a hand-curated table of contract
     # thresholds, measured against our own ingested season logs. It ships
     # the tracker to the board and appends the angle to matching prop

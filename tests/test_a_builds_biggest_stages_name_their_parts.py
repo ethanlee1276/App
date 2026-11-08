@@ -38,8 +38,8 @@ import launch                                                       # noqa: E402
 from engine import stageclock                                       # noqa: E402
 
 RUN_SLATE_PARTS = ["price props", "game bets", "correlations + exposure caps", "long shots + touchdown menu",
-                   "matchup scan", "most likely board", "touchdown scenarios", "matchup picks", "census",
-                   "player stats", "guide + shelves", "market scan", "incentives + milestones",
+                   "matchup scan", "most likely board", "touchdown scenarios", "matchup picks",
+                   "census + player stats + shelves + market scan", "incentives + milestones",
                    "playoff picture", "fatigue", "comps", "parlay screen"]
 
 
@@ -137,6 +137,18 @@ def test_the_readings_say_each_sections_seconds():
     parts = stageclock.parse_parts(said)["ideas readings"]
     assert list(parts) == ["menu", "sim", "journals + write"], parts
     assert parts["menu"] == 2.0 and parts["sim"] == 11.5 and parts["journals + write"] >= 0
+
+
+def test_the_college_build_names_the_parts_of_its_first_stage():
+    """"history + team ratings" ran 38-40 seconds of every Sunday build:
+    three feeds, the results store, three rating computations."""
+    import re
+    src = (ROOT / "cfb_build.py").read_text(encoding="utf-8")
+    seg = src[src.index("_clock.start()"):src.index('_clock.mark("history + team ratings")')]
+    got = re.findall(r'_clock\.lap\("history \+ team ratings", "([^"]+)"', seg)
+    assert got == ["teams + re-key", "schedule", "results window", "store results",
+                   "closes from the tape", "upcoming + neighbours", "this season's ratings",
+                   "every season's ratings", "rating fit"], got
 
 
 def _script(body: str) -> str:

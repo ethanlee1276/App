@@ -9345,11 +9345,15 @@ minutes go, but not what inside a stage took them: the pricing stage ran
 readings 33 at 08:25. Now the pricing names each of its jobs (the props
 themselves, the game bets, the correlations, the long shots, the matchup
 scan, the Most Likely board, the touchdown scenarios, the matchup picks,
-the player stats, the market scan, the incentives, the playoff picture,
-fatigue, the comparisons and the parlay screen), and the readings name
-each of their twelve sections. They ride on the heartbeat beside the
-stages (`boards` → `nfl` → `parts`), and a build killed at its limit keeps
-the parts it reached. Nothing prints outside a board build (the weekly
+the census with the player stats and the market scan, the incentives, the
+playoff picture, fatigue, the comparisons and the parlay screen), and the
+readings name each of their twelve sections. The college build's first
+stage (history and team ratings, 38 to 40 seconds of every Sunday build)
+names its parts too: the teams feed, the schedule, the results window and
+its store, the closing lines, this season's ratings, every season's
+ratings and the fit. They ride on the heartbeat beside the stages
+(`boards` → `nfl` → `parts`, and `cfb`), and a build killed at its limit
+keeps the parts it reached. Nothing prints outside a board build (the weekly
 replay prices thousands of old slates through the same code), and the
 board comes out the same with the clock running or not. Nothing to run;
 it tells me which job to make faster next.

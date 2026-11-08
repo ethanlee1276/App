@@ -1328,6 +1328,12 @@ def main() -> None:
     # was killed with nothing in its log to say where the time went.
     from engine import stageclock as _clock
     _clock.start()
+    # …AND THE PARTS OF ITS FIRST STAGE (engine/stageclock.lap): "history +
+    # team ratings" ran 38-40 seconds of every Sunday build on 8 November —
+    # three feeds, the results store, and three rating computations, which
+    # one number could not tell apart.
+    import time as _ptime
+    _t = _ptime.monotonic()
 
     conn = connect()
     if args.backfill:
@@ -1398,6 +1404,7 @@ def main() -> None:
                       f"(e.g. {', '.join(fixed['unmapped'][:3])})")
         except Exception as exc:                             # noqa: BLE001
             print(f"  CFB history re-key skipped: {exc}")
+    _t = _clock.lap("history + team ratings", "teams + re-key", _t)
 
     try:
         confs = cfbdata.fetch_conferences()
@@ -1485,8 +1492,10 @@ def main() -> None:
 
     # Results keep the ratings honest; the surrounding boards give the
     # letdown / lookahead reads. Both are keyless and cached for a day.
+    _t = _clock.lap("history + team ratings", "schedule", _t)
     history = cfbdata.load_range(_iso(day - datetime.timedelta(days=RESULT_WINDOW_DAYS)),
                                  _iso(day - datetime.timedelta(days=1)))
+    _t = _clock.lap("history + team ratings", "results window", _t)
     # A LOCKED HISTORY TABLE COSTS THE REFRESH, NOT THE BOARD (2026-11-03).
     # These re-store results earlier builds and the settle pass already
     # stored — idempotent upserts — and on 3 November a writer elsewhere
@@ -1507,14 +1516,17 @@ def main() -> None:
     # …and each finished game's close, from the lines this build has been
     # recording all season (engine/lineledger.closes_into_games): the
     # published closes stop at last season, so 2026 read zero.
+    _t = _clock.lap("history + team ratings", "store results", _t)
     try:
         from engine import lineledger as _ll
         _ll.closes_into_games(conn, "cfb", [g for g in history + games if g["completed"]])
     except Exception as exc:                                  # noqa: BLE001
         print(f"  cfb closes from the tape: skipped — {type(exc).__name__}: {exc}")
+    _t = _clock.lap("history + team ratings", "closes from the tape", _t)
     upcoming = cfbdata.load_range(_iso(day + datetime.timedelta(days=1)),
                                   _iso(day + datetime.timedelta(days=NEIGHBOUR_DAYS)))
     prev, nxt = cfbcontext.neighbours(history, upcoming)
+    _t = _clock.lap("history + team ratings", "upcoming + neighbours", _t)
 
     # THIS season, carried by LAST season until it can stand up — the same
     # `ratings_for_season` rule the NFL and MLB builds run, which this build
@@ -1546,6 +1558,7 @@ def main() -> None:
     _fallback = "espn:" if teams else None
     ratings, seasons_used = teamrates.ratings_for_season(
         conn, "cfb", day.year, shrink=8.0, exclude_prefix=_fallback)
+    _t = _clock.lap("history + team ratings", "this season's ratings", _t)
     # …AND A SECOND MAP, FOR THE VARIANCE ONLY. `fit_from_history`
     # measures residuals around whatever ratings it is handed, and can
     # only use a game where BOTH teams are in the map — so passing the
@@ -1562,7 +1575,9 @@ def main() -> None:
     # property of the sport and wants every game there is.
     all_seasons = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0,
                                                  exclude_prefix=_fallback)
+    _t = _clock.lap("history + team ratings", "every season's ratings", _t)
     fit = cfbratings.fit_from_history(conn, all_seasons or ratings)
+    _clock.lap("history + team ratings", "rating fit", _t)
     _clock.mark("history + team ratings")
     # OPPONENT-ADJUSTED, since 2026-09-02 (Ethan, on the audit's third Ask:
     # "whatever u think"). §5 calls opponent adjustment "everything" in a
