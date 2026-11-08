@@ -1231,6 +1231,8 @@ def _export_record(lconn, phases: dict) -> None:
     with sampler:
         ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
     phases["export_parts"] = sampler.seconds()
+    if sampler.error:
+        phases["export_parts_error"] = sampler.error
 
 
 def settle_open(log=print, state_path: Path | None = None,

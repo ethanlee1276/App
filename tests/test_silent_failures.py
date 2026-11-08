@@ -133,6 +133,11 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
     judged = {
         # names its failure (this file holds them)
         "_snapshot_closes", "_settled_props_with_close",
+        # THE EXPORT'S SAMPLER (engine/stacksample.Sampler._run, 2026-11-08),
+        # caught by this sweep the day it was written: it returns None either
+        # way, and a failure sets ``error``, which the settle pass puts on its
+        # phases as export_parts_error beside the empty answer.
+        "_run",
         # prints "Pick of the Day lock not applied (<error>)" and returns
         # the card unchanged — the build's own choice, not a blank card
         # (the sweep caught it when its lookup grew a loop, 2026-09-29)

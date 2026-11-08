@@ -11,8 +11,8 @@ seventy sections. What these hold:
     section (a function called deeper inside a section counts for the
     section), and nothing outside the call is counted;
   * the totals are the top sections by seconds, the rest summed;
-  * a sampler that fails stops and reports what it had, never raising into
-    the measured call;
+  * a sampler that fails stops, reports what it had and says why, never
+    raising into the measured call;
   * the settle pass writes the record through it and puts the totals on
     its phases as ``export_parts``.
 
@@ -90,7 +90,7 @@ def test_a_failing_sampler_never_raises_into_the_call():
             quick_section()
     finally:
         stacksample.sys._current_frames = saved
-    assert s.seconds() == {}
+    assert s.seconds() == {} and "no frames for you" in (s.error or ""), s.error
 
 
 def test_the_settle_pass_puts_the_exports_sections_on_its_phases():

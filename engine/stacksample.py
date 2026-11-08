@@ -10,7 +10,7 @@ look to the function the measured call was running directly at that moment
 to about a twentieth of a second each, for almost nothing.
 
 Standard library only. Never raises into the measured call: a sampler that
-fails stops sampling and reports what it had.
+fails stops sampling, reports what it had, and says why (``error``).
 """
 from __future__ import annotations
 
@@ -39,6 +39,9 @@ class Sampler:
         self.counts: dict = {}
         self.samples = 0
         self.elapsed = 0.0
+        #: Why sampling stopped early, or None: an empty answer must not read
+        #: as a call with nothing to say.
+        self.error: str | None = None
         self._tid = None
         self._stop = threading.Event()
         self._thread = None
@@ -66,7 +69,10 @@ class Sampler:
                 if name is not None:
                     self.counts[name] = self.counts.get(name, 0) + 1
                     self.samples += 1
-        except Exception:                                    # noqa: BLE001
+        except Exception as exc:                             # noqa: BLE001
+            # NAMED, NOT SILENT: the call it measures goes on; ``error``
+            # says sampling stopped and why, beside whatever it had.
+            self.error = f"{type(exc).__name__}: {exc}"
             return
 
     @staticmethod
