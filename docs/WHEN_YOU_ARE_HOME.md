@@ -9348,9 +9348,12 @@ season, day, game, so each question walked every college season stored. It
 now names the game's season (a year either side for college, in case a
 January bowl is labelled by the other year; the NFL its own, as before), so
 each one is a lookup. The same fix covers the step that clears a game's
-same-night rows once the official ones land. Nothing to run. On the
-heartbeat, `box_parts` should show `has_official_rows` near zero.
-Read-only, any time:
+same-night rows once the official ones land. Nothing to run. Measured on
+the box, the first pass on it (21:13, Saturday 7 November): the college box
+scores 5.3 seconds (43 to 61 before), `has_official_rows` too small to list,
+the whole ingest 9.8 seconds (64.4 the pass before) and the whole settle
+pass 46 seconds (166 to 194 that evening, 571 that afternoon). Read-only,
+any time:
 
 ```
 python3 -c "import json; d=json.load(open('/srv/qellys/web/data/heartbeat.json')); p=((d.get('chores') or {}).get('settle') or {}).get('phases', {}); print('ingest', p.get('ingest'), '| by league', p.get('ingest_parts'), '| box scores', p.get('box_parts'))"
@@ -9378,7 +9381,10 @@ compares each against the whole file; LQ's check, in the combined line,
 now checks this new start too and says where the read began).
 
 The index builds itself, 64 MB of the file a pass, so for the first hour or
-two after the deploy the read starts where it did. Nothing to run. On the
+two after the deploy the read starts where it did: on the box's first pass
+with it (21:13, Saturday 7 November) it covered a tenth of the file in 7.1
+seconds, so the file is about 640 MB and the index is whole in about ten
+passes. Nothing to run. On the
 heartbeat's `grade_parts`: `snapshot_indexed` climbs to 1.0, then
 `snapshot_share` drops well below the old 0.3 and `snapshot_read` with it;
 `snapshot_index` is the index's own seconds (well under one once built) and
