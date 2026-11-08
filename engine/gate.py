@@ -876,6 +876,18 @@ def would_downgrade(payload: dict, full_path, name: str = "") -> bool:
     full = Path(full_path)
     if not full.is_file():
         return False                     # nothing to protect yet
+    # THE NEW BOARD FIRST (2026-11-08). Two of the three conditions are the
+    # new board's own, and on every ordinary build one of them clears it —
+    # it has prices, or its odds attempt did not fail — so the board it
+    # replaces (the NFL's private copy is 18 MB of indented JSON) was read
+    # and parsed on every publish only to be thrown away. Read it only when
+    # the new board could be a downgrade. A check that raises here is asked
+    # again in the old order below, so nothing it decides moves.
+    try:
+        if priced_rows(payload, name) or not _odds_attempt_failed(payload):
+            return False
+    except Exception:                                         # noqa: BLE001
+        pass
     try:
         old = json.loads(full.read_text())
     except Exception:                                         # noqa: BLE001
@@ -937,6 +949,9 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     # which renders as a JSON error until the next cycle. The same lesson
     # the meme board's 20s loop and _save_profile already carry; the slow
     # loop was the one writer left telling itself it was too slow to race.
+    # THE BROWSER'S COPY, MADE ONCE (2026-11-08): the sidecar below and the
+    # public copy are the same `served` tree, and it was built twice.
+    srv = served(payload)
     for path, doc in ((full, payload),
                       (public, None)):
         if path is public:
@@ -948,12 +963,12 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
             # WHAT A BROWSER GETS (the site audit, 2026-09-24, M-3):
             # no alternate ladders, shelves by reference, no indentation.
             # The full copy above keeps all of it for the droplet's tools.
-            doc = served(payload)
+            doc = srv
             doc = redact(doc, label) if enabled() else doc
         tmp = path.with_suffix(path.suffix + ".tmp")
         with open(tmp, "w") as fh:
             if path is public:
-                json.dump(doc, fh, separators=(",", ":"))
+                fh.write(_compact(doc))
             else:
                 json.dump(doc, fh, indent=2)
         os.replace(tmp, path)
@@ -965,8 +980,21 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
             # every ten minutes. The build already holds the board, so it
             # writes the served copy beside the full one, after it, and
             # `server.board_bytes` reads it when it is at least as new.
-            _write_served_sidecar(full, payload)
+            _write_served_sidecar(full, payload, srv)
     return (str(public), str(full))
+
+
+def _compact(doc) -> str:
+    """``doc`` as compact JSON, the bytes ``json.dump(doc, fh,
+    separators=(",", ":"))`` writes.
+
+    THE FAST ENCODER (2026-11-08). `json.dump` to a file always takes the
+    standard library's pure-Python encoder; only `json.dumps` without an
+    indent takes the C one, and their bytes are the same. Timed on an
+    11.4 MB board: 1.19 s against 0.32 s. The NFL build's write stage, which
+    writes the public copy, the served copy and the light board's two
+    through here, took 14 to 17 seconds on 8 November."""
+    return json.dumps(doc, separators=(",", ":"))
 
 
 def served_sidecar(full_path) -> Path:
@@ -976,12 +1004,15 @@ def served_sidecar(full_path) -> Path:
     return p.with_name(p.name + ".served")
 
 
-def _write_served_sidecar(full: Path, payload) -> None:
+def _write_served_sidecar(full: Path, payload, srv=None) -> None:
+    """The members' ready-to-serve bytes beside the private copy. ``srv``
+    is `served(payload)` when the caller already made it."""
     try:
         side = served_sidecar(full)
         tmp = side.with_name(side.name + ".tmp")
+        text = _compact(served(payload) if srv is None else srv)
         with open(tmp, "w") as fh:
-            json.dump(served(payload), fh, separators=(",", ":"))
+            fh.write(text)
         os.replace(tmp, side)
     except (OSError, TypeError, ValueError):
         pass                      # the server falls back to building them

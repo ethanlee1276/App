@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after the NFL build's pricing and readings
+Last updated 2026-11-08, after every board started being written with
+the fast JSON encoder, its browser copy made once (step MC: nothing to
+run), after the NFL build's pricing and readings
 stages started naming their parts on the heartbeat (step MB: nothing to
 run), after the first-touchdown board started reading
 every team's history in one pass instead of one walk of the table per

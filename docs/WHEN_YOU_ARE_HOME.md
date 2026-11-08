@@ -9338,6 +9338,29 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MC. A board is written with the fast encoder** (step 453; 8 November).
+The NFL build's write stage took 14 to 17 seconds on Sunday morning for
+what is mostly writing files. Three things in the one place every board
+is written (`engine/gate.publish`):
+
+* Python's standard JSON writer has a fast encoder written in C and a
+  slow one written in Python, and writing straight to a file always takes
+  the slow one. The public copy and the members' copy now take the fast
+  one: the same bytes, about four times as fast (1.19 seconds against
+  0.32 on an 11.4 MB board).
+* The copy a browser gets was trimmed twice per publish, once for the
+  members' copy and once for the public file. Now once.
+* Before each publish, the guard against replacing a priced board with
+  an empty one read and parsed the old private copy (18 MB for the NFL)
+  every time, though on every ordinary build the new board's own prices
+  settle it. It now opens the old one only when the new board has no
+  prices and says its odds pull failed, which is the one case it guards.
+
+Every file written is byte for byte what it was (checked with the paywall
+off and on, on a real board and on one built to trip an encoder), and the
+guard still refuses a real downgrade. It helps every board, not only the
+NFL's. Nothing to run.
+
 **MB. The NFL build's two biggest stages name their parts on the
 heartbeat** (step 452; 8 November). The stage times say where a build's
 minutes go, but not what inside a stage took them: the pricing stage ran
