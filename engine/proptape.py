@@ -121,9 +121,21 @@ def last_seen(conn, sport: str, players: set,
               now: _dt.datetime | None = None) -> dict:
     """``{(player, market, book): (line, over, under)}`` as last stored.
 
-    One query, not one per prop. The whole point of the change bound is
-    to write less; buying a read per prop to do it would trade disk for
-    a worse problem.
+    A read of the watched men's own rows, not one per prop. The whole
+    point of the change bound is to write less; buying a read per prop to
+    do it would trade disk for a worse problem.
+
+    ONLY THE WATCHED MEN'S ROWS (2026-11-08). This read every row the
+    league had stored in `WATCH_DAYS` and kept the watched men's in
+    Python. The game lines share the table (engine/lineledger writes every
+    game's spread, total and moneylines at every book on every build, all
+    week), so that was tens of thousands of rows a day nobody watches: the
+    prop tape took 16.1 of the NFL prices stage's 17.3 seconds at 10:45 on
+    8 November. The men are now looked up through the (sport, player,
+    taken_at) index, a few hundred at a time, and the last row for each
+    key is the one the old time-ordered read ended on (the latest time,
+    then the latest event id, the table's own key order). A file without
+    that index is read the old way.
     """
     if not players:
         return {}
@@ -131,18 +143,56 @@ def last_seen(conn, sport: str, players: set,
         n = now or _dt.datetime.now(_dt.timezone.utc)
         since = (n - _dt.timedelta(days=WATCH_DAYS)).strftime(
             "%Y-%m-%dT%H:%M:00Z")
-        out: dict = {}
-        for r in conn.execute(
-                "SELECT player, market, book, line, over_odds, under_odds "
-                "FROM odds_history WHERE sport=? AND taken_at >= ? "
-                "ORDER BY taken_at", (sport, since)).fetchall():
-            # Ordered by time, so the LAST row for a key wins — the most
-            # recent number, which is the one a change is measured from.
-            if r[0] in players:
-                out[(r[0], r[1], r[2])] = (r[3], r[4], r[5])
-        return out
+        try:
+            return _last_seen_watched(conn, sport, players, since)
+        except Exception as exc:                              # noqa: BLE001
+            if "no such index" not in str(exc).lower():
+                raise
+        return _last_seen_scan(conn, sport, players, since)
     except Exception:                                         # noqa: BLE001
         return {}
+
+
+#: Watched men a lookup names at once (SQLite's oldest builds bind 999).
+LOOKUP_CHUNK = 500
+
+
+def _last_seen_watched(conn, sport: str, players, since: str) -> dict:
+    """`last_seen` through the (sport, player, taken_at) index."""
+    names = list(players)
+    rank: dict = {}
+    out: dict = {}
+    for i in range(0, len(names), LOOKUP_CHUNK):
+        part = names[i:i + LOOKUP_CHUNK]
+        marks = ",".join("?" * len(part))
+        for r in conn.execute(
+                "SELECT player, market, book, line, over_odds, under_odds, taken_at, event_id "
+                "FROM odds_history INDEXED BY idx_odds_hist_player "
+                f"WHERE sport=? AND player IN ({marks}) AND taken_at >= ?",
+                (sport, *part, since)).fetchall():
+            key = (r[0], r[1], r[2])
+            # The old read's order: by time, then by event id (the
+            # table's key), a missing event id before any written one.
+            at = (r[6], (0, "") if r[7] is None else (1, r[7]))
+            if key not in rank or at >= rank[key]:
+                rank[key] = at
+                out[key] = (r[3], r[4], r[5])
+    return out
+
+
+def _last_seen_scan(conn, sport: str, players, since: str) -> dict:
+    """`last_seen` the old way: every row the league stored since
+    ``since``, in time order, the watched men's kept."""
+    out: dict = {}
+    for r in conn.execute(
+            "SELECT player, market, book, line, over_odds, under_odds "
+            "FROM odds_history WHERE sport=? AND taken_at >= ? "
+            "ORDER BY taken_at", (sport, since)).fetchall():
+        # Ordered by time, so the LAST row for a key wins — the most
+        # recent number, which is the one a change is measured from.
+        if r[0] in players:
+            out[(r[0], r[1], r[2])] = (r[3], r[4], r[5])
+    return out
 
 
 def _games_by_team(games, sport: str = "") -> dict:

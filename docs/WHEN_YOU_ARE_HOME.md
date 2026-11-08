@@ -9338,6 +9338,30 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MI. Two jobs stop reading what they throw away** (step 459; 8
+November). The new part timings from the 10:45 NFL build pointed straight
+at them.
+
+- **The prop tape** (16.1 of the prices stage's 17.3 seconds). It keeps
+  each watched player's prices when they move: men on an injury report,
+  or with an open pick. To know whether a price moved, it read every price
+  the league had stored in ten days. That table also holds the game lines,
+  and the line ledger writes every game's spread, total and moneylines at
+  every book on every build, all week. So most of what it read was game
+  lines it never looks at. It now looks up only the watched players,
+  through the index built for that. On a 421,000-row copy of the table's
+  shape, 0.80 seconds became 0.02, with the same answers. It should save
+  more on the box, whose history file is far bigger than its memory.
+- **The line-movement stamps** (15.0 of the pipeline's 15.5 seconds). Each
+  pick's "how the line moved today" chart was built by walking every price
+  snapshot since midnight, every league's, once per pick: about six
+  hundred picks on a Sunday. The snapshots are now sorted by prop once,
+  and each pick gets its own. On 97,000 snapshots and 600 picks, 2.17
+  seconds became 0.03, every chart the same. The NBA and MLB builds use
+  the same code, so they speed up too.
+
+Nothing to run.
+
 **MH. The NFL build's last three unexplained stages say what's inside
 them** (step 458; 8 November). Three stages of the NFL build still showed
 a single number on the heartbeat: the prices (25 seconds at 09:33), the

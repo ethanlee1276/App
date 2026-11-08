@@ -1269,18 +1269,47 @@ def prop_series(rows: list[dict], player: str, market: str,
     return out
 
 
+def _rows_by_prop(rows) -> dict:
+    """``{(player, market): [row, ...]}``, each list in the rows' own order
+    (`prop_series` breaks a tie on price by it). A row whose player or
+    market cannot be a key could never equal a pick's, so it is left out."""
+    out: dict = {}
+    for r in rows:
+        try:
+            out.setdefault((r.get("player"), r.get("market")), []).append(r)
+        except TypeError:
+            continue
+    return out
+
+
 def attach_series(recs: list[dict], rows: list[dict]) -> int:
     """Hang today's tape on every priced pick that has one. Returns how
     many got one, so the build can say so. Two points is the floor for
-    the reason the line tape's is: one point is not a line."""
+    the reason the line tape's is: one point is not a line.
+
+    THE ROWS ARE SORTED BY PROP ONCE (2026-11-08). Each pick asked
+    `prop_series` of every snapshot since midnight, every league's, and
+    kept its own: about six hundred picks on an NFL Sunday, each a walk of
+    tens of thousands of rows, most of the 15 seconds the NFL pipeline's
+    line-movement stamps took at 10:45 on 8 November. Each pick now gets
+    its own prop's rows, in the order the walk met them, so every tape is
+    the one it was."""
     n = 0
+    by_prop = None
     for rec in recs:
         if rec.get("has_market") is False:
             continue
         side = rec.get("side")
         if side not in ("OVER", "UNDER"):
             continue
-        series = prop_series(rows, rec.get("player", ""), rec.get("market", ""), side)
+        if by_prop is None:
+            by_prop = _rows_by_prop(rows)
+        player, market = rec.get("player", ""), rec.get("market", "")
+        try:
+            own = by_prop.get((player, market), ())
+        except TypeError:
+            own = ()
+        series = prop_series(own, player, market, side)
         if len(series) < 2:
             continue
         rec["line_series"] = series
