@@ -888,6 +888,15 @@ g, gc = b.get('games') or [], b.get('gate_census') or {}
 print('NFL games', len(g), '| prices shown:', sum(1 for x in g if not x.get('price_stale')), '| props with no real price:', gc.get('no_real_price'), '| Edge picks', gc.get('recommended'), '| Most Likely', len(b.get('most_likely') or []))
 "
 SH
+run LR "Every NBA pick carries the market's fair price, every NFL bet its fair close" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import ledger
+c = ledger.connect()
+for sp in ('nba', 'nfl', 'cfb'):
+    r = c.execute(\"SELECT COUNT(*), SUM(fair_consensus IS NOT NULL), SUM(closing_fair IS NOT NULL) FROM bets WHERE sport=? AND category='main' AND ts >= '2026-11-08'\", (sp,)).fetchone()
+    print(sp, 'Edge picks since 8 Nov', r[0], '| market fair at the pick', r[1], '| market fair at the close', r[2])
+"
+SH
 run IO "A finished game is ESPN's page; the chat bar at the foot" 30 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -cF '${lv.state === "final" ? "" : `<div class="card pbp-parkcard">'
 curl -s https://qellysbook.com/js/hoopscast.js | grep -cF 'const viewFor = (d) => (S.view === "live"'

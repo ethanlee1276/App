@@ -314,8 +314,13 @@ def test_unstamped_history_is_not_reinterpreted():
 
 
 def test_settle_asks_for_the_bets_own_leg():
+    # The price close is read through `_snapshot_price_close` since
+    # 2026-11-08 (under the bet's own date, then its close days); it asks
+    # for the leg there, and the line close in `_close_line_of`.
     src = inspect.getsource(ledger.settle_from_history)
-    assert "_leg_key(" in src
+    assert "_snapshot_price_close(" in src and "_close_line_of(" in src
+    assert "_leg_key(" in inspect.getsource(ledger._snapshot_price_close)
+    assert "_leg_key(" in inspect.getsource(ledger._close_line_of)
 
 
 # --- college football --------------------------------------------------------

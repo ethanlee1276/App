@@ -1403,6 +1403,7 @@ def main() -> None:
         census = {"no_real_price": 0, "no_history": 0}
         props = []
         _onoff_cache: dict = {}
+        from engine.odds import consensus_fair
         for prop in slate.props:
             two = best_two_way(prop.lines)
             h = hist.get(prop.player)
@@ -1413,6 +1414,12 @@ def main() -> None:
                 census["no_real_price"] += 1
                 continue
             line, over_odds, under_odds, book = two
+            # THE FIELD'S FAIR AT THIS NUMBER, every book quoting it
+            # (engine/odds.consensus_fair), journaled beside the pick as the
+            # NFL's and MLB's are: the matched CLV reads it at pick time
+            # against the field's close (ledger._bet_clv_matched). The NBA's
+            # 145 graded picks on 8 November had none.
+            _field = consensus_fair(prop.lines, line)
             spread, fav = spread_by_team.get(h["team"], (0.0, False))
             _opp = next((g["away"] if g["home"] == h["team"] else g["home"]
                          for g in games if h["team"] in (g["home"], g["away"])), "")
@@ -1473,6 +1480,8 @@ def main() -> None:
                 "sharp_lines": [{"book": ln.book, "line": ln.line, "over_odds": ln.over_odds,
                                  "under_odds": ln.under_odds}
                                 for ln in (getattr(prop, "sharp_lines", None) or [])],
+                "fair_consensus": round(_field[0], 4) if _field else None,
+                "consensus_books": _field[1] if _field else 0,
                 "book": book, "minutes": h["minutes"],
                 "values": h[prop.market], "is_starter": bool(h["starter"]),
                 # Who started each of those games, and his club's starting
@@ -1859,6 +1868,9 @@ def main() -> None:
                          # journaled so the loss review can separate a
                          # rotation miss from a shooting night.
                          "proj_minutes": p.get("proj_minutes"),
+                         # The field's fair at pick time, for the matched CLV.
+                         "fair_consensus": p.get("fair_consensus"),
+                         "consensus_books": p.get("consensus_books"),
                          "recommended": True}
                         for p in picks_result["picks"]]
                 # Same drawdown circuit-breaker as NFL/MLB: 10u off the

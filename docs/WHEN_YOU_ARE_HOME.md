@@ -9338,6 +9338,49 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LR. Every NBA pick carries the market's fair price, and every NFL bet its
+fair close** (step 442; 8 November). The Record page's "matched" closing-line
+figure compares the market's no-vig chance when we picked (`fair_consensus`)
+with its no-vig chance at the close (`closing_fair`): the honest version,
+the market against itself rather than our best shopped price against it. On
+8 November it covered 0 of the 145 graded NBA picks and 144 of 503 NFL picks.
+Two causes, both fixed: the NBA board never wrote the market's fair price on
+a pick (the NFL and MLB boards always have; it is now taken from every book
+quoting the pick's number, three at least, as theirs is), and the settle
+looked an NFL bet's closing price up in our own snapshots under its week's
+label ("2026-W10"), which no close is ever filed under, instead of its game's
+day; the closing line was always read by the day, and now the price is too.
+A daily sport's bet reads exactly what it did. Nothing to run: NBA picks from
+the next build on carry it, NFL bets graded from now on take it. Read-only,
+any day after: how many of each sport's picks since 8 November carry each
+half:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import ledger
+c = ledger.connect()
+for sp in ('nba', 'nfl', 'cfb'):
+    r = c.execute(\"SELECT COUNT(*), SUM(fair_consensus IS NOT NULL), SUM(closing_fair IS NOT NULL) FROM bets WHERE sport=? AND category='main' AND ts >= '2026-11-08'\", (sp,)).fetchone()
+    print(sp, 'Edge picks since 8 Nov', r[0], '| market fair at the pick', r[1], '| market fair at the close', r[2])
+"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh LR 2>&1 | tee /tmp/lr.txt
+```
+
+Optional, your call: the NFL bets already graded can take their fair close
+from the price repair you ran on 6 October (it reads the game's day, and it
+only fills a fair close that is empty, though it also rewrites a banked
+price that disagrees with the snapshots, which is what it is for). The dry
+run first (writes nothing), then `--apply` only if its counts look right:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 launch.py --repair-closes --sport nfl > /tmp/closes.txt 2>&1; echo "exit $?"; head -60 /tmp/closes.txt
+```
+
 **LQ. Grading reads the odds snapshots once, and only the recent part**
 (step 441; 8 November). The settle pass at 19:15 on Saturday 7 November
 graded 152 bets in 402.5 seconds, and 393 of them were three reads of our

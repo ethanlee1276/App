@@ -4023,6 +4023,27 @@ def _close_line_of(b, dates, who, harvested: dict, snaps_of) -> tuple:
                                    for d in dates) if v is not None), None)
 
 
+def _snapshot_price_close(index, b, who: str, dates) -> dict:
+    """``{"over", "under"}``: this bet's price close in our own snapshots
+    (`_snapshot_close_odds`'s index), or ``{}``.
+
+    UNDER ITS OWN DATE, THEN ITS CLOSE DAYS (2026-11-08). The index files a
+    close under its game's day, and this read it under the bet's ``date``
+    alone: a daily sport's date is that day, but an NFL bet's is its week's
+    label ("2026-W10"), which no close is ever filed under, so not one NFL
+    bet ever took its price close (or the field's fair close the matched
+    CLV reads) from the snapshots; only a purchased close or the same
+    book's gave it a price. The line close has always read the bet's
+    `close_dates`; the price close reads them too, after its own date, so a
+    daily sport's bet reads exactly what it did."""
+    ln = round(float(b["line"]), 1) if b["line"] is not None else None
+    for d in [b["date"]] + [x for x in (dates or []) if x != b["date"]]:
+        got = index.get(_leg_key(index, (who, b["market"], d, ln), b))
+        if got:
+            return got
+    return {}
+
+
 def _close_odds_from(close: dict | None, bet_line, side: str | None):
     """The bet's side of a HARVESTED close, or None if it isn't its close.
 
@@ -6381,11 +6402,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             # our own recorded snapshots, which cost nothing and accrue on
             # every pull that was already paid for.
             _odds_ix = _snapfile.for_bet(b, _dates)["odds"]
-            _sides = _odds_ix.get(_leg_key(
-                _odds_ix,
-                (_who, b["market"], b["date"],
-                 round(float(b["line"]), 1) if b["line"] is not None else None),
-                b)) or {}
+            _sides = _snapshot_price_close(_odds_ix, b, _who, _dates)
             close_odds = _sides.get(
                 "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
             close_fair = _close_fair_from(_sides, None, b["side"])

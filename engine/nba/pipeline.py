@@ -400,6 +400,11 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
         "sharp_over": (round(mkt_over, 4) if sharp is not None and abs(sharp[1] - line) < 1e-9
                        else None),
         "sharp_book": sharp[2] if sharp is not None else "",
+        # The field's fair for the over at this number (engine/odds
+        # .consensus_fair, nba_build), journaled with the pick so its CLV
+        # can be read field against field (ledger._bet_clv_matched).
+        "fair_consensus": prop.get("fair_consensus"),
+        "consensus_books": prop.get("consensus_books") or 0,
         "context": context_notes,
         "chain": pj.get("chain"),
     }
