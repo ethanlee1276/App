@@ -235,7 +235,10 @@ In the study's own staging, and roughly in the order the study argues for:
    exchange-vs-book leg of the cross-market edge remains.
 6. **NFL and NBA officiating-crew tendencies** (data). The study's biggest
    claimed data edge, and the one whose effect sizes are the least
-   independently verified.
+   independently verified. *(Status 2026-11-08: the NFL half is PARTIAL —
+   `engine/nflrefs.py`, context on the game report only, no number moves,
+   see the ledger row above; the NBA/WNBA half only stores officials,
+   `engine/officials.py`. The ledger row, not this list, is current.)*
 7. **Covariance across simultaneous positions** (Stage 3).
 8. **Loss-chasing detection and behavior-tied reality checks** (Stage 3).
 
