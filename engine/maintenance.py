@@ -959,6 +959,7 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
     # (only the ones that ran); the settle pass puts them on its phases as
     # ``ingest_parts``.
     parts: dict = {}
+    box_parts: dict = {}
 
     def _part(name: str, t0: float) -> None:
         parts[name] = parts.get(name, 0.0) + (_t.monotonic() - t0)
@@ -1072,7 +1073,23 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
         t0 = _t.monotonic()
         try:
             from . import boxsettle
-            bx = boxsettle.ingest_for_open(lconn, hconn, league, log=log)
+            # WHERE A BOX-SCORE PULL'S TIME GOES (2026-11-08): college's took
+            # 66 of a pass's 71 ingest seconds on 7 November. Sampled two calls
+            # deep (engine/stacksample), on the phases as ``box_parts``.
+            try:
+                from .stacksample import Sampler
+                _bs = Sampler(boxsettle.ingest_for_open.__code__, depth=2)
+            except Exception:                            # noqa: BLE001
+                _bs = None
+            if _bs is None:
+                bx = boxsettle.ingest_for_open(lconn, hconn, league, log=log)
+            else:
+                with _bs:
+                    bx = boxsettle.ingest_for_open(lconn, hconn, league, log=log)
+                box_parts[league] = _bs.seconds(top=8)
+            if bx.get("unchanged"):
+                log(f"  {league.upper()} box scores: {bx['unchanged']} finished game(s) "
+                    f"already on file as they stand, not written again")
             if bx["games"]:
                 log(f"  {league.upper()} box scores: {bx['rows']} stat line(s) "
                     f"from {bx['games']} finished game(s), provisional until "
@@ -1088,6 +1105,8 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
         _part(f"box_{league}", t0)
     res = dict(res) if isinstance(res, dict) else {"games": 0}
     res["parts"] = {k: round(v, 1) for k, v in parts.items() if v >= 0.05}
+    if box_parts:
+        res["box_parts"] = box_parts
     return res
 
 
@@ -1533,6 +1552,8 @@ def settle_open(log=print, state_path: Path | None = None,
         lap("ingest")
         # And which league's pull took it (ingest_for_open_bets' parts).
         phases["ingest_parts"] = (res.get("parts") if isinstance(res, dict) else None) or {}
+        if isinstance(res, dict) and res.get("box_parts"):
+            phases["box_parts"] = res["box_parts"]
         # Each day's stat file read once for the pass's name lookups
         # (ledger.name_index), not once per open prop.
         with ledger.name_index():

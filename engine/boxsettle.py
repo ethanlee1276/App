@@ -381,7 +381,9 @@ def ingest_for_open(lconn, hconn, league: str, log=print,
                     fetch_rows=None, fetch_summary=None,
                     today: _dt.date | None = None) -> dict:
     """File provisional stat lines for every finished game this league
-    has an open prop on. Returns ``{games, rows, purged, skipped}``."""
+    has an open prop on. Returns ``{games, rows, purged, skipped}``, and
+    ``unchanged``: the games whose rows were on file as they stand, which
+    are not written again (`on_file`)."""
     from . import db as _db
     res: dict = {"games": 0, "rows": 0, "purged": 0, "skipped": []}
     games = finished_games_with_open_props(lconn, hconn, league, today=today)
@@ -434,7 +436,64 @@ def ingest_for_open(lconn, hconn, league: str, log=print,
             res["skipped"].append(f"{league} {g['away']}@{g['home']}: summary "
                                   "carried no stat lines")
             continue
+        if on_file(hconn, rows):
+            res["unchanged"] = res.get("unchanged", 0) + 1
+            continue
         res["rows"] += _db.upsert_player_logs(hconn, rows)
         res["games"] += 1
     hconn.commit()
     return res
+
+
+#: The columns a provisional row carries beyond its key (db.LOG_COLS).
+_ROW_VALUES = ("team", "opponent", "position", "home", "value")
+
+
+def _norm_row(r) -> tuple:
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return v
+    return (str(r["team"] or ""), str(r["opponent"] or ""), str(r["position"] or ""),
+            _num(r["home"]), _num(r["value"]))
+
+
+def on_file(hconn, rows: list) -> bool:
+    """Is every one of these provisional rows already on file exactly as it
+    stands? Then writing them again changes nothing.
+
+    EVERY PASS REWROTE EVERY FINISHED GAME (2026-11-08). The settle pass,
+    every five minutes, filed each finished game's box score again for as
+    long as a prop on its day waited: about sixty college games on a
+    Saturday, some 150 rows each, every one an INSERT OR REPLACE (a delete
+    and an insert, every index touched) on the history file, holding its
+    write lock, while the summaries had not changed in hours. That was 66 of
+    the pass's 71 ingest seconds. One read of the game's rows answers it;
+    a row that differs, or is missing, writes the game as before (a write
+    never removed a row the summary no longer carries, so a row on file
+    that is not among these changes nothing)."""
+    if not rows:
+        return False
+    first = rows[0]
+    ids = sorted({str(r["game_id"]) for r in rows})
+    marks = ",".join("?" * len(ids))
+    try:
+        cur = hconn.execute(
+            f"SELECT game_id, player, market, team, opponent, position, home, value "
+            f"FROM player_game_logs WHERE sport=? AND season=? AND period=? "
+            f"AND game_id IN ({marks})",
+            (first["sport"], int(first["season"]), str(first["period"]), *ids))
+        have = {(str(x[0]), x[1], x[2]): _norm_row({"team": x[3], "opponent": x[4],
+                                                     "position": x[5], "home": x[6],
+                                                     "value": x[7]})
+                for x in cur.fetchall()}
+    except Exception:                                      # noqa: BLE001
+        return False
+    for r in rows:
+        if (r["sport"], int(r["season"]), str(r["period"])) != (
+                first["sport"], int(first["season"]), str(first["period"])):
+            return False
+        if have.get((str(r["game_id"]), r["player"], r["market"])) != _norm_row(r):
+            return False
+    return True

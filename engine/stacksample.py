@@ -32,9 +32,12 @@ class Sampler:
         s.seconds()   # {"_two_leg_record": 10.4, "performance": 4.0, ...}
     """
 
-    def __init__(self, root, interval: float = INTERVAL_S, clock=time.monotonic):
+    def __init__(self, root, interval: float = INTERVAL_S, clock=time.monotonic, depth: int = 1):
         self.root = root
         self.interval = float(interval)
+        #: How many calls below ``root`` a sample names: 1, the direct callee
+        #: (``"fetch"``); 2, that and its own callee (``"fetch>loads"``).
+        self.depth = max(1, int(depth))
         self.clock = clock
         self.counts: dict = {}
         self.samples = 0
@@ -65,7 +68,7 @@ class Sampler:
         try:
             while not self._stop.wait(self.interval):
                 frame = sys._current_frames().get(self._tid)
-                name = self.callee(frame, self.root)
+                name = self.callee(frame, self.root, self.depth)
                 if name is not None:
                     self.counts[name] = self.counts.get(name, 0) + 1
                     self.samples += 1
@@ -76,15 +79,19 @@ class Sampler:
             return
 
     @staticmethod
-    def callee(frame, root):
+    def callee(frame, root, depth: int = 1):
         """The direct callee of the innermost frame running ``root`` on this
         stack (``(self)`` when ``root`` is the frame running), or None when
-        ``root`` is not on it."""
-        child = None
+        ``root`` is not on it; with ``depth`` above 1, that callee and the
+        calls under it, outermost first, joined by ``>``."""
+        below: list = []
         while frame is not None:
             if frame.f_code is root:
-                return "(self)" if child is None else child.f_code.co_name
-            child, frame = frame, frame.f_back
+                if not below:
+                    return "(self)"
+                return ">".join(f.f_code.co_name for f in reversed(below[-depth:]))
+            below.append(frame)
+            frame = frame.f_back
         return None
 
     def seconds(self, top: int = 15) -> dict:

@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after every NBA pick started carrying the
+Last updated 2026-11-08, after a finished game's box score already on file
+stopped being written again every pass (step LS: nothing to run), after
+every NBA pick started carrying the
 market's fair price and every NFL bet its fair close (step LR: nothing to
 run; one read-only check in the combined line, and an optional repair of
 past NFL bets, your call), after grading started reading the odds snapshots

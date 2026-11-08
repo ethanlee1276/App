@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LS. A finished game's box score already on file is not written again**
+(step 443; 8 November). The first settle pass on the new timing (LO, LP, LQ)
+put the college box scores at 66 of its 71 ingest seconds, every five
+minutes on a Saturday night, and the record export at 52.7 seconds (it had
+been 148.6 beside the old snapshot reads). Every pass filed every finished
+college game on the open bets' days again, some sixty games of about 150
+rows each, each row a delete and an insert on the 6.7 GB history file
+while it held the file's write lock, though the box scores had not changed
+in hours. A game whose rows are on file exactly as they stand is now left
+alone after one read; a corrected stat or a missing row writes the game as
+before. The ingest's log says how many games it left alone, and the
+heartbeat's `chores.settle.phases` gains `box_parts`: each box-score pull's
+seconds by step, two calls deep. Nothing to run.
+
 **LR. Every NBA pick carries the market's fair price, and every NFL bet its
 fair close** (step 442; 8 November). The Record page's "matched" closing-line
 figure compares the market's no-vig chance when we picked (`fair_consensus`)
