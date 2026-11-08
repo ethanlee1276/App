@@ -578,6 +578,24 @@ def _ts_after(fh, offset: int) -> float:
     return 0.0
 
 
+def _seek_since(fh, target: float) -> None:
+    """Put the binary file ``fh`` at the start of a line at most 64 KB
+    before the first one stamped ``target`` or later, by halving the byte
+    range: the file is append-only in time order (every writer stamps a row
+    with the moment it writes it, `record_snapshots`)."""
+    fh.seek(0, 2)
+    lo, hi = 0, fh.tell()
+    while hi - lo > 65536:
+        mid = (lo + hi) // 2
+        if _ts_after(fh, mid) < target:
+            lo = mid
+        else:
+            hi = mid
+    fh.seek(lo)
+    if lo:
+        fh.readline()
+
+
 def stream_since(ts: float, path: str | Path | None = None):
     """The snapshots from about ``ts`` on, without parsing the file's past.
 
@@ -593,19 +611,8 @@ def stream_since(ts: float, path: str | Path | None = None):
     path = Path(path) if path else HISTORY_PATH
     if not path.exists():
         return
-    target = float(ts) - SINCE_MARGIN_S
     with path.open("rb") as fh:
-        fh.seek(0, 2)
-        lo, hi = 0, fh.tell()
-        while hi - lo > 65536:
-            mid = (lo + hi) // 2
-            if _ts_after(fh, mid) < target:
-                lo = mid
-            else:
-                hi = mid
-        fh.seek(lo)
-        if lo:
-            fh.readline()
+        _seek_since(fh, float(ts) - SINCE_MARGIN_S)
         for raw in fh:
             raw = raw.strip()
             if not raw:
@@ -625,7 +632,8 @@ def stream_today(path: str | Path | None = None, now: float | None = None):
     return stream_since(midnight, path)
 
 
-def stream_wanted(want, path: str | Path | None = None, siblings: bool = False):
+def stream_wanted(want, path: str | Path | None = None, siblings: bool = False,
+                  since: float | None = None):
     """The snapshots of these ``{(normalized player, market)}`` only, one
     at a time, parsing a line only when its text says it may be wanted.
 
@@ -644,7 +652,12 @@ def stream_wanted(want, path: str | Path | None = None, siblings: bool = False):
     ``siblings`` also keeps every player who shares a wanted player's first
     initial and surname (2026-11-06): the close readers need both halves of
     a copy to see it (`_Copies`), and the man whose quotes were copied may
-    hold no bet at all."""
+    hold no bet at all.
+
+    ``since`` (an epoch) starts the read where `stream_since` would, so the
+    lines stamped before it, less SINCE_MARGIN_S, are never read at all
+    (the settle pass, `ledger._PassSnapshots`, 2026-11-08)."""
+    import io
     from .sources.oddsapi import normalize_name
     path = Path(path) if path else HISTORY_PATH
     if not path.exists():
@@ -657,7 +670,10 @@ def stream_wanted(want, path: str | Path | None = None, siblings: bool = False):
     # helper: a call per field per line was half the read's time. A field
     # not found, or one holding an escape, is not judged from the text.
     mtag, ptag, slash = '"market": "', '"player": "', "\\"
-    with path.open(encoding="utf-8") as fh:
+    with path.open("rb") as bfh:
+        if since is not None:
+            _seek_since(bfh, float(since) - SINCE_MARGIN_S)
+        fh = io.TextIOWrapper(bfh, encoding="utf-8")
         for raw in fh:
             i = raw.find(mtag)
             if i >= 0:
@@ -700,23 +716,43 @@ def closing_lines_by_date(rows: list[dict]) -> dict:
     snapshot is the nearest thing to that night's close, and it accrues on
     every paid pull with no extra spend. (On fixed-line markets like 0.5 HR
     the line never moves, so CLV there reads 0 — honest, if unexciting.)"""
-    import datetime as _dt
-    from .odds import is_exchange
-    from .sources.oddsapi import normalize_name
-
-    grouped: dict[tuple, list[dict]] = {}
-    copies = _Copies()
+    acc = LineCloses()
     for r in rows:
+        acc.add(r)
+    return acc.index()
+
+
+class LineCloses:
+    """`closing_lines_by_date` a row at a time: ``add`` each snapshot, then
+    ``index``. The function is this class's loop, so the two cannot differ;
+    the settle pass feeds one read of the file to this, `OddsCloses` and the
+    same-book closes together (`ledger._PassSnapshots`)."""
+
+    def __init__(self):
+        from .sources.oddsapi import normalize_name
+        self._norm = normalize_name
+        self.grouped: dict[tuple, list[dict]] = {}
+        self.copies = _Copies()
+
+    def add(self, r: dict) -> None:
         try:
             float(r["ts"])
             date = _slate_day(r)
-            name = normalize_name(r["player"])
+            name = self._norm(r["player"])
             key = (name, r["market"], date)
             float(r["line"])                       # reject unusable rows early
-            grouped.setdefault(key, []).append(_slim(r, _LINE_KEYS))
-            copies.add(name, r)
+            self.grouped.setdefault(key, []).append(_slim(r, _LINE_KEYS))
+            self.copies.add(name, r)
         except (KeyError, TypeError, ValueError):
-            continue
+            return
+
+    def index(self) -> dict:
+        return _line_index(self.grouped, self.copies)
+
+
+def _line_index(grouped: dict, copies) -> dict:
+    """`closing_lines_by_date`'s answer from its grouped rows."""
+    from .odds import is_exchange
     out = _CloseIndex()
     # ANOTHER PLAYER'S QUOTES ARE NOBODY'S CLOSE (2026-11-06, `_Copies`).
     out.twins = twins = copies.found()
@@ -852,28 +888,46 @@ def closing_odds_by_date(rows: list[dict]) -> dict:
     no usable price comes back None rather than absent, so a caller can
     tell "no quote" from "no snapshot".
     """
-    import datetime as _dt
-    from .sources.oddsapi import normalize_name
-
-    grouped: dict[tuple, list[dict]] = {}
-    copies = _Copies()
+    acc = OddsCloses()
     for r in rows:
+        acc.add(r)
+    return acc.index()
+
+
+class OddsCloses:
+    """`closing_odds_by_date` a row at a time, as `LineCloses` is for the
+    lines: the function is this class's loop."""
+
+    def __init__(self):
+        from .sources.oddsapi import normalize_name
+        self._norm = normalize_name
+        self.grouped: dict[tuple, list[dict]] = {}
+        self.copies = _Copies()
+
+    def add(self, r: dict) -> None:
         try:
             float(r["ts"])                         # reject unusable rows early
             # A row is usable if EITHER side is quoted. Requiring the over
             # was what made the under invisible.
             if r.get("over_odds") in (None, "") and \
                     r.get("under_odds") in (None, ""):
-                continue
+                return
             date = _slate_day(r)
             ln = round(float(r["line"]), 1)
-            name = normalize_name(r["player"])
-            grouped.setdefault(
+            name = self._norm(r["player"])
+            self.grouped.setdefault(
                 (name, r["market"], date, ln),
                 []).append(_slim(r, _ODDS_KEYS))
-            copies.add(name, r)
+            self.copies.add(name, r)
         except (KeyError, TypeError, ValueError):
-            continue
+            return
+
+    def index(self) -> dict:
+        return _odds_index(self.grouped, self.copies)
+
+
+def _odds_index(grouped: dict, copies) -> dict:
+    """`closing_odds_by_date`'s answer from its grouped rows."""
     out = _CloseIndex()
     # Another player's quotes are nobody's close (`_Copies`, 2026-11-06).
     out.twins = twins = copies.found()

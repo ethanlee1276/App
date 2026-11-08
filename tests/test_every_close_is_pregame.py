@@ -202,6 +202,8 @@ def _settle(lead_min, monkey_snaps=None):
          "home": "NYY", "away": "BOS", "player": "aaron judge",
          "market": "total_bases", "book": "DK", "line": 1.5,
          "over_odds": -250, "under_odds": 190}])
+    # A bet from July: the settle pass reads the whole file for it, through
+    # the two readers as it always did (`ledger._PassSnapshots`).
     saved = (ledger._snapshot_closes, ledger._snapshot_close_odds)
     snaps = monkey_snaps or ({}, {})
     ledger._snapshot_closes = lambda *a, **k: snaps[0]

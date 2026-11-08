@@ -5,9 +5,9 @@ engine/maintenance.settle_open, phases["grade_parts"]).
 The heartbeat's settle phases, Saturday 7 November: grading 366 seconds of
 one pass, and the phase is a single call. Inside it are the reads that
 could cost that much: the purchased closes (one read of odds_history per
-sport and market graded), three streams of our own snapshot file (the
-lines, the prices, the same book's close), the game lines' closes, the
-no-show sweep and the loss tagging. What these hold:
+sport and market graded), our own snapshot file (one read for the lines,
+the prices and the same book's close since 8 November), the game lines'
+closes, the no-show sweep and the loss tagging. What these hold:
 
   * a grading pass keeps, per thread, the seconds each of those took, how
     many bets were open, and the whole call; every named part fits inside
@@ -30,13 +30,18 @@ sys.path.insert(0, str(ROOT))
 from engine import ledger                                          # noqa: E402
 from engine import maintenance as M                                # noqa: E402
 
-KNOWN = {"open", "closes", "snapshot_lines", "snapshot_prices", "same_book",
+KNOWN = {"open", "closes", "same_book",
          "game_close", "game_rows", "stat_rows", "absent", "too_early", "noshow",
          "causes", "total",
          # The absent rule by half (seconds and bets), and its team reads.
-         "absent_nfl", "absent_cfb", "absent_n_nfl", "absent_n_cfb", "absent_team_reads"}
-#: Counts, and parts that sit inside another part.
-COUNTS = {"open", "absent_n_nfl", "absent_n_cfb", "absent_team_reads"}
+         "absent_nfl", "absent_cfb", "absent_n_nfl", "absent_n_cfb", "absent_team_reads",
+         # Our own snapshot file: one read a pass for the three close readers
+         # (ledger._PassSnapshots), how many, how many of the whole file, and
+         # the first day the recent read serves.
+         "snapshot_read", "snapshot_reads", "snapshot_whole", "snapshot_from"}
+#: Counts, a day, and parts that sit inside another part.
+COUNTS = {"open", "absent_n_nfl", "absent_n_cfb", "absent_team_reads",
+          "snapshot_reads", "snapshot_whole", "snapshot_from"}
 INSIDE = {"absent_nfl", "absent_cfb"}
 
 

@@ -259,11 +259,14 @@ def test_the_settle_path_streams_even_though_it_keeps_everything():
     # And since 2026-11-06 with the wanted players' first-initial-and-surname
     # kin (``siblings=True``), so a quote set filed under two of them at once
     # is seen whole and left out (linemoves._Copies).
-    lines = "closing_lines_by_date(_wanted_rows(_snapshot_stream(want, siblings=True), want,"
-    odds = "closing_odds_by_date(_wanted_rows(_snapshot_stream(want, siblings=True), want,"
+    # And since 2026-11-08 from a start time when the settle pass gives one
+    # (``since``, `_PassSnapshots`): the whole file when it does not.
+    lines = "closing_lines_by_date(_wanted_rows(_snapshot_stream(want, siblings=True, since=since),"
+    odds = "closing_odds_by_date(_wanted_rows(_snapshot_stream(want, siblings=True, since=since),"
     assert src.count(lines) == 1, "the line reader no longer streams the bets' rows and their kin"
     assert src.count(odds) == 1, "the price reader no longer streams the bets' rows and their kin"
-    assert "return stream_history() if want is None else stream_wanted(want, siblings=siblings)" in src
+    assert ("return stream_history() if want is None else "
+            "stream_wanted(want, siblings=siblings, since=since)") in src
     assert "closing_lines_by_date(load_history())" not in src
     # And the reason the streaming saving alone was small is recorded where
     # the change is, so nobody re-measures it from scratch to find out.
@@ -301,9 +304,18 @@ def test_settling_reads_the_snapshots_of_its_own_bets_only():
     assert '_want = {(normalize_name(b["player"]), b["market"]) for b in _open_rows}' in body
     # Every snapshot read in the settle path is its own bets' (`_want`). Since
     # 2026-11-05 the closing line is read through `_close_line_of`, which takes
-    # the settle path's one lazy reader, so the call appears once, not twice.
-    assert body.count("_snapshot_closes(") == body.count("_snapshot_closes(_want)") >= 1
-    assert "_snapshot_close_odds(want=_want)" in body and "_close_line_of(" in body
+    # the settle path's one lazy reader; since 2026-11-08 that reader is one
+    # read for the lines, the prices and the same book's close
+    # (`_PassSnapshots`), its rows the bets' and their kin, and a read that
+    # fails falls back to the two readers, each still the bets' own.
+    assert "_PassSnapshots(_want, _open_rows," in body and "_close_line_of(" in body
+    assert "_snapshot_closes(" not in body and "_snapshot_close_odds(" not in body
+    k = src.index("class _PassSnapshots:")
+    reader = src[k:src.index("\nclass ", k + 10) if "\nclass " in src[k + 10:] else len(src)]
+    reader = reader[:reader.index("\ndef ")] if "\ndef " in reader else reader
+    assert ("_wanted_rows(_snapshot_stream(self.want, siblings=True, since=since),\n"
+            "                              self.want, siblings=True)") in reader
+    assert "_snapshot_closes(self.want)" in reader and "_snapshot_close_odds(want=self.want)" in reader
     j = src.index("def repair_closing_lines(")
     repair = src[j:src.index("\ndef ", j + 10)]
     assert repair.count("_snapshot_closes(") == repair.count("_snapshot_closes(_want)") == 1, \

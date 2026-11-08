@@ -383,8 +383,11 @@ def name_index():
 #: and the phase is one call. `settle_from_history` keeps, per thread, the
 #: seconds its costly reads took this pass: the purchased closes
 #: (`closes`, one read of odds_history per sport and market graded), our
-#: own snapshot file (`snapshot_lines`, `snapshot_prices` and `same_book`,
-#: each a stream of it), the game lines' closes, the no-show sweep and the
+#: own snapshot file (`snapshot_read`: one read for the line, price and
+#: same-book closes, `_PassSnapshots`, with `snapshot_reads` and
+#: `snapshot_whole` counting them and `snapshot_from` the first day the
+#: recent read serves; `same_book` the same book's lookups), the game
+#: lines' closes, the no-show sweep and the
 #: loss tagging, beside how many bets were open and the whole call
 #: (`total`); what the named parts leave is finding each bet's stat row.
 #: The settle pass carries them to the heartbeat (chores.settle.phases
@@ -3906,14 +3909,16 @@ def repair_premature(conn, hist_conn, apply: bool = False) -> dict:
     return plan
 
 
-def _snapshot_stream(want, siblings: bool = False):
+def _snapshot_stream(want, siblings: bool = False, since: float | None = None):
     """The snapshot file for these bets: every row when ``want`` is None,
     else only the lines whose text names a wanted market and player
     (`linemoves.stream_wanted`, which says why: the settle pass parsed the
     whole file up to three times a pass, and the builds ran out of time).
-    ``siblings``: their first-initial-and-surname kin too (`_wanted_rows`)."""
+    ``siblings``: their first-initial-and-surname kin too (`_wanted_rows`).
+    ``since`` (an epoch, with ``want``): only the lines stamped from about
+    then on (`_PassSnapshots`)."""
     from .linemoves import stream_history, stream_wanted
-    return stream_history() if want is None else stream_wanted(want, siblings=siblings)
+    return stream_history() if want is None else stream_wanted(want, siblings=siblings, since=since)
 
 
 def _wanted_rows(rows, want, siblings: bool = False):
@@ -3951,7 +3956,7 @@ def _wanted_rows(rows, want, siblings: bool = False):
             yield r
 
 
-def _snapshot_closes(want=None) -> dict:
+def _snapshot_closes(want=None, since: float | None = None) -> dict:
     """``{(normalized player, market, date): closing line}`` from the free
     line-move snapshots. The fallback CLV source: harvested odds_history
     closes cost credits and only exist for backtested dates, while these
@@ -3976,8 +3981,8 @@ def _snapshot_closes(want=None) -> dict:
         from .linemoves import closing_lines_by_date
         # With the wanted players' loose-key kin, so a copy is seen whole
         # and left out (`linemoves._Copies`, 2026-11-06).
-        return closing_lines_by_date(_wanted_rows(_snapshot_stream(want, siblings=True), want,
-                                                  siblings=True))
+        return closing_lines_by_date(_wanted_rows(_snapshot_stream(want, siblings=True, since=since),
+                                                  want, siblings=True))
     except Exception as exc:     # noqa: BLE001
         # NEVER LET CLV BOOKKEEPING BLOCK SETTLING — and never let it fail
         # in silence either. `{}` here is indistinguishable from "no
@@ -4060,7 +4065,7 @@ def _close_odds_from(close: dict | None, bet_line, side: str | None):
     return price
 
 
-def _snapshot_close_odds(markets=None, want=None) -> dict:
+def _snapshot_close_odds(markets=None, want=None, since: float | None = None) -> dict:
     """``{(player, market, date): {"over": px, "under": px}}``.
 
     The price companion to :func:`_snapshot_closes`. Same free source, and
@@ -4084,10 +4089,186 @@ def _snapshot_close_odds(markets=None, want=None) -> dict:
             return closing_odds_by_date(r for r in _wanted_rows(_snapshot_stream(want, siblings=True),
                                                                 want, siblings=True)
                                         if r.get("market") in markets)
-        return closing_odds_by_date(_wanted_rows(_snapshot_stream(want, siblings=True), want,
-                                                 siblings=True))
+        return closing_odds_by_date(_wanted_rows(_snapshot_stream(want, siblings=True, since=since),
+                                                 want, siblings=True))
     except Exception:            # never let CLV bookkeeping block settling
         return {}
+
+
+#: How long before its game a snapshot can have been taken. Each snapshot is
+#: filed under its game's Eastern day (`linemoves._slate_day`), and a prop is
+#: quoted at most days ahead (the NFL's for the whole week, from Tuesday,
+#: before the boards bought tonight's games only). Twice that, so a player's
+#: last read before a missed week sits inside the read too (`linemoves._Copies`
+#: judges a shared quote set on each name's own earlier reads).
+SNAPSHOT_LEAD_DAYS = 14
+#: An open bet whose last close day is this recent sets where the settle
+#: pass's read of the snapshot file starts (`_snapshot_floor`); an older one
+#: that turns out to be gradable is served by a read of the whole file.
+SNAPSHOT_RECENT_DAYS = 3
+#: The most of the snapshot file (by bytes) the settle pass reads in one go
+#: for its three close readers, each holding its rows at once; past it each
+#: reads on its own (`_PassSnapshots._read`). Three readers' slimmed rows on a
+#: third of the file weigh about what one reader's held on the whole of it.
+ONE_READ_MAX_SHARE = 1 / 3
+_ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _snapshot_share(since: float) -> float:
+    """The share of the snapshot file's bytes a read from ``since`` covers
+    (`linemoves.stream_wanted` starts where this measures); 0.0 with no file."""
+    from . import linemoves
+    path = Path(linemoves.HISTORY_PATH)
+    try:
+        size = path.stat().st_size
+        if not size:
+            return 0.0
+        with path.open("rb") as fh:
+            linemoves._seek_since(fh, float(since) - linemoves.SINCE_MARGIN_S)
+            return max(0.0, (size - fh.tell()) / size)
+    except OSError:
+        return 0.0
+
+
+def _snapshot_floor(hist_conn, bets, today=None) -> tuple:
+    """``(first day, epoch)``: the earliest day a recent open bet can close
+    on, and the Eastern midnight SNAPSHOT_LEAD_DAYS before it, where the
+    settle pass's read of the snapshot file starts; ``(None, None)`` when no
+    open prop is recent (the pass then reads the whole file, as it did).
+    A bet's days are its `close_dates` and its own date when that is a day."""
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+    from .linemoves import SLATE_TZ
+    tz = ZoneInfo(SLATE_TZ)
+    today = today or _dt.datetime.now(tz).date()
+    cut = (today - _dt.timedelta(days=SNAPSHOT_RECENT_DAYS)).isoformat()
+    seen: dict = {}
+    firsts = []
+    for b in bets:
+        if not b["player"] or not b["date"] or b["market"] in GAME_MARKETS:
+            continue
+        wk = (b["sport"], b["date"])
+        if wk not in seen:
+            try:
+                days = [str(d) for d in close_dates(hist_conn, b) if d and _ISO_DAY.match(str(d))]
+            except Exception:                                  # noqa: BLE001
+                days = []
+            if _ISO_DAY.match(str(b["date"])):
+                days.append(str(b["date"]))
+            seen[wk] = days
+        days = seen[wk]
+        if days and max(days) >= cut:
+            firsts.append(min(days))
+    if not firsts:
+        return None, None
+    covered = min(firsts)
+    start = _dt.date.fromisoformat(covered) - _dt.timedelta(days=SNAPSHOT_LEAD_DAYS)
+    return covered, _dt.datetime(start.year, start.month, start.day, tzinfo=tz).timestamp()
+
+
+class _PassSnapshots:
+    """The settle pass's three reads of our own snapshot file, as one read
+    of its recent part.
+
+    THE GRADE SPENT 393 OF ITS 402 SECONDS HERE (19:15, Saturday 7 November,
+    152 bets graded): the line closes (`snapshot_lines`, 152 s), the price
+    closes (`snapshot_prices`, 145 s) and the same book's close (`same_book`,
+    96 s), each its own read of the whole season's file for the open bets'
+    players. Now one read feeds all three (`linemoves.LineCloses`,
+    `linemoves.OddsCloses`, `closebook.SameBookCloses.begin`), each building
+    exactly what its own read built from the same rows, and the read starts
+    at the earliest day a recent open bet can close on, less
+    SNAPSHOT_LEAD_DAYS (`_snapshot_floor`). Every snapshot of a day's games
+    is filed under that day and taken within the lead of it, so a bet whose
+    every day is at or after that first day gets the closes the whole file
+    gives. A bet that can close on an earlier day, one graded late, is
+    served by a read of the whole file, once a pass. A read that fails is
+    done the old way, each reader on its own."""
+
+    def __init__(self, want, bets, hist_conn, close_days, parts, today=None):
+        self.want, self.bets, self.hist = want, bets, hist_conn
+        self.close_days, self.parts = close_days, parts
+        self.first_day, self.since = _snapshot_floor(hist_conn, bets, today)
+        if self.first_day:
+            parts["snapshot_from"] = self.first_day
+        self._reads: dict = {}
+        #: The same-book reader's purchased closes, one read a pass.
+        self._harvest: dict = {}
+        #: Whether a close has asked for the line index yet this pass: the
+        #: same-book close counts its stamped keys only from then on, as it
+        #: did when that index was read lazily (`_same_book_close`).
+        self.lines_asked = False
+
+    def covers(self, b, dates) -> bool:
+        """Whether the recent read serves this bet: its close days and its
+        own date (when it is a day) all at or after its first day."""
+        if self.first_day is None or not dates:
+            return False
+        if any(not _ISO_DAY.match(str(d)) or str(d) < self.first_day for d in dates):
+            return False
+        own = str(b["date"] or "")
+        return not (_ISO_DAY.match(own) and own < self.first_day)
+
+    def for_bet(self, b, dates) -> dict:
+        """``{"lines", "odds", "samebook"}`` from a read that covers this bet."""
+        key = "recent" if self.covers(b, dates) else "whole"
+        got = self._reads.get(key)
+        if got is None:
+            got = self._reads[key] = self._read(self.since if key == "recent" else None)
+        return got
+
+    def _read(self, since) -> dict:
+        """The three readers' answers from ``since`` on (None: the whole
+        file, each reader on its own, exactly as before). The recent part is
+        one read when it is at most ONE_READ_MAX_SHARE of the file, so the
+        three readers' rows held at once never outweigh one reader's on the
+        whole file (the box has 1 GB); a larger part, each reader on its
+        own, from ``since``. A read that fails is done the old way."""
+        t0 = _time.monotonic()
+        got = None
+        if since is not None:
+            share = _snapshot_share(since)
+            self.parts["snapshot_share"] = round(share, 2)
+            try:
+                got = self._one_read(since) if share <= ONE_READ_MAX_SHARE else self._each_read(since)
+            except Exception as exc:                            # noqa: BLE001
+                print(f"  ⚠️  one read of the snapshot file failed ({type(exc).__name__}: "
+                      f"{exc}); each close reader reads it on its own")
+        if got is None:
+            got = {"lines": _snapshot_closes(self.want),
+                   "odds": _snapshot_close_odds(want=self.want),
+                   "samebook": {"_close_days": self.close_days}}
+        _add_part(self.parts, "snapshot_read", t0)
+        self.parts["snapshot_reads"] = self.parts.get("snapshot_reads", 0) + 1
+        if since is None:
+            self.parts["snapshot_whole"] = self.parts.get("snapshot_whole", 0) + 1
+        return got
+
+    def _each_read(self, since) -> dict:
+        """Each reader on its own, from ``since``."""
+        from .closebook import SameBookCloses
+        sb = SameBookCloses(self.hist, days=self.close_days, since=since)
+        sb._cache = self._harvest
+        sb.prepare([dict(r) for r in self.bets if r["market"] not in GAME_MARKETS])
+        return {"lines": _snapshot_closes(self.want, since=since),
+                "odds": _snapshot_close_odds(want=self.want, since=since),
+                "samebook": {"_samebook": sb, "_close_days": self.close_days}}
+
+    def _one_read(self, since) -> dict:
+        from .closebook import SameBookCloses
+        from .linemoves import LineCloses, OddsCloses
+        lines, odds = LineCloses(), OddsCloses()
+        sb = SameBookCloses(self.hist, days=self.close_days)
+        sb._cache = self._harvest
+        sb.begin([dict(r) for r in self.bets if r["market"] not in GAME_MARKETS])
+        for r in _wanted_rows(_snapshot_stream(self.want, siblings=True, since=since),
+                              self.want, siblings=True):
+            lines.add(r)
+            odds.add(r)
+            sb.add(r)
+        sb.finish()
+        return {"lines": lines.index(), "odds": odds.index(),
+                "samebook": {"_samebook": sb, "_close_days": self.close_days}}
 
 
 # NFL slates journal under the week label the site shows ('2025-W05');
@@ -6013,6 +6194,10 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     # (`_close_days`, `db._day_windows`): each bet's close is looked up
     # under its own `close_dates`, every one of them among these.
     closes_cache["_close_days"] = _close_days(hist_conn, _open_rows)
+    # Our own snapshot file, read once for the three close readers and from
+    # the days these bets can close on (`_PassSnapshots`), when a close
+    # first needs it.
+    _snapfile = _PassSnapshots(_want, _open_rows, hist_conn, closes_cache["_close_days"], parts)
     # One span of college stat rows for every teamless college prop's team
     # (`_recent_cfb_team`), read once inside the pass's name index.
     _index = _name_index_now()
@@ -6159,10 +6344,8 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
 
         def _snaps():
             # Our own snapshots, read once and only when a close needs them.
-            if "_snapshots" not in closes_cache:
-                with _grade_part(parts, "snapshot_lines"):
-                    closes_cache["_snapshots"] = _snapshot_closes(_want)
-            return closes_cache["_snapshots"]
+            _snapfile.lines_asked = True
+            return _snapfile.for_bet(b, _dates)["lines"]
         close, close_line = _close_line_of(b, _dates, _who, closes_cache[ck], _snaps)
         # The closing PRICE, which is the only thing that moves on a
         # fixed-line market.
@@ -6195,11 +6378,9 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             # No harvested price for this side at this line — fall back to
             # our own recorded snapshots, which cost nothing and accrue on
             # every pull that was already paid for.
-            if "_snapshot_odds" not in closes_cache:
-                with _grade_part(parts, "snapshot_prices"):
-                    closes_cache["_snapshot_odds"] = _snapshot_close_odds(want=_want)
-            _sides = closes_cache["_snapshot_odds"].get(_leg_key(
-                closes_cache["_snapshot_odds"],
+            _odds_ix = _snapfile.for_bet(b, _dates)["odds"]
+            _sides = _odds_ix.get(_leg_key(
+                _odds_ix,
                 (_who, b["market"], b["date"],
                  round(float(b["line"]), 1) if b["line"] is not None else None),
                 b)) or {}
@@ -6236,8 +6417,11 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         # book's quote, or the median of them, beside the best price on the
         # screen — which reads as the market moving toward us when nothing
         # moved. The fair close (`close_fair`) stays the market's, as it was.
+        _read = _snapfile.for_bet(b, _dates)
         with _grade_part(parts, "same_book"):
-            _px = _same_book_close(closes_cache, hist_conn, _open_rows, b, _dates)
+            _px = _same_book_close(_read["samebook"], hist_conn, _open_rows, b, _dates,
+                                   stamped=(getattr(_read["lines"], "stamped", ()) or ())
+                                   if _snapfile.lines_asked else ())
         if _px is not None:
             close_odds = _px
         _settle_one(conn, b, float(row["value"]), close_line,

@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after the record export started saying which of
+Last updated 2026-11-08, after grading started reading the odds snapshots
+once, from the recent part (step LQ: nothing to run; one read-only check
+in the combined line), after the record export started saying which of
 its sections took its time (step LP: nothing to run), after the settle
 pass's ingest started
 saying which league's pull took its time, and a finished game's box score
@@ -218,7 +220,7 @@ Everything below that only reads, in one go (a few minutes; it writes
 nothing). Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP LL LM KP 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP LL LM LQ KP 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (about an hour together; still

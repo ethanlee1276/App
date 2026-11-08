@@ -58,8 +58,15 @@ class SameBookCloses:
     in the snapshots. The snapshot file is streamed once and only rows for
     a bet in hand are kept, so the 1 GB box does not hold the history."""
 
-    def __init__(self, hist, snapshots=None, days=None):
+    #: What a close is cut from (`finish`), all a kept row holds: the box has
+    #: 1 GB, and the settle pass holds this beside its own two readers' rows.
+    _KEEP = ("ts", "start_ts", "book", "over_odds", "under_odds")
+
+    def __init__(self, hist, snapshots=None, days=None, since=None):
         self.hist = hist                     # the history DB connection, or None
+        # An epoch: `prepare` reads the file from about then on (the settle
+        # pass's recent read, `ledger._PassSnapshots`); None = all of it.
+        self._since = since
         # ``{(sport, market): {ISO day}}``: the purchased closes read for
         # these days only (`db._day_windows`), or each market's whole tape.
         self._days = days or {}
@@ -82,6 +89,28 @@ class SameBookCloses:
         every sport's every pull. The keys whose game start was recorded
         are kept as well, so the proven-close rule needs no second pass."""
         from . import linemoves
+        pairs = self.begin(bets)
+        if self._snap_rows is not None:
+            rows = self._snap_rows
+        else:
+            # PARSED ONLY WHEN ITS TEXT NAMES A BET IN HAND (2026-11-07).
+            # This read the whole file through `stream_history`, a
+            # `json.loads` for every line of every sport's every pull, on
+            # every settle pass that graded a prop; the settle's own two
+            # snapshot readers had moved to `stream_wanted` on 15 October.
+            # The same lines reach the filter below, so the answer is the
+            # same; the rest are judged from their text and skipped.
+            rows = linemoves.stream_wanted(pairs, since=self._since) if pairs else ()
+        for r in rows:
+            self.add(r)
+        self.finish()
+
+    def begin(self, bets: list[dict]) -> set:
+        """Start `prepare`'s pass for these bets without reading anything:
+        ``add`` each snapshot row, then ``finish``. Hands back the
+        ``{(normalized player, market)}`` the bets want. The settle pass
+        reads the file once for this and its own two close readers
+        (`ledger._PassSnapshots`)."""
         from .sources.oddsapi import normalize_name
         names: dict = {}
 
@@ -94,31 +123,30 @@ class SameBookCloses:
         for b in bets:
             if b.get("player") and b.get("market") and b.get("line") is not None:
                 want.add((norm(b["player"]), b["market"], round(float(b["line"]), 1)))
-        markets = {k[1] for k in want}
-        grouped: dict = {}
-        if self._snap_rows is not None:
-            rows = self._snap_rows
-        else:
-            # PARSED ONLY WHEN ITS TEXT NAMES A BET IN HAND (2026-11-07).
-            # This read the whole file through `stream_history`, a
-            # `json.loads` for every line of every sport's every pull, on
-            # every settle pass that graded a prop; the settle's own two
-            # snapshot readers had moved to `stream_wanted` on 15 October.
-            # The same lines reach the filter below, so the answer is the
-            # same; the rest are judged from their text and skipped.
-            pairs = {(k[0], k[1]) for k in want}
-            rows = linemoves.stream_wanted(pairs) if pairs else ()
-        for r in rows:
-            try:
-                if r.get("market") not in markets:
-                    continue
-                k = (norm(r["player"]), r["market"], round(float(r["line"]), 1))
-                if k not in want:
-                    continue
-                float(r["ts"])
-                grouped.setdefault((k[0], k[1], linemoves._slate_day(r), k[2]), []).append(r)
-            except (KeyError, TypeError, ValueError, AttributeError):
-                continue
+        self._norm, self._want3 = norm, want
+        self._markets = {k[1] for k in want}
+        self._grouped: dict = {}
+        return {(k[0], k[1]) for k in want}
+
+    def add(self, r: dict) -> None:
+        """One snapshot row into the pass `begin` started."""
+        from . import linemoves
+        try:
+            if r.get("market") not in self._markets:
+                return
+            k = (self._norm(r["player"]), r["market"], round(float(r["line"]), 1))
+            if k not in self._want3:
+                return
+            float(r["ts"])
+            self._grouped.setdefault((k[0], k[1], linemoves._slate_day(r), k[2]), []).append(
+                {f: r[f] for f in self._KEEP if f in r})
+        except (KeyError, TypeError, ValueError, AttributeError):
+            return
+
+    def finish(self) -> None:
+        """Each book's close from the rows the pass kept."""
+        from . import linemoves
+        grouped, self._grouped = self._grouped, {}
         out, stamped = {}, set()
         for key, items in grouped.items():
             legs = linemoves._pregame_legs(items)

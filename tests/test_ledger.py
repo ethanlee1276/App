@@ -2071,7 +2071,11 @@ def test_the_closing_price_comes_from_the_free_snapshots():
     so seeing a fixed-line market costs no extra credits."""
     import inspect
     from engine import linemoves
-    src = inspect.getsource(linemoves.closing_odds_by_date)
+    # A row at a time since 2026-11-08 (`OddsCloses`, which the settle pass
+    # feeds beside the line reader from one read); the function is its loop.
+    src = (inspect.getsource(linemoves.closing_odds_by_date) + inspect.getsource(linemoves.OddsCloses)
+           + inspect.getsource(linemoves._odds_index))
+    assert "acc = OddsCloses()" in src
     assert "over_odds" in src and "under_odds" in src
     # Cut per game since 2026-09-30 (`_pregame_legs`, which keeps a
     # doubleheader's second game); the medianing moved to `_price_close`.
@@ -2125,8 +2129,10 @@ def test_the_settle_picks_the_side_the_bet_actually_took():
     import inspect
     from engine import ledger
     src = inspect.getsource(ledger)
-    i = src.index('_sides = closes_cache["_snapshot_odds"]')
-    body = src[i:i + 400]
+    # The price index comes from the pass's one read since 2026-11-08
+    # (`_PassSnapshots`), the lookup unchanged.
+    i = src.index('_odds_ix = _snapfile.for_bet(b, _dates)["odds"]')
+    body = src[i:i + 500]
     assert '"under" if' in body and 'UNDER' in body
     assert '"over"' in body
 

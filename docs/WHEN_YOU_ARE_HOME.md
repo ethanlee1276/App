@@ -9338,6 +9338,37 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LQ. Grading reads the odds snapshots once, and only the recent part**
+(step 441; 8 November). The settle pass at 19:15 on Saturday 7 November
+graded 152 bets in 402.5 seconds, and 393 of them were three reads of our
+own odds-snapshot file (`data/cache/line_history.jsonl`, the whole season):
+one for each bet's closing line (152 s), one for its closing price (145 s)
+and one for the same book's close (96 s). Each close is filed under its
+game's day, and a day's snapshots are all taken within days of it, so the
+pass now reads the file once for all three, starting 14 days before the
+earliest day a recent open bet can close on; a bet older than that (one
+graded late) is served by a read of the whole file, as every bet was. Every
+close comes out the same (a test settles a synthetic season both ways and
+compares every bet). When the recent part is more than a third of the file
+the three readers read it on their own (the box has 1 GB), from the same
+place. The heartbeat's `grade_parts` gains `snapshot_read` (seconds),
+`snapshot_reads`, `snapshot_whole` (reads of the whole file), `snapshot_from`
+(the first day the recent read serves) and `snapshot_share` (how much of
+the file it read). Nothing to run. Read-only, any time after the deploy:
+both ways on the box's own file and open bets, and every close compared
+(it reads the whole file three times the old way, so it takes a few
+minutes; it should end "SAME"):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 tools/snapcheck.py
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh LQ 2>&1 | tee /tmp/lq.txt
+```
+
 **LP. The record export says which of its sections took its time** (step
 438; 8 November). With grading and ingest down to seconds, the settle pass's
 slowest phase is writing the record itself: 148.6 seconds at 19:10 on
