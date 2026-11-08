@@ -240,6 +240,37 @@ def record_note(conn, sport: str, games, now: _dt.datetime | None = None) -> str
             f"{shopped} shopped, {tail}.")
 
 
+#: Events one read of the tape names at once (SQLite's oldest builds bind 999).
+TAPE_CHUNK = 500
+
+
+def pregame_tape(conn, sport: str, event_ids, before: str) -> dict:
+    """``{event_id: [(taken_at, market, player, line, over_odds), …]}`` in
+    time order: the shopped field's game lines for those events, stamped
+    before ``before``.
+
+    ONE READ FOR THE WINDOW (2026-11-08). `closes_into_games` asked the tape
+    once per finished game, and no index leads with the event, so each ask
+    walked every row the league had stored before that game's kickoff,
+    every prop and every book since the tape began: "closes from the tape",
+    14 to 18 seconds of every college build on 8 November, for about two
+    weeks of results. The range is now walked once, to the latest kickoff,
+    and each game keeps its own event's rows from before its own; a key's
+    times are unique (the table's key), so its last row is the one it was."""
+    out: dict = {}
+    ids = sorted(e for e in event_ids if e)
+    for i in range(0, len(ids), TAPE_CHUNK):
+        part = ids[i:i + TAPE_CHUNK]
+        marks = ",".join("?" * len(part))
+        for r in conn.execute(
+                "SELECT event_id, taken_at, market, player, line, over_odds FROM odds_history "
+                f"WHERE sport=? AND event_id IN ({marks}) AND book=? "
+                "AND market IN ('spread','total','moneyline') AND taken_at<? ORDER BY taken_at",
+                (sport, *part, BEST_BOOK, before)):
+            out.setdefault(r[0], []).append(tuple(r[1:]))
+    return out
+
+
 def closes_into_games(conn, sport: str, games) -> dict:
     """Write each FINISHED game's last pre-kickoff line from this tape into
     the games table, where the models and the grading read closes.
@@ -261,6 +292,7 @@ def closes_into_games(conn, sport: str, games) -> dict:
     """
     import json as _json
     out = {"games": 0, "spread": 0, "total": 0, "ml": 0}
+    todo = []
     for g in games or []:
         if not g.get("completed") or not g.get("kickoff"):
             continue
@@ -273,12 +305,13 @@ def closes_into_games(conn, sport: str, games) -> dict:
         cut = kick.astimezone(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:00Z")
         home, away = g.get("home") or "", g.get("away") or ""
         event_id = f"{str(g.get('date') or '')[:10]}-{away}@{home}"
+        todo.append((g, cut, home, away, event_id))
+    tape = pregame_tape(conn, sport, {t[4] for t in todo}, max(t[1] for t in todo)) if todo else {}
+    for g, cut, home, away, event_id in todo:
         last: dict = {}
-        for r in conn.execute(
-                "SELECT market, player, line, over_odds FROM odds_history WHERE sport=? AND "
-                "event_id=? AND book=? AND market IN ('spread','total','moneyline') AND taken_at<? "
-                "ORDER BY taken_at", (sport, event_id, BEST_BOOK, cut)):
-            last[(r[0], r[1])] = (r[2], r[3])
+        for taken, market, player, line, over in tape.get(event_id, ()):
+            if taken < cut:
+                last[(market, player)] = (line, over)
         if not last:
             continue
         key = (sport, g.get("season") or 0, g.get("date") or "", g["game_id"])

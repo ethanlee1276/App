@@ -1391,7 +1391,10 @@ def main() -> None:
             ids = {str(meta.get("id") or ""): abbr
                    for abbr, meta in teams.items() if meta.get("id")}
             _cfbteams.remember_ids(ids)
-            fixed = _cfbingest.remap_cfb_team_keys(_cfbdb.connect(), ids)
+            # At most hourly, or at once when the map has grown
+            # (ingest.remap_cfb_team_keys_paced); {} when it rested.
+            fixed = _cfbingest.remap_cfb_team_keys_paced(_cfbdb.connect(), ids) or {
+                "teams": 0, "unmapped": []}
             if fixed["teams"]:
                 print(f"  CFB history: re-keyed {fixed['teams']} school(s) "
                       f"from ESPN ids to abbreviations — "

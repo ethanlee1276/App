@@ -999,13 +999,23 @@ def remap_cfb_team_keys(conn, id_to_abbr: dict | None = None) -> dict:
     if not mapping:
         return out
     present = set()
-    for table, columns in (("games", ("home", "away")),
-                           ("player_game_logs", ("team", "opponent"))):
-        for column in columns:
-            for (value,) in conn.execute(
-                    f"SELECT DISTINCT {column} FROM {table} WHERE sport='cfb' "
-                    f"AND {column} LIKE ?", (ESPN_KEY_PREFIX + "%",)):
-                present.add(str(value))
+    # ONE WALK A TABLE, BOTH COLUMNS (2026-11-08). No index leads with a
+    # team column, so each `SELECT DISTINCT … LIKE` walked every college
+    # row of its table, and there were four of them a build ("teams +
+    # re-key", 19-21 s of the college build on 8 November). Each table is
+    # now walked once and gives both columns' keys, matched by the same
+    # LIKE, so the keys found are the same.
+    like = ESPN_KEY_PREFIX + "%"
+    for table, (first, second) in (("games", ("home", "away")),
+                                   ("player_game_logs", ("team", "opponent"))):
+        for a, b in conn.execute(
+                f"SELECT CASE WHEN {first} LIKE ? THEN {first} END, "
+                f"CASE WHEN {second} LIKE ? THEN {second} END FROM {table} "
+                f"WHERE sport='cfb' AND ({first} LIKE ? OR {second} LIKE ?)",
+                (like, like, like, like)):
+            for value in (a, b):
+                if value is not None:
+                    present.add(str(value))
     if not present:
         return out
     for key in sorted(present):
@@ -1023,6 +1033,59 @@ def remap_cfb_team_keys(conn, id_to_abbr: dict | None = None) -> dict:
                 out["games" if table == "games" else "player_logs"] += \
                     cur.rowcount or 0
     conn.commit()
+    return out
+
+
+#: How often the college build looks for ESPN-id team keys to re-key, in
+#: seconds, when the teams map has not changed (`remap_cfb_team_keys_paced`).
+REKEY_EVERY_S = 3600
+
+
+def _rekey_state_path() -> str:
+    from . import feedstate
+    return feedstate.path("cfb_rekey.json")
+
+
+def remap_cfb_team_keys_paced(conn, id_to_abbr: dict | None = None,
+                              now: float | None = None, path: str | None = None):
+    """`remap_cfb_team_keys` at most once every `REKEY_EVERY_S`, or at once
+    when the teams map holds an id the last run did not. None when it did
+    not run this time.
+
+    THE SAME ANSWER EVERY TEN MINUTES (2026-11-08). The re-key runs in every
+    college build, and since its first repair what it finds is the visiting
+    FCS schools the scoreboard names by id (`cfbdata` keys a side with no
+    abbreviation `espn:<id>`), which the FBS teams feed can never map: the
+    same unmapped list, every build, for 19 to 21 seconds of walking the
+    tables. A key the map CAN turn into an abbreviation is rewritten within
+    the hour, and at once when the map itself has grown."""
+    import hashlib
+    import json as _json
+    import time as _time
+    from . import cfbteams
+    now = _time.time() if now is None else float(now)
+    path = path or _rekey_state_path()
+    mapping = {str(k): str(v) for k, v in
+               (id_to_abbr or cfbteams.load_ids() or {}).items() if k and v}
+    mark = hashlib.sha1(_json.dumps(sorted(mapping.items())).encode()).hexdigest()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            last = _json.load(fh)
+    except (OSError, ValueError):
+        last = {}
+    if (isinstance(last, dict) and last.get("map") == mark
+            and 0 <= now - float(last.get("at") or 0) < REKEY_EVERY_S):
+        return None
+    out = remap_cfb_team_keys(conn, mapping)
+    try:
+        import os
+        tmp = f"{path}.tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            _json.dump({"at": now, "map": mark, "teams": out.get("teams", 0),
+                        "unmapped": len(out.get("unmapped") or [])}, fh)
+        os.replace(tmp, path)
+    except OSError:
+        pass
     return out
 
 

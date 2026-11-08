@@ -9338,6 +9338,28 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MJ. The college build's first stage stops re-reading its history**
+(step 460; 8 November). Its part timings at 10:48 put two jobs at 37 of
+the stage's 40 seconds.
+
+- **Closes from the tape** (17.8 seconds). For every finished game in the
+  last two weeks, the build looks up the last line it saw before kickoff
+  and writes it as that game's close. Each lookup scanned every college
+  price ever stored before that game's kickoff, props and every book
+  included, once per game. It now reads the tape once for the whole two
+  weeks, and each game keeps its own lines from before its own kickoff.
+  The closes written are the same.
+- **Teams and re-key** (19.1 seconds). Every build searched the whole
+  games and player-stats tables, twice each, for schools stored under
+  ESPN's number instead of an abbreviation. Since the first repair it has
+  found the same thing every time: visiting FCS schools that the FBS
+  teams list can never name. Each table is now searched once, and the
+  search runs at most once an hour, or at once whenever the teams list
+  gains a school. A school that can be named is still renamed, now within
+  the hour instead of within the build.
+
+Nothing to run.
+
 **MI. Two jobs stop reading what they throw away** (step 459; 8
 November). The new part timings from the 10:45 NFL build pointed straight
 at them.
