@@ -8928,9 +8928,24 @@ def recent_regrades(conn, limit: int = 50) -> dict:
     code said). A first grading (open → won) is not a re-grade and is not
     listed; a deletion always is."""
     import json as _json
+    # THE FIRST GRADINGS ARE LEFT IN THE DATABASE (2026-11-08). Every grade
+    # is an 'update' row here, so the journal's whole grading history came
+    # back and had both its JSON halves parsed, every export (4.4 s of the
+    # record's 52.7 at 20:08 on 7 November), to keep the few that changed a
+    # SETTLED pick. SQLite's own JSON reader drops the rest first, by the
+    # loop's own rule below (a row with no new half, or an old status that
+    # was already settled); a database without it reads them all, as before.
     try:
-        rows = conn.execute("SELECT * FROM bets_audit WHERE action IN "
-                            "('update', 'delete') ORDER BY seq DESC").fetchall()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM bets_audit WHERE action IN ('update', 'delete') "
+                "AND (new IS NULL OR new = '' OR json_extract(old, '$.status') "
+                "IN ('won', 'lost', 'push', 'void')) ORDER BY seq DESC").fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc):
+                raise
+            rows = conn.execute("SELECT * FROM bets_audit WHERE action IN "
+                                "('update', 'delete') ORDER BY seq DESC").fetchall()
     except sqlite3.OperationalError:
         return {"n": 0, "recent": []}
     out = []
@@ -9201,10 +9216,22 @@ def _prose_block() -> dict:
 
 
 def _loss_patterns_block(conn) -> dict:
-    """The miner's view of this journal, for export_json. Guarded like
-    every other block: a mining failure must never cost the export."""
+    """The miner's view of this journal, for export_json: the one the settle
+    pass's learning step saved (losspatterns.refresh, after fresh grades and
+    at most hourly), which is the one every board's veto reads; mined here
+    only while nothing is saved. Guarded like every other block: a mining
+    failure must never cost the export.
+
+    READ, NOT RE-MINED (2026-11-08), as `_selection_haircut_block` reads its
+    store: the page shows the closures picks are actually refused under. It
+    re-mined the whole journal every export instead, 9.9 s of the record's
+    52.7 at 20:08 on 7 November, every ten minutes, to show a result the
+    vetoes would not use until the next learning step saved it."""
     try:
         from . import losspatterns as lp
+        stored = lp.load()
+        if isinstance(stored, dict) and "findings" in stored and "closed" in stored:
+            return stored
         return lp.mine(lp.records_from_ledger(conn))
     except Exception:                              # noqa: BLE001
         return {"n_records": 0, "tested": 0, "findings": [], "closed": []}

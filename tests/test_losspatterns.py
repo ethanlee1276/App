@@ -238,7 +238,18 @@ def test_the_block_ships_in_the_record_export_and_cannot_sink_it():
                encoding="utf-8").read()
     assert '"loss_patterns": _loss_patterns_block(conn)' in src
     conn = ledger.connect(":memory:")
-    block = ledger._loss_patterns_block(conn)
+    # The block reads the miner's saved result first (2026-11-08); with none
+    # saved it mines this journal, which is empty.
+    import tempfile
+    from pathlib import Path as _P
+    from engine import losspatterns as _lp
+    saved = _lp.DEFAULT_PATH
+    with tempfile.TemporaryDirectory() as td:
+        _lp.DEFAULT_PATH = _P(td) / "losspatterns.json"
+        try:
+            block = ledger._loss_patterns_block(conn)
+        finally:
+            _lp.DEFAULT_PATH = saved
     assert block["findings"] == [] and block["closed"] == []
 
 

@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after a finished game's box score already on file
+Last updated 2026-11-08, after the record export stopped re-mining the loss
+patterns and parsing every past grade each time (step LT: nothing to run),
+after a finished game's box score already on file
 stopped being written again every pass (step LS: nothing to run), after
 every NBA pick started carrying the
 market's fair price and every NFL bet its fair close (step LR: nothing to

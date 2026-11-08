@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LT. The record export reads only what it shows** (step 438; 8 November).
+The export's own timer (LP) at 20:08 on Saturday 7 November: 52.7 seconds,
+every ten minutes on a game day. Two of its slowest pieces did work nobody
+saw. The loss-pattern section re-mined the whole journal every export (9.9
+seconds) to show a result the boards' vetoes only take up when the settle
+pass's learning step saves it; it now shows that saved result, the closures
+picks are actually refused under (it mines only while nothing is saved yet).
+The list of re-graded picks parsed every grade the journal ever made (4.4
+seconds) to keep the few that changed a pick already settled; SQLite now
+drops the first gradings before anything is parsed, and the list is the same
+(a test compares it with the full read on a log with deletions and odd rows
+in it). Nothing to run; the heartbeat's `export_parts` shows the new seconds.
+
 **LS. A finished game's box score already on file is not written again**
 (step 443; 8 November). The first settle pass on the new timing (LO, LP, LQ)
 put the college box scores at 66 of its 71 ingest seconds, every five
