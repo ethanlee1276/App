@@ -702,6 +702,72 @@ def versus(sport: str, player: str, opponent: str, db_path=None) -> dict:
 
 
 def _query(conn, sport, markets, players) -> dict:
+    """``player_stats`` for ``players``: each one's last ``N_GAMES`` in each
+    market, newest first, players listed newest first.
+
+    ONE SEEK PER PLAYER AND MARKET (2026-11-08). The single read below
+    (`_query_scan`) asks for every season of every priced player, sorted
+    newest first, and SQLite answers the sort by walking the table's own
+    key backwards: every row the sport has, of every market and player,
+    to keep ten a pair. On a two-million-row copy of the table's shape:
+    1.68 seconds; on the NFL build at 09:16 on 8 November it sat inside an
+    11-second part of the pricing stage. Each pair's ten are now one seek
+    of the (sport, market, player) index, named outright because the
+    planner, left to itself, walks the key backwards for each of them too:
+    0.16 seconds, the same games. The order is the one that backwards walk
+    gave — newest season, week or date, then game, then player, then
+    market, as the box's file (never ANALYZEd, so planned the same way)
+    gave it — written down: a pair's games newest first, game id breaking
+    a tie (a doubleheader), and the players by their newest game, the name
+    breaking a tie the same way. A file without that index (one made
+    before it existed) is read the old way."""
+    import sqlite3
+    ids = [m for m, _ in markets]
+    labels = dict(markets)
+    q = ("SELECT season, period, game_id, opponent, home, value "
+         "FROM player_game_logs INDEXED BY idx_logs_lookup "
+         "WHERE sport=? AND market=? AND player=? "
+         "ORDER BY season DESC, period DESC, game_id DESC LIMIT ?")
+    grouped: dict[str, dict[str, list]] = {}
+    newest: dict = {}
+    try:
+        for player in players:
+            per: dict[str, list] = {}
+            for m in ids:
+                rows = conn.execute(q, (sport, m, player, N_GAMES)).fetchall()
+                if not rows:
+                    continue
+                top = (rows[0][0], str(rows[0][1]), str(rows[0][2]))
+                if player not in newest or top > newest[player]:
+                    newest[player] = top
+                lst = per.setdefault(m, [])
+                for r in rows:
+                    g = {"opponent": r[3], "home": bool(r[4]), "value": float(r[5])}
+                    if sport == "nfl":
+                        g["week"] = int(r[1])
+                    else:
+                        g["date"] = str(r[1])
+                    lst.append(g)
+            if per:
+                grouped[player] = per
+    except sqlite3.OperationalError as exc:
+        if "no such index" not in str(exc):
+            raise
+        return _query_scan(conn, sport, markets, players)
+    out: dict[str, dict[str, list]] = {}
+    for player in sorted(grouped, key=lambda p: (newest[p], p), reverse=True):
+        per = grouped[player]
+        keep = {labels[m]: per[m] for m, _ in markets
+                if len(per.get(m, [])) >= MIN_GAMES}
+        if keep:
+            out[player] = keep
+    return out
+
+
+def _query_scan(conn, sport, markets, players) -> dict:
+    """The single read `_query` replaced: every season of every player,
+    sorted newest first, ten kept a pair. Kept for a file without the
+    (sport, market, player) index."""
     ids = [m for m, _ in markets]
     labels = dict(markets)
     rows = conn.execute(

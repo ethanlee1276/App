@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after the comparisons on every prop card started
+Last updated 2026-11-08, after each player's last ten games started being
+looked up through the index instead of found by walking the history file
+(step MF: nothing to run), after the comparisons on every prop card started
 counting their similar past games without walking every one (step ME:
 nothing to run), after the depth charts started being read once
 per file instead of on every NFL build (step MD: nothing to run), after

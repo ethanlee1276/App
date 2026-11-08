@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MF. Each player's recent games are looked up, not searched for**
+(step 456; 8 November). The last ten games behind every prop's chart (the
+player stats on the board) were read by asking the history file for every
+season of every priced player, newest first. With no statistics on the
+file, the database answers "newest first" by walking the whole table
+backwards, every stat of every player in the sport, to keep ten games a
+player and stat. Each player's ten in each stat are now one direct look-up
+in the index built for exactly that (the database had to be told to use
+it, or it walks the table for each look-up too). Timed on a two-million-row
+copy of the table's shape: 1.68 seconds against 0.16, and the same games
+in the same order, the order written down now rather than left to how the
+file happened to be walked. It helps the college and baseball boards too.
+Nothing to run.
+
 **ME. The comparisons count a band without walking every past game**
 (step 455; 8 November). The first NFL build to name its parts (09:16 on
 Sunday) put the pricing stage at 48 seconds, and the prop pricing itself
