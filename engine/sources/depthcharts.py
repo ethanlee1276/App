@@ -82,6 +82,62 @@ def _slim(open_rows, keep_days: int | None) -> list[dict]:
     return out
 
 
+def _file_sha1(path) -> str:
+    import hashlib
+    h = hashlib.sha1()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _slim_kept(local, keep_days: int | None) -> list[dict]:
+    """`_slim` of the cached CSV ``local``, parsed once per file.
+
+    THE SAME FILE, PARSED EVERY BUILD (2026-11-08). The season's file is a
+    snapshot of every team's every position group, every day since March
+    (492,320 rows and 47 MB in September, longer each day), and the NFL
+    build streamed it twice on every build to keep the newest three weeks
+    (its depth-chart stage ran 11 to 14 seconds of every Sunday build on 8
+    November), though the file itself is refetched only when its cache
+    expires. `_slim` reads nothing but the file and ``keep_days`` (the
+    cutoff counts back from the file's own newest day, not from today), so
+    its rows are kept beside the file under the file's own fingerprint —
+    its bytes, the window, the columns kept and this module's code — and a
+    build off the same file loads them: 2.73 seconds against 0.09 on a
+    file of the same shape. Any byte of the file changed and it parses
+    again. Only a windowed read is kept; the fitters' read of every row
+    (``keep_days=None``) would be a copy as big as the file."""
+    import json
+    import os
+    from pathlib import Path
+    local = Path(local)
+    fresh = lambda: _slim(lambda: open(local, encoding="utf-8", newline=""), keep_days)  # noqa: E731
+    if not keep_days:
+        return fresh()
+    side = local.with_name(f"{local.name}.slim{int(keep_days)}.json")
+    try:
+        from .. import racecache
+        key = racecache.key("depth_charts", _file_sha1(local), int(keep_days), list(KEEP_COLUMNS),
+                            racecache.source_of(__file__))
+    except (OSError, TypeError, ValueError):
+        return fresh()
+    try:
+        doc = json.loads(side.read_text(encoding="utf-8"))
+        if isinstance(doc, dict) and doc.get("key") == key and isinstance(doc.get("rows"), list):
+            return doc["rows"]
+    except (OSError, ValueError):
+        pass
+    rows = fresh()
+    try:
+        tmp = side.with_name(side.name + ".tmp")
+        tmp.write_text(json.dumps({"key": key, "rows": rows}, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, side)
+    except OSError:
+        pass
+    return rows
+
+
 def slim_rows(text: str, keep_days: int | None = KEEP_DAYS) -> list[dict]:
     """`_slim` over a CSV held as text — the test seam, and small files."""
     import io
@@ -115,8 +171,7 @@ def load_depth_charts(season: int, keep_days: int | None = KEEP_DAYS) -> list[di
             # The module-level name, so the freshness suite can spy on it:
             # every depth-chart read asks the fetch layer, never exists().
             fetch_text(url, local.name)         # refresh the cache; drop the text
-            return _slim(lambda: open(local, encoding="utf-8", newline=""),
-                         keep_days)
+            return _slim_kept(local, keep_days)  # parsed once per file
         except DataUnavailable as exc:
             last_err = exc
         except OSError as exc:

@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MD. The depth charts are read once per file** (step 454; 8 November).
+The NFL build's depth-chart stage ran 11 to 14 seconds of every build on
+Sunday. The season's depth-chart file is a snapshot of every team's every
+position group for every day since March (492,320 rows, 47 MB, in
+September, and longer each day), and the build read the whole of it twice
+on every run to keep the newest three weeks, though the file itself is
+only fetched again when its cache runs out. The three weeks it keeps
+depend on nothing but the file, so they are now kept beside it (about a
+tenth of its size) under the file's own fingerprint, and a build off the
+same file loads them: 2.73 seconds against 0.09 on a file of the same
+shape here. Any change to the file and it is read again in full. The
+weekly fitters, which read every row, work as before. Nothing to run.
+
 **MC. A board is written with the fast encoder** (step 453; 8 November).
 The NFL build's write stage took 14 to 17 seconds on Sunday morning for
 what is mostly writing files. Three things in the one place every board

@@ -190,9 +190,12 @@ def test_the_loader_streams_through_slim_rows_not_fetch_csv():
     import inspect
     from engine.sources import depthcharts as D
     src = inspect.getsource(D.load_depth_charts)
-    # the fetch only refreshes the cache; the rows stream off the file
+    # the fetch only refreshes the cache; the rows stream off the file —
+    # through `_slim_kept`, which parses a given file once (2026-11-08)
     assert "fetch_text(url, local.name)" in src and "fetch_csv(" not in src
-    assert "_slim(lambda: open(local" in src
+    assert "_slim_kept(local, keep_days)" in src
+    kept = inspect.getsource(D._slim_kept)
+    assert "_slim(lambda: open(local" in kept and "fetch_csv(" not in kept
     assert D.KEEP_DAYS >= 14
     for key in ("dt", "week", "team", "club_code", "player_name", "full_name",
                 "player_display_name", "depth_position", "position", "pos_abb",

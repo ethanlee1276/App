@@ -844,7 +844,9 @@ KEEP_CACHE_PREFIXES = {
     "player_stats_": "nflverse per-season bulk, same",
     "stats_team_week_": "nflverse per-season team totals (volumecheck.py), small and bounded",
     "snap_counts_": "nflverse per-season bulk, same",
-    "depth_charts_": "nflverse per-season bulk, same",
+    "depth_charts_": ("nflverse per-season bulk, same — and beside it the build's slimmed "
+                      "copy of it (.slim21.json, a tenth of its size), one a season "
+                      "(engine/sources/depthcharts._slim_kept)"),
     "roster_": "nflverse per-season bulk, same",
     "cfb_rosters_": ("cfbfastR per-season roster, one file a season; the settler "
                      "reads it OFFLINE for a first-appearance player's school "
