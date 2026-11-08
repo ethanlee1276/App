@@ -212,6 +212,40 @@ def test_a_pick_the_board_held_is_not_on_the_list_to_be_staked():
     assert result["likely_board"]["tightened_off_list"] == 1
 
 
+def test_a_scan_card_never_names_a_pick_the_board_held_back():
+    """8 November: the NFL board's own check (engine/boardtruth) found two,
+    then three, players' scan cards naming a Most Likely pick the list did
+    not carry. The cards are stamped from the list as first built
+    (gamescan.stamp_picks); `harmonize` then takes the tightened board's
+    held picks off it. A card whose pick came off now says no pick, with
+    that number as its best and the board's reason; the others keep theirs,
+    and a posted pick stays on the list and on its card."""
+    from engine import boardtruth
+    keep, cut = _prop("A Sixty", 0.63), _prop("B Fifty-seven", 0.57)
+    posted = _prop("E Posted", 0.56, locked=True)
+    result = _result([keep, cut, posted])
+    card = lambda r: {"side": r["side"], "line": r["line"], "market": r["market"],   # noqa: E731
+                      "odds": r["odds"], "model_prob": r["model_prob"]}
+    result["scan_reads"] = {"NYJ@DET": {"players": [
+        {"player": "A Sixty", "team": "NYJ", "read": "good", "pick": card(keep)},
+        {"player": "B Fifty-seven", "team": "NYJ", "read": "good", "pick": card(cut)},
+        {"player": "E Posted", "team": "NYJ", "read": "good", "pick": card(posted)}]}}
+    with _Env(None):
+        assert "PICK MISSING" not in (boardtruth.check(result).get("by_check") or {}), "all on the list to start"
+        result["likely_board"] = B.build(result, record={}, sport="nfl", tiers_seen={})
+        B.harmonize(result)
+    reads = {x["player"]: x for x in result["scan_reads"]["NYJ@DET"]["players"]}
+    assert [r["player"] for r in result["most_likely"]] == ["A Sixty", "E Posted"]
+    assert reads["A Sixty"]["pick"]["line"] == 45.5 and "no_pick" not in reads["A Sixty"]
+    assert "pick" in reads["E Posted"], "a posted pick stays on the list and on its card"
+    held = reads["B Fifty-seven"]
+    assert "pick" not in held and held["no_pick"]["best"]["model_prob"] == 0.57, held
+    assert held["no_pick"]["priced"] is True
+    assert held["no_pick"]["refused"].startswith("our chance is 57% — the NFL board asks 60%"), held["no_pick"]
+    assert result["likely_board"]["cards_unpicked"] == 1
+    assert "PICK MISSING" not in (boardtruth.check(result).get("by_check") or {}), boardtruth.check(result)
+
+
 def test_the_audits_ask_the_sunday_question():
     import lossaudit as LA
     assert LA.game_weekday({"game_day": "2026-10-25"}) == "Sunday"

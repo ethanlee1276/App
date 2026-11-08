@@ -1131,6 +1131,35 @@ def matchup_warning(row: dict) -> str:
     return str((row.get("check_notes") or {}).get("matchup") or "our matchup read leans the other way")
 
 
+def _cards_follow_the_list(result: dict, held: dict) -> int:
+    """THE SCAN CARDS FOLLOW THE LIST (2026-11-08). A player's read is
+    stamped with his Most Likely pick from the list as the board first built
+    it (engine/gamescan.stamp_picks), before `harmonize` takes the tightened
+    board's held picks off that list; the NFL board's own check counted two
+    and three cards a build naming a pick the list did not carry
+    (engine/boardtruth PICK MISSING). A card whose pick came off says so: no
+    pick, the held number as its best on the read's side, and the board's
+    reason, which the card already prints ("The board turned it down: …").
+    ``held``: the held rows by `key_of`. Returns how many cards changed."""
+    on_list = {key_of(r) for r in result.get("most_likely") or [] if isinstance(r, dict)}
+    n = 0
+    for game in (result.get("scan_reads") or {}).values():
+        players = game.get("players") if isinstance(game, dict) else None
+        for x in players or []:
+            pick = x.get("pick") if isinstance(x, dict) else None
+            if not isinstance(pick, dict):
+                continue
+            k = key_of(dict(pick, player=pick.get("player") or x.get("player")))
+            if k not in held or k in on_list:
+                continue
+            reason = str(held[k].get("held_note") or "")
+            if reason.lower().startswith("held back:"):
+                reason = reason[len("held back:"):].strip()
+            x["no_pick"] = {"best": x.pop("pick"), "priced": True, "refused": reason}
+            n += 1
+    return n
+
+
 def harmonize(result: dict) -> int:
     """ONE BET, ONE CHANCE (Ethan, 2026-10-06, "yes 2"). The contradiction
     check found nine bets the page showed with two chances — Bucky Irving
@@ -1149,12 +1178,14 @@ def harmonize(result: dict) -> int:
     # (`tightened_reason`) is not posted on the list either, so the list's
     # staked book cannot take what the board refused — the list journals
     # `most_likely` on its own, after this.
-    tight = {key_of(r) for r in board.get("held") or [] if isinstance(r, dict) and r.get("tight_hold")}
+    tight_rows = {key_of(r): r for r in board.get("held") or [] if isinstance(r, dict) and r.get("tight_hold")}
+    tight = set(tight_rows)
     if tight and isinstance(result.get("most_likely"), list):
         keep = [r for r in result["most_likely"]
                 if not (isinstance(r, dict) and not r.get("locked") and key_of(r) in tight)]
         board["tightened_off_list"] = len(result["most_likely"]) - len(keep)
         result["most_likely"] = keep
+        board["cards_unpicked"] = _cards_follow_the_list(result, tight_rows)
     n = 0
     for r in rows:
         w = matchup_warning(r)
