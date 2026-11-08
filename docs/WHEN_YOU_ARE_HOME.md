@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MG. The matchup scan says which of its reads take the time** (step
+457; 8 November). Once the comparisons and the player stats got faster,
+the matchup scan became the biggest steady part of the NFL pricing stage:
+11.6 seconds at 09:16 and 13.3 at 09:33. That is the step that reads
+every game's matchup (the breakout and avoid reads, the coverage room,
+the touchdown chances) before the Most Likely board. Before it reads a
+single game it loads about a dozen tables: unit ratings, the season's
+numbers, red-zone trips, depth charts and defenders, scheme, charting
+and tracking, snaps and weekly usage, the depth mix and pocket split,
+yards before and after contact, and headshots. Its one number couldn't
+say which of those was slow. Each now prints its own seconds during a
+build, and the heartbeat lists them under `boards.nfl.parts["matchup
+scan"]`, separate from the pricing stage's parts so nothing is counted
+twice. Outside a build (the Lab, the backtest) it prints nothing, and
+the reads are the same with the clock on or off. Nothing to run.
+
 **MF. Each player's recent games are looked up, not searched for**
 (step 456; 8 November). The last ten games behind every prop's chart (the
 player stats on the board) were read by asking the history file for every

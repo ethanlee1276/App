@@ -15,6 +15,10 @@ took the time. What these hold:
   * run_slate says each of its jobs in order, and the board it returns is
     the same with the clock running or not;
   * the readings say each section's seconds and their journals' and write;
+  * the matchup scan (11.6 and 13.3 of the pricing stage's seconds at 09:16
+    and 09:33) says each table it reads under its own name, so its parts
+    are never added into the pricing's, and reads the same with the clock
+    running or not;
   * a build's parts ride its board's heartbeat entry beside its stages,
     taken once, and a build killed at its limit keeps the parts it printed.
 
@@ -41,6 +45,9 @@ RUN_SLATE_PARTS = ["price props", "game bets", "correlations + exposure caps", "
                    "matchup scan", "most likely board", "touchdown scenarios", "matchup picks",
                    "census + player stats + shelves + market scan", "incentives + milestones",
                    "playoff picture", "fatigue", "comps", "parlay screen"]
+MATCHUP_SCAN_PARTS = ["unit ratings", "season numbers", "red zone", "depth + defenders", "scheme",
+                      "charting + tracking", "snaps + weekly usage", "depth mix + pocket", "contact",
+                      "headshots", "the games", "touchdown stamps"]
 
 
 class _Stopped:
@@ -149,6 +156,53 @@ def test_the_college_build_names_the_parts_of_its_first_stage():
     assert got == ["teams + re-key", "schedule", "results window", "store results",
                    "closes from the tape", "upcoming + neighbours", "this season's ratings",
                    "every season's ratings", "rating fit"], got
+
+
+def _scan_once():
+    """One matchup scan of one game, its tables stubbed as the scan's own
+    test stubs them (tests/test_the_matchup_scan_reads_every_game.py), and
+    what it printed."""
+    import types
+    from engine import gamescan as G
+    from engine.sources import nflscheme as N
+    import engine.sources.nflverse as NV
+    import engine.teamchange as TC
+    real = (G.unit_ratings, N.load_pfr_def, G.scheme_tables, NV.load_weekly_stats, NV.load_snap_counts,
+            NV.headshot_map, TC.nfl_changes)
+    G.unit_ratings = lambda *a, **k: {}
+    N.load_pfr_def = lambda season: []
+    G.scheme_tables = lambda season: {"season": 2025, "defense": {}, "receivers": {}}
+    NV.load_weekly_stats = lambda s: []
+    NV.load_snap_counts = lambda s: []
+    NV.headshot_map = lambda s: {}
+    TC.nfl_changes = lambda *a, **k: {}                 # never the schedule download
+    result = {"games": [{"home": "GB", "away": "ATL"}],
+              "recommendations": [{"player": "Christian Watson", "team": "GB", "opponent": "ATL",
+                                   "position": "WR", "market": "rec_yds", "hit_prob": 0.7, "odds": -150}]}
+    slate = types.SimpleNamespace(games=[types.SimpleNamespace(home="GB", away="ATL", injuries=[])])
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            n = G.attach_nfl(result, slate, 2026, 3, conn=object())
+    finally:
+        (G.unit_ratings, N.load_pfr_def, G.scheme_tables, NV.load_weekly_stats, NV.load_snap_counts,
+         NV.headshot_map, TC.nfl_changes) = real
+    return n, result, buf.getvalue().splitlines()
+
+
+def test_the_matchup_scan_names_each_table_it_reads_and_reads_the_same():
+    with _Stopped():
+        n_quiet, quiet, quiet_lines = _scan_once()
+        stageclock.start()
+        n_timed, timed, timed_lines = _scan_once()
+    assert n_quiet == n_timed == 1
+    assert not stageclock.parse_parts(quiet_lines), "a scan outside a build prints no part"
+    parts = stageclock.parse_parts(timed_lines)
+    assert list(parts) == ["matchup scan"], "its own stage: never added into the pricing's parts"
+    assert list(parts["matchup scan"]) == MATCHUP_SCAN_PARTS, list(parts["matchup scan"])
+    assert not stageclock.parse(timed_lines), "a part is never a stage"
+    assert _same(quiet, timed), "the clock changes no read"
+    assert [p["player"] for p in timed["scan_reads"]["ATL@GB"]["players"]] == ["Christian Watson"]
 
 
 def _script(body: str) -> str:

@@ -1999,6 +1999,13 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
     from .sources import nflscheme as N
     from .sources.nflverse import load_weekly_stats, load_snap_counts
     from .sources.depthcharts import team_charts
+    # ITS PARTS ON THE STAGE CLOCK (engine/stageclock.lap), under its own
+    # name: the scan was 11.6 and 13.3 of the NFL pricing stage's seconds on
+    # 8 November, and it reads a dozen tables before it reads a game. Silent
+    # outside a build.
+    import time as _time
+    from . import stageclock as _clock
+    _t = _time.monotonic()
     if conn is None:
         from . import db
         conn = db.connect()
@@ -2010,7 +2017,9 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
     except Exception:                                        # noqa: BLE001
         changes = {}
     ratings = unit_ratings(conn, season, before_week=week, changes=changes)
+    _t = _clock.lap("matchup scan", "unit ratings", _t)
     numbers = season_numbers(conn, season, before_week=week)
+    _t = _clock.lap("matchup scan", "season numbers", _t)
     # RED-ZONE TRIPS, offence and defence (engine/redzone), for the
     # touchdown scenarios' fifth reading.
     try:
@@ -2018,14 +2027,18 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
         rz_teams = _rz_rates(conn, season, before_week=week, changes=changes)
     except Exception:                                        # noqa: BLE001
         rz_teams = {}
+    _t = _clock.lap("matchup scan", "red zone", _t)
     charts = team_charts(depth_rows, week)["teams"] if depth_rows else {}
     now_rows = N.load_pfr_def(season)
     defenders_now = N.defenders(now_rows)
     defenders_last = N.defenders(N.load_pfr_def(season - 1))
     tackling = N.team_tackling(now_rows)
+    _t = _clock.lap("matchup scan", "depth + defenders", _t)
     sch = scheme_tables(season)
     splits = {tuple(k.split("|", 1)): v for k, v in (sch.get("receivers") or {}).items()}
+    _t = _clock.lap("matchup scan", "scheme", _t)
     charting, tracking = charting_tables(season, week), tracking_tables(season, week)
+    _t = _clock.lap("matchup scan", "charting + tracking", _t)
 
     def _safe(fn, *a):
         try:
@@ -2037,12 +2050,14 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
     usage = blend_usage(
         usage_table(_safe(load_weekly_stats, season), snaps, before_week=week),
         usage_table(_safe(load_weekly_stats, season - 1), _safe(load_snap_counts, season - 1)))
+    _t = _clock.lap("matchup scan", "snaps + weekly usage", _t)
     try:
         from .nflusage import depth_mix, pocket_split
         attach_depth(usage, depth_mix(conn, season, upto_week=week))
         attach_player_map(usage, pocket_split(conn, season, upto_week=week), "pocket")
     except Exception:                                        # noqa: BLE001
         pass
+    _t = _clock.lap("matchup scan", "depth mix + pocket", _t)
     # YARDS BEFORE AND AFTER CONTACT (2026-10-08): what each defence
     # allows, and each back's own, off PFR's free weekly rushing rows.
     contact, own_contact = contact_tables(season)
@@ -2050,8 +2065,10 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
         c = own_contact.get((team, N.name_key(u.get("name") or "")))
         if c:
             u["contact"] = c
+    _t = _clock.lap("matchup scan", "contact", _t)
     from .sources.nflverse import headshot_map
     faces = _safe(headshot_map, season) or {}
+    _t = _clock.lap("matchup scan", "headshots", _t)
     props = scan_props(result)
     by_pair = {frozenset((g.home, g.away)): g for g in getattr(slate, "games", []) or []}
     # THE MODEL'S OWN MATCHUP NUMBERS, off the slate the board was priced
@@ -2089,7 +2106,9 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
         scan["numbers"] = {t: numbers[t] for t in (home, away) if t in numbers}
         gd["scan"] = scan
         n += 1
+    _t = _clock.lap("matchup scan", "the games", _t)
     stamp_touchdowns(reads, result)
+    _clock.lap("matchup scan", "touchdown stamps", _t)
     return n
 
 
