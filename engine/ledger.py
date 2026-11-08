@@ -11078,8 +11078,27 @@ def _two_leg_backtest(conn) -> dict:
                 h.close()
     except Exception:                                         # noqa: BLE001
         games = {}
-    result = twoleg.backtest(conn, since=RECORD_EPOCH, games=games)
+    # Each day's pairing under its inputs' fingerprint, kept beside the
+    # cache, so the hourly rerun pairs only the days whose picks changed
+    # (twoleg.backtest's memo; the whole record took 55.8 s at 20:21 on
+    # 7 November). Whose journal it is, as for the result.
+    memo_path = cache.with_name("two_leg_days.json")
+    memo: dict = {}
+    try:
+        held_memo = json.loads(memo_path.read_text(encoding="utf-8"))
+        if held_memo.get("db") == dbfile and held_memo.get("v") == twoleg.BACKTEST_VERSION:
+            memo = held_memo.get("days") or {}
+    except (OSError, ValueError, AttributeError):
+        memo = {}
+    result = twoleg.backtest(conn, since=RECORD_EPOCH, games=games, memo=memo)
     result["schedule"] = bool(games)
+    try:
+        tmp = memo_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"db": dbfile, "v": twoleg.BACKTEST_VERSION, "days": memo}),
+                       encoding="utf-8")
+        tmp.replace(memo_path)
+    except OSError:
+        pass
     try:
         cache.parent.mkdir(parents=True, exist_ok=True)
         tmp = cache.with_suffix(".tmp")

@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LU. The two-leg backtest pairs again only the days whose picks changed**
+(step 438; 8 November). The export at 20:21 on Saturday 7 November took
+154.7 seconds, 55.8 of them the two-leg parlay record: once its hour was up
+its backtest paired every day of the record again, every pair of every
+day's picks priced afresh, when only that day's picks had changed. A day's
+parlays depend on that day's picks alone, so each day's pairing is now kept
+under a fingerprint of its picks (`data/cache/two_leg_days.json`, beside the
+backtest's own cache) and only a day whose picks changed is paired again;
+the totals are added up in the same order, one return at a time, so they
+are the same to the last digit (a test holds a run with the memory to a run
+without it). Nothing to run.
+
 **LT. The record export reads only what it shows** (step 438; 8 November).
 The export's own timer (LP) at 20:08 on Saturday 7 November: 52.7 seconds,
 every ten minutes on a game day. Two of its slowest pieces did work nobody

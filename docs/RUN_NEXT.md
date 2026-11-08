@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after the record export stopped re-mining the loss
+Last updated 2026-11-08, after the two-leg backtest started pairing only
+the days whose picks changed (step LU: nothing to run), after the record
+export stopped re-mining the loss
 patterns and parsing every past grade each time (step LT: nothing to run),
 after a finished game's box score already on file
 stopped being written again every pass (step LS: nothing to run), after

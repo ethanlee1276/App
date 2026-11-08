@@ -63,6 +63,7 @@ from __future__ import annotations
 import re
 
 import itertools
+import json
 
 #: The leagues the Parlays page runs for (Ethan: "NBA MLB college football
 #: and NFL").
@@ -413,9 +414,37 @@ def _grade(t: dict) -> float | None:
     return None
 
 
+def _group_print(sport: str, pool: str, legs: list, min_lift, per_kind: int) -> str:
+    """A fingerprint of one day's pairing problem: every input `choose` and
+    `candidates` read, in order (ties keep the legs' order)."""
+    import hashlib
+    blob = json.dumps([BACKTEST_VERSION, sport, pool, min_lift, per_kind, legs],
+                      sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()
+
+
+def _group_tickets(sport: str, pool: str, legs: list, min_lift, per_kind: int) -> list:
+    """One day's graded parlays as the backtest adds them up: ``[kind,
+    return, [each graded leg's single return, in order], legs graded]``."""
+    out = []
+    for t in choose(candidates(sport, legs, min_lift), pool, per_kind):
+        ret = _grade(t)
+        if ret is None:
+            continue
+        deltas, n = [], 0
+        for l in t["legs"]:
+            if l["status"] == "won":
+                deltas.append(_dec(l["odds"]) - 1.0)
+            elif l["status"] == "lost":
+                deltas.append(-1.0)
+            n += 1 if l["status"] in ("won", "lost") else 0
+        out.append([t["kind"], ret, deltas, n])
+    return out
+
+
 def backtest(conn, since: str | None = None, games: dict | None = None,
              per_kind: int = PER_KIND, until: str | None = None,
-             min_lift: float | None = None) -> dict:
+             min_lift: float | None = None, memo: dict | None = None) -> dict:
     """Every graded day of the headline record, paired the way tonight's
     board is (`candidates` → `choose`), and graded off the legs' results.
 
@@ -424,7 +453,14 @@ def backtest(conn, since: str | None = None, games: dict | None = None,
     and every other pair is two games. ``until`` (a day, exclusive) ends the
     window, for the study's halves. Returns {"rows": [{sport, pool, kind,
     parlays, won, win_rate, units, roi, singles_roi}], "per_kind", "since",
-    "until", "rule"}."""
+    "until", "rule"}.
+
+    ``memo`` (a dict, kept between runs by the caller): each day's pairing
+    under its inputs' fingerprint, so a run pairs again only the days whose
+    graded picks changed (2026-11-08: the record export's hourly rerun of
+    every day of the record took 55.8 s on the box). A day's parlays are a
+    function of its picks alone, and they are added up in the same order,
+    one return at a time, so the answer is the one a full run gives."""
     from . import ledger as L
     since = since or getattr(L, "RECORD_EPOCH", None)
     q = (f"SELECT sport, {L.day_expr()} AS day, date, category, player, team, market, side, line, odds, "
@@ -462,22 +498,32 @@ def backtest(conn, since: str | None = None, games: dict | None = None,
             leg["opponent"] = f"?{team}"             # a team with no schedule: its own game
         groups.setdefault((sp, r["day"], pool), []).append(leg)
     agg: dict = {}
+    used: dict = {}
     for (sp, _day, pool), legs in groups.items():
-        for t in choose(candidates(sp, legs, min_lift), pool, per_kind):
-            ret = _grade(t)
-            if ret is None:
-                continue
-            for key in ((sp, pool, t["kind"]), (sp, pool, "all"), ("all", pool, "all")):
+        tickets = None
+        if memo is not None:
+            mk, fp = f"{sp}|{_day}|{pool}", _group_print(sp, pool, legs, min_lift, per_kind)
+            hit = memo.get(mk)
+            if isinstance(hit, dict) and hit.get("fp") == fp:
+                tickets = hit.get("t")
+        if tickets is None:
+            tickets = _group_tickets(sp, pool, legs, min_lift, per_kind)
+        if memo is not None:
+            used[mk] = {"fp": fp, "t": tickets}
+        for kind, ret, deltas, n in tickets:
+            for key in ((sp, pool, kind), (sp, pool, "all"), ("all", pool, "all")):
                 c = agg.setdefault(key, {"parlays": 0, "won": 0, "units": 0.0, "singles": 0.0, "legs": 0})
                 c["parlays"] += 1
                 c["won"] += ret > 0
                 c["units"] += ret
-                for l in t["legs"]:
-                    if l["status"] == "won":
-                        c["singles"] += _dec(l["odds"]) - 1.0
-                    elif l["status"] == "lost":
-                        c["singles"] -= 1.0
-                    c["legs"] += 1 if l["status"] in ("won", "lost") else 0
+                for d in deltas:
+                    c["singles"] += d
+                c["legs"] += n
+    if memo is not None:
+        # Only the days this run read: a day that left the window, or a
+        # pairing under inputs gone by, is not kept.
+        memo.clear()
+        memo.update(used)
     rows = []
     for (sp, pool, kind), c in sorted(agg.items()):
         rows.append({"sport": sp, "pool": pool, "kind": kind, "parlays": c["parlays"],
