@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after grading's read of the odds snapshots
+Last updated 2026-11-08, after the box-score pull started asking for a
+game by its season, not walking every stored college season per game
+(step LW: nothing to run; one read-only check in the combined line), after
+grading's read of the odds snapshots
 started at the first row it needs, through a day index the file now keeps
 (step LV: nothing to run; one read-only check in the combined line), after
 the two-leg backtest started pairing only
@@ -232,7 +235,7 @@ Everything below that only reads, in one go (a few minutes; it writes
 nothing). Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP LL LM LR LV LQ KP 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP LL LM LR LV LW LQ KP 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (about an hour together; still
@@ -245,6 +248,11 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long
 
 **Your 7 November catch-up, and what changed for it:**
 
+- **The college box scores (step LW):** of the box-score pull's 43 seconds
+  a pass, 39 were one question per finished college game (are its official
+  stat lines in?) that walked every stored college season to answer. It
+  now asks by the game's season. LW, in the run above, prints the ingest's
+  seconds from the heartbeat.
 - **Grading's snapshot read starts where it needs to (step LV):** after the
   one-read change (LQ) the read still began 14 days before the first open
   bet's day, 83 of the grade's 90 seconds on Saturday night. A small index

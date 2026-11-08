@@ -901,6 +901,9 @@ run LV "Grading's snapshot read starts at the first row it needs: the day index"
 python3 -c "import json; d=json.load(open('/srv/qellys/web/data/heartbeat.json')); g=((d.get('chores') or {}).get('settle') or {}).get('phases', {}).get('grade_parts') or {}; print({k: g.get(k) for k in ('open', 'snapshot_from', 'snapshot_indexed', 'snapshot_index', 'snapshot_share', 'snapshot_read', 'snapshot_reads', 'snapshot_whole', 'snapshot_unsure', 'total')})"
 ls -la /srv/qellys/data/cache/line_history.days.json
 SH
+run LW "The box-score pull asks for a game by its season: the ingest's seconds" 30 <<'SH'
+python3 -c "import json; d=json.load(open('/srv/qellys/web/data/heartbeat.json')); p=((d.get('chores') or {}).get('settle') or {}).get('phases', {}); print('ingest', p.get('ingest'), '| by league', p.get('ingest_parts'), '| box scores', p.get('box_parts'))"
+SH
 run IO "A finished game is ESPN's page; the chat bar at the foot" 30 <<'SH'
 curl -s https://qellysbook.com/js/detail.js | grep -cF '${lv.state === "final" ? "" : `<div class="card pbp-parkcard">'
 curl -s https://qellysbook.com/js/hoopscast.js | grep -cF 'const viewFor = (d) => (S.view === "live"'

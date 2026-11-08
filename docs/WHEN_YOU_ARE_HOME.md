@@ -9338,6 +9338,30 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LW. The box-score pull asks for a game by its season** (step 445; 8
+November). The first pass with LS's timer on it (20:52, Saturday 7
+November) showed the college box scores at 43.4 seconds, and only 1.4 of
+them were writing or comparing rows: 39.3 were one question asked of every
+finished college game, whether its official stat lines had arrived. It
+asked by sport, day and game, and the history file's key goes sport,
+season, day, game, so each question walked every college season stored. It
+now names the game's season (a year either side for college, in case a
+January bowl is labelled by the other year; the NFL its own, as before), so
+each one is a lookup. The same fix covers the step that clears a game's
+same-night rows once the official ones land. Nothing to run. On the
+heartbeat, `box_parts` should show `has_official_rows` near zero.
+Read-only, any time:
+
+```
+python3 -c "import json; d=json.load(open('/srv/qellys/web/data/heartbeat.json')); p=((d.get('chores') or {}).get('settle') or {}).get('phases', {}); print('ingest', p.get('ingest'), '| by league', p.get('ingest_parts'), '| box scores', p.get('box_parts'))"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh LW 2>&1 | tee /tmp/lw.txt
+```
+
 **LV. Grading's snapshot read starts at the first row it needs** (step
 444; 8 November). After LQ the settle pass read the odds-snapshot file once,
 but from 14 days before the first day a recent open bet could close on, in

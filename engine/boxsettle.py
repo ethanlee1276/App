@@ -138,24 +138,51 @@ def _official_ids(league: str, g: dict) -> list:
     return [str(g["game_id"])]
 
 
+def _season_terms(league: str, g: dict) -> tuple:
+    """``(sql, args)``: the seasons a game's rows are filed under, so a
+    lookup of them is the table's primary key's (sport, season, period,
+    game_id).
+
+    EVERY SETTLE PASS WALKED EVERY STORED COLLEGE SEASON, ONCE A GAME
+    (2026-11-08). The official-rows check asked for a game by sport, day and
+    id, and no index on the history file starts (sport, period): the primary
+    key puts the season second, and every other index the market. So each
+    finished college game on an open prop's day read the sport's whole
+    stored history, 39.3 of the box-score pull's 43.4 seconds at 20:52 on
+    Saturday 7 November, every five minutes. The NFL's ids (a team and its
+    week) repeat every season, so it asks for the game's own, as it always
+    did; any other league's id is its game's alone, and a season label can
+    sit a year either side of the game's (a January bowl), so those three.
+    A game row with no season asks as before."""
+    if league == "nfl":
+        return " AND season=?", [int(g["season"])]
+    try:
+        s = int(g["season"])
+    except (KeyError, TypeError, ValueError):
+        return "", []
+    return " AND season IN (?, ?, ?)", [s - 1, s, s + 1]
+
+
 def has_official_rows(hconn, league: str, g: dict) -> bool:
     ids = _official_ids(league, g)
     marks = ",".join("?" * len(ids))
-    q = (f"SELECT 1 FROM player_game_logs WHERE sport=? AND period=? "
+    terms, targs = _season_terms(league, g)
+    q = (f"SELECT 1 FROM player_game_logs WHERE sport=?{terms} AND period=? "
          f"AND game_id IN ({marks})")
-    args: list = [league, str(g["period"]), *ids]
-    if league == "nfl":
-        q += " AND season=?"
-        args.append(int(g["season"]))
+    args: list = [league, *targs, str(g["period"]), *ids]
     return hconn.execute(q + " LIMIT 1", args).fetchone() is not None
 
 
 def purge_provisional(hconn, league: str, g: dict) -> int:
+    """Remove a game's provisional rows once its official ones are filed.
+    They were written under the game's own season (`cfb_rows`, `nfl_rows`),
+    so the same lookup as `has_official_rows` finds every one."""
     ids = [i + BOX_SUFFIX for i in _official_ids(league, g)]
     marks = ",".join("?" * len(ids))
+    terms, targs = _season_terms(league, g)
     cur = hconn.execute(
-        f"DELETE FROM player_game_logs WHERE sport=? AND period=? "
-        f"AND game_id IN ({marks})", (league, str(g["period"]), *ids))
+        f"DELETE FROM player_game_logs WHERE sport=?{terms} AND period=? "
+        f"AND game_id IN ({marks})", (league, *targs, str(g["period"]), *ids))
     return cur.rowcount or 0
 
 
