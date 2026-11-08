@@ -951,26 +951,41 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
     the next league's ingest, nor the settle that runs after all of them.
     """
     from . import ingest
+    import time as _t
+
+    # WHERE THE INGEST'S TIME GOES (2026-11-07). The settle pass's phases put
+    # it at 45.6 seconds of a game-day pass once grading was fixed, and the
+    # phase is every league's pull at once. `parts` keeps each pull's seconds
+    # (only the ones that ran); the settle pass puts them on its phases as
+    # ``ingest_parts``.
+    parts: dict = {}
+
+    def _part(name: str, t0: float) -> None:
+        parts[name] = parts.get(name, 0.0) + (_t.monotonic() - t0)
 
     res = {"games": 0}
     if _has_open(lconn, "mlb", days):
+        t0 = _t.monotonic()
         try:
             res = ingest.ingest_mlb_results(hconn, days[0], days[-1],
                                             with_logs=True)
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  MLB results ingest skipped ({exc}) — settling on "
                 "what's already ingested")
+        _part("mlb", t0)
     for league, ingest_day in (("nba", _nba_day), ("wnba", _wnba_day), ("nhl", _nhl_day)):
         if ingest_day is None:
             continue
         for d in days:
             if not _has_open(lconn, league, [d]):
                 continue
+            t0 = _t.monotonic()
             try:
                 ingest_day(hconn, d)
             except Exception:  # noqa: BLE001
                 log(f"  ⚠️  {league.upper()} results for {d} unavailable — "
                     f"those picks stay open")
+            _part(league, t0)
     # FOOTBALL, WHICH HAD NO INTRADAY RESULTS PULL AT ALL. Both leagues
     # grade a game bet off `games.home_score`, and until now the only
     # writer of one was the once-a-day nflverse schedule refresh — so an
@@ -1008,6 +1023,7 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
     # and runs hourly there (2026-09-15; it was every four hours on any
     # game day, landed or not, which is both slower than the file and
     # four 15 MB downloads a day for nothing).
+    t_owed = _t.monotonic()
     owed = [d for d in days
             if _has_open(lconn, "nfl", [d]) and _nfl_day_wanted(hconn, d)]
     if owed:
@@ -1027,9 +1043,11 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  NFL weekly stats unavailable ({exc}) — props stay "
                 f"open until the next pull")
+    _part("nfl_stats", t_owed)
     for league in ("nfl", "cfb"):
         if not _has_open(lconn, league, days):
             continue
+        t0 = _t.monotonic()
         try:
             from .sources import livescores
             fin = livescores.ingest_finals(hconn, league)
@@ -1041,6 +1059,7 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  {league.upper()} finals unavailable ({exc}) — those "
                 f"picks stay open until the daily pass")
+        _part(f"finals_{league}", t0)
     # THE BOX SCORE, the night the game ends (engine/boxsettle). After
     # the finals, because it only reads a game with a stored final, and
     # before the settle, because that is what it exists to feed. Ethan,
@@ -1050,6 +1069,7 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
     for league in ("nfl", "cfb"):
         if not _has_open(lconn, league, days):
             continue
+        t0 = _t.monotonic()
         try:
             from . import boxsettle
             bx = boxsettle.ingest_for_open(lconn, hconn, league, log=log)
@@ -1065,6 +1085,9 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  {league.upper()} box scores unavailable ({exc}) — "
                 f"those props wait for the official file")
+        _part(f"box_{league}", t0)
+    res = dict(res) if isinstance(res, dict) else {"games": 0}
+    res["parts"] = {k: round(v, 1) for k, v in parts.items() if v >= 0.05}
     return res
 
 
@@ -1486,6 +1509,8 @@ def settle_open(log=print, state_path: Path | None = None,
         lap("prep")
         res = ingest_for_open_bets(lconn, hconn, days, log)
         lap("ingest")
+        # And which league's pull took it (ingest_for_open_bets' parts).
+        phases["ingest_parts"] = (res.get("parts") if isinstance(res, dict) else None) or {}
         # Each day's stat file read once for the pass's name lookups
         # (ledger.name_index), not once per open prop.
         with ledger.name_index():

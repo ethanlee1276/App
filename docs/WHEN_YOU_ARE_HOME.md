@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LO. The settle pass's ingest says which pull took its time, and a
+finished game's box score is read half-hourly** (step 438; 7 November).
+With grading down to seconds, the 18:10 pass spent 45.6 seconds ingesting,
+and that phase is every league's pull at once. The heartbeat's
+`chores.settle.phases` gains `ingest_parts`, each pull that ran under its
+own name: `mlb`, `nba`, `wnba`, `nhl`, `nfl_stats` (the NFL's weekly file),
+`finals_nfl` and `finals_cfb` (scores off the scoreboard), `box_nfl` and
+`box_cfb` (box scores of finished games). One of those was plainly doing
+more than it had to: the box score of a finished football game was
+downloaded again on every five-minute pass for as long as a prop on it
+waited for the official file, often until morning (its cache lives four
+seconds, for the live board), and a college Saturday now has twice the
+games. A copy that says the game is over is now kept half an hour; a copy
+taken while the game was being played is never kept, and the official file
+still replaces these rows overnight. Nothing to run.
+
 **LN. The absent rule's last slow read: a teamless college prop's school**
 (step 438; 7 November). With LJ's day files live, the 18:10 pass still spent
 37.6 of its 38.7 grading seconds in the absent-player rule. A college prop

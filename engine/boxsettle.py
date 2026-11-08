@@ -341,6 +341,42 @@ def _event_id(league: str, g: dict, ids: dict) -> str:
     return eid or str(ids.get((g["away"], g["home"])) or "")
 
 
+#: A FINISHED GAME'S BOX SCORE, read again at most this often (2026-11-07).
+#: The summary's cache lives four seconds (espnplays.LIVE_TTL, for the live
+#: board), so every five-minute settle pass downloaded every finished game's
+#: summary again for as long as a prop on it waited, often until the next
+#: morning's official file: a college Saturday's finished games, every pass,
+#: all evening, and twice as many of them once every conference's games
+#: reached the board. A copy that says the game is over is kept half an
+#: hour (late stat corrections still land within it, and the official file
+#: replaces these rows anyway); a copy taken while it was being played is
+#: never kept.
+FINAL_SUMMARY_TTL_S = 1800
+
+
+def summary_final(payload) -> bool:
+    """Does an ESPN summary say its game is over?"""
+    try:
+        comp = (((payload or {}).get("header") or {}).get("competitions") or [{}])[0] or {}
+        stype = (comp.get("status") or {}).get("type") or {}
+    except (AttributeError, IndexError, TypeError):
+        return False
+    return bool(stype.get("completed")) or stype.get("state") == "post"
+
+
+def _final_summary(fetch_summary, league: str, eid: str):
+    """The game's summary, a copy that already says it is over taken for up
+    to FINAL_SUMMARY_TTL_S, else a fresh one. A fetcher that takes no
+    ``ttl`` is asked plainly."""
+    try:
+        payload = fetch_summary(league, eid, ttl=FINAL_SUMMARY_TTL_S)
+    except TypeError:
+        return fetch_summary(league, eid)
+    if summary_final(payload):
+        return payload
+    return fetch_summary(league, eid, ttl=0)
+
+
 def ingest_for_open(lconn, hconn, league: str, log=print,
                     fetch_rows=None, fetch_summary=None,
                     today: _dt.date | None = None) -> dict:
@@ -389,7 +425,7 @@ def ingest_for_open(lconn, hconn, league: str, log=print,
             res["skipped"].append(f"{league} {g['away']}@{g['home']}: no event id")
             continue
         try:
-            payload = fetch_summary(league, eid)
+            payload = _final_summary(fetch_summary, league, eid)
             rows = nfl_rows(payload, g) if league == "nfl" else cfb_rows(payload, g)
         except Exception as exc:                          # noqa: BLE001
             res["skipped"].append(f"{league} {g['away']}@{g['home']}: {exc}")
