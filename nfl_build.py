@@ -258,6 +258,24 @@ def _mem(stage: str, on: bool = True) -> None:
         pass
 
 
+# THE PARTS OF A STAGE (engine/stageclock.lap), for the stages whose one
+# number could not say what inside them took the time: the prices (25 s at
+# 09:33 on 8 November), the pipeline's stamps (12 s) and the tracker's
+# hooks (15 s). Printed only in a build; never fatal.
+def _now() -> float:
+    import time as _time
+    return _time.monotonic()
+
+
+def _lap(stage: str, part: str, since: float) -> float:
+    """Print ``part`` of ``stage``'s seconds since ``since``; returns now."""
+    try:
+        from engine import stageclock as _clock
+        return _clock.lap(stage, part, since)
+    except Exception:                                        # noqa: BLE001
+        return _now()
+
+
 def _mem_report() -> None:
     """What each stage cost, worst first, beside the running total."""
     if not _MEM:
@@ -717,6 +735,7 @@ def main() -> None:
                    "events": 0, "moneylines": 0, "error": None,
                    "quota_remaining": None, "source": None}
     if args.odds or args.cached_odds:
+        _lap_t = _now()
         try:
             books = args.books.split(",") if args.books else None
             res = oddsapi.apply_odds_to_slate(
@@ -724,6 +743,7 @@ def main() -> None:
                 only_active=args.active_odds and not args.cached_odds,
                 cache_only=args.cached_odds and not args.odds,
                 until=args.price_until)
+            _lap_t = _lap("prices + quote journal + line ledger", "odds onto the slate", _lap_t)
             real_odds = res.matched > 0 or res.events_used > 0
             first_td_quotes = getattr(res, "first_td", None) or {}
             odds_status.update(matched=res.matched, events=res.events_used,
@@ -757,6 +777,7 @@ def main() -> None:
             _bv = bookvig.Census(res.book_vig)
             odds_status["book_margins"] = _bv.summary()
             print(bookvig.report(_bv, "nfl", wanted=oddsapi.DEFAULT_BOOKS))
+            _lap_t = _lap("prices + quote journal + line ledger", "book margins", _lap_t)
             if res.scorers_matched:
                 print(f"  Anytime-TD quotes attached to {res.scorers_matched} "
                       f"player(s) — the long-shot board prices these.")
@@ -775,6 +796,7 @@ def main() -> None:
                           f"for the hold measurement.")
                 except Exception as _exc:  # noqa: BLE001
                     print(f"  ⚠️  quote journal skipped: {_exc}")
+            _lap_t = _lap("prices + quote journal + line ledger", "quote journal", _lap_t)
             if res.moneylines:
                 print(f"  Moneylines attached to {res.moneylines} game(s).")
             if res.stale_prop_events:
@@ -829,6 +851,7 @@ def main() -> None:
                 _hc.close()
             except Exception as _exc:                        # noqa: BLE001
                 print(f"  ⚠️  NFL line ledger skipped: {_exc}")
+            _lap_t = _lap("prices + quote journal + line ledger", "line ledger", _lap_t)
             # AND THE PROP PRICES FOR MEN ON AN INJURY REPORT. The same
             # argument one table over: they are already in memory, and
             # `engine.injurylag` measured on 2026-09-19 that 817 of 1,554
@@ -847,6 +870,7 @@ def main() -> None:
                 _pc.close()
             except Exception as _exc:                        # noqa: BLE001
                 print(f"  ⚠️  NFL prop tape skipped: {_exc}")
+            _lap("prices + quote journal + line ledger", "prop tape", _lap_t)
         except oddsapi.OddsAPIError as exc:
             odds_status["error"] = str(exc)
             print(f"\n⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
@@ -1268,6 +1292,7 @@ def main() -> None:
     except Exception as _exc:                                 # noqa: BLE001
         print(f"  ⚠️  one Most Likely board skipped: {_exc}")
     _mem("most likely board", args.memtrace)
+    _lap_t = _now()
     # THE GAME PLAN (engine/gameplan): each game read in a bettor's order —
     # the line and the script, who is out, the matchup, the plays that
     # fit (volume first), the plays to avoid, what changes the read, and
@@ -1281,6 +1306,7 @@ def main() -> None:
         _lbw.warn_avoids(result)
     except Exception as _wexc:                                # noqa: BLE001
         print(f"  ⚠️  plays-to-avoid warnings skipped: {_wexc}")
+    _lap_t = _lap("pipeline", "game plan + avoid warnings", _lap_t)
     # HOW CURRENT THE WEEK TABLES ARE, on every build's log (engine/freshness):
     # a table behind the last week played is data the page would present
     # as this week's. Never fatal.
@@ -1294,6 +1320,7 @@ def main() -> None:
         result["data_freshness"] = _wk
     except Exception as _fexc:                                # noqa: BLE001
         print(f"  ⚠️  freshness check skipped: {_fexc}")
+    _lap_t = _lap("pipeline", "freshness", _lap_t)
     # Say on each card what the sample rule did — the reset that was
     # applied, or the stale sample that was too thin to reset.
     if reset_report:
@@ -1316,6 +1343,7 @@ def main() -> None:
                 "reset": list(e["reset"]) if e.get("reset") else None}
             for p, e in carry_report["carried"].items()}
 
+    _lap_t = _lap("pipeline", "resets + carried", _lap_t)
     # The last ten results for every club on the card — what a GAME bet
     # charts, the way a player prop charts its game log. Same source we
     # grade our own game bets against.
@@ -1329,6 +1357,7 @@ def main() -> None:
         _tlc.close()
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  team logs skipped: {exc}")
+    _lap_t = _lap("pipeline", "team logs", _lap_t)
 
     # §9/§10 — correlation flags and the bankroll caps, in the same place
     # and the same order baseball runs them: after ranking, before counts
@@ -1359,6 +1388,7 @@ def main() -> None:
                 print(f"  {_n}")
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  exposure caps skipped: {exc}")
+    _lap_t = _lap("pipeline", "correlations + exposure caps", _lap_t)
 
     # §10 drawdown circuit-breaker: after a 10u peak-to-trough drawdown on
     # the settled journal, every stake is halved until the peak is recovered.
@@ -1381,6 +1411,7 @@ def main() -> None:
             print("  ⚠️  Drawdown rule active — all stakes halved (10u+ off peak)")
     except Exception:
         pass
+    _lap_t = _lap("pipeline", "drawdown", _lap_t)
 
     # Stamp each pick with how the market has moved relative to OUR side.
     # Movement is 15% of the quality grade: with-steam raises it, sharp
@@ -1412,6 +1443,7 @@ def main() -> None:
                 print(f"  Line series: {_ns} pick(s) carry today's tape.")
         except Exception as exc:
             print(f"⚠️  Line-movement stamps skipped: {exc}")
+    _lap_t = _lap("pipeline", "line movement stamps", _lap_t)
 
     # THE LINE, AS A PICTURE — see the same block in mlb_build.py.
     # lineledger.record has been writing a row per observed minute since it
@@ -1426,6 +1458,7 @@ def main() -> None:
             print(f"Line tape: {_n_tape} pick(s) carry their own movement.")
     except Exception as exc:                                   # noqa: BLE001
         print(f"⚠️  Line tape skipped: {exc}")
+    _lap_t = _lap("pipeline", "line tape", _lap_t)
 
     c = result["counts"]
     print(f"\nAnalyzed {c['props_analyzed']} props → {c['recommended']} recommended")
@@ -1483,8 +1516,10 @@ def main() -> None:
         print(f"  {flag} {r['grade']:>11}  conf {r['confidence']:>4}  "
               f"edge {r['edge']:+.1%}  {r['headline']}{held}")
 
+    _lap("pipeline", "the printout", _lap_t)
     _mem("pipeline", args.memtrace)
     if args.out:
+        _lap_t = _now()
         import datetime as _dt
         from pathlib import Path
         result["generated_from"] = "live-odds" if real_odds else "live"
@@ -1539,6 +1574,7 @@ def main() -> None:
         # the finished strings and prices nothing.
         from engine.knowledge import stamp as _tier_stamp
         _tier_stamp(result)
+        _lap_t = _lap("tracker + exchange fair + crowd + openers + splits", "odds clocks + calibration + tiers", _lap_t)
         # (The matchup scan runs inside `run_slate`, before the Most Likely
         # board — `_scan_first` above.)
         # The live win-probability track, same wiring mlb_build carries
@@ -1561,6 +1597,7 @@ def main() -> None:
                 print(f"  Live line: charting {_tracked} game(s)")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  live line tracking unavailable: {_exc}")
+        _lap_t = _lap("tracker + exchange fair + crowd + openers + splits", "live lines", _lap_t)
         # The drive sim rides every priced game: one pass stamps the
         # page's diagnostics panel (g["sim"] — shares and shape, never a
         # pick) and journals the same claims pre-kickoff for the
@@ -1575,6 +1612,7 @@ def main() -> None:
                       f"page panels stamped, journal appended.")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  drive-sim journal skipped: {_exc}")
+        _lap_t = _lap("tracker + exchange fair + crowd + openers + splits", "drive sim", _lap_t)
         # Team shapes — the game page's two-team radar. Percentile ranks
         # over the last RANKABLE season's finals (in August that is last
         # season, and the panel's label says so). Never fatal: a fresh DB
@@ -1613,6 +1651,7 @@ def main() -> None:
                       f"{args.season} blended with {args.season - 1}.")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  team shapes skipped: {_exc}")
+        _lap_t = _lap("tracker + exchange fair + crowd + openers + splits", "team shapes", _lap_t)
         # THE OPEN-BET TRACKER. Every board but MLB's lacked one, so this
         # league's Live tab read "No open bets on today's card" whatever the
         # journal held — and the tab's two panels (edge bets, Most Likely bets)
@@ -1621,6 +1660,7 @@ def main() -> None:
         # the JSON as `live_picks_error`, where the page can see it.
         from engine.livepicks import attach_tracker as _attach_tracker
         _tn = _attach_tracker(result, "nfl")
+        _lap_t = _lap("tracker + exchange fair + crowd + openers + splits", "open-bet tracker", _lap_t)
         # THE PICK OF THE DAY, over the likelihood board this build just
         # assembled (engine/potd). One hook, every sport, so the bar
         # cannot drift between leagues; a failure lands in the JSON.
@@ -1631,18 +1671,22 @@ def main() -> None:
         # and a pick made without them — which looks like nothing wrong.
         from engine import exchangefair as _xf
         print(_xf.attach_to_board(result, "nfl"))
+        _lap_t = _lap("tracker + exchange fair + crowd + openers + splits", "exchange fair", _lap_t)
         # EVERY VENUE'S PRICE ON EVERY GAME, and the pregame record of them
         # that `engine/crowdfit` measures (engine/crowd). Never raises.
         from engine import crowd as _crowd
         print(_crowd.attach_to_board(result, "nfl"))
+        _lap_t = _lap("tracker + exchange fair + crowd + openers + splits", "crowd", _lap_t)
         # THE OPENING LINES, kept and compared (engine/lineopen) — after the crowd
         # hook, whose money split the against-the-money note reads.
         from engine import lineopen as _lo
         print(_lo.attach_to_board(result, "nfl"))
+        _lap_t = _lap("tracker + exchange fair + crowd + openers + splits", "openers", _lap_t)
         # THE PUBLIC BETTING PERCENTAGES (engine/splits): off until the
         # SharpAPI key is set; a paid key on the board, said in the report.
         from engine import splits as _splits
         print(_splits.attach_to_board(result, "nfl"))
+        _lap("tracker + exchange fair + crowd + openers + splits", "splits", _lap_t)
         _mem("tracker + exchange fair + crowd + openers + splits", args.memtrace)
         # THE GAME REPORT (engine/gamereport; Ethan, 2026-10-19: "a full
         # layed out detailed explanation for every nfl game just like how

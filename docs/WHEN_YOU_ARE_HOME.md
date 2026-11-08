@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MH. The NFL build's last three unexplained stages say what's inside
+them** (step 458; 8 November). Three stages of the NFL build still showed
+a single number on the heartbeat: the prices (25 seconds at 09:33), the
+pipeline (12) and the tracker (15). The prices stage puts the bought odds
+onto the slate, then writes the book margins, the touchdown quote
+journal, the line ledger and the prop tape. The pipeline stamps the game
+plan, data freshness, resets, team logs, correlation caps, the drawdown
+rule, line movement and the line tape. The tracker attaches the live
+lines, the drive sim, team shapes, the open-bet tracker, the exchange's
+fair price, the crowd, the opening lines and the betting splits. Each of
+those now prints its own seconds during a build. The heartbeat lists them
+under `boards.nfl.parts`, each under the stage that holds it. This also
+fixes a test of mine that failed about one run in twelve: a Most Likely
+pick that has just gone up is stamped with the time to the second, so two
+runs a second apart looked different. The test now ignores the clock.
+Nothing to run.
+
 **MG. The matchup scan says which of its reads take the time** (step
 457; 8 November). Once the comparisons and the player stats got faster,
 the matchup scan became the biggest steady part of the NFL pricing stage:

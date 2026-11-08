@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after the matchup scan started printing the
+Last updated 2026-11-08, after the NFL build's prices, pipeline and
+tracker stages started printing the seconds of each job inside them
+(step MH: nothing to run), after the matchup scan started printing the
 seconds of each table it reads, shown on the heartbeat under its own name
 (step MG: nothing to run), after each player's last ten games started being
 looked up through the index instead of found by walking the history file

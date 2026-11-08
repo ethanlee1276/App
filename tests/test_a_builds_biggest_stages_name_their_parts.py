@@ -19,6 +19,10 @@ took the time. What these hold:
     and 09:33) says each table it reads under its own name, so its parts
     are never added into the pricing's, and reads the same with the clock
     running or not;
+  * the NFL build's three stages that had no parts — the prices (25 s at
+    09:33), the pipeline's stamps (12 s) and the tracker's hooks (15 s) —
+    name theirs, each lap under the stage that holds it, so the heartbeat
+    files every part under the right stage;
   * a build's parts ride its board's heartbeat entry beside its stages,
     taken once, and a build killed at its limit keeps the parts it printed.
 
@@ -48,6 +52,16 @@ RUN_SLATE_PARTS = ["price props", "game bets", "correlations + exposure caps", "
 MATCHUP_SCAN_PARTS = ["unit ratings", "season numbers", "red zone", "depth + defenders", "scheme",
                       "charting + tracking", "snaps + weekly usage", "depth mix + pocket", "contact",
                       "headshots", "the games", "touchdown stamps"]
+NFL_STAGE_PARTS = {
+    "prices + quote journal + line ledger": ["odds onto the slate", "book margins", "quote journal",
+                                             "line ledger", "prop tape"],
+    "pipeline": ["game plan + avoid warnings", "freshness", "resets + carried", "team logs",
+                 "correlations + exposure caps", "drawdown", "line movement stamps", "line tape",
+                 "the printout"],
+    "tracker + exchange fair + crowd + openers + splits": [
+        "odds clocks + calibration + tiers", "live lines", "drive sim", "team shapes", "open-bet tracker",
+        "exchange fair", "crowd", "openers", "splits"],
+}
 
 
 class _Stopped:
@@ -103,12 +117,22 @@ def _run_slate():
     return got, buf.getvalue().splitlines()
 
 
+#: The build's own wall clock, to the second, wherever it lands: a Most
+#: Likely pick that has just gone up is stamped `since` now
+#: (engine/likely._stamp_hold), so two runs a second apart differed on it
+#: about one time in twelve (8 November).
+WALL_CLOCK_KEYS = {"generated_at", "built_at", "since", "out_at"}
+
+
 def _same(a, b):
     def clean(d):
-        d = json.loads(json.dumps(d, sort_keys=True, default=str))
-        d.pop("generated_at", None)
+        if isinstance(d, dict):
+            return {k: clean(v) for k, v in d.items() if k not in WALL_CLOCK_KEYS}
+        if isinstance(d, list):
+            return [clean(v) for v in d]
         return d
-    return clean(a) == clean(b)
+    return clean(json.loads(json.dumps(a, sort_keys=True, default=str))) == \
+        clean(json.loads(json.dumps(b, sort_keys=True, default=str)))
 
 
 def test_run_slate_names_each_of_its_jobs_and_returns_the_same_board():
@@ -203,6 +227,44 @@ def test_the_matchup_scan_names_each_table_it_reads_and_reads_the_same():
     assert not stageclock.parse(timed_lines), "a part is never a stage"
     assert _same(quiet, timed), "the clock changes no read"
     assert [p["player"] for p in timed["scan_reads"]["ATL@GB"]["players"]] == ["Christian Watson"]
+
+
+def test_the_nfl_builds_unexplained_stages_name_their_parts_under_their_own_marks():
+    import re
+    src = (ROOT / "nfl_build.py").read_text(encoding="utf-8")
+    marks = [(m.start(), m.group(1)) for m in re.finditer(r'_mem\("([^"]+)", args\.memtrace\)', src)]
+    for stage, want in NFL_STAGE_PARTS.items():
+        at = [k for k, (_pos, name) in enumerate(marks) if name == stage]
+        assert len(at) == 1, stage
+        seg = src[marks[at[0] - 1][0]:marks[at[0]][0]]
+        laps = re.findall(r'_lap\("([^"]+)", "([^"]+)"', seg)
+        assert {st for st, _p in laps} == {stage}, ("each lap under the stage that holds it", stage, laps)
+        assert [p for _st, p in laps] == want, (stage, laps)
+    every = re.findall(r'_lap\("([^"]+)", "([^"]+)"', src)
+    assert sorted(every) == sorted((st, p) for st, ps in NFL_STAGE_PARTS.items() for p in ps), \
+        "no lap outside the three stages"
+
+
+def test_the_nfl_builds_lap_prints_only_in_a_build_and_never_raises():
+    import nfl_build
+    with _Stopped():
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            t = nfl_build._lap("pipeline", "freshness", nfl_build._now())
+        assert buf.getvalue() == "" and isinstance(t, float), "nothing outside a build"
+        stageclock.start()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            nfl_build._lap("pipeline", "freshness", nfl_build._now() - 1.25)
+            nfl_build._lap("pipeline", "freshness", nfl_build._now() - 0.5)
+        got = stageclock.parse_parts(buf.getvalue().splitlines())
+        assert list(got) == ["pipeline"] and 1.7 <= got["pipeline"]["freshness"] < 3.0, got
+        keep = stageclock.lap
+        stageclock.lap = None                               # a broken clock
+        try:
+            assert isinstance(nfl_build._lap("pipeline", "freshness", 0.0), float)
+        finally:
+            stageclock.lap = keep
 
 
 def _script(body: str) -> str:
