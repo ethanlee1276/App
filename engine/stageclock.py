@@ -26,6 +26,20 @@ def start(clock=time.monotonic) -> None:
     _STATE["t0"] = _STATE["last"] = now
 
 
+def parse(lines) -> dict:
+    """``{stage: seconds}`` from a build's output, in the order its marks
+    printed them (a stage marked twice adds up): what `mark` said, read back
+    by the loop (launch._run_build) so the heartbeat can carry where a
+    build's time went. Lines that are not marks are ignored."""
+    import re
+    out: dict = {}
+    for ln in lines or ():
+        m = re.match(r"^\s*⏱ (.+): (\d+)s \(at \d+s of \d+\)\s*$", str(ln))
+        if m:
+            out[m.group(1)] = out.get(m.group(1), 0) + int(m.group(2))
+    return out
+
+
 def mark(stage: str, out=print, clock=time.monotonic) -> float:
     """Print how long ``stage`` took and where the build stands against the
     limit; returns the stage's seconds."""

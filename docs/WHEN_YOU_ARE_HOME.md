@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LY. A board build says on the heartbeat where its time went** (step
+449; 8 November). The heartbeat at 07:00 on Sunday 8 November: the NFL
+build took 577 seconds of the loop's 600-second limit, 60% of a 15-minute
+cycle, one slow stage away from being killed (a killed build leaves the
+last board up, so on a game day the prices stop moving). The build prints
+each stage's seconds as it goes, but only into its log on the box, and a
+build killed at the limit never had its log written at all. Now the NFL
+and college builds' stage times ride on the heartbeat beside each board's
+run (`boards` → `nfl` → `stages`), and a killed build keeps its log, the
+stage the kill fell in named with the seconds it had. Nothing to run; it
+tells me which stage to make faster next.
+
 **LX. The recency dial walks two and a half times as fast, and the
 heartbeat shows where each dial stands** (steps 447 and 448; 8 November).
 The heartbeat after Sunday's night run (00:56 to 01:46): the deep refit's

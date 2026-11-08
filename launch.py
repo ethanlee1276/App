@@ -121,6 +121,7 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
         # 2026-08-31 CPU-starvation cascade.
         # And first in line for the kernel's OOM killer (engine/childproc):
         # a build that outgrows the service's cap dies, never the server.
+        _LAST_BUILD_STAGES[0] = {}
         from engine.childproc import below_server
         nicer = below_server()
         proc = subprocess.run([sys.executable, *args], cwd=str(ROOT),
@@ -129,10 +130,20 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
     except Exception as exc:  # noqa: BLE001 — never let a refresh crash the server
         print(f"  build failed: {' '.join(args[:2])} — {str(exc)[:140]}")
         _LAST_BUILD_NOTE[0] = str(exc)[:240]
+        # A BUILD KILLED AT ITS LIMIT STILL SAYS HOW FAR IT GOT (2026-11-08:
+        # the NFL build ran 577 of its 600 seconds on a Sunday morning). Its
+        # log is kept — the stage clock's last line names the stage the kill
+        # fell in, and no log was written for a killed build until now — and
+        # its stage times go to the heartbeat, the unfinished one with them.
+        partial = _timed_out_lines(exc)
+        if partial:
+            _keep_build_log(args, partial + [f"# killed at its {timeout}s limit"], -9)
+            _LAST_BUILD_STAGES[0] = _stages_of(partial, killed_at=timeout)
         return False, str(exc)
     out = (proc.stdout + proc.stderr).strip().splitlines()
     tail = out[-1] if out else ""
     _keep_build_log(args, out, proc.returncode)
+    _LAST_BUILD_STAGES[0] = _stages_of(out)
     if proc.returncode != 0:
         # THE LAST LINE ALONE IS NOT THE ERROR. This printed
         # `tail[:140]`, and for a Python traceback that is the exception
@@ -153,6 +164,35 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
     _LAST_BUILD_NOTE[0] = ("" if proc.returncode == 0
                            else _failure_note(proc.returncode, tail, out))
     return proc.returncode == 0, tail
+
+
+def _timed_out_lines(exc) -> list:
+    """What a build killed at its limit had printed, as lines (`run` hands
+    it back as bytes whatever ``text`` was asked); [] for any other error."""
+    if not isinstance(exc, subprocess.TimeoutExpired):
+        return []
+    got = []
+    for part in (exc.stdout, exc.stderr):
+        if isinstance(part, (bytes, bytearray)):
+            part = part.decode("utf-8", "replace")
+        if part:
+            got.extend(str(part).strip().splitlines())
+    return got
+
+
+def _stages_of(out, killed_at: int | None = None) -> dict:
+    """``{stage: seconds}`` the build's stage clock printed
+    (engine/stageclock.parse), for the heartbeat beside the board's run. A
+    build killed at ``killed_at`` seconds also names the time it spent in
+    the stage the kill fell in. {} for a build with no stage clock."""
+    try:
+        from engine import stageclock
+        stages = stageclock.parse(out)
+    except Exception:                                        # noqa: BLE001
+        return {}
+    if killed_at is not None:
+        stages["(killed in the next stage)"] = max(0, int(killed_at) - sum(stages.values()))
+    return stages
 
 
 def _innermost_frame(out) -> str:
@@ -2069,6 +2109,12 @@ class _ThreadNote:
 #: _note_board so the heartbeat can carry WHY a board's refresh failed.
 #: Per thread (`_ThreadNote`): a board's note is its own thread's build.
 _LAST_BUILD_NOTE = _ThreadNote()
+#: The last _run_build's stage times (`_stages_of`), per thread the same
+#: way: _note_board puts them beside the board's run on the heartbeat, so
+#: where a model build's minutes went is read without the box (the NFL
+#: build ran 577 of its 600 seconds on 8 November with nothing public to
+#: say which stage).
+_LAST_BUILD_STAGES = _ThreadNote()
 
 
 #: The slate boards a stuck build would freeze, by the name
@@ -2186,6 +2232,12 @@ def _note_board(name: str, ok) -> bool:
     # the run it described.
     if not ok and _LAST_BUILD_NOTE[0]:
         _BOARD_RUNS[name]["note"] = _LAST_BUILD_NOTE[0]
+    # Where the build's time went, by its own stage clock; taken once, so a
+    # refresh that ran no build this time cannot wear the last one's.
+    stages = _LAST_BUILD_STAGES[0]
+    if stages:
+        _BOARD_RUNS[name]["stages"] = dict(stages)
+    _LAST_BUILD_STAGES[0] = {}
     # The two boards a member reads off it, as they stand after this run
     # (a failed run leaves the last good board, so it counts that one).
     if name in BOARD_FILES:
