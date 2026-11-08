@@ -9338,6 +9338,40 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LV. Grading's snapshot read starts at the first row it needs** (step
+444; 8 November). After LQ the settle pass read the odds-snapshot file once,
+but from 14 days before the first day a recent open bet could close on, in
+case a game had been priced that early: at 20:26 on Saturday 7 November
+that was from 15 October for bets from the 29th, 30% of the file, 82.8 of
+the grade's 89.6 seconds, every pass. The file now keeps a small index
+beside it (`data/cache/line_history.days.json`): where the first row of
+each game day begins. The read starts at the first row of the days the
+open bets close on, less two days for each player's earlier quotes, which
+the copy check (the A.J. Brown fix) needs, and never earlier than the old
+start. A copy that only an older read can place has the read done again
+from the old start. Every close it serves comes out the same (a test
+compares each against the whole file; LQ's check, in the combined line,
+now checks this new start too and says where the read began).
+
+The index builds itself, 64 MB of the file a pass, so for the first hour or
+two after the deploy the read starts where it did. Nothing to run. On the
+heartbeat's `grade_parts`: `snapshot_indexed` climbs to 1.0, then
+`snapshot_share` drops well below the old 0.3 and `snapshot_read` with it;
+`snapshot_index` is the index's own seconds (well under one once built) and
+`snapshot_unsure` counts reads done again for a copy (rare is right; paste
+it if it shows on most passes). Read-only, any time:
+
+```
+python3 -c "import json; d=json.load(open('/srv/qellys/web/data/heartbeat.json')); g=((d.get('chores') or {}).get('settle') or {}).get('phases', {}).get('grade_parts') or {}; print({k: g.get(k) for k in ('open', 'snapshot_from', 'snapshot_indexed', 'snapshot_index', 'snapshot_share', 'snapshot_read', 'snapshot_reads', 'snapshot_whole', 'snapshot_unsure', 'total')})"
+ls -la /srv/qellys/data/cache/line_history.days.json
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh LV 2>&1 | tee /tmp/lv.txt
+```
+
 **LU. The two-leg backtest pairs again only the days whose picks changed**
 (step 438; 8 November). The export at 20:21 on Saturday 7 November took
 154.7 seconds, 55.8 of them the two-leg parlay record: once its hour was up

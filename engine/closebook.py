@@ -62,11 +62,13 @@ class SameBookCloses:
     #: 1 GB, and the settle pass holds this beside its own two readers' rows.
     _KEEP = ("ts", "start_ts", "book", "over_odds", "under_odds")
 
-    def __init__(self, hist, snapshots=None, days=None, since=None):
+    def __init__(self, hist, snapshots=None, days=None, since=None, start=None):
         self.hist = hist                     # the history DB connection, or None
         # An epoch: `prepare` reads the file from about then on (the settle
         # pass's recent read, `ledger._PassSnapshots`); None = all of it.
+        # ``start``, a byte offset (`linemoves.day_start`), wins over it.
         self._since = since
+        self._start = start
         # ``{(sport, market): {ISO day}}``: the purchased closes read for
         # these days only (`db._day_windows`), or each market's whole tape.
         self._days = days or {}
@@ -100,7 +102,8 @@ class SameBookCloses:
             # snapshot readers had moved to `stream_wanted` on 15 October.
             # The same lines reach the filter below, so the answer is the
             # same; the rest are judged from their text and skipped.
-            rows = linemoves.stream_wanted(pairs, since=self._since) if pairs else ()
+            rows = (linemoves.stream_wanted(pairs, since=self._since, start=self._start)
+                    if pairs else ())
         for r in rows:
             self.add(r)
         self.finish()

@@ -38,10 +38,15 @@ KNOWN = {"open", "closes", "same_book",
          # Our own snapshot file: one read a pass for the three close readers
          # (ledger._PassSnapshots), how many, how many of the whole file, and
          # the first day the recent read serves.
-         "snapshot_read", "snapshot_reads", "snapshot_whole", "snapshot_from"}
-#: Counts, a day, and parts that sit inside another part.
+         "snapshot_read", "snapshot_reads", "snapshot_whole", "snapshot_from",
+         # Its share of the file; the file's day index, its seconds and the
+         # share it covers; reads done again from the lead for a copy
+         # (linemoves.day_offsets, day_start, _Copies.unsure).
+         "snapshot_share", "snapshot_index", "snapshot_indexed", "snapshot_unsure"}
+#: Counts, a day, shares, and parts that sit inside another part.
 COUNTS = {"open", "absent_n_nfl", "absent_n_cfb", "absent_team_reads",
-          "snapshot_reads", "snapshot_whole", "snapshot_from"}
+          "snapshot_reads", "snapshot_whole", "snapshot_from",
+          "snapshot_share", "snapshot_indexed", "snapshot_unsure"}
 INSIDE = {"absent_nfl", "absent_cfb"}
 
 

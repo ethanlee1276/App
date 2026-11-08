@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after the two-leg backtest started pairing only
+Last updated 2026-11-08, after grading's read of the odds snapshots
+started at the first row it needs, through a day index the file now keeps
+(step LV: nothing to run; one read-only check in the combined line), after
+the two-leg backtest started pairing only
 the days whose picks changed (step LU: nothing to run), after the record
 export stopped re-mining the loss
 patterns and parsing every past grade each time (step LT: nothing to run),
@@ -229,7 +232,7 @@ Everything below that only reads, in one go (a few minutes; it writes
 nothing). Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP LL LM LR LQ KP 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP LL LM LR LV LQ KP 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (about an hour together; still
@@ -242,6 +245,14 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh JU KK KM 2>&1 | tee /tmp/long
 
 **Your 7 November catch-up, and what changed for it:**
 
+- **Grading's snapshot read starts where it needs to (step LV):** after the
+  one-read change (LQ) the read still began 14 days before the first open
+  bet's day, 83 of the grade's 90 seconds on Saturday night. A small index
+  beside the snapshot file now says where each game day's first row is, and
+  the read starts there (less two days for the copy check). The index
+  builds itself over the first hour or two; LV, in the run above, prints the
+  heartbeat's numbers for it, and LQ checks every close against the whole
+  file.
 - **Every college game on the board (step LM):** ESPN's college scoreboard
   hands back about 25 games whatever we ask for, so a Saturday showed 25
   (no Michigan and Michigan State), and the playoff race's standings missed

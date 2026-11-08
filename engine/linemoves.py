@@ -400,6 +400,11 @@ class _Copies:
         self._waiting: list = []
         self._watch: set = set()
         self._after: dict = {}
+        #: Whether a copy was judged while one of its names had no read of
+        #: his own yet in what was read: a read that starts partway through
+        #: the file (`day_start`) cannot then tell it would place it as the
+        #: whole file does, and is done again from further back.
+        self.unsure = False
 
     def add(self, name: str, r: dict) -> None:
         try:
@@ -429,6 +434,8 @@ class _Copies:
                     continue
                 names = sorted(names)
                 before = {n: self._last.get((n, market)) for n in names}
+                if any(v is None for v in before.values()):
+                    self.unsure = True
                 read = _read_of(qs)
                 owner, losers = _place(read, {n: [q] for n, q in before.items()})
                 if owner is None:
@@ -596,6 +603,18 @@ def _seek_since(fh, target: float) -> None:
         fh.readline()
 
 
+def since_offset(ts: float, path: str | Path | None = None):
+    """The byte `stream_since` (and `stream_wanted`'s ``since``) starts a
+    read from ``ts`` at; None with no file."""
+    path = Path(path) if path else HISTORY_PATH
+    try:
+        with path.open("rb") as fh:
+            _seek_since(fh, float(ts) - SINCE_MARGIN_S)
+            return fh.tell()
+    except OSError:
+        return None
+
+
 def stream_since(ts: float, path: str | Path | None = None):
     """The snapshots from about ``ts`` on, without parsing the file's past.
 
@@ -632,8 +651,200 @@ def stream_today(path: str | Path | None = None, now: float | None = None):
     return stream_since(midnight, path)
 
 
+# THE FILE'S DAY INDEX (2026-11-08). The settle pass read the snapshot file
+# from SNAPSHOT_LEAD_DAYS before the first day it serves (`ledger.
+# _PassSnapshots`), in case a game's snapshot had been taken that long
+# before it. On Saturday 7 November that meant reading from 15 October for
+# bets from the 29th: 30% of the file, and 83 of the grade's 90 seconds,
+# every pass. The index says where the first row filed under each slate day
+# (`_slate_day`) begins, so the read starts at the first row of the days it
+# serves (and never before the lead did). It is read off the file itself, a
+# line at a time, and picks up where it stopped, since the file only grows.
+# It can always be built again, and nothing but that read uses it.
+DAY_INDEX_VERSION = 1
+#: The bytes of the file the index reads in one call at most, so its first
+#: build is spread over a few settle passes instead of holding one up.
+DAY_INDEX_BUDGET = 64 * 1024 * 1024
+#: How much of the file before a day's first row the read takes as well:
+#: each player's earlier quotes of his own, by which `_Copies` places a
+#: copied set (a copy those cannot place has the read done the old way).
+DAY_INDEX_LEAD_S = 2 * 86400.0
+_FP_BYTES = 4096
+_START_TAG, _TS_TAG = b'"start_ts": ', b'"ts": '
+
+
+def day_index_path(path: str | Path | None = None) -> Path:
+    """Where the day index of the snapshot file at ``path`` is kept."""
+    path = Path(path) if path else HISTORY_PATH
+    return path.with_name(path.stem + ".days.json")
+
+
+def _fingerprint(fh, lo: int, hi: int) -> str:
+    import hashlib
+    lo = max(0, lo)
+    fh.seek(lo)
+    return hashlib.sha1(fh.read(max(0, hi - lo))).hexdigest()
+
+
+def _epoch_day_exact(t: float, stamped: bool) -> str:
+    import datetime as _dt
+    if stamped:
+        from zoneinfo import ZoneInfo
+        return _dt.datetime.fromtimestamp(float(t), ZoneInfo(SLATE_TZ)).strftime("%Y-%m-%d")
+    return _dt.datetime.fromtimestamp(float(t)).strftime("%Y-%m-%d")
+
+
+def _epoch_day(t: float, stamped: bool, memo: dict) -> str:
+    """`_slate_day`'s day for an epoch: a game start's in the slate's zone,
+    a row's own stamp's in the machine's. Every zone's day turns on a
+    quarter hour, so a quarter hour's day is worked out once; an epoch
+    within a millisecond of a quarter's edge is worked out on its own."""
+    q = int(t // 900)
+    if 0.001 < t - q * 900 < 899.999:
+        key = (stamped, q)
+        d = memo.get(key)
+        if d is None:
+            d = memo[key] = _epoch_day_exact(q * 900 + 450, stamped)
+        return d
+    return _epoch_day_exact(t, stamped)
+
+
+def _number_after(raw: bytes, tag: bytes):
+    i = raw.find(tag)
+    if i < 0:
+        return None
+    j = i + len(tag)
+    k, e = raw.find(b",", j), raw.find(b"}", j)
+    if k < 0 or 0 <= e < k:
+        k = e
+    if k < 0:
+        return None
+    try:
+        return float(raw[j:k])
+    except ValueError:
+        return None
+
+
+def _line_day(raw: bytes, memo: dict):
+    """The day `_slate_day` files this line's row under, or None for a line
+    no reader takes. A flat row in `record_snapshots`' own shape is read off
+    its text; any other line is parsed and asked."""
+    if b"\\" not in raw and raw.count(b"{") == 1:
+        n = raw.count(b'"start_ts"')
+        if n == 1:
+            st = _number_after(raw, _START_TAG)
+            if st is not None:
+                return _epoch_day(st, True, memo)
+        elif n == 0 and b"start_ts" not in raw and raw.count(b'"ts"') == 1:
+            ts = _number_after(raw, _TS_TAG)
+            if ts is not None:
+                return _epoch_day(ts, False, memo)
+    try:
+        r = json.loads(raw)
+        return _slate_day(r) if isinstance(r, dict) else None
+    except Exception:                                  # noqa: BLE001 — no reader takes it either
+        return None
+
+
+def day_offsets(path: str | Path | None = None,
+                budget: int | None = DAY_INDEX_BUDGET) -> dict | None:
+    """``{"first": {day: byte offset}, "end", "size", "done"}``: where the
+    first row filed under each slate day begins, over the file's first
+    ``end`` bytes, brought up to date from where it last stopped, by at most
+    ``budget`` bytes (None: to the end); ``done`` once it reached the end.
+    None with no file. An index that no longer matches its file (another
+    file in its place, one cut short or written over) is built again from
+    the start. A last line still being written is left for the next call."""
+    import os
+    path = Path(path) if path else HISTORY_PATH
+    ipath = day_index_path(path)
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None
+    try:
+        held = json.loads(ipath.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        held = None
+    memo: dict = {}
+    try:
+        with path.open("rb") as fh:
+            end = held.get("end") if isinstance(held, dict) else None
+            first = held.get("first") if isinstance(held, dict) else None
+            fresh = not (held.get("v") == DAY_INDEX_VERSION
+                         and isinstance(end, int) and 0 <= end <= size
+                         and isinstance(first, dict)
+                         and all(isinstance(o, int) and 0 <= o < end for o in first.values())
+                         and held.get("head") == _fingerprint(fh, 0, min(end, _FP_BYTES))
+                         and held.get("tail") == _fingerprint(fh, end - _FP_BYTES, end)
+                         ) if isinstance(held, dict) else True
+            if fresh:
+                held, end = {"v": DAY_INDEX_VERSION, "first": {}}, 0
+            first = held["first"]
+            stop = size if budget is None else min(size, end + max(0, int(budget)))
+            fh.seek(end)
+            pos = end
+            while pos < stop:
+                raw = fh.readline()
+                if not raw.endswith(b"\n"):
+                    break
+                day = _line_day(raw, memo)
+                if day is not None and day not in first:
+                    first[day] = pos
+                pos += len(raw)
+            moved = fresh or pos != end
+            if moved:
+                held["end"] = pos
+                held["head"] = _fingerprint(fh, 0, min(pos, _FP_BYTES))
+                held["tail"] = _fingerprint(fh, pos - _FP_BYTES, pos)
+    except OSError:
+        return None
+    if moved:
+        tmp = ipath.with_name(f"{ipath.name}.{os.getpid()}.tmp")
+        try:
+            tmp.write_text(json.dumps(held, sort_keys=True), encoding="utf-8")
+            os.replace(tmp, ipath)
+        except OSError:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+    out = dict(held)
+    out["size"], out["done"] = size, stop >= size
+    return out
+
+
+def day_start(days, path: str | Path | None = None,
+              budget: int | None = DAY_INDEX_BUDGET, index: dict | None = None):
+    """Where a read of every row filed under these ``days`` starts (a day as
+    a string: it and every later day): the first of their first rows, less
+    DAY_INDEX_LEAD_S of the file before it. A day with no row yet has its
+    rows after the index's end, which the read reaches anyway. None until
+    the index has reached the end of the file (`day_offsets`): the caller
+    then reads as it did."""
+    path = Path(path) if path else HISTORY_PATH
+    held = index if index is not None else day_offsets(path, budget)
+    if not held or not held.get("done"):
+        return None
+    first = held["first"]
+    if isinstance(days, str):
+        offs = [o for d, o in first.items() if d >= days]
+    else:
+        offs = [first[d] for d in set(days) if d in first]
+    o = min(offs + [held["end"]])
+    try:
+        with path.open("rb") as fh:
+            t = _ts_after(fh, o)
+            if t == float("inf"):
+                return o
+            _seek_since(fh, t - DAY_INDEX_LEAD_S)
+            return min(fh.tell(), o)
+    except OSError:
+        return None
+
+
 def stream_wanted(want, path: str | Path | None = None, siblings: bool = False,
-                  since: float | None = None):
+                  since: float | None = None, start: int | None = None):
     """The snapshots of these ``{(normalized player, market)}`` only, one
     at a time, parsing a line only when its text says it may be wanted.
 
@@ -656,7 +867,8 @@ def stream_wanted(want, path: str | Path | None = None, siblings: bool = False,
 
     ``since`` (an epoch) starts the read where `stream_since` would, so the
     lines stamped before it, less SINCE_MARGIN_S, are never read at all
-    (the settle pass, `ledger._PassSnapshots`, 2026-11-08)."""
+    (the settle pass, `ledger._PassSnapshots`, 2026-11-08). ``start`` (a
+    byte offset at a line's start, `day_start`) starts it there instead."""
     import io
     from .sources.oddsapi import normalize_name
     path = Path(path) if path else HISTORY_PATH
@@ -671,7 +883,9 @@ def stream_wanted(want, path: str | Path | None = None, siblings: bool = False,
     # not found, or one holding an escape, is not judged from the text.
     mtag, ptag, slash = '"market": "', '"player": "', "\\"
     with path.open("rb") as bfh:
-        if since is not None:
+        if start is not None:
+            bfh.seek(int(start))
+        elif since is not None:
             _seek_since(bfh, float(since) - SINCE_MARGIN_S)
         fh = io.TextIOWrapper(bfh, encoding="utf-8")
         for raw in fh:
@@ -756,6 +970,7 @@ def _line_index(grouped: dict, copies) -> dict:
     out = _CloseIndex()
     # ANOTHER PLAYER'S QUOTES ARE NOBODY'S CLOSE (2026-11-06, `_Copies`).
     out.twins = twins = copies.found()
+    out.unsure = copies.unsure
 
     def _legs(key, items, drop):
         # A price quoted after first pitch is not a closing line — see
@@ -931,6 +1146,7 @@ def _odds_index(grouped: dict, copies) -> dict:
     out = _CloseIndex()
     # Another player's quotes are nobody's close (`_Copies`, 2026-11-06).
     out.twins = twins = copies.found()
+    out.unsure = copies.unsure
     for key, items in grouped.items():
         # Per game, as `closing_lines_by_date`: the plain key is the first
         # game's close, and a doubleheader adds ``key + (leg,)``.

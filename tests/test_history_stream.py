@@ -261,12 +261,14 @@ def test_the_settle_path_streams_even_though_it_keeps_everything():
     # is seen whole and left out (linemoves._Copies).
     # And since 2026-11-08 from a start time when the settle pass gives one
     # (``since``, `_PassSnapshots`): the whole file when it does not.
-    lines = "closing_lines_by_date(_wanted_rows(_snapshot_stream(want, siblings=True, since=since),"
-    odds = "closing_odds_by_date(_wanted_rows(_snapshot_stream(want, siblings=True, since=since),"
+    # And later that day from a byte the file's day index names (``start``,
+    # `linemoves.day_start`), when the pass has one.
+    lines = "closing_lines_by_date(_wanted_rows(_snapshot_stream(want, siblings=True, since=since,"
+    odds = "closing_odds_by_date(_wanted_rows(_snapshot_stream(want, siblings=True, since=since,"
     assert src.count(lines) == 1, "the line reader no longer streams the bets' rows and their kin"
     assert src.count(odds) == 1, "the price reader no longer streams the bets' rows and their kin"
-    assert ("return stream_history() if want is None else "
-            "stream_wanted(want, siblings=siblings, since=since)") in src
+    assert ("return (stream_history() if want is None\n"
+            "            else stream_wanted(want, siblings=siblings, since=since, start=start))") in src
     assert "closing_lines_by_date(load_history())" not in src
     # And the reason the streaming saving alone was small is recorded where
     # the change is, so nobody re-measures it from scratch to find out.
@@ -313,7 +315,7 @@ def test_settling_reads_the_snapshots_of_its_own_bets_only():
     k = src.index("class _PassSnapshots:")
     reader = src[k:src.index("\nclass ", k + 10) if "\nclass " in src[k + 10:] else len(src)]
     reader = reader[:reader.index("\ndef ")] if "\ndef " in reader else reader
-    assert ("_wanted_rows(_snapshot_stream(self.want, siblings=True, since=since),\n"
+    assert ("_wanted_rows(_snapshot_stream(self.want, siblings=True, since=since, start=start),\n"
             "                              self.want, siblings=True)") in reader
     assert "_snapshot_closes(self.want)" in reader and "_snapshot_close_odds(want=self.want)" in reader
     j = src.index("def repair_closing_lines(")
