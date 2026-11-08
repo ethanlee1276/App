@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after the playoff races (NFL, college, NBA Cup)
+Last updated 2026-11-08, after the first-touchdown board started reading
+every team's history in one pass instead of one walk of the table per
+team (step MA: nothing to run), after the playoff races (NFL, college, NBA Cup)
 started being played out again only when a score, a game left, a rating or
 the day has moved (step LZ: nothing to run), after each board build started putting its stage
 times on the heartbeat, and a build killed at its limit started keeping

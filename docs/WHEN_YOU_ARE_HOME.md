@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MA. The first-touchdown board reads every team's history in one pass**
+(step 451; 8 November). The NFL build's finer stage times, first seen at
+08:25 on Sunday (221 seconds in all): 60 pricing the slate, 33 for the
+inventions' readings, 28 for the first-touchdown board, 19 for the prices
+and the quote journal, 16 for the tracker and the pieces beside it, 14 to
+write the board, and 9 for the playoff race played out in full (step LZ:
+the build after keeps it). The first-touchdown board asked the history
+file for each team's carries, targets, catches and touchdowns one team at
+a time, twice a game, and no index on that table starts with the team, so
+each ask walked those five stats across every stored season: 28 walks on
+an NFL Sunday, more than a hundred on a college Saturday. It now asks once
+for every team on the slate and sorts the rows out itself. Timed on a
+two-million-row table of the same shape: 28 teams in 0.64 seconds instead
+of 11.06. The numbers are the same: each team's usage from the one read
+is exactly its own read, and the board's chances match to the digit it
+shows. The sums now run in name order, so a sum's last digit no longer
+depends on which index the database happened to walk. Nothing to run.
+
 **LZ. The playoff races are played out again only when something they read
 has moved** (step 450; 8 November). The first NFL build with its stage
 times on the heartbeat (07:48, Sunday) took 232 seconds: 67 pricing the

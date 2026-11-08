@@ -181,16 +181,53 @@ def team_usage(conn, sport: str, season: int, team: str, before_period: str | No
     """{player: {"touch", "td", "games"}} for ``team`` from player_game_logs:
     this season (before ``before_period`` when given) and last season at
     LAST_SEASON weight — his rows for THIS team only, so a man who moved
-    brings no old team's volume."""
+    brings no old team's volume. One team's `teams_usage`."""
+    return teams_usage(conn, sport, season, [team], before_period).get(team, {})
+
+
+def teams_usage(conn, sport: str, season: int, teams, before_period: str | None = None) -> dict:
+    """{team: `team_usage` of that team} for every team in ``teams``, from
+    ONE read of the logs.
+
+    ONE READ, NOT ONE A TEAM (2026-11-08). No index on player_game_logs
+    leads with the team, so each team's read walked the sport's rows for
+    these five stats across every stored season, and the board asked twice
+    a game: 28 walks on an NFL Sunday made the first-touchdown board 28 of
+    the build's 221 seconds at 08:25, and a college Saturday asks for a
+    hundred teams and more. Every team's rows for the two seasons come back
+    in one walk and are grouped here; each team's arithmetic is unchanged
+    (`_usage_from`)."""
+    want = sorted({t for t in (teams or []) if t})
+    if not want:
+        return {}
+    q = ("SELECT team, season, period, player, market, value FROM player_game_logs "
+         "WHERE sport=? AND season IN (?, ?) AND market IN (?,?,?,?,?) "
+         f"AND team IN ({','.join('?' * len(want))})")
+    args = [sport, season, season - 1, *TOUCH_MARKETS, *TD_MARKETS, REC_MARKET, *want]
+    rows: dict = {t: [] for t in want}
+    for r in conn.execute(q, args):
+        if r[0] in rows:
+            rows[r[0]].append((r[1], r[2], r[3], r[4], r[5]))
+    return {t: _usage_from(rows[t], sport, season, before_period) for t in want}
+
+
+def _usage_from(rows, sport: str, season: int, before_period: str | None = None) -> dict:
+    """One team's usage from its (season, period, player, market, value)
+    rows — team_usage's arithmetic.
+
+    IN A FIXED ORDER. The players are summed and listed in name order, not
+    in whatever order SQLite's walk handed the rows back: a catches-only
+    game's volume is a fraction (REC_MARKET), so the order of a sum could
+    move a last digit, and two men sharing a short name are matched to a
+    quote in this order (`_team_of`). The answer is the same whichever
+    index was walked and whether one team was asked for or thirty."""
     out: dict = {}
-    q = ("SELECT season, period, player, market, value FROM player_game_logs "
-         "WHERE sport=? AND team=? AND season IN (?, ?) AND market IN (?,?,?,?,?)")
-    args = [sport, team, season, season - 1, *TOUCH_MARKETS, *TD_MARKETS, REC_MARKET]
     # One game's line per player first, so a game with catches and no
     # targets can be read whole (REC_MARKET).
     lines: dict = {}
-    for r in conn.execute(q, args):
-        s, period, player, market, value = r[0], str(r[1]), r[2], r[3], r[4]
+    for s, period, player, market, value in sorted(
+            rows, key=lambda r: (str(r[2]), r[0], str(r[1]), str(r[3]), float(r[4] or 0))):
+        period = str(period)
         if s == season and before_period is not None and period >= str(before_period):
             continue
         g = lines.setdefault((player, s, period),
@@ -406,6 +443,12 @@ def board(quotes: dict, games: list, sport: str = "nfl", conn=None, date: str = 
     by_pair: dict = {}
     for q in (quotes or {}).values():
         by_pair.setdefault((q.get("home"), q.get("away")), []).append(q)
+    # Every team on the slate read at once, a season at a time (`teams_usage`).
+    need: dict = {}
+    for g in games or []:
+        if g.get("home") and g.get("away"):
+            need.setdefault(_season_of(g.get("date") or date), set()).update((g["home"], g["away"]))
+    usage = {s: teams_usage(conn, sport, s, ts) for s, ts in need.items()}
     rows, n_games, ours, ours_games = [], 0, [], 0
     for g in games or []:
         home, away = g.get("home"), g.get("away")
@@ -413,7 +456,7 @@ def board(quotes: dict, games: list, sport: str = "nfl", conn=None, date: str = 
         if not home or not away:
             continue
         season = _season_of(g.get("date") or date)
-        hu, au = team_usage(conn, sport, season, home), team_usage(conn, sport, season, away)
+        hu, au = usage[season].get(home, {}), usage[season].get(away, {})
         ranked = game_probs(hu, au, g.get("spread"), home, away, sport)
         if not qs:
             # No price on file for this game: our likeliest first scorers,
