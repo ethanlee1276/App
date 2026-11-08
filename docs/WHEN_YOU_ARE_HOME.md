@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MB. The NFL build's two biggest stages name their parts on the
+heartbeat** (step 452; 8 November). The stage times say where a build's
+minutes go, but not what inside a stage took them: the pricing stage ran
+37 seconds at 07:57 on Sunday and 112 at 08:09, and the inventions'
+readings 33 at 08:25. Now the pricing names each of its jobs (the props
+themselves, the game bets, the correlations, the long shots, the matchup
+scan, the Most Likely board, the touchdown scenarios, the matchup picks,
+the player stats, the market scan, the incentives, the playoff picture,
+fatigue, the comparisons and the parlay screen), and the readings name
+each of their twelve sections. They ride on the heartbeat beside the
+stages (`boards` → `nfl` → `parts`), and a build killed at its limit keeps
+the parts it reached. Nothing prints outside a board build (the weekly
+replay prices thousands of old slates through the same code), and the
+board comes out the same with the clock running or not. Nothing to run;
+it tells me which job to make faster next.
+
 **MA. The first-touchdown board reads every team's history in one pass**
 (step 451; 8 November). The NFL build's finer stage times, first seen at
 08:25 on Sunday (221 seconds in all): 60 pricing the slate, 33 for the

@@ -192,6 +192,14 @@ def attach(sport: str, props, games, board, out=None, quiet: bool = False) -> di
         live = Path(where).resolve() == Path(directory()).resolve()
         data = build(sport, props, games, board)
         LAST[sport] = data
+        # EACH SECTION'S SECONDS ON THE STAGE CLOCK (engine/stageclock.part):
+        # the readings took 33 of the NFL build's 221 seconds at 08:25 on 8
+        # November, and the stage's one number could not say which of them.
+        # Silent outside a build.
+        from . import stageclock as _clock
+        for name, secs in (data.get("timings") or {}).items():
+            _clock.part("ideas readings", name, secs)
+        t = time.monotonic()
         for name, sec in (list(data["sections"].items()) if live else []):
             try:
                 fn = _section_fns(name)[3]
@@ -200,6 +208,7 @@ def attach(sport: str, props, games, board, out=None, quiet: bool = False) -> di
             except Exception as exc:                        # noqa: BLE001
                 data["errors"][f"{name}.journal"] = f"{type(exc).__name__}: {exc}"[:300]
         write(sport, data, where)
+        _clock.part("ideas readings", "journals + write", time.monotonic() - t)
         if not quiet:
             errs = data.get("errors") or {}
             tm = data.get("timings") or {}

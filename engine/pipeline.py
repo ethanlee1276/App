@@ -1196,6 +1196,14 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     over on the board (`likely.READ_SEATS`). It is handed the board so
     far ({"games", "recommendations", "long_shots", "longshot_watch"}),
     may hang keys on it (they are published), and returns the leans."""
+    # ITS PARTS ON THE STAGE CLOCK (engine/stageclock.lap): the NFL build's
+    # pricing stage ran 37 seconds at 07:57 on 8 November and 112 at 08:09,
+    # and one number could not say which of the jobs below took it. Silent
+    # outside a build (the backtest and the Lab price thousands of slates
+    # here); nothing below changes order or result for it.
+    import time as _time
+    from . import stageclock as _clock
+    _t = _time.monotonic()
     if not isinstance(slate, Slate):
         slate = load_slate(slate)
     config = config or RuleConfig()
@@ -1204,8 +1212,10 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
                           nfl_usage=nfl_usage, team_context=team_context,
                           team_notes=team_notes, sport="nfl",
                           ripples=ripples)
+    _t = _clock.lap("run_slate", "price props", _t)
 
     game_bets = _game_bets(slate.games, config)
+    _t = _clock.lap("run_slate", "game bets", _t)
 
     # §9/§10 — correlation flags, incoherent-pair rejection, exposure caps.
     # Runs AFTER ranking and BEFORE counts, so a rejected pick never counts
@@ -1214,11 +1224,13 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     from .correlation import flag_correlations, apply_exposure_caps
     corr = flag_correlations(results)
     corr["cap_notes"] = apply_exposure_caps(results, game_bets)
+    _t = _clock.lap("run_slate", "correlations + exposure caps", _t)
 
     recommended = [r for r in results if r["recommended"]]
     td_census: dict = {}
     from .touchdowns import TD_WATCH_LIMIT as _TD_WATCH_LIMIT
     ls, ls_watch = _long_shots(slate, nfl_usage, td_census)
+    _t = _clock.lap("run_slate", "long shots + touchdown menu", _t)
     # Built once and read twice — the board itself and the shelves it is
     # laid out on. Calling the builder again for the shelves would let
     # the two disagree about the same slate, which is the failure
@@ -1241,6 +1253,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
             _leans = before_likely(_partial) or {}
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  before the Most Likely board: {_exc}")
+    _t = _clock.lap("run_slate", "matchup scan", _t)
     _lean_report: dict = {}
     _past_cap: list = []
     _likely = _likely_board(results, ls, ls_watch, census=_likely_census,
@@ -1251,6 +1264,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     if _partial.get("scan_reads"):
         from .gamescan import stamp_picks
         stamp_picks(_partial["scan_reads"], _lean_report, board=_likely)
+    _t = _clock.lap("run_slate", "most likely board", _t)
     # TOUCHDOWN SCENARIOS (engine/tdscenarios): a scorer built from the
     # matchup, the usage and the red zone, ranked by our chance — the
     # shelf under the touchdown shelf, journaled on paper by nfl_build.
@@ -1261,6 +1275,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     except Exception as _exc:                                 # noqa: BLE001
         print(f"  ⚠️  touchdown scenarios skipped: {_exc}")
         _scenarios = []
+    _t = _clock.lap("run_slate", "touchdown scenarios", _t)
     # MATCHUP PICKS (engine/matchpicks): every game broken down offence
     # against defence into its touchdowns and its yards-and-catches bets —
     # quarterbacks included, no edge bar, no slate cap — journaled on paper
@@ -1271,6 +1286,19 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     except Exception as _exc:                                 # noqa: BLE001
         print(f"  ⚠️  matchup picks skipped: {_exc}")
         _matchups = []
+    _t = _clock.lap("run_slate", "matchup picks", _t)
+    # The board's own reads, in the order the payload below always ran them
+    # (each was a call inside it), so each can say its seconds.
+    _gate_census = _census(results, sport="nfl")
+    _bar_status = _bar_notes("nfl", results)
+    _t = _clock.lap("run_slate", "census", _t)
+    _player_stats = statlogs.for_board(results, "nfl")
+    _t = _clock.lap("run_slate", "player stats", _t)
+    _guide = _boards.guide()
+    _shelves = _boards.shelves("nfl", _likely)
+    _t = _clock.lap("run_slate", "guide + shelves", _t)
+    _scan = _market_scan(results, ls, extra=td_scan_rows(slate))
+    _t = _clock.lap("run_slate", "market scan", _t)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -1283,7 +1311,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # to the Long Shots board and never reach this loop, so nothing
         # is excluded here — every row counted is a row this board tried
         # to recommend.
-        "gate_census": _census(results, sport="nfl"),
+        "gate_census": _gate_census,
         # …AND WHETHER THE BAR THE FUNNEL BLAMES CAN BE CLEARED AT ALL.
         # "edge under the minimum" reads as "the model looked and liked
         # nothing", which is one of two very different facts: the
@@ -1291,7 +1319,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # a large enough haircut makes the bar unreachable and a shut
         # market renders exactly like a quiet night. Empty on every
         # normal board; see engine/census.bar_notes.
-        "bar_status": _bar_notes("nfl", results),
+        "bar_status": _bar_status,
         "config": {
             "min_confidence": config.min_confidence,
             "min_edge": config.min_edge,
@@ -1301,7 +1329,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # Every ingested market for tonight's players, not just the one
         # each prop priced — the Players page's market chips
         # (engine/statlogs.py; empty on machines without the history DB).
-        "player_stats": statlogs.for_board(results, "nfl"),
+        "player_stats": _player_stats,
         "game_bets": game_bets,
         "long_shots": ls,
         # The page's five most-likely scorers, off the top of the ranked
@@ -1336,7 +1364,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # and not." The page used to carry those claims as typed prose,
         # including two AUC figures that are really `likely.RANK_AUC` and
         # would have rotted at the next refit. See engine/boards.
-        "board_guide": _boards.guide(),
+        "board_guide": _guide,
         # HOW THE LIKELIHOOD BOARD IS LAID OUT — shelves by the kind of
         # bet someone came to place, not one flat list of every market
         # mixed together. See engine/boards.shelves for why they are NOT
@@ -1344,7 +1372,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # "nfl", matching `gate_census` above: this pipeline is the
         # football one (nfl_build, the backtest, generate.py). Baseball
         # assembles its payload in engine/mlb.
-        "board_shelves": _boards.shelves("nfl", _likely),
+        "board_shelves": _shelves,
         # WHY THE BOARD IS THE SIZE IT IS. Same reason `td_census` below
         # exists: a board that comes up short has several causes and a
         # count that only reaches stdout is one nobody has.
@@ -1365,7 +1393,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # missing game lines, or a wiring fault. cfb_build already
         # publishes its equivalent; engine/devigcheck reads both.
         "td_census": td_census,
-        "market_scan": _market_scan(results, ls, extra=td_scan_rows(slate)),
+        "market_scan": _scan,
         "correlation": corr,
     }
     # End-of-year incentive money: a hand-curated table of contract
@@ -1389,6 +1417,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         out["incentives"] = inc
     except Exception:                              # noqa: BLE001
         out["incentives"] = {"entries": [], "milestones": [], "note": ""}
+    _t = _clock.lap("run_slate", "incentives + milestones", _t)
     # The playoff picture — the incentive tracker's mirror. Clinched
     # teams rest, eliminated teams shut down, and an ANNOUNCED rest flips
     # matching props to Pass before the journal or the parlay screen can
@@ -1406,16 +1435,19 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         out["playoff_picture"] = pic
     except Exception:                              # noqa: BLE001
         out["playoff_picture"] = {"teams": {}, "active": False, "note": ""}
+    _t = _clock.lap("run_slate", "playoff picture", _t)
     # Schedule fatigue: short weeks, byes and the body clock. §7's open
     # item — the data was always in the schedule feed and nothing read
     # it. Evidence and a journaled dimension, never a price (see
     # engine/fatigue.py for why that order is deliberate).
     from . import fatigue as _fatigue
     out["fatigue"] = _fatigue.decorate(results, slate.games)
+    _t = _clock.lap("run_slate", "fatigue", _t)
     # The outside view: what similar past spots actually did, counted off
     # the ingested logs with no distribution assumed. Evidence and a
     # divergence warning only — never a price input (see engine/comps.py).
     out["comps"] = _attach_comps(results, "nfl")
+    _t = _clock.lap("run_slate", "comps", _t)
     # §14: the parlay screen runs last, over the board that just cleared the
     # singles gates — never over candidates it invented for itself.
     from .parlays import attach
@@ -1424,7 +1456,9 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     for _k, _v in _partial.items():
         if _k not in ("date", "games", "recommendations", "long_shots", "longshot_watch"):
             out.setdefault(_k, _v)
-    return attach(out, "nfl")
+    out = attach(out, "nfl")
+    _clock.lap("run_slate", "parlay screen", _t)
+    return out
 
 
 def _attach_comps(results: list[dict], sport: str) -> dict:

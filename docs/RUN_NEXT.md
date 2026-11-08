@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after the first-touchdown board started reading
+Last updated 2026-11-08, after the NFL build's pricing and readings
+stages started naming their parts on the heartbeat (step MB: nothing to
+run), after the first-touchdown board started reading
 every team's history in one pass instead of one walk of the table per
 team (step MA: nothing to run), after the playoff races (NFL, college, NBA Cup)
 started being played out again only when a score, a game left, a rating or

@@ -1,0 +1,209 @@
+"""A board build's two biggest stages name their parts on the heartbeat
+(engine/stageclock.lap, part, parse_parts; engine/pipeline.run_slate;
+engine/ideas.attach; launch._parts_of, _note_board).
+
+The NFL build's stage times on 8 November: its pricing stage (run_slate)
+ran 37 seconds at 07:57 and 112 at 08:09, and its inventions' readings 33
+at 08:25 — and a stage's one number cannot say which of the jobs inside it
+took the time. What these hold:
+
+  * a part line names a stage's part and its seconds, read back as
+    ``{stage: {part: seconds}}``, a part named twice adding up; a part is
+    never counted as a stage, so the stages still add up to the build;
+  * nothing prints unless a build started the clock in that process — the
+    backtest and the Lab price thousands of slates through run_slate;
+  * run_slate says each of its jobs in order, and the board it returns is
+    the same with the clock running or not;
+  * the readings say each section's seconds and their journals' and write;
+  * a build's parts ride its board's heartbeat entry beside its stages,
+    taken once, and a build killed at its limit keeps the parts it printed.
+
+Run directly: `python3 tests/test_a_builds_biggest_stages_name_their_parts.py`
+"""
+import contextlib
+import io
+import json
+import os
+import sys
+import tempfile
+import textwrap
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+os.environ.setdefault("QB_FEEDSTATE_DIR", tempfile.mkdtemp())
+os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
+
+import launch                                                       # noqa: E402
+from engine import stageclock                                       # noqa: E402
+
+RUN_SLATE_PARTS = ["price props", "game bets", "correlations + exposure caps", "long shots + touchdown menu",
+                   "matchup scan", "most likely board", "touchdown scenarios", "matchup picks", "census",
+                   "player stats", "guide + shelves", "market scan", "incentives + milestones",
+                   "playoff picture", "fatigue", "comps", "parlay screen"]
+
+
+class _Stopped:
+    """The stage clock as a process that never started it (the backtest)."""
+
+    def __enter__(self):
+        self.keep = dict(stageclock._STATE)
+        stageclock._STATE.update(t0=None, last=None)
+
+    def __exit__(self, *exc):
+        stageclock._STATE.clear()
+        stageclock._STATE.update(self.keep)
+
+
+def test_a_part_reads_back_and_is_never_counted_as_a_stage():
+    said = []
+    with _Stopped():
+        t = stageclock.lap("run_slate", "price props", 0.0, out=said.append, clock=lambda: 5.0)
+        stageclock.part("ideas readings", "menu", 1.2, out=said.append)
+        assert said == [] and t == 5.0, "silent before a build starts the clock, and still returns now"
+        stageclock.start(clock=lambda: 0.0)
+        t = stageclock.lap("run_slate", "price props", 0.0, out=said.append, clock=lambda: 12.34)
+        t = stageclock.lap("run_slate", "game bets", t, out=said.append, clock=lambda: 13.0)
+        stageclock.part("ideas readings", "menu", 1.24, out=said.append)
+        stageclock.part("ideas readings", "menu", 0.5, out=said.append)
+        stageclock.mark("run_slate", out=said.append, clock=lambda: 20.0)
+    assert said[:2] == ["  ⏱ run_slate › price props: 12.3s", "  ⏱ run_slate › game bets: 0.7s"], said
+    parts = stageclock.parse_parts(said + ["Analyzed 610 props", "⏱ not › a part"])
+    assert parts == {"run_slate": {"price props": 12.3, "game bets": 0.7},
+                     "ideas readings": {"menu": 1.7}}, parts
+    assert list(parts["run_slate"]) == ["price props", "game bets"], "in the order they printed"
+    assert stageclock.parse(said) == {"run_slate": 20}, "a part line is never a stage"
+    assert stageclock.parse_parts(["  ⏱ run_slate: 60s (at 120s of 600)"]) == {}, "a stage line is never a part"
+    assert stageclock.parse_parts(None) == {}
+
+
+def test_a_broken_clock_or_printer_never_raises():
+    def boom(*a):
+        raise RuntimeError("no")
+    with _Stopped():
+        stageclock.start(clock=lambda: 0.0)
+        assert stageclock.lap("s", "p", 3.0, out=boom, clock=lambda: 4.0) == 4.0
+        assert stageclock.lap("s", "p", 3.0, out=print, clock=boom) == 3.0
+        stageclock.part("s", "p", "not a number", out=boom)
+        stageclock.part("s", "p", 1.0, out=boom)
+
+
+def _run_slate():
+    from engine.pipeline import run_slate
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        got = run_slate(os.path.join(ROOT, "data", "sample_slate.json"))
+    return got, buf.getvalue().splitlines()
+
+
+def _same(a, b):
+    def clean(d):
+        d = json.loads(json.dumps(d, sort_keys=True, default=str))
+        d.pop("generated_at", None)
+        return d
+    return clean(a) == clean(b)
+
+
+def test_run_slate_names_each_of_its_jobs_and_returns_the_same_board():
+    with _Stopped():
+        quiet, quiet_lines = _run_slate()
+        stageclock.start()
+        timed, timed_lines = _run_slate()
+    assert not stageclock.parse_parts(quiet_lines), "the backtest's run prints no part"
+    parts = stageclock.parse_parts(timed_lines)
+    assert list(parts) == ["run_slate"], parts
+    assert list(parts["run_slate"]) == RUN_SLATE_PARTS, list(parts["run_slate"])
+    assert all(v >= 0 for v in parts["run_slate"].values())
+    assert _same(quiet, timed), "the clock changes no number on the board"
+
+
+def test_the_readings_say_each_sections_seconds():
+    from engine import ideas
+    said = []
+    keep = ideas.build
+    ideas.build = lambda sport, props, games, board: {
+        "sport": sport, "sections": {"menu": {}, "sim": {}}, "errors": {},
+        "timings": {"menu": 2.04, "sim": 11.5}}
+    out = str(Path(tempfile.mkdtemp()) / "web" / "data" / "nfl.json")
+    try:
+        with _Stopped():
+            stageclock.start()
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                ideas.attach("nfl", [], [], {}, out=out)
+            said = buf.getvalue().splitlines()
+    finally:
+        ideas.build = keep
+    parts = stageclock.parse_parts(said)["ideas readings"]
+    assert list(parts) == ["menu", "sim", "journals + write"], parts
+    assert parts["menu"] == 2.0 and parts["sim"] == 11.5 and parts["journals + write"] >= 0
+
+
+def _script(body: str) -> str:
+    p = Path(tempfile.mkdtemp()) / "fake_build.py"
+    p.write_text(textwrap.dedent(body), encoding="utf-8")
+    return str(p)
+
+
+class _Logs:
+    def __enter__(self):
+        self.keep = launch.BUILD_LOG_DIR
+        launch.BUILD_LOG_DIR = Path(tempfile.mkdtemp())
+        return launch.BUILD_LOG_DIR
+
+    def __exit__(self, *exc):
+        launch.BUILD_LOG_DIR = self.keep
+
+
+def test_a_builds_parts_ride_its_board_entry_beside_its_stages_once():
+    build = _script("""
+        print("  ⏱ run_slate › price props: 31.5s")
+        print("  ⏱ run_slate › most likely board: 4.0s")
+        print("  ⏱ run_slate: 37s (at 60s of 600)")
+        print("  ⏱ ideas readings › sim: 12.2s")
+        print("  ⏱ ideas readings: 33s (at 93s of 600)")
+    """)
+    with _Logs():
+        ok, _tail = launch._run_build([build], timeout=60)
+        assert ok
+        launch._note_board("zz_parts_board", ok)
+        rec = launch._BOARD_RUNS["zz_parts_board"]
+        assert rec["stages"] == {"run_slate": 37, "ideas readings": 33}, rec
+        assert rec["parts"] == {"run_slate": {"price props": 31.5, "most likely board": 4.0},
+                                "ideas readings": {"sim": 12.2}}, rec
+        launch._note_board("zz_parts_board", True)
+        assert "parts" not in launch._BOARD_RUNS["zz_parts_board"], "a refresh with no build wears none"
+    launch._BOARD_RUNS.pop("zz_parts_board", None)
+
+
+def test_a_build_killed_at_its_limit_keeps_the_parts_it_printed():
+    build = _script("""
+        import sys, time
+        print("  ⏱ run_slate › price props: 40.0s", flush=True)
+        print("  ⏱ run_slate: 41s (at 41s of 600)", flush=True)
+        time.sleep(30)
+    """)
+    with _Logs():
+        ok, _why = launch._run_build([build], timeout=2)
+        assert not ok
+        launch._note_board("zz_parts_killed", ok)
+        rec = launch._BOARD_RUNS["zz_parts_killed"]
+        assert rec["parts"] == {"run_slate": {"price props": 40.0}}, rec
+        assert "(killed in the next stage)" in rec["stages"]
+    launch._BOARD_RUNS.pop("zz_parts_killed", None)
+
+
+if __name__ == "__main__":
+    fails = 0
+    tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+    for name, fn in tests:
+        try:
+            fn()
+            print(f"  ok  {name}")
+        except Exception as exc:                                    # noqa: BLE001
+            import traceback
+            fails += 1
+            print(f"FAIL  {name}: {type(exc).__name__}: {exc}")
+            traceback.print_exc(limit=5)
+    print(f"\n{len(tests) - fails} tests passed." if not fails else f"\n{fails} failed.")
+    sys.exit(1 if fails else 0)

@@ -122,6 +122,7 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
         # And first in line for the kernel's OOM killer (engine/childproc):
         # a build that outgrows the service's cap dies, never the server.
         _LAST_BUILD_STAGES[0] = {}
+        _LAST_BUILD_PARTS[0] = {}
         from engine.childproc import below_server
         nicer = below_server()
         proc = subprocess.run([sys.executable, *args], cwd=str(ROOT),
@@ -139,11 +140,13 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
         if partial:
             _keep_build_log(args, partial + [f"# killed at its {timeout}s limit"], -9)
             _LAST_BUILD_STAGES[0] = _stages_of(partial, killed_at=timeout)
+            _LAST_BUILD_PARTS[0] = _parts_of(partial)
         return False, str(exc)
     out = (proc.stdout + proc.stderr).strip().splitlines()
     tail = out[-1] if out else ""
     _keep_build_log(args, out, proc.returncode)
     _LAST_BUILD_STAGES[0] = _stages_of(out)
+    _LAST_BUILD_PARTS[0] = _parts_of(out)
     if proc.returncode != 0:
         # THE LAST LINE ALONE IS NOT THE ERROR. This printed
         # `tail[:140]`, and for a Python traceback that is the exception
@@ -193,6 +196,18 @@ def _stages_of(out, killed_at: int | None = None) -> dict:
     if killed_at is not None:
         stages["(killed in the next stage)"] = max(0, int(killed_at) - sum(stages.values()))
     return stages
+
+
+def _parts_of(out) -> dict:
+    """``{stage: {part: seconds}}`` the build printed for the parts inside
+    its stages (engine/stageclock.parse_parts: the pricing's jobs, each of
+    the readings' sections), for the heartbeat beside the stages. {} for a
+    build that printed none."""
+    try:
+        from engine import stageclock
+        return stageclock.parse_parts(out)
+    except Exception:                                        # noqa: BLE001
+        return {}
 
 
 def _innermost_frame(out) -> str:
@@ -2115,6 +2130,10 @@ _LAST_BUILD_NOTE = _ThreadNote()
 #: build ran 577 of its 600 seconds on 8 November with nothing public to
 #: say which stage).
 _LAST_BUILD_STAGES = _ThreadNote()
+#: …and the parts inside its biggest stages (`_parts_of`): the NFL pricing
+#: stage ran 37 seconds at 07:57 on 8 November and 112 at 08:09, and its
+#: one number could not say which of its jobs took the time.
+_LAST_BUILD_PARTS = _ThreadNote()
 
 
 #: The slate boards a stuck build would freeze, by the name
@@ -2238,6 +2257,10 @@ def _note_board(name: str, ok) -> bool:
     if stages:
         _BOARD_RUNS[name]["stages"] = dict(stages)
     _LAST_BUILD_STAGES[0] = {}
+    parts = _LAST_BUILD_PARTS[0]
+    if parts:
+        _BOARD_RUNS[name]["parts"] = {k: dict(v) for k, v in parts.items()}
+    _LAST_BUILD_PARTS[0] = {}
     # The two boards a member reads off it, as they stand after this run
     # (a failed run leaves the last good board, so it counts that one).
     if name in BOARD_FILES:
