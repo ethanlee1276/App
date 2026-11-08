@@ -806,10 +806,21 @@ def publish(ratings: dict, fit, day: _dt.date, teams: dict | None = None,
         ranks = current_ranks(games, day.isoformat())
         poll = {"name": "the poll on the scoreboard", "kind": "scoreboard"}
     twelve = selected(season, day, games, ranks, poll, teams)
+    # PLAYED OUT AGAIN ONLY WHEN SOMETHING IT READS HAS MOVED (engine/
+    # racecache): a score, a game left, the poll, a rating, the day.
+    from . import racecache
+    p = Path(out_path)
+    inputs = racecache.key("cfb", SIMS, day.isoformat(), games, ratings, float(fit.home_field),
+                           float(fit.margin_sd), ranks, poll, teams, twelve,
+                           racecache.source_of(__file__))
+    held = racecache.kept(p, inputs)
+    if held:
+        return (f"playoff race: no score, poll or rating has moved since "
+                f"{str(held['generated_at'])[:16].replace('T', ' ')} — kept")
     out = build(games, ratings, float(fit.home_field), float(fit.margin_sd),
                 day.isoformat(), ranks=ranks, poll=poll, teams=teams, selection=twelve)
+    out["inputs"] = inputs
     out["generated_at"] = _dt.datetime.now().isoformat(timespec="seconds")
-    p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p, p.name)
     if out.get("bracket"):

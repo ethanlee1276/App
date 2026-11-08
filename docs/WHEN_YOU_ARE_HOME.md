@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LZ. The playoff races are played out again only when something they read
+has moved** (step 450; 8 November). The first NFL build with its stage
+times on the heartbeat (07:48, Sunday) took 232 seconds: 67 pricing the
+slate, 57 for the first-touchdown board and the inventions' readings, and
+40 between the pricing and the journal. In that last span sat the NFL
+playoff race, playing the rest of the season out 10,000 times on every
+build (3.6 seconds on a fast machine; several times that on the box beside
+the boards), though between two builds nothing it reads usually changes.
+The college race (6,000 runs) and the NBA Cup (10,000) did the same in
+their builds. Each race now keeps a fingerprint of what it was built from:
+the scores so far, the games left, the ratings, the day, and its own code.
+The next build keeps the last race when nothing moved, and the race page's
+"Built" time stays the time it was played out. A finished game, a moved
+rating or the next day plays it out again. The NFL build's stage times are
+finer too: the first-touchdown board, the board's add-ons, the game
+reports, the write, and the race each report their own seconds. Nothing to
+run.
+
 **LY. A board build says on the heartbeat where its time went** (step
 449; 8 November). The heartbeat at 07:00 on Sunday 8 November: the NFL
 build took 577 seconds of the loop's 600-second limit, 60% of a 15-minute

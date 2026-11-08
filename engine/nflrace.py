@@ -503,10 +503,21 @@ def publish(day: _dt.date, out_path: str = "web/data/nfl_race.json") -> str:
         ratings, prior_share, _n = blended_ratings(conn, "nfl", season)
     finally:
         conn.close()
+    # PLAYED OUT AGAIN ONLY WHEN SOMETHING IT READS HAS MOVED (engine/
+    # racecache): a score, a game left, a rating, the day, or this code.
+    from . import racecache
+    p = Path(out_path)
+    inputs = racecache.key("nfl", SIMS, day.isoformat(), season, played, left, ratings,
+                           prior_share, racecache.source_of(__file__))
+    held = racecache.kept(p, inputs)
+    if held:
+        return (f"NFL playoff race: no score, game left or rating has moved since "
+                f"{str(held['generated_at'])[:16].replace('T', ' ')} — kept "
+                f"({int(held.get('sims') or SIMS):,} seasons)")
     out = build(rows, ratings, day.isoformat(), season=season)
     out["prior_share"] = prior_share
+    out["inputs"] = inputs
     out["generated_at"] = _dt.datetime.now().isoformat(timespec="seconds")
-    p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p, p.name)
     top = ", ".join(f"{c} 1: {out['today'][c]['seeds'][0]['team']}" for c in CONFERENCES

@@ -1155,6 +1155,7 @@ def main() -> None:
     except Exception as _fexc:                                # noqa: BLE001
         print(f"  ⚠️  first-touchdown board skipped: {_fexc}")
         result["long_shots"] = []
+    _mem("first touchdown board", args.memtrace)
     # THE INVENTIONS (engine/ideas, Ethan 2026-10-16 "add everything now.
     # 1-13"), BEFORE THE MOST LIKELY BOARD since 2026-10-17: readings of this
     # slate written to a private file the pick and game pages ask for, and
@@ -1642,6 +1643,7 @@ def main() -> None:
         # SharpAPI key is set; a paid key on the board, said in the report.
         from engine import splits as _splits
         print(_splits.attach_to_board(result, "nfl"))
+        _mem("tracker + exchange fair + crowd + openers + splits", args.memtrace)
         # THE GAME REPORT (engine/gamereport; Ethan, 2026-10-19: "a full
         # layed out detailed explanation for every nfl game just like how
         # the report is. Obv keep out the prop picks"). Last of the game
@@ -1661,6 +1663,7 @@ def main() -> None:
             print(_pn)
         if _tn:
             print(f"Open-bet tracker: {_tn}")
+        _mem("referees + game reports + pick of the day", args.memtrace)
         from engine import gate
         from engine import ledger as _led
         # THE DAY'S CLAIM OUTRANKS TONIGHT'S BOARD. `potd.build` above
@@ -1686,6 +1689,7 @@ def main() -> None:
             print(lightboard.report(gate.board_source(args.out), _lfull))
         except Exception as _lexc:                            # noqa: BLE001
             print(f"⚠️  Light board skipped: {_lexc}")
+        _mem("write the board", args.memtrace)
         # THE PLAYOFF RACE (engine/nflrace; Ethan, 2026-11-03: "do all of
         # them"), off the futures board's ratings and the season's schedule.
         # Its own file and its own failure line: a race that cannot be run
@@ -1697,6 +1701,7 @@ def main() -> None:
             print(f"  {_race.publish(_rdt.date.today(), out_path=str(_RPath(args.out).with_name('nfl_race.json')))}")
         except Exception as _rx:                              # noqa: BLE001
             print(f"  ⚠️  NFL playoff race skipped: {type(_rx).__name__}: {_rx}")
+        _mem("playoff race", args.memtrace)
 
     # Learning engine: journal real-priced picks; settle any whose results
     # have been ingested since. Proxy lines are never journaled.

@@ -501,10 +501,21 @@ def publish(conn, day: _dt.date, out_path: str = "web/data/nba_cup.json") -> str
         return "NBA Cup: not in the Cup window, not built"
     ratings, _prior, _n = futuresdata.blended_ratings(conn, "nba", SEASON)
     games = load_window(day) + load_knockouts(day)
+    # PLAYED OUT AGAIN ONLY WHEN SOMETHING IT READS HAS MOVED (engine/
+    # racecache): a score, a game left, a rating, the day.
+    from . import racecache
+    p = Path(out_path)
+    inputs = racecache.key("nba_cup", SIMS, day.isoformat(), games, ratings,
+                           futures.HOME_EDGE["nba"], futures.MARGIN_SCALE["nba"],
+                           racecache.source_of(__file__))
+    held = racecache.kept(p, inputs)
+    if held:
+        return (f"NBA Cup: no score, game left or rating has moved since "
+                f"{str(held['generated_at'])[:16].replace('T', ' ')} — kept")
     out = build(games, ratings, day.isoformat(), futures.HOME_EDGE["nba"],
                 futures.MARGIN_SCALE["nba"])
+    out["inputs"] = inputs
     out["generated_at"] = _dt.datetime.now().isoformat(timespec="seconds")
-    p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p, p.name)
     best = sorted(out["chances"].items(), key=lambda kv: -kv[1]["cup"])[:3]
