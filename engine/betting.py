@@ -349,8 +349,6 @@ def pick_side(lines, p_over_at, hold: float | None = None,
     # the caller's `has_market` is what refuses to price it.
     real_over = [ln for ln in lines if _prices_its_line(ln, "OVER")]
     over = best_over_line(real_over or lines, hold)
-    p_over_at_over = clamp(p_over_at(over.line), 1e-6, 1.0 - 1e-6)
-    over_edge = p_over_at_over - over.fair_prob
 
     # A market quoted Over-only (home runs, most scorer props) has no under
     # to bet: never price the side that doesn't exist. A pair that fails
@@ -364,9 +362,20 @@ def pick_side(lines, p_over_at, hold: float | None = None,
     two_sided = [ln for ln in lines if ln.under_odds
                  and pair_is_sane(ln.over_odds, ln.under_odds)]
     if not two_sided or not allow_under:
-        return "OVER", over, p_over_at_over, over.fair_prob, over_edge
+        return choose_side(over, None, p_over_at)
     real_under = [ln for ln in two_sided if _prices_its_line(ln, "UNDER")]
     under = best_under_line(real_under or two_sided, hold)
+    return choose_side(over, under, p_over_at)
+
+
+def choose_side(over, under, p_over_at):
+    """`pick_side`'s last step: the shopped over and under (None: the
+    market has no under to bet) priced by ``p_over_at``, and the side with
+    the larger edge, as ``(side, best_line, win_prob, fair_prob, edge)``."""
+    p_over_at_over = clamp(p_over_at(over.line), 1e-6, 1.0 - 1e-6)
+    over_edge = p_over_at_over - over.fair_prob
+    if under is None:
+        return "OVER", over, p_over_at_over, over.fair_prob, over_edge
 
     p_over_at_under = clamp(p_over_at(under.line), 1e-6, 1.0 - 1e-6)
     under_win = 1.0 - p_over_at_under
@@ -375,6 +384,26 @@ def pick_side(lines, p_over_at, hold: float | None = None,
     if over_edge >= under_edge:
         return "OVER", over, p_over_at_over, over.fair_prob, over_edge
     return "UNDER", under, under_win, under.fair_prob, under_edge
+
+
+def shop_one(lines, hold: float | None = None, allow_under: bool = True):
+    """`pick_side`'s shop for a field of ONE quote, as ``(over, under or
+    None)`` for `choose_side`. With one quote the model cannot change what is
+    shopped — the implausible-quote filter keeps that quote or falls back to
+    the field, which is that quote — so the shop is done once, whatever the
+    model says. The fitters' walk prices every game against one proxy quote,
+    and the recency dial asks its side 21 times a game (`logwalk.walk_pairs`).
+    Raises ValueError for any other field: `pick_side` is the shop there."""
+    from .odds import market_field, pair_is_sane
+    lines = market_field(lines)
+    if len(lines) != 1:
+        raise ValueError(f"shop_one shops one quote, not {len(lines)}")
+    over = best_over_line(lines, hold)
+    two_sided = [ln for ln in lines if ln.under_odds
+                 and pair_is_sane(ln.over_odds, ln.under_odds)]
+    if not two_sided or not allow_under:
+        return over, None
+    return over, best_under_line(two_sided, hold)
 
 
 def apply_selection(hit: float, edge: float, sport: str) -> tuple[float, float]:
@@ -581,6 +610,34 @@ def sharp_anchor_for(lines, sharp_lines, line: float):
     return best
 
 
+def prop_p_over(prop: Prop, proj: Projection, line: float, sport: str = "nfl") -> float:
+    """P(stat > ``line``) under ``proj``, calibrated: the chance every prop
+    priced through `evaluate_prop` carries, and the one the fitters' walk
+    scores (`logwalk.walk_pairs`), so the two cannot price a game apart."""
+    if prop.market in (PASS_TD, PASS_INT, FG_MADE):
+        # POISSON, NOT A NORMAL TAIL. A quarterback throws between
+        # zero and about five touchdowns; a normal fitted to a count
+        # that small is visibly wrong at exactly the half-points the
+        # market hangs (0.5, 1.5, 2.5), and `prob_over_discrete` is
+        # a continuity note on the same normal rather than a
+        # different distribution. `engine/passtd.at_least` is the
+        # closed form, and it is the same shape of decision
+        # `longshots.prob_at_least_one` makes for scorers.
+        # Interceptions (engine/passint, 2026-10-05) are the same
+        # kind of count at the same kind of half-number, and so are a
+        # kicker's field goals (2026-10-10: 0 to 4 a game, hung at 1.5).
+        from .passtd import at_least
+        raw = at_least(proj.mean, line)
+    elif prop.market in (RECEPTIONS, KICK_PTS, TACKLES_AST):
+        # Whole numbers a game, hung at the half — catches, a kicker's
+        # points, a defender's tackles + assists.
+        raw = prob_over_discrete(line, proj.mean, proj.std)
+    else:
+        raw = prob_over(line, proj.mean, proj.std)
+    # Calibrate before the side is chosen — see engine/mlb/betting.py.
+    return calibrated(sport, prop.market, raw)
+
+
 def evaluate_prop(prop: Prop, proj: Projection,
                   allow_synthetic_line: bool = False,
                   game=None, sport: str = "nfl") -> Recommendation:
@@ -600,28 +657,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
     from .losspatterns import veto as lp_veto
 
     def p_over_at(line: float) -> float:
-        if prop.market in (PASS_TD, PASS_INT, FG_MADE):
-            # POISSON, NOT A NORMAL TAIL. A quarterback throws between
-            # zero and about five touchdowns; a normal fitted to a count
-            # that small is visibly wrong at exactly the half-points the
-            # market hangs (0.5, 1.5, 2.5), and `prob_over_discrete` is
-            # a continuity note on the same normal rather than a
-            # different distribution. `engine/passtd.at_least` is the
-            # closed form, and it is the same shape of decision
-            # `longshots.prob_at_least_one` makes for scorers.
-            # Interceptions (engine/passint, 2026-10-05) are the same
-            # kind of count at the same kind of half-number, and so are a
-            # kicker's field goals (2026-10-10: 0 to 4 a game, hung at 1.5).
-            from .passtd import at_least
-            raw = at_least(proj.mean, line)
-        elif prop.market in (RECEPTIONS, KICK_PTS, TACKLES_AST):
-            # Whole numbers a game, hung at the half — catches, a kicker's
-            # points, a defender's tackles + assists.
-            raw = prob_over_discrete(line, proj.mean, proj.std)
-        else:
-            raw = prob_over(line, proj.mean, proj.std)
-        # Calibrate before the side is chosen — see engine/mlb/betting.py.
-        return calibrated(sport, prop.market, raw)
+        return prop_p_over(prop, proj, line, sport)
 
     # THE MEASURED HOLD, NOT THE ASSUMPTION, when one exists for this
     # market. `one_sided_hold` answers the fitted value from

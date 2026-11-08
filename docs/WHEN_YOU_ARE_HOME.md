@@ -9338,6 +9338,35 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**LX. The recency dial walks two and a half times as fast, and the
+heartbeat shows where each dial stands** (steps 447 and 448; 8 November).
+The heartbeat after Sunday's night run (00:56 to 01:46): the deep refit's
+round of 4 November did the grade ladder, then gave the NFL's recency dial
+the run's last 8 minutes and cut it off. The NFL's player memory and
+temperatures are done this round; its dial's big markets still carry their
+25 August fit, and the round still owes college, the NBA and the NFL's
+book-line props. Two changes:
+
+* **The dial computes only the number it scores.** It scores each of its
+  21 settings on its own walk through a market's history, and each walk
+  priced every game's whole bet (the line shop, the grade, the loss-pattern
+  check, the stake) to keep one number of it: the model's raw chance on the
+  over. It now computes that chance alone, with the same pieces the pricing
+  uses, and the numbers are identical to the last digit (checked on seven
+  NFL and college markets, five settings each, the calibration on and off).
+  Timed: two and a half times as fast; the rest of the time is the
+  projection itself, which it must keep. The settings the box saved
+  part-way still count: a resumed market scores its first setting again,
+  and it matches exactly, so nothing is redone.
+* **The heartbeat says where the round stands.** The deep refit's entry on
+  the public heartbeat now carries the round: what it owes, what it has
+  done, where a run's time ran out, and for each owed sport with a dial,
+  each market fitted this round (with its date), part-way (how many of the
+  21 settings are scored) or owed. Progress only, nothing from the boards.
+
+Nothing to run. The heartbeat is public: https://qellysbook.com/data/heartbeat.json,
+under `weekly` → `deepfit` → `round`.
+
 **LW. The box-score pull asks for a game by its season** (step 445; 8
 November). The first pass with LS's timer on it (20:52, Saturday 7
 November) showed the college box scores at 43.4 seconds, and only 1.4 of

@@ -203,8 +203,46 @@ def settled_props_from_logs(entries: list[dict], market: str,
 def _settled_props(entries, market, sport, min_history, limit, form_weights,
                    player_adjust, player_record, allowed) -> list[SettledProp]:
     """`settled_props_from_logs`, inside one read of the stores."""
-    game, opp = _neutral()
     settled: list[SettledProp] = []
+    for name, prop, game_i, opp_i, line, actual in _games(entries, market, sport, min_history,
+                                                          limit, allowed):
+        mult = player_adjust(name) if player_adjust else None
+        proj = build_projection(prop, game_i, opp_i, sport=sport,
+                                form_weights=form_weights,
+                                player_mult=mult)
+        if player_record is not None:
+            player_record(name, proj.mean / (mult or 1.0), actual)
+        rec = evaluate_prop(prop, proj, allow_synthetic_line=True,
+                            game=game_i, sport=sport)
+        # THE RAW CHANCE RIDES ALONG (2026-11-05), as it does in MLB's
+        # walk and the basketball one: the board corrects the model's
+        # raw chance and shrinks toward the market after, so every fit
+        # here (temperatures, the dial, player memory, the rank fit)
+        # learns on the raw one (`backtest._raw_over`). Without it the
+        # pairs were the chance already shrunk toward this walk's -110
+        # proxy, a band of 0.28-0.68 where the board's raw chance runs
+        # 0.01-0.90; fitted on 2022-24 NFL seasons and judged on 2025
+        # as the board applies it, the shrunk fit lost to the raw fit
+        # on all four yardage and catch markets, and to no correction
+        # at all on three (docs/ALL_SPORTS_AUDIT_2026-11-05.md).
+        settled.append(SettledProp(
+            player=name, market=market, line=line, odds=rec.odds,
+            hit_prob=rec.hit_prob, projection=rec.projection,
+            actual=actual, recommended=(rec.grade != "Pass"),
+            stake_units=rec.stake_units, side=rec.side, basis="naive",
+            grade=rec.grade, raw_prob=rec.raw_prob,
+        ))
+    return settled
+
+
+def _games(entries, market, sport, min_history, limit, allowed):
+    """Each game the walk prices, as ``(player, prop, game, opponent, line,
+    actual)``: game i of a player's log projected only from games [:i],
+    hung at the trailing-average proxy line (a count market at the book's
+    one number), with the opponent rated as of that week where the market
+    reads one. The one setup both walks share — the whole bet priced
+    (`_settled_props`) and the chance alone (`walk_pairs`)."""
+    game, opp = _neutral()
     companion = COMPANION.get(market)
     defences = None
     league = None
@@ -249,33 +287,63 @@ def _settled_props(entries, market, sport, min_history, limit, form_weights,
                 lines=[SportsbookLine("proxy", line, -110, -110)],
                 aux=aux,
             )
-            mult = player_adjust(e["name"]) if player_adjust else None
+            yield e["name"], prop, game_i, opp_i, line, actual
+
+
+def walk_pairs(sport: str, entries: list[dict], market: str,
+               min_history: int | None = None, form_weights: dict | None = None,
+               limit: int = 30) -> list:
+    """``walk(sport, entries, market, min_history, form_weights=...).pairs``,
+    and only that: each settled game's raw chance on the over and whether
+    the over came in, in the same order, to the same bit.
+
+    THE DIAL WALKS TWENTY-ONE TIMES A MARKET (2026-11-08). The recency
+    dial scores every setting on its own walk, and a walk priced each game's
+    whole bet — the line shop, the grade, the loss-pattern veto, the stake —
+    to keep one number of it, the model's raw chance, which the dial's Brier
+    score reads. On the box the NFL's dial still carried its 25 August fit on
+    8 November: one big market outgrew a run, and the round's nightly hour
+    reached it with eight minutes left. Here each game is projected exactly
+    as the walk projects it (`build_projection`, the same per-game setup),
+    priced by the evaluator's own chance (`betting.prop_p_over`), and its
+    side chosen by the evaluator's own last step (`betting.choose_side`) on
+    the one proxy quote, shopped once per line rather than once per game
+    (`betting.shop_one`). The raw chance is rounded as the recommendation
+    rounds it. Everything after the side — the grade, the gates, the
+    stake — never reached the pairs, and is not computed.
+
+    The walk must be called without the hooks a fitter other than the dial
+    passes (a player multiplier, a player record): those take `walk`. MLB
+    and basketball walk their own engines and are answered by `walk` too."""
+    if sport == "mlb" or sport in HOOPS:
+        return walk(sport, entries, market, min_history=min_history,
+                    form_weights=form_weights).pairs
+    from .betting import choose_side, prop_p_over, shop_one
+    from .longshots import one_sided_hold
+    from .storecache import frozen
+    pairs: list = []
+    shops: dict = {}
+    with frozen():
+        hold = one_sided_hold(sport, market)[0]
+        for _name, prop, game_i, opp_i, line, actual in _games(
+                entries, market, sport, 4 if min_history is None else min_history, limit, None):
             proj = build_projection(prop, game_i, opp_i, sport=sport,
-                                    form_weights=form_weights,
-                                    player_mult=mult)
-            if player_record is not None:
-                player_record(e["name"], proj.mean / (mult or 1.0), actual)
-            rec = evaluate_prop(prop, proj, allow_synthetic_line=True,
-                                game=game_i, sport=sport)
-            # THE RAW CHANCE RIDES ALONG (2026-11-05), as it does in MLB's
-            # walk and the basketball one: the board corrects the model's
-            # raw chance and shrinks toward the market after, so every fit
-            # here (temperatures, the dial, player memory, the rank fit)
-            # learns on the raw one (`backtest._raw_over`). Without it the
-            # pairs were the chance already shrunk toward this walk's -110
-            # proxy, a band of 0.28-0.68 where the board's raw chance runs
-            # 0.01-0.90; fitted on 2022-24 NFL seasons and judged on 2025
-            # as the board applies it, the shrunk fit lost to the raw fit
-            # on all four yardage and catch markets, and to no correction
-            # at all on three (docs/ALL_SPORTS_AUDIT_2026-11-05.md).
-            settled.append(SettledProp(
-                player=e["name"], market=market, line=line, odds=rec.odds,
-                hit_prob=rec.hit_prob, projection=rec.projection,
-                actual=actual, recommended=(rec.grade != "Pass"),
-                stake_units=rec.stake_units, side=rec.side, basis="naive",
-                grade=rec.grade, raw_prob=rec.raw_prob,
-            ))
-    return settled
+                                    form_weights=form_weights, player_mult=None)
+            key = tuple((ln.book, ln.line, ln.over_odds, ln.under_odds) for ln in prop.lines)
+            if key not in shops:
+                shops[key] = shop_one(prop.lines, hold)
+            over, under = shops[key]
+            side, _best, hit_raw, _fair, _edge = choose_side(
+                over, under, lambda at, _p=proj, _q=prop: prop_p_over(_q, _p, at, sport))
+            # As `evaluate_prop` records it (`raw_prob`) and `backtest.evaluate`
+            # states it on the over.
+            raw = round(hit_raw, 6)
+            p = raw if side == "OVER" else 1.0 - raw
+            if actual > line:
+                pairs.append((p, 1))
+            elif actual < line:
+                pairs.append((p, 0))
+    return pairs
 
 
 def backtest_from_logs(entries: list[dict], market: str, sport: str = "nfl",

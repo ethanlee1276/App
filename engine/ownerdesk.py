@@ -1119,6 +1119,37 @@ def fit_dates(paths=None) -> dict:
     return out
 
 
+def deep_round(t: float, deep_path=None, fit_paths=None) -> dict | None:
+    """The deep refit's round as of ``t``: what it still owes, what it has
+    done, the leagues sitting it out, where a run's time ran out, and each
+    owed sport's last finished fit. None with no round on record. The desk's
+    Weekly jobs card and the public heartbeat read the same."""
+    from . import deepfit as D
+    st = _json_cached(deep_path or D.STATE_PATH)
+    if not st:
+        return None
+    start = str(st.get("round") or "")
+    pieces = st.get("pieces") or {}
+    left = [str(x) for x in (st.get("left") or [])]
+    day = _dt.datetime.fromtimestamp(t, ET).date()
+    today = day.isoformat()
+    # A league at rest (deepfit.resting_pieces) is not owed: the next run
+    # takes it out of the round, and until then it is neither "still
+    # owed" nor a late fit to alert on. The card names them instead.
+    resting = D.resting_pieces(D.PIECE_ORDER, day)
+    left = [x for x in left if x not in resting]
+    done = [k for k in D.PIECE_ORDER if k not in left and isinstance(pieces.get(k), dict)
+            and str(pieces[k].get("done") or "") >= start]
+    # A sport's last finished fit: the round file's, or the stores' own
+    # date where that is later or the round file has none (`fit_dates`).
+    stores = fit_dates(fit_paths)
+    return {"round": start or None, "left": left, "done": done, "resting": resting,
+            "part_way": D._part_way(pieces, left, start, today),
+            "last_done": {k: max(str((pieces.get(k) or {}).get("done") or "")[:10],
+                                 stores.get(k, "")) or None
+                          for k in left if k in DEEP_SPORTS}}
+
+
 def weekly(now: float | None = None, jobs: dict | None = None, deep_path=None, lab_path=None,
            attempts_path=None, fit_paths=None) -> dict:
     """``{"jobs": [...], "deep": {...} | None, "lab": {...} | None}``.
@@ -1130,32 +1161,7 @@ def weekly(now: float | None = None, jobs: dict | None = None, deep_path=None, l
     by = {str(m).rsplit(".", 1)[-1]: e for m, e in (jobs or {}).items() if isinstance(e, dict)}
     order = [j for j in WEEKLY_JOB_ORDER if j in by] + sorted(j for j in by if j not in WEEKLY_JOB_ORDER)
     out: dict = {"jobs": [{"job": j, **{k: by[j].get(k) for k in keep}} for j in order]}
-    # The deep refit's round: what it still owes, and where a run's time ran out.
-    from . import deepfit as D
-    st = _json_cached(deep_path or D.STATE_PATH)
-    if st:
-        start = str(st.get("round") or "")
-        pieces = st.get("pieces") or {}
-        left = [str(x) for x in (st.get("left") or [])]
-        day = _dt.datetime.fromtimestamp(t, ET).date()
-        today = day.isoformat()
-        # A league at rest (deepfit.resting_pieces) is not owed: the next run
-        # takes it out of the round, and until then it is neither "still
-        # owed" nor a late fit to alert on. The card names them instead.
-        resting = D.resting_pieces(D.PIECE_ORDER, day)
-        left = [x for x in left if x not in resting]
-        done = [k for k in D.PIECE_ORDER if k not in left and isinstance(pieces.get(k), dict)
-                and str(pieces[k].get("done") or "") >= start]
-        # A sport's last finished fit: the round file's, or the stores' own
-        # date where that is later or the round file has none (`fit_dates`).
-        stores = fit_dates(fit_paths)
-        out["deep"] = {"round": start or None, "left": left, "done": done, "resting": resting,
-                       "part_way": D._part_way(pieces, left, start, today),
-                       "last_done": {k: max(str((pieces.get(k) or {}).get("done") or "")[:10],
-                                            stores.get(k, "")) or None
-                                     for k in left if k in DEEP_SPORTS}}
-    else:
-        out["deep"] = None
+    out["deep"] = deep_round(t, deep_path, fit_paths)
     # The Lab: the date each sport's numbers on the page are from, and when a
     # run last started each one.
     from . import gate, lab as LB

@@ -5379,7 +5379,7 @@ def _disk_check(free_bytes=None, say=print) -> float | None:
     return gb
 
 
-def _weekly_jobs_public() -> dict:
+def _weekly_jobs_public(now: float | None = None) -> dict:
     """engine.maintenance's record of each weekly job, keyed by its short
     name, the fields a reader needs and nothing else — scrubbed again on
     the way out, because this goes to a public file. The Lab's also says
@@ -5395,7 +5395,37 @@ def _weekly_jobs_public() -> dict:
     dates = _lab_dates_public()
     if dates and isinstance(jobs.get("lab"), dict):
         jobs["lab"]["sports"] = dates
+    rnd = _deep_round_public(now)
+    if rnd and isinstance(jobs.get("deepfit"), dict):
+        jobs["deepfit"]["round"] = rnd
     return jobs
+
+
+def _deep_round_public(now: float | None = None) -> dict:
+    """The deep refit's round as the owner desk's Weekly jobs card reads it
+    (`ownerdesk.deep_round`: what it owes, what it has done, where a run's
+    time ran out, each owed sport's last finished fit), and where each owed
+    sport's recency dial stands, market by market (`deepfit.dial_progress`).
+    Job progress only. On 8 November the round's one public line, cut at 200
+    characters, said the NFL's dial was "cut off after 8 min" and nothing
+    about how much of it was left."""
+    try:
+        from engine import deepfit as D, ownerdesk as OD
+        from engine.maintenance import scrub_public
+        rnd = OD.deep_round(time.time() if now is None else float(now))
+        if not rnd:
+            return {}
+        rnd = dict(rnd, part_way=[scrub_public(str(p)) for p in rnd.get("part_way") or []])
+        dial = {}
+        for sp in rnd.get("left") or []:
+            got = D.dial_progress(sp, rnd.get("round"))
+            if got:
+                dial[sp] = got
+        if dial:
+            rnd["dial"] = dial
+        return rnd
+    except Exception:  # noqa: BLE001 — the heartbeat never fails for a side read
+        return {}
 
 
 def _lab_dates_public() -> dict:

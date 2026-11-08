@@ -276,7 +276,7 @@ def fit(entries: list[dict], market: str, base: dict | None = None,
     as it did then (`GridCheckpoint`).
     """
     from . import calibrate as cal
-    from .logwalk import walk
+    from .logwalk import walk_pairs
 
     if base is None:
         base = base_for(sport)
@@ -288,12 +288,16 @@ def fit(entries: list[dict], market: str, base: dict | None = None,
             if r != 0.0 and r in saved:
                 scores[r] = saved[r]
                 continue
-            report = walk(sport, entries, market,
-                          min_history=min_history,
-                          form_weights=family(base, r))
-            if not report.pairs:
+            # The walk's pairs alone, without pricing each game's bet
+            # (`logwalk.walk_pairs`, 2026-11-08): the same pairs `walk`
+            # returns, to the bit, about 2.5 times as fast (timed on seven
+            # football markets; the projection it keeps is most of the rest).
+            pairs = walk_pairs(sport, entries, market,
+                               min_history=min_history,
+                               form_weights=family(base, r))
+            if not pairs:
                 return None
-            scores[r] = (_brier(report.pairs), len(report.pairs))
+            scores[r] = (_brier(pairs), len(pairs))
             if r == 0.0 and saved:
                 was = saved.get(0.0)
                 if was is None or was[1] != scores[r][1] or abs(was[0] - scores[r][0]) > 1e-12:

@@ -610,6 +610,44 @@ def _dial_kept(sport: str, round_of: str | None, path=None) -> int | None:
             and str(v.get("fitted") or "") >= round_of}
     return len(ff.GRID) * len(done) + sum(n for m, n in part.items() if m not in done)
 
+
+def dial_progress(sport: str, round_of: str | None, path=None, partial_path=None) -> dict:
+    """``{market: "fitted 2026-11-09" | "12 of 21 scored" | "owed"}``: where
+    each of ``sport``'s recency-dial markets stands in the round begun
+    ``round_of`` — fitted this round (the store's date), part-way (the
+    settings its checkpoint kept), or not begun. Empty for a sport with no
+    dial (basketball) or no round; a store or checkpoint that will not read
+    has kept nothing, so its markets read "owed". The public
+    heartbeat carries it, so a night's progress inside the NFL's dial can be
+    read without the box (2026-11-08: the round's one line said only "cut
+    off after 8 min")."""
+    if not round_of:
+        return {}
+    try:
+        from formfit import NO_DIAL, SPORT_MARKETS          # noqa: PLC0415
+    except Exception:                                       # noqa: BLE001
+        sys.path.insert(0, ROOT)
+        from formfit import NO_DIAL, SPORT_MARKETS          # noqa: PLC0415
+    if sport in NO_DIAL or sport not in SPORT_MARKETS:
+        return {}
+    try:
+        from . import formfit as ff
+        stored = ff._load(ff.DEFAULT_PATH if path is None else path) or {}
+        part = ff.partial_counts(sport, partial_path)
+    except Exception:                                       # noqa: BLE001
+        return {}
+    out = {}
+    for market in SPORT_MARKETS[sport]:
+        v = stored.get(f"{sport}:{market}")
+        fitted = str(v.get("fitted") or "") if isinstance(v, dict) else ""
+        if fitted >= round_of:
+            out[market] = f"fitted {fitted[:10]}"
+        elif part.get(market):
+            out[market] = f"{part[market]} of {len(ff.GRID)} scored"
+        else:
+            out[market] = "owed"
+    return out
+
 #: Every piece, in the order a round takes them when they are equally
 #: stale: the sports first (football leads in the autumn; the NBA's checks
 #: right before its fitters), then the extras in the order refit_all always

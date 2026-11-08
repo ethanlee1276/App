@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after the box-score pull started asking for a
+Last updated 2026-11-08, after the deep refit's recency dial started
+computing only the chance it scores, two and a half times as fast, and the
+heartbeat started showing where each dial market stands (step LX: nothing
+to run), after the box-score pull started asking for a
 game by its season, not walking every stored college season per game
 (step LW: nothing to run; one read-only check in the combined line), after
 grading's read of the odds snapshots
