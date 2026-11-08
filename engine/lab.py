@@ -922,6 +922,24 @@ def merge_sport(previous: dict, sport: str, blob: dict) -> tuple[dict, list[str]
     return _page_shell(sports), kept
 
 
+#: The sports the last `run_if_due` in this process replayed, failed and
+#: left for the next run: the `--auto` lane's last line names them
+#: (`status_line`), and that line is what the heartbeat keeps.
+LAST_RUN: dict = {}
+
+
+def status_line(status: str) -> str:
+    """The `--auto` lane's one line: the status word, and the sports it
+    replayed (and failed, and left waiting). The heartbeat keeps a weekly
+    job's last line, and "lab: ok" alone never said which sports a run
+    reached (8 November: the NFL's replay was the question)."""
+    parts = []
+    for key, word in (("done", "replayed"), ("failed", "failed"), ("waiting", "waiting")):
+        if LAST_RUN.get(key):
+            parts.append(f"{word} {', '.join(LAST_RUN[key])}")
+    return f"lab: {status}" + (f" ({'; '.join(parts)})" if parts else "")
+
+
 def run_if_due(hconn=None, log=print, path: Path | str | None = None,
                force: bool = False, today: _dt.date | None = None,
                nfl: bool = True, attempts_path: Path | str | None = None,
@@ -941,6 +959,7 @@ def run_if_due(hconn=None, log=print, path: Path | str | None = None,
     today = today or _dt.date.today()
     page = _previous_page(p)
     todo = list(SPORT_ORDER) if force else due_sports(page, today, _read_attempts(ap))
+    LAST_RUN.clear()
     if not todo:
         return "already"
     build_one = build_one or build_sport
@@ -991,6 +1010,7 @@ def run_if_due(hconn=None, log=print, path: Path | str | None = None,
     finally:
         if close:
             hconn.close()
+        LAST_RUN.update(done=list(done), failed=list(failed), waiting=list(waiting))
     if not done:
         return "failed"
     log(f"  lab: replayed {', '.join(done)}" + (f"; {', '.join(failed)} failed" if failed else "")
@@ -1240,7 +1260,7 @@ def main(argv=None) -> int:
     hconn = _db.connect()
     if args.auto:
         status = run_if_due(hconn=hconn, log=print)
-        print(f"lab: {status}")
+        print(status_line(status))
         return 0
     if args.bets:
         # ITS OWN PATH, and NFL only. The bet rows live on the

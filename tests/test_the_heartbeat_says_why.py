@@ -179,11 +179,19 @@ def test_a_job_started_is_kept_as_running():
 
 def test_the_heartbeat_publishes_them_scrubbed():
     import launch
-    with _InTemp():
-        M._record_job("engine.lab", started="2026-11-03T04:00:00", ended="2026-11-03T05:00:01", minutes=60,
-                      exit=-9, cut_off=True, running=False, last="lab: replaying nba (1 of 6)…", pid=4242)
-        M._record_job("engine.bugscan", last="mailed owner@example.com with apiKey=abc")
-        got = launch._weekly_jobs_public()
+    from engine import lab as LB
+    keep_lab = LB.LAB_PATH
+    with _InTemp() as td:
+        # No Lab page here, so no sport dates (tests/test_the_heartbeat_
+        # names_each_sports_lab_date.py holds those).
+        LB.LAB_PATH = td / "web" / "data" / "backtest.json"
+        try:
+            M._record_job("engine.lab", started="2026-11-03T04:00:00", ended="2026-11-03T05:00:01", minutes=60,
+                          exit=-9, cut_off=True, running=False, last="lab: replaying nba (1 of 6)…", pid=4242)
+            M._record_job("engine.bugscan", last="mailed owner@example.com with apiKey=abc")
+            got = launch._weekly_jobs_public()
+        finally:
+            LB.LAB_PATH = keep_lab
     assert got["lab"] == {"started": "2026-11-03T04:00:00", "ended": "2026-11-03T05:00:01", "minutes": 60,
                           "exit": -9, "cut_off": True, "running": False, "last": "lab: replaying nba (1 of 6)…"}
     assert "owner@example.com" not in json.dumps(got) and "abc" not in got["bugscan"]["last"]

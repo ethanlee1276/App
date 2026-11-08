@@ -5382,14 +5382,42 @@ def _disk_check(free_bytes=None, say=print) -> float | None:
 def _weekly_jobs_public() -> dict:
     """engine.maintenance's record of each weekly job, keyed by its short
     name, the fields a reader needs and nothing else — scrubbed again on
-    the way out, because this goes to a public file."""
+    the way out, because this goes to a public file. The Lab's also says
+    the day each sport's numbers are from (`_lab_dates_public`)."""
     try:
         from engine.maintenance import scrub_public, weekly_jobs_status
         keep = ("started", "ended", "minutes", "exit", "cut_off", "running", "last")
-        return {str(module).rsplit(".", 1)[-1]: {k: (scrub_public(v) if isinstance(v, str) else v)
-                                                for k, v in e.items() if k in keep}
+        jobs = {str(module).rsplit(".", 1)[-1]: {k: (scrub_public(v) if isinstance(v, str) else v)
+                                                 for k, v in e.items() if k in keep}
                 for module, e in weekly_jobs_status().items() if isinstance(e, dict)}
     except Exception:  # noqa: BLE001
+        return {}
+    dates = _lab_dates_public()
+    if dates and isinstance(jobs.get("lab"), dict):
+        jobs["lab"]["sports"] = dates
+    return jobs
+
+
+def _lab_dates_public() -> dict:
+    """``{sport: "YYYY-MM-DD"}``: the day each sport's numbers on the Lab's
+    page are from, read as the owner desk reads them (the subscriber's copy,
+    each sport's ``replayed_at``, else the page's own date). Dates only: the
+    page is paid. A weekly run's "lab: ok" never said which sports it
+    reached, and on 8 November whether the NFL had been replayed since 29
+    September could only be asked on the box."""
+    try:
+        from engine import gate, lab as LB
+        page = json.loads(Path(gate.board_source(Path(LB.LAB_PATH))).read_text(encoding="utf-8"))
+        stamp = str(page.get("generated_at") or "")
+        out = {}
+        for sp in LB.SPORT_ORDER:
+            blob = (page.get("sports") or {}).get(sp)
+            if isinstance(blob, dict):
+                day = str(blob.get("replayed_at") or stamp)[:10]
+                if day:
+                    out[sp] = day
+        return out
+    except Exception:  # noqa: BLE001 — the heartbeat never fails for a side read
         return {}
 
 
