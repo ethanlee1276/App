@@ -639,6 +639,19 @@ def draw_team(sport: str, team: str, prof: dict, shocks: dict | None, legs, tria
     return {"asked": asked, "values": {k: array("d", sim[k[0]][k[1]]) for k in keys}, "rho": rho}
 
 
+def over_bytes(values, line: float) -> int:
+    """Which trials went over the line, one byte a trial (1 over, 0 not),
+    as one integer: two legs' trials both over are the bytes the AND of
+    their numbers keeps."""
+    return int.from_bytes(bytes(x > line for x in values), "little")
+
+
+def popcount(x: int) -> int:
+    """How many bits are set (int.bit_count from Python 3.10; the 3.9 the
+    GitHub check runs counts its digits)."""
+    return x.bit_count() if hasattr(x, "bit_count") else bin(x).count("1")
+
+
 class KeptSims:
     """Every team's entry for one sport, in one file beside the kept
     game-log reads (engine/logcache's folder: pruned with them, dropped by
@@ -815,8 +828,12 @@ def ideas_section(props, games, board, sport, conn=None, keep=None):
         # was compared with every other twice, its over flags and its
         # scores' length worked out again for each partner. The same sums
         # over the same lists, so every number is the one it was.
-        overs = {(p, m): [x > r["line"] for x in values[(p, m)]] for p, m, r in legs}
-        n_over = {k: sum(v) for k, v in overs.items()}
+        # EACH LEG'S OVERS AS ONE NUMBER, A BYTE A TRIAL (2026-11-09): a pair's
+        # trials where both went over are the bytes both numbers hold, counted
+        # in one AND, where they were a thousand-step walk for every pair (45%
+        # of a kept build). The same count, so every number is the one it was.
+        overs = {(p, m): over_bytes(values[(p, m)], r["line"]) for p, m, r in legs}
+        n_over = {k: popcount(v) for k, v in overs.items()}
         boths: dict = {}
         for p, m, r in legs:
             vals = values[(p, m)]
@@ -827,16 +844,15 @@ def ideas_section(props, games, board, sport, conn=None, keep=None):
                 rho = rho_of.get(_pair((p, m), (q, n)))
                 if rho is None:
                     continue
-                o_a, o_b = overs[(p, m)], overs[(q, n)]
                 pair = frozenset(((p, m), (q, n)))
                 both = boths.get(pair)
                 if both is None:
-                    both = boths[pair] = sum(1 for x, y in zip(o_a, o_b) if x and y)
+                    both = boths[pair] = popcount(overs[(p, m)] & overs[(q, n)])
                 given = both / n_over[(p, m)] if n_over[(p, m)] else None
                 links.append({"player": q, "market": n, "line": s["line"], "rho": round(rho, 3),
                               "pricer_rho": round(prior_rho(sport, {"player": p, "team": team, "market": m},
                                                             {"player": q, "team": team, "market": n}), 3),
-                              "their_over": round(n_over[(q, n)] / len(o_b), 3),
+                              "their_over": round(n_over[(q, n)] / len(values[(q, n)]), 3),
                               "their_over_given_his": None if given is None else round(given, 3)})
             links.sort(key=lambda x: -abs(x["rho"]))
             players[f"{p}|{m}"] = {"team": team, "line": r["line"], "sim_over": round(over_chance(vals, r["line"]), 3),

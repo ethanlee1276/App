@@ -316,6 +316,32 @@ def test_a_kept_pairs_correlation_is_the_float_its_scores_give():
 
 
 
+def test_the_pair_counts_are_every_trial_counted():
+    """Each leg's overs are one number, a byte a trial, and a pair's trials
+    both over are counted in one AND (45% of a kept build was the walk over
+    every trial of every pair). Every count is the one the walk gives."""
+    rows, board = _six(_logs()), _board(extra=[("AAA WR2", "rec_yds", 40.5), ("BBB WR2", "receptions", 2.5)])
+    sec = _section(board, rows)
+    tg = P.team_games(rows)
+    checked = 0
+    for team in ("AAA", "BBB"):
+        legs = {(r["player"], r["market"]): r for r in board["recommendations"] if r["team"] == team}
+        e = P.draw_team("nfl", team, P.profile(tg[team]), {}, set(legs))
+        for (p, m), r in legs.items():
+            got = sec["players"][f"{p}|{m}"]
+            a = list(e["values"][(p, m)])
+            n_a = sum(1 for x in a if x > r["line"])
+            for link in got["links"]:
+                b = list(e["values"][(link["player"], link["market"])])
+                both = sum(1 for x, y in zip(a, b) if x > r["line"] and y > link["line"])
+                assert link["their_over"] == round(sum(1 for y in b if y > link["line"]) / len(b), 3), link
+                assert link["their_over_given_his"] == (round(both / n_a, 3) if n_a else None), link
+                checked += 1
+    assert checked >= 20, checked
+    for v in (0, 1, 2 ** 70 + 5, (1 << 8000) - 1):
+        assert P.popcount(v) == bin(v).count("1")
+    assert P.over_bytes([1.0, 3.0, 2.5, 2.0], 2.0) == int.from_bytes(bytes([0, 1, 1, 0]), "little")
+
 def test_college_is_not_played_and_reads_nothing():
     """College's logs file each game under its date and keep no targets, so
     the college section drew no team from the day it was built and read two

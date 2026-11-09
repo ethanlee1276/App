@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NM. The play simulator counts its pairs in one step** (step 489; 9
+November). Nothing to run. With every NFL team kept (NI: `kept 30, drawn 0`
+at 11:54), the simulator's part of the readings was 3.5 seconds, and nearly
+half of a kept build was counting, for every pair of legs, the trials where
+both went over, a thousand steps a pair. Each leg's overs are now one
+number, a byte a trial, and a pair's count is one AND of two numbers: the
+same counts (a test checks every pair against the trial-by-trial count), in
+about half the time.
+
 **NL. The play simulator stops reading college for nothing** (step 488; 9
 November). Nothing to run, and one thing to know. The simulator's first build
 on the new store (NI) said `playsim_sims.cfb: teams 0, drawn 0`: college's

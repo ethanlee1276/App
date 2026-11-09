@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after the play simulator stopped reading college logs it could not use
+Last updated 2026-11-09, after the play simulator started counting its pairs in one step (step
+NM: nothing to run), after the play simulator stopped reading college logs it could not use
 (step NL: nothing to run), after the readings' journals started saying their seconds apart (step
 NK: nothing to run), after the seal step started walking each chain once a cycle (step
 NJ: nothing to run), after the play simulator started keeping each team's games between
