@@ -858,6 +858,13 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     engine.nhl.lines result}; None reads the shift charts, {} none."""
     from engine.db import player_assets
     from engine.seasons import recent_seasons
+    # THE PARTS OF THE BOARD STAGE (engine/stageclock.lap): nearly the whole
+    # NHL build happens in here, so its one stage mark (main) could not say
+    # which read takes the time. Silent unless a build started the clock,
+    # so the tests and the Lab, which call this directly, print nothing.
+    import time as _ptime
+    from engine import stageclock as _clock
+    _pt = _ptime.monotonic()
     out = empty_board(date)
     out["games"] = [{"home": g["home"], "away": g["away"], "date": date, "kickoff": g.get("start", ""),
                      "live": _live_block(g)} for g in games]
@@ -865,23 +872,28 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
         return out, None
     seasons = recent_seasons(SPORT, date)
     players = M.player_games(conn, seasons=seasons)
+    _pt = _clock.lap("board", "player games", _pt)
     # THE INJURY REPORT FIRST (ESPN's NHL board): a man ruled out has no
     # prop, no read and cannot be the probable starter; a day-to-day man
     # keeps his number and his picks are held (likely.admissible).
     injuries = nhl_injuries() if injuries is None else injuries
     ruled_out = {n for n, i in injuries.items() if str(i.get("status") or "").strip().lower() in OUT_STATUSES}
     players = {n: p for n, p in players.items() if n not in ruled_out}
+    _pt = _clock.lap("board", "injuries", _pt)
     teams = M.team_profiles(conn, seasons=seasons)
     league = M.league_rates(players)
+    _pt = _clock.lap("board", "team profiles + league rates", _pt)
     from engine.sources import nhldata
     rosters = nhldata.load_rosters()
     slate = build_slate(games, players, date, rosters)
+    _pt = _clock.lap("board", "rosters + slate", _pt)
     if not slate.props:
         out["history_gap"] = {"teams": sorted({t for g in games for t in (g["home"], g["away"])}),
                               "players_found": len(players), "seasons": seasons}
     odds_note = "no odds requested"
     if attach_odds is not None:
         odds_note = attach_odds(slate) or "odds attached"
+    _pt = _clock.lap("board", "odds", _pt)
     # SHOT QUALITY (engine/nhl/xg.py): our expected goals from the stored
     # play-by-play — None until `ingest.py nhl --shots` has run and a model
     # is fitted, and then every number below reads as it did without it.
@@ -889,13 +901,17 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     xs = X.board_summaries(conn, seasons=seasons, window=M.XG_WINDOW)
     M.attach_xg(teams, (xs or {}).get("teams"))
     out["shot_quality"] = bool(xs)
+    _pt = _clock.lap("board", "shot quality", _pt)
     if starters is None:
         from engine.sources import nhlstarters
         starters = nhlstarters.tonight(date)
     out["starters_announced"] = len(starters)
+    _pt = _clock.lap("board", "starting goalies", _pt)
     ctx = scalpy_context(games, players, league, teams, date, xs=xs, starters=starters)
     assets = player_assets(conn, SPORT)
+    _pt = _clock.lap("board", "context + assets", _pt)
     recs, census = price_slate(slate, games, players, league, teams, assets, date, ctx=ctx, xs=xs)
+    _pt = _clock.lap("board", "price slate", _pt)
     # LINE COMBINATIONS (engine/nhl/lines): who each skater plays with, off
     # the shift charts of his team's newest games. A row says it, and a
     # ticket of two linemates reads their shared ice (engine/parlays).
@@ -910,6 +926,7 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
             lines = {}
     out["lines"] = lines
     attach_line_slots(recs, lines)
+    _pt = _clock.lap("board", "line combinations", _pt)
     for r in recs:
         inj = injuries.get(r["player"])
         if inj and r["player"] not in ruled_out:
@@ -931,6 +948,7 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
             rd["line_slot"] = slot
             rd.setdefault("notes", []).append(f"Line {slot['unit']} with {' and '.join(slot['mates'])}")
     out["scan_reads"] = sc["reads"]
+    _pt = _clock.lap("board", "scan", _pt)
     inj_by_team: dict = {}
     for n, i in injuries.items():
         inj_by_team.setdefault(i.get("team") or "", []).append({"player": n, "status": i["status"],
@@ -965,6 +983,7 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
     out["counts"] = {"props_built": len(slate.props), "props_analyzed": len(recs),
                      "recommended": sum(1 for r in recs if r["recommended"]),
                      "game_bets": sum(1 for b in bets if b.get("grade") != "Pass")}
+    _clock.lap("board", "game bets + market scan", _pt)
     return out, slate
 
 
@@ -1067,6 +1086,14 @@ def main() -> None:
     ap.add_argument("--live-lines", action="store_true",
                     help="pull the live market for in-progress games (three credits, the launcher's call)")
     args = ap.parse_args()
+    # ONE LINE PER STAGE as the build goes (engine/stageclock), read back by
+    # the loop for the heartbeat (boards.nhl.stages), as the NFL, college and
+    # NBA builds do: the NHL build ran 61 seconds of the 8 November cycles
+    # with nothing to say where. The board stage names its parts (`build`).
+    # The last mark prints before the closing summary, which stays the line
+    # the loop reports for the build.
+    from engine import stageclock as _clock
+    _clock.start()
 
     from engine.sources import nhldata
     try:
@@ -1079,6 +1106,7 @@ def main() -> None:
         return
     pre = [g for g in games if g.get("type") == 1]
     games = [g for g in games if g.get("type") in nhldata.KEEP_TYPES]
+    _clock.mark("schedule")
 
     attach = None
     if args.odds or args.cached_odds:
@@ -1099,6 +1127,7 @@ def main() -> None:
 
     conn = connect()
     out, slate = build(args.date, games, conn, attach_odds=attach)
+    _clock.mark("board")
     # EVERY BOOK'S NUMBER for the men with an open pick and the men on an
     # injury report, kept when it changes (engine/proptape): the line chart
     # with every book on it reads it back (engine/linebooks). Never raises.
@@ -1120,6 +1149,7 @@ def main() -> None:
             print(f"  Lines: {len(out['lines'])} team(s) read off their newest shift charts")
         except OSError as exc:
             print(f"⚠️  lines file skipped: {exc}")
+    _clock.mark("prop tape + game lines + shift lines")
     if not games:
         out.update(status="no games today",
                    note=("Preseason games only — no picks until the regular season."
@@ -1132,6 +1162,7 @@ def main() -> None:
             attach_most_likely(out, args.out, args.date)
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  Most Likely skipped: {exc}")
+    _clock.mark("most likely board")
     # THE LIVE LINE (engine/livelines), as the hoops boards carry it: the
     # pull is three credits for the whole slate and only on the launcher's
     # say-so (--live-lines, its own lane behind football) or a full odds
@@ -1170,11 +1201,13 @@ def main() -> None:
                 print(f"  {label}: {msg}")
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  {label} skipped: {exc}")
+    _clock.mark("live lines + tracker + exchange fair + crowd + openers + report + pick of the day")
     if games and not args.no_journal:
         try:
             journal(out, args.date)
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  NHL journal skipped: {exc}")
+    _clock.mark("journal")
     try:
         from engine import ledger
         # The game lines beside the board, where a pick named from one is
@@ -1201,6 +1234,7 @@ def main() -> None:
     # board's projections added up, beside it. Never fatal.
     from engine import fantasy_daily as _fd
     print("  " + _fd.build(SPORT, out, p))
+    _clock.mark("write the board")
     c = out["counts"]
     # THE ODDS LINE, ALWAYS. A board with no prices looks the same whether
     # no book had posted yet or the pull never happened (a hand run without

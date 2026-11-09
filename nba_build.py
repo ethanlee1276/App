@@ -903,6 +903,14 @@ def main() -> None:
     if args.diagnose:
         diagnose(args.league, args.date)
         return
+    # ONE LINE PER STAGE as the build goes (engine/stageclock), read back by
+    # the loop for the heartbeat (boards.nba.stages), as the NFL and college
+    # builds do. The NBA build ran 78 seconds of the 8 November cycles and
+    # the NHL's 61, with nothing to say where; a mark costs a clock read.
+    # The last one prints before the closing summary, which stays the line
+    # the loop reports for the build.
+    from engine import stageclock as _clock
+    _clock.start()
     tune = for_league(args.league)
     # Swap in whatever this league's OWN results can measure. The WNBA
     # shipped inheriting the NBA's margin SD and stat spreads because
@@ -930,6 +938,7 @@ def main() -> None:
                   f"spread (QB_NBA_SPREAD=1); their fitted CVs are not read")
     except Exception as exc:  # noqa: BLE001 — a failed fit must not stop a build
         print(f"⚠️  Tuning fit unavailable — using inherited numbers.\n   {exc}")
+    _clock.mark("tuning fit")
     # ESPN FOR BOTH LEAGUES (the NBA since 2026-10-14: the league's own CDN
     # answers the box 403 Forbidden for every file — `engine/sources/nbaespn`).
     if args.league == "wnba":
@@ -1033,6 +1042,7 @@ def main() -> None:
                             "distributions, humility clamp, approval gate) is built "
                             "and tested — it goes live with the schedule.")
 
+    _clock.mark("schedule")
     picks_result = None
     # The slate's game lines for the Pick of the Day (`potd.game_lines`),
     # filled once the odds are on the slate; empty on a night with none.
@@ -1120,6 +1130,7 @@ def main() -> None:
         print(f"Injuries: {len(listed)} designation(s) on tonight's players "
               f"({out['availability']['out']} out)" if injuries else
               "⚠️  Injury board unreadable — nobody is held for it, and that is a gap")
+        _clock.mark("history + rosters + injuries")
         # THE GAME REPORT'S OWN FACTS (engine/leaguereport): who carries each
         # team over his last ten, the injury report's names on each game,
         # and where each defence gives (engine/hoopsdvp). Never fatal. The
@@ -1135,6 +1146,7 @@ def main() -> None:
             _gr_meta = _gr_nba_meta(games, hist, listed, _gr_rt, _gr_last, injuries_read=bool(injuries))
         except Exception as _grx:                           # noqa: BLE001
             print(f"  ⚠️  game report facts skipped: {_grx}")
+        _clock.mark("game report facts")
 
         slate = _Slate([_Game(g["home"], g["away"], g["kickoff"],
                               g.get("home_name", ""), g.get("away_name", ""))
@@ -1319,6 +1331,7 @@ def main() -> None:
         except Exception as _exc:                             # noqa: BLE001 — telemetry, never the board
             print(f"  ⚠️  {args.league.upper()} line ledger skipped: {_exc}")
 
+        _clock.mark("slate + odds + line ledger")
         defense = defense_ratings(conn, args.league)
         density = {t: schedule_density(sched_days, t, args.date) for t in teams}
         _ss.add_spreads(out.get("schedule_spots") or [], spread_by_team)
@@ -1400,6 +1413,7 @@ def main() -> None:
                                                 f"back {', '.join(b)}" if b else "") if x)
                 for t, (o, b) in sorted(_five.items()) if o or b)
                   + ("" if _starters.on() else "  (switched off: not applied)"))
+        _clock.mark("context reads")
         census = {"no_real_price": 0, "no_history": 0}
         props = []
         _onoff_cache: dict = {}
@@ -1531,6 +1545,7 @@ def main() -> None:
         # and PUBLISHED. Listed points must square with the team total;
         # implied minutes must approach 200. A menu that fails either is
         # named, with the unmoved players the missing production sits on.
+        _clock.mark("prop inputs")
         try:
             from engine.nba.coherence import menu_audit
             out["menu_audit"] = menu_audit(
@@ -1551,6 +1566,7 @@ def main() -> None:
         # when the truth is usually "no book had priced any of it yet".
         out["gate_census"] = {**census, **(picks_result.get("gate_census") or {})}
         out["counts"]["props_built"] = len(slate.props)
+        _clock.mark("menu audit + pricing")
 
         # Shared-schema layer: the same slate shape NFL/MLB emit, so the
         # seven shared pages can render NBA. Scalpy's own keys stay put.
@@ -1693,6 +1709,7 @@ def main() -> None:
         # key player — could shine, could struggle, breakout — in the shape
         # the NFL, MLB and NHL scans write. It picks a side for Most Likely
         # (the leans below) and never moves a number. A failure is a line.
+        _clock.mark("shared recommendations + ladders")
         _nba_leans: dict = {}
         _nba_lean_report: dict = {}
         try:
@@ -1738,6 +1755,7 @@ def main() -> None:
         except Exception as _nsx:                           # noqa: BLE001
             print(f"  ⚠️  NBA matchup scan skipped: {_nsx}")
 
+        _clock.mark("scan + team profiles")
         # THE GAME LINES PINNACLE QUOTED, for the Pick of the Day. This
         # board prices no game market and its Most Likely board carries
         # none (none is measured for basketball), and the day's pick is game
@@ -1846,6 +1864,7 @@ def main() -> None:
         # published on each row's chain), as baseball's reads its own.
         from engine import likelyboard as _lb
         print(f"  {_lb.attach(out, args.league)}")
+        _clock.mark("most likely board")
 
         # Journal picks + stale flags under the league that produced them —
         # this build runs as BOTH leagues, and journaling "nba" while the
@@ -1933,6 +1952,7 @@ def main() -> None:
         except Exception as exc:
             print(f"⚠️  NBA journal skipped: {exc}")
         conn.close()
+        _clock.mark("journal + settle")
 
     # §14: the parlay screen runs over the board that just cleared the
     # singles gates. §7 defers to Scalpy 3.0 for the NBA; §8 tightens the
@@ -1945,6 +1965,7 @@ def main() -> None:
     out["comps"] = _attach_comps(out.get("recommendations") or [], args.league)
     from engine.parlays import attach
     attach(out, args.league)
+    _clock.mark("comps + parlays")
 
     # The live win-probability track (2026-08-18, Ethan: "we should be
     # showing that for ALL live games") — same wiring as mlb_build and
@@ -2006,6 +2027,7 @@ def main() -> None:
         print(_pn)
     if _tn:
         print(f"Open-bet tracker: {_tn}")
+    _clock.mark("live lines + tracker + exchange fair + crowd + openers + report")
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
     from engine import ledger as _led
@@ -2041,6 +2063,7 @@ def main() -> None:
     # board's projections added up, beside it. Never fatal.
     from engine import fantasy_daily as _fd
     print("  " + _fd.build(str(out.get("sport") or args.league), out, p))
+    _clock.mark("write the board")
     # AND THE PICK OF THE DAY, to its own book — HERE, once it exists and
     # the relock above has re-pointed it at today's lock. The journal
     # block runs before `potd.attach`, so journaling it there recorded
@@ -2062,6 +2085,7 @@ def main() -> None:
                 _cconn.close()
         except Exception as _cx:                              # noqa: BLE001
             print(f"  ⚠️  NBA Cup skipped: {type(_cx).__name__}: {_cx}")
+    _clock.mark("pick of the day journal + NBA Cup")
     if picks_result:
         c = picks_result["counts"]
         print(f"NBA {args.date}: {c['props_analyzed']} props → "
