@@ -43,9 +43,17 @@ def _run(js):
       {_fn("boardViewNow")}
       {_fn("slateNotice")}
       {_fn("slateNoticeHTML")}
+      // CALENDAR DAYS BACK FROM TODAY'S ET DATE, not 24-hour steps back
+      // from now (2026-11-08): a step across a clock change lands on the
+      // next date in the hour before midnight. At 23:30 EST on 8 November,
+      // 36 x 24 hours earlier was 00:30 EDT on 4 October, not the 3rd, so
+      // the board read 35 days old and the gate failed every night from
+      // 23:00 to midnight until the window cleared the change.
       const et = (daysAgo) => {{
-        const t = new Date(Date.now() - daysAgo * 86400000);
-        return new Intl.DateTimeFormat("en-CA", {{ timeZone: "America/New_York" }}).format(t);
+        const today = new Intl.DateTimeFormat("en-CA", {{ timeZone: "America/New_York" }}).format(new Date());
+        const t = new Date(today + "T12:00:00Z");
+        t.setUTCDate(t.getUTCDate() - daysAgo);
+        return t.toISOString().slice(0, 10);
       }};
       console.log(JSON.stringify((() => {{ {js} }})()));
     """
