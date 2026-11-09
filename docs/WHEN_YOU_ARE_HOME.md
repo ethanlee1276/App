@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MP. A board's publish says where its seconds go** (step 466; 9 November).
+Nothing to run. The NFL build's write stage ran 24 seconds at 02:11 on 9
+November and 22.4 of them were the one call that writes the board's three
+copies; the same steps take half a second on a ten-megabyte NFL board here,
+so the time is in something the box has and this machine does not, most
+likely the bet-slip links (stamped from the odds files the box banks, of
+which this machine has none). Every publish inside a build now prints its
+steps (prepare, bet links, downgrade check, served copy, private copy,
+sidecar, public copy) as the parts of `publish <file>`, and the heartbeat
+shows them under the board, e.g. `boards.nfl.parts["publish nfl.json"]`.
+Outside a build nothing prints, and every file is written byte for byte as
+before. The next heartbeat says which step, and I go after it from there.
+
 **MO. The game-log cache holds between builds, and the heartbeat says whether
 it did** (step 465; 9 November). Nothing to run. On the box after MN (02:15
 on 9 November) the NHL build still read its player games (19.7 seconds) and

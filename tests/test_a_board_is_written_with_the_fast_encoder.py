@@ -18,7 +18,10 @@ board's own prices clear it. What these hold:
   * the browser's copy is made once a publish;
   * the guard reads the old board only when the new one has no prices and
     says its odds attempt failed — and still refuses a real downgrade;
-  * a check that raises is asked again the old way, deciding the same.
+  * a check that raises is asked again the old way, deciding the same;
+  * inside a build a publish names its steps' seconds (the NFL build's
+    publish ran 22.4 seconds at 02:11 on 9 November with nothing to say
+    which step), and outside one it prints nothing.
 
 Run directly: `python3 tests/test_a_board_is_written_with_the_fast_encoder.py`
 """
@@ -193,6 +196,33 @@ def test_the_publish_refuses_a_downgrade_and_keeps_the_board():
             gate.publish(_unpriced(failed=True), public)
     assert "REFUSED" in buf.getvalue()
     assert Path(gate.board_source(public)).read_text() == before
+
+
+def test_a_publish_names_its_steps_only_inside_a_build():
+    from engine import stageclock
+    keep = dict(stageclock._STATE)
+    root = Path(tempfile.mkdtemp())
+    public = root / "web" / "data" / "nfl.json"
+    try:
+        stageclock._STATE.update(t0=None, last=None)
+        quiet = io.StringIO()
+        with contextlib.redirect_stdout(quiet):
+            gate.publish(copy.deepcopy(_tricky_board()), public)
+        assert "⏱" not in quiet.getvalue(), "the loop's refreshers and the tests print no clock"
+        stageclock.start()
+        said = io.StringIO()
+        with contextlib.redirect_stdout(said):
+            gate.publish(copy.deepcopy(_tricky_board()), public)
+        lines = said.getvalue().splitlines()
+        parts = stageclock.parse_parts(lines)
+        assert list(parts) == ["publish nfl.json"], parts
+        assert list(parts["publish nfl.json"]) == ["prepare", "bet links", "downgrade check", "served copy",
+                                                   "private copy", "sidecar", "public copy"], parts
+        assert all(v >= 0 for v in parts["publish nfl.json"].values())
+        assert stageclock.parse(lines) == {}, "a part is never counted as a stage"
+    finally:
+        stageclock._STATE.clear()
+        stageclock._STATE.update(keep)
 
 
 if __name__ == "__main__":

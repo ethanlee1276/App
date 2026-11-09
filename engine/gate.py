@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 
 from .served import served
@@ -914,6 +915,20 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     """
     public = Path(public_path)
     label = name or public.name
+    # WHERE A PUBLISH'S SECONDS GO (2026-11-09). The NFL build's publish ran
+    # 22.4 of its write stage's 24 seconds at 02:11 on 9 November, against
+    # half a second for the same steps on a ten-megabyte board here, with
+    # nothing to say which step. Each is timed and, inside a build (the
+    # stage clock started), printed as a part of "publish <file>", which the
+    # loop puts on the heartbeat; outside one nothing prints.
+    took: dict = {}
+    _t = time.monotonic()
+
+    def _step(part: str) -> None:
+        nonlocal _t
+        now = time.monotonic()
+        took[part] = took.get(part, 0.0) + (now - _t)
+        _t = now
     # AN UNDERSCORE KEY IS THE BUILD'S OWN WORKING STATE, NEVER THE BOARD
     # (the site audit, 2026-09-24). `potd.POOL_KEY` ("_potd_pool") carries
     # every row the display caps cut, for the selector, and each build pops
@@ -925,7 +940,9 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     # at the book it names, stamped here so every sports board gets it
     # from one place. Inside the paid rows, so `redact` strips it with them.
     from . import betlinks
+    _step("prepare")
     betlinks.stamp(payload, label)
+    _step("bet links")
     built = _full_dir_for(public)
     built.mkdir(parents=True, exist_ok=True)
     full = built / label
@@ -934,7 +951,10 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     # Loud rather than silent — a refusal nobody sees is the same failure
     # in a quieter coat, and this prints into the same build output as
     # the "Odds API unavailable" warning that precedes it.
-    if would_downgrade(payload, full, label):
+    refused = would_downgrade(payload, full, label)
+    _step("downgrade check")
+    if refused:
+        _publish_parts(label, took)
         print(f"\n⛔  REFUSED to publish {label}: this build has no priced "
               f"rows and its own odds_status says the pull failed, while "
               f"the board it would replace has "
@@ -952,6 +972,7 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     # THE BROWSER'S COPY, MADE ONCE (2026-11-08): the sidecar below and the
     # public copy are the same `served` tree, and it was built twice.
     srv = served(payload)
+    _step("served copy")
     for path, doc in ((full, payload),
                       (public, None)):
         if path is public:
@@ -972,6 +993,7 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
             else:
                 json.dump(doc, fh, indent=2)
         os.replace(tmp, path)
+        _step("private copy" if path is full else "public copy")
         if path is full:
             # THE MEMBERS' BYTES, MADE HERE (the 2026-09-26 outage). The
             # server used to build them itself: parse the 18MB private
@@ -981,7 +1003,20 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
             # writes the served copy beside the full one, after it, and
             # `server.board_bytes` reads it when it is at least as new.
             _write_served_sidecar(full, payload, srv)
+            _step("sidecar")
+    _publish_parts(label, took)
     return (str(public), str(full))
+
+
+def _publish_parts(label: str, took: dict) -> None:
+    """Each step's seconds as a part of "publish <file>", printed only inside
+    a build (engine/stageclock.part). Never raises."""
+    try:
+        from . import stageclock
+        for part, secs in took.items():
+            stageclock.part(f"publish {label}", part, secs)
+    except Exception:                                        # noqa: BLE001
+        pass
 
 
 def _compact(doc) -> str:
