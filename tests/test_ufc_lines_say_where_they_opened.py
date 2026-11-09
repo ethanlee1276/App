@@ -153,6 +153,40 @@ def test_the_build_puts_the_move_on_pick_and_pass_rows():
     assert '"commence": ev.get("commence_time")' in src
 
 
+def test_the_build_reads_the_history_from_the_cards_window_and_says_the_same():
+    """8.0 of the UFC build's 9 seconds at 10:44 on 9 November went on
+    reading every line of the shared history (every sport, since August)
+    to keep the rows of the 14 days before each bout. The read now starts
+    at the earliest bout's start less that window; the moves are the
+    same as a whole read's."""
+    def row(player, odds, ts, start, market="moneyline"):
+        return {"ts": ts, "player": player, "market": market, "book": "DraftKings", "line": 0.5,
+                "over_odds": odds, "under_odds": -odds, "start_ts": start}
+    old = [row("José Aldo", 200, T0 - 120 * 86400, T0 - 119 * 86400),
+           row("Jon Rival", -240, T0 - 120 * 86400, T0 - 119 * 86400)]
+    other = [row(f"Team {i % 50}", -110, T0 - 100 * 86400 + i * 1000, T0 - 60 * 86400) for i in range(3000)]
+    tmp, path = _history(old + other + _bout_rows())
+    try:
+        assert path.stat().st_size > 256 * 1024, "big enough for the seek to skip something"
+        names = {"José Aldo", "Jon Rival"}
+        whole = M.read(names, path)
+        window = M.read(names, path, since=T0 - M.WINDOW_DAYS * 86400)
+        assert len(whole) == 10 and len(window) == 8, (len(whole), len(window))
+        assert all(r["ts"] >= T0 - M.WINDOW_DAYS * 86400 for r in window), "the old bout is never read"
+        assert M.bout_move(window, "José Aldo", "Jon Rival", START) == \
+            M.bout_move(whole, "José Aldo", "Jon Rival", START)
+        out = {"picks": [{"fight": "José Aldo vs Jon Rival", "pick": "José Aldo"}]}
+        fights = [{"prices": {"fighter_a": "José Aldo", "fighter_b": "Jon Rival"}, "commence": START}]
+        assert M.attach(out, fights, path) == 1
+        assert out["picks"][0]["line_move"] == M.bout_move(whole, "José Aldo", "Jon Rival", START)
+        # A card with no start it can read is read whole, as before.
+        bare = {"picks": [{"fight": "José Aldo vs Jon Rival"}]}
+        assert M.attach(bare, [{"prices": {"fighter_a": "José Aldo", "fighter_b": "Jon Rival"},
+                                "commence": None}], path) == 0
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def _fn(src, decl):
     i = src.index(decl)
     j = src.find("\nfunction ", i + len(decl))

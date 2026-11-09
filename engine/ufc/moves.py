@@ -47,28 +47,25 @@ def _epoch(stamp) -> float | None:
         return None
 
 
-def read(names, path=None) -> list[dict]:
+def read(names, path=None, since=None) -> list[dict]:
     """The stored moneyline snapshots naming any of ``names`` (normalized
-    match), read a line at a time — the history holds every sport, and
-    only a fight row is parsed."""
-    from ..linemoves import HISTORY_PATH
+    match). The history holds every sport, so only a line whose text names
+    a wanted man's moneyline is parsed (`linemoves.stream_wanted`), and with
+    ``since`` (an epoch) the lines stamped before it are never read at all.
+
+    FROM THE CARD'S WINDOW, NOT FROM AUGUST (2026-11-09): this read every
+    line of the shared history on every UFC build, 8.0 of the build's 9
+    seconds at 10:44 on 9 November, to keep only the rows `bout_rows`
+    allows: taken in the WINDOW_DAYS before a bout. `attach` passes the
+    earliest bout's start less that window, so nothing it keeps is skipped."""
+    from ..linemoves import HISTORY_PATH, stream_wanted
     from ..sources.oddsapi import normalize_name
     want = {normalize_name(n) for n in names if n}
     path = Path(path) if path else HISTORY_PATH
     if not want or not path.exists():
         return []
-    out = []
-    with path.open(encoding="utf-8") as fh:
-        for raw in fh:
-            if '"moneyline"' not in raw:
-                continue
-            try:
-                r = json.loads(raw)
-            except ValueError:
-                continue
-            if r.get("market") == "moneyline" and normalize_name(str(r.get("player") or "")) in want:
-                out.append(r)
-    return out
+    return [r for r in stream_wanted({(n, "moneyline") for n in want}, path, since=since)
+            if r.get("market") == "moneyline" and normalize_name(str(r.get("player") or "")) in want]
 
 
 def bout_rows(rows: list[dict], commence) -> list[dict]:
@@ -167,7 +164,9 @@ def attach(out: dict, fights: list[dict], path=None) -> int:
     pairs = [((f.get("prices") or {}).get("fighter_a") or "",
               (f.get("prices") or {}).get("fighter_b") or "", f.get("commence"))
              for f in fights or []]
-    hist = read({n for a, b, _c in pairs for n in (a, b) if n}, path)
+    starts = [t for t in (_epoch(c) for _a, _b, c in pairs) if t is not None]
+    since = min(starts) - WINDOW_DAYS * 86400 if starts else None
+    hist = read({n for a, b, _c in pairs for n in (a, b) if n}, path, since=since)
     by = {f"{a} vs {b}": bout_move(hist, a, b, c) for a, b, c in pairs}
     for row in list(out.get("picks") or []) + list(out.get("pass_list") or []):
         mv = by.get(row.get("fight"))

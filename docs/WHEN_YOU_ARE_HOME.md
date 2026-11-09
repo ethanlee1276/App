@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NH. The UFC build reads only the card's two weeks of line history**
+(step 484; 9 November). Nothing to run. With its stages on the heartbeat
+(NC), the UFC build said where its time went: `line moves`, 8.0 of its 9
+seconds at 10:44, reading every line of the shared line history (every
+sport, since August) to keep the rows of the 14 days before each bout. It
+now starts at the earliest bout less those 14 days and parses only the
+card's fighters' moneyline rows; the moves on the cards are the same (the
+test compares them with a whole read).
+
 **NG. College's touchdown board blends a returner toward last season, as
 documented** (step 483; 9 November). Nothing to run. The blend that shrinks
 a player's few games this season toward his last season (three games to
