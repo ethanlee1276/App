@@ -197,6 +197,31 @@ def _why(stored, key: dict) -> str:
     return "key changed"
 
 
+#: THE DISK IT MAY TAKE (2026-11-09). One kept read is never stored past
+#: MAX_MB (a market's comps over every NFL or MLB season could be large), and
+#: nothing new is stored once the folder holds FOLDER_MB: the read is made
+#: as it always was, and its note says why it was not kept. The box had
+#: 16.7 GB free on 9 November and filled its disk once (1 November).
+MAX_MB = 64
+FOLDER_MB = 1500
+
+
+def folder_mb(skip: str = "") -> float:
+    """Megabytes of kept reads in the folder (``skip`` left out: the file a
+    store would replace). Never raises: an unreadable folder is 0."""
+    total = 0
+    try:
+        for fn in os.listdir(folder()):
+            if fn.endswith(".pkl") and os.path.join(folder(), fn) != skip:
+                try:
+                    total += os.path.getsize(os.path.join(folder(), fn))
+                except OSError:
+                    pass
+    except OSError:
+        return 0.0
+    return total / 1e6
+
+
 #: Set once a note could not be written in this process (said once).
 _NOTE_FAILED = [False]
 
@@ -272,11 +297,17 @@ def memo(conn, name: str, sport: str, seasons, compute, code=None, force: bool |
     t3 = clock()
     tmp = f"{path}.{os.getpid()}.tmp"
     try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(tmp, "wb") as fh:
-            pickle.dump({"key": key, "value": value}, fh, protocol=pickle.HIGHEST_PROTOCOL)
-        os.replace(tmp, path)
-        note.update(store_s=round(clock() - t3, 2), mb=round(os.path.getsize(path) / 1e6, 1))
+        blob = pickle.dumps({"key": key, "value": value}, protocol=pickle.HIGHEST_PROTOCOL)
+        if len(blob) > MAX_MB * 1e6:
+            note["not_stored"] = f"too big ({len(blob) / 1e6:.0f} MB > {MAX_MB})"
+        elif folder_mb(skip=path) + len(blob) / 1e6 > FOLDER_MB:
+            note["not_stored"] = f"folder full ({FOLDER_MB} MB)"
+        else:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(tmp, "wb") as fh:
+                fh.write(blob)
+            os.replace(tmp, path)
+            note.update(store_s=round(clock() - t3, 2), mb=round(len(blob) / 1e6, 1))
     except Exception as exc:                                 # noqa: BLE001
         note["not_stored"] = type(exc).__name__
         try:

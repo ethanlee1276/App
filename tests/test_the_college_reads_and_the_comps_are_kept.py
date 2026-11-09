@@ -162,6 +162,27 @@ def test_a_read_nothing_asks_for_goes_after_its_days_once_a_process():
             logcache._PRUNED[0] = keep
 
 
+def test_a_read_too_big_or_a_full_folder_is_made_but_not_kept():
+    with _Sandbox() as sb:
+        db.upsert_player_logs(sb.conn, [_row("cfb", 2026, "2026-09-05", "A", "rec_yds", 60)])
+        sb.conn.commit()
+        keep = (logcache.MAX_MB, logcache.FOLDER_MB)
+        try:
+            logcache.MAX_MB = 0
+            got, n = _counted(sb.conn, "big", "cfb", (2026,))
+            assert got == {"rows": 1} and n == 1, "the read is still made"
+            assert _note("big", "cfb")["not_stored"].startswith("too big")
+            assert _counted(sb.conn, "big", "cfb", (2026,))[1] == 1, "and made again: nothing was kept"
+            logcache.MAX_MB = keep[0]
+            _counted(sb.conn, "one", "cfb", (2026,))
+            logcache.FOLDER_MB = logcache.folder_mb()
+            _counted(sb.conn, "two", "cfb", (2026,))
+            assert _note("two", "cfb")["not_stored"].startswith("folder full")
+            assert _counted(sb.conn, "one", "cfb", (2026,))[1] == 0, "what is kept is still served"
+        finally:
+            logcache.MAX_MB, logcache.FOLDER_MB = keep
+
+
 # --- the comps ------------------------------------------------------------
 def _spots(n=4000, seed=5):
     rnd = random.Random(seed)

@@ -9359,7 +9359,10 @@ lineup's season 3.5, from logs that change when a night's box scores land.
   random records per market counted the same to the digit, a replay's
   cutoff included; a replay (the Lab, the backtest) still builds its own.
 - A kept read nothing has asked for in ten days is dropped, so last
-  season's tables and a market no board prices any more do not pile up.
+  season's tables and a market no board prices any more do not pile up. No
+  one read is kept past 64 MB, and nothing new past 1.5 GB in all (the box
+  had 16.7 GB free this morning): over either, the read is made as before
+  and its note says `too big` or `folder full`.
 - On the heartbeat each shows under `logcache` (`comps_rec_yds.cfb`,
   `cfb_usage2026.cfb`, `cfb_log_rows.cfb`, `cfb_defense.cfb`,
   `cfb_season_games.cfb`): served (`kept`) or read again, and why. The first
