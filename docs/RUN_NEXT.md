@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after the seal step started walking each chain once a cycle (step
+Last updated 2026-11-09, after the readings' journals started saying their seconds apart (step
+NK: nothing to run), after the seal step started walking each chain once a cycle (step
 NJ: nothing to run), after the play simulator started keeping each team's games between
 builds (step NI: nothing to run), after the UFC build started reading only the card's two weeks of line
 history (step NH: nothing to run), after college's touchdown board started blending a returner toward last

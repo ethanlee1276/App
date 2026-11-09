@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NK. The readings' journals each say their seconds** (step 487; 9
+November). Nothing to run. The NFL build's `ideas readings` stage had one
+part, `journals + write`, at 8.2 to 8.7 seconds on every build for hours
+after the attention journal's recheck went out, and one number could not
+say whether that was the attention journal running out its own eight-second
+budget, the curves' journal or the file. The heartbeat now shows
+`attention journal`, `curve journal` and `write` apart.
+
 **NJ. The seal step walks each chain once a cycle** (step 486; 9
 November). Nothing to run. The loop's `forecast-seal` step took 9.8 to 13.5
 seconds of every cycle. It walked the forecast chain end to end together

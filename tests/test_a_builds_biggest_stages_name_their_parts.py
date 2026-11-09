@@ -177,8 +177,47 @@ def test_the_readings_say_each_sections_seconds():
     finally:
         ideas.build = keep
     parts = stageclock.parse_parts(said)["ideas readings"]
-    assert list(parts) == ["menu", "sim", "journals + write"], parts
-    assert parts["menu"] == 2.0 and parts["sim"] == 11.5 and parts["journals + write"] >= 0
+    assert list(parts) == ["menu", "sim", "write"], "a scratch board keeps no journal: " + repr(parts)
+    assert parts["menu"] == 2.0 and parts["sim"] == 11.5 and parts["write"] >= 0
+
+
+def test_the_real_boards_journals_each_say_their_seconds():
+    """"journals + write" was one number (8.2 to 8.7 seconds of every NFL
+    build on 9 November) for the attention journal, the curves' journal
+    and the file together. On the real board each journal is its own part,
+    a section with none says nothing, and a journal that fails still says
+    how long it took."""
+    from engine import gate, ideas
+    calls = []
+
+    def fns(name):
+        def journal(sport, sec):
+            calls.append(name)
+            if name == "range":
+                raise RuntimeError("the table is locked")
+        return (None, None, None, None if name == "menu" else journal)
+    keep = (ideas.build, ideas._section_fns, ideas.directory, gate._full_dir_for)
+    where = tempfile.mkdtemp()
+    ideas.build = lambda sport, props, games, board: {
+        "sport": sport, "sections": {"menu": {}, "attention": {}, "range": {}}, "errors": {},
+        "timings": {"menu": 0.1, "attention": 0.5, "range": 0.2}}
+    ideas._section_fns = fns
+    ideas.directory = lambda: Path(where)
+    gate._full_dir_for = lambda out: where
+    try:
+        with _Stopped():
+            stageclock.start()
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                data = ideas.attach("nfl", [], [], {}, out=str(Path(where) / "nfl.json"))
+            said = buf.getvalue().splitlines()
+    finally:
+        ideas.build, ideas._section_fns, ideas.directory, gate._full_dir_for = keep
+    parts = stageclock.parse_parts(said)["ideas readings"]
+    assert calls == ["attention", "range"], calls
+    assert list(parts) == ["menu", "attention", "range", "attention journal", "range journal", "write"], parts
+    assert data["errors"] == {"range.journal": "RuntimeError: the table is locked"}, data["errors"]
+    assert (Path(where) / "ideas_nfl.json").exists()
 
 
 def test_the_college_build_names_the_parts_of_its_first_stage():

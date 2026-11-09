@@ -199,16 +199,25 @@ def attach(sport: str, props, games, board, out=None, quiet: bool = False) -> di
         from . import stageclock as _clock
         for name, secs in (data.get("timings") or {}).items():
             _clock.part("ideas readings", name, secs)
-        t = time.monotonic()
+        # EACH JOURNAL ITS OWN PART, AND THE WRITE ITS OWN (2026-11-09):
+        # "journals + write" stayed at 8.2 to 8.7 of the NFL readings'
+        # seconds for hours after the attention journal's recheck went
+        # out, and one number could not say whether that was the
+        # attention journal running out its own budget, the curves'
+        # journal or the file.
         for name, sec in (list(data["sections"].items()) if live else []):
+            t = time.monotonic()
             try:
                 fn = _section_fns(name)[3]
-                if fn is not None:
-                    fn(sport, sec)
+                if fn is None:
+                    continue
+                fn(sport, sec)
             except Exception as exc:                        # noqa: BLE001
                 data["errors"][f"{name}.journal"] = f"{type(exc).__name__}: {exc}"[:300]
+            _clock.part("ideas readings", f"{name} journal", time.monotonic() - t)
+        t = time.monotonic()
         write(sport, data, where)
-        _clock.part("ideas readings", "journals + write", time.monotonic() - t)
+        _clock.part("ideas readings", "write", time.monotonic() - t)
         if not quiet:
             errs = data.get("errors") or {}
             tm = data.get("timings") or {}
