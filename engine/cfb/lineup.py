@@ -96,7 +96,23 @@ def season_games(conn, season: int, teams=None) -> tuple[dict, dict]:
     ``players``: {team: {name: {"role", "games": {day: {market: value}}}}}
     ``team_days``: {team: [day, ...]} in order — the days the team has a
     logged game. A college game's ``period`` IS its date (engine/sources/
-    cfbfastr), so days sort as dates."""
+    cfbfastr), so days sort as dates.
+
+    KEPT UNTIL ITS ROWS CHANGE (engine/logcache, 2026-11-09): most of the
+    lineup step's 3.5 seconds at 08:35 on 9 November, every build. Keyed on
+    the season's logs and the teams asked for (tonight's slate, which holds
+    all day)."""
+    import hashlib
+    from .. import logcache
+    asked = sorted({t for t in teams if t}) if teams else []
+    return logcache.memo(conn, "cfb_season_games", "cfb", (int(season),),
+                         lambda: _season_games(conn, season, asked or None),
+                         code=__file__,
+                         extra={"teams": hashlib.sha1("|".join(asked).encode()).hexdigest()})
+
+
+def _season_games(conn, season: int, teams=None) -> tuple[dict, dict]:
+    """`season_games`, read from the table."""
     q = ("SELECT period, team, player, position, market, value FROM player_game_logs "
          f"WHERE sport='cfb' AND season=? AND market IN ({','.join('?' * len(READ))})")
     args: list = [int(season), *READ]

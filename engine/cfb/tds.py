@@ -309,7 +309,24 @@ def merged_usage(conn, season: int) -> tuple[int, dict, dict]:
     since he is otherwise not on the board at all.
 
     Provenance travels with it because the card has to say which it is.
+
+    KEPT UNTIL ITS ROWS CHANGE (engine/logcache, 2026-11-09): the college
+    build read it three times a build (its props, its touchdown board, its
+    matchup scan), 3.8 seconds each at 08:35 on 9 November, from logs that
+    change when a night's box scores land. Each call gets its own copy.
+    Keyed on every college season (a thin season falls back to whichever
+    stored season has the most players), one kept copy per season asked.
     """
+    from .. import logcache
+    from ..sources import oddsapi
+    season = int(season)
+    return logcache.memo(conn, f"cfb_usage{season}", "cfb", None,
+                         lambda: _merged_usage(conn, season),
+                         code=(__file__, oddsapi.__file__))
+
+
+def _merged_usage(conn, season: int) -> tuple[int, dict, dict]:
+    """`merged_usage`, read from the table."""
     from ..sources.oddsapi import normalize_name          # noqa: F401
     _prior_season, prior = usage_table(conn, season)
     current: dict = {}

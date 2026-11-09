@@ -9338,6 +9338,33 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MV. College's reads and every board's comps are kept until their rows
+change** (step 472; 9 November). Nothing to run. MS's parts named the time at
+08:35: the college build read the same logs again on every build, the comps'
+history 11.5 seconds (each market's whole past, one walk per market), the
+props' two seasons of player games 6.4, the defense ratings 5.6, the usage
+table 3.8 three times (props, touchdown board, matchup scan) and the
+lineup's season 3.5, from logs that change when a night's box scores land.
+
+- Each is now kept beside the history file (data/feedstate/logcache, like
+  the NHL's player games in MN) and served while its rows have not changed,
+  counted by the history file's own triggers (MQ). The comps and the usage
+  table count every season of their sport, so a row added to an old season
+  reads them again too; the defense ratings also key on the day they stop
+  before and the schools counted as FBS, the lineup on tonight's teams.
+- The comps' indexes are kept for every board that has them (NFL, college,
+  NBA, WNBA, MLB), stored as columns of numbers: about 10 MB a market and a
+  hundredth of a second to load, against 16.5 MB and 0.15 seconds stored
+  as they were. On real hockey rows (a 1.9-million-row copy here) 3,000
+  random records per market counted the same to the digit, a replay's
+  cutoff included; a replay (the Lab, the backtest) still builds its own.
+- A kept read nothing has asked for in ten days is dropped, so last
+  season's tables and a market no board prices any more do not pile up.
+- On the heartbeat each shows under `logcache` (`comps_rec_yds.cfb`,
+  `cfb_usage2026.cfb`, `cfb_log_rows.cfb`, `cfb_defense.cfb`,
+  `cfb_season_games.cfb`): served (`kept`) or read again, and why. The first
+  build after this lands reads everything once, then serves.
+
 **MU. The prediction-markets build says where its two minutes go** (step 471;
 9 November). Nothing to run. The heartbeat at 08:19 had the markets build
 (Kalshi's board and Polymarket's) at 117.5 seconds of that sweep. It runs

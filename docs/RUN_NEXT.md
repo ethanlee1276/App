@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after the prediction-markets build started putting its steps on the
+Last updated 2026-11-09, after college's game-log reads and every board's comps started being
+kept until their rows change (step MV: nothing to run), after the prediction-markets build started putting its steps on the
 heartbeat (step MU: nothing to run), after the roster files started being rebuilt every half hour
 instead of every sweep (step MT: nothing to run), after college's four slow stages started
 naming their parts on the heartbeat (step MS: nothing to run), after the first night with the faster dial was read back

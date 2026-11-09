@@ -324,9 +324,21 @@ def _log_rows(conn, seasons: list[int]) -> dict:
     so the one market with a single obvious player per team was the one
     market with no players at all.
     """
-    from ..sources.oddsapi import normalize_name
     if not seasons:
         return {}
+    # KEPT UNTIL ITS ROWS CHANGE (engine/logcache, 2026-11-09): 6.4 seconds of
+    # the college build's slate at 08:35 on 9 November, every build, from two
+    # seasons of logs that change when a night's box scores land.
+    from .. import logcache
+    from ..sources import oddsapi
+    return logcache.memo(conn, "cfb_log_rows", "cfb", seasons,
+                         lambda: _read_log_rows(conn, seasons),
+                         code=(__file__, oddsapi.__file__))
+
+
+def _read_log_rows(conn, seasons: list[int]) -> dict:
+    """`_log_rows`, read from the table."""
+    from ..sources.oddsapi import normalize_name
     q = ("SELECT season, period, player, team, opponent, position, home, "
          "market, value FROM player_game_logs WHERE sport='cfb' "
          "AND market IN (%s) AND season IN (%s) "

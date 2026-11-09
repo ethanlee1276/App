@@ -51,6 +51,14 @@ yet, rows changed, code changed, unreadable), and where its seconds went
 heartbeat (launch._logcache_public), so whether the cache holds on the box
 is a glance, not a guess from a build's timings.
 
+THE WHOLE SPORT, AND WHAT ELSE A READ TAKES (2026-11-09). ``seasons=None``
+keys a read on every season of its sport (the comps' spot index walks a
+market's whole history), counted the same way. ``extra`` folds the read's
+other inputs into its key (the date a read stops before, the schools a
+table counts as FBS), so a new day or a new school reads again; ``code``
+may name several source files when a read leans on another module's
+helpers (the name normaliser).
+
 ONLY THE PRODUCTION HISTORY FILE (`engine.db.DEFAULT_DB`). The tests and
 the Lab open files of their own and read them fresh, as they always did;
 `force=True` lets a test exercise the cache on a file of its own.
@@ -67,8 +75,9 @@ import pickle
 import time
 
 #: Bumped when a cached result's shape (or its key's) changes, so an old
-#: file is ignored. 2: keyed on the logs' generations.
-VERSION = 2
+#: file is ignored. 2: keyed on the logs' generations. 3: whole-sport keys,
+#: extra inputs and several code files.
+VERSION = 3
 DIRNAME = "logcache"
 #: The triggers that move `log_generations` (engine/db SCHEMA).
 TRIGGERS = ("log_generations_insert", "log_generations_delete", "log_generations_update")
@@ -95,21 +104,32 @@ def enabled_for(conn) -> bool:
         return False
 
 
+def _seasons(seasons):
+    """The sorted seasons a read covers, or None for the whole sport."""
+    return None if seasons is None else sorted({int(s) for s in seasons})
+
+
 def scope_key(conn, sport: str, seasons) -> tuple:
-    """(rows, highest rowid) of one sport's seasons in player_game_logs."""
-    seasons = sorted({int(s) for s in seasons})
-    r = conn.execute(
-        "SELECT COUNT(*), MAX(rowid) FROM player_game_logs WHERE sport=? "
-        f"AND season IN ({','.join('?' * len(seasons))})",
-        [sport, *seasons]).fetchone()
+    """(rows, highest rowid) of one sport's seasons in player_game_logs
+    (every season of it when ``seasons`` is None)."""
+    seasons = _seasons(seasons)
+    if seasons is None:
+        r = conn.execute("SELECT COUNT(*), MAX(rowid) FROM player_game_logs WHERE sport=?",
+                         (sport,)).fetchone()
+    else:
+        r = conn.execute(
+            "SELECT COUNT(*), MAX(rowid) FROM player_game_logs WHERE sport=? "
+            f"AND season IN ({','.join('?' * len(seasons))})",
+            [sport, *seasons]).fetchone()
     return int(r[0] or 0), int(r[1] or 0)
 
 
 def generations(conn, sport: str, seasons):
-    """(epoch, ((season, count of changes), ...)) for one sport's seasons,
-    off `log_generations`; None when the file has no such table (or no
-    epoch), and the caller counts the rows instead."""
-    seasons = sorted({int(s) for s in seasons})
+    """(epoch, ((season, count of changes), ...)) for one sport's seasons
+    (every season it has a count for, a missing season included, when
+    ``seasons`` is None), off `log_generations`; None when the file has no
+    such table (or no epoch), and the caller counts the rows instead."""
+    seasons = _seasons(seasons)
     try:
         # ALL THREE TRIGGERS, OR NO COUNTS. A table whose triggers are not
         # all there (a build killed between the schema's statements, a hand
@@ -123,6 +143,15 @@ def generations(conn, sport: str, seasons):
         epoch = conn.execute("SELECT gen FROM log_generations WHERE sport='~epoch'").fetchone()
         if epoch is None or epoch[0] is None:
             return None
+        if seasons is None:
+            # A season never written since the triggers were made has no
+            # row, and its rows have not changed: absent is the same count
+            # on both sides of the comparison.
+            # -1 stands for rows filed with no season, which count too.
+            every = conn.execute("SELECT season, gen FROM log_generations WHERE sport=?",
+                                 (sport,)).fetchall()
+            return int(epoch[0]), tuple(sorted(
+                (-1 if r[0] is None else int(r[0]), int(r[1] or 0)) for r in every))
         got = {int(r[0]): int(r[1] or 0) for r in conn.execute(
             "SELECT season, gen FROM log_generations WHERE sport=? "
             f"AND season IN ({','.join('?' * len(seasons))})", [sport, *seasons])}
@@ -142,7 +171,10 @@ def _path(name: str, sport: str, seasons: list, db: str) -> str:
 
 
 def code_hash(path) -> str:
-    """sha1 of a source file's bytes ("" when it cannot be read)."""
+    """sha1 of a source file's bytes, or of several files' in order ("" for
+    one that cannot be read)."""
+    if isinstance(path, (list, tuple)):
+        return hashlib.sha1("|".join(code_hash(p) for p in path).encode()).hexdigest()
     try:
         with open(path, "rb") as fh:
             return hashlib.sha1(fh.read()).hexdigest()
@@ -160,6 +192,8 @@ def _why(stored, key: dict) -> str:
         return "code changed"
     if any(stored.get(k) != key.get(k) for k in ("epoch", "gens", "rows", "top")):
         return "rows changed"
+    if stored.get("extra") != key.get("extra"):
+        return "inputs changed"
     return "key changed"
 
 
@@ -189,15 +223,17 @@ def _note(path: str, entry: dict) -> None:
 
 
 def memo(conn, name: str, sport: str, seasons, compute, code=None, force: bool | None = None,
-         clock=time.monotonic):
+         clock=time.monotonic, extra=None):
     """``compute()``, or the result stored for the same rows when they have
-    not changed since. ``seasons`` are the seasons ``compute`` reads;
-    ``code`` the source file that computes it (its caller's ``__file__``)."""
+    not changed since. ``seasons`` are the seasons ``compute`` reads (None:
+    every season of the sport); ``code`` the source file that computes it
+    (its caller's ``__file__``, or several); ``extra`` any other input it
+    reads, JSON-shaped (a date, a hash), which must match too."""
     if not (enabled_for(conn) if force is None else force):
         return compute()
     t0 = clock()
     try:
-        seasons = sorted({int(s) for s in seasons})
+        seasons = _seasons(seasons)
         gens = generations(conn, sport, seasons)
         if gens is not None:
             said = {"epoch": gens[0], "gens": gens[1]}
@@ -208,7 +244,8 @@ def memo(conn, name: str, sport: str, seasons, compute, code=None, force: bool |
             shown = {"rows": rows}
         db = db_file(conn)
         key = {"v": VERSION, "name": name, "sport": sport, "seasons": seasons,
-               "db": db, **said, "code": code_hash(code) if code else ""}
+               "db": db, **said, "code": code_hash(code) if code else "",
+               "extra": extra}
         path = _path(name, sport, seasons, db)
     except Exception:                                        # noqa: BLE001
         return compute()
@@ -247,7 +284,48 @@ def memo(conn, name: str, sport: str, seasons, compute, code=None, force: bool |
         except Exception:                                    # noqa: BLE001
             pass
     _note(path, note)
+    prune()
     return value
+
+
+#: A kept read nothing has asked for in this many days is dropped (its note
+#: is rewritten on every call, served or not): a renamed read, last season's
+#: usage table, a market no board prices any more.
+PRUNE_DAYS = 10
+
+#: Set once this process has pruned (once is enough: builds are minutes).
+_PRUNED = [False]
+
+
+def prune(now: float | None = None) -> int:
+    """Drop every kept read whose note is older than PRUNE_DAYS, once a
+    process; returns how many files went. Never raises: a file it cannot
+    drop is left for the next process, and costs only disk."""
+    if _PRUNED[0]:
+        return 0
+    _PRUNED[0] = True
+    t = time.time() if now is None else float(now)
+    n = 0
+    try:
+        names = os.listdir(folder())
+    except OSError:
+        return 0
+    for fn in names:
+        if not fn.endswith(".json"):
+            continue
+        note = os.path.join(folder(), fn)
+        try:
+            if t - os.path.getmtime(note) < PRUNE_DAYS * 86400:
+                continue
+        except OSError:
+            continue
+        for path in (note[:-len(".json")] + ".pkl", note):
+            try:
+                os.unlink(path)
+                n += 1
+            except OSError:
+                pass
+    return n
 
 
 def forget(sport: str) -> int:

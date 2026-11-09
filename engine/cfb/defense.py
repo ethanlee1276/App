@@ -98,8 +98,25 @@ def wide_rows(conn, season: int, before: str | None = None, fbs: set | None = No
 
 def ratings(conn, season: int, before: str | None = None) -> dict:
     """{school: {stat: rating}} for tonight: this season's games before
-    ``before``, shrunk toward last season's. Empty before the first game."""
+    ``before``, shrunk toward last season's. Empty before the first game.
+
+    KEPT UNTIL ITS ROWS CHANGE (engine/logcache, 2026-11-09): 5.6 seconds of
+    the college build's slate at 08:35 on 9 November, every build. Keyed on
+    the two seasons' logs, the day it stops before and the schools counted
+    as FBS (read off the games table, cheaply, on every call)."""
+    import hashlib
+    from .. import logcache
+    season = int(season)
     fbs = fbs_teams(conn, season)
+    extra = {"before": str(before)[:10] if before else None,
+             "fbs": hashlib.sha1("|".join(sorted(fbs)).encode()).hexdigest()}
+    return logcache.memo(conn, "cfb_defense", "cfb", (season - 1, season),
+                         lambda: _ratings(conn, season, before, fbs),
+                         code=(__file__, D.__file__), extra=extra)
+
+
+def _ratings(conn, season: int, before, fbs: set) -> dict:
+    """`ratings`, read from the table."""
     now = wide_rows(conn, season, before, fbs)
     if not now:
         return {}

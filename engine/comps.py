@@ -44,6 +44,8 @@ Standard library only; reads the history DB the ingests already fill.
 
 from __future__ import annotations
 
+import array
+
 #: Trailing games that define a player's "form state". Ten matches the
 #: form module's longest ordinary window, so the conditioning statistic
 #: is one the rest of the engine already thinks in.
@@ -163,16 +165,56 @@ class _BandIndex:
     BLOCK = 256
 
     def __init__(self, index: list[tuple]):
-        self.spots = sorted(index, key=lambda s: s[2])
-        self.forms = [s[2] for s in self.spots]
+        self._spots = sorted(index, key=lambda s: s[2])
+        self._cols = None
+        self.forms = [s[2] for s in self._spots]
         self.values = [s[3] for s in self.spots]
         b = self.BLOCK
         self.blocks = [sorted(self.values[i:i + b]) for i in range(0, len(self.values), b)]
         self.own: dict = {}
-        for _key, name, f, value in self.spots:
+        for _key, name, f, value in self._spots:
             fs, vs = self.own.setdefault(name, ([], []))
             fs.append(f)
             vs.append(value)
+
+    # A KEPT COPY IN COLUMNS (engine/logcache, 2026-11-09). College's comps
+    # read each market's whole history on every build, 11.5 seconds at 08:35
+    # on 9 November; kept between builds as tuples a market's index was 16.5
+    # MB and 0.15 seconds to load, as columns of floats 9.6 MB and 0.015.
+    # The spot tuples `comp_record` walks for a replay's cutoff come back
+    # only when one is asked for, rebuilt from the same columns (each name,
+    # season and date stored once), so every count is the same to the digit.
+    @property
+    def spots(self) -> list:
+        if self._spots is None:
+            names, seasons, periods = self._cols
+            self._spots = [((s, p), n, f, v) for n, s, p, f, v
+                           in zip(names, seasons, periods, self.forms, self.values)]
+        return self._spots
+
+    def __getstate__(self) -> dict:
+        pool: dict = {}
+        names, seasons, periods = [], [], []
+        for key, name, _f, _v in self.spots:
+            names.append(pool.setdefault(name, name))
+            seasons.append(pool.setdefault(("s", key[0]), key[0]))
+            periods.append(pool.setdefault(("p", key[1]), key[1]))
+        flat = array.array("d")
+        for block in self.blocks:
+            flat.extend(block)
+        return {"forms": array.array("d", self.forms), "values": array.array("d", self.values),
+                "blocks": flat, "n": len(self.forms),
+                "own": {n: (array.array("d", fs), array.array("d", vs))
+                        for n, (fs, vs) in self.own.items()},
+                "names": names, "seasons": seasons, "periods": periods}
+
+    def __setstate__(self, st: dict) -> None:
+        self.forms, self.values = st["forms"], st["values"]
+        b, flat = self.BLOCK, st["blocks"]
+        self.blocks = [flat[i:i + b] for i in range(0, len(flat), b)]
+        self.own = st["own"]
+        self._cols = (st["names"], st["seasons"], st["periods"])
+        self._spots = None
 
     def record(self, line: float, form: float, band: float = FORM_BAND, before=None,
                min_n: int = MIN_COMPS, player: str | None = None) -> dict | None:
@@ -232,6 +274,15 @@ def _form_of(rec: dict) -> float | None:
     return sum(vals) / len(vals)
 
 
+def _kept_index(conn, sport: str, market: str) -> "_BandIndex":
+    """One market's band index, kept until the sport's logs change
+    (engine/logcache): its whole history, so every season counts. A replay
+    (``before``) builds its own, as it always did."""
+    from . import logcache
+    return logcache.memo(conn, "comps_" + str(market).replace("-", "_"), sport, None,
+                         lambda: _BandIndex(spot_index(conn, sport, market)), code=__file__)
+
+
 def decorate(recommendations: list[dict], conn, sport: str,
              before=None, min_n: int = MIN_COMPS) -> dict:
     """Attach the comp record to every prop card that has one.
@@ -255,7 +306,8 @@ def decorate(recommendations: list[dict], conn, sport: str,
             continue
         if market not in indexes:
             try:
-                indexes[market] = _BandIndex(spot_index(conn, sport, market))
+                indexes[market] = (_kept_index(conn, sport, market) if before is None
+                                   else _BandIndex(spot_index(conn, sport, market)))
             except Exception:                      # noqa: BLE001
                 indexes[market] = _BandIndex([])
         # The band counted off a form-sorted index (`_BandIndex`): the same
