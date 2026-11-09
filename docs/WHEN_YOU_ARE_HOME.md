@@ -9338,6 +9338,43 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MK. Which MLB bets are still open, and why** (step 461; 9 November).
+The record's journal still counts 29 MLB bets as open (10 of them staked),
+though the season is over. The nightly chores pull MLB results from where
+they last stopped and then grade every open bet, so these are bets the
+grader cannot settle. Two causes fit, and only the box can tell them apart:
+
+- an "if necessary" postseason game that was never played. Its date has no
+  other game on it, and the automatic void (`ledger.auto_void_unplayed`)
+  only claims a bet when its day also holds a finished game, as proof the
+  day's results came in;
+- or older stragglers from earlier in the season.
+
+Until they settle or void, they are missing from the MLB record.
+Read-only: every open MLB bet with its date, section and stake, what the
+history file holds for that date, and what the automatic void would claim.
+Paste it back and I will fix whichever it is:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import ledger, db
+c, h = ledger.connect(), db.connect()
+rows = c.execute(\"SELECT date, category, player, market, side, line, stake_units FROM bets WHERE sport='mlb' AND status='open' ORDER BY date\").fetchall()
+print(len(rows), 'open MLB bets')
+for r in rows: print(' ', tuple(r))
+for d in sorted({r[0] for r in rows}):
+    g = h.execute(\"SELECT game_id, home_score, away_score FROM games WHERE sport='mlb' AND period=?\", (d,)).fetchall()
+    print(d, 'games on file:', [tuple(x) for x in g] or 'none')
+print('the automatic void would claim:', len(ledger.unplayed_bets(c, h, sports=('mlb',))))
+"
+```
+
+The check in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh MK 2>&1 | tee /tmp/mk.txt
+```
+
 **MJ. The college build's first stage stops re-reading its history**
 (step 460; 8 November). Its part timings at 10:48 put two jobs at 37 of
 the stage's 40 seconds.
@@ -9641,6 +9678,16 @@ The check in one go:
 ```
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh LV 2>&1 | tee /tmp/lv.txt
 ```
+
+**Measured on the box, Sunday night 8 November.** The index was whole
+(`snapshot_indexed` 1.0) and three passes graded props: 44 bets at 21:55,
+39 at 22:22 and 21 at 22:41. Their snapshot reads took 19.5, 16.8 and 15.3
+seconds at a share of 0.2, against 82.8 seconds at 0.3 before. No pass had
+to read again for a copy (`snapshot_unsure` never showed). The share stays
+near 0.2 because an NFL bet's days run Thursday to Monday, so the read
+starts two days before the Thursday of the oldest open bet's week (29
+October that night). As each week's stragglers settle, or pass seven days,
+it moves up a week on its own.
 
 **LU. The two-leg backtest pairs again only the days whose picks changed**
 (step 438; 8 November). The export at 20:21 on Saturday 7 November took

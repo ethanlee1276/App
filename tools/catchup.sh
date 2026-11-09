@@ -901,6 +901,19 @@ run LV "Grading's snapshot read starts at the first row it needs: the day index"
 python3 -c "import json; d=json.load(open('/srv/qellys/web/data/heartbeat.json')); g=((d.get('chores') or {}).get('settle') or {}).get('phases', {}).get('grade_parts') or {}; print({k: g.get(k) for k in ('open', 'snapshot_from', 'snapshot_indexed', 'snapshot_index', 'snapshot_share', 'snapshot_read', 'snapshot_reads', 'snapshot_whole', 'snapshot_unsure', 'total')})"
 ls -la /srv/qellys/data/cache/line_history.days.json
 SH
+run MK "Which MLB bets are still open, and why: the games on file for their dates" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import ledger, db
+c, h = ledger.connect(), db.connect()
+rows = c.execute(\"SELECT date, category, player, market, side, line, stake_units FROM bets WHERE sport='mlb' AND status='open' ORDER BY date\").fetchall()
+print(len(rows), 'open MLB bets')
+for r in rows: print(' ', tuple(r))
+for d in sorted({r[0] for r in rows}):
+    g = h.execute(\"SELECT game_id, home_score, away_score FROM games WHERE sport='mlb' AND period=?\", (d,)).fetchall()
+    print(d, 'games on file:', [tuple(x) for x in g] or 'none')
+print('the automatic void would claim:', len(ledger.unplayed_bets(c, h, sports=('mlb',))))
+"
+SH
 run LW "The box-score pull asks for a game by its season: the ingest's seconds" 30 <<'SH'
 python3 -c "import json; d=json.load(open('/srv/qellys/web/data/heartbeat.json')); p=((d.get('chores') or {}).get('settle') or {}).get('phases', {}); print('ingest', p.get('ingest'), '| by league', p.get('ingest_parts'), '| box scores', p.get('box_parts'))"
 SH

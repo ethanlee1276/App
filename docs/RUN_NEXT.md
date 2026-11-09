@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-08, after the college build started reading its
+Last updated 2026-11-09, after the grading read was measured on the box
+(step LV: 82.8 seconds before, 15 to 20 after; nothing to run) and 29 MLB
+bets were found still open after the season (step MK: one read-only check,
+added to the combined line below), after the college build started reading its
 closing lines once for the two weeks of results, and looking for
 ESPN-numbered schools at most hourly (step MJ: nothing to run), after the
 prop tape started reading only the watched players' prices and each pick's line chart only its own snapshots
@@ -262,7 +265,7 @@ Everything below that only reads, in one go (a few minutes; it writes
 nothing). Paste the whole file back:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP LL LM LR LV LW LQ KP 2>&1 | tee /tmp/now.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh JW JT KO JL IQ JM JN JO JP JP2 JQ JQ2 JR JR2 KF KG KI KL IX IU IT JA IP LL LM LR LV LW LQ KP MK 2>&1 | tee /tmp/now.txt
 ```
 
 The long ones, on a quiet evening (about an hour together; still
