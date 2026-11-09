@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after two more NBA stages started naming their parts (step NF: nothing
+Last updated 2026-11-09, after college's touchdown board started blending a returner toward last
+season as documented (step NG: nothing to run), after two more NBA stages started naming their parts (step NF: nothing
 to run), after three more NFL stages started naming their parts (step NE: nothing
 to run), after the attention reading started reading only its month and asking
 Wikipedia less (step ND: nothing to run), after the UFC step started saying where its time goes

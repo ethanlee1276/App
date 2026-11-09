@@ -2211,15 +2211,20 @@ def cfb_usage(conn, season: int) -> dict:
     and catches a game, the share of the team's carries, and the share of
     its CATCHES — college box scores log no targets, so the receiving share
     is said as catches (``share_of``) and never passed off as targets."""
-    from .cfb.tds import merged_usage, role_of
-    _season, usage, _why = merged_usage(conn, int(season))
+    from .cfb.tds import merged_usage, role_of, volume_rows
+    _season, usage, why = merged_usage(conn, int(season))
     out: dict = {}
     for team, players in (usage or {}).items():
-        car = sum(float(u.get("carries") or 0) for u in players.values()) or 0.0
-        rec = sum(float(u.get("receptions") or 0) for u in players.values()) or 0.0
+        # Once the team has played, last season's men with no game yet
+        # (mostly graduates) are neither listed nor counted in its shares
+        # (cfb.tds.volume_rows, USAGE_PRIOR_GAMES).
+        rows = volume_rows(players, why, team)
+        car = sum(float(u.get("carries") or 0) for u in rows) or 0.0
+        rec = sum(float(u.get("receptions") or 0) for u in rows) or 0.0
+        listed = {id(u) for u in rows}
         for _norm, u in players.items():
             name = u.get("player") or ""
-            if not name:
+            if not name or id(u) not in listed:
                 continue
             out[(team, _key(name))] = {
                 "name": name, "position": role_of(u), "games": int(u.get("games") or 0),

@@ -296,6 +296,31 @@ def usage_table(conn, season: int | None = None,
 #: USAGE_PRIOR_GAMES = 4`); college never got it, which is why the
 #: freshman hole read as a missing recruiting feed rather than as a
 #: missing blend.
+#:
+#: IT NEVER RAN IN SEASON, AND AS WRITTEN IT WOULD HAVE HURT (2026-11-09).
+#: `merged_usage` read its prior with `usage_table(conn, season)`, which
+#: serves THIS season as soon as MIN_SEASON_PLAYERS are logged — after the
+#: first Saturday — so from then on every man was blended toward himself,
+#: and a returner with no game yet was dropped. Replayed on the touchdown
+#: board's own chain (shares and team volumes the board's way, 2021-2025
+#: ingested from the mirror, scored 2022-23 / 2024-25), Brier:
+#:
+#:     his games this season    own only   as written   as shipped
+#:     3 or more  (15,943)      0.17652    0.18350      0.17645
+#:     2          ( 3,760)      0.17161    0.17680      0.16981
+#:     1          ( 4,744)      0.15449    0.15397      0.15049
+#:     none yet   ( 2,952)      unpriced   0.15780      0.15822
+#:
+#: "As written" kept last season's men with no game yet in the team's
+#: volume, so every graduate diluted every teammate's share. As shipped
+#: (`volume_rows`), last season's men count toward the volume only before
+#: the team's first game; the man being priced always counts. The
+#: touchdown rate blends the same way (`anytime_td`), and games are this
+#: season's and last's together, as they were — better than either the own
+#: rate or this season's games alone in every bucket. Three games in, the
+#: blend changes nothing (0.17645 against 0.17652), so the touchdown fit's
+#: replay (engine/cfbtdfit.samples, three games and up, own season) still
+#: grades the board that runs.
 USAGE_PRIOR_GAMES = 3
 
 
@@ -308,7 +333,9 @@ def merged_usage(conn, season: int) -> tuple[int, dict, dict]:
     carry their own weight from the first one — which is the whole point,
     since he is otherwise not on the board at all.
 
-    Provenance travels with it because the card has to say which it is.
+    Provenance travels with it because the card has to say which it is,
+    and because a team's volume must leave out last season's men once the
+    team has played (`volume_rows`).
 
     KEPT UNTIL ITS ROWS CHANGE (engine/logcache, 2026-11-09): the college
     build read it three times a build (its props, its touchdown board, its
@@ -325,25 +352,38 @@ def merged_usage(conn, season: int) -> tuple[int, dict, dict]:
                          code=(__file__, oddsapi.__file__))
 
 
+def _prior_table(conn, season: int) -> tuple[int, dict]:
+    """``(season - 1, its usage table)`` when last season was ingested as a
+    season (MIN_SEASON_PLAYERS); ``(0, {})`` otherwise. Never THIS season,
+    whatever it holds: blending a man toward himself is no blend."""
+    last = int(season) - 1
+    if last <= 0 or _players_logged(conn, last) < MIN_SEASON_PLAYERS:
+        return 0, {}
+    return usage_table(conn, last, force=True)
+
+
 def _merged_usage(conn, season: int) -> tuple[int, dict, dict]:
     """`merged_usage`, read from the table."""
     from ..sources.oddsapi import normalize_name          # noqa: F401
-    _prior_season, prior = usage_table(conn, season)
     current: dict = {}
     if season and _players_logged(conn, season) > 0:
         _cs, current = usage_table(conn, season, force=True)
     if not current:
-        return _prior_season, prior, {}
+        # Nothing of this season yet (August): the newest stored season,
+        # whole, exactly as before.
+        fallback_season, table = usage_table(conn, season)
+        return fallback_season, table, {}
+    _prior_season, prior = _prior_table(conn, season)
 
     fields = ("carries", "receptions", "rush_yds", "rec_yds",
-              "rz_car", "rz_rec")
+              "rz_car", "rz_rec", "anytime_td")
     out: dict = {}
     why: dict = {}
     for team, players in current.items():
         for name, cur in players.items():
             old = (prior.get(team) or {}).get(name)
             games = int(cur.get("games") or 0)
-            if not old or _prior_season == season:
+            if not old:
                 # Nothing to blend toward — his own games ARE the read.
                 out.setdefault(team, {})[name] = dict(cur)
                 why[(team, name)] = ("own", games, 0)
@@ -358,7 +398,9 @@ def _merged_usage(conn, season: int) -> tuple[int, dict, dict]:
             why[(team, name)] = ("blend", games, int(old.get("games") or 0))
 
     # Anyone with a prior season and no game yet keeps his old row, which
-    # is exactly what the old rule gave him and no worse.
+    # is exactly what the old rule gave him and no worse — priced off it if
+    # a book quotes him, but counted in his team's volume only until the
+    # team's first game (`volume_rows`).
     for team, players in prior.items():
         for name, old in players.items():
             if name in (out.get(team) or {}):
@@ -366,6 +408,19 @@ def _merged_usage(conn, season: int) -> tuple[int, dict, dict]:
             out.setdefault(team, {})[name] = dict(old)
             why[(team, name)] = ("prior", 0, int(old.get("games") or 0))
     return season, out, why
+
+
+def volume_rows(team_u: dict, why: dict, team: str, keep: str | None = None) -> list:
+    """The rows a team's volume is summed from (the share's denominator):
+    every man with a game this season, and last season's men (provenance
+    "prior") only before the team's first game, when they are all it has.
+    Once the team has played, a man with no game yet is mostly a graduate,
+    and counting him diluted every teammate's share (USAGE_PRIOR_GAMES).
+    ``keep``, the man being priced, always counts."""
+    def prior(name):
+        return ((why or {}).get((team, name)) or ("own",))[0] == "prior"
+    played = any(not prior(n) for n in (team_u or {}))
+    return [u for n, u in (team_u or {}).items() if not played or n == keep or not prior(n)]
 
 
 def _usage_quality(prov) -> float:
@@ -1142,10 +1197,12 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             # statement about the season the numbers came from — dividing
             # last year's touches by this year's roster would compare two
             # different teams and call it a role.
-            team_u = usage.get(usage_team) or {}
+            # Last season's men count only before the team's first game; he
+            # always does (`volume_rows`, USAGE_PRIOR_GAMES).
+            team_rows = volume_rows(usage.get(usage_team) or {}, usage_why, usage_team, keep=norm)
             vol = u["rush_yds"] + u["rec_yds"]
             team_vol = sum(p["rush_yds"] + p["rec_yds"]
-                           for p in team_u.values()) or 1.0
+                           for p in team_rows) or 1.0
             share = clamp(vol / team_vol, 0.0, 1.0)
             # RED-ZONE TOUCHES, at a small fitted weight. A team with no
             # red-zone rows at all — a board built from a box-score feed
@@ -1175,7 +1232,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             # coefficient of the wrong sign. A quarterback who takes
             # goal-line carries is already in `team_rz`, so he already
             # dilutes the back's share; a second term double-counts him.
-            team_rz = sum(p["rz_car"] + p["rz_rec"] for p in team_u.values())
+            team_rz = sum(p["rz_car"] + p["rz_rec"] for p in team_rows)
             rz_share = (clamp((u["rz_car"] + u["rz_rec"]) / team_rz, 0.0, 1.0)
                         if team_rz > 0 else share)
             share = (1.0 - RZ_SHARE_WEIGHT) * share \

@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NG. College's touchdown board blends a returner toward last season, as
+documented** (step 483; 9 November). Nothing to run. The blend that shrinks
+a player's few games this season toward his last season (three games to
+half weight) never ran once a season was under way: its "last season" was
+read with a function that serves the current season after the first
+Saturday, so every man was blended toward himself, and a returner with no
+game yet was dropped. Replayed here on 2021-2025 college games (downloaded
+from the same free mirror the box ingests), on the board's own touchdown
+chain, scored on 2024-25: as written, the blend would have made the board
+worse (0.1836 against 0.1765, three games in), because last season's
+graduates stayed in each team's volume and diluted everybody's share. With
+them left out once a team has played, and the touchdown rate blended too,
+it is better for a man with one game (0.1505 against 0.1545) or two
+(0.1698 against 0.1716), the same from three games on, and a returner in
+his first game is priced again. The matchup scan stops listing last
+season's departed men once a team has played.
+
 **NF. Two more NBA stages name their parts** (step 482; 9 November). Nothing
 to run. `history + rosters + injuries` (8 seconds at 10:13) and `slate +
 odds + line ledger` (5) now show their parts under `boards.nba.parts`: the

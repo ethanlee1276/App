@@ -227,6 +227,12 @@ def samples(conn, seasons=None, min_prior: int = MIN_PRIOR_GAMES) -> list:
     Season-to-date form, which is what `engine.cfb.tds.usage_table`
     averages on the live board — not a rolling window. Grading a model
     on a form window it does not use measures a model nobody runs.
+
+    His own season only, though the board blends a returner toward last
+    season (`cfb.tds.USAGE_PRIOR_GAMES`): from three games in — the only
+    rows this walk grades — the blend changes nothing measurable (Brier
+    0.17645 against 0.17652 held out, 2026-11-09), so this still grades
+    the board that runs.
     """
     where = "WHERE sport='cfb' AND market IN (%s)" % ",".join("?" * len(MARKETS))
     args = list(MARKETS)
