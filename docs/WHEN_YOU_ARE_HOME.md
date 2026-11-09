@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MU. The prediction-markets build says where its two minutes go** (step 471;
+9 November). Nothing to run. The heartbeat at 08:19 had the markets build
+(Kalshi's board and Polymarket's) at 117.5 seconds of that sweep. It runs
+every ten minutes, so it averages more than a minute of every six-minute
+sweep, and its step clocks went only to its own log. Each step is now a
+stage on the heartbeat (`boards.predmarkets.stages`: kalshi board,
+polymarket pull, store, recent tape, wallet history, tape counts, tape +
+flow, settle flags, validation, top traders, price tape), and its publish
+names its parts like every board's (MP). The next change reads these first.
+
 **MT. The roster files are rebuilt every half hour, not every sweep** (step
 470; 9 November). Nothing to run. The heartbeat at 07:54 had the rosters step
 at 34 seconds of a 365-second sweep, on every sweep: five leagues' roster

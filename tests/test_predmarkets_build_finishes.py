@@ -108,6 +108,26 @@ def test_every_step_prints_its_clock_and_the_budget_sits_under_the_kill():
     assert body.index("_attach_tape(conn, display_markets") < body.index("\n    conn.close()\n")
 
 
+def test_every_step_reaches_the_heartbeat_as_a_stage():
+    """The loop reads a build's stage marks onto the heartbeat
+    (launch._stages_of): 117.5 seconds of the sweep at 08:19 on 9 November
+    with nothing public to say which step took them."""
+    import contextlib
+    import io
+    from engine import stageclock
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        _run(_tree())
+    stages = stageclock.parse(buf.getvalue().splitlines())
+    for step in ("kalshi board", "polymarket pull", "store", "recent tape", "wallet history",
+                 "tape counts", "tape + flow", "settle flags", "validation", "top traders",
+                 "price tape"):
+        assert step in stages, (step, stages)
+    parts = stageclock.parse_parts(buf.getvalue().splitlines())
+    assert set(parts) <= {"publish predmarkets.json"}, ("its steps are stages; only the "
+                                                         "publish names parts (gate.publish)", parts)
+
+
 def test_a_failed_build_backs_off_instead_of_retrying_every_cycle():
     src = (ROOT / "launch.py").read_text()
     assert "PREDMARKETS_FAIL_BACKOFF_S = 1800" in src

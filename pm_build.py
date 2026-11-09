@@ -21,6 +21,7 @@ from engine import predmarket as pm
 from engine.db import connect
 from engine.sources.fetch import DataUnavailable
 from engine import gate
+from engine import stageclock
 
 #: Where each sport's built slate lives — the games and moneyline
 #: probabilities the Kalshi board compares against. Read from disk rather
@@ -280,6 +281,11 @@ _T0 = [time.monotonic()]
 
 def _lap(step: str) -> None:
     print(f"  pm {step:<16} {time.monotonic() - _T0[0]:6.1f}s", flush=True)
+    # …AND AS A STAGE (engine/stageclock), which the loop reads back onto the
+    # heartbeat (launch._stages_of → boards.predmarkets.stages): the build
+    # ran 117.5 seconds of the sweep at 08:19 on 9 November, every ten
+    # minutes, and its step clocks reached only a log nobody reads.
+    stageclock.mark(step)
 
 
 def _over() -> bool:
@@ -307,6 +313,7 @@ def main() -> None:
     args = ap.parse_args()
 
     _T0[0] = time.monotonic()
+    stageclock.start()
     out_dir = Path(args.out).parent
     build_kalshi(out_dir / "kalshi.json", out_dir)
     _lap("kalshi board")

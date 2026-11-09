@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after the roster files started being rebuilt every half hour
+Last updated 2026-11-09, after the prediction-markets build started putting its steps on the
+heartbeat (step MU: nothing to run), after the roster files started being rebuilt every half hour
 instead of every sweep (step MT: nothing to run), after college's four slow stages started
 naming their parts on the heartbeat (step MS: nothing to run), after the first night with the faster dial was read back
 (step LX: college's dial fitted three markets and part of a fourth in 19 minutes;
