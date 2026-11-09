@@ -124,8 +124,15 @@ def test_every_step_reaches_the_heartbeat_as_a_stage():
                  "price tape"):
         assert step in stages, (step, stages)
     parts = stageclock.parse_parts(buf.getvalue().splitlines())
-    assert set(parts) <= {"publish predmarkets.json"}, ("its steps are stages; only the "
-                                                         "publish names parts (gate.publish)", parts)
+    assert set(parts) <= {"publish predmarkets.json", "publish kalshi.json", "kalshi board"}, (
+        "its steps are stages; only the publishes (gate.publish) and the Kalshi step name parts",
+        parts)
+    src = (ROOT / "pm_build.py").read_text()
+    body = src[src.index("def build_kalshi("):src.index("def _lap(")]
+    laps = ["markets pull", "snapshot", "board", "price tape", "weather desk", "desk journal",
+            "tape count"]
+    at = [body.index(f'stageclock.lap("kalshi board", "{p}", _kt)') for p in laps]
+    assert at == sorted(at), ("the Kalshi step's parts, in the order it runs them", at)
 
 
 def test_a_failed_build_backs_off_instead_of_retrying_every_cycle():

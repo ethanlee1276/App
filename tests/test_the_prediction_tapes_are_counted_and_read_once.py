@@ -1,6 +1,6 @@
-"""The Polymarket tape's two totals are kept running between builds, and the
-wallets' names are read as the page asks for them (engine/predmarket
-.tape_counts, WalletNames; pm_build's "tape counts" step).
+"""The prediction-markets tapes are counted once and read once
+(engine/tapecount; engine/predmarket.tape_counts, WalletNames,
+price_series_many; engine/sources/kalshi.price_series_many; pm_build).
 
 The heartbeat at 09:16 on 9 November had "tape counts" at 76 of the
 prediction-markets build's 122 seconds, every ten minutes: a row count and
@@ -14,9 +14,13 @@ every display name ever harvested read for a few dozen. What these hold:
   * the build adds the new rows by their rowid range and finds a new
     wallet by one seek of the wallet index: it never walks the tape;
   * a wallet's name is read when asked for, once, and says what the whole
-    table says; the build no longer reads either whole table.
+    table says; the build no longer reads either whole table;
+  * the Kalshi board's snapshot total is kept the same way;
+  * each venue's charts are read in one walk of the window for every row,
+    and every row's chart is exactly the one its own read gave (each read
+    walked every market's last day: the snapshots are keyed bucket first).
 
-Run directly: `python3 tests/test_the_polymarket_tape_totals_are_kept.py`
+Run directly: `python3 tests/test_the_prediction_tapes_are_counted_and_read_once.py`
 """
 import random
 import sys
@@ -25,7 +29,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from engine import predmarket as pm                                # noqa: E402
+from engine import predmarket as pm, tapecount                     # noqa: E402
+from engine.sources import kalshi as kx                            # noqa: E402
 from engine.db import connect                                      # noqa: E402
 
 NOW = 1_794_230_000
@@ -67,11 +72,12 @@ def test_a_week_old_count_or_one_past_the_top_counts_again():
     conn = connect(":memory:")
     pm.store_trades(conn, [_trade(n, f"w{n % 4}") for n in range(10)])
     assert pm.tape_counts(conn, now=NOW)["how"] == "counted"
-    assert pm.tape_counts(conn, now=NOW + pm.RECOUNT_S - 60)["how"] == "kept"
-    assert pm.tape_counts(conn, now=NOW + pm.RECOUNT_S + 60)["how"] == "counted", "a week on"
-    conn.execute("UPDATE pm_tape_counts SET top_rowid = top_rowid + 50, trades = 999")
+    assert pm.tape_counts(conn, now=NOW + tapecount.RECOUNT_S - 60)["how"] == "kept"
+    assert pm.tape_counts(conn, now=NOW + tapecount.RECOUNT_S + 60)["how"] == "counted", "a week on"
+    conn.execute("UPDATE tape_counts SET top_rowid = top_rowid + 50, rows = 999 "
+                 "WHERE name='pm_trades'")
     conn.commit()
-    again = pm.tape_counts(conn, now=NOW + pm.RECOUNT_S + 120)
+    again = pm.tape_counts(conn, now=NOW + tapecount.RECOUNT_S + 120)
     assert again["how"] == "counted" and (again["trades"], again["wallets"]) == _full(conn) == (10, 4)
 
 
@@ -122,6 +128,83 @@ def test_the_build_reads_neither_whole_table():
         assert gone not in body, gone
     at = body.index("pm.tape_counts(conn)")
     assert at < body.index('_lap("tape counts")') < body.index('"stored_total": total_trades')
+
+
+def test_the_kalshi_snapshot_total_is_kept_the_same_way():
+    conn = connect(":memory:")
+    rnd = random.Random(5)
+    hows = []
+    for pull in range(8):
+        rows = [{"ticker": f"KX{rnd.randint(0, 30)}", "prob": rnd.random(), "title": "t"}
+                for _ in range(rnd.randint(0, 25))]
+        kx.store_snapshot(conn, rows, now=NOW + pull * 600)
+        kx.store_snapshot(conn, rows, now=NOW + pull * 600)     # the same bucket again: ignored
+        got = tapecount.kept(conn, "kalshi_snapshots", now=NOW + pull * 600)
+        assert got["rows"] == conn.execute("SELECT COUNT(*) FROM kalshi_snapshots").fetchone()[0]
+        assert got["distinct"] is None
+        hows.append(got["how"])
+    assert hows[0] == "counted" and set(hows[1:]) == {"kept"}, hows
+    try:
+        tapecount.kept(conn, "bets")
+        raise AssertionError("only a named tape is spoken")
+    except ValueError:
+        pass
+
+
+def _kalshi_tape(conn, rnd):
+    for b in range(150):
+        rows = [{"ticker": f"KX{t}", "prob": round(rnd.random(), 3), "spread_cents": rnd.randint(1, 9),
+                 "volume_24h": rnd.randint(0, 900), "open_interest": rnd.randint(0, 90), "title": "t"}
+                for t in range(40) if rnd.random() < 0.8]
+        kx.store_snapshot(conn, rows, now=NOW - 30 * 3600 + b * 600)
+
+
+def test_each_kalshi_markets_chart_is_the_one_its_own_read_gave():
+    conn = connect(":memory:")
+    _kalshi_tape(conn, random.Random(9))
+    want = [f"KX{t}" for t in range(0, 45, 2)] + ["KX3", "KX3", ""]
+    many = kx.price_series_many(conn, want, hours=24, now=NOW)
+    for t in set(want) - {""}:
+        one = kx.price_series(conn, t, hours=24, now=NOW)
+        assert many.get(t, []) == one, t
+    assert "KX44" not in many and "KX1" not in many, "only the markets asked for"
+
+
+def test_each_polymarket_chart_is_the_one_its_own_read_gave():
+    conn = connect(":memory:")
+    rnd = random.Random(11)
+    for b in range(150):
+        markets = [{"slug": f"m{k}", "question": "q", "yes": round(rnd.random(), 3), "vol24": 1.0,
+                    "liquidity": 2.0, "end_date": "2026-12-01"} for k in range(30) if rnd.random() < 0.7]
+        pm.store_snapshot(conn, markets, now=NOW - 30 * 3600 + b * 600)
+    want = [f"m{k}" for k in range(35)]
+    many = pm.price_series_many(conn, want, hours=24, now=NOW)
+    for s in want:
+        assert many.get(s, []) == pm.price_series(conn, s, hours=24, now=NOW), s
+
+
+def test_the_board_hangs_the_same_charts_with_one_read():
+    import pm_build
+    conn = connect(":memory:")
+    _kalshi_tape(conn, random.Random(13))
+    rows = [{"ticker": f"KX{t}"} for t in range(0, 44, 3)] + [{"ticker": ""}, {"title": "no key"}]
+    one = [dict(r) for r in rows]
+    n_one = pm_build._attach_tape(conn, one, kx.price_series, "ticker", now=NOW)
+    said = []
+    conn.set_trace_callback(said.append)
+    both = [dict(r) for r in rows]
+    n_both = pm_build._attach_tape(conn, both, kx.price_series, "ticker", now=NOW,
+                                   many=kx.price_series_many)
+    conn.set_trace_callback(None)
+    assert both == one and n_both == n_one and n_one > 5
+    reads = [s for s in said if "FROM kalshi_snapshots" in s]
+    assert len(reads) == 1, ("one walk of the window for every row", len(reads))
+
+    def broken(*a, **k):
+        raise RuntimeError("a read that fails")
+    again = [dict(r) for r in rows]
+    assert pm_build._attach_tape(conn, again, kx.price_series, "ticker", now=NOW,
+                                 many=broken) == n_one and again == one, "falls back row by row"
 
 
 if __name__ == "__main__":

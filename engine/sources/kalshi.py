@@ -414,6 +414,33 @@ def price_series(conn, ticker: str, hours: int = 24,
              "vol": r[3], "oi": r[4]} for r in rows]
 
 
+def price_series_many(conn, tickers, hours: int = 24,
+                      now: float | None = None) -> dict:
+    """`price_series` for many markets in one walk of the window.
+
+    The snapshots' only index leads with the bucket, so each market's own
+    read walked every market's last day to find its 144 points, once per
+    row on the board (2026-11-09). ``{ticker: points}``, each list exactly
+    what `price_series` returns for it; a market with no points is absent.
+    The ticker filter is read off the index, so only a wanted market's
+    rows are fetched from the table."""
+    import time as _time
+    ensure_tables(conn)
+    since = (now if now is not None else _time.time()) - hours * 3600
+    want = sorted({t for t in tickers if t})
+    out: dict = {}
+    for i in range(0, len(want), 500):
+        chunk = want[i:i + 500]
+        rows = conn.execute(
+            "SELECT ticker, bucket_ts, prob, spread_cents, volume_24h, open_interest "
+            "FROM kalshi_snapshots WHERE bucket_ts>=? AND ticker IN (%s) "
+            "ORDER BY bucket_ts" % ",".join("?" * len(chunk)), [since, *chunk]).fetchall()
+        for r in rows:
+            out.setdefault(r[0], []).append({"ts": int(r[1]), "prob": r[2], "spread_cents": r[3],
+                                             "vol": r[4], "oi": r[5]})
+    return out
+
+
 def store_snapshot(conn, rows: list[dict], now: float | None = None) -> int:
     """Append one 10-minute bucket of prices. Order books cannot be
     backfilled — every pricing idea needs stored tape to validate against,

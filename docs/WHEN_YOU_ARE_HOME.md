@@ -9353,6 +9353,17 @@ still counts in full once a week, and on its first build after this push
 the page shows, one row each. The build prints `pm tape: N trades from W
 wallets (kept, +n since the last build)` in its log.
 
+The Kalshi step (`kalshi board`, 36 seconds) had the same two habits: it
+ended on a count of every price snapshot ever stored (now kept the same
+way), and each market's chart read walked every market's last day of
+snapshots, because the snapshots are filed by time first; one read per row
+on the board. Each venue's charts are now read in one walk of the day for
+all its rows, and every chart is exactly what its own read gave. The Kalshi
+step now names its parts on the heartbeat (`boards.predmarkets.parts`,
+`kalshi board`: markets pull, snapshot, board, price tape, weather desk,
+desk journal, tape count), so what is left there, mostly waiting on Kalshi
+and the weather service, shows by name.
+
 **MX. The NBA's tuning fit is kept until a night's box scores land** (step
 474; 9 November). Nothing to run. The NBA build's first stage, `tuning fit`,
 ran 6 to 9 seconds of every build at 07:52 and 09:05 (of 52): before pricing

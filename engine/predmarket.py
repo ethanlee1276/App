@@ -310,13 +310,6 @@ CREATE TABLE IF NOT EXISTS pm_flags (
     signals TEXT, stack_mult REAL,
     PRIMARY KEY (venue, tx, wallet, outcome, ts)
 );
--- THE TAPE'S TWO TOTALS, kept running (`tape_counts`, 2026-11-09): one row,
--- the trades and wallets counted up to `top_rowid`, and when the last full
--- count ran.
-CREATE TABLE IF NOT EXISTS pm_tape_counts (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    trades INTEGER, wallets INTEGER, top_rowid INTEGER, counted_at INTEGER
-);
 """
 
 
@@ -423,6 +416,28 @@ def price_series(conn, slug: str, hours: int = 24,
             for r in rows]
 
 
+def price_series_many(conn, slugs, hours: int = 24,
+                      now: float | None = None) -> dict:
+    """`price_series` for many markets in one walk of the window (the
+    snapshots' key leads with the bucket, so a market's own read walks
+    every market's last day). ``{slug: points}``, each list exactly what
+    `price_series` returns; a market with no points is absent."""
+    ensure_tables(conn)
+    since = (now if now is not None else time.time()) - hours * 3600
+    want = sorted({s for s in slugs if s})
+    out: dict = {}
+    for i in range(0, len(want), 500):
+        chunk = want[i:i + 500]
+        rows = conn.execute(
+            "SELECT slug, ts, yes, vol24, liquidity FROM pm_snaps "
+            "WHERE venue='polymarket' AND ts>=? AND slug IN (%s) ORDER BY ts"
+            % ",".join("?" * len(chunk)), [since, *chunk]).fetchall()
+        for r in rows:
+            out.setdefault(r[0], []).append({"ts": int(r[1]), "prob": r[2], "vol": r[3],
+                                             "liq": r[4]})
+    return out
+
+
 def recent_tape(conn, hours: int = 24, now: float | None = None) -> list[dict]:
     """The last N hours of OUR recorded tape — what the flow feed scores.
 
@@ -509,66 +524,21 @@ def wallets_seen(conn) -> int:
     return int(conn.execute("SELECT COUNT(DISTINCT wallet) FROM pm_trades").fetchone()[0])
 
 
-#: THE TAPE'S TWO TOTALS, KEPT RUNNING (2026-11-09). The page says how many
-#: trades the tape holds and from how many wallets, and counting them walked
-#: every trade ever recorded, twice, on every build: "tape counts" was 76 of
-#: pm_build's 122 seconds at 09:16 on 9 November, every ten minutes. Nothing
-#: deletes from the tape, so the last count plus what was added since is the
-#: same number: the rows past the counted top (a rowid range, only the new
-#: rows) and the wallets among them that no counted row has (one seek of the
-#: wallet index each). Counted in full again once a week, and whenever the
-#: tape's top is below the counted one (a restored or rebuilt file).
-RECOUNT_S = 7 * 86400
-
-
-def _read_snapshot(conn):
-    """Begin a read transaction so a count and its top agree (none is open
-    once the build's writes are committed); returns whether this began one."""
-    if conn.in_transaction:
-        return False
-    conn.execute("BEGIN")
-    return True
-
-
+#: THE TAPE'S TWO TOTALS, KEPT RUNNING (2026-11-09; engine/tapecount). The
+#: page says how many trades the tape holds and from how many wallets, and
+#: counting them walked every trade ever recorded, twice, on every build:
+#: "tape counts" was 76 of pm_build's 122 seconds at 09:16 on 9 November,
+#: every ten minutes. Nothing deletes from the tape, so the last count plus
+#: what arrived since is the same number.
 def tape_counts(conn, now: float | None = None) -> dict:
-    """``{"trades", "wallets", "how", "added"}`` for the whole tape: the
-    numbers `COUNT(*)` and `wallets_seen` give, kept running between builds
-    (`how` is "kept", or "counted" when it counted in full)."""
+    """``{"trades", "wallets", "added", "how"}`` for the whole tape: what
+    ``COUNT(*)`` and `wallets_seen` give, kept running between builds
+    (``how`` is "kept", or "counted" when it counted in full)."""
+    from . import tapecount
     ensure_tables(conn)
-    now = time.time() if now is None else float(now)
-    began = _read_snapshot(conn)
-    try:
-        top = int(conn.execute("SELECT MAX(rowid) FROM pm_trades").fetchone()[0] or 0)
-        kept = conn.execute("SELECT trades, wallets, top_rowid, counted_at FROM pm_tape_counts "
-                            "WHERE id=1").fetchone()
-        full = (kept is None or None in tuple(kept) or int(kept[2]) > top
-                or now - int(kept[3]) > RECOUNT_S)
-        if full:
-            trades = int(conn.execute("SELECT COUNT(*) FROM pm_trades").fetchone()[0])
-            wallets = int(conn.execute("SELECT COUNT(DISTINCT wallet) FROM pm_trades").fetchone()[0])
-            added, counted_at = trades, int(now)
-        else:
-            was = int(kept[2])
-            added = int(conn.execute("SELECT COUNT(*) FROM pm_trades WHERE rowid > ?",
-                                     (was,)).fetchone()[0])
-            fresh = int(conn.execute(
-                "SELECT COUNT(DISTINCT n.wallet) FROM pm_trades AS n WHERE n.rowid > ?1 "
-                "AND NOT EXISTS (SELECT 1 FROM pm_trades AS o "
-                "WHERE o.wallet = n.wallet AND o.rowid <= ?1)", (was,)).fetchone()[0])
-            trades, wallets = int(kept[0]) + added, int(kept[1]) + fresh
-            counted_at = int(kept[3])
-    finally:
-        if began:
-            conn.commit()
-    try:
-        conn.execute("INSERT OR REPLACE INTO pm_tape_counts (id, trades, wallets, top_rowid, "
-                     "counted_at) VALUES (1, ?, ?, ?, ?)", (trades, wallets, top, counted_at))
-        conn.commit()
-    except sqlite3.OperationalError:
-        # A locked file keeps the old row; the next build adds from there.
-        conn.rollback()
-    return {"trades": trades, "wallets": wallets, "added": added,
-            "how": "counted" if full else "kept"}
+    got = tapecount.kept(conn, "pm_trades", now=now)
+    return {"trades": got["rows"], "wallets": got["distinct"], "added": got["added"],
+            "how": got["how"]}
 
 
 # --- scoring (pure) ---------------------------------------------------------

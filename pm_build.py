@@ -91,7 +91,7 @@ TAPE_HOURS = 24
 
 
 def _attach_tape(conn, rows, series_fn, key: str,
-                 now: float | None = None) -> int:
+                 now: float | None = None, many=None) -> int:
     """Hang OUR recorded price history on each board row.
 
     Ethan, 2026-08-19, with a Polymarket screenshot: clicking a market
@@ -109,15 +109,28 @@ def _attach_tape(conn, rows, series_fn, key: str,
     exactly the reading — "it has been flat" — that the data cannot
     support.
     """
+    # ONE WALK OF THE WINDOW FOR EVERY ROW (``many``, 2026-11-09): each
+    # venue's snapshots are keyed bucket first, so one row's read walked
+    # every market's last day; ``series_fn`` per row stays the fallback.
+    got = None
+    if many is not None:
+        try:
+            got = many(conn, [r.get(key) for r in rows if r.get(key)],
+                       hours=TAPE_HOURS, now=now)
+        except Exception:                                      # noqa: BLE001
+            got = None
     n = 0
     for r in rows:
         ident = r.get(key)
         if not ident:
             continue
-        try:
-            pts = series_fn(conn, ident, hours=TAPE_HOURS, now=now)
-        except Exception:                                      # noqa: BLE001
-            continue
+        if got is not None:
+            pts = got.get(ident) or []
+        else:
+            try:
+                pts = series_fn(conn, ident, hours=TAPE_HOURS, now=now)
+            except Exception:                                  # noqa: BLE001
+                continue
         if len(pts) < 2:
             continue
         r["tape"] = [[p["ts"], round(p["prob"], 4)] for p in pts]
@@ -136,6 +149,9 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
     from engine import kalshiweather as kw
     from engine import ledger
     from engine.sources import kalshi as kx
+    # Its parts on the heartbeat (boards.predmarkets.parts, "kalshi board"):
+    # the step ran 36 of the build's 122 seconds at 09:16 on 9 November.
+    _kt = time.monotonic()
     try:
         # The sports SERIES first — Ethan's first live --desk run showed
         # the general page is politics/econ wall-to-wall (an arbitrary
@@ -167,12 +183,17 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
             indent=2))
         _os.replace(_tmp, out_path)
         return
+    _kt = stageclock.lap("kalshi board", "markets pull", _kt)
     conn = connect()
     kx.store_snapshot(conn, markets)
+    _kt = stageclock.lap("kalshi board", "snapshot", _kt)
     games_by_sport, model_probs = _tonights_games_and_probs(data_dir)
     out = kx.board(markets, games_by_sport, model_probs)
     out["sources"] = {"page": len(page_markets), "series": series_report}
-    _attach_tape(conn, out.get("rows") or [], kx.price_series, "ticker")
+    _kt = stageclock.lap("kalshi board", "board", _kt)
+    _attach_tape(conn, out.get("rows") or [], kx.price_series, "ticker",
+                 many=kx.price_series_many)
+    _kt = stageclock.lap("kalshi board", "price tape", _kt)
 
     # THE WEATHER DESK — NWS forecast priced against the daily-high
     # brackets. Its own failure domain: a dead forecast API costs the
@@ -214,6 +235,7 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
     out["weather"] = [] if kw.PAUSED else weather_rows[:20]
     if kw.PAUSED:
         out["weather_paused"] = kw.PAUSED
+    _kt = stageclock.lap("kalshi board", "weather desk", _kt)
 
     # Journal what cleared the gates (flat paper stakes), then grade
     # whatever the exchange has since settled. On the LEDGER's own
@@ -255,9 +277,13 @@ def build_kalshi(out_path: Path, data_dir: Path) -> None:
         print(f"⚠️  desk journal skipped: {exc}")
         out["desk"] = {"error": str(exc)}
 
-    stored = conn.execute(
-        "SELECT COUNT(*) FROM kalshi_snapshots").fetchone()[0]
+    _kt = stageclock.lap("kalshi board", "desk journal", _kt)
+    # Kept running between builds, not counted (engine/tapecount): this
+    # walked every snapshot ever stored at the end of every Kalshi board.
+    from engine import tapecount
+    stored = tapecount.kept(conn, "kalshi_snapshots")["rows"]
     out["tape"] = {"stored_total": stored}
+    stageclock.lap("kalshi board", "tape count", _kt)
     gate.publish(out, out_path)
     print(f"Kalshi: {out['n_markets']} sports market(s), "
           f"{out['n_matched']} matched to tonight, "
@@ -453,7 +479,8 @@ def main() -> None:
     # every per-row read raised "Cannot operate on a closed database",
     # `_attach_tape` swallows a row's failure by design — and no
     # Polymarket market ever shipped its chart.
-    _attach_tape(conn, display_markets[:50], pm.price_series, "slug")
+    _attach_tape(conn, display_markets[:50], pm.price_series, "slug",
+                 many=pm.price_series_many)
     conn.close()
     _lap("price tape")
 
