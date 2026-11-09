@@ -90,6 +90,13 @@ def test_the_nhl_boards_parts_are_named_in_the_order_it_reads_them():
 
 
 NBA_PARTS = {
+    # 8 seconds at 10:13 on 9 November, nothing named.
+    "history + rosters + injuries": ("_ht", ("week's schedule", "schedule spots", "rosters", "injuries",
+                                             "player history", "history context",
+                                             "total norm + minutes window")),
+    # 5 seconds at 10:13 on 9 November, nothing named.
+    "slate + odds + line ledger": ("_ot", ("props", "prop odds", "game lines", "stale-line scan",
+                                           "prop tape", "line ledger")),
     "context reads": ("_ct", ("defense", "matchup ratings", "shooting", "rates",
                               "rotation + starting five")),
     "scan + team profiles": ("_st", ("team profiles", "vacancy", "faces", "scan")),

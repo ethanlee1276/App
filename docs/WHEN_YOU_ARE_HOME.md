@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NF. Two more NBA stages name their parts** (step 482; 9 November). Nothing
+to run. `history + rosters + injuries` (8 seconds at 10:13) and `slate +
+odds + line ledger` (5) now show their parts under `boards.nba.parts`: the
+week's schedule, the schedule spots, the rosters, the injury board, the
+player history, its context and the minutes window; the props, the prop
+odds, the game lines, the stale-line scan, the prop tape and the line ledger.
+
 **NE. Three more NFL stages name their parts** (step 481; 9 November).
 Nothing to run. `build_slate` (9 seconds at 10:12), `injuries + resets` (6)
 and `first touchdown board` (8) said only their totals; they now show their

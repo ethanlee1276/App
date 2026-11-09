@@ -1051,6 +1051,10 @@ def main() -> None:
     # leaguereport.nba_meta), filled below once the logs are read.
     _gr_meta: dict = {}
     if games:
+        # ITS PARTS ON THE HEARTBEAT (boards.nba.parts): 8 seconds at 10:13
+        # on 9 November with nothing to say which read held them.
+        import time as _htime
+        _ht = _htime.monotonic()
         played_yday = {t for g in yesterday
                        for t in (g["home"], g["away"])}
         # §6 schedule density needs a week of schedule, not just yesterday:
@@ -1065,6 +1069,7 @@ def main() -> None:
                 sched_days[_day] = parse_schedule_day(_sched, _day)
         except DataUnavailable:
             sched_days = {}
+        _ht = _clock.lap("history + rosters + injuries", "week's schedule", _ht)
         conn = connect()
         teams = {t for g in games for t in (g["home"], g["away"])}
         # TONIGHT'S SCHEDULE SPOTS (engine/nba/schedspots): the rest bucket
@@ -1082,16 +1087,21 @@ def main() -> None:
         # rosters place each man before his logs are read (`player_history`),
         # and ESPN's injury board — fetched for the Injuries page all along,
         # read by no build — says who sits tonight.
+        _ht = _clock.lap("history + rosters + injuries", "schedule spots", _ht)
         roster, roster_missed = current_teams(args.league)
+        _ht = _clock.lap("history + rosters + injuries", "rosters", _ht)
         injuries = hoops_injuries(args.league)
+        _ht = _clock.lap("history + rosters + injuries", "injuries", _ht)
         moved: set = set()
         hist = player_history(conn, teams, sport=args.league,
                               seasons=recent_seasons(args.league, args.date),
                               roster=roster, moved=moved)
+        _ht = _clock.lap("history + rosters + injuries", "player history", _ht)
         # His games' margins and rest, so tonight's blowout and rest
         # haircuts are read against what his minutes base already holds
         # (engine/nba/minutes.context_norms).
         history_context(conn, args.league, hist)
+        _ht = _clock.lap("history + rosters + injuries", "history context", _ht)
         # The league's own recent scoring, the norm tonight's total is read
         # against (engine/nba/context.env_factor).
         norm_total = total_norm(conn, args.league, args.date)
@@ -1100,6 +1110,7 @@ def main() -> None:
         # only once they have read closer, the twenty-game window otherwise.
         from engine.nba import window as _window
         minutes_window = _window.window_for(conn, args.league, args.date)
+        _clock.lap("history + rosters + injuries", "total norm + minutes window", _ht)
         print(f"  Minutes window      {minutes_window.get('window')} "
               f"({minutes_window.get('n', 0)} games of this season measured)")
         from engine.sources.oddsapi import normalize_name as _nn
@@ -1147,7 +1158,9 @@ def main() -> None:
         except Exception as _grx:                           # noqa: BLE001
             print(f"  ⚠️  game report facts skipped: {_grx}")
         _clock.mark("game report facts")
-
+        # ITS PARTS (boards.nba.parts): 5 seconds at 10:13 on 9 November.
+        import time as _otime
+        _ot = _otime.monotonic()
         slate = _Slate([_Game(g["home"], g["away"], g["kickoff"],
                               g.get("home_name", ""), g.get("away_name", ""))
                         for g in games], [])
@@ -1194,6 +1207,7 @@ def main() -> None:
             print(f"    Fix: python3 ingest.py {args.league} "
                   f"--seasons 2021-2026")
 
+        _ot = _clock.lap("slate + odds + line ledger", "props", _ot)
         odds_note = "no odds requested — engine ran with no bettable prices"
         first_basket_quotes: dict = {}      # the NBA's Long Shots market, apart
         if args.odds or args.cached_odds:
@@ -1254,6 +1268,7 @@ def main() -> None:
         # event pull already attached (`apply_board_lines_to_slate`). Games
         # under way are left out: the endpoint quotes them in play, and an
         # in-play number is not the game's pre-game line.
+        _ot = _clock.lap("slate + odds + line ledger", "prop odds", _ot)
         if args.board_odds or _board_lines_cached(args.league):
             try:
                 from engine.sources import oddsapi as _boa
@@ -1269,6 +1284,7 @@ def main() -> None:
                           f"{_bres.totals} total.")
             except Exception as exc:                        # noqa: BLE001
                 print(f"⚠️  game lines unavailable: {exc}")
+        _ot = _clock.lap("slate + odds + line ledger", "game lines", _ot)
 
         # Stale-line scan across every book's quotes — the sampler signal
         # MLB and NFL already journal. It must run HERE: the pipeline only
@@ -1300,11 +1316,13 @@ def main() -> None:
             out["market_scan"] = {"stale": stale_quotes(scan_rows)}
         except Exception:
             out["market_scan"] = {"stale": []}
+        _ot = _clock.lap("slate + odds + line ledger", "stale-line scan", _ot)
         # EVERY BOOK'S NUMBER for the men with an open pick and the men on
         # an injury report, kept when it changes (engine/proptape): the line
         # chart with every book on it reads it back (engine/linebooks).
         from engine.proptape import note_for as _tape_note
         print(_tape_note(args.league, slate))
+        _ot = _clock.lap("slate + odds + line ledger", "prop tape", _ot)
 
         spread_by_team: dict = {}
         total_by_team: dict = {}
@@ -1330,6 +1348,7 @@ def main() -> None:
                 for g in slate.games]))
         except Exception as _exc:                             # noqa: BLE001 — telemetry, never the board
             print(f"  ⚠️  {args.league.upper()} line ledger skipped: {_exc}")
+        _clock.lap("slate + odds + line ledger", "line ledger", _ot)
 
         _clock.mark("slate + odds + line ledger")
         # Its parts on the heartbeat (boards.nba.parts), as the college
