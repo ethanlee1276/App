@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MZ. College reads a finished game's closing lines once** (step 476; 9
+November). Nothing to run. With the college reads kept (MV), the build's
+biggest remaining part was `closes from the tape`: 6 to 11 seconds of every
+build, walking every college line the tape has stored before the latest
+kickoff in the two-week results window, to copy each finished game's last
+pre-kickoff line into the games table, and finding the same closes already
+there build after build. A finished game's pregame lines cannot change (a
+line recorded after kickoff never counts), so the walk now runs only when a
+game in the window has finished since the last walk or moved its kickoff,
+and otherwise at most every six hours (so a line `harvest_odds.py` adds for
+a past game later is still copied). On a quiet weekday most college builds
+skip it; on a Saturday it runs as games finish, as before.
+
 **MY. The prediction-markets build stops recounting the whole Polymarket
 tape** (step 475; 9 November). Nothing to run. MU put the build's steps on
 the heartbeat, and at 09:16 `tape counts` was 76 of its 122 seconds, every

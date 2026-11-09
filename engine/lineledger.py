@@ -243,6 +243,45 @@ def record_note(conn, sport: str, games, now: _dt.datetime | None = None) -> str
 #: Events one read of the tape names at once (SQLite's oldest builds bind 999).
 TAPE_CHUNK = 500
 
+#: A FINISHED GAME'S TAPE IS WALKED AGAIN AT MOST THIS OFTEN (2026-11-09).
+#: Its pregame tape cannot grow: every row a build records after kickoff is
+#: stamped after it, and only rows before the kickoff count. So when every
+#: finished game in the window was walked within this long, with the same
+#: kickoff, the walk is skipped: "closes from the tape" was 6 to 11 seconds
+#: of every college build on 9 November, finding the same closes already
+#: written. A newly finished game walks the window at once; the recheck
+#: picks up anything harvest_odds.py adds for a past game later.
+CLOSES_RECHECK_S = 6 * 3600
+
+CLOSES_SEEN = """
+CREATE TABLE IF NOT EXISTS closes_seen (
+    sport TEXT, event_id TEXT, cut TEXT, seen_at INTEGER,
+    PRIMARY KEY (sport, event_id)
+);
+"""
+
+
+def _all_seen(conn, sport: str, todo, now: float):
+    """``(skip, seen)``: whether every game in ``todo`` was walked within
+    CLOSES_RECHECK_S with its kickoff unchanged; ``seen`` is None when the
+    table cannot be read (the walk then runs, as it always did)."""
+    import sqlite3
+    try:
+        conn.executescript(CLOSES_SEEN)
+        seen: dict = {}
+        ids = sorted({t[4] for t in todo})
+        for i in range(0, len(ids), TAPE_CHUNK):
+            part = ids[i:i + TAPE_CHUNK]
+            for r in conn.execute(
+                    f"SELECT event_id, cut, seen_at FROM closes_seen WHERE sport=? "
+                    f"AND event_id IN ({','.join('?' * len(part))})", (sport, *part)):
+                seen[r[0]] = (r[1], int(r[2] or 0))
+    except sqlite3.OperationalError:
+        return False, None
+    skip = all(t[4] in seen and seen[t[4]][0] == t[1]
+               and 0 <= now - seen[t[4]][1] < CLOSES_RECHECK_S for t in todo)
+    return skip, seen
+
 
 def pregame_tape(conn, sport: str, event_ids, before: str) -> dict:
     """``{event_id: [(taken_at, market, player, line, over_odds), …]}`` in
@@ -271,7 +310,7 @@ def pregame_tape(conn, sport: str, event_ids, before: str) -> dict:
     return out
 
 
-def closes_into_games(conn, sport: str, games) -> dict:
+def closes_into_games(conn, sport: str, games, now: float | None = None) -> dict:
     """Write each FINISHED game's last pre-kickoff line from this tape into
     the games table, where the models and the grading read closes.
 
@@ -306,6 +345,13 @@ def closes_into_games(conn, sport: str, games) -> dict:
         home, away = g.get("home") or "", g.get("away") or ""
         event_id = f"{str(g.get('date') or '')[:10]}-{away}@{home}"
         todo.append((g, cut, home, away, event_id))
+    import time as _time
+    now = _time.time() if now is None else float(now)
+    seen = None
+    if todo:
+        skip, seen = _all_seen(conn, sport, todo, now)
+        if skip:
+            return out
     tape = pregame_tape(conn, sport, {t[4] for t in todo}, max(t[1] for t in todo)) if todo else {}
     for g, cut, home, away, event_id in todo:
         last: dict = {}
@@ -342,5 +388,8 @@ def closes_into_games(conn, sport: str, games) -> dict:
                     out["ml"] += 1
                     wrote = True
         out["games"] += int(wrote)
+    if seen is not None:
+        conn.executemany("INSERT OR REPLACE INTO closes_seen VALUES (?,?,?,?)",
+                         [(sport, t[4], t[1], int(now)) for t in todo])
     conn.commit()
     return out

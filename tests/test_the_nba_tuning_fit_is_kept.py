@@ -124,11 +124,16 @@ def test_the_seasons_and_the_games_needed_are_their_own_reads():
     with _Sandbox() as sb:
         _league(sb.conn, players=40)
         every = HF.fit_stat_cvs(sb.conn, "nba")
-        one = HF.fit_stat_cvs(sb.conn, "nba", [2026], min_games=5)
-        assert one == HF._fit_stat_cvs(sb.conn, "nba", [2026], 5) and one != every
-        assert HF.fit_stat_cvs(sb.conn, "nba", [2026]) == HF._fit_stat_cvs(sb.conn, "nba", [2026])
         assert HF.fit_stat_cvs(sb.conn, "nba") == every
         assert _note("hoops_cvs12", "nba")["kept"] is True
+        one = HF.fit_stat_cvs(sb.conn, "nba", [2026], min_games=5)
+        assert one == HF._fit_stat_cvs(sb.conn, "nba", [2026], 5) and one != every
+        assert _note("hoops_cvs5", "nba")["kept"] is False, "its own read, never the league's"
+        # The heartbeat keeps one note per name and league, the newest by the
+        # second, so a seasons read and the whole league's in the same second
+        # are told apart by what they return, not by the note.
+        assert HF.fit_stat_cvs(sb.conn, "nba", [2026]) == HF._fit_stat_cvs(sb.conn, "nba", [2026])
+        assert HF.fit_stat_cvs(sb.conn, "nba") == every
 
 
 def test_the_fitted_tuning_reads_the_same_through_the_cache():

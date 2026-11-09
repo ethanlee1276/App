@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after the prediction-markets build stopped recounting the whole
+Last updated 2026-11-09, after college started reading a finished game's closing lines once
+(step MZ: nothing to run), after the prediction-markets build stopped recounting the whole
 Polymarket tape every ten minutes (step MY: nothing to run), after the NBA's tuning fit started being kept until a night's box
 scores land (step MX: nothing to run), after the play simulator started doing each sum once (step MW:
 nothing to run), after college's game-log reads and every board's comps started being
