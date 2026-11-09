@@ -397,6 +397,26 @@ def _gens(conn):
             if r[0] != "~epoch"}
 
 
+def test_counts_whose_triggers_are_not_all_there_are_never_trusted():
+    """A build killed between the schema's statements, or a dropped trigger,
+    would leave counts that stop moving: the row count is used instead."""
+    with _Sandbox() as s:
+        _seed(s.conn)
+        assert logcache.generations(s.conn, "nhl", (2025,)) is not None
+        assert set(logcache.TRIGGERS) <= {r[0] for r in s.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='trigger'")}, "the schema makes every one it names"
+        s.conn.execute("DROP TRIGGER log_generations_delete")
+        s.conn.commit()
+        assert logcache.generations(s.conn, "nhl", (2025,)) is None
+        calls, compute = _counted(s)
+        memo = lambda: logcache.memo(s.conn, "probe", "nhl", (2025, 2024), compute, force=True)
+        assert memo() == {"n": 1} and memo() == {"n": 1}
+        assert "rows" in logcache.status()["probe.nhl"] and "gens" not in logcache.status()["probe.nhl"]
+        s.conn.execute("DELETE FROM player_game_logs WHERE player='Nazem Kadri' AND period='2024-11-01'")
+        s.conn.commit()
+        assert memo() == {"n": 2}, "the delete the dropped trigger would have missed is seen by the count"
+
+
 def test_the_logs_count_their_own_changes_by_sport_and_season():
     with _Sandbox() as s:
         c = s.conn

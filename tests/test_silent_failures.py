@@ -163,6 +163,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # first failure in a process prints "kept game-log read not noted
         # (<error>)" into the build's log, which no quiet build does.
         "_note",
+        # THE LOGS' COUNTS (engine/logcache.generations, 2026-11-09), caught
+        # by this sweep when it learned to check its triggers. Its failure is
+        # None, which sends the caller to the row count: a slower key, never a
+        # wrong one, and the read's note on the heartbeat then shows `rows`
+        # where a counted read shows `gens`, so the fallback is never silent.
+        "generations",
         # THE SITE'S OWN ERROR RECORD (engine/bugscan.record_server,
         # 2026-11-05), caught by this sweep the hour it was written, the
         # same shape as the mail log: a lost line must never cost the

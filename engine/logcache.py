@@ -70,6 +70,8 @@ import time
 #: file is ignored. 2: keyed on the logs' generations.
 VERSION = 2
 DIRNAME = "logcache"
+#: The triggers that move `log_generations` (engine/db SCHEMA).
+TRIGGERS = ("log_generations_insert", "log_generations_delete", "log_generations_update")
 
 
 def db_file(conn) -> str:
@@ -109,6 +111,15 @@ def generations(conn, sport: str, seasons):
     epoch), and the caller counts the rows instead."""
     seasons = sorted({int(s) for s in seasons})
     try:
+        # ALL THREE TRIGGERS, OR NO COUNTS. A table whose triggers are not
+        # all there (a build killed between the schema's statements, a hand
+        # that dropped one) would hold counts that stop moving, and serve a
+        # result through every new box score; the row count never can.
+        armed = conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND tbl_name='player_game_logs' "
+            f"AND name IN ({','.join('?' * len(TRIGGERS))})", TRIGGERS).fetchone()[0]
+        if armed != len(TRIGGERS):
+            return None
         epoch = conn.execute("SELECT gen FROM log_generations WHERE sport='~epoch'").fetchone()
         if epoch is None or epoch[0] is None:
             return None

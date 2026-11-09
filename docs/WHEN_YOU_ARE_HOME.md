@@ -9379,7 +9379,13 @@ all 556,969 rows they read.
   is in it, and both are tested.
 - A file the schema has not reached keys on the row count as before, and a
   fresh table draws a random epoch, so counts that start again never match
-  a result kept before.
+  a result kept before. The counts are trusted only while all three
+  triggers are in place: a build killed between the schema's statements, or
+  a dropped trigger, falls back to the row count (the read's note then shows
+  `rows` instead of `gens`), never to counts that stop moving.
+- On the box at 03:48: all three kept reads served, each key read in 0.0
+  seconds; the NHL board stage 3 seconds (25 at 02:15) and its whole build
+  about 9 (61).
 
 **MP. A board's publish says where its seconds go** (step 466; 9 November).
 Nothing to run. The NFL build's write stage ran 24 seconds at 02:11 on 9
