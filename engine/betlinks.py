@@ -36,6 +36,7 @@ stamping.
 """
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
@@ -56,6 +57,9 @@ GAME_MARKET = {"moneyline": "h2h", "ml": "h2h", "h2h": "h2h", "spread": "spreads
 
 _LOCK = threading.Lock()
 _MEMO: dict = {}
+#: The last stamp's seconds reading the banked files (``load_s``), which
+#: `gate.publish` reports apart from the matching (2026-11-09).
+LAST: dict = {}
 
 
 # ─── switches ──────────────────────────────────────────────────────────────
@@ -79,8 +83,16 @@ def _cache_dir() -> Path:
 # ─── keys ──────────────────────────────────────────────────────────────────
 
 def norm(s) -> str:
+    return _norm_text(str(s or ""))
+
+
+@functools.lru_cache(maxsize=1 << 16)
+def _norm_text(s: str) -> str:
+    """`normalize_name`, once per distinct text a process meets (2026-11-09).
+    A stamp asks it the same few hundred team and player names tens of
+    thousands of times: every pick row against every banked game."""
     from .sources.oddsapi import normalize_name
-    return normalize_name(str(s or ""))
+    return normalize_name(s)
 
 
 def point(x) -> str:
@@ -272,17 +284,23 @@ def _market_keys(sport: str) -> dict:
     return out
 
 
-def _names_for(team: str, sport: str) -> set:
+def _names_for(team: str, sport: str) -> frozenset:
     """Every normalised name a row's team could appear under in the API."""
+    return _names_for_text(str(team or "").strip(), str(sport or ""))
+
+
+@functools.lru_cache(maxsize=1 << 12)
+def _names_for_text(t: str, sport: str) -> frozenset:
+    """`_names_for`, once per team and sport a process meets (2026-11-09):
+    it walked the sport's whole team table for every pick row."""
     from .sources.oddsapi import SPORT_CONFIG
-    t = str(team or "").strip()
     if not t:
-        return set()
+        return frozenset()
     names = {norm(t)}
     for full, abbr in ((SPORT_CONFIG.get(sport) or {}).get("teams") or {}).items():
         if str(abbr).upper() == t.upper():
             names.add(norm(full))
-    return {n for n in names if n}
+    return frozenset(n for n in names if n)
 
 
 def _same_team(api_name: str, names: set) -> bool:
@@ -450,7 +468,9 @@ def stamp(payload, name: str = "", env=None, cache_dir: Path | None = None, now:
     sport = FILE_SPORT.get(Path(str(name or "")).name)
     if not sport:
         return 0
+    _t0 = time.monotonic()
     events = load(sport, cache_dir, now)
+    LAST["load_s"] = time.monotonic() - _t0
     if not events:
         return 0
     from .sources.oddsapi import SHARP_BOOKS

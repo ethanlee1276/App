@@ -941,8 +941,15 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     # from one place. Inside the paid rows, so `redact` strips it with them.
     from . import betlinks
     _step("prepare")
+    betlinks.LAST.clear()
     betlinks.stamp(payload, label)
     _step("bet links")
+    # The bet-slip links' seconds, apart: reading the banked odds files and
+    # matching the board's rows to them (7.1 of the NFL publish's 11.1
+    # seconds at 03:20 on 9 November, 8.4 of college's, 6.5 of the NBA's).
+    _links = took.pop("bet links", 0.0)
+    took["bet link files"] = min(_links, float(betlinks.LAST.get("load_s") or 0.0))
+    took["bet link rows"] = _links - took["bet link files"]
     built = _full_dir_for(public)
     built.mkdir(parents=True, exist_ok=True)
     full = built / label
@@ -988,10 +995,13 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
             doc = redact(doc, label) if enabled() else doc
         tmp = path.with_suffix(path.suffix + ".tmp")
         with open(tmp, "w") as fh:
-            if path is public:
-                fh.write(_compact(doc))
-            else:
-                json.dump(doc, fh, indent=2)
+            # BOTH COPIES BY THE FAST ENCODER (2026-11-09). The private copy
+            # kept its indented, pure-Python `json.dump` when the public one
+            # moved over: 2.5 of the NFL publish's 11.1 seconds at 03:20 on 9
+            # November, and 7.7 seconds a sweep across the boards. Every
+            # reader of it parses JSON (gate.board_source, full_board_file),
+            # none reads it by line, and compact it is a third smaller.
+            fh.write(_compact(doc))
         os.replace(tmp, path)
         _step("private copy" if path is full else "public copy")
         if path is full:

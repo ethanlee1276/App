@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after the history file started counting its own game-log
+Last updated 2026-11-09, after the bet-slip links stopped normalising the same names
+for every row and the private board copy moved to the fast encoder (step MR: nothing
+to run), after the history file started counting its own game-log
 changes for the kept reads' key (step MQ: nothing to run), after every board's publish started naming its steps on
 the heartbeat (step MP: nothing to run), after the kept game-log reads started holding between
 builds (a box score written again unchanged is left where it is) and the

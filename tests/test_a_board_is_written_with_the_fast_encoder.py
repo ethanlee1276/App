@@ -11,10 +11,13 @@ and parsed the private copy it was about to replace (18 MB of indented JSON
 for the NFL) on every publish, though on every ordinary build the new
 board's own prices clear it. What these hold:
 
-  * every file a publish writes is byte for byte what it wrote before —
-    the private copy, the public copy (paywall off and on) and the sidecar,
-    on a real board and on one built to trip an encoder (unicode, NaN,
-    infinity, numeric and boolean keys);
+  * every file a publish writes is byte for byte what the standard
+    library's own `json.dump` writes for it, compact — the private copy, the
+    public copy (paywall off and on) and the sidecar — on a real board and
+    on one built to trip an encoder (unicode, NaN, infinity, numeric and
+    boolean keys). The private copy was indented until 9 November, the one
+    file the fast encoder had not reached (2.5 of the NFL publish's 11.1
+    seconds that night); every reader of it parses JSON;
   * the browser's copy is made once a publish;
   * the guard reads the old board only when the new one has no prices and
     says its odds attempt failed — and still refuses a real downgrade;
@@ -62,14 +65,14 @@ def _env(**kv):
 
 
 def _old_bytes(payload, label):
-    """What publish wrote before: the three files, each by `json.dump`,
+    """What publish writes: the three files, each by `json.dump`, compact,
     after the bet-slip links it stamps into the rows."""
     from engine import betlinks
     payload = copy.deepcopy(payload)
     payload = {k: v for k, v in payload.items() if not str(k).startswith("_")}
     betlinks.stamp(payload, label)
     full, pub, side = io.StringIO(), io.StringIO(), io.StringIO()
-    json.dump(payload, full, indent=2)
+    json.dump(payload, full, separators=(",", ":"))
     doc = served(payload)
     doc = gate.redact(doc, label) if gate.enabled() else doc
     json.dump(doc, pub, separators=(",", ":"))
@@ -216,8 +219,8 @@ def test_a_publish_names_its_steps_only_inside_a_build():
         lines = said.getvalue().splitlines()
         parts = stageclock.parse_parts(lines)
         assert list(parts) == ["publish nfl.json"], parts
-        assert list(parts["publish nfl.json"]) == ["prepare", "bet links", "downgrade check", "served copy",
-                                                   "private copy", "sidecar", "public copy"], parts
+        assert list(parts["publish nfl.json"]) == ["prepare", "bet link files", "bet link rows", "downgrade check",
+                                                   "served copy", "private copy", "sidecar", "public copy"], parts
         assert all(v >= 0 for v in parts["publish nfl.json"].values())
         assert stageclock.parse(lines) == {}, "a part is never counted as a stage"
     finally:

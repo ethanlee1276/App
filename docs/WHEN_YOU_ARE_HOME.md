@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MR. The bet-slip links and the private copy, faster** (step 468; 9
+November). Nothing to run. MP's parts named the publish's time at 03:20: the
+bet-slip links took 7.1 of the NFL publish's 11.1 seconds, 8.4 of college's
+and 6.5 of the NBA's (23 seconds a sweep), and writing the indented private
+copy another 7.7 seconds a sweep across the boards.
+
+- The links matched every pick row against every banked game by normalising
+  the same few hundred team and player names afresh each time; each name is
+  now normalised once a process. On the 22 October NFL board (1,024 pick
+  rows, 30 games) the stamp went from 0.43 to 0.12 seconds, with exactly
+  the same links on every row.
+- The private copy (`data/built/`) is now written by the same fast encoder
+  as the public one, compact: every reader of it parses JSON, none reads it
+  by line, and it is a third smaller. The NFL's took 2.5 seconds.
+- The links' part is now two on the heartbeat, `bet link files` (reading the
+  banked odds files) and `bet link rows` (the matching), so the next
+  heartbeat says whether the files are worth keeping between builds too.
+
 **MQ. The history file counts its own game-log changes** (step 467; 9
 November). Nothing to run. MO's note on the heartbeat answered the question
 it was put there for: at 03:05 the NHL player games were served from the

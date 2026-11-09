@@ -151,6 +151,31 @@ def test_every_kind_of_pick_gets_its_own_slip():
     assert n == 9, "every pick with a slip or its game's pages, the Fliff row included"
 
 
+def test_a_stamp_names_each_team_and_player_once_and_times_its_files():
+    """THE NAMES, ONCE A PROCESS (2026-11-09). The NFL publish spent 7.1 of
+    its 11.1 seconds stamping links at 03:20 on 9 November, every pick row
+    asking the same few hundred names to be normalised against every banked
+    game; they are kept now, and give the same answers. And a stamp that
+    reads the banked files says how long (gate.publish reports it apart)."""
+    from engine.sources.oddsapi import normalize_name
+    for text in ("Amon-Ra St. Brown", "Ronald Acu\u00f1a Jr.", "A\u2019ja Wilson", "", "BUF", "Buffalo Bills"):
+        assert B.norm(text) == normalize_name(text), text
+        assert B.norm(text) == normalize_name(text), "asked again, the same"
+    assert B.norm(None) == "" and B.norm(12) == normalize_name("12")
+    assert B._names_for("BUF", "nfl") == {"buf", "buffalo bills"}, B._names_for("BUF", "nfl")
+    assert B._names_for(" buf ", "nfl") == B._names_for("BUF", "nfl")
+    assert B._names_for(None, "nfl") == frozenset() == B._names_for("  ", "nfl")
+    tmp = Path(tempfile.mkdtemp())
+    _banked(tmp)
+    B.LAST.clear()
+    board = _board()
+    n = B.stamp(board, "recommendations.json", env={}, cache_dir=tmp)
+    assert n == 9 and B.LAST.get("load_s", -1) >= 0, B.LAST
+    again = _board()
+    assert B.stamp(again, "recommendations.json", env={}, cache_dir=tmp) == n and again == board, \
+        "the same links, asked twice in one process"
+
+
 def test_the_box_lists_every_book_with_the_bet_own_book_first_then_best_price():
     """Ethan, 2026-10-06: "a box that shows all the different sports books …
     so it doesn't just send someone to one specific sportsbook"."""
