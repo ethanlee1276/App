@@ -574,7 +574,7 @@ function renderMyBets() {
       st.pending ? `<p class="list-note">${mbMoney(st.atRisk)} at risk on ${plural(st.pending, "open bet")}.</p>` : ""}`;
   })();
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = etToday();
   const form = `
     <div class="card mb-form">
       <div class="mb-form-row">

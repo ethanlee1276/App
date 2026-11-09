@@ -7206,7 +7206,7 @@ function renderSlateHorizon() {
                      .filter(Boolean).sort();
   if (!dates.length) return;
   const first = dates[0];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = etToday();
   // Midday, not midnight: a date-only difference across a DST boundary can
   // land on 0.96 of a day and floor to the wrong number.
   const days = Math.round(
@@ -16944,6 +16944,23 @@ function myBetOn(g, teams) {
   return !!g && (teams.has(String(g.home || "").toUpperCase()) || teams.has(String(g.away || "").toUpperCase()));
 }
 
+/* TODAY, EASTERN (2026-11-09), as YYYY-MM-DD: the site's day, the one the
+   slates are filed under and the weekly limit counts its Monday to Sunday
+   in. `new Date().toISOString()` gives the UTC date, which turns over at
+   7pm Eastern (8pm in summer): a bet logged on a Sunday evening was dated
+   Monday, fell out of the week its limit counts, and the limit's warning
+   never came (the gate caught it at 23:50 on 8 November). The same date
+   skipped tonight's game on the fantasy desk after 7pm, took "Today" off
+   the record's day card and cut a day off the countdown to a slate. */
+function etToday(now) {
+  const t = now == null ? new Date() : new Date(now);
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(t);
+  } catch (e) {
+    return t.toISOString().slice(0, 10);
+  }
+}
+
 /* THEIR OWN WEEKLY LIMIT (Settings → Limits; engine/limits): dollars logged
    Monday to Sunday, Eastern. Crossing it is said once, as it happens; the
    box stops the promotional alerts. */
@@ -17101,7 +17118,7 @@ window.mbAdd = function () {
   bets.push({
     id: Date.now() + "" + Math.floor(Math.random() * 1e4),
     book: g("mb-book") || "Other", sport: g("mb-sport") || "",
-    date: g("mb-date") || new Date().toISOString().slice(0, 10),
+    date: g("mb-date") || etToday(),
     desc, stake, odds, result: "pending",
   });
   mbSave(bets);
@@ -17354,7 +17371,7 @@ function mbRowsFromText(text, fallbackBook) {
              + `a recognizable ${missing.join(" + ")} column` }],
              mapping: map };
   }
-  const today = new Date().toISOString().slice(0, 10);
+  const today = etToday();
   const bets = [], skipped = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
@@ -21231,7 +21248,7 @@ function _ffDossierInfo(name) {
 function _ffPlayerDay(d, name, team) {
   if (!team) return null;
   const days = _ffDayEnv(d);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = etToday();
   const date = Object.keys(days).sort().find((iso) =>
     iso >= today && days[iso].some((e) => e.team === team));
   if (!date) return null;
@@ -27152,7 +27169,7 @@ async function renderHomePerf() {
           // graded slate, dated honestly when it isn't today's.
           const lastPt = curve[curve.length - 1];
           if (!lastPt || lastPt.day_u == null) return "";
-          const today = new Date().toISOString().slice(0, 10);
+          const today = etToday();
           const label = lastPt.date === today ? "Today’s profit/loss"
             : `Last slate (${escapeHtml(lastPt.date)})`;
           return `<div class="perf-day"><span class="k">${label}</span>
