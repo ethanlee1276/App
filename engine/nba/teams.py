@@ -230,7 +230,13 @@ def build(now_rows, last_rows, sport: str = "nba", before: str | None = None) ->
 
 def board_profiles(conn, sport: str, date: str) -> dict:
     """`build` for a board on ``date``: this season walk-forward, last season
-    whole."""
-    from ..seasons import season_of
-    season = season_of(sport, date)
-    return build(load_rows(conn, sport, season), load_rows(conn, sport, season - 1), sport, before=date)
+    whole. Kept between builds while those two seasons' logs and the date
+    hold (engine/logcache, 2026-11-09): 4.3 seconds of the NBA build's scan
+    stage at 09:34 on 9 November, the same two seasons summed on every build."""
+    from .. import divisions, logcache, seasons
+    season = seasons.season_of(sport, date)
+    return logcache.memo(conn, "nba_team_profiles", sport, [season - 1, season],
+                         lambda: build(load_rows(conn, sport, season), load_rows(conn, sport, season - 1),
+                                       sport, before=date),
+                         code=(__file__, divisions.__file__, seasons.__file__),
+                         extra={"date": str(date)})

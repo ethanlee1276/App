@@ -234,6 +234,27 @@ def season_of(date: str) -> int:
 
 
 def read(conn, season: int, before: str | None = None) -> dict:
+    """`_read`, kept between builds until a shot, an opening tip or a box
+    score is stored (engine/logcache, 2026-11-09): first basket was 9.8 of
+    the NBA build's 48 seconds at 09:34 on 9 November, every build reading
+    two seasons of first-quarter shots, the lineups and the tips again. The
+    shots and tips are written INSERT OR REPLACE and never deleted, so any
+    write moves its table's top rowid; the lineups come off the game logs,
+    whose changes the cache's own key counts."""
+    from . import divisions, logcache, seasons
+    from .sources import oddsapi
+    try:
+        tops = [int(conn.execute(f"SELECT MAX(rowid) FROM {t}").fetchone()[0] or 0)
+                for t in ("nba_shots", "nba_tips")]
+    except Exception:                                        # noqa: BLE001
+        return _read(conn, season, before)
+    return logcache.memo(conn, f"firstbasket{int(season)}", "nba", None,
+                         lambda: _read(conn, season, before),
+                         code=(__file__, oddsapi.__file__, divisions.__file__, seasons.__file__),
+                         extra={"before": before, "shots": tops[0], "tips": tops[1]})
+
+
+def _read(conn, season: int, before: str | None = None) -> dict:
     """{"teams": {team: {"first": n, "games": n}}, "usage": {team: {player:
     weighted first-three-minute shots}}, "recent": {team: {players}}} from
     this season's and last season's first-quarter rows (before ``before``)."""

@@ -184,6 +184,24 @@ def projection_mult(stat: str, rate: float, read: dict | None,
 
 
 def longrun(conn, sport: str, players, n: int = LONG_GAMES, before: str | None = None) -> dict:
+    """`_longrun`, kept between builds while the league's logs and the
+    slate's names hold (engine/logcache, 2026-11-09): every priced player's
+    last games for his shot columns, 4.4 seconds of the NBA build's context
+    reads at 09:34 on 9 November, read again on every build of the same
+    slate. Keyed on every season of the league, the names asked for (a
+    digest) and ``before``."""
+    names = sorted({p for p in players if p})
+    if not names:
+        return {}
+    import hashlib
+    from .. import logcache
+    return logcache.memo(conn, f"nba_shooting_long{int(n)}", sport, None,
+                         lambda: _longrun(conn, sport, names, n, before), code=__file__,
+                         extra={"names": hashlib.sha1("\n".join(names).encode()).hexdigest(),
+                                "before": before})
+
+
+def _longrun(conn, sport: str, players, n: int = LONG_GAMES, before: str | None = None) -> dict:
     """``{player: [stored games, newest first]}`` — his last ``n`` games with
     shot columns, any club, any season (``before`` an ISO date to read
     history as of then). One query for every name asked."""

@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NA. The NBA board's four slow reads are kept until what they read changes**
+(step 477; 9 November). Nothing to run. MX's parts named them on the NBA
+build at 09:34: first basket 9.8 seconds (two seasons of first-quarter shots,
+the lineups and the opening tips), the shooting read 4.4 and the rates read
+3.7 (every priced player's last sixty games) and the team profiles 4.3 (two
+seasons of box scores summed per night), all of them the same on every build
+of the same slate. Each is now kept the way MV keeps college's reads: first
+basket until a shot, a tip or a box score is stored or the day moves, the two
+long reads until a box score lands or the slate's names change, the team
+profiles until a box score lands or the day moves; the WNBA keeps its own.
+The numbers are the same as off the table (the tests compare them).
+
 **MZ. College reads a finished game's closing lines once** (step 476; 9
 November). Nothing to run. With the college reads kept (MV), the build's
 biggest remaining part was `closes from the tape`: 6 to 11 seconds of every

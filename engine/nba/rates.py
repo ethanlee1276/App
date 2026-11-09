@@ -196,6 +196,24 @@ def lift_zero(stat: str, read: dict | None, league_key: str = "nba") -> tuple:
 
 
 def longrun(conn, sport: str, players, n: int = LONG_GAMES, before: str | None = None) -> dict:
+    """`_longrun`, kept between builds while the league's logs and the
+    slate's names hold (engine/logcache, 2026-11-09): every priced player's
+    last games for his per-minute rates, 3.7 seconds of the NBA build's context
+    reads at 09:34 on 9 November, read again on every build of the same
+    slate. Keyed on every season of the league, the names asked for (a
+    digest) and ``before``."""
+    names = sorted({p for p in players if p})
+    if not names:
+        return {}
+    import hashlib
+    from .. import logcache
+    return logcache.memo(conn, f"nba_rates_long{int(n)}", sport, None,
+                         lambda: _longrun(conn, sport, names, n, before), code=__file__,
+                         extra={"names": hashlib.sha1("\n".join(names).encode()).hexdigest(),
+                                "before": before})
+
+
+def _longrun(conn, sport: str, players, n: int = LONG_GAMES, before: str | None = None) -> dict:
     """``{player: [(date, stored game), ...] newest first}`` — his last ``n``
     games, any club, any season (``before`` an ISO date to read history as
     of then). One query for every name asked."""
