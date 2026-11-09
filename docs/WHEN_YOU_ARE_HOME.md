@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NL. The play simulator stops reading college for nothing** (step 488; 9
+November). Nothing to run, and one thing to know. The simulator's first build
+on the new store (NI) said `playsim_sims.cfb: teams 0, drawn 0`: college's
+game logs file each game under its date, which the simulator's reader drops
+(it reads a week as a number), and keep no targets, which a receiver's share
+is made of. So the college section has drawn no team since it was built, and
+read two seasons of logs on every college build to draw none (2 to 6
+seconds). It now skips college. Making college work would need receivers
+built from their catches and a measurement of its own before anything could
+use it: the parlay pricer takes the simulation's correlation for any
+football pair once the NFL's verdict holds. Nothing on the site changes: the
+college pick pages never had a simulated reading.
+
 **NK. The readings' journals each say their seconds** (step 487; 9
 November). Nothing to run. The NFL build's `ideas readings` stage had one
 part, `journals + write`, at 8.2 to 8.7 seconds on every build for hours

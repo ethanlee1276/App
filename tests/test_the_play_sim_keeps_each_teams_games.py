@@ -315,6 +315,24 @@ def test_a_kept_pairs_correlation_is_the_float_its_scores_give():
     assert k1 != P.entry_key("nfl", "BBB", prof, {})
 
 
+
+def test_college_is_not_played_and_reads_nothing():
+    """College's logs file each game under its date and keep no targets, so
+    the college section drew no team from the day it was built and read two
+    seasons of logs on every build to draw none (2 to 6 seconds, 9
+    November). It now says nothing and reads nothing."""
+    keep = P.load_rows
+    read = []
+    try:
+        P.load_rows = lambda *a, **k: read.append(a) or []
+        board = {"recommendations": [{"team": "espn:2483", "opponent": "espn:333", "player": "QB One",
+                                      "market": "pass_yds", "line": 240.5}]}
+        assert P.ideas_section(None, None, board, "cfb", conn=_Conn()) is None
+        assert P.ideas_section(None, None, board, "nba", conn=_Conn()) is None
+    finally:
+        P.load_rows = keep
+    assert read == [], "nothing read for a sport the simulator does not play"
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

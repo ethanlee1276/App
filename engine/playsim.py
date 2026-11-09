@@ -754,7 +754,16 @@ def ideas_section(props, games, board, sport, conn=None, keep=None):
     of his over in the simulated games and the legs that move with his.
     ``keep`` is the team store (`KeptSims`); None reads the production
     file's when the connection is the production history file."""
-    if sport not in ("nfl", "cfb"):
+    # COLLEGE IS NOT PLAYED (2026-11-09). Its logs file each game under its
+    # date ('2025-08-23'), which `load_rows` drops (a week is a number here),
+    # and keep no targets, which a receiver's share is made of: so the
+    # college section drew no team from the day it was built, and read two
+    # seasons of logs on every build to draw none (2 to 6 seconds of the
+    # college readings on 9 November). Playing college needs its receivers
+    # made from their catches and a measurement of its own first: the
+    # parlay pricer takes the simulation's correlation for any football
+    # pair once the NFL's verdict holds (engine/ideagate.sim_rho).
+    if sport != "nfl":
         return None
     rows = [r for r in (board or {}).get("recommendations") or []
             if r.get("team") and r.get("market") in PROP_MARKETS and r.get("line") is not None]
