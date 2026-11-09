@@ -1208,6 +1208,10 @@ def main() -> None:
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  NHL journal skipped: {exc}")
     _clock.mark("journal")
+    # THE WRITE STAGE'S PARTS (2026-11-09): 36 seconds of the NHL build at
+    # 00:56 on 9 November, the NFL's 35, the NBA's 9, for the same few jobs.
+    import time as _wtime
+    _wt = _wtime.monotonic()
     try:
         from engine import ledger
         # The game lines beside the board, where a pick named from one is
@@ -1216,24 +1220,29 @@ def main() -> None:
                                                     (out.get("most_likely") or []) + potd_lines)
     except Exception as exc:                                # noqa: BLE001
         print(f"⚠️  Pick of the Day relock skipped: {exc}")
+    _wt = _clock.lap("write the board", "relock pick of the day", _wt)
     try:
         from engine import freshness
         freshness.stamp_board(out, SPORT)
     except Exception as exc:                                # noqa: BLE001
         print(f"⚠️  freshness stamp skipped: {exc}")
+    _wt = _clock.lap("write the board", "freshness", _wt)
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p)
+    _wt = _clock.lap("write the board", "publish", _wt)
     try:
         from engine import lightboard
         _, full = gate.publish(lightboard.light(out, SPORT), lightboard.light_path(p))
         print(lightboard.report(gate.board_source(p), full))
     except Exception as exc:                                # noqa: BLE001
         print(f"⚠️  Light board skipped: {exc}")
+    _wt = _clock.lap("write the board", "light board", _wt)
     # TONIGHT IN FANTASY POINTS (engine/fantasy_daily, 2026-10-27): the
     # board's projections added up, beside it. Never fatal.
     from engine import fantasy_daily as _fd
     print("  " + _fd.build(SPORT, out, p))
+    _clock.lap("write the board", "fantasy tonight", _wt)
     _clock.mark("write the board")
     c = out["counts"]
     # THE ODDS LINE, ALWAYS. A board with no prices looks the same whether

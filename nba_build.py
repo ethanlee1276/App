@@ -2028,6 +2028,10 @@ def main() -> None:
     if _tn:
         print(f"Open-bet tracker: {_tn}")
     _clock.mark("live lines + tracker + exchange fair + crowd + openers + report")
+    # THE WRITE STAGE'S PARTS (2026-11-09), as the NHL and NFL builds name
+    # theirs: the same few jobs ran 9 seconds here and 35 there.
+    import time as _wtime
+    _wt = _wtime.monotonic()
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
     from engine import ledger as _led
@@ -2046,11 +2050,14 @@ def main() -> None:
     # when a later build re-points the card at the day's lock.
     out["pick_of_the_day"] = _led.relock_potd(
         out.get("pick_of_the_day") or {}, (out.get("most_likely") or []) + potd_lines)
+    _wt = _clock.lap("write the board", "relock pick of the day", _wt)
     # HOW CURRENT THE STATS THE MODEL READ ARE (engine/freshness), on the
     # board for the page's banner and the build's self-check.
     from engine import freshness as _fresh
     _fresh.stamp_board(out, str(out.get("sport") or "nba"))
+    _wt = _clock.lap("write the board", "freshness", _wt)
     gate.publish(out, p)
+    _wt = _clock.lap("write the board", "publish", _wt)
     # The light copy the Home page draws first (engine/lightboard),
     # published the same way so the paywall strips the same keys.
     try:
@@ -2059,10 +2066,12 @@ def main() -> None:
         print(lightboard.report(gate.board_source(p), _lfull))
     except Exception as _lexc:                                # noqa: BLE001
         print(f"⚠️  Light board skipped: {_lexc}")
+    _wt = _clock.lap("write the board", "light board", _wt)
     # TONIGHT IN FANTASY POINTS (engine/fantasy_daily, 2026-10-27): the
     # board's projections added up, beside it. Never fatal.
     from engine import fantasy_daily as _fd
     print("  " + _fd.build(str(out.get("sport") or args.league), out, p))
+    _clock.lap("write the board", "fantasy tonight", _wt)
     _clock.mark("write the board")
     # AND THE PICK OF THE DAY, to its own book — HERE, once it exists and
     # the relock above has re-pointed it at today's lock. The journal

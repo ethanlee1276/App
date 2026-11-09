@@ -9338,6 +9338,29 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MN. Two game-log reads are kept until their rows change; the write stage
+names its parts** (step 464; 9 November). Nothing to run. The first NBA and
+NHL stage times (00:55 on 9 November) put 17 of the NHL board's 25 seconds
+into reading every player's games of two seasons, about a million rows,
+on every build, ten minutes apart, while those rows change about once a
+day. The fantasy file's season means read the same seasons again for every
+sport.
+
+- Both results are now kept on the box (`data/feedstate/logcache/`) with
+  the count and highest rowid of exactly the rows they read, and a hash of
+  the code that computed them, and served while all three still match.
+  Every write to the logs is an insert-or-replace, which moves the highest
+  rowid, so a new or corrected box score is read the next build; a deleted
+  row moves the count. Counting the key costs about a tenth of the read.
+- Only the live history file is kept this way; the tests and the Lab read
+  their own files fresh, as before. A cache file that cannot be read is a
+  read from the table, never an error.
+- The write stage now names its parts in the NHL, NBA and NFL builds
+  (relock the Pick of the Day, freshness, publish, light board, fantasy
+  tonight): it ran 36 seconds of the NHL build and 35 of the NFL's at
+  00:51-00:56, and 9 of the NBA's, for the same few jobs. The next
+  heartbeat says which part, and I go after it from there.
+
 **MM. A bet logged in the evening keeps its day** (step 463; 9 November).
 Nothing to run. The gate's browser check failed at 23:50 on Sunday 8
 November: a member with a $100 weekly limit logged $110 in My Bets and saw

@@ -61,6 +61,8 @@ NFL_STAGE_PARTS = {
     "tracker + exchange fair + crowd + openers + splits": [
         "odds clocks + calibration + tiers", "live lines", "drive sim", "team shapes", "open-bet tracker",
         "exchange fair", "crowd", "openers", "splits"],
+    # 35 seconds at 00:51 on 9 November, 19 the night before (2026-11-09).
+    "write the board": ["relock pick of the day", "publish", "light board"],
 }
 
 
@@ -245,7 +247,7 @@ def test_the_nfl_builds_unexplained_stages_name_their_parts_under_their_own_mark
         assert [p for _st, p in laps] == want, (stage, laps)
     every = re.findall(r'_lap\("([^"]+)", "([^"]+)"', src)
     assert sorted(every) == sorted((st, p) for st, ps in NFL_STAGE_PARTS.items() for p in ps), \
-        "no lap outside the three stages"
+        "no lap outside the stages listed"
 
 
 def test_the_nfl_builds_lap_prints_only_in_a_build_and_never_raises():

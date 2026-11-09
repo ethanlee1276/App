@@ -89,6 +89,25 @@ def test_the_nhl_boards_parts_are_named_in_the_order_it_reads_them():
     assert "_clock.mark(" not in body, "a mark always prints; inside build only silent laps"
 
 
+WRITE_PARTS = ("relock pick of the day", "freshness", "publish", "light board", "fantasy tonight")
+
+
+def test_each_builds_write_stage_names_its_parts_in_order():
+    """36 seconds of the NHL build at 00:56 on 9 November and 35 of the
+    NFL's went to writing the board, 9 of the NBA's, for the same few jobs:
+    each now says which."""
+    for name, before in (("nhl_build.py", '_clock.mark("journal")'),
+                         ("nba_build.py", '_clock.mark("live lines + tracker + exchange fair + crowd + openers + report")')):
+        body = _main_of(name)
+        seg = body[body.index(before):body.index('_clock.mark("write the board")')]
+        laps = [f'_clock.lap("write the board", "{p}", _wt)' for p in WRITE_PARTS]
+        for lp in laps:
+            assert seg.count(lp) == 1, (name, lp)
+        ok, at = _in_order(seg, laps)
+        assert ok, (name, at)
+        assert "_wt = _wtime.monotonic()" in seg, name
+
+
 def test_no_stage_name_can_be_read_as_a_part_or_cut_short():
     for st in NBA_STAGES + NHL_STAGES + NHL_BOARD_PARTS:
         assert "›" not in st and ":" not in st, st

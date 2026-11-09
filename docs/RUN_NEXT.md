@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after a bet logged in the evening started keeping its
+Last updated 2026-11-09, after the NHL board's player games and every sport's
+fantasy season means started being kept until their rows change, and the
+write stage started naming its parts (step MN: nothing to run), after a bet
+logged in the evening started keeping its
 Eastern day in My Bets (step MM: nothing to run), after the NBA and NHL builds started putting their
 stage times on the heartbeat (step ML: nothing to run), after the grading
 read was measured on the box

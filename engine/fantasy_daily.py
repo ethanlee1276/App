@@ -72,6 +72,19 @@ def season_means(conn, sport: str, season: int | None = None) -> dict:
             season = conn.execute("SELECT MAX(season) FROM player_game_logs WHERE sport=?", (sport,)).fetchone()[0]
         if season is None:
             return {}
+    except Exception:                                             # noqa: BLE001 — no logs, no fill
+        return {}
+    # KEPT UNTIL ITS ROWS CHANGE (engine/logcache, 2026-11-09): every build
+    # of every sport read two seasons of logs here for the fantasy file,
+    # rows that change about once a day.
+    from . import logcache
+    return logcache.memo(conn, "season_means", sport, (int(season), int(season) - 1),
+                         lambda: _season_means(conn, sport, int(season)), code=__file__)
+
+
+def _season_means(conn, sport: str, season: int) -> dict:
+    """`season_means` read off the table."""
+    try:
         rows = conn.execute(
             "SELECT season, player, market, COUNT(*), AVG(value), MAX(position) FROM player_game_logs "
             "WHERE sport=? AND season IN (?, ?) GROUP BY season, player, market",

@@ -249,7 +249,25 @@ def normal_over(line: float, mean: float, sd: float) -> float:
 # --- history ----------------------------------------------------------------
 def player_games(conn, teams: set | None = None, seasons=None) -> dict:
     """{player: {"team", "position", "games": [per-game dicts, newest first]}}
-    from player_game_logs (sport nhl). A traded player's team is his newest."""
+    from player_game_logs (sport nhl). A traded player's team is his newest.
+
+    KEPT UNTIL ITS ROWS CHANGE (engine/logcache, 2026-11-09): every NHL
+    build read every player's games of two seasons here, about a million
+    rows and 17 of the board's 25 seconds on the box at 00:56 on 9 November,
+    while those rows change about once a day."""
+    if seasons:
+        from .. import logcache
+        out = logcache.memo(conn, "player_games", "nhl", seasons,
+                            lambda: _player_games(conn, seasons), code=__file__)
+    else:
+        out = _player_games(conn, seasons)
+    if teams:
+        out = {k: v for k, v in out.items() if v["team"] in teams}
+    return out
+
+
+def _player_games(conn, seasons=None) -> dict:
+    """`player_games` read off the table, every team's players."""
     q = ("SELECT player, team, opponent, position, home, period, market, value FROM player_game_logs "
          "WHERE sport='nhl'")
     args: list = []
@@ -266,8 +284,6 @@ def player_games(conn, teams: set | None = None, seasons=None) -> dict:
         p["games"] = games
         if games:
             p["team"] = games[0]["team"]
-    if teams:
-        out = {k: v for k, v in out.items() if v["team"] in teams}
     return out
 
 

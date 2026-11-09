@@ -1708,6 +1708,9 @@ def main() -> None:
         if _tn:
             print(f"Open-bet tracker: {_tn}")
         _mem("referees + game reports + pick of the day", args.memtrace)
+        # THE WRITE STAGE'S PARTS (2026-11-09): 35 seconds at 00:51 on 9
+        # November, 19 at 23:21 the night before.
+        _lap_t = _now()
         from engine import gate
         from engine import ledger as _led
         # THE DAY'S CLAIM OUTRANKS TONIGHT'S BOARD. `potd.build` above
@@ -1723,7 +1726,9 @@ def main() -> None:
         # record held a pick made that morning.
         result["pick_of_the_day"] = _led.relock_potd(
             result.get("pick_of_the_day") or {}, result.get("most_likely") or [])
+        _lap_t = _lap("write the board", "relock pick of the day", _lap_t)
         gate.publish(result, args.out)
+        _lap_t = _lap("write the board", "publish", _lap_t)
         print(f"\nWrote {args.out}")
         # The light copy the Home page draws first (engine/lightboard),
         # published the same way so the paywall strips the same keys.
@@ -1733,6 +1738,7 @@ def main() -> None:
             print(lightboard.report(gate.board_source(args.out), _lfull))
         except Exception as _lexc:                            # noqa: BLE001
             print(f"⚠️  Light board skipped: {_lexc}")
+        _lap("write the board", "light board", _lap_t)
         _mem("write the board", args.memtrace)
         # THE PLAYOFF RACE (engine/nflrace; Ethan, 2026-11-03: "do all of
         # them"), off the futures board's ratings and the season's schedule.
