@@ -321,6 +321,29 @@ def netguard_tally(path: str, top: int = 8) -> str:
             f"internet by tests/netguard: {shown}{more}")
 
 
+#: How much of a failing file's output its report shows: the last
+#: TAIL_CHARS characters, after the lines that name what failed.
+TAIL_CHARS = 800
+NAMED_LINES = 10
+
+
+def failure_report(text: str) -> str:
+    """A failing file's report: every line that names a failed test, then
+    the tail of its output.
+
+    THE TAIL ALONE LOST THE NAME (gate 169, 2026-11-09). A test file runs
+    its tests in name order, so the "ok" lines of the tests after the one
+    that failed pushed its FAIL line out of the last 800 characters, and
+    the report could not say which test had failed or why. A named line
+    the tail already shows is not repeated."""
+    tail = text[-TAIL_CHARS:]
+    named = []
+    for line in text.splitlines():
+        if line.lstrip().startswith("FAIL") and line.strip() not in tail:
+            named.append(line.rstrip()[:300])
+    return ("\n".join(named[:NAMED_LINES]) + "\n" if named else "") + tail
+
+
 def _run(env, argv) -> int:
     files = sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
     jobs = _workers(argv)
@@ -409,7 +432,7 @@ def _run(env, argv) -> int:
         else:
             failed.append(name)
             print(f"  ❌ {name:28} FAILED")
-            print((out + err)[-800:])
+            print(failure_report(out + err))
 
     refused = netguard_tally(env.get("QB_NETGUARD_LOG", ""))
     if refused:

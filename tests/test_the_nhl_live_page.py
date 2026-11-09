@@ -705,9 +705,11 @@ def test_the_page_in_a_browser_at_390_and_1280():
                     page.route("**/data/pbp/nhl_401802123.json*", lambda r: r.fulfill(status=200, content_type="application/json", body=doc))
                     page.route("**/data/live_nhl.json*", lambda r: r.fulfill(status=200, content_type="application/json", body=strip))
                     page.goto(f"http://127.0.0.1:{port}/index.html#pbp/nhl/401802123", wait_until="load")
-                    page.wait_for_selector(".rc-stage .rc-photo", timeout=15000)
+                    # Thirty and twenty seconds (gate 169, 2026-11-09): three browser
+                    # files at a time on the gate; a page that is ready returns at once.
+                    page.wait_for_selector(".rc-stage .rc-photo", timeout=30000)
                     page.evaluate("document.querySelectorAll('#tour-overlay, .tour-pop').forEach((n) => n.remove())")
-                    page.wait_for_function("() => document.querySelector('.rc-photo').naturalWidth > 0", timeout=8000)
+                    page.wait_for_function("() => document.querySelector('.rc-photo').naturalWidth > 0", timeout=20000)
                     assert page.query_selector(".rc-svg .rc-ring"), "the newest event, ringed"
                     assert len(page.query_selector_all(".rc-play")) == 6
                     # The five views fit across a phone; nothing scrolls sideways.

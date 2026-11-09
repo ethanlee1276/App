@@ -146,6 +146,45 @@ def test_the_guard_actually_fires_on_a_silent_file():
         % (lines(seen["serial"][1]), lines(seen["parallel"][1])))
 
 
+def test_a_failing_files_report_names_the_test_that_failed():
+    """Gate 169 (2026-11-09): a browser test failed early in its file, the
+    file's other tests ran after it, and their "ok" lines pushed its FAIL
+    line out of the report's last 800 characters, so nobody could say
+    which test had failed. The report now leads with every line that
+    names a failure, and does not repeat one the tail already shows."""
+    import run_tests
+
+    body = ("  FAIL test_aaa_in_a_browser: the photo never decoded\n"
+            + "".join(f"  ok  test_bbb_{i:03d}_with_a_long_enough_name_to_fill_the_tail\n" for i in range(40))
+            + "\n1 failed\n")
+    report = run_tests.failure_report(body)
+    assert report.startswith("  FAIL test_aaa_in_a_browser: the photo never decoded\n"), report[:200]
+    assert report.endswith(body[-run_tests.TAIL_CHARS:])
+    short = "  ok  test_a\nFAIL  test_b: AssertionError: 2 != 3\n\n1 failed.\n"
+    assert run_tests.failure_report(short) == short, "a named line inside the tail is shown once"
+    many = "".join(f"FAIL test_{i}: x\n" for i in range(30)) + "x" * 2000
+    assert run_tests.failure_report(many).count("FAIL test_") == run_tests.NAMED_LINES
+
+    box = tempfile.mkdtemp()
+    os.mkdir(os.path.join(box, "tests"))
+    with open(os.path.join(box, "tests", "test_fails_early.py"), "w", encoding="utf-8") as fh:
+        fh.write("import sys\n"
+                 "print('  FAIL test_aaa: the first one broke')\n"
+                 "for i in range(40):\n"
+                 "    print(f'  ok  test_bbb_{i:03d}_with_a_long_enough_name_to_fill_the_tail')\n"
+                 "print('\\n1 failed')\n"
+                 "sys.exit(1)\n")
+    keep, run_tests.ROOT = run_tests.ROOT, box
+    try:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = run_tests._run(dict(os.environ), ["--serial"])
+    finally:
+        run_tests.ROOT = keep
+        shutil.rmtree(box, ignore_errors=True)
+    assert rc == 1 and "FAIL test_aaa: the first one broke" in out.getvalue(), out.getvalue()
+
+
 def test_a_hung_file_fails_itself_rather_than_the_whole_run():
     """Serially, a file that never returns stalled everything with
     nothing to say. In parallel it would hold a worker for ever and the
