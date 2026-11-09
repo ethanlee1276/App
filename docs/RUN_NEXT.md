@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after the boards' player stats started being kept between builds of the
+Last updated 2026-11-09, after the UFC step started saying where its time goes (step NC: nothing
+to run), after the boards' player stats started being kept between builds of the
 same slate (step NB: nothing to run), after the NBA board's four slow reads started being kept until what they
 read changes (step NA: nothing to run), after college started reading a finished game's closing lines once
 (step MZ: nothing to run), after the prediction-markets build stopped recounting the whole

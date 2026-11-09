@@ -2086,10 +2086,22 @@ def refresh_ufc(quiet: bool = False) -> bool:
     no games>0 gate — for UFC the card only EXISTS in the payload once a
     pull has happened, so gating the pull on the card is circular, which
     is the same knot in a different rope.
+
+    WHERE THE STEP'S TIME GOES (2026-11-09): the UFC step took 17-22
+    seconds of every cycle with nothing to say where. The build prints its
+    own stages; the work here before it (the drafts, the weigh-ins, the
+    fight history, the free card read and the pacer) rides ahead of them
+    on the heartbeat as one stage, "before the build", its pieces named
+    (`_ufc_before_the_build`).
     """
+    before: dict = {}
+    _bt = time.monotonic()
     _auto_dossiers(quiet)
+    _bt = _ufc_piece(before, "dossier drafts", _bt)
     _auto_weighins(quiet)
+    _bt = _ufc_piece(before, "weigh-ins", _bt)
     _auto_fight_history(quiet)
+    _bt = _ufc_piece(before, "fight history", _bt)
     args = ["ufc_build.py", "--out", UFC_OUT]
     # NOTHING TO BUY, NOTHING TO SPEND. The events list is free and is
     # where the card comes from; between cards it is empty, and a paid
@@ -2101,6 +2113,7 @@ def refresh_ufc(quiet: bool = False) -> bool:
     # …AND NOTHING TO BUY UNTIL FIGHT NIGHT (`_odds_affordable`'s tonight
     # rule): the card's bouts are its games.
     card = _ufc_card()
+    _bt = _ufc_piece(before, "the card (free events list)", _bt)
     spend = (_ufc_card_pending(quiet, card)
              and _odds_affordable(UFC_OUT, quiet, sport="ufc", tonight=_ufc_tonight(card)))
     before_seen = _paid_pull_baseline() if spend else ""
@@ -2108,12 +2121,39 @@ def refresh_ufc(quiet: bool = False) -> bool:
         args.append("--odds")
     elif _with_odds():
         args.append("--cached-odds")
+    _ufc_piece(before, "the pacer", _bt)
     ok, tail = _run_build(args)
+    _ufc_before_the_build(before)
     _finish_paid_pull(spend, before_seen, ok, tail, "UFC", sport="ufc")
     if not quiet:
         print(f"  UFC  card: {'refreshed' if ok else 'unavailable'}"
               + (f"  ({tail})" if not ok and tail else ""))
     return ok
+
+
+def _ufc_piece(pieces: dict, name: str, since: float, clock=time.monotonic) -> float:
+    """Note ``name``'s seconds since ``since`` in ``pieces`` and return now,
+    the next piece's ``since``."""
+    now = clock()
+    pieces[name] = round(pieces.get(name, 0.0) + max(0.0, now - since), 1)
+    return now
+
+
+def _ufc_before_the_build(pieces: dict) -> None:
+    """The loop's own work before the UFC build, one stage ahead of the
+    build's on the board's heartbeat entry ("before the build"), each piece
+    a part of it — read by `_note_board` with the build's own stages. A
+    build whose stages were not read (none printed) still gets this one.
+    Never raises."""
+    try:
+        if not pieces:
+            return
+        stages = dict(_LAST_BUILD_STAGES[0] or {})
+        parts = {k: dict(v) for k, v in (_LAST_BUILD_PARTS[0] or {}).items()}
+        _LAST_BUILD_STAGES[0] = {"before the build": int(round(sum(pieces.values()))), **stages}
+        _LAST_BUILD_PARTS[0] = {"before the build": dict(pieces), **parts}
+    except Exception:                                        # noqa: BLE001
+        pass
 
 
 #: What each board's last build did, and when. Written into the

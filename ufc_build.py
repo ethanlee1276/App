@@ -207,10 +207,18 @@ def main() -> None:
     ap.add_argument("--out", default="web/data/ufc.json")
     args = ap.parse_args()
     load_local_secrets()
+    # ONE LINE PER STAGE as the build goes (engine/stageclock), read back by
+    # the loop into boards.ufc.stages: the UFC step took 17-22 seconds of
+    # every cycle on 9 November with nothing to say where. The card's two
+    # biggest stages name their parts (stageclock.lap).
+    import time as _time
+    from engine import stageclock as _clock
+    _clock.start()
 
     out: dict = {"generated_at": datetime.datetime.now()
                  .isoformat(timespec="seconds")}
     dossiers = load_dossiers()
+    _clock.mark("dossiers")
 
     fights, event_label = [], ""
     near: list = []      # (name on the card, closest dossier we hold)
@@ -218,11 +226,13 @@ def main() -> None:
     if args.odds or args.cached_odds:
         from engine.sources import oddsapi
         from engine.sources.oddsapi import normalize_name
+        _ot = _time.monotonic()
         try:
             key = oddsapi.get_api_key()
             events = oddsapi.list_events(key, sport="ufc",
                                          cache_only=args.cached_odds and not args.odds)
             event_label, card = select_card(events)
+            _ot = _clock.lap("card + odds", "events list", _ot)
             snaps: list = []
             if card:
                 for ev in card:
@@ -259,6 +269,7 @@ def main() -> None:
                                    # The bout's start, so its line history
                                    # is this bout's and not his last one's.
                                    "commence": ev.get("commence_time")})
+            _ot = _clock.lap("card + odds", "bout prices + dossier lookups", _ot)
             # §8 — where the card is. One fact per event, recorded by hand
             # because the odds feed carries no venue; it decides cage size
             # and altitude, which reshape every method and distance price.
@@ -268,14 +279,17 @@ def main() -> None:
             for f in fights:
                 f["prices"]["venue"] = venue.get("venue", "")
                 f["prices"]["city"] = venue.get("city", "")
+            _ot = _clock.lap("card + odds", "venue", _ot)
             if snaps:
                 from engine.linemoves import record_fight_snapshots
                 n_snap = record_fight_snapshots(snaps)
                 print(f"Movement history: {n_snap} fight-price snapshot(s) "
                       f"recorded — opener and open→close become derivable "
                       f"as cards accumulate.")
+                _clock.lap("card + odds", "fight snapshots", _ot)
         except oddsapi.OddsAPIError as exc:
             out["odds_error"] = str(exc)
+    _clock.mark("card + odds")
 
     # Weigh-ins, before the model runs: a missed weight is appended to that
     # fighter's red_flags, and approval_gate already refuses to bet through
@@ -288,7 +302,9 @@ def main() -> None:
         for f in fights:
             weighin.annotate_fight(f, weigh_store)
         out["weigh_ins"] = weighin.card_summary(fights)
+    _clock.mark("weigh-ins")
 
+    _ct = _time.monotonic()
     if not fights:
         out.update(status="no_card",
                    note=out.get("odds_error",
@@ -309,6 +325,7 @@ def main() -> None:
             wi = by_fight.get(row.get("fight"))
             if wi:
                 row["weigh_in"] = wi
+        _ct = _clock.lap("the card", "model", _ct)
         # ROUND PRICES (engine/ufc/rounds, 2026-10-14): over/under rounds
         # and the round it ends in, on every fight the model priced, off
         # the finish times `ufc_fights` stores — fair numbers to shop, never
@@ -324,6 +341,7 @@ def main() -> None:
             print(f"Round prices: {n_rounds} priced fight(s) carry them")
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  round prices skipped: {exc}")
+        _ct = _clock.lap("the card", "round prices", _ct)
         # EACH CORNER'S PATH (engine/ufc/fightpath, 2026-10-15): how his own
         # stored fights ended, beside the model's read of this one, for the
         # Toolbox's fight path. Context; a man with nothing on file has none.
@@ -338,6 +356,7 @@ def main() -> None:
             print(f"Fight paths: {n_paths} corner(s) carry their record")
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  fight paths skipped: {exc}")
+        _ct = _clock.lap("the card", "fight paths", _ct)
         # WHERE EACH LINE OPENED (engine/ufc/moves, 2026-10-13): the fight
         # snapshots this build has written on every paid pull since
         # 2026-08-10, read for the first time. Evidence on the card — the
@@ -348,6 +367,8 @@ def main() -> None:
             print(f"Line moves: {moved} of {len(fights)} bout(s) have two or more pulls on file")
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  line moves skipped: {exc}")
+        _clock.lap("the card", "line moves", _ct)
+    _clock.mark("the card")
 
     # THE PICK OF THE DAY (engine/potd; Ethan, 2026-10-14, "do 1-11", to
     # "A Pick of the Day for the UFC card?": yes). The fights Pinnacle
@@ -359,14 +380,18 @@ def main() -> None:
     potd_lines = _potd.fight_lines(potd_bouts(bouts, out)) if fights else []
     print(_potd.attach(out, "ufc", lines=potd_lines))
     out["pick_of_the_day"] = _led.relock_potd(out.get("pick_of_the_day") or {}, potd_lines)
+    _clock.mark("pick of the day")
 
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p)
+    _clock.mark("publish")
     # And to its own book, once the card exists (`ledger.journal_potd`).
+    _jt = _time.monotonic()
     _jn = _led.journal_potd(out.get("pick_of_the_day") or {})
     if _jn:
         print(_jn)
+    _jt = _clock.lap("journal", "pick of the day", _jt)
 
     # Learning engine: journal the card's picks at their real prices and
     # settle any open ones whose fights have since happened (ESPN MMA
@@ -377,16 +402,20 @@ def main() -> None:
             from engine import ledger
             lconn = ledger.connect()
             logged = ledger.log_ufc_picks(lconn, out)
+            _jt = _clock.lap("journal", "log picks", _jt)
             open_n = lconn.execute(
                 "SELECT COUNT(*) FROM bets WHERE status='open' "
                 "AND sport='ufc'").fetchone()[0]
             settled = ledger.settle_ufc(lconn) if open_n else 0
+            _jt = _clock.lap("journal", "settle", _jt)
             if logged or settled:
                 ledger.export_json(lconn, "web/data/record.json")
                 print(f"UFC journal: {logged} pick(s) logged, {settled} "
                       f"settled — see the Record tab")
+                _clock.lap("journal", "record export", _jt)
         except Exception as exc:
             print(f"⚠️  UFC journal skipped: {exc}")
+    _clock.mark("journal")
 
     if out.get("status") == "card":
         c = out["counts"]

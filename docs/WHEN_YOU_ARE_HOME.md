@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NC. The UFC step says where its time goes** (step 479; 9 November).
+Nothing to run. The UFC step took 17 to 22 seconds of every cycle with
+nothing on the heartbeat to say where. The build now prints its stages
+(dossiers, card + odds, weigh-ins, the card, pick of the day, publish,
+journal), the card's stages name their parts (the events list, the bout
+prices, the model, round prices, fight paths, line moves; the journal's
+pick logging, settling and record export), and the loop's own work before
+the build rides ahead of them as `before the build`: the dossier drafts,
+the weigh-ins, the fight history, the free card read and the pacer, each
+timed. They show under `boards.ufc` on the heartbeat
+(`https://qellysbook.com/data/heartbeat.json`) after the next cycle.
+
 **NB. The boards' player stats are kept between builds of the same slate**
 (step 478; 9 November). Nothing to run. The last-ten-games charts and hit
 chips on every NFL, college and MLB prop come from one index seek per player
