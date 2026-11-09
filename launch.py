@@ -2631,7 +2631,9 @@ def _seal_forecasts(quiet: bool = False) -> None:
         from engine import ledger as _led
         conn = _led.connect()
         n = _led.seal_forecasts(conn)
-        v = _led.verify_forecast_log(conn)
+        # The chain only: the drift count is the daily heads' and the
+        # nightly report's, and nothing here reads it (2026-11-09).
+        v = _led.verify_forecast_log(conn, drift=False)
         # The change log rides the same sweep (audit P0-1): seal what the
         # triggers wrote, verify it, and once a day write both heads to
         # data/forecast_heads.jsonl — and post them off the box when

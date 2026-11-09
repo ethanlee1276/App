@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NJ. The seal step walks each chain once a cycle** (step 486; 9
+November). Nothing to run. The loop's `forecast-seal` step took 9.8 to 13.5
+seconds of every cycle. It walked the forecast chain end to end together
+with a walk of the whole journal for drift that nothing in the step reads,
+and the change log end to end; then the daily heads sealed and walked both
+chains again before seeing today's were already written, which they are on
+every cycle but the day's first. The heads now look for today's entry
+first, and the step asks for the chain alone. Nothing about what is checked
+changes: a broken chain still prints `FORECAST LOG BROKEN` on the cycle it
+breaks, and the daily heads, the record export, the nightly report and the
+doctor still count the drift.
+
 **NI. The play simulator keeps each team's games between builds** (step
 485; 9 November). Nothing to run. The NFL build's readings spent 11.7 to
 13.2 seconds in the play simulator on every build and ran out its

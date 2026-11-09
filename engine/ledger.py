@@ -8911,7 +8911,7 @@ def _same(a, b) -> bool:
     return str(a) == str(b)
 
 
-def verify_forecast_log(conn) -> dict:
+def verify_forecast_log(conn, drift: bool = True) -> dict:
     """Recompute every link. Reports the FIRST break, not just a boolean.
 
     A chain that says only "broken" is nearly useless — the whole value is
@@ -8925,6 +8925,12 @@ def verify_forecast_log(conn) -> dict:
     by itself wrong — a duplicate moved to its own book drifts — but a
     drift nobody logged is exactly what this exists to surface. Rows edited
     before the audit trail existed show up here, once, as unexplained.
+
+    ``drift=False`` leaves that second check out (and its three counts off
+    the answer): the loop's every-cycle seal reads only whether the chain
+    holds, and the drift walk read the whole journal for it every cycle
+    (2026-11-09). The daily heads, the record export, the nightly
+    integrity report and the doctor all still ask for it.
     """
     try:
         rows = conn.execute(
@@ -8944,7 +8950,8 @@ def verify_forecast_log(conn) -> dict:
         prev = r["hash"]
     out = {"ok": True, "n": len(rows), "head": prev if rows else None,
            "broken_at": None, "verified_through": len(rows)}
-    out.update(_forecast_drift(conn, rows))
+    if drift:
+        out.update(_forecast_drift(conn, rows))
     return out
 
 
@@ -9106,13 +9113,18 @@ def record_heads(conn, post: bool = True) -> dict | None:
     d = _db_dir(conn)
     if d is None:
         return None
-    seal_forecasts(conn)
-    seal_audit(conn)
-    f, a = verify_forecast_log(conn), verify_audit_log(conn)
+    # TODAY'S HEADS ARE CHECKED WHEN THEY ARE WRITTEN, NOT ON EVERY CYCLE
+    # (2026-11-09). The day's entry was looked for only after both chains
+    # had been sealed and walked end to end, so every cycle of the loop
+    # walked both twice (the seal step walks them just before this), and
+    # threw the second walk away on every cycle but the day's first.
     day = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     last = recent_heads(conn, 1)
     if last and last[-1].get("day") == day:
         return None
+    seal_forecasts(conn)
+    seal_audit(conn)
+    f, a = verify_forecast_log(conn), verify_audit_log(conn)
     entry = {"day": day, "at": _utc_now_iso(),
              "forecast_head": f.get("head"), "forecast_n": f.get("n"),
              "audit_head": a.get("head"), "audit_n": a.get("n"),
