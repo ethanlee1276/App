@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after the NHL board's player games and every sport's
+Last updated 2026-11-09, after the kept game-log reads started holding between
+builds (a box score written again unchanged is left where it is) and the
+heartbeat started saying whether each one was served (step MO: nothing to run),
+after the NHL board's player games and every sport's
 fantasy season means started being kept until their rows change, and the
 write stage started naming its parts (step MN: nothing to run), after a bet
 logged in the evening started keeping its

@@ -434,6 +434,11 @@ def ingest_for_open(lconn, hconn, league: str, log=print,
     # stores results as it builds, failed on "database is locked" behind
     # it from 07:56 that morning.
     hconn.commit()
+    if res["purged"]:
+        # A delete can free a rowid the next row takes back, so the kept
+        # game-log reads of this league are dropped (engine/logcache.forget).
+        from . import logcache
+        logcache.forget(league)
     if not need_ids:
         return res
     ids: dict = {}

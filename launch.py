@@ -5546,6 +5546,18 @@ def _nba_switches_public() -> dict:
         return {}
 
 
+def _logcache_public() -> dict:
+    """THE KEPT GAME-LOG READS (engine/logcache, 2026-11-09): each one's last
+    call, served or read again and why, with its seconds. The NHL build's
+    player games took 8.7 of its 12 board seconds at 02:22 on 9 November,
+    and from its timings alone there was no telling a slow key from a read."""
+    try:
+        from engine import logcache
+        return logcache.status()
+    except Exception:  # noqa: BLE001 — the heartbeat never fails for a side read
+        return {}
+
+
 def _write_heartbeat(interval: int, swept: str = "ran") -> None:
     """web/data/heartbeat.json — one small fact per cycle, never fatal."""
     try:
@@ -5614,6 +5626,9 @@ def _write_heartbeat(interval: int, swept: str = "ran") -> None:
             # THE LEAGUES OUT OF SEASON (2026-11-06): the page greys their
             # buttons in the league row and keeps them working.
             "seasons": _seasons_public(),
+            # THE KEPT GAME-LOG READS (2026-11-09): served or read again,
+            # why, and their seconds (engine/logcache.status).
+            "logcache": _logcache_public(),
         }))
         os.replace(tmp, p)
     except OSError:

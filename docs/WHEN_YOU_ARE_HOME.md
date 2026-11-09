@@ -9338,6 +9338,31 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MO. The game-log cache holds between builds, and the heartbeat says whether
+it did** (step 465; 9 November). Nothing to run. On the box after MN (02:15
+on 9 November) the NHL build still read its player games (19.7 seconds) and
+the fantasy file's season means (25.3) though nothing in them had changed.
+The results pulls re-read days they already hold (the daily catch-up
+re-reads each league's last final day; the settle pass re-reads every day
+with an open pick, every pass), and every rewrite filed the same box score
+under a new rowid, which the cache took for a change.
+
+- A game-log row already stored exactly as given is now left where it is; a
+  new or changed row goes in as before. A night of hockey written again
+  costs 0.03 seconds and no writes instead of 0.12 seconds and 3,200 writes;
+  a new night costs about 0.03 seconds more than it did.
+- A delete can free a rowid that the next row takes back, and the season
+  relabel updates rows in place, so the three paths that do either (the
+  provisional box-score purge, the bet repair, the relabel) now drop that
+  sport's kept reads.
+- The heartbeat's new `logcache` field says, for each kept read, whether its
+  last call was served (`kept`) or read again and why (`no copy`, `rows
+  changed`, `code changed`, `unreadable`), with its seconds (`key_s`,
+  `load_s`, `read_s`, `store_s`) and its size. By 02:22 the NHL season means
+  were served (0.2 seconds against 25.3) while player games still took 8.7;
+  the field says whether that is the key's count or a read, and I go after
+  it from there.
+
 **MN. Two game-log reads are kept until their rows change; the write stage
 names its parts** (step 464; 9 November). Nothing to run. The first NBA and
 NHL stage times (00:55 on 9 November) put 17 of the NHL board's 25 seconds

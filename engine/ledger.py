@@ -3888,6 +3888,7 @@ def repair_premature(conn, hist_conn, apply: bool = False) -> dict:
         plan["bankroll_after"] = plan["bankroll_before"] - (
             plan["dollars_reversed"] if rows else 0.0)
         return plan
+    emptied: set = set()
     for r in rows:
         conn.execute(
             "UPDATE bets SET status='open', actual=NULL, pnl_units=NULL, "
@@ -3899,12 +3900,19 @@ def repair_premature(conn, hist_conn, apply: bool = False) -> dict:
                 f"DELETE FROM player_game_logs WHERE {where} AND player=? "
                 f"AND market=?", (*wargs, r["player"], r["market"]))
             plan["logs_deleted"] += cur.rowcount
+            if cur.rowcount:
+                emptied.add(b["sport"])
         except Exception:
             pass
     set_cfg(conn, "bankroll",
             round(plan["bankroll_before"] - plan["dollars_reversed"], 2))
     conn.commit()
     hist_conn.commit()
+    # A delete can free a rowid the next row takes back, so the kept
+    # game-log reads of those sports are dropped (engine/logcache.forget).
+    from . import logcache
+    for sport in emptied:
+        logcache.forget(sport)
     plan["bankroll_after"] = bankroll(conn)
     return plan
 

@@ -1008,8 +1008,34 @@ def drop_games(conn, rows: list[dict]) -> int:
     return dropped
 
 
+#: The columns that name a game-log row (its primary key).
+LOG_KEYS = ("sport", "season", "period", "game_id", "player", "market")
+
+
 def upsert_player_logs(conn, rows: list[dict]) -> int:
-    return _upsert(conn, "player_game_logs", LOG_COLS, rows)
+    """Store game-log rows: a new row is added, a changed one replaced, and
+    one already stored exactly as given is left where it is.
+
+    THE SAME ROW WRITTEN AGAIN IS LEFT ALONE (2026-11-09). A plain INSERT OR
+    REPLACE deletes and re-adds a row even when nothing in it changed, which
+    files it under a new rowid. Every results pull re-reads days it has
+    already stored (the daily catch-up re-reads the last final day; the
+    settle pass re-reads each day with an open pick, every pass), so the
+    same rows were rewritten over and over, the history file took the
+    writes for nothing, and the kept game-log reads (engine/logcache), which
+    know a change by the highest rowid of the rows they read, saw a change
+    every time and read the table again. A row that differs in any column
+    still goes in under a rowid above every other, as before.
+
+    Returns how many rows were given, stored or already there (as before)."""
+    if not rows:
+        return 0
+    same = " AND ".join([f"{c} = :{c}" for c in LOG_KEYS]
+                        + [f"{c} IS :{c}" for c in LOG_COLS if c not in LOG_KEYS])
+    sql = (f"INSERT OR REPLACE INTO player_game_logs ({', '.join(LOG_COLS)}) "
+           f"SELECT {', '.join(f':{c}' for c in LOG_COLS)} "
+           f"WHERE NOT EXISTS (SELECT 1 FROM player_game_logs WHERE {same})")
+    return _chunked(conn, sql, [{c: r.get(c) for c in LOG_COLS} for r in rows])
 
 
 def upsert_odds_history(conn, rows: list[dict]) -> int:

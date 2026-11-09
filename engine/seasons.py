@@ -206,6 +206,12 @@ def relabel(conn, sport: str = "nba", apply: bool = False) -> dict:
         out[table] = {"wrong": wrong, "duplicates": dup}
     if apply:
         conn.commit()
+        if out.get("player_game_logs", {}).get("wrong"):
+            # An UPDATE keeps a row's rowid and a delete can free one, so
+            # the kept game-log reads of this sport are dropped
+            # (engine/logcache.forget).
+            from . import logcache
+            logcache.forget(sport)
     return out
 
 
