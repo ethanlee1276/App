@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MT. The roster files are rebuilt every half hour, not every sweep** (step
+470; 9 November). Nothing to run. The heartbeat at 07:54 had the rosters step
+at 34 seconds of a 365-second sweep, on every sweep: five leagues' roster
+files (MLB, NBA, WNBA, college, NHL, and UFC's note) rebuilt from feeds that
+are each kept half an hour or longer (the injury board 30 minutes, MLB's
+rosters six hours, college's schools a day) and from game logs that move
+when a night's box scores land. A sweep now keeps the files when the oldest
+was written less than 30 minutes ago and says so in the loop's log (`ROS
+rosters: kept (rebuilt 12 min ago; every 30 min)`); one missing, or one a
+failed league left behind, rebuilds them on that sweep. The heartbeat's
+`step_s.rosters` reads about 0 on the sweeps between, so the sweep should
+come down by about half a minute on average.
+
 **MS. College's four slow stages say where their seconds go** (step 469;
 9 November). Nothing to run. The heartbeat at 07:51 had the college build at
 110 seconds, the slowest of the sweep, and four of its stages held 92 of them

@@ -1579,6 +1579,31 @@ def refresh_fantasy(quiet: bool = False) -> bool:
     return ok
 
 
+#: HOW OFTEN THE SWEEP REBUILDS THE ROSTER FILES (2026-11-09). The heartbeat
+#: at 07:54 on 9 November had the rosters step at 34 seconds of a 365-second
+#: sweep, on every sweep, rebuilding five leagues' rosters whose feeds are
+#: each kept half an hour or longer (the injury board 30 minutes, MLB's six
+#: hours, college's schools a day) and whose game logs move when a night's
+#: box scores land. Half an hour is the shortest of those feeds.
+ROSTER_REBUILD_S = 30 * 60
+#: The files `rosters_build.py` writes (its FROM_LOGS and NO_SOURCE leagues;
+#: the NFL's comes from fantasy_build). Any one missing, or older than the
+#: rest, and the step runs again: a league whose build failed keeps its old
+#: file, so it is retried on the next sweep, not half an hour later.
+ROSTER_LEAGUES = ("mlb", "nba", "wnba", "cfb", "nhl", "ufc")
+
+
+def _rosters_age(now: float | None = None) -> float | None:
+    """Seconds since the OLDEST roster file this step writes was written,
+    or None when one is missing or cannot be read. Never raises."""
+    try:
+        t = time.time() if now is None else float(now)
+        return t - min(os.path.getmtime(ROOT / "web" / "data" / f"rosters_{lg}.json")
+                       for lg in ROSTER_LEAGUES)
+    except Exception:                                         # noqa: BLE001
+        return None
+
+
 def refresh_sport_rosters(quiet: bool = False) -> bool:
     """Per-sport roster tabs.
 
@@ -1594,7 +1619,16 @@ def refresh_sport_rosters(quiet: bool = False) -> bool:
     appearance markets there are `pass_yds`, `carries` and `receptions`,
     so an appearance-built college roster is the men who touched the
     ball and nobody else. Both fall back to appearances, saying why.
+
+    HALF-HOURLY, NOT EVERY SWEEP (2026-11-09): see ROSTER_REBUILD_S. A
+    sweep inside it keeps the files as they are and says so.
     """
+    age = _rosters_age()
+    if age is not None and age < ROSTER_REBUILD_S:
+        if not quiet:
+            print(f"  ROS  rosters: kept (rebuilt {age / 60:.0f} min ago; every "
+                  f"{ROSTER_REBUILD_S // 60} min)")
+        return True
     ok, tail = _run_build(["rosters_build.py"])
     if not quiet:
         print(f"  ROS  rosters: {'refreshed' if ok else 'unavailable'}"
