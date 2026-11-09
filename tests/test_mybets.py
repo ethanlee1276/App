@@ -151,7 +151,9 @@ def test_bulk_import_parses_real_export_shapes():
     node = shutil.which("node")
     if not node:
         return
-    fns = _slice("const MB_HEADERS", "\n/* Parsed-but-not-committed")
+    # The site's day (etToday, 2026-11-09): an undated row is dated by it.
+    fns = (_slice("function etToday(", "\n/* THEIR OWN WEEKLY LIMIT")
+           + _slice("const MB_HEADERS", "\n/* Parsed-but-not-committed"))
     check = fns + r"""
 const die = (msg) => { console.error(msg); process.exit(1); };
 const eq = (got, exp, msg) => {

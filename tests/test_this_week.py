@@ -128,7 +128,7 @@ def _run(script, desk=None, inj=None, today="2026-09-09", week=None):
            + "\n".join(_const(c) for c in ("FFCAL_DOW", "FFCAL_MON"))
            + "\n"
            + "\n".join(_fn(n) for n in (
-               "ffNorm", "_ffImpliedAvg", "_ffDayEnv", "_ffDayBoard",
+               "etToday", "ffNorm", "_ffImpliedAvg", "_ffDayEnv", "_ffDayBoard",
                "_ffCalSay", "_ffPlayerDay", "_ffPlayerSeat",
                "ffThisWeekHTML"))
            + "\nconst window = globalThis;\n" + WEEK_JS
