@@ -112,6 +112,97 @@ def test_the_builds_keep_each_player_current_once_a_day():
         A.PAUSE = real
 
 
+def _wiki(calls, behind=("Nobody Reads",)):
+    """A Wikipedia that has not published yesterday yet: every article's
+    views stop the day before it, and an article nobody reads answers 404."""
+    import urllib.parse
+
+    def get(url):
+        calls.append(url)
+        if "srsearch" in url:
+            name = urllib.parse.unquote(url.split("srsearch=")[1]).replace(" American football", "")
+            return {"query": {"search": [{"title": name}]}}
+        if any(b.replace(" ", "_") in url for b in behind):
+            raise urllib.error.HTTPError(url, 404, "not found", {}, None)
+        return {"items": [{"timestamp": "2026101400", "views": 800}]}
+    return get
+
+
+def test_a_title_short_of_yesterday_waits_for_the_recheck_and_the_next_man_gets_his_turn():
+    """The NFL build's journal took 8.4 of its readings' 30 seconds at 10:12
+    on 9 November: a man whose views stop short of yesterday was asked again
+    on every build, the board's first names first, until the budget ran out."""
+    conn = sqlite3.connect(":memory:")
+    calls, t = [], [1_800_000_000.0]
+    get, clock = _wiki(calls), (lambda: t[0])
+    views = lambda: len([c for c in calls if "/pageviews/" in c])     # noqa: E731
+    real = A.PAUSE
+    A.PAUSE = 0
+    try:
+        today = dt.date(2026, 10, 16)
+        assert A.keep_current(conn, "nfl", ["Nobody Reads", "Puka Nacua"], get, today, clock=clock) == 2
+        assert views() == 2 and conn.execute("SELECT MAX(date) FROM pageviews").fetchone()[0] == "2026-10-14"
+        t[0] += 600
+        assert A.keep_current(conn, "nfl", ["Nobody Reads", "Puka Nacua", "Kyren Williams"], get, today,
+                              clock=clock) == 1, "the two asked ten minutes ago wait; the next man is asked"
+        assert views() == 3 and "Kyren_Williams" in calls[-1]
+        t[0] += A.RECHECK_SECONDS
+        assert A.keep_current(conn, "nfl", ["Nobody Reads", "Puka Nacua"], get, today, clock=clock) == 2, \
+            "past the recheck they are asked again"
+        assert views() == 5
+        t[0] += 60
+        conn.execute("INSERT OR REPLACE INTO pageviews VALUES ('Puka Nacua', '2026-10-15', 900)")
+        t[0] += A.RECHECK_SECONDS
+        assert A.keep_current(conn, "nfl", ["Puka Nacua"], get, today, clock=clock) == 0, \
+            "current through yesterday: not asked, recheck or not"
+        assert sum("srsearch" in c for c in calls) == 3, "each title looked up once and kept"
+    finally:
+        A.PAUSE = real
+
+
+def _old_reading(conn, title, today):
+    """What the section read before 9 November: every stored day."""
+    views = A.stored_views(conn, title)
+    a = A.ratio(views, today)
+    return a and {**a, "title": title, "days": [v for _d, v in sorted(views.items())[-30:]]}
+
+
+def test_the_reading_reads_only_its_month_and_reads_the_same():
+    """Every stored day of every board player (seasons of backfill each) was
+    6.9 of the NFL readings' 30 seconds at 10:12 on 9 November; the reading
+    looks at a month."""
+    conn = sqlite3.connect(":memory:")
+    A.ensure_tables(conn)
+    d0 = dt.date.today()
+    today = d0.isoformat()
+    day = lambda i: (d0 - dt.timedelta(days=i)).isoformat()             # noqa: E731
+    men = {
+        # three seasons kept, the last month whole
+        "Puka Nacua": {day(i): 500 + (i * 37) % 900 for i in range(1, 1100)},
+        # a spike over a quiet month with a few days left out
+        "Jake Bobo": {day(i): (2400 if i <= 3 else 300 + i % 7) for i in range(1, 400) if i <= 3 or i % 5},
+        # read about so little that half his month's days are left out, so
+        # his newest thirty stored days reach back past it: still thirty drawn
+        "Rarely Read": {day(i): 40 + i % 9 for i in range(1, 800) if i <= 3 or i % 2 == 0},
+        # too few days in his month for a reading at all
+        "Nobody Reads": {day(i): 3 + i % 4 for i in range(1, 800) if i % 4 == 0 or i <= 3},
+        # a day stored ahead of today (a clock that moved) is read as before
+        "Davante Adams": {**{day(i): 9000 for i in range(1, 60)}, day(-1): 12000},
+    }
+    for p, views in men.items():
+        conn.execute("INSERT INTO wiki_titles VALUES ('nfl', ?, ?, ?)", (p, p, today))
+        conn.executemany("INSERT INTO pageviews VALUES (?, ?, ?)", [(p, d, v) for d, v in views.items()])
+    sec = A.ideas_section([], [], {"recommendations": [{"player": p} for p in men]}, "nfl", conn=conn)
+    for p in men:
+        assert sec["players"].get(p) == (_old_reading(conn, p, today) or None), p
+        assert len(A.recent_views(conn, p, today)) <= A.RECENT + A.BASELINE + 2 + A.SHOWN_DAYS
+    assert sec["players"]["Jake Bobo"]["spike"] and len(sec["players"]["Puka Nacua"]["days"]) == 30
+    rare = A.recent_views(conn, "Rarely Read", today)
+    assert len(sec["players"]["Rarely Read"]["days"]) == 30 and min(rare) < day(A.RECENT + A.BASELINE), \
+        "his newest thirty reach past the month and are all read"
+    assert "Nobody Reads" not in sec["players"], "too few days in his month is no reading, as before"
+
+
 def test_the_section_only_reads_and_reads_nothing_before_the_first_journal():
     conn = sqlite3.connect(":memory:")
     sec = A.ideas_section([], [], {"recommendations": [{"player": "Puka Nacua"}]}, "nfl", conn=conn)

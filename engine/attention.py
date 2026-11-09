@@ -18,7 +18,10 @@ anything and nothing is scraped.
   * VIEWS. Daily human views per article, kept in `pageviews`. The builds
     keep the board's players current (a few seconds a build at most, each
     man at most once a day); `--backfill` fills past seasons for the
-    measurement, resuming where it stopped.
+    measurement, resuming where it stopped. A man whose views stop short of
+    yesterday (Wikipedia has not published the day yet, an article with no
+    views answers 404, a day with none is left out) is asked again only
+    after RECHECK_SECONDS (`pageview_checks`), never on every build.
 
 THE READING. His attention ratio: the mean of his last three days' views
 over his median day in the four weeks before them. Above SPIKE he is
@@ -64,6 +67,14 @@ BUILD_SECONDS = 8.0
 PAUSE = 0.2
 #: A backfill is hundreds of calls in a row, so it goes slower.
 BACKFILL_PAUSE = 1.0
+#: A title asked for and still short of yesterday is asked again after this
+#: long. Before it (9 November) such a title was asked again on every build,
+#: the first names on the board in the same order every time, so the NFL
+#: build's 8-second budget went on the same men while the rest of the board
+#: waited: its journal took 8.4 of the readings' 30 seconds at 10:12.
+RECHECK_SECONDS = 3 * 3600
+#: The newest days of his views the pick page draws.
+SHOWN_DAYS = 30
 #: After Wikipedia says "too many requests", no build asks again for this long.
 COOLDOWN_SECONDS = 3600
 #: The longest Retry-After we will sit through once before giving up for the run.
@@ -78,6 +89,7 @@ TABLES = """
 CREATE TABLE IF NOT EXISTS wiki_titles (sport TEXT, player TEXT, title TEXT, looked_up TEXT,
     PRIMARY KEY (sport, player));
 CREATE TABLE IF NOT EXISTS pageviews (title TEXT, date TEXT, views INTEGER, PRIMARY KEY (title, date));
+CREATE TABLE IF NOT EXISTS pageview_checks (title TEXT PRIMARY KEY, checked_at REAL);
 """
 
 
@@ -208,9 +220,27 @@ def stored_views(conn, title: str) -> dict:
     return {d: v for d, v in conn.execute("SELECT date, views FROM pageviews WHERE title=?", (title,))}
 
 
-def keep_current(conn, sport: str, players, get=_get_json, today=None, budget=BUILD_SECONDS) -> int:
+def recent_views(conn, title: str, day: str) -> dict:
+    """The part of `stored_views` the reading for ``day`` looks at: every
+    day from the first its ratio asks for (RECENT + BASELINE days before),
+    and the newest SHOWN_DAYS days stored, whatever their dates. The same
+    ratio and the same month drawn, without the seasons a backfill keeps:
+    every stored day of every board player was 6.9 of the NFL readings' 30
+    seconds at 10:12 on 9 November."""
+    since = (_dt.date.fromisoformat(day) - _dt.timedelta(days=RECENT + BASELINE)).isoformat()
+    out = {d: v for d, v in conn.execute("SELECT date, views FROM pageviews WHERE title=? AND date >= ?",
+                                         (title, since))}
+    out.update({d: v for d, v in conn.execute(
+        "SELECT date, views FROM pageviews WHERE title=? ORDER BY date DESC LIMIT ?", (title, SHOWN_DAYS))})
+    return out
+
+
+def keep_current(conn, sport: str, players, get=_get_json, today=None, budget=BUILD_SECONDS,
+                 clock=time.time) -> int:
     """Bring each player's last five weeks up to yesterday, each at most
-    once a day, inside a few seconds. Returns the players refreshed."""
+    once a day, inside a few seconds. A title asked for within
+    RECHECK_SECONDS and still short of yesterday waits, so the budget reaches
+    the next man. Returns the players refreshed."""
     ensure_tables(conn)
     if cooling_down():
         return 0                       # Wikipedia asked us to slow down within the hour
@@ -228,11 +258,15 @@ def keep_current(conn, sport: str, players, get=_get_json, today=None, budget=BU
             have = conn.execute("SELECT MAX(date) FROM pageviews WHERE title=?", (title,)).fetchone()[0]
             if have and have >= yday:
                 continue
+            asked = conn.execute("SELECT checked_at FROM pageview_checks WHERE title=?", (title,)).fetchone()
+            if asked and asked[0] is not None and 0 <= clock() - float(asked[0]) < RECHECK_SECONDS:
+                continue
             got = fetch_views(title, start, yday, get)
         except RateLimited:
             start_cooldown()
             break                      # what this build fetched is kept; the next hour's builds skip
         conn.executemany("INSERT OR REPLACE INTO pageviews VALUES (?,?,?)", [(title, d, v) for d, v in got.items()])
+        conn.execute("INSERT OR REPLACE INTO pageview_checks VALUES (?,?)", (title, clock()))
         conn.commit()
         n += 1
         time.sleep(PAUSE)
@@ -262,10 +296,10 @@ def ideas_section(props, games, board, sport, conn=None):
                     break                        # no journal has run on this database yet
                 if not r or not r[0]:
                     continue
-                views = stored_views(conn, r[0])
+                views = recent_views(conn, r[0], today)
                 a = ratio(views, today)
                 if a:
-                    last = sorted(views.items())[-30:]
+                    last = sorted(views.items())[-SHOWN_DAYS:]
                     out[p] = {**a, "title": r[0], "days": [v for _d, v in last]}
         finally:
             if own:

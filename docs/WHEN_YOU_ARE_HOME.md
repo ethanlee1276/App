@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ND. The attention reading reads its month, and asks Wikipedia less**
+(step 480; 9 November). Nothing to run. Two parts of the NFL build's
+inventions' readings at 10:12: `attention` 6.9 seconds, which read every
+stored day of every board player's page views (seasons of them, kept for
+the measurement) to use the last month; and `journals + write` 8.4, where
+a player whose views stop short of yesterday (Wikipedia has not published
+the day yet, or nobody read his page) was asked for again on every build,
+the board's first names first, until the 8-second budget ran out, so the
+names further down waited. The reading now reads only the month it looks
+at (the same ratio and the same thirty days drawn; the test compares
+them), and a player asked for and still short of yesterday is asked again
+after three hours (`pageview_checks`), so each build's budget reaches the
+next names. College's readings use the same code.
+
 **NC. The UFC step says where its time goes** (step 479; 9 November).
 Nothing to run. The UFC step took 17 to 22 seconds of every cycle with
 nothing on the heartbeat to say where. The build now prints its stages
