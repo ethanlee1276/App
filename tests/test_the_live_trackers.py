@@ -655,11 +655,20 @@ def test_the_trackers_in_a_browser_at_390_and_1280():
                         return [r(p.querySelector('.pbp-photo')), r(p.querySelector('[data-gc-art]'))]; })()""")
                     assert boxes[0] == boxes[1], boxes
                     # Replay on the photograph runs its drive again; the card's own
-                    # Replay flies its last play again.
-                    page.click(".pbp-park [data-gc-replay]")
-                    assert page.query_selector(".pbp-park .gc-art-ball animateTransform"), "the photograph's ball runs again"
-                    page.click(".gc-dv [data-gc-dv-replay]")
-                    assert page.query_selector(".gc-dv .gc-dv-ball animateMotion"), "and the card's last play flies again"
+                    # Replay flies its last play again. Each button passes the
+                    # pointer's checks (seen, steady, on top), and each press is
+                    # read in the same task as the click: the page's own redraw,
+                    # every few seconds with nothing new to fly, landed between a
+                    # click and its read once on a loaded gate (9 November).
+                    for sel in (".pbp-park [data-gc-replay]", ".gc-dv [data-gc-dv-replay]"):
+                        page.locator(sel).first.click(trial=True)
+                    flew = page.evaluate("""(() => {
+                        document.querySelector('.pbp-park [data-gc-replay]').click();
+                        const photo = !!document.querySelector('.pbp-park .gc-art-ball animateTransform');
+                        document.querySelector('.gc-dv [data-gc-dv-replay]').click();
+                        return { photo, card: !!document.querySelector('.gc-dv .gc-dv-ball animateMotion') }; })()""")
+                    assert flew["photo"], "the photograph's ball runs again"
+                    assert flew["card"], "and the card's last play flies again"
                     page.click('.pbp-tab[data-pbp-tab="plays"]')
                     page.wait_for_selector(".gc-chart .gc-dc-row", state="attached", timeout=5000)
                     assert page.evaluate("""[...document.querySelectorAll('.gc-chart .gc-fd-svg')]
