@@ -329,6 +329,21 @@ def test_the_lineup_season_is_kept_for_the_slate_and_read_again_for_another():
         assert L.season_games(sb.conn, 2026) == L._season_games(sb.conn, 2026), "every team"
 
 
+def test_the_touchdown_boards_reads_are_kept_and_read_the_same():
+    from engine.cfb import tds as T
+    with _Sandbox() as sb:
+        _college(sb.conn)
+        logs = T._td_game_logs(sb.conn, T.TD_LOG_GAMES, T.TD_LOG_SEASONS)
+        assert T.td_game_logs(sb.conn) == logs and T.td_game_logs(sb.conn) == logs
+        assert _note(f"cfb_td_logs{T.TD_LOG_GAMES}x{T.TD_LOG_SEASONS}", "cfb")["kept"] is True
+        names = T._teams_by_name(sb.conn, 2026)
+        assert T.teams_by_name(sb.conn, 2026) == names and T.teams_by_name(sb.conn, 2026) == names
+        assert _note("cfb_teams_by_name", "cfb")["kept"] is True
+        _bump(sb.conn)
+        assert T.td_game_logs(sb.conn) == T._td_game_logs(sb.conn, T.TD_LOG_GAMES, T.TD_LOG_SEASONS)
+        assert _note(f"cfb_td_logs{T.TD_LOG_GAMES}x{T.TD_LOG_SEASONS}", "cfb")["why"] == "rows changed"
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

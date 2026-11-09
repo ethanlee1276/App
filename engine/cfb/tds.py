@@ -426,6 +426,17 @@ def teams_by_name(conn, season: int) -> dict:
     fixed it the same way (`engine.nflusage.season_teams`); the portal
     makes it several times larger here.
     """
+    # KEPT UNTIL ITS ROWS CHANGE (engine/logcache, 2026-11-09): read by the
+    # props' slate and the touchdown board on every college build.
+    from .. import logcache
+    from ..sources import oddsapi
+    return logcache.memo(conn, "cfb_teams_by_name", "cfb", (int(season),),
+                         lambda: _teams_by_name(conn, season),
+                         code=(__file__, oddsapi.__file__))
+
+
+def _teams_by_name(conn, season: int) -> dict:
+    """`teams_by_name`, read from the table."""
     from ..sources.oddsapi import normalize_name
     out: dict = {}
     for r in conn.execute(
@@ -891,7 +902,21 @@ def td_game_logs(conn, limit: int = TD_LOG_GAMES,
     resolves the same way in both: `resolve_side` decides who he plays
     against tonight, `usage_team` decides where his production is stored.
     Keying on the name alone would collide across 130-odd FBS rosters.
+
+    KEPT UNTIL ITS ROWS CHANGE (engine/logcache, 2026-11-09): every college
+    scorer's touchdown games of the newest seasons, read on every build.
+    Keyed on every college season, since which seasons are newest is itself
+    read off the table.
     """
+    from .. import logcache
+    from ..sources import oddsapi
+    return logcache.memo(conn, f"cfb_td_logs{int(limit)}x{int(seasons)}", "cfb", None,
+                         lambda: _td_game_logs(conn, limit, seasons),
+                         code=(__file__, oddsapi.__file__))
+
+
+def _td_game_logs(conn, limit: int, seasons: int) -> dict:
+    """`td_game_logs`, read from the table."""
     from ..sources.oddsapi import normalize_name
     ss = [int(r["season"]) for r in conn.execute(
         "SELECT DISTINCT season FROM player_game_logs WHERE sport='cfb' "

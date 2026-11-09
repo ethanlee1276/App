@@ -9363,10 +9363,14 @@ lineup's season 3.5, from logs that change when a night's box scores land.
   one read is kept past 64 MB, and nothing new past 1.5 GB in all (the box
   had 16.7 GB free this morning): over either, the read is made as before
   and its note says `too big` or `folder full`.
+- The touchdown board's own two reads go the same way: every scorer's
+  touchdown games of the newest two seasons, and who played for which
+  school this season (the props' slate reads that one too).
 - On the heartbeat each shows under `logcache` (`comps_rec_yds.cfb`,
   `cfb_usage2026.cfb`, `cfb_log_rows.cfb`, `cfb_defense.cfb`,
-  `cfb_season_games.cfb`): served (`kept`) or read again, and why. The first
-  build after this lands reads everything once, then serves.
+  `cfb_season_games.cfb`, `cfb_td_logs12x2.cfb`, `cfb_teams_by_name.cfb`):
+  served (`kept`) or read again, and why. The first build after this lands
+  reads everything once, then serves.
 
 **MU. The prediction-markets build says where its two minutes go** (step 471;
 9 November). Nothing to run. The heartbeat at 08:19 had the markets build
