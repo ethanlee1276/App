@@ -1332,7 +1332,12 @@ def main() -> None:
             print(f"  ⚠️  {args.league.upper()} line ledger skipped: {_exc}")
 
         _clock.mark("slate + odds + line ledger")
+        # Its parts on the heartbeat (boards.nba.parts), as the college
+        # build's: the stage ran 8 seconds of 50 at 09:05 on 9 November.
+        import time as _ctime
+        _ct = _ctime.monotonic()
         defense = defense_ratings(conn, args.league)
+        _ct = _clock.lap("context reads", "defense", _ct)
         density = {t: schedule_density(sched_days, t, args.date) for t in teams}
         _ss.add_spreads(out.get("schedule_spots") or [], spread_by_team)
         # §8 freshness: how recently the price we would bet was actually
@@ -1359,6 +1364,7 @@ def main() -> None:
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  matchup ratings skipped: {exc}")
             _dvp0, _dvp_rating = None, {}
+        _ct = _clock.lap("context reads", "matchup ratings", _ct)
         # SHOOTING, LUCK TAKEN OUT (engine/nba/shooting): every priced
         # player's last 60 games with shot columns, any club, and the
         # league's percentages over the last year — two reads for the slate.
@@ -1376,6 +1382,7 @@ def main() -> None:
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  shooting read skipped: {exc}")
             _shoot_long, _shoot_lg = {}, {}
+        _ct = _clock.lap("context reads", "shooting", _ct)
         # RATES, READ PAST HIS LAST TWENTY (engine/nba/rates, measured
         # 2026-11-04): every priced player's last 60 games, any club, so each
         # rate carries his older games and his role's league rate — one read.
@@ -1390,6 +1397,7 @@ def main() -> None:
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  rates read skipped: {exc}")
             _rate_long = {}
+        _ct = _clock.lap("context reads", "rates", _ct)
         # THE ROTATION'S NEWS (engine/nba/minutes; measured 2026-11-04): who
         # missed what, from the logs above. A man the books price tonight
         # who missed his club's last two or more is a returning regular
@@ -1413,6 +1421,7 @@ def main() -> None:
                                                 f"back {', '.join(b)}" if b else "") if x)
                 for t, (o, b) in sorted(_five.items()) if o or b)
                   + ("" if _starters.on() else "  (switched off: not applied)"))
+        _clock.lap("context reads", "rotation + starting five", _ct)
         _clock.mark("context reads")
         census = {"no_real_price": 0, "no_history": 0}
         props = []
@@ -1718,15 +1727,20 @@ def main() -> None:
             from engine.db import player_assets as _passets
             from engine.gamescan import leans_from_reads as _nleans_of
             from engine.sources.oddsapi import normalize_name as _pn
+            import time as _stime
+            _st = _stime.monotonic()
             _prof = _nteams.board_profiles(conn, args.league, args.date)
+            _st = _clock.lap("scan + team profiles", "team profiles", _st)
             _vacancy = {}
             for _t, _away in (gone or {}).items():
                 _big = _away[0][0]
                 _first = min((hist.get(_big) or {}).get("by_week") or {"": None})
                 _vacancy[_t] = {"out": _away, "inherit": _onoff.inheritance(
                     _team_rows(hist, _t, _first), _t, _big, "pts")}
+            _st = _clock.lap("scan + team profiles", "vacancy", _st)
             _assets = _passets(conn, args.league)
             _faces = {n: (_nface(_assets, n) or "") for n in hist}
+            _st = _clock.lap("scan + team profiles", "faces", _st)
             _pulled = {_pn(n) for g in slate.games for n in (getattr(g, "pulled_players", None) or [])}
             _ns = _nscan.scan(out.get("games") or [], hist, _prof,
                               dvp=_gr_rt,
@@ -1734,6 +1748,7 @@ def main() -> None:
                               key_players={r.get("player") for r in out.get("recommendations") or []},
                               out_players={n for n in hist if _pn(n) in _pulled},
                               faces=_faces, nights=_prof.get("nights"))
+            _st = _clock.lap("scan + team profiles", "scan", _st)
             out["scan_reads"] = _ns["reads"]
             for _gd in out.get("games") or []:
                 _tp = _ns["tapes"].get(f"{_gd['away']}@{_gd['home']}")
@@ -1762,11 +1777,14 @@ def main() -> None:
         # lines only — so without these the league could never name one.
         # Off the slate's own prices; the pick's bars all still hold
         # (`potd.game_lines`).
+        import time as _mtime
+        _mt = _mtime.monotonic()
         try:
             from engine import potd as _potd_gl
             potd_lines = _potd_gl.game_lines(slate.games, args.date, out.get("games"))
         except Exception as exc:                          # noqa: BLE001
             print(f"⚠️  Pick of the Day game lines skipped: {exc}")
+        _mt = _clock.lap("most likely board", "pick of the day lines", _mt)
 
         # THE LIKELIHOOD BOARD, for hoops. Same maker and same one bar
         # as every other league's (likely.admissible), and the same
@@ -1793,6 +1811,7 @@ def main() -> None:
                 census=_ml_census, census_by_kind=_ml_kinds, cut=_ml_cut,
                 previous=_likely_prev(args.out, args.date), turnover=_ml_turn,
                 leans=_nba_leans, lean_report=_nba_lean_report, past_cap=_ml_past_cap)
+            _mt = _clock.lap("most likely board", "likely board", _mt)
             out["likely_past_cap"] = _ml_past_cap
             # EVERY READ SAYS WHAT THE BOARD DID WITH IT (engine/gamescan
             # .stamp_picks): his pick on the read's side, the other side, or
@@ -1813,6 +1832,7 @@ def main() -> None:
             except Exception as _mpx:                       # noqa: BLE001
                 print(f"  ⚠️  matchup picks skipped: {_mpx}")
                 out["matchup_picks"] = []
+            _mt = _clock.lap("most likely board", "scan stamps + matchup picks", _mt)
             out["likely_turnover"] = _ml_turn
             if not out["most_likely"]:
                 from engine.rankfit import load as _rank_store
@@ -1853,6 +1873,7 @@ def main() -> None:
                     print(f"  First-basket faces: {_bfaces.fill(out, args.league, conn)} row(s) given a photo")
                 except Exception as _fbx:                     # noqa: BLE001
                     print(f"  ⚠️  first-basket board skipped: {_fbx}")
+            _mt = _clock.lap("most likely board", "first basket", _mt)
             out["board_guide"] = _hboards.guide(args.league)
             out["board_shelves"] = _hboards.shelves(args.league,
                                                     out["most_likely"])
@@ -1864,6 +1885,7 @@ def main() -> None:
         # published on each row's chain), as baseball's reads its own.
         from engine import likelyboard as _lb
         print(f"  {_lb.attach(out, args.league)}")
+        _clock.lap("most likely board", "one board", _mt)
         _clock.mark("most likely board")
 
         # Journal picks + stale flags under the league that produced them —

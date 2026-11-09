@@ -9348,6 +9348,12 @@ any NBA row changes (the WNBA's has its own copy, and a WNBA night leaves the
 NBA's alone), and the fit names its two halves on the heartbeat
 (`boards.nba.parts`: `margin spread` and `stat spreads`). The fit itself is
 unchanged: the same numbers come back through the copy as off the table.
+The build's three other slow stages with no breakdown name their parts too:
+`context reads` (8 seconds: defense, matchup ratings, shooting, rates,
+rotation + starting five), `scan + team profiles` (6: team profiles,
+vacancy, faces, scan) and `most likely board` (8: pick of the day lines,
+likely board, scan stamps + matchup picks, first basket, one board), so the
+next of them to keep is chosen from the heartbeat, not guessed.
 
 **MW. The play simulator does each sum once** (step 473; 9 November). Nothing
 to run. The NFL build's inventions spent 12.2 seconds in the play simulator

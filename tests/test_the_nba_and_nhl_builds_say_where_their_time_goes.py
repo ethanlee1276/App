@@ -89,6 +89,34 @@ def test_the_nhl_boards_parts_are_named_in_the_order_it_reads_them():
     assert "_clock.mark(" not in body, "a mark always prints; inside build only silent laps"
 
 
+NBA_PARTS = {
+    "context reads": ("_ct", ("defense", "matchup ratings", "shooting", "rates",
+                              "rotation + starting five")),
+    "scan + team profiles": ("_st", ("team profiles", "vacancy", "faces", "scan")),
+    "most likely board": ("_mt", ("pick of the day lines", "likely board",
+                                  "scan stamps + matchup picks", "first basket", "one board")),
+}
+
+
+def test_the_nba_builds_eight_second_stages_name_their_parts_in_order():
+    """At 09:05 on 9 November the NBA build's context reads ran 8 seconds,
+    its Most Likely board 8 and its matchup scan 6, with nothing to say
+    where: each now names its parts, between its stage's two marks."""
+    body = _main_of("nba_build.py")
+    order = list(NBA_STAGES)
+    for stage, (var, parts) in NBA_PARTS.items():
+        before = f'_clock.mark("{order[order.index(stage) - 1]}")'
+        seg = body[body.index(before):body.index(f'_clock.mark("{stage}")')]
+        laps = [f'_clock.lap("{stage}", "{p}", {var})' for p in parts]
+        for lp in laps:
+            assert seg.count(lp) == 1, (stage, lp)
+        ok, at = _in_order(seg, laps)
+        assert ok, (stage, at)
+        assert body.count(f'_clock.lap("{stage}", ') == len(parts), f"{stage}: no other part"
+        for p in parts:
+            assert "›" not in p and ":" not in p, p
+
+
 WRITE_PARTS = ("relock pick of the day", "freshness", "publish", "light board", "fantasy tonight")
 
 
