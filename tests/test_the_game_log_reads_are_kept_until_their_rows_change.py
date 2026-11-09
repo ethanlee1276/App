@@ -259,7 +259,7 @@ def test_each_read_notes_what_it_did_and_why():
         memo()
         n = _note_of()
         assert n["kept"] is False and n["why"] == "no copy", n
-        assert n["seasons"] == [2024, 2025] and n["rows"] == 60, n
+        assert n["seasons"] == [2024, 2025] and n["gens"] == {"2024": 30, "2025": 30}, n
         assert {"key_s", "read_s", "store_s", "mb", "at"} <= set(n), n
         memo()
         n = _note_of()
@@ -333,26 +333,105 @@ def test_the_heartbeat_carries_each_kept_reads_note():
         logcache.status = keep
 
 
-def test_a_delete_lets_a_rowid_come_back_so_it_forgets():
+def _bare(dirpath):
+    """A history file the schema never reached: the logs' table alone, no
+    generations, the way an old copy is."""
+    import sqlite3
+    conn = sqlite3.connect(os.path.join(dirpath, "bare.db"))
+    conn.execute("CREATE TABLE player_game_logs (sport TEXT, season INTEGER, period TEXT, game_id TEXT, "
+                 "player TEXT, team TEXT, opponent TEXT, position TEXT, home INTEGER, market TEXT, "
+                 "value REAL, PRIMARY KEY (sport, season, period, game_id, player, market))")
+    return conn
+
+
+def _trap(conn):
+    """Delete the two highest rows, then write two: the freed rowids come back."""
+    top = conn.execute("SELECT MAX(rowid) FROM player_game_logs").fetchone()[0]
+    conn.execute("DELETE FROM player_game_logs WHERE rowid IN (?, ?)", (top, top - 1))
+    conn.commit()
+    db.upsert_player_logs(conn, [_row("nhl", 2025, "2025-11-09", "Connor McDavid", "sog", 6),
+                                 _row("nba", 2025, "2025-11-02", "Nikola Jokic", "points", 28, team="DEN")])
+    conn.commit()
+
+
+def test_a_delete_lets_a_rowid_come_back_and_the_generations_still_see_it():
     with _Sandbox() as s:
         _seed(s.conn)
         calls, compute = _counted(s)
         memo = lambda: logcache.memo(s.conn, "probe", "nhl", (2025, 2024), compute, force=True)
         memo()
-        key = logcache.scope_key(s.conn, "nhl", (2025, 2024))
-        top = s.conn.execute("SELECT MAX(rowid) FROM player_game_logs").fetchone()[0]
-        s.conn.execute("DELETE FROM player_game_logs WHERE rowid IN (?, ?)", (top, top - 1))
-        s.conn.commit()
-        db.upsert_player_logs(s.conn, [_row("nhl", 2025, "2025-11-09", "Connor McDavid", "sog", 6),
-                                       _row("nba", 2025, "2025-11-02", "Nikola Jokic", "points", 28,
-                                            team="DEN")])
-        s.conn.commit()
-        assert logcache.scope_key(s.conn, "nhl", (2025, 2024)) == key, "a freed rowid came back"
-        assert memo() == {"n": 1}, "the trap: the same key over different rows"
-        assert logcache.forget("nhl") == 1 and logcache.forget("nhl") == 0
-        logcache.memo(s.conn, "probe", "nba", (2025,), compute, force=True)
-        assert memo() == {"n": len(calls)} and len(calls) == 3, "forgotten, so read again"
-        assert logcache.forget("nba") == 1, "one sport at a time"
+        counted, gens = logcache.scope_key(s.conn, "nhl", (2025, 2024)), logcache.generations(s.conn, "nhl",
+                                                                                              (2025, 2024))
+        _trap(s.conn)
+        assert logcache.scope_key(s.conn, "nhl", (2025, 2024)) == counted, \
+            "a freed rowid came back: the row count alone cannot tell"
+        assert logcache.generations(s.conn, "nhl", (2025, 2024)) != gens, "the generations counted it"
+        assert memo() == {"n": 2}, "so the read is done again, forgotten or not"
+
+
+def test_a_file_without_generations_counts_its_rows_and_forgets_on_a_delete():
+    with _Sandbox() as s:
+        bare = _bare(s.dir)
+        try:
+            _seed(bare)
+            assert logcache.generations(bare, "nhl", (2025,)) is None
+            calls, compute = _counted(s)
+            memo = lambda: logcache.memo(bare, "probe", "nhl", (2025, 2024), compute, force=True)
+            assert memo() == {"n": 1} and memo() == {"n": 1}, "kept on the row count"
+            assert logcache.status()["probe.nhl"]["rows"] == 60
+            _trap(bare)
+            assert memo() == {"n": 1}, "the trap: the same count over different rows"
+            assert logcache.forget("nhl") == 1 and logcache.forget("nhl") == 0
+            logcache.memo(bare, "probe", "nba", (2025,), compute, force=True)
+            assert memo() == {"n": 3} and len(calls) == 3, "forgotten, so read again"
+            assert logcache.forget("nba") == 1, "one sport at a time"
+            db.upsert_player_logs(bare, [_row("nhl", 2025, "2025-11-10", "Connor McDavid", "sog", 2)])
+            bare.commit()
+            assert memo() == {"n": 4}, "a new row is seen"
+        finally:
+            bare.close()
+
+
+def _gens(conn):
+    return {(r[0], r[1]): r[2] for r in conn.execute("SELECT sport, season, gen FROM log_generations")
+            if r[0] != "~epoch"}
+
+
+def test_the_logs_count_their_own_changes_by_sport_and_season():
+    with _Sandbox() as s:
+        c = s.conn
+        rows = [_row("nhl", 2025, "2025-11-08", p, "sog", 3) for p in ("A", "B", "C")]
+        for _ in range(3):
+            db.upsert_player_logs(c, rows)
+            c.commit()
+        assert _gens(c) == {("nhl", 2025): 3}, "three new rows, then the same three twice: nothing"
+        for v in (4, 5, 6):
+            db.upsert_player_logs(c, [dict(rows[0], value=v)])
+            c.commit()
+        assert _gens(c) == {("nhl", 2025): 6}, \
+            "each correction counts, under the logs' own INSERT OR REPLACE (a naive trigger stuck at 1)"
+        db.upsert_player_logs(c, [_row("nhl", None, "2025-11-08", "D", "sog", 1)])
+        c.commit()
+        assert c.execute("SELECT COUNT(*) FROM player_game_logs WHERE player='D'").fetchone()[0] == 1, \
+            "a row with no season still goes in"
+        c.execute("DELETE FROM player_game_logs WHERE player='B'")
+        c.execute("UPDATE player_game_logs SET season=2026 WHERE player='C'")
+        c.commit()
+        g = _gens(c)
+        assert g[("nhl", 2025)] == 8 and g[("nhl", 2026)] == 1, ("a delete, and a relabel on both seasons", g)
+        db.upsert_player_logs(c, [_row("nba", 2025, "2025-11-01", "Nikola Jokic", "points", 31)])
+        c.commit()
+        assert _gens(c)[("nhl", 2025)] == 8, "another sport's row counts for that sport only"
+        epoch = c.execute("SELECT gen FROM log_generations WHERE sport='~epoch'").fetchone()[0]
+        again = db.connect(os.path.join(s.dir, "history.db"))
+        other = db.connect(os.path.join(s.dir, "other.db"))
+        try:
+            assert again.execute("SELECT gen FROM log_generations WHERE sport='~epoch'").fetchone()[0] == epoch
+            assert other.execute("SELECT gen FROM log_generations WHERE sport='~epoch'").fetchone()[0] != epoch, \
+                "a fresh file draws its own epoch, so counts that start again never match"
+        finally:
+            again.close()
+            other.close()
 
 
 def test_every_delete_or_update_in_place_forgets():

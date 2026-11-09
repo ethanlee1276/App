@@ -49,6 +49,51 @@ CREATE TABLE IF NOT EXISTS player_game_logs (
     market TEXT, value REAL,
     PRIMARY KEY (sport, season, period, game_id, player, market)
 );
+-- THE GAME LOGS' GENERATIONS (engine/logcache, 2026-11-09). Every row added
+-- to, taken from or changed in player_game_logs counts one more for its
+-- sport and season, here, in the same transaction, whoever writes it. The
+-- kept game-log reads key on these instead of counting the index entries of
+-- the rows they read (4.65 seconds for the NHL's 556,969 on the box at 03:05
+-- on 9 November). The '~epoch' row is a random number drawn when the table
+-- is made, so counts that start again in a fresh table never match old ones.
+--
+-- NO CONSTRAINT A WRITE CAN TRIP. SQLite runs a trigger's statements under
+-- the conflict policy of the statement that fired it, so under the logs' own
+-- INSERT OR REPLACE an "INSERT OR IGNORE" here would REPLACE the row and
+-- start its count again at one (measured: five writes left it at 1), and a
+-- NOT NULL column met by a row with no season would abort the box score's
+-- write. So no column is NOT NULL, a sport and season's row goes in only
+-- when it is not there (NOT EXISTS, matched with IS), and the count moves by
+-- a plain UPDATE.
+CREATE TABLE IF NOT EXISTS log_generations (
+    sport TEXT, season INTEGER, gen INTEGER DEFAULT 0,
+    PRIMARY KEY (sport, season)
+);
+INSERT INTO log_generations (sport, season, gen)
+    SELECT '~epoch', NULL, abs(random())
+    WHERE NOT EXISTS (SELECT 1 FROM log_generations WHERE sport = '~epoch');
+CREATE TRIGGER IF NOT EXISTS log_generations_insert AFTER INSERT ON player_game_logs BEGIN
+    INSERT INTO log_generations (sport, season, gen) SELECT NEW.sport, NEW.season, 0
+        WHERE NOT EXISTS (SELECT 1 FROM log_generations
+                          WHERE sport IS NEW.sport AND season IS NEW.season);
+    UPDATE log_generations SET gen = gen + 1 WHERE sport IS NEW.sport AND season IS NEW.season;
+END;
+CREATE TRIGGER IF NOT EXISTS log_generations_delete AFTER DELETE ON player_game_logs BEGIN
+    INSERT INTO log_generations (sport, season, gen) SELECT OLD.sport, OLD.season, 0
+        WHERE NOT EXISTS (SELECT 1 FROM log_generations
+                          WHERE sport IS OLD.sport AND season IS OLD.season);
+    UPDATE log_generations SET gen = gen + 1 WHERE sport IS OLD.sport AND season IS OLD.season;
+END;
+CREATE TRIGGER IF NOT EXISTS log_generations_update AFTER UPDATE ON player_game_logs BEGIN
+    INSERT INTO log_generations (sport, season, gen) SELECT OLD.sport, OLD.season, 0
+        WHERE NOT EXISTS (SELECT 1 FROM log_generations
+                          WHERE sport IS OLD.sport AND season IS OLD.season);
+    UPDATE log_generations SET gen = gen + 1 WHERE sport IS OLD.sport AND season IS OLD.season;
+    INSERT INTO log_generations (sport, season, gen) SELECT NEW.sport, NEW.season, 0
+        WHERE NOT EXISTS (SELECT 1 FROM log_generations
+                          WHERE sport IS NEW.sport AND season IS NEW.season);
+    UPDATE log_generations SET gen = gen + 1 WHERE sport IS NEW.sport AND season IS NEW.season;
+END;
 CREATE TABLE IF NOT EXISTS ingest_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sport TEXT, kind TEXT, detail TEXT, rows INTEGER, ts TEXT

@@ -7,7 +7,17 @@ those rows change about once a day: when the night's box scores are
 ingested. The fantasy file's season means read the same seasons again in
 the board's write stage, for every sport.
 
-KEPT AGAINST A KEY THE ROWS THEMSELVES GIVE. A result is stored with the
+KEPT AGAINST THE LOGS' OWN COUNT OF THEIR CHANGES (2026-11-09). Every row
+added to, taken from or changed in player_game_logs counts one more for its
+sport and season in `log_generations`, by triggers in the history file
+itself (engine/db SCHEMA), whoever writes it; a result is stored with the
+counts of the seasons it read, and the table's random epoch, and served
+while they still match. Reading them is one small query: the count it
+replaced read every index entry of the rows (4.65 seconds for the NHL's
+556,969 on the box at 03:05 on 9 November, served or not). A file the
+schema has not reached has no such table, and falls back to the key below.
+
+THE FALLBACK: A KEY THE ROWS THEMSELVES GIVE. A result is stored with the
 count and the highest rowid of exactly the rows it read (one sport's
 seasons), and served while both still match. Every write to the table goes
 through `engine.db.upsert_player_logs`, which files a new or changed row
@@ -20,13 +30,14 @@ the primary key's own index, which holds no values, so it costs about a
 tenth of the read it saves (0.08 against 1.9 seconds on a million-row
 fixture).
 
-A DELETE OR AN UPDATE IN PLACE FORGETS. Taking rows away lowers the count,
-but the next row written can then take a freed rowid back (SQLite numbers a
-new row one above the highest it holds), so a delete followed by as many
-new rows could give the same key; and an UPDATE keeps a row's rowid. The
-paths that do either (the provisional box-score purge, the bet repair's log
-delete, the season relabel) call `forget(sport)`, which drops that sport's
-stored results. A new one must too.
+A DELETE OR AN UPDATE IN PLACE FORGETS. The generations count both. The
+fallback key does not: taking rows away lowers the count, but the next row
+written can then take a freed rowid back (SQLite numbers a new row one above
+the highest it holds), so a delete followed by as many new rows could give
+the same key; and an UPDATE keeps a row's rowid. So the paths that do
+either (the provisional box-score purge, the bet repair's log delete, the
+season relabel) also call `forget(sport)`, which drops that sport's stored
+results. A new one should too.
 
 AND AGAINST THE CODE THAT COMPUTED IT. The key carries a hash of the
 source file that computes the result (``code``), so a deploy that changes
@@ -55,8 +66,9 @@ import os
 import pickle
 import time
 
-#: Bumped when a cached result's shape changes, so an old file is ignored.
-VERSION = 1
+#: Bumped when a cached result's shape (or its key's) changes, so an old
+#: file is ignored. 2: keyed on the logs' generations.
+VERSION = 2
 DIRNAME = "logcache"
 
 
@@ -91,6 +103,23 @@ def scope_key(conn, sport: str, seasons) -> tuple:
     return int(r[0] or 0), int(r[1] or 0)
 
 
+def generations(conn, sport: str, seasons):
+    """(epoch, ((season, count of changes), ...)) for one sport's seasons,
+    off `log_generations`; None when the file has no such table (or no
+    epoch), and the caller counts the rows instead."""
+    seasons = sorted({int(s) for s in seasons})
+    try:
+        epoch = conn.execute("SELECT gen FROM log_generations WHERE sport='~epoch'").fetchone()
+        if epoch is None or epoch[0] is None:
+            return None
+        got = {int(r[0]): int(r[1] or 0) for r in conn.execute(
+            "SELECT season, gen FROM log_generations WHERE sport=? "
+            f"AND season IN ({','.join('?' * len(seasons))})", [sport, *seasons])}
+    except Exception:                                        # noqa: BLE001
+        return None
+    return int(epoch[0]), tuple((s, got.get(s, 0)) for s in seasons)
+
+
 def folder() -> str:
     from . import feedstate
     return os.path.join(feedstate.directory(), DIRNAME)
@@ -118,7 +147,7 @@ def _why(stored, key: dict) -> str:
         return "new shape"
     if stored.get("code") != key["code"]:
         return "code changed"
-    if (stored.get("rows"), stored.get("top")) != (key["rows"], key["top"]):
+    if any(stored.get(k) != key.get(k) for k in ("epoch", "gens", "rows", "top")):
         return "rows changed"
     return "key changed"
 
@@ -158,15 +187,22 @@ def memo(conn, name: str, sport: str, seasons, compute, code=None, force: bool |
     t0 = clock()
     try:
         seasons = sorted({int(s) for s in seasons})
-        rows, top = scope_key(conn, sport, seasons)
+        gens = generations(conn, sport, seasons)
+        if gens is not None:
+            said = {"epoch": gens[0], "gens": gens[1]}
+            shown = {"gens": {str(k): v for k, v in gens[1]}}
+        else:
+            rows, top = scope_key(conn, sport, seasons)
+            said = {"rows": rows, "top": top}
+            shown = {"rows": rows}
         db = db_file(conn)
         key = {"v": VERSION, "name": name, "sport": sport, "seasons": seasons,
-               "db": db, "rows": rows, "top": top, "code": code_hash(code) if code else ""}
+               "db": db, **said, "code": code_hash(code) if code else ""}
         path = _path(name, sport, seasons, db)
     except Exception:                                        # noqa: BLE001
         return compute()
     note = {"name": name, "sport": sport, "seasons": seasons, "at": int(time.time()),
-            "rows": rows, "key_s": round(clock() - t0, 2)}
+            **shown, "key_s": round(clock() - t0, 2)}
     why = "no copy"
     t1 = clock()
     try:

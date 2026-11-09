@@ -9338,6 +9338,31 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MQ. The history file counts its own game-log changes** (step 467; 9
+November). Nothing to run. MO's note on the heartbeat answered the question
+it was put there for: at 03:05 the NHL player games were served from the
+cache (0.23 seconds to load) and the NHL season means too (0.3 seconds for
+the whole fantasy step, against 25.3 at 02:15), but deciding the player
+games were still current took 4.65 seconds, counting the index entries of
+all 556,969 rows they read.
+
+- The history file now keeps, in a small table (`log_generations`), how
+  many times each sport and season's game logs have changed, moved by
+  triggers on the logs themselves in the same write, whoever does it: a new
+  row, a corrected one, a deleted one, a relabelled one (both seasons). The
+  kept reads key on those counts, one small query instead of the count. The
+  table and its triggers are made by the first build after this lands; a
+  night of new rows costs about 0.02 seconds more to write.
+- Two traps built around: SQLite runs a trigger's statements under the
+  conflict policy of the write that fired it, so under the logs' own
+  insert-or-replace an "insert or ignore" would have reset a count to one
+  on every write (measured: five writes left it at 1), and a column that
+  must not be empty would have aborted a box score with no season. Neither
+  is in it, and both are tested.
+- A file the schema has not reached keys on the row count as before, and a
+  fresh table draws a random epoch, so counts that start again never match
+  a result kept before.
+
 **MP. A board's publish says where its seconds go** (step 466; 9 November).
 Nothing to run. The NFL build's write stage ran 24 seconds at 02:11 on 9
 November and 22.4 of them were the one call that writes the board's three
