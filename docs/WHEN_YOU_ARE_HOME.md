@@ -9338,6 +9338,43 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MM. A bet logged in the evening keeps its day** (step 463; 9 November).
+Nothing to run. The gate's browser check failed at 23:50 on Sunday 8
+November: a member with a $100 weekly limit logged $110 in My Bets and saw
+"This week: $0.00" and no warning. My Bets dated a new bet with the UTC
+date, which turns over at 7pm Eastern (8pm in summer), so the Sunday-evening
+bets were filed under Monday and fell outside the Monday-to-Sunday Eastern
+week the limit counts. The same UTC date skipped tonight's game on the
+fantasy desk after 7pm, took "Today" off the Record card in the evening and
+cut a day off the countdown to a league's next slate. One page helper
+(`etToday` in web/js/app.js) now gives all six places the Eastern date, and
+a browser check logs two bets with the clock at Sunday 23:50 Eastern and
+sees them dated Sunday, counted in the week, with the limit's one warning.
+Bets already saved keep the date they were saved with; a member can change
+one by deleting it and logging it again. The changelog says it on the
+Methodology page.
+
+**ML. The NBA and NHL builds say where their time goes** (step 462; 9
+November). Nothing to run. The heartbeat at 23:26 on 8 November had the NBA
+build at 78 seconds of every cycle and the NHL's at 61, beside the stage
+tables the NFL and college builds keep, with nothing to say where either
+one's time went. Each now prints a line as each stage ends, which the loop
+already reads back into the heartbeat:
+
+- the NBA build in sixteen stages, from the tuning fit and the schedule
+  through the history, the slate and its odds, the pricing, the scan and
+  the Most Likely board to the journal and the board's write
+  (`boards.nba.stages`; the WNBA's under `boards.wnba` when it plays);
+- the NHL build in seven (`boards.nhl.stages`). Its board stage, where
+  nearly all of its work happens, also names its twelve parts, from the
+  player games to the game bets (`boards.nhl.parts.board`).
+
+The stage lines only report time; the boards come out the same. The build's
+closing summary is still its last line, the one the loop reports. Once the
+box has updated, I read the next few NBA and NHL builds' stages from the
+public heartbeat and go after the biggest one, as was done for the NFL build
+(577 seconds and killed at its limit, down to 139 to 187).
+
 **MK. Which MLB bets are still open, and why** (step 461; 9 November).
 The record's journal still counts 29 MLB bets as open (10 of them staked),
 though the season is over. The nightly chores pull MLB results from where

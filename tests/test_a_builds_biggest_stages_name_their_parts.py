@@ -120,8 +120,11 @@ def _run_slate():
 #: The build's own wall clock, to the second, wherever it lands: a Most
 #: Likely pick that has just gone up is stamped `since` now
 #: (engine/likely._stamp_hold), so two runs a second apart differed on it
-#: about one time in twelve (8 November).
-WALL_CLOCK_KEYS = {"generated_at", "built_at", "since", "out_at"}
+#: about one time in twelve (8 November). The Most Likely turnover's `at`
+#: is the same clock: with the gate's other files running beside it the two
+#: runs straddled a second (04:48:37 and 04:48:38 on 9 November) and that
+#: key was the whole difference. It is the board's only `at`.
+WALL_CLOCK_KEYS = {"generated_at", "built_at", "since", "out_at", "at"}
 
 
 def _same(a, b):
