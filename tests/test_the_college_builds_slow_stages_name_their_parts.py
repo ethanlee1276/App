@@ -157,8 +157,16 @@ def test_the_college_slate_names_its_reads_only_inside_a_build_and_builds_the_sa
 
 
 if __name__ == "__main__":
-    import inspect
-    for _name, _fn in sorted(inspect.getmembers(sys.modules[__name__], inspect.isfunction)):
-        if _name.startswith("test_"):
-            _fn()
-            print("ok", _name)
+    fails = 0
+    tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+    for name, fn in tests:
+        try:
+            fn()
+            print(f"  ok  {name}")
+        except Exception as exc:                                    # noqa: BLE001
+            import traceback
+            fails += 1
+            print(f"FAIL  {name}: {type(exc).__name__}: {exc}")
+            traceback.print_exc(limit=5)
+    print(f"\n{len(tests) - fails} tests passed." if not fails else f"\n{fails} failed.")
+    sys.exit(1 if fails else 0)
