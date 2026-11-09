@@ -42,6 +42,7 @@ import io
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -179,7 +180,12 @@ def test_in_a_browser_the_top_runs_on_as_one():
                     g = page.evaluate(ROW)
                     if scroll:
                         # Down until the score bar is down at the top, as a reader scrolls.
-                        for _ in range(40):
+                        # UNTIL IT IS, OR FIFTEEN SECONDS (gate 168, 2026-11-09): under
+                        # the gate's load forty steps (about five seconds) once ended
+                        # with the bar still up, the page still drawing or its
+                        # observer not yet called back; it passed alone three times.
+                        until = time.monotonic() + 15
+                        while time.monotonic() < until:
                             page.evaluate("window.scrollBy(0, 120)")
                             page.wait_for_timeout(120)
                             g = page.evaluate(ROW)
