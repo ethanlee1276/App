@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NE. Three more NFL stages name their parts** (step 481; 9 November).
+Nothing to run. `build_slate` (9 seconds at 10:12), `injuries + resets` (6)
+and `first touchdown board` (8) said only their totals; they now show their
+parts under `boards.nfl.parts` on the heartbeat: the schedule, the team
+depth and the slate; the live injury board, the weekly report and the
+sample resets; the first-scorer board and its report and faces. The next
+cut goes where those say the time is.
+
 **ND. The attention reading reads its month, and asks Wikipedia less**
 (step 480; 9 November). Nothing to run. Two parts of the NFL build's
 inventions' readings at 10:12: `attention` 6.9 seconds, which read every

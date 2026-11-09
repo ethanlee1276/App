@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after the attention reading started reading only its month and asking
+Last updated 2026-11-09, after three more NFL stages started naming their parts (step NE: nothing
+to run), after the attention reading started reading only its month and asking
 Wikipedia less (step ND: nothing to run), after the UFC step started saying where its time goes
 (step NC: nothing to run), after the boards' player stats started being kept between builds of the
 same slate (step NB: nothing to run), after the NBA board's four slow reads started being kept until what they

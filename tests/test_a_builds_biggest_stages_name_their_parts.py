@@ -65,6 +65,10 @@ NFL_STAGE_PARTS = {
     "write the board": ["relock pick of the day", "publish", "light board"],
     # 5 seconds at 09:02 on 9 November and 14 at 09:24, the parse kept (DC1).
     "depth charts": ["load", "injury roles", "qb watch", "team charts"],
+    # 9, 6 and 8 seconds at 10:12 on 9 November, none of them named.
+    "build_slate": ["schedule", "team depth", "slate"],
+    "injuries + resets": ["live injury board", "weekly report + holds", "sample resets"],
+    "first touchdown board": ["board", "report + faces"],
 }
 
 

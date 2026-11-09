@@ -391,7 +391,12 @@ def main() -> None:
     args = ap.parse_args()
     _mem("start", args.memtrace)
 
+    # THE PARTS OF THE FIRST STAGES (2026-11-09): build_slate 9 seconds,
+    # injuries + resets 6 and the first touchdown board 8 at 10:12 on 9
+    # November, none of them saying which read took the time.
+    _st = _now()
     games = show_games(args.season, args.week)
+    _st = _lap("build_slate", "schedule", _st)
     if args.games_only and args.live:
         # The scoreboard overlay for THIS path too; the full build's runs
         # later, on the slate it builds for itself. `price_games_only`
@@ -540,9 +545,11 @@ def main() -> None:
         carry_report["team_depth"] = _team_depth(_tdb.connect(), args.season)
     except Exception:                                         # noqa: BLE001
         carry_report["team_depth"] = {}
+    _st = _lap("build_slate", "team depth", _st)
     try:
         slate = build_slate(args.season, args.week, carry=args.carry,
                             report=carry_report, qb_backups=True, games=games)
+        _lap("build_slate", "slate", _st)
         _mem("build_slate", args.memtrace)
     except DataUnavailable as exc:
         print("\n⚠️  Full projections need weekly player stats.\n")
@@ -593,6 +600,7 @@ def main() -> None:
                      # missing when it was.
                      "weekly": 0, "live": None, "live_added": 0,
                      "live_error": None}
+    _it = _now()
     if args.injuries:
         live = None
         try:
@@ -600,6 +608,7 @@ def main() -> None:
         except Exception as exc:  # noqa: BLE001 — a keyless feed's blip costs a note, never the board
             injury_status["live_error"] = str(exc)
             print(f"\n⚠️  Live injury board unavailable — weekly report only.\n   {exc}")
+        _it = _lap("injuries + resets", "live injury board", _it)
         try:
             ir = injuries_feed.attach_injuries_to_slate(slate, args.season, args.week,
                                                         live=live)
@@ -621,6 +630,7 @@ def main() -> None:
         except DataUnavailable as exc:
             print(f"\n⚠️  Injury feed unavailable — projecting without it.\n   {exc}")
             injury_status["error"] = str(exc)
+        _it = _lap("injuries + resets", "weekly report + holds", _it)
 
     # §5's reset rule: a traded player, a new head coach or a snap-share
     # promotion makes the older games evidence about a job that no longer
@@ -647,7 +657,7 @@ def main() -> None:
                       f"dropped {e['dropped']}")
     except Exception as exc:                       # noqa: BLE001
         print(f"\n⚠️  Reset rule skipped — projecting on full samples.\n   {exc}")
-
+    _lap("injuries + resets", "sample resets", _it)
     _mem("injuries + resets", args.memtrace)
     qb_notes = None
     depth_qb1 = None
@@ -1172,17 +1182,20 @@ def main() -> None:
     # player's chance by our numbers beside his price, and the picks our
     # chance puts well above it. The anytime-touchdown menu still feeds Most
     # Likely's touchdown shelf; it is no longer the Long Shots board.
+    _ftt = _now()
     try:
         from engine import firsttd as _ftd
         _ft = _ftd.board(first_td_quotes, result.get("games") or [], sport="nfl",
                          date=result.get("date", ""))
         result["first_td"] = _ft
         result["long_shots"] = _ft["picks"]
+        _ftt = _lap("first touchdown board", "board", _ftt)
         print(_ftd.report(_ft))
         # THEIR FACES (engine/boardfaces): the first-scorer price list has no
         # photo, so every Long Shots card drew initials (Ethan, 2026-11-04).
         from engine import boardfaces as _bfaces
         print(f"  First-TD faces: {_bfaces.fill(result, 'nfl')} row(s) given a photo")
+        _lap("first touchdown board", "report + faces", _ftt)
     except Exception as _fexc:                                # noqa: BLE001
         print(f"  ⚠️  first-touchdown board skipped: {_fexc}")
         result["long_shots"] = []
