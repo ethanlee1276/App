@@ -198,41 +198,56 @@ def simulate(prof: dict, trials: int, rng: random.Random, shocks: dict | None = 
         slot(qb, m)
     kr, kq = sh["k_rec"], sh["k_rush"]
     rtop, ctop = rcum[-1], (ccum[-1] if ccum else 0.0)
+    # EACH NAME'S NUMBERS LOOKED UP ONCE, NOT ON EVERY THROW (2026-11-09).
+    # The NFL build's readings spent 12.2 seconds here at 07:49 on 9
+    # November; a thousand trials of sixty-odd plays re-read the same dicts
+    # and recomputed the same exponential on every throw. Every float below
+    # is the same expression on the same operands as before, drawn in the
+    # same order, so each trial comes out the same to the digit.
+    last_r = len(rnames) - 1
+    rec_of = [None if who is None else (1.0 / prof["receivers"][who]["catch"] - 1.0,
+                                        prof["receivers"][who]["ypc"],
+                                        out[who]["targets"], out[who]["receptions"], out[who]["rec_yds"])
+              for who in rnames]
+    other = (1.0 / OTHER_CATCH - 1.0, OTHER_YPC)
+    rush_of = [(prof["rushers"][who]["ypr"], out[who]["rush_att"], out[who]["rush_yds"]) for who in cnames]
+    n_c = len(cnames)
+    qb_att, qb_cmp, qb_yds = out[qb]["pass_att"], out[qb]["pass_cmp"], out[qb]["pass_yds"]
+    bisect_right, rand, gamma = bisect.bisect_right, rng.random, rng.gammavariate
     for t in range(trials):
         v, s, e = rng.gauss(0, sh["vol_sd"]), rng.gauss(0, sh["script_sd"]), rng.gauss(0, sh["eff_sd"])
         n_pass = _count(rng, prof["pass_att"] * math.exp(v + s))
         n_rush = _count(rng, prof["rush_att"] * math.exp(v - s))
         cmp_ = yds = 0.0
         boost = math.exp(e)
+        shade = math.exp(-e)
         for _ in range(n_pass):
-            who = rnames[min(bisect.bisect_right(rcum, rng.random() * rtop), len(rnames) - 1)]
-            if who is None:
-                c, ypc = OTHER_CATCH, OTHER_YPC
+            rec = rec_of[min(bisect_right(rcum, rand() * rtop), last_r)]
+            if rec is None:
+                odds_less_one, ypc = other
             else:
-                st = prof["receivers"][who]
-                c, ypc = st["catch"], st["ypc"]
-                out[who]["targets"][t] += 1
-            c = 1.0 / (1.0 + (1.0 / c - 1.0) * math.exp(-e))
-            if rng.random() < c:
-                y = rng.gammavariate(kr, ypc * boost / kr)
+                odds_less_one, ypc = rec[0], rec[1]
+                rec[2][t] += 1
+            c = 1.0 / (1.0 + odds_less_one * shade)
+            if rand() < c:
+                y = gamma(kr, ypc * boost / kr)
                 cmp_ += 1
                 yds += y
-                if who is not None:
-                    out[who]["receptions"][t] += 1
-                    out[who]["rec_yds"][t] += y
-        out[qb]["pass_att"][t] = n_pass
-        out[qb]["pass_cmp"][t] = cmp_
-        out[qb]["pass_yds"][t] = yds
+                if rec is not None:
+                    rec[3][t] += 1
+                    rec[4][t] += y
+        qb_att[t] = n_pass
+        qb_cmp[t] = cmp_
+        qb_yds[t] = yds
         if not ctop:
             continue
         for _ in range(n_rush):
-            i = bisect.bisect_right(ccum, rng.random() * ctop)
-            if i >= len(cnames):
+            i = bisect_right(ccum, rand() * ctop)
+            if i >= n_c:
                 continue
-            who = cnames[i]
-            ypr = prof["rushers"][who]["ypr"]
-            out[who]["rush_att"][t] += 1
-            out[who]["rush_yds"][t] += rng.gammavariate(kq, (ypr + RUSH_SHIFT) / kq) - RUSH_SHIFT
+            ypr, att, ryds = rush_of[i]
+            att[t] += 1
+            ryds[t] += gamma(kq, (ypr + RUSH_SHIFT) / kq) - RUSH_SHIFT
     return out
 
 
@@ -275,6 +290,23 @@ def scores_corr(a: list, b: list) -> float | None:
     if not sa or not sb:
         return None
     return max(-0.95, min(0.95, sum(x * y for x, y in zip(a, b)) / (sa * sb)))
+
+
+def _pair_corr(ns: dict, norm: dict, dots: dict, a, b) -> float | None:
+    """`scores_corr(ns[a], ns[b])` with each series' length and each pair's
+    dot product worked out once (x*y and y*x are the same float, summed in
+    the same order), for the board section's every-pair loop."""
+    xs, ys = ns[a], ns[b]
+    if len(xs) < 20 or len(xs) != len(ys):
+        return None
+    sa, sb = norm[a], norm[b]
+    if not sa or not sb:
+        return None
+    pair = frozenset((a, b))
+    dot = dots.get(pair)
+    if dot is None:
+        dot = dots[pair] = sum(x * y for x, y in zip(xs, ys))
+    return max(-0.95, min(0.95, dot / (sa * sb)))
 
 
 def normal_scores_corr(xs: list, ys: list) -> float | None:
@@ -581,23 +613,34 @@ def ideas_section(props, games, board, sport, conn=None):
         sim = simulate(prof, TRIALS_BUILD, rng, shocks)
         legs = [(p, m, r) for (p, m), r in by_team[team].items() if (sim.get(p) or {}).get(m)]
         ns = {(p, m): normal_scores(sim[p][m]) for p, m, _r in legs}
+        # EACH LEG'S NUMBERS ONCE, EACH PAIR'S ONCE (2026-11-09): every leg
+        # was compared with every other twice, its over flags and its
+        # scores' length worked out again for each partner. The same sums
+        # over the same lists, so every number is the one it was.
+        overs = {(p, m): [x > r["line"] for x in sim[p][m]] for p, m, r in legs}
+        n_over = {k: sum(v) for k, v in overs.items()}
+        norm = {k: math.sqrt(sum(x * x for x in v)) for k, v in ns.items()}
+        dots: dict = {}
+        boths: dict = {}
         for p, m, r in legs:
             vals = sim[p][m]
             links = []
             for q, n, s in legs:
                 if q == p:
                     continue
-                rho = scores_corr(ns[(p, m)], ns[(q, n)])
+                rho = _pair_corr(ns, norm, dots, (p, m), (q, n))
                 if rho is None:
                     continue
-                o_a = [x > r["line"] for x in vals]
-                o_b = [y > s["line"] for y in sim[q][n]]
-                both = sum(1 for x, y in zip(o_a, o_b) if x and y)
-                given = both / sum(o_a) if sum(o_a) else None
+                o_a, o_b = overs[(p, m)], overs[(q, n)]
+                pair = frozenset(((p, m), (q, n)))
+                both = boths.get(pair)
+                if both is None:
+                    both = boths[pair] = sum(1 for x, y in zip(o_a, o_b) if x and y)
+                given = both / n_over[(p, m)] if n_over[(p, m)] else None
                 links.append({"player": q, "market": n, "line": s["line"], "rho": round(rho, 3),
                               "pricer_rho": round(prior_rho(sport, {"player": p, "team": team, "market": m},
                                                             {"player": q, "team": team, "market": n}), 3),
-                              "their_over": round(sum(o_b) / len(o_b), 3),
+                              "their_over": round(n_over[(q, n)] / len(o_b), 3),
                               "their_over_given_his": None if given is None else round(given, 3)})
             links.sort(key=lambda x: -abs(x["rho"]))
             players[f"{p}|{m}"] = {"team": team, "line": r["line"], "sim_over": round(over_chance(vals, r["line"]), 3),

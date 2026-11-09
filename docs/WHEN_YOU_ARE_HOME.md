@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MW. The play simulator does each sum once** (step 473; 9 November). Nothing
+to run. The NFL build's inventions spent 12.2 seconds in the play simulator
+(`ideas readings` › `sim`) at 07:49: a thousand simulated games per team,
+and then every priced leg compared with every other. Each trial re-read the
+same player numbers and recomputed the same exponential on every throw, and
+each pair of legs was compared twice, with the over-or-under of each leg and
+the length of its scores worked out again for every partner. Now each is
+worked out once. Every float is the same expression on the same numbers,
+drawn in the same order, so the readings are identical to the digit (the
+old loop is kept in the tests as the reference, and a 28-team, 420-leg
+slate gave the same file before and after); here that slate went from 3.0 to
+2.1 seconds. Most of what is left is the random draws themselves, which
+cannot change without changing the readings.
+
 **MV. College's reads and every board's comps are kept until their rows
 change** (step 472; 9 November). Nothing to run. MS's parts named the time at
 08:35: the college build read the same logs again on every build, the comps'
