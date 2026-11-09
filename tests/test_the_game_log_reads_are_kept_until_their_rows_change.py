@@ -280,6 +280,38 @@ def test_each_read_notes_what_it_did_and_why():
         assert len(calls) == 5
 
 
+def test_a_note_that_cannot_be_written_says_so_once_and_costs_nothing():
+    import contextlib
+    import io
+    with _Sandbox() as s:
+        _seed(s.conn)
+        calls, compute = _counted(s)
+        seasons = [2024, 2025]
+        pkl = logcache._path("probe", "nhl", seasons, logcache.db_file(s.conn))
+        os.makedirs(pkl[:-len(".pkl")] + ".json")          # a folder where the note goes
+        keep = logcache._NOTE_FAILED[0]
+        logcache._NOTE_FAILED[0] = False
+        said = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(said):
+                first = logcache.memo(s.conn, "probe", "nhl", seasons, compute, force=True)
+                again = logcache.memo(s.conn, "probe", "nhl", seasons, compute, force=True)
+        finally:
+            logcache._NOTE_FAILED[0] = keep
+        assert first == again == {"n": 1} and len(calls) == 1, "stored and served all the same"
+        lines = [ln for ln in said.getvalue().splitlines() if "not noted" in ln]
+        assert len(lines) == 1 and "kept game-log read not noted" in lines[0], said.getvalue()
+        assert logcache.status() == {}, "nothing noted, and nothing made up"
+    keep_folder = logcache.folder
+    with tempfile.NamedTemporaryFile() as fh:
+        logcache.folder = lambda: fh.name                    # a file where the folder goes
+        try:
+            assert logcache.status() == {"error": "NotADirectoryError"}, \
+                "notes that cannot be listed say so, not 'nothing yet'"
+        finally:
+            logcache.folder = keep_folder
+
+
 def test_the_heartbeat_carries_each_kept_reads_note():
     src = (ROOT / "launch.py").read_text()
     beat = src[src.index("def _write_heartbeat("):]

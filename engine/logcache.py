@@ -123,19 +123,29 @@ def _why(stored, key: dict) -> str:
     return "key changed"
 
 
+#: Set once a note could not be written in this process (said once).
+_NOTE_FAILED = [False]
+
+
 def _note(path: str, entry: dict) -> None:
-    """What this call did, beside its stored result. Never raises."""
+    """What this call did, beside its stored result. Never raises: a lost
+    note must never cost the read it describes. But a missing note reads on
+    the heartbeat like a read that never ran, so the first failure in a
+    process says so in the build's log, which no quiet build prints."""
     tmp = f"{path}.{os.getpid()}.note"
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(tmp, "w") as fh:
             json.dump(entry, fh)
         os.replace(tmp, path[:-len(".pkl")] + ".json")
-    except Exception:                                        # noqa: BLE001
+    except Exception as exc:                                 # noqa: BLE001
         try:
             os.unlink(tmp)
         except Exception:                                    # noqa: BLE001
             pass
+        if not _NOTE_FAILED[0]:
+            _NOTE_FAILED[0] = True
+            print(f"  ⚠️  kept game-log read not noted ({type(exc).__name__}: {exc})")
 
 
 def memo(conn, name: str, sport: str, seasons, compute, code=None, force: bool | None = None,
@@ -215,7 +225,8 @@ def forget(sport: str) -> int:
 def status() -> dict:
     """Each kept read's last call, the newest per name and sport, keyed
     ``name.sport``: served (``kept``) or read again and ``why``, and its
-    seconds. {} when nothing is noted; never raises."""
+    seconds. {} when nothing is noted yet; ``{"error": <its type>}`` when the
+    notes cannot be listed, which no quiet box answers. Never raises."""
     newest: dict = {}
     try:
         for fn in os.listdir(folder()):
@@ -229,7 +240,9 @@ def status() -> dict:
             k = f"{e.get('name')}.{e.get('sport')}"
             if k not in newest or (e.get("at") or 0) > (newest[k].get("at") or 0):
                 newest[k] = e
-    except Exception:                                        # noqa: BLE001
+    except FileNotFoundError:
         return {}
+    except Exception as exc:                                 # noqa: BLE001
+        return {"error": type(exc).__name__}
     return {k: {f: v for f, v in e.items() if f not in ("name", "sport")}
             for k, e in sorted(newest.items())}
