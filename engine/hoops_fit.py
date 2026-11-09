@@ -86,6 +86,20 @@ def fit_margin_sd(conn, league: str, seasons: list[int] | None = None
 
 def fit_stat_cvs(conn, league: str, seasons: list[int] | None = None,
                  min_games: int = 12) -> tuple[dict, dict]:
+    """`_fit_stat_cvs`, kept until the league's logs change (engine/logcache,
+    2026-11-09): the NBA build's "tuning fit" stage ran 6-9 seconds of every
+    build at 07:52 and 09:05 on 9 November, re-reading every season's stat
+    rows to measure numbers that move when a night's box scores land.
+    Keyed on every season of the league (or the seasons asked for)."""
+    from . import logcache
+    return logcache.memo(conn, f"hoops_cvs{int(min_games)}", league,
+                         list(seasons) if seasons else None,
+                         lambda: _fit_stat_cvs(conn, league, seasons, min_games),
+                         code=__file__)
+
+
+def _fit_stat_cvs(conn, league: str, seasons: list[int] | None = None,
+                  min_games: int = 12) -> tuple[dict, dict]:
     """({stat: cv}, {stat: rows}) from this league's own player logs.
 
     The CV is measured PER PLAYER and then averaged, not pooled across the
@@ -158,7 +172,13 @@ def fitted_tuning(conn, league: str, seasons: list[int] | None = None
                     "games": 0, "stat_rows": {}}
 
     changes: dict = {}
+    # Its two halves name themselves on the heartbeat (boards.nba.parts,
+    # "tuning fit"), as the college build's stages do; silent outside a build.
+    import time as _time
+    from . import stageclock as _clock
+    _t = _time.monotonic()
     sd, n = fit_margin_sd(conn, league, seasons)
+    _t = _clock.lap("tuning fit", "margin spread", _t)
     report["games"] = n
     if sd is not None and n >= MIN_GAMES:
         changes["margin_sd"] = round(sd, 2)
@@ -169,6 +189,7 @@ def fitted_tuning(conn, league: str, seasons: list[int] | None = None
             f"margin_sd {base.margin_sd} — {n} games, need {MIN_GAMES}")
 
     cvs, counts = fit_stat_cvs(conn, league, seasons)
+    _clock.lap("tuning fit", "stat spreads", _t)
     report["stat_rows"] = counts
     merged = dict(base.sd_cv)
     # Every stat is accounted for either way. A report that collapses to

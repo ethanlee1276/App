@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MX. The NBA's tuning fit is kept until a night's box scores land** (step
+474; 9 November). Nothing to run. The NBA build's first stage, `tuning fit`,
+ran 6 to 9 seconds of every build at 07:52 and 09:05 (of 52): before pricing
+anything it re-reads every season's stat rows to measure how much one
+player's line moves from game to game, numbers that change only when new
+box scores are stored. That read is now kept the way MV keeps college's, until
+any NBA row changes (the WNBA's has its own copy, and a WNBA night leaves the
+NBA's alone), and the fit names its two halves on the heartbeat
+(`boards.nba.parts`: `margin spread` and `stat spreads`). The fit itself is
+unchanged: the same numbers come back through the copy as off the table.
+
 **MW. The play simulator does each sum once** (step 473; 9 November). Nothing
 to run. The NFL build's inventions spent 12.2 seconds in the play simulator
 (`ideas readings` › `sim`) at 07:49: a thousand simulated games per team,
