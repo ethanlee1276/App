@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NB. The boards' player stats are kept between builds of the same slate**
+(step 478; 9 November). Nothing to run. The last-ten-games charts and hit
+chips on every NFL, college and MLB prop come from one index seek per player
+and market, thousands a board (SL1 made each seek fast), and every build of
+the same slate made them again: inside the NFL pricing stage's 6-second
+`census + player stats + shelves + market scan` at 09:24. They are now kept
+the same way as the other reads, until any of that sport's games is stored
+or the board's players change.
+
 **NA. The NBA board's four slow reads are kept until what they read changes**
 (step 477; 9 November). Nothing to run. MX's parts named them on the NBA
 build at 09:34: first basket 9.8 seconds (two seasons of first-quarter shots,

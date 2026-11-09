@@ -123,7 +123,16 @@ def for_board(recommendations, sport: str, db_path=None) -> dict:
         return {}
     conn = _db.connect(path)
     try:
-        return _query(conn, sport, markets, players)
+        # KEPT BETWEEN BUILDS (engine/logcache, 2026-11-09) while the sport's
+        # logs and the board's names hold: one index seek per player and
+        # market, thousands a board, inside the NFL pricing stage's 6-second
+        # "census + player stats + shelves + market scan" at 09:24 on 9
+        # November, the same games on every build of the same slate.
+        import hashlib
+        from . import logcache
+        return logcache.memo(conn, "player_stats", sport, None,
+                             lambda: _query(conn, sport, markets, players), code=__file__,
+                             extra={"players": hashlib.sha1("\n".join(players).encode()).hexdigest()})
     finally:
         conn.close()
 

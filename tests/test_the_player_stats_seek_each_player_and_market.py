@@ -141,6 +141,46 @@ def test_the_board_reads_the_same_through_a_file():
     assert _same(got, want) and len(got) == 11, "every player but the one too thin to chart"
 
 
+def test_the_board_keeps_its_stats_between_builds_of_the_same_slate():
+    """Kept by engine/logcache (2026-11-09) while the sport's logs and the
+    board's names hold; read again for another board or a new game."""
+    import os
+    from engine import logcache
+    d = Path(tempfile.mkdtemp())
+    path = d / "history.db"
+    c = db.connect(str(path))
+    c.executemany("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, "
+                  "position, home, market, value) VALUES (?,?,?,?,?,?,?,?,?,?,?)", _nfl())
+    c.commit()
+    c.close()
+    keep = (logcache.enabled_for, os.environ.get("QB_FEEDSTATE_DIR"))
+    logcache.enabled_for = lambda conn: True
+    os.environ["QB_FEEDSTATE_DIR"] = str(d / "feedstate")
+    try:
+        recs = [{"player": f"Player {k:02d}"} for k in range(12)]
+        first = S.for_board(recs, "nfl", db_path=str(path))
+        assert S.for_board(list(reversed(recs)), "nfl", db_path=str(path)) == first
+        assert logcache.status()["player_stats.nfl"]["kept"] is True, "the same slate, any order"
+        fewer = S.for_board(recs[:5], "nfl", db_path=str(path))
+        assert logcache.status()["player_stats.nfl"]["why"] == "inputs changed"
+        assert set(fewer) == {f"Player {k:02d}" for k in range(5)}
+        c = db.connect(str(path))
+        c.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, "
+                  "position, home, market, value) VALUES ('nfl', 2026, '010', '2026_10_G0', 'Player 00', "
+                  "'BUF', 'MIA', 'WR', 1, 'rec_yds', 199.0)")
+        c.commit()
+        c.close()
+        again = S.for_board(recs, "nfl", db_path=str(path))
+        assert logcache.status()["player_stats.nfl"]["why"] == "rows changed"
+        assert again != first and again["Player 00"]["Receiving Yards"][0]["value"] == 199.0
+    finally:
+        logcache.enabled_for = keep[0]
+        if keep[1] is None:
+            os.environ.pop("QB_FEEDSTATE_DIR", None)
+        else:
+            os.environ["QB_FEEDSTATE_DIR"] = keep[1]
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
