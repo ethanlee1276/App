@@ -342,9 +342,17 @@ def main() -> None:
     _lap("recent tape")
     history = pm.wallet_history(conn, wallets=[t["wallet"] for t in tape])
     _lap("wallet history")
-    names = pm.wallet_names(conn)
-    total_trades = conn.execute("SELECT COUNT(*) FROM pm_trades").fetchone()[0]
-    seen = pm.wallets_seen(conn)
+    # The names looked up as the page asks for them, and the tape's two
+    # totals kept running between builds (engine/predmarket.WalletNames,
+    # tape_counts): this step read every trade ever recorded, twice, and
+    # every name ever harvested — 76 of the build's 122 seconds at 09:16 on
+    # 9 November, every ten minutes.
+    names = pm.WalletNames(conn)
+    counts = pm.tape_counts(conn)
+    total_trades, seen = counts["trades"], counts["wallets"]
+    how = ("counted in full" if counts["how"] == "counted"
+           else "kept, +%s since the last build" % format(counts["added"], ","))
+    print(f"  pm tape: {total_trades:,} trades from {seen:,} wallets ({how})", flush=True)
     _lap("tape counts")
     feed = pm.build_flow_feed(tape, markets, history)
     for f in feed:

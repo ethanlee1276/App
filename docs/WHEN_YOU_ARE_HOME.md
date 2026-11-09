@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MY. The prediction-markets build stops recounting the whole Polymarket
+tape** (step 475; 9 November). Nothing to run. MU put the build's steps on
+the heartbeat, and at 09:16 `tape counts` was 76 of its 122 seconds, every
+ten minutes: to print how many trades the tape holds and from how many
+wallets, it counted every trade ever recorded (millions), twice, and read
+every display name ever harvested to name a few dozen wallets. Nothing ever
+deletes from the tape, so the two totals are now kept in a one-row table
+and each build adds only what arrived since: the new rows by their position
+in the file, and a wallet as new only when no older row has it (one look in
+the wallet index each). The numbers are the same a full count gives; it
+still counts in full once a week, and on its first build after this push
+(so that one build takes the old time). Names are now read for the wallets
+the page shows, one row each. The build prints `pm tape: N trades from W
+wallets (kept, +n since the last build)` in its log.
+
 **MX. The NBA's tuning fit is kept until a night's box scores land** (step
 474; 9 November). Nothing to run. The NBA build's first stage, `tuning fit`,
 ran 6 to 9 seconds of every build at 07:52 and 09:05 (of 52): before pricing
