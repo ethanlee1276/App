@@ -26,8 +26,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
-import test_the_college_closes_and_rekey_walk_each_table_once as W   # noqa: E402
 from engine import lineledger as LL                                   # noqa: E402
+
+
+class _World:
+    """The closes test's world (tests/test_the_college_closes_and_rekey_walk_
+    each_table_once), imported when first asked for, as sibling tests are."""
+
+    def __getattr__(self, name):
+        import test_the_college_closes_and_rekey_walk_each_table_once as mod
+        return getattr(mod, name)
+
+
+W = _World()
 
 T0 = 1_794_240_000.0
 ZERO = {"games": 0, "spread": 0, "total": 0, "ml": 0}

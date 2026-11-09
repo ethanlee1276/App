@@ -127,6 +127,17 @@ def test_the_loader_reads_the_kept_rows_through_the_fetch_layer():
     assert a == b and calls == [D.KEEP_DAYS]
 
 
+def test_the_nfl_builds_depth_chart_stage_names_its_parts_in_order():
+    """5 seconds at 09:02 on 9 November and 14 at 09:24, with the parse
+    kept: the stage now says which of its four jobs took them."""
+    src = (ROOT / "nfl_build.py").read_text()
+    body = src[src.index('_mem("injuries + resets", args.memtrace)'):src.index('_mem("depth charts", args.memtrace)')]
+    laps = [f'_lap("depth charts", "{p}", _dt0)' for p in ("load", "injury roles", "qb watch", "team charts")]
+    at = [body.index(lp) for lp in laps]
+    assert at == sorted(at), at
+    assert body.index("load_depth_charts(args.season)") < at[0] < body.index("refine_injury_roles(all_inj")
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

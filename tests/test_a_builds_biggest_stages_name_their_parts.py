@@ -63,6 +63,8 @@ NFL_STAGE_PARTS = {
         "exchange fair", "crowd", "openers", "splits"],
     # 35 seconds at 00:51 on 9 November, 19 the night before (2026-11-09).
     "write the board": ["relock pick of the day", "publish", "light board"],
+    # 5 seconds at 09:02 on 9 November and 14 at 09:24, the parse kept (DC1).
+    "depth charts": ["load", "injury roles", "qb watch", "team charts"],
 }
 
 

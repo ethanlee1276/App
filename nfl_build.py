@@ -657,10 +657,15 @@ def main() -> None:
             from engine.sources.depthcharts import (load_depth_charts,
                                                     refine_injury_roles,
                                                     qb_dependency, qb1_map)
+            # Its parts on the heartbeat (boards.nfl.parts): 5 seconds at
+            # 09:02 on 9 November and 14 at 09:24, with the parse kept (DC1).
+            _dt0 = _now()
             rows = load_depth_charts(args.season)
+            _dt0 = _lap("depth charts", "load", _dt0)
             scan_depth_rows = rows
             all_inj = [i for g in slate.games for i in g.injuries]
             dres = refine_injury_roles(all_inj, rows, args.week)
+            _dt0 = _lap("depth charts", "injury roles", _dt0)
             print(f"\nDepth charts: refined {dres.refined} role(s), "
                   f"demoted {dres.demoted} backup(s).")
             for d in dres.details[:8]:
@@ -669,6 +674,7 @@ def main() -> None:
             # stamps a warning on that team's pass-catcher props.
             qb_notes = qb_dependency(rows, args.week, all_inj)
             depth_qb1 = qb1_map(rows, args.week)
+            _dt0 = _lap("depth charts", "qb watch", _dt0)
             # The team page's Depth Chart tab reads the published charts
             # off disk (server._team) — written here, where they are
             # already loaded, rather than refetched per page view.
@@ -677,6 +683,7 @@ def main() -> None:
                 write_team_charts(rows, args.week)
             except OSError as exc:
                 print(f"  · depth charts for the team page not written: {exc}")
+            _lap("depth charts", "team charts", _dt0)
             if qb_notes:
                 print(f"\nQB watch: {len(qb_notes)} team(s) flagged.")
                 for t, n in sorted(qb_notes.items()):

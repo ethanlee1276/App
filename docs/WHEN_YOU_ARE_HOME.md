@@ -9349,7 +9349,10 @@ line recorded after kickoff never counts), so the walk now runs only when a
 game in the window has finished since the last walk or moved its kickoff,
 and otherwise at most every six hours (so a line `harvest_odds.py` adds for
 a past game later is still copied). On a quiet weekday most college builds
-skip it; on a Saturday it runs as games finish, as before.
+skip it; on a Saturday it runs as games finish, as before. The NFL build's
+`depth charts` stage (5 seconds at 09:02, 14 at 09:24, with its parse already
+kept) now names its four parts on the heartbeat: load, injury roles, qb
+watch, team charts.
 
 **MY. The prediction-markets build stops recounting the whole Polymarket
 tape** (step 475; 9 November). Nothing to run. MU put the build's steps on
