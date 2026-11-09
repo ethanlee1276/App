@@ -1582,6 +1582,10 @@ def main() -> None:
     fit = cfbratings.fit_from_history(conn, all_seasons or ratings)
     _clock.lap("history + team ratings", "rating fit", _t)
     _clock.mark("history + team ratings")
+    # …and this stage's parts (engine/stageclock.lap): 12 seconds at 07:51 on
+    # 9 November across two rating solves, the fit, talent, the QB read, the
+    # weather and the lines.
+    _t = _ptime.monotonic()
     # OPPONENT-ADJUSTED, since 2026-09-02 (Ethan, on the audit's third Ask:
     # "whatever u think"). §5 calls opponent adjustment "everything" in a
     # sport where a Sun Belt schedule and an SEC schedule are not
@@ -1599,12 +1603,15 @@ def main() -> None:
     ratings, seasons_used = teamrates.adjusted_ratings_for_season(
         conn, "cfb", day.year, shrink=8.0, exclude_prefix=_fallback,
         home_field=fit.home_field)
+    _t = _clock.lap("opponent-adjusted ratings + game lines", "this season adjusted", _t)
     all_seasons_adj = teamrates.compute_adjusted_ratings(
         conn, "cfb", shrink=8.0, exclude_prefix=_fallback,
         home_field=fit.home_field)
+    _t = _clock.lap("opponent-adjusted ratings + game lines", "every season adjusted", _t)
     fit = cfbratings.fit_from_history(conn, all_seasons_adj or all_seasons
                                       or ratings)
     cfbratings.install(fit)
+    _t = _clock.lap("opponent-adjusted ratings + game lines", "rating fit", _t)
 
     # §5/§6 — the preseason prior, built from high-school recruiting. In
     # September a team's own results are two games against opponents nobody
@@ -1613,6 +1620,7 @@ def main() -> None:
     talent_report = attach_talent(conn, ratings, day.year, lookup)
     ratings = talent_report.pop("ratings")
     out["talent"] = talent_report
+    _t = _clock.lap("opponent-adjusted ratings + game lines", "talent", _t)
 
     store = cfbstatus.load_store()
     games = [cfbstatus.annotate_game(g, store) for g in games]
@@ -1637,6 +1645,7 @@ def main() -> None:
     except Exception as _qrx:                                 # noqa: BLE001
         print(f"  ⚠️  QB read skipped: {_qrx}")
 
+    _t = _clock.lap("opponent-adjusted ratings + game lines", "status + QB read", _t)
     # Kickoff weather, joined on the VENUE ESPN names (so neutral sites
     # read the right sky) with CFBD's coordinates and Open-Meteo's hourly
     # board. Degrades to nothing without the CFBD key or with either feed
@@ -1661,6 +1670,7 @@ def main() -> None:
             print(f"  ⚠️  Weather not stored: {_exc}")
     except Exception as exc:                              # noqa: BLE001
         print(f"Weather: skipped — {type(exc).__name__}: {exc}")
+    _t = _clock.lap("opponent-adjusted ratings + game lines", "weather", _t)
 
     out["games"] = [{"home": g["home"], "away": g["away"],
                      "date": g.get("date") or args.date,
@@ -1818,6 +1828,7 @@ def main() -> None:
         lines = priced.get(g["game_id"]) or {}
         gd["spread"] = (lines.get("spread") or [None])[0]
         gd["total"] = (lines.get("total") or [None])[0]
+    _clock.lap("opponent-adjusted ratings + game lines", "games + lines", _t)
 
     _clock.mark("opponent-adjusted ratings + game lines")
     # KEEP THE LINES THIS BOARD ALREADY PAID FOR. Free — the prices are in
@@ -2145,6 +2156,11 @@ def main() -> None:
             print(f"  ⚠️  {quotes_note}")
 
     _clock.mark("player slate + quotes")
+    # …AND THE PARTS OF THE PRICING STAGE (engine/stageclock.lap): "injuries
+    # + lineup + prop pricing" ran 40 of the 110 seconds of the build at 07:51
+    # on 9 November with nothing on the heartbeat to say which of its six
+    # steps took them.
+    _t = _ptime.monotonic()
     # WHO IS HURT, from ESPN's college injury board — the feed the Injuries
     # page already draws, which this build never read (Ethan, 2026-09-26:
     # college "locked in" like the NFL). It reaches the same places the
@@ -2162,6 +2178,7 @@ def main() -> None:
               f"({sum(1 for i in _cfb_inj if i.status in ('OUT', 'IR', 'DOUBTFUL'))} out or doubtful)")
     except Exception as _iexc:                               # noqa: BLE001
         print(f"  ⚠️  college injuries unavailable: {_iexc}")
+    _t = _clock.lap("injuries + lineup + prop pricing", "injuries", _t)
 
     try:
         from engine.cfb import props as _cfbprops
@@ -2173,6 +2190,7 @@ def main() -> None:
         _prop_slate = _cfbprops.build_slate(
             conn, _prop_games, args.date,
             _prop_season_of("cfb", args.date), census=prop_census)
+        _t = _clock.lap("injuries + lineup + prop pricing", "slate", _t)
         # The book's number replaces the proxy wherever this pull bought
         # one. A prop with no line keeps its proxy, is analysed and
         # shown, and is never staked or journaled — `evaluate_prop`
@@ -2183,6 +2201,7 @@ def main() -> None:
                                                   alt_sharp=alt_sharp_prop_lines,
                                                   record=bool(args.odds))
         prop_census["priced"] = _matched
+        _t = _clock.lap("injuries + lineup + prop pricing", "book lines", _t)
         # EVERY BOOK'S NUMBER for the men with an open pick and the men on
         # an injury report, kept when it changes (engine/proptape): the line
         # chart with every book on it reads it back (engine/linebooks).
@@ -2190,6 +2209,7 @@ def main() -> None:
         print(_tape_note("cfb", _prop_slate))
         for _pg in getattr(_prop_slate, "games", None) or []:
             _pg.injuries = [i for i in _cfb_inj if i.team in (_pg.home, _pg.away)]
+        _t = _clock.lap("injuries + lineup + prop pricing", "prop tape", _t)
         # WHO PLAYS AROUND HIM, FOR COLLEGE (engine/cfb/lineup; Ethan,
         # 2026-10-10: "do the teammate-out and new QB stuff for college").
         # The depth order off college's logs, who is out (ESPN's board and
@@ -2210,7 +2230,9 @@ def main() -> None:
                   + ("" if _clu.measured() else " — college not measured yet, nothing applied"))
         except Exception as _lux:                            # noqa: BLE001
             print(f"  ⚠️  college lineup step skipped: {_lux}")
+        _t = _clock.lap("injuries + lineup + prop pricing", "lineup", _t)
         out["recommendations"] = _price_props(_prop_slate, sport="cfb")
+        _clock.lap("injuries + lineup + prop pricing", "pricing", _t)
         _clock.mark("injuries + lineup + prop pricing")
         # The inventions (engine/ideas): readings of this slate, written
         # to a private file the pick and game pages ask for.
@@ -2347,6 +2369,9 @@ def main() -> None:
                      **result["counts"]}
 
     _clock.mark("player board")
+    # …AND THIS STAGE'S PARTS (engine/stageclock.lap): 18 seconds at 07:51 on
+    # 9 November, eight steps, one number.
+    _t = _ptime.monotonic()
     # THE LONG-SHOT BOARD (Ethan, 2026-08-25: "fix the odds range for
     # long shot picks for nfl and CFB"). Anytime-TD quotes for the best
     # games on the card, priced by engine/cfb/tds — implied totals, each
@@ -2372,6 +2397,7 @@ def main() -> None:
                     _st = _cfb_status.get((_r.get("team"), _nn(_r.get("player") or "")))
                     if _st:
                         _r["injury_status"] = _st
+            _t = _clock.lap("long shots + Most Likely board", "touchdown board", _t)
             # A STARTING QUARTERBACK OUT, BENCHED OR BACK (engine/cfb/
             # qbchange): read off the college passing logs, ESPN's injury
             # board and the passer the books priced this week, and put on
@@ -2402,6 +2428,7 @@ def main() -> None:
                     print(f"  QB changes: " + "; ".join(_cqb.card(c)["headline"] for c in _qb_ch.values()))
             except Exception as _qbx:                         # noqa: BLE001
                 print(f"  ⚠️  college QB check skipped: {_qbx}")
+            _t = _clock.lap("long shots + Most Likely board", "QB changes", _t)
             out["long_shots"] = rows
             # FIRST TOUCHDOWN IS COLLEGE'S LONG SHOTS (Ethan, 2026-10-31: "I
             # only want our long shot picks to be stuff like first basket
@@ -2433,6 +2460,7 @@ def main() -> None:
             except Exception as _ftx:                         # noqa: BLE001
                 out["long_shots"] = []
                 print(f"  ⚠️  first touchdown skipped: {_ftx}")
+            _t = _clock.lap("long shots + Most Likely board", "first touchdown", _t)
             # The most-likely-scorers list — shown, never journaled. The
             # page's shelf is the top of the ranked menu; the board below
             # is offered the whole thing and applies its own bar first
@@ -2470,6 +2498,7 @@ def main() -> None:
                       f"{len(_cfb_leans)} lean(s) for Most Likely.")
             except Exception as _sexc:                        # noqa: BLE001
                 print(f"  ⚠️  matchup scan skipped: {_sexc}")
+            _t = _clock.lap("long shots + Most Likely board", "matchup scan", _t)
             from engine.likely import build as _likely
             from engine import boards as _boards
             # THE CENSUS TRAVELS WITH THE BOARD. College's whole
@@ -2541,6 +2570,7 @@ def main() -> None:
             if out.get("scan_reads"):
                 _scan.stamp_picks(out["scan_reads"], _cfb_lean_report, board=out["most_likely"])
             out["likely_turnover"] = _ml_turn
+            _t = _clock.lap("long shots + Most Likely board", "most likely", _t)
             # THE NFL'S MATCHUP SHELVES, FOR COLLEGE (Ethan, 2026-09-26: "all
             # that work we have done for the past couple days has also been
             # done for college football"): the touchdown scenarios and every
@@ -2565,6 +2595,7 @@ def main() -> None:
             print(f"  Touchdown scenarios: {len(out['td_scenarios'])} · matchup picks: "
                   f"{sum(len(m.get('td') or []) + len(m.get('props') or []) for m in out['matchup_picks'])} "
                   f"across {len(out['matchup_picks'])} game(s)")
+            _t = _clock.lap("long shots + Most Likely board", "scenarios + matchup picks", _t)
             # AND WHY THE PROP HALF IS EMPTY, WHEN IT IS. College's
             # yardage markets have a model and, until the box holding
             # the logs walks them, no measurement — so `from_prop`
@@ -2610,6 +2641,7 @@ def main() -> None:
                 _lb.warn_avoids(out)
             except Exception as _wexc:                    # noqa: BLE001
                 print(f"  ⚠️  plays-to-avoid warnings skipped: {_wexc}")
+            _t = _clock.lap("long shots + Most Likely board", "board + game plan", _t)
             # WHY THE BOARD IS THE SIZE IT IS, published rather than
             # printed. An empty touchdown board has several causes — no
             # game qualified for a pull, the pull returned nothing, every
@@ -2640,6 +2672,7 @@ def main() -> None:
                           f"for the hold measurement.")
             except Exception as _hexc:                       # noqa: BLE001
                 print(f"  ⚠️  quote journal skipped: {_hexc}")
+            _t = _clock.lap("long shots + Most Likely board", "quote journal", _t)
             if census["quoted_players"]:
                 print(f"  TD board: {len(rows)} pick(s) + {len(watch)} "
                       f"most-likely from {census['quoted_players']} quoted "
@@ -2820,6 +2853,11 @@ def main() -> None:
         print(f"⚠️  CFB journal skipped: {exc}")
 
     _clock.mark("settle + record (or left to the settle lane)")
+    # …AND THE NEXT STAGE'S PARTS (engine/stageclock.lap): "pick of the day +
+    # crowd + parlays" ran 22 seconds at 07:51 on 9 November, eight steps
+    # (the last two inside `_write`, which every exit of this build goes
+    # out through).
+    _t = _ptime.monotonic()
     # THE OPEN-BET TRACKER. Every board but MLB's lacked one, so this
     # league's Live tab read "No open bets on today's card" whatever the
     # journal held — and the tab's two panels (edge bets, Most Likely bets)
@@ -2828,6 +2866,7 @@ def main() -> None:
     # the JSON as `live_picks_error`, where the page can see it.
     from engine.livepicks import attach_tracker as _attach_tracker
     _tn = _attach_tracker(out, "cfb")
+    _t = _clock.lap("pick of the day + crowd + parlays", "tracker", _t)
     # THE PICK OF THE DAY, over the likelihood board this build just
     # assembled (engine/potd). One hook, every sport, so the bar cannot
     # drift between leagues; a failure lands in the JSON.
@@ -2838,14 +2877,17 @@ def main() -> None:
     # and a pick made without them — which looks like nothing wrong.
     from engine import exchangefair as _xf
     print(_xf.attach_to_board(out, "cfb"))
+    _t = _clock.lap("pick of the day + crowd + parlays", "exchange fair", _t)
     # EVERY VENUE'S PRICE ON EVERY GAME, and the pregame record of them
     # that `engine/crowdfit` measures (engine/crowd). Never raises.
     from engine import crowd as _crowd
     print(_crowd.attach_to_board(out, "cfb"))
+    _t = _clock.lap("pick of the day + crowd + parlays", "crowd", _t)
     # THE OPENING LINES, kept and compared (engine/lineopen) — after the crowd
     # hook, whose money split the against-the-money note reads.
     from engine import lineopen as _lo
     print(_lo.attach_to_board(out, "cfb"))
+    _t = _clock.lap("pick of the day + crowd + parlays", "openers", _t)
     # THE GAME REPORT, as the NFL's (engine/gamereport; Ethan, 2026-10-20:
     # "I want you too do all of it besides D" — the college report among
     # it). Last of the game hooks, for the same reason as the NFL's: its
@@ -2864,7 +2906,9 @@ def main() -> None:
         print(f"  {_gr_line}")
     except Exception as _grexc:                               # noqa: BLE001
         print(f"  ⚠️  game reports skipped: {_grexc}")
+    _t = _clock.lap("pick of the day + crowd + parlays", "game reports", _t)
     _pn = _potd.attach(out, "cfb")
+    _clock.lap("pick of the day + crowd + parlays", "pick of the day", _t)
     if _pn:
         print(_pn)
     if _tn:
@@ -2999,11 +3043,15 @@ def _write(out: dict, path: str) -> None:
     # entirely (§6.4) — all of which lives in engine/parlays.py.
     # The outside view: what similar past spots actually did, counted off
     # CFB's own logs. Evidence only, never a price input.
+    import time as _wtime
+    from engine import stageclock as _clock
+    _t = _wtime.monotonic()
     from engine.pipeline import _attach_comps
     out["comps"] = _attach_comps(out.get("recommendations") or [], "cfb")
+    _t = _clock.lap("pick of the day + crowd + parlays", "comps", _t)
     from engine.parlays import attach
     attach(out, "cfb")
-    from engine import stageclock as _clock
+    _clock.lap("pick of the day + crowd + parlays", "parlays", _t)
     _clock.mark("pick of the day + crowd + parlays")
     # WHEN THESE PRICES WERE PULLED, which this board has never said.
     #

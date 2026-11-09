@@ -76,6 +76,8 @@ answer that can disagree with the touchdown board's.
 
 from __future__ import annotations
 
+import time
+
 from ..data_loader import Slate
 from ..models import (
     DefenseProfile, Game, GameLog, LiveStatus, Prop, SportsbookLine, Team,
@@ -408,7 +410,13 @@ def build_props(conn, games: list[dict], season: int,
     census.setdefault("below_volume", 0)
     census.setdefault("props", 0)
 
+    # ITS PARTS ON THE STAGE CLOCK (engine/stageclock.lap), silent outside a
+    # build: the college build's pricing stage ran 40 seconds at 07:51 on 9
+    # November, and this slate is the first of its steps.
+    from .. import stageclock as _clock
+    _t = time.monotonic()
     usage_season, usage, _why = merged_usage(conn, int(season))
+    _t = _clock.lap("college slate", "usage", _t)
     census["usage_season"] = usage_season
     # Two seasons: the one being played, and the one behind it for the
     # carry. Any further back is a different roster and a different
@@ -419,6 +427,7 @@ def build_props(conn, games: list[dict], season: int,
     seasons = sorted({usage_season, usage_season - 1, int(season),
                       int(season) - 1} - {0, -1})
     filed = _log_rows(conn, seasons)
+    _t = _clock.lap("college slate", "log rows", _t)
     if not filed:
         return []
     # THE SLATE'S TEAMS, in the identifiers `fetch_team_roster` already
@@ -431,6 +440,7 @@ def build_props(conn, games: list[dict], season: int,
         current = teams_by_name(conn, int(season))
         for norm, team in rosters_for(slate, int(season)).items():
             current.setdefault(norm, set()).add(team)
+    _t = _clock.lap("college slate", "rosters", _t)
     # THE FACES, from the two sources college actually has, in the order
     # that reaches the most players for the least work.
     #
@@ -468,6 +478,7 @@ def build_props(conn, games: list[dict], season: int,
             headshots.setdefault(norm, url)
     except Exception:                                         # noqa: BLE001
         pass
+    _t = _clock.lap("college slate", "faces", _t)
 
     cands = _candidates(games, filed, current)
     census["candidates"] = len(cands)
@@ -552,6 +563,7 @@ def build_props(conn, games: list[dict], season: int,
     # rosters carried, and how many landed on a prop.
     census["headshots"] = sum(1 for p in props if p.headshot)
     census["headshot_pool"] = len(headshots)
+    _clock.lap("college slate", "props", _t)
     return props
 
 
@@ -559,6 +571,8 @@ def build_slate(conn, games: list[dict], date: str, season: int,
                 census: dict | None = None,
                 current: dict | None = None) -> Slate:
     """Tonight's college slate, ready for `pipeline.price_props`."""
+    from .. import stageclock as _clock
+    _t = time.monotonic()
     ratings: dict = {}
     try:
         from .defense import ratings as _defense_ratings
@@ -569,6 +583,7 @@ def build_slate(conn, games: list[dict], date: str, season: int,
             census["defense_ratings_error"] = f"{type(exc).__name__}: {exc}"
     if census is not None:
         census["defenses_rated"] = len(ratings)
+    _clock.lap("college slate", "defense ratings", _t)
     teams, game_objs = _game_objects(games, ratings)
     props = build_props(conn, games, season, census=census, current=current)
     # A prop whose game is not on the slate would raise out of

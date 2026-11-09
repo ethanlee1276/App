@@ -9338,6 +9338,33 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**MS. College's four slow stages say where their seconds go** (step 469;
+9 November). Nothing to run. The heartbeat at 07:51 had the college build at
+110 seconds, the slowest of the sweep, and four of its stages held 92 of them
+with nothing to say which of their steps took the time: `injuries + lineup +
+prop pricing` 40, `pick of the day + crowd + parlays` 22, `long shots + Most
+Likely board` 18 and `opponent-adjusted ratings + game lines` 12. Each now
+prints its steps as parts, in the order the build runs them, and the
+heartbeat shows them under the board (`boards.cfb.parts`):
+
+- the pricing stage: injuries, slate, book lines, prop tape, lineup,
+  pricing; and the slate's own reads under `college slate`: defense
+  ratings, usage, log rows, rosters, faces, props. Its log rows read every
+  school's player games of two seasons on every build, the same kind of
+  read that cost the NHL board 17 seconds before its result was kept (MN,
+  MO), so that is the first number to look at;
+- the long shots stage: touchdown board, QB changes, first touchdown,
+  matchup scan, most likely, scenarios + matchup picks, board + game plan,
+  quote journal;
+- the pick of the day stage: tracker, exchange fair, crowd, openers, game
+  reports, pick of the day, comps, parlays (the last two inside the writer
+  every exit of the build goes through);
+- the ratings stage: this season adjusted, every season adjusted, rating
+  fit, talent, status + QB read, weather, games + lines.
+
+Outside a build nothing prints, and the slate builds the same props with the
+clock running or not (tested). The next change reads these numbers first.
+
 **MR. The bet-slip links and the private copy, faster** (step 468; 9
 November). Nothing to run. MP's parts named the publish's time at 03:20: the
 bet-slip links took 7.1 of the NFL publish's 11.1 seconds, 8.4 of college's

@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-09, after the first night with the faster dial was read back
+Last updated 2026-11-09, after college's four slow stages started naming their parts on the
+heartbeat (step MS: nothing to run), after the first night with the faster dial was read back
 (step LX: college's dial fitted three markets and part of a fourth in 19 minutes;
 the NFL's was not due; nothing to run), after the bet-slip links stopped normalising the same names
 for every row and the private board copy moved to the fast encoder (step MR: nothing
