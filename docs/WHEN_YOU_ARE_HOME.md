@@ -9762,6 +9762,24 @@ book-line props. Two changes:
 Nothing to run. The heartbeat is public: https://qellysbook.com/data/heartbeat.json,
 under `weekly` → `deepfit` → `round`.
 
+What the first night with the faster walk bought (00:14 to 01:04 on Monday
+9 November, the run's whole 50 minutes): the round went to college, the
+piece tried longest ago, which ran its player memory and temperatures (about
+31 minutes) and gave its recency dial the last 19. In those 19 the dial
+fitted passing, rushing and receiving yards (all dated 9 November) and
+scored 12 of receptions' 21 settings: 75 settings, about four a minute, if
+none was part-way from an earlier night (college's turn had not come before
+in this round). Sunday's NFL dial scored 8 settings in its 8 minutes on the
+old walk; those are different markets, so not a like-for-like timing. The
+NFL's dial did not move: rushing yards still 8 of 21 scored, receiving yards
+and receptions owed, because it was not its turn, and no run has stalled.
+The round still owes the NFL, college (receptions and four more dial
+markets), the NBA and the NFL's book-line props. The NFL build ran about two
+minutes at 07:33 (its stages add up to 119 seconds, the slowest pricing at
+40, the matchup scan 11.4 of that), far from its ten-minute limit, so
+nothing in it needed cutting; college's ran 93 seconds, slowest the Pick of
+the Day, crowd and parlays at 28.
+
 **LW. The box-score pull asks for a game by its season** (step 445; 8
 November). The first pass with LS's timer on it (20:52, Saturday 7
 November) showed the college box scores at 43.4 seconds, and only 1.4 of
