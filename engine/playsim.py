@@ -42,10 +42,14 @@ Standard library only.
 from __future__ import annotations
 
 import bisect
+import hashlib
 import json
 import math
+import os
+import pickle
 import random
 import time
+from array import array
 
 MARKETS = ("pass_att", "pass_cmp", "pass_yds", "targets", "receptions", "rec_yds", "rush_att", "rush_yds")
 #: The NFL logs kept carries as `carries` before the carries prop gave them
@@ -573,7 +577,183 @@ def measure(conn, sport: str = "nfl") -> dict:
     return {"shocks": shocks, "verdict": verdict(cases), "train": sorted(train)}
 
 
-def ideas_section(props, games, board, sport, conn=None):
+# ---- the board section: each team drawn from its own seed, and kept ------------------------
+
+#: EACH TEAM DRAWN FROM ITS OWN SEED, AND KEPT (2026-11-09). The NFL
+#: build's readings spent 11.7 to 13.2 seconds in this section on every
+#: build on 9 November and ran out BUILD_SECONDS, so the teams after the
+#: cutoff had no reading at all. Yet a team's thousand games are drawn
+#: only from its profile (its last LOOKBACK games), the fitted shocks and
+#: the trials, which move when it plays or the box refits, never when a
+#: line does. So each team now draws from its own seed (`team_rng`): one
+#: generator shared in board order made every team's games depend on which
+#: teams the board listed before it, and move whenever one came on or went
+#: off. And each team's legs' values, with the correlation of every pair
+#: among them, are kept (`KeptSims`) under a key of everything they are
+#: drawn from (`entry_key`). A build counts only what the lines change, and
+#: BUILD_SECONDS bounds only the teams it has to draw.
+SEED = 11
+#: A kept team no build has read for this many days is dropped.
+KEEP_DAYS = 10
+#: Bumped when a kept entry's shape changes, so an old file is ignored.
+KEEP_VERSION = 1
+
+
+def team_rng(sport: str, team: str) -> random.Random:
+    """One team's generator: the same whatever else is on the board, on
+    every run and machine (a str seed is hashed by SHA-512, not by the
+    process's hash seed)."""
+    return random.Random(f"playsim|{SEED}|{sport}|{team}")
+
+
+def entry_key(sport: str, team: str, prof: dict, shocks: dict | None, trials: int = TRIALS_BUILD) -> str:
+    """Everything a team's games are drawn from: its profile to the last
+    float, the shocks, the trials and its seed."""
+    blob = json.dumps([KEEP_VERSION, SEED, sport, team, int(trials), shocks or {}, prof], sort_keys=True)
+    return hashlib.sha1(blob.encode()).hexdigest()
+
+
+def _pair(a, b) -> tuple:
+    return (a, b) if a <= b else (b, a)
+
+
+def draw_team(sport: str, team: str, prof: dict, shocks: dict | None, legs, trials: int = TRIALS_BUILD) -> dict:
+    """One team's entry: the (player, market) legs asked for, each one the
+    simulation plays drawn in every trial, and the correlation of every
+    pair of two players' legs among them (`_pair_corr`'s float, which is
+    the same either way round)."""
+    sim = simulate(prof, trials, team_rng(sport, team), shocks)
+    asked = sorted({(p, m) for p, m in legs})
+    keys = [(p, m) for p, m in asked if m in PROP_MARKETS and (sim.get(p) or {}).get(m)]
+    ns = {k: normal_scores(sim[k[0]][k[1]]) for k in keys}
+    norm = {k: math.sqrt(sum(x * x for x in v)) for k, v in ns.items()}
+    dots: dict = {}
+    rho: dict = {}
+    for i, a in enumerate(keys):
+        for b in keys[i + 1:]:
+            if a[0] == b[0]:
+                continue                                      # one man's own legs are not a pair
+            r = _pair_corr(ns, norm, dots, a, b)
+            if r is not None:
+                rho[_pair(a, b)] = r
+    return {"asked": asked, "values": {k: array("d", sim[k[0]][k[1]]) for k in keys}, "rho": rho}
+
+
+class KeptSims:
+    """Every team's entry for one sport, in one file beside the kept
+    game-log reads (engine/logcache's folder: pruned with them, dropped by
+    its `forget`, and its note on the heartbeat with theirs as
+    ``playsim_sims.<sport>``). Read once a build; written only when a team
+    was drawn or dropped, or first read on a new day. Never raises: a file
+    it cannot read or write is a team drawn again."""
+
+    NAME = "playsim_sims"
+
+    def __init__(self, path: str, sport: str, code: str = "", clock=time.time):
+        self.path, self.sport, self.code, self.clock = path, sport, code, clock
+        self.teams: dict = {}
+        self.dirty = False
+        self.note: dict = {"kept": 0, "drawn": 0, "left": 0, "why": "no copy"}
+        t0 = time.monotonic()
+        try:
+            with open(path, "rb") as fh:
+                stored = pickle.load(fh)
+            if not isinstance(stored, dict) or stored.get("v") != KEEP_VERSION:
+                self.note["why"] = "old shape"
+            elif stored.get("code") != code:
+                self.note["why"] = "code changed"
+            else:
+                self.teams = dict(stored.get("teams") or {})
+                self.note["why"] = ""
+        except FileNotFoundError:
+            pass
+        except Exception:                                    # noqa: BLE001
+            self.note["why"] = "unreadable"
+        self.note["load_s"] = round(time.monotonic() - t0, 2)
+
+    @staticmethod
+    def path_for(sport: str) -> str:
+        from . import logcache
+        return os.path.join(logcache.folder(), f"{KeptSims.NAME}-{sport}-kept.pkl")
+
+    @classmethod
+    def for_board(cls, conn, sport: str):
+        """The store for a build on the production history file; None for
+        any other (a test's file, the Lab's), which draws every team."""
+        try:
+            from . import logcache
+            if not logcache.enabled_for(conn):
+                return None
+            return cls(cls.path_for(sport), sport, logcache.code_hash(__file__))
+        except Exception:                                    # noqa: BLE001
+            return None
+
+    def _day(self) -> int:
+        return int(self.clock() // 86400)
+
+    def get(self, team: str, key: str, legs):
+        """The team's entry when it was drawn from the same key and asked
+        for every one of these legs; None otherwise."""
+        e = self.teams.get(team)
+        if not e or e.get("key") != key or not set(legs) <= set(e.get("asked") or ()):
+            return None
+        if e.get("used") != self._day():
+            e["used"] = self._day()
+            self.dirty = True
+        self.note["kept"] += 1
+        return e
+
+    def asked(self, team: str, key: str) -> set:
+        """The legs the team's entry was drawn for, while its key holds: a
+        new leg is drawn with them, so a leg that leaves the board and comes
+        back is still there."""
+        e = self.teams.get(team)
+        return set(e.get("asked") or ()) if e and e.get("key") == key else set()
+
+    def put(self, team: str, key: str, entry: dict) -> None:
+        self.teams[team] = {**entry, "key": key, "used": self._day()}
+        self.dirty = True
+        self.note["drawn"] += 1
+
+    def save(self) -> None:
+        from . import logcache
+        cutoff = self._day() - KEEP_DAYS
+        for team in [t for t, e in self.teams.items() if (e.get("used") or 0) < cutoff]:
+            del self.teams[team]
+            self.dirty = True
+        t0 = time.monotonic()
+        tmp = f"{self.path}.{os.getpid()}.tmp"
+        try:
+            if self.dirty:
+                blob = pickle.dumps({"v": KEEP_VERSION, "code": self.code, "teams": self.teams},
+                                    protocol=pickle.HIGHEST_PROTOCOL)
+                if len(blob) > logcache.MAX_MB * 1e6:
+                    self.note["not_stored"] = f"too big ({len(blob) / 1e6:.0f} MB > {logcache.MAX_MB})"
+                elif logcache.folder_mb(skip=self.path) + len(blob) / 1e6 > logcache.FOLDER_MB:
+                    self.note["not_stored"] = f"folder full ({logcache.FOLDER_MB} MB)"
+                else:
+                    os.makedirs(os.path.dirname(self.path), exist_ok=True)
+                    with open(tmp, "wb") as fh:
+                        fh.write(blob)
+                    os.replace(tmp, self.path)
+                    self.dirty = False
+                    self.note["store_s"] = round(time.monotonic() - t0, 2)
+            self.note["mb"] = round(os.path.getsize(self.path) / 1e6, 1) if os.path.exists(self.path) else 0.0
+        except Exception as exc:                             # noqa: BLE001
+            self.note["not_stored"] = type(exc).__name__
+            try:
+                os.unlink(tmp)
+            except Exception:                                # noqa: BLE001
+                pass
+        logcache._note(self.path, {"name": self.NAME, "sport": self.sport, "at": int(time.time()),
+                                   "teams": len(self.teams), **self.note})
+
+
+def ideas_section(props, games, board, sport, conn=None, keep=None):
+    """The pick page's reading: for each board leg on a team, the chance
+    of his over in the simulated games and the legs that move with his.
+    ``keep`` is the team store (`KeptSims`); None reads the production
+    file's when the connection is the production history file."""
     if sport not in ("nfl", "cfb"):
         return None
     rows = [r for r in (board or {}).get("recommendations") or []
@@ -598,37 +778,44 @@ def ideas_section(props, games, board, sport, conn=None):
         if latest is None:
             return {"players": {}, "games": {}}
         tg = team_games(load_rows(conn, sport, (int(latest) - 1, int(latest)), sorted(by_team)))
+        if keep is None:
+            keep = KeptSims.for_board(conn, sport)
     finally:
         if own:
             conn.close()
-    rng = random.Random(11)
     start = time.monotonic()
     players, pairs_by_game = {}, {}
     for team in sorted(by_team, key=lambda t: -len(by_team[t])):
-        if time.monotonic() - start > BUILD_SECONDS:
-            break
         prof = profile(tg.get(team) or [])
         if not prof:
             continue
-        sim = simulate(prof, TRIALS_BUILD, rng, shocks)
-        legs = [(p, m, r) for (p, m), r in by_team[team].items() if (sim.get(p) or {}).get(m)]
-        ns = {(p, m): normal_scores(sim[p][m]) for p, m, _r in legs}
+        ekey = entry_key(sport, team, prof, shocks)
+        entry = keep.get(team, ekey, by_team[team]) if keep else None
+        if entry is None:
+            if time.monotonic() - start > BUILD_SECONDS:
+                if keep:
+                    keep.note["left"] += 1                    # drawn by a later build; kept teams still read
+                continue
+            entry = draw_team(sport, team, prof, shocks,
+                              set(by_team[team]) | (keep.asked(team, ekey) if keep else set()))
+            if keep:
+                keep.put(team, ekey, entry)
+        values, rho_of = entry["values"], entry["rho"]
+        legs = [(p, m, r) for (p, m), r in by_team[team].items() if (p, m) in values]
         # EACH LEG'S NUMBERS ONCE, EACH PAIR'S ONCE (2026-11-09): every leg
         # was compared with every other twice, its over flags and its
         # scores' length worked out again for each partner. The same sums
         # over the same lists, so every number is the one it was.
-        overs = {(p, m): [x > r["line"] for x in sim[p][m]] for p, m, r in legs}
+        overs = {(p, m): [x > r["line"] for x in values[(p, m)]] for p, m, r in legs}
         n_over = {k: sum(v) for k, v in overs.items()}
-        norm = {k: math.sqrt(sum(x * x for x in v)) for k, v in ns.items()}
-        dots: dict = {}
         boths: dict = {}
         for p, m, r in legs:
-            vals = sim[p][m]
+            vals = values[(p, m)]
             links = []
             for q, n, s in legs:
                 if q == p:
                     continue
-                rho = _pair_corr(ns, norm, dots, (p, m), (q, n))
+                rho = rho_of.get(_pair((p, m), (q, n)))
                 if rho is None:
                     continue
                 o_a, o_b = overs[(p, m)], overs[(q, n)]
@@ -651,6 +838,8 @@ def ideas_section(props, games, board, sport, conn=None):
                 pairs_by_game.setdefault(key, {})[pair] = {
                     "a": f"{pair[0][0]} {pair[0][1]}", "b": f"{pair[1][0]} {pair[1][1]}",
                     "rho": link["rho"], "pricer_rho": link["pricer_rho"]}
+    if keep:
+        keep.save()
     games_out = {k: sorted(v.values(), key=lambda x: -abs(x["rho"] - x["pricer_rho"]))[:6] for k, v in pairs_by_game.items()}
     return {"players": players, "games": games_out, "verdict": saved.get("verdict") or {}}
 

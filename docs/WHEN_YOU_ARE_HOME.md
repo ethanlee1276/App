@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NI. The play simulator keeps each team's games between builds** (step
+485; 9 November). Nothing to run. The NFL build's readings spent 11.7 to
+13.2 seconds in the play simulator on every build and ran out its
+ten-second budget, so the teams after the cutoff had no simulated reading on
+the pick page. A team's thousand simulated games come only from its last
+eight games and the fitted shocks, which move when it plays or the box
+refits, never when a line moves. Each team now draws from its own seed (its
+games no longer change when another team comes onto or off the board), and
+its games are kept in `data/feedstate/logcache/playsim_sims-nfl-kept.pkl`
+(and `-cfb-`) beside the kept game-log reads, a few megabytes; a build only
+counts the lines against them, and the budget only bounds the teams it has
+to draw. The pick page's simulated numbers move once, at the first build
+after this deploy, because of the new seeds. The heartbeat's `logcache`
+shows `playsim_sims.nfl` and `playsim_sims.cfb`: the teams kept, drawn and
+left for the next build.
+
 **NH. The UFC build reads only the card's two weeks of line history**
 (step 484; 9 November). Nothing to run. With its stages on the heartbeat
 (NC), the UFC build said where its time went: `line moves`, 8.0 of its 9
