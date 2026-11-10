@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NR. The NFL build's last two unexplained stages name their parts** (step
+494; 10 November). Nothing to run. Two of the NFL build's stages were still
+one number each on the heartbeat: the fantasy week (9 seconds at 00:07 on
+10 November, 16 at 00:31) and the referees, game reports and pick of the
+day (14 and 23). Each now lists its parts there: the season means, the
+team defences, the touchdown chances, the week's file and its publishing;
+the referees, the game reports and the pick of the day. The next cut goes
+at whichever part is slow. The season means are not it: both seasons'
+averages took a tenth to a third of a second each on a copy of the logs
+here.
+
 **NQ. A push reaches the site within minutes, even at midnight** (step 493;
 10 November). Nothing to run. My two pushes just after midnight (NO and NP)
 reached the board builds at once, since each build starts fresh on the new

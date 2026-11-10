@@ -69,6 +69,9 @@ NFL_STAGE_PARTS = {
     "build_slate": ["schedule", "team depth", "slate"],
     "injuries + resets": ["live injury board", "weekly report + holds", "sample resets"],
     "first touchdown board": ["board", "report + faces"],
+    # 9 and 16 seconds at 00:07 and 00:31 on 10 November; 14 and 23.
+    "fantasy week": ["season means", "team defenses", "touchdown chances", "the week's file", "publish"],
+    "referees + game reports + pick of the day": ["referees", "game reports", "pick of the day"],
 }
 
 

@@ -1221,6 +1221,9 @@ def main() -> None:
     # to their own paid file beside this board. The league desks, the
     # Fantasy page and Ask read it; it never costs the board.
     try:
+        # ITS PARTS (2026-11-10): 9 seconds at 00:07 on 10 November, 16 at
+        # 00:31, none of them named.
+        _fw_t = _now()
         from engine import fantasyweek as _fw
         from engine.pipeline import td_chances as _td_chances
         # His season so far, for the parts the board has no line for him in
@@ -1238,6 +1241,7 @@ def main() -> None:
                 _fw_conn.close()
         except Exception:                                     # noqa: BLE001
             _fw_means = {}
+        _fw_t = _lap("fantasy week", "season means", _fw_t)
         # THE TEAM DEFENSES (engine/dstproj, 2026-10-27): every league
         # starts one, and the desks valued every one at zero.
         _fw_defs: list = []
@@ -1252,13 +1256,18 @@ def main() -> None:
                 _dst_conn.close()
         except Exception as _dexc:                         # noqa: BLE001
             print(f"  ⚠️  team defenses skipped: {_dexc}")
-        _fw_doc = _fw.from_board(result, _td_chances(slate, nfl_usage),
+        _fw_t = _lap("fantasy week", "team defenses", _fw_t)
+        _fw_tds = _td_chances(slate, nfl_usage)
+        _fw_t = _lap("fantasy week", "touchdown chances", _fw_t)
+        _fw_doc = _fw.from_board(result, _fw_tds,
                                  ideas=_ideas.LAST.get("nfl"), season=args.season,
                                  week=args.week, slate=slate, season_means=_fw_means,
                                  defenses=_fw_defs)
+        _fw_t = _lap("fantasy week", "the week's file", _fw_t)
         if args.out:
             _fw.publish(_fw_doc, args.out)
         print("  " + _fw.summary_line(_fw_doc))
+        _lap("fantasy week", "publish", _fw_t)
     except Exception as _fexc:                                # noqa: BLE001
         print(f"  ⚠️  fantasy week skipped: {_fexc}")
     _mem("fantasy week", args.memtrace)
@@ -1713,20 +1722,25 @@ def main() -> None:
         # the report is. Obv keep out the prop picks"). Last of the game
         # hooks, because its market section reads the crowd, the opener and
         # the sim; the defence-vs-position ratings are the slate's own, the
-        # ones every prop was priced against.
+        # ones every prop was priced against. ITS PARTS (2026-11-10): 14
+        # seconds at 00:07 on 10 November, 23 at 00:31, none of them named.
+        _lap_t = _now()
         from engine import gamereport as _greport
         # THE REFEREE BEFORE KICKOFF (engine/nflrefs): stamped on each game
         # once a source names him, for the report's "Before kickoff".
         from engine import nflrefs as _nflrefs
         print(f"  {_nflrefs.attach(result, args.season, args.week)}")
+        _lap_t = _lap("referees + game reports + pick of the day", "referees", _lap_t)
         _allowed = {t: getattr(getattr(tm, "defense", None), "ratings", None) or {}
                     for t, tm in (getattr(slate, "teams", None) or {}).items()}
         print(f"  {_greport.attach(result, allowed=_allowed, season=args.season, out=args.out)}")
+        _lap_t = _lap("referees + game reports + pick of the day", "game reports", _lap_t)
         _pn = _potd.attach(result, "nfl")
         if _pn:
             print(_pn)
         if _tn:
             print(f"Open-bet tracker: {_tn}")
+        _lap("referees + game reports + pick of the day", "pick of the day", _lap_t)
         _mem("referees + game reports + pick of the day", args.memtrace)
         # THE WRITE STAGE'S PARTS (2026-11-09): 35 seconds at 00:51 on 9
         # November, 19 at 23:21 the night before.
