@@ -192,6 +192,14 @@ def test_a_table_that_would_not_read_back_equal_is_never_kept():
         assert G.charting_tables(2026, 5, keep=True) == odd
         assert G.charting_tables(2026, 5, keep=True) == odd and f.worked["charting"] == 2
         assert not os.path.exists(os.path.join(os.environ["QB_MODELS_DIR"], "scan_charting_nfl_2026.json"))
+    with _Files() as f:
+        def _fails(*a, **k):
+            f.worked["charting"] += 1
+            raise OSError("the play-by-play would not read")
+        F.season_tables = _fails
+        assert G.charting_tables(2026, 5, keep=True) == {} and G.charting_tables(2026, 5, keep=True) == {}
+        assert f.worked["charting"] == 2, "a failed read is read again, never kept"
+        assert not os.path.exists(os.path.join(os.environ["QB_MODELS_DIR"], "scan_charting_nfl_2026.json"))
     assert G._unpack_tables(json.loads(json.dumps(G._pack_tables(
         {"qbs": {("PHI", "J.Hurts"): {"attempts": 10, "iw_rate": 0.1}}, "partial": None})))) == \
         {"qbs": {("PHI", "J.Hurts"): {"attempts": 10, "iw_rate": 0.1}}, "partial": None}

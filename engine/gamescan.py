@@ -1802,8 +1802,9 @@ def scheme_tables(season: int) -> dict:
 # minute to spare): a file due a refresh is read the plain way, so the read
 # that refreshes it still happens, and nothing is kept from it. A table is
 # kept only when its files did not change while it was worked out and its
-# copy reads back equal to it. Only a build against the production history
-# keeps (`attach_nfl`); everywhere else, as before.
+# copy reads back equal to it; a failed read ({}) is never kept. Only a
+# build against the production history keeps (`attach_nfl`); everywhere
+# else, as before.
 _KEEP_SLACK_S = 60
 
 
@@ -1861,7 +1862,9 @@ def _kept_tables(kind: str, season: int, week, files, compute, code) -> dict:
         pass
     out = compute()
     try:
-        if [_fresh_stamp(p, ttl) for p, ttl in files] != stamps or not isinstance(out, dict):
+        # {} is the plain read's failure (a table with no plays still has its
+        # keys), so it is never kept: the next build reads again.
+        if [_fresh_stamp(p, ttl) for p, ttl in files] != stamps or not isinstance(out, dict) or not out:
             return out
         packed = _pack_tables(out)
         text = json.dumps({"key": key, "tables": packed}, separators=(",", ":"))
@@ -1876,22 +1879,36 @@ def _kept_tables(kind: str, season: int, week, files, compute, code) -> dict:
     return out
 
 
+def _charting_plain(season: int, week=None) -> dict:
+    """FTN's season tables as read; {} when there is no file or the pull fails."""
+    try:
+        from .sources import ftn as F
+        return F.season_tables(season, before_week=week)
+    except Exception:                                        # noqa: BLE001
+        return {}
+
+
 def charting_tables(season: int, week=None, keep: bool = False) -> dict:
     """This season's FTN charting to date (engine/sources/ftn.season_tables),
     the shares the scan shows and the reads quote — {} when nflverse has
     no file yet or the pull fails; the scan never fails for it. ``keep``
     (a production build) reuses the copy kept from the same files."""
+    if not keep:
+        return _charting_plain(season, week)
+    from .sources import fetch as FE
+    from .sources import ftn as F
+    from .sources import nflpbp
+    files = [(FE.CACHE_DIR / f"ftn_charting_{int(season)}.csv", F.TTL),
+             (FE.CACHE_DIR / f"pbp_{int(season)}.csv", nflpbp.PBP_TTL)]
+    return _kept_tables("charting", season, week, files, lambda: _charting_plain(season, week),
+                        (F.__file__, nflpbp.__file__, FE.__file__, __file__))
+
+
+def _tracking_plain(season: int, week=None) -> dict:
+    """Next Gen Stats' season tables as read; {} when the pull fails."""
     try:
-        from .sources import ftn as F
-        compute = lambda: F.season_tables(season, before_week=week)  # noqa: E731
-        if not keep:
-            return compute()
-        from .sources import fetch as FE
-        from .sources import nflpbp
-        files = [(FE.CACHE_DIR / f"ftn_charting_{int(season)}.csv", F.TTL),
-                 (FE.CACHE_DIR / f"pbp_{int(season)}.csv", nflpbp.PBP_TTL)]
-        return _kept_tables("charting", season, week, files, compute,
-                            (F.__file__, nflpbp.__file__, FE.__file__, __file__))
+        from .sources import ngs as NGS
+        return NGS.season_tables(season, before_week=week)
     except Exception:                                        # noqa: BLE001
         return {}
 
@@ -1900,17 +1917,13 @@ def tracking_tables(season: int, week=None, keep: bool = False) -> dict:
     """This season's Next Gen Stats to date with ranks (engine/sources/ngs.
     season_tables) — {} when the pull fails; never a reason a scan fails.
     ``keep`` as `charting_tables`."""
-    try:
-        from .sources import ngs as NGS
-        compute = lambda: NGS.season_tables(season, before_week=week)  # noqa: E731
-        if not keep:
-            return compute()
-        from .sources import fetch as FE
-        files = [(FE.CACHE_DIR / f"ngs_{kind}.csv", NGS.TTL) for kind in NGS.KINDS]
-        return _kept_tables("tracking", season, week, files, compute,
-                            (NGS.__file__, FE.__file__, __file__))
-    except Exception:                                        # noqa: BLE001
-        return {}
+    if not keep:
+        return _tracking_plain(season, week)
+    from .sources import fetch as FE
+    from .sources import ngs as NGS
+    files = [(FE.CACHE_DIR / f"ngs_{kind}.csv", NGS.TTL) for kind in NGS.KINDS]
+    return _kept_tables("tracking", season, week, files, lambda: _tracking_plain(season, week),
+                        (NGS.__file__, FE.__file__, __file__))
 
 
 def implied_points(g) -> tuple[dict, dict]:
