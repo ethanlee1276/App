@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NX. The game reports' player form is kept until the logs change** (step
+500; 10 November). Nothing to run. With their parts named (NV), the NFL game
+reports at 02:27 on 10 November took 4.4 seconds, 3.5 of them the player
+form: the last games, season totals and red-zone work of every player the
+reports name, read from the whole log table every build. It is kept between
+builds now, like the fantasy week's season means (NT), and read again only
+when the logs change, the players named change, or (for the NFL) the
+schedule file the home and away marks come from changes. A read that fails
+is never kept. On the heartbeat it is `report_form.nfl` (and `.cfb`) under
+the kept reads, and the game reports' `player form` part should drop to
+about a tenth of a second on most builds.
+
 **NW. The NFL pricing stage's preparation names its parts** (step 499; 10
 November). Nothing to run. At 02:12 on 10 November the NFL build's pricing
 stage (`run_slate`) took 23 seconds and its named parts added up to 12.4: the

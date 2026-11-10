@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-10, after the NFL pricing stage's preparation started naming its
+Last updated 2026-11-10, after the game reports' player form started being kept (step NX:
+nothing to run), after the NFL pricing stage's preparation started naming its
 parts (step NW: nothing to run), after the game reports started naming their parts (step NV:
 nothing to run), after Tuesday's deep refit run was written up (step LX: nothing
 to run), after a college box score stopped being written again every five minutes (step

@@ -69,13 +69,59 @@ def player_form(conn, season: int, players: dict, sport: str = "nfl", schedule=N
     "rz_tgt", "i10_tgt", "team_rz_car", "team_rz_tgt", "team"}}}.
 
     A name two players share is told apart by the team on the board: in
-    a week both played, the row for the board's team is kept."""
+    a week both played, the row for the board's team is kept.
+
+    KEPT UNTIL ITS ROWS CHANGE (engine/logcache, 2026-11-10): 3.5 of the NFL
+    build's 4.4 seconds of game reports at 02:27 on 10 November, every build,
+    for numbers that change only when a game is ingested. Keyed on the two
+    seasons' logs, the players named and, for the NFL, the schedule file the
+    venues come from. A read that fails is never kept: the answer is then
+    what it always was (`_player_form`, which answers {} on a failed read)."""
     if conn is None or not players:
         return {}
     try:
         season = int(season)
     except (TypeError, ValueError):
         return {}
+    try:
+        from . import logcache
+        extra = {"players": _players_key(players),
+                 "schedule": _schedule_stamp(schedule) if sport == "nfl" else None}
+        return logcache.memo(conn, "report_form", sport, (season - 1, season),
+                             lambda: _player_form(conn, season, players, sport, schedule, strict=True),
+                             code=_FORM_CODE, extra=extra)
+    except Exception:                                        # noqa: BLE001
+        return _player_form(conn, season, players, sport, schedule)
+
+
+#: The files the kept player form is computed by: this one, and the NFL red
+#: zone's name key (engine/fantasy._short_key).
+_FORM_CODE = (__file__, str(Path(__file__).with_name("fantasy.py")))
+
+
+def _players_key(players: dict) -> str:
+    import hashlib
+    pairs = sorted((str(k), str(v or "")) for k, v in (players or {}).items())
+    return hashlib.sha1(json.dumps(pairs).encode("utf-8")).hexdigest()
+
+
+def _schedule_stamp(path=None):
+    """The schedule file the NFL's venues are read from, as `_schedule_rows`
+    names it: [path, modified, bytes], or None when there is none."""
+    try:
+        from .sources.fetch import CACHE_DIR
+        p = Path(path) if path else Path(CACHE_DIR) / "games.csv"
+        st = p.stat()
+        return [str(p), st.st_mtime, st.st_size]
+    except Exception:                                        # noqa: BLE001
+        return None
+
+
+def _player_form(conn, season: int, players: dict, sport: str = "nfl", schedule=None,
+                 strict: bool = False) -> dict:
+    """`player_form`, read from the table. ``strict``: a failed read raises
+    instead of answering {} (or a form without its red zone), so the kept
+    read never keeps a failure."""
     marks = ",".join("?" * len(FORM_MARKETS))
     games: dict = {}
     try:
@@ -103,6 +149,8 @@ def player_form(conn, season: int, players: dict, sport: str = "nfl", schedule=N
                         continue
                     one["s"][k] = float(val)
     except Exception:                                        # noqa: BLE001
+        if strict:
+            raise
         return {}
     out: dict = {}
     for name, by_week in games.items():
@@ -125,7 +173,7 @@ def player_form(conn, season: int, players: dict, sport: str = "nfl", schedule=N
             rec["last_season"] = _totals(prior)
         rec["teams"] = sorted({g["team"] for g in cur if g.get("team")})
         out[name] = rec
-    _red_zone(conn, season, players, out, sport)
+    _red_zone(conn, season, players, out, sport, strict=strict)
     return out
 
 
@@ -137,7 +185,7 @@ def _totals(rows) -> dict:
     return {"games": len(rows), "s": s}
 
 
-def _red_zone(conn, season: int, players: dict, out: dict, sport: str) -> None:
+def _red_zone(conn, season: int, players: dict, out: dict, sport: str, strict: bool = False) -> None:
     """His red-zone counts this season and his team's, into ``out``: the
     NFL's under play-by-play's short names, college's under his own."""
     if sport == "nfl":
@@ -162,6 +210,8 @@ def _red_zone(conn, season: int, players: dict, out: dict, sport: str) -> None:
             tt = team_tot.setdefault(team, {})
             tt[mk] = tt.get(mk, 0.0) + float(tot)
     except Exception:                                        # noqa: BLE001
+        if strict:
+            raise
         return
     for name, team in players.items():
         rec = out.get(name)
