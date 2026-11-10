@@ -32,12 +32,17 @@ class Sampler:
         s.seconds()   # {"_two_leg_record": 10.4, "performance": 4.0, ...}
     """
 
-    def __init__(self, root, interval: float = INTERVAL_S, clock=time.monotonic, depth: int = 1):
+    def __init__(self, root, interval: float = INTERVAL_S, clock=time.monotonic, depth: int = 1,
+                 qualify: bool = False):
         self.root = root
         self.interval = float(interval)
         #: How many calls below ``root`` a sample names: 1, the direct callee
         #: (``"fetch"``); 2, that and its own callee (``"fetch>loads"``).
         self.depth = max(1, int(depth))
+        #: Each name carries its module (``"selectionfit.refresh"``), for a
+        #: call whose sections share a function name: the settle pass's
+        #: learners are six modules' ``refresh``.
+        self.qualify = bool(qualify)
         self.clock = clock
         self.counts: dict = {}
         self.samples = 0
@@ -68,7 +73,7 @@ class Sampler:
         try:
             while not self._stop.wait(self.interval):
                 frame = sys._current_frames().get(self._tid)
-                name = self.callee(frame, self.root, self.depth)
+                name = self.callee(frame, self.root, self.depth, self.qualify)
                 if name is not None:
                     self.counts[name] = self.counts.get(name, 0) + 1
                     self.samples += 1
@@ -79,17 +84,18 @@ class Sampler:
             return
 
     @staticmethod
-    def callee(frame, root, depth: int = 1):
+    def callee(frame, root, depth: int = 1, qualify: bool = False):
         """The direct callee of the innermost frame running ``root`` on this
         stack (``(self)`` when ``root`` is the frame running), or None when
         ``root`` is not on it; with ``depth`` above 1, that callee and the
-        calls under it, outermost first, joined by ``>``."""
+        calls under it, outermost first, joined by ``>``; with ``qualify``,
+        each named with the last part of its module's name."""
         below: list = []
         while frame is not None:
             if frame.f_code is root:
                 if not below:
                     return "(self)"
-                return ">".join(f.f_code.co_name for f in reversed(below[-depth:]))
+                return ">".join(_named(f, qualify) for f in reversed(below[-depth:]))
             below.append(frame)
             frame = frame.f_back
         return None
@@ -107,3 +113,12 @@ class Sampler:
         if rest:
             out["(rest)"] = round(rest * scale, 1)
         return out
+
+
+def _named(frame, qualify: bool) -> str:
+    """A frame's function name, with its module's last name in front when
+    ``qualify`` (``"journalfit.refresh"``)."""
+    if not qualify:
+        return frame.f_code.co_name
+    module = str(frame.f_globals.get("__name__") or "?").rsplit(".", 1)[-1]
+    return f"{module}.{frame.f_code.co_name}"

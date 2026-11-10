@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OF. The settle pass says which learner and which half of the parlay record
+took its time** (step 508; 10 November). Nothing to run. The first settle pass
+after the 04:35 restart ran 716 seconds: 528.6 of them in the hourly learners
+(loss patterns, the journal fits, the selection haircut, correlations, game
+lines, hypotheses) and 144.9 in the record export, 63.7 of those in the
+two-leg parlay section. On a one-CPU box those minutes are taken from the
+board builds: the NFL build ran 104 to 136 seconds beside that pass, 46 when
+the box is quiet. Nothing said which learner, or which half of the parlay
+section. The heartbeat now does, under `chores.settle.phases`: `learn_parts`
+gives each learner's seconds by module (`selectionfit.refresh`,
+`journalfit.refresh` and so on), and `export_two_leg` gives the parlay
+section's two halves (`report_s`, `backtest_s`), whether the backtest was
+served kept or worked out, and how many day groups it paired again. The next
+cut goes to whichever is biggest.
+
 **OE. The NFL usage maps and the join audit are kept between builds** (step
 507; 10 November). Nothing to run. Every NFL build read its usage maps (red
 zone, snaps, volume, xFP, depth, pocket, each player's team) and the join

@@ -1249,11 +1249,37 @@ def _export_record(lconn, phases: dict) -> None:
     if sampler is None:
         ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
         return
+    ledger.TWO_LEG_LAST.clear()
     with sampler:
         ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
     phases["export_parts"] = sampler.seconds()
     if sampler.error:
         phases["export_parts_error"] = sampler.error
+    if ledger.TWO_LEG_LAST:
+        phases["export_two_leg"] = dict(ledger.TWO_LEG_LAST)
+
+
+def _learn_sampled(learn, phases: dict) -> None:
+    """``learn()``, the settle pass's hourly learners, with where its time
+    went on the phases as ``learn_parts``: each learner's seconds, sampled
+    (engine/stacksample) and named with its module, since most of them are
+    a ``refresh``. The first pass after the 04:35 restart on 10 November
+    learned for 528.6 seconds, a pass in the hour on a one-CPU box beside
+    the board builds, with nothing to say which learner; a sampler that
+    fails costs only the parts, never the learning."""
+    try:
+        from .stacksample import Sampler
+        sampler = Sampler(learn.__code__, qualify=True)
+    except Exception:                                        # noqa: BLE001
+        sampler = None
+    if sampler is None:
+        learn()
+        return
+    with sampler:
+        learn()
+    phases["learn_parts"] = sampler.seconds()
+    if sampler.error:
+        phases["learn_parts_error"] = sampler.error
 
 
 def settle_open(log=print, state_path: Path | None = None,
@@ -1499,7 +1525,7 @@ def settle_open(log=print, state_path: Path | None = None,
             # an earlier pass made and has not yet learned from is learned
             # from here, or it would wait for the next open pick.
             if _learn_due(state, now):
-                learn()
+                _learn_sampled(learn, phases)
                 phases["learned"] = True
                 lap("learn")
             if ledger.record_dirty():
@@ -1681,7 +1707,7 @@ def settle_open(log=print, state_path: Path | None = None,
         if settled or fixed:
             state["learn_owed"] = True
         if _learn_due(state, now):
-            learn()
+            _learn_sampled(learn, phases)
             phases["learned"] = True
         lap("learn")
         # `record_dirty`: a build journaled and left the export to this lane.
