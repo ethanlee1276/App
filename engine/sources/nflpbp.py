@@ -111,6 +111,10 @@ def _pbp_urls(season: int) -> list[str]:
             f"{base}/play_by_play_{season}.csv"]
 
 
+#: How long a downloaded play-by-play file is served before it is fetched again.
+PBP_TTL = 86400
+
+
 def load_pbp_rows(season: int, columns=None):
     """Yield minimal per-play dicts for a season (streamed from the cached
     CSV; the 370-column rows never materialize as dicts). ``columns``
@@ -120,7 +124,7 @@ def load_pbp_rows(season: int, columns=None):
     text = None
     for url in _pbp_urls(season):
         try:
-            text = fetch_text(url, f"pbp_{season}.csv", ttl=86400, timeout=300)
+            text = fetch_text(url, f"pbp_{season}.csv", ttl=PBP_TTL, timeout=300)
             break
         except DataUnavailable as exc:
             last = exc

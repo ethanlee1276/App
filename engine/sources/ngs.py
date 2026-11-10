@@ -30,6 +30,8 @@ from .fetch import fetch_csv, DataUnavailable                 # noqa: F401
 
 BASE = "https://github.com/nflverse/nflverse-data/releases/download/nextgen_stats"
 KINDS = ("receiving", "rushing", "passing")
+#: How long a downloaded tracking file is served before it is fetched again.
+TTL = 6 * 3600
 #: The columns worth a look, per file — the tracking numbers, not the box score.
 METRICS = {
     "receiving": ("avg_separation", "avg_cushion", "avg_intended_air_yards",
@@ -48,7 +50,7 @@ def _f(v):
         return None
 
 
-def fetch(kind: str, ttl: int = 6 * 3600) -> list[dict]:
+def fetch(kind: str, ttl: int = TTL) -> list[dict]:
     """Every season's weekly rows for one file (regular season, week 1+)."""
     if kind not in KINDS:
         raise ValueError(f"unknown NGS file {kind!r}")

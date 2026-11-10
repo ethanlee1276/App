@@ -1791,23 +1791,124 @@ def scheme_tables(season: int) -> dict:
     return {"season": None, "defense": {}, "receivers": {}}
 
 
-def charting_tables(season: int, week=None) -> dict:
+# THE SCAN'S FILE TABLES, KEPT (2026-11-10). The charting table joins FTN's
+# file to the season's play-by-play, a 47 MB file read whole to find 23,647
+# plays (0.74 of its 0.93 seconds here; with the tracking table, 2.6 seconds
+# of the NFL build at 03:18 on 10 November), and both are worked out again
+# every build from files the fetch layer refreshes a few times a day. Each
+# table is kept beside the models, under its files' sizes and change times,
+# the week and the code that makes it. It is used only while every file is
+# one the fetch layer would serve as it stands (younger than its own TTL, a
+# minute to spare): a file due a refresh is read the plain way, so the read
+# that refreshes it still happens, and nothing is kept from it. A table is
+# kept only when its files did not change while it was worked out and its
+# copy reads back equal to it. Only a build against the production history
+# keeps (`attach_nfl`); everywhere else, as before.
+_KEEP_SLACK_S = 60
+
+
+def _fresh_stamp(path, ttl: float):
+    """``[size, mtime_ns]`` of a cached feed file younger than its TTL (less
+    `_KEEP_SLACK_S`); None for one missing or due a refresh."""
+    import os
+    import time
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    if time.time() - st.st_mtime >= ttl - _KEEP_SLACK_S:
+        return None
+    return [st.st_size, st.st_mtime_ns]
+
+
+def _pack_tables(tables: dict) -> dict:
+    out = {}
+    for k, v in tables.items():
+        if isinstance(v, dict) and any(isinstance(kk, tuple) for kk in v):
+            out[k] = {"__pairs__": [[list(kk), vv] for kk, vv in v.items()]}
+        else:
+            out[k] = v
+    return out
+
+
+def _unpack_tables(doc: dict) -> dict:
+    out = {}
+    for k, v in doc.items():
+        if isinstance(v, dict) and set(v) == {"__pairs__"}:
+            out[k] = {tuple(kk): vv for kk, vv in v["__pairs__"]}
+        else:
+            out[k] = v
+    return out
+
+
+def _kept_tables(kind: str, season: int, week, files, compute, code) -> dict:
+    """`compute()`, or the copy kept from the same files, week and code."""
+    import json
+    import os
+    from . import modelstate, racecache
+    stamps = [_fresh_stamp(p, ttl) for p, ttl in files]
+    if any(s is None for s in stamps):
+        return compute()
+    key = racecache.key("scan_table", kind, int(season), week, stamps,
+                        [racecache.source_of(f) for f in code])
+    path = modelstate.path(f"scan_{kind}_nfl_{int(season)}.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+        if isinstance(doc, dict) and doc.get("key") == key and isinstance(doc.get("tables"), dict):
+            return _unpack_tables(doc["tables"])
+    except (OSError, ValueError):
+        pass
+    out = compute()
+    try:
+        if [_fresh_stamp(p, ttl) for p, ttl in files] != stamps or not isinstance(out, dict):
+            return out
+        packed = _pack_tables(out)
+        text = json.dumps({"key": key, "tables": packed}, separators=(",", ":"))
+        if _unpack_tables(json.loads(text)["tables"]) != out:
+            return out
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path + ".tmp", "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(path + ".tmp", path)
+    except (OSError, TypeError, ValueError):
+        pass
+    return out
+
+
+def charting_tables(season: int, week=None, keep: bool = False) -> dict:
     """This season's FTN charting to date (engine/sources/ftn.season_tables),
     the shares the scan shows and the reads quote — {} when nflverse has
-    no file yet or the pull fails; the scan never fails for it."""
+    no file yet or the pull fails; the scan never fails for it. ``keep``
+    (a production build) reuses the copy kept from the same files."""
     try:
         from .sources import ftn as F
-        return F.season_tables(season, before_week=week)
+        compute = lambda: F.season_tables(season, before_week=week)  # noqa: E731
+        if not keep:
+            return compute()
+        from .sources import fetch as FE
+        from .sources import nflpbp
+        files = [(FE.CACHE_DIR / f"ftn_charting_{int(season)}.csv", F.TTL),
+                 (FE.CACHE_DIR / f"pbp_{int(season)}.csv", nflpbp.PBP_TTL)]
+        return _kept_tables("charting", season, week, files, compute,
+                            (F.__file__, nflpbp.__file__, FE.__file__, __file__))
     except Exception:                                        # noqa: BLE001
         return {}
 
 
-def tracking_tables(season: int, week=None) -> dict:
+def tracking_tables(season: int, week=None, keep: bool = False) -> dict:
     """This season's Next Gen Stats to date with ranks (engine/sources/ngs.
-    season_tables) — {} when the pull fails; never a reason a scan fails."""
+    season_tables) — {} when the pull fails; never a reason a scan fails.
+    ``keep`` as `charting_tables`."""
     try:
         from .sources import ngs as NGS
-        return NGS.season_tables(season, before_week=week)
+        compute = lambda: NGS.season_tables(season, before_week=week)  # noqa: E731
+        if not keep:
+            return compute()
+        from .sources import fetch as FE
+        files = [(FE.CACHE_DIR / f"ngs_{kind}.csv", NGS.TTL) for kind in NGS.KINDS]
+        return _kept_tables("tracking", season, week, files, compute,
+                            (NGS.__file__, FE.__file__, __file__))
     except Exception:                                        # noqa: BLE001
         return {}
 
@@ -2066,7 +2167,12 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
     sch = scheme_tables(season)
     splits = {tuple(k.split("|", 1)): v for k, v in (sch.get("receivers") or {}).items()}
     _t = _clock.lap("matchup scan", "scheme", _t)
-    charting, tracking = charting_tables(season, week), tracking_tables(season, week)
+    try:
+        from . import logcache as _lc
+        _keep = _lc.enabled_for(conn)
+    except Exception:                                        # noqa: BLE001
+        _keep = False
+    charting, tracking = charting_tables(season, week, keep=_keep), tracking_tables(season, week, keep=_keep)
     _t = _clock.lap("matchup scan", "charting + tracking", _t)
 
     def _safe(fn, *a):

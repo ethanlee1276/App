@@ -41,6 +41,8 @@ from .fetch import fetch_csv
 
 BASE = "https://github.com/nflverse/nflverse-data/releases/download/ftn_charting"
 FIRST_SEASON = 2022
+#: How long a downloaded charting file is served before it is fetched again.
+TTL = 6 * 3600
 REG_WEEKS = 18
 #: Five or more pass rushers is the blitz every charting service counts.
 BLITZ_RUSHERS = 5
@@ -63,7 +65,7 @@ def _n(v, default=None):
         return default
 
 
-def fetch(season: int, ttl: int = 6 * 3600) -> list[dict]:
+def fetch(season: int, ttl: int = TTL) -> list[dict]:
     """A season's charted plays, regular season only, [] when nflverse has
     no file for it (before FIRST_SEASON, or a season not yet played)."""
     if int(season) < FIRST_SEASON:
@@ -75,7 +77,7 @@ def fetch(season: int, ttl: int = 6 * 3600) -> list[dict]:
     return [r for r in rows if 0 < (_n(r.get("week"), 0) or 0) <= REG_WEEKS]
 
 
-def joined(season: int, ttl: int = 6 * 3600, charted=None, plays=None) -> list[dict]:
+def joined(season: int, ttl: int = TTL, charted=None, plays=None) -> list[dict]:
     """The charted plays with the play-by-play's who-and-which-side fields
     on each: one dict per play that both files carry. ``charted`` and
     ``plays`` are for tests; the season's files otherwise."""

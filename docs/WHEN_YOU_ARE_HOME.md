@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OB. The matchup scan's charting and tracking tables are kept until their files
+change** (step 504; 10 November). Nothing to run. The scan's charting table
+joins FTN's charting file to the season's play-by-play, a 47 MB file read whole
+to find 23,647 plays. With the Next Gen Stats tracking table it took 2.6
+seconds of the NFL build at 03:18 on 10 November, and both were worked out
+again every build from files the fetch layer refreshes a few times a day. Both
+tables are kept now beside the models (`scan_charting_nfl_2026.json`,
+`scan_tracking_nfl_2026.json`), under their files' sizes and change times, the
+week and the code that makes them. A kept table is used only while every one of
+its files is one the fetch layer would serve as it stands; a file due its
+refresh is read the plain way, so the refresh still happens, and nothing is
+kept from that read. Measured here on the same files: 0.91 and 0.22 seconds,
+then 0.00 on the next build, the same tables. Only builds on the production
+history keep. On the heartbeat it is the matchup scan's `charting + tracking`
+part.
+
 **OA. The matchup scan's usage comes from the slate's two seasons** (step 503;
 10 November). Nothing to run. The matchup scan inside the NFL pricing stage
 parsed this season's and last season's weekly stat files a third time for its
