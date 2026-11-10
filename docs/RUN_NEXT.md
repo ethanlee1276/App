@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-10, after Tuesday's deep refit run was written up (step LX: nothing
+Last updated 2026-11-10, after the game reports started naming their parts (step NV:
+nothing to run), after Tuesday's deep refit run was written up (step LX: nothing
 to run), after a college box score stopped being written again every five minutes (step
 NU: nothing to run), after the fantasy week's season means started being kept (step NT:
 nothing to run), after the attention journal started running beside

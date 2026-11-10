@@ -286,6 +286,38 @@ def test_the_matchup_scan_names_each_table_it_reads_and_reads_the_same():
     assert [p["player"] for p in timed["scan_reads"]["ATL@GB"]["players"]] == ["Christian Watson"]
 
 
+GAME_REPORT_PARTS = ["schedule + staff", "player form", "grades", "ideas + kicking fit",
+                     "meetings + kicking air", "what changed", "reports"]
+
+
+def _report_once():
+    from engine import db
+    from engine import gamereport as R
+    board = {"date": "2026-10-24", "sport": "cfb",
+             "teams": {"IU": {"name": "Indiana Hoosiers"}, "MIA": {"name": "Miami Hurricanes"}},
+             "games": [{"home": "IU", "away": "MIA", "date": "2026-10-24", "kickoff": "2026-10-24T19:30Z",
+                        "spread": -7.5, "total": 47.0}]}
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        line = R.attach(board, conn=db.connect(":memory:"), sport="cfb", season=2026)
+    return line, board, buf.getvalue().splitlines()
+
+
+def test_the_game_reports_name_their_parts_and_write_the_same_reports():
+    """3.0 seconds of the NFL build at 01:19 on 10 November, 11.1 at 02:00,
+    one number either way: its own stage on the clock, each step named."""
+    with _Stopped():
+        q_line, quiet, quiet_lines = _report_once()
+        stageclock.start()
+        t_line, timed, timed_lines = _report_once()
+    assert not stageclock.parse_parts(quiet_lines), "reports outside a build print no part"
+    parts = stageclock.parse_parts(timed_lines)
+    assert list(parts) == ["game reports"], "its own stage: never added into another's parts"
+    assert list(parts["game reports"]) == GAME_REPORT_PARTS, list(parts["game reports"])
+    assert not stageclock.parse(timed_lines), "a part is never a stage"
+    assert timed.get("game_reports") and q_line == t_line and _same(quiet, timed), "the clock changes no report"
+
+
 def test_the_nfl_builds_unexplained_stages_name_their_parts_under_their_own_marks():
     import re
     src = (ROOT / "nfl_build.py").read_text(encoding="utf-8")

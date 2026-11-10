@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NV. The game reports name their parts** (step 498; 10 November). Nothing
+to run. The NFL build's game reports took 3.0 seconds at 01:19 on 10 November
+and 11.1 at 02:00, one number either way, while the stages beside them held
+still, so something inside them is sometimes read again or fetched again.
+On the heartbeat they now have their own parts, under `game reports`: the
+schedule and staff, the player form (the logs of every player the reports
+name), the grades (the Next Gen Stats and Pro Football Reference files), the
+ideas and kicking fit, the meetings and kicking air, what changed, and the
+reports themselves. The college build's reports show the same parts.
+
 **NU. A college box score is no longer written again every five minutes**
 (step 497; 10 November). Nothing to run. From about half past midnight on
 10 November, with no game on, every settle pass changed 124 rows of this

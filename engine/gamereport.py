@@ -2542,7 +2542,14 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
     board's public path: what changed is kept beside its private copy
     (engine/reportlog), stamped ``at`` (now, Eastern, when none is given);
     with no ``out`` nothing is kept and no report has the section. One
-    line for the build log; never raises."""
+    line for the build log; never raises.
+
+    ITS PARTS ON THE STAGE CLOCK (2026-11-10), as the "game reports" stage:
+    3.0 seconds of the NFL build at 01:19 on 10 November and 11.1 at 02:00,
+    one number either way, while the stages beside it held still."""
+    import time as _time
+    from . import stageclock as _clock
+    _t = _time.monotonic()
     own = False
     try:
         sched = staff = None
@@ -2555,6 +2562,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             except Exception:                                # noqa: BLE001
                 sched, staff = None, {}
         names = _team_names() if sport == "nfl" else college_names(result)
+        _t = _clock.lap("game reports", "schedule + staff", _t)
         try:
             if conn is None:
                 from .db import connect
@@ -2567,6 +2575,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             form = reportdata.player_form(conn, season, report_players(result), sport=sport)
         except Exception:                                    # noqa: BLE001
             form = {}
+        _t = _clock.lap("game reports", "player form", _t)
         # OUR GRADES (engine/grades; Ethan's D, 2026-10-24), the NFL's, over
         # the weeks before this board's — never a reason a report fails.
         grades = {}
@@ -2576,6 +2585,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
                 grades = _grades.table(season, before_week=_week_of(result))
             except Exception:                                # noqa: BLE001
                 grades = {}
+        _t = _clock.lap("game reports", "grades", _t)
         if ideas is None and sport == "nfl":
             try:
                 from . import ideas as _ideas
@@ -2592,6 +2602,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
                 kfit, kbears = _kp.load("nfl"), _kp.bearings()
             except Exception:                                # noqa: BLE001
                 _kp = None
+        _t = _clock.lap("game reports", "ideas + kicking fit", _t)
         prepared = []
         for g in result.get("games") or []:
             if not isinstance(g, dict):
@@ -2612,7 +2623,9 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             except Exception:                                # noqa: BLE001
                 met = []
             prepared.append((g, extra, met))
+        _t = _clock.lap("game reports", "meetings + kicking air", _t)
         logged = log_changes(result, [(g, extra, None) for g, extra, _met in prepared], sport, out, at)
+        _t = _clock.lap("game reports", "what changed", _t)
         reports = []
         for g, extra, met in prepared:
             home, away = str(g.get("home") or ""), str(g.get("away") or "")
@@ -2623,6 +2636,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
                       grades=grades)
             if r:
                 reports.append(r)
+        _t = _clock.lap("game reports", "reports", _t)
         result[KEY] = reports
         if not reports:
             return "Game reports: no games on the board"
