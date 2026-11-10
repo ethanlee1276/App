@@ -1061,7 +1061,8 @@ def _merge_specs(primary: list[PlayerSpec],
 def build_slate(season: int, week: int, upto_week: int | None = None,
                 specs: list[PlayerSpec] | None = None,
                 carry: bool = False, report: dict | None = None,
-                qb_backups: bool = False, games: list[Game] | None = None) -> Slate:
+                qb_backups: bool = False, games: list[Game] | None = None,
+                keep: dict | None = None) -> Slate:
     """Assemble a real Slate for a season/week.
 
     Requires weekly stats (for game logs and defense profiles). Since nflverse
@@ -1103,6 +1104,14 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         last_season = load_weekly_stats(season - 1)
     except DataUnavailable:
         last_season = None
+    # THE TWO SEASONS, HANDED BACK (2026-11-10). ``keep``, when given, is
+    # filled with the rows read here ({"stats", "last_season"}), so a caller
+    # that needs the same two files again reads none: the NFL build's usage
+    # ripple parsed both a second time, 4.1 seconds at 02:43 on 10 November.
+    # Nothing below writes into a row (the defences' prior, the carry and the
+    # specs only read them), so the caller gets exactly what was read.
+    if keep is not None:
+        keep["stats"], keep["last_season"] = stats, last_season
     defenses = build_defense_profiles(stats, upto_week, last_season)
 
     participating = {g.home for g in games} | {g.away for g in games}

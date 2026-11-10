@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NY. The usage ripple reads the slate's two seasons, not the files again**
+(step 501; 10 November). Nothing to run. With the pricing stage's preparation
+named (NW), the NFL build at 02:43 on 10 November spent 4.1 seconds on the usage
+ripple, the card note that says what a teammate absorbed when a player now
+ruled out sat before. It parsed this season's and last season's weekly stat
+files again, the same two files the slate had parsed a minute earlier. The
+slate now hands the two seasons it read to the build, the ripple reads those,
+and the build lets them go once it has. The notes are the same; only the
+second parse is gone. On the heartbeat it is the `usage ripple` part of
+`run_slate`.
+
 **NX. The game reports' player form is kept until the logs change** (step
 500; 10 November). Nothing to run. With their parts named (NV), the NFL game
 reports at 02:27 on 10 November took 4.4 seconds, 3.5 of them the player

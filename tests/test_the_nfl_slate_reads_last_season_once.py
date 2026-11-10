@@ -15,7 +15,11 @@ for the defences' prior and again for the carry. What these hold:
   * build_slate asks for last season once, and builds the slate it built
     when it asked twice;
   * the defences' prior reads last season's rows and writes none, which is
-    what lets the carry take the same parse.
+    what lets the carry take the same parse;
+  * build_slate hands the two seasons it read back to its caller (``keep``)
+    without changing a prop, and the NFL build gives them to its usage
+    ripple instead of parsing both files again (4.1 seconds at 02:43 on 10
+    November), letting them go once the ripple has read them.
 
 Run directly: `python3 tests/test_the_nfl_slate_reads_last_season_once.py`
 """
@@ -73,7 +77,7 @@ def test_every_markets_means_in_one_walk_are_each_markets_own():
     assert carry.positional_means_all([], nv.STAT_MARKETS) == {m: {} for m in nv.STAT_MARKETS}
 
 
-def _stubbed(current, prior, week=5, season=2026, copies=False):
+def _stubbed(current, prior, week=5, season=2026, copies=False, keep=None):
     """build_slate with every feed replaced; ``copies`` hands each read of
     last season its own parse, as the build did before."""
     from engine.models import Game, Weather
@@ -97,7 +101,7 @@ def _stubbed(current, prior, week=5, season=2026, copies=False):
     nv.load_schedules = lambda: []
     try:
         report = {}
-        slate = nv.build_slate(season, week, carry=True, report=report)
+        slate = nv.build_slate(season, week, carry=True, report=report, keep=keep)
         return slate, report, asked
     finally:
         for n, fn in saved.items():
@@ -124,6 +128,26 @@ def test_the_defences_prior_writes_no_row():
     for week in (1, 5, 12):
         nv.build_defense_profiles(current, week, prior)
     assert prior == before
+
+
+def test_the_slate_hands_back_the_two_seasons_it_read():
+    prior = _season(4)
+    current = [dict(r, season="2026") for r in _season(11, 2026) if int(r["week"]) < 5]
+    keep = {}
+    slate, _report, asked = _stubbed(current, prior, keep=keep)
+    assert keep["stats"] is current and keep["last_season"] is prior, "the very rows read, no copy"
+    assert asked.count(2025) == 1 and asked.count(2026) == 1, asked
+    plain, _r, _a = _stubbed(current, prior)
+    assert slate.props and _props(slate) == _props(plain), "handing them back changes no prop"
+
+
+def test_the_build_hands_the_ripple_the_slates_two_seasons():
+    src = (ROOT / "nfl_build.py").read_text(encoding="utf-8")
+    assert "build_slate(args.season, args.week, keep=_weekly_kept," in src
+    rip = src[src.index("ripples: dict = {}"):src.index('_lap("run_slate", "usage ripple"')]
+    assert '_cur = _weekly_kept.get("stats") or []' in rip
+    assert '_prior = _weekly_kept.get("last_season") or []' in rip
+    assert "_weekly_kept.clear()" in rip, "let go once the ripple has read them"
 
 
 def test_the_build_reads_last_season_from_the_defences_parse():

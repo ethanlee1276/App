@@ -546,8 +546,9 @@ def main() -> None:
     except Exception:                                         # noqa: BLE001
         carry_report["team_depth"] = {}
     _st = _lap("build_slate", "team depth", _st)
+    _weekly_kept: dict = {}
     try:
-        slate = build_slate(args.season, args.week, carry=args.carry,
+        slate = build_slate(args.season, args.week, keep=_weekly_kept, carry=args.carry,
                             report=carry_report, qb_backups=True, games=games)
         _lap("build_slate", "slate", _st)
         _mem("build_slate", args.memtrace)
@@ -1124,16 +1125,23 @@ def main() -> None:
         from engine.sources.nflverse import load_weekly_stats as _weekly
         _inj = [i for g in slate.games for i in g.injuries]
         if _inj:
-            _cur, _prior = [], []
-            for _season, _sink in ((args.season, "cur"), (args.season - 1, "prior")):
-                try:
-                    rows_ = _weekly(_season)
-                except DataUnavailable:
-                    rows_ = []
-                if _sink == "cur":
-                    _cur = rows_
-                else:
-                    _prior = rows_
+            # The two seasons the slate read (build_slate's ``keep``), not
+            # a second parse of both files (4.1 seconds at 02:43 on 10
+            # November); read here only when the slate kept none.
+            if "stats" in _weekly_kept:
+                _cur = _weekly_kept.get("stats") or []
+                _prior = _weekly_kept.get("last_season") or []
+            else:
+                _cur, _prior = [], []
+                for _season, _sink in ((args.season, "cur"), (args.season - 1, "prior")):
+                    try:
+                        rows_ = _weekly(_season)
+                    except DataUnavailable:
+                        rows_ = []
+                    if _sink == "cur":
+                        _cur = rows_
+                    else:
+                        _prior = rows_
             ripples = _ripple.ripples_for_props(slate.props, _inj, _cur, _prior,
                                                 args.season, args.week)
             if ripples:
@@ -1142,6 +1150,9 @@ def main() -> None:
                       f"ruled out ({measured} with a measured share).")
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  usage ripple skipped: {exc}")
+    # Let the two seasons go once the ripple has read them, as its own
+    # parse was let go before.
+    _weekly_kept.clear()
     _rs_t = _lap("run_slate", "usage ripple", _rs_t)
     # THE BOARD THIS BUILD REPLACES, for the Most Likely hold: a pick keeps
     # its number and its seat between refreshes (likely.HOLD_MARGIN).
