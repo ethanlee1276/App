@@ -468,6 +468,17 @@ def stamp(payload, name: str = "", env=None, cache_dir: Path | None = None, now:
     sport = FILE_SPORT.get(Path(str(name or "")).name)
     if not sport:
         return 0
+    # THE ROWS FIRST, THE BANK ONLY FOR A BOARD WITH ONE (2026-11-10). The
+    # bank is three days of every odds pull's links, and reading it was 3.2
+    # of the NFL build's 4.8 publishing seconds at 03:18 on 10 November: a
+    # Tuesday board, with no pick, no game bet and no long shot on it, that
+    # had nothing to link. The walk only gathers the rows; a board without
+    # one comes back exactly as it went in, so it reads nothing.
+    rows: list = []
+    _walk(payload, rows)
+    if not rows:
+        LAST["load_s"] = 0.0
+        return 0
     _t0 = time.monotonic()
     events = load(sport, cache_dir, now)
     LAST["load_s"] = time.monotonic() - _t0
@@ -476,8 +487,6 @@ def stamp(payload, name: str = "", env=None, cache_dir: Path | None = None, now:
     from .sources.oddsapi import SHARP_BOOKS
     st, mkeys = bet_state(env), _market_keys(sport)
     eid_of = {id(ev): eid for eid, ev in events.items()}
-    rows: list = []
-    _walk(payload, rows)
     pages: dict = {}
     n = 0
     ok = lambda u: str(u).lower().startswith("https://")             # noqa: E731

@@ -322,6 +322,38 @@ def test_the_game_reports_name_their_parts_and_write_the_same_reports():
     assert timed.get("game_reports") and q_line == t_line and _same(quiet, timed), "the clock changes no report"
 
 
+SLATE_PARTS = ["this season's stats", "last season's stats", "defences", "carry index + position means",
+               "rows by player + snaps", "who plays", "roster teams + faces", "props", "touchdown props",
+               "quarterbacks + depth"]
+
+
+def _slate_once():
+    sys.path.insert(0, str(ROOT / "tests"))
+    import test_the_nfl_slate_reads_last_season_once as S
+    prior = S._season(4)
+    current = [dict(r, season="2026") for r in S._season(11, 2026) if int(r["week"]) < 5]
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        slate, report, _asked = S._stubbed(current, prior)
+    return S._props(slate), report, buf.getvalue().splitlines()
+
+
+def test_the_nfl_slate_names_its_parts_and_builds_the_same_slate():
+    """The slate was one lap of the NFL build: 5.4 seconds at 03:25 on 10
+    November and 13.8 at 03:18, naming nothing inside it. Its own stage
+    now, each read named; silent outside a build, and the same slate."""
+    with _Stopped():
+        quiet, q_report, quiet_lines = _slate_once()
+        stageclock.start()
+        timed, t_report, timed_lines = _slate_once()
+    assert not stageclock.parse_parts(quiet_lines), "a slate outside a build prints no part"
+    parts = stageclock.parse_parts(timed_lines)
+    assert list(parts) == ["slate"], "its own stage: never added into the build_slate stage's parts"
+    assert list(parts["slate"]) == SLATE_PARTS, list(parts["slate"])
+    assert not stageclock.parse(timed_lines), "a part is never a stage"
+    assert quiet and timed == quiet and _same(q_report, t_report), "the clock changes no prop"
+
+
 def test_the_nfl_builds_unexplained_stages_name_their_parts_under_their_own_marks():
     import re
     src = (ROOT / "nfl_build.py").read_text(encoding="utf-8")

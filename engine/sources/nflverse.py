@@ -1088,6 +1088,13 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     games = games if games else build_games(season, week)
     if not games:
         raise DataUnavailable(f"No scheduled games found for {season} week {week}.")
+    # WHERE THE SLATE'S SECONDS GO (2026-11-10). One lap on the NFL build's
+    # clock, 5.4 seconds at 03:25 on 10 November and 13.8 at 03:18, saying
+    # nothing of what inside it: each part now prints under its own stage,
+    # "slate" (engine/stageclock.lap: silent outside a build).
+    import time as _time
+    from .. import stageclock as _clock
+    _t = _time.monotonic()
 
     # A season that has not started has no weekly stats and cannot — the
     # file 404s because the games have not been played. That is the exact
@@ -1098,12 +1105,14 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         if not carry:
             raise
         stats = []
+    _t = _clock.lap("slate", "this season's stats", _t)
     # Last season is where each defence's rating starts (engine/defensevs):
     # two games of this season are a signal and mostly noise.
     try:
         last_season = load_weekly_stats(season - 1)
     except DataUnavailable:
         last_season = None
+    _t = _clock.lap("slate", "last season's stats", _t)
     # THE TWO SEASONS, HANDED BACK (2026-11-10). ``keep``, when given, is
     # filled with the rows read here ({"stats", "last_season"}), so a caller
     # that needs the same two files again reads none: the NFL build's usage
@@ -1113,6 +1122,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     if keep is not None:
         keep["stats"], keep["last_season"] = stats, last_season
     defenses = build_defense_profiles(stats, upto_week, last_season)
+    _t = _clock.lap("slate", "defences", _t)
 
     participating = {g.home for g in games} | {g.away for g in games}
     opponent_of = {}
@@ -1140,6 +1150,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
                                        load_schedules(), season)
             # Every market's means in one walk of last season (carry.positional_means_all).
             pos_means.update(_carry.positional_means_all(prior_stats, STAT_MARKETS))
+    _t = _clock.lap("slate", "carry index + position means", _t)
 
     # EACH PLAYER'S ROWS, ONCE. Every per-player read below filtered the
     # whole season by name — per player, per market — and on 2026-09-23
@@ -1157,6 +1168,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     # Snap shares, so a game a player left hurt is marked on his logs
     # (Ethan, 2026-09-23, Garrett Wilson's 0 vs CLE — 19 snaps, 39%).
     snaps = snap_table(season, season - 1 if carry else None)
+    _t = _clock.lap("slate", "rows by player + snaps", _t)
 
     if specs is None:
         # ``qb_backups``: each team's SECOND quarterback by volume too, as
@@ -1168,6 +1180,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         if carry and index:
             specs = _merge_specs(specs, _carry_specs(
                 prior_stats, roster, participating, qb_backups=qb_backups))
+    _t = _clock.lap("slate", "who plays", _t)
 
     # WHERE EACH MAN PLAYS NOW — the current roster, every status. See
     # `roster_teams`. Unreachable is an empty map, and the stat rows
@@ -1252,6 +1265,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
                 _s(r, "player_display_name", "player_name", "full_name"), url)
 
     specs = one_quarterback_each(specs, team_of)
+    _t = _clock.lap("slate", "roster teams + faces", _t)
 
     carried_report: dict = {}
     thin_report: dict = {}
@@ -1384,6 +1398,8 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             # typical number (the pick page names it — engine/ideagate).
             props[-1].form_prior_kind = "rookie"
 
+    _t = _clock.lap("slate", "props", _t)
+
     # ANYTIME-TOUCHDOWN PROPS, one per skill player already on the board.
     #
     # These existed only in the preseason seeder until 2026-08-25; the
@@ -1438,6 +1454,7 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             usage_role=p.usage_role, headshot=p.headshot,
         ))
     props.extend(td_props)
+    _t = _clock.lap("slate", "touchdown props", _t)
 
     # Teams dict for every participating side, using computed or neutral defense.
     teams: dict[str, Team] = {}
@@ -1470,5 +1487,6 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         except DataUnavailable:
             _snap_rows = None
         report["depth"] = _depth_table(stats, participating, upto_week, _snap_rows)
+    _clock.lap("slate", "quarterbacks + depth", _t)
 
     return Slate(date=f"{season}-W{week:02d}", teams=teams, games=games, props=props)

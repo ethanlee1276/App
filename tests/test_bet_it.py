@@ -438,6 +438,38 @@ def test_the_props_report_tells_game_lines_from_player_props():
     assert "newest none" in empty[0] and empty[1].strip() == "player-prop slip links banked: 0"
 
 
+
+def test_a_board_with_nothing_to_link_reads_no_bank():
+    """THE TUESDAY BOARD (2026-11-10). The NFL build spent 3.2 of its 4.8
+    publishing seconds at 03:18 on 10 November reading three days of banked
+    links for a board with no pick, no game bet and no long shot on it. The
+    rows are gathered first now: a board without one reads nothing and comes
+    back exactly as it went in; a board with picks reads the bank once and
+    is stamped as before."""
+    import copy
+    tmp = Path(tempfile.mkdtemp())
+    _banked(tmp)
+    real, asked = B.load, []
+    B.load = lambda *a, **k: (asked.append(a[0] if a else k.get("sport")), real(*a, **k))[1]
+    try:
+        empty = {"recommendations": [], "game_bets": [], "long_shots": [], "most_likely": [],
+                 "games": [{"home": "BUF", "away": "LAC", "book": "DraftKings", "odds": -110,
+                            "market": "spread"}],
+                 "player_stats": {"Josh Allen": {"book": "DraftKings", "odds": -110, "player": "x",
+                                                 "market": "y", "side": "z"}}}
+        before = copy.deepcopy(empty)
+        B.LAST.clear()
+        assert B.stamp(empty, "recommendations.json", env={}, cache_dir=tmp) == 0
+        assert asked == [] and B.LAST == {"load_s": 0.0}, (asked, B.LAST)
+        assert empty == before, "no row, no change: not even bet_pages"
+        board = _board()
+        n = B.stamp(board, "recommendations.json", env={}, cache_dir=tmp)
+        assert asked == ["nfl"] and n == 9 and B.LAST["load_s"] >= 0.0, (asked, n)
+        assert board["recommendations"][0]["bet_link"] == DK + "allen-o" and board.get("bet_pages")
+    finally:
+        B.load = real
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:

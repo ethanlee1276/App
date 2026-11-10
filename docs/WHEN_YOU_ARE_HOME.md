@@ -9338,6 +9338,32 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NZ. A board with nothing to bet reads no bet links; the slate and the college
+waits name their parts** (step 502; 10 November). Nothing to run. Three things,
+none of which changes a pick or a grade:
+
+- The NFL build at 03:18 on 10 November spent 3.2 of its 4.8 publishing
+  seconds reading three days of saved bet-slip links, for a Tuesday board with
+  no pick, no game bet and no long shot on it. The board's pick rows are
+  gathered first now, and a board without one reads nothing and goes out
+  exactly as before. A board with picks reads the links once, as it always
+  did. On the heartbeat it is `bet link files` under `publish
+  recommendations.json`, which should read 0.0 between game days.
+- The slate (`build_slate › slate`: 5.4 seconds at 03:25, 13.8 at 03:18) names
+  its parts under its own stage, `slate`: this season's stats, last season's
+  stats, defences, carry index + position means, rows by player + snaps, who
+  plays, roster teams + faces, props, touchdown props, quarterbacks + depth.
+  Measured here on the same files, about half of it is last season's file and
+  what is worked out from it, which does not change in season.
+- The settle pass sent 112 college props through the absent-player rule at
+  03:17 (5.4 seconds of its grading), and nothing said whether they wait on a
+  play file or box score that will come, or on a team no feed will ever name.
+  The grade's parts on the heartbeat now count which link each one stopped at
+  (`absent_why_cfb`: play file, box not filed, no final, two finals, no team,
+  first td unknown, bad date, or void) and time the rule's three reads
+  (`absent_cfb_team`, `absent_cfb_finals`, `absent_cfb_files`). I will read
+  the count from here and say what it holds.
+
 **NY. The usage ripple reads the slate's two seasons, not the files again**
 (step 501; 10 November). Nothing to run. With the pricing stage's preparation
 named (NW), the NFL build at 02:43 on 10 November spent 4.1 seconds on the usage

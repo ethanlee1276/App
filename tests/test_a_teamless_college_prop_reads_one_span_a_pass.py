@@ -178,6 +178,72 @@ def test_the_span_read_goes_through_the_season():
     assert "season=?" not in old, "the plain read cannot use a season it does not name"
 
 
+
+def _links_history(today):
+    """One of each link the college rule can stop at, dated off today (the
+    play-file wait counts its days from today)."""
+    import datetime as _dt
+    day = (today - _dt.timedelta(days=1)).isoformat()
+    before = (today - _dt.timedelta(days=20)).isoformat()
+    h = db.connect(":memory:")
+    db.upsert_player_logs(h, [
+        _log(before, "Kurtis Rourke", "IU"), _log(before, "Aidan Chiles", "MSU"),
+        _log(before, "Lonely Back", "UCF"),
+        _log(day, "IU Teammate", "IU"),                    # IU's box score, no play file, no first TD
+    ])
+    db.upsert_games(h, [_game(day, "IU", "PUR"), _game(day, "MSU", "MICH")])   # MSU's box never filed
+    return h, day
+
+
+def test_the_grade_counts_the_link_each_college_prop_stops_at_and_times_its_reads():
+    """WHICH LINK, AND WHERE THE SECONDS GO (2026-11-10): 112 college props
+    went through the rule at 03:17 on 10 November, 5.4 seconds, and nothing
+    said whether they wait on a play file or a box score that will come, or
+    on a team no feed will ever name. Counted inside the pass's index only;
+    the bets rule exactly as they do outside one."""
+    import datetime as _dt
+    today = _dt.date.today()
+
+    def _run(indexed):
+        hist, day = _links_history(today)
+        led = ledger.connect(":memory:")
+        ledger.configure_bankroll(led, starting=1000, unit_pct=1.0)
+        for player, market in (("Kurtis Rourke", "receptions"), ("Kurtis Rourke", "rush_yds"),
+                               ("Aidan Chiles", "rush_yds"), ("Lonely Back", "rush_yds"),
+                               ("Nobody Known", "rush_yds")):
+            led.execute(
+                "INSERT INTO bets (ts, sport, date, player, market, side, line, book, odds, "
+                "stake_units, stake_dollars, status, category) VALUES "
+                "('t','cfb',?,?,?,'OVER',10.5,'FanDuel',-110,0.1,1.0,'open','main')",
+                (day, player, market))
+        led.commit()
+        ledger.take_grade_parts()
+        if indexed:
+            with ledger.name_index():
+                ledger.settle_from_history(led, hist)
+        else:
+            ledger.settle_from_history(led, hist)
+        rows = [tuple(r) for r in led.execute("SELECT player, market, status FROM bets ORDER BY id")]
+        return rows, ledger.take_grade_parts()
+
+    plain, plain_parts = _run(False)
+    kept, parts = _run(True)
+    assert kept == plain, (kept, plain)
+    assert dict(((p, m), s) for p, m, s in kept) == {
+        ("Kurtis Rourke", "receptions"): "open", ("Kurtis Rourke", "rush_yds"): "void",
+        ("Aidan Chiles", "rush_yds"): "open", ("Lonely Back", "rush_yds"): "open",
+        ("Nobody Known", "rush_yds"): "open"}, kept
+    assert parts["absent_why_cfb"] == {"box not filed": 1, "no final": 1, "no team": 1,
+                                       "play file": 1, "void": 1}, parts["absent_why_cfb"]
+    assert sum(parts["absent_why_cfb"].values()) == parts["absent_n_cfb"] == 5
+    assert all(parts[f"absent_cfb_{r}"] >= 0.0 for r in ("team", "finals", "files")), parts
+    assert "absent_why_cfb" not in plain_parts and "absent_cfb_team" not in plain_parts, \
+        "outside a pass's index nothing is kept"
+    hist, day = _links_history(today)
+    b = {"sport": "cfb", "market": "rush_yds", "category": "main", "date": day, "player": "Nobody Known"}
+    assert "no team for him" in ledger.absent_blocker(hist, b), "the settle check's words, unchanged"
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

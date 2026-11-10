@@ -5931,13 +5931,44 @@ def _cfb_day_files(hist_conn, periods) -> tuple | None:
     return got
 
 
+#: WHICH LINK HOLDS EACH COLLEGE PROP (2026-11-10). The settle pass sent
+#: 112 college props through the absent-player rule at 03:17 on 10
+#: November, 5.4 seconds of its grading, and said neither where the seconds
+#: went nor whether those props wait on something that will come (a play
+#: file, a box score) or on something that never will (a team for a man no
+#: feed places). Inside the pass's name index each one is counted under the
+#: link it stops at, and the rule's three reads are timed; the grade's parts
+#: carry both to the heartbeat (`absent_why_cfb`, `absent_cfb_<read>`).
+#: Outside an index (the settle check's `absent_blocker`) nothing is kept.
+_ABSENT_WHY_KEY = "absent_why_cfb"
+_ABSENT_LAPS_KEY = "absent_laps_cfb"
+
+
+def _absent_tally(why: str) -> None:
+    index = _name_index_now()
+    if index is not None:
+        tally = index.setdefault(_ABSENT_WHY_KEY, {})
+        tally[why] = tally.get(why, 0) + 1
+
+
+def _absent_lap(read: str, t0: float) -> float:
+    now = _time.monotonic()
+    index = _name_index_now()
+    if index is not None:
+        laps = index.setdefault(_ABSENT_LAPS_KEY, {})
+        laps[read] = laps.get(read, 0.0) + (now - t0)
+    return now
+
+
 def _college_absent(hist_conn, b, target):
     """``(verdict, why)`` — the college half of `_absent_player_verdict`.
     ``why`` names the link that holds the bet open, so the settle check
     can say which one (`absent_blocker`); the verdict is the rule's own."""
+    t0 = _time.monotonic()
     try:
         d0 = datetime.date.fromisoformat(b["date"] or "")
     except ValueError:
+        _absent_tally("bad date")
         return None, "its date is not a calendar day"
     # The team: off the bet where the writer stamped it, else off the
     # player's own earlier stat rows. Five 09-12 rows had neither — a
@@ -5956,7 +5987,9 @@ def _college_absent(hist_conn, b, target):
                                     d0.year if d0.month >= 8 else d0.year - 1)
         except Exception:                                # noqa: BLE001
             team = None
+    t0 = _absent_lap("team", t0)
     if not team:
+        _absent_tally("no team")
         return None, ("no team for him — none stamped on the bet, no stat row in the "
                       "45 days before, not on the cached roster")
     lo = (d0 - datetime.timedelta(days=1)).isoformat()
@@ -5971,7 +6004,9 @@ def _college_absent(hist_conn, b, target):
         "AND (home=? OR away=?) AND home_score IS NOT NULL AND away_score IS NOT NULL",
         (lo, hi, team, team)).fetchall()
     fixtures = {(g["home"], g["away"]) for g in finals}
+    t0 = _absent_lap("finals", t0)
     if len(fixtures) != 1:
+        _absent_tally("no final" if not fixtures else "two finals")
         return None, (f"{team} has no final game a day either side of the date" if not fixtures
                       else f"{team} has {len(fixtures)} final games a day either side — the rule needs one")
     periods = sorted({g["period"] for g in finals})
@@ -5982,7 +6017,9 @@ def _college_absent(hist_conn, b, target):
     filed = (team in files[0]) if files is not None else hist_conn.execute(
         f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
         f"AND team=? LIMIT 1", (*periods, team)).fetchone()
+    t0 = _absent_lap("files", t0)
     if not filed:
+        _absent_tally("box not filed")
         return None, f"{team}'s game is final but its box score is not filed"
     if b["market"] == "first_td":
         # FIRST TOUCHDOWN (2026-10-31): the box score writes `first_td` only
@@ -5994,6 +6031,7 @@ def _college_absent(hist_conn, b, target):
             f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
             f"AND team=? AND market='first_td' LIMIT 1", (*periods, team)).fetchone()
         if not marked:
+            _absent_tally("first td unknown")
             return None, f"{team}'s first touchdown has no scorer on file yet"
     if b["market"] in PLAY_FILE_MARKETS and (datetime.date.today() - d0).days < PLAY_FILE_DAYS:
         # The box score is in; the play file, which would show him thrown
@@ -6002,7 +6040,9 @@ def _college_absent(hist_conn, b, target):
             f"SELECT 1 FROM player_game_logs WHERE sport='cfb' AND period IN ({marks}) "
             f"AND team=? AND game_id NOT LIKE '%-box' LIMIT 1", (*periods, team)).fetchone()
         if not read:
+            _absent_tally("play file")
             return "wait", f"waiting for the play file on {team}'s game (up to {PLAY_FILE_DAYS} days)"
+    _absent_tally("void")
     return "void", "the absent-player rule voids it — the settle has not run since"
 
 
@@ -6696,6 +6736,11 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         closes_cache["_line_opens"].close()
     if _index is not None and _index.get("cfb_team_reads"):
         parts["absent_team_reads"] = _index["cfb_team_reads"]
+    if _index is not None and _index.get(_ABSENT_WHY_KEY):
+        # Which link each college prop stopped at, and the rule's reads.
+        parts["absent_why_cfb"] = dict(sorted(_index[_ABSENT_WHY_KEY].items()))
+        for read, secs in (_index.get(_ABSENT_LAPS_KEY) or {}).items():
+            parts[f"absent_cfb_{read}"] = secs
     parts["total"] = _time.monotonic() - t_call
     return settled + voided
 
