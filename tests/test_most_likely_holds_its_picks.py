@@ -280,7 +280,10 @@ def test_the_replay_changes_fewer_picks_between_looks():
 
 def test_every_build_hands_the_hold_its_last_board():
     src = lambda *p: open(os.path.join(ROOT, *p), encoding="utf-8").read()   # noqa: E731
-    assert "likely_previous=_likely_prev(args.out, slate.date)" in src("nfl_build.py")
+    # Read before run_slate is called, so the stage clock can time it (2026-11-10).
+    nfl = src("nfl_build.py")
+    assert "_likely_was = _likely_prev(args.out, slate.date) if args.out else None" in nfl
+    assert "likely_previous=_likely_was," in nfl
     pipe = src("engine", "pipeline.py")
     assert "previous=likely_previous," in pipe and '"likely_turnover": _likely_turnover,' in pipe
     assert "previous=_likely_prev(args.out, result.get(\"date\"))" in src("mlb_build.py")

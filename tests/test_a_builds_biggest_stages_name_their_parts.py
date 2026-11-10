@@ -72,6 +72,10 @@ NFL_STAGE_PARTS = {
     # 9 and 16 seconds at 00:07 and 00:31 on 10 November; 14 and 23.
     "fantasy week": ["season means", "team defenses", "touchdown chances", "the week's file", "publish"],
     "referees + game reports + pick of the day": ["referees", "game reports", "pick of the day"],
+    # run_slate's own parts added up to 12.4 of its 23 seconds at 02:12 on 10
+    # November: the rest was the build's preparation before it is called.
+    "run_slate": ["live scores + team ratings", "usage maps", "usage join audit", "usage ripple",
+                  "previous Most Likely board"],
 }
 
 

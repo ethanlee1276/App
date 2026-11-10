@@ -1023,6 +1023,10 @@ def main() -> None:
                   f"prices already attached.\n   {exc}")
 
     _mem("odds", args.memtrace)
+    # THE PRICING STAGE'S OWN PREPARATION (2026-11-10): run_slate's parts
+    # added up to 12.4 of the stage's 23 seconds at 02:12 on 10 November; the
+    # rest was the work below, done before run_slate is called, unnamed.
+    _rs_t = _now()
     if args.live:
         from engine.sources.livescores import attach_live
         n = attach_live(slate)
@@ -1066,6 +1070,7 @@ def main() -> None:
                   "have been played — before that there is nothing to fill.")
     except Exception as exc:
         print(f"\n⚠️  Team ratings unavailable — moneyline shows no edge.\n   {exc}")
+    _rs_t = _lap("run_slate", "live scores + team ratings", _rs_t)
 
     model = None
     if args.model:
@@ -1084,6 +1089,7 @@ def main() -> None:
         nfl_usage = build_usage_maps(_usage_connect())
     except Exception:
         nfl_usage = None
+    _rs_t = _lap("run_slate", "usage maps", _rs_t)
 
     # WHO HAS PRODUCTION BUT NO MEASURED USAGE. The two feeds in
     # player_game_logs are joined by name, and when that join fails
@@ -1105,6 +1111,7 @@ def main() -> None:
         except Exception as exc:                              # noqa: BLE001
             # Bookkeeping must never be the thing that kills a build.
             print(f"  usage join audit skipped: {exc}")
+    _rs_t = _lap("run_slate", "usage join audit", _rs_t)
     # THE USAGE RIPPLE ON THE CARD. Ethan, 2026-09-14: "RB2 Isiah Pacheco
     # is now out till October 11th so RB1 ... should be seeing a lot more
     # usage". For every prop whose same-position teammate is ruled out,
@@ -1135,9 +1142,12 @@ def main() -> None:
                       f"ruled out ({measured} with a measured share).")
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  usage ripple skipped: {exc}")
+    _rs_t = _lap("run_slate", "usage ripple", _rs_t)
     # THE BOARD THIS BUILD REPLACES, for the Most Likely hold: a pick keeps
     # its number and its seat between refreshes (likely.HOLD_MARGIN).
     from engine.likely import previous_board as _likely_prev
+    _likely_was = _likely_prev(args.out, slate.date) if args.out else None
+    _rs_t = _lap("run_slate", "previous Most Likely board", _rs_t)
 
     # THE MATCHUP SCAN (Ethan, 2026-09-24: "ranking the defenses and
     # offenses and looking at where exactly in the defense and offense is
@@ -1171,8 +1181,7 @@ def main() -> None:
         return leans
     result = run_slate(slate, config, model=model, nfl_usage=nfl_usage,
                        team_notes=qb_notes, ripples=ripples,
-                       likely_previous=_likely_prev(args.out, slate.date)
-                       if args.out else None,
+                       likely_previous=_likely_was,
                        before_likely=_scan_first)
     _mem("run_slate", args.memtrace)
     # FIRST TOUCHDOWN IS THE NFL'S LONG SHOTS (engine/firsttd; Ethan,

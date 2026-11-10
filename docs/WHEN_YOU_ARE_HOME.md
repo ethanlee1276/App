@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NW. The NFL pricing stage's preparation names its parts** (step 499; 10
+November). Nothing to run. At 02:12 on 10 November the NFL build's pricing
+stage (`run_slate`) took 23 seconds and its named parts added up to 12.4: the
+rest was the build's own preparation before the pricing starts, unnamed. It
+has five parts of its own now, under the same stage on the heartbeat: live
+scores + team ratings, usage maps, usage join audit, usage ripple (which reads
+two seasons of weekly stats when a player is ruled out), and the previous
+Most Likely board. Nothing they compute changes.
+
 **NV. The game reports name their parts** (step 498; 10 November). Nothing
 to run. The NFL build's game reports took 3.0 seconds at 01:19 on 10 November
 and 11.1 at 02:00, one number either way, while the stages beside them held
@@ -9359,9 +9368,10 @@ name, or a team line under the same label on each side). The pass wrote
 both rows, the second replaced the first, and the next pass found the first
 missing and wrote both again. Each name is now written once, as the last of
 its rows, which is what the table held after every pass anyway, so nothing
-stored changes. On the heartbeat, the 2026 count in the college kept reads'
-`gens` should hold still between settle passes when no game has finished,
-and those reads should say `kept` true.
+stored changes. Measured on the box after it landed: the count held at 31,278
+from 02:04 on, every college kept read said `kept`, and the college build
+took 16 seconds at 02:12 (50 to 69 before), its injuries, lineup and prop
+pricing 1 second (21) and its Pick of the Day, crowd and parlays 6 (17).
 
 **NT. The fantasy week's season means are kept until the logs change**
 (step 496; 10 November). Nothing to run. 2.5 of the NFL fantasy week's 4
