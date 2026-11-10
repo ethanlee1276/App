@@ -184,9 +184,16 @@ def test_in_a_browser_the_top_runs_on_as_one():
                         # the gate's load forty steps (about five seconds) once ended
                         # with the bar still up, the page still drawing or its
                         # observer not yet called back; it passed alone three times.
+                        # EACH STEP AT ONCE, NOT A GLIDE (gate 174, 2026-11-09: fifteen
+                        # seconds of steps ended with the bar still up, `on` false). The
+                        # page scrolls smoothly (styles.css `html { scroll-behavior:
+                        # smooth }`), so a plain scrollBy is an animation that needs the
+                        # browser's frames, and under the gate's load those stall and
+                        # the page never moves. An instant step moves it there and then,
+                        # as the finished-game and landing tests already scroll.
                         until = time.monotonic() + 15
                         while time.monotonic() < until:
-                            page.evaluate("window.scrollBy(0, 120)")
+                            page.evaluate("window.scrollBy({top: 120, behavior: 'instant'})")
                             page.wait_for_timeout(120)
                             g = page.evaluate(ROW)
                             if g["on"] and g["top"] is not None and abs(g["top"]) < 2:
