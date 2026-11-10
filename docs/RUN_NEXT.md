@@ -10,9 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-10, after the fantasy week's season means started being kept (step NT:
-nothing to run), after the attention journal started running beside the NFL and college
-builds (step NS: nothing to run), after the NFL build's last two unexplained stages started naming
+Last updated 2026-11-10, after a college box score stopped being written again every
+five minutes (step NU: nothing to run), after the fantasy week's season means started
+being kept (step NT: nothing to run), after the attention journal started running beside
+the NFL and college builds (step NS: nothing to run), after the NFL build's last two unexplained stages started naming
 their parts (step NR: nothing to run), after a push started reaching the site within minutes even at
 midnight (step NQ: nothing to run), after the NFL slate started reading last season once (step NP: nothing
 to run), after the play simulator's read of the game logs started being kept (step

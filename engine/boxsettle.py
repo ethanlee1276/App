@@ -468,6 +468,10 @@ def ingest_for_open(lconn, hconn, league: str, log=print,
             res["skipped"].append(f"{league} {g['away']}@{g['home']}: summary "
                                   "carried no stat lines")
             continue
+        # One row a key, the last, as the table keeps them (db.last_per_key):
+        # a name on both sides of the game was two rows the check could never
+        # find on file, so the game was written again every pass.
+        rows = _db.last_per_key(rows)
         if on_file(hconn, rows):
             res["unchanged"] = res.get("unchanged", 0) + 1
             continue

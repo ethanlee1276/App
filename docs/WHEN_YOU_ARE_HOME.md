@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NU. A college box score is no longer written again every five minutes**
+(step 497; 10 November). Nothing to run. From about half past midnight on
+10 November, with no game on, every settle pass changed 124 rows of this
+season's college logs, so every kept college read (`cfb_log_rows`, the
+`comps_*.cfb` reads) said `rows changed` and read its rows again on every
+build. The logs file a row under the player's name, not his team, and a box
+score can list one name on both sides of a game (two players who share a
+name, or a team line under the same label on each side). The pass wrote
+both rows, the second replaced the first, and the next pass found the first
+missing and wrote both again. Each name is now written once, as the last of
+its rows, which is what the table held after every pass anyway, so nothing
+stored changes. On the heartbeat, the 2026 count in the college kept reads'
+`gens` should hold still between settle passes when no game has finished,
+and those reads should say `kept` true.
+
 **NT. The fantasy week's season means are kept until the logs change**
 (step 496; 10 November). Nothing to run. 2.5 of the NFL fantasy week's 4
 seconds at 01:19 on 10 November went on two averages over the whole log

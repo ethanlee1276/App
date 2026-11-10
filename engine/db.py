@@ -1057,6 +1057,60 @@ def drop_games(conn, rows: list[dict]) -> int:
 LOG_KEYS = ("sport", "season", "period", "game_id", "player", "market")
 
 
+def _log_key(r) -> tuple | None:
+    """A row's primary key as the table compares it: the season an integer
+    (INTEGER affinity), the rest text. None when a part is missing, since
+    SQLite never treats two NULLs in a key as the same row."""
+    out = []
+    for c in LOG_KEYS:
+        v = r.get(c)
+        if v is None:
+            return None
+        if c == "season":
+            try:
+                f = float(v)
+                v = int(f) if f == int(f) else f
+            except (TypeError, ValueError, OverflowError):
+                v = str(v)
+        elif not isinstance(v, str):
+            v = str(v)
+        out.append(v)
+    return tuple(out)
+
+
+def last_per_key(rows: list[dict]) -> list[dict]:
+    """The game-log rows as the table keeps them: one per primary key, the
+    last given, in the order each key first appears. A row with a missing
+    key part is kept as given.
+
+    TWO ROWS WITH ONE KEY FLIPPED EVERY PASS (2026-11-10). The key names a
+    player by name alone, not by team, so a box score that lists one name
+    on both sides of a game (two players who share a name, or a team line
+    under the same label on each side) gives two rows one key. The write
+    stored the first, then replaced it with the second, so the table ended
+    each pass holding the last; on the next pass the first no longer matched
+    what was stored, the box-score check (boxsettle.on_file) said the game
+    had changed, and both went in again: two changes a key, every pass,
+    for ever. From about half past midnight on 10 November the college logs'
+    generation count rose by 124 with every settle pass, no game on, and
+    every kept college read (engine/logcache) read its rows again. Keeping
+    the last row of each key stores exactly what every pass ended with, and
+    a pass after it writes nothing."""
+    kept: dict = {}
+    loose: list = []
+    order: list = []
+    for r in rows:
+        k = _log_key(r)
+        if k is None:
+            order.append(("loose", len(loose)))
+            loose.append(r)
+            continue
+        if k not in kept:
+            order.append(("kept", k))
+        kept[k] = r
+    return [loose[ref] if kind == "loose" else kept[ref] for kind, ref in order]
+
+
 def upsert_player_logs(conn, rows: list[dict]) -> int:
     """Store game-log rows: a new row is added, a changed one replaced, and
     one already stored exactly as given is left where it is.
@@ -1072,6 +1126,9 @@ def upsert_player_logs(conn, rows: list[dict]) -> int:
     every time and read the table again. A row that differs in any column
     still goes in under a rowid above every other, as before.
 
+    Rows given twice under one key are written once, as the last of them
+    (`last_per_key`), which is what the table held after them anyway.
+
     Returns how many rows were given, stored or already there (as before)."""
     if not rows:
         return 0
@@ -1080,7 +1137,8 @@ def upsert_player_logs(conn, rows: list[dict]) -> int:
     sql = (f"INSERT OR REPLACE INTO player_game_logs ({', '.join(LOG_COLS)}) "
            f"SELECT {', '.join(f':{c}' for c in LOG_COLS)} "
            f"WHERE NOT EXISTS (SELECT 1 FROM player_game_logs WHERE {same})")
-    return _chunked(conn, sql, [{c: r.get(c) for c in LOG_COLS} for r in rows])
+    _chunked(conn, sql, [{c: r.get(c) for c in LOG_COLS} for r in last_per_key(rows)])
+    return len(rows)
 
 
 def upsert_odds_history(conn, rows: list[dict]) -> int:
