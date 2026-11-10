@@ -244,6 +244,50 @@ def test_the_grade_counts_the_link_each_college_prop_stops_at_and_times_its_read
     assert "no team for him" in ledger.absent_blocker(hist, b), "the settle check's words, unchanged"
 
 
+
+def test_a_prop_on_days_with_nothing_final_waits_without_a_team_lookup():
+    """NOTHING FINAL YET (2026-11-10): at 03:58 on 10 November 111 of the 112
+    college props stopped at "no final game", props on games not played
+    yet, and all 7.3 seconds went to finding each man's team first. Inside
+    the pass's index the days are asked once whether any college game on
+    them is final; with none, the bet waits as before and no team is read.
+    The settle check, outside an index, still names the team."""
+    import datetime as _dt
+    today = _dt.date.today()
+    ahead = (today + _dt.timedelta(days=3)).isoformat()      # nothing final within a day of it
+
+    def _run(indexed):
+        hist, _day = _links_history(today)
+        counted = _Counting(hist)
+        led = ledger.connect(":memory:")
+        ledger.configure_bankroll(led, starting=1000, unit_pct=1.0)
+        for player in ("Kurtis Rourke", "Aidan Chiles", "Nobody Known"):
+            led.execute(
+                "INSERT INTO bets (ts, sport, date, player, market, side, line, book, odds, "
+                "stake_units, stake_dollars, status, category) VALUES "
+                "('t','cfb',?,?,'rush_yds','OVER',10.5,'FanDuel',-110,0.1,1.0,'open','main')",
+                (ahead, player))
+        led.commit()
+        ledger.take_grade_parts()
+        if indexed:
+            with ledger.name_index():
+                ledger.settle_from_history(led, counted)
+        else:
+            ledger.settle_from_history(led, counted)
+        rows = [tuple(r) for r in led.execute("SELECT player, status FROM bets ORDER BY id")]
+        return rows, counted, ledger.take_grade_parts(), hist
+
+    plain, plain_hist, _p, _h = _run(False)
+    kept, kept_hist, parts, hist = _run(True)
+    assert kept == plain and {s for _p2, s in kept} == {"open"}, (kept, plain)
+    assert parts["absent_why_cfb"] == {"nothing final yet": 3}, parts["absent_why_cfb"]
+    assert kept_hist.span == 0 and kept_hist.plain == 0, "no team read for a game not yet final"
+    assert plain_hist.plain == 3, "outside an index the rule reads as it always did"
+    b = {"sport": "cfb", "market": "rush_yds", "category": "main", "date": ahead, "player": "Kurtis Rourke"}
+    assert ledger.absent_blocker(hist, b).startswith("IU has no final game a day either side"), \
+        ledger.absent_blocker(hist, b)
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

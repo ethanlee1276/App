@@ -5939,6 +5939,9 @@ def _cfb_day_files(hist_conn, periods) -> tuple | None:
 #: feed places). Inside the pass's name index each one is counted under the
 #: link it stops at, and the rule's three reads are timed; the grade's parts
 #: carry both to the heartbeat (`absent_why_cfb`, `absent_cfb_<read>`).
+#: "nothing final yet" is a prop whose days hold no final college game at
+#: all (its game not yet played); "no final" is one whose team's game is
+#: missing on days other games finished, which is worth a look.
 #: Outside an index (the settle check's `absent_blocker`) nothing is kept.
 _ABSENT_WHY_KEY = "absent_why_cfb"
 _ABSENT_LAPS_KEY = "absent_laps_cfb"
@@ -5970,6 +5973,28 @@ def _college_absent(hist_conn, b, target):
     except ValueError:
         _absent_tally("bad date")
         return None, "its date is not a calendar day"
+    lo = (d0 - datetime.timedelta(days=1)).isoformat()
+    hi = (d0 + datetime.timedelta(days=1)).isoformat()
+    # NOTHING FINAL YET, NOTHING TO LOOK UP (2026-11-10). At 03:58 on 10
+    # November 111 of the 112 college props the pass sent here stopped at
+    # "no final game a day either side", props on games not yet played,
+    # and all 7.3 of the rule's seconds went to finding each man's team
+    # first. Inside the pass's name index, the days are asked once whether
+    # any college game on them is final at all; when none is, the bet waits
+    # as it would have, with no team looked up. The settle check
+    # (`absent_blocker`, outside an index) still names the team.
+    index = _name_index_now()
+    if index is not None:
+        fk = ("cfb_any_final", id(hist_conn), lo, hi)
+        if fk not in index:
+            index[fk] = hist_conn.execute(
+                "SELECT 1 FROM games WHERE sport='cfb' AND period BETWEEN ? AND ? "
+                "AND home_score IS NOT NULL AND away_score IS NOT NULL LIMIT 1",
+                (lo, hi)).fetchone() is not None
+        if not index[fk]:
+            _absent_lap("finals", t0)
+            _absent_tally("nothing final yet")
+            return None, "no college game a day either side of the date is final yet"
     # The team: off the bet where the writer stamped it, else off the
     # player's own earlier stat rows. Five 09-12 rows had neither — a
     # first-appearance freshman has no history — which is why the bet
@@ -5992,8 +6017,6 @@ def _college_absent(hist_conn, b, target):
         _absent_tally("no team")
         return None, ("no team for him — none stamped on the bet, no stat row in the "
                       "45 days before, not on the cached roster")
-    lo = (d0 - datetime.timedelta(days=1)).isoformat()
-    hi = (d0 + datetime.timedelta(days=1)).isoformat()
     # ONE FIXTURE, however many rows. The games table holds the same
     # college game twice — once keyed AWAY@HOME, once by its ESPN id —
     # and a night game's two rows can even sit a day apart (Hawaii-UNLV,

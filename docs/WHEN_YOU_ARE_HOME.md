@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OD. A college prop whose game is not final yet waits without its team looked
+up** (step 506; 10 November). Nothing to run. The new count on the heartbeat
+(NZ) answered straight away. At 03:58 on 10 November, 111 of the 112 college
+props the settle pass sent through the absent-player rule stopped at "no final
+game a day either side": props on games not played yet. All 7.3 seconds of the
+rule went to looking up each player's team before learning that. The pass now
+asks the bet's days once whether any college game on them is final at all;
+when none is, the prop waits exactly as before, with no team looked up. The
+count calls that `nothing final yet`. `no final` is kept for a prop whose own
+team's game is missing on days when other games finished, which is the one
+worth a look. The settle check still names the team. This should take about 7
+seconds off every settle pass while a slate waits.
+
 **OC. The usage ripple splits each season by team once** (step 505; 10
 November). Nothing to run. For every player ruled out, the usage ripple (the
 card note on what a teammate absorbed when he sat) picked his team's rows out
