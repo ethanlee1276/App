@@ -21,7 +21,11 @@ these hold:
   * the store opens only on the production history file, lives beside the
     kept game-log reads (pruned and forgotten with them), drops a team no
     build has read in KEEP_DAYS, is never written past the reads' size
-    limits, and says on the heartbeat what each build kept and drew.
+    limits, and says on the heartbeat what each build kept and drew;
+  * the section's own read of two seasons of logs (`board_games`) is kept
+    until those logs change or the board's teams do, and gives the games a
+    fresh read gives (4.2 to 8.3 seconds a build at 22:49-23:23 on 9
+    November, with every team's draw kept).
 
 Run directly: `python3 tests/test_the_play_sim_keeps_each_teams_games.py`
 """
@@ -341,6 +345,59 @@ def test_the_pair_counts_are_every_trial_counted():
     for v in (0, 1, 2 ** 70 + 5, (1 << 8000) - 1):
         assert P.popcount(v) == bin(v).count("1")
     assert P.over_bytes([1.0, 3.0, 2.5, 2.0], 2.0) == int.from_bytes(bytes([0, 1, 1, 0]), "little")
+
+def _log_row(team, wk, player, market, value, season=2026):
+    return {"sport": "nfl", "season": season, "period": str(wk), "game_id": f"{team}-{season}-{wk}",
+            "player": player, "team": team, "opponent": OPP[team], "position": "WR", "home": 1,
+            "market": market, "value": value}
+
+
+def test_the_boards_log_read_is_kept_until_the_logs_or_the_teams_change():
+    from engine import db
+    with tempfile.TemporaryDirectory() as tmp:
+        old = os.environ.get("QB_FEEDSTATE_DIR")
+        os.environ["QB_FEEDSTATE_DIR"] = os.path.join(tmp, "feedstate")
+        enabled, reads = logcache.enabled_for, []
+        load = P.load_rows
+        conn = db.connect(os.path.join(tmp, "history.db"))
+        try:
+            logcache.enabled_for = lambda c: True
+            P.load_rows = lambda *a, **k: (reads.append(1), load(*a, **k))[1]
+            db.upsert_player_logs(conn, [_log_row(t, wk, f"{t} {p}", m, v) for t in ("AAA", "BBB", "CCC")
+                                         for wk in range(1, 6) for p, m, v in (("WR0", "targets", 7),
+                                                                               ("WR0", "rec_yds", 61.0),
+                                                                               ("QB", "pass_att", 33))])
+            conn.commit()
+            seasons = (2025, 2026)
+            first = P.board_games(conn, "nfl", seasons, {"BBB", "AAA"})
+            again = P.board_games(conn, "nfl", seasons, ["AAA", "BBB"])
+            note = logcache.status()["playsim_games.nfl"]
+            assert reads == [1] and note["kept"] is True, (reads, note)
+            assert again == first == P.team_games(load(conn, "nfl", seasons, ["AAA", "BBB"]))
+            assert sorted(first) == ["AAA", "BBB"] and len(first["AAA"]) == 5
+            P.board_games(conn, "nfl", seasons, ["AAA", "CCC"])
+            assert len(reads) == 2, "another team list reads again"
+            db.upsert_player_logs(conn, [_log_row("AAA", 6, "AAA WR0", "targets", 9)])
+            conn.commit()
+            moved = P.board_games(conn, "nfl", seasons, ["AAA", "BBB"])
+            note = logcache.status()["playsim_games.nfl"]
+            assert len(reads) == 3 and note["kept"] is False and note["why"] == "rows changed", note
+            assert len(moved["AAA"]) == 6 and moved == P.team_games(load(conn, "nfl", seasons, ["AAA", "BBB"]))
+        finally:
+            P.load_rows, logcache.enabled_for = load, enabled
+            conn.close()
+            if old is None:
+                os.environ.pop("QB_FEEDSTATE_DIR", None)
+            else:
+                os.environ["QB_FEEDSTATE_DIR"] = old
+
+
+def test_the_section_reads_its_logs_through_the_kept_read():
+    import inspect
+    src = inspect.getsource(P.ideas_section)
+    assert "board_games(conn, sport, (int(latest) - 1, int(latest)), by_team)" in src
+    assert "team_games(load_rows(" not in src
+
 
 def test_college_is_not_played_and_reads_nothing():
     """College's logs file each game under its date and keep no targets, so

@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NO. The play simulator's read of the game logs is kept too** (step 491; 10
+November). Nothing to run. With every NFL team's games kept (NI: the store
+said `kept 30, drawn 0` at 22:49, 22:55 and 23:23 on 9 November), the
+simulator's part of the readings was still 4.2 to 8.3 seconds a build: two
+seasons of game logs read on every build for the team profiles its keys are
+made of, rows that change about once a day. That read is now kept with the
+other game-log reads (LC1 to LC3) until the logs change or the board's teams
+do, and gives the same games. The heartbeat shows it as
+`logcache.playsim_games.nfl`.
+
 **NN. Grading reads its snapshot rows at half the cost, and a copy it cannot
 place has only that name read again** (step 490; 10 November). Nothing new
 to run: LQ, already on the list (`tools/snapcheck.py`), compares this read

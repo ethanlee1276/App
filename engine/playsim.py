@@ -762,6 +762,24 @@ class KeptSims:
                                    "teams": len(self.teams), **self.note})
 
 
+def board_games(conn, sport: str, seasons, teams) -> dict:
+    """`team_games` of these seasons' logs for these teams, kept until the
+    logs change (`logcache.memo`: their generation count for these seasons,
+    and these teams).
+
+    THE READ WAS THE SECTION (9 November). With every NFL team kept (the
+    store's note at 22:49, 22:55 and 23:23: kept 30, drawn 0), the
+    simulator's part of the readings was still 4.2 to 8.3 seconds a build:
+    two seasons of game logs read on every build, for the profiles a team's
+    key is made of, rows that change about once a day. The same rows give
+    the same games, so every key, and every reading, is the one it was."""
+    from . import logcache
+    teams = sorted(teams)
+    return logcache.memo(conn, "playsim_games", sport, seasons,
+                         lambda: team_games(load_rows(conn, sport, seasons, teams)),
+                         code=__file__, extra=teams)
+
+
 def ideas_section(props, games, board, sport, conn=None, keep=None):
     """The pick page's reading: for each board leg on a team, the chance
     of his over in the simulated games and the legs that move with his.
@@ -799,7 +817,7 @@ def ideas_section(props, games, board, sport, conn=None, keep=None):
             latest = None                                     # a database with no logs table reads empty
         if latest is None:
             return {"players": {}, "games": {}}
-        tg = team_games(load_rows(conn, sport, (int(latest) - 1, int(latest)), sorted(by_team)))
+        tg = board_games(conn, sport, (int(latest) - 1, int(latest)), by_team)
         if keep is None:
             keep = KeptSims.for_board(conn, sport)
     finally:
