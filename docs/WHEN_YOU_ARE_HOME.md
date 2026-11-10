@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NS. The attention journal runs beside the NFL and college builds** (step
+495; 10 November). Nothing to run. With the box to itself at 01:14 on 10
+November, the NFL build took 74 seconds, and 8.4 of them were the attention
+journal: the build standing still while it asked Wikipedia for the board
+players' page views, which only the next build reads. It runs on its own
+thread now while the build goes on, and the build checks it has finished
+only at its very end. On the heartbeat it is still the readings' "attention
+journal" part; the build no longer waits for it.
+
 **NR. The NFL build's last two unexplained stages name their parts** (step
 494; 10 November). Nothing to run. Two of the NFL build's stages were still
 one number each on the heartbeat: the fantasy week (9 seconds at 00:07 on
@@ -9361,7 +9370,7 @@ instead, up to its 70 minutes. Now no long weekly job starts while the
 updater waits for anything. The deep refit, the Lab, the Thursday
 re-measure of the inventions, the backup and the Tuesday referees' fit are
 each held and start right after the restart, the same day; board learning
-waits for the next pass that learns. Only the bug scan, a second's work,
+waits for the next pass that learns. Only the bug scan, a few seconds' work,
 starts as before. A held job's line in the chores log reads `held — the
 box's updater restarts into new code once the sweep or weekly job in
 progress ends; it starts right after`.

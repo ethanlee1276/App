@@ -177,6 +177,58 @@ def game_slice(data: dict, home: str, away: str) -> dict:
     return out
 
 
+#: THE JOURNALS THAT WAIT ON THE NETWORK RUN BESIDE THE BUILD (2026-11-10).
+#: The attention journal was 8.4 of the NFL build's 74 seconds at 01:14 on
+#: 10 November: its whole budget (attention.BUILD_SECONDS) spent waiting on
+#: Wikipedia for views that only the NEXT build reads, while the build
+#: waited for it. It runs on a thread of its own now, on its own connection
+#: (WAL and the busy timeout, engine/db.tune), while the build goes on; the
+#: build's end waits for it (`finish_journals`) and says its seconds then.
+#: Not a daemon: a build that ends without asking still waits for it.
+BACKGROUND_JOURNALS = ("attention",)
+_BACKGROUND: list = []
+
+
+class _Journal:
+    """One section's journal on its own thread: its seconds and its error
+    kept for `finish_journals`."""
+
+    def __init__(self, name: str, fn, sport: str, section):
+        import threading
+        self.name, self.secs, self.error = name, 0.0, None
+        self.thread = threading.Thread(target=self._run, args=(fn, sport, section),
+                                       name=f"{name}-journal")
+
+    def _run(self, fn, sport, section) -> None:
+        t = time.monotonic()
+        try:
+            fn(sport, section)
+        except Exception as exc:                            # noqa: BLE001
+            self.error = f"{type(exc).__name__}: {exc}"[:300]
+        self.secs = time.monotonic() - t
+
+
+def finish_journals(timeout: float | None = None) -> dict:
+    """Wait for the journals `attach` left running, say each one's seconds
+    on the stage clock as the others do, and return ``{name: seconds}``;
+    one still running past ``timeout`` is left to the exit. Never raises."""
+    out: dict = {}
+    try:
+        from . import stageclock as _clock
+        while _BACKGROUND:
+            job = _BACKGROUND.pop(0)
+            job.thread.join(timeout)
+            if job.thread.is_alive():
+                continue
+            _clock.part("ideas readings", f"{job.name} journal", job.secs)
+            if job.error:
+                print(f"  ⚠️  {job.name} journal: {job.error}")
+            out[job.name] = job.secs
+    except Exception:                                       # noqa: BLE001
+        pass
+    return out
+
+
 def attach(sport: str, props, games, board, out=None, quiet: bool = False) -> dict:
     """What a build calls: build every section and write the file beside
     the build's own full board (`out` is the board's public path, as
@@ -185,7 +237,8 @@ def attach(sport: str, props, games, board, out=None, quiet: bool = False) -> di
 
     THE JOURNALS RUN ONLY FOR THE REAL BOARD. A build pointed at a scratch
     tree (every test that runs one) writes its file there and keeps nothing
-    in the history database, which no test may touch."""
+    in the history database, which no test may touch. Those in
+    BACKGROUND_JOURNALS are started and left running (`finish_journals`)."""
     try:
         from . import gate
         where = gate._full_dir_for(out) if out else directory()
@@ -210,6 +263,11 @@ def attach(sport: str, props, games, board, out=None, quiet: bool = False) -> di
             try:
                 fn = _section_fns(name)[3]
                 if fn is None:
+                    continue
+                if name in BACKGROUND_JOURNALS:
+                    job = _Journal(name, fn, sport, sec)
+                    job.thread.start()
+                    _BACKGROUND.append(job)
                     continue
                 fn(sport, sec)
             except Exception as exc:                        # noqa: BLE001

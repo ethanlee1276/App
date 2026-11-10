@@ -213,12 +213,16 @@ def test_the_real_boards_journals_each_say_their_seconds():
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 data = ideas.attach("nfl", [], [], {}, out=str(Path(where) / "nfl.json"))
+                # The attention journal runs beside the build (2026-11-10,
+                # engine/ideas BACKGROUND_JOURNALS): its seconds are said
+                # when the build's end waits for it.
+                ideas.finish_journals()
             said = buf.getvalue().splitlines()
     finally:
         ideas.build, ideas._section_fns, ideas.directory, gate._full_dir_for = keep
     parts = stageclock.parse_parts(said)["ideas readings"]
-    assert calls == ["attention", "range"], calls
-    assert list(parts) == ["menu", "attention", "range", "attention journal", "range journal", "write"], parts
+    assert sorted(calls) == ["attention", "range"], calls
+    assert list(parts) == ["menu", "attention", "range", "range journal", "write", "attention journal"], parts
     assert data["errors"] == {"range.journal": "RuntimeError: the table is locked"}, data["errors"]
     assert (Path(where) / "ideas_nfl.json").exists()
 

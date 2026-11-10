@@ -1830,11 +1830,12 @@ def heavy_running(but: str = "") -> str:
 #: would hold the restart for as long as it ran: the deep refit and the Lab
 #: (each up to its fifty minutes; the refit's Wednesday scouts start with
 #: it), the inventions' re-measure (76 minutes on 5 November), the backup
-#: (25 that day) and the referees' fit (three seasons of play-by-play read).
+#: (25 that day); and the referees' fit, 56 seconds on 10 November but three
+#: seasons of play-by-play to fetch again once its copies are a day old.
 #: Board learning, on the settle pass's own three-hour clock, is put off
 #: instead to the next pass that learns, its clock not reset (92 minutes in
-#: when a restart killed it on 4 November). The bug scan, a second's work
-#: on 9 November, starts as before.
+#: when a restart killed it on 4 November). The bug scan, 1 to 3 seconds on
+#: 9 and 10 November, starts as before.
 HOLDABLE = {"deep": ("deep_attempted", "deep refit"),
             "lab": ("lab_attempted", "the Lab"),
             "inventions": ("inventions_attempted", "the inventions' re-measure"),

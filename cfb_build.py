@@ -3112,4 +3112,10 @@ def _write(out: dict, path: str) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        # The journals the inventions' readings left running (engine/ideas
+        # BACKGROUND_JOURNALS) end with the build, and say their seconds.
+        from engine import ideas as _ideas_end
+        _ideas_end.finish_journals()
