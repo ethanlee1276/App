@@ -129,6 +129,8 @@ class SameBookCloses:
         self._norm, self._want3 = norm, want
         self._markets = {k[1] for k in want}
         self._grouped: dict = {}
+        # Each stamp's slate day, worked out once a pass (`linemoves._slate_day`).
+        self._slate_days: dict = {}
         return {(k[0], k[1]) for k in want}
 
     def add(self, r: dict) -> None:
@@ -141,7 +143,7 @@ class SameBookCloses:
             if k not in self._want3:
                 return
             float(r["ts"])
-            self._grouped.setdefault((k[0], k[1], linemoves._slate_day(r), k[2]), []).append(
+            self._grouped.setdefault((k[0], k[1], linemoves._slate_day(r, self._slate_days), k[2]), []).append(
                 {f: r[f] for f in self._KEEP if f in r})
         except (KeyError, TypeError, ValueError, AttributeError):
             return

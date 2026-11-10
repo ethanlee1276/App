@@ -21,7 +21,11 @@ hold:
     fraction of what the old lead read, and every close it serves is the
     whole file's; it never starts before the old lead did;
   * a copied quote set it cannot place (a name with no read of his own in
-    what was read) has the read done again from the old lead;
+    what was read) has only its names' copies judged again from the old
+    lead, on their own rows (`_PassSnapshots._replay`), and every close is
+    still the whole file's; so does a copy left waiting, and a copy in a
+    group the read's first pull holds; the readers' own path (a share past
+    ONE_READ_MAX_SHARE) still reads everything again from the old lead;
   * a day no open bet can close on (a card priced weeks ahead) does not move
     where the read starts;
   * while the index is still being built, the read starts at the old lead.
@@ -339,11 +343,10 @@ def test_a_card_priced_weeks_ahead_does_not_pull_the_start_back():
     _served_equal(snap, recent, lines, odds, sb)
 
 
-def test_a_copy_its_reads_cannot_place_reads_again_from_the_old_lead():
+def _bells():
     """Yesterday's last pull filed Jake Bell's hits under Josh Bell too.
     Josh Bell's own reads were nine days ago: inside the old lead, before
-    the first day's first row. Without them the read cannot place the copy
-    as the whole file does, so it reads again from the old lead."""
+    the first day's first row."""
     st1, st9 = _start(_day(1)), _start(_day(9))
     bells = []
     for h in (20, 10):
@@ -354,15 +357,165 @@ def test_a_copy_its_reads_cannot_place_reads_again_from_the_old_lead():
     for name in ("Jake Bell", "Josh Bell"):
         bells += [{"ts": st1 - 1800, "player": name, "market": "hits", "book": b, "line": 0.5,
                    "over_odds": -125, "under_odds": 105, "start_ts": st1} for b in BOOKS[:3]]
-    p = _file(SEASON + bells)
+    return bells
+
+
+def test_a_copy_its_reads_cannot_place_has_only_its_names_judged_again_from_the_old_lead():
+    """Without Josh Bell's own reads the read cannot place the copy as the
+    whole file does, so the Bells' copies, and only theirs, are judged again
+    from the old lead on their own rows: the read itself stays at the day
+    index, and Jake Bell's close is the whole file's."""
+    p = _file(SEASON + _bells())
     extra = [(1, "Jake Bell", "MIA", "ATL", "hits", "OVER")]
     snap, recent, lines, odds, sb, parts = _both(p, extra)
     assert snap.start is not None and parts.get("snapshot_unsure") == 1, parts
-    assert parts["snapshot_share"] == parts["lead_share"], "read from the old lead"
+    assert parts.get("snapshot_replay_groups") == 1 and parts.get("snapshot_replay", -1) >= 0, parts
+    assert "snapshot_lead" not in parts, parts
+    assert parts["snapshot_share"] < parts["lead_share"] * 0.5, "the read stays at the day index"
     jake = normalize_name("Jake Bell")
-    assert (jake, "hits", _day(1).isoformat(), 0.5) in odds
-    assert recent["odds"][(jake, "hits", _day(1).isoformat(), 0.5)] == \
-        odds[(jake, "hits", _day(1).isoformat(), 0.5)]
+    key = (jake, "hits", _day(1).isoformat(), 0.5)
+    assert key in odds and recent["odds"][key] == odds[key]
+    _served_equal(snap, recent, lines, odds, sb)
+
+
+def test_without_the_names_judged_again_the_read_alone_would_give_another_close():
+    """What the replay is for: the read from the day index alone hands the
+    copy to Jake Bell (the only name with a read of his own in it), so his
+    close would be Josh Bell's quotes."""
+    p = _file(SEASON + _bells())
+    extra = [(1, "Jake Bell", "MIA", "ATL", "hits", "OVER")]
+    keep = ledger._PassSnapshots._replay
+    try:
+        ledger._PassSnapshots._replay = lambda self, *a: True       # judged on the read alone
+        snap, recent, lines, odds, sb, parts = _both(p, extra)
+    finally:
+        ledger._PassSnapshots._replay = keep
+    key = (normalize_name("Jake Bell"), "hits", _day(1).isoformat(), 0.5)
+    assert snap.start is not None and recent["odds"][key] != odds[key], (recent["odds"][key], odds[key])
+
+
+def test_the_names_judged_again_are_the_only_rows_parsed_again():
+    p = _file(SEASON + _bells())
+    extra = [(1, "Jake Bell", "MIA", "ATL", "hits", "OVER")]
+    seen = []
+    keep = ledger._snapshot_stream
+
+    def counted(want, *a, **k):
+        seen.append(set(want) if want is not None else None)
+        return keep(want, *a, **k)
+    ledger._snapshot_stream = counted
+    try:
+        snap, recent, lines, odds, sb, parts = _both(p, extra)
+    finally:
+        ledger._snapshot_stream = keep
+    assert parts.get("snapshot_replay_groups") == 1, parts
+    assert {(normalize_name("Jake Bell"), "hits")} in seen, seen
+    assert len([w for w in seen if w and len(w) > 1]) >= 1, "the one read of every wanted row"
+
+
+def test_a_copy_left_waiting_is_judged_again_from_the_old_lead():
+    """Two men whose every read is the same quotes (a bench namesake the
+    books never quote, handed the star's lines): no read decides the copy,
+    so it waits, and a wait is settled on reads a read from further back
+    can see sooner. Their copies are judged again from the old lead, and
+    every close is the whole file's."""
+    rows = []
+    for back in range(DAYS_BACK, -2, -1):
+        st = _start(_day(back))
+        for h in (20, 10, 1):
+            for name in ("Jalen Williams", "Jaylin Williams"):
+                rows += [{"ts": st - h * 3600 - 420, "player": name, "market": "hits", "book": b,
+                          "line": 0.5, "over_odds": -130 - h, "under_odds": 100 + h, "start_ts": st}
+                         for b in BOOKS[:2]]
+    p = _file(SEASON + rows)
+    extra = [(1, "Jalen Williams", "OKC", "DEN", "hits", "OVER")]
+    snap, recent, lines, odds, sb, parts = _both(p, extra)
+    assert snap.start is not None and parts.get("snapshot_replay_groups") == 1, parts
+    assert parts["snapshot_share"] < parts["lead_share"] * 0.5, parts
+    _served_equal(snap, recent, lines, odds, sb)
+
+
+def _twins():
+    """Max and Mia Twin, both quoted, each with reads of his own: a copied
+    set sits as near to one as to the other, so it waits, and it is settled
+    on each man's first read of his own after his first wait. Nine days ago
+    (inside the old lead, before the day index's start) they had a wait of
+    their own, and the reads after it settle yesterday's copy for Max: his
+    -125 sits nearer the copy's -150 than anything of Mia's. The read from
+    the day index alone sees only yesterday's in-play reads after the wait
+    (Max -112, Mia -152) and gives the copy to Mia instead."""
+    st1, st9 = _start(_day(1)), _start(_day(9))
+
+    def q(ts, name, over, st):
+        return [{"ts": ts, "player": name, "market": "hits", "book": b, "line": 0.5,
+                 "over_odds": over, "under_odds": 100, "start_ts": st} for b in BOOKS[:2]]
+    rows = []
+    for st, after in ((st9, {"Max Twin": -125, "Mia Twin": -200}), (st1, {"Max Twin": -112, "Mia Twin": -152})):
+        rows += q(st - 3 * 3600 - 70, "Max Twin", -110, st) + q(st - 2 * 3600 - 70, "Mia Twin", -110, st)
+        over = -120 if st == st9 else -150
+        rows += q(st - 3600 - 70, "Max Twin", over, st) + q(st - 3600 - 70, "Mia Twin", over, st)
+        rows += q(st + 3600 - 70, "Max Twin", after["Max Twin"], st)
+        rows += q(st + 5400 - 70, "Mia Twin", after["Mia Twin"], st)
+    return rows
+
+
+def test_a_copy_left_waiting_is_settled_as_a_read_from_the_old_lead_settles_it():
+    p = _file(SEASON + _twins())
+    extra = [(1, "Max Twin", "MIN", "CHI", "hits", "OVER")]
+    snap, recent, lines, odds, sb, parts = _both(p, extra)
+    key = (normalize_name("Max Twin"), "hits", _day(1).isoformat(), 0.5)
+    assert snap.start is not None and "snapshot_unsure" not in parts, parts
+    assert parts.get("snapshot_replay_groups") == 1, parts
+    assert recent["odds"][key] == odds[key], (recent["odds"][key], odds[key])
+    _served_equal(snap, recent, lines, odds, sb)
+    keep = ledger._PassSnapshots._replay
+    try:
+        ledger._PassSnapshots._replay = lambda self, *a: True       # settled on the read alone
+        snap2, alone, *_rest = _both(p, extra)
+    finally:
+        ledger._PassSnapshots._replay = keep
+    assert alone["odds"][key] != odds[key], "the read alone settles it for Mia"
+
+
+def test_the_groups_a_read_from_partway_cannot_judge_alone():
+    """`_Copies.partway_groups`, unit by unit: an unsure copy's group, a
+    waiting copy's, and a group the read's first pull holds that holds a
+    copy later; not a group whose copies the read placed on reads it held,
+    nor one in the first pull that never holds a copy."""
+    def row(ts, name, market, over, under=100):
+        return {"ts": ts, "player": name, "market": market, "book": "DraftKings", "line": 0.5,
+                "over_odds": over, "under_odds": under}
+    c = LM._Copies()
+    feed = [row(100.0, "Mike Edge", "hits", -110), row(100.0, "Ben Calm", "hits", -115),
+            row(200.0, "Ann Seen", "hits", -120),
+            row(300.0, "Ann Seen", "hits", -125), row(300.0, "Abe Seen", "hits", -125),   # unsure
+            row(400.0, "Mike Edge", "hits", -140), row(400.0, "Mo Edge", "hits", -140),   # edge, unsure
+            row(500.0, "Tim Twin", "runs", -150), row(500.0, "Tom Twin", "runs", -150)]
+    for t in range(600, 1600, 100):
+        feed += [row(float(t), "Pat Own", "hits", -110), row(float(t), "Pia Own", "hits", -160)]
+    feed += [row(1700.0, "Pat Own", "hits", -112), row(1700.0, "Pia Own", "hits", -112)]  # placed
+    for r in feed:
+        c.add(normalize_name(r["player"]), r)
+    c.found()
+    got = c.partway_groups()
+    assert ("hits", "a seen") in got and ("hits", "m edge") in got, got
+    assert ("runs", "t twin") in got, "no read of his own: unsure, then waiting"
+    assert ("hits", "b calm") not in got, "first pull, never a copy"
+    assert ("hits", "p own") in c.paired_groups and ("hits", "p own") not in got, \
+        "a copy placed on reads inside the read"
+
+
+def test_the_readers_own_path_still_reads_everything_again_from_the_old_lead():
+    p = _file(SEASON + _bells())
+    extra = [(1, "Jake Bell", "MIA", "ATL", "hits", "OVER")]
+    keep = ledger.ONE_READ_MAX_SHARE
+    ledger.ONE_READ_MAX_SHARE = 0.0
+    try:
+        snap, recent, lines, odds, sb, parts = _both(p, extra)
+    finally:
+        ledger.ONE_READ_MAX_SHARE = keep
+    assert parts.get("snapshot_unsure") == 1 and parts.get("snapshot_lead") == 1, parts
+    assert parts["snapshot_share"] == parts["lead_share"], "read from the old lead"
     _served_equal(snap, recent, lines, odds, sb)
 
 
@@ -398,6 +551,8 @@ def test_the_pass_reads_its_start_from_the_index():
     assert "linemoves.day_start(sorted(self.days), index=held)" in src
     assert "self._one_read(since, start)" in src and "self._each_read(since, start)" in src
     assert 'self.parts["snapshot_unsure"]' in src
+    assert "lines.copies.partway_groups() | odds.copies.partway_groups()" in src
+    assert 'self.parts["snapshot_lead"]' in src
 
 
 if __name__ == "__main__":

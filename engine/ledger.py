@@ -4236,9 +4236,10 @@ class _PassSnapshots:
     player's earlier quotes of his own (`linemoves.day_start`), and never
     before the lead did: every row of every day it serves is read. A copied
     quote set (`linemoves._Copies`) that a name's earlier read would place,
-    with no such read in what was read, has the read done again from the
-    lead, as before; so does every pass while the index is still being
-    built."""
+    with no such read in what was read, has its names' copies judged again
+    from the lead, on their rows alone (`_replay`); every other name's are
+    already what a read from the lead makes. Every pass while the index is
+    still being built reads from the lead, as before."""
 
     def __init__(self, want, bets, hist_conn, close_days, parts, today=None):
         self.want, self.bets, self.hist = want, bets, hist_conn
@@ -4328,8 +4329,10 @@ class _PassSnapshots:
                     got = (self._one_read(since, start) if share <= ONE_READ_MAX_SHARE
                            else self._each_read(since, start))
                     if got is None:
-                        # A copy only an earlier read can place: from the lead.
+                        # A copy only an earlier read can place, on the
+                        # readers' own path: every reader again, from the lead.
                         self.parts["snapshot_unsure"] = self.parts.get("snapshot_unsure", 0) + 1
+                        self.parts["snapshot_lead"] = self.parts.get("snapshot_lead", 0) + 1
                 if got is None:
                     share = _snapshot_share(since)
                     self.parts["snapshot_share"] = round(share, 2)
@@ -4365,29 +4368,93 @@ class _PassSnapshots:
 
     def _one_read(self, since, start=None):
         """The three readers fed by one read from ``since`` (or the byte
-        offset ``start``). From ``start``: None as soon as a copied quote set
-        is judged with a name that has no read of his own in what was read
-        (`linemoves._Copies.unsure`), for the caller to read from ``since``."""
+        offset ``start``). From ``start``, the copies of every name group the
+        read could not judge alone (`linemoves._Copies.partway_groups`: a
+        copied quote set that found a name with no read of his own in what
+        was read, among them) are judged again from ``since`` (`_replay`);
+        None when that cannot be done, for the caller to read everything
+        from ``since``."""
         from .closebook import SameBookCloses
         from .linemoves import LineCloses, OddsCloses
         lines, odds = LineCloses(), OddsCloses()
         sb = SameBookCloses(self.hist, days=self.close_days)
         sb._cache = self._harvest
         sb.begin([dict(r) for r in self.bets if r["market"] not in GAME_MARKETS])
-        watch = start is not None
         for r in _wanted_rows(_snapshot_stream(self.want, siblings=True, since=since, start=start),
                               self.want, siblings=True):
             lines.add(r)
             odds.add(r)
             sb.add(r)
-            if watch and (lines.copies.unsure or odds.copies.unsure):
-                return None
         sb.finish()
-        got = {"lines": lines.index(), "odds": odds.index(),
-               "samebook": {"_samebook": sb, "_close_days": self.close_days}}
-        if watch and (lines.copies.unsure or odds.copies.unsure):
-            return None
-        return got
+        if start is not None:
+            lines.copies.found()                 # every pull judged, the last ones too
+            odds.copies.found()
+            groups = lines.copies.partway_groups() | odds.copies.partway_groups()
+            if lines.copies.unsure_groups or odds.copies.unsure_groups:
+                self.parts["snapshot_unsure"] = self.parts.get("snapshot_unsure", 0) + 1
+            if groups and not self._replay(since, groups, lines, odds):
+                return None
+        return {"lines": lines.index(), "odds": odds.index(),
+                "samebook": {"_samebook": sb, "_close_days": self.close_days}}
+
+    def _replay(self, since, groups, lines, odds) -> bool:
+        """Judge again, from ``since``, the copies of these ``(market, first
+        initial and surname)`` groups, on their own rows, and hand the two
+        close readers those judgements in place of theirs for these groups.
+        False (nothing changed) when a group holds no wanted name to read
+        it by, which `_wanted_rows` never lets through.
+
+        ONE NAME'S ROWS AGAIN, NOT EVERY WANTED ROW (9 November, 22:55: the
+        grade 48 seconds, 42 of them the snapshot read, read twice: once from
+        the day index, until a copy there named a man with no read of his own
+        in it, then all of it again from the lead, a third of the file).
+        `_Copies` keeps its state by name and market and judges a copy on the
+        names sharing its first initial and surname alone, so a group's
+        judgements depend on its own rows, in the file's order, and nothing
+        else. Each of these groups is judged again here on exactly the rows
+        a read from the lead hands it, so its judgements are that read's;
+        every other group's already are (`_Copies.partway_groups`). Only
+        these names' rows are parsed: a pass over the text, a second or two,
+        where reading every wanted row again was half a minute. (Two ways a
+        group's own rows could still judge apart from the whole read, which
+        this does not guard: a pull whose rows another writer interleaved
+        past `_Copies.KEEP` other pulls, which the whole read takes as two
+        pulls and this as the one written; and more than `_Copies.WAITING`
+        copies waiting at once, which the whole read settles early.)"""
+        from .linemoves import LineCloses, OddsCloses, _loose
+        t0 = _time.monotonic()
+        want = {(n, m) for n, m in self.want if (m, _loose(n)) in groups}
+        if {(m, _loose(n)) for n, m in want} != groups:
+            return False
+        again_lines, again_odds = LineCloses(), OddsCloses()
+        for r in _wanted_rows(_snapshot_stream(want, siblings=True, since=since), want, siblings=True):
+            again_lines.add(r)
+            again_odds.add(r)
+        lines.copies = _GroupCopies(lines.copies, again_lines.copies, groups)
+        odds.copies = _GroupCopies(odds.copies, again_odds.copies, groups)
+        _add_part(self.parts, "snapshot_replay", t0)
+        self.parts["snapshot_replay_groups"] = self.parts.get("snapshot_replay_groups", 0) + len(groups)
+        return True
+
+
+class _GroupCopies:
+    """A close reader's `linemoves._Copies` with some groups judged by
+    another read: `found` is ``own``'s for every ``(market, first initial
+    and surname)`` group but ``groups``, and ``again``'s for those
+    (`_PassSnapshots._replay`)."""
+
+    unsure = False
+
+    def __init__(self, own, again, groups):
+        self._own, self._again, self._groups = own, again, set(groups)
+        self.unsure_groups: set = set()
+
+    def found(self) -> dict:
+        from .linemoves import _loose
+        groups = self._groups
+        out = {k: v for k, v in self._own.found().items() if (k[1], _loose(k[0])) not in groups}
+        out.update((k, v) for k, v in self._again.found().items() if (k[1], _loose(k[0])) in groups)
+        return out
 
 
 # NFL slates journal under the week label the site shows ('2025-W05');

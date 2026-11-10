@@ -9338,6 +9338,31 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NN. Grading reads its snapshot rows at half the cost, and a copy it cannot
+place has only that name read again** (step 490; 10 November). Nothing new
+to run: LQ, already on the list (`tools/snapcheck.py`), compares this read
+with the whole file and now also says how many name groups it read again.
+At 22:49 and 22:55 on 9 November the settle pass's grade took 48 to 50
+seconds, 42 of them the snapshot read, done twice: once from the day index
+(LL) until a copied quote set there named a man with no read of his own in
+it, then all of it again from the lead, a third of the file. Three changes,
+every close the same:
+
+  * Each player's name is worked out once and kept, and each game's Eastern
+    day once a read: the two close readers cost half what they did a row (a
+    synthetic million-row file here: 43.5 seconds to 20.7).
+  * A copy the read cannot judge alone has only its names' rows read again
+    from the lead, about a second of text, not every wanted row.
+  * Two cases the day-index read judged unlike a read from the lead now get
+    the lead's answer: a copy left waiting (it is settled on reads that can
+    come from before the read began), and a name group in the read's first
+    pull, which the read can begin halfway through. A test shows a close the
+    old read got wrong this way.
+
+The heartbeat's `chores.settle.phases.grade_parts` now shows `snapshot_replay`
+(seconds) and `snapshot_replay_groups`; `snapshot_lead` counts a read done
+all over again from the lead, which only the each-reader path still does.
+
 **NM. The play simulator counts its pairs in one step** (step 489; 9
 November). Nothing to run. With every NFL team kept (NI: `kept 30, drawn 0`
 at 11:54), the simulator's part of the readings was 3.5 seconds, and nearly

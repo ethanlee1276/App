@@ -57,8 +57,13 @@ def main() -> int:
     sb = SameBookCloses(hconn, days=days)
     sb.prepare([dict(r) for r in rows if r["market"] not in ledger.GAME_MARKETS])
     t_whole = time.monotonic() - t0
-    where = ("the file's day index" if snap.start is not None and not parts.get("snapshot_unsure")
+    where = ("the file's day index" if snap.start is not None and not parts.get("snapshot_lead")
              else "the lead (the day index is still being built, or a copy needed it)")
+    again = parts.get("snapshot_replay_groups")
+    if again:
+        # The name groups whose copies the read could not judge alone, judged
+        # again from the lead on their own rows (ledger._PassSnapshots._replay).
+        where += f"; {again} name group(s) judged again from the lead in {parts.get('snapshot_replay', 0):.1f}s"
     print(f"the recent read {t_recent:.1f}s ({parts.get('snapshot_share')} of the file, from {where}; "
           f"index {parts.get('snapshot_index', 0):.1f}s, covering {parts.get('snapshot_indexed')}) | "
           f"the three whole-file reads {t_whole:.1f}s")

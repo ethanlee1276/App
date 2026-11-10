@@ -405,6 +405,15 @@ class _Copies:
         #: the file (`day_start`) cannot then tell it would place it as the
         #: whole file does, and is done again from further back.
         self.unsure = False
+        #: The ``(market, first initial and surname)`` of each such copy.
+        self.unsure_groups: set = set()
+        #: Each group holding a copy left waiting for a later read, each
+        #: holding any copy, and each seen in the read's first pull: with
+        #: ``unsure_groups``, what `partway_groups` names.
+        self.waiting_groups: set = set()
+        self.paired_groups: set = set()
+        self.edge_groups: set = set()
+        self._first_ts = None
 
     def add(self, name: str, r: dict) -> None:
         try:
@@ -418,7 +427,12 @@ class _Copies:
             self._order.append(ts)
             if len(self._order) > self.KEEP:
                 self._judge(self._order.pop(0))
-        pull.setdefault((r.get("market"), _loose(name)), {}).setdefault(name, []).append(q)
+            if self._first_ts is None:
+                self._first_ts = ts
+        group = (r.get("market"), _loose(name))
+        if ts == self._first_ts:
+            self.edge_groups.add(group)
+        pull.setdefault(group, {}).setdefault(name, []).append(q)
 
     def _judge(self, ts: float) -> None:
         for (market, _key), by in (self._open.pop(ts, None) or {}).items():
@@ -433,12 +447,15 @@ class _Copies:
                         self._after[k] = qs
                     continue
                 names = sorted(names)
+                self.paired_groups.add((market, _key))
                 before = {n: self._last.get((n, market)) for n in names}
                 if any(v is None for v in before.values()):
                     self.unsure = True
+                    self.unsure_groups.add((market, _key))
                 read = _read_of(qs)
                 owner, losers = _place(read, {n: [q] for n, q in before.items()})
                 if owner is None:
+                    self.waiting_groups.add((market, _key))
                     self._waiting.append((ts, market, names, read, before))
                     self._watch.update((n, market) for n in names)
                     if len(self._waiting) > self.WAITING:
@@ -458,6 +475,26 @@ class _Copies:
             self._flag(ts, market, names, losers)
         del self._waiting[:upto]
 
+    def partway_groups(self) -> set:
+        """Every ``(market, first initial and surname)`` group whose copies a
+        read begun partway through the file (`day_start`) may judge other
+        than a read from further back does, so the caller judges them again
+        from there (`ledger._PassSnapshots._replay`), once every pull is
+        judged (`found`):
+
+          * one whose copy found a name with no read of his own yet
+            (``unsure_groups``): his reads before the read began place it;
+          * one with a copy left waiting: it is settled on each name's first
+            read of his own after his first wait, and a read from further
+            back may have begun that wait sooner;
+          * one seen in the read's first pull that holds a copy anywhere:
+            the read can begin inside a pull (`_seek_since` lands on a line
+            up to 64 KB early) and take half of a copy for a read of his own.
+
+        Every other group's copies are judged on each name's latest read of
+        his own, inside the read, which is a read from further back's too."""
+        return self.unsure_groups | self.waiting_groups | (self.edge_groups & self.paired_groups)
+
     def found(self) -> dict:
         """``{(player, market, ts): (the other players)}``: every read left
         out, a name's copy of another's quotes (never the owner's own)."""
@@ -475,7 +512,7 @@ def _uncopied(key: tuple, rows: list, twins: dict) -> list:
     return [r for r in rows if (key[0], key[1], float(r["ts"])) not in twins]
 
 
-def _slate_day(r: dict) -> str:
+def _slate_day(r: dict, memo: dict | None = None) -> str:
     """The day a snapshot is filed under.
 
     A row stamped with its game's start files under that start's Eastern
@@ -486,13 +523,35 @@ def _slate_day(r: dict) -> str:
 
     An unstamped row keeps the machine-local day it always had: history
     written before the stamp is not reinterpreted.
+
+    ``memo``, a reader's own dict, keeps each stamp's day once worked out
+    (9 November): every row of a game carries its start and every row of a
+    pull its stamp, and a day here is 2.5 µs, asked of each row by each
+    close reader (`LineCloses`, `OddsCloses`, `closebook.SameBookCloses`) in
+    the settle pass's read of the file. The same stamp gives the same day,
+    so the answer is the one asked fresh.
     """
     import datetime as _dt
     st = r.get("start_ts")
     if st is not None:
+        st = float(st)
+        if memo is not None:
+            d = memo.get(st)
+            if d is not None:
+                return d
         from zoneinfo import ZoneInfo
-        return _dt.datetime.fromtimestamp(float(st), ZoneInfo(SLATE_TZ)).strftime("%Y-%m-%d")
-    return _dt.datetime.fromtimestamp(float(r["ts"])).strftime("%Y-%m-%d")
+        d = _dt.datetime.fromtimestamp(st, ZoneInfo(SLATE_TZ)).strftime("%Y-%m-%d")
+    else:
+        ts = float(r["ts"])
+        st = (ts,)                     # its own key: never a start's
+        if memo is not None:
+            d = memo.get(st)
+            if d is not None:
+                return d
+        d = _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+    if memo is not None:
+        memo[st] = d
+    return d
 
 
 def _pregame_legs(items: list[dict]) -> list[tuple]:
@@ -947,11 +1006,12 @@ class LineCloses:
         self._norm = normalize_name
         self.grouped: dict[tuple, list[dict]] = {}
         self.copies = _Copies()
+        self._days: dict = {}
 
     def add(self, r: dict) -> None:
         try:
             float(r["ts"])
-            date = _slate_day(r)
+            date = _slate_day(r, self._days)
             name = self._norm(r["player"])
             key = (name, r["market"], date)
             float(r["line"])                       # reject unusable rows early
@@ -1028,10 +1088,11 @@ def closing_books_by_date(rows) -> dict:
 
     grouped: dict = {}
     copies = _Copies()
+    days: dict = {}
     for r in rows:
         try:
             float(r["ts"])
-            date = _slate_day(r)
+            date = _slate_day(r, days)
             name = normalize_name(r["player"])
             key = (name, r["market"], date)
             float(r["line"])
@@ -1118,6 +1179,7 @@ class OddsCloses:
         self._norm = normalize_name
         self.grouped: dict[tuple, list[dict]] = {}
         self.copies = _Copies()
+        self._days: dict = {}
 
     def add(self, r: dict) -> None:
         try:
@@ -1127,7 +1189,7 @@ class OddsCloses:
             if r.get("over_odds") in (None, "") and \
                     r.get("under_odds") in (None, ""):
                 return
-            date = _slate_day(r)
+            date = _slate_day(r, self._days)
             ln = round(float(r["line"]), 1)
             name = self._norm(r["player"])
             self.grouped.setdefault(

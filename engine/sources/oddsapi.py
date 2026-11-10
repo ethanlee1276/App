@@ -17,6 +17,7 @@ allowed.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
@@ -944,6 +945,13 @@ def _key_for(explicit: str | None, cache_only: bool) -> str:
 _SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b", re.I)
 
 
+#: ONE ANSWER PER NAME (9 November). The answer depends on the string
+#: alone, and the same few thousand names come through here over and over:
+#: the settle pass's read of the snapshot file asked it of every wanted
+#: row three times over, 2.8 µs a call, on a game night's million rows,
+#: and every board joins its feeds on it. Each name is worked out once and
+#: kept (a bounded number: a few MB at most).
+@functools.lru_cache(maxsize=1 << 15)
 def normalize_name(name: str) -> str:
     """Loose key for matching player names across sources (drops punctuation,
     suffixes, casing and accents so 'Amon-Ra St. Brown' == 'amon ra st brown'
