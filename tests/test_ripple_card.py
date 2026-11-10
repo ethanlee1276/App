@@ -69,6 +69,45 @@ def test_a_measured_absence_is_said_with_its_number():
     assert n["with"] < n["without"]
 
 
+def test_each_teams_rows_are_split_once_and_every_note_is_the_same():
+    """EACH TEAM'S ROWS, ONCE (2026-11-10): the seasons are split by team once
+    a build, and each man ruled out reads his own team's rows: the notes
+    are the notes the whole seasons gave, for any number of absences."""
+    prior, cur = [], []
+    for team in ("KC", "BUF", "DET", "SF"):
+        prior += _season(2025, range(1, 18), out_weeks=(5, 6, 7, 8), team=team)
+        cur += _season(2026, range(1, 4), out_weeks=(2,), team=team)
+    props = [_Prop(p, t, pos, m) for t in ("KC", "BUF", "DET", "SF")
+             for p, pos, m in (("RB Two", "RB", RUSH_YDS), ("RB Three", "RB", RUSH_YDS),
+                               ("WR Two", "WR", REC_YDS), ("WR Two", "WR", RECEPTIONS))]
+    outs = [_out(team=t) for t in ("KC", "BUF", "DET", "SF")] + \
+           [_out("WR One", t, "WR") for t in ("KC", "DET")]
+    split = []
+    real = rd._rows_by_team
+    rd._rows_by_team = lambda rows: (split.append(len(rows or [])), real(rows))[1]
+    try:
+        got = rd.ripples_for_props(props, outs, cur, prior, 2026, 4)
+    finally:
+        rd._rows_by_team = real
+    assert split == [len(cur), len(prior)], "each season split once, whatever the absences"
+
+    class _Whole(dict):                        # every team handed the whole season, as before
+        def __init__(self, rows):
+            super().__init__()
+            self.rows = rows
+
+        def get(self, _team, _default=None):
+            return self.rows
+    rd._rows_by_team = _Whole
+    try:
+        whole = rd.ripples_for_props(props, outs, cur, prior, 2026, 4)
+    finally:
+        rd._rows_by_team = real
+    assert got and got == whole, "the same notes as the whole seasons give"
+    assert ("WR Two", REC_YDS) not in got or all(n["out"] == "WR One" for n in got[("WR Two", REC_YDS)])
+    assert {k for k in got} >= {("RB Two", RUSH_YDS)}
+
+
 def test_below_the_floor_the_card_says_it_could_not_measure():
     prior = _season(2025, range(1, 18), out_weeks=(9,))
     cur = _season(2026, range(1, 3))

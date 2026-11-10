@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-10, after the matchup scan's charting and tracking tables started
+Last updated 2026-11-10, after the usage ripple started splitting each season by team once
+(step OC: nothing to run), after the matchup scan's charting and tracking tables started
 being kept until their files change (step OB: nothing to run), after the matchup scan's usage started coming from the slate's
 two seasons (step OA: nothing to run), after a board with nothing to bet stopped reading the bet links
 and the slate and the college waits started naming their parts (step NZ: nothing to run),

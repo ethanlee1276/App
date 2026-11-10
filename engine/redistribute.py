@@ -233,6 +233,16 @@ def _first_week(rows, player_key: str, kind: str):
     return min(weeks) if weeks else None
 
 
+def _rows_by_team(rows) -> dict:
+    """``{team: its rows, in file order}``, keyed the way `absence_rows`
+    matches a row's team, so handing it one team's rows finds the rows it
+    would have found in the whole season."""
+    out: dict = {}
+    for r in rows or []:
+        out.setdefault(str(r.get("recent_team") or r.get("team") or "").upper(), []).append(r)
+    return out
+
+
 def absence_rows(stats, prior_stats, team: str, player: str, kind: str,
                  season: int, week: int) -> list:
     """The rows a redistribution may read for this absence.
@@ -315,6 +325,13 @@ def ripples_for_props(props, injuries, stats, prior_stats,
             out_by_team.setdefault((str(inj.team).upper(), kind), []).append(inj)
     if not out_by_team:
         return {}
+    # EACH TEAM'S ROWS, ONCE A BUILD (2026-11-10). `absence_rows` picks one
+    # team's rows out of both whole seasons, and it was asked once for every
+    # man ruled out: two full walks of every player's every week, again and
+    # again (the NFL build's usage ripple, 2.1 to 2.4 seconds on 10
+    # November). The seasons are split by team once here, and each absence
+    # is handed its own team's rows: the same rows, in the same order.
+    now_of, prior_of = _rows_by_team(stats), _rows_by_team(prior_stats)
     cache: dict = {}
     result: dict = {}
     for prop in props:
@@ -330,8 +347,8 @@ def ripples_for_props(props, injuries, stats, prior_stats,
                     continue                       # his own hold, not a ripple
                 ck = (team, _key(inj.player), kind)
                 if ck not in cache:
-                    rows = absence_rows(stats, prior_stats, team, inj.player,
-                                        kind, season, week)
+                    rows = absence_rows(now_of.get(team, []), prior_of.get(team, []), team,
+                                        inj.player, kind, season, week)
                     cache[ck] = (redistribution(rows, team, inj.player, kind)
                                  if rows else None)
                 res = cache[ck]

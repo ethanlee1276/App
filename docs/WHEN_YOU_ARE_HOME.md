@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OC. The usage ripple splits each season by team once** (step 505; 10
+November). Nothing to run. For every player ruled out, the usage ripple (the
+card note on what a teammate absorbed when he sat) picked his team's rows out
+of both whole seasons again: two full walks of every player's every week per
+absence, 2.1 to 2.4 seconds of the NFL build on 10 November. The seasons are
+split by team once now and each absence reads only its team's rows, the same
+rows in the same order. Measured here with forty players ruled out across
+twenty teams: 0.73 seconds down to 0.15, the same 62 card notes. On the
+heartbeat it is the `usage ripple` part of `run_slate`.
+
 **OB. The matchup scan's charting and tracking tables are kept until their files
 change** (step 504; 10 November). Nothing to run. The scan's charting table
 joins FTN's charting file to the season's play-by-play, a 47 MB file read whole
@@ -9376,7 +9386,10 @@ none of which changes a pick or a grade:
   gathered first now, and a board without one reads nothing and goes out
   exactly as before. A board with picks reads the links once, as it always
   did. On the heartbeat it is `bet link files` under `publish
-  recommendations.json`, which should read 0.0 between game days.
+  recommendations.json`. It reads 0.0 only for a board with no pick row at
+  all: the NFL board on Tuesday 10 November still carried a few in its paid
+  sections (the public copy, which strips them, showed none), and read the
+  links in 1.1 seconds at 03:56.
 - The slate (`build_slate › slate`: 5.4 seconds at 03:25, 13.8 at 03:18) names
   its parts under its own stage, `slate`: this season's stats, last season's
   stats, defences, carry index + position means, rows by player + snaps, who
