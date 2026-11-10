@@ -10192,6 +10192,18 @@ minutes at 07:33 (its stages add up to 119 seconds, the slowest pricing at
 nothing in it needed cutting; college's ran 93 seconds, slowest the Pick of
 the Day, crowd and parlays at 28.
 
+The second night (00:21 to 01:06 on Tuesday 10 November, 45 minutes) went
+to the NBA's own fit, the runnable piece tried longest ago (its three
+checks were already done this round; the NFL last had a turn on Sunday
+night, college on Monday), and finished it. No dial ran, so none moved: the
+NFL's rushing yards are still 8 of 21 scored, its receiving yards and
+receptions owed; college's receptions 12 of 21, with passing attempts,
+completions, rushing attempts and interceptions owed. No run has stalled.
+The round still owes the NFL, college and the NFL's book-line props, which
+wait for the NFL. The NFL has waited two nights while college and the NBA
+ran; it is now the stalest piece that can run, so Wednesday night's run
+goes to it first.
+
 **LW. The box-score pull asks for a game by its season** (step 445; 8
 November). The first pass with LS's timer on it (20:52, Saturday 7
 November) showed the college box scores at 43.4 seconds, and only 1.4 of
