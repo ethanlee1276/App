@@ -518,6 +518,16 @@ def from_maps(m: dict, keys: list):
 
 
 def join_audit(conn, season: int | None = None, min_touches: float = 20.0) -> list:
+    """`_join_audit`, kept between builds while the NFL logs are unchanged
+    (it reads nothing else), like the maps below (`build_usage_maps`):
+    0.8 seconds of every NFL build at 03:56 on 10 November."""
+    from . import logcache
+    return logcache.memo(conn, "nfl_join_audit", "nfl", None,
+                         lambda: _join_audit(conn, season, min_touches),
+                         code=_kept_code(), extra={"season": season, "min": min_touches})
+
+
+def _join_audit(conn, season: int | None = None, min_touches: float = 20.0) -> list:
     """Players with real production whose play-by-play rows never join.
 
     THE CHECK THAT SHOULD HAVE EXISTED FIRST. `player_game_logs` holds
@@ -564,7 +574,69 @@ def build_usage_maps(conn, season: int | None = None,
 
     ``season``/``upto_week`` are for the replay, which must see only what
     had happened. Live callers pass neither and get today's database,
-    which is already only what has happened."""
+    which is already only what has happened.
+
+    KEPT UNTIL WHAT THEY READ CHANGES (2026-11-10). The NFL build read the
+    maps afresh every build: 1.9 seconds at 03:56 on 10 November, 7 to 9 on
+    a cold disk, from rows that change when a week's results are ingested.
+    A live call (neither argument) is kept by engine/logcache against every
+    NFL season's log generations, the NFL games' lines (`_kept_inputs`:
+    the red-zone map's implied totals read them) and the role detector's
+    saved verdict (the snap and volume maps ask it), and the code below
+    (`_kept_code`). The replay's calls, each as of its own week, are read
+    as they always were, and so is any history file but the production one.
+    """
+    extra = _kept_inputs(conn) if season is None and upto_week is None else None
+    if extra is None:
+        return _usage_maps(conn, season, upto_week)
+    from . import logcache
+    return logcache.memo(conn, "nfl_usage_maps", "nfl", None,
+                         lambda: _usage_maps(conn, None, None),
+                         code=_kept_code(), extra=extra)
+
+
+def _kept_code() -> tuple:
+    """The source files the maps and the audit are worked out by."""
+    from . import fantasy, ideagate, rolechange, tdbacktest, touchdowns
+    from .sources import nflpbp
+    return (__file__, fantasy.__file__, touchdowns.__file__, tdbacktest.__file__,
+            ideagate.__file__, rolechange.__file__, nflpbp.__file__)
+
+
+def _kept_inputs(conn) -> dict | None:
+    """What the live maps read besides the NFL logs, for their kept copy's
+    key: a digest of every NFL game's spread and total (`red_zone_usage`'s
+    implied totals; the daily schedule pull and the closes fill them, not
+    the builds) and the size and time of the role detector's saved verdict
+    (engine/ideagate.role_verdict, refitted weekly). None for any history
+    file but the production one, or when either cannot be read: the maps
+    are then read from the table, as before."""
+    from . import logcache
+    if not logcache.enabled_for(conn):
+        return None
+    import hashlib
+    import os
+    from . import modelstate
+    from .rolechange import STORE
+    digest = hashlib.sha1()
+    try:
+        for row in conn.execute(
+                "SELECT season, period, game_id, home, away, spread, total FROM games "
+                "WHERE sport='nfl' AND spread IS NOT NULL AND total IS NOT NULL "
+                "ORDER BY season, period, game_id"):
+            digest.update(repr(tuple(row)).encode())
+    except Exception:                                        # noqa: BLE001
+        return None
+    try:
+        st = os.stat(modelstate.path(STORE))
+        role = [st.st_size, st.st_mtime_ns]
+    except OSError:
+        role = None
+    return {"lines": digest.hexdigest(), "role": role}
+
+
+def _usage_maps(conn, season: int | None, upto_week: int | None) -> dict:
+    """`build_usage_maps`, read from the table."""
     return {"red_zone": red_zone_usage(conn), "snap": snap_shares(conn),
             "volume": volume_roles(conn, season, upto_week),
             "xfp": xfp_roles(conn, season, upto_week),

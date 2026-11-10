@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-10, after a college prop whose game is not final yet started waiting
+Last updated 2026-11-10, after the NFL usage maps and the join audit started being kept
+between builds (step OE: nothing to run), after a college prop whose game is not final yet started waiting
 without its team looked up (step OD: nothing to run), after the usage ripple started splitting each season by team once
 (step OC: nothing to run), after the matchup scan's charting and tracking tables started
 being kept until their files change (step OB: nothing to run), after the matchup scan's usage started coming from the slate's

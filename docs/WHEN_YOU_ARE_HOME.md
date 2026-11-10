@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OE. The NFL usage maps and the join audit are kept between builds** (step
+507; 10 November). Nothing to run. Every NFL build read its usage maps (red
+zone, snaps, volume, xFP, depth, pocket, each player's team) and the join
+audit from the history file afresh: 1.9 and 0.8 seconds at 03:56 on 10
+November, 7 to 9 seconds for the maps on a cold disk, from rows that change
+when a week's results are ingested. They are now kept like the other game-log
+reads (engine/logcache), and read again when the NFL logs change, when any NFL
+game's spread or total changes (the red-zone map's implied totals read them),
+when the weekly refit rewrites the role detector's file, or when their code
+changes. The Lab's replay reads them as of each week, as before. On the
+heartbeat they show under `logcache` as `nfl_usage_maps.nfl` and
+`nfl_join_audit.nfl`; the NFL build's `usage maps` and `usage join audit` parts
+should drop to a few hundredths of a second once each is kept.
+
 **OD. A college prop whose game is not final yet waits without its team looked
 up** (step 506; 10 November). Nothing to run. The new count on the heartbeat
 (NZ) answered straight away. At 03:58 on 10 November, 111 of the 112 college
