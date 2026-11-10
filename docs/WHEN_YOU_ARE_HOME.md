@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NQ. A push reaches the site within minutes, even at midnight** (step 493;
+10 November). Nothing to run. My two pushes just after midnight (NO and NP)
+reached the board builds at once, since each build starts fresh on the new
+files, but the site itself kept running the code from 00:04 for up to an
+hour longer. The updater had pulled them while a board sweep ran and was
+waiting for that sweep to end, as it should (KA). But the day's first
+chores ran inside that wait, at 00:20, and started the deep refit; when the
+sweep ended, the updater found the refit running and waited for it
+instead, up to its 70 minutes. Now no long weekly job starts while the
+updater waits for anything. The deep refit, the Lab, the Thursday
+re-measure of the inventions, the backup and the Tuesday referees' fit are
+each held and start right after the restart, the same day; board learning
+waits for the next pass that learns. Only the bug scan, a second's work,
+starts as before. A held job's line in the chores log reads `held — the
+box's updater restarts into new code once the sweep or weekly job in
+progress ends; it starts right after`.
+
 **NP. The NFL slate reads last season once** (step 492; 10 November).
 Nothing to run. The NFL build's slate stage took 14 to 19 seconds a build on
 9 November. On a copy of the same files here, 2.2 of its 5.1 seconds were the

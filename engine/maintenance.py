@@ -1363,13 +1363,18 @@ def settle_open(log=print, state_path: Path | None = None,
             # the weekly fitters (`_spawn_module`).
             last_bl = state.get("last_boardlearn_ts")
             if not (isinstance(last_bl, (int, float)) and now - last_bl < BOARDLEARN_EVERY_S):
-                try:
-                    for line in _run_board_learning(lconn, hconn, log):
-                        log(f"  {line}")
-                except Exception as exc:  # noqa: BLE001
-                    log(f"  ⚠️  board learning skipped: {exc}")
-                state["last_boardlearn_ts"] = now
-                _save_state(state_path, state)
+                if updater_waiting():
+                    # Not into a restart (HOLDABLE): put off, its clock not
+                    # reset, so the next pass that learns runs it.
+                    log("  board learning: put off — the box's updater restarts into new code first")
+                else:
+                    try:
+                        for line in _run_board_learning(lconn, hconn, log):
+                            log(f"  {line}")
+                    except Exception as exc:  # noqa: BLE001
+                        log(f"  ⚠️  board learning skipped: {exc}")
+                    state["last_boardlearn_ts"] = now
+                    _save_state(state_path, state)
             # The correlation priors, refit against our own history. The
             # last fitter on this site that a human had to remember to
             # run: you typed the command, read a table and hand-copied
@@ -1746,28 +1751,45 @@ WEEKLY_JOB_TIMEOUT_S = 3600
 #: THE UPDATER WAITS FOR A WEEKLY JOB (deploy/autoupdate.py RESTART_PENDING,
 #: 2026-11-04). A restart kills every weekly child in the unit, so the box's
 #: updater now holds a restart while one runs and leaves this note; while it
-#: is fresh no new deep refit or Lab run starts here (`_hold`), so the wait
-#: ends when the running job does, and `launch_held` starts what was held
-#: the moment the restart lands. Past the TTL the note is an updater that
-#: died, and jobs start as before.
+#: is fresh no new long weekly job (HOLDABLE) starts here (`_hold`), so the
+#: wait ends when the running job does, and `launch_held` starts what was
+#: held the moment the restart lands. Past the TTL the note is an updater
+#: that died, and jobs start as before.
 RESTART_PENDING_NAME = "restart_pending.json"
 RESTART_PENDING_TTL_S = 80 * 60
 
+#: AND WHILE IT WAITS FOR THE SWEEP (2026-11-10). The updater leaves a second
+#: note while the board sweep in progress finishes (deploy/autoupdate.py
+#: RESTART_WANT, which launch.py `_restart_wanted` reads to start no new
+#: sweep), and only the first note was read here. At 00:20:49 on 10 November
+#: the day's chores started the deep refit, the bug scan and the referees'
+#: fit inside a wait for the sweep; when the sweep ended the updater found
+#: the refit running and waited for it instead, up to WEEKLY_WAIT_MAX_S, an
+#: hour for code that was due within minutes. Either note holds the long
+#: jobs now (HOLDABLE). Past launch.py's RESTART_WANT_TTL_S the sweep's note
+#: is an updater that died, as the sweeps themselves read it.
+RESTART_WANT_NAME = "restart_wanted.json"
+RESTART_WANT_TTL_S = 50 * 60
+
 
 def updater_waiting(now: float | None = None) -> str:
-    """The commit the box's updater holds a restart for while a weekly job
-    finishes, or "" — no note, an unreadable one, or one past
-    RESTART_PENDING_TTL_S. Never raises."""
+    """The commit the box's updater holds a restart for, while a weekly job
+    finishes (RESTART_PENDING_NAME) or the board sweep in progress does
+    (RESTART_WANT_NAME), or "": no note, an unreadable one, or one past its
+    TTL. Never raises."""
     import time as _time
-    try:
-        d = json.loads((_child_dir() / RESTART_PENDING_NAME).read_text(encoding="utf-8"))
-        commit = str(d.get("commit") or "").strip()
-        since = float(d.get("since") or 0)
-    except (OSError, ValueError, TypeError, AttributeError):
-        return ""
-    if not commit or (_time.time() if now is None else now) - since > RESTART_PENDING_TTL_S:
-        return ""
-    return commit
+    now = _time.time() if now is None else now
+    for name, ttl in ((RESTART_PENDING_NAME, RESTART_PENDING_TTL_S),
+                      (RESTART_WANT_NAME, RESTART_WANT_TTL_S)):
+        try:
+            d = json.loads((_child_dir() / name).read_text(encoding="utf-8"))
+            commit = str(d.get("commit") or "").strip()
+            since = float(d.get("since") or 0)
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+        if commit and now - since <= ttl:
+            return commit
+    return ""
 
 
 #: ONE OF THE TWO AT A TIME (2026-11-06). The Lab and the deep refit each
@@ -1802,33 +1824,55 @@ def heavy_running(but: str = "") -> str:
     return ""
 
 
+#: THE JOBS HELD WHILE THE UPDATER WAITS (`_hold`, `launch_held`): each with
+#: the mark its day's attempt is recorded under and its name in the log. They
+#: are the weekly children that can run for many minutes, each of which
+#: would hold the restart for as long as it ran: the deep refit and the Lab
+#: (each up to its fifty minutes; the refit's Wednesday scouts start with
+#: it), the inventions' re-measure (76 minutes on 5 November), the backup
+#: (25 that day) and the referees' fit (three seasons of play-by-play read).
+#: Board learning, on the settle pass's own three-hour clock, is put off
+#: instead to the next pass that learns, its clock not reset (92 minutes in
+#: when a restart killed it on 4 November). The bug scan, a second's work
+#: on 9 November, starts as before.
+HOLDABLE = {"deep": ("deep_attempted", "deep refit"),
+            "lab": ("lab_attempted", "the Lab"),
+            "inventions": ("inventions_attempted", "the inventions' re-measure"),
+            "backup": ("last_backup", "the backup"),
+            "refs": ("nflrefs_attempted", "the referees' fit")}
+
+
 def _hold(state: dict, state_path, job: str, today: _dt.date, log, behind: str = "") -> None:
-    """Hold ``job`` ("deep" or "lab") for `launch_held`: its day's attempt is
+    """Hold ``job`` (a HOLDABLE key) for `launch_held`: its day's attempt is
     not spent, so it starts once the restart lands, or once the other heavy
-    job (``behind``) ends, rather than tomorrow."""
+    job (``behind``) ends, rather than on its next day."""
     held = dict(state.get("held") or {})
     held[job] = today.isoformat()
     state["held"] = held
     _save_state(state_path, state)
-    name = "deep refit" if job == "deep" else "the Lab"
+    name = HOLDABLE.get(job, (None, job))[1]
     if behind:
         other = "the Lab" if behind == HEAVY_WEEKLY["lab"] else "the deep refit"
         log(f"  {name}: held — {other} is running, and the two never share the box's one CPU; "
             f"it starts the cycle after {other} ends")
         return
-    log(f"  {name}: held — the box's updater restarts into "
-        f"new code once the weekly job in progress ends; it starts right after")
+    log(f"  {name}: held — the box's updater restarts into new code once the sweep or "
+        f"weekly job in progress ends; it starts right after")
 
 
 def launch_held(state_path=None, today: _dt.date | None = None, log=print,
-                deep=None, deep_next=None, lab_run=None) -> list[str]:
+                deep=None, deep_next=None, lab_run=None,
+                inventions_run=None, backup_run=None, refs_run=None) -> list[str]:
     """Start the weekly jobs `_hold` kept back, once the updater has stopped
     waiting: the same day's only (a later day's own schedule takes it), each
     once, its attempt marked first as the chores mark it. Every cycle, from
-    `run_if_due`. The runners are injectable for tests. Never raises."""
+    `run_if_due`. The runners are injectable for tests; a job held without
+    one stays held in a sandbox, and the backup is only ever the real state
+    file's, as in the chores. Never raises."""
     out: list[str] = []
     from . import modelstate
-    if os.environ.get(modelstate.ENV_VAR) and not (deep or deep_next or lab_run):
+    sandbox = bool(os.environ.get(modelstate.ENV_VAR))
+    if sandbox and not (deep or deep_next or lab_run or inventions_run or backup_run or refs_run):
         return out                     # a sandbox never starts a real fitter
     try:
         if updater_waiting():
@@ -1840,26 +1884,32 @@ def launch_held(state_path=None, today: _dt.date | None = None, log=print,
         if not held:
             return out
         day = today.isoformat()
+        wednesday = today.weekday() == 2
+        given = {"deep": deep if wednesday else deep_next, "lab": lab_run,
+                 "inventions": inventions_run, "backup": backup_run, "refs": refs_run}
+        real = {"deep": _run_deep_refit if wednesday else _continue_deep_refit, "lab": _run_lab,
+                "inventions": _run_inventions, "refs": _run_nflrefs,
+                "backup": ((lambda lg: _spawn_module("engine.backupzip", lg, (day,)))
+                           if Path(state_path) == Path(STATE_PATH) else None)}
         start = []
         still = {}
         # One heavy job at a time (HEAVY_WEEKLY): none starts while the
         # other runs, and of two held at once only the first starts now.
+        # The others never waited for the heavy ones, and do not now.
         busy = heavy_running()
         for job, when in held.items():
-            key = "deep_attempted" if job == "deep" else "lab_attempted"
-            if when == day and job in ("deep", "lab") and state.get(key) != day:
-                if busy or start:
-                    still[job] = when
-                    continue
-                state[key] = day
-                start.append(job)
+            key = HOLDABLE.get(job, (None,))[0]
+            if key is None or when != day or state.get(key) == day:
+                continue
+            runner = given[job] or (None if sandbox else real[job])
+            if runner is None or (job in HEAVY_WEEKLY and (busy or any(j in HEAVY_WEEKLY for j, _ in start))):
+                still[job] = when
+                continue
+            state[key] = day
+            start.append((job, runner))
         state["held"] = still
         _save_state(state_path, state)
-        for job in start:
-            if job == "deep":
-                runner = (deep or _run_deep_refit) if today.weekday() == 2 else (deep_next or _continue_deep_refit)
-            else:
-                runner = lab_run or _run_lab
+        for job, runner in start:
             for line in runner(log):
                 out.append(line)
                 log(f"  {line}")
@@ -3310,13 +3360,18 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
     # results are in, and Wednesday is the deep refit's. The attempt is
     # marked before the work, as the deep refit's is.
     if today.weekday() == 3 and state.get("inventions_attempted") != today.isoformat():
-        state["inventions_attempted"] = today.isoformat()
-        _save_state(state_path, state)
-        try:
-            for line in _run_inventions(log):
-                log(f"  {line}")
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  inventions re-measure skipped: {exc}")
+        if updater_waiting():
+            # Not into a restart (HOLDABLE): an hour and more of it would
+            # hold the new code that long. Started once it lands.
+            _hold(state, state_path, "inventions", today, log)
+        else:
+            state["inventions_attempted"] = today.isoformat()
+            _save_state(state_path, state)
+            try:
+                for line in _run_inventions(log):
+                    log(f"  {line}")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  inventions re-measure skipped: {exc}")
 
     # THE BUG SCAN, once a day (engine/bugscan; Ethan, 2026-10-24: "we need a
     # debugging thing to scan for bugs"): crashes on people's screens, build
@@ -3335,13 +3390,16 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
     # Tuesdays: Monday night's game is in the play-by-play by then, and the
     # week's assignments are named after it. Marked before the work.
     if today.weekday() == 1 and state.get("nflrefs_attempted") != today.isoformat():
-        state["nflrefs_attempted"] = today.isoformat()
-        _save_state(state_path, state)
-        try:
-            for line in _run_nflrefs(log):
-                log(f"  {line}")
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  referee tendencies skipped: {exc}")
+        if updater_waiting():
+            _hold(state, state_path, "refs", today, log)      # not into a restart (HOLDABLE)
+        else:
+            state["nflrefs_attempted"] = today.isoformat()
+            _save_state(state_path, state)
+            try:
+                for line in _run_nflrefs(log):
+                    log(f"  {line}")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  referee tendencies skipped: {exc}")
 
     # BOOTSTRAP: a box holding a sport's logs with an EMPTY rank store
     # measures now rather than waiting for Wednesday — the same "fit it
@@ -3526,9 +3584,13 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
         # history.db and deflated it on the refresher thread while every
         # board waited. It is a weekly child like the fitters now, logged
         # by reap_children when it lands; marked as attempted when started.
-        state["last_backup"] = today.isoformat()
-        for line in _spawn_module("engine.backupzip", log, (today.isoformat(),)):
-            log(f"  {line}")
+        # Not into a restart (HOLDABLE): held, and started once it lands.
+        if updater_waiting():
+            _hold(state, state_path, "backup", today, log)
+        else:
+            state["last_backup"] = today.isoformat()
+            for line in _spawn_module("engine.backupzip", log, (today.isoformat(),)):
+                log(f"  {line}")
 
     if ingest_ok:
         state["last_done"] = today.isoformat()

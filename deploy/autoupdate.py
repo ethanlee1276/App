@@ -215,7 +215,9 @@ def _trim(repo, clear=False) -> str:
 #: (data/cache/sweep.json, written by launch.py `_note_sweep`); while one
 #: is, the new code is pulled and served as files (the page, the trimmed
 #: shell) but the restart waits, and data/cache/restart_wanted.json tells
-#: the app to start no new sweep, so the wait ends at the sweep's end. An
+#: the app to start no new sweep, so the wait ends at the sweep's end. Nor
+#: a long weekly job (`maintenance.updater_waiting`, 2026-11-10): one that
+#: started inside this wait would turn it into the hour-long wait below. An
 #: app too old to say restarts at once, as before.
 SWEEP_STATE = ("data", "cache", "sweep.json")
 RESTART_WANT = ("data", "cache", "restart_wanted.json")
@@ -231,9 +233,9 @@ RESTART_WANT = ("data", "cache", "restart_wanted.json")
 #: (maintenance.WEEKLY_JOB_TIMEOUT_S, an hour) and a margin. It leaves
 #: RESTART_PENDING, NOT RESTART_WANT: the boards keep sweeping (held for an
 #: hour, every board's picks would come off the page), while the app starts
-#: no new deep refit or Lab run (`maintenance.updater_waiting`), so the wait
-#: ends when the running job does. Then the board sweep, as above, on its
-#: own clock.
+#: no new long weekly job (`maintenance.updater_waiting`, HOLDABLE), so the
+#: wait ends when the running job does. Then the board sweep, as above, on
+#: its own clock.
 WEEKLY_PIDS = ("data", "cache")
 RESTART_PENDING = ("data", "cache", "restart_pending.json")
 WEEKLY_WAIT_MAX_S = 70 * 60
