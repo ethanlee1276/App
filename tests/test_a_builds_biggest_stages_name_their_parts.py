@@ -75,7 +75,7 @@ NFL_STAGE_PARTS = {
     # run_slate's own parts added up to 12.4 of its 23 seconds at 02:12 on 10
     # November: the rest was the build's preparation before it is called.
     "run_slate": ["live scores + team ratings", "usage maps", "usage join audit", "usage ripple",
-                  "previous Most Likely board"],
+                  "matchup scan usage", "previous Most Likely board"],
 }
 
 

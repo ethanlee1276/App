@@ -147,7 +147,41 @@ def test_the_build_hands_the_ripple_the_slates_two_seasons():
     rip = src[src.index("ripples: dict = {}"):src.index('_lap("run_slate", "usage ripple"')]
     assert '_cur = _weekly_kept.get("stats") or []' in rip
     assert '_prior = _weekly_kept.get("last_season") or []' in rip
-    assert "_weekly_kept.clear()" in rip, "let go once the ripple has read them"
+    # Then the matchup scan's usage off the same rows, and only then let go.
+    scan = src[src.index('_lap("run_slate", "usage ripple"'):src.index('_lap("run_slate", "matchup scan usage"')]
+    assert "_gs_usage.nfl_usage(args.season, args.week," in scan
+    assert 'stats=_weekly_kept.get("stats") or []' in scan
+    assert 'last_season=_weekly_kept.get("last_season")' in scan
+    assert scan.index("nfl_usage(") < scan.index("_weekly_kept.clear()"), "let go once both have read them"
+    assert src.count("_weekly_kept.clear()") == 1
+    assert "depth_rows=scan_depth_rows, usage_now=_scan_usage)" in src
+
+
+def test_the_scan_reads_the_usage_the_slates_seasons_give():
+    """The matchup scan's usage (engine/gamescan.nfl_usage) off the slate's
+    two seasons is the usage it read for itself, and the scan handed it
+    reads neither weekly stat file."""
+    from engine import gamescan as G
+    prior = _season(4)
+    current = [dict(r, season="2026") for r in _season(11, 2026) if int(r["week"]) < 5]
+    snaps = {2026: [{"player": "Player 1", "team": "MIA", "week": "3", "game_type": "REG",
+                     "offense_pct": "0.81", "position": "RB"}],
+             2025: [{"player": "Player 1", "team": "MIA", "week": "9", "game_type": "REG",
+                     "offense_pct": "0.66", "position": "RB"}]}
+    saved = nv.load_weekly_stats, nv.load_snap_counts
+    asked = []
+    nv.load_snap_counts = lambda s: snaps.get(s, [])
+    try:
+        nv.load_weekly_stats = lambda s: (asked.append(s), current if s == 2026 else prior)[1]
+        own = G.nfl_usage(2026, 5)
+        assert sorted(asked) == [2025, 2026], asked
+        del asked[:]
+        handed = G.nfl_usage(2026, 5, stats=current, last_season=prior)
+        assert asked == [] and handed == own and own[1], "the same usage, no file read"
+        thin = G.nfl_usage(2026, 5, stats=current, last_season=None)
+        assert asked == [2025] and thin == own, "a season the slate lacked is read, as before"
+    finally:
+        nv.load_weekly_stats, nv.load_snap_counts = saved
 
 
 def test_the_build_reads_last_season_from_the_defences_parse():

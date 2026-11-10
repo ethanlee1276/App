@@ -1990,14 +1990,43 @@ def contact_tables(season: int) -> tuple[dict, dict]:
     return contact, N.rushers_contact(now)
 
 
+def nfl_usage(season: int, week: int, stats=None, last_season=None) -> tuple:
+    """``(recent starters, usage)`` as the matchup scan reads them: this
+    season's snap counts and weekly stats to the week, last season's
+    blended in (`usage_table`, `blend_usage`, `recent_starters`).
+
+    THE SLATE'S TWO SEASONS, NOT A THIRD PARSE (2026-11-10). The scan read
+    both weekly stat files again for this ("snaps + weekly usage", 2.3
+    seconds of the NFL build at 03:18 on 10 November), the same two files
+    the slate had parsed a minute before. ``stats`` and ``last_season`` are
+    the slate's own rows when the build hands them over (nflverse
+    .build_slate's ``keep``); either one missing is read here, as the scan
+    always read it. Nothing here writes into a row."""
+    from .sources.nflverse import load_weekly_stats, load_snap_counts
+
+    def _safe(fn, *a):
+        try:
+            return fn(*a)
+        except Exception:                                    # noqa: BLE001
+            return []
+    snaps = _safe(load_snap_counts, season)
+    recent = recent_starters(snaps, before_week=week)
+    now = stats if stats is not None else _safe(load_weekly_stats, season)
+    last = last_season if last_season is not None else _safe(load_weekly_stats, season - 1)
+    usage = blend_usage(usage_table(now, snaps, before_week=week),
+                        usage_table(last, _safe(load_snap_counts, season - 1)))
+    return recent, usage
+
+
 def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
-               conn=None) -> int:
+               conn=None, usage_now=None) -> int:
     """Hang a ``scan`` on every game of an NFL board. Reads only what is
     cached or small (the unit table, this season's defender file, the
     weekly stats the build already fetched); a missing input leaves its
-    part of the scan empty, never the board. Returns games scanned."""
+    part of the scan empty, never the board. Returns games scanned.
+    ``usage_now`` is `nfl_usage`'s answer when the build worked it out
+    from the slate's own rows; without it the scan reads its own."""
     from .sources import nflscheme as N
-    from .sources.nflverse import load_weekly_stats, load_snap_counts
     from .sources.depthcharts import team_charts
     # ITS PARTS ON THE STAGE CLOCK (engine/stageclock.lap), under its own
     # name: the scan was 11.6 and 13.3 of the NFL pricing stage's seconds on
@@ -2045,11 +2074,7 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
             return fn(*a)
         except Exception:                                    # noqa: BLE001
             return []
-    snaps = _safe(load_snap_counts, season)
-    recent = recent_starters(snaps, before_week=week)
-    usage = blend_usage(
-        usage_table(_safe(load_weekly_stats, season), snaps, before_week=week),
-        usage_table(_safe(load_weekly_stats, season - 1), _safe(load_snap_counts, season - 1)))
+    recent, usage = usage_now if usage_now is not None else nfl_usage(season, week)
     _t = _clock.lap("matchup scan", "snaps + weekly usage", _t)
     try:
         from .nflusage import depth_mix, pocket_split

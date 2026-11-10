@@ -1150,10 +1150,25 @@ def main() -> None:
                       f"ruled out ({measured} with a measured share).")
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  usage ripple skipped: {exc}")
-    # Let the two seasons go once the ripple has read them, as its own
-    # parse was let go before.
-    _weekly_kept.clear()
     _rs_t = _lap("run_slate", "usage ripple", _rs_t)
+    # THE MATCHUP SCAN'S USAGE, OFF THE SAME TWO SEASONS (2026-11-10). The
+    # scan, run inside the pricing below (`_scan_first`), parsed both weekly
+    # stat files a third time for its usage table: "snaps + weekly usage",
+    # 2.3 seconds at 03:18 on 10 November. It is worked out here from the
+    # slate's rows (engine/gamescan.nfl_usage) and handed to the scan; only
+    # the small table is held, and the two seasons are let go, as the
+    # ripple's own parse was let go before.
+    _scan_usage = None
+    if "stats" in _weekly_kept:
+        try:
+            from engine import gamescan as _gs_usage
+            _scan_usage = _gs_usage.nfl_usage(args.season, args.week,
+                                              stats=_weekly_kept.get("stats") or [],
+                                              last_season=_weekly_kept.get("last_season"))
+        except Exception:                                     # noqa: BLE001
+            _scan_usage = None
+    _weekly_kept.clear()
+    _rs_t = _lap("run_slate", "matchup scan usage", _rs_t)
     # THE BOARD THIS BUILD REPLACES, for the Most Likely hold: a pick keeps
     # its number and its seat between refreshes (likely.HOLD_MARGIN).
     from engine.likely import previous_board as _likely_prev
@@ -1182,7 +1197,7 @@ def main() -> None:
         from engine import gamescan as _scan
         try:
             _ns = _scan.attach_nfl(partial, slate, args.season, args.week,
-                                   depth_rows=scan_depth_rows)
+                                   depth_rows=scan_depth_rows, usage_now=_scan_usage)
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  matchup scan skipped: {_exc}")
             return {}

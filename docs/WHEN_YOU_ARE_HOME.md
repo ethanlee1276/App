@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OA. The matchup scan's usage comes from the slate's two seasons** (step 503;
+10 November). Nothing to run. The matchup scan inside the NFL pricing stage
+parsed this season's and last season's weekly stat files a third time for its
+usage table (`snaps + weekly usage`, 2.3 seconds at 03:18 on 10 November),
+after the slate and the usage ripple had read the same two. The build now
+works the scan's usage out from the slate's rows, right after the ripple, and
+hands the scan that small table; the two seasons are let go as before. Measured
+here on the same files: 0.87 seconds down to 0.60, the same usage to the
+last number. On the heartbeat the work shows as `matchup scan usage` under
+`run_slate`, and the scan's own `snaps + weekly usage` part drops to almost
+nothing.
+
 **NZ. A board with nothing to bet reads no bet links; the slate and the college
 waits name their parts** (step 502; 10 November). Nothing to run. Three things,
 none of which changes a pick or a grade:
