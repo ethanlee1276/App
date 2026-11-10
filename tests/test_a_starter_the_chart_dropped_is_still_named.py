@@ -98,8 +98,13 @@ def test_a_lineman_the_chart_still_starts_is_named_once():
 
 
 def test_the_build_reads_the_snap_counts_once_for_both():
+    # One read of this season's snap counts feeds both the starters and the
+    # usage table (engine/gamescan.nfl_usage, 2026-11-10: the usage now off
+    # the slate's own weekly rows when the build hands them over).
+    assert "snaps = _safe(load_snap_counts, season)" in SRC
     assert "recent = recent_starters(snaps, before_week=week)" in SRC
-    assert "usage_table(_safe(load_weekly_stats, season), snaps, before_week=week)" in SRC
+    assert "usage_table(now, snaps, before_week=week)" in SRC
+    assert SRC.count("_safe(load_snap_counts, season)") == 1
     assert "contact=contact, recent=recent)" in SRC
 
 

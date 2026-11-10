@@ -68,9 +68,14 @@ def test_the_read_says_the_split_and_last_seasons_rate():
 
 def test_the_build_hands_the_scan_both_seasons():
     src = open(os.path.join(ROOT, "engine", "gamescan.py"), encoding="utf-8").read()
-    body = src[src.index("def attach_nfl("):src.index("# ═══ COLLEGE")]
-    assert "usage = blend_usage(" in body
-    assert "_safe(load_weekly_stats, season - 1), _safe(load_snap_counts, season - 1)" in body
+    # The scan's usage is engine/gamescan.nfl_usage's (2026-11-10): this
+    # season blended with last, last season's own snap counts beside it.
+    body = src[src.index("def nfl_usage("):src.index("def attach_nfl(")]
+    assert "usage = blend_usage(usage_table(now, snaps, before_week=week)," in body
+    assert "usage_table(last, _safe(load_snap_counts, season - 1)))" in body
+    assert "last = last_season if last_season is not None else _safe(load_weekly_stats, season - 1)" in body
+    scan = src[src.index("def attach_nfl("):src.index("# ═══ COLLEGE")]
+    assert "recent, usage = usage_now if usage_now is not None else nfl_usage(season, week)" in scan
     assert G.CURRENT_SHARE == 0.55 and G.CURRENT_LEADS_GAMES == 2
     assert G.season_share(2) == 0.55 and G.season_share(9) == 0.55, "a tiny bit ahead, all season"
 
