@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NP. The NFL slate reads last season once** (step 492; 10 November).
+Nothing to run. The NFL build's slate stage took 14 to 19 seconds a build on
+9 November. On a copy of the same files here, 2.2 of its 5.1 seconds were the
+carry's position averages, worked out once for each of fourteen markets, each
+time filtering last season's whole regular season and reading every row's
+position and name again, for a season that does not change. And last
+season's file was read and parsed twice. Now every market's averages come
+from one walk of it, and the defences and the carry share one parse: the
+same 1,419 props for week 10 (1,530 for week 9, 1,623 for week 3), byte for
+byte, in about 1.8 seconds here instead of 2.1 to 2.3.
+
 **NO. The play simulator's read of the game logs is kept too** (step 491; 10
 November). Nothing to run. With every NFL team's games kept (NI: the store
 said `kept 30, drawn 0` at 22:49, 22:55 and 23:23 on 9 November), the

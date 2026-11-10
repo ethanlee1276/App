@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-10, after the play simulator's read of the game logs started being kept (step
+Last updated 2026-11-10, after the NFL slate started reading last season once (step NP: nothing
+to run), after the play simulator's read of the game logs started being kept (step
 NO: nothing to run), after grading started reading its snapshot rows at half the cost (step
 NN: nothing new to run; LQ checks it), after the play simulator started counting its pairs in one step (step
 NM: nothing to run), after the play simulator stopped reading college logs it could not use

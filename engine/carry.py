@@ -333,6 +333,46 @@ def positional_means(rows: list[dict], market: str) -> dict[str, float]:
     return {p: sum(v) / len(v) for p, v in buckets.items() if v}
 
 
+def positional_means_all(rows: list[dict], markets) -> dict[str, dict[str, float]]:
+    """``{market: positional_means(rows, market)}`` for every market, in
+    one walk of the season's rows.
+
+    FOURTEEN WALKS OF ONE SEASON (10 November). The NFL build's slate stage
+    took 14 to 19 seconds a build on 9 November; on a copy of the same
+    files here, 2.2 of its 5.1 seconds were this mean, worked out once per
+    market: last season's whole regular season filtered, and each row's
+    position and name read, fourteen times over, for a season that does
+    not change. Each row is read once now, its value taken in every
+    market. Each market's players are met in the same order and their
+    numbers summed in the same order, so every mean is the float
+    `positional_means` gives."""
+    from .sources.nflverse import _s, _regular_season, board_position, stat_value
+
+    markets = list(markets)
+    per_player: dict[tuple, list[list[float]]] = {}
+    for r in _regular_season(rows):
+        pos = board_position(r)
+        name = _s(r, "player_display_name", "player_name", "full_name")
+        if not pos or not name:
+            continue
+        lists = per_player.get((pos, name))
+        if lists is None:
+            lists = per_player[(pos, name)] = [[] for _ in markets]
+        for i, market in enumerate(markets):
+            lists[i].append(stat_value(r, market))
+
+    out: dict[str, dict[str, float]] = {}
+    for i, market in enumerate(markets):
+        buckets: dict[str, list[float]] = {}
+        for (pos, _name), lists in per_player.items():
+            vals = lists[i]
+            if len(vals) < MIN_PRIOR_GAMES:
+                continue
+            buckets.setdefault(pos, []).append(sum(vals) / len(vals))
+        out[market] = {p: sum(v) / len(v) for p, v in buckets.items() if v}
+    return out
+
+
 def carried_logs(rows: list[dict], player: str, market: str) -> list[GameLog]:
     """One player's prior-season games, tagged ``prior=True``.
 

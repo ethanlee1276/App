@@ -1117,15 +1117,20 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     pos_means: dict[str, dict[str, float]] = {}
     if carry:
         try:
-            prior_stats = load_weekly_stats(season - 1)
+            # LAST SEASON PARSED ONCE (10 November): the defences' prior just
+            # above read the same file, and nothing there writes to a row
+            # (engine/defensevs.allowed_by_game reads them), so its parse
+            # is the one a second read gave. A second parse of 19,000 rows
+            # a build.
+            prior_stats = last_season if last_season is not None else load_weekly_stats(season - 1)
             roster = roster_index(season)
         except DataUnavailable:
             prior_stats, roster = [], {}
         if prior_stats and roster:
             index = _carry.build_index(prior_stats, roster,
                                        load_schedules(), season)
-            for market in STAT_MARKETS:
-                pos_means[market] = _carry.positional_means(prior_stats, market)
+            # Every market's means in one walk of last season (carry.positional_means_all).
+            pos_means.update(_carry.positional_means_all(prior_stats, STAT_MARKETS))
 
     # EACH PLAYER'S ROWS, ONCE. Every per-player read below filtered the
     # whole season by name — per player, per market — and on 2026-09-23
