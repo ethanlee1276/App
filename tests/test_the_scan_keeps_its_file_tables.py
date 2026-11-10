@@ -30,13 +30,52 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "tests"))
 
 from engine import gamescan as G                                   # noqa: E402
 from engine.sources import fetch as FE                              # noqa: E402
 from engine.sources import ftn as F                                 # noqa: E402
 from engine.sources import ngs as NGS                               # noqa: E402
-import test_the_play_charting_is_read_and_shown as C                # noqa: E402
+
+
+def _chart(game, play, week, **flags):
+    """One FTN charting row (tests/test_the_play_charting_is_read_and_shown.py's)."""
+    row = {"nflverse_game_id": game, "nflverse_play_id": str(play), "week": str(week),
+           "n_blitzers": "0", "n_pass_rushers": "4", "n_defense_box": "7"}
+    for k in ("is_play_action", "is_screen_pass", "is_rpo", "is_motion", "is_no_huddle",
+              "is_qb_out_of_pocket", "is_interception_worthy", "is_throw_away", "is_catchable_ball",
+              "is_contested_ball", "is_created_reception", "is_drop", "is_qb_fault_sack"):
+        row[k] = "FALSE"
+    row.update({k: (str(v).upper() if isinstance(v, bool) else str(v)) for k, v in flags.items()})
+    return row
+
+
+def _play(game, play, week, posteam, defteam, kind, **who):
+    """One play-by-play row, the columns the charting join reads."""
+    row = {"game_id": game, "play_id": f"{play}.0", "week": str(week), "posteam": posteam, "defteam": defteam,
+           "play_type": kind, "pass_attempt": "1" if kind == "pass" else "0",
+           "rush_attempt": "1" if kind == "run" else "0", "qb_dropback": "1" if kind == "pass" else "0",
+           "qb_scramble": "0", "sack": "0", "interception": "0", "complete_pass": "0",
+           "passer_player_id": "", "passer_player_name": "", "receiver_player_id": "",
+           "receiver_player_name": "", "rusher_player_id": "", "rusher_player_name": ""}
+    row.update(who)
+    return row
+
+
+def _game_fixture(g, week):
+    """One game: ten PHI dropbacks against CHI (four blitzed), four runs."""
+    charted, plays = [], []
+    for i in range(10):
+        charted.append(_chart(g, i + 1, week, n_pass_rushers=5 if i < 4 else 4, n_blitzers=1 if i < 4 else 0,
+                              is_interception_worthy=(i == 0), is_catchable_ball=(i < 8),
+                              is_drop=(i == 1), is_contested_ball=(i == 2), is_play_action=(i < 3)))
+        plays.append(_play(g, i + 1, week, "PHI", "CHI", "pass", passer_player_id="00-H",
+                           passer_player_name="J.Hurts", receiver_player_id="00-S",
+                           receiver_player_name="D.Smith"))
+    for i in range(4):
+        charted.append(_chart(g, 20 + i, week, n_defense_box=8 if i < 3 else 5))
+        plays.append(_play(g, 20 + i, week, "PHI", "CHI", "run", rusher_player_id="00-B",
+                           rusher_player_name="S.Barkley"))
+    return charted, plays
 
 NGS_ROWS = [
     {"season": "2026", "week": "1", "team_abbr": "PHI", "player_display_name": "DeVonta Smith",
@@ -59,16 +98,13 @@ def _write(path, rows):
 
 
 def _season_fixture():
-    """C._fixture()'s plays over five games, weeks 1-4: past every table's
-    minimum (40 dropbacks a defence, 30 attempts a passer, 8 targets)."""
+    """Five such games, weeks 1-4: past every table's minimum (40 dropbacks
+    a defence, 30 attempts a passer, 8 targets a receiver)."""
     charted, plays = [], []
     for n, week in enumerate((1, 2, 3, 3, 4)):
-        c, p = C._fixture()
-        gid = f"2026_{week:02d}_CHI_PHI_{n}"
-        for r in c:
-            charted.append(dict(r, nflverse_game_id=gid, week=str(week)))
-        for r in p:
-            plays.append(dict(r, game_id=gid, week=str(week)))
+        c, p = _game_fixture(f"2026_{week:02d}_CHI_PHI_{n}", week)
+        charted += c
+        plays += p
     return charted, plays
 
 
