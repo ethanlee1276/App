@@ -97,7 +97,7 @@ MIN_GAMES = 3
 SD_MIN_GAMES = 5
 
 
-def per_game(conn, season: int, markets=None) -> dict:
+def per_game(conn, season: int, markets=None, *, strict: bool = False) -> dict:
     """``{player: {market: mean, "_games": n, "_sd": spread, "position": pos}}``.
 
     Averaged over games the player actually appeared in, which is the
@@ -114,6 +114,9 @@ def per_game(conn, season: int, markets=None) -> dict:
     rookie with two identical games would otherwise report certainty.
     ``_sd_basis`` says which, so a card can never imply a measurement it
     did not make.
+
+    ``strict`` lets a failed read raise instead of answering ``{}`` (or
+    without the teams), for `season_means`, which must never keep one.
     """
     markets = tuple(markets or (["fp_ppr"] + list(SCORING_MARKET.values())))
     q = ("SELECT player, position, market, COUNT(*) n, AVG(value) a, "
@@ -124,6 +127,8 @@ def per_game(conn, season: int, markets=None) -> dict:
     try:
         rows = conn.execute(q, [int(season)] + list(markets)).fetchall()
     except Exception:                                         # noqa: BLE001
+        if strict:
+            raise
         return {}
     own: dict = {}
     for r in rows:
@@ -164,8 +169,30 @@ def per_game(conn, season: int, markets=None) -> dict:
             if r["player"] in out and r["team"]:
                 out[r["player"]]["team"] = r["team"]
     except Exception:                                         # noqa: BLE001
-        pass
+        if strict:
+            raise
     return out
+
+
+def season_means(conn, season: int) -> dict:
+    """The fantasy week's season means: last season's `per_game` overlaid by
+    this season's (a man with no game yet this season keeps last season's),
+    kept between builds until either season's logs change (engine/logcache).
+
+    2.5 of the NFL build's 4-second fantasy week at 01:19 on 10 November, two
+    aggregates over the box's whole log table for numbers that change only
+    when a game is ingested. A read that fails is never kept: it raises
+    inside the kept read, and this answers as the build always did."""
+    from . import logcache
+    season = int(season)
+
+    def fresh() -> dict:
+        return {**per_game(conn, season - 1, strict=True), **per_game(conn, season, strict=True)}
+
+    try:
+        return logcache.memo(conn, "fantasy_means", "nfl", (season - 1, season), fresh, code=__file__)
+    except Exception:                                         # noqa: BLE001
+        return {**per_game(conn, season - 1), **per_game(conn, season)}
 
 
 def with_board(means: dict, board: list[dict] | None) -> dict:

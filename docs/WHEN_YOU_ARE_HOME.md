@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**NT. The fantasy week's season means are kept until the logs change**
+(step 496; 10 November). Nothing to run. 2.5 of the NFL fantasy week's 4
+seconds at 01:19 on 10 November went on two averages over the whole log
+table, last season's and this season's, which change only when a game is
+ingested. They are kept between builds now, like the play simulator's log
+read (NO), and read again only when either season's logs change. A read
+that fails is never kept. On the heartbeat it is `fantasy_means.nfl` under
+the kept reads: `kept` true on most builds, and `rows changed` once after
+each game is ingested.
+
 **NS. The attention journal runs beside the NFL and college builds** (step
 495; 10 November). Nothing to run. With the box to itself at 01:14 on 10
 November, the NFL build took 74 seconds, and 8.4 of them were the attention
@@ -9353,10 +9363,11 @@ one number each on the heartbeat: the fantasy week (9 seconds at 00:07 on
 10 November, 16 at 00:31) and the referees, game reports and pick of the
 day (14 and 23). Each now lists its parts there: the season means, the
 team defences, the touchdown chances, the week's file and its publishing;
-the referees, the game reports and the pick of the day. The next cut goes
-at whichever part is slow. The season means are not it: both seasons'
-averages took a tenth to a third of a second each on a copy of the logs
-here.
+the referees, the game reports and the pick of the day. The first build to
+name them (01:19 on 10 November) put 2.5 of the fantasy week's 4 seconds
+on the season means, which took only a tenth to a third of a second each
+on a smaller copy of the logs here, and 3.0 of the game stage's 3 on the
+game reports. NT cuts the season means.
 
 **NQ. A push reaches the site within minutes, even at midnight** (step 493;
 10 November). Nothing to run. My two pushes just after midnight (NO and NP)

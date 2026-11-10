@@ -1231,12 +1231,12 @@ def main() -> None:
         _fw_means: dict = {}
         try:
             from engine.db import connect as _fw_connect
-            from engine.fantasy_lineup import per_game as _fw_per_game
+            from engine.fantasy_lineup import season_means as _fw_season_means
             _fw_conn = _fw_connect()
             try:
-                # Last season for a man with no game yet this one (weeks 1-3).
-                _fw_means = {**_fw_per_game(_fw_conn, args.season - 1),
-                             **_fw_per_game(_fw_conn, args.season)}
+                # Last season for a man with no game yet this one (weeks 1-3),
+                # kept until the logs change (2.5 of the stage's 4 seconds).
+                _fw_means = _fw_season_means(_fw_conn, args.season)
             finally:
                 _fw_conn.close()
         except Exception:                                     # noqa: BLE001
