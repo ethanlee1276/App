@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-11, after the heartbeat started keeping the last learning pass and the last export
+Last updated 2026-11-11, after the NBA started buying its prices at 7am ET (step OH: nothing to run),
+after the heartbeat started keeping the last learning pass and the last export
 (step OG: nothing to run) and the weekly refit's third night finished the NFL (step LX: nothing to run),
 after the settle pass started naming which learner and which half of the
 parlay record took its time (step OF: nothing to run), after the NFL usage maps and the join audit started being kept

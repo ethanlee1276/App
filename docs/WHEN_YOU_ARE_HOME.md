@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OH. The NBA buys its prices at 7am too** (step 510; 11 November). Nothing
+to run. Ethan, at 8:40am: "NBA isn't showing picks for edge or most likely.
+We should start pulling odds around 7am est every day." The NBA's first paid
+pull of the day was at noon (its windows were noon and 6pm, set on 21
+October to make the month's credits last), so until noon its board had props
+and no book prices, and nothing to rank: 0 Edge and 0 Most Likely at 08:36.
+The NBA now has a 7am window too (engine/oddsbudget.SPORT_TOUCHPOINTS), and
+the month's plan funds four NBA pulls a game day instead of three
+(engine/oddsplan.PULLS), about 4,900 credits more a month, so the 7am pull
+never takes the 6pm pull's place under the day's ceiling. On the 100k plan
+every league is still funded at its full cadence; the extra comes out of
+headroom (the NBA's own extra pulls and part of college's), not out of
+anything bought. The 7am board is thinner than noon's, since not every book
+has posted its props by then; noon and 6pm re-price it. Hockey keeps noon
+and 6pm. Today's 7am window had passed before this went out, so today's NBA
+prices land at noon; from Thursday on, at 7am.
+
 **OG. The heartbeat keeps the last learning pass and the last export** (step
 509; 11 November). Nothing to run. OF's breakdown had not been read by
 Wednesday morning: the heartbeat shows only the latest settle pass, and at

@@ -217,11 +217,13 @@ GAMES_BY_WEEKDAY = {
 POSTSEASON_GAMES = {"nba": 3, "nhl": 3, "mlb": 1, "wnba": 1.5, "cfb": 3}
 
 #: Prop pulls a game day gets at the target cadence, with the days that
-#: differ. Basketball and hockey: noon, the pre-game run and 6pm ET
-#: (`oddsbudget.SPORT_TOUCHPOINTS`). College: eight on Saturday — the
-#: windows and a readiness pull for each wave — two on Thursday and
-#: Friday, four on the weekday nights. UFC: one a day, four on fight day.
-PULLS = {"nba": 3, "nhl": 3, "mlb": 4, "wnba": 3, "cfb": 4, "ufc": 1}
+#: differ. Basketball: 7am, noon, the pre-game run and 6pm ET; hockey and
+#: the WNBA: noon, the pre-game run and 6pm (`oddsbudget.SPORT_TOUCHPOINTS`;
+#: the NBA's 7am pull since 11 November, so its Edge and Most Likely boards
+#: are up in the morning). College: eight on Saturday — the windows and a
+#: readiness pull for each wave — two on Thursday and Friday, four on the
+#: weekday nights. UFC: one a day, four on fight day.
+PULLS = {"nba": 4, "nhl": 3, "mlb": 4, "wnba": 3, "cfb": 4, "ufc": 1}
 PULLS_ON = {("cfb", 3): 2, ("cfb", 4): 2, ("cfb", 5): 8, ("ufc", 5): 4}
 #: The most games one pull prices (college's `PLAYER_EVENT_CAP`).
 PULL_CAP = {"cfb": 12}

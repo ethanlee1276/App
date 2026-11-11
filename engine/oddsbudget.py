@@ -1074,7 +1074,16 @@ TOUCHPOINT_GRACE_S = 2 * 3600
 #: the one after the injury reports, at the day's ceiling. Keyed by LANE,
 #: so the three-credit lines lanes ("nba_board_lines") keep the four.
 #: QB_ODDS_WINDOWS, when set, moves every lane's windows, these included.
-SPORT_TOUCHPOINTS = {"nba": (12, 18), "nhl": (12, 18), "wnba": (12, 18)}
+#:
+#: THE NBA'S 7AM WINDOW (Ethan, 2026-11-11, 8:40am, the NBA board showing
+#: no Edge and no Most Likely: "We should start pulling odds around 7am
+#: est every day"). Noon was the NBA's first paid pull of the day, so its
+#: board had nothing to price for the morning. It now buys at 7am too; the
+#: month's plan funds the extra pull (engine/oddsplan.PULLS: four NBA pulls
+#: a game day), so the 7am pull does not take the 6pm pull's place under
+#: the day's ceiling. The 7am board is thinner than noon's (not every book
+#: has posted its props yet) and noon and 6pm still re-price it.
+SPORT_TOUCHPOINTS = {"nba": (7, 12, 18), "nhl": (12, 18), "wnba": (12, 18)}
 
 
 def _touchpoints(sport: str | None = None) -> tuple:

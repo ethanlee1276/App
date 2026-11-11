@@ -101,23 +101,24 @@ room for the days after.
 
 | | need (the month) | planned | fill |
 |---|---:|---:|---:|
-| NFL | 22,100 | 33,150 | 150% |
-| College | 10,256 | 12,820 | 125% |
-| NBA | 19,398 | 24,247 | 125% |
-| MLB (World Series, to Nov 4 at most) | 496 | 620 | 125% |
-| NHL | 10,476 | 11,418 | 109% |
-| UFC | 224 | 244 | 109% |
+| NFL | 22,140 | 33,210 | 150% |
+| College | 10,792 | 13,084 | 121% |
+| NBA | 25,010 | 25,010 | 100% |
+| MLB (World Series, to Nov 4 at most) | 496 | 496 | 100% |
+| NHL | 10,476 | 10,476 | 100% |
+| UFC | 224 | 224 | 100% |
 | WNBA | off-season | 0 | |
 | Held back: closing lines 12,000 · buffer 5,000 · reserve 500 | | | |
 
 With every league buying on its game nights only, all target cadences
-together come to about 63k for November, well inside the 82,500 a 100k
-plan leaves after what's held back (before the tonight rule they came to
-about 87k, and hockey and UFC ran at 60%). So every sport is funded in full
-with headroom on top: the NFL half again, college, the NBA and baseball a
-quarter, and hockey and UFC share the rest. Once baseball is out, they go
-to 115%. December and January fund everyone with full headroom and leave
-some credits unplanned.
+together come to about 69k for November, inside the 82,500 a 100k plan
+leaves after what's held back (before the tonight rule they came to about
+87k, and hockey and UFC ran at 60%). So every sport is funded in full, and
+the headroom on top goes to the NFL (half again) and most of college's
+quarter. The NBA's 7am pull (since 11 November, four prop pulls a game day
+instead of three) costs about 4,900 credits a month and came out of that
+headroom: before it, the NBA had a quarter on top too. December and January
+fund everyone with full headroom and leave some credits unplanned.
 
 A month where every sport spends its full ceiling every day still ends
 above the reserve; that's tested in `tests/test_the_odds_plan.py`.
@@ -191,7 +192,7 @@ the table for today.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | NFL | 600 | 0 | 0 | 400 | 0 | 0 | 3,500 | 4,500 |
 | College | 0 | 224 | 224 | 252 | 278 | 1,586 | 0 | 2,564 |
-| NBA | 639 | 582 | 810 | 468 | 753 | 639 | 639 | 4,530 |
+| NBA | 823 | 743 | 1,063 | 583 | 983 | 823 | 823 | 5,841 |
 | NHL | 234 | 450 | 270 | 486 | 270 | 558 | 234 | 2,502 |
 | UFC | 0 | 0 | 0 | 0 | 0 | 56 | 0 | 56 |
 
@@ -207,10 +208,12 @@ the table for today.
   four on weekday nights, at 13 credits a game for up to 12 of that night's
   games a pull. Game lines run on game nights only, every 15 minutes in the
   pre-game window and through the games.
-* **NBA and NHL.** Three prop pulls on a game day: noon, the pre-game run
-  and 6pm ET. The NBA adds its three-credit game-lines lane until the last
-  tip. Both add the live line while games are on. An 11-game NBA night is
-  about 870 credits; a 9-game NHL night is about 410.
+* **NBA and NHL.** The NBA: four prop pulls on a game day, at 7am, noon,
+  the pre-game run and 6pm ET (the 7am one since 11 November, so its Edge
+  and Most Likely boards are up in the morning). The NHL: three, at noon,
+  the pre-game run and 6pm. The NBA adds its three-credit game-lines lane
+  until the last tip. Both add the live line while games are on. An 11-game
+  NBA night is about 1,140 credits; a 9-game NHL night is about 410.
 * **MLB.** Four pulls on a World Series game day, about 124 credits.
 * **UFC.** One credit a fight, four pulls on fight day, nothing on the
   days before.
@@ -250,9 +253,10 @@ show 14 as the example, and that got copied.)
 
 ## What changed in the pacer with it
 
-* **NBA, NHL and WNBA pull at noon and 6pm ET** instead of the four
-  football windows. Their pre-game window doesn't triple their pace (the
-  burst), which would spend a three-pull day before the 6pm injury reports.
+* **NHL and WNBA pull at noon and 6pm ET, the NBA at 7am, noon and 6pm**
+  (the 7am window since 11 November), instead of the four football windows.
+  Their pre-game window doesn't triple their pace (the burst), which would
+  spend the day's pulls before the 6pm injury reports.
 * **A day with no game near is off-peak.** When a board's next game is more
   than 36 hours away (NFL Tuesdays and Fridays, college Sundays), the
   pacer used to treat the slate as having no times at all. That kept the

@@ -224,25 +224,28 @@ def test_the_last_tier_shares_one_fill():
 def test_november_at_100k_funds_every_sport_and_most_of_the_headroom():
     """The page's numbers (docs/ODDS_PLAN.md): the whole plan on the 1st.
     With every league buying on its game nights only — tonight's games, not
-    the week's — every target is met with room left: the NFL's half again,
-    a quarter for college, the NBA and baseball, and hockey and UFC share
-    the rest at one fill."""
+    the week's — every target is met with room left: the NFL's half again
+    and most of college's quarter, every other league at one fill."""
     plan = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1)
     assert all(lp.target == lp.need for lp in plan.leagues.values()), "every league's need is met"
     nfl = plan.get("nfl")
     assert nfl.extra == int(nfl.need * P.NFL_HEADROOM), "the NFL's headroom first"
-    assert plan.get("cfb").extra == int(plan.get("cfb").need * P.HEADROOM), "college's next"
-    # Since 2026-10-31 the NBA buys its first-basket market too (20 credits an
-    # event, not 19), so the headroom runs out inside the NBA's share: most of
-    # it, and the leagues after it at one fill.
+    # Since 2026-11-11 the NBA buys four prop pulls a game day (its 7am window,
+    # Ethan: "We should start pulling odds around 7am est every day"), about
+    # 4,900 credits more a month, so the headroom now runs out inside
+    # college's share: most of it, and the NBA and the leagues after it at
+    # one fill, every one of them still funded at its full cadence.
+    cfb = plan.get("cfb")
+    assert 0.5 * int(cfb.need * P.HEADROOM) < cfb.extra <= int(cfb.need * P.HEADROOM), cfb.extra
     nba = plan.get("nba")
-    assert 0.5 * int(nba.need * P.HEADROOM) < nba.extra <= int(nba.need * P.HEADROOM), nba.extra
-    for lg in ("mlb", "nhl", "ufc"):
+    assert nba.need == P.day_need("nba", NOV1) + sum(
+        P.day_need("nba", NOV1 + dt.timedelta(days=d)) for d in range(1, 30)), "four pulls a game day, all month"
+    for lg in ("nba", "mlb", "nhl", "ufc"):
         assert plan.get(lg).fill >= 1.0, lg
     assert plan.get("wnba").need == 0 and plan.unplanned <= 2
     gone = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1,
                    over={"mlb"})
-    assert gone.get("nba").extra > plan.get("nba").extra, "baseball's share went to the leagues still playing"
+    assert gone.get("cfb").extra > plan.get("cfb").extra, "baseball's share went to the leagues still playing"
 
 
 def test_a_season_that_is_over_leaves_the_pool():
@@ -400,10 +403,12 @@ def test_college_buys_on_its_game_nights_only():
 def test_a_healthy_month_does_not_starve_basketball():
     """THE BUG THE PLAN REPLACES: under the weights the NBA drew ~2% of a
     weekday — one sparse pull. On a healthy pool its ceiling tonight covers
-    three pulls of an eleven-game slate, its lines and its live line."""
+    four pulls of an eleven-game slate (7am, noon, the pre-game run and 6pm
+    since 11 November), its lines and its live line."""
     plan = P.build(OCT21, 45_000, TONIGHT)
     pull = (TONIGHT["nba"] + 1) * ob.credits_per_event("nba")
-    assert plan.get("nba").envelope >= 3 * pull, (plan.get("nba").envelope, pull)
+    assert P.PULLS["nba"] == 4
+    assert plan.get("nba").envelope >= 4 * pull, (plan.get("nba").envelope, pull)
     assert plan.get("nhl").envelope >= 3 * (TONIGHT["nhl"] + 1) * ob.credits_per_event("nhl")
 
 
@@ -737,8 +742,11 @@ def test_month_spend_and_the_last_seven_days():
 
 
 # --- the pacer fixes that came with the plan ------------------------------------------
-def test_basketball_and_hockey_keep_their_own_two_windows():
-    assert ob._touchpoints("nba") == ob._touchpoints("nhl") == ob._touchpoints("wnba") == (12, 18)
+def test_basketball_and_hockey_keep_their_own_windows():
+    """Hockey and the WNBA buy at noon and 6pm; the NBA at 7am too (Ethan,
+    11 November: "We should start pulling odds around 7am est every day")."""
+    assert ob._touchpoints("nhl") == ob._touchpoints("wnba") == (12, 18)
+    assert ob._touchpoints("nba") == (7, 12, 18)
     assert ob._touchpoints("nfl") == ob._touchpoints() == ob.TOUCHPOINTS
     assert ob._touchpoints("nba_board_lines") == ob.TOUCHPOINTS, \
         "a three-credit lane keeps the four windows"
