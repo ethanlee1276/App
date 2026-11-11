@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OG. The heartbeat keeps the last learning pass and the last export** (step
+509; 11 November). Nothing to run. OF's breakdown had not been read by
+Wednesday morning: the heartbeat shows only the latest settle pass, and at
+07:41 that pass neither learned nor exported, so every pass that did overnight
+had been replaced by the quiet ones after it. Every pass now also carries the
+last pass that learned (`last_learned`: when, the learning's seconds, and each
+learner's) and the last export (`last_exported`: when, its seconds, its
+sections and the two-leg section's halves), under `chores.settle.phases`. They
+are kept in the settle pass's state file, so a restart keeps them too. The
+first pass that learns or exports after this push fills them; the slowest
+learner gets cut after that.
+
 **OF. The settle pass says which learner and which half of the parlay record
 took its time** (step 508; 10 November). Nothing to run. The first settle pass
 after the 04:35 restart ran 716 seconds: 528.6 of them in the hourly learners
@@ -10355,6 +10367,16 @@ The round still owes the NFL, college and the NFL's book-line props, which
 wait for the NFL. The NFL has waited two nights while college and the NBA
 ran; it is now the stalest piece that can run, so Wednesday night's run
 goes to it first.
+
+The third night (00:16 to 01:05 on Wednesday 11 November, 49 minutes) went
+to the NFL, as it should have, and finished it: its recency dial's markets
+still owed (rushing yards from 8 of 21 settings scored, receiving yards and
+receptions), then the NFL's book-line props, which had waited for it. The
+heartbeat's last line: `round of 2026-11-04: nfl, nfl_props done this run;
+left for the next: cfb`. The round now owes only college, whose player memory
+and temperatures are done; its dial has receptions at 12 of 21 settings and
+passing attempts, completions, rushing attempts and interceptions owed. No run
+has stalled. Thursday night's run goes to college.
 
 **LW. The box-score pull asks for a game by its season** (step 445; 8
 November). The first pass with LS's timer on it (20:52, Saturday 7

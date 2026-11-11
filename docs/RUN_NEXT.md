@@ -10,7 +10,9 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-10, after the settle pass started naming which learner and which half of the
+Last updated 2026-11-11, after the heartbeat started keeping the last learning pass and the last export
+(step OG: nothing to run) and the weekly refit's third night finished the NFL (step LX: nothing to run),
+after the settle pass started naming which learner and which half of the
 parlay record took its time (step OF: nothing to run), after the NFL usage maps and the join audit started being kept
 between builds (step OE: nothing to run), after a college prop whose game is not final yet started waiting
 without its team looked up (step OD: nothing to run), after the usage ripple started splitting each season by team once

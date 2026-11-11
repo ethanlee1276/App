@@ -13,7 +13,11 @@ which learner or which half. What these hold:
     pass's phases as ``learn_parts``, at both places the pass learns;
   * the two-leg section times its two halves (the pools' record and the
     backtest, kept or worked out) and the settle pass puts them on its
-    phases as ``export_two_leg``, cleared before each export.
+    phases as ``export_two_leg``, cleared before each export;
+  * every pass carries the last learning pass's breakdown and the last
+    export's (``last_learned``, ``last_exported``) through the settle state,
+    since the heartbeat shows only the latest pass (07:41 on 11 November: a
+    quiet pass, every overnight one that learned replaced).
 
 Run directly: `python3 tests/test_the_learners_say_which_took_their_time.py`
 """
@@ -119,6 +123,39 @@ def test_the_two_leg_halves_are_timed_and_reach_the_phases():
         assert "export_two_leg" not in phases, "cleared before each export: never an earlier one's"
     finally:
         ledger.export_json = real
+
+
+def test_every_pass_carries_the_last_learning_and_the_last_export():
+    from engine import maintenance as M
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "maintenance.json"
+        state = M._load_state(path)
+        learned = {"learned": True, "learn": 12.3, "learn_parts": {"selectionfit.refresh": 9.1},
+                   "exported": True, "export": 4.0, "export_parts": {"_two_leg_record": 2.5},
+                   "export_two_leg": {"report_s": 0.4, "backtest_s": 2.1, "backtest": "kept"}}
+        M._keep_last_parts(state, learned, 1000.0)
+        M._save_state(path, state)
+        assert learned["last_learned"]["parts"] == {"selectionfit.refresh": 9.1}
+        assert learned["last_learned"]["learn"] == 12.3
+        assert learned["last_exported"]["two_leg"]["backtest"] == "kept"
+        # The next pass, in its own process, does neither: both come back from the file.
+        quiet: dict = {"learned": False, "learn": 0.0, "export": 0.0}
+        again = M._load_state(path)
+        M._keep_last_parts(again, quiet, 2000.0)
+        assert quiet["last_learned"] == learned["last_learned"], quiet
+        assert quiet["last_exported"] == learned["last_exported"], quiet
+        assert quiet["last_learned"]["at"] < M._dt.datetime.fromtimestamp(2000.0).isoformat(timespec="seconds")
+        # A later learning replaces it; an export without a two-leg half carries none.
+        later = {"learn": 3.0, "learn_parts": {"journalfit.refresh": 2.0}, "export_parts": {"performance": 1.0}}
+        M._keep_last_parts(again, later, 3000.0)
+        assert later["last_learned"]["parts"] == {"journalfit.refresh": 2.0}
+        assert "two_leg" not in later["last_exported"]
+    src = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
+    i = src.index("def settle_open(")
+    body = src[i:src.index("\ndef ", i + 1)]
+    assert body.count("_keep_last_parts(state, phases, now)\n") == 2, "both places a pass ends"
+    assert body.count('_keep_last_parts(state, phases, now)\n            state["last_settle_ts"] = now') == 1
+    assert body.count('_keep_last_parts(state, phases, now)\n    state["last_settle_ts"] = now') == 1
 
 
 if __name__ == "__main__":

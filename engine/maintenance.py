@@ -1535,6 +1535,7 @@ def settle_open(log=print, state_path: Path | None = None,
                 _export_record(lconn, phases)
                 _exported(state, now)
                 lap("export")
+            _keep_last_parts(state, phases, now)
             state["last_settle_ts"] = now
             _save_state(state_path, state)
             _publish_phases(phases, now)
@@ -1726,10 +1727,37 @@ def settle_open(log=print, state_path: Path | None = None,
                 + (f" → {days[-1]}" if days[-1] != days[0] else "") + ")")
     except Exception as exc:  # noqa: BLE001 — never take the site down
         log(f"  ⚠️  auto-settle failed: {exc}")
+    _keep_last_parts(state, phases, now)
     state["last_settle_ts"] = now
     _save_state(state_path, state)
     _publish_phases(phases, now)
     return settled
+
+
+def _keep_last_parts(state: dict, phases: dict, now: float) -> None:
+    """The last pass that learned and the last that exported, on every
+    pass's phases: ``last_learned`` (when, the learning's seconds, each
+    learner's) and ``last_exported`` (when, the export's seconds, its
+    sections, the two-leg section's halves).
+
+    The heartbeat shows only the latest pass. At 07:41 on Wednesday 11
+    November that was a pass that did neither, and every pass that learned
+    or exported overnight had been replaced by the quiet ones after it, so
+    the learners' breakdown (`_learn_sampled`) had never been read. Each
+    pass runs in its own process, so they are kept in the settle state,
+    which a restart keeps too."""
+    at = _dt.datetime.fromtimestamp(now).isoformat(timespec="seconds")
+    if phases.get("learn_parts"):
+        state["last_learned"] = {"at": at, "learn": phases.get("learn"),
+                                 "parts": dict(phases["learn_parts"])}
+    if phases.get("export_parts"):
+        kept = {"at": at, "export": phases.get("export"), "parts": dict(phases["export_parts"])}
+        if phases.get("export_two_leg"):
+            kept["two_leg"] = dict(phases["export_two_leg"])
+        state["last_exported"] = kept
+    for key in ("last_learned", "last_exported"):
+        if isinstance(state.get(key), dict):
+            phases[key] = dict(state[key])
 
 
 def _publish_phases(phases: dict, now: float) -> None:
