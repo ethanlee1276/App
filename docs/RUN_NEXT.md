@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-11, after the NBA started buying its prices at 7am ET (step OH: nothing to run),
+Last updated 2026-11-11, after every league started buying its prices at 7am ET on a game day
+(step OI: nothing to run), after the NBA started buying its prices at 7am ET (step OH: nothing to run),
 after the heartbeat started keeping the last learning pass and the last export
 (step OG: nothing to run) and the weekly refit's third night finished the NFL (step LX: nothing to run),
 after the settle pass started naming which learner and which half of the

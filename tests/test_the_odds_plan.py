@@ -224,28 +224,27 @@ def test_the_last_tier_shares_one_fill():
 def test_november_at_100k_funds_every_sport_and_most_of_the_headroom():
     """The page's numbers (docs/ODDS_PLAN.md): the whole plan on the 1st.
     With every league buying on its game nights only — tonight's games, not
-    the week's — every target is met with room left: the NFL's half again
-    and most of college's quarter, every other league at one fill."""
+    the week's — every target is met with room left: most of the NFL's half
+    again, every other league at one fill."""
     plan = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1)
     assert all(lp.target == lp.need for lp in plan.leagues.values()), "every league's need is met"
+    # Since 2026-11-11 basketball and hockey buy four prop pulls a game day
+    # (their 7am window; Ethan: "that should be for all sports ... a lot of
+    # people look early in the morning"), about 8,000 credits more a month,
+    # so the headroom now runs out inside the NFL's own half again: most of
+    # it, and college and every league after it at one fill, every one of
+    # them still funded at its full cadence.
     nfl = plan.get("nfl")
-    assert nfl.extra == int(nfl.need * P.NFL_HEADROOM), "the NFL's headroom first"
-    # Since 2026-11-11 the NBA buys four prop pulls a game day (its 7am window,
-    # Ethan: "We should start pulling odds around 7am est every day"), about
-    # 4,900 credits more a month, so the headroom now runs out inside
-    # college's share: most of it, and the NBA and the leagues after it at
-    # one fill, every one of them still funded at its full cadence.
-    cfb = plan.get("cfb")
-    assert 0.5 * int(cfb.need * P.HEADROOM) < cfb.extra <= int(cfb.need * P.HEADROOM), cfb.extra
-    nba = plan.get("nba")
-    assert nba.need == P.day_need("nba", NOV1) + sum(
-        P.day_need("nba", NOV1 + dt.timedelta(days=d)) for d in range(1, 30)), "four pulls a game day, all month"
-    for lg in ("nba", "mlb", "nhl", "ufc"):
+    assert 0.9 * int(nfl.need * P.NFL_HEADROOM) < nfl.extra <= int(nfl.need * P.NFL_HEADROOM), nfl.extra
+    for lg in ("nba", "nhl"):
+        assert plan.get(lg).need == sum(P.day_need(lg, NOV1 + dt.timedelta(days=d)) for d in range(30)), \
+            f"{lg}: four pulls a game day, all month"
+    for lg in ("cfb", "nba", "mlb", "nhl", "ufc"):
         assert plan.get(lg).fill >= 1.0, lg
     assert plan.get("wnba").need == 0 and plan.unplanned <= 2
     gone = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1,
                    over={"mlb"})
-    assert gone.get("cfb").extra > plan.get("cfb").extra, "baseball's share went to the leagues still playing"
+    assert gone.get("nfl").extra > plan.get("nfl").extra, "baseball's share went to the leagues still playing"
 
 
 def test_a_season_that_is_over_leaves_the_pool():
@@ -404,12 +403,12 @@ def test_a_healthy_month_does_not_starve_basketball():
     """THE BUG THE PLAN REPLACES: under the weights the NBA drew ~2% of a
     weekday — one sparse pull. On a healthy pool its ceiling tonight covers
     four pulls of an eleven-game slate (7am, noon, the pre-game run and 6pm
-    since 11 November), its lines and its live line."""
+    since 11 November), its lines and its live line; hockey's the same."""
     plan = P.build(OCT21, 45_000, TONIGHT)
     pull = (TONIGHT["nba"] + 1) * ob.credits_per_event("nba")
-    assert P.PULLS["nba"] == 4
+    assert P.PULLS["nba"] == P.PULLS["nhl"] == 4
     assert plan.get("nba").envelope >= 4 * pull, (plan.get("nba").envelope, pull)
-    assert plan.get("nhl").envelope >= 3 * (TONIGHT["nhl"] + 1) * ob.credits_per_event("nhl")
+    assert plan.get("nhl").envelope >= 4 * (TONIGHT["nhl"] + 1) * ob.credits_per_event("nhl")
 
 
 def test_the_plans_prices_are_the_pacers_and_the_builds():
@@ -743,10 +742,21 @@ def test_month_spend_and_the_last_seven_days():
 
 # --- the pacer fixes that came with the plan ------------------------------------------
 def test_basketball_and_hockey_keep_their_own_windows():
-    """Hockey and the WNBA buy at noon and 6pm; the NBA at 7am too (Ethan,
-    11 November: "We should start pulling odds around 7am est every day")."""
-    assert ob._touchpoints("nhl") == ob._touchpoints("wnba") == (12, 18)
-    assert ob._touchpoints("nba") == (7, 12, 18)
+    """Basketball and hockey buy at 7am, noon and 6pm, not the football
+    leagues' four windows (Ethan, 11 November: "We should start pulling odds
+    around 7am est every day" ... "that should be for all sports")."""
+    assert ob._touchpoints("nba") == ob._touchpoints("nhl") == ob._touchpoints("wnba") == (7, 12, 18)
+
+
+def test_every_league_opens_its_game_day_at_7am():
+    """Ethan, 11 November: "a lot of people look early in the morning". Every
+    league's first paid window is 7am Eastern; on a day it does not play it
+    buys nothing at all (`launch._odds_affordable`, the tonight rule)."""
+    for lane in ("nfl", "cfb", "nba", "nhl", "mlb", "wnba", "ufc"):
+        assert min(ob._touchpoints(lane)) == 7, lane
+    for lg in ("nba", "nhl", "wnba"):
+        assert P.PULLS[lg] == len(ob._touchpoints(lg)) + 1, \
+            f"{lg}: the plan funds every window and the pre-game run"
     assert ob._touchpoints("nfl") == ob._touchpoints() == ob.TOUCHPOINTS
     assert ob._touchpoints("nba_board_lines") == ob.TOUCHPOINTS, \
         "a three-credit lane keeps the four windows"

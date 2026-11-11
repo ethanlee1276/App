@@ -59,29 +59,26 @@ def test_the_windows_are_the_hours_that_were_asked_for():
     assert TOUCHPOINTS == (7, 12, 15, 18)
 
 
-def test_the_nba_buys_its_morning_board_at_7am_and_hockey_waits_for_noon():
+def test_basketball_and_hockey_buy_their_morning_boards_at_7am():
     """Ethan, 11 November, the NBA board empty at 8:40am: "We should start
-    pulling odds around 7am est every day". Noon was the NBA's first paid
-    window of the day, so nothing priced its Edge or Most Likely boards in
-    the morning. On a game day with last night's pull eleven hours back,
-    7:05am is owed to the NBA and not to hockey, which keeps noon."""
+    pulling odds around 7am est every day", and then "that should be for
+    all sports". Noon was basketball's and hockey's first paid window of the
+    day, so nothing priced their Edge or Most Likely boards in the morning.
+    On a game day with last night's pull eleven hours back, 7:05am is owed
+    to both, once each."""
     p = _tmp()
     save(BudgetState(remaining=20000, last_refresh_ts=at(20),
                      sport_last_refresh={"nba": at(20, day=14), "nhl": at(20, day=14)}), p)
     kicks = [at(19, 10)]
-    ok, why = should_refresh(0, now=at(7, 5), path=p, sport="nba", kickoffs=kicks, credits=220)
-    assert ok is True and "7am refresh window" in why, why
-    assert touchpoint_due(load(p), "nba", at(7, 5)) == "2026-08-15:07"
-    held, why = should_refresh(0, now=at(7, 5), path=p, sport="nhl", kickoffs=kicks, credits=132)
-    assert held is False, why
-    assert touchpoint_due(load(p), "nhl", at(7, 5)) is None
-    assert touchpoint_due(load(p), "nhl", at(12, 5)) == "2026-08-15:12"
-    # Served once: after the 7am pull lands, the NBA's next window is noon.
-    mark_refreshed(at(7, 5), p, sport="nba")
-    again, _ = should_refresh(0, now=at(7, 40), path=p, sport="nba", kickoffs=kicks, credits=220)
-    assert again is False
-    assert touchpoint_due(load(p), "nba", at(12, 5)) == "2026-08-15:12"
-
+    for sport, credits in (("nba", 220), ("nhl", 132)):
+        ok, why = should_refresh(0, now=at(7, 5), path=p, sport=sport, kickoffs=kicks, credits=credits)
+        assert ok is True and "7am refresh window" in why, (sport, why)
+        assert touchpoint_due(load(p), sport, at(7, 5)) == "2026-08-15:07"
+        # Served once: after the 7am pull lands, the next window is noon.
+        mark_refreshed(at(7, 5), p, sport=sport)
+        again, _ = should_refresh(0, now=at(7, 40), path=p, sport=sport, kickoffs=kicks, credits=credits)
+        assert again is False, sport
+        assert touchpoint_due(load(p), sport, at(12, 5)) == "2026-08-15:12"
 
 def test_off_peak_pacing_would_otherwise_hold_the_morning():
     """The premise. If ordinary pacing already allowed a 7am pull there

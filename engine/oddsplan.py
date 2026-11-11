@@ -75,9 +75,10 @@ hands that to the pacer as the league's share of the day
 starvation rule and the wide-or-narrow pull all read the plan's number.
 The reserve, the fifteen-minute floor, the NFL's priority floor and its
 readiness, inactives and closing pulls all stand. Two pacer changes came
-with the plan: basketball and hockey pull at noon and 6pm and do not burst
-(`oddsbudget.SPORT_TOUCHPOINTS`), and a board whose next game is past the
-window's horizon paces off-peak (`oddsbudget.slate_is_far`).
+with the plan: basketball and hockey pull at noon and 6pm (and at 7am too
+since 11 November) and do not burst (`oddsbudget.SPORT_TOUCHPOINTS`), and a
+board whose next game is past the window's horizon paces off-peak
+(`oddsbudget.slate_is_far`).
 
 IT IS RECOMPUTED FROM THE REAL BALANCE every cycle (`current`), so it
 corrects itself: a league that ran over leaves less in the pool, and the
@@ -217,13 +218,13 @@ GAMES_BY_WEEKDAY = {
 POSTSEASON_GAMES = {"nba": 3, "nhl": 3, "mlb": 1, "wnba": 1.5, "cfb": 3}
 
 #: Prop pulls a game day gets at the target cadence, with the days that
-#: differ. Basketball: 7am, noon, the pre-game run and 6pm ET; hockey and
-#: the WNBA: noon, the pre-game run and 6pm (`oddsbudget.SPORT_TOUCHPOINTS`;
-#: the NBA's 7am pull since 11 November, so its Edge and Most Likely boards
-#: are up in the morning). College: eight on Saturday — the windows and a
-#: readiness pull for each wave — two on Thursday and Friday, four on the
-#: weekday nights. UFC: one a day, four on fight day.
-PULLS = {"nba": 4, "nhl": 3, "mlb": 4, "wnba": 3, "cfb": 4, "ufc": 1}
+#: differ. Basketball and hockey: 7am, noon, the pre-game run and 6pm ET
+#: (`oddsbudget.SPORT_TOUCHPOINTS`; the 7am pull since 11 November, so
+#: every league's Edge and Most Likely boards are up in the morning).
+#: College: eight on Saturday — the windows and a readiness pull for each
+#: wave — two on Thursday and Friday, four on the weekday nights. UFC: one a
+#: day, four on fight day.
+PULLS = {"nba": 4, "nhl": 4, "mlb": 4, "wnba": 4, "cfb": 4, "ufc": 1}
 PULLS_ON = {("cfb", 3): 2, ("cfb", 4): 2, ("cfb", 5): 8, ("ufc", 5): 4}
 #: The most games one pull prices (college's `PLAYER_EVENT_CAP`).
 PULL_CAP = {"cfb": 12}
@@ -628,14 +629,22 @@ def build(day: _dt.date, pool: int, games_today: dict | None = None,
 
     def share_out(tier, owed, money):
         """Hand ``money`` across ``tier`` in proportion to what each is
-        ``owed``; every league in the tier gets the same fraction."""
-        total = sum(owed.values())
+        ``owed``; every league in the tier gets the same fraction, and every
+        credit is handed out: the odd ones go to the largest remainders (the
+        tier's order on a tie), never past what a league is owed. A share
+        rounded down in floating point once left a credit meant for tonight's
+        hockey over for the NFL's Sunday (10,600 credits on a Thursday, after
+        hockey's 7am pull joined the plan on 11 November)."""
+        total = sum(int(owed[lg]) for lg in tier)
         if money >= total:
             return {lg: owed[lg] for lg in tier}
-        if len(tier) == 1:                   # a tier of one takes every credit
-            return {lg: int(money) for lg in tier}
-        frac = money / total if total > 0 else 0.0
-        return {lg: int(owed[lg] * frac) for lg in tier}
+        money = max(0, int(money))
+        got = {lg: int(owed[lg]) * money // total for lg in tier}
+        spare = money - sum(got.values())
+        by_rest = sorted(tier, key=lambda lg: -(int(owed[lg]) * money % total))
+        for lg in by_rest[:spare]:
+            got[lg] += 1
+        return got
 
     def fund(tier, owed):
         """Add to the targets in ``tier`` out of what is ``left``."""

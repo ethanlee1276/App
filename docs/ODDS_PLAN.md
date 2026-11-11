@@ -101,24 +101,26 @@ room for the days after.
 
 | | need (the month) | planned | fill |
 |---|---:|---:|---:|
-| NFL | 22,140 | 33,210 | 150% |
-| College | 10,792 | 13,084 | 121% |
+| NFL | 22,140 | 32,550 | 147% |
+| College | 10,792 | 10,792 | 100% |
 | NBA | 25,010 | 25,010 | 100% |
 | MLB (World Series, to Nov 4 at most) | 496 | 496 | 100% |
-| NHL | 10,476 | 10,476 | 100% |
+| NHL | 13,428 | 13,428 | 100% |
 | UFC | 224 | 224 | 100% |
 | WNBA | off-season | 0 | |
 | Held back: closing lines 12,000 · buffer 5,000 · reserve 500 | | | |
 
 With every league buying on its game nights only, all target cadences
-together come to about 69k for November, inside the 82,500 a 100k plan
+together come to about 72k for November, inside the 82,500 a 100k plan
 leaves after what's held back (before the tonight rule they came to about
 87k, and hockey and UFC ran at 60%). So every sport is funded in full, and
-the headroom on top goes to the NFL (half again) and most of college's
-quarter. The NBA's 7am pull (since 11 November, four prop pulls a game day
-instead of three) costs about 4,900 credits a month and came out of that
-headroom: before it, the NBA had a quarter on top too. December and January
-fund everyone with full headroom and leave some credits unplanned.
+the headroom on top goes to the NFL: most of its half again (10,410 of
+11,070). The 7am pulls (since 11 November, so every board is up in the
+morning: four prop pulls a game day instead of three for the NBA and
+hockey) cost about 4,900 and 3,000 credits a month and came out of that
+headroom: before them, college had its full quarter on top and the NBA
+some of one. December and January fund everyone with full headroom and
+leave some credits unplanned.
 
 A month where every sport spends its full ceiling every day still ends
 above the reserve; that's tested in `tests/test_the_odds_plan.py`.
@@ -190,10 +192,10 @@ the table for today.
 
 | | Mon | Tue | Wed | Thu | Fri | Sat | Sun | week |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| NFL | 600 | 0 | 0 | 400 | 0 | 0 | 3,500 | 4,500 |
-| College | 0 | 224 | 224 | 252 | 278 | 1,586 | 0 | 2,564 |
+| NFL | 600 | 0 | 0 | 410 | 0 | 0 | 3,500 | 4,510 |
+| College | 0 | 232 | 232 | 258 | 286 | 1,690 | 0 | 2,698 |
 | NBA | 823 | 743 | 1,063 | 583 | 983 | 823 | 823 | 5,841 |
-| NHL | 234 | 450 | 270 | 486 | 270 | 558 | 234 | 2,502 |
+| NHL | 294 | 582 | 342 | 630 | 342 | 726 | 294 | 3,210 |
 | UFC | 0 | 0 | 0 | 0 | 0 | 56 | 0 | 56 |
 
 * **NFL.** Sunday: the four windows (7am, noon, 3pm, 6pm ET), plus a
@@ -208,12 +210,12 @@ the table for today.
   four on weekday nights, at 13 credits a game for up to 12 of that night's
   games a pull. Game lines run on game nights only, every 15 minutes in the
   pre-game window and through the games.
-* **NBA and NHL.** The NBA: four prop pulls on a game day, at 7am, noon,
-  the pre-game run and 6pm ET (the 7am one since 11 November, so its Edge
-  and Most Likely boards are up in the morning). The NHL: three, at noon,
-  the pre-game run and 6pm. The NBA adds its three-credit game-lines lane
-  until the last tip. Both add the live line while games are on. An 11-game
-  NBA night is about 1,140 credits; a 9-game NHL night is about 410.
+* **NBA and NHL.** Four prop pulls on a game day, at 7am, noon, the
+  pre-game run and 6pm ET (the 7am one since 11 November, so their Edge
+  and Most Likely boards are up in the morning). The NBA adds its
+  three-credit game-lines lane until the last tip. Both add the live line
+  while games are on. An 11-game NBA night is about 1,140 credits; a
+  9-game NHL night is about 530.
 * **MLB.** Four pulls on a World Series game day, about 124 credits.
 * **UFC.** One credit a fight, four pulls on fight day, nothing on the
   days before.
@@ -253,8 +255,9 @@ show 14 as the example, and that got copied.)
 
 ## What changed in the pacer with it
 
-* **NHL and WNBA pull at noon and 6pm ET, the NBA at 7am, noon and 6pm**
-  (the 7am window since 11 November), instead of the four football windows.
+* **The NBA, NHL and WNBA pull at 7am, noon and 6pm ET** (the 7am window
+  since 11 November; every league now buys at 7am on a day it plays),
+  instead of the four football windows.
   Their pre-game window doesn't triple their pace (the burst), which would
   spend the day's pulls before the 6pm injury reports.
 * **A day with no game near is off-peak.** When a board's next game is more

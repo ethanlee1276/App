@@ -9338,6 +9338,26 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OI. Every league buys its prices at 7am on a game day** (step 511; 11
+November). Nothing to run. Ethan, after OH: "And that should be for all
+sports ... if there's games that day ... stick on the schedule we talked
+about. But I want it to be polling earlier in the day as well, because a lot
+of people look early in the morning." The NFL, college, MLB and UFC already
+opened at 7am ET (their four windows: 7am, noon, 3pm and 6pm), and OH gave
+the NBA its 7am window. Hockey and the WNBA now have one too
+(engine/oddsbudget.SPORT_TOUCHPOINTS: 7am, noon and 6pm), only on a day they
+play, as before: a league with no game today buys nothing. The month's plan
+funds four hockey pulls a game day instead of three (engine/oddsplan.PULLS),
+about 3,000 credits more a month; the WNBA is out of season and costs
+nothing until May. On the 100k plan every league is still funded at its full
+cadence: all of them together now come to about 72k of the 82,500 the month
+plans for, and the extra comes out of headroom (college's quarter and a
+little of the NFL's half: it keeps 10,410 of its 11,070), not out of anything
+bought. The plan's split of a short month now hands out every credit, too: a
+share rounded down could leave a credit meant for tonight's hockey to the
+NFL's Sunday. From Thursday the hockey board is priced at 7am on a game day,
+like the rest.
+
 **OH. The NBA buys its prices at 7am too** (step 510; 11 November). Nothing
 to run. Ethan, at 8:40am: "NBA isn't showing picks for edge or most likely.
 We should start pulling odds around 7am est every day." The NBA's first paid
