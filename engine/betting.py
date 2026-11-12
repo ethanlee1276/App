@@ -905,9 +905,25 @@ def evaluate_prop(prop: Prop, proj: Projection,
         # The weather bullet, the same way (2026-09-23): a measured wind or
         # rain cut helps an UNDER and argues against an OVER, and the words
         # "receiving yards −8%" cannot tell the page which.
+        # BY THIS PICK'S OWN MARKET since 2026-11-12 (Ethan: "I feel like we
+        # are not putting weather as a factor for the picks"). The sentence
+        # is written for the position, so a minus sign in it said nothing
+        # about this market: a back's carries OVER in rain — carries +7% —
+        # wore "against this side" for his catches' −16%, and a
+        # quarterback's rushing yards, which no weather moves, wore the
+        # passing cut. Now the condition's own factor on this market signs
+        # it (engine/weather.sign_for), and a market it left alone says so.
         elif (r.startswith(("Wind ", "Rain ", "Snow ")) and "measured" in r
-              and "−" in r and "left alone" not in r):
-            reasons[i] = r + (" — with this side" if side == "UNDER" else " — against this side")
+              and "left alone" not in r):
+            from .weather import sign_for, label as wx_label
+            s = sign_for(getattr(proj, "weather", None), prop.market, r)
+            if s is None:
+                s = -1 if "−" in r else 0
+            if s:
+                helps = (s > 0) == (side == "OVER")
+                reasons[i] = r + (" — with this side" if helps else " — against this side")
+            elif getattr(getattr(proj, "weather", None), "by_kind", None):
+                reasons[i] = r + f" — his {wx_label(prop.market)} left alone"
     # And the grade's own script note said the same thing a second time
     # in different words, under a green tick. One sentence per fact: the
     # numbered bullet above carries it; the note only runs when there is

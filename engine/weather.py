@@ -33,13 +33,32 @@ wind multipliers were measured on the reported wind at kickoff, and the
 board reads Open-Meteo's forecast for the kickoff hour (engine/nflwx.py),
 and a forecast takes the measured cut of its own range (WIND_FORECAST).
 College reads the same table: its games are too few to measure alone.
+
+TWO MARKETS THE BOARD PRICED AND THE WEATHER NEVER TOUCHED (2026-11-12).
+Ethan: "I feel like we are not putting weather as a factor for the picks."
+For passing and receiving yards, touchdowns, catches and a back's carries
+it was — but a quarterback's COMPLETIONS and a kicker's POINTS have been
+bought and priced since October (engine/sources/oddsapi VOLUME_ODDS_KEYS,
+NEW_PROP_ODDS_KEYS) and were never measured, so rain and wind left them
+alone. Measured the same way, ten seasons, the same rule:
+
+  * completions ×0.917 in rain (123 starts, all ten seasons under), ×0.949
+    at 12-18 mph and ×0.935 at 18+ (391 and 90 starts) — the throws still
+    go up (attempts measured nothing: ×0.98 ± .01 at 12-18), fewer land;
+  * a kicker's points ×0.930 at 12-18 mph (432 games), carried up to 18+
+    (×0.931 ± .054 on 93 games, too few alone) — fewer extra points and
+    no more field goals to make up for them. Rain measured nothing clear
+    on them (×0.942 ± .048: more field-goal tries, fewer extra points),
+    cold just short of the bar (×0.900 ± .051), field goals made alone
+    nothing (×0.959 ± .043 at 12-18). Those stay untouched.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .models import Weather, PASS_YDS, PASS_TD, RUSH_YDS, RUSH_ATT, REC_YDS, RECEPTIONS
+from .models import (Weather, PASS_YDS, PASS_TD, PASS_CMP, RUSH_YDS, RUSH_ATT, REC_YDS,
+                     RECEPTIONS, KICK_PTS)
 from .wxfit import band as wind_band, forecast_range, FREEZE_F
 
 
@@ -50,6 +69,36 @@ class WeatherEffect:
     # §7: at 25+ mph the spec says avoid deep-passing markets ENTIRELY —
     # rules.py turns this into a hard block, not just a haircut.
     avoid_deep: bool = False
+    #: Each condition's own factor per market — {"wind": {...}, "precip":
+    #: {...}, "cold": {...}} — so a pick's weather sentence is said to be
+    #: with or against ITS side by what that condition did to ITS market
+    #: (engine/betting), not by a minus sign somewhere in the sentence. A
+    #: reason is written per position, and the rain sentence under a back's
+    #: carries OVER names his catches −16% and his carries +7%.
+    by_kind: dict = field(default_factory=dict)
+
+
+def sign_for(eff: "WeatherEffect | None", market: str, reason: str) -> int | None:
+    """+1 when the condition a weather ``reason`` names ("Wind …", "Rain …",
+    "Snow …") raised ``market``, −1 when it cut it, 0 when it left it alone;
+    None for an effect built without the split (the caller keeps its own
+    rule)."""
+    kinds = getattr(eff, "by_kind", None)
+    if not kinds:
+        return None
+    kind = "wind" if str(reason).startswith("Wind ") else "precip" \
+        if str(reason).startswith(("Rain ", "Snow ")) else "cold"
+    f = float((kinds.get(kind) or {}).get(market, 1.0))
+    return 1 if f > 1.0 else -1 if f < 1.0 else 0
+
+
+def label(market: str) -> str:
+    """The words a weather sentence uses for ``market`` (the board's own
+    label, lower-cased, for a market the weather tables do not name)."""
+    if market in _LABEL:
+        return _LABEL[market]
+    from .models import MARKET_LABELS
+    return MARKET_LABELS.get(market, str(market).replace("_", " ")).lower()
 
 
 #: python3 wxfit.py, 2016-2025 — what engine/wxfit's rule applies.
@@ -59,9 +108,13 @@ WIND = {
     ("pass_yds", "QB"): {"12-18": 0.926, "18+": 0.92},
     ("rec_yds", "WRTE"): {"8-12": 0.955, "12-18": 0.92, "18+": 0.904},
     ("receptions", "WRTE"): {"12-18": 0.953, "18+": 0.953},
+    # 2026-11-12, measured as above (see the module's last paragraph).
+    ("pass_cmp", "QB"): {"12-18": 0.949, "18+": 0.935},
+    ("kick_pts", "K"): {"12-18": 0.93, "18+": 0.93},
 }
 FREEZE: dict = {}
 RAIN = {
+    ("pass_cmp", "QB"): 0.917,
     ("pass_td", "QB"): 0.836,
     ("pass_yds", "QB"): 0.887,
     ("rec_yds", "RB"): 0.791,
@@ -118,6 +171,13 @@ WIND_FORECAST = {
     ("pass_yds", "QB"): {"0-4": 1.000, "4-7": 0.995, "7-10": 0.990, "10-13": 0.968, "13+": 0.938},
     ("rec_yds", "WRTE"): {"0-4": 0.997, "4-7": 0.984, "7-10": 0.967, "10-13": 0.945, "13+": 0.926},
     ("receptions", "WRTE"): {"0-4": 1.000, "4-7": 0.997, "7-10": 0.994, "10-13": 0.980, "13+": 0.962},
+    # 2026-11-12: read off the same 483 games, not fetched again — what
+    # each forecast range turned into (engine/wxfit.FORECAST_SHARES, which
+    # give every row above back to within 0.001) over these markets'
+    # measured bands: engine/wxfit.forecast_row(WIND[key]). The droplet's
+    # next `python3 wxfit.py --scale` checks them against the games.
+    ("pass_cmp", "QB"): {"0-4": 1.000, "4-7": 0.997, "7-10": 0.993, "10-13": 0.977, "13+": 0.954},
+    ("kick_pts", "K"): {"0-4": 1.000, "4-7": 0.995, "7-10": 0.991, "10-13": 0.970, "13+": 0.943},
 }
 TD_WIND_FORECAST = {"pass": {"0-4": 1.000, "4-7": 0.991, "7-10": 0.982, "10-13": 0.942, "13+": 0.890}}
 
@@ -125,16 +185,18 @@ TD_WIND_FORECAST = {"pass": {"0-4": 1.000, "4-7": 0.991, "7-10": 0.982, "10-13":
 #: at kickoff, holds the games that were given a small chance and stayed dry.
 PRECIP_FLOOR = 0.3
 
-MARKETS = (PASS_YDS, PASS_TD, RUSH_YDS, RUSH_ATT, REC_YDS, RECEPTIONS)
-_LABEL = {PASS_YDS: "passing yards", PASS_TD: "passing TDs", RUSH_YDS: "rushing yards",
-          RUSH_ATT: "carries", REC_YDS: "receiving yards", RECEPTIONS: "catches"}
+MARKETS = (PASS_YDS, PASS_TD, PASS_CMP, RUSH_YDS, RUSH_ATT, REC_YDS, RECEPTIONS, KICK_PTS)
+_LABEL = {PASS_YDS: "passing yards", PASS_TD: "passing TDs", PASS_CMP: "completions",
+          RUSH_YDS: "rushing yards", RUSH_ATT: "carries", REC_YDS: "receiving yards",
+          RECEPTIONS: "catches", KICK_PTS: "kicking points"}
 #: The markets a position's props are priced in, and the group measured for it.
-_POSITION_MARKETS = {"QB": (PASS_YDS, PASS_TD, RUSH_YDS), "WR": (REC_YDS, RECEPTIONS),
-                     "TE": (REC_YDS, RECEPTIONS), "RB": (RUSH_YDS, RUSH_ATT, REC_YDS, RECEPTIONS)}
-_GROUP = {"QB": "QB", "WR": "WRTE", "TE": "WRTE", "RB": "RB", "FB": "RB"}
-_DEFAULT_GROUP = {PASS_YDS: "QB", PASS_TD: "QB", RUSH_YDS: "RB", RUSH_ATT: "RB", REC_YDS: "WRTE",
-                  RECEPTIONS: "WRTE"}
-_WHO = {"QB": "a quarterback's", "WRTE": "a receiver's", "RB": "a back's"}
+_POSITION_MARKETS = {"QB": (PASS_YDS, PASS_TD, PASS_CMP, RUSH_YDS), "WR": (REC_YDS, RECEPTIONS),
+                     "TE": (REC_YDS, RECEPTIONS), "RB": (RUSH_YDS, RUSH_ATT, REC_YDS, RECEPTIONS),
+                     "K": (KICK_PTS,)}
+_GROUP = {"QB": "QB", "WR": "WRTE", "TE": "WRTE", "RB": "RB", "FB": "RB", "K": "K"}
+_DEFAULT_GROUP = {PASS_YDS: "QB", PASS_TD: "QB", PASS_CMP: "QB", RUSH_YDS: "RB", RUSH_ATT: "RB",
+                  REC_YDS: "WRTE", RECEPTIONS: "WRTE", KICK_PTS: "K"}
+_WHO = {"QB": "a quarterback's", "WRTE": "a receiver's", "RB": "a back's", "K": "a kicker's"}
 
 
 def shipped() -> dict:
@@ -210,6 +272,7 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
         return WeatherEffect(mult, reasons)
 
     markets = _markets_for(position)
+    by_kind: dict = {"wind": {}, "precip": {}, "cold": {}}
     wind = float(w.wind_mph or 0.0)
     if getattr(w, "forecast", False):
         r = forecast_range(wind)
@@ -218,6 +281,7 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
             f = WIND_FORECAST.get((m, _group(m, position)), {}).get(r)
             if f and f < 1.0:
                 mult[m] *= f
+                by_kind["wind"][m] = f
                 hit.append(f"{_LABEL[m]} {_pct1(f)}")
         if hit:
             reasons.append(f"Wind {wind:.0f} mph forecast — games forecast at "
@@ -231,6 +295,7 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
                 f = WIND.get((m, _group(m, position)), {}).get(b)
                 if f:
                     mult[m] *= f
+                    by_kind["wind"][m] = f
                     hit.append(f"{_LABEL[m]} {_pct(f)}")
             who = _WHO.get(_GROUP.get(str(position or "").upper(), ""), "")
             if hit:
@@ -252,6 +317,7 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
             f = table.get((m, _group(m, position)))
             if f:
                 mult[m] *= at_chance(f, p)
+                by_kind["precip"][m] = at_chance(f, p)
                 hit.append(f"{_LABEL[m]} {_pct(f)}")
                 now.append(_pct(at_chance(f, p)))
         if hit:
@@ -273,13 +339,14 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
             f = FREEZE.get((m, _group(m, position)))
             if f:
                 mult[m] *= f
+                by_kind["cold"][m] = f
                 hit.append(f"{_LABEL[m]} {_pct(f)}")
         reasons.append(f"{w.temp_f:.0f}°F — " + (
             f"measured below freezing: {', '.join(hit)}" if hit else
             "cold on its own measured no clear effect once wind, rain and snow "
             "are separated; left alone"))
 
-    return WeatherEffect(mult, reasons, avoid_deep=avoid_deep)
+    return WeatherEffect(mult, reasons, avoid_deep=avoid_deep, by_kind=by_kind)
 
 
 def td_multiplier(w: Weather | None, position: str) -> tuple[float, list[str]]:

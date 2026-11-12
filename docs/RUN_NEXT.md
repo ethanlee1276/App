@@ -10,7 +10,7 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-12, after the report started saying why a matchup card reads against the edge it names (step OP: nothing to run), after the board's self-check started counting a report and a matchup card that point opposite ways (step OO: nothing to run), after the report started giving this season's rank beside the two-season blend where they sit far apart, "the Giants' run defense (30th; 13th this season alone)" (step ON: nothing to run), after a stingy defence's rank started being said as the fewest, "the 3rd-fewest" and not "the 30th-most" (step OM: nothing to run), after a running quarterback's legs went on his matchup card (step OL:
+Last updated 2026-11-12, after rain and wind started reaching a quarterback's completions and a kicker's points, and a pick's weather line started being marked by its own market (step OQ: nothing to run), after the report started saying why a matchup card reads against the edge it names (step OP: nothing to run), after the board's self-check started counting a report and a matchup card that point opposite ways (step OO: nothing to run), after the report started giving this season's rank beside the two-season blend where they sit far apart, "the Giants' run defense (30th; 13th this season alone)" (step ON: nothing to run), after a stingy defence's rank started being said as the fewest, "the 3rd-fewest" and not "the 30th-most" (step OM: nothing to run), after a running quarterback's legs went on his matchup card (step OL:
 nothing to run), after a player's matchup card started saying what the matchup says,
 the weather counted and his own share not (step OK: nothing to run), after the game-line
 calibration started saying where its time goes
@@ -1729,6 +1729,20 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh KP 2>&1 | tee /tmp/kp.txt
 Each league says `collecting` until 200 score changes, then whether the
 licensed feed is as fast or faster. A league moves onto it only on that
 verdict, and only as its own change.
+
+## 8b. Your call: a forecast for games abroad (free; step OQ)
+
+Sunday's Patriots–Lions game in Munich reads "no forecast pulled", so the
+weather is left out of its props. The NWS, which the boards read since
+step KY, covers the US only, and nothing falls back to Open-Meteo (its free
+use is non-commercial). Norway's weather service (MET Norway) publishes a
+worldwide forecast that is free, needs no key, and allows commercial use as
+long as the site credits it ("Weather data from MET Norway") and names
+itself in each request. If you want it: say yes, and it gets built for the
+games the NWS cannot answer (London, Munich, Madrid, Mexico City and the
+rest), behind one read-only command on the box that shows its reading for
+each venue before any board uses it. Nothing to pay. If not, games abroad
+keep "no forecast pulled", as now.
 
 ## 9. Done 6 November: the weather moved to the National Weather Service (step KY)
 

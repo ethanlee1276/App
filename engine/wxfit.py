@@ -76,16 +76,23 @@ QB_ATTEMPTS = 15
 #: backs' snow touchdowns (×1.77) stand on 26 team-games.
 MIN_N = 40
 
-#: position -> ((market, stat column(s), form floor), ...)
+#: position -> ((market, stat column(s), form floor), ...). The columns are
+#: summed, so a column named twice counts twice: a kicker's points are three
+#: a field goal and one an extra point (engine/models KICK_PTS).
+#: COMPLETIONS AND A KICKER'S POINTS since 2026-11-12: both priced since
+#: October and never measured until Ethan said the weather was missing from
+#: the picks (engine/weather.py's last paragraph has what they measured).
 MARKETS = {
-    "QB": (("pass_yds", ("passing_yards",), 120.0), ("pass_td", ("passing_tds",), 0.3)),
+    "QB": (("pass_yds", ("passing_yards",), 120.0), ("pass_td", ("passing_tds",), 0.3),
+           ("pass_cmp", ("completions",), 9.0)),
     "WR": (("rec_yds", ("receiving_yards",), 15.0), ("receptions", ("receptions",), 1.5)),
     "TE": (("rec_yds", ("receiving_yards",), 15.0), ("receptions", ("receptions",), 1.5)),
     "RB": (("rush_yds", ("rushing_yards",), 15.0), ("rec_yds", ("receiving_yards",), 8.0),
            ("receptions", ("receptions",), 1.0)),
+    "K": (("kick_pts", ("fg_made", "fg_made", "fg_made", "pat_made"), 4.0),),
 }
 #: Receivers and tight ends are measured as one group, as the board prices them.
-GROUP = {"QB": "QB", "WR": "WRTE", "TE": "WRTE", "RB": "RB"}
+GROUP = {"QB": "QB", "WR": "WRTE", "TE": "WRTE", "RB": "RB", "K": "K"}
 
 _PRECIP = re.compile(r"rain|shower|drizzle|snow|sleet|flurr|flake", re.I)
 _SNOW = re.compile(r"snow|sleet|flurr|flake", re.I)
@@ -603,6 +610,36 @@ FORECAST_RANGES = ((13.0, "13+"), (10.0, "10-13"), (7.0, "7-10"), (4.0, "4-7"), 
 
 def forecast_range(mph: float) -> str:
     return next(name for lo, name in FORECAST_RANGES if float(mph or 0.0) >= lo)
+
+
+#: WHAT A FORECAST TURNED INTO (2026-11-12): for each forecast range, the
+#: share of its games whose game book reported 8-12, 12-18 and 18+ mph at
+#: kickoff. Read back off the rows the droplet measured on 483 games
+#: (engine/weather.WIND_FORECAST, `python3 wxfit.py --scale`, 2026-09-25):
+#: every row there is the mean of its bands' cuts over the reported winds,
+#: so the catches and passing-touchdown rows (flat above 12 mph) give the
+#: share at 12+, the passing-yards row (deeper at 18+) the 18+ part of it,
+#: and the receiving-yards row (cut from 8 mph) the 8-12 share. These give
+#: all five measured rows back to within 0.001
+#: (tests/test_the_weather_reaches_completions_and_kickers.py), and a market
+#: measured since takes its forecast row from them (`forecast_row`) until
+#: the next --scale run, which reads every row of engine/weather.WIND,
+#: measures it against the games themselves.
+FORECAST_SHARES = {"0-4": (0.067, 0.0, 0.0), "4-7": (0.236, 0.067, 0.0),
+                   "7-10": (0.50, 0.13, 0.0), "10-13": (0.44, 0.357, 0.07),
+                   "13+": (0.08, 0.47, 0.34)}
+
+
+def forecast_row(bands: dict) -> dict:
+    """The forecast row for a wind row ``bands`` ({band: multiplier},
+    engine/weather.WIND's shape): each forecast range's mean multiplier over
+    the reported bands its games turned into (FORECAST_SHARES)."""
+    out = {}
+    for _lo, name in reversed(FORECAST_RANGES):
+        cut = math.fsum(s * (1.0 - float(bands.get(b, 1.0)))
+                        for s, b in zip(FORECAST_SHARES[name], BANDS))
+        out[name] = round(1.0 - cut, 3)
+    return out
 
 
 def effect_by_forecast(pairs, table: dict, board=None) -> list[dict]:

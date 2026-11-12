@@ -9338,6 +9338,34 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OQ. Rain and wind reach completions and a kicker's points** (step 519; 12
+November). Nothing to run. You said the weather isn't a factor for the
+picks. For most of the board it has been since September: the kickoff
+forecast moves passing yards and touchdowns, receivers' yards and catches,
+a back's carries and a receiver's touchdown chance (tonight's Commanders at
+the Giants, 74% rain and 12 mph: passing yards −11%, receivers' yards −14%,
+catches −10%, a back's carries +5%). Two markets priced since October never
+had it: a quarterback's completions and a kicker's points. Measured the same
+way (ten seasons of games, the same rule): completions ×0.917 in rain,
+×0.949 at 12-18 mph and ×0.935 at 18+; a kicker's points ×0.930 from 12 mph
+(fewer extra points, no more field goals to make up for them). Both now move
+with the forecast: tonight a quarterback's completions −8%, a 15 mph Sunday
+a kicker's points −6%. Pass attempts, field goals made, and a kicker in rain
+or cold measured nothing clear and stay untouched. And a pick's weather line
+is marked with or against its side by what the weather did to that pick's own
+market: a back's carries OVER in rain read "against this side" (the same line
+names his catches' cut); it reads "with this side" now, and a market the
+weather leaves alone (a back's or a quarterback's rushing yards) says "his
+rushing yards left alone" instead of wearing the passing cut. The next
+`python3 wxfit.py` you run (KU's) measures the two with everything else, and
+`--scale` checks their forecast rows against the games.
+
+One thing it cannot fix from here: Sunday's Patriots–Lions game in Munich
+reads "no forecast pulled". The NWS, which the boards read since step KY,
+covers the US only, and nothing falls back to Open-Meteo (its free use is
+non-commercial). A free source abroad that allows commercial use with a
+credit line (MET Norway) is in RUN_NEXT's decisions.
+
 **OP. The report says why a card crosses the edge it names** (step 518; 12
 November). Nothing to run. The first NFL build with step OO's check found 8
 crossings on the board (one card in about every other game). Both sides can
