@@ -48,6 +48,31 @@ from .stadiums import STADIUM_COORDS
 #: skip a forecast for a game being played in the rain.
 INDOOR_ROOFS = ("dome", "closed")
 
+#: A RETRACTABLE ROOF NOBODY HAS CALLED YET IS CLOSED (2026-11-12). nflverse
+#: writes a game's roof only once it is played, so every coming game at the
+#: five retractable roofs (Arizona, Atlanta, Dallas, Houston, Indianapolis)
+#: arrives blank, and the board pulled a forecast and priced it as open air:
+#: Sunday's 49ers at the Cowboys took a 15 mph wind and a 56% chance of rain
+#: (passing yards −12%). The played games say otherwise — 2016-2025, 362 of
+#: those clubs' 412 home games were played closed, and the 48 played open
+#: were fair days (wind 5 mph on average, none in rain, 47°F the coldest).
+#: A roof that opens only in fine weather leaves nothing to price either
+#: way, so a blank roof at a retractable stadium reads as closed. A roof the
+#: schedule does call ("open", "closed") is taken as written.
+RETRACTABLE_CLOSED = {"games": 412, "closed": 362, "open": 48, "seasons": "2016-2025"}
+
+
+def retractable_unset(g) -> bool:
+    """True for a game at a retractable-roof stadium whose roof the schedule
+    has not called (and not a neutral site, which keeps its own venue)."""
+    if getattr(g, "neutral_site", False):
+        return False
+    if str(getattr(g, "roof", "") or "").strip():
+        return False
+    from .stadiums import STADIUMS
+    s = STADIUMS.get(str(getattr(g, "home", "") or "").upper())
+    return bool(s and s.roof == "retractable")
+
 #: The precipitation chance at which the board's own layers already call
 #: it rain (`engine/weather.py` reads `w.rain or w.precip_chance >= 0.6`),
 #: and the temperature below which that precipitation is snow.
@@ -153,6 +178,11 @@ def attach(games, forecast=None) -> int:
     for g in games or []:
         roof = str(getattr(g, "roof", "") or "").strip().lower()
         w = getattr(g, "weather", None)
+        if retractable_unset(g):
+            g.weather = Weather(dome=True, temp_f=70.0, wind_mph=0.0, measured=True,
+                                retractable=True)
+            stamped += 1
+            continue
         if roof in INDOOR_ROOFS or (w is not None and w.dome):
             # Answered without asking anybody — climate control is a fact
             # about a building. The flag is SET here rather than assumed

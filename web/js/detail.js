@@ -1805,7 +1805,7 @@ function renderGamePage() {
   // The header re-uses the same art the strip card draws, at full width.
   const art = mlb ? ballpark(g) : nba ? court(g) : state.sport === "nhl" ? rink(g) : stadium(g);
   const cond = nba ? "Indoor hardwood" : state.sport === "nhl" ? "Indoor ice"
-    : w.dome ? "Indoor"
+    : w.dome ? (w.retractable ? "Retractable roof · expected closed" : "Indoor")
     // Same rule as the strip card: an unmeasured prior is not a forecast.
     : w.measured === false ? "Outdoor · weather not pulled"
     : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}${

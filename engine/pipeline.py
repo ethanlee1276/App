@@ -1666,6 +1666,8 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
             # A forecast takes its range's measured cut, not the band's
             # (engine/weather.WIND_FORECAST); the checks read this.
             "forecast": bool(getattr(w, "forecast", False)),
+            # A retractable roof read as closed (engine/nflwx.retractable_unset).
+            "retractable": bool(getattr(w, "retractable", False)),
         },
         # §5.1's encoding contract, computed rather than assumed.
         "conditions": _conditions(g, results),

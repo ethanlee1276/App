@@ -185,6 +185,12 @@ TD_WIND_FORECAST = {"pass": {"0-4": 1.000, "4-7": 0.991, "7-10": 0.982, "10-13":
 #: at kickoff, holds the games that were given a small chance and stayed dry.
 PRECIP_FLOOR = 0.3
 
+#: What a retractable roof the schedule has not called says (engine/nflwx
+#: .retractable_unset): read as closed, and why.
+RETRACTABLE_REASON = ("Retractable roof — read as closed: these roofs were shut for 9 home games "
+                      "in 10 from 2016 to 2025 and open only on fair days, never in rain, so the "
+                      "weather is left out")
+
 MARKETS = (PASS_YDS, PASS_TD, PASS_CMP, RUSH_YDS, RUSH_ATT, REC_YDS, RECEPTIONS, KICK_PTS)
 _LABEL = {PASS_YDS: "passing yards", PASS_TD: "passing TDs", PASS_CMP: "completions",
           RUSH_YDS: "rushing yards", RUSH_ATT: "carries", REC_YDS: "receiving yards",
@@ -262,7 +268,8 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
     reasons: list[str] = []
 
     if w.dome:
-        reasons.append("Dome game — no weather impact on the passing game")
+        reasons.append(RETRACTABLE_REASON if getattr(w, "retractable", False)
+                       else "Dome game — no weather impact on the passing game")
         return WeatherEffect(mult, reasons)
     if not getattr(w, "measured", False):
         # The 60°F / 6 mph prior is a number to do arithmetic on, not a
@@ -353,7 +360,8 @@ def td_multiplier(w: Weather | None, position: str) -> tuple[float, list[str]]:
     """The weather's multiplier on an anytime-touchdown RATE that starts from
     the book's implied team total (touchdowns.py, engine/cfb/tds.py)."""
     if w is None or w.dome:
-        return 1.0, ["Indoors — weather is not a factor"]
+        return 1.0, ["Retractable roof, read as closed — weather is not a factor"
+                     if getattr(w, "retractable", False) else "Indoors — weather is not a factor"]
     if not getattr(w, "measured", False):
         return 1.0, ["Outdoors, no forecast pulled — weather left out"]
     kind = "pass" if str(position or "").upper() in ("WR", "TE") else "rush"

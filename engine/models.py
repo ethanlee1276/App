@@ -176,6 +176,10 @@ class Weather:
     #: range instead (engine/weather.WIND_FORECAST), and the card shows the
     #: forecast's own number.
     forecast: bool = False
+    #: A RETRACTABLE ROOF the schedule has not called yet (engine/nflwx
+    #: .attach): read as closed, with ``dome`` set, and said so on the card
+    #: rather than called a dome.
+    retractable: bool = False
 
 
 @dataclass

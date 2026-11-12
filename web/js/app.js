@@ -7775,7 +7775,7 @@ function gameCard(g, i) {
   // kickoff-hour forecast — never the conditions today.
   const wxKnown = !!(w.dome || w.measured || g.weather_checked);
   const cond = nba ? "Indoor hardwood" : nhl ? "Indoor ice"
-    : w.dome ? "Indoor"
+    : w.dome ? (w.retractable ? "Retractable roof · expected closed" : "Indoor")
     : !g.weather || !wxKnown
       ? (g.indoor ? "Indoor" : "Outdoor · weather not pulled")
       : `${Math.round(w.temp_f)}°F · ${windTxt}${

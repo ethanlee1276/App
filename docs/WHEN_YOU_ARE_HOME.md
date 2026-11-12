@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OR. A retractable roof nobody has called yet is read as closed** (step 520;
+12 November). Nothing to run. Checking step OQ on the live board turned up
+the opposite problem: weather where there shouldn't be any. Sunday's 49ers at
+the Cowboys took a 15 mph wind and a 56% chance of rain on its props
+(passing yards −12%), because nflverse writes a game's roof only once it is
+played, so every coming game at the five retractable roofs (Arizona,
+Atlanta, Dallas, Houston, Indianapolis) arrived blank and the board treated
+it as open air. The played games: 2016-2025, 362 of those clubs' 412 home
+games were played with the roof closed, and the 48 played open were fair
+days (wind 5 mph on average, none in rain). So a blank roof there now reads
+as closed: no forecast pulled, no weather in the number, and the game card
+says "Retractable roof · expected closed" with the reason. A roof the
+schedule does call ("open", "closed") is taken as written. Four games on
+this week's board change (Chiefs at Falcons, Dolphins at Colts, Rams at
+Cardinals, 49ers at Cowboys); only the Cowboys game had a cut worth
+anything.
+
 **OQ. Rain and wind reach completions and a kicker's points** (step 519; 12
 November). Nothing to run. You said the weather isn't a factor for the
 picks. For most of the board it has been since September: the kickoff
