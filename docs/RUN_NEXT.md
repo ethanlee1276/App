@@ -10,7 +10,7 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-12, after the report started giving this season's rank beside the two-season blend where they sit far apart, "the Giants' run defense (30th; 13th this season alone)" (step ON: nothing to run), after a stingy defence's rank started being said as the fewest, "the 3rd-fewest" and not "the 30th-most" (step OM: nothing to run), after a running quarterback's legs went on his matchup card (step OL:
+Last updated 2026-11-12, after the board's self-check started counting a report and a matchup card that point opposite ways (step OO: nothing to run), after the report started giving this season's rank beside the two-season blend where they sit far apart, "the Giants' run defense (30th; 13th this season alone)" (step ON: nothing to run), after a stingy defence's rank started being said as the fewest, "the 3rd-fewest" and not "the 30th-most" (step OM: nothing to run), after a running quarterback's legs went on his matchup card (step OL:
 nothing to run), after a player's matchup card started saying what the matchup says,
 the weather counted and his own share not (step OK: nothing to run), after the game-line
 calibration started saying where its time goes

@@ -39,6 +39,17 @@ its word:
                matchup read backing it — engine/likelyboard.held_reason
                takes those off (Ethan, 2026-10-07: "take picks off once
                they drop under 50% unless we have data to back" it)
+  CROSSED      the game report's short version gives a side a run or pass
+               edge (one of the three unit edges it names) while a matchup
+               card on that offence reads the other way: "room to run for
+               the Commanders" over a Commanders back read UNFAVORABLE, or
+               "the Giants' pass defense should slow down the Commanders'
+               passing game" over a Commanders receiver read FAVORABLE.
+               Ethan's Commanders–Giants screenshots, 12 November 2026:
+               "That doesn't make any sense." Both can be true (the edge is
+               the two-season unit blend, the card this season's yards and
+               the forecast), so it is counted for a human to read, not
+               changed.
 
 A problem is a question for a human, not a verdict; nothing here edits a
 board. Standard library only.
@@ -53,6 +64,13 @@ LONGSHOT_PROB = 0.20
 KEEP = 8
 
 _BARE_MATE = re.compile(r" is out — his (targets|carries) are open$")
+#: Which cards a unit edge speaks for: the run game's backs; the passing
+#: game's quarterback and receivers.
+EDGE_GROUP = {"rushing": {"RB", "FB"}, "passing": {"QB", "WR", "TE"}}
+#: The card verdicts that lean each way (engine/gamescan._label).
+READ_UP, READ_DOWN = frozenset({"good", "breakout"}), frozenset({"tough", "avoid"})
+#: The edges the short version names (engine/gamereport.sec_short).
+REPORT_EDGES = 3
 _NOW_PCT = re.compile(r"now (\d+)%")
 
 
@@ -135,6 +153,27 @@ def check(board: dict) -> dict:
         p = _f(r.get("model_prob"))
         if p is not None and p < DROP_FLOOR - 1e-9 and (r.get("checks") or {}).get("matchup") is not True:
             probs.append(("UNDER EVEN", f"{_who(r)}: {p:.0%} on the board with no matchup read behind it"))
+    for g in (board or {}).get("games") or []:
+        if not isinstance(g, dict):
+            continue
+        edges = [e for e in ((g.get("scan") or {}).get("edges") or []) if isinstance(e, dict)][:REPORT_EDGES]
+        reads = ((((board or {}).get("scan_reads") or {}).get(f"{g.get('away')}@{g.get('home')}") or {})
+                 .get("players") or [])
+        for e in edges:
+            group = EDGE_GROUP.get(e.get("unit"))
+            if not group or not reads:
+                continue
+            up = (e.get("gap") or 0) > 0
+            for x in reads:
+                if x.get("team") != e.get("off") or str(x.get("pos") or "").upper() not in group:
+                    continue
+                checked += 1
+                read = x.get("read")
+                if (up and read in READ_DOWN) or (not up and read in READ_UP):
+                    probs.append(("CROSSED", f"{x.get('player')} ({x.get('team')} {x.get('pos')}): card reads "
+                                  f"{read}, the report gives {e.get('off') if up else e.get('def')} the "
+                                  f"{e.get('unit')} edge ({e.get('off')} {e.get('off_rank')} vs "
+                                  f"{e.get('def')} {e.get('def_rank')})"))
     fresh = (board or {}).get("data_freshness") or {}
     if fresh.get("played") is not None:
         checked += 1

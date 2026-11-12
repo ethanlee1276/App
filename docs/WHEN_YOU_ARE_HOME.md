@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OO. The self-check reads the report against the matchup cards** (step 517;
+12 November). Nothing to run. Your Commanders–Giants screenshots were a
+report giving a side the run edge ("room to run for the Commanders") over
+a card on that side reading the other way (Rachaad White UNFAVORABLE). The
+board's self-check (engine/boardtruth) now counts that as CROSSED after
+every build: for each of the three unit edges the short version names, a
+back read tough or avoid under a run edge for his side, or a quarterback or
+receiver read good under a pass edge against his side. Both can be true
+(the edge is the two-season unit blend, the card this season's yards and
+the forecast), so it is a question for a human, not an edit: the Status
+page shows the count ("report and a matchup card point opposite ways"),
+the build log names the players. If it keeps showing, tell me and I'll
+make the two say the same thing.
+
 **ON. The report gives this season's rank beside the two-season blend** (step
 516; 12 November). Nothing to run. The Commanders at the Giants' short
 version read "the Giants' run defense (30th), so there is room to run".

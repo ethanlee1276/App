@@ -4057,7 +4057,8 @@ const TRUTH_WORDS = { "FLOOR": "under 55%", "CAP": "heavier than −250", "OLD P
   "NO NOW": "locked, no current price", "LOCK NOTE": "note and tile disagree",
   "PICK MISSING": "card names a missing pick", "LONGSHOT": "longshot called likeliest",
   "BARE MATE": "teammate-out line with no number", "DATA BEHIND": "stats behind",
-  "UNDER EVEN": "under 50%, nothing backing it" };
+  "UNDER EVEN": "under 50%, nothing backing it",
+  "CROSSED": "report and a matchup card point opposite ways" };
 function truthRowHTML(t, sub) {
   if (!t || t.checked == null) return "";
   if (!t.count) return sub("Self-check", `all ${t.checked} claims hold`, "st-good", "");
