@@ -130,10 +130,6 @@ def normalise(actions: list) -> list[dict]:
     return out
 
 
-def _is_fg(r) -> bool:
-    return r["type"] in ("2pt", "3pt")
-
-
 def _ft_last(r) -> bool:
     """The last free throw of a trip: a miss on it is a live rebound."""
     s = r["sub"] or ""

@@ -3221,8 +3221,7 @@ select.calc-in { width: auto; font-weight: 600; }
 .fr-send { margin: 10px 0 14px; padding: 12px;
   background: var(--panel-2); border: var(--hairline) solid transparent;
   border-radius: var(--radius); }
-.fr-send .fr-note,
-#slip-send-slot .fr-note { width: 100%; margin-bottom: 10px; padding: 8px 10px;
+.fr-send .fr-note { width: 100%; margin-bottom: 10px; padding: 8px 10px;
   background: var(--panel); color: var(--text);
   border: var(--hairline) solid transparent;
   border-radius: var(--radius); font: inherit; font-size: var(--fs-sm); }
@@ -7727,8 +7726,17 @@ button.rc-day b { font-size: var(--fs-sm); }
 
    Add an id here when a new in-page link appears; `revealAnchor` in
    app.js is what makes such a link work at all when its target sits in a
-   sub-tab. */
-#preseason-board { scroll-margin-top: 76px; }
+   sub-tab. Write the offset as `calc(var(--topbar-h) + N)`, the way the
+   live targets do (`[id^="gp-sec-"]` above, .kr-month, .ft-sec, report's
+   own heading): the one rule that sat here wrote a bare 76px, which is
+   the masthead measured once in 2026 and frozen.
+
+   The section holds no rule at the moment. #preseason-board was the
+   last one, and it outlived its element by the whole of the NFL
+   preseason retirement (ddb8f850): scroll-margin-top on an id nothing
+   renders has no symptom at all, so nothing reported it for months.
+   test_a_stylesheet_targets_no_id_that_is_gone enumerates every id our
+   stylesheets target now, which is the only way this reports itself. */
 
 /* --- League desk: the lineup and the trades ------------------------------ */
 .ld-total { font-size: var(--fs-xl); font-weight: 800;
