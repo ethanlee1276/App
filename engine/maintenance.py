@@ -1266,7 +1266,17 @@ def _learn_sampled(learn, phases: dict) -> None:
     a ``refresh``. The first pass after the 04:35 restart on 10 November
     learned for 528.6 seconds, a pass in the hour on a one-CPU box beside
     the board builds, with nothing to say which learner; a sampler that
-    fails costs only the parts, never the learning."""
+    fails costs only the parts, never the learning.
+
+    The biggest learner says where its own time went too: the game-line
+    calibration (128.8 of the 249.1 seconds at 04:03 on 12 November) puts
+    each league's fit and each read on ``learn_gamecal`` (`engine.gamecal
+    .LAST`), cleared before each pass so it is this pass's or none."""
+    try:
+        from . import gamecal
+        gamecal.LAST.clear()
+    except Exception:                                        # noqa: BLE001
+        gamecal = None
     try:
         from .stacksample import Sampler
         sampler = Sampler(learn.__code__, qualify=True)
@@ -1274,12 +1284,14 @@ def _learn_sampled(learn, phases: dict) -> None:
         sampler = None
     if sampler is None:
         learn()
-        return
-    with sampler:
-        learn()
-    phases["learn_parts"] = sampler.seconds()
-    if sampler.error:
-        phases["learn_parts_error"] = sampler.error
+    else:
+        with sampler:
+            learn()
+        phases["learn_parts"] = sampler.seconds()
+        if sampler.error:
+            phases["learn_parts_error"] = sampler.error
+    if gamecal is not None and gamecal.LAST:
+        phases["learn_gamecal"] = dict(gamecal.LAST)
 
 
 def settle_open(log=print, state_path: Path | None = None,
@@ -1737,7 +1749,7 @@ def settle_open(log=print, state_path: Path | None = None,
 def _keep_last_parts(state: dict, phases: dict, now: float) -> None:
     """The last pass that learned and the last that exported, on every
     pass's phases: ``last_learned`` (when, the learning's seconds, each
-    learner's) and ``last_exported`` (when, the export's seconds, its
+    learner's, the game-line calibration's own parts) and ``last_exported`` (when, the export's seconds, its
     sections, the two-leg section's halves).
 
     The heartbeat shows only the latest pass. At 07:41 on Wednesday 11
@@ -1748,8 +1760,10 @@ def _keep_last_parts(state: dict, phases: dict, now: float) -> None:
     which a restart keeps too."""
     at = _dt.datetime.fromtimestamp(now).isoformat(timespec="seconds")
     if phases.get("learn_parts"):
-        state["last_learned"] = {"at": at, "learn": phases.get("learn"),
-                                 "parts": dict(phases["learn_parts"])}
+        kept = {"at": at, "learn": phases.get("learn"), "parts": dict(phases["learn_parts"])}
+        if phases.get("learn_gamecal"):
+            kept["gamecal"] = dict(phases["learn_gamecal"])
+        state["last_learned"] = kept
     if phases.get("export_parts"):
         kept = {"at": at, "export": phases.get("export"), "parts": dict(phases["export_parts"])}
         if phases.get("export_two_leg"):

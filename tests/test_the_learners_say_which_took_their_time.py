@@ -17,7 +17,12 @@ which learner or which half. What these hold:
   * every pass carries the last learning pass's breakdown and the last
     export's (``last_learned``, ``last_exported``) through the settle state,
     since the heartbeat shows only the latest pass (07:41 on 11 November: a
-    quiet pass, every overnight one that learned replaced).
+    quiet pass, every overnight one that learned replaced);
+  * the biggest learner says where its own time went: the game-line
+    calibration (128.8 of 249.1 seconds at 04:03 on 12 November) times each
+    league's fit and each read (``engine.gamecal.LAST``), the settle pass
+    puts it on ``learn_gamecal``, cleared before each pass, and keeps the
+    last one under ``last_learned``.
 
 Run directly: `python3 tests/test_the_learners_say_which_took_their_time.py`
 """
@@ -156,6 +161,103 @@ def test_every_pass_carries_the_last_learning_and_the_last_export():
     assert body.count("_keep_last_parts(state, phases, now)\n") == 2, "both places a pass ends"
     assert body.count('_keep_last_parts(state, phases, now)\n            state["last_settle_ts"] = now') == 1
     assert body.count('_keep_last_parts(state, phases, now)\n    state["last_settle_ts"] = now') == 1
+
+
+def _calibration_history():
+    """A scratch history: four NFL teams through two seasons, every game
+    with its score and a schedule close, and a harvested total for some."""
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE games (sport TEXT, season INT, period TEXT, home TEXT, away TEXT, "
+                 "home_score INT, away_score INT, spread REAL, total REAL, extra TEXT, date TEXT)")
+    conn.execute("CREATE TABLE odds_history (sport TEXT, market TEXT, book TEXT, taken_at TEXT, "
+                 "home TEXT, away TEXT, player TEXT, line REAL, over_odds INT, under_odds INT)")
+    teams = ("A", "B", "C", "D")
+    rows, harvest = [], []
+    for season in (2024, 2025):
+        for wk in range(1, 18):
+            for i in range(0, 4, 2):
+                home, away = teams[(wk + i) % 4], teams[(wk + i + 1) % 4]
+                hs, as_ = 17 + (wk * 3 + i) % 15, 14 + (wk * 5 + i) % 13
+                date = f"{season}-09-{wk:02d}" if wk < 30 else None
+                rows.append((season, f"{wk:03d}", home, away, hs, as_, -2.5 - i, 43.5 + wk % 5,
+                             '{"ml": [-140, 120], "spread_odds": [-110, -110], "total_odds": [-110, -110]}',
+                             date))
+                if wk % 3 == 0:
+                    harvest.append(("nfl", "total", "best", f"{date}T18:00:00Z", home, away, "",
+                                    44.0 + wk % 4, -110, -110))
+    conn.executemany("INSERT INTO games (sport, season, period, home, away, home_score, away_score, "
+                     "spread, total, extra, date) VALUES ('nfl',?,?,?,?,?,?,?,?,?,?)", rows)
+    conn.executemany("INSERT INTO odds_history VALUES (?,?,?,?,?,?,?,?,?,?)", harvest)
+    conn.commit()
+    return conn
+
+
+class _ScratchCalibration:
+    """engine.gamecal pointed at a throwaway state file (the box's own
+    data/feedstate/gamecal.json is never read or written here)."""
+
+    def __enter__(self):
+        from engine import gamecal as G
+        self.G, self.tmp = G, tempfile.TemporaryDirectory()
+        self.saved = G.STATE_PATH, dict(G._cache)
+        G.STATE_PATH = str(Path(self.tmp.name) / "gamecal.json")
+        G._cache.clear()
+        return G
+
+    def __exit__(self, *exc):
+        self.G.STATE_PATH = self.saved[0]
+        self.G._cache.clear()
+        self.G._cache.update(self.saved[1])
+        self.G.LAST.clear()
+        self.tmp.cleanup()
+
+
+def test_the_game_line_calibration_names_each_fit_and_each_read():
+    with _ScratchCalibration() as G:
+        conn = _calibration_history()
+        out = G.refresh(conn, sport="nfl")
+        last = dict(G.LAST)
+        assert set(last["fits"]) == {"nfl:total", "nfl:spread", "nfl:moneyline"}, last
+        assert {"sports", "schedule closes", "harvested closes", "games", "walk"} <= set(last["parts"]), last
+        assert last["seconds"] >= max(last["fits"].values()) >= 0, last
+        assert list(last["fits"].values()) == sorted(last["fits"].values(), reverse=True)
+        # Timing only: what it adopts and holds is what each fit says on its own.
+        fits = {m: G.fit_one(conn, "nfl", m) for m in ("total", "spread", "moneyline")}
+        held = {h["key"]: h["why"] for h in out["held"]}
+        for m, f in fits.items():
+            key = f"nfl:{m}"
+            assert key in held or any(a["key"] == key for a in out["adopted"]), key
+            if f.missing:
+                assert held[key] == f.missing, (key, held, f.missing)
+        # Each refresh's numbers are its own, never added to the last one's.
+        G.refresh(conn, sport="nfl", markets=("total",))
+        assert set(G.LAST["fits"]) == {"nfl:total"}, G.LAST
+
+
+def test_the_settle_pass_puts_the_calibrations_parts_on_its_phases_and_keeps_them():
+    from engine import maintenance as M
+    with _ScratchCalibration() as G:
+        conn = _calibration_history()
+        phases: dict = {}
+        M._learn_sampled(lambda: G.refresh(conn, sport="nfl"), phases)
+        assert set(phases["learn_gamecal"]["fits"]) == {"nfl:total", "nfl:spread", "nfl:moneyline"}, phases
+        # A pass whose learning never reached the calibration carries none,
+        # never the pass before's.
+        quiet: dict = {}
+        M._learn_sampled(lambda: None, quiet)
+        assert "learn_gamecal" not in quiet, quiet
+        with tempfile.TemporaryDirectory() as td:
+            state = M._load_state(Path(td) / "maintenance.json")
+            # A scratch refresh is too quick for the sampler to see; the
+            # box's 128.8 seconds are not.
+            phases["learn_parts"] = phases.get("learn_parts") or {"gamecal.refresh": 1.0}
+            M._keep_last_parts(state, phases, 1000.0)
+            assert state["last_learned"]["gamecal"] == phases["learn_gamecal"], state
+            later = {"learn": 2.0, "learn_parts": {"corrfit.refresh": 2.0}}
+            M._keep_last_parts(state, later, 2000.0)
+            assert "gamecal" not in state["last_learned"], "a later learning without it replaces it whole"
 
 
 if __name__ == "__main__":

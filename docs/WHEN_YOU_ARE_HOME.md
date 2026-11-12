@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OJ. The game-line calibration says where its two minutes go** (step 512;
+12 November). Nothing to run. The first learning pass after OG, at 04:03 on
+Thursday 12 November, learned for 249.1 seconds, and more than half of them,
+128.8, were the game-line calibration (engine/gamecal.refresh): every league
+with a final score, its totals, spreads and moneylines, each walked from the
+first stored game against the closing numbers. Nothing in it said which
+league or which read took the time, and this container's history file is a
+small stub that cannot stand in for the box's, so it is not cut blind. It now
+times each league's fit (`nfl:total` and the rest, slowest first) and each
+part of the walks (the schedule's closes, read from the games table; the
+harvested closes, read from the odds history; the games read; and the walk
+itself), and the settle pass puts them on `learn_gamecal` and keeps the last
+under `last_learned.gamecal`, cleared before each pass so it is never an
+earlier one's. The first pass that learns after this push fills it; the slow
+part gets cut after that, with its results checked identical.
+
 **OI. Every league buys its prices at 7am on a game day** (step 511; 11
 November). Nothing to run. Ethan, after OH: "And that should be for all
 sports ... if there's games that day ... stick on the schedule we talked
@@ -9357,6 +9373,12 @@ bought. The plan's split of a short month now hands out every credit, too: a
 share rounded down could leave a credit meant for tonight's hockey to the
 NFL's Sunday. From Thursday the hockey board is priced at 7am on a game day,
 like the rest.
+
+Thursday 12 November, the first morning with both windows: by 07:41 the
+NBA board had 112 Edge picks (29 of them staked) and 48 Most Likely, built
+at 07:41:19, and hockey's 555 Edge (on paper, as every hockey pick is
+until its record earns money) and 85 Most Likely, at 07:41:42. A day
+earlier, before the NBA's 7am window, the NBA board had 0 and 0 at 08:36.
 
 **OH. The NBA buys its prices at 7am too** (step 510; 11 November). Nothing
 to run. Ethan, at 8:40am: "NBA isn't showing picks for edge or most likely.
@@ -9386,6 +9408,18 @@ sections and the two-leg section's halves), under `chores.settle.phases`. They
 are kept in the settle pass's state file, so a restart keeps them too. The
 first pass that learns or exports after this push fills them; the slowest
 learner gets cut after that.
+
+They filled overnight. The last pass that learned, at 04:03 on Thursday 12
+November, learned for 249.1 seconds: the game-line calibration 128.8
+(`gamecal.refresh`), the correlations 49.6, the journal fits 38.7, the
+selection haircut 17.0, the loss patterns 9.6 and the hypotheses 4.3. The
+calibration is the one to cut, and OJ makes it say where its time goes
+first. The export at 08:09 on 11 November took 60.8 seconds, its biggest
+section `_edge_snapshot` at 10.3, and the two-leg section 0.2 with its
+backtest kept (report 0.1, backtest 0.1), so the 63.7 seconds on 10 November
+were a backtest worked out after a grade, not the section's usual cost; at
+07:38 on 12 November the export took 76.8, the sport report 12.2 the
+biggest, the two-leg backtest kept again.
 
 **OF. The settle pass says which learner and which half of the parlay record
 took its time** (step 508; 10 November). Nothing to run. The first settle pass
@@ -10414,6 +10448,16 @@ left for the next: cfb`. The round now owes only college, whose player memory
 and temperatures are done; its dial has receptions at 12 of 21 settings and
 passing attempts, completions, rushing attempts and interceptions owed. No run
 has stalled. Thursday night's run goes to college.
+
+The fourth night (00:17 to 01:02 on Thursday 12 November, 45 minutes) went
+to college, as it should have. Its recency dial finished receptions (the
+last 9 of 21 settings), passing attempts, completions and rushing attempts
+(21 each), and scored 3 of interceptions' 21: 75 settings in the run, each
+market kept as it finished (`fitted 2026-11-12` on the heartbeat). The last
+line reads `nothing done this run; left for the next: cfb`, which means no
+sport finished, not that nothing was kept; nothing stalled. The round of 4
+November now owes only college's interceptions, 18 settings, about a quarter
+of a night, so Friday night's run should finish the round.
 
 **LW. The box-score pull asks for a game by its season** (step 445; 8
 November). The first pass with LS's timer on it (20:52, Saturday 7

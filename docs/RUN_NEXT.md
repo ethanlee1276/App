@@ -10,7 +10,10 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-11, after every league started buying its prices at 7am ET on a game day
+Last updated 2026-11-12, after the game-line calibration started saying where its time goes
+(step OJ: nothing to run) and Thursday's check read the 7am boards, the refit's fourth night
+and the slowest learner (steps OI, LX and OG: nothing to run),
+after every league started buying its prices at 7am ET on a game day
 (step OI: nothing to run), after the NBA started buying its prices at 7am ET (step OH: nothing to run),
 after the heartbeat started keeping the last learning pass and the last export
 (step OG: nothing to run) and the weekly refit's third night finished the NFL (step LX: nothing to run),

@@ -85,6 +85,22 @@ STATE_PATH = _feedstate.path("gamecal.json")
 
 _cache: dict = {}
 
+#: WHERE THE LAST REFRESH'S SECONDS WENT: each fit's ("nfl:total") and
+#: each part of the walks summed over every fit (the schedule's closes,
+#: the harvested closes, the games read, the walk itself). The settle
+#: pass's learners took 249.1 seconds at 04:03 on 12 November, 128.8 of
+#: them here, the biggest of the six, with nothing to say which league or
+#: which read; the settle pass puts this on its phases (`maintenance.
+#: _learn_sampled`, ``learn_gamecal``) and keeps the last one, so a cut is
+#: chosen on the box's own numbers. Timing only: no fit reads it.
+LAST: dict = {}
+_PARTS: dict = {}
+
+
+def _timed(part: str, t0: float) -> None:
+    """Add the seconds since ``t0`` to this refresh's ``part``."""
+    _PARTS[part] = _PARTS.get(part, 0.0) + (time.monotonic() - t0)
+
 
 class Fit:
     """One market's calibration slope, with everything needed to judge it."""
@@ -179,14 +195,21 @@ def observations(conn, sport: str, market: str,
     # the measured number, so the board bets MORE on the market it just
     # stopped being able to measure. The second is silent and it is a
     # wrong number wearing a real one's clothes.
+    t0 = time.monotonic()
     schedule = schedule_closes(conn, sport, market, require_prices=False)
+    _timed("schedule closes", t0)
+    t0 = time.monotonic()
     harvested = game_line_closes(conn, sport, market)
+    _timed("harvested closes", t0)
     if not schedule and not harvested:
         return []
+    t0 = time.monotonic()
     rows = conn.execute(
         "SELECT season, period, date, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY season, period", (sport,)).fetchall()
+    _timed("games", t0)
+    t0 = time.monotonic()
     agg: dict = {}
     out: list[tuple] = []
     for row in rows:
@@ -213,6 +236,7 @@ def observations(conn, sport: str, market: str,
         agg[home] = (pf + hs, pa + as_, n + 1)
         pf, pa, n = agg.get(away, (0.0, 0.0, 0))
         agg[away] = (pf + as_, pa + hs, n + 1)
+    _timed("walk", t0)
     return out
 
 
@@ -256,15 +280,22 @@ def _moneyline_observations(conn, sport: str, min_team_games: int) -> list[tuple
     # letting it decide whether the schedule is read at all turns a
     # partial harvest into a total blackout; and a schedule keyed by
     # week alone hands one season its neighbour's line.
+    t0 = time.monotonic()
     schedule = {k: {k[2]: h, k[3]: a}
                 for k, (h, a) in schedule_moneylines(conn, sport).items()}
+    _timed("schedule closes", t0)
+    t0 = time.monotonic()
     harvested = moneyline_closes(conn, sport)
+    _timed("harvested closes", t0)
     if not schedule and not harvested:
         return []
+    t0 = time.monotonic()
     rows = conn.execute(
         "SELECT season, period, date, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY season, period", (sport,)).fetchall()
+    _timed("games", t0)
+    t0 = time.monotonic()
     agg: dict = {}
     out: list[tuple] = []
     for row in rows:
@@ -285,6 +316,7 @@ def _moneyline_observations(conn, sport: str, min_team_games: int) -> list[tuple
         agg[home] = (pf + hs, pa + as_, n + 1)
         pf, pa, n = agg.get(away, (0.0, 0.0, 0))
         agg[away] = (pf + as_, pa + hs, n + 1)
+    _timed("walk", t0)
     return out
 
 
@@ -376,18 +408,32 @@ def refresh(db="data/history.db", sport: str | None = None,
     reason, because a calibration that quietly declines to adopt is the
     same invisibility this module exists to remove.
     """
+    LAST.clear()
+    _PARTS.clear()
+    began = time.monotonic()
     conn = db if hasattr(db, "execute") else sqlite3.connect(db)
     own = conn is not db
+    by_fit: dict = {}
     try:
         conn.row_factory = sqlite3.Row
         sports = ([sport] if sport else
                   [r[0] for r in conn.execute(
                       "SELECT DISTINCT sport FROM games "
                       "WHERE home_score IS NOT NULL")])
-        fits = [fit_one(conn, s, m) for s in sports for m in markets]
+        _timed("sports", began)
+        fits = []
+        for s in sports:
+            for m in markets:
+                t0 = time.monotonic()
+                fits.append(fit_one(conn, s, m))
+                by_fit[f"{s}:{m}"] = round(time.monotonic() - t0, 1)
     finally:
         if own:
             conn.close()
+        LAST.update(seconds=round(time.monotonic() - began, 1),
+                    fits=dict(sorted(by_fit.items(), key=lambda kv: -kv[1])),
+                    parts={k: round(v, 1) for k, v in
+                           sorted(_PARTS.items(), key=lambda kv: -kv[1])})
     state = _read_state()
     adopted, held = [], []
     for f in fits:
