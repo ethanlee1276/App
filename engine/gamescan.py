@@ -713,6 +713,32 @@ def _rank(r: dict, side: str, unit: str):
     return ((r or {}).get(side) or {}).get(unit, {}).get("rank")
 
 
+def _now_rank(r: dict, side: str, unit: str):
+    """The unit's rank on this season alone (_stamp_now_ranks), stamped
+    where its blend still leans on last season; None where it does not."""
+    return ((r or {}).get(side) or {}).get(unit, {}).get("now_rank")
+
+
+#: How far apart (in places, at least) a unit's blended rank and its rank on
+#: this season alone sit before a sentence gives both: a quarter of the
+#: league. Ethan, 12 November 2026, the Commanders at the Giants: the report
+#: said "the Giants' run defense (30th)", the blend still leaning on last
+#: season in November, while the Giants rank 13th on this season alone and
+#: the cards under it read this season's yards. The blend still decides
+#: every edge, as measured; the words say both, as the tale of the tape does.
+NOW_APART = 8
+
+
+def now_said(rank, now, n_teams: int = 32):
+    """This season's rank where it sits at least a quarter of the league
+    (NOW_APART at the least) from the blended ``rank``; None otherwise."""
+    try:
+        r, x = int(rank), int(now)
+    except (TypeError, ValueError):
+        return None
+    return x if abs(x - r) >= max(NOW_APART, round((n_teams or 32) * 0.25)) else None
+
+
 def unit_edges(off_team: str, def_team: str, ratings: dict, teams: int = 32) -> list[dict]:
     """The unit-against-unit gaps for one offence against one defence,
     widest first. Rank 1 is best on both sides, so an offence ranked 5th
@@ -727,14 +753,16 @@ def unit_edges(off_team: str, def_team: str, ratings: dict, teams: int = 32) -> 
             continue
         gap = drank - orank          # > 0: the offence is the better unit
         out.append({"unit": ou, "label": label, "off": off_team, "def": def_team,
-                    "off_rank": orank, "def_rank": drank, "gap": gap})
+                    "off_rank": orank, "def_rank": drank, "gap": gap,
+                    "off_now": _now_rank(o, "off", ou), "def_now": _now_rank(d, "def", du)})
     for unit, label in (("pressure", "pass protection vs pass rush"),
                         ("havoc", "ball security vs havoc"),
                         ("line", "run blocking vs the front")):
         a, b = _rank(o, "off", unit), _rank(d, "def", unit)
         if a is not None and b is not None:
             out.append({"unit": unit, "label": label, "off": off_team, "def": def_team,
-                        "off_rank": a, "def_rank": b, "gap": b - a})
+                        "off_rank": a, "def_rank": b, "gap": b - a,
+                        "off_now": _now_rank(o, "off", unit), "def_now": _now_rank(d, "def", unit)})
     out.sort(key=lambda e: -abs(e["gap"]))
     return out
 

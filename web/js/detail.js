@@ -1300,13 +1300,19 @@ function scanTapeHTML(scan, away, home) {
     </div>`;
 }
 
-function scanEdgeLine(e) {
+function scanEdgeLine(e, n) {
   const u = SCAN_UNITS.find(([k]) => k === e.unit) || [e.unit, e.label, "offense", "defense"];
   const offBetter = e.gap > 0;
   // "Packers’", not "Packers’s": most team names are plural.
   const poss = (t) => { const n = teamName(t); return /s$/.test(n) ? `${n}’` : `${n}’s`; };
-  const a = `${poss(e.off)} ${u[2]} (${ordinal(e.off_rank)})`;
-  const b = `${poss(e.def)} ${u[3]} (${ordinal(e.def_rank)})`;
+  /* THIS SEASON ALONE beside the blended rank when the two sit a quarter
+     of the league apart (engine/gamereport.edge_sentence, NOW_APART): the
+     Giants' run defense read "30th" in November on a blend still leaning
+     on last season, 13th on this season alone (12 November 2026). */
+  const apart = Math.max(8, Math.round((n || 32) * 0.25));
+  const rk = (r, now) => `${ordinal(r)}${now != null && Math.abs(now - r) >= apart ? `; ${ordinal(now)} this season alone` : ""}`;
+  const a = `${poss(e.off)} ${u[2]} (${rk(e.off_rank, e.off_now)})`;
+  const b = `${poss(e.def)} ${u[3]} (${rk(e.def_rank, e.def_now)})`;
   return offBetter ? [`Edge ${teamName(e.off)}`, `${a} against ${b}`]
     : [`Edge ${teamName(e.def)}`, `${b} against ${a}`];
 }
@@ -1544,7 +1550,7 @@ function matchupScanHTML(g) {
     <p class="ms-note">Ranked 1–${n}, 1 best, ${adjusted ? "adjusted for the opponents each team has faced"
       : "not adjusted for schedule, so a soft schedule flatters a unit"}. ${escapeHtml(blend)}</p>
     ${edges.length ? `<div class="card ms-edges"><div class="ms-sub">${planOn ? "More mismatches" : "Biggest mismatches"}</div>
-      <ul>${edges.map((e) => { const [who, what] = scanEdgeLine(e);
+      <ul>${edges.map((e) => { const [who, what] = scanEdgeLine(e, n);
         return `<li class="${e.gap > 0 ? "off" : "def"}"><b>${escapeHtml(who)}</b> — ${escapeHtml(what)}</li>`; }).join("")}</ul></div>` : ""}
     ${inj.length ? `<div class="card ms-inj"><div class="ms-sub">Injuries and what they open</div>
       ${inj.map((i) => `<div class="ms-inj-row">${playerAvatar(i.player, i.team, { size: 32, headshot: i.headshot })}

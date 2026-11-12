@@ -2088,37 +2088,57 @@ def market_sentence(c: Ctx) -> str:
 
 def edge_sentence(c: Ctx, e: dict, first: bool = True) -> str:
     """One edge from the scan, said with what it means on the field. The
-    first one says what the ranks are out of; the rest do not repeat it."""
+    first one says what the ranks are out of; the rest do not repeat it.
+
+    THIS SEASON ALONE, where it sits far from the rank the edge stands on
+    (engine/gamescan.now_said): "the Giants' run defense (30th; 13th this
+    season alone)". The blend still decides the edge, as measured."""
+    from .gamescan import now_said
     off, dfn = str(e.get("off") or ""), str(e.get("def") or "")
     try:
-        ro, rd = _ord(e["off_rank"]), _ord(e["def_rank"])
+        ranks = {"off": int(e["off_rank"]), "def": int(e["def_rank"])}
     except (KeyError, TypeError, ValueError):
         return named(c, edge_words(c, e))
+
+    def now_of(side):
+        return now_said(ranks[side], e.get(f"{side}_now"), c.n_teams)
+
+    def inner(side, w=""):
+        """For inside the parentheses: "30th in the league; 13th this season alone"."""
+        now = now_of(side)
+        return f"{_ord(ranks[side])}{w}" + (f"; {_ord(now)} this season alone" if now else "")
+
+    def bare(side):
+        """For running text: "30th (13th this season alone)"."""
+        now = now_of(side)
+        return _ord(ranks[side]) + (f" ({_ord(now)} this season alone)" if now else "")
+
     where = (" in the country" if c.sport == "cfb" else " in the league") if first else ""
+    ro_w, rd_w, ro, rd = inner("off", where), inner("def", where), inner("off"), inner("def")
     O, D, On, Dn = team_owner(c, off), team_owner(c, dfn), team_np(c, off), team_np(c, dfn)
     ahead = (e.get("gap") or 0) > 0
     unit = e.get("unit")
     if unit == "passing":
-        return (f"{O} passing game ({ro}{where}) faces {D} pass defense ({rd}), an edge for {On} through "
+        return (f"{O} passing game ({ro_w}) faces {D} pass defense ({rd}), an edge for {On} through "
                 "the air" if ahead else
-                f"{D} pass defense ({rd}{where}) should slow down {O} passing game ({ro})")
+                f"{D} pass defense ({rd_w}) should slow down {O} passing game ({ro})")
     if unit == "rushing":
-        return (f"{O} run game ({ro}{where}) faces {D} run defense ({rd}), so there is room to run for {On}"
+        return (f"{O} run game ({ro_w}) faces {D} run defense ({rd}), so there is room to run for {On}"
                 if ahead else
-                f"{D} run defense ({rd}{where}) should hold {O} run game ({ro}) in check")
+                f"{D} run defense ({rd_w}) should hold {O} run game ({ro}) in check")
     if unit == "explosive":
-        return (f"{O} big plays ({ro}{where}) meet a {c.name(dfn) if _the(c, dfn) else dfn} defense that gives "
+        return (f"{O} big plays ({ro_w}) meet a {c.name(dfn) if _the(c, dfn) else dfn} defense that gives "
                 f"them up ({rd}), so {On} should find some chunk plays" if ahead else
-                f"{D} defense limits big plays ({rd}{where}) and {O} offense ranks {ro} at making them, so "
+                f"{D} defense limits big plays ({rd_w}) and {O} offense ranks {bare('off')} at making them, so "
                 f"expect few chunk plays from {On}")
     if unit == "pressure":
-        return (f"{O} pass protection ({ro}{where}) faces {D} pass rush ({rd}), so {O} quarterback should "
+        return (f"{O} pass protection ({ro_w}) faces {D} pass rush ({rd}), so {O} quarterback should "
                 "have time to throw" if ahead else
-                f"{D} pass rush ({rd}{where}) faces {O} pass protection ({ro}), so expect pressure on {O} "
+                f"{D} pass rush ({rd_w}) faces {O} pass protection ({ro}), so expect pressure on {O} "
                 "quarterback")
     if unit == "overall":
-        return (f"{O} offense ({ro}{where}) faces {D} defense ({rd}), an edge for {On}" if ahead else
-                f"{D} defense ({rd}{where}) faces {O} offense ({ro}), an edge for {Dn}")
+        return (f"{O} offense ({ro_w}) faces {D} defense ({rd}), an edge for {On}" if ahead else
+                f"{D} defense ({rd_w}) faces {O} offense ({ro}), an edge for {Dn}")
     return named(c, edge_words(c, e))
 
 

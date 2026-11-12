@@ -1059,10 +1059,16 @@ def scan_facts(board: dict, g: dict) -> dict:
                        for side in ("off", "def")}
     out["unit_ranks"] = ranks
     edges = []
+    from .gamescan import now_said
+    n_rank = int(out["ranked_of"] or 32)
+
+    def alone(e, side):
+        now = now_said(e.get(f"{side}_rank"), e.get(f"{side}_now"), n_rank)
+        return f" (this season alone {now})" if now else ""
     for e in (scan.get("edges") or [])[:6]:
         better = e["off"] if e.get("gap", 0) > 0 else e["def"]
-        edges.append(f"{e['off']} offense {e['unit']} {e['off_rank']} vs {e['def']} defense "
-                     f"{e['unit']} {e['def_rank']}: edge {better}")
+        edges.append(f"{e['off']} offense {e['unit']} {e['off_rank']}{alone(e, 'off')} vs {e['def']} defense "
+                     f"{e['unit']} {e['def_rank']}{alone(e, 'def')}: edge {better}")
     if edges:
         out["mismatches"] = edges
     inj = [f"{i['player']} ({i['team']} {i.get('position') or ''}, {str(i['status']).lower()}): {i['opens']}"

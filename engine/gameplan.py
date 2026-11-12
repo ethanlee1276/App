@@ -153,14 +153,21 @@ def absences(scan: dict) -> list:
 
 def matchup_lines(scan: dict, home: str, away: str) -> list:
     """The units that decide it, the soft spot, the rush — from the scan."""
+    from .gamescan import now_said
     out = []
     n = int((scan.get("method") or {}).get("teams") or 32)
+
+    def alone(e, side):
+        """"; 13th this season alone" where the blend sits far from it (gamescan.now_said)."""
+        now = now_said(e.get(f"{side}_rank"), e.get(f"{side}_now"), n)
+        return f"; {_ord(now)} this season alone" if now else ""
     for e in (scan.get("edges") or [])[:3]:
         if not isinstance(e, dict):
             continue
         better = e.get("off") if (e.get("gap") or 0) > 0 else e.get("def")
-        out.append(f"{e.get('off')}'s {e.get('unit')} offence ({_ord(e.get('off_rank') or 0)} of {n}) against "
-                   f"{e.get('def')}'s {e.get('unit')} defence ({_ord(e.get('def_rank') or 0)}) — edge {better}.")
+        out.append(f"{e.get('off')}'s {e.get('unit')} offence ({_ord(e.get('off_rank') or 0)} of {n}"
+                   f"{alone(e, 'off')}) against {e.get('def')}'s {e.get('unit')} defence "
+                   f"({_ord(e.get('def_rank') or 0)}{alone(e, 'def')}) — edge {better}.")
     for team in (away, home):
         room = (scan.get("coverage") or {}).get(team) or {}
         soft = room.get("weakest")

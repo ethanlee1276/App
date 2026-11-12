@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ON. The report gives this season's rank beside the two-season blend** (step
+516; 12 November). Nothing to run. The Commanders at the Giants' short
+version read "the Giants' run defense (30th), so there is room to run".
+That 30th is the blend every edge is measured on, which still leans on last
+season in November; on this season alone the Giants rank 13th, and the
+cards under it read this season's yards. Each edge now carries both sides'
+this-season ranks (engine/gamescan.unit_edges), and once the two sit a
+quarter of the league apart (eight places at the least;
+engine/gamescan.now_said) the sentence says both: "the Giants' run defense
+(30th; 13th this season alone)". The game plan's matchup lines, Ask's
+mismatches and the page's mismatch list say it the same way. The blend
+still decides which edges are named and which side they favour; only the
+words changed.
+
 **OM. A stingy defence is said as the fewest** (step 515; 12 November).
 Nothing to run. Ethan's free fantasy page that morning read "NYG allow
 189.2 passing yards a game, the 30th-most (league 233.5), over 8 games"
