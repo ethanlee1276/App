@@ -68,6 +68,20 @@ hands out on purpose, and they hold up week to week. (Season to date, last
 season at half weight; every player gets a small floor, chosen on the
 training seasons.)
 
+**Weather, asked 12 November 2026 (measured, not built).** Ethan: "I feel
+like we are not putting weather as a factor for the picks." The anytime
+model cuts a pass catcher's touchdown chance in rain (×0.811 per point of the
+team's total, engine/weather.TD_RAIN), so does rain also move WHO scores a
+team's first one? Asked of every team first touchdown 2021-2026 (2,764; the
+game book's kickoff sky, wxfit's tiers): in rain the pass catchers scored
+57.7% of their teams' first touchdowns where these shares gave them 53.5%,
+against 54.9% and 53.8% in the base games — ×1.06 ± .11 over 78 team
+first touchdowns, the seasons split, the wrong way for a cut. Putting the
+anytime rain cut on the shares made the rain games' log loss worse (2.071
+as it is; 2.085 with catchers ×0.811). Wind at 12+ mph: ×0.98 ± .05 over
+349, nothing. The team half already reads the lines, which carry the
+forecast; the player half stays as it is.
+
 ## The whole model, checked
 
 His chance = his team's chance of scoring the first touchdown × 94.8% (an

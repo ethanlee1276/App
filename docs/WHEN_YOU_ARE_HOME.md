@@ -9360,6 +9360,14 @@ rushing yards left alone" instead of wearing the passing cut. The next
 `python3 wxfit.py` you run (KU's) measures the two with everything else, and
 `--scale` checks their forecast rows against the games.
 
+Asked the same day, and left alone: does rain move WHO scores a team's
+first touchdown toward the backs? No. Over every team's first touchdown
+since 2021, the pass catchers scored their usual share in rain (×1.06 ± .11,
+78 of them), and putting the anytime rain cut on the first-touchdown shares
+made the predictions worse; 12+ mph wind, ×0.98 ± .05 over 349, nothing.
+The first-touchdown picks keep reading the lines, which carry the forecast
+(docs/FIRST_TD_RESEARCH.md, "Which player").
+
 One thing it cannot fix from here: Sunday's Patriots–Lions game in Munich
 reads "no forecast pulled". The NWS, which the boards read since step KY,
 covers the US only, and nothing falls back to Open-Meteo (its free use is
