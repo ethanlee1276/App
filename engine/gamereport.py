@@ -2142,6 +2142,25 @@ def edge_sentence(c: Ctx, e: dict, first: bool = True) -> str:
     return named(c, edge_words(c, e))
 
 
+def edge_though(c: Ctx, e: dict):
+    """(clause, [players]) when a card on the edge's offence reads against
+    it (engine/gamescan.crossing_reads), else None: the counted reason of
+    the most-used such card, said after the edge — "so there is room to run
+    for the Chiefs, though the Falcons give up the 6th-fewest rushing yards
+    to running backs (68 a game)". Ethan, 12 November 2026, on the
+    Commanders at the Giants: "room to run" over an UNFAVORABLE back, with
+    nothing saying why, "doesn't make any sense". A card crossing the edge
+    is said beside it, never left to contradict it."""
+    from .gamescan import crossing_reads
+    up = (e.get("gap") or 0) > 0
+    against = sorted(crossing_reads(e, c.reads), key=lambda r: -_volume(r))
+    for r in against:
+        why = _best_reason(c, r, "down" if up else "up")
+        if why:
+            return why, [r.get("player") for r in against]
+    return None
+
+
 def _best_reason(c: Ctx, r: dict, tone: str) -> str:
     """The one reason a short line gives for a player: a matchup over his
     workload, and either over the game's line, which every player in the
@@ -2400,8 +2419,16 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
     if s:
         items.append(s)
     edges = _edges(c)
+    crossed = []
     if edges:
-        said = [edge_sentence(c, e, first=(i == 0)) for i, e in enumerate(edges[:3])]
+        said = []
+        for i, e in enumerate(edges[:3]):
+            s = edge_sentence(c, e, first=(i == 0))
+            why = edge_though(c, e)
+            if why:
+                s += f", though {why[0]}"
+                crossed.append({"unit": e.get("unit"), "off": e.get("off"), "players": why[1]})
+            said.append(s)
         items.append("Where the matchup tilts: " + ". ".join([said[0]] + [cap(x) for x in said[1:]]))
     cov = c.scan.get("coverage") or {}
     soft, n_soft = [], 0
@@ -2453,7 +2480,12 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
     sim = sim_sentence(c)
     if sim:
         items.append(sim)
-    return _section("short", "The short version", [_list(items)])
+    sec = _section("short", "The short version", [_list(items)])
+    if sec and crossed:
+        # What engine/boardtruth reads before it counts a crossing (CROSSED):
+        # each edge whose crossing cards the sentence answered.
+        sec["crossed"] = crossed
+    return sec
 
 
 SECTIONS = (sec_facts, sec_meetings, sec_market, sec_rankings, sec_identity, sec_injuries,

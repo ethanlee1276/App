@@ -48,8 +48,11 @@ its word:
                Ethan's Commanders–Giants screenshots, 12 November 2026:
                "That doesn't make any sense." Both can be true (the edge is
                the two-season unit blend, the card this season's yards and
-               the forecast), so it is counted for a human to read, not
-               changed.
+               the forecast), so the report says why beside the edge
+               (engine/gamereport.edge_though: "…room to run for the
+               Chiefs, though the Falcons give up the 6th-fewest rushing
+               yards to running backs"); a crossing it left unanswered is
+               counted.
 
 A problem is a question for a human, not a verdict; nothing here edits a
 board. Standard library only.
@@ -64,11 +67,6 @@ LONGSHOT_PROB = 0.20
 KEEP = 8
 
 _BARE_MATE = re.compile(r" is out — his (targets|carries) are open$")
-#: Which cards a unit edge speaks for: the run game's backs; the passing
-#: game's quarterback and receivers.
-EDGE_GROUP = {"rushing": {"RB", "FB"}, "passing": {"QB", "WR", "TE"}}
-#: The card verdicts that lean each way (engine/gamescan._label).
-READ_UP, READ_DOWN = frozenset({"good", "breakout"}), frozenset({"tough", "avoid"})
 #: The edges the short version names (engine/gamereport.sec_short).
 REPORT_EDGES = 3
 _NOW_PCT = re.compile(r"now (\d+)%")
@@ -153,27 +151,29 @@ def check(board: dict) -> dict:
         p = _f(r.get("model_prob"))
         if p is not None and p < DROP_FLOOR - 1e-9 and (r.get("checks") or {}).get("matchup") is not True:
             probs.append(("UNDER EVEN", f"{_who(r)}: {p:.0%} on the board with no matchup read behind it"))
+    from .gamescan import crossing_reads, edge_reads
+    answered = set()
+    for rep in (board or {}).get("game_reports") or []:
+        for sec in (rep or {}).get("sections") or [] if isinstance(rep, dict) else []:
+            if isinstance(sec, dict) and sec.get("key") == "short":
+                for x in sec.get("crossed") or []:
+                    answered.add((rep.get("game"), x.get("unit"), x.get("off")))
     for g in (board or {}).get("games") or []:
         if not isinstance(g, dict):
             continue
+        key = f"{g.get('away')}@{g.get('home')}"
         edges = [e for e in ((g.get("scan") or {}).get("edges") or []) if isinstance(e, dict)][:REPORT_EDGES]
-        reads = ((((board or {}).get("scan_reads") or {}).get(f"{g.get('away')}@{g.get('home')}") or {})
-                 .get("players") or [])
+        reads = ((((board or {}).get("scan_reads") or {}).get(key) or {}).get("players") or [])
         for e in edges:
-            group = EDGE_GROUP.get(e.get("unit"))
-            if not group or not reads:
+            checked += len(edge_reads(e, reads))
+            if (key, e.get("unit"), e.get("off")) in answered:
                 continue
             up = (e.get("gap") or 0) > 0
-            for x in reads:
-                if x.get("team") != e.get("off") or str(x.get("pos") or "").upper() not in group:
-                    continue
-                checked += 1
-                read = x.get("read")
-                if (up and read in READ_DOWN) or (not up and read in READ_UP):
-                    probs.append(("CROSSED", f"{x.get('player')} ({x.get('team')} {x.get('pos')}): card reads "
-                                  f"{read}, the report gives {e.get('off') if up else e.get('def')} the "
-                                  f"{e.get('unit')} edge ({e.get('off')} {e.get('off_rank')} vs "
-                                  f"{e.get('def')} {e.get('def_rank')})"))
+            for x in crossing_reads(e, reads):
+                probs.append(("CROSSED", f"{x.get('player')} ({x.get('team')} {x.get('pos')}): card reads "
+                              f"{x.get('read')}, the report gives {e.get('off') if up else e.get('def')} the "
+                              f"{e.get('unit')} edge ({e.get('off')} {e.get('off_rank')} vs "
+                              f"{e.get('def')} {e.get('def_rank')}) and does not say why"))
     fresh = (board or {}).get("data_freshness") or {}
     if fresh.get("played") is not None:
         checked += 1

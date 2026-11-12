@@ -729,6 +729,34 @@ def _now_rank(r: dict, side: str, unit: str):
 NOW_APART = 8
 
 
+#: Which cards a unit edge speaks for: the run game's backs; the passing
+#: game's quarterback and receivers.
+EDGE_GROUP = {"rushing": frozenset({"RB", "FB"}), "passing": frozenset({"QB", "WR", "TE"})}
+#: The card verdicts that lean each way (_label).
+READ_UP, READ_DOWN = frozenset({"good", "breakout"}), frozenset({"tough", "avoid"})
+
+
+def edge_reads(edge: dict, reads) -> list:
+    """The cards a run or pass edge speaks for: the edge's offence, the
+    unit's positions. [] for any other unit."""
+    group = EDGE_GROUP.get((edge or {}).get("unit"))
+    if not group:
+        return []
+    return [x for x in reads or [] if isinstance(x, dict) and x.get("team") == edge.get("off")
+            and str(x.get("pos") or "").upper() in group]
+
+
+def crossing_reads(edge: dict, reads) -> list:
+    """The cards on the edge's offence that read against it: a back read
+    tough or avoid under a run edge for his side, a quarterback or receiver
+    read good under a pass edge against it. Ethan's Commanders-Giants
+    screenshots, 12 November 2026: "room to run for the Commanders" over
+    "Rachaad White ... UNFAVORABLE". engine/gamereport says why under the
+    edge; engine/boardtruth counts any it did not (CROSSED)."""
+    against = READ_DOWN if ((edge or {}).get("gap") or 0) > 0 else READ_UP
+    return [x for x in edge_reads(edge, reads) if x.get("read") in against]
+
+
 def now_said(rank, now, n_teams: int = 32):
     """This season's rank where it sits at least a quarter of the league
     (NOW_APART at the least) from the blended ``rank``; None otherwise."""

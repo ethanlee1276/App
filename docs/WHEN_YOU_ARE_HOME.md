@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OP. The report says why a card crosses the edge it names** (step 518; 12
+November). Nothing to run. The first NFL build with step OO's check found 8
+crossings on the board (one card in about every other game). Both sides can
+be true, so the report now says why: when a card on the edge's offence reads
+against a run or pass edge the short version names, the sentence adds that
+card's own counted reason (engine/gamereport.edge_though), the most-used
+such card's: "so there is room to run for the Chiefs, though the Falcons
+give up the sixth-fewest rushing yards to running backs (68 a game)", or
+"…should slow down the Commanders' passing game, though the Giants give up
+the third-most receiving yards to wide receivers". The report records each
+edge it answered, and the self-check now counts only a crossing left
+unanswered, so the Status page's CROSSED count should read 0 from the next
+build.
+
 **OO. The self-check reads the report against the matchup cards** (step 517;
 12 November). Nothing to run. Your Commanders–Giants screenshots were a
 report giving a side the run edge ("room to run for the Commanders") over
