@@ -103,11 +103,14 @@ def test_a_receiver_read_counts_its_reasons():
               scheme={"zone": 0.67, "man": 0.33}, split={"zone": [41, 467.0], "man": [21, 180.0]},
               tackling={}, line_out=[], mates_out=[])
     # Without the model's matchup numbers (college), the unit rank counts.
+    # His share is said, first among the notes, and not counted: it is
+    # what he is, not the defence he faces (gamescan._label, 2026-11-12).
     x = G.player_read("Christian Watson", "GB", "ATL", "WR", **kw)
-    assert x["read"] == "good" and len(x["pro"]) == 2 and not x["con"]
+    assert x["read"] == "good" and x["pro"] == ["ATL's pass defense ranks 24th"] and not x["con"], x
+    assert x["role"] == ["Commands 29% of the targets (9.5 a game)"] and x["notes"][0] == x["role"][0]
     # The corner out, the soft spot and the zone split are shown, not
     # counted: four seasons found no lift in any of them (engine/scanfit).
-    assert len(x["notes"]) == 3 and any("Terrell" in n for n in x["notes"])
+    assert len(x["notes"]) == 4 and any("Terrell" in n for n in x["notes"])
     # With them (the NFL), the model's own matchup rating and the points the
     # lines expect count, and the unit rank is a note.
     allowed = {"qb_pass_yds": {"rank": 3, "of": 32, "pg": 251.0},
@@ -122,7 +125,10 @@ def test_a_receiver_read_counts_its_reasons():
     thin = G.player_read("Kyle Pitts", "ATL", "GB", "TE", usage={"tgt_share": 0.07, "games": 2},
                          ratings={"GB": {"def": {"passing": {"rank": 3}}}}, room={}, scheme={},
                          split={}, tackling={}, line_out=[], mates_out=[])
-    assert thin["read"] == "avoid" and len(thin["con"]) == 2
+    # A small share is said, never a reason against him: the defence is
+    # the one reason, and one reason leans a read.
+    assert thin["read"] == "tough" and thin["con"] == ["GB's pass defense ranks 3rd"], thin
+    assert thin["role"] == ["Only 7% of the targets so far"]
 
 
 def test_the_reads_are_paid_and_the_facts_ride_the_game():

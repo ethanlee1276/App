@@ -9338,6 +9338,38 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OK. A player's matchup card says what the matchup says** (step 513; 12
+November). Nothing to run. Ethan, on the Commanders at the Giants: "We're
+saying that the Giants defense ranked 30th, but then we're saying that
+Commanders running back is an unfavorable matchup ... it's supposed to rain
+this game as well." The short version said the Giants' run defense ranks
+30th, so there is room to run, and the card under it read "Rachaad White vs
+NYG's run defense: UNFAVORABLE" in a game forecast 74% rain. The one reason
+against him was his own share, only 28% of the carries so far, which the card
+hides because its role line already says it; nothing about the Giants or the
+weather counted against him at all. Two changes (engine/gamescan):
+
+* A player's share of the work no longer counts toward his matchup, either
+  way. It is said (with what was noticed and not counted) and it still
+  decides a breakout, the volume to use a good matchup, but the verdict is
+  the defence he faces, the points the lines expect, a teammate out and the
+  forecast. One counted reason leans a card (favorable or unfavorable), two
+  make it strong, where a starter's share used to stand in for one of them.
+* The weather counts, as the board already prices it (engine/weather). In
+  rain teams run more and a back keeps his share, so a back's carries go up
+  (about 5% on that 74% forecast, measured 2016-2025); receivers' and
+  quarterbacks' yards come down (about 15% and 11% that night, with the 12
+  mph wind). A step of 3% or more on his headline market is one reason. A
+  card that leans on the weather alone points only at what the weather moves:
+  rain backs a back's carries, never his rushing yards, which our rain study
+  found do not reliably follow (docs/WEATHER_AND_QB_2026-11-06.md).
+
+On that night the Commanders' backs read favorable, Diggs unfavorable and
+Daniels (the third-fewest passing yards allowed, and the rain) the one to
+avoid, which is what the short version and the forecast say. The same
+verdicts feed Most Likely's matchup check, so a back's carries over in the
+rain is now backed and his rushing yards over is not.
+
 **OJ. The game-line calibration says where its two minutes go** (step 512;
 12 November). Nothing to run. The first learning pass after OG, at 04:03 on
 Thursday 12 November, learned for 249.1 seconds, and more than half of them,

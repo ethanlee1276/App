@@ -760,9 +760,95 @@ READS = (("breakout", "Breakout candidate"), ("good", "Good matchup"), ("neutral
 
 
 def _label(score: int, volume: bool) -> tuple[str, str]:
-    key = ("breakout" if score >= 3 and volume else "good" if score >= 2
-           else "neutral" if score >= 0 else "tough" if score == -1 else "avoid")
+    """The matchup's verdict from its count: one reason either way leans
+    it, two make it strong (a breakout needs the volume to use it).
+
+    THE COUNT IS THE MATCHUP'S ONLY (2026-11-12). Ethan, the Commanders at
+    the Giants: the short version said the Giants' run defense ranks 30th,
+    "so there is room to run", and the card under it read "Rachaad White
+    vs NYG's run defense — UNFAVORABLE", in a game forecast 74% rain. The
+    one reason against him was his own share, "only 28% of the carries so
+    far", which the card hides because its role line already says it. His
+    share is what he is, and the books' line is set on it; it is not the
+    defence he faces. It is said (``role``) and it decides a breakout (the
+    volume to use a good matchup), but it no longer counts here, so the
+    scale stands even: one counted reason leans a read, two make it strong,
+    where a starter's share used to stand in for one of them."""
+    key = ("breakout" if score >= 2 and volume else "good" if score >= 1
+           else "neutral" if score == 0 else "tough" if score == -1 else "avoid")
     return key, dict(READS)[key]
+
+
+#: HOW BIG A MEASURED WEATHER STEP HAS TO BE TO COUNT (2026-11-12, the same
+#: game). The board's numbers take the measured weather steps
+#: (engine/weather: in rain teams run more and a back's carries go up, and
+#: receivers' and quarterbacks' yards come down), and the read counted none
+#: of them, so a back's card could read against him on a night his carries
+#: were priced up. A step this big on his headline market is one reason,
+#: either way: the size of a defence-versus-position step at the edge of
+#: the league's top or bottom quarter.
+WEATHER_STEP = 0.03
+
+#: Each group's headline weather market, and the markets a lean that rests
+#: on the weather alone may point at: what engine/weather moves for him.
+#: A back's rushing YARDS are not among them, nor his touchdowns: rain adds
+#: carries, and per carry he gained less in rain in most seasons
+#: (docs/WEATHER_AND_QB_2026-11-06.md), so the extra carries do not
+#: reliably add yards.
+WEATHER_MARKET = {"rb": "rush_att", "wr": "rec_yds", "te": "rec_yds", "qb": "pass_yds"}
+WEATHER_LEAN = {"rb": ("rush_att",), "wr": ("rec_yds", "receptions", "anytime_td"),
+                "te": ("rec_yds", "receptions", "anytime_td"), "qb": ("pass_yds", "pass_td")}
+
+
+def _weather_of(w):
+    """A models.Weather from what a board carries: the slate's own object,
+    or the dict a built board's game holds. None when there is none."""
+    if w is None:
+        return None
+    if isinstance(w, dict):
+        from .models import Weather
+        try:
+            return Weather(**{k: w[k] for k in ("dome", "temp_f", "wind_mph", "wind_dir",
+                                                 "precip_chance", "rain", "snow", "measured",
+                                                 "forecast") if k in w and w[k] is not None})
+        except TypeError:
+            return None
+    return w if hasattr(w, "dome") else None
+
+
+def weather_line(group: str, pos: str, weather) -> tuple[int, str]:
+    """(+1 / −1 / 0, sentence): the measured weather step on his headline
+    market (engine/weather.evaluate_weather — the numbers the board priced
+    him with), when it is WEATHER_STEP or more either way."""
+    w = _weather_of(weather)
+    market = WEATHER_MARKET.get(group)
+    if w is None or not market or getattr(w, "dome", False) or not getattr(w, "measured", False):
+        return 0, ""
+    from dataclasses import replace
+    from .weather import evaluate_weather, precip
+    position = (pos or "").upper() or {"rb": "RB", "wr": "WR", "te": "TE", "qb": "QB"}[group]
+    try:
+        m = float(evaluate_weather(w, position).multipliers.get(market, 1.0))
+        calm = float(evaluate_weather(replace(w, wind_mph=0.0), position).multipliers.get(market, 1.0))
+    except Exception:                                        # noqa: BLE001
+        return 0, ""
+    if abs(m - 1.0) < WEATHER_STEP:
+        return 0, ""
+    kind, p = precip(w)
+    sky = [f"{kind} is {p:.0%} likely at kickoff"] if kind else []
+    if m < calm - 0.005:
+        sky.append(f"the wind is forecast at {float(w.wind_mph or 0):.0f} mph")
+    said = (" and ".join(sky) or "the forecast").capitalize()
+    # Said of the position, not "his": a reason two of one offence's players
+    # share is said once for the group (engine/gamereport._shared).
+    words = {"rb": "a back's carries", "wr": "a receiver's yards", "te": "a receiver's yards",
+             "qb": "a quarterback's passing yards"}[group]
+    if m > 1.0:
+        if group == "rb" and kind == "rain":
+            return 1, (f"{said}: teams run more in rain and a back keeps his share, about "
+                       f"{round((m - 1) * 100):.0f}% more carries (measured, 2016-2025)")
+        return 1, f"{said}: about {round((m - 1) * 100):.0f}% more on {words} (measured, 2016-2025)"
+    return -1, f"{said}: about {round((1 - m) * 100):.0f}% off {words} (measured, 2016-2025)"
 
 
 #: Implied points (from the posted spread and total) that make a
@@ -1229,7 +1315,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 line_words: str = "", charting: dict | None = None,
                 charting_def: dict | None = None, tracking: dict | None = None,
                 targets: list | None = None, league_iw: float | None = None,
-                contact: dict | None = None) -> dict:
+                contact: dict | None = None, weather=None) -> dict:
     """One player's read against this opponent: a label, the reasons for
     and against it (each a sentence a reader can check), what else the
     scan noticed, and the markets the read points at.
@@ -1247,10 +1333,13 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     are `notes`: shown, never counted. Where no defence-vs-position
     rating is given (college), the unit ranks stand in, as before.
 
-    Counted, not weighed: every counted reason is one point either way."""
+    Counted, not weighed: every counted reason is one point either way.
+    His share of the work is said in ``role`` and never counted (see
+    `_label`); the measured weather step on his headline market is
+    (`weather_line`)."""
     group = _POS_GROUP.get((pos or "").upper(), "")
     u = usage or {}
-    pro, con, notes = [], [], []
+    pro, con, notes, role = [], [], [], []
     o, d = ratings.get(team) or {}, ratings.get(opp) or {}
     measured = bool(allowed)
     lean: list = []
@@ -1311,9 +1400,9 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         per = u.get("targets_pg") if word == "targets" else u.get("rec_pg")
         if share >= 0.22:
             volume = True
-            pro.append(f"Commands {share:.0%} of the {word} ({per or 0:g} a game)")
+            role.append(f"Commands {share:.0%} of the {word} ({per or 0:g} a game)")
         elif u.get("games") and share < 0.12:
-            con.append(f"Only {share:.0%} of the {word} so far")
+            role.append(f"Only {share:.0%} of the {word} so far")
         elif share >= 0.18:
             volume = True
         if measured:
@@ -1348,9 +1437,9 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         cs = u.get("carry_share") or 0.0
         if cs >= 0.55:
             volume = True
-            pro.append(f"Takes {cs:.0%} of the carries ({u.get('carries_pg', 0):g} a game)")
+            role.append(f"Takes {cs:.0%} of the carries ({u.get('carries_pg', 0):g} a game)")
         elif u.get("games") and cs < 0.30:
-            con.append(f"Only {cs:.0%} of the carries so far")
+            role.append(f"Only {cs:.0%} of the carries so far")
         if measured:
             dvp("rush_yds")
             dvp("anytime_td")
@@ -1398,8 +1487,25 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 f"{opp}'s pass rush ranks {_ord(rush)}"
                 + (f" and {team} is without {', '.join(line_out)}" if line_out
                    else f" against the {_ord(prot)} pass protection"))
+    # THE WEATHER, as the board priced him (WEATHER_STEP).
+    wx_sign, wx_text = weather_line(group, pos, weather)
+    if wx_sign > 0:
+        pro.append(wx_text)
+    elif wx_sign < 0:
+        con.append(wx_text)
+    if wx_text and group == "rb" and "rec_yds" in lean and wx_sign > 0:
+        notes.append("His catches come down in rain (a back's receiving yards ×0.79 there, "
+                     "measured 2016-2025); the extra is in his carries")
     score = len(pro) - len(con)
     key, label = _label(score, volume)
+    # His share is said with what was noticed and not counted, first.
+    notes = role + notes
+    # A LEAN THAT RESTS ON THE WEATHER ALONE points only at the markets the
+    # weather moves (WEATHER_LEAN): rain backs a back's carries, never his
+    # rushing yards.
+    winning = pro if score > 0 else con if score < 0 else []
+    if wx_text and winning == [wx_text]:
+        lean = [m for m in lean if m in WEATHER_LEAN.get(group, ())]
     # WHAT THE CHARTING AND THE TRACKING SAY (engine/sources/ftn, ngs):
     # shown, never counted — chartfit and ngsfit found no lift in any of it.
     notes += charting_notes(group, opp, charting, charting_def, tracking)
@@ -1415,7 +1521,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                       "in_number": bool(counted), "kind": "teammate"})
     return {"player": name, "team": team, "opp": opp, "pos": (pos or "").upper(),
             "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": lean,
-            "facts": facts,
+            "role": role, "facts": facts,
             "usage": {k: u.get(k) for k in ("tgt_share", "targets_pg", "carry_share",
                                             "carries_pg", "rec_yds_pg", "rush_yds_pg",
                                             "snap_pct", "games", "rec_pg", "share_of")
@@ -1536,8 +1642,12 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
               line_words: dict | None = None, faces: dict | None = None,
               evidence: list | None = None, pulled: list | None = None,
               charting: dict | None = None, tracking: dict | None = None,
-              contact: dict | None = None, recent: dict | None = None) -> dict:
+              contact: dict | None = None, recent: dict | None = None,
+              weather=None) -> dict:
     """The whole scan for one game (see the block comment above).
+
+    ``weather`` is the game's forecast (models.Weather, or the dict a
+    built board carries): every read counts its measured step.
 
     ``recent`` is `recent_starters` — {team: {name key}} — who has started
     lately by the snap counts, so a starter the depth chart has already
@@ -1691,7 +1801,7 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
             tracking=own_track,
             targets=top_targets(usage, team) if group == "qb" else None,
             league_iw=league_iw_rate(ch) if group == "qb" else None,
-            contact=(contact or {}).get(opp[team]))
+            contact=(contact or {}).get(opp[team]), weather=weather)
         read["notes"] = list(read.get("notes") or []) + maybe_lines
         # HIS OWN LISTING, when it is short of out: the read assumes he plays.
         if own_status in ("QUESTIONABLE", "GTD"):
@@ -2243,7 +2353,8 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                                             if r.get("team") in (home, away)],
                          charting=charting, tracking=tracking,
                          pulled=getattr(g, "pulled_players", None) or [],
-                         contact=contact, recent=recent)
+                         contact=contact, recent=recent,
+                         weather=getattr(g, "weather", None) or gd.get("weather"))
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         scan["redzone"] = {t: rz_teams[t] for t in (home, away) if t in rz_teams}
@@ -2419,7 +2530,7 @@ def attach_cfb(out: dict, season: int, resolve, fetch=None, usage: dict | None =
         scan = scan_game(home, away, ratings=ratings, charts={}, defenders_now={},
                          props=gprops, opponent_adjusted=False, usage=usage or {},
                          injuries=[i for i in injuries or [] if getattr(i, "team", "") in (home, away)],
-                         pulled=gd.get("pulled_players") or [])
+                         pulled=gd.get("pulled_players") or [], weather=gd.get("weather"))
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         # THE SAME FURNITURE THE NFL SCAN CARRIES (Ethan, 2026-09-26: "we

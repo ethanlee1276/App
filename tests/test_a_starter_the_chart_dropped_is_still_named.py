@@ -105,7 +105,7 @@ def test_the_build_reads_the_snap_counts_once_for_both():
     assert "recent = recent_starters(snaps, before_week=week)" in SRC
     assert "usage_table(now, snaps, before_week=week)" in SRC
     assert SRC.count("_safe(load_snap_counts, season)") == 1
-    assert "contact=contact, recent=recent)" in SRC
+    assert "contact=contact, recent=recent," in SRC
 
 
 if __name__ == "__main__":

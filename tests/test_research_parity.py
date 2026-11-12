@@ -407,7 +407,7 @@ def test_yards_after_contact_allowed_come_free_from_the_pfr_rushing_rows():
     src = open(os.path.join(ROOT, "engine", "gamescan.py"), encoding="utf-8").read()
     assert "contact, own_contact = contact_tables(season)" in src
     assert 'own_contact.get((team, N.name_key(u.get("name") or "")))' in src
-    assert "contact=(contact or {}).get(opp[team]))" in src
+    assert "contact=(contact or {}).get(opp[team]), weather=weather)" in src
     facts = G.read_facts("rb", "RB", "TB", "DAL", usage={"games": 4, "carry_share": 0.6, "carries_pg": 16.0,
                                                          "contact": own[irving]},
                          allowed=None, ratings_def={}, points=None, line_words="", n_teams=32, room=None,
