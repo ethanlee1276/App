@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OM. A stingy defence is said as the fewest** (step 515; 12 November).
+Nothing to run. Ethan's free fantasy page that morning read "NYG allow
+189.2 passing yards a game, the 30th-most (league 233.5), over 8 games"
+under Jayden Daniels: true, and backwards to read. The Giants give up the
+third-fewest. A defence's rank is now said from its own end of the table
+(engine/defensevs.rank_words): the top half as the most, the bottom half as
+the fewest, in the card's sentence under every prop and on the fantasy
+page ("the 3rd-fewest (league 233.5)"), in its second line ("1.8
+passing TDs a game (10th-most)"), and on the page's rank chip ("3rd-fewest
+of 32"). The tough-matchup line under a prop already said it this way;
+the numbers and the colours are unchanged.
+
 **OL. A quarterback who runs has his legs on his matchup card** (step 514; 12
 November). Nothing to run. Ethan, the same afternoon: "we should have QB
 rushing yards in the matchup report as well." Jayden Daniels' card read him

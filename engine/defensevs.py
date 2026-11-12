@@ -377,6 +377,20 @@ def num(x) -> str:
     return f"{float(x):.1f}".rstrip("0").rstrip(".")
 
 
+def rank_words(rank: int, of: int) -> str:
+    """Where a defence ranks, said from its own end of the table: "3rd-most"
+    in the top half, "3rd-fewest" in the bottom (rank 1 gives up the most).
+
+    Ethan's free fantasy page, 12 November 2026, the Giants before the
+    Commanders: "NYG allow 189.2 passing yards a game, the 30th-most" —
+    true, and backwards to read. Third-fewest is what it means, and the
+    tough-matchup line under a prop already said it that way."""
+    rank, of = int(rank), int(of or 0)
+    if of and rank > (of + 1) // 2:
+        return f"{_ord(of - rank + 1)}-fewest"
+    return f"{_ord(rank)}-most"
+
+
 def matchup_card(team: str, rating: dict, stat: str, also: str | None = None) -> dict | None:
     """What goes under a pick: the defence, what it gives up to this position, where that ranks."""
     r = (rating or {}).get(stat)
@@ -387,9 +401,9 @@ def matchup_card(team: str, rating: dict, stat: str, also: str | None = None) ->
     card = {"opponent": team, "stat": words, "per_game": round(float(r["pg"]), 1),
             "league": round(float(r["league"]), 1), "rank": r["rank"], "of": r["of"], "games": games,
             "text": (f"{team} allowed {num(r['pg'])} {words} a game last season, the "
-                     f"{_ord(r['rank'])}-most (league {num(r['league'])}); no game yet this season"
+                     f"{rank_words(r['rank'], r['of'])} (league {num(r['league'])}); no game yet this season"
                      if r.get("last_season") else
-                     f"{team} allow {num(r['pg'])} {words} a game, the {_ord(r['rank'])}-most "
+                     f"{team} allow {num(r['pg'])} {words} a game, the {rank_words(r['rank'], r['of'])} "
                      f"(league {num(r['league'])}), over {games} game{'s' if games != 1 else ''}")}
     if r.get("last_season"):
         card["last_season"] = True
@@ -398,7 +412,7 @@ def matchup_card(team: str, rating: dict, stat: str, also: str | None = None) ->
         card["also"] = {"stat": STATS[also][2], "per_game": round(float(t["pg"]), 2), "rank": t["rank"],
                         "of": t["of"]}
         per = f"{float(t['pg']):.1f}" if also.endswith("_td") else num(t["pg"])
-        card["text"] += f"; {per} {STATS[also][2]} a game ({_ord(t['rank'])}-most)"
+        card["text"] += f"; {per} {STATS[also][2]} a game ({rank_words(t['rank'], t['of'])})"
     return card
 
 
@@ -482,5 +496,5 @@ def effect(team: str, rating: dict, position: str, market: str, sport: str = "nf
                       f"{name}'s rating is last season, when they were "
                       f"{'generous' if soft else 'stingy'} with {words}; {n} game"
                       f"{'' if n == 1 else 's'} into this one they allow {num(r['pg'])} a game, "
-                      f"the {_ord(r['rank'])}-most")
+                      f"the {rank_words(r['rank'], r['of'])}")
     return factor, reason, card

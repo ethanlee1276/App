@@ -9395,9 +9395,14 @@ function matchupCardHTML(r) {
   };
   // Touchdowns keep their decimal: "1.0 TDs a game", never "1 TDs".
   const n = (x) => /TD/.test(x.stat) ? Number(x.per_game).toFixed(1) : muNum(x.per_game);
+  // A stingy defence is said from its own end of the table: "3rd-fewest
+  // of 32", not "30th-most of 32" (the Giants' passing yards, 12 November
+  // 2026; engine/defensevs.rank_words says the card's sentence the same way).
+  const rankWords = (rank, of) => (of && rank > Math.floor((of + 1) / 2))
+    ? `${muOrd(of - rank + 1)}-fewest of ${of}` : `${muOrd(rank)}-most of ${of}`;
   const line = (x, avg) => `<div class="mu-line"><b>${n(x)}</b> ${escapeHtml(x.stat)} a game${
       avg != null ? ` <span class="mu-avg">(avg ${muNum(avg)})</span>` : ""}
-      <span class="mu-rank${tone(x.rank, x.of)}">${muOrd(x.rank)}-most of ${x.of}</span></div>`;
+      <span class="mu-rank${tone(x.rank, x.of)}">${rankWords(x.rank, x.of)}</span></div>`;
   const m = c.model || {};
   const move = m.applied != null ? Math.round((Number(m.applied) - 1) * 100) : 0;
   const model = c.note ? escapeHtml(c.note) : m.reads
