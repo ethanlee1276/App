@@ -779,6 +779,12 @@ def _label(score: int, volume: bool) -> tuple[str, str]:
     return key, dict(READS)[key]
 
 
+#: A QUARTERBACK WHO RUNS (Ethan, 2026-11-12: "we should have QB rushing
+#: yards in the matchup report as well"): this many carries or rushing yards
+#: a game, and his legs are said on his read and his card.
+QB_RUNS_CARRIES, QB_RUNS_YDS = 3.0, 15.0
+
+
 #: HOW BIG A MEASURED WEATHER STEP HAS TO BE TO COUNT (2026-11-12, the same
 #: game). The board's numbers take the measured weather steps
 #: (engine/weather: in rain teams run more and a back's carries go up, and
@@ -1041,6 +1047,18 @@ def rank_fact(allowed: dict | None, stat: str, opp: str, n_default: int = 32):
             else f"{opp} {verb} {where} {words}")
     sign = 1 if rank <= n / 3 else -1 if rank > n * 2 / 3 else 0
     return sign, text
+
+
+def _ground_line(allowed: dict | None, opp: str, n_default: int = 32) -> str:
+    """"NYG gives up 31 rushing yards a game to quarterbacks — the 4th-most
+    of 32": what ``opp`` allows a quarterback on the ground, at any rank."""
+    r = (allowed or {}).get("qb_rush_yds") or {}
+    rank, n, pg = r.get("rank"), r.get("of") or n_default, r.get("pg")
+    if not rank or not isinstance(pg, (int, float)):
+        return ""
+    where = (f"the {_ord(rank)}-most of {n}" if rank <= (n + 1) / 2
+             else f"the {_ord(n - rank + 1)}-fewest of {n}")
+    return f"{opp} gives up {pg:.0f} rushing yards a game to quarterbacks — {where}"
 
 
 #: A corner who has allowed a passer rating this low is where picks come
@@ -1487,6 +1505,22 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 f"{opp}'s pass rush ranks {_ord(rush)}"
                 + (f" and {team} is without {', '.join(line_out)}" if line_out
                    else f" against the {_ord(prot)} pass protection"))
+        # HIS LEGS (QB_RUNS_CARRIES): his carries and yards a game, and what
+        # this defence gives up to quarterbacks on the ground at any rank.
+        # Said, never counted: in the NFL that rating measured nothing beyond
+        # his own form (engine/defensevs.MODEL_STAT, ("rush_yds", "QB"),
+        # 2026-10-09), so the read stays his passing read and leans none of
+        # his rushing markets.
+        cpg, ypg = float(u.get("carries_pg") or 0), float(u.get("rush_yds_pg") or 0)
+        if cpg >= QB_RUNS_CARRIES or ypg >= QB_RUNS_YDS:
+            role.append(f"Runs {cpg:g} times a game for {ypg:.0f} yards")
+            if measured:
+                ground = _ground_line(allowed, opp, n_teams)
+            else:
+                rr = _rank(d, "def", "rushing")
+                ground = f"{opp}'s run defense ranks {_ord(rr)}" if rr else ""
+            if ground:
+                notes.append(f"On the ground: {ground}")
     # THE WEATHER, as the board priced him (WEATHER_STEP).
     wx_sign, wx_text = weather_line(group, pos, weather)
     if wx_sign > 0:
@@ -1524,7 +1558,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             "role": role, "facts": facts,
             "usage": {k: u.get(k) for k in ("tgt_share", "targets_pg", "carry_share",
                                             "carries_pg", "rec_yds_pg", "rush_yds_pg",
-                                            "snap_pct", "games", "rec_pg", "share_of")
+                                            "snap_pct", "games", "rec_pg", "share_of",
+                                            "attempts_pg")
                       if u.get(k) is not None}}
 
 

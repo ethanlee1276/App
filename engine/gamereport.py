@@ -445,6 +445,16 @@ def _role_line(r: dict) -> str:
         return ", ".join(bits)
     if pos in ("WR", "TE") and u.get("tgt_share"):
         return f"{_pct(u['tgt_share'])} of the {word} ({_num(per)} a game)"
+    if pos == "QB":
+        # A QUARTERBACK'S WORK, his legs with it when he runs (Ethan,
+        # 2026-11-12: "we should have QB rushing yards in the matchup report
+        # as well"; engine/gamescan.QB_RUNS_CARRIES).
+        from .gamescan import QB_RUNS_CARRIES, QB_RUNS_YDS
+        bits = [f"{_num(u['attempts_pg'])} pass attempts a game"] if u.get("attempts_pg") else []
+        cpg, ypg = float(u.get("carries_pg") or 0), float(u.get("rush_yds_pg") or 0)
+        if cpg >= QB_RUNS_CARRIES or ypg >= QB_RUNS_YDS:
+            bits.append(f"{_num(cpg)} carries for {_num(ypg, 0)} rushing yards a game")
+        return ", ".join(bits)
     return ""
 
 
@@ -495,7 +505,9 @@ def form_game(group: str, g: dict) -> str:
                         if s.get("pass_att") else _count(s.get("pass_yds"), "yd"))
         bits.append(f"{_n(s.get('pass_td'))} TD" + (f", {_n(s.get('pass_int'))} INT" if "pass_int" in s else ""))
         if (s.get("rush_yds") or 0) >= 15 or s.get("rush_td"):
-            bits.append(f"{_count(s.get('rush_yds'), 'rush yd')}"
+            car = s.get("rush_att") if s.get("rush_att") is not None else s.get("carries")
+            bits.append((f"{_count(car, 'carry', 'carries')} for " if car else "")
+                        + f"{_count(s.get('rush_yds'), 'rush yd')}"
                         + (f", {_n(s['rush_td'])} rush TD" if s.get("rush_td") else ""))
         return ", ".join(bits)
     if group == "rb":
@@ -527,7 +539,10 @@ def form_season(group: str, t: dict) -> str:
             bits.append(f"{_pct((s.get('pass_cmp') or 0) / s['pass_att'])} completed")
         bits.append(f"{_n(s.get('pass_td'))} TD" + (f", {_n(s.get('pass_int'))} INT" if "pass_int" in s else ""))
         if (s.get("rush_yds") or 0) >= 50 or (s.get("rush_td") or 0) >= 2:
-            bits.append(f"{_count(s.get('rush_yds'), 'rushing yd')}"
+            car = s.get("rush_att") if s.get("rush_att") is not None else s.get("carries")
+            bits.append((f"{_count(car, 'carry', 'carries')} for " if car else "")
+                        + f"{_count(s.get('rush_yds'), 'rushing yd')}"
+                        + (f" ({_num(s['rush_yds'] / n, 0)} a game)" if n else "")
                         + (f", {_n(s['rush_td'])} rushing TD" if s.get("rush_td") else ""))
         return head + ", ".join(bits)
     if group == "rb":
@@ -1341,7 +1356,7 @@ def _why(r: dict) -> list:
         if s.startswith("Usage is ") or "passer rating on" in s:
             continue
         if "against man" in s or "against zone" in s or "box" in s \
-                or s.startswith(("Tracking:", "Charted:")):
+                or s.startswith(("Tracking:", "Charted:", "On the ground:")):
             why.append(s)
     seen, out = set(), []
     for w in why:

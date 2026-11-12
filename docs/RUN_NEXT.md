@@ -10,7 +10,8 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-12, after a player's matchup card started saying what the matchup says,
+Last updated 2026-11-12, after a running quarterback's legs went on his matchup card (step OL:
+nothing to run), after a player's matchup card started saying what the matchup says,
 the weather counted and his own share not (step OK: nothing to run), after the game-line
 calibration started saying where its time goes
 (step OJ: nothing to run) and Thursday's check read the 7am boards, the refit's fourth night

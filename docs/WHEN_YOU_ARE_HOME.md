@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OL. A quarterback who runs has his legs on his matchup card** (step 514; 12
+November). Nothing to run. Ethan, the same afternoon: "we should have QB
+rushing yards in the matchup report as well." Jayden Daniels' card read him
+only as a passer. A quarterback with three carries or fifteen rushing yards
+a game (engine/gamescan.QB_RUNS_CARRIES) now has them said: on his card's
+role line beside his pass attempts ("31.4 pass attempts a game, 6.4 carries
+for 41 rushing yards a game"), under him what the defense gives up to
+quarterbacks on the ground at any rank ("On the ground: NYG gives up 31
+rushing yards a game to quarterbacks, the 4th-most of 32"; college, which
+has no such rating, says its run defense), and his carries beside his
+rushing yards in his season and game lines. It is said, not counted: in the
+NFL that rating measured nothing beyond his own form
+(engine/defensevs.MODEL_STAT, 2026-10-09), so his verdict stays the passing
+read and none of his rushing markets is leaned. A pocket passer gets none of
+it.
+
 **OK. A player's matchup card says what the matchup says** (step 513; 12
 November). Nothing to run. Ethan, on the Commanders at the Giants: "We're
 saying that the Giants defense ranked 30th, but then we're saying that
