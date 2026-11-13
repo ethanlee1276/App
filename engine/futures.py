@@ -63,12 +63,14 @@ from .divisions import group_of, has_divisions
 #: elsewhere in this repo for the game-bet models and reused rather than
 #: re-derived, so a futures number and a moneyline cannot disagree about
 #: what home advantage is worth.
-HOME_EDGE = {"nfl": 1.8, "mlb": 0.20, "nba": 2.4, "wnba": 2.2, "cfb": 2.5, "nhl": 0.20}
+HOME_EDGE = {"nfl": 1.8, "mlb": 0.20, "nba": 2.4, "wnba": 2.2, "cfb": 2.5, "nhl": 0.20,
+             "cbb": 3.0}
 
 #: Margin-to-probability slope. A rating gap of this many points is one
 #: logistic unit — i.e. about 73% to win. Per sport because a run and a
 #: point are not the same size of thing.
-MARGIN_SCALE = {"nfl": 7.0, "mlb": 1.35, "nba": 8.5, "wnba": 8.0, "cfb": 10.0, "nhl": 1.4}
+MARGIN_SCALE = {"nfl": 7.0, "mlb": 1.35, "nba": 8.5, "wnba": 8.0, "cfb": 10.0, "nhl": 1.4,
+                "cbb": 9.0}
 
 # Hockey (2026-10-03). A goal of margin is a big thing: a club a goal a
 # game better than an average one wins about two in three, which a slope of

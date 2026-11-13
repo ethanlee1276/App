@@ -16,7 +16,7 @@
 
 // The leagues in the order a reader looks for them; a league with no card
 // today (out of season, not built yet) is simply absent.
-const PD_ORDER = ["nfl", "cfb", "nba", "nhl", "mlb", "wnba", "ufc"];
+const PD_ORDER = ["nfl", "cfb", "nba", "cbb", "nhl", "mlb", "wnba", "ufc"];
 // Whose number the fair is, in the home card's own words.
 const PD_WITNESS = { exchange: "the exchange’s price", sharp: "the sharp book’s fair",
                      market: "the market’s fair", model: "our number" };

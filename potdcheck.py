@@ -43,6 +43,7 @@ BOARDS = {
     "mlb": "web/data/mlb_recommendations.json",
     "nba": "web/data/nba.json",
     "wnba": "web/data/wnba.json",
+    "cbb": "web/data/cbb.json",
     "nhl": "web/data/nhl.json",
     "ufc": "web/data/ufc.json",
 }

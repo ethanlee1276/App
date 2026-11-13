@@ -328,7 +328,7 @@ def check_league_days(rep):
             return
         from engine import db, freshness
         conn = db.connect()
-        reps = {s: freshness.daily(conn, s) for s in ("cfb", "mlb", "nba", "wnba")}
+        reps = {s: freshness.daily(conn, s) for s in ("cfb", "mlb", "nba", "wnba", "cbb")}
         behind = [f"{s.upper()} {freshness.line(r)}" for s, r in reps.items() if r["behind"]]
         if behind:
             rep.add("league days", FAIL, " · ".join(behind),

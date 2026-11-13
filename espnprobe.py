@@ -48,6 +48,7 @@ SUMMARY = {
             "college-football/summary"),
     "nba": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary",
     "wnba": "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/summary",
+    "cbb": "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary",
     "nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/summary",
 }
 

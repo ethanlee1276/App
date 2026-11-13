@@ -60,6 +60,7 @@ SPORTS = {
     "wnba": ("wnba", ["min", "lv", "ny"]),
     "nhl":  ("nhl",  ["edm", "la", "utah"]),
     "cfb":  ("ncaa", ["333", "130", "2"]),   # ESPN uses numeric team ids here
+    "cbb":  ("ncaa", ["150", "2509", "41"]), # the same numeric ids: Duke, Purdue, UConn
 }
 
 

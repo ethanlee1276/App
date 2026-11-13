@@ -413,7 +413,50 @@ WNBA = replace(
           "not count as bets until the bucket clears the promotion bar."),
 )
 
-LEAGUES = {"nba": NBA, "wnba": WNBA}
+# MEN'S COLLEGE BASKETBALL (2026-11-13, Ethan: "we need to add college
+# basketball ... look at all the tools and resources and data points we use
+# for NBA, and obviously put that towards college basketball").
+#
+# THE STRUCTURAL FACTS are the NCAA's: two 20-minute halves (40 minutes, so
+# every minutes-denominated number is scaled as the WNBA's is), five fouls
+# and out, a 13-to-15-man roster, about thirty-one games before the
+# conference tournaments.
+#
+# THE MARKET STRUCTURE is the WNBA spec's, for the WNBA spec's reason: a soft
+# market with low limits, where a model that disagrees with the book needs
+# the bigger cushion — counting stats tied to minutes first (rebounds,
+# assists, PRA), points second, threes last; the 0-100 grade gating at 70; the
+# role-stability filter; the tighter bankroll caps. The books post college
+# player props on the ranked teams and the power conferences, not on every
+# game (`cbbteams.priority`).
+#
+# THE FITTED NUMBERS start as the WNBA's (a 40-minute game measured on its own
+# seasons — the nearest measured basketball), until the college lab measures
+# college's own (docs/CBB_LAB.md); `hoops_fit` swaps in what the league's own
+# stored results can measure at every build, as it does for the WNBA.
+#
+# ON PROBATION: picks are journaled and graded, not staked, until the league's
+# own record clears the promotion bar (`engine.promotion`) — the rule the
+# WNBA and the NHL came in under.
+CBB = replace(
+    WNBA,
+    key="cbb", name="NCAAB",
+    game_minutes=40,
+    roster_size=15,
+    season_games=31,
+    personal_fouls=5,
+    calibrated=False,
+    inherited_from="wnba",
+    note=("College basketball runs the NBA's engine on a 40-minute game: the "
+          "minutes model, the shooting and rate reads, the matchup scan and "
+          "the market's own price. Its fitted numbers start from the WNBA's "
+          "(the nearest 40-minute game measured on its own seasons) until "
+          "college's own seasons measure them. Picks are journaled and graded "
+          "on probation; they do not count as bets until the league's record "
+          "clears the promotion bar."),
+)
+
+LEAGUES = {"nba": NBA, "wnba": WNBA, "cbb": CBB}
 
 
 def for_league(key: str) -> LeagueTuning:

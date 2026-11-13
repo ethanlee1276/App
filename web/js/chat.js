@@ -515,7 +515,7 @@ function chatRowFor(room) {
    plays) and leaves the conversation where it is. */
 function chatMount(league, event, d) {
   const room = league && event ? `${league}_${event}` : "";
-  if (!/^(nfl|cfb|nba|wnba|nhl|mlb)_\d{1,14}$/.test(room)) return;
+  if (!/^(nfl|cfb|nba|wnba|nhl|mlb|cbb)_\d{1,14}$/.test(room)) return;
   // A game saved for later (app.js spoiledG) has no room and no bar, even
   // when this call was queued by the game's first draw and this file arrived
   // after the reader had veiled it: the bar's newest message can say the score.

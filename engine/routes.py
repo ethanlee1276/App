@@ -68,6 +68,7 @@ BOARD_FILES = {
     "wnba": "wnba.json",
     "cfb": "cfb.json",
     "nhl": "nhl.json",
+    "cbb": "cbb.json",
 }
 
 #: Search order when a two-segment URL does not say which league it means.
@@ -75,7 +76,7 @@ BOARD_FILES = {
 #: sport — so the resolver looks through the boards in this order and
 #: takes the first hit. In season the busiest league is first, which is
 #: both the common case and the cheapest one.
-SPORT_ORDER = ("mlb", "nfl", "cfb", "nba", "nhl", "wnba")
+SPORT_ORDER = ("mlb", "nfl", "cfb", "nba", "cbb", "nhl", "wnba")
 
 SITE = "https://qellysbook.com"
 
@@ -94,6 +95,7 @@ SECTIONS = {
     "nba":  ("sport", "nba", "NBA", "The NBA board: player props priced against the book, with the projection behind each one."),
     "wnba": ("sport", "wnba", "WNBA", "The WNBA board: player props priced against the book, with the projection behind each one."),
     "cfb":  ("sport", "cfb", "College football", "The college football board: player props, game bets and touchdown long shots."),
+    "cbb":  ("sport", "cbb", "College basketball", "The men's college basketball board: every Division I game's lines, and player props on the night's biggest games."),
     "ufc":  ("view", "ufc", "UFC", "The fight card, the weigh-ins and what the model makes of each bout."),
     # sections
     "record":    ("view", "record", "Track record", "Every pick graded in public — wins, losses and closing-line value, with the sample size beside every number."),
@@ -364,7 +366,7 @@ def pick_meta(slug: str, web: Path = WEB) -> dict:
 #: A live game's own address (Ethan's research, 2026-10-29: "/live/{sport}/
 #: {game_id}. Public (no login), SEO-indexed with '[Team] vs [Team] live
 #: stats props' titles to capture Google traffic").
-LIVE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb")
+LIVE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb", "cbb")
 _EVENT = re.compile(r"^\d{1,14}$")
 
 

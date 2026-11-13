@@ -63,6 +63,7 @@ BOARDS = (
     ("cfb", "cfb.json", "College football"),
     ("nba", "nba.json", "NBA"),
     ("wnba", "wnba.json", "WNBA"),
+    ("cbb", "cbb.json", "NCAAB"),
 )
 
 

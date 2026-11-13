@@ -375,6 +375,13 @@ RULES: dict[str, SportRules] = {
     # tickets are banned entirely — too few simultaneous games.
     "wnba": SportRules("wnba", "WNBA", blowout_spread=9.0, cross_game="banned",
                        tier3_allowed=False),
+    # COLLEGE BASKETBALL (2026-11-13) takes the WNBA's screen, for the same
+    # reasons: a soft market where a favourite's stars sit in a blowout, Tier
+    # 3 (threes) too thin to pair. Cross-game tickets stand on the default
+    # (dominance) screen — a college night is dozens of games at once, the
+    # opposite of the WNBA's four. A 40-minute college game's blowout comes
+    # at a wider spread than the WNBA's (college spreads run wider).
+    "cbb": SportRules("cbb", "NCAAB", blowout_spread=12.0, tier3_allowed=False),
     # §9. The ceiling is two legs in ONE fight (ML + method / distance /
     # round group). We price fight winners; we do not price method of
     # victory or distance. So there is no same-fight pair to screen, and
@@ -2113,6 +2120,7 @@ SLATE_BOARDS = {
     "cfb": "web/data/cfb.json",
     "nba": "web/data/nba.json",
     "wnba": "web/data/wnba.json",
+    "cbb": "web/data/cbb.json",
     # UFC was missing from a map whose own heading says "ACROSS ALL
     # SPORTS", so a Saturday with a card and a college slate could
     # publish two parlays against a rule that permits one. Nothing

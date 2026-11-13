@@ -32,6 +32,8 @@ PLANS = {
              ("points by minutes", "pts", "min", 15.0, 20)],
     "nba": [("minutes by minutes", "min", "min", 15.0, 20),
             ("points by minutes", "pts", "min", 15.0, 20)],
+    "cbb": [("minutes by minutes", "min", "min", 15.0, 20),
+            ("points by minutes", "pts", "min", 15.0, 20)],
 }
 
 
@@ -64,8 +66,8 @@ def main(argv=None) -> int:
         from engine.form import MLB_WINDOW_WEIGHTS, CAREER_PRIOR_GAMES
         project = X.form_projection(MLB_WINDOW_WEIGHTS, CAREER_PRIOR_GAMES)
     else:
-        from engine.hoops import NBA, WNBA
-        tune = WNBA if sport == "wnba" else NBA
+        from engine.hoops import for_league
+        tune = for_league(sport)
     for label, value_m, usage_m, floor, window in PLANS[sport]:
         series = _series(conn, sport, value_m, usage_m)
         if sport != "mlb":

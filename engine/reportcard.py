@@ -32,7 +32,7 @@ import re
 MAX_BETS = 300
 #: The fields kept from each bet the page sends, and their lengths.
 _ID, _SPORT, _DESC = 40, 8, 160
-SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
+SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "cbb")
 
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _NUM = re.compile(r"(?<![\d.])[+-]?\d+(?:\.\d+)?(?![\d.])")

@@ -43,7 +43,8 @@ ROOT = Path(__file__).resolve().parents[1]
 #: grew the same makers (player reads leaning Most Likely, matchup picks
 #: beside the Edge picks and the one board) and so the same ways to argue
 #: with itself.
-FILES = {"nfl": "recommendations.json", "cfb": "cfb.json", "nba": "nba.json", "wnba": "wnba.json"}
+FILES = {"nfl": "recommendations.json", "cfb": "cfb.json", "nba": "nba.json", "wnba": "wnba.json",
+         "cbb": "cbb.json"}
 
 #: Two chances for the same prop, side and line, further apart than this,
 #: are two numbers for one bet.

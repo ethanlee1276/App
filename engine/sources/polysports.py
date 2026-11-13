@@ -52,6 +52,8 @@ SPORT_TAGS = {
     # Polymarket price. A candidate like the rest: the build's report says
     # whether the tag and the /sports series are real.
     "nhl": ("nhl",),
+    # Men's college basketball (2026-11-13): candidates, like the rest.
+    "cbb": ("ncaab", "cbb", "college-basketball"),
 }
 
 #: A short timeout: this runs inside a board build that the launcher
@@ -239,7 +241,8 @@ def parse_lines(ev: dict) -> list[dict]:
 
 #: Polymarket's own league names on its /sports list, per league of ours.
 SPORT_KEYS = {"nfl": ("nfl",), "cfb": ("cfb", "ncaaf"), "mlb": ("mlb",),
-              "nba": ("nba",), "wnba": ("wnba",), "nhl": ("nhl",)}
+              "nba": ("nba",), "wnba": ("wnba",), "nhl": ("nhl",),
+              "cbb": ("ncaab", "cbb")}
 
 
 def fetch_series_ids(ttl: int = 86400) -> dict:

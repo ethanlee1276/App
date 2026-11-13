@@ -57,7 +57,8 @@ from .statmath import normal_cdf
 #: not route around it — a live panel is not a licence to invent a
 #: number the pregame model would not print. Measure the SD and NBA
 #: turns on with no change here.
-REGULATION_S = {"nfl": 3600, "cfb": 3600, "nba": 2880, "wnba": 2400, "nhl": 3600}
+#: College basketball (2026-11-13): two twenty-minute halves.
+REGULATION_S = {"nfl": 3600, "cfb": 3600, "nba": 2880, "wnba": 2400, "nhl": 3600, "cbb": 2400}
 
 #: Inside this many seconds, with the margin inside one score, possession
 #: decides more than anything this model can see. Not a refusal — the
@@ -68,13 +69,13 @@ REGULATION_S = {"nfl": 3600, "cfb": 3600, "nba": 2880, "wnba": 2400, "nhl": 3600
 #: not gradual: it arrives the moment the trailing team's only path is
 #: "get the ball back", which is a possession fact, not a margin one.
 BLIND_S = 300
-BLIND_MARGIN = {"nfl": 8, "cfb": 8, "nba": 6, "wnba": 6, "nhl": 1}
+BLIND_MARGIN = {"nfl": 8, "cfb": 8, "nba": 6, "wnba": 6, "nhl": 1, "cbb": 6}
 
 
 #: How many periods a regulation game has, and how long each runs.
 #: Derived from REGULATION_S rather than repeated, so the two cannot
 #: disagree about how long a game is.
-PERIODS = {"nfl": 4, "cfb": 4, "nba": 4, "wnba": 4, "nhl": 3}
+PERIODS = {"nfl": 4, "cfb": 4, "nba": 4, "wnba": 4, "nhl": 3, "cbb": 2}
 
 # HOCKEY IS NOT A MARGIN GAME (2026-10-03). Goals are rare and come one at
 # a time, so a Normal on the margin is the wrong shape; what is left of the

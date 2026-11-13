@@ -34,6 +34,9 @@ ESPN_SCOREBOARD = {
     # Hockey (2026-10-03): scores, state and the period clock only — no
     # play-by-play parser for it, which `attach_plays` says on the card.
     "nhl": "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
+    # Men's college basketball (2026-11-13): Division I, asked for below.
+    "cbb": ("https://site.api.espn.com/apis/site/v2/sports/basketball/"
+            "mens-college-basketball/scoreboard"),
 }
 
 #: What the scoreboard needs ASKED FOR, per league. Appended by
@@ -57,7 +60,14 @@ ESPN_SCOREBOARD = {
 #: The other three leagues have a slate small enough that the default
 #: covers it — 16 NFL games, a dozen hoops — so they ask for nothing and
 #: the entry is absent rather than empty.
-SCOREBOARD_QUERY = {"cfb": f"?groups={FBS_GROUP}&limit=900"}
+SCOREBOARD_QUERY = {"cfb": f"?groups={FBS_GROUP}&limit=900",
+                    # College basketball: Division I (group 50) and a page
+                    # that holds a Saturday's 150 games, the board's own ask
+                    # (`espnhoops.SCOREBOARD_QUERY`).
+                    "cbb": "?groups=50&limit=500"}
+
+#: The letter a live period is written with (``P2``, ``H1``, ``Q3``).
+PERIOD_LETTER = {"nhl": "P", "cbb": "H"}
 
 #: The least a college conference's own live page is held (`fetch_rows`).
 CFB_GROUP_TTL = 60
@@ -107,6 +117,12 @@ def _side_key(team: dict, league: str = "nfl") -> str:
     if league == "cfb":
         from .cfbdata import _team_key
         return _team_key(team)
+    if league == "cbb":
+        # The college basketball board's own key, called rather than
+        # copied: ESPN's code for a Division I school, ``espn:{id}`` for a
+        # small one (`espnhoops.team_key`).
+        from .espnhoops import team_key
+        return team_key(team, "cbb")
     name = (team.get("displayName") or "").strip()
     abbr = (team.get("abbreviation") or "").strip()
     try:
@@ -360,7 +376,9 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
                 yard = spot_to_yard_line(sit.get("downDistanceText", ""), home, away)
         live = LiveStatus(
             state=state, home_score=hs, away_score=as_,
-            period=(f"{'P' if league == 'nhl' else 'Q'}{status.get('period')}"
+            # Hockey's periods are P, college basketball's halves H (H3 is
+            # its first overtime), everyone else's quarters Q.
+            period=(f"{PERIOD_LETTER.get(league, 'Q')}{status.get('period')}"
                     if state == "live" and status.get("period") else period),
             # NO CLOCK AND NO DOWN THROUGH A HOLD. The feed freezes both
             # where the game stopped, and a frozen "2nd & 7 · 4:12" reads

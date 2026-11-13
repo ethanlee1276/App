@@ -382,8 +382,8 @@ BRIDGE_AHEAD_DAYS = 7
 BRIDGE_QUIET_DAYS = 10
 BRIDGE_RECENT_DAYS = 24
 BRIDGE_END_MONTHS = {"mlb": (10, 11), "nba": (5, 6, 7), "nhl": (5, 6, 7), "wnba": (9, 10, 11),
-                     "nfl": (2, 3), "cfb": (1, 2)}
-BRIDGE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb")
+                     "nfl": (2, 3), "cfb": (1, 2), "cbb": (4, 5)}
+BRIDGE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb", "cbb")
 #: It is BACK when it is on again after OPENER_GAP_DAYS off, and the note
 #: goes out over the OPENER_DAYS after, to members away AWAY_DAYS or more.
 OPENER_GAP_DAYS = 30

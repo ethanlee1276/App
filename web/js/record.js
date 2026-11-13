@@ -2575,7 +2575,7 @@ function recSelectionHaircut(sh, scope) {
    skill over always guessing the base rate, calibration error, and the
    basis, because a replay against a trailing-average line measures
    forecasting skill, never an edge over a book. */
-const REPLAY_SPORT = { mlb: "MLB", nfl: "NFL", cfb: "College", nba: "NBA", wnba: "WNBA" };
+const REPLAY_SPORT = { mlb: "MLB", nfl: "NFL", cfb: "College", nba: "NBA", wnba: "WNBA", cbb: "NCAAB" };
 
 function recReplaySection(rp, scope) {
   if (!rp || typeof rp !== "object") return "";

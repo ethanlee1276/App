@@ -138,6 +138,14 @@ def name_map(sport: str) -> dict:
         return dict(getattr(oddsapi, "WNBA_TEAM_ABBR", {}) or {})
     if sport == "nhl":
         return dict(getattr(oddsapi, "NHL_TEAM_ABBR", {}) or {})
+    if sport == "cbb":
+        # College basketball's book spellings, harvested by its builds
+        # (`engine.cbbteams`), the way college football's are.
+        try:
+            from . import cbbteams
+            return dict(cbbteams.load() or {})
+        except Exception:                                     # noqa: BLE001
+            return {}
     if sport == "cfb":
         try:
             from . import cfbteams
@@ -809,7 +817,8 @@ STAT_SECTIONS["baseball"] = (
 
 #: Which set of sections a sport gets.
 STAT_SPORTS = {"nfl": "football", "cfb": "football", "nhl": "hockey",
-               "nba": "basketball", "wnba": "basketball", "mlb": "baseball"}
+               "nba": "basketball", "wnba": "basketball", "mlb": "baseball",
+               "cbb": "college basketball"}
 
 #: How many rows a section prints. ESPN lists everyone who touched the
 #: ball; a page does not need the punter who took one snap.
@@ -900,7 +909,7 @@ def stat_tables(conn, sport: str, team: str, season: int | None = None,
 
 #: The market a league's playing time is logged under, for the measured
 #: depth chart.
-USAGE_MARKET = {"nhl": "toi", "nba": "min", "wnba": "min"}
+USAGE_MARKET = {"nhl": "toi", "nba": "min", "wnba": "min", "cbb": "min"}
 #: Each player's newest this-many games set his place.
 USAGE_WINDOW = 20
 

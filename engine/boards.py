@@ -361,6 +361,7 @@ SHELVES_BY_SPORT = {
     "mlb": BASEBALL_SHELVES,
     "nba": HOOPS_SHELVES,
     "wnba": HOOPS_SHELVES,
+    "cbb": HOOPS_SHELVES,
 }
 FOOTBALL = ("nfl", "cfb")
 

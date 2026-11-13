@@ -61,7 +61,7 @@ LAB_EVERY_DAYS = 7
 #: 10-10; once the whole pass outgrew the chores' one-hour ceiling
 #: (engine.maintenance.WEEKLY_JOB_TIMEOUT_S) it was cut off every night
 #: with nothing written, and was due again the next night, from the start.
-SPORT_ORDER = ("mlb", "nfl", "cfb", "nba", "wnba", "ufc")
+SPORT_ORDER = ("mlb", "nfl", "cfb", "nba", "cbb", "wnba", "ufc")
 
 #: When the Lab last STARTED each sport, so a sport a run was cut off in
 #: goes to the back of the next run's line instead of blocking the rest.
@@ -73,7 +73,7 @@ MLB_MARKETS = ("total_bases", "hits", "strikeouts")
 
 #: Game-line markets, and the sports whose closes can carry them.
 GAME_MARKETS = ("total", "spread")
-GAME_SPORTS = ("nfl", "mlb", "cfb", "nba", "wnba")
+GAME_SPORTS = ("nfl", "mlb", "cfb", "nba", "wnba", "cbb")
 
 #: A walk-forward needs a real history before its numbers mean anything.
 MIN_HISTORY = 8
@@ -730,7 +730,7 @@ def build_sport(sport: str, hconn, log=print, nfl: bool = True,
     elif sport == "cfb":
         blob = {"props": cfb_props(log=log, conn=hconn),
                 "game_lines": game_lines(hconn, "cfb", log=log)}
-    elif sport in ("nba", "wnba"):
+    elif sport in ("nba", "wnba", "cbb"):
         missed: list = []
         props = hoops_props(hconn, sport, log=log, budget_s=cap(LAB_HOOPS_PROPS_BUDGET_S), missed=missed)
         sec = ({"markets": props} if props else

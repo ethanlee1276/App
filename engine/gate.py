@@ -358,6 +358,7 @@ ROW_PAID_KEYS_BY_FILE = {
     "fantasy_nba.json": ("players", ("proj",)),
     "fantasy_wnba.json": ("players", ("proj",)),
     "fantasy_nhl.json": ("players", ("proj",)),
+    "fantasy_cbb.json": ("players", ("proj",)),
 }
 
 #: …and the ones that must NEVER be touched, named rather than inferred.
@@ -433,11 +434,12 @@ FREE_FILES = (
     # every league the builder writes is registered HERE, so the next
     # league added cannot repeat this without the sandbox suite saying so.
     "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json", "live_nhl.json",
+    "live_cbb.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
-    "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
+    "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json", "rosters_cbb.json",
     "rosters_nhl.json", "nhl_lines.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
-    "standings_nfl.json", "standings_wnba.json", "standings_nhl.json",
+    "standings_nfl.json", "standings_wnba.json", "standings_nhl.json", "standings_cbb.json",
     # The book report card (engine/booksharp.payload, written by the
     # daily chores). Facts about BOOKS — early-price error vs the close,
     # who moves first — with no pick, no line and no model probability
@@ -467,7 +469,7 @@ FREE_FILES = (
 KNOWN_BOARDS = (
     "witness.json", "community.json",
     "recommendations.json", "mlb_recommendations.json", "nba.json",
-    "wnba.json", "cfb.json", "ufc.json", "nhl.json",
+    "wnba.json", "cfb.json", "ufc.json", "nhl.json", "cbb.json",
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
     "futures_nfl.json", "backtest.json", "kalshi.json", "predmarkets.json",
     "record.json", "record_head.json", "injuries.json", "news.json", "fantasy.json",
@@ -484,7 +486,7 @@ KNOWN_BOARDS = (
     "fantasy_week.json",
     # Tonight's basketball and hockey fantasy points, beside their boards
     # (engine/fantasy_daily, 2026-10-27). Free points, paid stat lines.
-    "fantasy_nba.json", "fantasy_wnba.json", "fantasy_nhl.json",
+    "fantasy_nba.json", "fantasy_wnba.json", "fantasy_nhl.json", "fantasy_cbb.json",
     # memes_build.py has written this since the meme ledger shipped and
     # nothing here had ever heard of it — the third time a pipeline grew
     # a board without telling the gate. Unregistered meant `is_free` said
@@ -493,11 +495,12 @@ KNOWN_BOARDS = (
     "memerecord.json", "heartbeat.json", "feed.json", "sweat.json",
     "streak.json", "bookreport.json", "ufc_live.json", "live_mlb.json",
     "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json", "live_nhl.json",
+    "live_cbb.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
-    "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
+    "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json", "rosters_cbb.json",
     "rosters_nhl.json", "nhl_lines.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
-    "standings_nfl.json", "standings_wnba.json", "standings_nhl.json",
+    "standings_nfl.json", "standings_wnba.json", "standings_nhl.json", "standings_cbb.json",
     # The day's one pick across every league, and since 2026-10-30 every
     # league's card beside it, written by the refresh cycle rather than by
     # a build (launch._write_day_top_pick). Mixed: see MIXED_FILES.
@@ -508,7 +511,7 @@ KNOWN_BOARDS = (
 #: paid picks in one object, handled by stripping keys rather than by name.
 MIXED_FILES = (
     "recommendations.json", "mlb_recommendations.json", "nba.json",
-    "wnba.json", "cfb.json", "ufc.json", "nhl.json",
+    "wnba.json", "cfb.json", "ufc.json", "nhl.json", "cbb.json",
     # Not sports boards, same shape of problem: a feed's facts and the
     # model's read of them in one object. Their paid keys are named in
     # PAID_KEYS_BY_FILE rather than in PAID_KEYS, because `coins` and
@@ -524,6 +527,7 @@ MIXED_FILES = (
     # Each row's points are free and its workings paid, per row rather than
     # per key: ROW_PAID_KEYS_BY_FILE.
     "fantasy_week.json", "fantasy_nba.json", "fantasy_wnba.json", "fantasy_nhl.json",
+    "fantasy_cbb.json",
 )
 
 #: The switch. OFF by default, and that default is the whole reason this

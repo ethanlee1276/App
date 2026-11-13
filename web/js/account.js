@@ -3556,7 +3556,8 @@ const FOLLOW_LEAGUES = [["nfl", "NFL", () => (typeof TEAMS !== "undefined" ? TEA
   ["nba", "NBA", () => (typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : {})],
   ["mlb", "MLB", () => (typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {})],
   ["nhl", "NHL", () => (typeof NHL_TEAMS !== "undefined" ? NHL_TEAMS : {})],
-  ["wnba", "WNBA", () => (typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : {})]];
+  ["wnba", "WNBA", () => (typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : {})],
+  ["cbb", "NCAAB", () => (typeof teamsForSport === "function" ? teamsForSport("cbb") : {})]];
 const FOLLOW_MAX = 20;          // engine/alerts.MAX_WATCHES
 let _fol = { lg: "nfl", teams: [], players: [], hits: [], q: "", done: null };
 

@@ -54,7 +54,7 @@ from . import profanity
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "web" / "data"
 
-ROOM_RE = re.compile(r"^(nfl|cfb|nba|wnba|nhl|mlb)_([0-9]{1,14})$")
+ROOM_RE = re.compile(r"^(nfl|cfb|nba|wnba|nhl|mlb|cbb)_([0-9]{1,14})$")
 #: A play's id as the deep files write it (ESPN's numeric ids, MLB's
 #: at-bat index, the NHL feed's event id), with room for a ``:`` suffix.
 PLAY_RE = re.compile(r"^[A-Za-z0-9:._-]{1,40}$")

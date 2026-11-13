@@ -37,7 +37,7 @@ import unicodedata
 #: then MLB, then NBA, then WNBA, then UFC") — this is the tie-break
 #: order when no tab preference says otherwise. Hockey (2026-10-03) sits
 #: after the WNBA: Ethan, the same day, "I don't really bet it."
-SOURCES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
+SOURCES = ("nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl", "ufc")
 
 
 def norm(s: str) -> str:

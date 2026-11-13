@@ -2061,7 +2061,9 @@ POTD_CATEGORY = "potd"
 #: 1-11", to "A Pick of the Day for the UFC card?": yes), its pick named
 #: off the fights Pinnacle priced (`potd.fight_lines`) and settled by
 #: `settle_ufc` like every other fight row.
-POTD_LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
+#: Men's college basketball joined 2026-11-13 with its board (on
+#: probation: a probation league's pick is named and graded like any other).
+POTD_LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "cbb")
 
 #: How many settled Picks of the Day the Record page gets as receipts.
 #: One a day per sport, so this is about a fortnight across six books —
@@ -6255,6 +6257,7 @@ def _game_bet_evidence(hist_conn, b, where, wargs):
 #: Ethan, 2026-10-13: "It should not take a day for all bets to settle."
 DERIVED_MARKETS = {("nba", "pra"): ("pts", "reb", "ast"),
                    ("wnba", "pra"): ("pts", "reb", "ast"),
+                   ("cbb", "pra"): ("pts", "reb", "ast"),
                    # The NBA's two-stat combos (2026-10-13, hoops.COMBOS).
                    ("nba", "pts_reb"): ("pts", "reb"),
                    ("nba", "pts_ast"): ("pts", "ast"),
@@ -6637,7 +6640,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         # wrong, or because she shot 3-for-12?" — the one question that
         # separates a pipeline bug from variance.
         actual_minutes = None
-        if b["sport"] in ("nba", "wnba"):
+        if b["sport"] in ("nba", "wnba", "cbb"):
             m = hist_conn.execute(
                 f"SELECT value FROM player_game_logs WHERE {where} "
                 f"AND market='min' AND player=? AND game_id=?",
@@ -11210,7 +11213,7 @@ def move_longshots_out_of_main(conn, stake_units: float = 0.1) -> int:
 # `predmarkets.json` by their own report card, and folding a
 # prediction-market flag rate into a betting P&L would make both numbers
 # mean nothing.
-TRACKED_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
+TRACKED_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "cbb")
 
 
 def sport_report(conn, sport: str,

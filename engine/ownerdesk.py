@@ -1060,7 +1060,7 @@ LAB_LATE_D = 15
 #: A sport the refit owes this round, last fitted this many days ago or
 #: never (the NFL went from late August to November).
 DEEP_LATE_D = 15
-DEEP_SPORTS = ("nfl", "cfb", "nba", "mlb", "wnba")
+DEEP_SPORTS = ("nfl", "cfb", "nba", "cbb", "mlb", "wnba")
 _JSON: dict = {}
 
 

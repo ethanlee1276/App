@@ -111,7 +111,7 @@ MARKET_WORDS = {
 GAME_MARKETS = ("moneyline", "spread", "total")
 SCORER_MARKETS = ("anytime_td", "anytime_goal")
 FIGHT_MARKETS = ("fight_distance", "fight_rounds", "fight_round", "win_ko", "win_sub", "win_dec", "win_finish")
-SPORTS = ("nfl", "cfb", "nba", "wnba", "mlb", "nhl", "ufc", "other")
+SPORTS = ("nfl", "cfb", "nba", "wnba", "mlb", "nhl", "ufc", "cbb", "other")
 #: The UFC card (ufc_build.py), read beside the leagues' boards for a fight
 #: leg (engine/slipfight) — not one of askbot.BOARD_FILES, which are the
 #: leagues' prop and game boards Ask reads.

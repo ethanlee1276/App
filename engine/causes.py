@@ -38,13 +38,13 @@ from __future__ import annotations
 # Final-margin thresholds where the game script is dead and the tape
 # stops resembling the game that was priced. Units are the sport's own
 # (runs for MLB, points elsewhere).
-BLOWOUT_MARGIN = {"nfl": 17, "cfb": 21, "nba": 20, "wnba": 16, "mlb": 6}
+BLOWOUT_MARGIN = {"nfl": 17, "cfb": 21, "nba": 20, "wnba": 16, "mlb": 6, "cbb": 20}
 
 # Under this share of projected minutes the rotation read failed, not
 # the shooting model.
 SHORT_RUN_FRAC = 0.75
 
-HOOPS = ("nba", "wnba")
+HOOPS = ("nba", "wnba", "cbb")
 
 
 def _col(b, name):

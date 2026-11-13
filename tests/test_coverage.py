@@ -20,7 +20,7 @@ from engine import coverage as C
 
 
 def test_every_sport_with_a_board_is_scanned():
-    assert set(C.BUILDERS) == {"nfl", "mlb", "nba", "wnba", "cfb", "ufc"}
+    assert set(C.BUILDERS) == {"nfl", "mlb", "nba", "wnba", "cfb", "ufc", "cbb"}
 
 
 def test_the_scan_reads_the_database_rather_than_a_document():

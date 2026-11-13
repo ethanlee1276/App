@@ -529,7 +529,7 @@ function labGameTable(games) {
    ran from what happened, and a lock where the market-by-market replay
    would be. Never a number from behind the lock. */
 const LAB_SPORT_NAMES = { mlb: "MLB", nfl: "NFL", cfb: "College football", nba: "NBA", wnba: "WNBA",
-  nhl: "NHL", ufc: "UFC" };
+  nhl: "NHL", ufc: "UFC", cbb: "College basketball" };
 async function labFreeHTML() {
   const rec = (typeof loadRecordOnce === "function" ? await loadRecordOnce() : null) || {};
   const rp = rec.replay || {};
@@ -603,7 +603,7 @@ async function renderLab() {
       appears here after the first run.</div></div>`;
     return;
   }
-  const order = ["mlb", "nfl", "cfb", "nba", "wnba", "nhl", "ufc"];
+  const order = ["mlb", "nfl", "cfb", "nba", "cbb", "wnba", "nhl", "ufc"];
   const has = (sport) => {
     const s = d.sports[sport];
     return (s.props || {}).markets || ((s.game_lines || {}).markets);
@@ -761,7 +761,7 @@ function zenoCalendarHTML(months, snap) {
    open until he grades it from this page (or the synced copy from Juice
    Reel arrives and takes its place — engine/zeno._posted_twin). */
 const ZENO_POST_BOOKS = [["fanduel", "FanDuel"], ["draftkings", "DraftKings"], ["thescore", "theScore Bet"]];
-const ZENO_POST_SPORTS = ["nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "other"];
+const ZENO_POST_SPORTS = ["nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "cbb", "other"];
 async function zenoPost(rows) {
   const r = await fetch("/api/zeno/import", {
     method: "POST",
@@ -1771,6 +1771,7 @@ const ROSTER_PLACEHOLDER = {
   mlb: "Search a team or a player… (e.g. Yankees, NYY, Judge)",
   nba: "Search a team or a player… (e.g. Celtics, BOS, Tatum)",
   wnba: "Search a team or a player… (e.g. Liberty, NYL, Stewart)",
+  cbb: "Search a school or a player… (e.g. Duke, DUKE, Flagg)",
   cfb: "Search a program or a player… (e.g. Georgia, UGA)",
 };
 
@@ -1787,6 +1788,9 @@ const ROSTER_COPY = {
   wnba: "— built from who has actually appeared for each club this season, most "
       + "games first. Measured playing time is the depth chart here, rather than "
       + "somebody’s published guess at one.",
+  cbb: "— built from who has actually appeared for each school this season, most "
+     + "minutes-logged games first. College rosters turn over every spring, so a "
+     + "school's list fills in as November's games are played and ingested.",
   cfb: "— built from who has actually appeared for each program this season, most "
      + "games first. College rosters churn hardest of any league, so this list is "
      + "thin in week one and fills as the season is played.",
@@ -2924,7 +2928,7 @@ function teamGameDoor(d, p, g) {
    (engine/gamearchive). The schedule knows a game by its day and its two
    sides; the server finds the feed's own game from those, and the game's
    own id ("NYY@BOS-G2") says which leg of a doubleheader it was. */
-const PAST_GAME_LEAGUES = new Set(["nfl", "cfb", "nba", "wnba", "nhl", "mlb"]);
+const PAST_GAME_LEAGUES = new Set(["nfl", "cfb", "nba", "wnba", "nhl", "mlb", "cbb"]);
 function teamPastGameAttrs(d, g) {
   return ` data-past-game="${escapeAttr(d.sport)}" data-pg-date="${escapeAttr(String(g.date || g.period || "").slice(0, 10))}"`
     + ` data-pg-home="${escapeAttr(g.home || "")}" data-pg-away="${escapeAttr(g.away || "")}"`
@@ -3988,6 +3992,7 @@ const STATUS_BOARDS = [
   ["wnba.json", "WNBA board"],
   ["nhl.json", "NHL board"],
   ["cfb.json", "College football board"],
+  ["cbb.json", "College basketball board"],
   ["ufc.json", "UFC card"],
   ["record.json", "The record"],
   ["feed.json", "The feed"],
@@ -4004,6 +4009,7 @@ const STATUS_BOARDS = [
   ["live_nba.json", "Live scoreboard (NBA)"],
   ["live_wnba.json", "Live scoreboard (WNBA)"],
   ["live_nhl.json", "Live scoreboard (NHL)"],
+  ["live_cbb.json", "Live scoreboard (college basketball)"],
   /* The Lab's weekly backtest (audit O17): nine days overdue once with
      nothing flagging it, because it was not on this list at all. */
   ["backtest.json", "The Lab (weekly backtest)"],
@@ -4018,7 +4024,7 @@ const STATUS_MAX_AGE_H = { "backtest.json": 192, "record.json": 6, "ufc.json": 1
 /* Which league a slate file is, so its row can say "off-season" from the
    heartbeat rather than "never built" or a scary age. */
 const STATUS_SPORT_OF = { "recommendations.json": "nfl", "mlb_recommendations.json": "mlb",
-  "nba.json": "nba", "wnba.json": "wnba", "nhl.json": "nhl", "cfb.json": "cfb" };
+  "nba.json": "nba", "wnba.json": "wnba", "nhl.json": "nhl", "cfb.json": "cfb", "cbb.json": "cbb" };
 
 async function boardStamp(file) {
   try {
@@ -4047,7 +4053,7 @@ async function boardStamp(file) {
    carried the commit and each board's last run since August; --boards
    read them over SSH and nothing on the site did. */
 const BUILD_LEAGUES = [["nfl", "NFL"], ["cfb", "College football"], ["mlb", "MLB"],
-  ["nba", "NBA"], ["wnba", "WNBA"], ["nhl", "NHL"], ["ufc", "UFC"]];
+  ["nba", "NBA"], ["cbb", "College basketball"], ["wnba", "WNBA"], ["nhl", "NHL"], ["ufc", "UFC"]];
 
 /* THE BOARD'S SELF-CHECK (engine/boardtruth, run by launch._board_truth
    after every build): how many of the claims the page makes held against

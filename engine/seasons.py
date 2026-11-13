@@ -49,12 +49,19 @@ SEASON_WINDOWS = {
     # Preseason (late September) is outside the window and is never stored
     # anyway (engine/sources/nhldata.KEEP_TYPES).
     "nhl": (10, 1, 6, 30, True),
+    # MEN'S COLLEGE BASKETBALL (2026-11-13, Ethan: "we need to add college
+    # basketball"). Opening night in the first week of November through the
+    # national championship game in the first week of April. Exhibitions in
+    # late October are left out (no box score of one is a player's form),
+    # and the window runs to mid-April so a late title game is never cut.
+    "cbb": (11, 1, 4, 15, True),
 }
 
 # Sports whose day-by-day ingest is worth warning about before it starts.
 # A basketball season is ~1,200 games and each one costs a box-score
-# request; six of them is an afternoon, not a coffee break.
-HEAVY = {"nba", "wnba", "nhl"}
+# request; six of them is an afternoon, not a coffee break. A college
+# basketball season is about 6,300 Division I games, five times that.
+HEAVY = {"nba", "wnba", "nhl", "cbb"}
 
 
 def window(sport: str, season: int) -> tuple[str, str]:

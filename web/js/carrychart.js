@@ -144,6 +144,7 @@
     nfl: "his snaps, targets and carries game by game, and his share of his team’s",
     cfb: "his carries, catches and attempts game by game, and his share of his team’s",
     nba: "his minutes, starts and shots, game by game", wnba: "her minutes and starts, game by game",
+    cbb: "his minutes and starts, game by game",
     mlb: "his plate appearances and spot in the order, or his pitch count and rest, game by game",
     nhl: "his ice time and shots, or the shots he faced, game by game",
   }).forEach(([lg, sec]) => { KIND[`role@${lg}`] = Object.assign({}, KIND.role, { sec }); });
@@ -2070,7 +2071,7 @@
      nor a bet the charts read (a player page's head, a leg the parlay
      checker priced): probe asks for each and draws what he has. */
   const ALL = { nfl: ["carries", "routes", "passes", "kicks", "role"], cfb: ["carries", "routes", "role"],
-                nba: ["shots", "role"], wnba: ["role"], nhl: ["shotmap", "saves", "role"],
+                nba: ["shots", "role"], wnba: ["role"], cbb: ["role"], nhl: ["shotmap", "saves", "role"],
                 mlb: ["spray", "pitches", "role"], ufc: ["fights"] };
   function doorKinds(lg, mkt, pos, opp) {
     const hint = kindsFor(lg, mkt, pos);
@@ -2149,7 +2150,7 @@
        assists ride the same minutes (engine/nba/shots). The WNBA has no
        play file stored: her role. */
     if (sport === "nba") return m ? role(["shots"]) : [];
-    if (sport === "wnba") return m ? ["role"] : [];
+    if (sport === "wnba" || sport === "cbb") return m ? ["role"] : [];
     /* A fighter's chart is every fight on his record (engine/ufc/history). */
     if (sport === "ufc") return ["fights"];
     /* Hockey's is the bet's side of the puck: a goalie's saves or goals

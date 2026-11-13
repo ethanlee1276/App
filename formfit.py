@@ -55,6 +55,8 @@ SPORT_MARKETS = {
     # memory and the temperatures after this fit are real for both.
     "nba": ["pts", "reb", "ast", "fg3m", "pra"],
     "wnba": ["pts", "reb", "ast", "fg3m", "pra"],
+    # Men's college basketball (2026-11-13), the WNBA's five markets.
+    "cbb": ["pts", "reb", "ast", "fg3m", "pra"],
     # COLLEGE, ADDED 2026-09-04, and the comment it replaces was true
     # when it was written:
     #
@@ -148,7 +150,7 @@ SPORT_MARKETS = {
 _HOOPS_NO_DIAL = ("the basketball board's projection is minutes × a per-minute rate over "
                   "his last twenty games, with no blend of windows for a recency dial to "
                   "turn; its memory and temperatures walk that model (engine/hoopsreplay.walk)")
-NO_DIAL = {"nba": _HOOPS_NO_DIAL, "wnba": _HOOPS_NO_DIAL}
+NO_DIAL = {"nba": _HOOPS_NO_DIAL, "wnba": _HOOPS_NO_DIAL, "cbb": _HOOPS_NO_DIAL}
 
 
 class _ShownGrid(ff.GridCheckpoint):

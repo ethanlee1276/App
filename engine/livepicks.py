@@ -59,7 +59,7 @@ def fast_live_overlay(sport: str, games: list, fast_dir=None,
     import json
     import time
     from pathlib import Path
-    if sport not in ("nfl", "cfb", "nba", "wnba"):
+    if sport not in ("nfl", "cfb", "nba", "wnba", "cbb"):
         return 0
     path = Path(fast_dir or FAST_DIR) / f"live_{sport}.json"
     try:

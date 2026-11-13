@@ -83,6 +83,11 @@ SPORT_MARKETS = {
             ("stl", "Steals"), ("blk", "Blocks"), ("tov", "Turnovers")),
     "wnba": (("pts", "Points"), ("reb", "Rebounds"), ("ast", "Assists"),
              ("fg3m", "3-Pointers Made")),
+    # Men's college basketball (2026-11-13): the five its board prices, and
+    # the three the box score stores beside them.
+    "cbb": (("pts", "Points"), ("reb", "Rebounds"), ("ast", "Assists"),
+            ("fg3m", "3-Pointers Made"), ("stl", "Steals"), ("blk", "Blocks"),
+            ("tov", "Turnovers")),
     # College football joined 2026-08-24, off ESPN's own box scores —
     # the "no free player-level feed covers 134 programs" line in the
     # front end was stale, and this is the layer that retires it. Same

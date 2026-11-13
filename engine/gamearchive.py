@@ -45,7 +45,7 @@ from pathlib import Path
 from .sources.fetch import CACHE_DIR, DEFAULT_AGENT, fetch_text
 
 #: The leagues ESPN's summary serves (livescores.ESPN_SCOREBOARD).
-ESPN_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl")
+ESPN_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "cbb")
 #: Baseball reads MLB's own feed, as its live page does.
 LEAGUES = ESPN_LEAGUES + ("mlb",)
 

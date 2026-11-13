@@ -52,7 +52,25 @@ ESPN_PATHS = {
     "cfb": "football/college-football",
     "nba": "basketball/nba",
     "wnba": "basketball/wnba",
+    # Men's college basketball (2026-11-13): every conference's table, which
+    # the page groups by the conference the board's scoreboard carried.
+    "cbb": "basketball/mens-college-basketball",
 }
+
+#: ESPN NAMES A WINTER SEASON BY THE YEAR IT ENDS; this site names it by the
+#: year it starts (`engine.seasons`). The NBA's 2026-27 is ``season=2027``
+#: at ESPN, and asking for 2026 handed back 2025-26's FINAL table: the
+#: Standings page on 13 November 2026 read Boston 56-26 and Detroit 60-22
+#: under "2026", a fortnight into a season nobody had played eighty-two
+#: games of. The football leagues and the WNBA play inside one calendar
+#: year (football's January is still its start year's season at ESPN too),
+#: so only the two basketball winters move. Hockey reads its own league.
+ESPN_SEASON_SHIFT = {"nba": 1, "cbb": 1}
+
+#: Leagues whose grouping is the feed's own: college basketball's
+#: conferences (`parse_espn` ``groups``). Everyone else is grouped by
+#: `engine.divisions`, which the docstring above says why.
+GROUPED_BY_FEED = frozenset({"cbb"})
 
 #: Hockey: the league's own feed (the host every NHL score and box score
 #: here already comes from), keyed by the same abbreviations our games use.
@@ -142,33 +160,40 @@ def parse_mlb(payload) -> list[dict]:
     return rows
 
 
-def _espn_entries(node, out):
+def _espn_entries(node, out, group: str = ""):
     """Every standings entry anywhere in ESPN's tree.
 
     The envelope nests conferences inside the league and divisions inside
     conferences, and which levels exist differs by sport and by season.
     Walking for `standings.entries` reads them all without encoding a
-    depth that changes.
-    """
+    depth that changes. Each entry is paired with the name of the nearest
+    group above it that has one (its conference, for college basketball:
+    `parse_espn` ``groups=True``)."""
     if isinstance(node, dict):
+        here = str(node.get("abbreviation") or node.get("shortName")
+                   or node.get("name") or "").strip() or group
         st = node.get("standings")
         if isinstance(st, dict):
             for e in (st.get("entries") or []):
                 if isinstance(e, dict):
-                    out.append(e)
+                    out.append((e, here))
         for key in ("children", "groups"):
             for child in (node.get(key) or []):
-                _espn_entries(child, out)
+                _espn_entries(child, out, here)
     elif isinstance(node, list):
         for child in node:
-            _espn_entries(child, out)
+            _espn_entries(child, out, group)
     return out
 
 
-def parse_espn(payload) -> list[dict]:
-    """ESPN v2 standings envelope -> flat rows, one per team."""
+def parse_espn(payload, groups: bool = False) -> list[dict]:
+    """ESPN v2 standings envelope -> flat rows, one per team.
+
+    ``groups`` adds each row's ``group``: the name of the table ESPN filed
+    it under — its conference, which is how college basketball's 365
+    schools are grouped (no division table in this repo holds them)."""
     rows = []
-    for e in _espn_entries(payload, []):
+    for e, group in _espn_entries(payload, []):
         team = e.get("team") or {}
         abbr = (team.get("abbreviation") or team.get("displayName")
                 or team.get("name") or "")
@@ -196,6 +221,8 @@ def parse_espn(payload) -> list[dict]:
             "last10": (disp("Last Ten Games") or disp("lastTen")
                        or disp("vs. Last 10") or ""),
         })
+        if groups and group:
+            rows[-1]["group"] = group
     return rows
 
 
@@ -247,11 +274,16 @@ def fetch(sport: str, season: int) -> list[dict]:
     # `nflpreseason` reads the preseason scoreboard with (type 1), and
     # the cache name carries it so a cached preseason table is never
     # served as the regular one.
+    # ESPN's label for the season, not ours (`ESPN_SEASON_SHIFT`), and the
+    # cache named by it: a file kept under the old name holds the wrong
+    # season's table.
+    espn_season = season + ESPN_SEASON_SHIFT.get(sport, 0)
     url = (f"https://site.api.espn.com/apis/v2/sports/{path}/standings"
-           f"?season={season}&seasontype=2")
-    return parse_espn(fetch_json(url, f"standings_{sport}_{season}_t2.json",
+           f"?season={espn_season}&seasontype=2")
+    return parse_espn(fetch_json(url, f"standings_{sport}_espn{espn_season}_t2.json",
                                  ttl=STANDINGS_TTL,
-                                 user_agent=DEFAULT_AGENT))
+                                 user_agent=DEFAULT_AGENT),
+                      groups=sport in GROUPED_BY_FEED)
 
 
 def parse_nhl(payload, season: int | None = None) -> list[dict]:

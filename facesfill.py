@@ -61,6 +61,12 @@ from engine import db
 #: all, so a miss changes nothing on the card.
 ESPN_HEADSHOT = "https://a.espncdn.com/i/headshots/{league}/players/full/{pid}.png"
 
+#: ESPN's folder for a league whose code is not its folder: college
+#: basketball's photos sit under ``mens-college-basketball`` (seen on every
+#: hoopR box score of 2025-26 and 2026-27: ``.../headshots/mens-college-
+#: basketball/players/full/{id}.png``).
+ESPN_FACE_DIR = {"cbb": "mens-college-basketball"}
+
 #: The chart tables, and the leagues each one draws (engine/chartfill).
 CHART_TABLES = {"nfl": ("carries", "targets"), "cfb": ("carries",)}
 
@@ -126,7 +132,7 @@ def hoops_rows(conn, league: str) -> list[dict]:
         return []
     today = dt.date.today().isoformat()
     return [{"sport": league, "player": r[0], "espn_id": r[1],
-             "headshot": ESPN_HEADSHOT.format(league=league, pid=r[1]),
+             "headshot": ESPN_HEADSHOT.format(league=ESPN_FACE_DIR.get(league, league), pid=r[1]),
              "seen": today}
             for r in stored]
 
@@ -223,7 +229,7 @@ def fill(conn, sport: str, dry_run: bool = False,
         rows = nfl_rows(season)
     elif sport == "mlb":
         rows = mlb_rows()
-    elif sport in ("nba", "wnba"):
+    elif sport in ("nba", "wnba", "cbb"):
         rows = hoops_rows(conn, sport)
     else:
         rows = []
@@ -247,7 +253,7 @@ def main(argv: list) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--db", default=str(db.DEFAULT_DB))
     p.add_argument("--sport", default="",
-                   help="one of nfl, mlb, nba, wnba, cfb (default: all five)")
+                   help="one of nfl, mlb, nba, wnba, cfb, cbb (default: all six)")
     p.add_argument("--season", type=int, default=None,
                    help="NFL roster season (default: this year, falling "
                         "back one)")
@@ -266,7 +272,7 @@ def main(argv: list) -> int:
                   f"face" + (f"; none for: {', '.join(miss[:10])}" if miss else ""))
         return 0
 
-    sports = [a.sport.lower()] if a.sport else ["nfl", "mlb", "nba", "wnba", "cfb"]
+    sports = [a.sport.lower()] if a.sport else ["nfl", "mlb", "nba", "wnba", "cfb", "cbb"]
     conn = db.connect(a.db)
     print("faces backfill — filling player_assets from ids already in hand"
           + ("  (DRY RUN)" if a.dry_run else ""))

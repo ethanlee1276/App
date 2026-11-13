@@ -103,7 +103,7 @@ HOOPS_LOGS = {"pts": (("pts",),), "reb": (("reb",),), "ast": (("ast",),), "fg3m"
 HOCKEY_MARKETS = ("sog", "points", "goals", "assists", "blocks", "saves", "anytime_goal")
 BASEBALL_LOGS = {"hits": (("hits",),), "total_bases": (("total_bases",),), "home_runs": (("home_runs",),),
                  "strikeouts": (("strikeouts",),), "outs": (("outs",),)}
-FAMILY = {"nfl": "football", "cfb": "football", "nba": "hoops", "wnba": "hoops", "nhl": "hockey",
+FAMILY = {"nfl": "football", "cfb": "football", "nba": "hoops", "wnba": "hoops", "cbb": "hoops", "nhl": "hockey",
           "mlb": "baseball"}
 #: Where a slip names no sport (or "other"), the leagues a market can be
 #: read in, in the order tried. A name has to resolve in exactly one.
@@ -111,7 +111,7 @@ LEAGUES_FOR = {}
 for _m in FOOTBALL_LOGS:
     LEAGUES_FOR[_m] = ("nfl", "cfb")
 for _m in HOOPS_LOGS:
-    LEAGUES_FOR[_m] = ("nba", "wnba")
+    LEAGUES_FOR[_m] = ("nba", "wnba", "cbb")
 for _m in HOCKEY_MARKETS:
     LEAGUES_FOR[_m] = ("nhl",)
 for _m in BASEBALL_LOGS:
@@ -1272,7 +1272,7 @@ def checks(row: dict, board: dict | None, league: str, prob: float | None) -> di
     lean = leans.get((row.get("player") or "", row.get("team") or "", row.get("market")))
     if lean:
         c, n = LB.matchup_check(r, leans, {}, {}, "scan")
-    elif source in ("scan+model", "model") or league in ("nba", "wnba", "nhl"):
+    elif source in ("scan+model", "model") or league in ("nba", "wnba", "nhl", "cbb"):
         steps = {(row.get("player") or "", row.get("market")): (s["mult"], s.get("why") or "")
                  for s in ((row.get("chain") or {}).get("steps") or [])
                  if isinstance(s, dict) and s.get("key") == "matchup" and s.get("mult") is not None}

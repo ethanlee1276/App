@@ -1875,6 +1875,7 @@ POS_WORDS = {
             "DH": "designated hitter", "IF": "infielder", "UT": "utility man"},
 }
 POS_WORDS["wnba"] = POS_WORDS["nba"]
+POS_WORDS["cbb"] = POS_WORDS["nba"]
 
 #: The verbs a scan's reason puts right after a team's code, and the form
 #: a club's plural nickname takes: "GB gives up" → "the Packers give up".

@@ -37,7 +37,8 @@ const KR_QUEST_SHORT = { watch: "Watch 10 min", chat: "Chat", react: "React", ca
 const KR_BADGE_ICON = { live: "📺", voice: "💬", crowd: "👏", caller: "🎯", hothand: "🔥", trivia: "🧠", winner: "🏆",
   streak: "📅", sports: "🌎", there: "⚡", host: "🎉", recruiter: "🤝", weeks: "🥇", season: "🎟️", karma: "✨",
   pickem: "🏈", perfect: "💯", founding: "🌱", nightowl: "🦉" };
-const KR_LEAGUE = { nfl: "NFL", cfb: "college football", nba: "NBA", wnba: "WNBA", nhl: "NHL", mlb: "MLB" };
+const KR_LEAGUE = { nfl: "NFL", cfb: "college football", nba: "NBA", wnba: "WNBA", nhl: "NHL", mlb: "MLB",
+                    cbb: "college basketball" };
 
 const krEsc = (s) => escapeHtml(String(s == null ? "" : s));
 const krNum = (n) => Number(n || 0).toLocaleString("en-US");

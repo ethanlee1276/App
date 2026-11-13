@@ -140,7 +140,7 @@ KINDS = {
     "saves": (("nhl",), _nhl_saves, _any_row("nhl_shots")),
     # Every league's (2026-10-14): how much he is used, game by game, off
     # the box scores the boards already read (engine/role).
-    "role": (("nfl", "cfb", "nba", "wnba", "mlb", "nhl"), _role, _logged),
+    "role": (("nfl", "cfb", "nba", "wnba", "mlb", "nhl", "cbb"), _role, _logged),
     # A fighter's (2026-10-14): every bout on his record, how and when it
     # ended (engine/ufc/history).
     "fights": (("ufc",), _ufc_fights, _any_row("ufc_fights")),

@@ -100,7 +100,12 @@ CREDITS_PER_EVENT = 8
 #: picks to be stuff like ... first touchdown score for NFL").
 #: The NBA's is twenty since 2026-10-31: the first-basket market
 #: (`oddsapi.FIRST_BASKET_ODDS_TO_MARKET`; Ethan: "first basket score for NBA").
-EVENT_CREDITS = {"nfl": 26, "mlb": 11, "nba": 20, "wnba": 13, "nhl": 12, "ufc": 1}
+#: College basketball's is thirteen (2026-11-13): the WNBA's request — five
+#: player markets, their five ladders and the three game markets — under
+#: the NCAA's key (`oddsapi.SPORT_CONFIG["cbb"]`). A college night is 60 to
+#: 150 games; the pull buys only the count `affordable_events` pays for, the
+#: games the books are likeliest to have priced first (`cbbteams.priority`).
+EVENT_CREDITS = {"nfl": 26, "mlb": 11, "nba": 20, "wnba": 13, "nhl": 12, "ufc": 1, "cbb": 13}
 
 
 def credits_per_event(sport: str | None = None) -> int:
@@ -1087,7 +1092,10 @@ TOUCHPOINT_GRACE_S = 2 * 3600
 #: 7am pull does not take the 6pm pull's place under the day's ceiling. The
 #: 7am board is thinner than noon's (not every book has posted its props
 #: yet); noon and 6pm still re-price it.
-SPORT_TOUCHPOINTS = {"nba": (7, 12, 18), "nhl": (7, 12, 18), "wnba": (7, 12, 18)}
+SPORT_TOUCHPOINTS = {"nba": (7, 12, 18), "nhl": (7, 12, 18), "wnba": (7, 12, 18),
+                     # College basketball, the same three windows on a game
+                     # day (2026-11-13).
+                     "cbb": (7, 12, 18)}
 
 
 def _touchpoints(sport: str | None = None) -> tuple:

@@ -76,8 +76,8 @@ FIT_CAP = 30000
 
 
 def _tune(sport: str):
-    from .hoops import NBA, WNBA
-    return WNBA if sport == "wnba" else NBA
+    from .hoops import for_league
+    return for_league(sport)
 
 
 def _norm(name: str) -> str:

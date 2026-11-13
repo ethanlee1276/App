@@ -109,7 +109,7 @@ FOOTBALL = ("nfl", "cfb")
 #: a finished WNBA game (event 401857186). NBA is the same
 #: `sports/basketball` API one segment over, exactly as NFL is to CFB,
 #: and is served on the same inference: confirmed by its first live game.
-HOOPS = ("nba", "wnba")
+HOOPS = ("nba", "wnba", "cbb")
 
 #: Hockey: the same `sports/{sport}/{league}/summary` family, read with
 #: the basketball reader (a top-level `plays` list, each play naming its

@@ -250,6 +250,9 @@ MLB_OUT = "web/data/mlb_recommendations.json"
 NFL_OUT = "web/data/recommendations.json"
 NBA_OUT = "web/data/nba.json"
 WNBA_OUT = "web/data/wnba.json"
+#: Men's college basketball (2026-11-13), the basketball build's third
+#: league (`nba_build.py --league cbb`).
+CBB_OUT = "web/data/cbb.json"
 NHL_OUT = "web/data/nhl.json"
 UFC_OUT = "web/data/ufc.json"
 CFB_OUT = "web/data/cfb.json"
@@ -335,6 +338,7 @@ MLB_LINES_CLOCK = "mlb_lines"
 #: its own money.
 NBA_LINES_CLOCK = "nba_lines"
 WNBA_LINES_CLOCK = "wnba_lines"
+CBB_LINES_CLOCK = "cbb_lines"
 #: …AND BASKETBALL'S PRE-GAME LINES, the NFL's and college's three-credit
 #: tier (2026-10-20, NBA opening night). The props pull was the only paid
 #: pull the hoops boards had — nineteen credits a game on a small share of
@@ -345,6 +349,7 @@ WNBA_LINES_CLOCK = "wnba_lines"
 #: the league's money.
 NBA_BOARD_CLOCK = "nba_board_lines"
 WNBA_BOARD_CLOCK = "wnba_board_lines"
+CBB_BOARD_CLOCK = "cbb_board_lines"
 #: …AND HOCKEY'S (2026-10-03), last in line: the same three-credit board
 #: pull on its own clock and the NHL's own (small) share of the money, and
 #: NEVER while a football game is live — the live history shares one
@@ -436,6 +441,35 @@ def _slate_games(path: str) -> int:
         with open(path) as fh:
             return len(json.load(fh).get("games", []))
     except Exception:
+        return 0
+
+
+def _priced_games(board: dict) -> list:
+    """The games a board's per-game pull buys: the ones it names in
+    ``board_games`` when it names any, every game otherwise.
+
+    COLLEGE BASKETBALL (2026-11-13) carries every Division I game on its
+    scoreboard — sixty to a hundred and fifty a night — and buys player
+    prices on the five `nba_build.college_board_games` picks. Counting the
+    whole scoreboard would meter a 78-credit pull as a 1,300-credit one and
+    the pacer would decline every night; a board that prices part of its
+    slate says which part, and the pacer counts that."""
+    games = [g for g in (board.get("games") or []) if isinstance(g, dict)]
+    named = board.get("board_games")
+    if not isinstance(named, list):
+        return games
+    keep = {str(k) for k in named}
+    return [g for g in games if f"{g.get('away')}@{g.get('home')}" in keep]
+
+
+def _prop_games(path: str) -> int:
+    """How many games the board's paid player pull would price (0 when
+    missing/unreadable) — `_slate_games` less what `_priced_games` leaves
+    out."""
+    try:
+        with open(path) as fh:
+            return len(_priced_games(json.load(fh)))
+    except Exception:                                        # noqa: BLE001
         return 0
 
 
@@ -570,10 +604,11 @@ def _board_word(path: str, ok: bool) -> str:
 
 
 def _games_on_slate(path: str) -> int:
-    """How many games the last build found — the per-refresh odds cost."""
+    """How many games the last build found — the per-refresh odds cost
+    (the games it prices, `_priced_games`)."""
     try:
         with open(path) as fh:
-            return max(1, len(json.load(fh).get("games", [])))
+            return max(1, len(_priced_games(json.load(fh))))
     except Exception:
         return 10
 
@@ -600,7 +635,8 @@ def _games_on_slate(path: str) -> int:
 #: day the three overlap, football takes the larger slices and baseball
 #: draws behind it.
 SPORT_WEIGHT = {"nfl": 1.0, "cfb": 1.0, "mlb": 0.6,
-                "nba": 0.15, "wnba": 0.15, "nhl": 0.15, "ufc": 0.15}
+                "nba": 0.15, "wnba": 0.15, "nhl": 0.15, "ufc": 0.15,
+                "cbb": 0.15}
 DEFAULT_WEIGHT = 0.15
 
 #: How many days a week each league actually plays.
@@ -618,7 +654,7 @@ DEFAULT_WEIGHT = 0.15
 #: and could not reach. It is also self-limiting — every refresh requires
 #: games on the slate, so a league cannot claim a game-day share on a day
 #: it is not playing.
-PLAY_DAYS_PER_WEEK = {"mlb": 7.0, "nba": 7.0, "wnba": 5.0, "nhl": 7.0,
+PLAY_DAYS_PER_WEEK = {"mlb": 7.0, "nba": 7.0, "wnba": 5.0, "nhl": 7.0, "cbb": 7.0,
                       "nfl": 3.0, "cfb": 2.0, "ufc": 1.0}
 
 
@@ -626,7 +662,8 @@ def _live_sports() -> list[str]:
     """Which leagues have a slate on the board right now."""
     return [name for name, path in (("mlb", MLB_OUT), ("nfl", NFL_OUT),
                                     ("nba", NBA_OUT), ("wnba", WNBA_OUT),
-                                    ("nhl", NHL_OUT), ("cfb", CFB_OUT))
+                                    ("nhl", NHL_OUT), ("cfb", CFB_OUT),
+                                    ("cbb", CBB_OUT))
             if _slate_games(path) > 0]
 
 
@@ -699,8 +736,11 @@ def _games_tonight(now: float) -> dict:
     from engine.oddsbudget import tonight_games
     out: dict = {}
     for name, path in (("mlb", MLB_OUT), ("nba", NBA_OUT), ("wnba", WNBA_OUT),
-                       ("nhl", NHL_OUT), ("nfl", NFL_OUT), ("cfb", CFB_OUT)):
-        games = _slate_games(path)
+                       ("nhl", NHL_OUT), ("nfl", NFL_OUT), ("cfb", CFB_OUT),
+                       ("cbb", CBB_OUT)):
+        # The games a pull would price (`_priced_games`): college
+        # basketball's five, not its whole Division I scoreboard.
+        games = _prop_games(path)
         n = tonight_games(_slate_kickoffs(path), now) if games else 0
         if n is None and name not in ("nfl", "cfb"):
             n = games
@@ -743,7 +783,7 @@ def _seasons_over(day: _dt.date | None = None) -> frozenset:
     when = day or _dt.date.fromtimestamp(now)
     out = set()
     for name, path in (("mlb", MLB_OUT), ("nba", NBA_OUT), ("wnba", WNBA_OUT),
-                       ("nhl", NHL_OUT), ("cfb", CFB_OUT)):
+                       ("nhl", NHL_OUT), ("cfb", CFB_OUT), ("cbb", CBB_OUT)):
         if oddsplan.season_phase(name, when) in (None, "regular"):
             continue
         try:
@@ -910,7 +950,7 @@ def _slate_kickoffs(path: str) -> list:
     out = []
     try:
         with open(path) as fh:
-            games = json.load(fh).get("games", [])
+            games = _priced_games(json.load(fh))
         for g in games:
             k = g.get("kickoff") or ""
             if "T" not in k:
@@ -1590,7 +1630,7 @@ ROSTER_REBUILD_S = 30 * 60
 #: the NFL's comes from fantasy_build). Any one missing, or older than the
 #: rest, and the step runs again: a league whose build failed keeps its old
 #: file, so it is retried on the next sweep, not half an hour later.
-ROSTER_LEAGUES = ("mlb", "nba", "wnba", "cfb", "nhl", "ufc")
+ROSTER_LEAGUES = ("mlb", "nba", "wnba", "cfb", "nhl", "ufc", "cbb")
 
 
 def _rosters_age(now: float | None = None) -> float | None:
@@ -1788,6 +1828,50 @@ def refresh_wnba(quiet: bool = False) -> bool:
     _finish_paid_pull(spend, before_seen, ok, tail, "WNBA", sport="wnba")
     if not quiet:
         print(f"  WNBA {_slate_date()}: {_board_word(WNBA_OUT, ok)}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+def refresh_cbb(quiet: bool = False) -> bool:
+    """Men's college basketball (2026-11-13) — the same build with
+    ``--league cbb``, paced like the NBA's on its own money and clocks.
+
+    Two differences, both in what a pull buys. The player pull prices the
+    five games the build chose (`nba_build.college_board_games`), so it is
+    asked only while one of them is still to tip (`_prop_games`) and is
+    metered on those five (`_priced_games`). The game-line tier is one
+    three-credit request for the whole Division I night, as the NBA's."""
+    args = ["nba_build.py", _slate_date(), "--league", "cbb",
+            "--out", CBB_OUT]
+    spend = _prop_games(CBB_OUT) > 0 and _odds_affordable(CBB_OUT, quiet, sport="cbb")
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
+        args.append("--odds")
+    live_spend, live_before = False, ""
+    lines_spend, lines_before = False, ""
+    if not spend and _with_odds():
+        args.append("--cached-odds")
+        # The live line on its own lane (CBB_LINES_CLOCK), as the NBA's —
+        # and never while a football game is live: a college Saturday's
+        # live football line comes first (`_football_live`, the NHL's rule).
+        if (not _football_live() and _live_lines_due(CBB_OUT)
+                and _odds_affordable(CBB_OUT, quiet, sport=CBB_LINES_CLOCK,
+                                     credits=BOARD_ODDS_COST)):
+            args.append("--live-lines")
+            live_spend = True
+            live_before = _paid_pull_baseline()
+        # …and the pre-game lines on theirs (CBB_BOARD_CLOCK).
+        lines_spend, lines_before = _hoops_lines_tier(args, CBB_OUT, "cbb",
+                                                      CBB_BOARD_CLOCK, quiet)
+    # 600s, the model boards' ceiling (refresh_nba).
+    ok, tail = _run_build(args, timeout=600)
+    _finish_paid_pull(live_spend, live_before, ok, tail, "NCAAB live lines",
+                      sport=CBB_LINES_CLOCK)
+    _finish_paid_pull(lines_spend, lines_before, ok, tail, "NCAAB game lines",
+                      sport=CBB_BOARD_CLOCK)
+    _finish_paid_pull(spend, before_seen, ok, tail, "NCAAB", sport="cbb")
+    if not quiet:
+        print(f"  NCAAB {_slate_date()}: {_board_word(CBB_OUT, ok)}"
               + (f"  ({tail})" if not ok and tail else ""))
     return ok
 
@@ -2221,10 +2305,12 @@ _LAST_BUILD_PARTS = _ThreadNote()
 #: cycle is a sequential sum on one core: whoever builds first is
 #: freshest when a cycle is cut short, and does not wait four minutes
 #: behind a league he cares about less.
-SPORT_PRIORITY = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
+#: Men's college basketball joined 2026-11-13 beside the NBA, the build it
+#: shares (as college football sits beside the NFL).
+SPORT_PRIORITY = ("nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl", "ufc")
 
 BOARD_FILES = {"nfl": NFL_OUT, "cfb": CFB_OUT, "mlb": MLB_OUT,
-               "nba": NBA_OUT, "wnba": WNBA_OUT, "nhl": NHL_OUT}
+               "nba": NBA_OUT, "cbb": CBB_OUT, "wnba": WNBA_OUT, "nhl": NHL_OUT}
 
 #: Every board that names a Pick of the Day: the six above and the fight
 #: card, which is not in BOARD_FILES because it does not rebuild every cycle
@@ -2541,6 +2627,11 @@ def refresh_all(quiet: bool = False) -> None:
     else:
         with _isolated("nba"): _note_board("nba", refresh_nba(quiet=quiet))
     lap("nba")
+    if _resting_board("cbb"):
+        _note_rest("cbb")
+    else:
+        with _isolated("cbb"): _note_board("cbb", refresh_cbb(quiet=quiet))
+    lap("cbb")
     if _resting_board("wnba"):
         _note_rest("wnba")
     else:
@@ -2591,7 +2682,8 @@ def _publish_feed(quiet: bool = False) -> None:
     try:
         from engine import feed as _feed
         _feed.scan_all({"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
-                        "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT}, quiet=quiet)
+                        "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT,
+                        "cbb": CBB_OUT}, quiet=quiet)
     except Exception as exc:                              # noqa: BLE001
         if not quiet:
             print(f"  feed: skipped — {type(exc).__name__}: {exc}")
@@ -2611,7 +2703,7 @@ def _publish_feed(quiet: bool = False) -> None:
     try:
         from engine import streak as _streak
         _streak.run({"mlb": MLB_OUT, "nba": NBA_OUT,
-                     "wnba": WNBA_OUT, "cfb": CFB_OUT}, quiet=quiet)
+                     "wnba": WNBA_OUT, "cfb": CFB_OUT, "cbb": CBB_OUT}, quiet=quiet)
     except Exception as exc:                              # noqa: BLE001
         if not quiet:
             print(f"  streak: skipped — {type(exc).__name__}: {exc}")
@@ -2859,7 +2951,8 @@ def why_live(sport: str = "mlb") -> None:
     from engine.sources.oddsapi import normalize_name
 
     path = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
-            "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+            "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT,
+            "cbb": CBB_OUT}.get(sport, MLB_OUT)
     try:
         d = _json.loads(Path(path).read_text())
     except Exception as exc:
@@ -3175,7 +3268,8 @@ def why_pick(name: str, sport: str = "mlb") -> None:
     from engine.sources.oddsapi import normalize_name
 
     path = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
-            "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+            "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT,
+            "cbb": CBB_OUT}.get(sport, MLB_OUT)
     try:
         d = _json.loads(Path(path).read_text())
     except Exception as exc:
@@ -4943,7 +5037,7 @@ SETTLE_CLOCK_S = 30
 #: per final would queue a dozen.
 FINAL_KICK_GAP_S = 90
 #: The live boards whose finals start a pass (web/data/live_{league}.json).
-FINAL_WATCH = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl")
+FINAL_WATCH = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "cbb")
 #: What the clock has seen and owes: the finals already acted on, and
 #: whether a final landed while a pass was running (it may have read the
 #: feeds before the final did, so it runs again once that pass ends).
@@ -5825,7 +5919,7 @@ def _live_scores_refresher() -> None:
         try:
             ok, _tail = _run_build(["livescore_build.py"])
             if ok:
-                for lg in ("nfl", "cfb", "nba", "wnba", "nhl"):
+                for lg in ("nfl", "cfb", "nba", "wnba", "nhl", "cbb"):
                     f = ROOT / "web" / "data" / f"live_{lg}.json"
                     if not f.is_file():
                         continue
@@ -6688,7 +6782,7 @@ def preflight() -> None:
         from engine.db import connect as _fc
         _fconn = _fc()
         print("\n  Player faces (captured during ingest, not on a refresh):")
-        for _sp in ("mlb", "nfl", "nba", "wnba"):
+        for _sp in ("mlb", "nfl", "nba", "wnba", "cbb"):
             try:
                 _tot = _fconn.execute(
                     "SELECT COUNT(*) FROM player_assets WHERE sport=?",
@@ -6708,7 +6802,7 @@ def preflight() -> None:
                 print(f"{warn} {_sp.upper()}: no photos stored — cards show "
                       f"initials. Re-read the season: python3 ingest.py "
                       f"{_sp}" + (" --seasons 2025-2026 --refresh"
-                                  if _sp in ("nba", "wnba") else ""))
+                                  if _sp in ("nba", "wnba", "cbb") else ""))
     except Exception as exc:                                 # noqa: BLE001
         print(f"{warn} Player faces: not checked ({exc})")
 
@@ -8124,7 +8218,8 @@ def side_bias(sport: str = "mlb") -> None:
     import json as _json
     from engine.betting import MARKET_SHRINK, MAX_CREDIBLE_EDGE
     rel = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
-           "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+           "wnba": WNBA_OUT, "nhl": NHL_OUT, "cfb": CFB_OUT,
+           "cbb": CBB_OUT}.get(sport, MLB_OUT)
     try:
         recs = _json.loads((ROOT / rel).read_text()).get("recommendations", [])
     except (OSError, ValueError):
@@ -8773,7 +8868,7 @@ def show_stakes() -> None:
     from engine.staking import kelly_fraction, price_cap_units
 
     rows, seen = [], []
-    for name in ("recommendations", "mlb_recommendations", "nba", "wnba", "cfb"):
+    for name in ("recommendations", "mlb_recommendations", "nba", "wnba", "cfb", "cbb"):
         p = ROOT / f"web/data/{name}.json"
         if not p.exists():
             continue
@@ -10165,6 +10260,7 @@ def show_unbuilt() -> None:
 _SPORT_REFRESH = {
     "mlb": "refresh_mlb", "nfl": "refresh_nfl", "nba": "refresh_nba",
     "wnba": "refresh_wnba", "nhl": "refresh_nhl", "cfb": "refresh_cfb", "ufc": "refresh_ufc",
+    "cbb": "refresh_cbb",
 }
 
 
@@ -10282,7 +10378,7 @@ def nightly_run(odds_only: bool = False, sports=None) -> None:
 #: Boards a pick can live on, by the public path their private copy is
 #: resolved from.
 INSPECT_BOARDS = ("recommendations.json", "mlb_recommendations.json",
-                  "cfb.json", "nba.json", "wnba.json", "ufc.json")
+                  "cfb.json", "nba.json", "wnba.json", "ufc.json", "cbb.json")
 
 
 def _print_prob_check(r: dict) -> None:
@@ -11866,7 +11962,7 @@ def main() -> None:
             print('usage: python3 launch.py --why-pick "Player Name" [sport]')
             return
         sport = rest[-1].lower() if rest[-1].lower() in (
-            "mlb", "nfl", "nba", "wnba", "cfb") else "mlb"
+            "mlb", "nfl", "nba", "wnba", "cfb", "cbb") else "mlb"
         who = " ".join(rest[:-1] if sport == rest[-1].lower() else rest)
         why_pick(who, sport)
         return
@@ -11960,7 +12056,7 @@ def main() -> None:
         show_stuck()
         return
     if "--fill-game-closes" in argv:
-        _fs = next((a for a in argv if a in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl")), None)
+        _fs = next((a for a in argv if a in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "cbb")), None)
         fill_game_closes(apply="--apply" in argv, sport=_fs)
         return
     if "--void-unplayed" in argv:
@@ -12741,7 +12837,8 @@ def _board_size_cli() -> None:
     from engine import gate as _gate
     rows = []
     for label, path in (("MLB", MLB_OUT), ("NFL", NFL_OUT), ("NBA", NBA_OUT),
-                        ("WNBA", WNBA_OUT), ("NHL", NHL_OUT), ("CFB", CFB_OUT), ("UFC", UFC_OUT)):
+                        ("WNBA", WNBA_OUT), ("NHL", NHL_OUT), ("CFB", CFB_OUT), ("UFC", UFC_OUT),
+                        ("NCAAB", CBB_OUT)):
         full = ROOT / "data" / "built" / Path(path).name
         src = full if full.is_file() else ROOT / path
         if not src.is_file():

@@ -45,7 +45,7 @@ from .seasons import season_of
 # Points/runs per game are worth showing; the label differs by sport and
 # so does what a bettor reads it for.
 SCORE_LABEL = {"nfl": "PF/PA", "cfb": "PF/PA",
-               "nba": "PPG", "wnba": "PPG", "mlb": "R/RA", "nhl": "GF/GA"}
+               "nba": "PPG", "wnba": "PPG", "mlb": "R/RA", "nhl": "GF/GA", "cbb": "PPG"}
 
 #: Leagues that actually play ties. Everywhere else an equal-score row is
 #: a game that did not finish (suspended, postponed) or one whose score we

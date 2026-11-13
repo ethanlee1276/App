@@ -33,7 +33,7 @@
       "the park, the weather and the umpire, and the hitters set up to shine or struggle",
     nhl: "the line and what it means, the tale of the tape, the goalies, the injury report, and the " +
       "skaters set up to shine or struggle",
-    nba: HOOPS, wnba: HOOPS,
+    nba: HOOPS, wnba: HOOPS, cbb: HOOPS,
   };
   HOLDS.cfb = HOLDS.nfl;
 

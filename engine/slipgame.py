@@ -50,15 +50,16 @@ import datetime as _dt
 import math
 
 GAME_MARKETS = ("moneyline", "spread", "total")
-LEAGUES = ("nfl", "cfb", "mlb", "nhl", "nba", "wnba")
+LEAGUES = ("nfl", "cfb", "mlb", "nhl", "nba", "wnba", "cbb")
 #: A two-way book's usual margin, for when the slip's own price is the only
 #: one we hold: about 4.5 points on a moneyline pair, 4.8 at -110/-110.
 TYPICAL_MARGIN = {"moneyline": 0.045, "spread": 0.0476, "total": 0.0476}
-UNITS = {"nfl": "points", "cfb": "points", "mlb": "runs", "nhl": "goals", "nba": "points", "wnba": "points"}
+UNITS = {"nfl": "points", "cfb": "points", "mlb": "runs", "nhl": "goals", "nba": "points", "wnba": "points",
+         "cbb": "points"}
 WORD = {"nfl": "NFL", "cfb": "college football", "mlb": "baseball", "nhl": "hockey", "nba": "NBA",
-        "wnba": "WNBA"}
+        "wnba": "WNBA", "cbb": "college basketball"}
 #: Leagues where nothing of ours projects a game total.
-NO_TOTAL_MODEL = ("nba", "wnba")
+NO_TOTAL_MODEL = ("nba", "wnba", "cbb")
 #: The finals the form line reads.
 FORM_GAMES = 10
 #: The board's own clamp on a game chance (gamebets.price_total and friends).

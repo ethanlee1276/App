@@ -1124,6 +1124,7 @@ BOARD_FILES = {
     "nba": "web/data/nba.json",
     "wnba": "web/data/wnba.json",
     "ufc": "web/data/ufc.json",
+    "cbb": "web/data/cbb.json",
 }
 
 

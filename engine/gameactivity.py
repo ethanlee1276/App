@@ -37,7 +37,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "web" / "data"
 #: The leagues with a fast scoreboard of their own.
-LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb")
+LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb", "cbb")
 #: Games a member can have on the lock screen at once (Apple allows a few;
 #: the parlays' own cap is the same, engine/pushmine.MAX_ACTIVITIES).
 MAX_GAMES = 5

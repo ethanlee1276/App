@@ -62,7 +62,7 @@ CRASHES_24H = 50
 SERVER_ERRORS_24H = 25
 OWNER_EVERY_S = 15 * 60
 LABELS = {"nfl": "NFL", "cfb": "college football", "nba": "NBA", "wnba": "WNBA", "nhl": "NHL", "mlb": "MLB",
-          "ufc": "UFC"}
+          "ufc": "UFC", "cbb": "college basketball"}
 
 
 def site_account(conn) -> int | None:

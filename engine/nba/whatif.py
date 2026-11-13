@@ -26,7 +26,7 @@ STATS = ("min", "pts", "reb", "ast")
 TOP = 8
 #: The rotation offered: the men with the most minutes in his club's recent games.
 ROTATION = 10
-LEAGUES = ("nba", "wnba")
+LEAGUES = ("nba", "wnba", "cbb")
 
 
 def _rows(conn, league: str, team: str, seasons: list[int]) -> list[dict]:

@@ -59,7 +59,7 @@ from .ingest import ESPN_KEY_PREFIX
 from .playoffs import is_postseason
 
 #: The margin, inclusive, that makes a game "one-score" for the sport.
-ONE_SCORE = {"nfl": 8, "cfb": 8, "nba": 5, "wnba": 5, "mlb": 1}
+ONE_SCORE = {"nfl": 8, "cfb": 8, "nba": 5, "wnba": 5, "mlb": 1, "cbb": 5}
 
 #: Seasons pooled: this one and the two before it (see the docstring).
 SPAN = 3

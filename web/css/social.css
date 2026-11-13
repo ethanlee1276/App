@@ -222,7 +222,7 @@ textarea.fd-input { resize: vertical; line-height: var(--lh-snug); }
   color: var(--fd-sp); background: color-mix(in srgb, var(--fd-sp) 14%, transparent);
   border: var(--hairline) solid transparent; text-decoration: none; }
 .fd-sp-nfl, .fd-sp-ufc { --fd-sp: var(--bad); }
-.fd-sp-nba, .fd-sp-wnba { --fd-sp: var(--warn); }
+.fd-sp-nba, .fd-sp-wnba, .fd-sp-cbb { --fd-sp: var(--warn); }
 .fd-sp-nhl { --fd-sp: var(--text-dim); }
 .fd-sp-cfb { --fd-sp: var(--brand-2); }
 .fd-sp-soccer { --fd-sp: var(--good); }

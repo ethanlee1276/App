@@ -39,6 +39,9 @@ KALSHI = "https://api.elections.kalshi.com/trade-api/v2"
 #: dump to sports, never to assert what exists — the series list is theirs
 #: to grow, so anything unmatched still parses and simply isn't tagged.
 SPORT_HINTS = {
+    # COLLEGE BASKETBALL FIRST (2026-11-13): its markets say "basketball"
+    # too, and the first league whose hint matches takes the market.
+    "cbb": ("NCAAMB", "NCAAB", "COLLEGE BASKETBALL", "MEN'S COLLEGE"),
     "mlb": ("MLB", "BASEBALL"),
     "nfl": ("NFL", "FOOTBALL"),
     "nba": ("NBA", "BASKETBALL"),
@@ -67,6 +70,8 @@ SPORT_SERIES = {
     # and no series was listed for it. A candidate, like every name here:
     # the build's per-series report says whether it is real.
     "nhl": ("KXNHLGAME", "KXNHL"),
+    # Men's college basketball (2026-11-13): candidates, reported per series.
+    "cbb": ("KXNCAAMBGAME", "KXNCAABGAME"),
 }
 
 
@@ -91,6 +96,8 @@ LINE_SERIES = {
     "mlb": ("KXMLBSPREAD", "KXMLBTOTAL"),
     "nba": ("KXNBASPREAD", "KXNBATOTAL"),
     "nhl": ("KXNHLSPREAD", "KXNHLTOTAL"),
+    # Candidates (2026-11-13), as the game series above.
+    "cbb": ("KXNCAAMBSPREAD", "KXNCAAMBTOTAL"),
 }
 
 

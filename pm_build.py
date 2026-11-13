@@ -30,7 +30,7 @@ from engine import stageclock
 #: would double every build for a comparison column.
 SLATE_FILES = {"nfl": "recommendations.json",
                "mlb": "mlb_recommendations.json",
-               "nba": "nba.json", "wnba": "wnba.json", "cfb": "cfb.json"}
+               "nba": "nba.json", "wnba": "wnba.json", "cfb": "cfb.json", "cbb": "cbb.json"}
 
 
 def _names_by_abbr(sport: str) -> dict:

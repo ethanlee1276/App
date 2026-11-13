@@ -53,7 +53,7 @@ ROOT = Path(__file__).resolve().parent.parent
 #: The sports with a learning ladder. CFB is here because it has a board
 #: and a journal; it has never had enough settled rows to fit, which is a
 #: fact worth printing rather than an omission worth hiding.
-SPORTS = ("nfl", "mlb", "nba", "wnba", "cfb")
+SPORTS = ("nfl", "mlb", "nba", "wnba", "cfb", "cbb")
 
 DONE, TODO, UNKNOWN = "done", "todo", "unknown"
 
@@ -230,7 +230,7 @@ def data_items(conn=None) -> list[Item]:
                      "not reachable from here; run this on the machine that "
                      "holds it")]
     out = []
-    for sport in ("mlb", "nfl", "nba", "wnba"):
+    for sport in ("mlb", "nfl", "nba", "wnba", "cbb"):
         try:
             row = conn.execute(
                 "SELECT COUNT(*), MAX(season || '-' || period) FROM "
@@ -250,7 +250,7 @@ def data_items(conn=None) -> list[Item]:
 
     # Faces. Cosmetic, and the cards fall back to initials — so this is a
     # `todo` only when a league has none at all, not when it has gaps.
-    for sport in ("mlb", "nfl", "nba", "wnba"):
+    for sport in ("mlb", "nfl", "nba", "wnba", "cbb"):
         try:
             have = conn.execute(
                 "SELECT COUNT(*) FROM player_assets WHERE sport=? AND "

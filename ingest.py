@@ -77,8 +77,8 @@ def print_summary(conn) -> None:
     if faces:
         parts = [f"{r[0].upper()} {r[2] or 0:,}/{r[1]:,}" for r in faces]
         print(f"  Player photos: {' · '.join(parts)}")
-    elif s["games"].get("nba") or s["games"].get("wnba"):
-        print("  Player photos: none stored — NBA/WNBA prop cards will draw "
+    elif s["games"].get("nba") or s["games"].get("wnba") or s["games"].get("cbb"):
+        print("  Player photos: none stored — basketball prop cards will draw "
               "initials. Re-ingest those seasons to capture them.")
 
     n_ump = conn.execute(
@@ -274,7 +274,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Populate the historical database.")
     ap.add_argument("sport",
                     choices=["nfl", "nflpre", "mlb", "nba", "wnba", "nhl", "cfb",
-                             "cfbhist", "ufc", "status"])
+                             "cfbhist", "ufc", "cbb", "status"])
     # NO default. It used to carry the NFL's "last five seasons", which
     # meant `python3 ingest.py nba` with no arguments silently launched a
     # 1,366-day backfill instead of printing usage. A command that starts
@@ -505,7 +505,7 @@ def main() -> None:
         if empty:
             print(f"  {empty:,} day(s) had no NHL games (off days, the All-Star "
                   f"break, the gaps between playoff rounds).")
-    elif args.sport in ("nba", "wnba"):
+    elif args.sport in ("nba", "wnba", "cbb"):
         # One path, two leagues. Both publish the same JSON shapes on their
         # own CDN, so the only thing that differs is which day-ingester to
         # call — and the WNBA arm existing at all matters more than it
@@ -530,6 +530,28 @@ def main() -> None:
                               f"· NOT JSON · starts {row.get('head')!r}")
                     print()
                 return
+        if args.sport == "cbb" and args.probe:
+            # MEN'S COLLEGE BASKETBALL (2026-11-13): every ESPN endpoint the
+            # league reads, answered on this box — the scoreboard's game
+            # count (a cut answer reads 25), a summary, two rosters, the
+            # injuries, rankings, news and the standings.
+            from engine.sources.cbbespn import probe as _cprobe
+            print("Probing every college basketball endpoint — what each one "
+                  "ACTUALLY returns right now:\n")
+            for row in _cprobe():
+                print(f"  {row['label']}")
+                print(f"    {row['url']}")
+                if row.get("error"):
+                    print(f"    ✗ {row['status']}: {row['error']}")
+                elif row.get("json"):
+                    print(f"    ✅ {row['status']} · {row['bytes']:,} bytes · JSON"
+                          + (f" · {row['read']}" if row.get("read") else
+                             f" · top keys {row.get('top_keys')}"))
+                else:
+                    print(f"    ✗ {row['status']} · {row['bytes']:,} bytes "
+                          f"· NOT JSON · starts {row.get('head')!r}")
+                print()
+            return
         # ESPN for BOTH leagues. The NBA CDN only ever serves the CURRENT
         # season's schedule, so it cannot answer a question about 2021 —
         # which is exactly why this database had one season of basketball
@@ -537,7 +559,7 @@ def main() -> None:
         # as far as the sport does.
         from engine.sources import espnhoops
         league = args.sport
-        label = league.upper()
+        label = {"cbb": "NCAAB"}.get(league, league.upper())
 
         def ingest_day(c, d):
             return espnhoops.ingest_day(c, d, league=league,

@@ -39,7 +39,7 @@ from .seasons import season_of
 from .teamrates import compute_team_ratings
 
 #: Games after which this season and last carry equal weight.
-PRIOR_GAMES = {"nfl": 6, "cfb": 5, "mlb": 40, "nba": 20, "wnba": 12, "nhl": 20}
+PRIOR_GAMES = {"nfl": 6, "cfb": 5, "mlb": 40, "nba": 20, "wnba": 12, "nhl": 20, "cbb": 10}
 
 #: How much of last season's rating survives into the prior. Rosters turn
 #: over; leaning on a stale number at full strength is how a preseason

@@ -49,7 +49,7 @@ try:
 except Exception:                                         # noqa: BLE001
     ET = _dt.timezone(_dt.timedelta(hours=-5))
 
-SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl")
+SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "cbb")
 #: Grade a pick once its game has had time to finish.
 GRADE_AFTER_S = 3 * 3600
 GRADE_RETRY_S = 15 * 60

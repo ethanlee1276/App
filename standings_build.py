@@ -28,7 +28,7 @@ from engine import divisions, playoffs, pressure, standings
 from engine.db import connect
 from engine.seasons import season_of, window as window_of
 
-SPORTS = ("nfl", "mlb", "nba", "wnba", "cfb", "nhl")
+SPORTS = ("nfl", "mlb", "nba", "wnba", "cfb", "nhl", "cbb")
 #: How long after a season's window opens an empty table is shown as every
 #: club at 0-0 (the league's own table not out yet, no final on file).
 ZERO_TABLE_DAYS = 14
@@ -63,6 +63,24 @@ def cfb_conferences() -> dict:
     return out
 
 
+def cbb_conferences() -> dict:
+    """``{school code: conference}`` from the college basketball board — the
+    conference ids its scoreboard carried, named (`cbbteams.conference`).
+    The standings feed's own tables fill in every school the board has not
+    seen (`_live_table`), and a missing board costs only this map."""
+    from engine import cbbteams
+    try:
+        blob = json.loads((OUT_DIR / "cbb.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    out: dict[str, str] = {}
+    for code, t in ((blob.get("teams") or {}).items()):
+        conf = cbbteams.conference((t or {}).get("conf"))
+        if code and conf:
+            out[code] = conf
+    return out
+
+
 def _live_table(sport: str, season: int, confs: dict | None):
     """``(table, error)`` — the league's own standings, or why not.
 
@@ -78,6 +96,11 @@ def _live_table(sport: str, season: int, confs: dict | None):
         rows = leaguestandings.fetch(sport, season)
         if not rows:
             return None, "the standings feed answered with no teams"
+        if sport in leaguestandings.GROUPED_BY_FEED:
+            # Each school under the conference table ESPN filed it in; a
+            # school the board has seen keeps the board's own conference.
+            confs = {**{r["team"]: r["group"] for r in rows if r.get("group")},
+                     **(confs or {})}
         table = standings.from_feed(sport, rows, season, conferences=confs)
         if not table.get("groups"):
             return None, "no fetched team matched our division table"
@@ -126,7 +149,8 @@ def build(sport: str, season: int | None = None,
                   f"({playoffs.post_start('mlb', season)}) — calendar unreachable: {exc}")
     conn = connect()
     try:
-        confs = cfb_conferences() if sport == "cfb" else None
+        confs = (cfb_conferences() if sport == "cfb"
+                 else cbb_conferences() if sport == "cbb" else None)
         # HOW MANY TEAMS THE MAP COVERED, carried out to the caller so the
         # build log can say it. Silence is what let this break twice: the
         # docstring above records the first time (a filename no builder

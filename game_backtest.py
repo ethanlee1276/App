@@ -44,7 +44,7 @@ MARKETS = ("total", "spread", "moneyline")
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("sport", choices=["nfl", "mlb", "cfb", "nba", "wnba"])
+    ap.add_argument("sport", choices=["nfl", "mlb", "cfb", "nba", "wnba", "cbb"])
     ap.add_argument("--market", default="all", choices=("all",) + MARKETS)
     ap.add_argument("--min-games", type=int, default=15,
                     help="prior games each team needs before a bet is priced "

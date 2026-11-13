@@ -52,6 +52,7 @@ LIVE_FILES = {
     "wnba": WEB / "data" / "wnba.json",
     "cfb": WEB / "data" / "cfb.json",
     "nhl": WEB / "data" / "nhl.json",
+    "cbb": WEB / "data" / "cbb.json",
 }
 
 # Sleeper league-sync proxy: the browser can't always call api.sleeper.app
@@ -1224,6 +1225,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._api(parse_qs(parsed.query), sport="cfb")
         if parsed.path in ("/api/nhl/recommendations", "/api/nhl/recommendations/"):
             return self._api(parse_qs(parsed.query), sport="nhl")
+        if parsed.path in ("/api/cbb/recommendations", "/api/cbb/recommendations/"):
+            return self._api(parse_qs(parsed.query), sport="cbb")
         if parsed.path in ("/api/draftadvice", "/api/draftadvice/"):
             return self._draft_advice(parse_qs(parsed.query))
         if parsed.path in ("/api/players/search", "/api/players/search/"):
@@ -4385,7 +4388,7 @@ class Handler(BaseHTTPRequestHandler):
         if self._rate_limited(RATE_CALENDAR_PER_MIN, "ticket"):
             return
         room = str(body.get("room") or "")
-        m = re.fullmatch(r"(nfl|cfb|nba|wnba|nhl|mlb)_(\d{1,14})", room)
+        m = re.fullmatch(r"(nfl|cfb|nba|wnba|nhl|mlb|cbb)_(\d{1,14})", room)
         if not m:
             return self._send(404, b'{"error":"no such game"}', ".json")
         try:
@@ -5013,7 +5016,7 @@ class Handler(BaseHTTPRequestHandler):
             hours = max(1, min(168, int(arg("hours") or LB.HOURS)))
         except ValueError:
             hours = LB.HOURS
-        if sport not in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl") or not player or not market:
+        if sport not in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "cbb") or not player or not market:
             return self._send(400, b'{"error":"sport, player and market"}', ".json")
         A = _acct()
         aconn = A.connect()
@@ -5042,7 +5045,7 @@ class Handler(BaseHTTPRequestHandler):
         from engine import ideas as ID
         arg = lambda k: (q.get(k) or [""])[0]              # noqa: E731
         sport = arg("sport").lower()[:5]
-        if sport not in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl"):
+        if sport not in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "cbb"):
             return self._send(400, b'{"error":"sport"}', ".json")
         player, market = arg("player")[:60].strip(), arg("market")[:40].strip()
         home, away = arg("home")[:40].strip(), arg("away")[:40].strip()
@@ -6071,7 +6074,7 @@ class Handler(BaseHTTPRequestHandler):
         )
         # NBA/WNBA/CFB/NHL have no sample pipeline — the built file is the only
         # source. (The frontend re-applies its filters client-side anyway.)
-        if sport in ("nba", "wnba", "cfb", "nhl"):
+        if sport in ("nba", "wnba", "cfb", "nhl", "cbb"):
             live = LIVE_FILES[sport]
             if live.is_file():
                 self._send(200, live.read_bytes(), ".json",

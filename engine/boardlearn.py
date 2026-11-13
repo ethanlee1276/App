@@ -47,7 +47,7 @@ from pathlib import Path
 from . import modelstate
 
 #: Every league with a Most Likely board.
-SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl")
+SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "cbb")
 #: The fewest picks a slice needs before it is graded on the page.
 MIN_SLICE = 15
 #: |z| at which a slice is called over-claiming or beating its claim. The

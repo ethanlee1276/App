@@ -101,7 +101,7 @@ VOID_AFTER_DAYS = 3
 
 #: Sports whose player logs are filed by ISO date — see the module
 #: docstring for why NFL is absent.
-SLATE_SPORTS = ("mlb", "nba", "wnba", "cfb")
+SLATE_SPORTS = ("mlb", "nba", "wnba", "cfb", "cbb")
 
 _EASTERN = ZoneInfo("America/New_York")
 

@@ -158,9 +158,11 @@ def _floor(lp) -> int:
 
 def test_the_order_is_ethans():
     """"NFL comes first, then college football, then NBA, then baseball";
-    hockey, UFC and the WNBA, which he did not place, after them at one fill."""
-    assert P.TIERS == (("nfl",), ("cfb",), ("nba",), ("mlb",), ("nhl", "ufc", "wnba"))
-    assert P.PRIORITY == ("nfl", "cfb", "nba", "mlb", "nhl", "ufc", "wnba")
+    hockey, UFC and the WNBA, which he did not place, after them at one fill;
+    college basketball (2026-11-13), the newest, in a tier of its own after
+    them all, so a new league is never funded out of a ranked one."""
+    assert P.TIERS == (("nfl",), ("cfb",), ("nba",), ("mlb",), ("nhl", "ufc", "wnba"), ("cbb",))
+    assert P.PRIORITY == ("nfl", "cfb", "nba", "mlb", "nhl", "ufc", "wnba", "cbb")
     assert P.tiers(NOV1) == P.TIERS
     assert 0 < P.FLOOR_SHARE < 1
 
@@ -234,12 +236,16 @@ def test_november_at_100k_funds_every_sport_and_most_of_the_headroom():
     # so the headroom now runs out inside the NFL's own half again: most of
     # it, and college and every league after it at one fill, every one of
     # them still funded at its full cadence.
+    # Since 2026-11-13 college basketball's month (three pulls of five games a
+    # night and its lines lane, about 8,000 credits) is funded too, out of
+    # what was the NFL's headroom: the NFL keeps its full cadence and some of
+    # its half again, and every league after it is at one fill.
     nfl = plan.get("nfl")
-    assert 0.9 * int(nfl.need * P.NFL_HEADROOM) < nfl.extra <= int(nfl.need * P.NFL_HEADROOM), nfl.extra
+    assert 0 < nfl.extra < int(nfl.need * P.NFL_HEADROOM), nfl.extra
     for lg in ("nba", "nhl"):
         assert plan.get(lg).need == sum(P.day_need(lg, NOV1 + dt.timedelta(days=d)) for d in range(30)), \
             f"{lg}: four pulls a game day, all month"
-    for lg in ("cfb", "nba", "mlb", "nhl", "ufc"):
+    for lg in ("cfb", "nba", "mlb", "nhl", "ufc", "cbb"):
         assert plan.get(lg).fill >= 1.0, lg
     assert plan.get("wnba").need == 0 and plan.unplanned <= 2
     gone = P.build(NOV1, 100_000, end=dt.date(2026, 12, 1), reset="measured", start=NOV1,
@@ -262,7 +268,7 @@ def test_until_the_renewal_the_nba_is_funded_right_after_the_nfl():
     for nba. We need that now" — October's credits had run out after the
     NFL and college, and he chose the NBA before college until Nov 1."""
     oct28, end = dt.date(2026, 10, 28), dt.date(2026, 11, 1)
-    assert P.tiers(oct28) == (("nfl",), ("nba",), ("cfb",), ("mlb",), ("nhl", "ufc", "wnba"))
+    assert P.tiers(oct28) == (("nfl",), ("nba",), ("cfb",), ("mlb",), ("nhl", "ufc", "wnba"), ("cbb",))
     assert sorted(lg for t in P.tiers(oct28) for lg in t) == sorted(P.PRIORITY), "nobody dropped"
     assert P.tiers(P.NBA_FIRST_UNTIL) == P.TIERS and P.tiers(NOV1) == P.TIERS, "from the renewal, as before"
     seen = 0

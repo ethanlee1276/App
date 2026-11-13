@@ -1296,9 +1296,11 @@
     mlb: [builderHTML],
     nba: [spotsHTML, whatifHTML, builderHTML],
     wnba: [spotsHTML, whatifHTML, builderHTML],
+    cbb: [spotsHTML, whatifHTML, builderHTML],
     nhl: [goaliesHTML, linesHTML, builderHTML],
   };
-  const SPORT_NAME = { nfl: "NFL", cfb: "College football", mlb: "MLB", nba: "NBA", wnba: "WNBA", nhl: "NHL", ufc: "UFC" };
+  const SPORT_NAME = { nfl: "NFL", cfb: "College football", mlb: "MLB", nba: "NBA", wnba: "WNBA", nhl: "NHL", ufc: "UFC",
+                       cbb: "College basketball" };
 
   function tools(host) {
     if (!host) return;

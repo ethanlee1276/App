@@ -95,7 +95,7 @@ def _late(row: dict, league: str) -> float:
     return 1.4 if per >= 4 else 1.0
 
 
-_CLOSE = {"mlb": 2, "nhl": 1, "nba": 6, "wnba": 6, "nfl": 8, "cfb": 8}
+_CLOSE = {"mlb": 2, "nhl": 1, "nba": 6, "wnba": 6, "nfl": 8, "cfb": 8, "cbb": 6}
 
 
 def _by_kind(row: dict, league: str) -> float:

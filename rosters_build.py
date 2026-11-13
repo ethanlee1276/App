@@ -46,7 +46,7 @@ from engine.seasons import season_of
 # fall back to appearances; NBA and WNBA are appearance-built outright,
 # where it costs far less — basketball counts a minute played, so anyone
 # who got off the bench is on the page.
-FROM_LOGS = ("mlb", "nba", "wnba", "cfb", "nhl")
+FROM_LOGS = ("mlb", "nba", "wnba", "cfb", "nhl", "cbb")
 
 #: The league's current roster first (2026-10-03, Ethan: "make sure we're
 #: pulling all live data for NHL, like all live rosters and injuries ... I
@@ -55,7 +55,7 @@ FROM_LOGS = ("mlb", "nba", "wnba", "cfb", "nhl")
 #: fallback and still fill the games column.
 LIVE_FEEDS = ("nhl", "nba", "wnba")
 #: A man counts as appearing in a game through these markets.
-GAME_MARKETS = {"nhl": ("toi",), "nba": ("min",), "wnba": ("min",)}
+GAME_MARKETS = {"nhl": ("toi",), "nba": ("min",), "wnba": ("min",), "cbb": ("min",)}
 NO_SOURCE = {
     "ufc": "MMA has fighters, not rosters. Each fighter's measured record "
            "lives in his dossier on the UFC card itself.",
@@ -68,6 +68,7 @@ BLIND_SPOT = {
            "here is a plate appearance,",
     "cfb": "every lineman, defender, kicker and backup, because an "
            "appearance here is a carry, a catch or a pass,",
+    "cbb": "every walk-on who has not played a minute,",
 }
 
 OUT_DIR = Path("web/data")

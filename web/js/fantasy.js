@@ -1715,7 +1715,7 @@ async function ffNightLoad() {
       return res.ok ? await res.json() : null;
     } catch (e) { return null; }
   };
-  return (await Promise.all(["fantasy_nba.json", "fantasy_wnba.json", "fantasy_nhl.json"].map(one)))
+  return (await Promise.all(["fantasy_nba.json", "fantasy_wnba.json", "fantasy_nhl.json", "fantasy_cbb.json"].map(one)))
     .filter(Boolean);
 }
 

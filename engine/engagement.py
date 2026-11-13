@@ -855,7 +855,8 @@ AWAY_DEFAULT_HOUR = 19
 #: A slate worth a line: at least this many games today in the member's league.
 AWAY_SLATE_MIN = 3
 #: The leagues with a fast scoreboard (engine/kickoffs.LEAGUES) and their names.
-LEAGUE_NAME = {"nfl": "NFL", "cfb": "college football", "nba": "NBA", "wnba": "WNBA", "nhl": "NHL", "mlb": "MLB"}
+LEAGUE_NAME = {"nfl": "NFL", "cfb": "college football", "nba": "NBA", "wnba": "WNBA", "nhl": "NHL", "mlb": "MLB",
+               "cbb": "college basketball"}
 
 
 def ensure_tables(conn) -> None:

@@ -61,7 +61,8 @@ SERVER_LOG_MAX = 1024 * 1024
 #: The boards the site publishes, as launch.BOARD_FILES names them.
 BOARDS = {"nfl": "web/data/recommendations.json", "cfb": "web/data/cfb.json",
           "mlb": "web/data/mlb_recommendations.json", "nba": "web/data/nba.json",
-          "wnba": "web/data/wnba.json", "nhl": "web/data/nhl.json"}
+          "wnba": "web/data/wnba.json", "nhl": "web/data/nhl.json",
+          "cbb": "web/data/cbb.json"}
 BUILD_LOGS = ("nfl_build", "cfb_build", "mlb_build", "nba_build", "nhl_build", "ufc_build")
 #: A board this many hours old, in its season, is stale.
 BOARD_STALE_H = 3

@@ -37,7 +37,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
+LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "cbb")
 #: The card draws his photo 160px wide (carrychart.js `heroShots`: facePreview(full, 160)).
 CARD_PX = 160
 #: visuals.js's resizes, as `facePreview` splices them into a Cloudinary path.

@@ -132,14 +132,16 @@ MAX_INJURIES = 15
 #: Every league's board, by the name the page asks for it with. A question
 #: is read against all of them, whichever league the reader has open.
 BOARD_FILES = {"nfl": "recommendations.json", "cfb": "cfb.json", "nba": "nba.json",
-               "wnba": "wnba.json", "mlb": "mlb_recommendations.json", "nhl": "nhl.json"}
+               "wnba": "wnba.json", "mlb": "mlb_recommendations.json", "nhl": "nhl.json",
+               "cbb": "cbb.json"}
 #: The order leagues are tried in when a name could be more than one team;
 #: the reader's own league always goes first.
-LEAGUES = ("nfl", "nba", "mlb", "nhl", "wnba", "cfb")
+LEAGUES = ("nfl", "nba", "mlb", "nhl", "wnba", "cfb", "cbb")
 #: A league named in the question, for the record's per-league line.
 LEAGUE_WORDS = {"nfl": r"\bnfl\b", "cfb": r"\b(?:cfb|college football|ncaaf?)\b",
                 "nba": r"\bnba\b", "wnba": r"\bwnba\b", "mlb": r"\b(?:mlb|baseball)\b",
-                "nhl": r"\b(?:nhl|hockey)\b"}
+                "nhl": r"\b(?:nhl|hockey)\b",
+                "cbb": r"\b(?:cbb|ncaab|ncaam|college basketball|college hoops|march madness)\b"}
 
 #: The lookups: rounds of tool calls one question may take, calls in all,
 #: and how much each answer carries.
@@ -192,7 +194,7 @@ SLATE_GAMES = 16
 PICK_KINDS = ("best_bets", "most_likely", "long_shots", "game_lines", "parlays", "pick_of_the_day",
               "top_pick_today")
 RECORD_WINDOWS = {"today": 0, "yesterday": 1, "last_7_days": 7, "last_30_days": 30, "season": None}
-LIVE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "mlb")
+LIVE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "mlb", "cbb")
 
 CACHE_PATH = Path(os.environ.get("QB_ASK_CACHE", "").strip() or (ROOT / "data" / "ask_cache.json"))
 USAGE_PATH = Path(os.environ.get("QB_ASK_USAGE", "").strip() or (ROOT / "data" / "ask_usage.json"))
@@ -841,7 +843,7 @@ def _caps(question: str) -> set[str]:
 #: harvest from the books' spellings (engine/cfbteams), so it grows through
 #: the season and is re-read hourly; its shared mascots ("Tigers",
 #: "Bulldogs") name several schools and drop out like "New York" does.
-NAMED_LEAGUES = ("nfl", "mlb", "nba", "wnba", "cfb")
+NAMED_LEAGUES = ("nfl", "mlb", "nba", "wnba", "cfb", "cbb")
 TEAM_WORDS_TTL_S = 3600
 #: Words a city's first half leaves that name nothing on their own
 #: ("green" of Green Bay).

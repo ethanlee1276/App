@@ -29,11 +29,36 @@ def test_the_url_names_the_regular_season_and_the_cache_carries_it():
     real = LS.fetch_json
     LS.fetch_json = fake
     try:
-        for sport in ("nfl", "cfb", "nba", "wnba"):
+        for sport in ("nfl", "cfb", "wnba"):
             LS.fetch(sport, 2026)
             assert "seasontype=2" in seen["url"], (sport, seen["url"])
             assert "season=2026" in seen["url"]
-            assert seen["name"] == f"standings_{sport}_2026_t2.json", seen["name"]
+            assert seen["name"] == f"standings_{sport}_espn2026_t2.json", seen["name"]
+    finally:
+        LS.fetch_json = real
+
+
+def test_a_winter_season_is_asked_for_by_the_year_it_ends():
+    """The NBA's (and college basketball's) 2026-27 is ESPN's 2027.
+
+    13 November 2026: the NBA Standings page read Boston 56-26 and Detroit
+    60-22 under "2026" — 2025-26's final table, because ESPN names a winter
+    season by the year it ends and this site by the year it starts. The
+    cache file is named by ESPN's label, so the old file cannot answer."""
+    seen = {}
+
+    def fake(url, cache_name, **kw):
+        seen["url"], seen["name"] = url, cache_name
+        return {"children": []}
+
+    real = LS.fetch_json
+    LS.fetch_json = fake
+    try:
+        for sport in ("nba", "cbb"):
+            LS.fetch(sport, 2026)
+            assert "season=2027&seasontype=2" in seen["url"], (sport, seen["url"])
+            assert seen["name"] == f"standings_{sport}_espn2027_t2.json", seen["name"]
+        assert "mens-college-basketball/standings" in seen["url"]
     finally:
         LS.fetch_json = real
 
@@ -56,7 +81,8 @@ def test_baseball_is_untouched():
 
 
 def test_the_reason_is_beside_the_parameter():
-    assert "?season={season}&seasontype=2" in SRC
+    assert "?season={espn_season}&seasontype=2" in SRC
+    assert "Boston 56-26" in SRC and "BY THE YEAR IT ENDS" in SRC
     assert "PRESEASON table" in SRC and "49 exhibition games" in SRC
 
 

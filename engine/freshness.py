@@ -92,7 +92,7 @@ def line(rep: dict) -> str:
 #: ingest runs once, after the late games. College's player logs come from
 #: a mirror that publishes finished weeks (engine/maintenance: "Monday …
 #: is when a new week is there to read"), so a Saturday is due Tuesday.
-DAILY_GRACE = {"cfb": 3, "mlb": 1, "nba": 1, "wnba": 1}
+DAILY_GRACE = {"cfb": 3, "mlb": 1, "nba": 1, "wnba": 1, "cbb": 1}
 
 #: The tables each league's model reads, and the rows in each that say a
 #: day is in. MLB's player logs are keyed by the game's index in the
@@ -105,6 +105,7 @@ DAILY_TABLES = {
     "cfb": {"results": _RESULTS, "player stats": _LOGS},
     "nba": {"results": _RESULTS, "player stats": _LOGS},
     "wnba": {"results": _RESULTS, "player stats": _LOGS},
+    "cbb": {"results": _RESULTS, "player stats": _LOGS},
     "mlb": {"results": _RESULTS},
 }
 
@@ -164,7 +165,7 @@ def stamp_board(board: dict, sport: str) -> None:
 # cycles; the weekly backtest and the season projections move on their own,
 # slower clocks.
 MAX_AGE_H = {
-    "nfl": 2.0, "cfb": 2.0, "mlb": 2.0, "nba": 2.0, "wnba": 2.0,
+    "nfl": 2.0, "cfb": 2.0, "mlb": 2.0, "nba": 2.0, "wnba": 2.0, "cbb": 2.0,
     "ufc": 12.0, "record": 6.0, "futures": 48.0, "backtest": 24.0 * 8,
 }
 DEFAULT_MAX_AGE_H = 6.0

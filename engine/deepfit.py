@@ -652,7 +652,7 @@ def dial_progress(sport: str, round_of: str | None, path=None, partial_path=None
 #: stale: the sports first (football leads in the autumn; the NBA's checks
 #: right before its fitters), then the extras in the order refit_all always
 #: ran them.
-PIECE_ORDER = ("nfl", "cfb", *NBA_CHECKS, "nba", "mlb", "wnba",
+PIECE_ORDER = ("nfl", "cfb", *NBA_CHECKS, "nba", "cbb", "mlb", "wnba",
                "yardage_mixture", "td_scale", "touchdowns", "cfb_touchdowns",
                "nfl_props", "ladder")
 

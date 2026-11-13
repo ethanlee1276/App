@@ -211,7 +211,7 @@ def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list
     homers, strikeouts and outs): each read's markets on its side, where
     our number agrees."""
     home, away = game.get("home"), game.get("away")
-    markets = (MLB_PROP_MARKETS if sport == "mlb" else HOOPS_PROP_MARKETS if sport in ("nba", "wnba")
+    markets = (MLB_PROP_MARKETS if sport == "mlb" else HOOPS_PROP_MARKETS if sport in ("nba", "wnba", "cbb")
                else PROP_MARKETS)
     by_key: dict = {}
     for r in props or []:
@@ -232,7 +232,7 @@ def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list
                 if (x.get("pos") or "") != "SP" and not u.get("lineup_spot"):
                     continue
                 role, bar = 99, 0
-            elif sport in ("nba", "wnba"):
+            elif sport in ("nba", "wnba", "cbb"):
                 # A rotation role, not a garbage-time line.
                 role, bar = u.get("mpg"), HOOPS_MIN_MINUTES
             else:

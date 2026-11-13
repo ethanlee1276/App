@@ -94,9 +94,14 @@ def test_both_basketball_leagues_share_one_parser():
     from engine.sources import wnbaespn
     assert wnbaespn.parse_summary is E.parse_summary
     assert wnbaespn.parse_scoreboard is E.parse_scoreboard
-    assert set(E.LEAGUES) == {"nba", "wnba"}
+    # Three since 2026-11-13: men's college basketball reads the same parser
+    # through its own binding (engine/sources/cbbespn).
+    assert set(E.LEAGUES) == {"nba", "wnba", "cbb"}
     assert "basketball/nba" in E._base("nba")
     assert "basketball/wnba" in E._base("wnba")
+    assert "basketball/mens-college-basketball" in E._base("cbb")
+    from engine.sources import cbbespn
+    assert cbbespn.parse_summary is E.parse_summary
 
 
 def test_the_nba_history_does_not_come_from_the_current_season_cdn():

@@ -17,7 +17,7 @@ from engine.db import connect
 
 
 def main(argv):
-    leagues = argv or ["nba", "wnba"]
+    leagues = argv or ["nba", "wnba", "cbb"]
     conn = connect()
     for lg in leagues:
         seasons = [r[0] for r in conn.execute(

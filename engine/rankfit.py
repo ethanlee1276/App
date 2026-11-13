@@ -94,6 +94,7 @@ MARKETS = {
     "mlb": ("hits", "total_bases", "home_runs", "strikeouts", "outs"),
     "nba": ("pts", "reb", "ast", "fg3m", "pra", "pts_reb", "pts_ast", "reb_ast", "stl", "blk", "tov"),
     "wnba": ("pts", "reb", "ast", "fg3m", "pra"),
+    "cbb": ("pts", "reb", "ast", "fg3m", "pra"),
     # THE VOLUME MARKETS joined 2026-10-05 (engine/cfb/props.MARKETS says
     # why); the walk measures them on this box's logs and the shelf opens
     # only above the floor, as for the four before them.

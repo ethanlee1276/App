@@ -535,6 +535,7 @@
   --lg-mlb: #7ABCFF;
   --lg-nba: #BEA6FE;
   --lg-wnba: #F395C3;
+  --lg-cbb: #7FD8A4;
   --lg-nhl: #5FCBE3;
   --lg-ufc: #FD9693;
   --league: var(--lg-nfl);
@@ -4862,6 +4863,7 @@ body.pk-open { overflow: hidden; }
   --lg-mlb: #2A76C3;
   --lg-nba: #7D60BC;
   --lg-wnba: #AF4D80;
+  --lg-cbb: #2F8A57;
   --lg-nhl: #0088A4;
   --lg-ufc: #B84D4E;
   --sky: #0077BD;
@@ -10766,6 +10768,7 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
 :root[data-league="mlb"] { --league: var(--lg-mlb); }
 :root[data-league="nba"] { --league: var(--lg-nba); }
 :root[data-league="wnba"] { --league: var(--lg-wnba); }
+:root[data-league="cbb"] { --league: var(--lg-cbb); }
 :root[data-league="nhl"] { --league: var(--lg-nhl); }
 :root[data-league="ufc"] { --league: var(--lg-ufc); }
 
@@ -10786,6 +10789,7 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
 .sportbar-in .sport-btn[data-sport="mlb"] { --hue: var(--lg-mlb); }
 .sportbar-in .sport-btn[data-sport="nba"] { --hue: var(--lg-nba); }
 .sportbar-in .sport-btn[data-sport="wnba"] { --hue: var(--lg-wnba); }
+.sportbar-in .sport-btn[data-sport="cbb"] { --hue: var(--lg-cbb); }
 .sportbar-in .sport-btn[data-sport="nhl"] { --hue: var(--lg-nhl); }
 .sportbar-in .sport-btn[data-sport="ufc"] { --hue: var(--lg-ufc); }
 /* A LEAGUE OUT OF SEASON (Ethan, 2026-11-06; app.js `markSeasons`): grey,

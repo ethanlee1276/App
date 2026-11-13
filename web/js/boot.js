@@ -233,7 +233,8 @@ try {
   (function () {
     if (!window.fetch || !/^\/(index\.html)?$/.test(location.pathname) || /[?&]static\b/.test(location.search)) return;
     var light = { nfl: "recommendations_picks.json", mlb: "mlb_recommendations_picks.json", nba: "nba_picks.json",
-                  wnba: "wnba_picks.json", cfb: "cfb_picks.json", nhl: "nhl_picks.json" };
+                  wnba: "wnba_picks.json", cfb: "cfb_picks.json", nhl: "nhl_picks.json",
+                  cbb: "cbb_picks.json" };
     var sport = (location.search.match(/[?&]sport=([a-z]+)/) || [])[1];
     if (!light[sport]) {
       var kept = null;

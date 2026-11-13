@@ -87,6 +87,12 @@ TRANSFER = {
     "nba": {"pts": 1.0, "reb": 1.0, "ast": 1.0, "fg3m": 1.0,
             "stl": 1.0, "blk": 0.96, "tov": 1.0},
     "wnba": {"pts": 0.79, "reb": 0.78, "ast": 1.0, "fg3m": 0.89},
+    # Men's college basketball (2026-11-13): the WNBA's damped transfer,
+    # inherited like the rest of its tuning until college's own seasons are
+    # walked (`hoopsdvpfit.py cbb`) — a schedule of 365 teams runs much
+    # further from average than a pro league's, so the defence a man meets
+    # tonight is worth reading, and worth not over-reading on a first fit.
+    "cbb": {"pts": 0.79, "reb": 0.78, "ast": 1.0, "fg3m": 0.89},
 }
 
 

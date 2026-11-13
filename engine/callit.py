@@ -37,7 +37,7 @@ import sqlite3
 import time
 
 FOOTBALL = ("nfl", "cfb")
-HOOPS = ("nba", "wnba")
+HOOPS = ("nba", "wnba", "cbb")
 HOCKEY = ("nhl",)
 LEAGUES = ("mlb",) + FOOTBALL + HOOPS + HOCKEY
 CHOICES = {

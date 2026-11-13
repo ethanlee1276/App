@@ -50,8 +50,9 @@ COMMUNITY = ROOT / "web" / "data" / "community.json"
 PUBLIC_KEEP = 10
 SITE = "https://qellysbook.com"
 BOARD_FILE = {"nfl": "recommendations.json", "cfb": "cfb.json", "mlb": "mlb_recommendations.json",
-              "nba": "nba.json", "wnba": "wnba.json", "nhl": "nhl.json"}
-SPORT_LABEL = {"nfl": "NFL", "cfb": "College football", "mlb": "MLB", "nba": "NBA", "wnba": "WNBA", "nhl": "NHL"}
+              "nba": "nba.json", "wnba": "wnba.json", "nhl": "nhl.json", "cbb": "cbb.json"}
+SPORT_LABEL = {"nfl": "NFL", "cfb": "College football", "mlb": "MLB", "nba": "NBA", "wnba": "WNBA", "nhl": "NHL",
+               "cbb": "College basketball"}
 MARKET_WORDS = {"pass_yds": "passing yards", "rush_yds": "rushing yards", "rec_yds": "receiving yards",
                 "receptions": "receptions", "anytime_td": "anytime TD", "first_td": "first TD", "first_basket": "first basket", "pass_td": "passing TDs",
                 "pass_att": "pass attempts", "pass_cmp": "completions", "rush_att": "carries",

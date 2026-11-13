@@ -598,7 +598,7 @@ CLOSE_CHANCE = 0.85
 LINE_MOVE = 0.02
 LINE_POINTS = 1.0
 #: "Within one score", by league, in the last LATE_SHARE of regulation.
-ONE_SCORE = {"nfl": 8, "cfb": 8, "nba": 5, "wnba": 5, "nhl": 1, "mlb": 1}
+ONE_SCORE = {"nfl": 8, "cfb": 8, "nba": 5, "wnba": 5, "nhl": 1, "mlb": 1, "cbb": 5}
 LATE_SHARE = 0.10
 
 

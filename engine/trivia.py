@@ -38,7 +38,7 @@ import re
 import time
 from pathlib import Path
 
-LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb")
+LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb", "cbb")
 #: The stats asked about, per kind of game: (market in the logs, words).
 STATS = {
     "football": (("rec_yds", "receiving yards"), ("rush_yds", "rushing yards"), ("receptions", "catches"),
@@ -81,7 +81,7 @@ def ensure_tables(conn) -> None:
 
 
 def _kind(league: str) -> str:
-    return {"nfl": "football", "cfb": "football", "nba": "hoops", "wnba": "hoops",
+    return {"nfl": "football", "cfb": "football", "nba": "hoops", "wnba": "hoops", "cbb": "hoops",
             "nhl": "hockey", "mlb": "mlb"}.get(league, "")
 
 

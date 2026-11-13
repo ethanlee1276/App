@@ -217,6 +217,7 @@
     cfb: "Carries, catches and attempts are the box score’s. Shares are of every carry or catch his team’s players were credited with that game; red-zone touches are his carries and catches inside the 20, from the play file (it names no college target).",
     nba: "Minutes and whether he started are the box score’s; shots from the floor, threes and free throws tried are from the NBA’s play-by-play (the shot chart’s).",
     wnba: "Minutes and whether she started are the box score’s.",
+    cbb: "Minutes and whether he started are the box score’s.",
     mlb: "Plate appearances and outs are the box score’s. His spot in the order is where he came up among his side’s first nine batters; pitches seen or thrown, batters faced and whether he started are from the play-by-play (the pitch chart’s). Days of rest count every game he pitched.",
     nhl: "Ice time, shots on goal and shots faced are the box score’s; shot attempts (on goal, missed and blocked) and those on the power play are from the play-by-play the expected-goals model reads.",
   };

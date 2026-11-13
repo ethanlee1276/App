@@ -34,7 +34,7 @@ sys.path.insert(0, str(ROOT))
 
 #: Leagues in the order the page lists them. Fights and desk tickets grade
 #: elsewhere (the fight's result, the exchange) and are counted, not traced.
-LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl")
+LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "cbb")
 GAME_MARKETS = ("moneyline", "total", "spread", "team_total")
 #: How many owed rows to name per league.
 SHOW = 8

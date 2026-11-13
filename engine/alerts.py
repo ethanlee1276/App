@@ -283,7 +283,7 @@ def list_watches(conn, user_id) -> list[dict]:
 # ─── a followed team, in its own league ─────────────────────────────────────
 #: The leagues a followed team names (js/account.js followSave keeps
 #: "nfl:MIA" in the account's synced settings; the watch itself is "MIA").
-TEAM_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb")
+TEAM_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb", "cbb")
 
 
 def team_leagues(conn, user_id) -> dict:

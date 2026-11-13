@@ -57,7 +57,7 @@ class Entries(list):
 
 #: The leagues that walk the basketball board's own model
 #: (engine/hoopsreplay.walk) rather than the football chain below.
-HOOPS = ("nba", "wnba")
+HOOPS = ("nba", "wnba", "cbb")
 
 _TUNE: dict = {}
 

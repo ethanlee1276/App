@@ -59,7 +59,7 @@ DEFAULT_TOPICS = ("posted", "settled")
 #: The leagues the day's top pick can come from (engine/potd.TOP_PICK_LEAGUES),
 #: as an alert names them.
 POTD_LEAGUE = {"nfl": "NFL", "cfb": "College football", "mlb": "MLB", "nba": "NBA", "wnba": "WNBA",
-               "nhl": "NHL", "ufc": "UFC"}
+               "nhl": "NHL", "ufc": "UFC", "cbb": "College basketball"}
 #: A member's own alerts (engine/pushmine): a phone signed in when it
 #: subscribed may ask for these too.
 PERSONAL = ("watches", "bets", "clutch", "finals", "lineup", "karma", "mentions", "reminders", "pickem", "kickoff",

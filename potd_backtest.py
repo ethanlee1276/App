@@ -27,7 +27,7 @@ from engine import db, potd
 from engine.potdbacktest import (replay_potd, summarize, sweep_ev,
                                  sweep_conf)
 
-SPORTS = ("mlb", "nfl", "cfb", "nba", "wnba")
+SPORTS = ("mlb", "nfl", "cfb", "nba", "wnba", "cbb")
 
 
 def main() -> None:

@@ -44,6 +44,11 @@ POSTSEASON = {
     # label is the autumn it kicked off, and its bowls start that
     # December.
     "cfb":  ("date", (12, 15), False),    # bowls and the playoff
+    # Men's college basketball: the NCAA tournament, from the First Four
+    # (the Tuesday after Selection Sunday, in the March after the season's
+    # label). The conference tournaments before it count in the regular
+    # season, as every school's record does.
+    "cbb":  ("date", (3, 17), True),
 }
 
 ROUND_NAMES = {
@@ -55,6 +60,8 @@ ROUND_NAMES = {
     "wnba": ["First Round", "Semifinals", "WNBA Finals"],
     "cfb": ["First Round", "Quarterfinals", "Semifinals",
             "National Championship"],
+    "cbb": ["First Four", "First Round", "Second Round", "Sweet 16",
+            "Elite Eight", "Final Four", "National Championship"],
 }
 
 

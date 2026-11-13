@@ -28,6 +28,7 @@ ET = ZoneInfo("America/New_York")
 #: Days of a new month the last one's recap stays up.
 GRACE = 7
 LEAGUE_WORD = {"nfl": "NFL", "cfb": "college football", "nba": "NBA", "wnba": "WNBA", "nhl": "NHL",
+               "cbb": "college basketball",
                "mlb": "MLB", "ufc": "UFC", "soccer": "soccer"}
 
 

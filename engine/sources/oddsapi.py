@@ -691,6 +691,17 @@ SPORT_CONFIG = {
             "markets": CFB_ODDS_TO_MARKET, "teams": {},
             "scorers": SCORER_ODDS_TO_MARKET,
             "alternates": ALT_ODDS_TO_MARKET},
+    # MEN'S COLLEGE BASKETBALL (2026-11-13): the WNBA's request — the same
+    # five player markets and their ladders — under the NCAA's key. The team
+    # map stays EMPTY, as college football's does: 365 schools are joined at
+    # run time from the slate's own names (`_slate_resolver`, the college
+    # resolver `cfbdata.resolve_team`), never from a hand-written table.
+    # BILLING: a college night is 60 to 150 games and this lists markets,
+    # it does not authorise a slate-wide pull — `nba_build` hands the pull
+    # only the games `oddsbudget.affordable_events` pays for.
+    "cbb": {"sport_key": "basketball_ncaab",
+            "markets": WNBA_ODDS_TO_MARKET, "teams": {},
+            "alternates": HOOPS_ALT_ODDS_TO_MARKET},
     # Hockey (2026-10-03): the same three kinds — stat props, the Yes/No
     # scorer, the ladders. Player props bill per market per event, so an
     # NHL event is 12 markets; `oddsbudget` sets how many events.
@@ -720,6 +731,7 @@ FUTURES_KEYS = {
     "nba": "basketball_nba_championship_winner",
     "cfb": "americanfootball_ncaaf_championship_winner",
     "nhl": "icehockey_nhl_championship_winner",
+    "cbb": "basketball_ncaab_championship_winner",
 }
 
 #: A week. Futures are the slowest market a book runs — a division number
@@ -763,7 +775,7 @@ def _classify(url: str, cache_name: str) -> tuple[str, str, int, str]:
         kind, cost = ("hist_event" if hist else "live_event"), per * (5 if hist else 1)
     sport = ""
     for token in cache_name.replace(".json", "").split("_"):
-        if token in ("nfl", "mlb", "nba", "wnba", "cfb", "ufc"):
+        if token in ("nfl", "mlb", "nba", "wnba", "cfb", "ufc", "nhl", "cbb"):
             sport = token
             break
     return kind, sport, cost, cache_name
@@ -2182,6 +2194,30 @@ def starts_after(ev: dict, until: float | None) -> bool:
     return t.tzinfo is not None and t.timestamp() > until
 
 
+def _slate_resolver(slate, cfg: dict):
+    """``name -> code`` for one slate's games: the slate's own full names
+    first (the feed-to-feed join, below), the league's static table second,
+    and, for a slate that carries one (college basketball's, built from the
+    scoreboard's names, nicknames and short names), the college resolver
+    last — "Miami (OH) RedHawks" against ESPN's "Miami (OH)", without a
+    hand-written alias table (`cfbdata.resolve_team`)."""
+    slate_names: dict[str, str] = {}
+    for g in slate.games:
+        for nm, ab in ((getattr(g, "home_name", ""), g.home),
+                       (getattr(g, "away_name", ""), g.away)):
+            if nm and ab:
+                slate_names[_team_key(nm)] = ab
+    lookup = getattr(slate, "team_lookup", None) or {}
+
+    def _abbr(name: str) -> str | None:
+        hit = slate_names.get(_team_key(name)) or cfg["teams"].get(name)
+        if hit or not lookup:
+            return hit
+        from .cfbdata import resolve_team
+        return resolve_team(name, lookup) or None
+    return _abbr
+
+
 def _team_key(name: str) -> str:
     """A team name reduced to what two feeds can be expected to agree on.
 
@@ -2547,15 +2583,7 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
     # calls the same teams, and for the WNBA it did not — all five games
     # dropped. Same join here, so the two paths cannot disagree about who
     # is playing.
-    slate_names: dict[str, str] = {}
-    for g in slate.games:
-        for nm, ab in ((getattr(g, "home_name", ""), g.home),
-                       (getattr(g, "away_name", ""), g.away)):
-            if nm and ab:
-                slate_names[_team_key(nm)] = ab
-
-    def _abbr(name: str) -> str | None:
-        return slate_names.get(_team_key(name)) or cfg["teams"].get(name)
+    _abbr = _slate_resolver(slate, cfg)
 
     days = slate_days(slate.games)
 
@@ -2882,15 +2910,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     # reshuffles" — and builds its map from the feed instead. This does the
     # same wherever the schedule carries team names: the join runs feed-name
     # to feed-abbreviation, so the two halves cannot disagree.
-    slate_names: dict[str, str] = {}
-    for g in slate.games:
-        for nm, ab in ((getattr(g, "home_name", ""), g.home),
-                       (getattr(g, "away_name", ""), g.away)):
-            if nm and ab:
-                slate_names[_team_key(nm)] = ab
-
-    def _abbr(name: str) -> str | None:
-        return slate_names.get(_team_key(name)) or cfg["teams"].get(name)
+    _abbr = _slate_resolver(slate, cfg)
 
     # WHICH DAYS THIS SLATE COVERS — `slate_days` / `other_day` above,
     # shared with the board-lines path so the rule has one definition.

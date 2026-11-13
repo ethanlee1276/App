@@ -398,7 +398,7 @@ def _odds_layer() -> Layer:
 
 BOARD_FILE = {"nfl": "recommendations.json", "mlb": "mlb_recommendations.json",
               "nba": "nba.json", "wnba": "wnba.json", "cfb": "cfb.json",
-              "ufc": "ufc.json"}
+              "ufc": "ufc.json", "cbb": "cbb.json"}
 
 
 def _board_status(sport: str) -> str:
@@ -690,13 +690,51 @@ def ufc(conn) -> SportCoverage:
     ])
 
 
+def cbb(conn) -> SportCoverage:
+    """Men's college basketball — the third league on the basketball build
+    (`engine.hoops.CBB`), added 13 November 2026."""
+    from .hoops import CBB
+    return SportCoverage("cbb", "NCAAB", [
+        _results_layer(conn, "cbb", 3000, "python3 ingest.py cbb --seasons 2024-2026 --scores-only"),
+        _logs_layer(conn, "cbb", 40000, "python3 ingest.py cbb --seasons 2024-2026"),
+        _odds_layer(),
+        _prop_closes_layer(conn, "cbb"),
+        Layer("Schedule feed", "the night's Division I slate and its finals — "
+              "sixty to a hundred and fifty games on a Saturday",
+              OK, "ESPN mens-college-basketball, Division I (groups=50), keyless"),
+        Layer("Fitted tuning", "minutes, spreads and blowout curves are the "
+              "WNBA's 40-minute numbers until college's own seasons are measured "
+              "and its own picks are graded",
+              PARTIAL if CBB.probation else OK,
+              "on probation — journaled and graded, not staked "
+              "(enforced: engine/probation zeroes every size)",
+              "the record decides when it is available; promoting is an "
+              "explicit, logged act — engine/promotion"),
+        Layer("Availability / injury report", "a college rotation is eight deep "
+              "and one absence moves every other minute; most schools publish "
+              "nothing", PARTIAL,
+              "ESPN's team injury lists where a school reports one; minutes "
+              "otherwise come from recent games",
+              "the same gap the NBA board has"),
+        Layer("Player props offered", "the books post college player props on "
+              "the ranked and power-conference games, not on all of them",
+              PARTIAL, "props bought on the five best games a night "
+              "(`nba_build.CBB_PROP_GAMES`, `cbbteams.priority`); "
+              "game lines on every game"),
+        Layer("On/off + lineup data", "who absorbs a sitting starter's minutes",
+              PARKED, "no free college on/off feed; the ripple is modelled from "
+              "minutes redistribution only"),
+        _journal_layer("cbb"),
+    ])
+
+
 def _fresh(cache_name: str) -> str:
     age = _cache_age_h(cache_name)
     return "never fetched" if age is None else f"cached {age}h ago"
 
 
 BUILDERS = {"nfl": nfl, "mlb": mlb, "nba": nba, "wnba": wnba, "cfb": cfb,
-            "ufc": ufc}
+            "ufc": ufc, "cbb": cbb}
 
 
 def scan(sports: list[str] | None = None) -> list[SportCoverage]:

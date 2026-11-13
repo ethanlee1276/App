@@ -113,7 +113,13 @@ from dataclasses import dataclass, field
 #: (proportional within the tier), so none of them is the one cut first.
 #: Every one of them past the NFL is owed its floor before any of them is
 #: owed more (`FLOOR_SHARE`).
-TIERS = (("nfl",), ("cfb",), ("nba",), ("mlb",), ("nhl", "ufc", "wnba"))
+TIERS = (("nfl",), ("cfb",), ("nba",), ("mlb",), ("nhl", "ufc", "wnba"),
+         # College basketball (2026-11-13, Ethan: "we need to add college
+         # basketball"): its own tier, last, so a new league is never funded
+         # out of the leagues Ethan ranked — it gets its floor with every
+         # other league in season, and the rest of its target only after
+         # every tier above has had its own.
+         ("cbb",))
 #: Every league, in the order the report lists them.
 PRIORITY = tuple(lg for tier in TIERS for lg in tier)
 
@@ -212,10 +218,18 @@ GAMES_BY_WEEKDAY = {
     "wnba": (4, 4, 4, 4, 4, 4, 4),
     "cfb": (0, 1, 1, 2, 3, 12, 0),
     "ufc": (0, 0, 0, 0, 0, 13, 0),
+    # College basketball plays every night from November to March (20 to 50
+    # games a weeknight, 100+ on a Saturday); a pull prices five at most
+    # (`PULL_CAP`), the ranked and power-conference games first
+    # (`cbbteams.priority`), so every night is the cap.
+    "cbb": (5, 5, 5, 5, 5, 5, 5),
 }
 #: Average games a day outside the regular season (playoffs, bowls; one
 #: World Series game every day or two).
-POSTSEASON_GAMES = {"nba": 3, "nhl": 3, "mlb": 1, "wnba": 1.5, "cfb": 3}
+POSTSEASON_GAMES = {"nba": 3, "nhl": 3, "mlb": 1, "wnba": 1.5, "cfb": 3,
+                    # The conference tournaments and March Madness: a
+                    # pull still prices five at most.
+                    "cbb": 5}
 
 #: Prop pulls a game day gets at the target cadence, with the days that
 #: differ. Basketball and hockey: 7am, noon, the pre-game run and 6pm ET
@@ -224,10 +238,18 @@ POSTSEASON_GAMES = {"nba": 3, "nhl": 3, "mlb": 1, "wnba": 1.5, "cfb": 3}
 #: College: eight on Saturday — the windows and a readiness pull for each
 #: wave — two on Thursday and Friday, four on the weekday nights. UFC: one a
 #: day, four on fight day.
-PULLS = {"nba": 4, "nhl": 4, "mlb": 4, "wnba": 4, "cfb": 4, "ufc": 1}
+PULLS = {"nba": 4, "nhl": 4, "mlb": 4, "wnba": 4, "cfb": 4, "ufc": 1,
+         # College basketball: the three game-day windows (7am, noon, 6pm
+         # ET, `oddsbudget.SPORT_TOUCHPOINTS`), no fourth pre-game run.
+         "cbb": 3}
 PULLS_ON = {("cfb", 3): 2, ("cfb", 4): 2, ("cfb", 5): 8, ("ufc", 5): 4}
 #: The most games one pull prices (college's `PLAYER_EVENT_CAP`).
-PULL_CAP = {"cfb": 12}
+#: College basketball's five (2026-11-13): its whole month — three pulls of
+#: five games and the lines lane, about 8,000 credits — comes out of what the
+#: plan had left as the NFL's headroom (the extra pulls past its full
+#: cadence), never out of any league's target; six games a pull would have
+#: taken all of it.
+PULL_CAP = {"cfb": 12, "cbb": 5}
 
 #: THE THREE-CREDIT LANES, at the pacer's own cadence for a three-credit
 #: pull: the fifteen-minute floor (`oddsbudget.MIN_REFRESH_GAP`) inside the
@@ -245,7 +267,11 @@ PULL_CAP = {"cfb": 12}
 #: Hockey and baseball have no pre-game tier: their prop pull carries the
 #: game lines.
 LINES_BY_WEEKDAY = {"nba": (43,) * 7, "wnba": (43,) * 7,
-                    "cfb": (24, 40, 40, 58, 58, 78, 24)}
+                    "cfb": (24, 40, 40, 58, 58, 78, 24),
+                    # College basketball's game lines, every Division I game
+                    # in one three-credit request (`launch.CBB_BOARD_CLOCK`),
+                    # about once an hour of a game day.
+                    "cbb": (12,) * 7}
 #: Hours a game day has a game in progress, for the live-line lane
 #: (`launch.MLB_LINES_CLOCK` and its kin). The football leagues' live line
 #: is their lines lane, counted above.
@@ -261,11 +287,14 @@ SEASONS = {
     "nhl": (("regular", (10, 6), (4, 16)), ("playoffs", (4, 17), (6, 22))),
     "mlb": (("regular", (3, 25), (9, 28)), ("postseason", (9, 29), (11, 4))),
     "wnba": (("regular", (5, 14), (9, 14)), ("playoffs", (9, 15), (10, 20))),
+    # Opening night in the first days of November to the title game in the
+    # first week of April; the tournaments from the second week of March.
+    "cbb": (("regular", (11, 1), (3, 8)), ("tournaments", (3, 9), (4, 8))),
     "ufc": (("regular", (1, 1), (12, 31)),),
 }
 
 LABEL = {"nfl": "NFL", "cfb": "CFB", "nba": "NBA", "nhl": "NHL",
-         "mlb": "MLB", "ufc": "UFC", "wnba": "WNBA"}
+         "mlb": "MLB", "ufc": "UFC", "wnba": "WNBA", "cbb": "NCAAB"}
 
 
 class PlanUnavailable(Exception):

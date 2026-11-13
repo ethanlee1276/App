@@ -37,12 +37,12 @@
   "use strict";
 
   const STRONG_KEY = "qb_feed_strong";
-  const SPORTS = [["nfl", "NFL"], ["cfb", "CFB"], ["mlb", "MLB"], ["nba", "NBA"],
+  const SPORTS = [["nfl", "NFL"], ["cfb", "CFB"], ["mlb", "MLB"], ["nba", "NBA"], ["cbb", "NCAAB"],
                   ["wnba", "WNBA"], ["nhl", "NHL"], ["ufc", "UFC"], ["soccer", "Soccer"]];
   const SPORT_NAME = Object.fromEntries(SPORTS);
   // Parlays come off the site's own boards; UFC and soccer are talk only.
-  const BOARD_SPORTS = ["nfl", "cfb", "mlb", "nba", "wnba", "nhl"];
-  const POPULAR = ["nfl", "mlb", "nba", "nhl", "cfb", "wnba", "ufc", "soccer"];
+  const BOARD_SPORTS = ["nfl", "cfb", "mlb", "nba", "wnba", "nhl", "cbb"];
+  const POPULAR = ["nfl", "mlb", "nba", "nhl", "cfb", "cbb", "wnba", "ufc", "soccer"];
   const REASONS = [["spam", "Spam"], ["abuse", "Harassment"], ["hate", "Hate"],
                    ["scam", "Scam or selling picks"], ["other", "Something else"]];
   const METRICS = [["win", "Win %"], ["units", "Units"], ["followers", "Followers"]];
@@ -102,7 +102,7 @@
   const svg = (d, size, cls) => `<svg class="ic${cls ? ` ${cls}` : ""}" viewBox="0 0 16 16" width="${size}" height="${size}" fill="none"
     stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${d}</svg>`;
   const ico = (name, size = 16) => (P[name] ? svg(P[name], size) : icon(name, size));
-  const SPORT_ICON = { nfl: "shield", cfb: "football", mlb: "baseball", nba: "basketball", wnba: "basketball",
+  const SPORT_ICON = { nfl: "shield", cfb: "football", mlb: "baseball", nba: "basketball", wnba: "basketball", cbb: "basketball",
                        nhl: "hockey", ufc: "octagon", soccer: "soccer" };
   const sportIcon = (k, size = 18) => ico(SPORT_ICON[k] || "dot", size);
 
@@ -221,7 +221,8 @@
                    mlb: typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : null,
                    nba: typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : null,
                    wnba: typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : null,
-                   nhl: typeof NHL_TEAMS !== "undefined" ? NHL_TEAMS : null };
+                   nhl: typeof NHL_TEAMS !== "undefined" ? NHL_TEAMS : null,
+                   cbb: typeof teamsForSport === "function" ? teamsForSport("cbb") : null };
     return maps[sport] || {};
   }
 
@@ -1971,7 +1972,7 @@
   });
 
   // ── the Account page: your one profile ────────────────────────────────────
-  const TEAM_LEAGUES = [["", "None"], ["nfl", "NFL"], ["cfb", "CFB"], ["mlb", "MLB"], ["nba", "NBA"], ["wnba", "WNBA"], ["nhl", "NHL"]];
+  const TEAM_LEAGUES = [["", "None"], ["nfl", "NFL"], ["cfb", "CFB"], ["mlb", "MLB"], ["nba", "NBA"], ["cbb", "NCAAB"], ["wnba", "WNBA"], ["nhl", "NHL"]];
 
   function profileFormHTML(m, suggest, creating) {
     const [lg, abbr] = (m.team || "").split(":");

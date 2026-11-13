@@ -110,7 +110,9 @@ RECORD_MISS = 0.08
 MATCHUP_SOURCE = {"nfl": "scan+model", "cfb": "scan+model", "mlb": "scan+model",
                   # Hockey's read (engine/nhl/scan, 2026-10-03): the opposing
                   # starter, shots allowed, expected goals, rest, ice time.
-                  "nhl": "scan", "nba": "scan+model", "wnba": "scan+model"}
+                  "nhl": "scan", "nba": "scan+model", "wnba": "scan+model",
+                  # College basketball reads the NBA's scan (2026-11-13).
+                  "cbb": "scan+model"}
 MODEL_MATCHUP_STEP = 0.03
 #: The journal buckets whose settled rows make the record.
 RECORD_CATEGORIES = ("likely", "matchup_td", "matchup_prop", "td_scenario", "board", "bold")

@@ -52,7 +52,7 @@
    game opens; uses app.js's helpers by name. No inline handlers. */
 (function () {
   "use strict";
-  const HOOPS = new Set(["nba", "wnba"]);
+  const HOOPS = new Set(["nba", "wnba", "cbb"]);
   const esc = (v) => escapeHtml(String(v == null ? "" : v));
   const num = (v) => { const n = Number(v); return v === null || v === "" || !Number.isFinite(n) ? null : n; };
   const lower = (s) => String(s || "").toLowerCase();
@@ -64,9 +64,14 @@
   const S = { view: "live", stats: "team", odds: "odds", q: null, shots: "both", run: null, replay: false, ctx: null };
 
   /* ---------------- the clock ---------------- */
-  const QUARTER_S = { nba: 720, wnba: 600 };
+  /* A regulation period's seconds: the NBA's and the WNBA's quarters, and
+     college's halves (2026-11-13: two of twenty minutes, five-minute
+     overtimes like everyone's). */
+  const QUARTER_S = { nba: 720, wnba: 600, cbb: 1200 };
+  const REG_PERIODS = { cbb: 2 };
+  const regN = (league) => REG_PERIODS[league] || 4;
   const OT_S = 300;
-  const periodLen = (league, p) => (p > 4 ? OT_S : (QUARTER_S[league] || 720));
+  const periodLen = (league, p) => (p > regN(league) ? OT_S : (QUARTER_S[league] || 720));
   function clockSecs(c) {
     const s = String(c == null ? "" : c).trim();
     if (!s) return null;
@@ -83,8 +88,18 @@
     const left = clockSecs(p && p.clock);
     return t + (left == null ? 0 : clamp(periodLen(league, per) - left, 0, periodLen(league, per)));
   }
-  const periodWord = (p) => (!p ? "" : p <= 4 ? ["1st", "2nd", "3rd", "4th"][p - 1] : p === 5 ? "OT" : `${p - 4}OT`);
-  const periodShort = (p) => (!p ? "" : p <= 4 ? `Q${p}` : p === 5 ? "OT" : `${p - 4}OT`);
+  /* The league `render` is drawing, for the period's words: a quarter's
+     "1st" and "Q1", or a college half's "1st half" and "H1". */
+  let LG = "";
+  const periodWord = (p, lg = LG) => {
+    const n = regN(lg);
+    return !p ? "" : p <= n ? (n === 2 ? ["1st half", "2nd half"] : ["1st", "2nd", "3rd", "4th"])[p - 1]
+      : p === n + 1 ? "OT" : `${p - n}OT`;
+  };
+  const periodShort = (p, lg = LG) => {
+    const n = regN(lg);
+    return !p ? "" : p <= n ? `${n === 2 ? "H" : "Q"}${p}` : p === n + 1 ? "OT" : `${p - n}OT`;
+  };
   const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
   /* ---------------- sides and the box ---------------- */
@@ -345,7 +360,7 @@
           <b class="hc-pts">${has}${score != null ? esc(score) : "–"}</b></div>`;
     };
     const hold = lv.state === "live" && typeof liveHoldWord === "function" ? liveHoldWord(lv) : "";
-    const per = /^Q(\d+)$/.exec(String(lv.period || ""));
+    const per = /^[QH](\d+)$/.exec(String(lv.period || ""));
     const pnum = per ? Number(per[1]) : 0;
     let mid;
     if (lv.state === "live") {
@@ -353,7 +368,7 @@
         <b class="hc-clock">${esc(hold ? "" : (lv.clock || ""))}</b>
         <span class="hc-live">${icon("dot", 8)} Live</span>`;
     } else if (lv.state === "final") {
-      mid = `<span class="hc-per">Final</span><b class="hc-clock">${esc(pnum > 4 ? periodShort(pnum) : "")}</b>`;
+      mid = `<span class="hc-per">Final</span><b class="hc-clock">${esc(pnum > regN(league) ? periodShort(pnum) : "")}</b>`;
     } else {
       const tip = typeof pbpTime === "function" ? pbpTime(lv.start_time) : "";
       mid = `<span class="hc-per">Tip-off</span><b class="hc-clock">${esc(tip || "—")}</b>`;
@@ -531,7 +546,7 @@
   function flowSVG(d, league, k, h) {
     const f = flow(d, league);
     if (f.length < 2) return `<p class="rail-quiet">The game flow draws itself from the first basket.</p>`;
-    const reg = 4 * (QUARTER_S[league] || 720);
+    const reg = regN(league) * (QUARTER_S[league] || 720);
     const end = Math.max(reg, f[f.length - 1].t);
     const W = 1000, H2 = h || 240, mid = H2 / 2;
     const top = Math.max(10, ...f.map((r) => Math.abs(r.m)));
@@ -651,7 +666,7 @@
     const shown = plays.filter((p) => p && p.event && (q === 0 || Number(p.period) === q)).slice().reverse();
     const live = (d.live || {}).state === "live";
     const opts = [`<option value=""${S.q == null ? " selected" : ""}>${live ? "Now" : "Latest"}${cur ? ` — ${periodWord(cur)}` : ""}</option>`]
-      .concat(periods.map((p) => `<option value="${p}"${S.q === p ? " selected" : ""}>${periodWord(p)}${p <= 4 ? " quarter" : ""}</option>`))
+      .concat(periods.map((p) => `<option value="${p}"${S.q === p ? " selected" : ""}>${periodWord(p)}${p <= regN(LG) && regN(LG) === 4 ? " quarter" : ""}</option>`))
       .concat([`<option value="0"${S.q === 0 ? " selected" : ""}>Every play</option>`]).join("");
     const rows = shown.map((p) => {
       const kind = playKind(p), side = sideOf(d, p.team);
@@ -824,7 +839,7 @@
     const out = [];
     const lv = d.live || {}, plays = d.plays || [];
     const last = plays[plays.length - 1];
-    const t = last ? elapsed(league, last) : 0, reg = 4 * (QUARTER_S[league] || 720);
+    const t = last ? elapsed(league, last) : 0, reg = regN(league) * (QUARTER_S[league] || 720);
     const h = num(lv.home_score), a = num(lv.away_score);
     const tot = num((k.boardGame || {}).total);
     if (lv.state === "live" && t >= 240 && t < reg && h != null && a != null) {
@@ -907,6 +922,7 @@
      were scrolled to. */
   function render(host, ctx, chose) {
     if (!host || !ctx || !ctx.d) return false;
+    LG = String(ctx.league || ctx.d.league || "");
     if (!S.ctx || !S.ctx.d || S.ctx.d.event_id !== ctx.d.event_id) { S.run = null; S.q = null; }
     const same = !!(S.ctx && S.ctx.d && S.ctx.d.event_id === ctx.d.event_id);
     S.ctx = ctx;

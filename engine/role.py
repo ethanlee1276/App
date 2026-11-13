@@ -76,6 +76,7 @@ LOGGED = {
             ("rz", ("rz_car", "rz_rec"))),
     "nba": (("min", ("min",)),),
     "wnba": (("min", ("min",)),),
+    "cbb": (("min", ("min",)),),
     "mlb": (("pa", ("pa",)), ("outs", ("outs",))),
     "nhl": (("toi", ("toi",)), ("sog", ("sog",)), ("sa", ("shots_against",))),
 }
@@ -90,6 +91,7 @@ ORDER = {
     "cfb": ("att", "car", "car_sh", "rec", "rec_sh", "rz"),
     "nba": ("min", "fga", "fg3a", "fta"),
     "wnba": ("min",),
+    "cbb": ("min",),
     "mlb": ("pa", "spot", "seen", "pitches", "bf", "outs", "rest"),
     "nhl": ("toi", "sog", "sat", "pp", "sa"),
 }
@@ -165,7 +167,7 @@ def _logged(conn, sport: str, name: str, season: int) -> list:
             if got:
                 v[key] = round(sum(got), 4)
         start = None
-        if sport in ("nba", "wnba"):
+        if sport in ("nba", "wnba", "cbb"):
             start = {"S": True, "B": False}.get(g["pos"].upper())
         elif sport in STARTED and g["raw"].get(STARTED[sport]) is not None:
             start = bool(g["raw"][STARTED[sport]])
@@ -462,7 +464,7 @@ def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
     from .carries import scoreboard
     scoreboard(conn, sport, pick, games)
     newest = games[::-1]
-    position = "" if sport in ("nba", "wnba") else newest[0]["pos"]
+    position = "" if sport in ("nba", "wnba", "cbb") else newest[0]["pos"]
     for g in games:
         g["v"] = {k: g["v"][k] for k in shown if g["v"].get(k) is not None}
         g.pop("leg", None)

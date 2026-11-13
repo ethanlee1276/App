@@ -41,7 +41,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
 #: How long each league's game runs, for the calendar block.
-LENGTH_MIN = {"nfl": 195, "cfb": 210, "nba": 150, "wnba": 135, "mlb": 180, "nhl": 150}
+LENGTH_MIN = {"nfl": 195, "cfb": 210, "nba": 150, "wnba": 135, "mlb": 180, "nhl": 150,
+              "cbb": 120}
 _TOKEN = re.compile(r"(\d{1,12})\.([A-Za-z0-9_-]{24,64})")
 PRODID = "-//Qellys Book//Your games//EN"
 

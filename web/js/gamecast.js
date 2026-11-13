@@ -32,7 +32,8 @@
   //: engine/sources/nflverse.ESPN_HEADSHOT draws NFL faces from. A face is
   //: the board's own first (the deep file's `faces`), this second, blank
   //: third.
-  const FACE_DIR = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl" };
+  const FACE_DIR = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl",
+                     cbb: "mens-college-basketball" };
   //: The box score's open side (the team toggle), kept across redraws.
   let _team = "";
 
@@ -1776,7 +1777,7 @@
      handed the strip, the way back and app.js's own wiring. Until it lands
      the page says so; a file that will not load leaves basketball on the
      rooms above, as it was. */
-  const HOOPS = new Set(["nba", "wnba"]);
+  const HOOPS = new Set(["nba", "wnba", "cbb"]);
   let _hoops = null, _hoopsFailed = false;
   function hoops(host, ctx) {
     if (host && ctx && ctx.league === "nhl") return rink(host, ctx);

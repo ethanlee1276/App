@@ -39,7 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from engine import potd                                       # noqa: E402
 
 #: Boards that carry a `most_likely` list. Same spelling the builds use.
-BOARDS = ("mlb", "nfl", "cfb", "nba", "wnba")
+BOARDS = ("mlb", "nfl", "cfb", "nba", "wnba", "cbb")
 
 
 def board_paths(sport: str, where: str) -> list:

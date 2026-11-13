@@ -39,7 +39,11 @@ from __future__ import annotations
 #: NBA ~215-235), not fitted constants — the factor is damped and
 #: clamped tightly enough that ±3 points of norm error moves a
 #: projection by well under 1%.
-LEAGUE_TOTAL = {"wnba": 162.0, "nba": 225.0}
+LEAGUE_TOTAL = {"wnba": 162.0, "nba": 225.0,
+                # College: 149.4 a game between two Division I schools in
+                # 2025-26 (5,752 games of ESPN's scoreboards), the fallback
+                # until the league's own stored finals give the norm.
+                "cbb": 149.0}
 
 #: Half the total's excess is credited to volume (see module docstring),
 #: and the whole factor is clamped — a 20-point outlier total is a

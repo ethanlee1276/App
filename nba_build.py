@@ -174,7 +174,7 @@ def player_history(conn, teams: set[str], sport: str = "nba",
     return hist
 
 
-def current_teams(league: str, fetch=None) -> tuple[dict, list]:
+def current_teams(league: str, fetch=None, team_ids: dict | None = None) -> tuple[dict, list]:
     """``({normalized name: team}, [clubs that would not load])`` from ESPN's
     current rosters (`espnrosters.fetch_league`, the same six-hour cache the
     Rosters page reads), teams in this league's own abbreviations.
@@ -189,14 +189,19 @@ def current_teams(league: str, fetch=None) -> tuple[dict, list]:
     from engine.sources import espnrosters
     from engine.sources.oddsapi import normalize_name
     try:
-        feed, missed = (fetch or (lambda: espnrosters.fetch_league(league)))()
+        feed, missed = (fetch or (lambda: espnrosters.fetch_league(league, team_ids=team_ids)))()
     except Exception:                                       # noqa: BLE001
         return {}, []
     known = set(divisions.MAPS.get(league) or {})
+    # College's codes are the scoreboard's own (`espnhoops.team_key`) and
+    # are read back exactly as the board holds them: the pro leagues' alias
+    # map upper-cases a code, which would turn a small school's
+    # ``espn:{id}`` into a key nothing else uses.
+    keep_code = league in espnrosters.BY_ID_ONLY
     seen: dict = {}
     out: dict = {}
     for team, people in (feed or {}).items():
-        club = divisions.canonical(league, team)
+        club = team if keep_code else divisions.canonical(league, team)
         for p in people or []:
             k = normalize_name(str(p.get("player") or ""))
             if k:
@@ -204,6 +209,50 @@ def current_teams(league: str, fetch=None) -> tuple[dict, list]:
                 out[k] = club
     return ({k: t for k, t in out.items() if seen[k] == 1 and (not known or t in known)},
             list(missed or []))
+
+
+def club_ids(games: list[dict]) -> dict:
+    """``{club code: ESPN team id}`` for the clubs in ``games`` — the ids
+    college's scoreboard carries (`espnhoops.parse_scoreboard`), which is
+    how its rosters are asked for (`espnrosters.BY_ID_ONLY`)."""
+    out: dict = {}
+    for g in games or []:
+        for side in ("home", "away"):
+            if g.get(side) and g.get(f"{side}_id"):
+                out[g[side]] = str(g[f"{side}_id"])
+    return out
+
+
+def board_assets(conn, league: str, team_ids: dict | None = None, fetch=None) -> dict:
+    """``{player: {espn_id, headshot}}`` — the faces the board's cards wear.
+
+    The stored table (`db.player_assets`, written by the box-score ingest)
+    is keyed by sport and name alone. That is safe for a pro league and not
+    for college, where Division I's five thousand men include namesakes on
+    different schools: the later box score's photo would be the face of
+    both. So for college the clubs' own current rosters — tonight's prop
+    clubs, read by id on the six-hour cache `current_teams` just filled —
+    go over the table, each photo ESPN's for that man on that roster.
+    A roster that will not load leaves the table's faces as they were."""
+    from engine.db import player_assets
+    assets = dict(player_assets(conn, league) or {})
+    if league != "cbb" or not team_ids:
+        return assets
+    from engine.sources import espnrosters
+    try:
+        feed, _missed = (fetch or (lambda: espnrosters.fetch_league(league, team_ids=team_ids)))()
+    except Exception:                                       # noqa: BLE001
+        return assets
+    for people in (feed or {}).values():
+        for p in people or []:
+            name, shot = str(p.get("player") or ""), str(p.get("headshot") or "")
+            if name and shot:
+                # Re-inserted, not updated in place, so a spelling the table
+                # also holds is found here first by the normalised join
+                # (`pipeline._norm_index` keeps the LAST row per key).
+                row = dict(assets.pop(name, None) or {}, headshot=shot)
+                assets[name] = row
+    return assets
 
 
 #: ESPN designations that mean he is not playing tonight — the hoops twin of
@@ -659,6 +708,55 @@ def matchup_fit(defense: dict, opponent: str) -> float:
     return round(0.35 + 0.5 * rank, 3)
 
 
+#: HOW MANY COLLEGE GAMES A BUILD PRICES PLAYERS FOR — the month's plan's
+#: cap on one pull (`oddsplan.PULL_CAP["cbb"]`), so the history read, the
+#: props and the paid pull cover the same games. ``QB_CBB_PROP_GAMES`` moves it.
+CBB_PROP_GAMES = 5
+
+
+def college_board_games(games: list[dict], cap: int | None = None) -> list[dict]:
+    """The college games a build prices players for: the ones still to tip,
+    the ranked and power-conference games first (`cbbteams.priority`), at
+    most ``cap``.
+
+    WHY NOT EVERY GAME. A college night is 60 to 150 games; the books post
+    player props on the ranked teams and the power conferences, and a paid
+    pull buys a game at a time (`oddsbudget.EVENT_CREDITS`). The history read
+    and the projections follow the same games, so the build's time and the
+    month's credits go where a price can exist. A game under way is never
+    bought: its pre-game number is gone."""
+    import os
+    from engine.cbbteams import priority
+    if cap is None:
+        try:
+            cap = int(os.environ.get("QB_CBB_PROP_GAMES", "") or CBB_PROP_GAMES)
+        except ValueError:
+            cap = CBB_PROP_GAMES
+    ahead = [g for g in games or [] if (g.get("state") or "scheduled") == "scheduled"]
+    return sorted(ahead, key=priority)[:max(0, cap)]
+
+
+def college_lookup(games: list[dict]) -> dict:
+    """``{loose name: code}`` for joining a book's college team names to the
+    slate (`oddsapi._slate_resolver`): each side's full name, school, short
+    name and code (`cfbdata.name_key`). Never the bare nickname — a dozen
+    Division I schools are the Wildcats."""
+    from engine.sources.cfbdata import name_key
+    out: dict = {}
+    for g in games or []:
+        for side in ("home", "away"):
+            code = g.get(side)
+            if not code:
+                continue
+            info = g.get(f"{side}_info") or {}
+            for variant in (g.get(f"{side}_name"), info.get("name"), info.get("loc"),
+                            info.get("short"), info.get("abbr")):
+                k = name_key(str(variant or ""))
+                if k:
+                    out.setdefault(k, code)
+    return out
+
+
 def best_two_way(lines) -> tuple | None:
     """Most-quoted line value, best Over and best Under across books."""
     by_line: dict = {}
@@ -694,6 +792,8 @@ def diagnose(league: str, date: str) -> None:
     from engine.seasons import recent_seasons
     if league == "wnba":
         from engine.sources.wnbaespn import fetch_schedule, parse_schedule_day
+    elif league == "cbb":
+        from engine.sources.cbbespn import fetch_schedule, parse_schedule_day
     else:
         from engine.sources.nbaespn import fetch_schedule, parse_schedule_day
 
@@ -803,6 +903,9 @@ def _recent_slate(args, tune) -> tuple[int, bool]:
         if league == "wnba":
             from engine.sources.wnbaespn import (fetch_schedule,
                                                  parse_schedule_day)
+        elif league == "cbb":
+            from engine.sources.cbbespn import (fetch_schedule,
+                                                parse_schedule_day)
         else:
             from engine.sources.nbaespn import (fetch_schedule,
                                                 parse_schedule_day)
@@ -895,7 +998,10 @@ def main() -> None:
     # same JSON shapes from its own CDN; what differs is the tuning (a
     # 40-minute game) and the fact that its tuning has never been fitted to
     # WNBA results — see engine/hoops.py.
-    ap.add_argument("--league", choices=["nba", "wnba"], default="nba")
+    # MEN'S COLLEGE BASKETBALL (2026-11-13) is the third: the same engine on
+    # a 40-minute game, Division I's whole night on the scoreboard and its
+    # player props on the games worth buying (`college_board_games`).
+    ap.add_argument("--league", choices=["nba", "wnba", "cbb"], default="nba")
     ap.add_argument("--diagnose", action="store_true",
                     help="report exactly where this board loses its props "
                          "(schedule teams vs stored logs) and exit")
@@ -947,6 +1053,8 @@ def main() -> None:
         # endpoint family that already carries NFL scores and the whole
         # college football board here.
         from engine.sources.wnbaespn import fetch_schedule, parse_schedule_day
+    elif args.league == "cbb":
+        from engine.sources.cbbespn import fetch_schedule, parse_schedule_day
     else:
         from engine.sources.nbaespn import fetch_schedule, parse_schedule_day
 
@@ -1007,8 +1115,48 @@ def main() -> None:
     out["games"] = [{"home": g["home"], "away": g["away"], "date": args.date,
                      "kickoff": g.get("kickoff", ""),
                      "live": _live_block(g)} for g in games]
+    # COLLEGE: EVERY DIVISION I GAME ON THE SCOREBOARD, THE PLAYERS ON THE
+    # GAMES WORTH BUYING. The night's whole slate is the page's scoreboard
+    # and its game lines (one three-credit request prices all of it); the
+    # player history, the props and the paid player-prop pull are the top
+    # games by `cbbteams.priority` (`college_board_games`). The teams' names,
+    # colours and logos ride in the board (`cbbespn.teams_from_games`), as
+    # college football's do — 365 schools are not a file in the repo.
+    all_games = games
+    if args.league == "cbb":
+        from engine.sources.cbbespn import teams_from_games as _cbb_teams
+        _tonight = _cbb_teams(games)
+        # EVERY SCHOOL SEEN, tonight's over them: the standings, rosters and
+        # team pages name schools tonight's slate does not hold
+        # (`cbbteams.cards`), and a rank is tonight's only. The Division I
+        # ids are kept too, for the readers that see a school only in a
+        # summary, where its conference is not written (`espnhoops.team_key`).
+        try:
+            from engine import cbbteams as _cbbt
+            _cbbt.remember_cards(_tonight)
+            _cbbt.remember_ids({t["id"]: c for c, t in _tonight.items()
+                                if t.get("id") and t.get("conf")})
+            out["teams"] = {**_cbbt.cards(), **_tonight}
+        except Exception:                                   # noqa: BLE001
+            out["teams"] = _tonight
+        for gd, g in zip(out["games"], games):
+            gd.update({k: g.get(k) for k in ("home_rank", "away_rank", "home_conf", "away_conf",
+                                             "neutral", "conference_game", "broadcast",
+                                             "home_name", "away_name")
+                       if g.get(k) not in (None, "")})
+        games = college_board_games(games)
+        out["board_games"] = [f"{g['away']}@{g['home']}" for g in games]
+        print(f"College night: {len(all_games)} Division I game(s); props built for the "
+              f"{len(games)} game(s) the board prices — "
+              + (", ".join(out["board_games"]) or "none still to tip"))
 
-    if not games and "status" not in out:
+    if all_games and not games and "status" not in out:
+        # COLLEGE, EVERY GAME UNDER WAY: the scoreboard is full and no game
+        # is left to price players for — a live night, not an empty one.
+        out.update(status="slate",
+                   note=f"Every {tune.name} game on tonight's board has tipped; "
+                        f"the player prices come back with the next slate.")
+    if not all_games and "status" not in out:
         # "OFFSEASON" FROM A SINGLE EMPTY DAY IS NOT A FINDING. This
         # asserted it whenever today had no games — no lookback, no
         # evidence — and on 2026-08-31, a Sunday in the middle of a WNBA
@@ -1050,6 +1198,9 @@ def main() -> None:
     # What the game report needs that the board does not carry (engine/
     # leaguereport.nba_meta), filled below once the logs are read.
     _gr_meta: dict = {}
+    # College's prop clubs by ESPN id (`club_ids`): its rosters and faces are
+    # read by id (`current_teams`, `board_assets`); None for the pro leagues.
+    cbb_ids = None
     if games:
         # ITS PARTS ON THE HEARTBEAT (boards.nba.parts): 8 seconds at 10:13
         # on 9 November with nothing to say which read held them.
@@ -1088,7 +1239,10 @@ def main() -> None:
         # and ESPN's injury board — fetched for the Injuries page all along,
         # read by no build — says who sits tonight.
         _ht = _clock.lap("history + rosters + injuries", "schedule spots", _ht)
-        roster, roster_missed = current_teams(args.league)
+        # College asks for tonight's prop clubs by the ids the scoreboard
+        # carried (`espnrosters.BY_ID_ONLY`), never the 365-school list.
+        cbb_ids = club_ids(games) if args.league == "cbb" else None
+        roster, roster_missed = current_teams(args.league, team_ids=cbb_ids)
         _ht = _clock.lap("history + rosters + injuries", "rosters", _ht)
         injuries = hoops_injuries(args.league)
         _ht = _clock.lap("history + rosters + injuries", "injuries", _ht)
@@ -1164,6 +1318,10 @@ def main() -> None:
         slate = _Slate([_Game(g["home"], g["away"], g["kickoff"],
                               g.get("home_name", ""), g.get("away_name", ""))
                         for g in games], [])
+        if args.league == "cbb":
+            # The book's college names, joined to the night's schools by the
+            # college resolver (`college_lookup`, `oddsapi._slate_resolver`).
+            slate.team_lookup = college_lookup(all_games)
         thin_counts = 0
         for player, h in hist.items():
             if len(h["minutes"]) >= 3:
@@ -1269,11 +1427,26 @@ def main() -> None:
         # under way are left out: the endpoint quotes them in play, and an
         # in-play number is not the game's pre-game line.
         _ot = _clock.lap("slate + odds + line ledger", "prop odds", _ot)
+        # The games the night's lines are written to (the board's cards):
+        # the props slate's, and college's whole night beside them.
+        _line_games = list(slate.games)
         if args.board_odds or _board_lines_cached(args.league):
             try:
                 from engine.sources import oddsapi as _boa
                 _pre = _Slate([sg for sg, g in zip(slate.games, games)
                                if (g.get("state") or "scheduled") == "scheduled"], [])
+                if args.league == "cbb":
+                    # EVERY DIVISION I GAME'S LINES IN THE ONE REQUEST: the
+                    # props slate's own games (so their spreads and totals
+                    # reach the minutes model) and the rest of the night's.
+                    _own = {(sg.home, sg.away): sg for sg in slate.games}
+                    _pre = _Slate([_own.get((g["home"], g["away"]))
+                                   or _Game(g["home"], g["away"], g["kickoff"],
+                                            g.get("home_name", ""), g.get("away_name", ""))
+                                   for g in all_games
+                                   if (g.get("state") or "scheduled") == "scheduled"], [])
+                    _pre.team_lookup = slate.team_lookup
+                    _line_games = list(slate.games) + [sg for sg in _pre.games if sg not in slate.games]
                 if _pre.games:
                     _bres = _boa.apply_board_lines_to_slate(
                         _pre, sport=args.league, cache_only=not args.board_odds)
@@ -1622,10 +1795,9 @@ def main() -> None:
             # Photos come out of the same box scores that produced the stat
             # history — one table read, no second feed. A player we have
             # never ingested is simply absent and keeps the initials chip.
-            from engine.db import player_assets
             recs = shared_recommendations(props, lines_map, dates_map,
                                           tune=tune,
-                                          assets=player_assets(conn, args.league),
+                                          assets=board_assets(conn, args.league, cbb_ids),
                                           alt_map=alt_map,
                                           alt_sharp_map=alt_sharp_map)
             # Movement, EVIDENCE-ONLY (§4). The snapshot history has been
@@ -1719,7 +1891,7 @@ def main() -> None:
             # priced — which is what a settled NBA moneyline closes on
             # (ledger._game_close). 0 is "not offered" and is written as
             # nothing.
-            by_pair = {(g.home, g.away): g for g in slate.games}
+            by_pair = {(g.home, g.away): g for g in _line_games}
             for gd in out.get("games", []):
                 g = by_pair.get((gd["home"], gd["away"]))
                 if g is not None:
@@ -1757,7 +1929,8 @@ def main() -> None:
                 _vacancy[_t] = {"out": _away, "inherit": _onoff.inheritance(
                     _team_rows(hist, _t, _first), _t, _big, "pts")}
             _st = _clock.lap("scan + team profiles", "vacancy", _st)
-            _assets = _passets(conn, args.league)
+            _assets = (board_assets(conn, args.league, cbb_ids) if args.league == "cbb"
+                       else _passets(conn, args.league))
             _faces = {n: (_nface(_assets, n) or "") for n in hist}
             _st = _clock.lap("scan + team profiles", "faces", _st)
             _pulled = {_pn(n) for g in slate.games for n in (getattr(g, "pulled_players", None) or [])}
@@ -2016,6 +2189,10 @@ def main() -> None:
         from engine import livelines as _ll
         from engine.sources.oddsapi import NBA_TEAM_ABBR, WNBA_TEAM_ABBR
         _names = WNBA_TEAM_ABBR if args.league == "wnba" else NBA_TEAM_ABBR
+        if args.league == "cbb":
+            # College's names are the night's own (the board's teams table).
+            _names = {t.get("name"): code for code, t in (out.get("teams") or {}).items()
+                      if t.get("name")}
         _live_games = [g for g in out.get("games") or []
                        if (g.get("live") or {}).get("state") == "live"]
         if _live_games and (args.odds or args.live_lines):

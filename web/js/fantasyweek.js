@@ -853,6 +853,7 @@
              + "counted, and goalies are left out: their wins and goals against are not projected." },
   };
   NIGHT.wnba = { ...NIGHT.nba, teams: () => (typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : null) };
+  NIGHT.cbb = { ...NIGHT.nba, teams: () => (typeof teamsForSport === "function" ? teamsForSport("cbb") : null) };
   const NIGHT_WORD = { pts: "point", fg3m: "three", reb: "rebound", ast: "assist", stl: "steal",
                        blk: "block", tov: "turnover", goals: "goal", assists: "assist",
                        sog: "shot on goal", blocks: "blocked shot" };
@@ -942,7 +943,7 @@
     const pos = posTabs.includes(night.pos) ? night.pos : "ALL";
     const rows = all.filter((r) => (!game || gameKey(r.game) === game) && (pos === "ALL" || r.position === pos));
     const shown = night.all ? rows : rows.slice(0, SHOWN);
-    const word = { nba: "NBA", wnba: "WNBA", nhl: "NHL" };
+    const word = { nba: "NBA", wnba: "WNBA", nhl: "NHL", cbb: "NCAAB" };
     const locked = doc.locked && doc.locked["players[].fields"];
     return `
       ${nightDocs.length > 1 ? `<div class="rec-bf-group ffn-sports" role="group" aria-label="Sport">${nightDocs.map((d) => `
@@ -997,7 +998,7 @@
 
   /* The tab's name: the sports with a slate tonight. */
   function dailyName(docs) {
-    const word = { nba: "NBA", wnba: "WNBA", nhl: "NHL" };
+    const word = { nba: "NBA", wnba: "WNBA", nhl: "NHL", cbb: "NCAAB" };
     return listed(nightCurrent(docs).map((d) => word[d.sport])).replace(" and ", " & ") + " tonight";
   }
 

@@ -655,7 +655,7 @@ def scoreboard(conn, sport: str, season: int, games: list[dict]) -> list[dict]:
 
 
 #: The leagues whose games table is keyed by the day (``period`` is the date).
-DAILY = ("nba", "wnba", "mlb", "nhl")
+DAILY = ("nba", "wnba", "mlb", "nhl", "cbb")
 
 
 def _daily_finals(conn, sport: str, games: list[dict]) -> list[dict]:

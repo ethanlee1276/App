@@ -1742,7 +1742,7 @@ function renderGamePage() {
   // the header carries are not printed again on every one of them.
   CARD_GAME = g;
   const mlb = state.sport === "mlb";
-  const nba = state.sport === "nba" || state.sport === "wnba";
+  const nba = state.sport === "nba" || state.sport === "wnba" || state.sport === "cbb";
   const w = g.weather || {};
   // Park factors. This line was DROPPED in the 08-11 desktop-sheet
   // rewrite while two Key-insights lines kept reading f.hr — and
@@ -2691,7 +2691,8 @@ const pbpTitleCase = (v) => String(v || "").replace(/[_-]+/g, " ")
    only this page and the gamecast it loads draw them). */
 //: What leads a player's line, by league; the rest follow in the order the parser gave them.
 const PBP_LEAD_STAT = { nfl: ["pass_yds", "rush_yds", "rec_yds", "receptions"], cfb: ["pass_yds", "rush_yds", "rec_yds", "receptions"],
-                        mlb: ["total_bases", "hits", "home_runs", "strikeouts"], nba: ["points", "rebounds", "assists"], wnba: ["points", "rebounds", "assists"] };
+                        mlb: ["total_bases", "hits", "home_runs", "strikeouts"], nba: ["points", "rebounds", "assists"], wnba: ["points", "rebounds", "assists"],
+                        cbb: ["points", "rebounds", "assists"] };
 
 /* A BOX SCORE IS A TABLE, and this room was drawing it as prose.
 
@@ -3253,7 +3254,7 @@ if (typeof window !== "undefined" && !window._recapBound) {
    nothing the model thinks. The card is drawn from the last answer on every
    redraw, so it never blinks, and asks again at most every five seconds. */
 const _ci = { key: "", at: 0, v: null, note: "", span: "week" };
-const CI_LEAGUES = new Set(["mlb", "nfl", "cfb", "nba", "wnba", "nhl"]);
+const CI_LEAGUES = new Set(["mlb", "nfl", "cfb", "nba", "wnba", "nhl", "cbb"]);
 const CI_WORD = { hit: "Hit", out: "Out", k: "Strikeout", walk: "Walk",
                   td: "Touchdown", fg: "Field goal", punt: "Punt", turnover: "Turnover",
                   three: "Three", two: "Two", ft: "Free throw",
@@ -3872,7 +3873,7 @@ const PBP_MOMENTS = [                    // football, the biggest first: word, t
 ];
 // The sport a league plays, for the plays it reads and the moments it has.
 const pbpSportOf = (league) => league === "nfl" || league === "cfb" ? "football"
-  : league === "nba" || league === "wnba" ? "hoops" : league === "nhl" ? "hockey" : "baseball";
+  : league === "nba" || league === "wnba" || league === "cbb" ? "hoops" : league === "nhl" ? "hockey" : "baseball";
 // A game clock in seconds: "5:10", "0.4", "45.2" (app.js pbpClockSecs is
 // a drive's length, and reads only a plain m:ss).
 function pbpGameClockSecs(c) {
@@ -4371,8 +4372,9 @@ function pbpArenaPeriod(lv, league, d) {
     if (n <= 3) return ["1ST", "2ND", "3RD"][n - 1];
     return n === 4 ? "OT" : (((d || {}).rink || {}).game_type === 3 ? `${n - 3}OT` : "SO");
   }
-  const m = /^Q(\d+)$/.exec(per), n = m ? +m[1] : 0;
-  return !n ? per.toUpperCase() : n <= 4 ? `Q${n}` : n === 5 ? "OT" : `${n - 4}OT`;
+  // College basketball's halves read H1, H2 (its overtimes, H3 on, OT).
+  const m = /^([QH])(\d+)$/.exec(per), n = m ? +m[2] : 0, reg = m && m[1] === "H" ? 2 : 4;
+  return !n ? per.toUpperCase() : n <= reg ? `${m[1]}${n}` : n === reg + 1 ? "OT" : `${n - reg}OT`;
 }
 // What the game is doing, in a board's words; inside the last hour, counted.
 function pbpArenaStatus(d, league) {
@@ -4656,6 +4658,19 @@ function pbpCfbTeamsWarm() {
     })
     .catch(() => {});
 }
+/* …and college basketball's, its board read the same way (app.js _cbbTeams). */
+let _pbpCbbWarm = null;
+function pbpCbbTeamsWarm() {
+  if (_cbbTeams || _pbpCbbWarm || typeof LIVE_FEEDS === "undefined" || !LIVE_FEEDS.cbb) return;
+  _pbpCbbWarm = boardFetch(LIVE_FEEDS.cbb, { cache: "no-cache" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((b) => {
+      if (!b || !b.teams || _cbbTeams) return;
+      _cbbTeams = b.teams;
+      if (state.view === "pbp" && (state.pbp || {}).league === "cbb") renderPbpPage();
+    })
+    .catch(() => {});
+}
 /* ON MY LOCK SCREEN, A GAME (engine/gameactivity, deploy/ios/native
    GameActivity; docs/RETENTION.md). The apps people open during a game own
    it on the lock screen (ESPN's, theScore's, the NBA's): in the iOS app, a
@@ -4726,6 +4741,7 @@ function pbpBoardHTML(d, league, lv, opts) {
   const col = pbpSideColours(league, d);
   const ball = pbpBallSide(d, league, lv);
   if (league === "cfb") pbpCfbTeamsWarm();
+  if (league === "cbb") pbpCbbTeamsWarm();
   const side = (ha) => {
     const abbr = d[ha], t = table[abbr] || {};
     const full = (ha === "home" ? d.home_name : d.away_name) || teamNameIn(league, abbr) || abbr || "";
@@ -5261,7 +5277,8 @@ function gpFieldHTML(d, league, lv) {
    whatever the scoreboard has that the plays have not caught up to. A
    period with no play on file cannot be read, and then there is no line
    rather than a wrong one. */
-const GP_REG = { nfl: 4, cfb: 4, nba: 4, wnba: 4, nhl: 3 };
+//: College basketball (2026-11-13): two halves.
+const GP_REG = { nfl: 4, cfb: 4, nba: 4, wnba: 4, nhl: 3, cbb: 2 };
 function gpLinesFromPlays(d, lv) {
   const last = {};
   (d.plays || []).forEach((p) => {
@@ -5290,7 +5307,7 @@ function gpLines(d, league, lv) {
   const own = (t) => (Array.isArray(ls[t]) ? ls[t].map(Number) : null);
   const away = own(d.away), home = own(d.home);
   if (away && home && (away.length || home.length)) return { away, home };
-  return GP_REG[league] && league !== "nba" && league !== "wnba" ? gpLinesFromPlays(d, lv) : null;
+  return GP_REG[league] && league !== "nba" && league !== "wnba" && league !== "cbb" ? gpLinesFromPlays(d, lv) : null;
 }
 function gpPeriodNow(league, lv) {
   if (lv.state !== "live") return 0;
@@ -5642,7 +5659,7 @@ function gpInjuriesHTML(d, league) {
 function gpPeriodWord(league, n) {
   const k = Number(n) || 0, reg = GP_REG[league] || 4;
   if (!k) return "";
-  if (k <= reg) return `${pbpOrd(k)} ${league === "nhl" ? "period" : "quarter"}`;
+  if (k <= reg) return `${pbpOrd(k)} ${league === "nhl" ? "period" : league === "cbb" ? "half" : "quarter"}`;
   return k === reg + 1 ? "Overtime" : `${k - reg}OT`;
 }
 function gpDrivesHTML(d, league) {

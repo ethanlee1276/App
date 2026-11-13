@@ -44,6 +44,11 @@ LEAGUES = {
     "cfb": f"{ROOT}/football/college-football/injuries",
     # Hockey (2026-10-03): ESPN's NHL board, same envelope.
     "nhl": f"{ROOT}/hockey/nhl/injuries",
+    # Men's college basketball (2026-11-13), the college football board's
+    # twin: schools have no reporting duty, so it runs sparse, and a league
+    # whose board will not load is a note on the page, never a blank one
+    # for the others (`injuries_build`).
+    "cbb": f"{ROOT}/basketball/mens-college-basketball/injuries",
 }
 
 #: How long a fetched injury board is believed before ESPN is asked again.

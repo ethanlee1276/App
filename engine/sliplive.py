@@ -56,7 +56,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FAST_DIR = ROOT / "web" / "data"
 #: The leagues the twelve-second loop covers (livescore_build), and
 #: baseball's own fast file (live_build).
-FAST_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl")
+FAST_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "cbb")
 MLB_FILE = "live_mlb.json"
 #: Hockey's skaters, off the league's own box score (livescore_build
 #: `nhl_box_pass`), keyed AWAY@HOME in the board's codes.

@@ -21,7 +21,15 @@ from .. import divisions
 from .fetch import DEFAULT_AGENT, DataUnavailable, fetch_json
 
 ROOT = "https://site.api.espn.com/apis/site/v2/sports"
-PATHS = {"nba": "basketball/nba", "wnba": "basketball/wnba"}
+PATHS = {"nba": "basketball/nba", "wnba": "basketball/wnba",
+         "cbb": "basketball/mens-college-basketball"}
+
+#: Leagues whose rosters are fetched by the ids a caller already holds, never
+#: by walking the league's team list: college's is 365 schools (and ESPN's
+#: list holds hundreds more below Division I), so a build asks for the clubs
+#: on its own slate, whose ids ride on the scoreboard it already read
+#: (`espnhoops.parse_scoreboard`: ``home_id``/``away_id``).
+BY_ID_ONLY = frozenset({"cbb"})
 ROSTER_TTL = 6 * 3600
 
 
@@ -76,13 +84,24 @@ def parse_roster(payload: dict) -> list[dict]:
     return out
 
 
-def fetch_league(sport: str, ttl: int = ROSTER_TTL, fetch=None) -> tuple[dict, list]:
-    """``({our abbreviation: [people]}, [clubs that would not load])``."""
+def fetch_league(sport: str, ttl: int = ROSTER_TTL, fetch=None,
+                 team_ids: dict | None = None) -> tuple[dict, list]:
+    """``({our abbreviation: [people]}, [clubs that would not load])``.
+
+    ``team_ids`` (``{our code: ESPN id}``) asks for those clubs alone and
+    skips the league's team list — the only way college is read
+    (`BY_ID_ONLY`); its codes are kept as given, since a college code is
+    the scoreboard's own (`espnhoops.team_key`)."""
     path = PATHS.get(sport)
     if not path:
         raise DataUnavailable(f"no ESPN roster path for {sport}")
     fetch = fetch or (lambda url, name: fetch_json(url, name, ttl=ttl, user_agent=DEFAULT_AGENT))
-    ids = parse_teams(sport, fetch(f"{ROOT}/{path}/teams", f"espn_{sport}_teams.json"))
+    if team_ids is not None:
+        ids = {str(k): str(v) for k, v in team_ids.items() if k and v}
+    elif sport in BY_ID_ONLY:
+        raise DataUnavailable(f"{sport} rosters are read by team id only")
+    else:
+        ids = parse_teams(sport, fetch(f"{ROOT}/{path}/teams", f"espn_{sport}_teams.json"))
     if not ids:
         raise DataUnavailable(f"ESPN listed no {sport} teams")
     out, missed = {}, []

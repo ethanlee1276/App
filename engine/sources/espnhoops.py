@@ -39,7 +39,99 @@ ROOT = "https://site.api.espn.com/apis/site/v2/sports"
 LEAGUES = {
     "nba": f"{ROOT}/basketball/nba",
     "wnba": f"{ROOT}/basketball/wnba",
+    # MEN'S COLLEGE BASKETBALL (2026-11-13, Ethan: "we need to add college
+    # basketball"): the same API family and the same box-score columns.
+    "cbb": f"{ROOT}/basketball/mens-college-basketball",
 }
+
+#: WHAT A COLLEGE SCOREBOARD MUST ASK FOR. Without ``groups=50`` (Division
+#: I) ESPN answers with the day's featured games only, a few dozen of the 60
+#: to 150 a college night holds, and its default page would cut a Saturday
+#: off besides — the same lesson `livescores.SCOREBOARD_QUERY` learned for
+#: college football's ``groups=80``.
+SCOREBOARD_QUERY = {"cbb": "&groups=50&limit=500"}
+
+#: Periods of regulation: four quarters, but two halves in college.
+REG_PERIODS = {"cbb": 2}
+
+
+def team_key(team: dict, league: str = "") -> str:
+    """One side's code in the league's own vocabulary.
+
+    THE PRO LEAGUES: ESPN's abbreviation (the NBA's clubs are re-keyed to
+    the league's own codes at ingest, as before).
+
+    COLLEGE: ESPN's abbreviation for a Division I school, and ``espn:{id}``
+    for anyone else. A college night is Division I against Division I
+    mostly, and against a small school in a November "buy game" now and
+    then; ESPN's codes are unique among the 365 Division I schools but not
+    beyond them (measured on two seasons of ESPN's own scoreboards: TEX was
+    Texas and Texas A&M-San Antonio, CAL California and Calvary, UNI
+    Northern Iowa and Union (TN)). A Division I school carries its
+    conference's id on the scoreboard and a small school carries none, so
+    the rule needs no table: the code is kept only where it is unique, and
+    a small school can never be filed under a Division I code. ``espn:{id}``
+    is the codebase's own spelling for a side with no usable code
+    (`cfbdata._team_key`)."""
+    abbr = str((team or {}).get("abbreviation") or "").strip()
+    ident = str((team or {}).get("id") or "").strip()
+    if league == "cbb":
+        conf = str((team or {}).get("conferenceId") or "").strip()
+        if abbr and conf:
+            if ident:
+                DI_SEEN[ident] = abbr
+            return abbr
+        # A SUMMARY'S TEAM CARRIES NO CONFERENCE (the box score's and the
+        # header's team dicts are the short ones), so a Division I school
+        # read there is known by the id a scoreboard already tied to its
+        # code — in this process (`DI_SEEN`), or by an earlier build
+        # (`cbbteams.load_ids`). Only an id no scoreboard ever placed in
+        # Division I is a small school.
+        known = (DI_SEEN.get(ident) or _stored_ids().get(ident)) if ident else ""
+        if known:
+            return known
+        return f"espn:{ident}" if ident else abbr
+    return abbr
+
+
+#: ``{ESPN team id: code}`` for the Division I schools this process has read
+#: off a scoreboard (`team_key`).
+DI_SEEN: dict = {}
+_STORED: list = []
+
+
+def _stored_ids() -> dict:
+    """The id map earlier builds stored (`cbbteams.load_ids`), read once."""
+    if not _STORED:
+        try:
+            from .. import cbbteams
+            _STORED.append(cbbteams.load_ids())
+        except Exception:                                   # noqa: BLE001
+            _STORED.append({})
+    return _STORED[0]
+
+
+def _logo(team: dict) -> str:
+    """The team's logo URL as the feed hands it (never built from the id)."""
+    if not isinstance(team, dict):
+        return ""
+    if isinstance(team.get("logo"), str) and team["logo"].startswith("http"):
+        return team["logo"]
+    for lg in team.get("logos") or []:
+        href = (lg or {}).get("href") if isinstance(lg, dict) else None
+        if isinstance(href, str) and href.startswith("http"):
+            return href
+    return ""
+
+
+def _rank(competitor: dict) -> int | None:
+    """The poll rank ESPN prints beside a college team (1-25), or None."""
+    cur = ((competitor or {}).get("curatedRank") or {}).get("current")
+    try:
+        cur = int(cur)
+    except (TypeError, ValueError):
+        return None
+    return cur if 1 <= cur <= 25 else None
 
 BASE = LEAGUES["wnba"]
 SCOREBOARD = BASE + "/scoreboard"
@@ -86,8 +178,13 @@ def _num(raw) -> float | None:
         return None
 
 
-def parse_scoreboard(payload: dict) -> list[dict]:
-    """One day's games: ids, teams, finals."""
+def parse_scoreboard(payload: dict, league: str = "") -> list[dict]:
+    """One day's games: ids, teams, finals.
+
+    ``league`` decides the team codes (`team_key`: college keeps ESPN's code
+    only for Division I) and how many periods make regulation; the pro
+    leagues' rows are unchanged by it."""
+    reg_n = REG_PERIODS.get(league, 4)
     out: list[dict] = []
     for ev in payload.get("events", []) or []:
         comp = (ev.get("competitions") or [{}])[0]
@@ -103,10 +200,26 @@ def parse_scoreboard(payload: dict) -> list[dict]:
             # REGULATION'S POINTS, when the feed carries the periods: the
             # NBA Cup's third tiebreaker leaves overtime out (engine/nbacup).
             per = [_num((x or {}).get("value")) for x in (c.get("linescores") or [])]
-            side = {"abbr": (t.get("abbreviation") or "").strip(),
+            side = {"abbr": team_key(t, league) if league == "cbb" else (t.get("abbreviation") or "").strip(),
                     "name": (t.get("displayName") or t.get("name") or "").strip(),
                     "score": _num(c.get("score")),
-                    "reg": (sum(per[:4]) if len(per) >= 4 and None not in per[:4] else None)}
+                    "reg": (sum(per[:reg_n]) if len(per) >= reg_n and None not in per[:reg_n] else None),
+                    # Who the side is beyond its code: ESPN's id, the poll
+                    # rank, the conference, and the identity a card draws
+                    # (colours, logo, names). Carried for every league; the
+                    # college board's teams table is built from them.
+                    "id": str(t.get("id") or "").strip(),
+                    "rank": _rank(c),
+                    "conf": str(t.get("conferenceId") or "").strip(),
+                    "info": {"name": (t.get("displayName") or "").strip(),
+                             "short": (t.get("shortDisplayName") or "").strip(),
+                             "loc": (t.get("location") or "").strip(),
+                             "nick": (t.get("name") or "").strip(),
+                             "abbr": (t.get("abbreviation") or "").strip(),
+                             "primary": ("#" + str(t.get("color")).lstrip("#")) if t.get("color") else "",
+                             "secondary": (("#" + str(t.get("alternateColor")).lstrip("#"))
+                                           if t.get("alternateColor") else ""),
+                             "logo": _logo(t)}}
             if c.get("homeAway") == "home":
                 home = side
             else:
@@ -159,6 +272,17 @@ def parse_scoreboard(payload: dict) -> list[dict]:
                                 if isinstance(n, dict) and n.get("headline")),
             "home_reg": home["reg"] if completed else None,
             "away_reg": away["reg"] if completed else None,
+            # ESPN's team ids, ranks, conferences and identities (above),
+            # the neutral floor and the conference flag — college's reads.
+            "home_id": home["id"], "away_id": away["id"],
+            "home_rank": home["rank"], "away_rank": away["rank"],
+            "home_conf": home["conf"], "away_conf": away["conf"],
+            "home_info": home["info"], "away_info": away["info"],
+            "neutral": bool(comp.get("neutralSite")),
+            "conference_game": bool(comp.get("conferenceCompetition")),
+            "broadcast": " · ".join(
+                str(n) for b in (comp.get("broadcasts") or []) if isinstance(b, dict)
+                for n in (b.get("names") or []) if n),
         })
     return out
 
@@ -174,6 +298,10 @@ def parse_summary(payload: dict) -> list[dict]:
     box = payload.get("boxscore") or {}
     for team_block in box.get("players", []) or []:
         team = ((team_block.get("team") or {}).get("abbreviation") or "").strip()
+        # The side's ESPN id rides on every row: college keys a team by it
+        # where its code is not unique (`team_key`), and the scoreboard,
+        # not this block, knows which it is.
+        team_id = str((team_block.get("team") or {}).get("id") or "").strip()
         for group in team_block.get("statistics", []) or []:
             names = [str(n).upper() for n in (group.get("names") or [])]
             if not names:
@@ -222,7 +350,7 @@ def parse_summary(payload: dict) -> list[dict]:
                 # the only stable handle if a payload ever omits the href.
                 shot = (info.get("headshot") or {})
                 rows.append({
-                    "player": player, "team": team,
+                    "player": player, "team": team, "team_id": team_id,
                     "position": "S" if ath.get("starter") else "B",
                     "stats": vals,
                     "espn_id": str(info.get("id") or ""),
@@ -278,7 +406,8 @@ def fetch_scoreboard(date: str, ttl: int | None = None,
     day = date.replace("-", "")
     if ttl is None:
         ttl = 30 * 24 * 3600 if _is_settled(date) else LIVE_TTL
-    return fetch_json(f"{_base(league)}/scoreboard?dates={day}&limit=60",
+    query = SCOREBOARD_QUERY.get(league, "&limit=60")
+    return fetch_json(f"{_base(league)}/scoreboard?dates={day}{query}",
                       f"espn_{league}_{day}.json", ttl=ttl,
                       user_agent=DEFAULT_AGENT)
 
@@ -293,7 +422,7 @@ def fetch_summary(game_id: str, ttl: int = 30 * 24 * 3600,
 def load_day(date: str, ttl: int | None = None,
              league: str = "wnba") -> list[dict]:
     """``ttl=None`` lets the date decide — see `fetch_scoreboard`."""
-    return parse_scoreboard(fetch_scoreboard(date, ttl=ttl, league=league))
+    return parse_scoreboard(fetch_scoreboard(date, ttl=ttl, league=league), league=league)
 
 
 def ingest_day(conn, date: str, league: str = "wnba",
@@ -349,8 +478,14 @@ def ingest_day(conn, date: str, league: str = "wnba",
         except Exception as exc:                              # noqa: BLE001
             result["skipped"].append(f"{league} officials {g['game_id']}: {exc}")
         opp = {g["home"]: g["away"], g["away"]: g["home"]}
+        # College's sides by ESPN id (`team_key`): the box block's own code
+        # can be a small school's that a Division I school shares.
+        by_id = {g.get("home_id"): g["home"], g.get("away_id"): g["away"]}
+        by_id.pop(None, None)
+        by_id.pop("", None)
         for row in parse_summary(summary):
-            row = dict(row, team=club(row["team"]))
+            row = dict(row, team=(by_id.get(row.get("team_id")) or club(row["team"])
+                                  if league == "cbb" else club(row["team"])))
             # Identity once per player per game, not once per market — the
             # same person appears in this loop for points, rebounds and
             # assists, and an id does not vary between them.
@@ -410,6 +545,15 @@ def parse_schedule_day(_schedule: dict, date: str,
              "home_name": g.get("home_name", ""),
              "away_name": g.get("away_name", ""),
              "kickoff": g.get("kickoff", ""),
+             # College's reads (`parse_scoreboard`): ids, poll ranks,
+             # conferences, the identity a card draws, the neutral floor.
+             "home_id": g.get("home_id", ""), "away_id": g.get("away_id", ""),
+             "home_rank": g.get("home_rank"), "away_rank": g.get("away_rank"),
+             "home_conf": g.get("home_conf", ""), "away_conf": g.get("away_conf", ""),
+             "home_info": g.get("home_info") or {}, "away_info": g.get("away_info") or {},
+             "neutral": bool(g.get("neutral")),
+             "conference_game": bool(g.get("conference_game")),
+             "broadcast": g.get("broadcast", ""),
              "home_score": g["home_score"], "away_score": g["away_score"],
              "live_home_score": g.get("live_home_score"),
              "live_away_score": g.get("live_away_score"),

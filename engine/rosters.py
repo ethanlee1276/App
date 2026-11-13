@@ -264,7 +264,7 @@ def group_of(position: str) -> str:
 # inactive rather than active. Long enough to survive a rest day or a
 # short IL stint, short enough that a released player stops looking like a
 # starter.
-STALE_DAYS = {"mlb": 14, "nba": 21, "wnba": 21}
+STALE_DAYS = {"mlb": 14, "nba": 21, "wnba": 21, "cbb": 21}
 
 # The market we count appearances from, per sport. One row per game
 # played, so counting these counts games — using every market would count
@@ -275,7 +275,7 @@ STALE_DAYS = {"mlb": 14, "nba": 21, "wnba": 21}
 # receptions. A tuple means ANY of these counts, and the games column
 # counts DISTINCT game_ids so a player with three markets in one box
 # score is one appearance, not three.
-APPEARANCE_MARKET = {"mlb": "pa", "nba": "min", "wnba": "min",
+APPEARANCE_MARKET = {"mlb": "pa", "nba": "min", "wnba": "min", "cbb": "min",
                      "cfb": ("pass_yds", "carries", "receptions")}
 
 #: MLB positions in page order. Pitchers first — they are half the roster

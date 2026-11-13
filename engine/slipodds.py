@@ -48,7 +48,7 @@ OLD_S = 60 * 60
 #: The ledger's name for these calls (`oddsapi._classify`).
 KIND = "slip_event"
 #: The leagues the odds pull prices. A fight leg reads the UFC card.
-LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl")
+LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "cbb")
 GAME_KEYS = {"moneyline": "h2h", "spread": "spreads", "total": "totals"}
 #: How far ahead an event may be and still be the leg's game.
 HORIZON_S = 7 * 86400

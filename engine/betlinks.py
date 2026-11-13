@@ -48,7 +48,7 @@ PREFIX = "betlinks_"
 KEEP_S = 3 * 86400
 #: The six sports boards a pick can be on, by published file name.
 FILE_SPORT = {"recommendations.json": "nfl", "cfb.json": "cfb", "mlb_recommendations.json": "mlb",
-              "nba.json": "nba", "wnba.json": "wnba", "nhl.json": "nhl"}
+              "nba.json": "nba", "wnba.json": "wnba", "nhl.json": "nhl", "cbb.json": "cbb"}
 #: Keys under which no pick lives: skipped by the walk, for speed.
 SKIP_KEYS = frozenset({"player_stats", "games", "logs", "all_lines", "recent_values", "comps",
                        "gate_census", "near_miss", "priced_out", "config", "counts", "injured_list"})

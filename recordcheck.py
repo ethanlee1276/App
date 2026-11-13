@@ -63,7 +63,7 @@ SECTION = {"main": "Edge picks", "paper": "Edge picks", "likely": "Most Likely",
 
 #: Where each league's board is published (engine/boardlint's map).
 BOARD_FILES = {"nfl": "recommendations.json", "cfb": "cfb.json", "mlb": "mlb_recommendations.json",
-               "nba": "nba.json", "wnba": "wnba.json"}
+               "nba": "nba.json", "wnba": "wnba.json", "cbb": "cbb.json"}
 
 
 def _ro(path) -> sqlite3.Connection:

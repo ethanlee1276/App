@@ -14,7 +14,7 @@
 (function () {
   if (window._qbHere || typeof fetch !== "function") return;
   window._qbHere = true;
-  const ROOM = /^(nfl|cfb|nba|wnba|nhl|mlb)$/;
+  const ROOM = /^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/;
   let tab = "";
   try { tab = sessionStorage.getItem("qb.tab") || ""; } catch (e) { tab = ""; }
   if (!/^[a-f0-9]{16}$/.test(tab)) {

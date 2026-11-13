@@ -90,7 +90,7 @@ FALLBACK_D = {
 }
 
 #: The leagues with a regulation clock this can divide (engine/livewp).
-CLOCK_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl")
+CLOCK_LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "cbb")
 
 #: A ratio this close to 1 is Poisson; a negative binomial with a huge r
 #: is the same distribution computed the slow way.

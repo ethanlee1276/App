@@ -38,7 +38,7 @@ TOPIC = "kickoff"
 #: Told the first minute a game is this close to its start.
 LEAD_S = 10 * 60
 #: The scoreboards read, in the game chat's own league codes.
-LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb")
+LEAGUES = ("nfl", "cfb", "nba", "wnba", "nhl", "mlb", "cbb")
 #: A scoreboard's word for a game that has begun or ended.
 UNDER_WAY = ("live", "in", "final", "post")
 

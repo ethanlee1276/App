@@ -64,6 +64,9 @@ SPORT_MARKETS = {
     "nba": ["pts", "reb", "ast", "fg3m", "pra",
             "pts_reb", "pts_ast", "reb_ast", "stl", "blk", "tov"],
     "wnba": ["pts", "reb", "ast", "fg3m", "pra"],
+    # Men's college basketball (2026-11-13): the five markets its board
+    # prices, walked on its own model (`hoops.CBB`, engine/hoopsreplay).
+    "cbb": ["pts", "reb", "ast", "fg3m", "pra"],
     # COLLEGE JOINED 2026-09-04, and the line it replaces was true when
     # it was written: college was priced at game level only, with no
     # player props for a fitter to walk. It has both now —

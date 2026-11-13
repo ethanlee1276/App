@@ -79,7 +79,7 @@ POLL_OPEN_S = 3 * 86400
 MAX_LINK = 300
 #: Sports a DISCUSSION post may wear. Parlays come only from the boards in
 #: SPORT_FILE; talk can be about anything the room watches.
-TALK_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "soccer")
+TALK_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "cbb", "soccer")
 MIN_LEGS = 1
 MAX_LEGS = 3          # the slip's own cap (SLIP_MAX in app.js)
 POSTS_PER_DAY = 10
@@ -108,7 +108,7 @@ STATS_MIN = 10                 # graded parlays before the community win rate sh
 #: The six sports boards a leg can come from — the same map Bet it uses.
 SPORT_FILE = {"nfl": "recommendations.json", "cfb": "cfb.json",
               "mlb": "mlb_recommendations.json", "nba": "nba.json",
-              "wnba": "wnba.json", "nhl": "nhl.json"}
+              "wnba": "wnba.json", "nhl": "nhl.json", "cbb": "cbb.json"}
 
 GAME_WORDS = {"spread": "Spread", "total": "Game total", "team_total": "Team total",
               "moneyline": "Moneyline", "ml": "Moneyline", "h2h": "Moneyline",
@@ -330,7 +330,7 @@ def profile_set(conn, user_id: int, handle, bio, name=None, color=None,
     except (TypeError, ValueError):
         color = 0
     team = str(team if team is not None else old.get("team", "")).strip()[:16]
-    if team and not re.fullmatch(r"(nfl|cfb|mlb|nba|wnba|nhl):[A-Za-z0-9&.\- ]{2,12}", team):
+    if team and not re.fullmatch(r"(nfl|cfb|mlb|nba|wnba|nhl|cbb):[A-Za-z0-9&.\- ]{2,12}", team):
         return 400, {"error": "That favourite team is not one this site knows."}
     if not HANDLE_RE.match(handle):
         return 400, {"error": "A handle is 3–20 letters, numbers or underscores."}

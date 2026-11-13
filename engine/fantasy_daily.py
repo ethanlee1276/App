@@ -44,7 +44,11 @@ SCORING = {
     "nhl": {"goals": 8.5, "assists": 5.0, "sog": 1.5, "blocks": 1.3},
 }
 SCORING["wnba"] = SCORING["nba"]
-FILES = {"nba": "fantasy_nba.json", "wnba": "fantasy_wnba.json", "nhl": "fantasy_nhl.json"}
+# College basketball (2026-11-13): the daily-fantasy sites score college the
+# NBA's way, so its night adds up the same.
+SCORING["cbb"] = SCORING["nba"]
+FILES = {"nba": "fantasy_nba.json", "wnba": "fantasy_wnba.json", "nhl": "fantasy_nhl.json",
+         "cbb": "fantasy_cbb.json"}
 #: Designations that mean he will not play.
 OUT = {"OUT", "O", "INACTIVE", "SUSPENDED", "IR", "INJURED RESERVE", "NOT WITH TEAM"}
 #: A hockey points line split by his own goals-to-assists when the logs

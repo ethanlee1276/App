@@ -1535,7 +1535,7 @@ def previous_card(sport: str, built_dir=None) -> dict | None:
 
 #: The leagues whose builds hand `attach` their game lines (`game_lines`):
 #: the ones whose Most Likely board carries no game market at all.
-LINE_LEAGUES = ("nba", "wnba", "nhl")
+LINE_LEAGUES = ("nba", "wnba", "nhl", "cbb")
 
 
 def _field(game, key, default=None):
@@ -2044,7 +2044,7 @@ def attach(result: dict, sport: str, now=None, cut=None,
 #: order so that two picks identical on every measured quantity resolve
 #: the same way on every run, instead of the answer depending on which
 #: board finished writing first.
-TOP_PICK_LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
+TOP_PICK_LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "cbb")
 # HOCKEY AND THE FIGHT CARD JOINED ON 2026-10-30. Both have named a Pick of
 # the Day since October (`nhl_build`, `ufc_build` call `attach`), and the
 # day's top pick — "across every league" — had never looked at either: the

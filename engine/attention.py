@@ -54,7 +54,8 @@ SEARCH = "https://en.wikipedia.org/w/api.php?action=query&list=search&srlimit=3&
 #: bare one is throttled first (the 429s of 2026-10-17).
 USER_AGENT = "QellysBook/1.0 (https://qellysbook.com; pageview research, one call per player)"
 SPORT_WORDS = {"nfl": "American football", "cfb": "college football", "mlb": "baseball",
-               "nba": "basketball", "wnba": "basketball", "nhl": "ice hockey"}
+               "nba": "basketball", "wnba": "basketball", "nhl": "ice hockey",
+               "cbb": "college basketball"}
 
 #: His recent window and the baseline before it, in days.
 RECENT = 3

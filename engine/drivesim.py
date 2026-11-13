@@ -71,6 +71,12 @@ SPORTS = {
              "score_mix": ((1, 0.12), (2, 0.66), (3, 0.22))},
     "wnba": {"units": 81.0, "units_sd": 3.0,
              "score_mix": ((1, 0.12), (2, 0.66), (3, 0.22))},
+    # Men's college basketball (2026-11-13), measured on 2025-26's 6,194
+    # Division I regular-season box scores (hoopR's ESPN team boxes): 68.8
+    # possessions a team (sd 6.0), and the scores split by the same rough
+    # rule as the pro leagues' — more of them threes, fewer free throws.
+    "cbb": {"units": 68.8, "units_sd": 6.0,
+            "score_mix": ((1, 0.11), (2, 0.62), (3, 0.27))},
 }
 
 

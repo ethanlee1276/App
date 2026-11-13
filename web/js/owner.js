@@ -32,7 +32,8 @@ let _odBusy = false;
 let _odLast = null;
 const OD_HOURS = [[1, "1 hour"], [3, "3 hours"], [6, "6 hours"], [12, "12 hours"], [24, "1 day"], [48, "2 days"],
                   [72, "3 days"], [168, "1 week"]];
-const OD_LEAGUES = { nfl: "NFL", cfb: "College", nba: "NBA", nhl: "NHL", mlb: "MLB", wnba: "WNBA", ufc: "UFC" };
+const OD_LEAGUES = { nfl: "NFL", cfb: "College", nba: "NBA", nhl: "NHL", mlb: "MLB", wnba: "WNBA", ufc: "UFC",
+                     cbb: "NCAAB" };
 
 const odN = (v) => (v == null || v === "" ? "—" : Number(v).toLocaleString());
 const odMoney = (v) => (v == null ? "—" : `$${Math.round(Number(v)).toLocaleString()}`);
@@ -85,7 +86,7 @@ const WO_PAGES = {
   whoson: "Owner desk",             // a tab opened before the two were one page
 };
 const WO_LEAGUES = { nfl: "NFL", cfb: "College football", nba: "NBA", wnba: "WNBA", nhl: "NHL", mlb: "MLB",
-  ufc: "UFC", polymarket: "Polymarket", fantasy: "Fantasy" };
+  ufc: "UFC", polymarket: "Polymarket", fantasy: "Fantasy", cbb: "College basketball" };
 
 function woPage(view) {
   if (WO_PAGES[view]) return WO_PAGES[view];

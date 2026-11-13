@@ -810,6 +810,9 @@ PRUNABLE_CACHE_PREFIXES = (
     # that says a file is classified and a pruner that skips it is the
     # gap the classification test exists to close.
     "espn_nba_", "espn_wnba_",
+    # Men's college basketball (2026-11-13): the same two kinds, under its
+    # own league name (`espnhoops`, `livescores`).
+    "espn_cbb_",
     "mma_scoreboard_", "mma_live_", "mma_ev_", "mma_comp_", "mma_cptr_",
     "pm_evt_", "pm_mkt_", "pm_wtrades_", "pm_pnl_", "pm_leaderboard_",
     "nws_pt_", "nws_fc_", "sol_holders_", "sleeper_trend_",
@@ -976,7 +979,8 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
             log(f"  ⚠️  MLB results ingest skipped ({exc}) — settling on "
                 "what's already ingested")
         _part("mlb", t0)
-    for league, ingest_day in (("nba", _nba_day), ("wnba", _wnba_day), ("nhl", _nhl_day)):
+    for league, ingest_day in (("nba", _nba_day), ("wnba", _wnba_day), ("nhl", _nhl_day),
+                               ("cbb", _cbb_day)):
         if ingest_day is None:
             continue
         for d in days:
@@ -1219,6 +1223,19 @@ def _hoops_ingesters():
 
 
 _nba_day, _wnba_day = _hoops_ingesters()
+
+
+def _cbb_ingester():
+    """Men's college basketball's day-ingest callable, or None — the same
+    degrade-don't-crash rule as `_hoops_ingesters` (2026-11-13)."""
+    try:
+        from .sources import cbbespn as _c
+        return _c.ingest_day
+    except Exception:  # noqa: BLE001
+        return None
+
+
+_cbb_day = _cbb_ingester()
 
 
 def _nhl_ingester():
@@ -2782,6 +2799,34 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  wnba results ingest failed: {exc}")
 
+    # MEN'S COLLEGE BASKETBALL RESULTS (2026-11-13) — ESPN's Division I
+    # scoreboard and each final's box score, one date at a time from the
+    # league's last stored final, in its season window (November to the
+    # first week of April). What settles college picks, fills the minutes
+    # and rates the board reads, and stores the faces its cards wear. A
+    # Saturday is a hundred-odd box scores, so the first night after a gap
+    # is the slow one; every night after reads one day.
+    if (today.month >= 11 or today.month <= 4) and _cbb_day is not None:
+        cstart = _catch_up_start(_hconn, "cbb", yesterday)
+        if cstart <= yesterday:
+            try:
+                from . import db as _cdb
+                cconn = _cdb.connect()
+                tot_g = tot_l = 0
+                d = cstart
+                while d <= yesterday:
+                    res = _cbb_day(cconn, d.isoformat())
+                    tot_g += res["games"]
+                    tot_l += res["player_logs"]
+                    if any("scoreboard" in s for s in res.get("skipped", [])):
+                        log(f"  ⚠️  {res['skipped'][0]}")
+                        break
+                    d += _dt.timedelta(days=1)
+                if tot_g or tot_l:
+                    log(f"  ncaab results: {tot_g} game(s), {tot_l:,} log rows")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  ncaab results ingest failed: {exc}")
+
     # NHL results (2026-10-03) — the NHL's own keyless feed, one date at a
     # time from the league's last stored final, in its season window
     # (October–June). This is what settles NHL picks and grows the history
@@ -3320,7 +3365,7 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 # markets, and the log said "rank fit skipped" once. The
                 # MLB moneyline shelf depends on the last thing in this
                 # block running, so it has to run whatever came before.
-                for _sp in ("mlb", "wnba", "nba", "cfb", "nhl"):
+                for _sp in ("mlb", "wnba", "nba", "cfb", "nhl", "cbb"):
                     try:
                         _rank_measure(_rkc, _sp, log=log)
                     except Exception as _rexc:  # noqa: BLE001
@@ -3481,7 +3526,7 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
         _rbs = _rank_load()
         _rbc = _rbdb.connect()
         try:
-            for _sp in ("mlb", "wnba", "nba", "nhl"):
+            for _sp in ("mlb", "wnba", "nba", "nhl", "cbb"):
                 if any(k.startswith(f"{_sp}:") for k in _rbs):
                     continue
                 have = _rbc.execute(
@@ -3622,7 +3667,7 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
         _filled = []
         # College for the carry chart's players (facesfill.chart_rows);
         # the NFL pass fills the route and carry charts' as well.
-        for _sport in ("nfl", "mlb", "nba", "wnba", "cfb"):
+        for _sport in ("nfl", "mlb", "nba", "wnba", "cfb", "cbb"):
             try:
                 _n, _before, _after = facesfill.fill(_fconn, _sport)
             except Exception as exc:                          # noqa: BLE001

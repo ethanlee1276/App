@@ -166,7 +166,10 @@ def test_the_table_is_each_league_at_its_headroom_and_the_harvest():
     assert P.table_day(sun, over=("mlb",)) > 2 * P.table_day(dt.date(2026, 11, 10), over=("mlb",)), \
         "an NFL Sunday is the dearest day of the week"
     month = sum(P.table_day(NOV1 + dt.timedelta(days=i), over=("mlb",)) for i in range(30))
-    assert 85_000 <= month <= 110_000, f"the table spends about the whole 100k: {month}"
+    # Every league at its headroom: about the whole 100k, and since college
+    # basketball joined (2026-11-13) a little past it — the plan cuts the
+    # headroom, never a target, when the pool cannot hold all of it.
+    assert 85_000 <= month <= 120_000, f"the table spends about the whole 100k: {month}"
 
 
 # --- where it went ------------------------------------------------------------------

@@ -52,6 +52,10 @@ FEEDS: dict[str, list[tuple[str, str]]] = {
     "wnba": [("ESPN", "https://www.espn.com/espn/rss/wnba/news"), ("CBS Sports", _CBS.format("wnba"))],
     "nhl": [("ESPN", "https://www.espn.com/espn/rss/nhl/news"), ("CBS Sports", _CBS.format("nhl"))],
     "ufc": [("ESPN", "https://www.espn.com/espn/rss/mma/news"), ("CBS Sports", _CBS.format("mma"))],
+    # Men's college basketball (2026-11-13): ESPN's "ncb" feed, the college
+    # football feed's ("ncf") neighbour, and CBS's college-basketball page.
+    "cbb": [("ESPN", "https://www.espn.com/espn/rss/ncb/news"),
+            ("CBS Sports", _CBS.format("college-basketball"))],
 }
 
 TTL = 1800

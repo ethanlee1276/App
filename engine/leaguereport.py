@@ -51,7 +51,7 @@ from .gamereport import (KEY, Ctx, _f, _h, _join, _list, _num, _ord, _p, _pct, _
                          shine_lines, summary, team_be, team_np, team_owner)
 
 #: The leagues this module writes.
-SPORTS = ("mlb", "nhl", "nba", "wnba")
+SPORTS = ("mlb", "nhl", "nba", "wnba", "cbb")
 
 #: Nicknames two words long (the rest are the full name's last word).
 TWO_WORD = {"Red Sox", "White Sox", "Blue Jays", "Maple Leafs", "Golden Knights", "Blue Jackets",
@@ -860,7 +860,7 @@ def nba_meta(games: list, hist: dict, listed: dict, dvp: dict | None = None, dvp
 
 
 # ═══ THE HOOK ════════════════════════════════════════════════════════════════════════
-BUILDERS = {"mlb": MLB, "nhl": NHL, "nba": NBA, "wnba": NBA}
+BUILDERS = {"mlb": MLB, "nhl": NHL, "nba": NBA, "wnba": NBA, "cbb": NBA}
 
 
 def build(g: dict, result: dict, *, sport: str, names: dict | None = None, meta: dict | None = None,
@@ -883,9 +883,21 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
     ``at``. One line for the build log; never raises."""
     try:
         names = team_names(sport)
+        if sport == "cbb":
+            # College's names are the night's own (the board's teams table):
+            # the school, as a reader says it ("Duke", "Kansas").
+            names = {code: (t.get("loc") or t.get("short") or t.get("name") or code)
+                     for code, t in (result.get("teams") or {}).items()}
+        # COLLEGE WRITES THE GAMES IT PRICES: a night of sixty to a hundred and
+        # fifty games, of which the board reads the players of the few it
+        # prices (`nba_build.college_board_games`); a report on a game it holds
+        # no player of would be a scoreboard line dressed as a read.
+        board = set(result.get("board_games") or []) if sport == "cbb" else None
         prepared = []
         for g in result.get("games") or []:
             if not isinstance(g, dict) or not g.get("home") or not g.get("away"):
+                continue
+            if board is not None and f"{g['away']}@{g['home']}" not in board:
                 continue
             m = (meta or {}).get(f"{g['away']}@{g['home']}") or {}
             more = (mlb_more(g, result) if sport == "mlb" else nhl_more(g, result) if sport == "nhl"

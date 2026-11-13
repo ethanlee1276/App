@@ -49,7 +49,7 @@ HERE_S = 150
 MAX_TABS = 5000
 #: What a tab may say: our own page names, a league or a game's room.
 VIEW = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
-DETAIL = re.compile(r"^(?:[a-z]{2,8}|(?:nfl|cfb|nba|wnba|nhl|mlb)_[0-9]{1,14})$")
+DETAIL = re.compile(r"^(?:[a-z]{2,8}|(?:nfl|cfb|nba|wnba|nhl|mlb|cbb)_[0-9]{1,14})$")
 TAB = re.compile(r"^[a-f0-9]{16}$")
 
 _LOCK = threading.Lock()

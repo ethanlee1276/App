@@ -259,7 +259,7 @@
      matchup last, the pick page's own order. */
   function chartsHTML(l) {
     const lg = String(l.sport || "").toLowerCase();
-    return l.player && /^(nfl|cfb|nba|wnba|nhl|mlb)$/.test(lg)
+    return l.player && /^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/.test(lg)
       ? `<div class="pgr-charts"><button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="auto" data-mkt="${esc(l.market || "")}" data-opp="${esc(l.opponent || "")}">His charts</button></div>` : "";
   }
 
