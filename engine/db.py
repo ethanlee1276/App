@@ -562,6 +562,7 @@ CREATE TABLE IF NOT EXISTS cbb_shots (
 CREATE INDEX IF NOT EXISTS cbb_shots_player ON cbb_shots (person_id, season);
 CREATE INDEX IF NOT EXISTS cbb_shots_name ON cbb_shots (player);
 CREATE INDEX IF NOT EXISTS cbb_shots_league ON cbb_shots (season, zone, made);
+CREATE INDEX IF NOT EXISTS cbb_shots_opp ON cbb_shots (season, opponent, zone, made);
 -- THE LEAGUE'S PASSING TRACKING NUMBERS (nextgen_stats/ngs_passing): one
 -- row per player-week, week 0 the season line, passers past the league's
 -- minimum — time to throw, completion % above expectation, aggressiveness

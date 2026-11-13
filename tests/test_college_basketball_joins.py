@@ -361,6 +361,22 @@ def test_polymarket_is_asked_for_colleges_soonest_hundred_and_says_why_it_failed
     assert nba["limit"] == 200 and nba["timeout"] == PS.TIMEOUT_S and nba["soonest"] is False
 
 
+
+def test_a_college_pick_says_why_it_is_not_staked_as_it_is():
+    """The lab measured college's minutes and spreads on college, so
+    "borrowed numbers" would be half true; the reason on every unstaked
+    college pick says what is: its picks are ungraded and its blowout and
+    rest numbers are still the WNBA's."""
+    from engine import hoops
+    from engine.nba import pipeline
+    why = hoops.CBB.probation_why
+    assert "not been graded" in why and "WNBA" in why
+    assert hoops.WNBA.probation_why == "" and hoops.NBA.probation_why == ""
+    src = (ROOT / "engine" / "nba" / "pipeline.py").read_text(encoding="utf-8")
+    assert 'getattr(tune, "probation_why", "") or' in src
+    assert pipeline is not None
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

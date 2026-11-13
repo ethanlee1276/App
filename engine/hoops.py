@@ -142,6 +142,11 @@ class LeagueTuning:
     calibrated: bool = True
     inherited_from: str = ""
     note: str = ""
+    #: Why a probation board withholds its sizes, said on every pick it
+    #: unstakes; empty reads the reason off ``inherited_from``
+    #: (`engine/nba/pipeline`). College's own (2026-11-13): its minutes and
+    #: spreads are measured on college, so "borrowed numbers" is half true.
+    probation_why: str = ""
 
     @property
     def probation(self) -> bool:
@@ -491,6 +496,9 @@ CBB = replace(
           "and the margin's spread is fitted from the box's own college games. "
           "Picks are journaled and graded on probation; they do not count as "
           "bets until the league's record clears the promotion bar."),
+    probation_why=("college's own picks have not been graded against real prices yet, and its "
+                   "blowout and rest numbers are still the WNBA's — an ungraded league does not "
+                   "get to size a bet"),
 )
 
 LEAGUES = {"nba": NBA, "wnba": WNBA, "cbb": CBB}

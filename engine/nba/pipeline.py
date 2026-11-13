@@ -485,12 +485,13 @@ def run_nba_slate(props: list[dict], meta: dict | None = None,
     # grades being the entire point of a probation board.
     if tune.probation:
         from ..probation import unstake as _unstake
-        _why = [f"this league's fitted numbers are the "
-                f"{tune.inherited_from.upper()} model's, not its own — "
-                f"borrowed numbers do not get to size a bet"
-                if tune.inherited_from else
-                "this league's numbers have not been fitted to its own "
-                "results, so any stake would be Kelly on a borrowed spread"]
+        _why = [getattr(tune, "probation_why", "") or
+                (f"this league's fitted numbers are the "
+                 f"{tune.inherited_from.upper()} model's, not its own — "
+                 f"borrowed numbers do not get to size a bet"
+                 if tune.inherited_from else
+                 "this league's numbers have not been fitted to its own "
+                 "results, so any stake would be Kelly on a borrowed spread")]
         # BOTH size fields in one pass — the bankroll fraction and the
         # unit count. Two calls would have the second overwrite the
         # first's record of what the size would have been.
