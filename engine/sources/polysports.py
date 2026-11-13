@@ -406,7 +406,7 @@ def probe(sport: str = "cbb", limit: int = 5) -> list[str]:
     import urllib.request
     from .fetch import USER_AGENT
 
-    def get(url, n=300):
+    def _venue_answer(url, n=300):
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         try:
             with urllib.request.urlopen(req, timeout=SLOW.get(sport, TIMEOUT_S)) as r:
@@ -419,7 +419,7 @@ def probe(sport: str = "cbb", limit: int = 5) -> list[str]:
             return "error", str(e)[:200].encode(), 0
 
     out = []
-    status, body, size = get(f"{GAMMA}/sports", n=None)
+    status, body, size = _venue_answer(f"{GAMMA}/sports", n=None)
     rows = []
     try:
         rows = [r for r in json.loads(body) if str((r or {}).get("sport") or "").strip().lower()
@@ -445,7 +445,7 @@ def probe(sport: str = "cbb", limit: int = 5) -> list[str]:
                      f"{GAMMA}/events?tag_slug={tag}&closed=false&active=true&limit={page}"
                      f"&order=startDate&ascending=true"))
     for label, url in asks:
-        status, body, size = get(url)
+        status, body, size = _venue_answer(url)
         out.append(f"{label}: {status}, {size:,} bytes — "
                    + " ".join(body.decode("utf-8", "replace").split())[:240])
     out.append("Read-only: nothing was cached or written.")

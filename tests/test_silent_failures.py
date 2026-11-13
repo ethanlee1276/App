@@ -299,6 +299,10 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # "college basketball team cards not kept (<error>)" in the build's
         # log; a card that cannot be kept must never cost the board.
         "remember_cards",
+        # THE POLYMARKET PROBE'S REQUESTS (engine/sources/polysports.probe,
+        # 2026-11-13): a request that fails prints as its own line, status
+        # "error" and the reason; the failure is the answer it was run to see.
+        "_venue_answer",
         # THE COLLEGE BASKETBALL PROBE'S ROWS (engine/sources/cbbespn.probe,
         # 2026-11-13): a request that fails is a row of its own, status
         # "error" and the error's text, printed by `ingest.py cbb --probe` —
