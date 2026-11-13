@@ -333,6 +333,34 @@ def test_the_nbas_two_reads_run_on_college_with_colleges_own_league():
     assert RT.projection_mult("reb", 0.2, college, "wnba") == (1.0, "")
 
 
+
+def test_polymarket_is_asked_for_colleges_soonest_hundred_and_says_why_it_failed():
+    """The box's first college build: every Polymarket read for college
+    failed while the NBA's answered in the same minute. College asks for the
+    soonest hundred on a longer clock, and a failure says why on the board."""
+    from engine.sources import polysports as PS
+    asked = []
+    keep = PS.fetch_series_ids, PS.fetch_series_events, PS.fetch_events
+    PS.fetch_series_ids = lambda: {"cbb": ["10470"], "nba": ["10345"]}
+
+    def series(sid, **k):
+        asked.append((sid, k))
+        if sid == "10470":
+            raise OSError("The read operation timed out")
+        return []
+    PS.fetch_series_events = series
+    PS.fetch_events = lambda tag, **k: asked.append((tag, k)) or []
+    try:
+        rows, report = PS.fetch_sports(["cbb", "nba"])
+    finally:
+        PS.fetch_series_ids, PS.fetch_series_events, PS.fetch_events = keep
+    assert report["series:10470"] == "error: The read operation timed out"
+    college = dict(asked)["10470"]
+    assert college["limit"] == 100 and college["timeout"] == 25 and college["soonest"] is True
+    nba = dict(asked)["10345"]
+    assert nba["limit"] == 200 and nba["timeout"] == PS.TIMEOUT_S and nba["soonest"] is False
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

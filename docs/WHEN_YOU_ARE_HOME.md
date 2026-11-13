@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OX. College's checklist, and Polymarket's college prices** (step 526; 13
+November). Nothing to run. docs/CBB_PARITY.md lists every NBA tool and where
+college stands: what is done, what college does its own way, and what waits
+for March (the tournament's race, title futures, and first basket, which the
+books post for NBA games and almost never for college ones).
+
+On the box at 16:56 the college board carried game lines on 49 of its 61
+games and Kalshi's markets on 41, but every Polymarket read for college
+failed while the NBA's answered in the same minute: a college night is sixty
+to a hundred and fifty games open at once, and asking for two hundred of them
+with every market is the one answer big enough to run out its 12-second
+clock. College now asks for the soonest hundred on a 25-second clock, and
+every venue failure says why on the board (`polymarket_tags` reads, say,
+"error: timed out" instead of "error"), so the next build shows whether that
+was it.
+
 **OW. College reads a player's shooting and his rebounds the NBA's way**
 (step 525; 13 November). Nothing to run. The two reads the NBA lab built
 (points and threes from shot volume at a player's longer-run percentages;

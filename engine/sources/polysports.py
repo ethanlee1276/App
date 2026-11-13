@@ -60,6 +60,22 @@ SPORT_TAGS = {
 #: kills at 180 seconds, and a crowd price is garnish on that board.
 TIMEOUT_S = 12
 
+#: COLLEGE BASKETBALL'S PAGE (2026-11-13). The box's first college build
+#: had every Polymarket read fail while the NBA's, in the same minute,
+#: answered: a college series holds sixty to a hundred and fifty games a
+#: night, all open at once, and two hundred of them with every market is the
+#: one answer here big enough to run out the clock. College asks for the
+#: soonest hundred, with a longer clock (its build's ceiling is 600 seconds,
+#: not 180), and each failure now says why on the board.
+PAGE = {"cbb": 100}
+SLOW = {"cbb": 25}
+
+
+def _why(exc) -> str:
+    """``"error"`` and the failure's own short reason, for the report."""
+    reason = " ".join(str(exc or "").split())[:60]
+    return f"error: {reason}" if reason else "error"
+
 #: Market words that mean "not the moneyline".
 NOT_ML = re.compile(r"\b(spread|o/u|over|under|total|points|handicap|draw|1st|first|half|quarter|inning|"
                     r"props?|mvp|yards|touchdowns?|runs?|goals?|puck|period)\b", re.I)
@@ -84,10 +100,10 @@ def _num(v):
         return None
 
 
-def fetch_events(tag: str, limit: int = 200, ttl: int = 300) -> list[dict]:
+def fetch_events(tag: str, limit: int = 200, ttl: int = 300, timeout: int = TIMEOUT_S) -> list[dict]:
     url = (f"{GAMMA}/events?tag_slug={tag}&closed=false&active=true"
            f"&limit={limit}&order=startDate&ascending=true")
-    raw = json.loads(fetch_text(url, f"poly_events_{tag}.json", ttl=ttl, timeout=TIMEOUT_S))
+    raw = json.loads(fetch_text(url, f"poly_events_{tag}.json", ttl=ttl, timeout=timeout))
     return raw if isinstance(raw, list) else (raw.get("events") or raw.get("data") or [])
 
 
@@ -259,9 +275,12 @@ def fetch_series_ids(ttl: int = 86400) -> dict:
     return out
 
 
-def fetch_series_events(series_id: str, limit: int = 200, ttl: int = 300) -> list[dict]:
+def fetch_series_events(series_id: str, limit: int = 200, ttl: int = 300, timeout: int = TIMEOUT_S,
+                        soonest: bool = False) -> list[dict]:
     url = f"{GAMMA}/events?series_id={series_id}&closed=false&active=true&limit={limit}"
-    raw = json.loads(fetch_text(url, f"poly_series_{series_id}.json", ttl=ttl, timeout=TIMEOUT_S))
+    if soonest:
+        url += "&order=startDate&ascending=true"
+    raw = json.loads(fetch_text(url, f"poly_series_{series_id}.json", ttl=ttl, timeout=timeout))
     return raw if isinstance(raw, list) else (raw.get("events") or raw.get("data") or [])
 
 
@@ -277,25 +296,27 @@ def fetch_sports(sports=None) -> tuple[list[dict], dict]:
     rows, report = [], {}
     try:
         series = fetch_series_ids()
-    except Exception:                                          # noqa: BLE001
+    except Exception as exc:                                   # noqa: BLE001
         series = {}
-        report["sports"] = "error"
+        report["sports"] = _why(exc)
     for sport in (sports or SPORT_TAGS):
         got = []
+        page = {"limit": PAGE.get(sport, 200), "timeout": SLOW.get(sport, TIMEOUT_S)}
         for sid in series.get(sport, []):
             try:
-                parsed = [dict(r, sport=sport) for r in parse_events(fetch_series_events(sid))]
-            except Exception:                                  # noqa: BLE001
-                report[f"series:{sid}"] = "error"
+                parsed = [dict(r, sport=sport) for r in parse_events(
+                    fetch_series_events(sid, soonest=sport in PAGE, **page))]
+            except Exception as exc:                           # noqa: BLE001
+                report[f"series:{sid}"] = _why(exc)
                 continue
             report[f"series:{sid}"] = len(parsed)
             got.extend(parsed)
         if not got:
             for tag in SPORT_TAGS.get(sport, ()):
                 try:
-                    events = fetch_events(tag)
-                except Exception:                              # noqa: BLE001
-                    report[tag] = "error"
+                    events = fetch_events(tag, **page)
+                except Exception as exc:                       # noqa: BLE001
+                    report[tag] = _why(exc)
                     break                 # the venue is down; aliases will not help
                 parsed = [dict(r, sport=sport) for r in parse_events(events)]
                 report[tag] = len(parsed)

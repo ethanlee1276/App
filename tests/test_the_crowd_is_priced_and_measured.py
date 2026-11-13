@@ -93,7 +93,8 @@ def test_a_dead_venue_costs_its_rows_not_the_build():
         rows, report = polysports.fetch_sports(["cfb"])
     finally:
         polysports.fetch_events, polysports.fetch_series_ids = orig
-    assert rows == [] and report == {"sports": "error", "cfb": "error"}, "one error, and the aliases are not tried"
+    assert rows == [] and report == {"sports": "error: blocked", "cfb": "error: blocked"}, \
+        "one error, its reason said, and the aliases are not tried"
 
 
 FUTURE = {"slug": "super-bowl-champion-2027", "startDate": "2026-07-22T05:31:00Z", "markets": [
