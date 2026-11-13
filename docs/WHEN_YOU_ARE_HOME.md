@@ -9338,6 +9338,45 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OU. College basketball's numbers, measured on five college seasons; its
+standings fixed on the box's first table** (step 523; 13 November). Nothing
+to run.
+
+College went live at 16:18 on Friday: 61 Division I games on the board, all
+122 schools with their names, colours and logos, and the five priced games
+picked (Florida, Duke, Illinois, UConn, Michigan State). No picks yet, as
+expected: the box holds no college box scores until tonight's chores read
+the last week and OT's backfill reads the rest.
+
+The lab (docs/CBB_LAB.md). Every Division I box score of the last five
+seasons, 284,087 player-games, replayed through the college board's own
+projection. The minutes pieces college took from the WNBA held up: the
+starting five's news and a player's first game back each made minutes
+better in every season (his first game back takes 15-17% off the minutes
+error in the games it touches), and the newest games weighted 0.60 / 0.25 /
+0.15 read minutes best of four weightings. The three the WNBA leaves off
+fail on college too. The spread that follows the projection, fitted on
+college's own seasons, beat one width per stat in every judged season in
+seven markets (points 1.0-1.1% Brier, PRA 1.3-1.4%); threes keep one width.
+And the fix that matters this month: until the box has a month of college
+games to measure its own widths, the board was using the NBA's starting
+ones, half as wide as a college line moves (points 0.30 against 0.78), so
+every college chance would have been too sure of itself. It starts from
+college's own now.
+
+The box's first college standings had two faults, both fixed: every
+conference showed twice (the schools tonight's slate named under "ACC", the
+rest under ESPN's own "acc"), and every record read 0-0 beside home records
+of 3-0, because a college conference table's wins and losses are the
+conference record. The table now shows the overall record and one table per
+conference.
+
+Also: a college game report says the school ("Duke has", never "the Duke
+have"); the slip reader knows the college basketball label; the prediction
+markets page has an NCAAB chip; the officials tool reads college's crews;
+and the test suite stopped building the hockey and college boards for real
+every run (one of them failed the deploy gate's file check).
+
 **OT. Men's college basketball is on the site** (step 522; 13 November).
 You asked for college basketball with everything the NBA has. It is the
 basketball build's third league (the NBA's and the WNBA's code, run with

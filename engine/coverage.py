@@ -695,16 +695,16 @@ def cbb(conn) -> SportCoverage:
     (`engine.hoops.CBB`), added 13 November 2026."""
     from .hoops import CBB
     return SportCoverage("cbb", "NCAAB", [
-        _results_layer(conn, "cbb", 3000, "python3 ingest.py cbb --seasons 2024-2026 --scores-only"),
-        _logs_layer(conn, "cbb", 40000, "python3 ingest.py cbb --seasons 2024-2026"),
+        _results_layer(conn, "cbb", 3000, "python3 ingest.py cbb --seasons 2025-2026 --scores-only"),
+        _logs_layer(conn, "cbb", 40000, "python3 ingest.py cbb --seasons 2025-2026"),
         _odds_layer(),
         _prop_closes_layer(conn, "cbb"),
         Layer("Schedule feed", "the night's Division I slate and its finals — "
               "sixty to a hundred and fifty games on a Saturday",
               OK, "ESPN mens-college-basketball, Division I (groups=50), keyless"),
-        Layer("Fitted tuning", "minutes, spreads and blowout curves are the "
-              "WNBA's 40-minute numbers until college's own seasons are measured "
-              "and its own picks are graded",
+        Layer("Fitted tuning", "the minutes pieces and the stat spreads are "
+              "measured on five college seasons (docs/CBB_LAB.md); the blowout "
+              "curves and rest are the WNBA's until its own picks are graded",
               PARTIAL if CBB.probation else OK,
               "on probation — journaled and graded, not staked "
               "(enforced: engine/probation zeroes every size)",

@@ -430,10 +430,36 @@ WNBA = replace(
 # player props on the ranked teams and the power conferences, not on every
 # game (`cbbteams.priority`).
 #
-# THE FITTED NUMBERS start as the WNBA's (a 40-minute game measured on its own
-# seasons — the nearest measured basketball), until the college lab measures
-# college's own (docs/CBB_LAB.md); `hoops_fit` swaps in what the league's own
-# stored results can measure at every build, as it does for the WNBA.
+# THE FITTED NUMBERS, MEASURED ON COLLEGE'S OWN SEASONS (2026-11-13, the
+# college lab, docs/CBB_LAB.md): five regular seasons, 2021-22 to 2025-26, of
+# ESPN's Division I box scores (sportsdataverse's public hoopR files, research
+# only), 284,087 player-games of men with 15+ minutes a game, through the
+# board's own projection (engine/nba/pipeline.project, nbarules' rows):
+#   * THE MINUTES PIECES the WNBA measured hold on college: the starting
+#     five's news and his first game back each make minutes better in every
+#     season and points never worse over every game (his first game back takes
+#     15-17% off the minutes error in the games it touches); the newest games
+#     weighted 0.60/0.25/0.15 read minutes best of the four weightings tried.
+#     A role that jumped, the second game back and a regular's return each
+#     failed the NBA's bar on college (points worse in some season) and stay
+#     off, as they do for the WNBA.
+#   * THE SPREAD THAT FOLLOWS THE PROJECTION (`sd_power`), fitted on one
+#     season and judged on the next: Brier lower in all four judged seasons in
+#     seven markets (points 1.0-1.1%, PRA 1.3-1.4%, the combos 0.8-1.4%,
+#     rebounds 0.2-0.4%, assists 0.4-0.8%); the overs it called 80% or more
+#     hit 82-86%, where one CV's few such points calls hit 70-77%. Threes stay
+#     on their CV (worse in all four), as the NBA's and the WNBA's do. Read
+#     only when the NBA's spread switch is on (`prob.spread_on`).
+#   * ONE CV PER STAT before the box can fit its own (`sd_cv`): `hoops_fit`
+#     measures each stat's spread from the box's stored college games once
+#     players have 12 games, mid-December without the two-season backfill.
+#     Until then the board read the NBA's starting values, half as wide as a
+#     college line moves (points 0.30 against 0.78), and every chance would
+#     have been too sure of itself; these are hoops_fit's own rule on two
+#     college seasons, what the box fits once the backfill lands.
+# Still inherited, because the replay has no lines to measure them against:
+# the blowout curves and the rest buckets (the box fits the margin's spread
+# from its own college games once 200 are stored).
 #
 # ON PROBATION: picks are journaled and graded, not staked, until the league's
 # own record clears the promotion bar (`engine.promotion`) — the rule the
@@ -445,15 +471,21 @@ CBB = replace(
     roster_size=15,
     season_games=31,
     personal_fouls=5,
+    sd_cv={**WNBA.sd_cv, "pts": 0.783, "reb": 0.743, "ast": 0.972, "fg3m": 1.047,
+           "pra": 0.639, "pts_reb": 0.672, "pts_ast": 0.721, "reb_ast": 0.676},
+    sd_power={"pts": (6.021, 0.738), "reb": (1.543, 0.949), "ast": (1.393, 0.900),
+              "pra": (9.262, 0.620), "pts_reb": (7.766, 0.674),
+              "pts_ast": (6.301, 0.718), "reb_ast": (2.157, 0.829)},
     calibrated=False,
     inherited_from="wnba",
     note=("College basketball runs the NBA's engine on a 40-minute game: the "
-          "minutes model, the shooting and rate reads, the matchup scan and "
-          "the market's own price. Its fitted numbers start from the WNBA's "
-          "(the nearest 40-minute game measured on its own seasons) until "
-          "college's own seasons measure them. Picks are journaled and graded "
-          "on probation; they do not count as bets until the league's record "
-          "clears the promotion bar."),
+          "minutes model, the rate reads, the matchup scan and the market's own "
+          "price. Its minutes pieces and its stat spreads are measured on five "
+          "college seasons (the WNBA's minutes pieces held; the spreads are "
+          "college's own); the blowout curves and rest are still the WNBA's, "
+          "and the margin's spread is fitted from the box's own college games. "
+          "Picks are journaled and graded on probation; they do not count as "
+          "bets until the league's record clears the promotion bar."),
 )
 
 LEAGUES = {"nba": NBA, "wnba": WNBA, "cbb": CBB}

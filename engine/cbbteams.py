@@ -87,6 +87,49 @@ def conference_name(conf_id) -> str:
     return CONFERENCES.get(c, (c, c))[1] if c else ""
 
 
+#: THE STANDINGS FEED'S OWN LABELS for its conference tables, read off the
+#: box's first college table (2026-11-13: "acc", "atl10", "belt", "Metro"
+#: ...), to the scoreboard's conference ids. Without it every conference
+#: showed twice, the schools a slate had named under "ACC" and the rest
+#: under "acc" (`conference_of_feed`).
+FEED_LABELS = {
+    "acc": "2", "aeast": "1", "atl10": "3", "belt": "27", "big10": "7", "big12": "8",
+    "bige": "4", "bigw": "9", "bsky": "5", "bsou": "6", "col": "10", "hor": "45",
+    "ivy": "12", "land": "25", "meac": "16", "midam": "14", "mvc": "18", "mwest": "44",
+    "neast": "19", "ovc": "20", "pac12": "21", "pat": "22", "sec": "23", "south": "24",
+    "summ": "49", "swac": "26", "usa": "11", "wcc": "29", "metro": "13",
+    "american": "62", "asun": "46", "uac": "30",
+}
+
+
+def _norm(text) -> str:
+    return " ".join(str(text or "").lower().replace("-", " ").split())
+
+
+def conference_of_feed(group_id="", group_name="", label="") -> str:
+    """The board's short name for the conference table the standings feed
+    filed a school under: by the group's id where it is a conference id the
+    scoreboard uses, then its full name, then the feed's own label; the
+    label itself when none of them is known (a new conference prints as
+    ESPN calls it rather than vanishing)."""
+    gid = str(group_id or "").strip()
+    if gid in CONFERENCES:
+        return CONFERENCES[gid][0]
+    name = _norm(group_name)
+    if name:
+        for short, full in CONFERENCES.values():
+            if name in (_norm(full), _norm(short)):
+                return short
+    lab = str(label or "").strip()
+    cid = FEED_LABELS.get(lab.lower())
+    if cid:
+        return CONFERENCES[cid][0]
+    for short, full in CONFERENCES.values():
+        if _norm(lab) in (_norm(short), _norm(full)):
+            return short
+    return lab
+
+
 def is_division_one(code: str) -> bool:
     """A code the scoreboard gave a Division I school (`espnhoops.team_key`)."""
     return bool(code) and not str(code).startswith("espn:")

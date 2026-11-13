@@ -218,6 +218,47 @@ def test_the_standings_group_by_the_feeds_conference_tables():
     assert "cbb" in LS.GROUPED_BY_FEED and LS.ESPN_SEASON_SHIFT["cbb"] == 1
 
 
+def test_a_college_table_shows_the_overall_record_not_the_conference_one():
+    """The box, 2026-11-13: every school 0-0 two weeks into the season with
+    home records of 3-0 beside it. A college conference table's own wins and
+    losses are the CONFERENCE record; the page shows the overall one and
+    keeps the other as what it is. The pro leagues' tables are untouched."""
+    from engine.sources import leaguestandings as LS
+    entry = {"team": {"abbreviation": "DUKE"}, "stats": [
+        {"name": "wins", "value": 0}, {"name": "losses", "value": 0},
+        {"name": "overall", "type": "total", "summary": "4-1", "displayValue": "4-1"},
+        {"name": "Home", "type": "home", "displayValue": "3-0"},
+        {"name": "Road", "type": "road", "displayValue": "0-1"}]}
+    payload = {"children": [{"id": "2", "name": "Atlantic Coast Conference", "abbreviation": "acc",
+                             "standings": {"entries": [entry]}}]}
+    row = LS.parse_espn(payload, groups=True)[0]
+    assert (row["wins"], row["losses"]) == (4, 1), row
+    assert (row["conf_wins"], row["conf_losses"]) == (0, 0)
+    assert row["group"] == "acc" and row["group_id"] == "2" and row["group_name"] == "Atlantic Coast Conference"
+    pro = LS.parse_espn(payload)[0]
+    assert (pro["wins"], pro["losses"]) == (0, 0) and "conf_wins" not in pro, "a pro table reads its own"
+    # No total filed: a record smaller than its home and road games is not
+    # the overall one, and those games are the floor.
+    bare = {"children": [{"abbreviation": "acc", "standings": {"entries": [dict(
+        entry, stats=[s for s in entry["stats"] if s.get("type") != "total"])]}}]}
+    row = LS.parse_espn(bare, groups=True)[0]
+    assert (row["wins"], row["losses"]) == (3, 1), row
+
+
+def test_one_conference_is_one_table():
+    """The box, 2026-11-13: sixty conference tables for thirty-one
+    conferences, the schools a slate had named under "ACC" and the rest under
+    the feed's own "acc". Every feed label lands on the board's name."""
+    from engine import cbbteams as C
+    assert C.conference_of_feed("", "", "acc") == "ACC"
+    assert C.conference_of_feed("", "", "Metro") == "MAAC"
+    assert C.conference_of_feed("", "", "atl10") == "A-10"
+    assert C.conference_of_feed("2", "", "whatever") == "ACC", "the scoreboard's id first"
+    assert C.conference_of_feed("", "Metro Atlantic Athletic Conference", "") == "MAAC"
+    assert C.conference_of_feed("", "", "A New League") == "A New League", "an unknown one prints as filed"
+    assert {C.conference_of_feed("", "", lab) for lab in C.FEED_LABELS} == {v[0] for v in C.CONFERENCES.values()}
+
+
 # --------------------------------------------------------------- registered everywhere
 def test_the_league_is_registered_where_the_nba_is():
     import launch

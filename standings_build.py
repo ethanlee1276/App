@@ -97,9 +97,14 @@ def _live_table(sport: str, season: int, confs: dict | None):
         if not rows:
             return None, "the standings feed answered with no teams"
         if sport in leaguestandings.GROUPED_BY_FEED:
-            # Each school under the conference table ESPN filed it in; a
-            # school the board has seen keeps the board's own conference.
-            confs = {**{r["team"]: r["group"] for r in rows if r.get("group")},
+            # Each school under the conference table ESPN filed it in, named
+            # as the board names it (`cbbteams.conference_of_feed`: one ACC,
+            # never an "ACC" and an "acc"); a school the board has seen keeps
+            # the board's own conference.
+            from engine import cbbteams
+            confs = {**{r["team"]: cbbteams.conference_of_feed(r.get("group_id"), r.get("group_name"),
+                                                               r.get("group"))
+                        for r in rows if r.get("group")},
                      **(confs or {})}
         table = standings.from_feed(sport, rows, season, conferences=confs)
         if not table.get("groups"):

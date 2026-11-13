@@ -160,30 +160,52 @@ def parse_mlb(payload) -> list[dict]:
     return rows
 
 
-def _espn_entries(node, out, group: str = ""):
+def _espn_entries(node, out, group: str = "", info: dict | None = None):
     """Every standings entry anywhere in ESPN's tree.
 
     The envelope nests conferences inside the league and divisions inside
     conferences, and which levels exist differs by sport and by season.
     Walking for `standings.entries` reads them all without encoding a
-    depth that changes. Each entry is paired with the name of the nearest
-    group above it that has one (its conference, for college basketball:
-    `parse_espn` ``groups=True``)."""
+    depth that changes. Each entry is paired with the label of the nearest
+    group above it that has one, and that group's id and full name (its
+    conference, for college basketball: `parse_espn` ``groups=True``)."""
     if isinstance(node, dict):
-        here = str(node.get("abbreviation") or node.get("shortName")
-                   or node.get("name") or "").strip() or group
+        label = str(node.get("abbreviation") or node.get("shortName")
+                    or node.get("name") or "").strip()
+        here = label or group
+        here_info = ({"id": str(node.get("id") or "").strip(),
+                      "name": str(node.get("name") or "").strip()} if label else (info or {}))
         st = node.get("standings")
         if isinstance(st, dict):
             for e in (st.get("entries") or []):
                 if isinstance(e, dict):
-                    out.append((e, here))
+                    out.append((e, here, here_info))
         for key in ("children", "groups"):
             for child in (node.get(key) or []):
-                _espn_entries(child, out, here)
+                _espn_entries(child, out, here, here_info)
     elif isinstance(node, list):
         for child in node:
-            _espn_entries(child, out, group)
+            _espn_entries(child, out, group, info)
     return out
+
+
+def _overall(stats: dict):
+    """``(wins, losses)`` off the entry's overall record, or None.
+
+    A COLLEGE CONFERENCE TABLE'S OWN ``wins`` AND ``losses`` ARE THE
+    CONFERENCE RECORD (the box, 2026-11-13: every school 0-0 two weeks in,
+    home records 3-0 beside them, because no conference game had been
+    played). The record a reader means is the overall one, which ESPN files
+    among the entry's records as its total."""
+    for s in stats.values():
+        kind = str(s.get("type") or "").strip().lower()
+        name = str(s.get("name") or "").strip().lower()
+        abbr = str(s.get("abbreviation") or "").strip().lower()
+        if kind == "total" or name in ("overall", "total") or abbr in ("total", "ovr", "overall"):
+            text = s.get("summary") or s.get("displayValue")
+            if re.search(r"\d+\D+\d+", str(text or "")):
+                return _wl(text)
+    return None
 
 
 def parse_espn(payload, groups: bool = False) -> list[dict]:
@@ -193,7 +215,7 @@ def parse_espn(payload, groups: bool = False) -> list[dict]:
     it under — its conference, which is how college basketball's 365
     schools are grouped (no division table in this repo holds them)."""
     rows = []
-    for e, group in _espn_entries(payload, []):
+    for e, group, ginfo in _espn_entries(payload, []):
         team = e.get("team") or {}
         abbr = (team.get("abbreviation") or team.get("displayName")
                 or team.get("name") or "")
@@ -208,6 +230,19 @@ def parse_espn(payload, groups: bool = False) -> list[dict]:
             continue
         home_w, home_l = _wl(disp("Home") or disp("home"))
         away_w, away_l = _wl(disp("Road") or disp("road") or disp("away"))
+        conf_wl = None
+        if groups:
+            # College: the overall record, and the table's own wins and
+            # losses kept as what they are, the conference record. With no
+            # total filed, a record smaller than its home and road games
+            # cannot be the overall one: those games are the floor.
+            total = _overall(stats)
+            if total is not None:
+                conf_wl = (int(wins), int(losses))
+                wins, losses = total
+            elif wins + losses < home_w + home_l + away_w + away_l:
+                conf_wl = (int(wins), int(losses))
+                wins, losses = home_w + away_w, home_l + away_l
         rows.append({
             "team": abbr,
             "wins": int(wins), "losses": int(losses),
@@ -223,6 +258,12 @@ def parse_espn(payload, groups: bool = False) -> list[dict]:
         })
         if groups and group:
             rows[-1]["group"] = group
+            if ginfo.get("id"):
+                rows[-1]["group_id"] = ginfo["id"]
+            if ginfo.get("name"):
+                rows[-1]["group_name"] = ginfo["name"]
+        if conf_wl is not None:
+            rows[-1]["conf_wins"], rows[-1]["conf_losses"] = conf_wl
     return rows
 
 
