@@ -16889,6 +16889,7 @@ function pmFlowLeague(f) {
   if (m) return m[1] === "ncaaf" ? "cfb" : m[1] === "ncaab" ? "cbb" : m[1];
   const t = String((f && f.market) || "");
   if (/\bUFC\b|\bMMA\b/i.test(t)) return "ufc";
+  if (/\bNCAAB\b|March Madness|college basketball/i.test(t)) return "cbb";
   if (/\bWNBA\b/.test(t)) return "wnba";
   if (/\bNBA\b/.test(t)) return "nba";
   if (/\bMLB\b|World Series/i.test(t)) return "mlb";

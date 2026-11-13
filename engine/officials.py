@@ -19,8 +19,9 @@ from __future__ import annotations
 import json
 import os
 
-#: The leagues whose ingest hands a summary over (engine/sources/espnhoops).
-LEAGUES = ("nba", "wnba")
+#: The leagues whose ingest hands a summary over (engine/sources/espnhoops):
+#: college basketball's too since 2026-11-13, on the same summary.
+LEAGUES = ("nba", "wnba", "cbb")
 
 
 def parse(summary: dict) -> list[dict]:

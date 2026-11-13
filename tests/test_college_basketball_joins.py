@@ -255,6 +255,19 @@ def test_the_pages_draw_it():
     assert "cbb: 2 }" in det
 
 
+
+def test_a_report_says_the_school_never_the_school():
+    """A game report names a club "the Celtics" and a school "Duke": the
+    school takes a singular verb ("Duke has"), never "the Duke have"."""
+    from engine import gamereport as GR
+    g = {"away": "UNC", "home": "DUKE"}
+    c = GR.Ctx(g, {"games": [g]}, names={"DUKE": "Duke", "UNC": "North Carolina"}, sport="cbb")
+    assert GR.team_np(c, "DUKE") == "Duke" and GR.team_np(c, "UNC") == "North Carolina"
+    assert GR.team_be(c, "DUKE", "have", "has") == "has"
+    pro = GR.Ctx(g, {"games": [g]}, names={"DUKE": "Celtics"}, sport="nba")
+    assert GR.team_np(pro, "DUKE") == "the Celtics" and GR.team_be(pro, "DUKE", "have", "has") == "have"
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

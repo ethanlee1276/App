@@ -42,7 +42,7 @@ def _fn(name: str) -> str:
 
 
 def test_the_hoops_and_hockey_boards_get_the_model_boards_ceiling():
-    for name in ("refresh_nba", "refresh_wnba", "refresh_nhl"):
+    for name in ("refresh_nba", "refresh_wnba", "refresh_nhl", "refresh_cbb"):
         fn = _fn(name)
         assert "_run_build(args, timeout=600)" in fn, name
         assert "_run_build(args)" not in fn, name

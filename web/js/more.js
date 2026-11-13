@@ -1445,7 +1445,7 @@ function predBoardHTML(kx, d) {
 }
 
 const PMX_LEAGUES = [["all", "All Markets"], ["nfl", "NFL"], ["cfb", "CFB"], ["mlb", "MLB"],
-                     ["nba", "NBA"], ["wnba", "WNBA"], ["ufc", "UFC"]];
+                     ["nba", "NBA"], ["cbb", "NCAAB"], ["wnba", "WNBA"], ["ufc", "UFC"]];
 
 /* The venues' marks. Kalshi's is its letter; Polymarket's is drawn as the
    outline mark its app uses. Both are the venues' own identities, shown

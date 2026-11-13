@@ -233,7 +233,7 @@ def test_the_gate_stands_before_the_pacer_and_every_paid_lane_passes_it():
     assert gate.index("if tonight == 0 and not ahead:") < gate.index("should_refresh(")
     assert "tonight=tonight, tomorrow=" in gate, "every decision records tonight's count"
     for fn in ("refresh_nfl", "refresh_cfb", "refresh_mlb", "refresh_nba", "refresh_nhl",
-               "refresh_wnba", "refresh_ufc"):
+               "refresh_wnba", "refresh_ufc", "refresh_cbb"):
         body = _fn(LAUNCH, fn)
         for flag in ('"--odds"', '"--board-odds"', '"--live-lines"', '"--lines-odds"'):
             if f"args.append({flag})" in body:

@@ -44,11 +44,14 @@ sys.path.insert(0, ROOT)
 
 import launch                                                # noqa: E402
 
-BOARDS = ("nfl", "cfb", "mlb", "nba", "wnba", "ufc",
+BOARDS = ("nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl", "ufc",
           "predmarkets", "memes", "fantasy")
 TAIL = ("refresh_sport_rosters", "refresh_injuries", "refresh_news",
         "refresh_standings", "_arbitrate_parlays", "_journal_parlays",
         "_seal_forecasts", "_run_futures", "_publish_feed")
+#: Stubbed too, never asserted to run: the Kalshi trader is a step, not a
+#: board, and is off unless the box sets QB_KALSHI_MODE.
+ALSO = ("_kalshi_trader",)
 
 
 def _cycle(raisers=()):
@@ -67,7 +70,7 @@ def _cycle(raisers=()):
             return True
         return f
 
-    names = [(b, f"refresh_{b}") for b in BOARDS] + [(t, t) for t in TAIL]
+    names = [(b, f"refresh_{b}") for b in BOARDS] + [(t, t) for t in TAIL + ALSO]
     for label, attr in names:
         saved[attr] = getattr(launch, attr)
         setattr(launch, attr, stub(label, label in raisers))
@@ -136,6 +139,18 @@ def test_a_healthy_cycle_records_no_failure():
 def test_every_board_still_rebuilds_when_nothing_raises():
     ran = _cycle()
     assert [b for b in BOARDS if b not in ran] == []
+
+
+def test_every_step_the_sweep_calls_is_stubbed_here():
+    """A league added to the sweep and not to BOARDS ran its REAL build
+    from this file: the hockey board, and from 2026-11-13 college
+    basketball's, landed in web/data/ on every suite run, and the gate's
+    registry check failed on the one it had never heard of
+    (tests/test_gate.py, a board built but unregistered)."""
+    import re
+    called = set(re.findall(r"\b(\w+)\(quiet=quiet\)", _refresh_all_block()))
+    stubbed = {f"refresh_{b}" for b in BOARDS} | set(TAIL) | set(ALSO)
+    assert called <= stubbed, f"would run for real: {sorted(called - stubbed)}"
 
 
 # --- the shape the fix depends on ------------------------------------------

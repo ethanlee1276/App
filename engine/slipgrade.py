@@ -168,7 +168,8 @@ SCHEMA = {
 SYSTEM = """You read sportsbook bet slips from screenshots. Report only what the picture shows.
 
 For every leg of the ticket give:
-- sport: nfl, cfb (college football), nba, wnba, mlb, nhl, ufc (a UFC or any MMA fight), or other.
+- sport: nfl, cfb (college football), nba, cbb (men's college basketball), wnba, mlb, nhl, ufc (a UFC or
+  any MMA fight), or other.
 - player: the player's full name as printed, or "" for a game line or any fight leg.
 - team: for a moneyline or spread, the team picked; for a fight leg naming a fighter, that fighter's
   full name; otherwise the player's team if printed, else "".

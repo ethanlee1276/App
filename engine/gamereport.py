@@ -1916,8 +1916,9 @@ PLURAL_NAMES = {"Red Sox", "White Sox"}
 
 def _the(c: Ctx, t: str) -> bool:
     """A club goes by its nickname with "the" ("the Lions", "the Heat"); a
-    college by its school ("Indiana"); a code with no name stands alone."""
-    return c.sport != "cfb" and c.name(t) != t and c.name(t) not in PLACE_NAMES
+    college by its school ("Indiana", and in basketball "Duke has", never
+    "the Duke have"); a code with no name stands alone."""
+    return c.sport not in ("cfb", "cbb") and c.name(t) != t and c.name(t) not in PLACE_NAMES
 
 
 def _many(c: Ctx, t: str) -> bool:

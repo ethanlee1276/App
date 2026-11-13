@@ -95,7 +95,7 @@ def test_all_five_refreshes_use_the_shared_helper():
     """The point of the file. Four of five had their own line and the
     fifth had the lesson."""
     for fn in ("refresh_mlb", "refresh_nfl", "refresh_nba",
-               "refresh_wnba", "refresh_cfb"):
+               "refresh_wnba", "refresh_cfb", "refresh_cbb"):
         assert "_board_word(" in _body(fn), fn
 
 
@@ -109,7 +109,7 @@ def test_no_slate_refresh_still_prints_a_bare_refreshed():
     remaining gap of a different shape, not this one.
     """
     for fn in ("refresh_mlb", "refresh_nfl", "refresh_nba",
-               "refresh_wnba", "refresh_cfb"):
+               "refresh_wnba", "refresh_cfb", "refresh_cbb"):
         body = _body(fn)
         assert "'refreshed' if ok else" not in body, fn
         assert '"refreshed" if ok else' not in body, fn
