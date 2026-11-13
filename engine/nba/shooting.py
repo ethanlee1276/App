@@ -47,6 +47,9 @@ LONG_GAMES = 60
 #: cannot give a current one (2024-25 / 2025-26: 36.0% and 36.0% from
 #: three, 54.5% and 55.0% on twos, 78.0% and 78.3% at the line).
 LEAGUE_FALLBACK = {"p3": 0.360, "p2": 0.548, "pf": 0.781}
+#: College's, 2025-26's Division I box scores: a shorter three, and fewer
+#: of everything made, than the NBA's.
+LEAGUE_FALLBACK_BY = {"nba": LEAGUE_FALLBACK, "cbb": {"p3": 0.338, "p2": 0.519, "pf": 0.722}}
 #: A recent window where fewer of his minutes than this carry shot
 #: columns is too thin a volume read; the raw rate stands.
 MIN_SHOT_SHARE = 0.8
@@ -55,7 +58,13 @@ MIN_SHOT_SHARE = 0.8
 POINTS_COMBOS = ("pra", "pts_reb", "pts_ast")
 MOVED = ("pts", "fg3m") + POINTS_COMBOS
 #: Leagues measured. The WNBA was not (its own percentages, its own lab).
-LEAGUES = ("nba",)
+#: College basketball was, on its own five seasons (2026-11-13,
+#: docs/CBB_LAB.md: points 0.4-0.5% closer, threes 1.2-1.3%, every judged
+#: season), against its own percentages (`LEAGUE_FALLBACK_BY` until the
+#: box's logs can say).
+LEAGUES = ("nba", "cbb")
+#: What each league's read says it was measured to do, on the pick.
+MEASURED = {"nba": {"fg3m": "1.68%", "pts": "0.99%"}, "cbb": {"fg3m": "1.2%", "pts": "0.5%"}}
 
 
 def enabled() -> bool:
@@ -104,7 +113,7 @@ def sums(games: list) -> dict:
     return tot
 
 
-def bundle(recent: list, longrun: list, league: dict | None = None) -> dict | None:
+def bundle(recent: list, longrun: list, league: dict | None = None, league_key: str = "nba") -> dict | None:
     """What a prop carries for the read: ``{"recent": sums, "long": sums,
     "league": pcts}`` — ``recent`` the games his rate is read from (his
     newest first, each a stored game ``{market: value}``), ``longrun`` his
@@ -115,7 +124,7 @@ def bundle(recent: list, longrun: list, league: dict | None = None) -> dict | No
     mins = sum(float(_num((g or {}).get("min")) or 0.0) for g in recent)
     if r["games"] == 0 or mins <= 0 or r["min"] < MIN_SHOT_SHARE * mins:
         return None
-    lg = dict(LEAGUE_FALLBACK)
+    lg = dict(LEAGUE_FALLBACK_BY.get(league_key, LEAGUE_FALLBACK))
     lg.update({k: v for k, v in (league or {}).items() if k in lg and v})
     return {"recent": r, "long": sums(longrun or recent), "league": lg}
 
@@ -164,7 +173,7 @@ def projection_mult(stat: str, rate: float, read: dict | None,
         note = (f"Threes read as his attempts times his 3P% over his last {LONG_GAMES} games "
                 f"({s['p3']:.1%} shrunk toward the league's), not his makes"
                 + (f" — {lately:.1%} lately" if lately is not None else "")
-                + " (measured: 1.68% closer on a season it never saw)")
+                + f" (measured: {MEASURED.get(league_key, MEASURED['nba'])['fg3m']} closer on a season it never saw)")
     else:
         if s["pts_raw"] <= 0:
             return 1.0, ""
@@ -176,7 +185,8 @@ def projection_mult(stat: str, rate: float, read: dict | None,
         m = new_rate / base_rate
         note = (f"Points read from his shot volume at his long-run percentages "
                 f"(2s {s['p2']:.1%}, 3s {s['p3']:.1%}, FTs {s['pf']:.1%}, shrunk toward the league's), "
-                f"not his recent makes (measured: 0.99% closer on a season it never saw)")
+                f"not his recent makes (measured: {MEASURED.get(league_key, MEASURED['nba'])['pts']} closer on a "
+                f"season it never saw)")
     m = round(m, 4)
     if abs(m - 1.0) < 0.005:
         return 1.0, ""

@@ -54,8 +54,10 @@ and is not moved. Pure functions plus one read of `player_game_logs`.
 """
 from __future__ import annotations
 
-#: Leagues measured.
-LEAGUES = ("nba",)
+#: Leagues measured. College basketball's on its own five seasons
+#: (2026-11-13, docs/CBB_LAB.md: rebounds 0.6-0.8% closer, assists
+#: 0.5-0.7%, every judged season), with its own role rates (`LEAGUE_BY`).
+LEAGUES = ("nba", "cbb")
 #: His long-run read: his last this-many games, any club, any season — the
 #: twenty and the older games past them (the shooting read's sixty).
 LONG_GAMES = 60
@@ -69,6 +71,12 @@ PARAMS = {"reb": (0.5, 25.0), "ast": (0.3, 25.0), "stl": (0.75, 400.0),
 #: seasons (the starters' own five at the opening tip).
 LEAGUE = {True: {"reb": 0.18576, "ast": 0.12008, "stl": 0.03411, "blk": 0.02068, "tov": 0.06080},
           False: {"reb": 0.17466, "ast": 0.09553, "stl": 0.03528, "blk": 0.01936, "tov": 0.04962}}
+#: Each league's own: college's a minute for a starter and for a bench
+#: player over 2025-26's Division I box scores (a 40-minute game at college's
+#: pace: fewer of everything a minute than the NBA's).
+LEAGUE_BY = {"nba": LEAGUE,
+             "cbb": {True: {"reb": 0.15633, "ast": 0.07358, "stl": 0.03363, "blk": 0.01601, "tov": 0.05635},
+                     False: {"reb": 0.15896, "ast": 0.05891, "stl": 0.03310, "blk": 0.01763, "tov": 0.05364}}}
 #: The stats read, and the columns each needs.
 KEYS = tuple(PARAMS)
 #: The parts of each market this step reads. Points, threes and the points
@@ -113,8 +121,9 @@ def sums(games) -> dict:
     return out
 
 
-def bundle(recent, recent_dates, longrun, starter) -> dict | None:
-    """What a prop carries for the read: ``{"recent", "older", "starter"}``.
+def bundle(recent, recent_dates, longrun, starter, league: str = "nba") -> dict | None:
+    """What a prop carries for the read: ``{"recent", "older", "starter",
+    "league"}`` (whose role rates the read shrinks toward, `LEAGUE_BY`).
 
     ``recent`` the games his rate is read from (newest first, each a stored
     game ``{market: value}``) on ``recent_dates``; ``longrun`` his last
@@ -124,7 +133,8 @@ def bundle(recent, recent_dates, longrun, starter) -> dict | None:
         return None
     seen = {str(d) for d in (recent_dates or [])}
     older = [g for d, g in (longrun or []) if str(d) not in seen]
-    return {"recent": sums(recent), "older": sums(older), "starter": bool(starter)}
+    return {"recent": sums(recent), "older": sums(older), "starter": bool(starter),
+            "league": league if league in LEAGUE_BY else "nba"}
 
 
 def blended(stat: str, read: dict | None):
@@ -137,7 +147,7 @@ def blended(stat: str, read: dict | None):
         return None
     v_o, m_o = (read.get("older") or {}).get(stat) or (0.0, 0.0)
     w, kappa = PARAMS[stat]
-    prior = LEAGUE[bool(read.get("starter"))][stat]
+    prior = LEAGUE_BY.get(read.get("league") or "nba", LEAGUE)[bool(read.get("starter"))][stat]
     den = m_r + w * m_o + kappa
     return v_r / m_r, (v_r + w * v_o + kappa * prior) / den
 

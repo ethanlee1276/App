@@ -144,7 +144,9 @@ def test_a_doubleheader_is_told_apart_only_by_its_leg():
 
 
 def test_every_daily_chart_builder_and_the_role_chart_read_them():
-    for path, call in (("engine/nba/shots.py", 'scoreboard(conn, "nba", pick, out_games)'),
+    # The shot chart's league is its own argument since college joined it
+    # (2026-11-13): the NBA's and college basketball's, one call.
+    for path, call in (("engine/nba/shots.py", "scoreboard(conn, league, pick, out_games)"),
                        ("engine/mlb/charts.py", 'scoreboard(conn, "mlb", pick, out_games)'),
                        ("engine/mlb/charts.py", 'scoreboard(conn, "mlb", pick, games)'),
                        ("engine/nhl/charts.py", 'scoreboard(conn, "nhl", pick, games)'),

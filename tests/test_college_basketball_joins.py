@@ -309,6 +309,30 @@ def test_a_report_says_the_school_never_the_school():
     assert GR.team_np(pro, "DUKE") == "the Celtics" and GR.team_be(pro, "DUKE", "have", "has") == "have"
 
 
+
+def test_the_nbas_two_reads_run_on_college_with_colleges_own_league():
+    """The college lab (docs/CBB_LAB.md): shooting, luck taken out, made
+    points 0.4-0.5% and threes 1.2-1.3% closer on college games, and the
+    rates read past his last twenty made rebounds 0.6-0.8% and assists
+    0.5-0.7% closer, every judged season, against college's own percentages
+    and role rates. The WNBA stays unmeasured."""
+    from engine.nba import rates as RT, shooting as SH
+    games = [{"min": 30.0, "pts": 20.0, "fgm": 8.0, "fga": 14.0, "fg3m": 3.0, "fg3a": 5.0,
+              "ftm": 1.0, "fta": 2.0, "reb": 6.0, "ast": 2.0} for _ in range(20)]
+    read = SH.bundle(games, games, None, "cbb")
+    assert read["league"] == SH.LEAGUE_FALLBACK_BY["cbb"], "college's own percentages until the box can say"
+    m, note = SH.projection_mult("pts", 20.0 / 30.0, read, "cbb")
+    assert m != 1.0 and "0.5% closer" in note
+    assert SH.projection_mult("pts", 20.0 / 30.0, read, "wnba") == (1.0, "")
+    dates = [f"2026-11-{d:02d}" for d in range(1, 21)]
+    college = RT.bundle(games, dates, list(zip(dates, games)), True, "cbb")
+    pro = RT.bundle(games, dates, list(zip(dates, games)), True)
+    assert college["league"] == "cbb" and pro["league"] == "nba"
+    assert RT.blended("ast", college)[1] < RT.blended("ast", pro)[1], "college's starters assist less a minute"
+    assert RT.projection_mult("reb", 0.2, college, "cbb")[0] != 1.0
+    assert RT.projection_mult("reb", 0.2, college, "wnba") == (1.0, "")
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

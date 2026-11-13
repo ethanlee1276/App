@@ -457,6 +457,11 @@ WNBA = replace(
 #     college line moves (points 0.30 against 0.78), and every chance would
 #     have been too sure of itself; these are hoops_fit's own rule on two
 #     college seasons, what the box fits once the backfill lands.
+#   * THE NBA'S TWO READS (engine/nba/shooting, engine/nba/rates), on college's
+#     own league numbers: points 0.4-0.5% and threes 1.2-1.3% closer from his
+#     shot volume at his longer-run percentages, rebounds 0.6-0.8% and assists
+#     0.5-0.7% closer read past his last twenty; on for college (each module's
+#     LEAGUES), under the NBA's switches.
 # Still inherited, because the replay has no lines to measure them against:
 # the blowout curves and the rest buckets (the box fits the margin's spread
 # from its own college games once 200 are stored).

@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OW. College reads a player's shooting and his rebounds the NBA's way**
+(step 525; 13 November). Nothing to run. The two reads the NBA lab built
+(points and threes from shot volume at a player's longer-run percentages;
+rebounds and assists read past his last twenty games toward his role's
+average) were measured on five college seasons with college's own league
+numbers, and both helped in every season held out: points 0.4-0.5% closer,
+threes 1.2-1.3%, rebounds 0.6-0.8%, assists 0.5-0.7% (docs/CBB_LAB.md).
+Both are on for college under the NBA's own switches.
+
 **OV. College basketball's shot chart and matchup view** (step 524; 13
 November). Nothing to run. The NBA's shot chart, for college: every shot a
 player took, where on the floor, made or missed, on the college court (a

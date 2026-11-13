@@ -1710,11 +1710,11 @@ def main() -> None:
                 # 60: the read `pipeline.project` rebuilds points and threes
                 # from (None when the logs carry too few shot columns).
                 "shooting": (_shooting.bundle(h.get("games") or [], _shoot_long.get(prop.player),
-                                              _shoot_lg)
+                                              _shoot_lg, args.league)
                              if _shoot_long or _shoot_lg else None),
                 # His older games past those twenty and his role (engine/nba/rates).
                 "rates": (_rates.bundle(h.get("games") or [], h.get("dates") or [],
-                                        _rate_long.get(prop.player), bool(h["starter"]))
+                                        _rate_long.get(prop.player), bool(h["starter"]), args.league)
                           if _rate_long else None),
                 "spread": spread, "is_favorite": fav,
                 # What his history's games carried (`history_context`).

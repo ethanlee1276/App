@@ -213,7 +213,7 @@ def test_the_build_the_replay_and_the_fitters_hand_it_the_same_read():
     build = (ROOT / "nba_build.py").read_text(encoding="utf-8")
     assert "_rates.longrun(conn, args.league," in build
     assert ('"rates": (_rates.bundle(h.get("games") or [], h.get("dates") or [],\n'
-            '                                        _rate_long.get(prop.player), bool(h["starter"]))') in build
+            '                                        _rate_long.get(prop.player), bool(h["starter"]), args.league)') in build
     from engine import hoopsreplay as HR
     games = [_game(reb=5.0 + (i % 3)) for i in range(70)]
     dates = sorted(_days(70))

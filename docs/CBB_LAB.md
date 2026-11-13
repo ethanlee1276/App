@@ -137,6 +137,37 @@ the two seasons the box's backfill stores:
 | One season (2021-22 to 2025-26) | 0.72-0.74 | 0.69-0.70 | 0.93-0.94 | 1.00-1.02 | 0.58 | 0.61 | 0.66-0.67 | 0.62 |
 | **Two seasons pooled (the board's)** | **0.783** | **0.743** | **0.972** | **1.047** | **0.639** | **0.672** | **0.721** | **0.676** |
 
+## The NBA's two reads, on college: both on
+
+The NBA lab measured two reads of a player's rate on the NBA's own seasons
+(docs/NBA_LAB.md). Both are the build's own code (`engine/nba/shooting`,
+`engine/nba/rates`), and college's box scores store every column they read.
+Every player-game above (264,882 from 2022-23 on, each judged season with
+the season before's league numbers), projected with and without the read,
+each side on its own level. RMSE, season by season:
+
+| | 2022-23 | 2023-24 | 2024-25 | 2025-26 |
+|---|---|---|---|---|
+| Points, shooting read | −0.52% | −0.50% | −0.53% | −0.42% |
+| Threes, shooting read | −1.27% | −1.25% | −1.16% | −1.20% |
+| Rebounds, rates read | −0.83% | −0.60% | −0.61% | −0.56% |
+| Assists, rates read | −0.72% | −0.70% | −0.65% | −0.50% |
+
+- **Shooting, luck taken out**: points and threes rebuilt from his shot
+  volume at his percentages over his last 60 games (any school), shrunk
+  toward the league's, with the NBA's shrinkage. College's league numbers are
+  its own: the box's stored college games over the last year once it holds
+  enough of them, and 2025-26's until then (3P% 33.8%, 2P% 51.9%, FT% 72.2%,
+  `shooting.LEAGUE_FALLBACK_BY`).
+- **Rates, read past his last twenty**: rebounds and assists a minute with
+  his older games and his role's league rate, the NBA's weights, college's
+  own role rates (2025-26: a starter's rebounds 0.156 a minute and assists
+  0.074, a bench player's 0.159 and 0.059; `rates.LEAGUE_BY`).
+
+Both are on for college, each under the NBA's switch (`QB_NBA_SHOOTING`, the
+`rates` verdict), and each says on the pick what it was measured to do on
+college.
+
 ## Not measured here
 
 - **The margin's spread** (`margin_sd`, every spread and moneyline chance):
@@ -146,9 +177,8 @@ the two seasons the box's backfill stores:
 - **The blowout curves and the rest buckets**: they key on the game's
   spread, and these box scores carry no lines. College rarely plays on
   consecutive days outside its tournaments.
-- **The shooting read** (`engine/nba/shooting`, points and threes from shot
-  volume at long-run percentages) and **the scout's flags** were measured on
-  the NBA's games and stay the NBA's.
+- **The scout's flags** and **first basket** were measured on the NBA's
+  games and stay the NBA's.
 
 ## Reproducing it
 

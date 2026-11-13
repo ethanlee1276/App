@@ -191,7 +191,7 @@ def _shooting(e: dict, i: int, sport: str, market: str):
     recent = games[max(0, i - WINDOW):i][::-1]
     longrun = [g for g in games[max(0, i - SH.LONG_GAMES * 2):i][::-1]
                if SH.game_shots(g) is not None][:SH.LONG_GAMES]
-    return SH.bundle(recent, longrun)
+    return SH.bundle(recent, longrun, None, sport)
 
 
 def _rates(e: dict, i: int, sport: str):
@@ -211,7 +211,7 @@ def _rates(e: dict, i: int, sport: str):
                if float((g or {}).get("min") or 0.0) > 0][::-1]
     starters = e.get("starters") or []
     starter = bool(starters[i - 1]) if 0 < i <= len(starters) else False
-    return RT.bundle(recent, dates[lo:i][::-1], longrun, starter)
+    return RT.bundle(recent, dates[lo:i][::-1], longrun, starter, sport)
 
 
 def _todo(entries: list, min_history: int, cap: int) -> list:
