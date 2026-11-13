@@ -381,6 +381,50 @@ def test_a_college_pick_says_why_it_is_not_staked_as_it_is():
     assert pipeline is not None
 
 
+
+def test_the_box_can_see_what_polymarket_answers_college():
+    """Runbook OY: every college read came back 406 on the box while the
+    NBA's answered. The probe prints the venue's own answer to each request
+    the build makes, the NBA's as the control, and writes nothing."""
+    import io
+    import json
+    import urllib.error
+    import urllib.request
+    from engine.sources import polysports as PS
+
+    class _Resp(io.BytesIO):
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake(req, timeout=None):
+        url = req.full_url
+        if url.endswith("/sports"):
+            return _Resp(json.dumps([{"sport": "ncaab", "series": "39,10470"},
+                                     {"sport": "nba", "series": "10345"}]).encode())
+        if "series_id=10345" in url:
+            return _Resp(b"[]")
+        raise urllib.error.HTTPError(url, 406, "Not Acceptable", {}, io.BytesIO(b'{"error": "too many"}'))
+    keep = urllib.request.urlopen
+    urllib.request.urlopen = fake
+    try:
+        lines = PS.probe("cbb")
+    finally:
+        urllib.request.urlopen = keep
+    text = "\n".join(lines)
+    assert "series 10470, as the build asks: 406" in text and '"error": "too many"' in text
+    assert "series 39, 5 and no order: 406" in text
+    assert "nba series 10345 (the control): 200" in text
+    assert lines[-1] == "Read-only: nothing was cached or written."
+    src = (ROOT / "engine" / "sources" / "polysports.py").read_text(encoding="utf-8")
+    body = src[src.index("def probe("):]
+    assert "fetch_text" not in body and "write" not in body.split("Read-only")[0].lower().replace("written", "")
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

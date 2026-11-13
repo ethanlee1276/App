@@ -388,3 +388,71 @@ def _days(iso: str) -> int:
 def p_home(row: dict, first_is_home: bool) -> float:
     p = float(row["prob"])
     return round(p if first_is_home else 1.0 - p, 4)
+
+
+# --- the box's look at one league's answers (read-only) ------------------------------
+def probe(sport: str = "cbb", limit: int = 5) -> list[str]:
+    """What Polymarket answers each request the build makes for ``sport``,
+    with nothing cached read or written: the /sports row naming the league,
+    then each of its series and tags as the build asks (`fetch_sports`'s
+    page and clock), each with its HTTP status and the first of its body,
+    and the NBA's series as the control that answers.
+
+    Written 2026-11-13 for college basketball: every college read came back
+    "HTTP Error 406: Not Acceptable" on the box while the NBA's, hockey's and
+    college football's answered in the same minute, and this sandbox cannot
+    reach the venue to see why."""
+    import urllib.error
+    import urllib.request
+    from .fetch import USER_AGENT
+
+    def get(url, n=300):
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        try:
+            with urllib.request.urlopen(req, timeout=SLOW.get(sport, TIMEOUT_S)) as r:
+                body = r.read()
+                return r.status, body if n is None else body[:n], len(body)
+        except urllib.error.HTTPError as e:
+            body = e.read()
+            return e.code, body[:n or 600], len(body)
+        except Exception as e:                                     # noqa: BLE001
+            return "error", str(e)[:200].encode(), 0
+
+    out = []
+    status, body, size = get(f"{GAMMA}/sports", n=None)
+    rows = []
+    try:
+        rows = [r for r in json.loads(body) if str((r or {}).get("sport") or "").strip().lower()
+                in SPORT_KEYS.get(sport, ()) + SPORT_KEYS["nba"]]
+    except ValueError:
+        pass
+    out.append(f"/sports: {status}, {size:,} bytes; the rows for {sport} and the nba:")
+    for r in rows:
+        out.append("  " + json.dumps(r)[:300])
+    page = PAGE.get(sport, 200)
+    asks = []
+    for r in rows:
+        name = str(r.get("sport") or "").strip().lower()
+        for sid in [x.strip() for x in str(r.get("series") or "").split(",") if x.strip()]:
+            base = f"{GAMMA}/events?series_id={sid}&closed=false&active=true"
+            if name in SPORT_KEYS["nba"]:
+                asks.append((f"nba series {sid} (the control)", f"{base}&limit={limit}"))
+                continue
+            asks.append((f"series {sid}, as the build asks", f"{base}&limit={page}&order=startDate&ascending=true"))
+            asks.append((f"series {sid}, {limit} and no order", f"{base}&limit={limit}"))
+    for tag in SPORT_TAGS.get(sport, ()):
+        asks.append((f"tag {tag}, as the build asks",
+                     f"{GAMMA}/events?tag_slug={tag}&closed=false&active=true&limit={page}"
+                     f"&order=startDate&ascending=true"))
+    for label, url in asks:
+        status, body, size = get(url)
+        out.append(f"{label}: {status}, {size:,} bytes — "
+                   + " ".join(body.decode("utf-8", "replace").split())[:240])
+    out.append("Read-only: nothing was cached or written.")
+    return out
+
+
+if __name__ == "__main__":
+    import sys as _sys
+    for _line in probe(_sys.argv[1] if len(_sys.argv) > 1 else "cbb"):
+        print(_line)

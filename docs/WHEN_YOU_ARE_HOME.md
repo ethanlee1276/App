@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OY. What Polymarket answers college's requests** (step 527; 13
+November). One read-only command. With step OX on the box, the college
+board's Polymarket report reads `HTTP Error 406: Not Acceptable` for every
+college request (both of college's series on Polymarket's sports list and
+the ncaab tag), while the NBA's, hockey's and college football's answered in
+the same minute. Kalshi prices 41 of the night's 61 college games, so the
+crowd column is not empty, but Polymarket's half is. This sandbox cannot
+reach Polymarket, so this prints what it answers the box: the sports list's
+rows for college and the NBA, then each request the build makes, its status
+and the start of its body, with the NBA's as the control. Nothing is cached
+or written. Paste it back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.sources.polysports cbb
+```
+
 **OX. College's checklist, and Polymarket's college prices** (step 526; 13
 November). Nothing to run. docs/CBB_PARITY.md lists every NBA tool and where
 college stands: what is done, what college does its own way, and what waits

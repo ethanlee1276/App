@@ -10,7 +10,7 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-13, after college's checklist against the NBA was written and Polymarket was asked for college's prices in smaller pages (step OX: nothing to run), after college started reading a player's shooting and his rebounds the NBA's way (step OW: nothing to run), after college basketball got the NBA's shot chart and matchup view on its own court (step OV: nothing to run), after college basketball's numbers were measured on five college seasons and its standings were fixed on the box's first table (step OU: nothing to run), after men's college basketball joined the site with everything the NBA has, and the NBA standings stopped showing last season (step OT: three box commands, item 00a), after the game-line calibration started seeking its closes by market instead of walking every quote its league stored (step OS: nothing to run), after a retractable roof the schedule has not called started being read as closed instead of open air (step OR: nothing to run), after rain and wind started reaching a quarterback's completions and a kicker's points, and a pick's weather line started being marked by its own market (step OQ: nothing to run), after the report started saying why a matchup card reads against the edge it names (step OP: nothing to run), after the board's self-check started counting a report and a matchup card that point opposite ways (step OO: nothing to run), after the report started giving this season's rank beside the two-season blend where they sit far apart, "the Giants' run defense (30th; 13th this season alone)" (step ON: nothing to run), after a stingy defence's rank started being said as the fewest, "the 3rd-fewest" and not "the 30th-most" (step OM: nothing to run), after a running quarterback's legs went on his matchup card (step OL:
+Last updated 2026-11-13, after Polymarket started answering college's requests with HTTP 406 and a read-only probe was written to see why (step OY: one read-only command, item 00a), after college's checklist against the NBA was written and Polymarket was asked for college's prices in smaller pages (step OX: nothing to run), after college started reading a player's shooting and his rebounds the NBA's way (step OW: nothing to run), after college basketball got the NBA's shot chart and matchup view on its own court (step OV: nothing to run), after college basketball's numbers were measured on five college seasons and its standings were fixed on the box's first table (step OU: nothing to run), after men's college basketball joined the site with everything the NBA has, and the NBA standings stopped showing last season (step OT: three box commands, item 00a), after the game-line calibration started seeking its closes by market instead of walking every quote its league stored (step OS: nothing to run), after a retractable roof the schedule has not called started being read as closed instead of open air (step OR: nothing to run), after rain and wind started reaching a quarterback's completions and a kicker's points, and a pick's weather line started being marked by its own market (step OQ: nothing to run), after the report started saying why a matchup card reads against the edge it names (step OP: nothing to run), after the board's self-check started counting a report and a matchup card that point opposite ways (step OO: nothing to run), after the report started giving this season's rank beside the two-season blend where they sit far apart, "the Giants' run defense (30th; 13th this season alone)" (step ON: nothing to run), after a stingy defence's rank started being said as the fewest, "the 3rd-fewest" and not "the 30th-most" (step OM: nothing to run), after a running quarterback's legs went on his matchup card (step OL:
 nothing to run), after a player's matchup card started saying what the matchup says,
 the weather counted and his own share not (step OK: nothing to run), after the game-line
 calibration started saying where its time goes
@@ -577,10 +577,17 @@ After, read-only, what is stored:
 cd /srv/qellys && sudo -u qellys python3 ingest.py status
 ```
 
-Or the two read-only checks in one go:
+And read-only, what Polymarket answers college's requests (the board shows
+"HTTP Error 406" for every college read while the NBA's answer; step OY):
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh OT 2>&1 | tee /tmp/ot.txt
+cd /srv/qellys && sudo -u qellys python3 -m engine.sources.polysports cbb
+```
+
+Or the three read-only checks in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh OT OY 2>&1 | tee /tmp/ot.txt
 ```
 
 ## 00. First, when you're home: NBA Most Likely is back, and where the credits went (step JW)

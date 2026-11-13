@@ -832,6 +832,9 @@ run OT "College basketball: ESPN's endpoints on the box, and what is stored" 300
 cd /srv/qellys && sudo -u qellys python3 ingest.py cbb --probe
 cd /srv/qellys && sudo -u qellys python3 ingest.py status
 SH
+run OY "What Polymarket answers college basketball's requests" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.sources.polysports cbb
+SH
 run IS "Your renewal day is the 1st" 60 <<'SH'
 cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_ODDS_RESET_DAY=' /etc/qellys/env | xargs) python3 -m engine.oddsplan | head -6
 SH
