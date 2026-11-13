@@ -72,8 +72,15 @@ SLOW = {"cbb": 25}
 
 
 def _why(exc) -> str:
-    """``"error"`` and the failure's own short reason, for the report."""
-    reason = " ".join(str(exc or "").split())[:60]
+    """``"error"`` and the failure's own short reason, for the report: the
+    cause, never the URL the fetch layer leads its message with ("Could not
+    fetch <url>: <cause>" — the box's first report was all URL)."""
+    text = " ".join(str(exc or "").split())
+    m = re.match(r"Could not fetch \S+?: (.*)$", text)
+    reason = (m.group(1) if m else text)[:80]
+    status = getattr(exc, "status", None)
+    if status and str(status) not in reason:
+        reason = f"HTTP {status} {reason}".strip()
     return f"error: {reason}" if reason else "error"
 
 #: Market words that mean "not the moneyline".

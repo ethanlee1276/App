@@ -355,6 +355,10 @@ def test_polymarket_is_asked_for_colleges_soonest_hundred_and_says_why_it_failed
     finally:
         PS.fetch_series_ids, PS.fetch_series_events, PS.fetch_events = keep
     assert report["series:10470"] == "error: The read operation timed out"
+    from engine.sources.fetch import DataUnavailable
+    said = PS._why(DataUnavailable("Could not fetch https://gamma-api.polymarket.com/events?series_id=1: "
+                                   "HTTP Error 422: Unprocessable Entity", status=422))
+    assert said == "error: HTTP Error 422: Unprocessable Entity", "the cause, never the URL"
     college = dict(asked)["10470"]
     assert college["limit"] == 100 and college["timeout"] == 25 and college["soonest"] is True
     nba = dict(asked)["10345"]
