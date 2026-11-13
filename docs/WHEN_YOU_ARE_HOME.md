@@ -9338,6 +9338,26 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OS. The game-line calibration seeks its closes instead of walking every
+quote** (step 521; 13 November). Nothing to run. OJ's timers filled on the
+first pass that learned after it, at 03:06 on Friday 13 November: the
+calibration learned for 250.3 seconds, and 244.7 of them were one read, the
+harvested closes (the game lines the box keeps from the odds feed), slowest
+in the NFL (its totals fit 99.1 seconds, its spreads 59.9). The read asks for
+one market of one book in time order, and the box's history file answered
+that by walking the table in its own key order (league, then time): every
+prop at every book at every snapshot the league has, to keep a game line or
+two from each. It now seeks the market through the (league, market, player,
+time) index the file already has, and puts what it finds in the walk's own
+order (time, then the rest of the key, the row's id breaking a tie), so each
+game's close is the same row as before. Measured on a 2.6-million-row copy
+of the table's shape: the NFL's totals 0.41 to 0.05 seconds, spreads 0.34 to
+0.05, moneylines 0.41 to 0.12, every close the same and in the same order.
+The game ranks and the Pick of the Day's replay read the same closes and gain
+the same. The next pass that learns shows it on the public heartbeat,
+https://qellysbook.com/data/heartbeat.json, under `chores` → `settle` →
+`phases` → `last_learned` → `gamecal` → `parts` → `harvested closes`.
+
 **OR. A retractable roof nobody has called yet is read as closed** (step 520;
 12 November). Nothing to run. Checking step OQ on the live board turned up
 the opposite problem: weather where there shouldn't be any. Sunday's 49ers at
@@ -9508,6 +9528,15 @@ itself), and the settle pass puts them on `learn_gamecal` and keeps the last
 under `last_learned.gamecal`, cleared before each pass so it is never an
 earlier one's. The first pass that learns after this push fills it; the slow
 part gets cut after that, with its results checked identical.
+
+It filled at 03:06 on Friday 13 November, the first pass that learned after
+the push (Thursday's 04:03 was the last one before it). The calibration took
+250.3 seconds, and the slow read is the harvested closes, 244.7 of them: the
+schedule's closes came to 2.9, the walk 1.2, the games read 1.0. The slow
+league is the NFL, its totals fit 99.1 seconds and its spreads 59.9, then
+MLB's totals 27.7 and college's totals 24.0; the NBA, hockey and the WNBA
+had nothing to fit. The read walked every quote its league stored to find
+the game lines among them; OS cuts it, with every close checked identical.
 
 **OI. Every league buys its prices at 7am on a game day** (step 511; 11
 November). Nothing to run. Ethan, after OH: "And that should be for all
@@ -10613,6 +10642,17 @@ line reads `nothing done this run; left for the next: cfb`, which means no
 sport finished, not that nothing was kept; nothing stalled. The round of 4
 November now owes only college's interceptions, 18 settings, about a quarter
 of a night, so Friday night's run should finish the round.
+
+The fifth night (00:19 to 00:36 on Friday 13 November, 17 minutes) went to
+college and finished interceptions, its last 18 settings, and with them the
+round of 4 November: the last line reads `deep refit: round of 2026-11-04
+complete — cfb this run`, nothing is left or part-way, nothing was cut off,
+and MLB and the WNBA sat the round out at rest. What the round bought: every
+piece in season has had its full fit since 4 November, where the NFL's had
+waited since late August. That is the NFL's and college's player memory,
+temperatures and recency dials, the NBA's three checks and its own fit, the touchdown models, the yardage mixture, the NFL's
+book-line props and the grade ladder. This week's round, the round of 11
+November, which waited for this one to end, begins with Saturday night's run.
 
 **LW. The box-score pull asks for a game by its season** (step 445; 8
 November). The first pass with LS's timer on it (20:52, Saturday 7

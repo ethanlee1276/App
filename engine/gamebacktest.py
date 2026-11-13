@@ -19,6 +19,7 @@ Honesty notes:
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass, field
 
 from .db import starters_by_game
@@ -31,16 +32,57 @@ SHRINK = 6.0
 # A starter's record firms up over this many starts before it's fully trusted.
 PITCHER_SHRINK = 5.0
 
+#: The harvested closes' read: one market of one book, sought through the
+#: odds history's (sport, market, player, taken_at) index and sorted into the
+#: order the box's walk of the table's key gave (`harvest_rows`).
+HARVEST_SEEK = ("SELECT {cols} FROM odds_history INDEXED BY idx_odds_hist_lookup "
+                "WHERE sport=? AND market=? AND book=? "
+                "ORDER BY taken_at, event_id, player, market, book, rowid")
+#: The same read the old way, for a file without that index.
+HARVEST_SCAN = ("SELECT {cols} FROM odds_history "
+                "WHERE sport=? AND market=? AND book=? ORDER BY taken_at")
+
+
+def harvest_rows(conn, cols: str, sport: str, market: str, book: str):
+    """One market's harvested rows at one book, oldest first — the read
+    behind `game_line_closes` and `moneyline_closes`, whose callers keep the
+    LAST row for a game, so the order is the answer.
+
+    ONE SEEK PER MARKET (2026-11-13). Both asked for a market's rows of one
+    book in time order, and SQLite, on the box's file (never ANALYZEd),
+    answered the order by walking the table's own key, (sport, taken_at,
+    event, player, market, book): every row the league ever stored, each
+    prop at every book at every snapshot, to keep a game line or two per
+    snapshot. On the box's learning pass at 03:06 on 13 November that walk
+    was 244.7 of the game-line calibration's 250.3 seconds (the NFL's
+    totals fit 99.1, its spreads 59.9). The rows are now sought through the
+    (sport, market, player, taken_at) index, named outright because the
+    planner, left to itself, takes the walk for the order it gives, and then
+    sorted into that walk's order, written down: the time, then the rest of
+    the key, the row's id breaking a tie (only a key with a part missing
+    can tie, as SQLite lets a missing part repeat). So the last row for a
+    game is the same row it was. On a 2.6-million-row copy of the table's
+    shape (props at five books every snapshot, the game lines beside them):
+    the NFL's totals 0.41 to 0.05 seconds, spreads 0.34 to 0.05, moneylines
+    0.41 to 0.12, every close the same and in the same order. A file
+    without the index (one made before it existed) is read the old way."""
+    args = (sport, market, book)
+    try:
+        return conn.execute(HARVEST_SEEK.format(cols=cols), args)
+    except sqlite3.OperationalError as exc:
+        if "no such index" not in str(exc):
+            raise
+    return conn.execute(HARVEST_SCAN.format(cols=cols), args)
+
 
 def moneyline_closes(conn, sport: str, book: str = "best") -> dict:
     """``{(date, home, away): {team: odds}}`` for one book — the last
     harvested snapshot on each date is that day's close. ``book="best"`` is
     the shopped-best aggregate; a book title (e.g. ``"Pinnacle"``) selects
     that book's own prices."""
-    q = ("SELECT taken_at, home, away, player, over_odds FROM odds_history "
-         "WHERE sport=? AND market='moneyline' AND book=? ORDER BY taken_at")
     out: dict = {}
-    for r in conn.execute(q, (sport, book)):
+    for r in harvest_rows(conn, "taken_at, home, away, player, over_odds",
+                          sport, "moneyline", book):
         date = str(r["taken_at"])[:10]
         game = out.setdefault((date, r["home"], r["away"]), {})
         # Ordered by taken_at, so later same-date snapshots overwrite.
@@ -504,13 +546,11 @@ def game_line_closes(conn, sport: str, market: str, book: str = "best") -> dict:
     """``{(date, home, away): (line, odds_a, odds_b)}`` — last snapshot wins.
 
     For a total: ``(line, over_odds, under_odds)``. For a spread: the HOME
-    team's number and ``(home_odds, away_odds)``.
+    team's number and ``(home_odds, away_odds)``. Read by `harvest_rows`.
     """
-    q = ("SELECT taken_at, home, away, line, over_odds, under_odds "
-         "FROM odds_history WHERE sport=? AND market=? AND book=? "
-         "ORDER BY taken_at")
     out: dict = {}
-    for r in conn.execute(q, (sport, market, book)):
+    for r in harvest_rows(conn, "taken_at, home, away, line, over_odds, under_odds",
+                          sport, market, book):
         if r["line"] is None or r["over_odds"] is None or r["under_odds"] is None:
             continue
         out[(str(r["taken_at"])[:10], r["home"], r["away"])] = (
