@@ -198,7 +198,7 @@ def test_a_basketball_payload_gives_football_nothing_and_vice_versa():
 
 def test_the_leagues_each_parser_serves():
     assert set(E.FOOTBALL) == {"nfl", "cfb"}
-    assert set(E.HOOPS) == {"nba", "wnba"}
+    assert set(E.HOOPS) == {"nba", "wnba", "cbb"}
     assert not set(E.FOOTBALL) & set(E.HOOPS)
 
 

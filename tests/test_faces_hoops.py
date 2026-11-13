@@ -199,7 +199,9 @@ def test_the_build_actually_passes_the_map():
     i = src.index("recs = shared_recommendations(")
     call = src[i:i + 400]
     assert "assets=" in call, "the build still builds recommendations faceless"
-    assert "player_assets(conn, args.league)" in call, (
+    # College's faces lay its schools' own roster photos over the table
+    # (`nba_build.board_assets`), still for the league being built.
+    assert "board_assets(conn, args.league" in call, (
         "the faces must be read for the league being built, or a WNBA board "
         "looks up NBA players and finds none")
 

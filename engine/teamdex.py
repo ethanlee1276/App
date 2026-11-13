@@ -818,7 +818,7 @@ STAT_SECTIONS["baseball"] = (
 #: Which set of sections a sport gets.
 STAT_SPORTS = {"nfl": "football", "cfb": "football", "nhl": "hockey",
                "nba": "basketball", "wnba": "basketball", "mlb": "baseball",
-               "cbb": "college basketball"}
+               "cbb": "basketball"}
 
 #: How many rows a section prints. ESPN lists everyone who touched the
 #: ball; a page does not need the punter who took one snap.

@@ -3744,8 +3744,7 @@ function potdCallStrip(payload) {
    render on the CFB page" — and MLB had none); a league without one keeps
    the venue band above. */
 // nhl: the puck at centre ice (Ethan, 2026-10-03).
-const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba-ball", wnba: "wnba-ball", nhl: "nhl-ball",
-                    cbb: "nba-ball" };
+const POTD_BALL = { nfl: "nfl-ball", cfb: "cfb-ball", mlb: "mlb-ball", nba: "nba-ball", wnba: "wnba-ball", nhl: "nhl-ball", cbb: "nba-ball" };
 function potdBallArt() {
   const stem = POTD_BALL[state.sport];
   if (!stem) return "";
@@ -27794,8 +27793,7 @@ const LEAGUE_OUT_OF_MARKET = { mlb: "mlbtv", nba: "nbalp", wnba: "wnbalp", nhl: 
    ESPN league has a Gamecast page per event id. A live game with an id
    always gets one, so a game whose feed named no carrier still has a link
    — the MLB game Ethan was watching had none. */
-const ESPN_GAME_PATH = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl",
-                         cbb: "mens-college-basketball" };
+const ESPN_GAME_PATH = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl", cbb: "mens-college-basketball" };
 function gameLinksFor(g, league) {
   if (!g) return {};
   if (league === "mlb") {

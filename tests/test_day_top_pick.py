@@ -515,7 +515,8 @@ def test_the_payload_says_how_many_leagues_there_were_supposed_to_be():
     of five and the page spoke for all five."""
     out = potd.day_top_pick({"cfb": {}, "nba": {}, "wnba": {}}, "2026-09-16")
     assert out["leagues_seen"] == 3
-    assert out["leagues_expected"] == len(potd.TOP_PICK_LEAGUES) == 7
+    # Eight since men's college basketball joined (2026-11-13).
+    assert out["leagues_expected"] == len(potd.TOP_PICK_LEAGUES) == 8
 
 
 def test_a_league_handed_in_as_none_is_censused_rather_than_vanishing():

@@ -340,7 +340,7 @@ def test_the_real_door_answers_and_holds_its_ceiling():
 def test_every_game_played_opens_its_page_and_comes_back_to_the_team():
     door = _fn(MORE, "teamGameDoor")
     assert "if (g.final && PAST_GAME_LEAGUES.has(d.sport)) return teamPastGameAttrs(d, g);" in door
-    assert 'const PAST_GAME_LEAGUES = new Set(["nfl", "cfb", "nba", "wnba", "nhl", "mlb"]);' in MORE
+    assert 'const PAST_GAME_LEAGUES = new Set(["nfl", "cfb", "nba", "wnba", "nhl", "mlb", "cbb"]);' in MORE
     attrs = _fn(MORE, "teamPastGameAttrs")
     for k in ("data-past-game", "data-pg-date", "data-pg-home", "data-pg-away", "data-pg-id"):
         assert k in attrs, k

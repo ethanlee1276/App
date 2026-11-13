@@ -46,8 +46,8 @@ from engine import oddsplan                                         # noqa: E402
 
 CSS = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
 APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
-LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
-BOARDS = ("MLB_OUT", "NBA_OUT", "WNBA_OUT", "NHL_OUT", "CFB_OUT")
+LEAGUES = ("nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl", "ufc")
+BOARDS = ("MLB_OUT", "NBA_OUT", "WNBA_OUT", "NHL_OUT", "CFB_OUT", "CBB_OUT")
 ASKED = dt.date(2026, 11, 6)
 
 
@@ -94,7 +94,8 @@ def test_the_calendar_names_the_leagues_not_playing():
         assert launch._seasons_public(dt.date(2027, 2, 1)) == {"over": ["cfb", "mlb", "wnba"]}, \
             "February: the NFL's playoffs, the NBA and the NHL still on"
         july = launch._seasons_public(dt.date(2027, 7, 4))
-        assert july == {"over": ["cfb", "nba", "nfl", "nhl"]}, july
+        # College basketball (2026-11-13) is done by July too.
+        assert july == {"over": ["cbb", "cfb", "nba", "nfl", "nhl"]}, july
         for day in (ASKED, dt.date(2027, 2, 1), dt.date(2027, 7, 4), dt.date(2027, 12, 25)):
             over = launch._seasons_public(day)["over"]
             assert over == sorted(over) and set(over) <= set(LEAGUES), (day, over)
@@ -107,11 +108,12 @@ def test_a_postseason_its_board_says_has_ended_greys_before_the_calendar_does():
     day = dt.date(2026, 10, 30)
     assert oddsplan.season_phase("mlb", day) not in (None, "regular"), "a postseason day"
     with _Boards() as b:
-        assert launch._seasons_public(day) == {"over": ["wnba"]}, "a board that cannot be read says nothing"
+        # College basketball's season opens in November: grey on 30 October.
+        assert launch._seasons_public(day) == {"over": ["cbb", "wnba"]}, "a board that cannot be read says nothing"
         b.write("MLB_OUT", {"games": [{}], "upcoming": {"date": "2026-10-31", "days_ahead": 1}})
-        assert launch._seasons_public(day) == {"over": ["wnba"]}, "a game tonight: still playing"
+        assert launch._seasons_public(day) == {"over": ["cbb", "wnba"]}, "a game tonight: still playing"
         b.write("MLB_OUT", {"games": []})
-        assert launch._seasons_public(day) == {"over": ["mlb", "wnba"]}, "the World Series is over"
+        assert launch._seasons_public(day) == {"over": ["cbb", "mlb", "wnba"]}, "the World Series is over"
         assert set(launch._seasons_over(day)) <= set(launch._seasons_public(day)["over"]), \
             "a league out of the odds plan is grey in the row"
 

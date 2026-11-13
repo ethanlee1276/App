@@ -300,7 +300,7 @@ def test_every_sport_gets_the_board_with_its_own_matchup_read():
     projection read the defence). A sport with no read says so, and its
     picks top out at Strong."""
     assert B.MATCHUP_SOURCE == {"nfl": "scan+model", "cfb": "scan+model", "mlb": "scan+model", "nhl": "scan",
-                                "nba": "scan+model", "wnba": "scan+model"}
+                                "nba": "scan+model", "wnba": "scan+model", "cbb": "scan+model"}
     def rec(player, market, mult, why="opp starter K% +12%"):
         return {"player": player, "market": market,
                 "chain": {"base": 1.0, "steps": [{"key": "park", "mult": 1.02},

@@ -77,7 +77,7 @@ def test_parser_survives_garbage():
 
 
 def test_every_league_has_a_feed_and_ufc_deliberately_does_not():
-    assert set(inj.LEAGUES) == {"nfl", "mlb", "nba", "wnba", "cfb", "nhl"}
+    assert set(inj.LEAGUES) == {"nfl", "mlb", "nba", "wnba", "cfb", "nhl", "cbb"}
     for url in inj.LEAGUES.values():
         assert url.endswith("/injuries")
 

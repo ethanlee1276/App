@@ -263,7 +263,7 @@ def test_every_reader_knows_the_three_by_name():
         assert parlays.TIER[m] == 3 and m in parlays.FAMILY and m in parlays.EXTREME_MARKETS, m
         assert m in slipgrade.MARKETS and m in slipgrade.MARKET_WORDS, m
         assert slipread.HOOPS_LOGS[m] == ((m,),) and sliplive.BOX_STAT[m] == (m,), m
-        assert slipread.LEAGUES_FOR[m] == ("nba", "wnba"), m
+        assert slipread.LEAGUES_FOR[m] == ("nba", "wnba", "cbb"), m
     assert [markets.label(m) for m in COUNTS] == ["Steals", "Blocks", "Turnovers"]
     shelf = {s[0]: s[2] for s in boards.HOOPS_SHELVES}
     assert shelf["counts"] == COUNTS

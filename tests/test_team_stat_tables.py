@@ -177,7 +177,7 @@ def test_every_sport_gets_its_own_shape_never_footballs():
     sport falling back to football's shape cannot pass by accident."""
     assert teamdex.STAT_SPORTS == {"nfl": "football", "cfb": "football", "nhl": "hockey",
                                    "nba": "basketball", "wnba": "basketball",
-                                   "mlb": "baseball"}, teamdex.STAT_SPORTS
+                                   "cbb": "basketball", "mlb": "baseball"}, teamdex.STAT_SPORTS
     rows = [("Shohei Ohtani", "DH", "hits", 2, "g1"), ("Shohei Ohtani", "DH", "pa", 4, "g1")]
     t = teamdex.stat_tables(_db("mlb", "LAD", rows), "mlb", "LAD")
     assert [s["key"] for s in t["sections"]] == ["batting"], t["sections"]

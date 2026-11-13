@@ -77,7 +77,9 @@ def test_the_leagues_that_fit_in_the_default_ask_for_nothing():
     those entries are ABSENT rather than empty — a table of empty strings
     invites somebody to `.get(league)` and get a falsy answer from two
     different situations."""
-    assert set(livescores.SCOREBOARD_QUERY) == {"cfb"}, \
+    # College basketball (2026-11-13) asks, like college football: a
+    # Division I night is 60 to 150 games, and ESPN's default is neither.
+    assert set(livescores.SCOREBOARD_QUERY) == {"cfb", "cbb"}, \
         livescores.SCOREBOARD_QUERY
 
 

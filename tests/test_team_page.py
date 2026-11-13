@@ -66,6 +66,7 @@ function icon(n) { return "[" + n + "]"; }
 function teamMark(t) { return "<i>" + t + "</i>"; }
 function nflMap() { return TEAMS; }
 let _cfbTeams = null;
+let _cbbTeams = null;
 """
 
 #: The shape `web/js/teams.js` really has, including the historical keys

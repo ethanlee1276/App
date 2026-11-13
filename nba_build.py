@@ -1242,7 +1242,8 @@ def main() -> None:
         # College asks for tonight's prop clubs by the ids the scoreboard
         # carried (`espnrosters.BY_ID_ONLY`), never the 365-school list.
         cbb_ids = club_ids(games) if args.league == "cbb" else None
-        roster, roster_missed = current_teams(args.league, team_ids=cbb_ids)
+        roster, roster_missed = (current_teams(args.league, team_ids=cbb_ids) if cbb_ids is not None
+                                 else current_teams(args.league))
         _ht = _clock.lap("history + rosters + injuries", "rosters", _ht)
         injuries = hoops_injuries(args.league)
         _ht = _clock.lap("history + rosters + injuries", "injuries", _ht)

@@ -402,7 +402,7 @@ def test_the_server_serves_the_league():
     assert LIVE_FILES["cfb"].name == "cfb.json"
     src = _read("server.py")
     assert "/api/cfb/recommendations" in src
-    assert '("nba", "wnba", "cfb", "nhl")' in src
+    assert '("nba", "wnba", "cfb", "nhl", "cbb")' in src
 
 
 def test_the_page_is_wired_end_to_end():

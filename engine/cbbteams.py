@@ -159,7 +159,10 @@ def cards(path: str | None = None) -> dict:
 def remember_cards(teams: dict, path: str | None = None) -> int:
     """Merge tonight's ``{code: card}`` (`cbbespn.teams_from_games`) into the
     kept cards; the number of schools new or changed. Never raises: a card
-    file that cannot be written costs the next page a colour, not a build."""
+    file that cannot be written costs the next page a colour, not a build.
+    But its 0 is also what a night of known schools answers, so a failure
+    prints "college basketball team cards not kept (<error>)" into the
+    build's log, which no quiet night does."""
     import json
     import os
     path = path or CARDS_PATH
@@ -181,5 +184,6 @@ def remember_cards(teams: dict, path: str | None = None) -> int:
             json.dump({"teams": dict(sorted(kept.items()))}, fh, separators=(",", ":"))
         os.replace(tmp, path)
         return changed
-    except Exception:                                       # noqa: BLE001
+    except Exception as exc:                                # noqa: BLE001
+        print(f"⚠️  college basketball team cards not kept ({exc})")
         return 0

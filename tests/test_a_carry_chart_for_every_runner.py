@@ -498,7 +498,7 @@ def test_the_chart_loads_on_first_use_and_runs_under_the_pages_csp():
     # lead it through the chart module's kindsFor (pinned in
     # test_the_pick_page_draws_his_chart).
     i = APP_JS.index("function chartDoor(")
-    assert '/^(nfl|cfb|nba|wnba|nhl|mlb)$/.test(lg)' in APP_JS[i:i + 300], "every charted league, football's first"
+    assert '/^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/.test(lg)' in APP_JS[i:i + 300], "every charted league, football's first"
     assert 'ccDoor(player, lg, "auto", "His charts", r.headshot, r)' in APP_JS[i:i + 300]
     assert "+ chartDoor(player, lg, priced.get(mkt) || r0)" in APP_JS, \
         "every profile card variant carries it beside the head-to-head, with the row it shows (face, bet, position)"

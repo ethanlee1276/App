@@ -515,7 +515,7 @@ def test_todays_games_come_off_the_built_boards():
 
     saved = {k: getattr(launch, k) for k in
              ("MLB_OUT", "NBA_OUT", "WNBA_OUT", "NHL_OUT", "NFL_OUT", "UFC_OUT", "CFB_OUT",
-              "_ufc_card")}
+              "CBB_OUT", "_ufc_card")}
     launch.NBA_OUT = board("nba.json", [{}] * 7)            # no times: a daily board is tonight's
     launch.NHL_OUT = board("nhl.json", [{"kickoff": iso(2026, 11, 5, 19)}] * 4)
     launch.MLB_OUT = board("mlb.json", [])
@@ -525,13 +525,21 @@ def test_todays_games_come_off_the_built_boards():
     launch.CFB_OUT = board("cfb.json", [
         {"kickoff": iso(2026, 11, 5, 19, 30)}, {"kickoff": iso(2026, 11, 6, 0, 30)},
         {"kickoff": iso(2026, 11, 6, 19)}, {"kickoff": iso(2026, 11, 7, 12)}])
+    # College basketball's board carries the whole Division I night and
+    # names the five games its player pull prices (`board_games`): the
+    # pacer counts the five, never the scoreboard.
+    slate = [{"away": f"A{i}", "home": f"H{i}", "kickoff": iso(2026, 11, 5, 19)}
+             for i in range(140)]
+    launch.CBB_OUT = os.path.join(d, "cbb.json")
+    with open(launch.CBB_OUT, "w") as fh:
+        json.dump({"games": slate, "board_games": [f"A{i}@H{i}" for i in range(5)]}, fh)
     card = [{"commence_time": iso(2026, 11, 7, 18)}] * 12
     launch._ufc_card = lambda cache_only=False: card
     launch._GAMES_TODAY[:] = [0.0, {}]
     try:
         got = launch._games_tonight(thu)
         assert got == {"mlb": 0, "nba": 7, "wnba": 0, "nhl": 4, "nfl": 1, "cfb": 2,
-                       "ufc": 0}, got
+                       "cbb": 5, "ufc": 0}, got
         got = launch._games_tonight(sat)
         assert (got["nfl"], got["cfb"], got["ufc"]) == (0, 1, 12), got
         launch.NFL_OUT = board("nfl_x.json", [{"date": "2026-W10", "kickoff": "TBD"}] * 14)

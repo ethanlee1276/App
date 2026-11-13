@@ -26,7 +26,9 @@ import launch                                                  # noqa: E402
 from engine import playersearch                                # noqa: E402
 
 # Hockey joined 2026-10-03 after the WNBA ("I don't really bet it").
-ORDER = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc")
+# College basketball joined 2026-11-13 beside the NBA, its engine's own
+# league, ahead of the WNBA's off-season.
+ORDER = ("nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl", "ufc")
 
 
 def _src(rel):
@@ -56,10 +58,10 @@ def test_the_live_tab_and_the_search_chips_follow_it():
     js = _src("web/js/app.js")
     i = js.index("const LIVE_FEEDS = {")
     block = js[i:js.index("};", i)]
-    feeds = re.findall(r"\b(nfl|cfb|mlb|nba|wnba|nhl):", block)
+    feeds = re.findall(r"\b(nfl|cfb|mlb|nba|cbb|wnba|nhl):", block)
     assert tuple(feeds) == tuple(s for s in ORDER if s in feeds), feeds
     j = js.index("const SEARCH_SCOPES")
-    assert '["nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc"]' in js[j:j + 120]
+    assert '["nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl", "ufc"]' in js[j:j + 120]
 
 
 def test_the_search_tie_break_and_the_top_bar_follow_it():

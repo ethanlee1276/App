@@ -213,7 +213,7 @@ def test_every_league_has_its_stat_tab_and_hockeys_reads_like_hockey():
     assert keys == ["skaters", "goalies"], keys
     goalies = t["sections"][1]
     assert goalies["rows"][0]["cells"][goalies["columns"].index("SV%")] == 0.933
-    assert set(teamdex.STAT_SPORTS) == {"nfl", "cfb", "nhl", "nba", "wnba", "mlb"}
+    assert set(teamdex.STAT_SPORTS) == {"nfl", "cfb", "nhl", "nba", "wnba", "mlb", "cbb"}
     assert teamdex.resolve("Edmonton Oilers", "nhl", ["EDM", "CGY"]) == ["EDM"]
 
 

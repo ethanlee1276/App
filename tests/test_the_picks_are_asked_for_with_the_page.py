@@ -55,7 +55,7 @@ def _early():
 def test_boots_league_files_are_the_boards_light_copies():
     light = dict(re.findall(r'(\w+): "([a-z_]+\.json)"', _early().split("var sport")[0]))
     meta = dict(re.findall(r'\n  (\w+): \{ logo:.*?fallback: "data/([a-z_]+)\.json" \}', APP, re.S))
-    assert set(light) == set(meta) == {"nfl", "mlb", "nba", "wnba", "cfb", "nhl"}, (light, meta)
+    assert set(light) == set(meta) == {"nfl", "mlb", "nba", "wnba", "cfb", "nhl", "cbb"}, (light, meta)
     for sport, stem in meta.items():
         assert light[sport] == f"{stem}_picks.json", (sport, light[sport])
     assert 'return f.replace(/^data\\//, "").replace(/\\.json$/, "_picks.json");' in _fn("lightNameFor")

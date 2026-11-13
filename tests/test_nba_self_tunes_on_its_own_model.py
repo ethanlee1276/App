@@ -104,7 +104,7 @@ def test_the_walk_door_hands_basketball_to_its_own_model():
     finally:
         logwalk.build_projection = keep
     src = (ROOT / "engine" / "logwalk.py").read_text(encoding="utf-8")
-    assert 'HOOPS = ("nba", "wnba")' in src and "hoops_walk(entries, market" in src
+    assert 'HOOPS = ("nba", "wnba", "cbb")' in src and "hoops_walk(entries, market" in src
 
 
 def test_each_game_is_priced_off_the_twenty_before_it_as_the_build_hands_them():
@@ -242,7 +242,7 @@ def test_pra_the_combos_and_the_counts_are_fitted_and_the_dial_declines_basketba
         assert tuple(mod.SPORT_MARKETS["nba"]) == NBA_MARKETS == rankfit.MARKETS["nba"], mod.__name__
         assert mod.SPORT_MARKETS["wnba"] == ["pts", "reb", "ast", "fg3m", "pra"], "the WNBA board prices five"
     assert {"nba", "wnba"} <= set(formfit_cli.SPORT_MARKETS), "deepfit counts sports from this table"
-    assert set(formfit_cli.NO_DIAL) == {"nba", "wnba"}
+    assert set(formfit_cli.NO_DIAL) == {"nba", "wnba", "cbb"}
     # The temperature fit sees PRA now.
     conn = _league()
     got, err = calibrate_cli.fit_market(conn, "pra", None, 200, sport="nba")

@@ -491,7 +491,7 @@ def test_every_door_and_the_module():
     # Every leg's door asks for his charts with its bet (2026-10-14); a
     # basketball bet's are his shots and his role (kindsFor, pinned above).
     i = SLIP_JS.index("function chartsHTML(")
-    assert '/^(nfl|cfb|nba|wnba|nhl|mlb)$/.test(lg)' in SLIP_JS[i:i + 400] and 'data-kind="auto"' in SLIP_JS[i:i + 600]
+    assert '/^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/.test(lg)' in SLIP_JS[i:i + 400] and 'data-kind="auto"' in SLIP_JS[i:i + 600]
     assert 'shots: "hoops"' in CC_JS and 'Q.draw("shots"' in HOOPS_JS and "window.QBCarry.plug" in HOOPS_JS
     assert "onclick" not in HOOPS_JS and "onerror" not in HOOPS_JS and not re.search(r"on(error|load)\s*=", HOOPS_JS)
     for cls in (".nb-svg", ".nb-paint", ".nb-arc", ".nb-shot.m", ".nb-shot.x", ".nb-pill rect", ".dt.nb-x"):

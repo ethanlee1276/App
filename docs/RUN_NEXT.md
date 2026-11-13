@@ -10,7 +10,7 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-13, after the game-line calibration started seeking its closes by market instead of walking every quote its league stored (step OS: nothing to run), after a retractable roof the schedule has not called started being read as closed instead of open air (step OR: nothing to run), after rain and wind started reaching a quarterback's completions and a kicker's points, and a pick's weather line started being marked by its own market (step OQ: nothing to run), after the report started saying why a matchup card reads against the edge it names (step OP: nothing to run), after the board's self-check started counting a report and a matchup card that point opposite ways (step OO: nothing to run), after the report started giving this season's rank beside the two-season blend where they sit far apart, "the Giants' run defense (30th; 13th this season alone)" (step ON: nothing to run), after a stingy defence's rank started being said as the fewest, "the 3rd-fewest" and not "the 30th-most" (step OM: nothing to run), after a running quarterback's legs went on his matchup card (step OL:
+Last updated 2026-11-13, after men's college basketball joined the site with everything the NBA has, and the NBA standings stopped showing last season (step OT: three box commands, item 00a), after the game-line calibration started seeking its closes by market instead of walking every quote its league stored (step OS: nothing to run), after a retractable roof the schedule has not called started being read as closed instead of open air (step OR: nothing to run), after rain and wind started reaching a quarterback's completions and a kicker's points, and a pick's weather line started being marked by its own market (step OQ: nothing to run), after the report started saying why a matchup card reads against the edge it names (step OP: nothing to run), after the board's self-check started counting a report and a matchup card that point opposite ways (step OO: nothing to run), after the report started giving this season's rank beside the two-season blend where they sit far apart, "the Giants' run defense (30th; 13th this season alone)" (step ON: nothing to run), after a stingy defence's rank started being said as the fewest, "the 3rd-fewest" and not "the 30th-most" (step OM: nothing to run), after a running quarterback's legs went on his matchup card (step OL:
 nothing to run), after a player's matchup card started saying what the matchup says,
 the weather counted and his own share not (step OK: nothing to run), after the game-line
 calibration started saying where its time goes
@@ -547,6 +547,41 @@ close lines (1,537 re-read at the sportsbooks' number), and item 8's key
 - SharpAPI's Pro plan for the betting splits (step DK): no.
 - The legal items (the postal address in the Privacy Policy, a lawyer's
   read of both pages; docs/LAUNCH.md): not yet.
+
+## 00a. Any time now: college basketball's box checks, then last season's games (step OT)
+
+College basketball is on the site (the NCAAB button, between the NBA and the
+WNBA), with everything the NBA board has. It runs on probation: picks are
+journaled and graded, nothing staked. Its credits come last, out of the NFL's
+spare headroom, never the NFL's own target.
+
+First, read-only: does ESPN answer the box for every college endpoint we
+read, and does a Saturday's scoreboard come back whole (a row reading 25
+events would be the cut college football's had)? Paste it back:
+
+```
+cd /srv/qellys && sudo -u qellys python3 ingest.py cbb --probe
+```
+
+Then, it writes: two seasons of college box scores, so each player's
+minutes and rates read two seasons as the NBA's do. A couple of hours; stop
+it any time and run it again, it skips what is stored:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 ingest.py cbb --seasons 2025-2026
+```
+
+After, read-only, what is stored:
+
+```
+cd /srv/qellys && sudo -u qellys python3 ingest.py status
+```
+
+Or the two read-only checks in one go:
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh OT 2>&1 | tee /tmp/ot.txt
+```
 
 ## 00. First, when you're home: NBA Most Likely is back, and where the credits went (step JW)
 

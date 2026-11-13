@@ -341,7 +341,7 @@ def test_every_door_and_the_module():
     # pitcher's strikeouts or outs draw his pitches, anything else a
     # hitter's balls in play (kindsFor, pinned above).
     i = SLIP_JS.index("function chartsHTML(")
-    assert '/^(nfl|cfb|nba|wnba|nhl|mlb)$/.test(lg)' in SLIP_JS[i:i + 400]
+    assert '/^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/.test(lg)' in SLIP_JS[i:i + 400]
     assert 'data-kind="auto" data-mkt="${esc(l.market || "")}"' in SLIP_JS[i:i + 600]
     assert 'const PLUG = { spray: "mlb", pitches: "mlb"' in CC_JS
     assert "el.src = `js/chart-${f}.js`;" in CC_JS and 'el.addEventListener("load"' in CC_JS

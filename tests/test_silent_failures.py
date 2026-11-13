@@ -293,6 +293,17 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # (tests/test_the_deploy_waits_for_a_weekly_job). A weekly job must
         # never cost the chores their day.
         "launch_held",
+        # COLLEGE BASKETBALL'S KEPT TEAM CARDS (engine/cbbteams.remember_cards,
+        # 2026-11-13), caught by this sweep the day it was written. Its 0 is
+        # also a night of schools already known, so a failure prints
+        # "college basketball team cards not kept (<error>)" in the build's
+        # log; a card that cannot be kept must never cost the board.
+        "remember_cards",
+        # THE COLLEGE BASKETBALL PROBE'S ROWS (engine/sources/cbbespn.probe,
+        # 2026-11-13): a request that fails is a row of its own, status
+        # "error" and the error's text, printed by `ingest.py cbb --probe` —
+        # the failure is the answer, and no answered request looks like it.
+        "_row",
     }
 
     def broad(h):

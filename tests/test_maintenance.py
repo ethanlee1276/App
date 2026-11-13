@@ -44,6 +44,9 @@ def _no_feeds(monkeypatch):
 
     monkeypatch.setattr(maintenance, "_nba_day", None)
     monkeypatch.setattr(maintenance, "_wnba_day", None)
+    # College basketball's day ingest (2026-11-13), ESPN's scoreboard and box
+    # scores: the same hook, nulled for the same reason.
+    monkeypatch.setattr(maintenance, "_cbb_day", None)
     # The NFL weekly-results pull (nflverse on github.com) runs August to
     # February, and January is the date the property test below uses. It
     # read as green only when another test in the same run had just left

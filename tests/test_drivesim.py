@@ -37,7 +37,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def test_every_clock_sport_has_a_shape_and_ufc_deliberately_does_not():
-    assert set(drivesim.SPORTS) == {"nfl", "cfb", "nba", "wnba"}, \
+    assert set(drivesim.SPORTS) == {"nfl", "cfb", "nba", "wnba", "cbb"}, \
         "MLB has its own PA sim; UFC has no possession structure to model"
     for cfg in drivesim.SPORTS.values():
         assert abs(sum(w for _, w in cfg["score_mix"]) - 1.0) < 1e-9

@@ -260,7 +260,7 @@ def test_the_module_draws_numbers_and_never_a_sentence():
     assert "(d.live || {}).win_prob" in GC, "the win percentage is our model's"
     assert "Win % (our model)" in GC
     assert "https://a.espncdn.com/i/headshots/${dir}/players/full/" in GC
-    assert 'const FACE_DIR = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl" };' in GC
+    assert 'const FACE_DIR = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl", cbb: "mens-college-basketball" };' in GC
     assert "onerror" not in GC and "onclick" not in GC, "no inline handlers under the page's CSP"
     for cls in (".gc-drive", ".gc-last", ".gc-chip", ".gc-win", ".gc-leaders", ".gc-lead-row",
                 ".gc-toggle", ".gc-tog.active", ".gc-ts-row", ".gc-bar", ".gc-dr", ".gc-tag.turnover", ".gc-face"):

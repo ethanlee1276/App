@@ -828,6 +828,10 @@ print(Counter('the 60% bar' if 'asks 60%' in str(r.get('held_note')) else 'tight
 [print(' ', r.get('player'), r.get('market'), r.get('side'), r.get('line'), round(float(r.get('model_prob') or 0), 3), '-', r.get('held_note')) for r in held[:8]]
 "
 SH
+run OT "College basketball: ESPN's endpoints on the box, and what is stored" 300 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 ingest.py cbb --probe
+cd /srv/qellys && sudo -u qellys python3 ingest.py status
+SH
 run IS "Your renewal day is the 1st" 60 <<'SH'
 cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_ODDS_RESET_DAY=' /etc/qellys/env | xargs) python3 -m engine.oddsplan | head -6
 SH

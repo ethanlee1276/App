@@ -277,7 +277,7 @@ _FULL_PAGE = {"sports": {
     # Every sport the Lab replays is on a real page; a sport the page does
     # not carry is owed (engine.lab.due_sports, 2026-11-03).
     **{sp: {"props": {"unavailable": "nothing yet"}, "game_lines": {"unavailable": "nothing yet"}}
-       for sp in ("nfl", "cfb", "nba", "wnba", "ufc")}}}
+       for sp in ("nfl", "cfb", "nba", "cbb", "wnba", "ufc")}}}
 
 
 def _page(doc, today):

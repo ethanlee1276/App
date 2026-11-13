@@ -82,7 +82,7 @@ def _sports(block):
 
 
 # The NHL joined 2026-10-03, after the WNBA.
-LEAGUES = ["nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc"]
+LEAGUES = ["nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl", "ufc"]
 MARKETS = ["intel", "fantasy", "memes"]
 
 

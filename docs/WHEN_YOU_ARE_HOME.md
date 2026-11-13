@@ -9338,6 +9338,65 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OT. Men's college basketball is on the site** (step 522; 13 November).
+You asked for college basketball with everything the NBA has. It is the
+basketball build's third league (the NBA's and the WNBA's code, run with
+`--league cbb`), so every piece the NBA board has runs for it: Edge and Most
+Likely props, game lines, the market scan and sharp value, the live page
+with the court and the play feed (two 20-minute halves, H1/H2), the game
+page, standings by conference, rosters, injuries, news, the Ask bot, the
+alerts, parlays, the Pick of the Day, the record, the weekly refit's memory
+and temperatures, and the Lab's replay. The league row has an NCAAB button
+between the NBA and the WNBA.
+
+How a college night works. ESPN's Division I scoreboard (every game, 60 to
+150 a night) is the slate. The game lines for all of it come in the same
+three-credit request the NBA's do. Player props are bought on the five best
+games still to tip: ranked teams first, then the power conferences, then
+conference games (`QB_CBB_PROP_GAMES` changes the five). The books post
+college props on those games and few others, so the credits go where a price
+exists. Each school's code is ESPN's for Division I and `espn:{id}` for a
+small school (ESPN reuses codes below Division I: CAL is California and
+Calvary). Headshots come from each school's own roster on ESPN, read by team
+id, so a namesake at another school never lends a face.
+
+It starts on probation, like the WNBA and the NHL: every pick is journaled
+and graded, nothing is staked, until the record earns it. Its tuning is the
+WNBA's 40-minute numbers until college's own seasons are measured.
+
+The credits: college gets its own share last, after every other league.
+November needs about 8,100 more for it, and that comes out of the NFL's spare
+headroom (about 10,400 left over in the plan, now about 2,300). The NFL's own
+target is untouched. To spend less, set `QB_CBB_PROP_GAMES=3`.
+
+Found doing this: the NBA standings page showed last season's final table
+(Boston 56-26, Detroit 60-22). ESPN names a winter season by the year it
+ends, and the page asked for 2026. Fixed for the NBA and college; nothing to
+run.
+
+Three things on the box. First, read-only: does ESPN answer the box for
+every college endpoint we read, and does the Saturday scoreboard come back
+whole? College football's came back cut at 25 games; a college basketball
+Saturday is 140-odd, so a scoreboard row reading 25 events means the same cut:
+
+```
+cd /srv/qellys && sudo -u qellys python3 ingest.py cbb --probe
+```
+
+Second, it writes: last season's and this season's box scores, so every
+player's minutes and rates read two seasons, as the NBA's do (a couple of
+hours; it can be stopped and run again, it skips what is stored):
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 ingest.py cbb --seasons 2025-2026
+```
+
+Third, read-only, after: what is stored, college included:
+
+```
+cd /srv/qellys && sudo -u qellys python3 ingest.py status
+```
+
 **OS. The game-line calibration seeks its closes instead of walking every
 quote** (step 521; 13 November). Nothing to run. OJ's timers filled on the
 first pass that learned after it, at 03:06 on Friday 13 November: the

@@ -165,8 +165,8 @@ def test_fill_writes_the_roster_first_and_only_the_charts_gaps_after():
 def test_the_daily_chores_and_the_command_line_ask_for_college():
     src = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
     i = src.index("import facesfill")
-    assert '("nfl", "mlb", "nba", "wnba", "cfb")' in src[i:i + 900]
-    assert '"wnba", "cfb"]' in (ROOT / "facesfill.py").read_text(encoding="utf-8")
+    assert '("nfl", "mlb", "nba", "wnba", "cfb", "cbb")' in src[i:i + 900]
+    assert '"wnba", "cfb", "cbb"]' in (ROOT / "facesfill.py").read_text(encoding="utf-8")
 
 
 def test_the_check_counts_the_charts_players_the_way_the_chart_reads_them():

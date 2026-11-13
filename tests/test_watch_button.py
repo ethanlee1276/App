@@ -105,7 +105,7 @@ def test_the_page_knows_where_every_carrier_the_feeds_name_streams():
     for k in ("peacock", "paramount", "foxone", "espn", "espnplus", "prime", "netflix", "nflplus", "ytv", "hbomax",
               "apple", "mlbtv", "nbalp", "wnbalp"):
         assert k in keys, k
-    assert 'LEAGUE_OUT_OF_MARKET = { mlb: "mlbtv", nba: "nbalp", wnba: "wnbalp", nhl: "espnplus" }' in APP
+    assert 'LEAGUE_OUT_OF_MARKET = { mlb: "mlbtv", nba: "nbalp", wnba: "wnbalp", nhl: "espnplus", cbb: "espnplus" }' in APP
     # "ESPN+" must not fall into ESPN, nor "YouTube TV" into YouTube: the
     # specific rule sits above the general one.
     assert table.index('"espnplus"]') < table.index('"espn"]') and table.index('"ytv"]') < table.index('"youtube"]')
@@ -146,7 +146,7 @@ def test_every_live_game_links_to_the_game_itself():
     fn = APP[APP.index("const ESPN_GAME_PATH"):APP.index("function streamKey(")]
     assert 'https://www.mlb.com/tv/g${pk}' in fn and 'https://www.mlb.com/gameday/${pk}' in fn
     assert 'https://www.espn.com/${path}/game/_/gameId/${ev}' in fn
-    assert 'ESPN_GAME_PATH = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl" }' in fn
+    assert 'ESPN_GAME_PATH = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl", cbb: "mens-college-basketball" }' in fn
     assert fn.count('.replace(/\\D/g, "")') == 2, "ids are digits only before they go in a URL"
     sf = APP[APP.index("function streamsFor("):APP.index("function watchHTML(")]
     assert 'key === "mlbtv" && game.tv ? game.tv' in sf, "MLB.TV opens this game"

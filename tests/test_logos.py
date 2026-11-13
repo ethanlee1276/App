@@ -55,7 +55,7 @@ def test_every_sport_the_site_renders_has_a_league_key():
     js = _js()
     m = re.search(r"const ESPN_LEAGUE = \{([^}]*)\}", js)
     assert m, "the league map is gone"
-    for sport in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl"):
+    for sport in ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "cbb"):
         assert re.search(rf"\b{sport}:", m.group(1)), sport
 
 
@@ -184,7 +184,8 @@ def test_the_measurement_sits_next_to_the_decision_it_made():
     where the URL is built — not in the probe, which only reported it."""
     js = _js()
     i = js.index("function logoUrl(")
-    why = js[max(0, i - 1600):i]
+    # 1,700 since college basketball's key (2026-11-13) lengthened the map.
+    why = js[max(0, i - 1700):i]
     assert "40,228" in why or "40228" in why, \
         "the byte measurement that chose the combiner path is gone"
     assert "11,537" in why or "11537" in why

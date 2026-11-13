@@ -153,7 +153,7 @@ def test_every_daily_chart_builder_and_the_role_chart_read_them():
     role = (ROOT / "engine" / "role.py").read_text(encoding="utf-8")
     assert role.index("scoreboard(conn, sport, pick, games)") < role.index('g.pop("leg", None)'), \
         "the role chart reads its finals while a doubleheader's games still name their leg"
-    assert CR.DAILY == ("nba", "wnba", "mlb", "nhl")
+    assert CR.DAILY == ("nba", "wnba", "mlb", "nhl", "cbb")
 
 
 # --- the page --------------------------------------------------------------------------

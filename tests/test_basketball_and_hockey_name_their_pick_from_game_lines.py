@@ -241,7 +241,7 @@ def test_basketball_and_hockey_hand_their_lines_to_the_pick_and_the_lock():
         assert "game_lines(slate.games" in src, f"{fn} makes no game lines"
         assert "lines=potd_lines" in src, f"{fn} does not hand them to the pick"
         assert "+ potd_lines" in src, f"{fn} does not hand them to the relock"
-    assert set(potd.LINE_LEAGUES) == {"nba", "wnba", "nhl"}
+    assert set(potd.LINE_LEAGUES) == {"nba", "wnba", "nhl", "cbb"}
 
 
 def test_football_and_baseball_keep_their_boards_own_bars():
