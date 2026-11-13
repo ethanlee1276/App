@@ -2827,6 +2827,24 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  ncaab results ingest failed: {exc}")
 
+    # COLLEGE'S SHOT CHART (2026-11-13): the results ingest above folds each
+    # final's shots off the summary it reads; this fills the finals stored
+    # before it did, or whose read failed then, a budget a night, newest
+    # first (engine/nba/shots, league "cbb").
+    if (today.month >= 11 or today.month <= 4) and _cbb_day is not None:
+        try:
+            from . import db as _csdb
+            from .nba import shots as _cshots
+            _cs = _csdb.connect()
+            back = _cshots.backfill(_cs, today, league="cbb")
+            if back["games"] or back["failed"] or back.get("empty"):
+                log(f"  ncaab shots: {back['games']} game(s), {back['shots']:,} shots"
+                    + (f", {back['empty']} with none" if back.get("empty") else "")
+                    + (f", {back['failed']} unread" if back["failed"] else "")
+                    + (f", {back['left']:,} older left" if back.get("left") else ""))
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  ncaab shots failed: {exc}")
+
     # NHL results (2026-10-03) — the NHL's own keyless feed, one date at a
     # time from the league's last stored final, in its season window
     # (October–June). This is what settles NHL picks and grows the history

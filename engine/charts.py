@@ -60,8 +60,16 @@ def _mlb_pitches(conn, sport, player, season):
 
 
 def _nba_shots(conn, sport, player, season):
+    """The NBA's shot chart, and college basketball's off its own table
+    (engine/nba/shots ``league``; 2026-11-13)."""
     from .nba import shots as N
-    return N.chart(conn, player, season)
+    return N.chart(conn, player, season, league=sport)
+
+
+def _shots_stored(conn, sport):
+    """Has the league's own shot table any row at all?"""
+    from .nba.shots import table_of
+    return _any_row(table_of(sport))(conn, sport)
 
 
 def _nhl_shotmap(conn, sport, player, season):
@@ -88,7 +96,7 @@ def _matchup_stored(conn, sport):
     """The league's own chart table (the matchup reads it)."""
     if sport in ("nfl", "cfb"):
         return _rows_in("targets" if sport == "nfl" else "carries")(conn, sport)
-    return _any_row({"nba": "nba_shots", "nhl": "nhl_shots", "mlb": "mlb_pa"}[sport])(conn, sport)
+    return _any_row({"nba": "nba_shots", "cbb": "cbb_shots", "nhl": "nhl_shots", "mlb": "mlb_pa"}[sport])(conn, sport)
 
 
 def _logged(conn, sport):
@@ -131,8 +139,10 @@ KINDS = {
     "spray": (("mlb",), _spray, _any_row("mlb_pa")),
     "pitches": (("mlb",), _mlb_pitches, _any_row("mlb_pitches")),
     # Basketball's (2026-10-13): every shot he took, where from, made or
-    # missed, off the league's own play-by-play (engine/nba/shots).
-    "shots": (("nba",), _nba_shots, _any_row("nba_shots")),
+    # missed, off the league's own play-by-play (engine/nba/shots). College
+    # basketball's from 2026-11-13, off each final's ESPN summary, on the
+    # college court.
+    "shots": (("nba", "cbb"), _nba_shots, _shots_stored),
     # Hockey's pair (2026-10-13): a skater's every attempt and a goalie's
     # every shot faced, off the shots the xG model already stores
     # (engine/nhl/charts).
@@ -147,7 +157,7 @@ KINDS = {
     # Tonight's opponent beside his chart (2026-10-14): the zones of his own
     # chart, what the opponent allows in each against the league, and the
     # fit (engine/matchview). The one kind that is told the opponent.
-    "matchup": (("nfl", "cfb", "nba", "nhl", "mlb"), _matchup, _matchup_stored),
+    "matchup": (("nfl", "cfb", "nba", "cbb", "nhl", "mlb"), _matchup, _matchup_stored),
 }
 #: The kinds that also take tonight's opponent and the chart a page leads with.
 TOLD_OPP = ("matchup",)

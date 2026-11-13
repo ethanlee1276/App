@@ -477,6 +477,18 @@ def ingest_day(conn, date: str, league: str = "wnba",
             _officials.store(conn, league, g["game_id"], date, _officials.parse(summary))
         except Exception as exc:                              # noqa: BLE001
             result["skipped"].append(f"{league} officials {g['game_id']}: {exc}")
+        # COLLEGE'S SHOT CHART (engine/nba/shots, 2026-11-13): every shot of
+        # the final, off the summary in hand, into college's own table. The
+        # NBA's are read by the nightly's own pass; college's cost no fetch.
+        if league == "cbb":
+            try:
+                from .. import db as _sdb
+                from ..nba import shots as _shots
+                rows = _shots.fold_espn(summary, date, str(g["game_id"]), league="cbb")
+                _sdb.upsert_cbb_shots(conn, rows or [_shots.empty_row(g["game_id"], date, "cbb")])
+                result["shots"] = result.get("shots", 0) + len(rows)
+            except Exception as exc:                          # noqa: BLE001
+                result["skipped"].append(f"{league} shots {g['game_id']}: {exc}")
         opp = {g["home"]: g["away"], g["away"]: g["home"]}
         # College's sides by ESPN id (`team_key`): the box block's own code
         # can be a small school's that a Division I school shares.

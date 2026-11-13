@@ -68,6 +68,37 @@ AREA = {"restricted area": "ra", "in the paint (non-ra)": "paint", "mid-range": 
 #: line, and how far up from the baseline the corner three runs.
 RA_R, LANE_HALF, FT_LINE, CORNER_TOP = 40.0, 80.0, 142.5, 92.5
 
+#: COLLEGE'S COURT (2026-11-13): the same restricted arc and free-throw
+#: line, a 12-foot lane, and the three-point line at 22 feet 1.75 inches,
+#: whose straight corners (21 feet 7.75 inches out) meet the arc 4.7 feet
+#: above the basket. ESPN's college play-by-play keeps the NBA's frame (the
+#: basket at x 25, y 0, whole feet): on 2025-26's 990,000 shots with a spot,
+#: the threes sat 22.0 feet and out and the twos inside 20.2.
+COURT = {"nba": (RA_R, LANE_HALF, FT_LINE, CORNER_TOP), "cbb": (40.0, 60.0, 142.5, 47.0)}
+#: Where each league's shots are kept (engine/db): college's apart, so each
+#: league's zone percentages are its own.
+TABLES = {"nba": "nba_shots", "cbb": "cbb_shots"}
+
+
+def table_of(league: str) -> str:
+    return TABLES.get(str(league or "nba").lower(), "nba_shots")
+
+
+#: A final read whole that holds no shot at all files this one row, so it is
+#: not asked for again: a college game against a small school often comes
+#: with no play-by-play, and re-reading those every night would spend the
+#: backfill's budget on answers already known. No chart, zone or matchup
+#: reads it (no shooter, and `kind` is neither a field goal nor a free throw).
+EMPTY_KIND = "none"
+
+
+def empty_row(game_id: str, date: str, league: str = "cbb") -> dict:
+    from ..seasons import season_of
+    return {"game_id": str(game_id), "action": -1, "season": season_of(league, date), "date": date,
+            "person_id": None, "player": "", "team": "", "opponent": "", "home": 0, "period": 0,
+            "clock": "", "kind": EMPTY_KIND, "made": 0, "shot": "", "descriptor": "", "distance": None,
+            "x": None, "y": None, "zone": "", "area": "", "assist": "", "blocked": 0, "quals": ""}
+
 #: Games read per night by the backfill (two files each).
 BACKFILL_PER_NIGHT = 300
 #: Distance bands for the splits, in feet.
@@ -94,20 +125,22 @@ def clock(pt) -> str:
     return f"{int(m.group(1))}:{int(m.group(2)):02d}" if m else ""
 
 
-def zone(kind: str, x, y, dist, area: str = "") -> str:
-    """The league's zone for a field-goal attempt."""
+def zone(kind: str, x, y, dist, area: str = "", league: str = "nba") -> str:
+    """The league's zone for a field-goal attempt, on its own court
+    (`COURT`: college's lane is 12 feet, the NBA's 16)."""
     own = AREA.get(str(area or "").strip().lower())
     if own:
         return own
+    ra_r, lane_half, ft_line, corner_top = COURT.get(league, COURT["nba"])
     if kind == "3pt":
-        return "corner3" if y is not None and y <= CORNER_TOP else "above3"
+        return "corner3" if y is not None and y <= corner_top else "above3"
     if x is not None and y is not None:
-        if math.hypot(x, y) <= RA_R:
+        if math.hypot(x, y) <= ra_r:
             return "ra"
-        return "paint" if abs(x) <= LANE_HALF and y <= FT_LINE else "mid"
+        return "paint" if abs(x) <= lane_half and y <= ft_line else "mid"
     if dist is None:
         return "mid"
-    return "ra" if dist <= RA_R / 10 else "paint" if dist <= 8 else "mid"
+    return "ra" if dist <= ra_r / 10 else "paint" if dist <= lane_half / 10 else "mid"
 
 
 def _date_of(game: dict) -> str:
@@ -205,9 +238,11 @@ def _espn_spot(play: dict):
     return round((x - ESPN_HOOP[0]) * 10, 1), round((y - ESPN_HOOP[1]) * 10, 1)
 
 
-def fold_espn(summary: dict, date: str, game_id: str = "") -> list[dict]:
-    """One ESPN final's shots and free throws as `nba_shots` rows. Nothing
-    when the summary cannot say whose game it is."""
+def fold_espn(summary: dict, date: str, game_id: str = "", league: str = "nba") -> list[dict]:
+    """One ESPN final's shots and free throws as `nba_shots` rows (college
+    basketball's, ``league="cbb"``, as `cbb_shots` rows: its schools keyed
+    as the board keys them, `espnhoops.team_key`, and its zones on its own
+    court). Nothing when the summary cannot say whose game it is."""
     from .. import divisions
     from ..seasons import season_of
     comp = (((summary or {}).get("header") or {}).get("competitions") or [{}])[0]
@@ -215,7 +250,12 @@ def fold_espn(summary: dict, date: str, game_id: str = "") -> list[dict]:
     club, side = {}, {}
     for c in comp.get("competitors") or []:
         t = c.get("team") or {}
-        tid, ab = str(t.get("id") or ""), divisions.canonical("nba", str(t.get("abbreviation") or ""))
+        if league == "cbb":
+            from ..sources.espnhoops import team_key
+            ab = team_key(t, "cbb")
+        else:
+            ab = divisions.canonical("nba", str(t.get("abbreviation") or ""))
+        tid = str(t.get("id") or "")
         if tid and ab:
             club[tid] = ab
             side[c.get("homeAway")] = ab
@@ -229,7 +269,7 @@ def fold_espn(summary: dict, date: str, game_id: str = "") -> list[dict]:
                 a = ath.get("athlete") or {}
                 if a.get("id") and a.get("displayName"):
                     names[str(a["id"])] = str(a["displayName"])
-    season = season_of("nba", date)
+    season = season_of(league, date)
     out = []
     for p in summary.get("plays") or []:
         if not p.get("shootingPlay"):
@@ -252,7 +292,7 @@ def fold_espn(summary: dict, date: str, game_id: str = "") -> list[dict]:
                     "kind": kind, "made": 1 if made else 0,
                     "shot": str((p.get("type") or {}).get("text") or ""), "descriptor": "",
                     "distance": dist, "x": x, "y": y,
-                    "zone": zone(kind, x, y, dist) if kind != "ft" else "", "area": "",
+                    "zone": zone(kind, x, y, dist, league=league) if kind != "ft" else "", "area": "",
                     "assist": names.get(who[1], "") if made and len(who) > 1 else "",
                     "blocked": 1 if not made and kind != "ft" and len(who) > 1 and who[1] else 0,
                     "quals": ""})
@@ -352,14 +392,14 @@ def fold_tip(pbp: dict, box: dict, date: str = "") -> dict | None:
     return None
 
 
-def read_espn(game_id: str):
+def read_espn(game_id: str, league: str = "nba"):
     """ESPN's summary of one final, or None — read without keeping a file
     this read wrote; one the results ingest already holds stays."""
     from ..sources import espnhoops, fetch as F
-    name = f"espn_nba_box_{game_id}.json"
+    name = f"espn_{league}_box_{game_id}.json"
     had = F._cache_path(name).exists()
     try:
-        return espnhoops.fetch_summary(str(game_id), league="nba")
+        return espnhoops.fetch_summary(str(game_id), league=league)
     except Exception:                                              # noqa: BLE001
         return None
     finally:
@@ -370,20 +410,20 @@ def read_espn(game_id: str):
                 pass
 
 
-def espn_finals(conn, since: str, before: str) -> list[dict]:
-    """``[{game_id, date}]``, newest first: every NBA final the history holds
-    from ``since`` up to ``before`` under ESPN's own game id — the results
-    ingest's rows, so the games list needs no schedule file at all."""
+def espn_finals(conn, since: str, before: str, league: str = "nba") -> list[dict]:
+    """``[{game_id, date}]``, newest first: every final of the league the
+    history holds from ``since`` up to ``before`` under ESPN's own game id —
+    the results ingest's rows, so the games list needs no schedule file."""
     return [{"game_id": str(g), "date": str(d)[:10]} for g, d in conn.execute(
-        "SELECT game_id, period FROM games WHERE sport='nba' AND home_score IS NOT NULL "
-        "AND period >= ? AND period < ? ORDER BY period DESC, game_id", (since, before))
+        "SELECT game_id, period FROM games WHERE sport=? AND home_score IS NOT NULL "
+        "AND period >= ? AND period < ? ORDER BY period DESC, game_id", (league, since, before))
         if str(g).isdigit()]
 
 
 # --- the games ------------------------------------------------------------------
-def stored(conn, season: int | None = None) -> set:
+def stored(conn, season: int | None = None, league: str = "nba") -> set:
     """The games already folded (a final's shots never change)."""
-    q, args = "SELECT DISTINCT game_id FROM nba_shots", ()
+    q, args = f"SELECT DISTINCT game_id FROM {table_of(league)}", ()
     if season is not None:
         q, args = q + " WHERE season=?", (int(season),)
     try:
@@ -421,7 +461,7 @@ CHUNK = 8
 
 
 def ingest_games(conn, games: list, read=None, workers: int = 4, chunk: int = CHUNK,
-                 espn: bool = False) -> dict:
+                 espn: bool = False, league: str = "nba") -> dict:
     """Fold and store every game in ``games`` not already stored, ``chunk``
     at a time, each chunk written before the next is read. A chunk none of
     whose games could be read ends the run; the rest wait for the next.
@@ -429,12 +469,14 @@ def ingest_games(conn, games: list, read=None, workers: int = 4, chunk: int = CH
     the CDN's pair. ``{"games", "shots", "failed"}``."""
     from concurrent.futures import ThreadPoolExecutor
     from .. import db
-    have = stored(conn)
+    have = stored(conn, league=league)
     todo = [g for g in games if str(g["game_id"]) not in have]
     out = {"games": 0, "shots": 0, "failed": 0}
     if not todo:
         return out
-    read = read or (read_espn if espn else read_once)
+    if read is None:
+        read = (lambda gid: read_espn(gid, league)) if espn else read_once
+    upsert = db.upsert_cbb_shots if league == "cbb" else db.upsert_nba_shots
     step = max(1, int(chunk))
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         for i in range(0, len(todo), step):
@@ -447,16 +489,23 @@ def ingest_games(conn, games: list, read=None, workers: int = 4, chunk: int = CH
                 break
             for g, (pbp, box) in zip(part, pairs):
                 if espn:
-                    rows = fold_espn(pbp, g.get("date") or "", str(g["game_id"])) if pbp else []
+                    rows = fold_espn(pbp, g.get("date") or "", str(g["game_id"]), league=league) if pbp else []
                 else:
                     rows = fold(pbp, box, g.get("date") or "") if pbp and box else []
                 if not rows:
+                    if espn and pbp and league == "cbb":
+                        # Read whole, no shot in it: filed as known-empty.
+                        upsert(conn, [empty_row(g["game_id"], g.get("date") or "", league)])
+                        out["empty"] = out.get("empty", 0) + 1
+                        continue
                     out["failed"] += 1
                     continue
-                out["shots"] += db.upsert_nba_shots(conn, rows)
+                out["shots"] += upsert(conn, rows)
                 out["games"] += 1
-                tip = (fold_espn_tip(pbp, g.get("date") or "", str(g["game_id"])) if espn
-                       else fold_tip(pbp, box, g.get("date") or ""))
+                # The opening tip is first basket's, the NBA's alone.
+                tip = None if league != "nba" else (
+                    fold_espn_tip(pbp, g.get("date") or "", str(g["game_id"])) if espn
+                    else fold_tip(pbp, box, g.get("date") or ""))
                 if tip:
                     db.upsert_nba_tips(conn, [tip])
                     out["tips"] = out.get("tips", 0) + 1
@@ -464,30 +513,35 @@ def ingest_games(conn, games: list, read=None, workers: int = 4, chunk: int = CH
     return out
 
 
-def ingest_recent(conn, today, days: int = 3, read=None) -> dict:
+def ingest_recent(conn, today, days: int = 3, read=None, league: str = "nba") -> dict:
     """The last few days' finals, as the results ingest just stored them,
     off ESPN's summaries (the league's CDN answers the box 403)."""
     import datetime as _dt
     first = (today - _dt.timedelta(days=days)).isoformat()
-    return ingest_games(conn, espn_finals(conn, first, today.isoformat()), read=read, espn=True)
+    return ingest_games(conn, espn_finals(conn, first, today.isoformat(), league), read=read, espn=True,
+                        league=league)
 
 
-def backfill(conn, today, budget: int = BACKFILL_PER_NIGHT, read=None) -> dict:
+def backfill(conn, today, budget: int = BACKFILL_PER_NIGHT, read=None, league: str = "nba") -> dict:
     """This season's finals, then last season's, newest first, ``budget``
     games at a time, off ESPN's summaries of the games the history already
-    holds (the history backfill read every one of them)."""
+    holds (the history backfill read every one of them). College's are
+    folded at ingest from the summary in hand; this fills the finals stored
+    before that (2026-11-13) or whose read failed then."""
     from ..seasons import window, season_of
-    cur = season_of("nba", today.isoformat())
-    have = stored(conn)
-    first = window("nba", cur - 1)[0]
-    todo = [g for g in espn_finals(conn, first, today.isoformat()) if g["game_id"] not in have]
+    cur = season_of(league, today.isoformat())
+    have = stored(conn, league=league)
+    first = window(league, cur - 1)[0]
+    todo = [g for g in espn_finals(conn, first, today.isoformat(), league) if g["game_id"] not in have]
     out = {"games": 0, "shots": 0, "failed": 0, "left": 0, "last_season": ""}
     take = todo[:budget]
     if take:
-        got = ingest_games(conn, take, read=read, espn=True)
+        got = ingest_games(conn, take, read=read, espn=True, league=league)
         for k in ("games", "shots", "failed"):
             out[k] += got[k]
-    out["left"] = max(0, len(todo) - out["games"] - out["failed"])
+        if got.get("empty"):
+            out["empty"] = got["empty"]
+    out["left"] = max(0, len(todo) - out["games"] - out["failed"] - out.get("empty", 0))
     return out
 
 
@@ -546,13 +600,14 @@ def season_label(season: int) -> str:
     return f"{int(season)}-{(int(season) + 1) % 100:02d}"
 
 
-def resolve(conn, player: str) -> tuple:
+def resolve(conn, player: str, league: str = "nba") -> tuple:
     """``(person id, stored name)``, or ``(None, "")``."""
     from ..carries import _fold
     q = (player or "").strip()
     if not q:
         return None, ""
-    row = conn.execute("SELECT person_id, player FROM nba_shots WHERE player=? ORDER BY date DESC LIMIT 1",
+    table = table_of(league)
+    row = conn.execute(f"SELECT person_id, player FROM {table} WHERE player=? ORDER BY date DESC LIMIT 1",
                        (q,)).fetchone()
     if row:
         return row[0], row[1]
@@ -560,7 +615,7 @@ def resolve(conn, player: str) -> tuple:
     if not want:
         return None, ""
     hits = {}
-    for pid, name in conn.execute("SELECT DISTINCT person_id, player FROM nba_shots"):
+    for pid, name in conn.execute(f"SELECT DISTINCT person_id, player FROM {table}"):
         if _fold(name) == want:
             hits[pid] = name
     return next(iter(hits.items())) if len(hits) == 1 else (None, "")
@@ -595,11 +650,11 @@ def _splits(rows: list, key, order=None) -> list:
     return out
 
 
-def _league(conn, season: int) -> dict:
+def _league(conn, season: int, league: str = "nba") -> dict:
     """The league's field-goal percentage in each zone that season, from
     every stored shot."""
     out = {}
-    for z, n, m in conn.execute("SELECT zone, COUNT(*), SUM(made) FROM nba_shots WHERE season=? "
+    for z, n, m in conn.execute(f"SELECT zone, COUNT(*), SUM(made) FROM {table_of(league)} WHERE season=? "
                                 "AND kind IN ('2pt', '3pt') GROUP BY zone", (int(season),)):
         if z and n:
             out[z] = round((m or 0) / n, 3)
@@ -610,18 +665,21 @@ def _league(conn, season: int) -> dict:
 BOX = ("min", "reb", "ast", "stl", "blk", "tov")
 
 
-def chart(conn, player: str, season: int | None = None) -> dict:
+def chart(conn, player: str, season: int | None = None, league: str = "nba") -> dict:
     """Everything the shot chart draws for one player-season.
 
     ``{player, sport, seasons, season, season_label, team, games: [{id, date,
     opp, home, team, line, box, shots}], season_line, zones, by_type,
     by_period, by_dist}`` — games newest first, each shot ``{i, x, y, m, k,
-    d, t, ds, p, c, a, b, z, q}`` in the order taken."""
-    pid, name = resolve(conn, player)
+    d, t, ds, p, c, a, b, z, q}`` in the order taken. ``league="cbb"`` reads
+    college's own table, beside college's own zone percentages, by half."""
+    league = "cbb" if str(league or "").lower() == "cbb" else "nba"
+    table = table_of(league)
+    pid, name = resolve(conn, player, league)
     if pid is None:
         return {}
     seasons = [int(s) for (s,) in conn.execute(
-        "SELECT DISTINCT season FROM nba_shots WHERE person_id=? ORDER BY season DESC", (pid,))]
+        f"SELECT DISTINCT season FROM {table} WHERE person_id=? ORDER BY season DESC", (pid,))]
     if not seasons:
         return {}
     pick = int(season) if season and int(season) in seasons else seasons[0]
@@ -629,7 +687,7 @@ def chart(conn, player: str, season: int | None = None) -> dict:
     for (gid, act, date, team, opp, home, per, clk, kind, made, shot, desc, dist, x, y, zn, ast,
          blk, quals) in conn.execute(
             "SELECT game_id, action, date, team, opponent, home, period, clock, kind, made, shot, descriptor, "
-            "distance, x, y, zone, assist, blocked, quals FROM nba_shots WHERE person_id=? AND season=? "
+            f"distance, x, y, zone, assist, blocked, quals FROM {table} WHERE person_id=? AND season=? "
             "ORDER BY date DESC, game_id, action", (pid, pick)):
         g = games.setdefault(gid, {"id": gid, "date": date, "opp": opp, "home": bool(home), "team": team,
                                    "shots": []})
@@ -642,8 +700,8 @@ def chart(conn, player: str, season: int | None = None) -> dict:
         dates = sorted({g["date"] for g in out_games})
         marks = ",".join("?" * len(BOX))
         for date, market, value in conn.execute(
-                f"SELECT period, market, value FROM player_game_logs WHERE sport='nba' AND player=? "
-                f"AND period BETWEEN ? AND ? AND market IN ({marks})", (name, dates[0], dates[-1], *BOX)):
+                f"SELECT period, market, value FROM player_game_logs WHERE sport=? AND player=? "
+                f"AND period BETWEEN ? AND ? AND market IN ({marks})", (league, name, dates[0], dates[-1], *BOX)):
             logs.setdefault(date, {})[market] = value
     every = []
     for g in out_games:
@@ -651,30 +709,35 @@ def chart(conn, player: str, season: int | None = None) -> dict:
         g["box"] = logs.get(g["date"], {})
         every += g["shots"]
     fg = [s for s in every if s["k"] in FIELD_GOALS]
-    league = _league(conn, pick)
+    lg_pct = _league(conn, pick, league)
     zones = []
     for key, label in ZONES:
         xs = [s for s in fg if s["z"] == key]
         made = sum(s["m"] for s in xs)
         zones.append({"key": key, "name": label, "fga": len(xs), "fgm": made,
                       "pct": round(made / len(xs), 3) if xs else None,
-                      "share": round(len(xs) / len(fg), 3) if fg else None, "league": league.get(key)})
+                      "share": round(len(xs) / len(fg), 3) if fg else None, "league": lg_pct.get(key)})
     line = _line(every)
     n = len(out_games)
     line.update({"games": n, "ppg": round(line["pts"] / n, 1) if n else None,
                  "fga_pg": round(line["fga"] / n, 1) if n else None,
                  "fg3a_pg": round(line["fg3a"] / n, 1) if n else None})
     by_type = _splits(fg, lambda s: s["t"] or "Other")
-    by_period = _splits(fg, lambda s: (f"Q{s['p']}" if (s["p"] or 0) <= 4 else "OT") if s["p"] else "",
-                        order=["Q1", "Q2", "Q3", "Q4", "OT"])
+    if league == "cbb":
+        # Two halves; any period past them is overtime.
+        by_period = _splits(fg, lambda s: (f"H{s['p']}" if (s["p"] or 0) <= 2 else "OT") if s["p"] else "",
+                            order=["H1", "H2", "OT"])
+    else:
+        by_period = _splits(fg, lambda s: (f"Q{s['p']}" if (s["p"] or 0) <= 4 else "OT") if s["p"] else "",
+                            order=["Q1", "Q2", "Q3", "Q4", "OT"])
     by_dist = _splits(fg, lambda s: next((lab for lo, hi, lab in DIST_BANDS
                                           if s["d"] is not None and lo <= s["d"] < hi + 1), ""),
                       order=[lab for _lo, _hi, lab in DIST_BANDS])
     # The final over the game's building (the chart's frame, 2026-10-14).
     from ..carries import scoreboard
-    scoreboard(conn, "nba", pick, out_games)
+    scoreboard(conn, league, pick, out_games)
     latest = out_games[0] if out_games else {}
-    return {"player": name, "sport": "nba", "seasons": seasons, "season": pick,
+    return {"player": name, "sport": league, "seasons": seasons, "season": pick,
             "season_label": season_label(pick), "team": latest.get("team", ""), "games": out_games,
             "season_line": line, "zones": zones, "by_type": by_type, "by_period": by_period,
             "by_dist": by_dist}

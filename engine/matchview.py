@@ -243,15 +243,19 @@ def _field(conn, season: int, table: str) -> dict:
     return _memo(conn, ("field", table, season), build)
 
 
-def _nba(conn, season: int) -> dict:
+def _nba(conn, season: int, league: str = "nba") -> dict:
+    """What each defense allowed in each zone that season, off the league's
+    own shot table (college basketball's from 2026-11-13: `cbb_shots`)."""
+    from .nba.shots import table_of
+
     def build():
         out: dict = {}
         for opp, zone, n, made in conn.execute(
-                "SELECT opponent, zone, COUNT(*), SUM(made) FROM nba_shots WHERE season=? "
+                f"SELECT opponent, zone, COUNT(*), SUM(made) FROM {table_of(league)} WHERE season=? "
                 "AND kind IN ('2pt', '3pt') GROUP BY opponent, zone", (season,)):
             _add(out, opp, zone, n, float(made or 0))
         return out
-    return _memo(conn, ("nba", season), build)
+    return _memo(conn, (league, season), build)
 
 
 def _band_sql() -> str:
@@ -419,6 +423,11 @@ def _season_for(conn, sport: str, family: str, table_of, opp: str) -> tuple:
 
 
 def _newest(conn, sport: str, family: str) -> int | None:
+    if family == "shots" and sport == "cbb":
+        try:
+            return _latest(conn, "SELECT MAX(season) FROM cbb_shots")
+        except Exception:                                          # noqa: BLE001 — a table not made yet
+            return None
     sql = {"routes": "SELECT MAX(season) FROM targets WHERE sport='nfl'",
            "passes": "SELECT MAX(season) FROM passes WHERE sport='nfl'",
            "carries": "SELECT MAX(season) FROM carries WHERE sport='nfl'",
@@ -469,9 +478,9 @@ def family_of(conn, sport: str, player: str, hint: str = "") -> tuple[str, str]:
         if not nr and not nc:
             return "", ""
         return ("runs", runs) if nr >= nc else ("catches", catches)
-    if sport == "nba":
+    if sport in ("nba", "cbb"):
         from .nba.shots import resolve
-        _pid, name = resolve(conn, player)
+        _pid, name = resolve(conn, player, sport)
         return ("shots", name) if name else ("", "")
     if sport == "nhl":
         from .nhl.charts import _resolve
@@ -553,11 +562,12 @@ def chart(conn, sport: str, player: str, opp: str, season=None, hint: str = "") 
         right = table[key]
         order = zones_
     elif fam == "shots":
-        from .nba.shots import resolve, season_label
-        pid, _n = resolve(conn, name)
-        his_season, left = _his(conn, "SELECT season, zone FROM nba_shots WHERE person_id=? "
+        from .nba.shots import resolve, season_label, table_of
+        lg = "cbb" if sport == "cbb" else "nba"
+        pid, _n = resolve(conn, name, lg)
+        his_season, left = _his(conn, f"SELECT season, zone FROM {table_of(lg)} WHERE person_id=? "
                                       "AND kind IN ('2pt', '3pt')", (pid,), lambda z: z)
-        season_, table, key = _season_for(conn, "nba", fam, lambda s: _nba(conn, s), opp)
+        season_, table, key = _season_for(conn, lg, fam, lambda s: _nba(conn, s, lg), opp)
         if not key or not left:
             return {}
         right, order = table[key], _nba_zones()

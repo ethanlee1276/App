@@ -38,8 +38,13 @@
   const ZONE = { ra: "Restricted area", paint: "In the paint", mid: "Mid-range", corner3: "Corner 3",
                  above3: "Above the break 3" };
   const kindWord = (s) => (s.k === "3pt" ? "3" : s.k === "2pt" ? "2" : "free throw");
-  const period = (p) => (!p ? "" : p <= 4 ? `Q${p}` : p === 5 ? "OT" : `${p - 4}OT`);
-  const when = (s) => [period(s.p), s.c].filter(Boolean).join(" ");
+  /* College plays two halves (2026-11-13): H1, H2, then overtime. */
+  const isCollege = (d) => !!(d && d.sport === "cbb");
+  const period = (p, d) => {
+    const reg = isCollege(d) ? 2 : 4, mark = isCollege(d) ? "H" : "Q";
+    return !p ? "" : p <= reg ? `${mark}${p}` : p === reg + 1 ? "OT" : `${p - reg}OT`;
+  };
+  const when = (s, d) => [period(s.p, d), s.c].filter(Boolean).join(" ");
   const what = (s) => (s.k === "ft" ? `Free throw${s.t ? ` ${s.t}` : ""}`
     : [s.t, s.ds].filter(Boolean).join(" · ") || "Shot");
   const result = (s) => (s.k === "ft" ? (s.m ? "Made FT" : "Missed FT") : `${s.m ? "Made" : "Missed"} ${kindWord(s)}`);
@@ -71,20 +76,32 @@
      wide copy under each, no filter — and the lane in his colour. */
   const X = (x) => Math.max(4, Math.min(496, 250 + x));
   const Y = (y) => Math.max(4, Math.min(406, y + 47.5));
-  const LINES = `<path d="M170 190 V0 M330 0 V190 H170"/>
+  /* EACH LEAGUE'S OWN COURT. The NBA's: a 16-foot lane, the three-point
+     line 23 feet 9 inches out and 22 feet in the corners. College's
+     (2026-11-13): a 12-foot lane and the line at 22 feet 1.75 inches, its
+     straight corners 21 feet 7.75 inches out, meeting the arc 4.7 feet
+     above the basket. The restricted arc, the free-throw line and its
+     circle are the same on both. */
+  const COURT = {
+    nba: { lane: [170, 330], arc: "M30 0 V137 A237.5 237.5 0 0 0 470 137 V0", cx: [30, 470], cy: 137 },
+    cbb: { lane: [190, 310], arc: "M33.5 0 V94.3 A221.5 221.5 0 0 0 466.5 94.3 V0", cx: [33.5, 466.5], cy: 94.3 },
+  };
+  const courtOf = (d) => COURT[isCollege(d) ? "cbb" : "nba"];
+  const lines = (c) => `<path d="M${c.lane[0]} 190 V0 M${c.lane[1]} 0 V190 H${c.lane[0]}"/>
       <path d="M190 190 A60 60 0 0 0 310 190"/>
       <path d="M210 47.5 A40 40 0 0 0 290 47.5"/>
-      <path d="M30 0 V137 A237.5 237.5 0 0 0 470 137 V0"/>`;
-  function courtSVG() {
+      <path d="${c.arc}"/>`;
+  function courtSVG(d) {
+    const c = courtOf(d);
     let planks = "";
     for (let x = 0, k = 0; x < 500; x += 25, k++) planks += `<rect class="nb-plank${k % 2 ? " alt" : ""}" x="${x}" y="0" width="25" height="410"/>`;
     return `<rect class="nb-floor" x="0" y="0" width="500" height="410"/>${planks}
-      <rect class="nb-paint" x="170" y="0" width="160" height="190"/>
-      <g class="nb-glow">${LINES}</g>
+      <rect class="nb-paint" x="${c.lane[0]}" y="0" width="${c.lane[1] - c.lane[0]}" height="190"/>
+      <g class="nb-glow">${lines(c)}</g>
       <path class="nb-line" d="M190 190 A60 60 0 0 0 310 190"/>
       <path class="nb-line dash" d="M190 190 A60 60 0 0 1 310 190"/>
       <path class="nb-line" d="M210 47.5 A40 40 0 0 0 290 47.5"/>
-      <path class="nb-arc" d="M30 0 V137 A237.5 237.5 0 0 0 470 137 V0"/>
+      <path class="nb-arc" d="${c.arc}"/>
       <line class="nb-board" x1="220" y1="40" x2="280" y2="40"/>
       <circle class="nb-rim-glow" cx="250" cy="47.5" r="7.5"/>
       <circle class="nb-rim" cx="250" cy="47.5" r="7.5"/>`;
@@ -101,10 +118,10 @@
       : `<path class="nb-shot cx-mark x${sel(i)}" d="${cross(x, y, r - 1)}"/>`;
     return `<g class="cc-carry" data-i="${i}" data-z="${zones.of(s)}"><circle class="nb-hit" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="12"/>${mark}</g>`;
   }
-  function shotGame(g) {
+  function shotGame(g, d) {
     const shots = g.shots || [];
     const fga = shots.filter((s) => s.k !== "ft").length;
-    return svg(courtSVG() + shots.map(shotMark).join(""),
+    return svg(courtSVG(d) + shots.map(shotMark).join(""),
       `Shot chart: ${fga} shot${fga === 1 ? "" : "s"} from the floor. Every shot and free throw is listed below.`);
   }
   /* THE SEASON, HOT AND COLD: each of the league's zones shaded by his
@@ -112,13 +129,17 @@
      deep as his share of shots there), every shot faint over it, and each
      zone's own number on it — two corners each their own, the rest down
      the middle of the floor. */
-  const AREA = {
-    ra: '<circle cx="250" cy="47.5" r="40"/>',
-    paint: '<path d="M170 0 H330 V190 H170 Z M290 47.5 A40 40 0 1 0 210 47.5 A40 40 0 1 0 290 47.5 Z"/>',
-    mid: '<path d="M30 0 V137 A237.5 237.5 0 0 0 470 137 V0 Z M170 0 H330 V190 H170 Z"/>',
-    corner3: '<path d="M0 0 H30 V137 H0 Z M470 0 H500 V137 H470 Z"/>',
-    above3: '<path d="M0 0 H500 V410 H0 Z M30 0 V137 A237.5 237.5 0 0 0 470 137 V0 Z M0 0 H30 V137 H0 Z M470 0 H500 V137 H470 Z"/>',
-  };
+  /* The zones as shapes on each league's own court (`COURT`). */
+  function areas(d) {
+    const c = courtOf(d), [l, r] = c.lane, [a, b] = c.cx, h = c.cy;
+    return {
+      ra: '<circle cx="250" cy="47.5" r="40"/>',
+      paint: `<path d="M${l} 0 H${r} V190 H${l} Z M290 47.5 A40 40 0 1 0 210 47.5 A40 40 0 1 0 290 47.5 Z"/>`,
+      mid: `<path d="${c.arc} Z M${l} 0 H${r} V190 H${l} Z"/>`,
+      corner3: `<path d="M0 0 H${a} V${h} H0 Z M${b} 0 H500 V${h} H${b} Z"/>`,
+      above3: `<path d="M0 0 H500 V410 H0 Z ${c.arc} Z M0 0 H${a} V${h} H0 Z M${b} 0 H500 V${h} H${b} Z"/>`,
+    };
+  }
   const temp = (z) => (!z || z.pct == null || z.league == null ? "even"
     : z.pct - z.league >= 0.02 ? "hot" : z.pct - z.league <= -0.02 ? "cold" : "even");
   const PILLS = { ra: [250, 72], paint: [250, 150], mid: [250, 238], above3: [250, 345] };
@@ -134,7 +155,8 @@
     const by = {};
     (d.zones || []).forEach((z) => { by[z.key] = z; });
     const most = Math.max(0.01, ...(d.zones || []).map((z) => z.share || 0));
-    let body = courtSVG();
+    let body = courtSVG(d);
+    const AREA = areas(d);
     Object.keys(AREA).forEach((k) => {
       const z = by[k];
       if (!z || !z.fga) return;
@@ -191,15 +213,15 @@
                 { h: "Dist", c: "cc-c-v", w: "52px", r: 1 },
                 { h: "Result", c: "cc-c-res", p: "92px", w: "190px" },
                 { h: "Pts", c: "cc-c-y", p: "30px", w: "40px", r: 1 }];
-  function shotList(g) {
+  function shotList(g, d) {
     return grid("shots", COLS, (g.shots || []).map((s, i) => {
       const zone = s.k === "ft" ? "Free throw line" : ZONE[s.z] || "";
       const res = [[result(s), s.m ? "good" : "bad"]].concat(s.b ? [["Blocked", "bad"]] : []);
       return {
         i, f: flags(s),
-        said: [when(s), what(s), feet(s.d), zone, result(s), ...tags(s)].filter(Boolean).join(", "),
-        cells: [`${i + 1}`, esc(when(s) || "—"),
-                two(what(s), [when(s), feet(s.d) || (s.k === "ft" ? "Line" : ""), assist(s), ...quals(s)].filter(Boolean).join(" · ")),
+        said: [when(s, d), what(s), feet(s.d), zone, result(s), ...tags(s)].filter(Boolean).join(", "),
+        cells: [`${i + 1}`, esc(when(s, d) || "—"),
+                two(what(s), [when(s, d), feet(s.d) || (s.k === "ft" ? "Line" : ""), assist(s), ...quals(s)].filter(Boolean).join(" · ")),
                 two(what(s), [zone, assist(s), ...quals(s)].filter(Boolean).join(" · ")),
                 esc(feet(s.d) || "—"), pills(res), [points(s) ? `+${points(s)}` : "—", s.m ? "gain" : "miss"]],
       };
@@ -210,9 +232,9 @@
       .filter(Boolean).join(" "));
   const FILTERS = [["", "All shots"], ["m", "Makes"], ["x", "Misses"], ["3", "Threes"], ["paint", "In the paint"],
                    ["ft", "Free throws"], ["ast", "Assisted"], ["blk", "Blocked"]];
-  const csv = (g) => [["#", "Period", "Clock", "Kind", "Shot", "Descriptor", "Distance (ft)", "Zone", "Made", "Points",
+  const csv = (g, d) => [["#", "Period", "Clock", "Kind", "Shot", "Descriptor", "Distance (ft)", "Zone", "Made", "Points",
                        "Assisted by", "Blocked", "Court x", "Court y"]]
-    .concat((g.shots || []).map((s, i) => [i + 1, period(s.p), s.c, s.k === "ft" ? "FT" : s.k === "3pt" ? "3PT" : "2PT",
+    .concat((g.shots || []).map((s, i) => [i + 1, period(s.p, d), s.c, s.k === "ft" ? "FT" : s.k === "3pt" ? "3PT" : "2PT",
       s.t, s.ds, s.d == null ? "" : Math.round(s.d), s.k === "ft" ? "" : ZONE[s.z] || "", s.m ? 1 : 0, points(s),
       s.m ? s.a || "" : "", s.b ? 1 : 0, s.x == null ? "" : s.x, s.y == null ? "" : s.y]));
 
@@ -226,7 +248,10 @@
         d.zones.filter((z) => z.fga).map((z) => [z.name, z.fga, z.fgm, pct(z.pct), pct(z.share), pct(z.league)])));
     }
     if (d.by_type && d.by_type.length) out.push(tableHTML("By kind of shot", ["Shot", "FGA", "Made", "FG%"], splitRows(d.by_type)));
-    if (d.by_period && d.by_period.length) out.push(tableHTML("By quarter", ["Quarter", "FGA", "Made", "FG%"], splitRows(d.by_period)));
+    if (d.by_period && d.by_period.length) {
+      out.push(isCollege(d) ? tableHTML("By half", ["Half", "FGA", "Made", "FG%"], splitRows(d.by_period))
+        : tableHTML("By quarter", ["Quarter", "FGA", "Made", "FG%"], splitRows(d.by_period)));
+    }
     if (d.by_dist && d.by_dist.length) out.push(tableHTML("By distance", ["Distance", "FGA", "Made", "FG%"], splitRows(d.by_dist)));
     return out.join("");
   }
@@ -256,7 +281,7 @@
     count: (L) => `${(L.fga || 0).toLocaleString()} shots`,
     chip: (g) => `${g.line.pts} pts · ${g.line.fgm}-${g.line.fga}`,
     zones,
-    game: (g) => shotGame(g),
+    game: (g, d) => shotGame(g, d),
     season: (d) => shotSeason(d),
     legend: (g) => legend(g),
     gameSide: (g) => gameTiles(g),
@@ -264,14 +289,16 @@
     //: His card's five (carrychart.js `playerHero`).
     heroTiles: (d) => { const L = d.season_line || {};
       return [["Games", L.games], ["PPG", num1(L.ppg)], ["FG%", pct(L.fg_pct)], ["3PT%", pct(L.fg3_pct)], ["FT%", pct(L.ft_pct)]]; },
-    list: (g) => shotList(g),
+    list: (g, d) => shotList(g, d),
     flags, filters: FILTERS, csv,
     views: (d) => VIEWS.filter(([, , k]) => (d[k] || []).some((x) => x.fga)).map(([k, name]) => [k, name]),
     barTitle: (v) => BAR_TITLE[v],
     bars: (d, v) => shotBars(d, v),
     splits: (d) => tables(d),
-    note: () => `<p class="cc-note">Each mark is a shot from the floor, where it was taken, from the NBA’s own play-by-play (its court coordinates, drawn with the basket at the top); the box score names the shooter. A lit green dot went in, a red cross missed. A free throw has no spot on the floor: it is listed, not drawn, and counted in no zone; a heave from past 36 feet sits on the far edge. The zones are the league’s own (the restricted area is the four feet around the basket, the paint the rest of the lane, the corner three the straight part of the line), and the league’s percentage in each is every shot of that season on file; the season view shades a zone green where he shoots two points or more better than the league there and red where two or more worse, deeper the more of his shots it takes. Minutes, rebounds, assists, steals, blocks and turnovers are his box score that night.</p>`,
-    tip: (s) => `<b class="${s.m ? "gain" : "loss"}">${esc(result(s))}</b>${s.d != null ? ` · ${esc(feet(s.d))}` : ""}
-      <span>${esc([when(s), what(s), ...tags(s)].filter(Boolean).join(" · "))}</span>`,
+    note: (d) => `<p class="cc-note">Each mark is a shot from the floor, where it was taken, from ${isCollege(d)
+      ? "ESPN’s play-by-play of the game (its court coordinates, to the foot, drawn with the basket at the top on the college court: a 12-foot lane and the three-point line at 22 feet 1¾ inches)"
+      : "the NBA’s own play-by-play (its court coordinates, drawn with the basket at the top)"}; the box score names the shooter. A lit green dot went in, a red cross missed. A free throw has no spot on the floor: it is listed, not drawn, and counted in no zone; a heave from past 36 feet sits on the far edge. The zones are the league’s own (the restricted area is the four feet around the basket, the paint the rest of the lane, the corner three the straight part of the line), and the league’s percentage in each is every shot of that season on file; the season view shades a zone green where he shoots two points or more better than the league there and red where two or more worse, deeper the more of his shots it takes. Minutes, rebounds, assists, steals, blocks and turnovers are his box score that night.</p>`,
+    tip: (s, g, d) => `<b class="${s.m ? "gain" : "loss"}">${esc(result(s))}</b>${s.d != null ? ` · ${esc(feet(s.d))}` : ""}
+      <span>${esc([when(s, d), what(s), ...tags(s)].filter(Boolean).join(" · "))}</span>`,
   });
 })();

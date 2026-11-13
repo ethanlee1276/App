@@ -9338,6 +9338,25 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OV. College basketball's shot chart and matchup view** (step 524; 13
+November). Nothing to run. The NBA's shot chart, for college: every shot a
+player took, where on the floor, made or missed, on the college court (a
+12-foot lane and the three-point line at 22 feet 1.75 inches), by half, with
+his zones beside college's own percentages; and the matchup view, his zones
+against what tonight's opponent allows in each. A college prop's chart door
+opens it, as an NBA prop's does.
+
+The shots come off each final's ESPN summary, the one the results ingest
+already reads for the box score, so they cost nothing: tonight's chores
+store last week's, and OT's backfill command now stores every shot of the
+two seasons as it goes. Checked first on 2025-26's 990,000 college shots in
+ESPN's play-by-play: the same court frame as the NBA's (threes 22.0 feet
+and out, twos inside 20). Finals stored before this (none yet) are read
+back a budget a night; a small school's game that comes with no
+play-by-play is filed once as empty and never read again. College's shots
+are kept apart from the NBA's, so neither league's zone percentages move
+the other's.
+
 **OU. College basketball's numbers, measured on five college seasons; its
 standings fixed on the box's first table** (step 523; 13 November). Nothing
 to run.

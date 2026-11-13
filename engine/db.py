@@ -545,6 +545,23 @@ CREATE TABLE IF NOT EXISTS nba_tips (
     home_jumper TEXT, away_jumper TEXT, third TEXT
 );
 CREATE INDEX IF NOT EXISTS nba_tips_season ON nba_tips (season, date);
+-- COLLEGE BASKETBALL SHOTS (2026-11-13, the shot chart for college): the NBA's
+-- rows exactly, off each Division I final's ESPN summary the results ingest
+-- already reads (engine/sources/espnhoops.ingest_day), so they cost no fetch.
+-- Kept apart from nba_shots because the league's own percentages in each zone
+-- are every stored shot of the season: a college shot in the NBA's table
+-- would move the NBA's, and the courts are not the same (a 12-foot lane, the
+-- three-point line at 22 feet 1.75). engine/nba/shots.py fills and draws it.
+CREATE TABLE IF NOT EXISTS cbb_shots (
+    game_id TEXT, action INTEGER, season INTEGER, date TEXT, person_id INTEGER,
+    player TEXT, team TEXT, opponent TEXT, home INTEGER, period INTEGER, clock TEXT,
+    kind TEXT, made INTEGER, shot TEXT, descriptor TEXT, distance REAL, x REAL, y REAL,
+    zone TEXT, area TEXT, assist TEXT, blocked INTEGER, quals TEXT,
+    PRIMARY KEY (game_id, action)
+);
+CREATE INDEX IF NOT EXISTS cbb_shots_player ON cbb_shots (person_id, season);
+CREATE INDEX IF NOT EXISTS cbb_shots_name ON cbb_shots (player);
+CREATE INDEX IF NOT EXISTS cbb_shots_league ON cbb_shots (season, zone, made);
 -- THE LEAGUE'S PASSING TRACKING NUMBERS (nextgen_stats/ngs_passing): one
 -- row per player-week, week 0 the season line, passers past the league's
 -- minimum — time to throw, completion % above expectation, aggressiveness
@@ -1408,6 +1425,12 @@ def upsert_nba_shots(conn, rows: list[dict]) -> int:
     """Every shot on the NBA shot chart (engine/nba/shots.py)."""
     from .nba.shots import SHOT_COLS
     return _upsert(conn, "nba_shots", SHOT_COLS, rows)
+
+
+def upsert_cbb_shots(conn, rows: list[dict]) -> int:
+    """Every shot on the college shot chart (engine/nba/shots.py, league cbb)."""
+    from .nba.shots import SHOT_COLS
+    return _upsert(conn, "cbb_shots", SHOT_COLS, rows)
 
 
 def upsert_nba_tips(conn, rows: list[dict]) -> int:
