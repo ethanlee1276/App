@@ -60,15 +60,76 @@ SPORT_TAGS = {
 #: kills at 180 seconds, and a crowd price is garnish on that board.
 TIMEOUT_S = 12
 
-#: COLLEGE BASKETBALL'S PAGE (2026-11-13). The box's first college build
-#: had every Polymarket read fail while the NBA's, in the same minute,
-#: answered: a college series holds sixty to a hundred and fifty games a
-#: night, all open at once, and two hundred of them with every market is the
-#: one answer here big enough to run out the clock. College asks for the
-#: soonest hundred, with a longer clock (its build's ceiling is 600 seconds,
-#: not 180), and each failure now says why on the board.
-PAGE = {"cbb": 100}
+#: COLLEGE BASKETBALL'S CLOCK (2026-11-13). A college series holds sixty to
+#: a hundred and fifty games a night, all open at once, the biggest answer
+#: the venue gives this site; its build's ceiling is 600 seconds, not 180, so
+#: it waits longer. Its page is its first shape's (`SHAPES`).
 SLOW = {"cbb": 25}
+
+#: COLLEGE'S OTHER WAYS IN (2026-11-13, Ethan: "try other options too").
+#: With its cause on the board, every college read said "HTTP Error 406: Not
+#: Acceptable" while every other league's answered in the same minute: the
+#: venue refuses something about college's ask, and this sandbox cannot reach
+#: it to see what. Each shape narrows a different thing — the order, the
+#: dates the games start in, the page, the filters themselves — and the first
+#: that answers is used. The report names the shape that answered and why the
+#: ones before it did not, so the box's next build says which the venue takes.
+#: Every other league asks one way, as before.
+SHAPES = {
+    "cbb": (("page", {"closed": "false", "active": "true", "limit": "100",
+                      "order": "startDate", "ascending": "true"}),
+            ("window", {"closed": "false", "limit": "100", "start_date_min": "{lo}",
+                        "start_date_max": "{hi}"}),
+            ("small", {"closed": "false", "active": "true", "limit": "20"}),
+            ("bare", {"limit": "20"})),
+}
+#: The shape every league but college asks in: a series as it always has,
+#: and a tag soonest first (a tag holds every market about the league).
+PLAIN = (("plain", {"closed": "false", "active": "true", "limit": "200"}),)
+PLAIN_TAG = (("plain", {"closed": "false", "active": "true", "limit": "200",
+                        "order": "startDate", "ascending": "true"}),)
+
+
+def _shape_query(params: dict, now=None) -> str:
+    """One shape's query string, its date window filled from ``now`` (the
+    games starting from six hours ago to two days on)."""
+    import datetime as _dt
+    from urllib.parse import urlencode
+    now = now or _dt.datetime.now(_dt.timezone.utc)
+    lo = (now - _dt.timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    hi = (now + _dt.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return urlencode({k: v.format(lo=lo, hi=hi) for k, v in params.items()})
+
+
+def _first_answer(sport: str, ask, plain=PLAIN) -> tuple:
+    """``(events, shape, refusals)``: ``ask(name, params)`` for each of the
+    league's shapes until one answers; ``refusals`` is ``[(shape, why)]`` for
+    the ones that did not. Raises the first refusal when none answered."""
+    refusals, first = [], None
+    for name, params in SHAPES.get(sport, plain):
+        try:
+            return ask(name, params), name, refusals
+        except Exception as exc:                                # noqa: BLE001
+            first = first or exc
+            refusals.append((name, _why(exc)))
+    raise _Refused(refusals) from first
+
+
+class _Refused(Exception):
+    """Every shape a league asks in was refused; carries each one's reason."""
+
+    def __init__(self, refusals):
+        super().__init__("; ".join(f"{n}: {w}" for n, w in refusals))
+        self.refusals = refusals
+
+
+def _said(count: int, shape: str, refusals: list) -> object:
+    """The report's value for a source that answered: the count alone when
+    it answered the first way (every league but college, as before), else the
+    count, the shape that answered, and why the ones before it did not."""
+    if not refusals:
+        return count
+    return f"{count} ({shape}; " + "; ".join(f"{n} {w}" for n, w in refusals)[:160] + ")"
 
 
 def _why(exc) -> str:
@@ -107,10 +168,15 @@ def _num(v):
         return None
 
 
-def fetch_events(tag: str, limit: int = 200, ttl: int = 300, timeout: int = TIMEOUT_S) -> list[dict]:
-    url = (f"{GAMMA}/events?tag_slug={tag}&closed=false&active=true"
-           f"&limit={limit}&order=startDate&ascending=true")
-    raw = json.loads(fetch_text(url, f"poly_events_{tag}.json", ttl=ttl, timeout=timeout))
+def fetch_events(tag: str, limit: int = 200, ttl: int = 300, timeout: int = TIMEOUT_S,
+                 params: dict | None = None, shape: str = "") -> list[dict]:
+    if params is not None:
+        url = f"{GAMMA}/events?tag_slug={tag}&{_shape_query(params)}"
+    else:
+        url = (f"{GAMMA}/events?tag_slug={tag}&closed=false&active=true"
+               f"&limit={limit}&order=startDate&ascending=true")
+    name = f"poly_events_{tag}{'_' + shape if shape and shape != 'plain' else ''}.json"
+    raw = json.loads(fetch_text(url, name, ttl=ttl, timeout=timeout))
     return raw if isinstance(raw, list) else (raw.get("events") or raw.get("data") or [])
 
 
@@ -283,11 +349,15 @@ def fetch_series_ids(ttl: int = 86400) -> dict:
 
 
 def fetch_series_events(series_id: str, limit: int = 200, ttl: int = 300, timeout: int = TIMEOUT_S,
-                        soonest: bool = False) -> list[dict]:
-    url = f"{GAMMA}/events?series_id={series_id}&closed=false&active=true&limit={limit}"
-    if soonest:
-        url += "&order=startDate&ascending=true"
-    raw = json.loads(fetch_text(url, f"poly_series_{series_id}.json", ttl=ttl, timeout=timeout))
+                        soonest: bool = False, params: dict | None = None, shape: str = "") -> list[dict]:
+    if params is not None:
+        url = f"{GAMMA}/events?series_id={series_id}&{_shape_query(params)}"
+    else:
+        url = f"{GAMMA}/events?series_id={series_id}&closed=false&active=true&limit={limit}"
+        if soonest:
+            url += "&order=startDate&ascending=true"
+    name = f"poly_series_{series_id}{'_' + shape if shape and shape != 'plain' else ''}.json"
+    raw = json.loads(fetch_text(url, name, ttl=ttl, timeout=timeout))
     return raw if isinstance(raw, list) else (raw.get("events") or raw.get("data") or [])
 
 
@@ -308,25 +378,29 @@ def fetch_sports(sports=None) -> tuple[list[dict], dict]:
         report["sports"] = _why(exc)
     for sport in (sports or SPORT_TAGS):
         got = []
-        page = {"limit": PAGE.get(sport, 200), "timeout": SLOW.get(sport, TIMEOUT_S)}
+        clock = SLOW.get(sport, TIMEOUT_S)
         for sid in series.get(sport, []):
             try:
-                parsed = [dict(r, sport=sport) for r in parse_events(
-                    fetch_series_events(sid, soonest=sport in PAGE, **page))]
-            except Exception as exc:                           # noqa: BLE001
-                report[f"series:{sid}"] = _why(exc)
+                events, shape, refused = _first_answer(sport, lambda name, params, sid=sid: fetch_series_events(
+                    sid, params=params, shape=name, timeout=clock))
+            except _Refused as exc:
+                report[f"series:{sid}"] = (exc.refusals[0][1] if len(exc.refusals) == 1
+                                           else "error: " + str(exc)[:200])
                 continue
-            report[f"series:{sid}"] = len(parsed)
+            parsed = [dict(r, sport=sport) for r in parse_events(events)]
+            report[f"series:{sid}"] = _said(len(parsed), shape, refused)
             got.extend(parsed)
         if not got:
             for tag in SPORT_TAGS.get(sport, ()):
                 try:
-                    events = fetch_events(tag, **page)
-                except Exception as exc:                       # noqa: BLE001
-                    report[tag] = _why(exc)
+                    events, shape, refused = _first_answer(sport, lambda name, params, tag=tag: fetch_events(
+                        tag, params=params, shape=name, timeout=clock), plain=PLAIN_TAG)
+                except _Refused as exc:
+                    report[tag] = (exc.refusals[0][1] if len(exc.refusals) == 1
+                                   else "error: " + str(exc)[:200])
                     break                 # the venue is down; aliases will not help
                 parsed = [dict(r, sport=sport) for r in parse_events(events)]
-                report[tag] = len(parsed)
+                report[tag] = _said(len(parsed), shape, refused)
                 got.extend(parsed)
                 if parsed:
                     break
@@ -429,21 +503,20 @@ def probe(sport: str = "cbb", limit: int = 5) -> list[str]:
     out.append(f"/sports: {status}, {size:,} bytes; the rows for {sport} and the nba:")
     for r in rows:
         out.append("  " + json.dumps(r)[:300])
-    page = PAGE.get(sport, 200)
     asks = []
+    shapes = SHAPES.get(sport, PLAIN)
     for r in rows:
         name = str(r.get("sport") or "").strip().lower()
         for sid in [x.strip() for x in str(r.get("series") or "").split(",") if x.strip()]:
-            base = f"{GAMMA}/events?series_id={sid}&closed=false&active=true"
             if name in SPORT_KEYS["nba"]:
-                asks.append((f"nba series {sid} (the control)", f"{base}&limit={limit}"))
+                asks.append((f"nba series {sid} (the control)",
+                             f"{GAMMA}/events?series_id={sid}&closed=false&active=true&limit={limit}"))
                 continue
-            asks.append((f"series {sid}, as the build asks", f"{base}&limit={page}&order=startDate&ascending=true"))
-            asks.append((f"series {sid}, {limit} and no order", f"{base}&limit={limit}"))
+            for shape, params in shapes:
+                asks.append((f"series {sid}, {shape}", f"{GAMMA}/events?series_id={sid}&{_shape_query(params)}"))
     for tag in SPORT_TAGS.get(sport, ()):
-        asks.append((f"tag {tag}, as the build asks",
-                     f"{GAMMA}/events?tag_slug={tag}&closed=false&active=true&limit={page}"
-                     f"&order=startDate&ascending=true"))
+        for shape, params in SHAPES.get(sport, PLAIN_TAG):
+            asks.append((f"tag {tag}, {shape}", f"{GAMMA}/events?tag_slug={tag}&{_shape_query(params)}"))
     for label, url in asks:
         status, body, size = _venue_answer(url)
         out.append(f"{label}: {status}, {size:,} bytes — "

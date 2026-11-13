@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**OZ. Polymarket: college asks four ways until one answers** (step 528; 13
+November). Nothing to run. You, on OY: "try other options too." Every
+college build now asks Polymarket in four shapes, stopping at the first
+that answers: the soonest hundred games (what it asked before), the games
+starting in a two-day window, a page of twenty, and no filters at all. Each
+narrows a different thing the venue might be refusing. The board's
+`polymarket_tags` names the shape that answered and why the ones before it
+did not, for example `14 (window; page error: HTTP Error 406: Not
+Acceptable)`, so the first build after the deploy says which one Polymarket
+takes. OY's probe now prints every shape too. Every other league asks the
+one way it always has.
+
 **OY. What Polymarket answers college's requests** (step 527; 13
 November). One read-only command. With step OX on the box, the college
 board's Polymarket report reads `HTTP Error 406: Not Acceptable` for every

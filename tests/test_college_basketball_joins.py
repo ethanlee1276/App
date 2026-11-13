@@ -334,36 +334,44 @@ def test_the_nbas_two_reads_run_on_college_with_colleges_own_league():
 
 
 
-def test_polymarket_is_asked_for_colleges_soonest_hundred_and_says_why_it_failed():
-    """The box's first college build: every Polymarket read for college
-    failed while the NBA's answered in the same minute. College asks for the
-    soonest hundred on a longer clock, and a failure says why on the board."""
+def test_polymarket_is_asked_for_college_every_way_until_one_answers():
+    """The box's college builds: every Polymarket read for college came back
+    "HTTP Error 406: Not Acceptable" while the NBA's answered in the same
+    minute. College asks in four shapes (soonest hundred; a two-day window
+    of start dates; a page of twenty; no filters) until one answers, on a
+    longer clock, and the report says which answered and why the others did
+    not. Every other league asks once, as before."""
     from engine.sources import polysports as PS
+    from engine.sources.fetch import DataUnavailable
     asked = []
     keep = PS.fetch_series_ids, PS.fetch_series_events, PS.fetch_events
     PS.fetch_series_ids = lambda: {"cbb": ["10470"], "nba": ["10345"]}
 
     def series(sid, **k):
-        asked.append((sid, k))
-        if sid == "10470":
-            raise OSError("The read operation timed out")
+        asked.append((sid, k.get("shape"), dict(k.get("params") or {}), k.get("timeout")))
+        if sid == "10470" and k.get("shape") in ("page", "window"):
+            raise DataUnavailable("Could not fetch https://gamma-api.polymarket.com/x: HTTP Error 406: "
+                                  "Not Acceptable", status=406)
         return []
     PS.fetch_series_events = series
-    PS.fetch_events = lambda tag, **k: asked.append((tag, k)) or []
+    PS.fetch_events = lambda tag, **k: asked.append((tag, k.get("shape"), {}, k.get("timeout"))) or []
     try:
         rows, report = PS.fetch_sports(["cbb", "nba"])
     finally:
         PS.fetch_series_ids, PS.fetch_series_events, PS.fetch_events = keep
-    assert report["series:10470"] == "error: The read operation timed out"
-    from engine.sources.fetch import DataUnavailable
-    said = PS._why(DataUnavailable("Could not fetch https://gamma-api.polymarket.com/events?series_id=1: "
-                                   "HTTP Error 422: Unprocessable Entity", status=422))
+    college = [(shape, timeout) for sid, shape, _p, timeout in asked if sid == "10470"]
+    assert college == [("page", 25), ("window", 25), ("small", 25)], "until one answers, on the longer clock"
+    said = report["series:10470"]
+    assert said.startswith("0 (small; page error: HTTP Error 406") and "window error: HTTP Error 406" in said
+    nba = [(shape, p, timeout) for sid, shape, p, timeout in asked if sid == "10345"]
+    assert nba == [("plain", {"closed": "false", "active": "true", "limit": "200"}, PS.TIMEOUT_S)]
+    assert report["series:10345"] == 0, "a league that answers the first way reads as before"
+    q = PS._shape_query(dict(PS.SHAPES["cbb"])["window"])
+    assert "start_date_min=" in q and "start_date_max=" in q and "{lo}" not in q
+    from engine.sources.fetch import DataUnavailable as DU
+    said = PS._why(DU("Could not fetch https://gamma-api.polymarket.com/events?series_id=1: "
+                      "HTTP Error 422: Unprocessable Entity", status=422))
     assert said == "error: HTTP Error 422: Unprocessable Entity", "the cause, never the URL"
-    college = dict(asked)["10470"]
-    assert college["limit"] == 100 and college["timeout"] == 25 and college["soonest"] is True
-    nba = dict(asked)["10345"]
-    assert nba["limit"] == 200 and nba["timeout"] == PS.TIMEOUT_S and nba["soonest"] is False
-
 
 
 def test_a_college_pick_says_why_it_is_not_staked_as_it_is():
@@ -416,8 +424,9 @@ def test_the_box_can_see_what_polymarket_answers_college():
     finally:
         urllib.request.urlopen = keep
     text = "\n".join(lines)
-    assert "series 10470, as the build asks: 406" in text and '"error": "too many"' in text
-    assert "series 39, 5 and no order: 406" in text
+    assert "series 10470, page: 406" in text and '"error": "too many"' in text
+    assert "series 39, window: 406" in text and "series 39, bare: 406" in text
+    assert "tag ncaab, small: 406" in text
     assert "nba series 10345 (the control): 200" in text
     assert lines[-1] == "Read-only: nothing was cached or written."
     src = (ROOT / "engine" / "sources" / "polysports.py").read_text(encoding="utf-8")
