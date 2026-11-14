@@ -75,7 +75,7 @@ def test_the_basketball_card_journals_its_rest_and_the_veto_reads_it():
     card = evaluate_prop(prop, NBA)
     assert card["kind"] != "skip" and card["rest_days"] == 1, card
     src = (ROOT / "engine" / "nba" / "pipeline.py").read_text(encoding="utf-8")
-    assert 'lead_min=_lead, rest_days=prop.get("rest_days"))' in src
+    assert 'lead_min=_lead, rest_days=prop.get("rest_days"),' in src
     nb = (ROOT / "nba_build.py").read_text(encoding="utf-8")
     assert '"rest_days": density.get(h["team"], {}).get(' in nb, "every prop carries it from the schedule"
 
@@ -90,7 +90,7 @@ def test_hockey_reads_its_rest_off_the_teams_last_games():
     assert NH._rest_days({"last10": {"2026-11-14"}}, "2026-11-14") is None, "tonight's own game is not rest"
     src = (ROOT / "nhl_build.py").read_text(encoding="utf-8")
     body = src[src.index("def price_prop("):src.index("# --- game lines")]
-    assert "horizon_days=0, rest_days=rest_days)" in body and '"rest_days": rest_days,' in body
+    assert "horizon_days=0, rest_days=rest_days," in body and '"rest_days": rest_days,' in body
 
 
 def test_the_journal_writes_the_rest_a_pick_carries():

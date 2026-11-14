@@ -92,7 +92,10 @@ DIMS = ("side", "odds", "prob", "horizon", "book", "lead", "park", "wind",
         # propose about, however faithfully it is journaled.
         "velo", "tto",
         # §6's coverage tell — how much zone the opposing defence plays.
-        "coverage")
+        "coverage",
+        # Basketball's minutes and hockey's ice time (2026-11-14): the
+        # leagues the lab had never proposed on, given a lever of their own.
+        "minutes")
 
 
 class HypothesisUnavailable(RuntimeError):

@@ -434,12 +434,15 @@ def test_every_journaled_dimension_the_lab_can_test_is_sliceable_here():
                # defence's zone rate, journaled on NFL props. Same story
                # as velo: the lab gained a dimension and this assertion
                # is what forces the report to gain it too.
-               "coverage"}
+               "coverage",
+               # Basketball's minutes and hockey's ice time, 2026-11-14:
+               # the leagues the lab had never proposed on.
+               "minutes"}
     assert set(DIMS) == covered, "DIMS moved; recheck bleed's coverage"
     here = set(bleed.DIMENSIONS)
     for want in ("side", "book", "price", "claimed p", "horizon", "capture lag",
                  "park", "wind", "lineup", "rest", "clock", "pen own", "velo", "tto",
-                 "coverage",
+                 "coverage", "minutes",
                  "pen opp"):
         assert want in here, want
 

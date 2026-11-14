@@ -340,7 +340,8 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
                          "and cannot price an in-play market"]
     _block = lp_veto(tune.key, stat, side=side, odds=odds, prob=p_final,
                      book=prop.get("book"), horizon_days=0,
-                     lead_min=_lead, rest_days=prop.get("rest_days"))
+                     lead_min=_lead, rest_days=prop.get("rest_days"),
+                     proj_minutes=proj_min)
     if _block:
         fails = fails + [_block]
     # THE INJURY BOARD (nba_build.hoops_injuries, 2026-10-13). Ruled out

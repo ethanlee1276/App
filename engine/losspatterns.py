@@ -367,6 +367,41 @@ def tto_band(depth) -> str | None:
     return "past 3x"
 
 
+#: THE MINUTES A PICK ASSUMED, banded per league (2026-11-14). A basketball
+#: prop is a minutes bet wearing a stat's name, and every basketball pick
+#: has journaled the minutes it assumed (`bets.proj_minutes`) for months,
+#: yet neither the miner nor the hypothesis lab could slice on it: the
+#: question "do our overs on the bench's 18-minute men run hot?" had the
+#: rows and no dimension. Hockey's is the skater's ice time. Bands sit
+#: where each league's rotation does: basketball's bench, rotation, starter
+#: and heavy-minutes starter; hockey's fourth line, middle six, top line or
+#: top pair, and the heaviest minutes.
+MINUTES_BANDS = {
+    "hoops": ((20.0, "under 20 min"), (28.0, "20-28 min"), (34.0, "28-34 min"), (None, "34+ min")),
+    "nhl": ((14.0, "under 14 min"), (18.0, "14-18 min"), (21.0, "18-21 min"), (None, "21+ min")),
+}
+
+
+def minutes_band(minutes, sport=None) -> str | None:
+    """The minutes (a skater's ice time in hockey) a pick assumed, banded;
+    None for a league without the dimension or a pick that journaled none."""
+    league = str(sport or "").lower()
+    key = "hoops" if league in ("nba", "wnba", "cbb") else league
+    bands = MINUTES_BANDS.get(key)
+    if not bands:
+        return None
+    try:
+        m = float(minutes)
+    except (TypeError, ValueError):
+        return None
+    if m <= 0:
+        return None
+    for top, label in bands:
+        if top is None or m < top:
+            return label
+    return None
+
+
 def coverage_band(zone_rate) -> str | None:
     """How much ZONE the opposing defence plays — §6's coverage tell.
 
@@ -405,7 +440,7 @@ def features_of(side=None, odds=None, prob=None, book=None,
                 lineup_conf=False, sport=None, rest_days=None,
                 body_clock=None, pen_own=None, pen_opp=None,
                 velo_delta=None, tto_proj=None,
-                opp_zone_rate=None) -> dict:
+                opp_zone_rate=None, proj_minutes=None) -> dict:
     """The feature dict for one bet — mining and veto both come through
     here, so a pick is judged by exactly the dimensions it was mined on."""
     feats = {
@@ -432,6 +467,8 @@ def features_of(side=None, odds=None, prob=None, book=None,
         # §6's coverage tell: how much zone the opposing defence plays.
         # NFL props only; NULL is not "balanced" — see coverage_band.
         "coverage": coverage_band(opp_zone_rate),
+        # Basketball's minutes and hockey's ice time (`minutes_band`).
+        "minutes": minutes_band(proj_minutes, sport),
     }
     return {k: v for k, v in feats.items() if v is not None}
 
@@ -448,7 +485,7 @@ def records_from_ledger(conn) -> list[dict]:
         "category, "
         "lead_min, park_hr, wind_out, roofed, lineup_slot, lineup_conf, "
         "rest_days, body_clock, pen_own, pen_opp, velo_delta, tto_proj, "
-        "opp_zone_rate "
+        "opp_zone_rate, proj_minutes "
         "FROM bets WHERE status IN ('won','lost')").fetchall()
     out = []
     for r in rows:
@@ -490,6 +527,7 @@ def records_from_ledger(conn) -> list[dict]:
                                  rest_days=r["rest_days"],
                                  body_clock=r["body_clock"],
                                  pen_own=r["pen_own"], pen_opp=r["pen_opp"],
+                                 proj_minutes=r["proj_minutes"],
                                  sport=r["sport"]),
         })
     return out
@@ -1030,7 +1068,7 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
          wind_out=None, roofed=False, lineup_slot=None, lineup_conf=False,
          rest_days=None, body_clock=None, pen_own=None, pen_opp=None,
          velo_delta=None, tto_proj=None, opp_zone_rate=None,
-         path=None) -> str | None:
+         path=None, proj_minutes=None) -> str | None:
     """The reason this pick is blocked, or None.
 
     Consulted where is_reliable() is: a pick whose features land in a slice
@@ -1048,6 +1086,7 @@ def veto(sport: str, market: str, side=None, odds=None, prob=None,
                         velo_delta=velo_delta, tto_proj=tto_proj,
                         opp_zone_rate=opp_zone_rate,
                         pen_own=pen_own, pen_opp=pen_opp,
+                        proj_minutes=proj_minutes,
                         sport=sport)
     for f in store.get("closed") or []:
         if f.get("sport") != sport:

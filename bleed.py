@@ -142,7 +142,7 @@ def load(conn, sport=None, category="main", since=None) -> list[dict]:
     q = ("SELECT sport, date, player, market, side, line, book, odds, grade, "
          "status, pnl_units, stake_units, hit_prob, closing_line, category, "
          "ts, loss_cause, lineup_slot, lineup_conf, park_hr, wind_out, "
-         "roofed, lead_min, rest_days, body_clock, pen_own, pen_opp "
+         "roofed, lead_min, rest_days, body_clock, pen_own, pen_opp, proj_minutes "
          "FROM bets WHERE status IN ('won','lost')")
     args: list = []
     if category != "all":
@@ -203,7 +203,7 @@ def odds_bucket(b) -> str:
 from engine.losspatterns import (clock_band, horizon_band,  # noqa: E402
                                  lead_band, lineup_band, park_band,
                                  pen_band, prob_band, rest_band, wind_band, velo_band,
-                                 coverage_band,
+                                 coverage_band, minutes_band,
                                  tto_band)
 
 
@@ -241,6 +241,7 @@ DIMENSIONS = {
     "capture lag": lambda b: lead_band(b.get("lead_min")),
     "horizon":     lambda b: horizon_band(b.get("horizon_days")),
     "rest":        lambda b: rest_band(b.get("rest_days"), b.get("sport")),
+    "minutes":     lambda b: minutes_band(b.get("proj_minutes"), b.get("sport")),
     "clock":       lambda b: clock_band(b.get("body_clock")),
     "pen own":     lambda b: pen_band(b.get("pen_own")),
     "pen opp":     lambda b: pen_band(b.get("pen_opp")),

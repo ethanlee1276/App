@@ -265,8 +265,10 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
     from engine.losspatterns import veto as _lp_veto
     win, edge = apply_selection(win, edge, SPORT)
     rest_days = _rest_days((ctx or {}).get(prop.team) or {}, date)
+    toi = None if prop.market in M.GOALIE_MARKETS else proj.get("toi")
     loss_block = _lp_veto(SPORT, prop.market, side=side, odds=odds, prob=win,
-                          book=book, horizon_days=0, rest_days=rest_days)
+                          book=book, horizon_days=0, rest_days=rest_days,
+                          proj_minutes=toi)
     ev = expected_value(win, odds)
     label = M.MARKET_LABELS.get(prop.market, prop.market)
     vals = [float(v) for v in proj.get("recent") or []]
@@ -384,8 +386,10 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         "hit_prob": round(win, 4), "raw_prob": round(raw, 4), "fair_prob": round(fair, 4),
         "loss_pattern": loss_block or "",
         # The days since his team's last game (1: the second night of a
-        # back-to-back), journaled so the record can be sliced by it.
+        # back-to-back), and a skater's projected ice time, journaled so
+        # the record can be sliced by them (engine/losspatterns).
         "rest_days": rest_days,
+        "proj_minutes": round(toi, 1) if toi else None,
         # Which market the haircut trusted, and what the other books said.
         "market_source": "sharp" if sharp else "books",
         "sharp_value": sharp_val,

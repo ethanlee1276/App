@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PS. The record can ask about a basketball player's minutes** (step 547;
+14 November). Nothing to run. A basketball prop is a minutes bet wearing a
+stat's name, and every basketball pick has journaled the minutes it assumed
+for months; neither the loss miner nor the hypothesis lab could slice on
+them, so "do our overs on the bench's 18-minute men run hot?" had the rows
+and no question to ask. The minutes are a dimension now, banded where a
+rotation sits (under 20, 20-28, 28-34, 34 and up), and it reads the NBA's
+settled picks already in the journal, so tonight's learning pass can test
+it at once; a hockey skater's projected ice time is journaled from today
+and banded the same way (under 14, 14-18, 18-21, 21 and up). The loss veto
+reads both, so a slice the record closes is refused on the board, and the
+lab can propose on them from its next weekly run.
+
 **PR. The record can ask about a back-to-back** (step 546; 14 November).
 Nothing to run. You asked whether the hypothesis lab works for every sport.
 It runs (79 hypotheses on the Record page, retested tonight, proposed weekly
