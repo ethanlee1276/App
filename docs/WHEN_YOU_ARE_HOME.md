@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QS. A game's parlays draw on every prop the board prices** (step 573;
+14 November). Nothing to run. With QP live, the NFL board went from 13 to 14
+three-leg tickets across 13 games, so the opposite-script rule wasn't what
+held it to one a game. The legs were: they came from the posted picks alone
+(Most Likely and Edge), and about six a game clear the 60% floor. Every
+other prop the board prices at a named book carries our chance too (its
+card shows it), and your own tickets are built from those ("Nabers 5+
+receptions (max -250) + Skattebo 12+ rush attempts (max -200)"). They're
+legs now, under the same rules: our chance 60% or better, a named book,
+nothing past the Most Likely cap of -250 (your 09-01 rule: past it, "not a
+parlay leg"), no player listed out, doubtful or on IR, and a game still to
+play (engine/gameparlays.priced_legs). Still tracked, staked at nothing.
+
 **QR. College basketball's odds line stops calling Sunday's games drops**
 (step 572; 14 November). Nothing to run. After QE, the college basketball
 board's odds line still read "40 event(s) DROPPED — see the odds diagnosis"

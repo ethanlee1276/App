@@ -15,8 +15,9 @@ parlays for each game."
 WHAT HIS REPORTS DO, AND SO WHAT THIS DOES, game by game:
 
 THE LEGS. Only numbers the board already prices for a reader: the game's
-Most Likely picks and its Edge picks (engine/twoleg's legs — each a real
-price at a named book, none started, none held), at LEG_FLOOR or better
+Most Likely picks, its Edge picks, and every other prop it priced at a named
+book (engine/twoleg's legs and `priced_legs` — each a real price, none
+started, none held), at LEG_FLOOR or better
 (his reports' bar: "they sit under the 65% hit-rate floor, so they don't
 qualify for the parlay"; ours is a little lower, and every leg shows its
 own chance). Never a past-the-cap row (Ethan, 09-01: "not a parlay leg"),
@@ -141,12 +142,57 @@ def _norm_side(leg: dict) -> dict:
     return leg
 
 
+#: Statuses that keep a man off every ticket.
+_OUT = ("OUT", "DOUBTFUL", "IR", "SUSPENDED")
+
+
+def priced_legs(board: dict, sport: str, now=None) -> list[dict]:
+    """Every prop the board priced at a named book as a leg, at our own
+    chance for its side, inside the Most Likely board's price cap.
+
+    WHY (2026-11-14). The legs were the board's posted picks alone, Most
+    Likely and Edge, and the first NFL board built that way, and again with
+    the opposite-script pairs allowed (OPPOSED_SCRIPT_RHO), counted 13 and
+    then 14 three-leg tickets across 13 games, where Ethan asked for four a
+    game: about six posted picks a game clear LEG_FLOOR, and few trios of
+    six pass the clash rules. Every other prop on the board carries our
+    chance at a real price too (its prop card shows it), and his own
+    tickets are built from exactly those: "Nabers 5+ receptions (max -250)
+    + Skattebo 12+ rush attempts (max -200)". The Most Likely cap still
+    holds (likely.HEAVIEST_PRICE, -250: past it a leg is "not a parlay
+    leg", Ethan 09-01), as do the floor, a real book, the injury report and
+    a game still to play."""
+    from . import twoleg as T
+    from .likely import HEAVIEST_PRICE
+    from .stakeplan import priced_out
+    out = []
+    for r in board.get("recommendations") or []:
+        if not isinstance(r, dict) or r.get("has_market") is False or r.get("_game_leg"):
+            continue
+        if str(r.get("book") or "").strip().lower() in ("", "proxy"):
+            continue
+        if str(r.get("injury_status") or "").strip().upper() in _OUT:
+            continue
+        try:
+            if int(float(r.get("odds"))) < HEAVIEST_PRICE:
+                continue                                # past the cap: never a parlay leg
+        except (TypeError, ValueError):
+            continue
+        if priced_out("edge", r.get("odds")):
+            continue                                    # the Edge book's long-price limit, as edge_legs
+        leg = T._leg(r, r.get("hit_prob"), "priced")
+        if leg and not T._started(leg, now):
+            out.append(leg)
+    return out
+
+
 def legs_for(board: dict, sport: str, now=None) -> list[dict]:
-    """The board's priced picks as legs — Most Likely and Edge, the more
-    likely copy of a pick kept — at LEG_FLOOR or better."""
+    """The board's priced picks as legs — Most Likely, Edge, and every other
+    prop it priced at a named book (`priced_legs`), the more likely copy of
+    a pick kept — at LEG_FLOOR or better."""
     from . import twoleg as T
     got: dict = {}
-    for get in (T.likely_legs, T.edge_legs):
+    for get in (T.likely_legs, T.edge_legs, priced_legs):
         try:
             rows = get(board, sport, now)
         except Exception:                                    # noqa: BLE001

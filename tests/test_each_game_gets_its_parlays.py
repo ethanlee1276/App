@@ -132,6 +132,43 @@ def test_his_own_ticket_is_built_and_priced():
     assert not ok, why
 
 
+def _rec(player, team, pos, market, side, line, p, odds, book="DraftKings", **kw):
+    opp = "WAS" if team == "NYG" else "NYG"
+    r = {"player": player, "team": team, "opponent": opp, "home": "NYG", "away": "WAS", "position": pos,
+         "market": market, "side": side, "line": line, "odds": odds, "book": book, "hit_prob": p,
+         "has_market": True, "recommended": False, "game_date": "2099-11-12",
+         "kickoff": "2099-11-12T20:15:00-05:00", "reasons": [f"Projection clears {line}"]}
+    r.update(kw)
+    return r
+
+
+def test_every_priced_prop_is_a_leg_inside_the_cap():
+    """The first NFL board built on the posted picks alone counted 13, then
+    14, three-leg tickets across 13 games: about six posted picks a game.
+    Every prop the board priced at a named book is a leg now, at our own
+    chance, inside the Most Likely cap."""
+    b = {"date": "2099-W10", "games": [GAME],
+         "most_likely": [_ml("Malik Nabers", "NYG", "WR", "receptions", "Over", 4.5, 0.72, -250, "Receptions"),
+                         _ml("Jayden Daniels", "WAS", "QB", "rush_yds", "Over", 24.5, 0.68, -200, "Rushing Yards")],
+         "recommendations": [
+             _rec("Cam Skattebo", "NYG", "RB", "rush_att", "Over", 11.5, 0.67, -200),
+             _rec("Isaiah Likely", "NYG", "TE", "receptions", "Over", 3.5, 0.70, -225),
+             _rec("Chig Okonkwo", "WAS", "TE", "receptions", "Over", 2.5, 0.66, -190),
+             _rec("Stefon Diggs", "WAS", "WR", "rec_yds", "Over", 29.5, 0.665, -225),
+             _rec("Terry McLaurin", "WAS", "WR", "receptions", "Over", 2.5, 0.80, -400),     # past the cap
+             _rec("Rachaad White", "WAS", "RB", "rush_yds", "Over", 29.5, 0.64, -180, book="proxy"),
+             _rec("Wan'Dale Robinson", "NYG", "WR", "receptions", "Over", 3.5, 0.66, -170,
+                  injury_status="OUT"),
+             _rec("Daniel Jones", "NYG", "QB", "pass_yds", "Over", 199.5, 0.52, -115)]}  # under the floor
+    legs = {l["player"] for l in GP.legs_for(b, "nfl")}
+    assert {"Cam Skattebo", "Isaiah Likely", "Chig Okonkwo", "Stefon Diggs"} <= legs, legs
+    assert not legs & {"Terry McLaurin", "Rachaad White", "Wan'Dale Robinson", "Daniel Jones"}, legs
+    g = GP.build(b, "nfl")["games"][0]
+    assert len(g["threes"]) == 4, (len(g["threes"]), g.get("threes_note"))
+    assert len(GP.build(dict(b, recommendations=[]), "nfl")["games"][0]["threes"]) == 0, \
+        "two posted picks alone make no three-leg ticket"
+
+
 def test_three_touchdown_pairs_with_his_reasons():
     gp = GP.build(board(), "nfl")
     pairs = gp["games"][0]["scorers"]
