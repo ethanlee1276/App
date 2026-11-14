@@ -99,11 +99,20 @@ def test_rain_counts_against_a_receiver():
                           ratings=NYG, room={}, scheme={}, split={}, tackling={}, line_out=[],
                           mates_out=[], allowed={"wr_rec_yds": {"rank": 16, "of": 32, "pg": 140.0}},
                           points=20.0, weather=RAIN)
-    assert diggs["read"] == "tough", diggs
+    # The rain counts, one family against him; a fifth of the targets is a
+    # featured receiver, who needs two against him to read tough
+    # (engine/readlogic.ladder, 2026-11-14) — he reads neutral, rain said.
+    assert diggs["read"] == "neutral", diggs
     (line,) = diggs["con"]
     assert line == ("Rain is 74% likely at kickoff and the wind is forecast at 12 mph: about 15% "
                     "off a receiver's yards (measured, 2016-2025)"), line
-    assert set(diggs["lean"]) <= {"rec_yds", "receptions", "anytime_td"}
+    third = G.player_read("Jahan Dotson", "WAS", "NYG", "WR",
+                          usage={"tgt_share": 0.12, "targets_pg": 3.6, "games": 7},
+                          ratings=NYG, room={}, scheme={}, split={}, tackling={}, line_out=[],
+                          mates_out=[], allowed={"wr_rec_yds": {"rank": 16, "of": 32, "pg": 140.0}},
+                          points=20.0, weather=RAIN)
+    assert third["read"] == "tough" and third["con"] == [line], third
+    assert set(third["lean"]) <= {"rec_yds", "receptions", "anytime_td"}
 
 
 def test_the_board_s_dict_reads_like_the_slate_s_own_and_a_roof_counts_nothing():

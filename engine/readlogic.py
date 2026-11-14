@@ -42,7 +42,11 @@ THREE RULES, kept here so the leagues cannot drift apart again:
    A back with most of his team's carries, a receiver with a fifth of its
    targets, a starting quarterback, a starter's minutes, a skater who
    shoots three times a night, a bat at the top of the order: the read can
-   call it tough, never a man to avoid.
+   call it tough, never a man to avoid — and it takes one more family
+   against him than against anyone else to call it tough (Sheppard at
+   Miami, 2026-11-14: one stingy run defense is a stingy run defense, not
+   an unfavorable workhorse). The bar is the same both ways: a read leans
+   tough on as many families as it needs to lean good.
 
 3. SCORING IS ITS OWN QUESTION (`mark_scorers`, football). A run defence
    ranked 5th gives up fewer yards a carry; it does not take the goal-line
@@ -102,14 +106,31 @@ def ladder(n: int, *, featured: bool = False, breakout_ok: bool = False,
            good_at: int = 1, breakout_at: int = 2) -> str:
     """The read's key from its count. ``good_at`` and ``breakout_at`` are
     the league's own bars (football leans on one family, the others on
-    two); a breakout needs ``breakout_ok`` (the volume to use the spot);
-    "avoid" needs two families against him AND a player who is not
-    featured (rule 2)."""
-    key = ("breakout" if n >= breakout_at and breakout_ok else "good" if n >= good_at
-           else "neutral" if n >= 0 else "tough" if n == -1 else "avoid")
-    if key == "avoid" and featured:
-        key = "tough"
-    return key
+    two); a breakout needs ``breakout_ok`` (the volume to use the spot).
+
+    THE SAME BAR BOTH WAYS (Ethan, 2026-11-14, a screenshot of two won
+    parlays on Duke's Nate Sheppard, 63 rushing yards and a touchdown by
+    the second quarter: "based off our game reports, one of these players
+    was unfavorable which was wrong"). A read leans "tough" on as many
+    families as "good" needs (``good_at``) and "avoid" on as many as a
+    breakout (``breakout_at``). Every league but football had leaned good
+    on two families and tough on one, since each league's first read: one
+    reason against a player outweighed one for him.
+
+    A FEATURED PLAYER NEEDS ONE MORE (rule 2). His share of the work keeps
+    him on the field in a bad spot, so one family against him — Sheppard's
+    was Miami's run defense ranked 5th, the only reason his read had — says
+    a stingy defense, not an unfavorable player: he reads neutral with the
+    reason shown. Two against him read tough; he is never "avoid"."""
+    if n >= breakout_at and breakout_ok:
+        return "breakout"
+    if n >= good_at:
+        return "good"
+    if n > -(good_at + (1 if featured else 0)):
+        return "neutral"
+    if n <= -breakout_at and not featured:
+        return "avoid"
+    return "tough"
 
 
 class Reasons:

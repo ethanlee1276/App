@@ -39,11 +39,23 @@ def test_one_vote_a_family():
 
 
 def test_a_featured_player_is_never_avoid():
-    assert RL.ladder(-2) == "avoid"
+    assert RL.ladder(-1) == "tough" and RL.ladder(-2) == "avoid"
     assert RL.ladder(-2, featured=True) == "tough"
     assert RL.ladder(-5, featured=True) == "tough"
     assert RL.ladder(2, breakout_ok=True) == "breakout" and RL.ladder(2) == "good"
     assert RL.ladder(1, good_at=2) == "neutral", "the other leagues keep their own bar"
+
+
+def test_the_bar_is_the_same_both_ways_and_a_featured_player_needs_one_more():
+    """Ethan, 2026-11-14, two won parlays on Nate Sheppard (a touchdown and
+    63 rushing yards by the second quarter at Miami): "based off our game
+    reports, one of these players was unfavorable which was wrong"."""
+    assert RL.ladder(-1, featured=True) == "neutral", "one family against a workhorse: a stingy defense"
+    two = dict(good_at=2, breakout_at=3)
+    assert RL.ladder(2, **two) == "good" and RL.ladder(-1, **two) == "neutral", "one reason is not a lean either way"
+    assert RL.ladder(-2, **two) == "tough" and RL.ladder(-3, **two) == "avoid"
+    assert RL.ladder(-2, featured=True, **two) == "neutral" and RL.ladder(-3, featured=True, **two) == "tough"
+    assert RL.ladder(-9, featured=True, **two) == "tough", "never avoid"
 
 
 def _back(**kw):
@@ -57,10 +69,17 @@ def _back(**kw):
     return G.player_read("Duke Back", "DUKE", "MIA", "RB", **base)
 
 
-def test_dukes_back_at_miami_is_tough_for_yards_not_avoid():
+def test_dukes_back_at_miami_reads_neutral_with_the_defense_said():
+    """The read the report printed UNFAVORABLE on 14 November: 62% of the
+    carries, one reason against him (Miami's run defense ranked 5th). Said,
+    and it no longer makes a workhorse unfavorable on its own."""
     x = _back(points=21.0, line_words="+13.5 on the road, total 55.5")
-    assert x["read"] == "tough", x
+    assert x["read"] == "neutral", x
     assert x["con"] == ["MIA's run defense ranks 5th"], x["con"]
+    committee = _back(points=21.0, usage={"carry_share": 0.40, "carries_pg": 12.0, "games": 9})
+    assert committee["read"] == "tough", "a back without the volume still reads the defense"
+    low = _back(points=17.0)
+    assert low["read"] == "tough", "two families against the workhorse: the defense and the points"
     # The college read hears the lines now (gamescan.implied_points_row).
     from engine import gamescan as G
     pts, words = G.implied_points_row({"home": "MIA", "away": "DUKE", "spread": -13.5, "total": 55.5})
@@ -118,7 +137,7 @@ def test_the_report_names_the_scorer_and_keeps_him_off_the_hard_day_list():
     assert "and not _go_to(r)" in src[i:i + 1500], "the short version's hard-day list skips him"
     j = src.index("def sec_watch(")
     assert "and not _go_to(r)" in src[j:j + 600], "and so does Could struggle"
-    assert '"UNFAVORABLE FOR YARDS — STILL THE GO-TO SCORER"' in src
+    assert '"TOUGH FOR YARDS — STILL THE GO-TO SCORER"' in src and "UNFAVORABLE FOR YARDS" not in src
     assert "scorers = scorer_sentence(c)" in src
 
 
@@ -135,12 +154,15 @@ def test_hockey_and_baseball_count_their_defence_and_their_starter_once():
     from engine.mlb import scan as B
     fam = {"shots": RL.DEFENSE, "chances": RL.DEFENSE}
     key, _ = H._label([], ["shots", "chances"], False, fam)
-    assert key == "tough", "the shots and the chances a defence allows are one reason"
-    key, _ = H._label([], ["shots", "chances", "goalie"], False, {**fam, "goalie": RL.GOALIE}, featured=True)
+    assert key == "neutral", "the shots and the chances a defence allows are one reason, and one is no lean"
+    key, _ = H._label([], ["shots", "chances", "goalie"], False, {**fam, "goalie": RL.GOALIE})
+    assert key == "tough", "two families lean a hockey read"
+    key, _ = H._label([], ["shots", "chances", "goalie", "rest"], False,
+                      {**fam, "goalie": RL.GOALIE, "rest": RL.SCHEDULE}, featured=True)
     assert key == "tough", "a skater who shoots three times a night is never avoid"
     fam = {"slg": RL.PITCHER, "xera": RL.PITCHER, "whiff": RL.PITCHER}
     key, _ = B._label([], ["slg", "xera", "whiff"], False, fam)
-    assert key == "tough", "a starter's slugging allowed and his expected ERA are one reason"
+    assert key == "neutral", "a starter's slugging allowed and his expected ERA are one reason"
 
 
 if __name__ == "__main__":

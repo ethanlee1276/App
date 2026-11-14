@@ -1577,8 +1577,9 @@ def sec_matchups(c: Ctx) -> dict | None:
             scorer = scorer_words(c, r) if _go_to(r) else ""
             if scorer and tone == "unfavorable":
                 # Duke's back at Miami (engine/readlogic rule 3): the yards
-                # are tough, the touchdowns still go through him.
-                tone, label = "neutral", "UNFAVORABLE FOR YARDS — STILL THE GO-TO SCORER"
+                # are tough, the touchdowns still go through him — said as
+                # the card says it, never as UNFAVORABLE first.
+                tone, label = "neutral", "TOUGH FOR YARDS — STILL THE GO-TO SCORER"
             pos = str(r.get("pos") or "").upper()
             against = {"QB": f"{dfn}'s pass defense", "RB": f"{dfn}'s run defense",
                        "FB": f"{dfn}'s run defense"}.get(pos, f"{dfn}'s coverage")

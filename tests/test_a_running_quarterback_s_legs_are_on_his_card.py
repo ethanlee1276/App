@@ -51,7 +51,9 @@ def test_a_running_quarterback_has_his_legs_said_and_never_counted():
     # Never counted: the verdict is the passing read's, and no rushing
     # market is leaned (the rating measured nothing in the NFL).
     assert x["pro"] == [] and x["con"] == ["NYG gives up the 3rd-fewest passing yards (189 a game)"]
-    assert x["read"] == "tough"
+    # One family against a starting quarterback reads a stingy defence,
+    # not an unfavorable passer (engine/readlogic.ladder, 2026-11-14).
+    assert x["read"] == "neutral"
     assert not {"rush_yds", "rush_att"} & set(x["lean"]), x["lean"]
     stingy = dict(ALLOWED, qb_rush_yds={"rank": 31, "of": 32, "pg": 9.0})
     y = _qb("Jayden Daniels", DANIELS, allowed=stingy)

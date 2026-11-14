@@ -9338,6 +9338,37 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QF. One reason against a workhorse no longer makes him unfavorable**
+(step 560; 14 November). Nothing to run. You, with two won Duke–Miami
+parlays (Mark Fletcher Jr. and Nate Sheppard to score, and Sheppard 60+
+rushing yards, at 63 by the second quarter): "based off our game reports,
+one of these players was unfavorable which was wrong". Sheppard's read had
+one reason against him, Miami's run defense ranked 5th, and nothing for
+him: Duke's expected 20.5 points sat between the bars, and his own
+blocking (69th) was one short of counting. One reason was enough to read
+"tough", and the report printed that as "UNFAVORABLE", for a back with
+62% of the carries and 17 touchdowns. This morning's fix had only stopped
+it reaching "avoid".
+
+Two rule changes, the same in every league (engine/readlogic.ladder):
+- **The same bar both ways.** A read leans tough on as many reasons as it
+  needs to lean good. Football leans on one either way. The NBA, the NHL
+  and MLB lean good on two but had leaned tough on one since each league's
+  first read, so one reason against a player outweighed one for him; they
+  now need two either way.
+- **A featured player needs one more.** That's a back with most of the
+  carries, a receiver with a fifth of the targets, a starting quarterback,
+  a starter's minutes, a skater who shoots three times a night, or a bat
+  at the top of the order. One reason against him reads neutral, with the
+  reason shown; two read tough, and he is never "avoid".
+
+Sheppard now reads neutral with "Miami's run defense ranks 5th" said. A
+back without the volume, or the workhorse with two reasons against him
+(the defense and a low expected score), still reads tough. Where a go-to
+scorer does read tough, the report says "TOUGH FOR YARDS — STILL THE GO-TO
+SCORER", not "UNFAVORABLE". Fewer tough reads also means fewer unders
+seated by a read on the Most Likely board, and fewer plays listed to avoid.
+
 **QE. College's odds line counts the games it does not buy** (step 559; 14
 November). Nothing to run. College prices players for the five games a
 pull buys, while the odds event list holds the whole night, so Saturday's
