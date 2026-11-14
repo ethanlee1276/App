@@ -9410,6 +9410,10 @@ college build should read `polymarket_tags` → `series:10470` as a plain
 count, with no refusals beside it, and more of the night's games with a
 Polymarket price in `crowd_census`. OY's probe asks the same way now.
 
+On the box from the 09:57 college build (the builds run the new code
+before the site's own restart): `series:10470` read 99, a plain count, no
+refusal beside it, where the 09:20 build read 19.
+
 **PM. The NBA's own checks judge only seasons that have ended** (step 541;
 14 November). Nothing to run. You asked for every calibration, every
 learner and every hypothesis test checked in every sport. The first thing
@@ -9466,6 +9470,11 @@ players on its rosters. It had read this season's first week only, 373 of
 the 749 games played so far, and none of last season. Your backfill (00a,
 running since about 9:25am) is what they wait for; after it the 6pm pull
 should land on a board with props.
+
+The backfill finished at about 10:05am: 6,765 games and 1,911,896
+player-log rows new, college's history now 7,138 games and 2,030,000 rows
+over the 2025 and 2026 seasons. The next college build reads two seasons
+for every returning player.
 
 **PK. The Lab draws** (step 539; 14 November). Nothing to run. You, with a
 screenshot of the Lab: "the lab shows this every time u click on the page.

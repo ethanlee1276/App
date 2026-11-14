@@ -10,7 +10,7 @@ The owner's desk shows this same list on your phone, under **Commands
 waiting for you**: each step folded under its heading, each command with a
 Copy button.
 
-Last updated 2026-11-14, after the heartbeat started saying what each learner concluded for each league (step PQ: nothing to run), after the basketball and hockey boards started applying the selection haircut their own records learned, and two learners stopped un-correcting claims nothing had corrected (step PP: nothing to run), after Saturday's check read the box (steps OS, LX, OX, PD, PH, PJ and PL: nothing to run), after the NBA's own checks started judging only seasons that have ended, so the rotation rules a few weeks of this season switched off are judged again tonight (step PM: nothing to run), after Polymarket's college pages started answering, asked for a compressed page (step PN: nothing to run), after the title prices command started passing the box's key and the pacer's hold started naming its sooner window (step PO: one command in 00a), after college's board was found pricing no player props (step PL: one read-only command in 00a), after the Lab started drawing again for members (it threw on every visit since 28 August; step PK: nothing to run), after college basketball got its own address (qellysbook.com/cbb; its link preview waits on one Caddy command, step PJ in 00a) and the odds plan started counting its live lane, after college's Parlays page started building two-leg tickets from college's own picks, every one tracked while college is on probation (step PI: nothing to run), after college's cards started carrying the scout's flags measured on college's own five seasons (step PH: nothing to run), after a school below Division I started being named by its abbreviation instead of its "espn:" key on the live cards and game pages (step PG: nothing to run), after the Live tab's Play feed stopped throwing when tapped, college's plays started reading their halves, and the feed started showing faces (step PF: nothing to run), after the eight leagues started sharing one row on every phone, the folded Duo's included (step PE: nothing to run), after the NCAA race started waiting for the whole season's schedule before it plays out (step PD: nothing to run), after a game abroad started reading MET Norway's forecast where the NWS has none, credited on the page (step PC: one read-only command, item 8b), after college basketball got its title futures, the race's own title chances beside the books' prices (step PB: one command, one credit, item 00a), after college basketball got its NCAA tournament race, the NBA Cup's page for college: the field if the season ended today, the bubble, every conference's race and our chances, then the bracket from Selection Sunday (step PA: one read-only command, item 00a), after college started asking Polymarket four ways until one answers (step OZ: nothing to run), after Polymarket started answering college's requests with HTTP 406 and a read-only probe was written to see why (step OY: one read-only command, item 00a), after college's checklist against the NBA was written and Polymarket was asked for college's prices in smaller pages (step OX: nothing to run), after college started reading a player's shooting and his rebounds the NBA's way (step OW: nothing to run), after college basketball got the NBA's shot chart and matchup view on its own court (step OV: nothing to run), after college basketball's numbers were measured on five college seasons and its standings were fixed on the box's first table (step OU: nothing to run), after men's college basketball joined the site with everything the NBA has, and the NBA standings stopped showing last season (step OT: three box commands, item 00a), after the game-line calibration started seeking its closes by market instead of walking every quote its league stored (step OS: nothing to run), after a retractable roof the schedule has not called started being read as closed instead of open air (step OR: nothing to run), after rain and wind started reaching a quarterback's completions and a kicker's points, and a pick's weather line started being marked by its own market (step OQ: nothing to run), after the report started saying why a matchup card reads against the edge it names (step OP: nothing to run), after the board's self-check started counting a report and a matchup card that point opposite ways (step OO: nothing to run), after the report started giving this season's rank beside the two-season blend where they sit far apart, "the Giants' run defense (30th; 13th this season alone)" (step ON: nothing to run), after a stingy defence's rank started being said as the fewest, "the 3rd-fewest" and not "the 30th-most" (step OM: nothing to run), after a running quarterback's legs went on his matchup card (step OL:
+Last updated 2026-11-14, after college's two seasons of box scores landed (00a: two things left), after the heartbeat started saying what each learner concluded for each league (step PQ: nothing to run), after the basketball and hockey boards started applying the selection haircut their own records learned, and two learners stopped un-correcting claims nothing had corrected (step PP: nothing to run), after Saturday's check read the box (steps OS, LX, OX, PD, PH, PJ and PL: nothing to run), after the NBA's own checks started judging only seasons that have ended, so the rotation rules a few weeks of this season switched off are judged again tonight (step PM: nothing to run), after Polymarket's college pages started answering, asked for a compressed page (step PN: nothing to run), after the title prices command started passing the box's key and the pacer's hold started naming its sooner window (step PO: one command in 00a), after college's board was found pricing no player props (step PL: one read-only command in 00a), after the Lab started drawing again for members (it threw on every visit since 28 August; step PK: nothing to run), after college basketball got its own address (qellysbook.com/cbb; its link preview waits on one Caddy command, step PJ in 00a) and the odds plan started counting its live lane, after college's Parlays page started building two-leg tickets from college's own picks, every one tracked while college is on probation (step PI: nothing to run), after college's cards started carrying the scout's flags measured on college's own five seasons (step PH: nothing to run), after a school below Division I started being named by its abbreviation instead of its "espn:" key on the live cards and game pages (step PG: nothing to run), after the Live tab's Play feed stopped throwing when tapped, college's plays started reading their halves, and the feed started showing faces (step PF: nothing to run), after the eight leagues started sharing one row on every phone, the folded Duo's included (step PE: nothing to run), after the NCAA race started waiting for the whole season's schedule before it plays out (step PD: nothing to run), after a game abroad started reading MET Norway's forecast where the NWS has none, credited on the page (step PC: one read-only command, item 8b), after college basketball got its title futures, the race's own title chances beside the books' prices (step PB: one command, one credit, item 00a), after college basketball got its NCAA tournament race, the NBA Cup's page for college: the field if the season ended today, the bubble, every conference's race and our chances, then the bracket from Selection Sunday (step PA: one read-only command, item 00a), after college started asking Polymarket four ways until one answers (step OZ: nothing to run), after Polymarket started answering college's requests with HTTP 406 and a read-only probe was written to see why (step OY: one read-only command, item 00a), after college's checklist against the NBA was written and Polymarket was asked for college's prices in smaller pages (step OX: nothing to run), after college started reading a player's shooting and his rebounds the NBA's way (step OW: nothing to run), after college basketball got the NBA's shot chart and matchup view on its own court (step OV: nothing to run), after college basketball's numbers were measured on five college seasons and its standings were fixed on the box's first table (step OU: nothing to run), after men's college basketball joined the site with everything the NBA has, and the NBA standings stopped showing last season (step OT: three box commands, item 00a), after the game-line calibration started seeking its closes by market instead of walking every quote its league stored (step OS: nothing to run), after a retractable roof the schedule has not called started being read as closed instead of open air (step OR: nothing to run), after rain and wind started reaching a quarterback's completions and a kicker's points, and a pick's weather line started being marked by its own market (step OQ: nothing to run), after the report started saying why a matchup card reads against the edge it names (step OP: nothing to run), after the board's self-check started counting a report and a matchup card that point opposite ways (step OO: nothing to run), after the report started giving this season's rank beside the two-season blend where they sit far apart, "the Giants' run defense (30th; 13th this season alone)" (step ON: nothing to run), after a stingy defence's rank started being said as the fewest, "the 3rd-fewest" and not "the 30th-most" (step OM: nothing to run), after a running quarterback's legs went on his matchup card (step OL:
 nothing to run), after a player's matchup card started saying what the matchup says,
 the weather counted and his own share not (step OK: nothing to run), after the game-line
 calibration started saying where its time goes
@@ -548,33 +548,19 @@ close lines (1,537 re-read at the sportsbooks' number), and item 8's key
 - The legal items (the postal address in the Privacy Policy, a lawyer's
   read of both pages; docs/LAUNCH.md): not yet.
 
-## 00a. Running now: college basketball's last season, then two checks and the title prices (steps OT, PA, PO)
+## 00a. Any time now: the NCAA race on last season, and the title prices (steps PA, PO)
 
 Done on 14 November, with what each showed written under its step in
 docs/WHEN_YOU_ARE_HOME.md: the six read-only checks (OT, OY, PA, PC, PJ,
-PL) and college's Caddy command (qellysbook.com/cbb answers with its own
-title now).
+PL), college's Caddy command (qellysbook.com/cbb answers with its own title
+now) and the two seasons of college box scores (finished about 15:05 UTC:
+6,765 games and 1,911,896 player-log rows new; college now holds 7,138
+games, 2,030,000 rows, seasons 2025-2026). College's props were waiting on
+that last one (step PL).
 
-Running now, since about 14:25 UTC on 14 November: two seasons of college
-box scores. College's player props wait on it: a prop needs three of a
-player's games, and on Saturday morning the box held two or fewer for 4,962
-of the 5,360 college players on its rosters (step PL). Stop it any time and
-run it again; it skips what is stored:
-
-```
-cd /srv/qellys && sudo -u qellys nice -n 19 python3 ingest.py cbb --seasons 2025-2026
-```
-
-After it finishes, read-only, what is stored (the CBB line should read
-seasons 2025-2026):
-
-```
-cd /srv/qellys && sudo -u qellys python3 ingest.py status
-```
-
-Then, read-only, once the college build has run after it: the NCAA race
-reading last season (`last season read for` should name about 360 schools,
-not 0; step PA):
+Read-only, once the college build has run after it: the NCAA race reading
+last season (`last season read for` should name about 360 schools, not 0;
+step PA):
 
 ```
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/ncaa_race.json')); t=d['today']; print(d['generated_at'], d['played'], 'played', d['games_left'], 'left', d['sims'], 'seasons; last season read for', d.get('prior')); print('1 seeds:', [r['name'] for r in t['field'] if r.get('seed') == 1]); print('last four in:', [r['name'] for r in t.get('last_four_in', [])]); print('title:', sorted(((round(c['title'], 3), k) for k, c in d['chances'].items()), reverse=True)[:6])"
@@ -589,10 +575,10 @@ passes it in now (step PO):
 cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^ODDS_API_KEY' /etc/qellys/env | xargs) python3 futures_build.py cbb --odds
 ```
 
-Or the two read-only checks in one go, after the backfill:
+Or the race check through the catch-up:
 
 ```
-cd /srv/qellys && nice -n 19 bash tools/catchup.sh OT PA 2>&1 | tee /tmp/ot.txt
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh PA 2>&1 | tee /tmp/pa.txt
 ```
 
 ## 00. First, when you're home: NBA Most Likely is back, and where the credits went (step JW)
