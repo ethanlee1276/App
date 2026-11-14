@@ -310,11 +310,23 @@ def merge_injuries(weekly: list[Injury], live: list[Injury]) -> tuple[list[Injur
     by: dict[tuple[str, str], Injury] = {}
     for inj in weekly:
         by[(inj.team, normalize_name(inj.player))] = inj
+    # A CLUB THAT HAS FILED ITS GAME DESIGNATIONS HAS SAID WHO IS
+    # QUESTIONABLE (2026-11-14). ESPN's board keeps a designation after the
+    # club drops it: on the morning of the Commanders–Giants game it still
+    # had Skattebo and McCarthy questionable, where the Giants' final report
+    # listed only Malik Harrison (Ethan's own report caught it: "Treat
+    # ESPN's widget as stale"). So once a club's weekly report carries a
+    # game designation, the live board's questionable or doubtful tag on a
+    # man the club did not list is dropped. Its OUT and reserve moves still
+    # land — those are what the live board is for.
+    filed = {inj.team for inj in weekly if inj.status in ("OUT", "DOUBTFUL", "QUESTIONABLE")}
     added = 0
     for inj in live:
         key = (inj.team, normalize_name(inj.player))
         prev = by.get(key)
         if prev is None:
+            if inj.team in filed and inj.status in ("QUESTIONABLE", "DOUBTFUL"):
+                continue
             by[key] = inj
             added += 1
         elif SEVERITY.get(inj.status, 0) > SEVERITY.get(prev.status, 0):

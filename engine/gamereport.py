@@ -1190,8 +1190,12 @@ def sec_identity(c: Ctx) -> dict | None:
             cov.append(f"blitzes {_pct(d['blitz'])}")
         if _f(d.get("pressure")) is not None:
             cov.append(f"gets pressure on {_pct(d['pressure'])} of dropbacks")
-        if cov:
-            lines.append(f"On defense {t} {_join(cov)}" + (f" ({sch_season} charting)" if sch_season else ""))
+        # THIS SEASON FIRST (2026-11-14). The coverage table is the newest
+        # season the participation data has (2025 on 14 November), and it
+        # was said first and plain: "NYG blitzes 30%" beside this season's
+        # charting of 40%. Ethan: "I feel like we're not pulling the most
+        # recent data". This season's charting leads; last season's shells
+        # say they are last season's.
         dd = ch_def.get(t) or {}
         now = []
         if _f(dd.get("blitz_rate")) is not None:
@@ -1203,6 +1207,16 @@ def sec_identity(c: Ctx) -> dict | None:
         if now:
             lines.append(f"This season {t} is {_join(now)}" +
                          (f" (charted, weeks 1–{weeks})" if weeks else ""))
+        if cov:
+            old = bool(sch_season and c.season and int(sch_season) < int(c.season))
+            if old and _f(dd.get("blitz_rate")) is not None:
+                cov = [x for x in cov if not x.startswith("blitzes ")]
+            lines.append((f"Last season ({sch_season}) {t} " + _join(cov).replace("plays zone", "played zone")
+                          .replace("shows two deep", "showed two deep").replace("gets pressure", "got pressure")
+                          .replace("blitzes", "blitzed")
+                          + " — this season's coverage shells are not published until it ends")
+                         if old else
+                         f"On defense {t} {_join(cov)}" + (f" ({sch_season} charting)" if sch_season else ""))
         if lines:
             blocks += [_h(c.name(t)), _list(lines)]
     return _section("identity", "How each team plays", blocks)
@@ -1219,6 +1233,16 @@ def sec_injuries(c: Ctx) -> dict | None:
                 f"{r.get('player')} ({r.get('position') or '—'}) — {str(r.get('status') or '').lower()}"
                 + (f". {r['opens'][0].upper()}{r['opens'][1:]}" if r.get("opens") else "")
                 for r in mine)]
+    # ON A RESERVE LIST (the roster's own status, engine/gamescan
+    # .reserve_rows): the men the weekly report never lists, with what they
+    # took with them — Ethan's reports open on them ("Terry McLaurin, IR —
+    # removes the WR1").
+    for t in c.teams:
+        res = [r for r in (c.scan.get("reserve") or {}).get(t) or [] if isinstance(r, dict)]
+        if res:
+            blocks.append(_p(f"{c.name(t)} without, for the season or a while: " + "; ".join(
+                f"{r['player']}" + (f" ({r['position']})" if r.get("position") else "")
+                + f" — {r['status']}; he had {r['what']} this season" for r in res)))
     lines = c.scan.get("line_out") or {}
     for t in c.teams:
         if lines.get(t):

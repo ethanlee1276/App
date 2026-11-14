@@ -583,6 +583,23 @@ def usage_table(weekly_rows: list[dict], snap_rows: list[dict] | None = None,
     return out
 
 
+def _defender_of(defenders: dict, team: str, name: str) -> dict:
+    """His coverage numbers: by his name, else — when the depth chart and
+    PFR spell him differently — the one defender of his team with his last
+    name. NYG's nickel is "Dru Phillips" on the depth chart and "Andru
+    Phillips" at PFR, and the scan read him as never targeted (14 November,
+    the Commanders–Giants scan)."""
+    k = _key(name)
+    hit = defenders.get((team, k))
+    if hit:
+        return hit
+    last = k.split(" ")[-1] if k else ""
+    if not last:
+        return {}
+    same = [v for (t, kk), v in defenders.items() if t == team and kk.split(" ")[-1] == last]
+    return same[0] if len(same) == 1 else {}
+
+
 def coverage_room(team: str, chart: list[dict], defenders_now: dict,
                   defenders_last: dict | None = None, injuries=None) -> dict:
     """``team``'s corners as the published depth chart lines them up
@@ -607,7 +624,7 @@ def coverage_room(team: str, chart: list[dict], defenders_now: dict,
             continue
         name, st, depth = starter
         k = _key(name)
-        now = defenders_now.get((team, k)) or {}
+        now = _defender_of(defenders_now, team, name)
         last = next((v for (_t, kk), v in (defenders_last or {}).items() if kk == k), {})
         corners.append({"name": name, "spot": spot, "status": st,
                         "next_man_up": depth > 0,
@@ -625,12 +642,72 @@ def coverage_room(team: str, chart: list[dict], defenders_now: dict,
             "weakest": weakest["name"] if weakest and weakest["rating"] >= SOFT_RATING else None}
 
 
-def _pass_rush(team: str, defenders_now: dict, injuries=None, n: int = 3) -> list[dict]:
-    """The defence's leading pass rushers this season, by pressures."""
-    got = [dict(v, team=team) for (t, _k), v in defenders_now.items() if t == team and v.get("pressures")]
+def _reserved(reserve: dict | None, team: str, name: str) -> str:
+    """"on injured reserve" when the roster has him on a reserve list."""
+    if not reserve:
+        return ""
+    from .sources.oddsapi import normalize_name
+    return reserve.get((team, normalize_name(name or ""))) or ""
+
+
+def _pass_rush(team: str, defenders_now: dict, injuries=None, n: int = 3,
+               reserve: dict | None = None) -> list[dict]:
+    """The defence's leading pass rushers this season, by pressures — the
+    men who will play: one on a reserve list is left off and the next man
+    named (engine/sources/nflverse.reserve_index)."""
+    got = [dict(v, team=team) for (t, _k), v in defenders_now.items() if t == team and v.get("pressures")
+           and not _reserved(reserve, team, v.get("name"))]
     got.sort(key=lambda v: -v["pressures"])
     return [{"name": v["name"], "pressures": int(v["pressures"]), "sacks": v["sacks"],
              "status": _status(injuries, team, v["name"])} for v in got[:n]]
+
+
+#: A reserve-list player the report names: this share of the targets or
+#: carries before he went down, or this many pressures or targets in coverage.
+RESERVE_TGT, RESERVE_CAR, RESERVE_PRESSURES, RESERVE_COVER = 0.12, 0.25, 8, 20
+
+
+def reserve_rows(team: str, reserve: dict | None, usage: dict, defenders_now: dict) -> list[dict]:
+    """The men of ``team`` on a reserve list who mattered this season: a
+    receiver's share of the targets, a back's of the carries, a defender's
+    pressures or the targets he covered — most first. Ethan's reports open
+    the personnel section on them ("Terry McLaurin, WR, IR — removes the
+    WR1"); the weekly injury report never lists them."""
+    if not reserve:
+        return []
+    from .sources.oddsapi import normalize_name
+    out = []
+    for (t, k), u in (usage or {}).items():
+        if t != team:
+            continue
+        why = reserve.get((team, normalize_name(u.get("name") or "")))
+        if not why:
+            continue
+        tgt, car = float(u.get("tgt_share") or 0), float(u.get("carry_share") or 0)
+        if tgt >= RESERVE_TGT or car >= RESERVE_CAR:
+            what = (f"{tgt:.0%} of the targets" if tgt >= RESERVE_TGT else f"{car:.0%} of the carries")
+            out.append({"player": u.get("name"), "position": u.get("position") or "", "status": why,
+                        "what": what, "weight": max(tgt, car)})
+    for (t, _k), v in (defenders_now or {}).items():
+        if t != team:
+            continue
+        why = reserve.get((team, normalize_name(v.get("name") or "")))
+        if not why:
+            continue
+        pr, tg = int(v.get("pressures") or 0), int(v.get("targets") or 0)
+        if pr >= RESERVE_PRESSURES:
+            out.append({"player": v.get("name"), "position": v.get("pos") or "", "status": why,
+                        "what": f"{pr} pressures and {v.get('sacks') or 0} sacks", "weight": pr / 40.0})
+        elif tg >= RESERVE_COVER:
+            out.append({"player": v.get("name"), "position": v.get("pos") or "", "status": why,
+                        "what": f"{tg} targets in coverage", "weight": tg / 80.0})
+    seen, rows = set(), []
+    for r in sorted(out, key=lambda r: -r["weight"]):
+        if r["player"] in seen:
+            continue
+        seen.add(r["player"])
+        rows.append({k: r[k] for k in ("player", "position", "status", "what")})
+    return rows[:6]
 
 
 #: The offensive line as the injury report spells its positions.
@@ -1760,8 +1837,11 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
               evidence: list | None = None, pulled: list | None = None,
               charting: dict | None = None, tracking: dict | None = None,
               contact: dict | None = None, recent: dict | None = None,
-              weather=None) -> dict:
+              weather=None, reserve: dict | None = None) -> dict:
     """The whole scan for one game (see the block comment above).
+
+    ``reserve`` is the roster's reserve lists (engine/sources/nflverse
+    .reserve_index): {(team, folded name): "on injured reserve"}.
 
     ``weather`` is the game's forecast (models.Weather, or the dict a
     built board carries): every read counts its measured step.
@@ -1963,7 +2043,8 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
                                  if ((charting or {}).get("defense") or {}).get(t)},
                      "offense": {t: ((charting or {}).get("offense") or {}).get(t) for t in teams
                                  if ((charting or {}).get("offense") or {}).get(t)}} if charting else None,
-        "rush": {t: _pass_rush(t, defenders_now, injuries) for t in teams},
+        "rush": {t: _pass_rush(t, defenders_now, injuries, reserve=reserve) for t in teams},
+        "reserve": {t: reserve_rows(t, reserve, usage, defenders_now) for t in teams},
         "line_out": lines,
         "injuries": inj_rows,
         "players": reads,
@@ -2462,6 +2543,14 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
     _t = _clock.lap("matchup scan", "contact", _t)
     from .sources.nflverse import headshot_map
     faces = _safe(headshot_map, season) or {}
+    # WHO IS ON A RESERVE LIST (the roster's own status): never named as a
+    # pass rusher, and named in the report's injuries for what he took
+    # with him.
+    try:
+        from .sources.nflverse import reserve_index
+        reserve = reserve_index(season)
+    except Exception:                                        # noqa: BLE001
+        reserve = {}
     _t = _clock.lap("matchup scan", "headshots", _t)
     props = scan_props(result)
     by_pair = {frozenset((g.home, g.away)): g for g in getattr(slate, "games", []) or []}
@@ -2494,7 +2583,8 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
                          charting=charting, tracking=tracking,
                          pulled=getattr(g, "pulled_players", None) or [],
                          contact=contact, recent=recent,
-                         weather=getattr(g, "weather", None) or gd.get("weather"))
+                         weather=getattr(g, "weather", None) or gd.get("weather"),
+                         reserve=reserve)
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         scan["redzone"] = {t: rz_teams[t] for t in (home, away) if t in rz_teams}

@@ -405,6 +405,32 @@ def roster_index(season: int) -> dict[str, dict]:
     return out
 
 
+#: The roster's reserve lists, in words (its `status_description_abbr`):
+#: injured reserve and its designated-to-return kind, PUP, NFI, suspension.
+RESERVE_WORDS = {"R01": "on injured reserve", "R48": "on injured reserve (designated to return)",
+                 "R02": "on the PUP list", "R04": "on the non-football injury list",
+                 "R05": "suspended", "R03": "on a reserve list"}
+
+
+def reserve_index(season: int) -> dict[tuple, str]:
+    """``{(team, folded name): "on injured reserve"}`` — every man the
+    current roster has on a reserve list. The weekly injury report does
+    not carry them, so a scan reading only it listed Daron Payne, on
+    Washington's IR, as a top pass rusher for the Thursday game of
+    12 November (Ethan's reports listed him, McLaurin and Croskey-Merritt
+    as out). Empty when the roster cannot be read."""
+    from .oddsapi import normalize_name
+    out: dict = {}
+    for r in load_rosters(season):
+        if _s(r, "status").upper() != "RES":
+            continue
+        name, team = _s(r, "full_name", "player_name", "football_name"), _s(r, "team")
+        if name and team:
+            out[(team, normalize_name(name))] = RESERVE_WORDS.get(_s(r, "status_description_abbr").upper(),
+                                                                 "on a reserve list")
+    return out
+
+
 def roster_teams(season: int) -> dict[str, str]:
     """``{name: team}`` for EVERY player the roster file knows, whatever
     his status — keyed by the exact name and by its folded form
