@@ -2413,6 +2413,27 @@ def _eastern_day(stamp: str) -> str:
     return t.astimezone(ZoneInfo("America/New_York")).date().isoformat()
 
 
+def unmapped_other_day(slate, ev, days) -> bool:
+    """An event whose names did not map, on another day than this slate's,
+    for a slate whose names are TONIGHT'S (`slate.team_lookup`): not a stale
+    team table, another day's schools.
+
+    College basketball's names come off tonight's scoreboard
+    (nba_build.college_lookup), so a school that plays tomorrow and not
+    tonight is in no lookup, and the name check below ran first: Saturday
+    14 November's college board read "40 event(s) DROPPED — see the odds
+    diagnosis" all evening, Sunday's games, on a night its own lines
+    reached 28 of its 36 games still to play. The pro leagues' names come
+    from a fixed table, where an unmapped name is a stale table on any
+    day, and they are asked as before."""
+    if not getattr(slate, "team_lookup", None):
+        return False
+    try:
+        return bool(other_day(ev, days) or off_slate_day(ev, slate.games))
+    except Exception:                                      # noqa: BLE001
+        return False
+
+
 def off_slate_day(ev, games) -> bool:
     """Is this event on a day none of the slate's games is on, in Eastern?
 
@@ -2632,6 +2653,9 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
     for ev in events:
         home = _abbr(ev.get("home_team", ""))
         away = _abbr(ev.get("away_team", ""))
+        if (not home or not away) and unmapped_other_day(slate, ev, days):
+            result.other_day_events += 1            # another day's schools (`unmapped_other_day`)
+            continue
         if not home or not away:
             result.dropped_events.append(
                 {"reason": "team name not in the map",
@@ -2985,6 +3009,9 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # expanded and SPORT_CONFIG never heard. A mapped pair that is not
         # on the slate means our own abbreviations and the table's disagree,
         # which is a wiring bug, not a data one.
+        if (not home or not away) and unmapped_other_day(slate, ev, days):
+            result.other_day_events += 1            # another day's schools (`unmapped_other_day`)
+            continue
         if not home or not away:
             result.dropped_events.append(
                 {"reason": "team name not in the map",

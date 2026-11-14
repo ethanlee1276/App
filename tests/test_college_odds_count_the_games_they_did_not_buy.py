@@ -65,6 +65,50 @@ def test_without_the_nights_pairs_it_is_still_a_drop():
     assert [d["reason"] for d in res.dropped_events] == ["mapped, but that pair is not on our slate"]
 
 
+def _college_run(lookup):
+    teams = {t: Team(t, t, DefenseProfile(t)) for t in ("DUKE", "UNC")}
+    game = Game(home="DUKE", away="UNC", weather=Weather(dome=True), date="2026-11-14",
+                kickoff="2026-11-14T23:00:00Z", spread=-3.5, total=150.5)
+    logs = [GameLog(week=w, opponent="X", value=18) for w in range(1, 6)]
+    prop = Prop(player="Cooper Flagg", team="DUKE", opponent="UNC", position="F", market=PASS_YDS, logs=logs,
+                career_avg=18, vs_opponent_avg=None, lines=[SportsbookLine(book="proxy", line=17.5)],
+                usage_role="starter")
+    slate = Slate(date="2026-11-14", teams=teams, games=[game], props=[prop])
+    if lookup:
+        slate.team_lookup = {"duke": "DUKE", "north carolina": "UNC"}
+    events = [{"id": "c1", "home_team": "Duke Blue Devils", "away_team": "North Carolina Tar Heels",
+               "commence_time": "2026-11-14T23:00:00Z"},
+              {"id": "c2", "home_team": "Kentucky Wildcats", "away_team": "Gonzaga Bulldogs",
+               "commence_time": "2026-11-16T00:30:00Z"},                       # Sunday's, two schools not on tonight's slate
+              {"id": "c3", "home_team": "Nowhere State", "away_team": "Duke Blue Devils",
+               "commence_time": "2026-11-14T20:00:00Z"}]                        # tonight, a name nobody maps
+    names = {"Duke Blue Devils": "DUKE", "North Carolina Tar Heels": "UNC"}
+    was = oa.list_events, oa.fetch_event_odds, oa._slate_resolver
+    oa.list_events = lambda key, ttl=300, sport="nfl", cache_only=False: list(events)
+    oa.fetch_event_odds = (lambda eid, key, markets=None, books=None, ttl=300, sport="nfl",
+                           cache_only=False: ({"bookmakers": []}, oa.Quota()))
+    oa._slate_resolver = lambda slate, cfg: (lambda n: names.get(n, ""))
+    try:
+        return oa.apply_odds_to_slate(slate, api_key="k", sport="cbb")
+    finally:
+        oa.list_events, oa.fetch_event_odds, oa._slate_resolver = was
+
+
+def test_another_days_schools_are_another_days_games_not_a_stale_table():
+    """Saturday's college board read "40 event(s) DROPPED" all evening:
+    Sunday's games, whose schools are in no lookup built off tonight's
+    scoreboard. A name nobody maps tonight is still a drop."""
+    res = _college_run(lookup=True)
+    assert res.other_day_events >= 1, res.other_day_events
+    dropped = [d["reason"] for d in res.dropped_events]
+    assert dropped == ["team name not in the map"], dropped
+    # A league whose names come from its fixed table keeps the alarm on any day.
+    res = _college_run(lookup=False)
+    assert [d["reason"] for d in res.dropped_events].count("team name not in the map") == 2, res.dropped_events
+    src = (ROOT / "engine" / "sources" / "oddsapi.py").read_text(encoding="utf-8")
+    assert src.count("and unmapped_other_day(slate, ev, days):") == 2, "the props pull and the game lines alike"
+
+
 def test_college_hands_the_whole_night_and_the_note_says_it_plainly():
     src = (ROOT / "nba_build.py").read_text(encoding="utf-8")
     assert 'slate.night_pairs = [(g["home"], g["away"]) for g in all_games' in src

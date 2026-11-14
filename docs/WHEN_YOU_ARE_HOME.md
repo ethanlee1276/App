@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QR. College basketball's odds line stops calling Sunday's games drops**
+(step 572; 14 November). Nothing to run. After QE, the college basketball
+board's odds line still read "40 event(s) DROPPED — see the odds diagnosis"
+all evening, on a night its lines reached 28 of its 36 games still to play.
+The six without are non-Division I visitors no book prices, plus three
+Division I pairs. The 40 were Sunday's games: college's team names come off
+tonight's scoreboard, so a school that plays tomorrow and not tonight is in
+no lookup, and the name check ran before the day check and called it a
+stale team table. For a league whose names come from tonight's slate, an
+unmapped game on another day now counts with the other days; a name nobody
+maps tonight is still a drop, and the pro leagues' fixed tables keep the
+alarm on any day (engine/sources/oddsapi.unmapped_other_day).
+
 **QQ. The same-night settle never files a box score read mid-game** (step
 571; 14 November). Nothing to run. Cooper Barkate's Notre Dame game was
 filed from two box-score copies that disagreed with each other, 75 and 92
