@@ -151,21 +151,37 @@ def test_a_venue_that_fails_costs_only_its_own_bar():
     assert census["why"] == {"Kalshi": "DataUnavailable: down"}, "the census names the venue that refused"
 
 
-def test_polymarkets_tape_is_asked_compressed():
-    """Every board's split read Kalshi alone on 14 November, with 13 to 44
-    failed reads a build; Polymarket serves a big page compressed only."""
+def test_polymarkets_tape_is_read_off_data_api_v2():
+    """Every board's split read Kalshi alone on 14 November; the census's
+    `why` named the cause, "HTTP Error 410: Gone": Polymarket retired Data
+    API v1 on 2 November. v2 selects by `condition`, wraps its rows in
+    `data` and spells its fields in snake_case."""
     sent = {}
+    v2 = {"data": [{"side": "BUY", "outcome": "Chiefs", "size": 1000, "price": 0.55, "token_id": "1"},
+                   {"taker_side": "SELL", "outcome_name": "Bills", "shares": 10, "price": 0.45}],
+          "next_cursor": "abc"}
 
     def fake(url, cache_name, ttl=0, timeout=0, headers=None, **kw):
-        sent.update(url=url, headers=headers or {})
-        return "[]"
+        sent.update(url=url, cache=cache_name, headers=headers or {})
+        return __import__("json").dumps(v2)
     real = M.fetch_text
     M.fetch_text = fake
     try:
-        assert M.fetch_poly_trades("0xabc") == []
+        got = M.fetch_poly_trades("0xabc")
     finally:
         M.fetch_text = real
-    assert sent["headers"].get("Accept-Encoding") == "gzip" and "limit=1000" in sent["url"], sent
+    assert sent["url"].startswith("https://data-api.polymarket.com/v2/trades?condition=0xabc"), sent["url"]
+    assert "taker_only=true" in sent["url"] and "limit=1000" in sent["url"] and "market=" not in sent["url"]
+    assert sent["headers"].get("Accept-Encoding") == "gzip" and sent["cache"].startswith("pm_trades2_")
+    assert got == [{"side": "BUY", "outcome": "Chiefs", "size": 1000, "price": 0.55},
+                   {"side": "SELL", "outcome": "Bills", "size": 10, "price": 0.45}], got
+    assert M._poly_rows([{"side": "BUY"}]) == [{"side": "BUY"}], "v1's bare list still reads"
+    assert M._poly_rows({"error": "Data API v1 has been retired"}) == []
+    # The mapped fills land where v1's did: money on the Chiefs (home).
+    result = {"games": [dict(GAME)]}
+    census = M.attach(result, "nfl", [], [], _poly_rows(), kalshi_trades=lambda t: [],
+                      poly_trades=lambda c: [M._poly_trade(t) for t in v2["data"]] * 12, now=NOW)
+    assert census["games"] == 1 and result["games"][0]["money"]["venues"] == ["Polymarket"], census
     clean = M.attach({"games": [dict(GAME)]}, "nfl", [], [], [], kalshi_trades=lambda t: [],
                      poly_trades=lambda c: [], now=NOW)
     assert "why" not in clean, "a clean night's census is unchanged"

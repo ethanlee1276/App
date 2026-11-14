@@ -40,7 +40,16 @@ import time
 from .sources.fetch import fetch_text, DataUnavailable
 
 KALSHI_TRADES = "https://api.elections.kalshi.com/trade-api/v2/markets/trades?ticker={t}&limit={n}"
-POLY_TRADES = "https://data-api.polymarket.com/trades?market={c}&limit={n}&takerOnly=true"
+#: POLYMARKET'S DATA API v2 (2026-11-14). The money split read Kalshi alone
+#: in every league, and the census's `why` (step QN) named the cause on the
+#: first build that carried it: every Polymarket trade read answered "HTTP
+#: Error 410: Gone". Polymarket retired its Data API v1 on 2 November 2026
+#: (v1's /trades, /positions and /activity answer 410, "Data API v1 has been
+#: retired"); v2 selects a market by `condition` rather than `market`, takes
+#: `taker_only`, pages by cursor at up to a thousand rows a call, wraps its
+#: rows in `data` and spells its fields in snake_case. One page, the latest
+#: thousand taker fills, as before.
+POLY_TRADES = "https://data-api.polymarket.com/v2/trades?condition={c}&limit={n}&taker_only=true"
 TRADE_PAGE = 1000
 TTL_S = 600                 # one read per market per ten minutes, cached
 MAX_GAMES = 20              # the soonest games on a build; a college Saturday has sixty
@@ -134,24 +143,38 @@ def fetch_kalshi_trades(ticker: str) -> list:
     return got.get("trades") or [] if isinstance(got, dict) else []
 
 
-#: ASKED COMPRESSED (2026-11-14). Every board's money split read Kalshi
-#: alone, all evening and in every league (NBA 5 of 5 games, NHL 8 of 8,
-#: NFL 12 of 12, college basketball 11 of 11), with 13 to 44 failed reads a
-#: build, while Polymarket's prices reached the same games. Polymarket
-#: serves a big page compressed only ({"error":"gzip_required"} on its
-#: events pages, step OY, `polysports.ACCEPT`), and a page here is a
-#: thousand trades. `fetch_text` unpacks a gzip body. Each venue's first
-#: refusal now rides on the census (`why`), so the next build says whether
-#: this was it.
+#: ASKED COMPRESSED (2026-11-14), as Polymarket's events pages require for
+#: a big page (step OY, `polysports.ACCEPT`); `fetch_text` unpacks a gzip
+#: body. That was the first guess at why every read failed; the census's
+#: `why` showed the real cause, v1's retirement (POLY_TRADES above).
 POLY_HEADERS = {"Accept-Encoding": "gzip"}
 
 
+def _poly_rows(got) -> list:
+    """v2's rows (wrapped in ``data``), or v1's bare list, or nothing."""
+    if isinstance(got, list):
+        return got
+    if isinstance(got, dict):
+        for key in ("data", "trades"):
+            if isinstance(got.get(key), list):
+                return got[key]
+    return []
+
+
+def _poly_trade(t: dict) -> dict:
+    """One v2 fill in the four names `poly_flow` reads (v1's)."""
+    def first(*keys):
+        return next((t.get(k) for k in keys if t.get(k) not in (None, "")), None)
+    return {"side": first("side", "taker_side"), "outcome": first("outcome", "outcome_name"),
+            "size": first("size", "shares"), "price": first("price")}
+
+
 def fetch_poly_trades(cid: str) -> list:
+    # Its own cache name: v1's last cached pages are never read as v2's.
     body = fetch_text(POLY_TRADES.format(c=cid, n=TRADE_PAGE),
-                      f"pm_trades_{cid[:40]}.json", ttl=TTL_S, timeout=20,
+                      f"pm_trades2_{cid[:40]}.json", ttl=TTL_S, timeout=20,
                       headers=POLY_HEADERS)
-    got = json.loads(body)
-    return got if isinstance(got, list) else []
+    return [_poly_trade(t) for t in _poly_rows(json.loads(body)) if isinstance(t, dict)]
 
 
 # --- the game ----------------------------------------------------------------

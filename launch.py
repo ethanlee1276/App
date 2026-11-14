@@ -6401,7 +6401,8 @@ def preflight() -> None:
         ("NBA schedule/boxscores (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"),
         ("College football (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"),
         ("Polymarket markets (Gamma)", "https://gamma-api.polymarket.com/markets?limit=1"),
-        ("Polymarket tape (Data API)", "https://data-api.polymarket.com/trades?limit=1"),
+        # v2 since Polymarket retired Data API v1 on 2026-11-02 (v1 answers 410).
+        ("Polymarket tape (Data API)", "https://data-api.polymarket.com/v2/trades?limit=1"),
         ("Polymarket leaderboard", "https://lb-api.polymarket.com/leaderboard?window=all&limit=1"),
         ("Sleeper (fantasy sync)", "https://api.sleeper.app/v1/state/nfl"),
         ("Sportsbook odds (all sports)", "https://api.the-odds-api.com/v4/sports/"),

@@ -85,9 +85,39 @@ def fetch_markets(limit: int = 100, ttl: int = 120) -> list[dict]:
     return json.loads(fetch_text(url, "pm_markets.json", ttl=ttl))
 
 
+#: DATA API v2 (2026-11-14). Polymarket retired Data API v1 on 2 November
+#: 2026: v1's /trades answers "410 Gone" ("Data API v1 has been retired"),
+#: found by the money split's census (engine/moneysplit, step QN) twelve
+#: days later. Every read here was v1's, and `fetch_text` hands back the
+#: last cached copy when a read fails, so the flow feed has been reading
+#: the tape as it stood on 2 November. v2 wraps its rows in `data`, spells
+#: its fields in snake_case and takes snake_case parameters; `v2_rows`
+#: gives the rows v1's names too, so every parser below reads either. Its
+#: cache names are new, so a v1 copy is never served as v2's.
+DATA_API_V2 = f"{DATA_API}/v2"
+
+
+def _camel(key: str) -> str:
+    head, *rest = str(key).split("_")
+    return head + "".join(w[:1].upper() + w[1:] for w in rest)
+
+
+def v2_rows(got) -> list[dict]:
+    """A Data API answer as rows, each carrying v1's camelCase names beside
+    v2's own (``proxy_wallet`` is also ``proxyWallet``): v2's ``data``
+    wrapper, or v1's bare list."""
+    if isinstance(got, dict):
+        got = got.get("data") if isinstance(got.get("data"), list) else got.get("trades")
+    out = []
+    for r in got if isinstance(got, list) else []:
+        if isinstance(r, dict):
+            out.append({**{_camel(k): v for k, v in r.items() if "_" in str(k)}, **r})
+    return out
+
+
 def fetch_trades(limit: int = 500, ttl: int = 60) -> list[dict]:
-    url = f"{DATA_API}/trades?limit={limit}&takerOnly=true"
-    return json.loads(fetch_text(url, "pm_trades.json", ttl=ttl))
+    url = f"{DATA_API_V2}/trades?limit={limit}&taker_only=true"
+    return v2_rows(json.loads(fetch_text(url, "pm_trades_v2.json", ttl=ttl)))
 
 
 def fetch_big_trades(min_cash: int = 5000, limit: int = 300,
@@ -95,9 +125,9 @@ def fetch_big_trades(min_cash: int = 5000, limit: int = 300,
     """The tape FILTERED to large cash trades. The general feed is almost
     all retail-sized fills, so a 500-row slice can easily contain zero
     whales — this dedicated pull is how the flow feed never misses them."""
-    url = (f"{DATA_API}/trades?limit={limit}&takerOnly=true"
-           f"&filterType=CASH&filterAmount={min_cash}")
-    return json.loads(fetch_text(url, "pm_big_trades.json", ttl=ttl))
+    url = (f"{DATA_API_V2}/trades?limit={limit}&taker_only=true"
+           f"&filter_type=CASH&filter_amount={min_cash}")
+    return v2_rows(json.loads(fetch_text(url, "pm_big_trades_v2.json", ttl=ttl)))
 
 
 LEADERBOARD = "https://lb-api.polymarket.com"
@@ -118,8 +148,8 @@ def fetch_leaderboard(window: str = "all", limit: int = 10,
 
 
 def fetch_wallet_trades(wallet: str, limit: int = 20, ttl: int = 900) -> list[dict]:
-    url = f"{DATA_API}/trades?user={wallet}&limit={limit}"
-    return json.loads(fetch_text(url, f"pm_wtrades_{wallet[:16]}.json", ttl=ttl))
+    url = f"{DATA_API_V2}/trades?user={wallet}&limit={limit}"
+    return v2_rows(json.loads(fetch_text(url, f"pm_wtrades2_{wallet[:16]}.json", ttl=ttl)))
 
 
 PNL_API = "https://user-pnl-api.polymarket.com"
@@ -206,6 +236,26 @@ def parse_markets(raw: list[dict]) -> list[dict]:
     return out
 
 
+def _epoch(v) -> int:
+    """A trade's time as epoch seconds: v1's number (seconds, or
+    milliseconds), or an ISO stamp; 0 when it cannot be read."""
+    if v in (None, ""):
+        return 0
+    try:
+        n = float(v)
+        return int(n / 1000) if n > 1e11 else int(n)
+    except (TypeError, ValueError):
+        pass
+    import datetime as _dt
+    try:
+        d = _dt.datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=_dt.timezone.utc)
+    return int(d.timestamp())
+
+
 def parse_trades(raw: list[dict]) -> list[dict]:
     """Normalize Data-API tape rows. ``usd`` = shares × price."""
     out = []
@@ -213,7 +263,7 @@ def parse_trades(raw: list[dict]) -> list[dict]:
         try:
             price = float(t.get("price") or 0)
             size = float(t.get("size") or 0)
-            ts = int(t.get("timestamp") or 0)
+            ts = _epoch(t.get("timestamp"))
         except (TypeError, ValueError):
             continue
         wallet = t.get("proxyWallet") or ""

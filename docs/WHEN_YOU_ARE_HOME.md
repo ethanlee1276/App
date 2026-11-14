@@ -9338,6 +9338,26 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QT. Polymarket's trade tape is read off its Data API v2** (step 574; 14
+November). Nothing to run. QN's census named the cause on its first build:
+every Polymarket trade read, in every league, answered "HTTP Error 410:
+Gone". Polymarket retired its Data API v1 on 2 November 2026 (v1's /trades,
+/positions and /activity answer 410, "Data API v1 has been retired"). Two
+features read it. The game page's money split showed Kalshi alone, and the
+prediction-market flow feed (the whale tracker) has been reading the tape
+as it stood on 2 November, because a failed read hands back the last cached
+copy. Both read v2 now (engine/moneysplit.POLY_TRADES, engine/predmarket.
+fetch_trades / fetch_big_trades / fetch_wallet_trades): v2 selects a market
+by `condition`, takes snake_case parameters, wraps its rows in `data` and
+spells its fields in snake_case, and the rows are given v1's names too, so
+the parsers read either. New cache names keep a v1 copy from being served
+as v2's. The status page's feed probe asks v2. Polymarket's documentation
+isn't reachable from this environment, so this was built from developers'
+migration notes; if v2 refuses something, `money_census.why` on each board
+names it on the next build. Not moved, because I couldn't confirm their v2
+shape: the wallet P&L curve (user-pnl-api.polymarket.com, reported gone too)
+and the leaderboard (lb-api.polymarket.com).
+
 **QS. A game's parlays draw on every prop the board prices** (step 573;
 14 November). Nothing to run. With QP live, the NFL board went from 13 to 14
 three-leg tickets across 13 games, so the opposite-script rule wasn't what
