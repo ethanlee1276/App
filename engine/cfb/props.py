@@ -358,7 +358,15 @@ def _read_log_rows(conn, seasons: list[int]) -> dict:
     return out
 
 
-def _candidates(games: list[dict], filed: dict, current: dict) -> list[tuple]:
+def _this_season(slot: dict) -> bool:
+    """Has this player a game of the season being played in his filed rows?
+    (`_read_log_rows` marks every older season's row ``prior``.)"""
+    return any(not row[4] for key, rows in (slot or {}).items()
+               if key not in ("player", "position") for row in rows or ())
+
+
+def _candidates(games: list[dict], filed: dict, current: dict,
+                census: dict | None = None) -> list[tuple]:
     """``[(side, opponent, filed_team, norm)]`` — who is playable tonight.
 
     Enumerated from the LOGS rather than from a quote list, which is the
@@ -371,11 +379,23 @@ def _candidates(games: list[dict], filed: dict, current: dict) -> list[tuple]:
     decides who he plays against tonight, the filing team decides where
     his production is stored. Reused rather than re-derived so the two
     college boards can never disagree about which school a player is at.
+
+    LAST SEASON'S MEN WHO ARE GONE ARE NOT CANDIDATES (2026-11-14). The
+    logs are two seasons, so every school's graduates and transfers-out
+    were placed on its side all season long, priced off last year's games
+    on a proxy line, and read in its game report. Once a side has played
+    this season, a man filed there with no game this season, in no
+    school's logs this season (`current`) and on no published roster, is
+    not placed; ``census["gone"]`` counts them. Before a side's first game
+    every man filed there is still a candidate, as before: last season is
+    all it has. (A transfer-out is `resolve_side`'s: placed at his new
+    school, never at the old one.)
     """
     from .tds import resolve_side
 
     seen: set = set()
     out: list[tuple] = []
+    played: dict = {}
     for g in games or []:
         home, away = str(g.get("home") or ""), str(g.get("away") or "")
         if not home or not away:
@@ -390,6 +410,13 @@ def _candidates(games: list[dict], filed: dict, current: dict) -> list[tuple]:
                 continue
             if (side, norm) in seen:
                 continue                     # a name cannot play twice
+            if side == filed_team and norm not in (current or {}):
+                if side not in played:
+                    played[side] = any(_this_season(sl) for sl in (filed.get(side) or {}).values())
+                if played[side] and not _this_season((filed.get(side) or {}).get(norm)):
+                    if census is not None:
+                        census["gone"] = census.get("gone", 0) + 1
+                    continue
             seen.add((side, norm))
             out.append((side, away if side == home else home,
                         filed_team, norm))
@@ -420,6 +447,7 @@ def build_props(conn, games: list[dict], season: int,
     census.setdefault("no_logs", 0)
     census.setdefault("thin_history", 0)
     census.setdefault("below_volume", 0)
+    census.setdefault("gone", 0)
     census.setdefault("props", 0)
 
     # ITS PARTS ON THE STAGE CLOCK (engine/stageclock.lap), silent outside a
@@ -492,7 +520,7 @@ def build_props(conn, games: list[dict], season: int,
         pass
     _t = _clock.lap("college slate", "faces", _t)
 
-    cands = _candidates(games, filed, current)
+    cands = _candidates(games, filed, current, census)
     census["candidates"] = len(cands)
     league_int = league_int_rate(filed)
     census["transfers"] = sum(1 for side, _o, ft, _n in cands if ft != side)

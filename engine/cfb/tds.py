@@ -547,11 +547,21 @@ def resolve_side(norm: str, home: str, away: str, usage: dict,
     empty in week one, when nobody has played yet, and this returns
     nothing rather than guessing: putting a back on the wrong side of a
     30-point spread is worse than leaving him off the board.
+
+    A MAN WHO LEFT IS NOT TONIGHT'S (the picks audit, 2026-11-14: Dylan
+    Lonergan read twice, "BC vs ND, QB" and "RUTG vs NEB, QB"). The props
+    board hands this two seasons of logs, so last season's Boston College
+    rows found him under Boston College, and the first loop placed him
+    there although this season's logs and rosters have him at Rutgers. A
+    team he is filed under counts only when `current` has him nowhere, or
+    has him there too.
     """
+    now = (current or {}).get(norm)
     for t in (home, away):
         if norm in (usage.get(t) or {}):
+            if now and t not in now:
+                continue                 # filed here before; at another school now
             return t, t
-    now = (current or {}).get(norm)
     if not now:
         return "", ""
     side = next((t for t in (home, away) if t in now), "")

@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QK. A college player who left is read at his new school only** (step
+565; 14 November). Nothing to run. Your picks audit (QC) read Dylan
+Lonergan twice on one Saturday: "BC vs ND, QB" and "RUTG vs NEB, QB". This
+season's logs have him at Rutgers. College's props board reads two seasons
+of logs, so last season's Boston College rows found him under Boston
+College and the board placed him on that side too, priced off last year's
+games and read in Boston College's game report. Every school's graduates
+were placed the same way all season, on a proxy line. Now a school a man is
+filed under counts only when this season's logs and rosters have him there
+or nowhere (engine/cfb/tds.resolve_side), and once a team has played this
+season, a man with no game this season, in no school's logs and on no
+roster, is left off (engine/cfb/props._candidates). A transfer before his
+first game for his new school is still placed there off his old school's
+rows, as before. The build's Player props line counts what it left off:
+"... found under a former school, N gone since last season, ...".
+
 **QJ. A college game is filed once** (step 564; 14 November). Two box
 commands, the first read-only; paste both back. Your PU run showed every
 2026 Miami game of Cooper Barkate's filed two or three times: the official

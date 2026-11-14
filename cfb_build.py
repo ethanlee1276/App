@@ -2341,6 +2341,7 @@ def main() -> None:
                   f"{prop_census['candidates']} placed player(s), "
                   f"{_matched} with a real book line "
                   f"({prop_census['transfers']} found under a former school, "
+                  f"{prop_census.get('gone', 0)} gone since last season, "
                   f"{prop_census['thin_history']} with too little history, "
                   f"{prop_census['below_volume']} below the volume floor; "
                   f"usage from {prop_census.get('usage_season')})")
