@@ -67,6 +67,16 @@ missing, and a flag needing a missing field does not fire):
     p3_recent, p3_long, a3_recent
                         his three-point percentage over his last ten games
                         and over his long run, and his attempts over the ten
+    total_norm          the league's usual game total (nba_build.total_norm),
+                        which college's fast and slow games are read against
+    league              "nba" (the default) or "cbb": whose thresholds and
+                        whose measured verdicts the flags take
+
+COLLEGE (2026-11-14). Ethan, 2026-11-13: every NBA tool on college. The
+flags are the same fourteen; three thresholds are college's own, written
+here before any flag was measured on college's games (`LEAGUE`), and every
+verdict is college's own measurement (`VERDICTS["cbb"]`, docs/CBB_LAB.md
+"The scout"), not the NBA's carried over.
 
 Standard library only. Pure: no I/O.
 """
@@ -90,6 +100,35 @@ BOOM_BUST_CV = 0.55
 THIN_GAMES = 5
 HOT_HAND = 0.08            # 3P% over his last ten this far above his long run
 HOT_HAND_ATTEMPTS = 25     # …on at least this many threes
+
+#: COLLEGE'S GAME-SCRIPT THRESHOLDS, written 2026-11-14 before any flag was
+#: measured on college's games. The NBA's three are NBA-sized. A college
+#: favourite of ten is an ordinary game (the median final margin of a
+#: Division I game is ten points, every season 2022-23 to 2025-26), so a
+#: projected college blowout is fifteen. College's scoring moved from 141
+#: to 149 points a game across those four seasons, so one fixed total would
+#: call a different share of games fast each season: college's fast and slow
+#: games are read against the league's own usual total (nba_build.total_norm,
+#: its latest 200 finals) at the NBA's own ratios — 236 and 214 against an
+#: NBA game's usual total of about 227. The rest (minutes ratios, the swing,
+#: five games, the hot hand) are ratios of his own numbers and stay as they
+#: are. A threshold here that needs a missing field does not fire.
+LEAGUE = {
+    "nba": {"blowout_spread": BLOWOUT_SPREAD, "fast_total": FAST_TOTAL, "slow_total": SLOW_TOTAL},
+    "cbb": {"blowout_spread": 15.0, "fast_ratio": 1.04, "slow_ratio": 0.94},
+}
+
+
+def _script(s: dict, league: str) -> tuple:
+    """(blowout spread, fast total, slow total) for this league; a total
+    read against a norm the situation does not carry is None."""
+    th = LEAGUE.get(league) or LEAGUE["nba"]
+    if "fast_ratio" in th:
+        norm = s.get("total_norm")
+        if not norm:
+            return th["blowout_spread"], None, None
+        return th["blowout_spread"], float(norm) * th["fast_ratio"], float(norm) * th["slow_ratio"]
+    return th["blowout_spread"], th["fast_total"], th["slow_total"]
 
 #: Every flag: (code, the sentence a scout would write). Game script first,
 #: then the people around him, then the player himself.
@@ -137,6 +176,23 @@ VERDICT = {
 #: The flags a card shows: the ones still measured to go wrong.
 CARD = tuple(c for c in FLAGS if VERDICT.get(c, ("",))[0] == "warning")
 
+#: COLLEGE'S VERDICTS, its own seasons' (docs/CBB_LAB.md, "The scout"). A
+#: flag never reaches a college card on the NBA's word: a league with no
+#: verdict for a flag shows nothing for it.
+VERDICT_CBB: dict = {}
+#: Each league's verdicts.
+VERDICTS = {"nba": VERDICT, "cbb": VERDICT_CBB}
+
+
+def _verdicts(league) -> dict:
+    return VERDICTS.get(league or "nba", {})
+
+
+def card_for(league: str = "nba") -> tuple:
+    """The flags a card shows in this league: its own measured warnings."""
+    v = _verdicts(league)
+    return tuple(c for c in FLAGS if v.get(c, ("",))[0] == "warning")
+
 
 def _avg(xs):
     xs = [float(x) for x in xs if x is not None]
@@ -155,12 +211,14 @@ def _cv(xs):
 
 def situation(market: str, side: str, line=None, values=None, minutes=None, starter=None,
               spread=None, total=None, rest=None, games_season=None, missed_last=None,
-              mate_out=None, mate_back=None, p3_recent=None, p3_long=None, a3_recent=None) -> dict:
+              mate_out=None, mate_back=None, p3_recent=None, p3_long=None, a3_recent=None,
+              total_norm=None, league: str = "nba") -> dict:
     """The fields a flag reads, from the pick and his history (``values`` and
     ``minutes`` newest first)."""
     vals = list(values or [])
     mins = list(minutes or [])
     return {"market": market, "side": (side or "").upper(), "line": line,
+            "league": league or "nba", "total_norm": total_norm,
             "starter": starter, "spread": spread, "total": total, "rest": rest,
             "last5": _avg(vals[:5]), "cv10": _cv(vals[:10]),
             "min3": _avg(mins[:3]) if len(mins) >= 6 else None,
@@ -177,12 +235,13 @@ def flags(s: dict) -> list[str]:
     over, under = side == "OVER", side == "UNDER"
     out = set()
     spread, total = s.get("spread"), s.get("total")
-    if over and s.get("starter") and spread is not None and abs(spread) >= BLOWOUT_SPREAD and m in VOLUME:
+    blowout, fast, slow = _script(s, s.get("league") or "nba")
+    if over and s.get("starter") and spread is not None and abs(spread) >= blowout and m in VOLUME:
         out.add("blowout_over")
     if total is not None and m in VOLUME:
-        if under and total >= FAST_TOTAL:
+        if under and fast is not None and total >= fast:
             out.add("fast_under")
-        if over and total <= SLOW_TOTAL:
+        if over and slow is not None and total <= slow:
             out.add("slow_over")
     if over and s.get("rest") in ("b2b_home", "b2b_road", "b2b_road_30plus", "3in4"):
         out.add("b2b_over")
@@ -216,15 +275,19 @@ def flags(s: dict) -> list[str]:
     return [c for c in FLAGS if c in out]
 
 
-def card_flags(codes) -> list[str]:
-    """The flags a card shows: only those measured to still go wrong."""
-    return [c for c in codes if c in CARD]
+def card_flags(codes, league: str = "nba") -> list[str]:
+    """The flags a card shows: only those measured to still go wrong, in
+    the pick's own league."""
+    card = CARD if (league or "nba") == "nba" else card_for(league)
+    return [c for c in codes if c in card]
 
 
-def notes(codes: list[str]) -> list[str]:
-    """The card's sentences: what a scout would write, and what it measured."""
-    return [f"{FLAGS[c][0].upper()}{FLAGS[c][1:]}. {VERDICT[c][1][0].upper()}{VERDICT[c][1][1:]}."
-            for c in codes if c in FLAGS and c in VERDICT]
+def notes(codes: list[str], league: str = "nba") -> list[str]:
+    """The card's sentences: what a scout would write, and what it measured
+    in the pick's own league."""
+    v = _verdicts(league)
+    return [f"{FLAGS[c][0].upper()}{FLAGS[c][1:]}. {v[c][1][0].upper()}{v[c][1][1:]}."
+            for c in codes if c in FLAGS and c in v]
 
 
 def every(ctx: dict | None, market: str, side: str, line=None) -> list[str]:
@@ -238,15 +301,22 @@ def every(ctx: dict | None, market: str, side: str, line=None) -> list[str]:
         return []
     return flags(situation(market, side, line, ctx.get("values"), ctx.get("minutes"), ctx.get("starter"),
                            ctx.get("spread"), ctx.get("total"), ctx.get("rest"), ctx.get("games_season"),
-                           ctx.get("missed_last"), ctx.get("mate_out"), ctx.get("mate_back")))
+                           ctx.get("missed_last"), ctx.get("mate_out"), ctx.get("mate_back"),
+                           total_norm=ctx.get("total_norm"), league=league_of(ctx)))
+
+
+def league_of(ctx) -> str:
+    """The league a row's facts were built for (the NBA's carry none)."""
+    return str((ctx or {}).get("league") or "nba") if isinstance(ctx, dict) else "nba"
 
 
 def read(ctx: dict | None, market: str, side: str, line=None) -> tuple[list, list]:
     """``(card flags, card sentences)`` for one pick, from the side-free facts
     the build put on its row (``scout_ctx``, nba_build.scout_context).
     Empty for a row the build gave none (another league, an old board)."""
-    codes = card_flags(every(ctx, market, side, line))
-    return codes, notes(codes)
+    lg = league_of(ctx)
+    codes = card_flags(every(ctx, market, side, line), lg)
+    return codes, notes(codes, lg)
 
 
 def annotate(rows: list[dict]) -> int:
@@ -261,7 +331,8 @@ def annotate(rows: list[dict]) -> int:
         if not isinstance(r, dict) or not isinstance(r.get("scout_ctx"), dict):
             continue
         allf = every(r["scout_ctx"], r.get("market") or "", str(r.get("side") or ""), r.get("line"))
-        codes = card_flags(allf)
-        r["scout_flags"], r["scout_notes"], r["scout_all"] = codes, notes(codes), allf
+        lg = league_of(r["scout_ctx"])
+        codes = card_flags(allf, lg)
+        r["scout_flags"], r["scout_notes"], r["scout_all"] = codes, notes(codes, lg), allf
         n += bool(codes)
     return n
