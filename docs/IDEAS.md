@@ -11,6 +11,66 @@ Ordered by *value per unit of work*, not by size.
 
 ---
 
+## 2026-11-14: knowing what a user bet elsewhere — what is possible, and what is not
+
+Ethan: *"I want to see if we can track what apps they use on their phone
+and what they do on the apps ... say if a user went on DraftKings and
+placed a bet on college football without checking Kelly's book. In return,
+we could then send them a notification about college football."*
+
+The goal is right and worth building toward: **catch a user betting a sport
+they did not check here, and bring them back to it.** What is written down
+here is the line between the version that is possible and the version that
+is not, so it does not get re-opened later by someone who has not seen it.
+
+**NOT POSSIBLE, and not a matter of effort.** An app cannot see what a
+person does inside another app. iOS and Android sandbox every app from
+every other — our app has no API, private or public, that reports "this
+phone opened DraftKings" or "this phone placed a bet there." The only ways
+to get that signal are the ones a malware vendor uses: a VPN or "root
+certificate" that decrypts the phone's traffic, an accessibility-service
+keylogger, or a jailbroken device. Each is a store-ban and, for betting
+data, a privacy-law violation (GDPR, CCPA, and the state gambling
+regulators we would need a licence from). We will not build, buy, or
+integrate any of them, and this entry exists so the idea is not re-attempted
+in that form. Covertly watching what a person bets elsewhere is surveillance,
+not a feature.
+
+**POSSIBLE, and genuinely useful — with the user's own consent, which is
+the whole product, not a formality.** Three buildable paths, best value
+first:
+
+1. **Bet-slip share-in (ships on what we already have).** We already
+   register as an iOS/Android share target and parse a shared slip
+   (`web/sw.js`, the share-a-slip work of 2026-10-24). Add: when a user
+   shares a DraftKings/FanDuel slip *into* our app, read the sport off it,
+   and if they never opened our board for that sport this week, offer "want
+   our read on college football next time?" — opt-in, from a slip they
+   chose to hand us. No tracking; the user brings the data. *A day on top
+   of the existing share target.*
+
+2. **Sportsbook account link (OAuth where it exists, else manual).** A few
+   books expose a read-only bet-history API or a "connect your account"
+   OAuth; most do not. Where one exists, a user who links it (their choice,
+   revocable) lets us see *their own* graded bets, which also sharpens their
+   Record page. The nudge — "you bet three college games last week and
+   checked our board for none of them" — then runs off data they handed us
+   about themselves. *Scoped per book; start with one that has an API.*
+
+3. **"What did you bet this week?" the user fills in.** The least
+   technical and the most honest: a weekly one-tap check-in where the user
+   logs what they bet and where. It feeds the same nudge and the same
+   Record page, and it needs no integration at all. Low effort, and it is
+   the fallback every serious money-management app (the ones Action Network
+   and others ship) actually relies on, because the covert version does not
+   exist for them either.
+
+**The rule for all three:** the user turns it on, sees exactly what we
+read, and can turn it off and delete it. That is not a tax on the feature —
+it is the only version of the feature that ships, keeps us in the stores,
+and keeps a gambling-adjacent product on the right side of the regulator we
+will answer to.
+
 ## 2026-10-27 (later): sweat it, find it, keep coming back — round three
 
 Ethan: *"think of more ideas and build them all too."* Every idea on the
