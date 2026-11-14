@@ -898,6 +898,24 @@ def get_api_key(explicit: str | None = None) -> str:
     """
     ring = api_keys(explicit)
     if not ring:
+        # THE BOX'S KEY IS THERE, AND THIS USER CANNOT SEE IT (2026-11-14:
+        # Ethan's `sudo -u qellys python3 futures_build.py cbb --odds` was
+        # told to go and get a key). The service has /etc/qellys/env from
+        # systemd; it is root's, mode 600, so a command run as the service's
+        # user at a prompt reads none of it. Say that, and how to pass it.
+        try:
+            from ..secrets import system_env_hidden
+            hidden = system_env_hidden()
+        except Exception:                                   # noqa: BLE001
+            hidden = False
+        if hidden:
+            raise OddsAPIError(
+                "No Odds API key readable here: the box's key is in "
+                "/etc/qellys/env, which only root can read, so a command run "
+                "as the service's user does not see it. Pass it in front of "
+                "the command: sudo -u qellys env $(sudo grep -E "
+                "'^ODDS_API_KEY' /etc/qellys/env | xargs) python3 ..."
+            )
         raise OddsAPIError(
             "No Odds API key. Set ODDS_API_KEY in the environment or in "
             "secrets.local (ODDS_API_KEY_2, _3 … add spares) — get a free "

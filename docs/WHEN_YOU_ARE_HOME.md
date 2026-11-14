@@ -9338,6 +9338,57 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PO. Two messages that sent you the wrong way** (step 543; 14 November).
+One command, the title prices, corrected. Step PB's command printed "No
+Odds API key ... get a free key" when you ran it: the key is there, in the
+box's settings file, /etc/qellys/env, which only root can read; the site
+has it from systemd, a command run as the site's user at a prompt sees
+none of it. The command now passes the key in front, the way the paywall
+checks pass theirs, and the message says that instead of sending you for a
+new key (one credit):
+
+```
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^ODDS_API_KEY' /etc/qellys/env | xargs) python3 futures_build.py cbb --odds
+```
+
+And PL's output read "held 78 next odds refresh in 41892s" at 9:20am, a
+pull at nine at night, while college's noon window was owed and two hours
+forty away: the number is the ordinary gap, stretched off-peak, and a
+window overrides it. A hold now ends "; the 12pm window comes first, in
+9600s" when one does.
+
+**PN. Polymarket answers college's pages** (step 542; 14 November). Nothing
+to run. Your catch-up printed what the 406s were: `{"error":"gzip_required",
+"hint":"send the header Accept-Encoding: gzip. /events and /events/keyset
+pages with limit above 50 are served compressed only."}`. College's
+soonest hundred games and its two-day window both ask for more than fifty,
+so only the page of twenty answered, oldest first: 19 games of Saturday's
+71 carried Polymarket's price. Every Polymarket ask now says it takes gzip
+and the reader unpacks it, every league's alike (the NBA's, hockey's and
+college football's answered already; theirs are unchanged). The next
+college build should read `polymarket_tags` → `series:10470` as a plain
+count, with no refusals beside it, and more of the night's games with a
+Polymarket price in `crowd_census`. OY's probe asks the same way now.
+
+**PM. The NBA's own checks judge only seasons that have ended** (step 541;
+14 November). Nothing to run. You asked for every calibration, every
+learner and every hypothesis test checked in every sport. The first thing
+the audit found: the NBA's rotation rules (his first games back, a role
+that jumped, a regular's return) were switched off on Saturday morning by
+the box's own weekly check (`nba_switches` → `rotation`: `not yet`, since 14
+November). The check judged every season with 100 or more games a rule
+touches, and three and a half weeks of the season being played had just
+crossed that floor: rules measured on two full seasons, held out both ways,
+switched off on a few weeks of noise. That is thrashing, not learning. The
+rates read past the last twenty used the same bar the same way. Now a
+season still being played is shown in the check's table, marked "in
+progress: shown, not judged", and never decides; and a check whose
+measuring code changed is owed again in a round whose NBA fit is still to
+run, so tonight's refit runs the fixed rotation and rates checks first,
+then fits the NBA's calibration on the board they leave. If the finished
+seasons still hold, the rotation rules come back on tonight; the heartbeat
+shows it under `nba_switches` → `rotation` → `verdict` (`ready`).
+
 **PL. Why college's board has no player props** (step 540; 14 November).
 One read-only command; paste it back. College's board priced no player
 props on its first two days (`props_analyzed` 0 at 4:55pm Eastern on the
@@ -9360,6 +9411,21 @@ for r in ob.decisions(since=time.time() - 48 * 3600, lane='cbb')[-20:]: print(r[
 for f in sorted(glob.glob('data/cache/odds_event_cbb_*.json'), key=os.path.getmtime)[-10:]: d = json.load(open(f)); bks = d.get('bookmakers') or []; print(time.strftime('%m-%d %H:%M', time.localtime(os.path.getmtime(f))), d.get('away_team'), '@', d.get('home_team'), len(bks), 'books', sorted({m.get('key') for b in bks for m in b.get('markets') or []}))
 "
 ```
+
+What it showed (your run, 9:21am on 14 November): neither cause alone. The
+pacer bought, on time: Friday's 6pm pull (five games, every one with player
+props posted, Ohio State at UConn's the whole menu, the other four the
+books' alternate ladders) and Saturday's 7am pull (78 credits), then held,
+its noon and 6pm windows still to come (PO: its message said nine at
+night). At 7am the books had posted Saturday's props for one game of the
+five, LSU at Gonzaga (ladders); Colorado at Providence and the three
+mismatches had game lines only. And the board had nothing to match them to:
+it built no props at all (`props_built` 0), because a prop needs three of a
+player's games and the box held two or fewer for 4,962 of the 5,360 college
+players on its rosters. It had read this season's first week only, 373 of
+the 749 games played so far, and none of last season. Your backfill (00a,
+running since about 9:25am) is what they wait for; after it the 6pm pull
+should land on a board with props.
 
 **PK. The Lab draws** (step 539; 14 November). Nothing to run. You, with a
 screenshot of the Lab: "the lab shows this every time u click on the page.
@@ -9408,6 +9474,13 @@ adds outside the NBA's evening (measured on 2025-26's schedule; every live
 lane shares one cadence clock, so the NBA's evening is no new spend).
 About 45 credits a college game day, inside the plan.
 
+Saturday's check (14 November): you installed it at 14:24 UTC, and
+qellysbook.com/cbb answers `<title>College basketball · Qellys Book</title>`
+with a `qb-route` naming `cbb` (read at 14:37 UTC; your catch-up's PJ line ran
+two minutes before the reload, hence the plain title in it). College's board
+carries its two-leg tickets (10 behind the members' lock on the 09:20 build),
+and rosters_cbb.json holds 5,360 players on 434 teams.
+
 **PI. College's Parlays page builds** (step 537; 14 November). Nothing to
 run. College's board showed a Parlays tab, but the two-leg builder ran
 only for the four leagues named on 31 October, so college's page could
@@ -9435,6 +9508,12 @@ shootout is an NBA warning). A flag moves no number: college's graded
 record learns the same flags the NBA's does, and only one it proves on
 games the fit never saw lowers a chance. The first week of a college season
 puts "barely into his season" on most cards, as measured.
+
+Saturday's check (14 November, the 09:20 build): no college row carries a
+scout note yet, because the board has no props yet (PL), and nothing in
+cbb.json says "in two seasons". The live file names every small school by
+its code: six "espn:" sides on Saturday's 61 games, each with its
+abbreviation (Mary Baldwin's `MBAL` among them).
 
 **PG. A small school by its name, not its key** (step 535; 14 November).
 Nothing to run. Checking every college page against the night's real
@@ -9494,6 +9573,22 @@ built before that is never held. Until then the page keeps the race it
 has, and the build's line reads `NCAA race: still reading the season off
 the scoreboard (N day(s) to go)`.
 
+Saturday's check (14 November): it waited and then built. The public copy
+was written at 09:20 Eastern with 749 games played and 5,323 left, 2,000
+seasons played out; the field if the season ended today has 68 schools, 17
+in each of four regions (sixteen seeds, the First Four's two extra 11s and
+16s), and 32 conferences have their races. Its line on the box (PA, your
+run): 1 seeds Michigan State, Florida, Kansas and Xavier; title chances led
+by Michigan State's 12.7%. `prior` read `{'season': 2025, 'schools': 0}`, so
+those chances stand on this season's first week alone (Wright State at 4.8%
+for the title is that, not a finding); last season's games, your backfill in
+00a, are the prior they shrink toward, and the race reads it on its first
+build after. College's Futures board is written beside it (locked, the
+whole board behind the members' lock). MET Norway (step PC): your run read
+all 10 venues abroad, and the one game abroad on a board this weekend, the
+Patriots at the Lions in Munich, carries its forecast with source
+`met-norway` (48°F, wind 2 mph, no rain).
+
 **PC. A forecast for games abroad: MET Norway** (step 531; 14 November).
 One read-only command. You, on decision 8b: "Yes if free." It is free: no
 key and no account, and commercial use is allowed on two conditions, both
@@ -9527,7 +9622,7 @@ beside every race, from the title prices already kept, so a build never
 spends. This pulls them, one market and one region:
 
 ```
-cd /srv/qellys && sudo -u qellys python3 futures_build.py cbb --odds
+cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^ODDS_API_KEY' /etc/qellys/env | xargs) python3 futures_build.py cbb --odds
 ```
 
 It prints how many schools it priced. A book's runner is matched to a school
@@ -9613,6 +9708,19 @@ clock. College now asks for the soonest hundred on a 25-second clock, and
 every venue failure says why on the board (`polymarket_tags` reads, say,
 "error: timed out" instead of "error"), so the next build shows whether that
 was it.
+
+College's first night (Saturday's check, the 09:20 build on 14 November):
+its results landed. `data_freshness.played` reads 2026-11-13 for both the
+results and the player stats, nothing behind, and the shot chart holds
+shots (Gonzaga's Braden Huff, his 7 November game). Its `game_bets` are
+empty, as the NBA's are: the basketball build prices its game lines on the
+game cards (52 of Saturday's 71 carry one) and has never written the edge
+board's game bets, so that is not the finals. Polymarket answered 19 games
+through the page of twenty, the two bigger pages refused for gzip (fixed,
+PN), and Kalshi 33; 44 of the 71 games went into the crowd study. No player props
+yet (`props_analyzed` 0): PL has why, and it is the history, not the books.
+Every in-season board built clean on the same pass (the NFL, college
+football, the NBA and college; the truth check counted 0 on each).
 
 **OW. College reads a player's shooting and his rebounds the NBA's way**
 (step 525; 13 November). Nothing to run. The two reads the NBA lab built
@@ -9759,6 +9867,15 @@ The game ranks and the Pick of the Day's replay read the same closes and gain
 the same. The next pass that learns shows it on the public heartbeat,
 https://qellysbook.com/data/heartbeat.json, under `chores` → `settle` →
 `phases` → `last_learned` → `gamecal` → `parts` → `harvested closes`.
+
+What the box measured (the first pass that learned on it, 04:47 on Saturday
+14 November): the calibration learned for 165.5 seconds (250.3 on Friday),
+the harvested closes 158.4 of them (244.7); the NFL's totals fit 34.5
+seconds (99.1), its spreads 20.0 (59.9). A third off, not the seconds the
+copy measured: the seek still reads every book's row of the market to keep
+the one book it wants, one at a time from a file far bigger than the box's
+memory, where the copy sat in memory whole. The learning pass came to 356
+seconds; nothing waits on it overnight.
 
 **OR. A retractable roof nobody has called yet is read as closed** (step 520;
 12 November). Nothing to run. Checking step OQ on the live board turned up
@@ -11055,6 +11172,19 @@ waited since late August. That is the NFL's and college's player memory,
 temperatures and recency dials, the NBA's three checks and its own fit, the touchdown models, the yardage mixture, the NFL's
 book-line props and the grade ladder. This week's round, the round of 11
 November, which waited for this one to end, begins with Saturday night's run.
+
+It began a night early, on Friday night's run (00:20 to 00:51 on Saturday 14
+November, 31 minutes): college basketball's own fit, the NBA's rotation and
+rates checks, the yardage mixture, the touchdown scale and models, and
+college football's touchdowns, all done; nothing cut off, nothing part-way.
+The round of 11 November still owes the NFL, college football, the NBA's
+vacancy and spread checks and its own fit, the NFL's book-line props and the
+grade ladder; MLB and the WNBA rest. The dials owe the NFL's passing yards
+(its other three markets stand fitted on 11 November) and college football's
+passing, rushing and receiving yards. One thing this run did was wrong: its
+rotation check judged the NBA season in progress and switched the rotation
+rules off. Step PM fixes the check, and tonight's run runs it again first,
+before the NBA's fit.
 
 **LW. The box-score pull asks for a game by its season** (step 445; 8
 November). The first pass with LS's timer on it (20:52, Saturday 7

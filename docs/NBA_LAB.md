@@ -640,6 +640,16 @@ on the box's own seasons in its own column and files its own verdict
 (engine/nba/switches `starters`), apart from the rotation's three. Runbook
 KG prints it.
 
+**Only finished seasons decide *(11-14)*.** The box's `nba_rules` and
+`nba_rates` checks judged every season with enough games a rule touches;
+on 14 November three and a half weeks of 2026-27 crossed that floor and
+switched the rotation's three rules off, against two full seasons held out
+both ways. A season still being played (engine/seasons.finished: its
+window has not ended) is now shown in the table, marked "in progress:
+shown, not judged", and never decides; a check whose measuring code changed
+carries a version (engine/deepfit.NBA_CHECK_VERSION) and is owed again in a
+round whose NBA fit is still to run (runbook PM).
+
 ## First basket, the men who play *(11-05)*
 
 The first-basket board (engine/firstbasket, the NBA's Long Shots) shares

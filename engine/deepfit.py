@@ -523,6 +523,29 @@ NBA_CHECKS = {"nba_rules": ("nbarules.py", ("--save",)),
               # 2026-11-04): on or off by the box's own seasons, as the rules.
               "nba_rates": ("nbarates.py", ("--save",)),
               "nba_spread": ("nbalabcheck.py", ("--part", "spread", "--save-verdict"))}
+#: A CHECK WHOSE MEASURING CODE CHANGED IS OWED AGAIN (2026-11-14). Each
+#: check's version is written beside its done date (`run`); a round whose
+#: NBA fitters are still owed runs a check again before them when its
+#: version here is newer than the one it last ran (`_late_checks`), so a
+#: fixed check is not left standing on its old verdict for a week, and the
+#: NBA's calibration is fitted on the board the fixed check leaves. 2: the
+#: rotation's rules and the rates read judge only FINISHED seasons
+#: (nbarules, nbarates) — three and a half weeks of the season in progress
+#: crossed the rules' floor on 2026-11-14 and switched them off.
+NBA_CHECK_VERSION = {"nba_rules": 2, "nba_rates": 2}
+
+
+def _check_stale(piece: str, pieces: dict) -> bool:
+    """Did this check last run an older version of its code than this one?"""
+    if piece not in NBA_CHECK_VERSION:
+        return False
+    try:
+        ran = int((pieces.get(piece) or {}).get("v") or 1)
+    except (TypeError, ValueError):
+        ran = 1
+    return ran < NBA_CHECK_VERSION[piece]
+
+
 #: The time a check is given before its own first run has said how long it
 #: takes: the spread's replay reads every stored NBA game four times over and
 #: prices a ladder twice (the lab's two seasons took seven minutes on a fast
@@ -799,7 +822,8 @@ def _late_checks(st: dict, start: str) -> bool:
     pieces = st.get("pieces") or {}
     # A check set aside this round as too long for a run is not owed again.
     missing = [c for c in NBA_CHECKS
-               if c not in left and str((pieces.get(c) or {}).get("done") or "") < start
+               if c not in left
+               and (str((pieces.get(c) or {}).get("done") or "") < start or _check_stale(c, pieces))
                and ((pieces.get(c) or {}).get("too_long") or {}).get("round") != start]
     if not missing:
         return False
@@ -1049,6 +1073,8 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
             break
         entry.update({"done": today.isoformat(), "seconds": round(clock() - t0),
                       "rows": rows.get(p)})
+        if p in NBA_CHECK_VERSION:
+            entry["v"] = NBA_CHECK_VERSION[p]
         entry.pop("fitters_done", None)
         entry.pop("cut_off", None)
         entry.pop("min_s", None)

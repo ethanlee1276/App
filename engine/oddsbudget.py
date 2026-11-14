@@ -1248,6 +1248,21 @@ def touchpoint_due(state: "BudgetState", sport: str | None, now: float):
     return stamp
 
 
+def next_touchpoint(sport: str | None, now: float):
+    """When this sport's next touchpoint opens later today, else None.
+
+    For the hold message only (2026-11-14): the box's 9:20am log read "next
+    odds refresh in 41892s" for college, a pull at nine at night, while its
+    noon window was two and a half hours off and owed. The ordinary gap is
+    stretched off-peak; a touchpoint overrides it, and the message now says
+    so."""
+    local = _local(now)
+    later = [h for h in sorted(_touchpoints(sport)) if h > local.hour]
+    if not later:
+        return None
+    return local.replace(hour=later[0], minute=0, second=0, microsecond=0).timestamp()
+
+
 # --- how much of the slate to price ------------------------------------------
 # Background cycles pass --active-odds, which prices only games inside a
 # six-hour window. That was written for a 500-credit free plan, where a
@@ -1685,7 +1700,11 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
                if window is False else
                "off-peak — no game on this board inside 36h" if far else
                f"budgeting {state.remaining} credits to month end")
-        return False, f"next odds refresh in {int(gap - waited)}s ({why})"
+        # A touchpoint sooner than the stretched gap buys first: say when.
+        tp = next_touchpoint(sport, now) if not far else None
+        sooner = (f"; the {_hour_label(tp)} window comes first, in {int(tp - now)}s"
+                  if tp is not None and tp - now < gap - waited else "")
+        return False, f"next odds refresh in {int(gap - waited)}s ({why}){sooner}"
     return True, f"refreshing odds ({state.remaining} credits left this month)"
 
 

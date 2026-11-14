@@ -285,6 +285,29 @@ def test_four_windows_a_day_are_affordable_on_the_real_plan():
     assert afford // per_pull >= len(TOUCHPOINTS)
 
 
+
+def test_a_hold_says_when_a_sooner_window_buys():
+    """The box's college log at 9:20am on 14 November: "held 78 next odds
+    refresh in 41892s (off-peak — saving the odds budget for the pre-game
+    window)" — a pull at nine at night, read as such — while the noon window
+    was owed and two hours forty off. The hold now says the window comes
+    first, and the window still buys at noon."""
+    p = _tmp()
+    _funded(p, last_refresh_hour=7, sport="cbb")
+    st = load(p)
+    st.sport_touchpoint["cbb"] = "2026-08-15:07"
+    save(st, p)
+    # The first board game tips at 2pm: 9:20 is before its window opens.
+    ok, why = should_refresh(78, now=at(9, 20), path=p, sport="cbb", credits=78,
+                             kickoffs=[at(14), at(15, 30), at(18)])
+    assert ok is False and why.startswith("next odds refresh in"), why
+    assert why.endswith("; the 12pm window comes first, in 9600s"), why
+    ok, why = should_refresh(78, now=at(12, 5), path=p, sport="cbb", credits=78,
+                             kickoffs=[at(14), at(15, 30), at(18)])
+    assert ok is True, why            # inside the window by then, or by the window's own door
+    assert oddsbudget.next_touchpoint("cbb", at(19)) is None, "no window left today: nothing said"
+    assert oddsbudget.next_touchpoint("cbb", at(9, 20)) == at(12)
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

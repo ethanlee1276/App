@@ -255,7 +255,9 @@ def _box(tmp: Path, players: int):
             g = _game(reb=6.0 + noise(5), ast=4.0 + noise(3), stl=1.0 + noise(1), blk=1.0 + noise(1),
                       tov=2.0 + noise(2))
             for k, v in g.items():
-                rows.append(("nba", 2026, day, f"g{p}-{d}", f"P{p}", "BOS", "NYK", "S", 1, k, float(v)))
+                # Season 2025: January to March 2026 are its games, and the
+                # box's run judges only a season that has ended (2026-11-14).
+                rows.append(("nba", 2025, day, f"g{p}-{d}", f"P{p}", "BOS", "NYK", "S", 1, k, float(v)))
     conn.executemany("INSERT INTO player_game_logs VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows)
     conn.commit()
     conn.close()
@@ -282,7 +284,7 @@ def test_the_box_check_judges_every_stat_and_the_switch_follows():
         rows = NR.cases(NR.load(conn))
     finally:
         conn.close()
-    got = NR.measure(rows)[2026]
+    got = NR.measure(rows)[2025]
     assert all(got[k]["n"] > 0 and got[k]["gain"] > 0 for k in ("reb", "ast", "stl", "blk", "tov")), got
     keep_db, keep_min = db.DEFAULT_DB, NR.MIN_ROWS
     db.DEFAULT_DB = str(tmp / "history.db")

@@ -77,6 +77,41 @@ def test_the_mail_line_says_it_cannot_see_rather_than_not_set():
     assert _mail_line(hidden=False) == "Mail relay: NOT configured — nothing will send (docs/EMAIL.md)."
 
 
+
+def test_a_paid_pull_without_the_key_says_the_settings_are_roots():
+    """The box, 2026-11-14: Ethan's `sudo -u qellys python3 futures_build.py
+    cbb --odds` printed "No Odds API key ... get a free key", with the key
+    sitting in /etc/qellys/env where the service reads it. It now says the
+    file is root's and how to pass the key in, and still says "set one"
+    where there is no file to read."""
+    from engine.sources import oddsapi as OA
+    keep = {k: os.environ.pop(k) for k in list(os.environ) if k.startswith("ODDS_API_KEY")}
+    try:
+        with _patched(OA, "api_keys", lambda explicit=None: []):
+            with _patched(S, "system_env_hidden", lambda: True):
+                try:
+                    OA.get_api_key()
+                    raise AssertionError("no key, no pull")
+                except OA.OddsAPIError as exc:
+                    said = str(exc)
+                assert "/etc/qellys/env" in said and "only root can read" in said, said
+                assert "sudo -u qellys env $(sudo grep -E '^ODDS_API_KEY' /etc/qellys/env | xargs) python3" in said
+                assert "get a free key" not in said, "the box has one"
+            with _patched(S, "system_env_hidden", lambda: False):
+                try:
+                    OA.get_api_key()
+                    raise AssertionError("no key, no pull")
+                except OA.OddsAPIError as exc:
+                    assert "Set ODDS_API_KEY" in str(exc), "with nothing hidden, it says set one"
+    finally:
+        os.environ.update(keep)
+    # The runbook's own command passes the key the same way.
+    for doc in ("docs/RUN_NEXT.md", "docs/WHEN_YOU_ARE_HOME.md"):
+        text = (ROOT / doc).read_text(encoding="utf-8")
+        assert "sudo -u qellys python3 futures_build.py cbb --odds" not in text, doc
+        assert ("sudo -u qellys env $(sudo grep -E '^ODDS_API_KEY' /etc/qellys/env | xargs) "
+                "python3 futures_build.py cbb --odds") in text, doc
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

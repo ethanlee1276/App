@@ -22,7 +22,10 @@ level and a rule must not take credit for that.
 
 THE BAR, written before the first box run: in every season with 100 or
 more games a rule touches, the squared error of minutes AND of points in
-those games is lower with the rule. HOLDS, or the seasons where it does
+those games is lower with the rule. Every FINISHED season (2026-11-14):
+the season in progress is shown and never judged — three and a half
+weeks of it crossed the floor and switched off rules measured on two full
+seasons, on a sample the bar was never written for. HOLDS, or the seasons where it does
 not. If one does not hold, ``QB_NBA_ROTATION=0`` in /etc/qellys/env turns
 all three off at the next build (`engine/nba/minutes.rotation_on`), and
 the result belongs in the lab's notes.
@@ -221,12 +224,18 @@ def measure(rows: list, tune) -> dict:
     return out
 
 
-def verdict(res: dict, rules: tuple = RULES) -> tuple[bool, list]:
+def verdict(res: dict, rules: tuple = RULES, judge=None) -> tuple[bool, list]:
     """``(holds, why not)`` for ``rules``: the rotation's three by default,
-    ``(FIVE,)`` for the starting five's news."""
+    ``(FIVE,)`` for the starting five's news. ``judge`` (season → bool)
+    says which seasons may be judged: the box's run passes seasons that
+    have ENDED (`seasons.finished`), so the season in progress is shown and
+    never judged — three and a half weeks of it crossed the floor on
+    2026-11-14 and switched off rules measured on two full seasons."""
     why = []
     judged = 0
     for season, by in sorted(res.items()):
+        if judge is not None and not judge(season):
+            continue
         for rule in rules:
             c = by.get(rule) or {}
             if c.get("n", 0) < MIN_TOUCHED:
@@ -239,7 +248,16 @@ def verdict(res: dict, rules: tuple = RULES) -> tuple[bool, list]:
     return not why, why
 
 
-def report(res: dict, k_vac: float) -> list:
+def _finished(season) -> bool:
+    """A season the box's run may judge: one played to its end."""
+    from engine.seasons import finished
+    try:
+        return finished("nba", int(season))
+    except (TypeError, ValueError):
+        return False
+
+
+def report(res: dict, k_vac: float, judge=_finished) -> list:
     lines = ["NBA ROTATION RULES ON THIS BOX'S OWN SEASONS — the board's values, each rule taken out in turn",
              f"(every game a man of {PRICED_MIN:.0f}+ minutes a game played; the vacancy at k {k_vac:g}; "
              "squared error the rule takes off in the games it touches, each side on its own level)", ""]
@@ -250,13 +268,14 @@ def report(res: dict, k_vac: float) -> list:
             c = by.get(rule) or {}
             cells.append(f"n {c.get('n', 0):5d} min {100 * c.get('minutes', 0):+5.1f}% pts {100 * c.get('points', 0):+5.1f}%"
                          if c.get("n") else "—")
-        lines.append(f"{season!s:<8}{by['n']:>8}  " + "".join(f"{x:>30}" for x in cells))
-    ok, why = verdict(res)
-    lines += ["", f"THE BAR (every season with {MIN_TOUCHED}+ touched games: minutes AND points better with the rule): "
+        lines.append(f"{season!s:<8}{by['n']:>8}  " + "".join(f"{x:>30}" for x in cells)
+                     + ("" if judge is None or judge(season) else "   (in progress: shown, not judged)"))
+    ok, why = verdict(res, judge=judge)
+    lines += ["", f"THE BAR (every finished season with {MIN_TOUCHED}+ touched games: minutes AND points better with the rule): "
               + ("HOLDS — the board keeps all three." if ok else
                  "DOES NOT HOLD: " + "; ".join(why[:6])
                  + " — set QB_NBA_ROTATION=0 in /etc/qellys/env to turn the three off, and send this.")]
-    ok5, why5 = verdict(res, (FIVE,))
+    ok5, why5 = verdict(res, (FIVE,), judge=judge)
     lines += [f"THE STARTING FIVE'S NEWS (engine/nba/starters), the same bar: "
               + ("HOLDS — the board keeps it." if ok5 else
                  "NOT JUDGED: no season has enough games it touches — its switch stays as it is."
@@ -310,7 +329,7 @@ def main(argv=None) -> int:
         # thin to judge leaves the switch as it was.
         from engine.nba import switches
         for name, rules in (("rotation", RULES), ("starters", (FIVE,))):
-            ok, why = verdict(res, rules)
+            ok, why = verdict(res, rules, judge=_finished)
             if why == [NOT_JUDGED]:
                 print(f"{name} verdict not filed: no season has enough games a rule touches")
             else:

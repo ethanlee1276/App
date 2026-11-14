@@ -74,6 +74,21 @@ def window(sport: str, season: int) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
+def finished(sport: str, season: int, today: str | None = None) -> bool:
+    """Has this season been played to its end (its window's last day before
+    ``today``)? A season still being played is not, however many games it
+    holds; a sport without a window has nothing to wait for.
+
+    For the box's own checks that judge a rule season by season (nbarules,
+    nbarates): a season in progress is shown and never judged, because a
+    few weeks of it is not the sample its bar was written for (2026-11-14,
+    the NBA's rotation rules switched off on three and a half weeks)."""
+    if sport not in SEASON_WINDOWS:
+        return True
+    end = window(sport, int(season))[1]
+    return (today or _dt.date.today().isoformat()) > end
+
+
 def season_of(sport: str, date: str) -> int:
     """The season an ISO date belongs to, labelled by the year it STARTED.
 

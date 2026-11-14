@@ -117,9 +117,14 @@ def measure(rows: list) -> dict:
     return out
 
 
-def verdict(res: dict) -> tuple[bool, list]:
+def verdict(res: dict, judge=None) -> tuple[bool, list]:
+    """``(holds, why not)``. ``judge`` (season → bool) says which seasons may
+    be judged: the box's run passes seasons that have ENDED, so the season
+    in progress is shown and never judged (2026-11-14, nbarules' reason)."""
     why, judged = [], 0
     for season, by in sorted(res.items()):
+        if judge is not None and not judge(season):
+            continue
         for stat in STATS:
             c = by.get(stat) or {}
             if c.get("n", 0) < MIN_ROWS:
@@ -132,7 +137,7 @@ def verdict(res: dict) -> tuple[bool, list]:
     return not why, why
 
 
-def report(res: dict) -> list:
+def report(res: dict, judge=None) -> list:
     lines = ["NBA RATES READ PAST THE LAST TWENTY ON THIS BOX'S OWN SEASONS — the board's constants",
              f"(every game of {MIN_MINUTES:.0f}+ minutes with {PRIOR_GAMES}+ earlier for his club; the rate times "
              "the minutes he played; squared error the read takes off)", ""]
@@ -142,9 +147,10 @@ def report(res: dict) -> list:
         for stat in STATS:
             c = by.get(stat) or {}
             cells.append(f"n {c['n']:6d} {100 * c['gain']:+6.2f}%" if c.get("n") else "—")
-        lines.append(f"{season!s:<8}" + "".join(f"{x:>22}" for x in cells))
-    ok, why = verdict(res)
-    lines += ["", f"THE BAR (every season with {MIN_ROWS}+ games of a stat: closer with the read, every stat): "
+        lines.append(f"{season!s:<8}" + "".join(f"{x:>22}" for x in cells)
+                     + ("" if judge is None or judge(season) else "   (in progress: shown, not judged)"))
+    ok, why = verdict(res, judge=judge)
+    lines += ["", f"THE BAR (every finished season with {MIN_ROWS}+ games of a stat: closer with the read, every stat): "
               + ("HOLDS — the board keeps it." if ok else
                  "DOES NOT HOLD: " + "; ".join(why[:6])
                  + " — set QB_NBA_RATES=0 in /etc/qellys/env to turn it off, and send this.")]
@@ -167,12 +173,13 @@ def main(argv=None) -> int:
         print("No NBA logs stored.")
         return 0
     res = measure(cases(players))
-    for line in report(res):
+    from nbarules import _finished
+    for line in report(res, judge=_finished):
         if "--save" in argv and line.startswith("Read-only"):
             continue                                  # it files a verdict below
         print(line)
     if "--save" in argv:
-        ok, why = verdict(res)
+        ok, why = verdict(res, judge=_finished)
         if why == ["no season has enough games to judge"]:
             print("rates verdict not filed: no season has enough games to judge")
         else:

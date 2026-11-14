@@ -64,7 +64,9 @@ def _round(path, today, clock, run_piece, rows=None):
 def _start(path, left, pieces=None):
     # The NBA checks not named in ``left`` are done this round, so the
     # round's own late-joining rule (deepfit._late_checks) adds none.
-    done = {c: {"done": WED.isoformat(), "seconds": 60} for c in D.NBA_CHECKS if c not in left}
+    # At the check's current version: an older one is owed again (2026-11-14).
+    done = {c: {"done": WED.isoformat(), "seconds": 60, "v": D.NBA_CHECK_VERSION.get(c, 1)}
+            for c in D.NBA_CHECKS if c not in left}
     path.write_text(json.dumps({"round": WED.isoformat(), "left": list(left),
                                 "pieces": {**done, **(pieces or {})}}))
 

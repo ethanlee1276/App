@@ -75,6 +75,15 @@ SLOW = {"cbb": 25}
 #: that answers is used. The report names the shape that answered and why the
 #: ones before it did not, so the box's next build says which the venue takes.
 #: Every other league asks one way, as before.
+#:
+#: THE CAUSE, ON THE BOX (2026-11-14, Ethan's catch-up, step OY): every
+#: refusal's body was {"error":"gzip_required","hint":"send the header
+#: Accept-Encoding: gzip. /events and /events/keyset pages with limit above
+#: 50 are served compressed only."}. College's soonest hundred and its
+#: two-day window are both over fifty; the page of twenty answered, oldest
+#: first, 19 games of a 71-game night. Every ask now says it takes gzip
+#: (`ACCEPT`), so the soonest hundred answers first again; the other shapes
+#: stay behind it in case the venue refuses something else.
 SHAPES = {
     "cbb": (("page", {"closed": "false", "active": "true", "limit": "100",
                       "order": "startDate", "ascending": "true"}),
@@ -83,6 +92,10 @@ SHAPES = {
             ("small", {"closed": "false", "active": "true", "limit": "20"}),
             ("bare", {"limit": "20"})),
 }
+#: SENT ON EVERY ASK (above): a page over fifty events is served compressed
+#: only, and `fetch.fetch_text` unpacks a gzip body.
+ACCEPT = {"Accept-Encoding": "gzip"}
+
 #: The shape every league but college asks in: a series as it always has,
 #: and a tag soonest first (a tag holds every market about the league).
 PLAIN = (("plain", {"closed": "false", "active": "true", "limit": "200"}),)
@@ -176,7 +189,7 @@ def fetch_events(tag: str, limit: int = 200, ttl: int = 300, timeout: int = TIME
         url = (f"{GAMMA}/events?tag_slug={tag}&closed=false&active=true"
                f"&limit={limit}&order=startDate&ascending=true")
     name = f"poly_events_{tag}{'_' + shape if shape and shape != 'plain' else ''}.json"
-    raw = json.loads(fetch_text(url, name, ttl=ttl, timeout=timeout))
+    raw = json.loads(fetch_text(url, name, ttl=ttl, timeout=timeout, headers=ACCEPT))
     return raw if isinstance(raw, list) else (raw.get("events") or raw.get("data") or [])
 
 
@@ -337,7 +350,8 @@ SPORT_KEYS = {"nfl": ("nfl",), "cfb": ("cfb", "ncaaf"), "mlb": ("mlb",),
 def fetch_series_ids(ttl: int = 86400) -> dict:
     """``{our league: [series id, …]}`` off Polymarket's /sports list,
     which names each league's GAME series. {} when the list is not there."""
-    raw = json.loads(fetch_text(f"{GAMMA}/sports", "poly_sports.json", ttl=ttl, timeout=TIMEOUT_S))
+    raw = json.loads(fetch_text(f"{GAMMA}/sports", "poly_sports.json", ttl=ttl, timeout=TIMEOUT_S,
+                                headers=ACCEPT))
     out: dict = {}
     for row in raw if isinstance(raw, list) else []:
         name = str((row or {}).get("sport") or "").strip().lower()
@@ -357,7 +371,7 @@ def fetch_series_events(series_id: str, limit: int = 200, ttl: int = 300, timeou
         if soonest:
             url += "&order=startDate&ascending=true"
     name = f"poly_series_{series_id}{'_' + shape if shape and shape != 'plain' else ''}.json"
-    raw = json.loads(fetch_text(url, name, ttl=ttl, timeout=timeout))
+    raw = json.loads(fetch_text(url, name, ttl=ttl, timeout=timeout, headers=ACCEPT))
     return raw if isinstance(raw, list) else (raw.get("events") or raw.get("data") or [])
 
 
@@ -480,14 +494,20 @@ def probe(sport: str = "cbb", limit: int = 5) -> list[str]:
     import urllib.request
     from .fetch import USER_AGENT
 
+    import gzip
+
+    def _unpacked(body):
+        return gzip.decompress(body) if body[:2] == b"\x1f\x8b" else body
+
     def _venue_answer(url, n=300):
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        # Asked as the build asks (`ACCEPT`), and unpacked as it unpacks.
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **ACCEPT})
         try:
             with urllib.request.urlopen(req, timeout=SLOW.get(sport, TIMEOUT_S)) as r:
-                body = r.read()
+                body = _unpacked(r.read())
                 return r.status, body if n is None else body[:n], len(body)
         except urllib.error.HTTPError as e:
-            body = e.read()
+            body = _unpacked(e.read())
             return e.code, body[:n or 600], len(body)
         except Exception as e:                                     # noqa: BLE001
             return "error", str(e)[:200].encode(), 0

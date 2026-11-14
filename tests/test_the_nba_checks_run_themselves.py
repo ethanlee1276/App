@@ -109,8 +109,14 @@ def test_a_round_under_way_takes_the_checks_late():
     assert any("join this round before its fitters" in ln for ln in lines), lines
     st = {"round": "2026-11-04", "left": ["mlb"], "pieces": {}}
     assert not D._late_checks(st, "2026-11-04") and st["left"] == ["mlb"], "no NBA fitters owed, no checks"
-    st = {"round": "2026-11-04", "left": ["nba"], "pieces": {c: {"done": "2026-11-04"} for c in CHECKS}}
+    st = {"round": "2026-11-04", "left": ["nba"],
+          "pieces": {c: {"done": "2026-11-04", "v": D.NBA_CHECK_VERSION.get(c, 1)} for c in CHECKS}}
     assert not D._late_checks(st, "2026-11-04"), "a check done this round is not owed twice"
+    # …unless its measuring code changed since (2026-11-14): a check done
+    # this round on an older version runs again before the NBA's fitters.
+    st = {"round": "2026-11-04", "left": ["nba"], "pieces": {c: {"done": "2026-11-04"} for c in CHECKS}}
+    assert D._late_checks(st, "2026-11-04")
+    assert st["left"] == [*(c for c in CHECKS if c in D.NBA_CHECK_VERSION), "nba"], st["left"]
 
 
 class _Done:

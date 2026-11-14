@@ -259,7 +259,9 @@ def test_the_weekly_run_files_both_verdicts_and_the_heartbeat_shows_it():
         for d, g in games.items():
             for name, s in g.items():
                 for market in ("min", "pts"):
-                    rows.append({"sport": "nba", "season": season, "period": d, "game_id": f"{team}-{d}",
+                    # Filed under a finished season (2025): the run judges
+                    # only a season that has ended (nbarules, 2026-11-14).
+                    rows.append({"sport": "nba", "season": 2025, "period": d, "game_id": f"{team}-{d}",
                                  "player": name, "team": team, "opponent": "NYK",
                                  "position": "S" if s["starter"] else "B", "home": 1,
                                  "market": market, "value": float(s[market])})

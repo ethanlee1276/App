@@ -152,11 +152,17 @@ def prune_ephemeral(cache_dir: Path | None = None, force: bool = False,
 
 
 def fetch_text(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
-               timeout: int = 45, user_agent=USER_AGENT) -> str:
+               timeout: int = 45, user_agent=USER_AGENT,
+               headers: dict | None = None) -> str:
     """Return the text body of ``url``, caching it under ``cache_name``.
 
     If a fresh cache exists it is used. On a network failure a stale cache is
     used if present; otherwise :class:`DataUnavailable` is raised.
+
+    ``headers`` are sent beside the User-Agent: a venue that serves a big
+    page compressed only (Polymarket, 2026-11-14: "send the header
+    Accept-Encoding: gzip") is asked for it, and a gzip body is unpacked
+    below whoever asked.
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = _cache_path(cache_name)
@@ -165,9 +171,10 @@ def fetch_text(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
         return path.read_text(encoding="utf-8", errors="replace")
 
     try:
-        headers = ({} if user_agent is DEFAULT_AGENT
-                   else {"User-Agent": user_agent})
-        req = urllib.request.Request(url, headers=headers)
+        sent = ({} if user_agent is DEFAULT_AGENT
+                else {"User-Agent": user_agent})
+        sent.update(headers or {})
+        req = urllib.request.Request(url, headers=sent)
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read()
         if url.endswith(".gz") or raw[:2] == b"\x1f\x8b":
