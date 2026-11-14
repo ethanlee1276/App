@@ -2042,7 +2042,15 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
                      "defense": {t: ((charting or {}).get("defense") or {}).get(t) for t in teams
                                  if ((charting or {}).get("defense") or {}).get(t)},
                      "offense": {t: ((charting or {}).get("offense") or {}).get(t) for t in teams
-                                 if ((charting or {}).get("offense") or {}).get(t)}} if charting else None,
+                                 if ((charting or {}).get("offense") or {}).get(t)},
+                     # EACH WEEK'S BLITZ AND WHO IT FACED, and each side's
+                     # scrambling quarterbacks (engine/sources/ftn, 2026-11-14):
+                     # the report's angles read them (engine/angles).
+                     "defense_weeks": {t: ((charting or {}).get("defense_weeks") or {}).get(t) for t in teams
+                                       if ((charting or {}).get("defense_weeks") or {}).get(t)},
+                     "scrambles": {t: sorted((v for (tt, _n), v in ((charting or {}).get("scrambles") or {}).items()
+                                              if tt == t), key=lambda v: -int(v.get("scrambles") or 0))[:2]
+                                   for t in teams}} if charting else None,
         "rush": {t: _pass_rush(t, defenders_now, injuries, reserve=reserve) for t in teams},
         "reserve": {t: reserve_rows(t, reserve, usage, defenders_now) for t in teams},
         "line_out": lines,

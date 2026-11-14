@@ -51,7 +51,7 @@ HEAVY_BOX, LIGHT_BOX = 8, 6
 PBP_COLS = ("game_id", "play_id", "week", "posteam", "defteam", "play_type", "pass_attempt",
             "rush_attempt", "qb_dropback", "qb_scramble", "sack", "interception", "complete_pass",
             "passer_player_id", "passer_player_name", "receiver_player_id", "receiver_player_name",
-            "rusher_player_id", "rusher_player_name")
+            "rusher_player_id", "rusher_player_name", "yards_gained")
 
 
 def _flag(v) -> bool:
@@ -175,6 +175,10 @@ def defense_weeks(rows, season: int) -> dict:
         if not team:
             continue
         a = acc[(team, season, _n(r.get("week"), 0))]
+        # WHO IT FACED that week, so a meeting's own blitz rate can be read
+        # (the scan's "blitzed him on 62% of his dropbacks in Week 5").
+        if r.get("posteam"):
+            a["opp"] = r.get("posteam")
         if _is_dropback(r):
             a["dropbacks"] += 1
             a["blitz"] += (_n(r.get("n_pass_rushers"), 0) or 0) >= BLITZ_RUSHERS
@@ -185,6 +189,27 @@ def defense_weeks(rows, season: int) -> dict:
                 a["runs"] += 1
                 a["heavy_box"] += box >= HEAVY_BOX
                 a["light_box"] += box <= LIGHT_BOX
+    return _weeks(acc)
+
+
+def scramble_weeks(rows, season: int) -> dict:
+    """Per quarterback (the runner, by gsis id) per week: scrambles and their
+    yards — what a blitz-heavy defence turns into rushing yards for a
+    quarterback who runs (Ethan's reports: "Daniels scrambles 4.2 times a
+    game at 8.74 yards a carry" against "a Giants D that blitzed him on
+    62.2% of his dropbacks")."""
+    acc: dict = defaultdict(lambda: defaultdict(int))
+    for r in rows:
+        if _n(r.get("qb_scramble"), 0) != 1:
+            continue
+        pid = r.get("rusher_player_id") or r.get("passer_player_id") or ""
+        if not pid:
+            continue
+        a = acc[(pid, season, _n(r.get("week"), 0))]
+        a["scrambles"] += 1
+        a["scramble_yds"] += _n(r.get("yards_gained"), 0) or 0
+        a["name"] = r.get("rusher_player_name") or r.get("passer_player_name") or ""
+        a["team"] = r.get("posteam") or ""
     return _weeks(acc)
 
 
@@ -288,10 +313,29 @@ def season_tables(season: int, before_week=None, rows=None) -> dict:
     out["weeks"] = sum(1 for n in per_week.values() if n >= FULL_WEEK_PLAYS)
     partial = [w for w, n in per_week.items() if n < FULL_WEEK_PLAYS]
     out["partial"] = max(partial) if partial else None
+    out["defense_weeks"] = {}
     for team, weeks in defense_weeks(rows, season).items():
         t = _sum_shares(weeks, DEFENSE_SHARES, before_week)
         if t.get("dropbacks", 0) >= MIN_DROPBACKS or t.get("runs", 0) >= MIN_RUNS:
             out["defense"][team] = t
+        # EACH WEEK'S BLITZ AND WHO IT FACED (2026-11-14): the last four
+        # weeks' rate and a meeting's own, for the report's angles.
+        out["defense_weeks"][team] = [
+            {"week": w, "opp": c.get("opp") or "", "dropbacks": int(c.get("dropbacks") or 0),
+             "blitz": int(c.get("blitz") or 0)}
+            for _s, w, c in weeks if before_week is None or w < int(before_week)]
+    # EACH QUARTERBACK'S SCRAMBLES (scramble_weeks), keyed as the qbs are.
+    out["scrambles"] = {}
+    for _pid, weeks in scramble_weeks(rows, season).items():
+        kept = [(w, c) for _s, w, c in weeks if before_week is None or w < int(before_week)]
+        if not kept:
+            continue
+        name, team = kept[-1][1].get("name") or "", kept[-1][1].get("team") or ""
+        if name and team:
+            out["scrambles"][(team, name)] = {
+                "scrambles": sum(int(c.get("scrambles") or 0) for _w, c in kept),
+                "yds": sum(int(c.get("scramble_yds") or 0) for _w, c in kept),
+                "weeks": len(kept), "name": name, "team": team}
     for team, weeks in offense_weeks(rows, season).items():
         t = _sum_shares(weeks, OFFENSE_SHARES, before_week)
         if t.get("dropbacks", 0) >= MIN_DROPBACKS:

@@ -336,8 +336,10 @@ class Ctx:
                  sched=None, staff: dict | None = None, names: dict | None = None,
                  form: dict | None = None, meetings: list | None = None, ideas: dict | None = None,
                  sport: str = "nfl", meta: dict | None = None, changes: dict | None = None,
-                 grades: dict | None = None):
+                 grades: dict | None = None, angles: dict | None = None):
         self.g = g
+        # This season's leak tables (engine/angles.nfl_tables), the NFL's.
+        self.angle_tables = angles or {}
         # Our grades (engine/grades), the NFL's: {kind: {(team, name): grade}}.
         self.grades = grades or {}
         self.sport = sport
@@ -2603,6 +2605,31 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
     return sec
 
 
+def sec_angles(c: Ctx) -> dict | None:
+    """THE ANGLES (engine/angles; Ethan, 2026-11-14: "it looks at the
+    player's defense and offense and tries to find good matchups ... it's
+    very hard to find that information if we are giving it"). Where each
+    defence leaks to the players this offence has — the top receiver, the
+    tight end, the quarterback's legs against the blitz, the red-zone
+    scorer — each with its number, its rank and the market it points at,
+    first after the short version."""
+    from .angles import for_game
+    rows = for_game(c, c.angle_tables)
+    if not rows:
+        return None
+    up = [r for r in rows if r.get("tone") == "up"]
+    down = [r for r in rows if r.get("tone") == "down"]
+    blocks = []
+    if up:
+        blocks += [_h("Where to look"), _list(f"{_sentence(r['text'])[:-1]} → {r['points_to']}" for r in up)]
+    if down:
+        blocks += [_h("Where to be careful"), _list(f"{_sentence(r['text'])[:-1]} → {r['points_to']}" for r in down)]
+    blocks.append({"type": "note", "text": ("This season's games, from the box scores and the charting. Shown, not "
+                                            "counted: the board's numbers price each defence against each position "
+                                            "on their own measured scale.")})
+    return _section("angles", "The angles", blocks)
+
+
 def _game_parlays(c: Ctx) -> dict | None:
     from .gameparlays import for_game
     return for_game(c.result, c.home, c.away)
@@ -2656,7 +2683,7 @@ def parlay_sentence(c: Ctx) -> str:
     return _sentence(". ".join(bits)) if bits else ""
 
 
-SECTIONS = (sec_facts, sec_meetings, sec_market, sec_rankings, sec_identity, sec_injuries,
+SECTIONS = (sec_angles, sec_facts, sec_meetings, sec_market, sec_rankings, sec_identity, sec_injuries,
             sec_matchups, sec_trenches, sec_redzone, sec_context, sec_scripts, sec_watch,
             sec_parlays, sec_weather, sec_before)
 
@@ -2683,13 +2710,13 @@ def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
           staff: dict | None = None, names: dict | None = None, form: dict | None = None,
           meetings: list | None = None, ideas: dict | None = None, sport: str = "nfl",
           meta: dict | None = None, changes: dict | None = None,
-          grades: dict | None = None) -> dict | None:
+          grades: dict | None = None, angles: dict | None = None) -> dict | None:
     """One game's report, or None for a row with no teams."""
     if not isinstance(g, dict) or not g.get("away") or not g.get("home"):
         return None
     c = Ctx(g, result, allowed=allowed, sched=sched, staff=staff, names=names,
             form=form, meetings=meetings, ideas=ideas, sport=sport, meta=meta, changes=changes,
-            grades=grades)
+            grades=grades, angles=angles)
     return finish(c, SECTIONS, sec_short)
 
 
@@ -2821,6 +2848,16 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             except Exception:                                # noqa: BLE001
                 grades = {}
         _t = _clock.lap("game reports", "grades", _t)
+        # THE ANGLES' TABLES (engine/angles): this season's leaks by
+        # defence, read once off the game logs.
+        angle_tables = {}
+        if sport == "nfl" and season and conn is not None:
+            try:
+                from . import angles as _angles
+                angle_tables = _angles.nfl_tables(conn, season, before_week=_week_of(result))
+            except Exception:                                # noqa: BLE001
+                angle_tables = {}
+        _t = _clock.lap("game reports", "angles", _t)
         if ideas is None and sport == "nfl":
             try:
                 from . import ideas as _ideas
@@ -2868,7 +2905,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
                       form=form, meetings=met, ideas=extra, sport=sport,
                       meta=(meta or {}).get(f"{away}@{home}"),
                       changes=logged.get(f"{away}@{home}|{str(g.get('date') or '')[:10]}"),
-                      grades=grades)
+                      grades=grades, angles=angle_tables)
             if r:
                 reports.append(r)
         _t = _clock.lap("game reports", "reports", _t)

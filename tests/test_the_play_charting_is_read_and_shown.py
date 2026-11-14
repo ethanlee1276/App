@@ -71,7 +71,10 @@ def test_the_join_is_by_game_and_play_and_the_tables_count_what_the_charting_say
     rows = F.joined(2026, charted=charted, plays=plays)
     assert len(rows) == 15, "every charted play the play-by-play carries, once"
     d = F.defense_weeks(rows, 2026)["CHI"]
-    assert d == [(2026, 1, {"dropbacks": 10, "blitz": 4, "blitzers": 4, "runs": 4, "heavy_box": 3, "light_box": 1})]
+    # Each week also says whom it faced since 2026-11-14 (a meeting's own
+    # blitz rate, engine/angles).
+    assert d == [(2026, 1, {"opp": "PHI", "dropbacks": 10, "blitz": 4, "blitzers": 4, "runs": 4,
+                            "heavy_box": 3, "light_box": 1})]
     o = F.offense_weeks(rows, 2026)["PHI"][0][2]
     assert o["dropbacks"] == 10 and o["play_action"] == 3 and o["attempts"] == 10 and o["catchable"] == 8 and o["iw"] == 1
     q = F.qb_weeks(rows, 2026)["00-H"][0][2]
