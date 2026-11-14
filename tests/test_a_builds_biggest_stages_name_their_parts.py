@@ -290,7 +290,8 @@ def test_the_matchup_scan_names_each_table_it_reads_and_reads_the_same():
     assert [p["player"] for p in timed["scan_reads"]["ATL@GB"]["players"]] == ["Christian Watson"]
 
 
-GAME_REPORT_PARTS = ["schedule + staff", "player form", "grades", "ideas + kicking fit",
+# "angles" since 2026-11-14: the leak tables the report opens on (engine/angles).
+GAME_REPORT_PARTS = ["schedule + staff", "player form", "grades", "angles", "ideas + kicking fit",
                      "meetings + kicking air", "what changed", "reports"]
 
 
