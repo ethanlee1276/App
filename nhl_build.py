@@ -571,6 +571,15 @@ def game_bets(g, teams: dict, ctx: dict | None = None, league: dict | None = Non
             c["grade"], c["stake_units"] = "Pass", 0.0
         else:
             c["stake_units"] = eh["stake_units"]
+        # The loss miner's closures and the stopped shelves, as on every
+        # board (`gamebets.loss_veto`), once Edge Hunter has sized it; a
+        # closed slice takes it off the Edge board the way an injury does.
+        from engine.gamebets import loss_veto
+        block = loss_veto(SPORT, {**c, "date": getattr(g, "date", None),
+                                  "kickoff": getattr(g, "kickoff", None)}, g)
+        if block:
+            c["loss_veto"] = block
+            _edge_pass(c, block)
     return out
 
 

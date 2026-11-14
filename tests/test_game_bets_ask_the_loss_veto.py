@@ -97,6 +97,14 @@ def test_no_store_is_no_veto_and_a_broken_card_never_raises():
     assert GB.loss_veto("nfl", {"bet_type": "first_td"}) is None
 
 
+def test_hockeys_game_bets_ask_it_once_edge_hunter_has_sized_them():
+    src = (ROOT / "nhl_build.py").read_text(encoding="utf-8")
+    i = src.index("def game_bets(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert body.index('c["edge_hunter"] = eh') < body.index("block = loss_veto(SPORT,") < body.index(
+        "_edge_pass(c, block)"), "after the sizing, through the Edge board's own pass"
+
+
 def test_both_game_finishers_ask_it_last():
     for path, sport in ((ROOT / "engine" / "pipeline.py", "nfl"), (ROOT / "engine" / "mlb" / "pipeline.py", "mlb")):
         src = path.read_text(encoding="utf-8")

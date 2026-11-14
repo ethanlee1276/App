@@ -9373,9 +9373,10 @@ game bets included, and closes a slice the record convicts; a market that
 has lost over its whole record is stopped (engine/shelfstop), and the
 hypothesis lab's confirmed rules close slices too. All three are enforced in
 one place, `losspatterns.veto`, and every prop board and college football's
-game plays ask it. The NFL's and MLB's spreads, totals and moneylines never
-did, so a convicted pocket or a stopped game shelf kept posting and staking.
-They ask it now, last, with what the journal writes for a game bet (the
+game plays ask it. The NFL's, MLB's and the NHL's spreads (puck lines),
+totals and moneylines never did, so a convicted pocket or a stopped game
+shelf kept posting and staking. They ask it now, last (hockey's once Edge
+Hunter has sized the bet), with what the journal writes for a game bet (the
 market and side as journaled, the price, our chance, the shop, days and
 minutes to kickoff, rest, body clock, football's wind). A game bet in a
 closed slice is shown with the closure on its card and not staked
