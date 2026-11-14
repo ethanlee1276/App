@@ -137,8 +137,10 @@ def is_division_one(code: str) -> bool:
 
 def priority(game: dict) -> tuple:
     """How much one game is worth buying player prices for, as a sort key
-    (smaller first): a ranked team in it (the higher the better), two power
-    conference schools, one, a conference game, then the tip.
+    (smaller first): two Division I schools; how many of its two sides are
+    ranked or in a power conference, both before one before none; a ranked
+    team in it (the higher the better); two power conference schools, one;
+    a conference game; then the tip.
 
     WHY THIS ORDER. A college night is 60 to 150 games and the books post
     player props on a fraction of them — the ranked teams and the power
@@ -146,10 +148,24 @@ def priority(game: dict) -> tuple:
     price spends credits on an empty answer; buying them in this order buys
     the priced ones first, inside the budget's count
     (`oddsbudget.affordable_events`), which is the rule college football's
-    pull follows with its attention tiers."""
+    pull follows with its attention tiers.
+
+    BOTH SIDES BEFORE ONE (2026-11-14, the board's own prop menu). Of the
+    eight games Saturday's pulls bought, the books posted player markets on
+    one, LSU at Gonzaga, and ladders on one more, Colorado at Providence.
+    Six power schools' home games against small ones got nothing: Gardner-
+    Webb at South Carolina, Stonehill at Texas Tech, Southern Utah at Wake
+    Forest, UNC Asheville at Georgia Tech, Utah Tech at California, Rider at
+    Villanova. A ranked team used to put its game first whoever it played,
+    so a ranked school's buy game was bought ahead of two power schools
+    meeting. And a school below Division I (an "espn:" code, `is_division_
+    one`) is bought last: the evening's last pull bought one."""
     ranks = [r for r in (game.get("home_rank"), game.get("away_rank")) if r]
     power = sum(1 for side in ("home", "away") if str(game.get(f"{side}_conf") or "") in POWER)
-    return (0 if ranks else 1, min(ranks) if ranks else 99, -power,
+    notable = sum(1 for side in ("home", "away")
+                  if game.get(f"{side}_rank") or str(game.get(f"{side}_conf") or "") in POWER)
+    below = sum(1 for side in ("home", "away") if not is_division_one(str(game.get(side) or "")))
+    return (below, -notable, 0 if ranks else 1, min(ranks) if ranks else 99, -power,
             0 if game.get("conference_game") else 1, str(game.get("kickoff") or ""))
 
 

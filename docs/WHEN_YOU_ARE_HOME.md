@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QL. College basketball buys the games the books post players on**
+(step 566; 14 November). Nothing to run. College basketball's board priced
+no player props again on Saturday (Edge 0, Most Likely 0 at 4 PM ET). Its
+prop menu says why: of the eight games the day's pulls bought, the books
+posted player markets on one, LSU at Gonzaga, and ladders on one more,
+Colorado at Providence. Six power schools' home games against small ones
+got nothing: Gardner-Webb at South Carolina, Stonehill at Texas Tech,
+Southern Utah at Wake Forest, UNC Asheville at Georgia Tech, Utah Tech at
+California, and Rider at Villanova. A ranked team used to put its game first
+whoever it played. The pull now buys first the games where both sides are
+ranked or in a power conference, then one, then none, and a school below
+Division I last (the last pull had bought one). The five games a pull and
+its credits are unchanged (engine/cbbteams.priority). The prop menu on the
+board (`prop_menu`) keeps saying what each bought game carried.
+
 **QK. A college player who left is read at his new school only** (step
 565; 14 November). Nothing to run. Your picks audit (QC) read Dylan
 Lonergan twice on one Saturday: "BC vs ND, QB" and "RUTG vs NEB, QB". This

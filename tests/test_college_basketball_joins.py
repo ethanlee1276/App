@@ -134,8 +134,32 @@ def test_the_board_buys_the_ranked_and_power_games_still_to_tip():
          "home_rank": 9, "home_conf": "7", "away_conf": "7"},
     ]
     picked = [f"{g['away']}@{g['home']}" for g in nba_build.college_board_games(games, cap=3)]
-    assert picked == ["UNC@DUKE", "IU@PUR", "espn:9999@TEX"], picked
+    # (Pin updated 2026-11-14: a school below Division I is bought last — no
+    # book posts its players — so the small-conference game is third.)
+    assert picked == ["UNC@DUKE", "IU@PUR", "B@A"], picked
     assert nba_build.CBB_PROP_GAMES == 5
+
+
+def test_two_real_teams_meeting_are_bought_before_a_ranked_schools_buy_game():
+    """Saturday 14 November's prop menu: the books posted player markets on
+    LSU at Gonzaga and ladders on Colorado at Providence, and nothing on six
+    power schools' home games against small ones. A ranked team used to put
+    its game first whoever it played."""
+    import nba_build
+    games = [
+        {"home": "TTU", "away": "STO", "state": "scheduled", "kickoff": "2026-11-14T19:00Z",
+         "home_rank": 8, "home_conf": "8", "away_conf": "46"},                 # a ranked host's buy game
+        {"home": "SC", "away": "GWEB", "state": "scheduled", "kickoff": "2026-11-14T19:00Z",
+         "home_conf": "23", "away_conf": "6"},
+        {"home": "PROV", "away": "COLO", "state": "scheduled", "kickoff": "2026-11-14T23:00Z",
+         "home_conf": "4", "away_conf": "8"},                                   # two power schools
+        {"home": "GONZ", "away": "LSU", "state": "scheduled", "kickoff": "2026-11-14T20:30Z",
+         "home_rank": 12, "home_conf": "29", "away_conf": "23"},                # ranked against power
+        {"home": "UNCW", "away": "espn:2410", "state": "scheduled", "kickoff": "2026-11-14T18:00Z",
+         "home_conf": "10"},
+    ]
+    picked = [f"{g['away']}@{g['home']}" for g in nba_build.college_board_games(games, cap=5)]
+    assert picked == ["LSU@GONZ", "COLO@PROV", "STO@TTU", "GWEB@SC", "espn:2410@UNCW"], picked
     assert nba_build.club_ids([{"home": "DUKE", "away": "UNC", "home_id": "150", "away_id": "153"}]) == \
         {"DUKE": "150", "UNC": "153"}
 
