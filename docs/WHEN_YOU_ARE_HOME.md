@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PE. Eight leagues on one row** (step 533; 14 November). Nothing to run.
+You, with the folded Duo's league row circled: "fit this better." College
+basketball made the leagues eight, and at 48px a button the eighth (UFC)
+sat alone on a second line on every phone. The leagues now share the row
+in equal eighths with 1px a side, the crest never wider than its eighth,
+and the label a little tighter. All eight hold one row on the folded Duo
+(46px each), every iPhone (45 to 52px), a 360 Android (43px) and a 320
+phone (38px), every button still 44px tall. Measured in a browser at each
+size (tests/test_eight_leagues_one_row). The first visit stays inside its
+378 KB budget, with 11 bytes to spare.
+
 **PD. The NCAA race waits for the whole schedule** (step 532; 14
 November). Nothing to run. The box's first race (00:55 UTC) was played out
 with only six days of the schedule ahead read, and said "437 games left"

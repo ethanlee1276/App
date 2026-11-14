@@ -5152,23 +5152,26 @@ body.has-rail .shell {
   .sportbar { padding: 0; }
   /* `.view` drops to 12px here; the strip tracks it. */
   .sportbar-in { padding: 0 8px; gap: 0; }
-  /* THE SIX SHARE THE ROW EVENLY. `flex: 1 1 auto` with a floor rather
-     than `0 0 auto`: at 390px the labels are three and four characters,
-     so intrinsic widths leave NFL narrow and WNBA wide and the underline
-     lengths disagree down the row. Spreading them puts the taps on an
-     even pitch, which is what a thumb aims at. The floor is what keeps a
-     seventh league wrapping to a second line instead of squeezing six
-     into an unreadable one. */
-  .sportbar-in .sport-btn { flex: 1 1 auto; min-width: 48px; }
+  /* THE LEAGUES SHARE THE ROW IN EQUAL PARTS. Spread rather than sized to
+     their labels: intrinsic widths left NFL narrow and WNBA wide, and an
+     even pitch is what a thumb aims at. EIGHT SINCE COLLEGE BASKETBALL
+     (Ethan, 2026-11-14, the folded Duo's strip circled: "fit this
+     better"): at 48px a button with 4px a side the eighth, UFC, sat alone
+     on a second line on every phone. Equal eighths (`1 1 0`), 1px a side,
+     the crest never wider than its eighth (below) and the label a little
+     tighter hold all eight on one row down to a 320 phone, every button
+     still 44px tall; the 36px floor wraps anything narrower, the safe
+     failure (tests/test_eight_leagues_one_row, test_league_strip). */
+  .sportbar-in .sport-btn { flex: 1 1 0; min-width: 36px; }
   /* v3 (2026-09-22): the strip as a carousel of crests — a circle with
      the code, the name beneath, the active one ringed in gold. It still
      wraps and never scrolls (test_league_strip). */
   .sportbar-in { padding: 6px 8px 2px; }
   .sportbar-in .sport-btn { display: flex; flex-direction: column; align-items: center; gap: 5px;
-    padding: 6px 2px 8px; border-bottom: 0; font-size: var(--fs-2xs); letter-spacing: .06em; }
+    padding: 6px 2px 8px; border-bottom: 0; font-size: var(--fs-2xs); letter-spacing: .03em; }
   /* The crest holds the sport's glyph (leagueCrests); the code is the
      label beneath it, once. */
-  .sportbar-in .sport-btn .crest { width: 44px; height: 44px; border-radius: 50%;
+  .sportbar-in .sport-btn .crest { width: min(44px, 100%); aspect-ratio: 1; border-radius: 50%;
     display: grid; place-items: center; border: var(--hairline) solid transparent; background: var(--panel);
     color: var(--text-dim);
     /* The active ring is an inset outline, so the crest never changes
@@ -6259,7 +6262,7 @@ body.has-deck #rail-live { display: none; }
      phone's 344 — one row, every league in reach, the 44px crest the
      tap target it always was. Later in the file than the 900px rule
      on purpose: same specificity, and the last one wins. */
-  .sportbar-in .sport-btn { padding: 0 4px; }
+  .sportbar-in .sport-btn { padding: 0 1px; }
   /* ONE WAY IN, AT THE TOP LEFT. The hamburger came back to the top
      left on 2026-08-22 (Ethan: "three bars on the top left that will
      pull open the menu"); the tab bar's fifth slot became More on
@@ -10213,6 +10216,8 @@ body.betit-open { overflow: hidden; }
    ============================================================ */
 @media (max-width: 359px) {
   .view { padding-left: 10px; padding-right: 10px; }
+  /* A 320 phone's eighth is 38px: NCAAB fits it unspaced. */
+  .sportbar-in .sport-btn { letter-spacing: 0; }
   .ob-card { grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "who who" "odds ring" "checks checks"; }
   .ob-odds { justify-self: start; }
@@ -11113,3 +11118,4 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
   .tf-toast, .crash-note, [id="ptr"], .pk-card, .ffd-card, .tour-card, .a2hs-card,
   .graph-tip { background-image: none; }
 }
+

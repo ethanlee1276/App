@@ -115,17 +115,21 @@ def test_the_live_page_opens_quiet_with_the_decks_card_and_nothing_twice():
     assert ".lv-rest ~ .yp-host { margin-bottom: 18px; }" in CSS
 
 
-def test_six_crests_share_one_row_on_a_phone():
+def test_the_crests_share_one_row_on_a_phone():
+    """Six crests (2026-09-22), eight since college basketball (2026-11-14,
+    the folded Duo's strip: "fit this better"): equal eighths, the crest
+    never wider than its eighth, so all eight hold one row down to a 320
+    phone (measured in a browser by tests/test_eight_leagues_one_row)."""
     tablet = DECLS.index(".sportbar-in .sport-btn { min-height: 44px; padding: 0 10px; }")
-    phone = DECLS.index(".sportbar-in .sport-btn { padding: 0 4px; }")
+    phone = DECLS.index(".sportbar-in .sport-btn { padding: 0 1px; }")
     assert tablet < phone, "the phone's padding must come after the tablet's, or the tablet's wins"
     block = DECLS.rfind("@media (max-width: 760px) {", 0, phone)
     assert block != -1 and "@media" not in DECLS[block + 10:phone], "inside the phone block"
-    crest = int(re.search(r"\.sportbar-in \.sport-btn \.crest \{ width: (\d+)px;", DECLS).group(1))
-    side = int(re.search(r"\.sportbar-in \.sport-btn \{ padding: 0 (\d+)px; \}", DECLS).group(1))
+    floor = int(re.search(r"\.sportbar-in \.sport-btn \{ flex: 1 1 0; min-width: (\d+)px; \}", DECLS).group(1))
     bar = int(re.search(r"\.sportbar-in \{ padding: 6px (\d+)px 2px; \}", DECLS).group(1))
-    assert 6 * (crest + 2 * side) <= 360 - 2 * bar, "six crests no longer fit a 360 phone in one row"
-    assert crest >= 44, "the crest is the tap target"
+    assert 8 * floor <= 320 - 2 * bar, "eight leagues no longer fit a 320 phone in one row"
+    assert ".sportbar-in .sport-btn .crest { width: min(44px, 100%); aspect-ratio: 1;" in DECLS, \
+        "the crest can outgrow its eighth"
 
 
 if __name__ == "__main__":

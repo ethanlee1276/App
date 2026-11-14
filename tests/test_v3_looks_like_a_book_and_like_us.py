@@ -43,7 +43,9 @@ PHONE = PHONE[:PHONE.index("\n}\n") + 3]
 def test_the_league_strip_is_a_carousel_of_crests_on_phones_and_still_wraps():
     # v4 (2026-09-22): the crest is the sport's glyph (leagueCrests) and
     # the code is said once, beneath it — see test_the_phone_says_nothing_twice.py.
-    assert ".sportbar-in .sport-btn .crest { width: 44px; height: 44px; border-radius: 50%;" in PHONE
+    # 44px, or its eighth of the row where that is less (eight leagues
+    # since 2026-11-14, tests/test_eight_leagues_one_row).
+    assert ".sportbar-in .sport-btn .crest { width: min(44px, 100%); aspect-ratio: 1; border-radius: 50%;" in PHONE
     # The ring is an inset outline: 2px stays a stripe weight for borders
     # (tests/test_hairlines.py), and the crest keeps its size when active.
     assert "outline: 2px solid transparent; outline-offset: -2px;" in PHONE
