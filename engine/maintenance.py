@@ -1279,6 +1279,59 @@ def _export_record(lconn, phases: dict) -> None:
         phases["export_two_leg"] = dict(ledger.TWO_LEG_LAST)
 
 
+def _learn_verdicts_note() -> str:
+    """What `learn_verdicts` is, for the reader of the heartbeat."""
+    return ("what each learner concluded on this pass, per league: counts and "
+            "keys only, never a fitted number")
+
+
+def verdict_losspatterns(lp: dict) -> dict:
+    """The loss miner's pass: rows read, slices tested, slices closed by league."""
+    from collections import Counter
+    closed = Counter(str((f or {}).get("sport") or "all") for f in (lp or {}).get("closed") or [])
+    return {"records": (lp or {}).get("n_records"), "tested": (lp or {}).get("tested"),
+            "closed": dict(sorted(closed.items()))}
+
+
+def verdict_journal(jf: dict) -> dict:
+    """The journal fits by league: temperatures fitted or refitted this pass,
+    keys another fitter owns, keys still under the floor, players' memory
+    adopted."""
+    out: dict = {}
+    temps = (jf or {}).get("temperatures") or {}
+    for kind, name in (("fitted", "fitted"), ("refitted", "fitted"),
+                       ("owned", "owned"), ("collecting", "collecting")):
+        for r in temps.get(kind) or []:
+            sport = str((r or {}).get("key") or "").split(":", 1)[0] or "?"
+            d = out.setdefault(sport, {})
+            d[name] = d.get(name, 0) + 1
+    for r in ((jf or {}).get("memory") or {}).get("fitted") or []:
+        if (r or {}).get("adopted"):
+            sport = str(r.get("key") or "").split(":", 1)[0] or "?"
+            d = out.setdefault(sport, {})
+            d["memory"] = d.get("memory", 0) + 1
+    return dict(sorted(out.items()))
+
+
+def verdict_selection(sf: dict) -> dict:
+    """The selection haircut by league: settled picks read, and whether the
+    league's own fit is applied. The shift itself stays off the page."""
+    entries = [("pooled", (sf or {}).get("pooled") or {})] + sorted(((sf or {}).get("sports") or {}).items())
+    return {name: {"n": int((e or {}).get("n") or 0), "applied": bool((e or {}).get("applied"))}
+            for name, e in entries}
+
+
+def verdict_hypotheses(hs: dict) -> dict:
+    """The hypothesis lab's retest: each stored claim's standing, by league."""
+    out: dict = {}
+    for h in (hs or {}).get("hypotheses") or []:
+        sport = str((h or {}).get("sport") or "all")
+        act = str((h or {}).get("action") or "none")
+        d = out.setdefault(sport, {})
+        d[act] = d.get(act, 0) + 1
+    return dict(sorted(out.items()))
+
+
 def _learn_sampled(learn, phases: dict) -> None:
     """``learn()``, the settle pass's hourly learners, with where its time
     went on the phases as ``learn_parts``: each learner's seconds, sampled
@@ -1352,9 +1405,15 @@ def settle_open(log=print, state_path: Path | None = None,
         def learn():
             state["learn_owed"] = False
             state["last_learn_ts"] = now
+            # WHAT EACH LEARNER CONCLUDED, by league (2026-11-14; Ethan: "make
+            # sure ... everything is learning and getting better"): counts and
+            # keys, kept with the pass on the public heartbeat beside its
+            # seconds, so a learner that stops learning for a league shows.
+            verdicts = phases.setdefault("learn_verdicts", {"note": _learn_verdicts_note()})
             try:
                 from . import losspatterns
                 lp = losspatterns.refresh(lconn)
+                verdicts["loss patterns"] = verdict_losspatterns(lp)
                 if lp["closed"]:
                     log(f"  loss patterns: {len(lp['closed'])} slice(s) "
                         "self-closed — see the Record page")
@@ -1366,6 +1425,7 @@ def settle_open(log=print, state_path: Path | None = None,
             try:
                 from . import journalfit
                 jf = journalfit.refresh(lconn)
+                verdicts["journal fits"] = verdict_journal(jf)
                 for f in jf["temperatures"]["fitted"]:
                     log(f"  journal fit: {f['key']} temperature "
                         f"T={f['temperature']} on {f['n']} settled bets")
@@ -1381,6 +1441,7 @@ def settle_open(log=print, state_path: Path | None = None,
             try:
                 from . import selectionfit
                 sf = selectionfit.refresh(lconn)
+                verdicts["selection haircut"] = verdict_selection(sf)
                 # AND WHETHER ONE NUMBER IS THE RIGHT SHAPE. The pooled
                 # haircut assumes the over-claim is the same size at
                 # every price; the droplet's book says it grows with the
@@ -1444,6 +1505,7 @@ def settle_open(log=print, state_path: Path | None = None,
             try:
                 from . import corrfit
                 cf = corrfit.refresh(hconn)
+                verdicts["correlations"] = {"adopted": len(cf.get("adopted") or [])}
                 for a in cf["adopted"]:
                     sup = a.get("superseded")
                     log(f"  correlation refit: {a['key']} rho={a['r']:+.3f} "
@@ -1467,6 +1529,7 @@ def settle_open(log=print, state_path: Path | None = None,
             try:
                 from . import gamecal
                 gc = gamecal.refresh(hconn)
+                verdicts["game lines"] = {"adopted": sorted(str(a.get("key")) for a in gc.get("adopted") or [])}
                 for a in gc["adopted"]:
                     log(f"  game-line calibration: {a['key']} keeps "
                         f"{a['shrink']:.0%} of a disagreement with the close "
@@ -1480,6 +1543,7 @@ def settle_open(log=print, state_path: Path | None = None,
             try:
                 from . import hypotheses
                 hs = hypotheses.retest(lconn)
+                verdicts["hypotheses"] = verdict_hypotheses(hs)
                 closed_h = [h for h in hs.get("hypotheses") or []
                             if h.get("action") == "close"]
                 if closed_h:
@@ -1783,6 +1847,8 @@ def _keep_last_parts(state: dict, phases: dict, now: float) -> None:
         kept = {"at": at, "learn": phases.get("learn"), "parts": dict(phases["learn_parts"])}
         if phases.get("learn_gamecal"):
             kept["gamecal"] = dict(phases["learn_gamecal"])
+        if phases.get("learn_verdicts"):
+            kept["verdicts"] = dict(phases["learn_verdicts"])
         state["last_learned"] = kept
     if phases.get("export_parts"):
         kept = {"at": at, "export": phases.get("export"), "parts": dict(phases["export_parts"])}

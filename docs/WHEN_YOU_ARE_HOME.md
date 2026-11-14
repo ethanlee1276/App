@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PQ. The heartbeat says what each learner concluded, league by league**
+(step 545; 14 November). Nothing to run. Until now the public heartbeat
+said how long each learner ran and the box's own log said what it found, so
+a learner that stopped learning for one league could only be seen from a
+shell. The last learning pass now carries each learner's verdict beside its
+seconds, under `chores` → `settle` → `phases` → `last_learned` →
+`verdicts`: the loss patterns' slices closed by league, the journal's
+temperatures fitted, owned by the deep refit and still collecting by
+league, the selection haircut's settled picks and whether each league's
+own fit is applied, the game-line calibrations adopted, the correlations
+adopted, and the hypothesis lab's claims by standing. Counts and keys only;
+no fitted number leaves the box. The first pass that learns on this code
+fills it, tonight after the grades: https://qellysbook.com/data/heartbeat.json.
+
 **PP. Every board applies what its own record learned** (step 544; 14
 November). Nothing to run. The second thing the audit found, and the one
 that touches picks. The selection haircut (what our own settled picks
