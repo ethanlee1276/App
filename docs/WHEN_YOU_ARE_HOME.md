@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QN. The money split asks Polymarket's trade tape the way it requires**
+(step 568; 14 November). Nothing to run. A game page's "where the money is
+going" bars are read off the two prediction markets' trade tapes. Every
+board read Kalshi alone all evening, in every league (NBA 5 of 5 games, NHL
+8 of 8, NFL 12 of 12, college basketball 11 of 11), with 13 to 44 failed
+reads a build, while Polymarket's prices reached the same games. Polymarket
+serves a big page compressed only (the `gzip_required` refusal under OY),
+and a trade page is a thousand trades, asked without saying it takes gzip.
+It now says so (engine/moneysplit.POLY_HEADERS). Each venue's first refusal
+also rides on the board's `money_census` as `why`, so if Polymarket still
+refuses, the next build says how. This environment can't reach Polymarket,
+so the board is the check: after the deploy, a game's money bars list
+"Polymarket" beside "Kalshi", or `money_census.why` names the refusal.
+
 **QM. Game bets obey the record's closures** (step 567; 14 November).
 Nothing to run. The loss miner reads every settled bet with a stated chance,
 game bets included, and closes a slice the record convicts; a market that

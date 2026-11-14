@@ -148,6 +148,27 @@ def test_a_venue_that_fails_costs_only_its_own_bar():
                       kalshi_trades=boom, poly_trades=lambda c: [{"side": "BUY", "outcome": "Chiefs",
                                                                   "size": 1000, "price": 0.55}] * 12, now=NOW)
     assert census["errors"] == 1 and result["games"][0]["money"]["venues"] == ["Polymarket"]
+    assert census["why"] == {"Kalshi": "DataUnavailable: down"}, "the census names the venue that refused"
+
+
+def test_polymarkets_tape_is_asked_compressed():
+    """Every board's split read Kalshi alone on 14 November, with 13 to 44
+    failed reads a build; Polymarket serves a big page compressed only."""
+    sent = {}
+
+    def fake(url, cache_name, ttl=0, timeout=0, headers=None, **kw):
+        sent.update(url=url, headers=headers or {})
+        return "[]"
+    real = M.fetch_text
+    M.fetch_text = fake
+    try:
+        assert M.fetch_poly_trades("0xabc") == []
+    finally:
+        M.fetch_text = real
+    assert sent["headers"].get("Accept-Encoding") == "gzip" and "limit=1000" in sent["url"], sent
+    clean = M.attach({"games": [dict(GAME)]}, "nfl", [], [], [], kalshi_trades=lambda t: [],
+                     poly_trades=lambda c: [], now=NOW)
+    assert "why" not in clean, "a clean night's census is unchanged"
 
 
 def test_an_injected_price_feed_never_reads_a_tape_from_the_network():

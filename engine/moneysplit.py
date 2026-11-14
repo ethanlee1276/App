@@ -134,9 +134,22 @@ def fetch_kalshi_trades(ticker: str) -> list:
     return got.get("trades") or [] if isinstance(got, dict) else []
 
 
+#: ASKED COMPRESSED (2026-11-14). Every board's money split read Kalshi
+#: alone, all evening and in every league (NBA 5 of 5 games, NHL 8 of 8,
+#: NFL 12 of 12, college basketball 11 of 11), with 13 to 44 failed reads a
+#: build, while Polymarket's prices reached the same games. Polymarket
+#: serves a big page compressed only ({"error":"gzip_required"} on its
+#: events pages, step OY, `polysports.ACCEPT`), and a page here is a
+#: thousand trades. `fetch_text` unpacks a gzip body. Each venue's first
+#: refusal now rides on the census (`why`), so the next build says whether
+#: this was it.
+POLY_HEADERS = {"Accept-Encoding": "gzip"}
+
+
 def fetch_poly_trades(cid: str) -> list:
     body = fetch_text(POLY_TRADES.format(c=cid, n=TRADE_PAGE),
-                      f"pm_trades_{cid[:40]}.json", ttl=TTL_S, timeout=20)
+                      f"pm_trades_{cid[:40]}.json", ttl=TTL_S, timeout=20,
+                      headers=POLY_HEADERS)
     got = json.loads(body)
     return got if isinstance(got, list) else []
 
@@ -207,8 +220,13 @@ def attach(result: dict, sport: str, kalshi_markets=None, kalshi_line_markets=No
         def read(fn, *args):
             try:
                 return fn(*args)
-            except (DataUnavailable, ValueError, OSError):
+            except (DataUnavailable, ValueError, OSError) as exc:
                 census["errors"] += 1
+                # WHICH VENUE REFUSED, AND HOW: the first refusal each, so a
+                # count of failed reads names its cause on the board.
+                venue = "Kalshi" if fn is kt else "Polymarket"
+                census.setdefault("why", {}).setdefault(
+                    venue, f"{type(exc).__name__}: {exc}"[:200])
                 return []
 
         def take(venue, acc, flow):
