@@ -21,7 +21,10 @@ started, none held), at LEG_FLOOR or better
 (his reports' bar: "they sit under the 65% hit-rate floor, so they don't
 qualify for the parlay"; ours is a little lower, and every leg shows its
 own chance). Never a past-the-cap row (Ethan, 09-01: "not a parlay leg"),
-never a man the board already dropped for an injury.
+never a man the board already dropped for an injury, and never a tackle,
+sack or kicking prop (Ethan, 2026-11-14: "i dont wanna use tackle picks or
+anything like that. and not kicker points either" — parlays.NO_PARLAY_MARKETS,
+refused where every leg is made, twoleg._leg).
 
 NO CONFLICTS. Every pair of legs passes the clash taxonomy
 (engine/parlays.relate): no player twice, no quarterback against his own
@@ -57,9 +60,12 @@ questionable.
 
 THE TOUCHDOWN PAIRS. Two scorers from one game, from every quoted scorer
 the touchdown model priced (`td_field`, engine/pipeline; college's own),
-each at TD_FLOOR or better: one from each side (a shootout lifts both) or
+each at SCORER_FLOOR or better: one from each side (a shootout lifts both) or
 two from one side (they share its touchdowns, priced at the measured
-negative link). Hockey's analog is two goal scorers; basketball has no
+negative link). In football the scorers are chosen and the pairs ranked on
+our research (`research`: the matchup, his usage, the breakout and
+good-matchup reads, the game script), never on the prices alone (Ethan,
+2026-11-14). Hockey's analog is two goal scorers; basketball has no
 scorer market, and its games say so.
 
 TRACKED, NEVER STAKED. The record (engine/twoleg's study): same-game pairs
@@ -271,6 +277,178 @@ def scorer_legs(board: dict, sport: str, now=None) -> list[dict]:
         seen.add(k)
         out.append(leg)
     return out
+
+
+# --- the touchdown pairs' research ------------------------------------------------------------
+#: TOUCHDOWN PAIRS FROM OUR RESEARCH, NOT THE PRICES (2026-11-14). Ethan:
+#: "make sure we are making the TD parlays based off reaseerach we do and the
+#: breakout canidates and game scripts and all of that and not just based off
+#: the player lines". The pairs were the game's likeliest priced scorers,
+#: paired by their joint chance — the touchdown model's number, which leans
+#: on the points the lines expect and the share the player already has, so
+#: the pairs read like the shortest prices on the board. Now each football
+#: scorer is first read on the research the site already writes (the case
+#: his own words make: "where the lions do bad and bills do good ... figure
+#: out ... could have breakout games and get tds"):
+#:
+#:   the matchup   engine/matchpicks.td_matchup, the one the matchup picks and
+#:                 the one Most Likely board's scorer check read: his team's
+#:                 expected points, the defence at his position (the run
+#:                 defence for a back or a quarterback), his expected
+#:                 red-zone chances and red-zone trips both ways, 0–8;
+#:   his usage     his share of the targets or the carries, 0–2 (the
+#:                 touchdown scenarios' bars, engine/tdscenarios);
+#:   the read      the matchup scan's verdict on him — a breakout candidate
+#:                 +2, a good matchup +1, a tough one −1, and a player the
+#:                 scan says to avoid is never a leg;
+#:   the script    the spread: a back on a side favoured by SCRIPT_FAVORITE
+#:                 or more +1 (a leading team runs, at the goal line too),
+#:                 on a side that trails by SCRIPT_BIG_DOG or more −1; a
+#:                 receiver or tight end in a shootout by the total +1.
+#:
+#: A scorer is a leg only with a red-zone role (RED_ZONE_CHANCES' "ok" bar —
+#: Zay Flowers on the scenario shelf: "it says 0.0 redzone chances expected
+#: yet we display this pick") and RESEARCH_MIN of the 13 points; scorers and
+#: pairs are ranked on the research first and our chance second. The chance
+#: a pair shows is still the model's and the copula's, unmoved: the record
+#: has not shown a soft defence adding to a receiver's touchdown chance past
+#: the game total (engine/tdmatchfit), so the research CHOOSES the pairs and
+#: the journal (`game_td`) says how they do. Hockey's goal-scorer pairs have
+#: no scan read and are ranked on the chance as before.
+RESEARCH_SPORTS = ("nfl", "cfb")
+RESEARCH_MIN = 4
+RESEARCH_MAX = 13
+READ_POINTS = {"breakout": 2, "good": 1, "neutral": 0, "tough": -1}
+SCRIPT_FAVORITE = 3.0
+SCRIPT_BIG_DOG = 7.0
+#: The reasons a researched scorer leg shows: the case (the read, the
+#: defence, the script), then his own (`why_lines`), then the rest.
+RESEARCH_WHY = 5
+
+
+def _f(v):
+    try:
+        return None if v is None or v == "" else float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _margin(team: str, game: dict | None):
+    """The points the lines expect ``team`` to win by (negative: lose by),
+    off the game's home spread."""
+    sp = _f((game or {}).get("spread"))
+    if sp is None or not team:
+        return None
+    if team == (game or {}).get("home"):
+        return -sp
+    if team == (game or {}).get("away"):
+        return sp
+    return None
+
+
+def research(leg: dict, read: dict | None, game: dict | None, sport: str) -> dict | None:
+    """{"score", "points", "head", "tail", "red_zone"} — our research case
+    for one football scorer, out of RESEARCH_MAX, with its lines (``head``
+    the case, ``tail`` the rest) — or None when there is none: no matchup
+    read on him, a read that says to avoid him, or a position the readings
+    do not cover."""
+    from .matchpicks import td_matchup
+    from .tdscenarios import TARGET_SHARE, CARRY_SHARE, _pts
+    if not read or read.get("read") == "avoid":
+        return None
+    pos = str(read.get("pos") or read.get("position") or leg.get("position") or "").upper()
+    if pos not in ("QB", "RB", "FB", "WR", "TE"):
+        return None
+    td = read.get("td") or {}
+    team = leg.get("team") or read.get("team") or ""
+    opp = leg.get("opponent") or read.get("opp") or ""
+    scan = (game or {}).get("scan") or {}
+    units, rz = scan.get("units") or {}, scan.get("redzone") or {}
+    u = read.get("usage") or {}
+    row = {"position": pos, "team": team, "opponent": opp,
+           "implied_total": td.get("implied_total") if td.get("implied_total") is not None
+           else leg.get("implied_total"),
+           "rz_chances": td.get("rz_chances") if td.get("rz_chances") is not None else leg.get("rz_chances")}
+    m = td_matchup(row, units.get(opp), rz.get(team), rz.get(opp), int(scan.get("n_teams") or 32), u)
+    pts = dict(m["points"])
+    lines = []
+    label = str(read.get("label") or "").strip()
+    rp = READ_POINTS.get(str(read.get("read") or ""), 0)
+    # A TOUGH DRAW FOR YARDS IS NOT ONE FOR TOUCHDOWNS when he is his team's
+    # go-to scorer (engine/readlogic, rule 3: "Tough for yards — still the
+    # go-to scorer").
+    if rp < 0 and ((read.get("scoring") or {}).get("go_to")):
+        rp = 0
+    if label and rp > 0:
+        lines.append(label)
+    if pos in ("WR", "TE"):
+        pts["usage"] = _pts(_f(u.get("tgt_share")), TARGET_SHARE)
+    elif pos in ("RB", "FB"):
+        pts["usage"] = _pts(_f(u.get("carry_share")), CARRY_SHARE)
+    else:
+        pts["usage"] = 0                           # a quarterback's share is not his touchdown case
+    pts["read"] = rp
+    # THE SCRIPT, off the spread and the total.
+    script, why = 0, ""
+    margin = _margin(team, game)
+    total = _f((game or {}).get("total"))
+    if pos in ("RB", "FB") and margin is not None:
+        if margin >= SCRIPT_FAVORITE:
+            script, why = 1, (f"{team} favoured by {margin:g} — a leading team runs the ball, at the goal "
+                              f"line too")
+        elif margin <= -SCRIPT_BIG_DOG:
+            script, why = -1, f"{team} a {abs(margin):g}-point underdog — a trailing team runs less"
+    elif pos in ("WR", "TE") and total is not None and total >= HIGH_TOTAL.get(sport, 47.0):
+        script, why = 1, f"a {total:g}-point total — a shootout, and both sides throw to score"
+    pts["script"] = script
+    score = sum(pts.values())
+    # THE LINES, the case first: the read, the defence and the script — what
+    # the touchdown model's own reasons never say — then the rest of the
+    # matchup (his red-zone chances, his share, the points the lines expect,
+    # the trips), which the leg's own reasons may already carry.
+    mine = list(m.get("lines") or [])
+    lines += [x for x in mine if "defence ranks" in x]
+    if why:
+        lines.append(why)
+    tail = [x for x in mine if "red-zone chances" in x]
+    tail += [x for x in mine if x not in lines and x not in tail]
+    return {"score": int(score), "points": pts, "head": lines, "tail": tail,
+            "red_zone": pts.get("red_zone", 0)}
+
+
+def research_scorers(scorers: list[dict], board: dict, games: list, sport: str) -> tuple[list, int]:
+    """The scorers our research makes a case for, each with its ``research``
+    stamped and its research lines first in ``why`` — and how many priced
+    scorers it read. Hockey (no scan read) passes through unread."""
+    if sport not in RESEARCH_SPORTS:
+        return scorers, len(scorers)
+    reads = reads_by_player(board)
+    out = []
+    for leg in scorers:
+        read = reads.get((_key(leg.get("player")), leg.get("team") or ""))
+        r = research(leg, read, _game_of(leg, games), sport)
+        if not r or r["score"] < RESEARCH_MIN or not r["red_zone"]:
+            continue
+        leg["research"] = r["score"]
+        leg["research_of"] = RESEARCH_MAX
+        leg["research_points"] = r["points"]
+        old = [str(x) for x in leg.get("why") or []]
+        # His red-zone work said once: the model's own line ("Red-zone touch
+        # share ~38% (3.1 expected chances)") or the matchup's.
+        has_rz = any(x.startswith(("Red-zone", "Goal-line")) for x in old)
+        why: list = []
+        for x in r["head"] + old + [t for t in r["tail"] if not (has_rz and "red-zone chances" in t)]:
+            if x and x not in why:
+                why.append(x)
+        leg["why"] = why[:RESEARCH_WHY]
+        out.append(leg)
+    return out, len(scorers)
+
+
+def _by_research(t: dict) -> tuple:
+    """A scorer pair's rank: its research, then our chance it hits."""
+    return (-sum(int(l.get("research") or 0) for l in t["legs"]), -t["joint"],
+            -(t.get("ev_at_naive") or -9))
 
 
 # --- why each leg: the read, the model's own reasons ------------------------------------------
@@ -635,9 +813,11 @@ def _leg_id(l: dict) -> tuple:
     return (l.get("player"), l.get("market"), str(l.get("side") or "").upper(), l.get("line"))
 
 
-#: What a published leg keeps: the card's words, the journal's keys.
+#: What a published leg keeps: the card's words, the journal's keys, and a
+#: scorer's research (`research`).
 LEG_KEYS = ("player", "team", "opponent", "home", "away", "position", "market", "market_label", "side",
-            "line", "odds", "book", "p", "why", "injury_status", "game_date")
+            "line", "odds", "book", "p", "why", "injury_status", "game_date", "research", "research_of",
+            "research_points")
 
 
 def slim(leg: dict) -> dict:
@@ -645,12 +825,13 @@ def slim(leg: dict) -> dict:
     return {k: leg.get(k) for k in LEG_KEYS if leg.get(k) not in (None, "", [])}
 
 
-def choose(tickets: list[dict], n: int) -> list[dict]:
-    """The likeliest first; each next one shares at most MAX_SHARED legs
+def choose(tickets: list[dict], n: int, rank=None) -> list[dict]:
+    """The likeliest first (or by ``rank``, a sort key — the scorer pairs'
+    research, `_by_research`); each next one shares at most MAX_SHARED legs
     with every ticket already chosen, and no leg rides on more than
     MAX_USES of them. A second pass, when the first leaves fewer than
     ``n``, lets a ticket share all but one leg."""
-    ranked = sorted(tickets, key=lambda t: (-t["joint"], -(t.get("ev_at_naive") or -9)))
+    ranked = sorted(tickets, key=rank or (lambda t: (-t["joint"], -(t.get("ev_at_naive") or -9))))
     out: list = []
     uses: dict = {}
     for shared in (MAX_SHARED, None):
@@ -703,7 +884,10 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
         price += f" · the legs' own prices multiplied pay {t['naive_words']}, and a book's same-game price pays less"
     legs = [{"pick": pick_words(l), "player": l.get("player"), "team": l.get("team"),
              "price": " ".join(x for x in (_odds_words(l.get("odds")), l.get("book") or "") if x),
-             "chance": round(float(l.get("p") or 0), 4), "why": list(l.get("why") or [])}
+             "chance": round(float(l.get("p") or 0), 4), "why": list(l.get("why") or []),
+             # A scorer's research case, out of RESEARCH_MAX (`research_scorers`).
+             **({"research": int(l["research"]), "research_of": int(l.get("research_of") or RESEARCH_MAX)}
+                if l.get("research") is not None else {})}
             for l in t.get("legs") or []]
     script = ""
     if t.get("script"):
@@ -722,9 +906,11 @@ def game_label(game: dict) -> str:
     return f"{game.get('away')}@{game.get('home')}"
 
 
-def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict]) -> dict:
+def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
+               priced: int | None = None) -> dict:
     """A game's four 3-leg tickets and three scorer pairs, and why there
-    are fewer when there are."""
+    are fewer when there are. ``priced`` is how many priced scorers the game
+    had before the research read them (`research_scorers`)."""
     pool = sorted(legs, key=lambda l: -float(l["p"]))[:MAX_POOL]
     memo: dict = {}
     threes = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(pool, 3)) if t]
@@ -740,16 +926,36 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict]) ->
                               f"{LEG_FLOOR:.0%} or better, and only {len(threes)} three-leg combination(s) of "
                               f"them without a conflict")
     if sport in SCORER_MARKETS:
-        sc = sorted(scorers, key=lambda l: -float(l["p"]))[:MAX_SCORERS]
+        researched = sport in RESEARCH_SPORTS
+        # THE RESEARCH FIRST (RESEARCH_SPORTS): the strongest cases are the
+        # scorers tried, and the pairs are ranked on them; our chance breaks
+        # ties. Hockey ranks on the chance.
+        sc = sorted(scorers, key=(lambda l: (-int(l.get("research") or 0), -float(l["p"]))) if researched
+                    else (lambda l: -float(l["p"])))[:MAX_SCORERS]
         pairs = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(sc, 2)) if t]
-        out["scorers"] = choose(pairs, SCORER_PER_GAME)
+        if researched:
+            for t in pairs:
+                t["research"] = sum(int(l.get("research") or 0) for l in t["legs"])
+        out["scorers"] = choose(pairs, SCORER_PER_GAME, rank=_by_research if researched else None)
         for t in out["scorers"]:
             t["legs"] = [slim(l) for l in t["legs"]]
         out["scorers_read"] = len(sc)
+        if researched:
+            out["scorers_priced"] = len(sc) if priced is None else int(priced)
         if len(out["scorers"]) < SCORER_PER_GAME:
-            out["scorers_note"] = (f"{len(out['scorers'])} of {SCORER_PER_GAME}: {len(sc)} priced "
-                                   f"{SCORER_WORDS.get(sport, 'scorer')}(s) in this game at "
-                                   f"{SCORER_FLOOR.get(sport, 0.25):.0%} or better")
+            floor = f"{SCORER_FLOOR.get(sport, 0.25):.0%}"
+            if researched:
+                n_priced = out["scorers_priced"]
+                out["scorers_note"] = (
+                    f"{len(out['scorers'])} of {SCORER_PER_GAME}: {len(sc)} of the {n_priced} priced "
+                    f"scorer(s) in this game at {floor} or better carry a research case — a red-zone role "
+                    f"and {RESEARCH_MIN} or more of the {RESEARCH_MAX} research points (his team's expected "
+                    f"points, the defence he faces, his usage and red-zone work, the matchup read and the "
+                    f"game script)")
+            else:
+                out["scorers_note"] = (f"{len(out['scorers'])} of {SCORER_PER_GAME}: {len(sc)} priced "
+                                       f"{SCORER_WORDS.get(sport, 'scorer')}(s) in this game at "
+                                       f"{floor} or better")
     else:
         out["scorers"] = []
         out["scorers_note"] = "No scorer market in this league — basketball's books post no anytime scorer"
@@ -762,22 +968,32 @@ def build(board: dict, sport: str, now=None) -> dict:
     sp = str(sport or "").lower()
     games = [g for g in board.get("games") or [] if isinstance(g, dict) and g.get("home") and g.get("away")]
     legs = enrich(legs_for(board, sp, now), board)
-    scorers = enrich(scorer_legs(board, sp, now), board)
+    priced = enrich(scorer_legs(board, sp, now), board)
+    # THE RESEARCH READS EVERY PRICED SCORER (`research_scorers`): the ones it
+    # makes a case for are the touchdown pairs' legs.
+    scorers, _ = research_scorers(priced, board, games, sp)
     by_game: dict = {}
+
+    def slot(g):
+        return by_game.setdefault(game_label(g), {"g": g, "legs": [], "scorers": [], "priced": 0})
     for leg in legs:
         g = _game_of(leg, games)
         if g:
-            by_game.setdefault(game_label(g), {"g": g, "legs": [], "scorers": []})["legs"].append(leg)
+            slot(g)["legs"].append(leg)
+    for leg in priced:
+        g = _game_of(leg, games)
+        if g:
+            slot(g)["priced"] += 1
     for leg in scorers:
         g = _game_of(leg, games)
         if g:
-            by_game.setdefault(game_label(g), {"g": g, "legs": [], "scorers": []})["scorers"].append(leg)
+            slot(g)["scorers"].append(leg)
     out_games = []
     for g in games:
         x = by_game.get(game_label(g))
         if not x:
             continue
-        out_games.append(build_game(sp, x["g"], x["legs"], x["scorers"]))
+        out_games.append(build_game(sp, x["g"], x["legs"], x["scorers"], priced=x["priced"]))
     return {"sport": sp, "date": board.get("date") or "", "games": out_games,
             "take_edge": TAKE_EDGE, "leg_floor": LEG_FLOOR,
             "counts": {"games": len(out_games), "threes": sum(len(x["threes"]) for x in out_games),

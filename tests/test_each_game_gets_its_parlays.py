@@ -24,7 +24,16 @@ sys.path.insert(0, str(ROOT))
 
 from engine import gameparlays as GP                # noqa: E402
 
-GAME = {"home": "NYG", "away": "WAS", "date": "2099-11-12", "kickoff": "20:15", "spread": -2.5, "total": 40.5}
+#: The matchup scan's numbers for the game (engine/gamescan): each defence's
+#: rank against the pass and the run, and red-zone trips both ways — what the
+#: touchdown pairs' research reads (gameparlays.research, 2026-11-14).
+SCAN = {"n_teams": 32,
+        "units": {"WAS": {"def": {"passing": {"rank": 27}, "rushing": {"rank": 22}}},
+                  "NYG": {"def": {"passing": {"rank": 12}, "rushing": {"rank": 18}}}},
+        "redzone": {"NYG": {"off": 3.1, "off_rel": 0.08, "def": 2.9, "def_rel": 0.02},
+                    "WAS": {"off": 3.2, "off_rel": 0.10, "def": 3.3, "def_rel": 0.12}}}
+GAME = {"home": "NYG", "away": "WAS", "date": "2099-11-12", "kickoff": "20:15", "spread": -2.5, "total": 40.5,
+        "scan": SCAN}
 
 
 def _ml(player, team, pos, market, side, line, p, odds, label):
@@ -65,13 +74,27 @@ def board():
             _td("Rachaad White", "WAS", "RB", 0.30, 165),
             _td("Jayden Daniels", "WAS", "QB", 0.12, 260),
         ],
+        # (Reads carry their usage and touchdown stamp since 2026-11-14: the
+        # touchdown pairs are chosen on that research, gameparlays.research.)
         "scan_reads": {"WAS@NYG": {"players": [
-            {"player": "Isaiah Likely", "team": "NYG", "pos": "TE", "read": "good",
+            {"player": "Isaiah Likely", "team": "NYG", "opp": "WAS", "pos": "TE", "read": "good",
+             "label": "Good matchup", "usage": {"tgt_share": 0.20},
+             "td": {"model_prob": 0.30, "odds": 210, "implied_total": 21.5, "rz_chances": 1.9},
              "pro": ["WAS gives up the 4th-most receiving yards to tight ends (68.8 a game)"],
              "notes": ["WAS gives up the 2nd-most touchdowns to tight ends (1.0 a game)"]},
-            {"player": "Cam Skattebo", "team": "NYG", "pos": "RB", "read": "good",
+            {"player": "Cam Skattebo", "team": "NYG", "opp": "WAS", "pos": "RB", "read": "good",
+             "label": "Good matchup", "usage": {"carry_share": 0.62},
+             "td": {"model_prob": 0.45, "odds": 130, "implied_total": 21.5, "rz_chances": 3.1},
              "pro": ["Rain is 74% likely at kickoff: teams run more in rain and a back keeps his share, about "
-                     "6% more carries (measured, 2016-2025)"], "notes": []}]}},
+                     "6% more carries (measured, 2016-2025)"], "notes": []},
+            {"player": "Malik Nabers", "team": "NYG", "opp": "WAS", "pos": "WR", "read": "neutral",
+             "label": "Neutral", "usage": {"tgt_share": 0.27},
+             "td": {"model_prob": 0.36, "odds": 165, "implied_total": 21.5, "rz_chances": 1.8},
+             "pro": [], "notes": []},
+            {"player": "Rachaad White", "team": "WAS", "opp": "NYG", "pos": "RB", "read": "neutral",
+             "label": "Neutral", "usage": {"carry_share": 0.45},
+             "td": {"model_prob": 0.30, "odds": 165, "implied_total": 19.0, "rz_chances": 1.2},
+             "pro": [], "notes": []}]}},
     }
 
 
@@ -212,6 +235,11 @@ def test_three_touchdown_pairs_with_his_reasons():
     sk = " | ".join(legs["Cam Skattebo"]["why"])
     assert "Goal-line work" in sk and "rain" in sk.lower(), sk
     assert all(l["player"] != "Jayden Daniels" for t in pairs for l in t["legs"]), "12% is under the scorer bar"
+    # (Added 2026-11-14.) White is priced at 30% and has no research case:
+    # 19 expected points, a run defence 18th, a 45% share — 3 of 13.
+    assert all(l["player"] != "Rachaad White" for t in pairs for l in t["legs"]), "no research case, no leg"
+    assert all(l.get("research", 0) >= GP.RESEARCH_MIN for t in pairs for l in t["legs"])
+    assert "WAS’s run defence ranks 22nd of 32" in sk, sk
     # His pair, asked directly: two Giants scorers, priced as unrelated, the
     # caveat that both need the Giants to score twice, and Likely's reason
     # the defence's touchdowns to tight ends.
