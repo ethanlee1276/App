@@ -2575,7 +2575,7 @@ function pbpUmpHTML(d) {
   if (!n) return "";
   return `<div class="card pbp-crew"><div class="pbp-rail-head">Umpire watch <span class="mini">the plate umpire’s zone</span></div>
     <p class="pbp-crew-n"><b>${missed}</b> missed of ${n} called pitch${n === 1 ? "" : "es"} · ${Math.round((100 * (n - missed)) / n)}% right</p>
-    <p class="mini pbp-crew-why">${missed ? `Against ${escapeHtml(d.away)} ${cost.away}, against ${escapeHtml(d.home)} ${cost.home}. ` : ""}By the league’s own pitch tracking, to the edge of the ball. Live only: no season of an umpire’s calls is kept here to set it beside.</p></div>`;
+    <p class="mini pbp-crew-why">${missed ? `Against ${escapeHtml(d.away_abbr || d.away)} ${cost.away}, against ${escapeHtml(d.home_abbr || d.home)} ${cost.home}. ` : ""}By the league’s own pitch tracking, to the edge of the ball. Live only: no season of an umpire’s calls is kept here to set it beside.</p></div>`;
 }
 
 function pbpPressureHTML(d, league, boardGame) {
@@ -2599,7 +2599,7 @@ function pbpPressureHTML(d, league, boardGame) {
     <p class="pbp-pr-sub">${escapeHtml(pressureSpan(pr))} · one-score means within ${
       escapeHtml(pressureUnit(pr))}</p>
     <p class="pbp-pr-line">${m.state ? `<b>${escapeHtml(m.state)}</b> · ` : ""}${escapeHtml(m.line)}</p>
-    ${m.market ? `<p class="pbp-pr-market">Live market: <b>${escapeHtml(d.home)} ${
+    ${m.market ? `<p class="pbp-pr-market">Live market: <b>${escapeHtml(d.home_abbr || d.home)} ${
       Number(m.market.now).toFixed(0)}%</b> to win, from ${
       Number(m.market.opened).toFixed(0)}% at the open — the market’s number, not ours.</p>` : ""}
     <div class="pr-table">
@@ -2914,8 +2914,8 @@ function pbpTotalsHTML(d, league) {
   ];
   return `<div class="pbp-bx-wrap"><table class="pbp-bx pbp-tot">
     <thead><tr><th scope="col" class="pbp-bx-who">Team totals</th>
-      <th scope="col">${escapeHtml(d.away || "")}</th>
-      <th scope="col">${escapeHtml(d.home || "")}</th></tr></thead>
+      <th scope="col">${escapeHtml(d.away_abbr || d.away || "")}</th>
+      <th scope="col">${escapeHtml(d.home_abbr || d.home || "")}</th></tr></thead>
     <tbody>${rows.map(([label, x, y]) => `<tr>
       <th scope="row" class="pbp-bx-who">${escapeHtml(label)}</th>
       <td>${escapeHtml(String(x))}</td><td>${escapeHtml(String(y))}</td></tr>`).join("")}
@@ -3134,7 +3134,7 @@ function awayCardHTML(d, league, was) {
   const swing = typeof was.wp === "number" && typeof wpNow === "number" && Math.abs(wpNow - was.wp) >= 5
     ? `<span>Win chance: ${escapeHtml(side(was.wp))} ${pct(was.wp)}% → ${escapeHtml(side(wpNow))} ${pct(wpNow)}%</span>` : "";
   const score = was.a != null && was.h != null
-    ? `<span>${escapeHtml(d.away)} ${Number(was.a)}–${Number(was.h)} ${escapeHtml(d.home)} → <b>${Number(lv.away_score)}–${Number(lv.home_score)}</b></span>` : "";
+    ? `<span>${escapeHtml(d.away_abbr || d.away)} ${Number(was.a)}–${Number(was.h)} ${escapeHtml(d.home_abbr || d.home)} → <b>${Number(lv.away_score)}–${Number(lv.home_score)}</b></span>` : "";
   return `<div class="card pbp-away" role="status">
     <div class="pbp-rail-head">While you were away <span class="mini">${mins < 90 ? `${mins} min` : `${Math.round(mins / 60)} hr`} · ${since.length} play${since.length === 1 ? "" : "s"}</span>
       <button type="button" class="pbp-away-x" data-away-x="1" aria-label="Dismiss">×</button></div>
@@ -3211,7 +3211,7 @@ function recapFacts(d, league) {
       const now = Math.sign(y - x);
       if (now && lead && now !== lead) changes++;
       if (now) lead = now;
-      if (Math.abs(y - x) > big.n) big = { n: Math.abs(y - x), side: y > x ? d.home : d.away };
+      if (Math.abs(y - x) > big.n) big = { n: Math.abs(y - x), side: y > x ? d.home_abbr || d.home : d.away_abbr || d.away };
     }
     if (typeof r.wp === "number" && won) low = Math.min(low, won === d.home ? r.wp : 100 - r.wp);
   });
@@ -3230,11 +3230,11 @@ function pbpRecapHTML(d, league) {
     f.top ? `<li><span>Best line</span>${escapeHtml(f.top)}</li>` : "",
   ].filter(Boolean);
   if (!lines.length) return "";
-  const text = `${d.away} ${f.a}–${f.h} ${d.home}, final. ${f.pog ? `Play of the game: ${awayWords(f.pog, league)}. ` : ""}${
+  const text = `${d.away_abbr || d.away} ${f.a}–${f.h} ${d.home_abbr || d.home}, final. ${f.pog ? `Play of the game: ${awayWords(f.pog, league)}. ` : ""}${
     f.comeback ? `${f.won} won after falling to ${f.comeback}% to win. ` : ""}${f.top ? `Best line: ${f.top}.` : ""}`;
   return `<div class="card pbp-recap">
     <div class="pbp-rail-head">The game in 30 seconds <button type="button" class="pbp-recap-share" data-recap-share="${escapeAttr(text)}">Share</button></div>
-    <div class="pbp-recap-final">${escapeHtml(d.away)} <b>${f.a}</b> – <b>${f.h}</b> ${escapeHtml(d.home)}<span>Final</span></div>
+    <div class="pbp-recap-final">${escapeHtml(d.away_abbr || d.away)} <b>${f.a}</b> – <b>${f.h}</b> ${escapeHtml(d.home_abbr || d.home)}<span>Final</span></div>
     <ul class="pbp-recap-list">${lines.join("")}</ul></div>`;
 }
 if (typeof window !== "undefined" && !window._recapBound) {
@@ -3466,9 +3466,9 @@ function pbpWinChartHTML(d, league, boardGame) {
       ${timed ? `<polyline class="pbp-wp-room" fill="none" points=""/>` : ""}
       ${mkt != null ? `<line class="pbp-wp-mkt" x1="0" y1="${y(mkt * 100)}" x2="${W}" y2="${y(mkt * 100)}"/>` : ""}
     </svg>
-    <div class="pbp-wp-key"><span>Above the line: ${escapeHtml(d.home || "home")}</span>${timed
-      ? `<span class="pbp-wp-roomkey" hidden>Dashed: the room’s vote</span>` : ""}<span>Below: ${escapeHtml(d.away || "away")}</span></div>
-    ${mkt != null ? `<p class="mini pbp-wp-mktkey">Dotted: the market at the start, ${escapeHtml(d.home || "home")} ${Math.round(mkt * 100)}%
+    <div class="pbp-wp-key"><span>Above the line: ${escapeHtml(d.home_abbr || d.home || "home")}</span>${timed
+      ? `<span class="pbp-wp-roomkey" hidden>Dashed: the room’s vote</span>` : ""}<span>Below: ${escapeHtml(d.away_abbr || d.away || "away")}</span></div>
+    ${mkt != null ? `<p class="mini pbp-wp-mktkey">Dotted: the market at the start, ${escapeHtml(d.home_abbr || d.home || "home")} ${Math.round(mkt * 100)}%
       (the two moneylines, margin out).</p>` : ""}
     ${timed ? `<p class="mini pbp-wp-says" hidden></p>` : ""}
   </div>`;
@@ -3596,13 +3596,15 @@ function pbpStripHTML(league, games, current) {
       : left > 0 && left <= PBP_COUNT_MS ? `<span class="pbp-chip-time" data-pbp-count="${start}" data-pbp-pre="in "
           data-pbp-done="Starting">in ${pbpCountdown(left)}</span>`
       : `<span class="pbp-chip-time">${escapeHtml(pbpTime(lv.start_time) || "TBD")}</span>`;
-    const row = (abbr, score) => `<span class="pbp-chip-row">${teamMarkIn(league, abbr, 16)}<em>${
-      escapeHtml(abbr || "")}</em><b>${score != null ? score : ""}</b></span>`;
+    // A school below Division I by its own abbreviation, never its
+    // "espn:<id>" key (livescores.parse, 2026-11-14); the mark keys on the code.
+    const row = (abbr, score, label) => `<span class="pbp-chip-row">${teamMarkIn(league, abbr, 16)}<em>${
+      escapeHtml(label || abbr || "")}</em><b>${score != null ? score : ""}</b></span>`;
     return `<button type="button" class="pbp-chip${on ? " active" : ""}${door || bg ? " door" : ""}"${
       door ? ` data-pbp="${escapeAttr(id)}"` : bg ? ` data-pbp-game="${escapeAttr(gameId(bg))}"
       title="Open this game’s page"` : " disabled"}>
       <div class="pbp-chip-head">${head}</div>
-      ${row(g.away, hid ? null : lv.away_score)}${row(g.home, hid ? null : lv.home_score)}
+      ${row(g.away, hid ? null : lv.away_score, g.away_abbr)}${row(g.home, hid ? null : lv.home_score, g.home_abbr)}
       <div class="pbp-chip-foot">${escapeHtml(lv.state === "live" ? (lv.period || "") : "")}</div>
     </button>`;
   };
@@ -4442,11 +4444,14 @@ function pbpArenaSVG(d, league, opt = {}) {
   const now = st.text ? { t: st.text, c: "url(#pbp-ar-gold)",
     a: st.start ? ` data-pbp-count="${st.start}" data-pbp-pre="${st.pre}" data-pbp-done="${st.done}"` : "" } : null;
   const scored = lv.away_score != null && lv.home_score != null;
-  const shout = moment.word ? [{ t: moment.word, c: "url(#pbp-ar-gold)" }, ...(moment.side ? [S(" · "), T(d[moment.side])] : [])] : null;
+  const shout = moment.word ? [{ t: moment.word, c: "url(#pbp-ar-gold)" }, ...(moment.side ? [S(" · "), T(d[`${moment.side}_abbr`] || d[moment.side])] : [])] : null;
   let out = "";
   if (!hockey) {
-    const game = shout || [T(scored ? `${away} ` : away), ...(scored ? [N(lv.away_score)] : []),
-      ...(now ? [S(" · "), now] : []), S(" · "), T(scored ? `${home} ` : home), ...(scored ? [N(lv.home_score)] : [])];
+    // On the board, a school below Division I by its abbreviation (the id
+    // above keeps the codes the moment's own key is built from).
+    const aw = d.away_abbr || away, hm = d.home_abbr || home;
+    const game = shout || [T(scored ? `${aw} ` : aw), ...(scored ? [N(lv.away_score)] : []),
+      ...(now ? [S(" · "), now] : []), S(" · "), T(scored ? `${hm} ` : hm), ...(scored ? [N(lv.home_score)] : [])];
     const top = lv.state === "live" ? String(lv.clock || "") : lv.state === "final" ? "0.0" : "";
     const bottom = lv.state === "live" ? pbpArenaPeriod(lv, league, d) : lv.state === "final" ? "FINAL" : "";
     out = pbpLedLine(A.ring, game, 22, blink, A.ink.ring) + pbpLedLine(A.table, game, 19, blink, A.ink.table)
@@ -5333,7 +5338,7 @@ function gpLineHTML(d, league, lv) {
   const win = done && Number(lv.home_score) !== Number(lv.away_score)
     ? (Number(lv.home_score) > Number(lv.away_score) ? "home" : "away") : "";
   const row = (ha) => `<tr class="${win && win !== ha ? "lost" : ""}"><th scope="row"><span class="gp-ls-team">${teamMarkIn(league, d[ha], 20)}<span>${
-    escapeHtml(d[ha] || "")}</span></span></th>${cols.map((k) => {
+    escapeHtml(d[`${ha}_abbr`] || d[ha] || "")}</span></span></th>${cols.map((k) => {
       const v = L[ha][k - 1];
       return `<td${k === now ? ' class="now"' : ""}>${v == null || (!done && k > now && now) ? "" : escapeHtml(String(v))}</td>`;
     }).join("")}<td class="t">${tot(ha) == null ? "" : escapeHtml(String(tot(ha)))}</td></tr>`;
@@ -5504,7 +5509,7 @@ function gpOddsHTML(d, league, g) {
   const ml = (v) => (v == null ? "—" : american(v));
   const row = (ha) => {
     const home = ha === "home";
-    return `<tr><th scope="row"><span class="gp-ls-team">${teamMarkIn(league, d[ha], 20)}<span>${escapeHtml(d[ha] || "")}</span></span></th>
+    return `<tr><th scope="row"><span class="gp-ls-team">${teamMarkIn(league, d[ha], 20)}<span>${escapeHtml(d[`${ha}_abbr`] || d[ha] || "")}</span></span></th>
       <td>${spTxt(sp == null ? null : home ? sp : -sp)}</td><td>${total == null ? "—" : `${home ? "U" : "O"} ${total}`}</td><td>${ml(home ? hMl : aMl)}</td></tr>`;
   };
   const opened = open && tag !== "Opening line" && num(open.spread_home) != null
@@ -5567,7 +5572,7 @@ function gpTeamStatsHTML(d, league) {
   const more = rest.length ? `<details class="gp-more-stats" data-gp-key="ts-more"${gpOpenAttr("ts-more", false)}><summary>More team stats</summary>${
     rest.map(row).join("")}</details>` : "";
   return `<div class="card gp-card gp-tscard"><div class="gp-card-head gp-ts-head"><span class="gp-ls-team">${teamMarkIn(league, d.away, 22)}<span>${
-    escapeHtml(d.away || "")}</span></span><b>Team stats</b><span class="gp-ls-team home"><span>${escapeHtml(d.home || "")}</span>${
+    escapeHtml(d.away_abbr || d.away || "")}</span></span><b>Team stats</b><span class="gp-ls-team home"><span>${escapeHtml(d.home_abbr || d.home || "")}</span>${
     teamMarkIn(league, d.home, 22)}</span></div>${lead.map(row).join("")}${more}</div>`;
 }
 
@@ -5682,8 +5687,8 @@ function gpDrivesHTML(d, league) {
     const key = snaps.find((p) => p.scoring) || snaps[snaps.length - 1];
     const words = key ? footballWords(key, d).title : "";
     const last = rows.slice().reverse().find((p) => p.away_score != null && p.home_score != null) || {};
-    const score = last.away_score != null ? `<span class="gp-dr-score"><span>${escapeHtml(d.away || "")} <b>${last.away_score}</b></span><span>${
-      escapeHtml(d.home || "")} <b>${last.home_score}</b></span></span>` : "";
+    const score = last.away_score != null ? `<span class="gp-dr-score"><span>${escapeHtml(d.away_abbr || d.away || "")} <b>${last.away_score}</b></span><span>${
+      escapeHtml(d.home_abbr || d.home || "")} <b>${last.home_score}</b></span></span>` : "";
     const id = `dr-${dr.id || `${per}-${i}`}`;
     const tone = /turnover|interception|fumble|safety|downs/i.test(result) ? " bad" : dr.scoring ? " score" : now ? " live" : "";
     return `${head}<details class="card gp-dr${tone}" data-gp-key="${escapeAttr(id)}"${gpOpenAttr(id, now)}>

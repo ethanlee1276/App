@@ -27893,10 +27893,10 @@ function liveCardHTML({ sport, g, bets }) {
     <div class="lb-table">
       <span class="lb-th"></span><span class="lb-th">Spread</span>
       <span class="lb-th">Total</span><span class="lb-th">ML</span>
-      <span class="lb-tm">${escapeHtml(g.away)}</span><b>${sp(g.away)}</b>
+      <span class="lb-tm">${escapeHtml(g.away_abbr || g.away)}</span><b>${sp(g.away)}</b>
       <b>${g.total != null ? "O " + Number(g.total).toFixed(1) : "—"}</b>
       <b>${mlOdds(g.away_ml)}</b>
-      <span class="lb-tm">${escapeHtml(g.home)}</span><b>${sp(g.home)}</b>
+      <span class="lb-tm">${escapeHtml(g.home_abbr || g.home)}</span><b>${sp(g.home)}</b>
       <b>${g.total != null ? "U " + Number(g.total).toFixed(1) : "—"}</b>
       <b>${mlOdds(g.home_ml)}</b>
     </div>` : "";
@@ -27911,7 +27911,7 @@ function liveCardHTML({ sport, g, bets }) {
       <span class="lb-league">${escapeHtml(lgCode(sport))}</span></div>
     ${watchHTML(g, sport, "lb-watch")}
     <div class="lb-score">
-      <span class="lb-team">${mark(g.away)}<em>${escapeHtml(g.away)}</em></span>
+      <span class="lb-team">${mark(g.away)}<em>${escapeHtml(g.away_abbr || g.away)}</em></span>
       <b${lv.away_score == null ? "" : ` data-tick="ls:${escapeAttr(gameId(g))}:a" data-tick-mode="neutral"
         data-tick-v="${lv.away_score}"`}>${
         lv.away_score != null ? lv.away_score : "–"}</b>
@@ -27919,7 +27919,7 @@ function liveCardHTML({ sport, g, bets }) {
       <b${lv.home_score == null ? "" : ` data-tick="ls:${escapeAttr(gameId(g))}:h" data-tick-mode="neutral"
         data-tick-v="${lv.home_score}"`}>${
         lv.home_score != null ? lv.home_score : "–"}</b>
-      <span class="lb-team">${mark(g.home)}<em>${escapeHtml(g.home)}</em></span>
+      <span class="lb-team">${mark(g.home)}<em>${escapeHtml(g.home_abbr || g.home)}</em></span>
     </div>
     ${hid ? `<p class="rail-quiet lb-why">Spoiler-free: the score and the plays wait until you open the game.</p>` : ""}
     ${linesGrid}
@@ -29387,7 +29387,8 @@ function playsHTML(g) {
     const tag = ice ? (p.scoring ? ` <span class="lb-rbi">GOAL</span>` : "")
       : p.scoring && p.points ? ` <span class="lb-rbi">+${p.points}</span>`
       : p.shot ? ` <span class="lb-miss">miss</span>` : "";
-    const who = [p.team, p.player].filter(Boolean).map(escapeHtml).join(" · ");
+    const who = [p.team === g.home ? g.home_abbr || p.team : p.team === g.away ? g.away_abbr || p.team : p.team,
+      p.player].filter(Boolean).map(escapeHtml).join(" · ");
     const at = (p.away_score != null && p.home_score != null)
       ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
     return `<div class="lb-play${p.scoring ? " scoring" : ""}">

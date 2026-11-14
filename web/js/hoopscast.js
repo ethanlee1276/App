@@ -355,7 +355,7 @@
       return `<div class="hc-side ${ha}">
           <span class="hc-crest">${teamMarkIn(league, abbr, 56)}</span>
           <div class="hc-team"><span class="hc-loc">${esc(t.loc || "")}</span>
-            <b class="hc-nick">${esc(t.nick || teamNameIn(league, abbr) || abbr)}</b>
+            <b class="hc-nick">${esc(t.nick || d[`${ha}_abbr`] || teamNameIn(league, abbr) || abbr)}</b>
             ${rec ? `<span class="hc-rec">${esc(rec)}</span>` : ""}${marks ? `<span class="hc-marks-row">${marks}</span>` : ""}</div>
           <b class="hc-pts">${has}${score != null ? esc(score) : "–"}</b></div>`;
     };
@@ -518,7 +518,7 @@
       ${p.player ? faceHTML(league, row || { name: p.player }, k.faces, 36) : (p.team ? teamMarkIn(league, p.team, 28) : "")}
       <div class="hc-cap-t"><span class="hc-cap-k">Last play · ${esc([periodShort(p.period), p.clock].filter(Boolean).join(" "))}</span>
         <b>${esc(p.player || teamNameIn(league, p.team) || "")}</b><span>${playWords(p, d, k)}</span></div>
-      ${p.away_score != null ? `<span class="hc-cap-sc">${esc(d.away)} ${esc(p.away_score)} – ${esc(p.home_score)} ${esc(d.home)}</span>` : ""}</div>`;
+      ${p.away_score != null ? `<span class="hc-cap-sc">${esc(d.away_abbr || d.away)} ${esc(p.away_score)} – ${esc(p.home_score)} ${esc(d.home_abbr || d.home)}</span>` : ""}</div>`;
   }
   function trackerHTML(d, league, k) {
     const floor = k.floor;
@@ -619,7 +619,7 @@
   function shotLegendHTML(d, league, k) {
     const tally = (side) => { const s = k.shots.filter((r) => r.side === side); return `${s.filter((r) => r.made).length}/${s.length}`; };
     const chip = (key, label) => `<button type="button" class="hc-chip${S.shots === key ? " on" : ""}" data-hc-shots="${key}">${label}</button>`;
-    return `<div class="hc-legend">${chip("both", "Both")}${chip("away", `${esc(d.away)} ${tally("away")}`)}${chip("home", `${esc(d.home)} ${tally("home")}`)}
+    return `<div class="hc-legend">${chip("both", "Both")}${chip("away", `${esc(d.away_abbr || d.away)} ${tally("away")}`)}${chip("home", `${esc(d.home_abbr || d.home)} ${tally("home")}`)}
       <span class="hc-key"><i class="made"></i>Made <i class="miss"></i>Missed</span></div>`;
   }
 
@@ -732,7 +732,7 @@
     const val = (s) => { const m = /^(\d+)-(\d+)$/.exec(s); return m ? (Number(m[2]) ? Number(m[1]) / Number(m[2]) : 0) : (num(s) || 0); };
     // A shooting line reads as its rate, the makes and tries under it.
     const shown = (s) => { const m = /^(\d+)-(\d+)$/.exec(s); return m ? `${Number(m[2]) ? Math.round((100 * Number(m[1])) / Number(m[2])) : 0}%<small>${m[1]}/${m[2]}</small>` : esc(s); };
-    return `<div class="hc-ts-head"><span>${teamMarkIn(league, d.away, 22)} <b>${esc(d.away)}</b></span><span><b>${esc(d.home)}</b> ${teamMarkIn(league, d.home, 22)}</span></div>
+    return `<div class="hc-ts-head"><span>${teamMarkIn(league, d.away, 22)} <b>${esc(d.away_abbr || d.away)}</b></span><span><b>${esc(d.home_abbr || d.home)}</b> ${teamMarkIn(league, d.home, 22)}</span></div>
       ${rows.map(([label, a, h]) => {
         const x = val(a), y = val(h), top = Math.max(x, y) || 1;
         return `<div class="hc-ts"><b class="hc-ts-v">${shown(a)}</b>
@@ -769,8 +769,8 @@
         <rect x="0" y="0" width="940" height="500" class="hc-fc-floor"/>
         <rect x="0" y="0" width="940" height="500" class="hc-fc-line"/><line x1="470" y1="0" x2="470" y2="500" class="hc-fc-line"/>
         <circle cx="470" cy="250" r="60" class="hc-fc-line"/>${half(false)}${half(true)}${marks}</svg>
-      <div class="hc-zones"><div>${teamMarkIn(league, d.away, 18)} <b>${esc(d.away)}</b>${zones("away") || `<p class="rail-quiet">No shots yet.</p>`}</div>
-        <div>${teamMarkIn(league, d.home, 18)} <b>${esc(d.home)}</b>${zones("home") || `<p class="rail-quiet">No shots yet.</p>`}</div></div>`;
+      <div class="hc-zones"><div>${teamMarkIn(league, d.away, 18)} <b>${esc(d.away_abbr || d.away)}</b>${zones("away") || `<p class="rail-quiet">No shots yet.</p>`}</div>
+        <div>${teamMarkIn(league, d.home, 18)} <b>${esc(d.home_abbr || d.home)}</b>${zones("home") || `<p class="rail-quiet">No shots yet.</p>`}</div></div>`;
   }
   function linescoreHTML(d) {
     const ls = d.linescores || {};
@@ -782,15 +782,15 @@
       `<td>${xs[i] == null ? "" : esc(xs[i])}</td>`).join("")}<td class="t">${total == null ? "" : esc(total)}</td></tr>`;
     const lv = d.live || {};
     return `<table class="hc-ls"><thead><tr><th></th>${head}<th scope="col">T</th></tr></thead>
-      <tbody>${row(d.away, A, lv.away_score)}${row(d.home, Hh, lv.home_score)}</tbody></table>`;
+      <tbody>${row(d.away_abbr || d.away, A, lv.away_score)}${row(d.home_abbr || d.home, Hh, lv.home_score)}</tbody></table>`;
   }
   function flowTabHTML(d, league, k) {
     const L = k.leads, dr = k.droughts;
     const line = (ic, text) => `<div class="hc-fact">${icon(ic, 14)}<span>${text}</span></div>`;
     const facts = [
       line("rising", `<b>${L.changes}</b> lead change${L.changes === 1 ? "" : "s"}, <b>${L.ties}</b> tie${L.ties === 1 ? "" : "s"}`),
-      L.big.away ? line("bolt", `${esc(d.away)}'s largest lead: <b>${L.big.away}</b>`) : "",
-      L.big.home ? line("bolt", `${esc(d.home)}'s largest lead: <b>${L.big.home}</b>`) : "",
+      L.big.away ? line("bolt", `${esc(d.away_abbr || d.away)}'s largest lead: <b>${L.big.away}</b>`) : "",
+      L.big.home ? line("bolt", `${esc(d.home_abbr || d.home)}'s largest lead: <b>${L.big.home}</b>`) : "",
       L.best ? line("hot", `Longest run: <b>${esc(d[L.best.side])} ${L.best.pts}–0</b>`) : "",
       L.run ? line("hot", `Right now: <b>${esc(d[L.run.side])} on a ${L.run.pts}–0 run</b>`) : "",
       ...["away", "home"].map((ha) => ((d.live || {}).state === "live" && dr[ha] >= 180
@@ -817,8 +817,8 @@
     const g = k.boardGame || {};
     const sp = num(g.spread), tot = num(g.total);
     const rows = [];
-    if (sp != null) rows.push(["Spread", `${esc(d.away)} ${esc(signed(-sp))}`, `${esc(d.home)} ${esc(signed(sp))}`]);
-    if (num(g.away_ml) || num(g.home_ml)) rows.push(["Moneyline", `${esc(d.away)} ${esc(price(g.away_ml) || "—")}`, `${esc(d.home)} ${esc(price(g.home_ml) || "—")}`]);
+    if (sp != null) rows.push(["Spread", `${esc(d.away_abbr || d.away)} ${esc(signed(-sp))}`, `${esc(d.home_abbr || d.home)} ${esc(signed(sp))}`]);
+    if (num(g.away_ml) || num(g.home_ml)) rows.push(["Moneyline", `${esc(d.away_abbr || d.away)} ${esc(price(g.away_ml) || "—")}`, `${esc(d.home_abbr || d.home)} ${esc(price(g.home_ml) || "—")}`]);
     if (tot != null) rows.push(["Total", `Over ${esc(tot)}`, `Under ${esc(tot)}`]);
     const lines = rows.length ? `<div class="hc-lines">${rows.map(([k2, a, h]) =>
       `<div class="hc-line-row"><span class="hc-line-k">${k2}</span><span class="hc-line-v">${a}</span><span class="hc-line-v">${h}</span></div>`).join("")}</div>
@@ -830,7 +830,7 @@
       const h = Number(wp.home_win_prob), a = wp.away_win_prob != null ? Number(wp.away_win_prob) : 1 - h;
       win = `<div class="hc-win"><span class="hc-line-k">Win chance (our model)</span>
         <div class="hc-winbar"><i class="away" style="width:${Math.round(a * 100)}%"></i><i class="home" style="width:${Math.round(h * 100)}%"></i></div>
-        <div class="hc-win-v"><span>${esc(d.away)} <b>${Math.round(a * 100)}%</b></span><span><b>${Math.round(h * 100)}%</b> ${esc(d.home)}</span></div></div>`;
+        <div class="hc-win-v"><span>${esc(d.away_abbr || d.away)} <b>${Math.round(a * 100)}%</b></span><span><b>${Math.round(h * 100)}%</b> ${esc(d.home_abbr || d.home)}</span></div></div>`;
     }
     const track = k.boardGame && k.boardGame.line_track && typeof lineTrackHTML === "function" ? lineTrackHTML(k.boardGame) : "";
     return `${lines}${win}${track}`;
@@ -849,9 +849,9 @@
     const T = teamTotals(d);
     const pct = (s) => { const m = /^(\d+)-(\d+)$/.exec(String(s || "")); return m && Number(m[2]) ? Math.round((100 * Number(m[1])) / Number(m[2])) : null; };
     const fa = pct(T.away["Field goals"]), fh = pct(T.home["Field goals"]);
-    if (fa != null && fh != null) out.push(["target", `Shooting: ${esc(d.away)} <b>${fa}%</b>, ${esc(d.home)} <b>${fh}%</b> from the floor.`]);
+    if (fa != null && fh != null) out.push(["target", `Shooting: ${esc(d.away_abbr || d.away)} <b>${fa}%</b>, ${esc(d.home_abbr || d.home)} <b>${fh}%</b> from the floor.`]);
     const ta = pct(T.away["3-pointers"]), th = pct(T.home["3-pointers"]);
-    if (ta != null && th != null) out.push(["target", `From three: ${esc(d.away)} <b>${ta}%</b>, ${esc(d.home)} <b>${th}%</b>.`]);
+    if (ta != null && th != null) out.push(["target", `From three: ${esc(d.away_abbr || d.away)} <b>${ta}%</b>, ${esc(d.home_abbr || d.home)} <b>${th}%</b>.`]);
     if (k.leads.run) out.push(["hot", `${esc(d[k.leads.run.side])} on a <b>${k.leads.run.pts}–0</b> run.`]);
     ["away", "home"].forEach((ha) => { if (lv.state === "live" && k.droughts[ha] >= 180) out.push(["cold", `${esc(d[ha])}: no field goal in <b>${mmss(k.droughts[ha])}</b>.`]); });
     if (k.leads.changes || k.leads.ties) out.push(["rising", `<b>${k.leads.changes}</b> lead changes and <b>${k.leads.ties}</b> ties so far.`]);

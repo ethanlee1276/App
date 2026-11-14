@@ -93,6 +93,37 @@ def test_the_live_tab_names_the_league_as_the_strip_does():
     assert "escapeHtmllgCode" not in APP and not re.search(r"[A-Za-z_]lgCode\(", APP), "a call folded into a name"
 
 
+def test_a_school_below_division_one_is_named_by_its_abbreviation_not_its_key():
+    """A small school is keyed "espn:<id>" (espnhoops.team_key), and the
+    game page and its strip printed that key: "espn:124942" for Mary
+    Baldwin, 2026-11-14. The scoreboard's own abbreviation rides along
+    for it, and every card prints that."""
+    from engine.sources import livescores
+    ev = {"events": [{"id": "401926203", "date": "2026-11-14T00:00Z", "competitions": [{"competitors": [
+        {"homeAway": "home", "score": "71", "team": {"id": "2678", "abbreviation": "VMI", "conferenceId": "24",
+                                                      "displayName": "VMI Keydets"}},
+        {"homeAway": "away", "score": "53", "team": {"id": "124942", "abbreviation": "MBC",
+                                                      "displayName": "Mary Baldwin Fighting Squirrels"}}]}],
+        "status": {"type": {"state": "post", "completed": True, "shortDetail": "Final"}}}]}
+    rows = livescores.parse_espn_rows(ev, "cbb")
+    if rows:                                              # the league's own key rule decides the codes
+        r = rows[0]
+        if str(r["away"]).startswith("espn:"):
+            assert r.get("away_abbr") == "MBC" and "home_abbr" not in r, r
+    src = (ROOT / "livescore_build.py").read_text()
+    assert src.count('for k in ("home_abbr", "away_abbr"):') == 2, "the live row and the game's own file"
+    card = _fn(APP, "liveCardHTML")
+    for side in ("away", "home"):
+        assert f"escapeHtml(g.{side}_abbr || g.{side})" in card
+    assert "p.team === g.home ? g.home_abbr || p.team : p.team === g.away ? g.away_abbr || p.team : p.team" in APP
+    assert "row(g.away, hid ? null : lv.away_score, g.away_abbr)" in DETAIL
+    assert "const aw = d.away_abbr || away, hm = d.home_abbr || home;" in DETAIL
+    assert DETAIL.count('d[`${ha}_abbr`] || d[ha] || ""') == 2
+    CAST_H = (ROOT / "web" / "js" / "hoopscast.js").read_text()
+    assert "esc(d.away)" not in CAST_H and "esc(d.home)" not in CAST_H
+    assert "row(d.away_abbr || d.away, A, lv.away_score)" in CAST_H
+
+
 # --- in a browser ---------------------------------------------------------------------
 def _live():
     def play(i, period, clock, team, player, event, scoring, pts, a, h):

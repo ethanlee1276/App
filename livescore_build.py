@@ -217,6 +217,11 @@ def _row(r: dict, league: str = "") -> dict:
     out = {"event_id": r["event_id"], "home": r["home"], "away": r["away"],
            "home_name": r["home_name"], "away_name": r["away_name"],
            "live": live}
+    # A school below Division I's own abbreviation, for the cards to name
+    # it by in place of its "espn:<id>" key (livescores.parse, 2026-11-14).
+    for k in ("home_abbr", "away_abbr"):
+        if r.get(k):
+            out[k] = r[k]
     # ESPN's own team ids, when the scoreboard gave them. A basketball
     # play names its team by id and nothing else, and these are how
     # `attach_plays` turns that id into the card's own `home`/`away` —
@@ -614,6 +619,11 @@ def pbp_doc(league: str, g: dict, payload: dict,
     }
     if g.get("tv") or g.get("tv_local"):
         doc["tv"], doc["tv_local"] = list(g.get("tv") or []), list(g.get("tv_local") or [])
+    # A school below Division I's own abbreviation, which the page prints
+    # in place of its "espn:<id>" key (livescores.parse, 2026-11-14).
+    for k in ("home_abbr", "away_abbr"):
+        if g.get(k):
+            doc[k] = g[k]
     if g.get("birthdays"):
         doc["birthdays"] = list(g["birthdays"])
     if league in espnplays.FOOTBALL:

@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PG. A small school by its name, not its key** (step 535; 14 November).
+Nothing to run. Checking every college page against the night's real
+games, the game page of VMI against Mary Baldwin named Mary Baldwin
+"espn:124942": a school below Division I is keyed by ESPN's id, and the
+header, the linescore, the game strip, the live card and the plays printed
+the key. The live file and each game's own file now carry the school's
+abbreviation ("MBC"), and every card prints it; the logos still key on the
+id. The Live tab's cards are the first page drawn there, so the first visit
+grew 21 bytes past its 378 KB budget, and the budget is now 379 (its
+history says why, as each step up does).
+
 **PF. The Play feed opens; college plays read their halves** (step 534;
 14 November). Nothing to run. You, on the Live tab with 23 college games
 on: "clicking the play feed button throws an error and glitches the page."

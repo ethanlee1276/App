@@ -338,6 +338,10 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
         home = away = None
         home_name = away_name = ""
         home_id = away_id = ""
+        # A SCHOOL BELOW DIVISION I is keyed "espn:<id>" (espnhoops.team_key),
+        # which no card should print: its own abbreviation rides along for
+        # the cards to name it by ("ERKA", 2026-11-14).
+        abbrs: dict = {}
         hs = as_ = None
         by_id: dict[str, str] = {}
         for c in competitors:
@@ -354,6 +358,8 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
                 home, hs, home_name, home_id = ab, score, name, tid
             else:
                 away, as_, away_name, away_id = ab, score, name, tid
+            if str(ab).startswith("espn:") and team.get("abbreviation"):
+                abbrs["home_abbr" if c.get("homeAway") == "home" else "away_abbr"] = str(team["abbreviation"])
         if not home or not away:
             continue
         status = ev.get("status", {}) or comp.get("status", {})
@@ -401,7 +407,7 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
                     "home": home, "away": away,
                     "home_name": home_name, "away_name": away_name,
                     "home_id": home_id, "away_id": away_id,
-                    "live": live})
+                    "live": live, **abbrs})
     return out
 
 

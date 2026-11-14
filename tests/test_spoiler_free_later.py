@@ -79,7 +79,8 @@ def test_every_card_that_draws_a_score_asks_first():
         "the board's game page: no score, no bases"
     assert '&& state.view === "game" && !spoiledG(state.sport, row))' in gp, "and no room mounted from it"
     strip = _fn(DETAIL, "pbpStripHTML")
-    assert "hid = spoiledG(league, g);" in strip and "row(g.away, hid ? null : lv.away_score)" in strip
+    # (a school below Division I named by its abbreviation since 2026-11-14)
+    assert "hid = spoiledG(league, g);" in strip and "row(g.away, hid ? null : lv.away_score, g.away_abbr)" in strip
 
 
 def test_the_game_page_offers_it_and_veils_a_saved_game():

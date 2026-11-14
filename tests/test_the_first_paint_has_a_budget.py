@@ -301,7 +301,16 @@ APP_JS_BUDGET_KB = 290
 #: browser does and folding the rule into the strip's phone block:
 #: 385,762 -> 386,078 B, 30 over 377. It cannot load later: the first
 #: page drawn holds the sort. Told to Ethan.
-BOOT_BUDGET_KB = 378
+#: 378 -> 379 on 2026-11-14, for Ethan's Live tab with 23 college games on
+#: ("clicking the play feed button throws an error and glitches the
+#: page") and the fixes that came with it: the league chips' handler kept
+#: to the league chips, college's halves (halfPeriod), NCAAB for CBB on
+#: every line (lgCode, which also folded eleven copies of the same
+#: expression and paid for most of this), and a school below Division I
+#: named by its own abbreviation, not "espn:<id>", on the live card and in
+#: its plays. 387,072 -> 387,093 B, 21 over 378. It cannot load later: the
+#: Live tab's cards are the first page drawn there. Told to Ethan.
+BOOT_BUDGET_KB = 379
 
 
 def _gz_trimmed(rel: str) -> int:
