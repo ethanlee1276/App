@@ -51,7 +51,10 @@ def test_a_slate_with_no_dates_reads_its_kickoffs_in_eastern():
 
 def test_both_paths_ask_before_they_drop():
     src = (ROOT / "engine" / "sources" / "oddsapi.py").read_text(encoding="utf-8")
-    assert src.count("off_slate_day(ev, slate.games)") == 2
+    # (Pin updated 2026-11-14: the third is `unmapped_other_day`, which both
+    # paths ask before an unmapped college name becomes a drop — step QR.)
+    assert src.count("off_slate_day(ev, slate.games)") == 3
+    assert src.count("and unmapped_other_day(slate, ev, days):") == 2
     assert "if not legs and off_slate_day(ev, slate.games):" in src
     assert "not in slate_pairs and off_slate_day(ev, slate.games):" in src
 
