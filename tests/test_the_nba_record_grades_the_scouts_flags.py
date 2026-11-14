@@ -164,7 +164,8 @@ def test_a_proven_nba_flag_lowers_its_picks_whether_or_not_the_card_shows_it():
     assert abs(row["model_prob"] - round(q + 0.5 * (0.66 - q), 4)) < 1e-9 and row["model_prob"] < 0.66
     assert S.FLAGS["b2b_over"] in row["ctx_note"] and row["board_raw_prob"] == 0.66
     src = open(os.path.join(ROOT, "engine", "likelyboard.py"), encoding="utf-8").read()
-    block = src[src.index('if sport == "nba":\n        try:\n            from .nba import scout as _nsc'):]
+    # The NBA's and college's (2026-11-14), each its own league's verdicts.
+    block = src[src.index('if sport in ("nba", "cbb"):'):]
     block = block[:block.index("except Exception")]
     assert block.index("_nsc.annotate(_nrows)") < block.index("_nctx.apply(_nrows, sport)")
 

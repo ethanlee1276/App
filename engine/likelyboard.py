@@ -924,13 +924,17 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
     # never saw, that picks carrying it over-claim (engine/likelyctx, each
     # settled pick's situation rebuilt by engine/nba/scoutrecord); until
     # that store holds an NBA entry the flags are notes and nothing moves.
-    if sport == "nba":
+    # COLLEGE'S (2026-11-14) are its own five seasons' verdicts on its own
+    # cards (engine/nba/scout.VERDICT_CBB), and its own record learns them
+    # the same way (engine/likelyctx.LEARNS).
+    if sport in ("nba", "cbb"):                              # engine/nba/scout.LEAGUES
         try:
             from .nba import scout as _nsc
             _nrows = [pool[k] for k in order]
             _nsc.annotate(_nrows)
             from . import likelyctx as _nctx
-            _nctx.apply(_nrows, sport)
+            if sport in _nctx.LEARNS:
+                _nctx.apply(_nrows, sport)
         except Exception:                                    # noqa: BLE001
             pass
     # THE INVENTIONS, ONCE PROVEN (engine/ideagate; Ethan, 2026-10-17: "make

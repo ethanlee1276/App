@@ -114,14 +114,16 @@ def test_the_edge_card_carries_them_and_most_likely_rereads_them():
     assert '"scout_ctx": row.get("scout_ctx")' in likely, "Most Likely rows keep the facts"
     board = (ROOT / "engine" / "likelyboard.py").read_text()
     i = board.index("THE NBA SCOUT'S READ")
-    assert 'if sport == "nba":' in board[i:i + 900] and "_nsc.annotate(" in board[i:i + 900]
+    # The NBA's and college's (2026-11-14), each by its own seasons' verdicts.
+    assert 'if sport in ("nba", "cbb"):' in board[i:i + 1600] and "_nsc.annotate(" in board[i:i + 1600]
     assert [x for x in r["reasons"] if x.startswith("Scout: ")] == [f"Scout: {t}" for t in r["scout_notes"]], \
         "the Edge card draws them as reasons"
     assert '"reasons": [x for x in (row.get("reasons") or []) if not str(x).startswith("Scout: ")]' in likely, \
         "a Most Likely row drops the Edge side's scout lines and reads its own"
     build = (ROOT / "nba_build.py").read_text()
-    assert '"scout_ctx": (scout_context(' in build and 'if args.league == "nba" else None' in build, \
-        "the NBA only: the WNBA was not measured"
+    assert '"scout_ctx": (scout_context(' in build and 'if args.league in _scout_leagues else None' in build, \
+        "the NBA and college, each measured on its own seasons: the WNBA was not measured"
+    assert S.LEAGUES == ("nba", "cbb") and "wnba" not in S.VERDICTS
 
 
 if __name__ == "__main__":

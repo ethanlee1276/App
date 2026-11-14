@@ -177,8 +177,8 @@ college.
 - **The blowout curves and the rest buckets**: they key on the game's
   spread, and these box scores carry no lines. College rarely plays on
   consecutive days outside its tournaments.
-- **The scout's flags** and **first basket** were measured on the NBA's
-  games and stay the NBA's.
+- **First basket** was measured on the NBA's play-by-play and stays the
+  NBA's. (The scout's flags were, until 2026-11-14: below, "The scout".)
 
 ## The tournament model
 
@@ -286,6 +286,86 @@ The race built on 2025-26's own games, as the box will build it:
   first-round result and the Final Four's pairs once the scoreboard listed
   them.
 
+## The scout
+
+The NBA scout's fourteen flags (`engine/nba/scout`: the spots a basketball
+person hesitates in, docs/NBA_LAB.md "The scout") were measured on NBA
+games only, and college's cards carried none. On 2026-11-14 each was
+measured on college's own seasons, the NBA's way, with everything decided
+before the run.
+
+**Written first** (committed before the run, `scout.LEAGUE["cbb"]`). Three
+game-script thresholds are college's own: a projected blowout is fifteen
+points (a favourite of ten is an ordinary college game; the median Division
+I final margin is ten points, every season 2022-23 to 2025-26), and a fast
+or slow game is read against the league's own usual total at the NBA's
+ratios, 1.04 and 0.94 (236 and 214 against an NBA game's usual 227),
+because college's scoring moved from 141 to 149 points a game across those
+four seasons. The rest are ratios of his own numbers and stay the NBA's.
+The bar: a WARNING is under what our number said in every judged season
+(200+ flagged picks), under both spreads the board can run (one CV, and the
+measured power spread), in at least two seasons, by 1.0% or more on
+average; REFUSED is over it in every judged season; PRICED hits less before
+any model in every season while our number already takes it out.
+
+**The rows.** Every Division I regular-season game of 2021-22 to 2025-26 a
+man of 15+ minutes a game played, five or more games for his school first,
+his history running back across seasons at the same school as the board's
+twenty games do: 61,505 / 71,300 / 71,765 / 71,969 / 70,947 player-games,
+in college's five priced markets, at a half-point line off his last five.
+Each projected through the board's own projection at college's tuning
+(shooting and the rates reads on, the stand-in spread, total and rest on
+the prop, the player memory off). Before any model: the flagged side's hit
+rate against the same side unflagged. After ours: on the picks our number
+makes (the side it gives 50%+), how far flagged picks fall under what we
+said, against unflagged ones on that side.
+
+**The seasons carry no book lines.** The game-script flags read OUR
+RATINGS' spread (`engine/cbbratings`, refitted each Monday on the season's
+games before it, last season's as the prior) and a total from the two
+schools' points for and against, over the four seasons with a schedule
+(2022-23 on). A man barely into his season needs last season's games, so
+four seasons there too.
+
+**What it found** (after our number, the one-CV spread, teammate-out
+minutes off as the board runs; 2021-22 to 2025-26):
+
+| Flag | Verdict | After ours, season by season | Fires on |
+|---|---|---|---|
+| an under while a regular teammate sits | **warning** | -5.8 / -4.2 / -5.5 / -5.8 / -5.1% (with the teammate-out minutes on: -4.2 / -2.6 / -3.8 / -4.2 / -3.3%) | 11-14% |
+| an over in his first game back | **warning** | -8.6 / -8.9 / -9.4 / -12.0 / -11.5%, after the first-game-back minutes rule | 2% |
+| an over after his minutes dropped | **warning** | -2.9 / -3.4 / -4.5 / -3.2 / -3.5% | 8-9% |
+| an over on the second of two straight days | **warning** | -2.7 / -2.3 / -1.1 / -3.3 / -2.7% | 5% |
+| an over the night a regular returns | **warning** | -2.9 / -0.5 / -2.0 / -4.6 / -1.6% | 3% |
+| an under after his minutes jumped | **warning** | -1.0 / -0.6 / -1.8 / -1.2 / -1.6% | 16-17% |
+| a man under five games into his season | **warning** | — / -1.4 / -1.7 / -2.6 / -4.7% | 5-9% |
+| a starter's over in a projected blowout | refused | — / +4.0 / +3.4 / +1.8 / +4.4% | 7-9% |
+| an under in a projected shootout | refused | — / +0.1 / +0.3 / +0.5 / +1.1% | 18-27% |
+| an over in a projected grind | priced | before any model -2.5 / -0.9 / -1.4 / -2.1%; after ours — / -1.7 / +0.4 / +0.2 / -1.4% | 4-8% |
+| a scoring over after a hot three-point run | priced | before -5.2 to -5.9% every season; after -1.2 / -2.2 / +1.5 / +2.3 / +1.4% | 2-6% |
+| games that swing widely | mixed | -1.7 to -1.3% at one CV, -0.3 to +0.5% at the power spread | 51-52% |
+| a line far from his last five | unmeasured | needs the books' lines | — |
+
+The power spread agrees on every warning (first game back -7.4 to -10.9%,
+the rest within a point). College is not the NBA here: the back-to-back
+over the NBA refused is a warning (college plays two days running only in
+its tournaments); the minutes jump the NBA's role-jump rule priced still
+goes wrong (college runs no role-jump rule: it failed on points, above);
+his first game back goes wrong by far more than the NBA's even after
+college's own first-game-back rule; and the projected shootout the NBA
+warns on does not, in any college season. The NBA's swing threshold (a
+game-to-game spread of 0.55) catches half of all college player-markets,
+and what it found came and went with the spread: not a warning.
+
+**On the board** (`engine/nba/scout.VERDICT_CBB`): the seven warnings reach
+college's cards as "Scout:" lines, each sentence saying what college's
+seasons measured; a refused, priced, mixed or unmeasured flag never does.
+A flag moves no number: college's graded record learns the same flags
+(engine/likelyctx, each settled pick rebuilt by engine/nba/scoutrecord with
+college's names, seasons and usual total, a regular who sat read off this
+season's games so a graduated senior never "sat" an opener), and only a
+flag the record proves on games the fit never saw lowers a chance.
+
 ## Reproducing it
 
 The scripts are research, not the site: the hoopR player boxes for
@@ -293,3 +373,8 @@ The scripts are research, not the site: the hoopR player boxes for
 `nbarules.cases`' shape by school id and athlete id (two players on one
 roster can share a name), then the WNBA lab's three runs with college's
 tuning: the variants, `nbarules.measure`, and the spread fit and judgement.
+The scout: the same boxes with every shot column and the hoopR schedules
+(2023-2026, for the ratings' spread and the scoring total), one process per
+season — the rows, the situation through `scout.situation` at league
+"cbb", the board's projection off and on the teammate-out minutes, the two
+spreads' chances, each flag's before and after by the bar above.

@@ -518,12 +518,14 @@ def return_for(player: str, team: str, back: dict, hist: dict, listed: dict,
 
 
 def scout_context(player: str, market: str, h: dict, spread, total, rest, missed,
-                  gone: dict, back: dict, league: str, season: int) -> dict:
+                  gone: dict, back: dict, league: str, season: int, total_norm=None) -> dict:
     """The side-free facts engine/nba/scout's flags read for one prop: his
     club's spread (negative = favoured) and the game total, tonight's rest,
     his last ten in the market and in minutes, his games for the club this
     season, whether he missed its last game, and whether a regular
-    teammate sits (24+ minutes a game, ruled out) or returns tonight."""
+    teammate sits (24+ minutes a game, ruled out) or returns tonight. The
+    league picks whose thresholds and verdicts the flags take, and college
+    reads its fast and slow games against the league's usual total."""
     from engine.nba import window as _w
     from engine.nba.minutes import RETURN_REGULAR_MIN
     team = h.get("team")
@@ -533,7 +535,8 @@ def scout_context(player: str, market: str, h: dict, spread, total, rest, missed
             games = _w.this_season(h.get("dates"), league, season)
         except Exception:                                   # noqa: BLE001
             games = None
-    return {"starter": bool(h.get("starter")), "spread": spread, "total": total, "rest": rest,
+    return {"league": league, "total_norm": total_norm,
+            "starter": bool(h.get("starter")), "spread": spread, "total": total, "rest": rest,
             "values": [float(v) for v in (h.get(market) or [])[:10]],
             "minutes": [float(m) for m in (h.get("minutes") or [])[:10]],
             "games_season": games, "missed_last": bool(missed),
@@ -1260,6 +1263,9 @@ def main() -> None:
         # The league's own recent scoring, the norm tonight's total is read
         # against (engine/nba/context.env_factor).
         norm_total = total_norm(conn, args.league, args.date)
+        # THE SCOUT'S LEAGUES (engine/nba/scout.LEAGUES): the NBA and college,
+        # each card read by its own league's measured verdicts.
+        from engine.nba.scout import LEAGUES as _scout_leagues
         # Which games his minutes base reads at the season's start, as the
         # day's measurement chose (engine/nba/window): this season's alone
         # only once they have read closer, the twenty-game window otherwise.
@@ -1663,14 +1669,16 @@ def main() -> None:
                 "return_names": ", ".join(n for n, _m in _back.get(h["team"], []) if n != prop.player),
                 # THE SCOUT'S READ (engine/nba/scout): the side-free facts its
                 # flags need, so each card — the Edge side here, Most Likely's
-                # own side later — names the spots measured to go wrong.
+                # own side later — names the spots measured to go wrong. The
+                # NBA's and college's (2026-11-14), each measured on its own
+                # seasons; the WNBA was not measured.
                 "scout_ctx": (scout_context(prop.player, prop.market, h,
                                             spread_by_team.get(h["team"], (None,))[0],
                                             total_by_team.get(h["team"]),
                                             density.get(h["team"], {}).get("rest"),
                                             _missed, gone, _back, args.league,
-                                            minutes_window.get("season") or 0)
-                              if args.league == "nba" else None),
+                                            minutes_window.get("season") or 0, total_norm=norm_total)
+                              if args.league in _scout_leagues else None),
                 # THE INJURY BOARD ON THE PROP: ruled out is a grade-D
                 # restriction (no bet, the card says why); listed and
                 # playable is held until the lineup confirms, on the Edge

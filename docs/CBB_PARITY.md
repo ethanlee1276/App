@@ -50,7 +50,7 @@ Measured numbers are in `docs/CBB_LAB.md`.
 | What a missing teammate opens, the vacancy step | Done | The shared reads; the vacancy step follows the NBA's verdict |
 | Defense vs position | Done | `engine/hoopsdvp`, the WNBA's measured transfer |
 | The combos (P+R, P+A, R+A), steals, blocks, turnovers as markets | Different | Priced for the NBA only: each is another market on every event the odds pull buys. College prices points, rebounds, assists, threes and PRA on its five games a night |
-| The scout's flags | Not yet | Fourteen spots measured on the NBA's games; none is measured on college's |
+| The scout's flags | Done *(11-14)* | Measured on five college seasons by a bar written before the run (docs/CBB_LAB.md, "The scout"): seven warnings on college's cards (a teammate sitting, his first game back, a minutes drop or jump, two straight days, a regular's return, a man barely into his season); a projected blowout and shootout refused; college's graded record learns the same flags |
 
 ## Offense against defense
 

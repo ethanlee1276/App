@@ -42,6 +42,12 @@ league's games, every man's games, and the stored game lines, from about a
 season before the first pick. The settle loop's board learning runs this
 every few hours on a one-CPU box; a query per pick would not do.
 
+COLLEGE (2026-11-14): the same rebuild for college's own record, read the
+way college's cards read (engine/nba/scout.VERDICT_CBB): its own league's
+names and seasons, the league's usual total over its latest 200 finals for
+the fast and slow games, and a regular who SAT read off this season's games
+only — a senior who played last March and graduated did not sit tonight.
+
 Standard library only. Never writes.
 """
 from __future__ import annotations
@@ -73,9 +79,15 @@ LOOKBACK_DAYS = 400
 BOOK = "best"
 
 
-def _canon(team) -> str:
+#: nba_build.total_norm's: the league's latest this-many finals before the
+#: day, and the fewest it reads a norm from.
+NORM_FINALS = 200
+NORM_MIN_FINALS = 50
+
+
+def _canon(team, sport: str = "nba") -> str:
     from engine import divisions
-    return divisions.canonical("nba", str(team or ""))
+    return divisions.canonical(sport, str(team or ""))
 
 
 def _day(value) -> str:
@@ -111,8 +123,32 @@ def _eastern_day(stamp: str) -> str:
         return (t - _dt.timedelta(hours=5)).date().isoformat()
 
 
-def load(hist, first_day: str, sport: str = "nba") -> dict:
-    """Everything `context` reads, from three queries.
+#: How many club spellings one log query names (SQLite's limit is 999).
+TEAM_CHUNK = 400
+
+
+def _logs(hist, sport: str, lo: str, teams):
+    """The logs `load` reads: every man's for the NBA, and for a league of
+    365 schools only the picks' own clubs' (a million rows a season
+    otherwise, on a one-CPU box)."""
+    marks = ",".join("?" * len(COLUMNS))
+    sql = ("SELECT player, period, team, position, market, value FROM player_game_logs "
+           f"WHERE sport=? AND period >= ? AND market IN ({marks})")
+    if teams is None:
+        return hist.execute(sql, (sport, lo, *COLUMNS)).fetchall()
+    from engine import divisions
+    names = sorted({x.upper() for t in teams if t for x in divisions.spellings(sport, str(t))})
+    out = []
+    for i in range(0, len(names), TEAM_CHUNK):
+        part = names[i:i + TEAM_CHUNK]
+        out += hist.execute(sql + f" AND UPPER(team) IN ({','.join('?' * len(part))})",
+                            (sport, lo, *COLUMNS, *part)).fetchall()
+    return out
+
+
+def load(hist, first_day: str, sport: str = "nba", teams=None) -> dict:
+    """Everything `context` reads, from three queries (``teams``: only these
+    clubs' logs, for college's record).
 
     ``{"games": {player: {day: {"team", "start", column: value}}},
        "club_days": {club: [days, oldest first]},
@@ -133,20 +169,17 @@ def load(hist, first_day: str, sport: str = "nba") -> dict:
     except Exception:                                         # noqa: BLE001 — no games table
         found = []
     for period, home, away in found:
-        d, home, away = _day(period), _canon(home), _canon(away)
+        d, home, away = _day(period), _canon(home, sport), _canon(away, sport)
         club_days[home].add(d)
         club_days[away].add(d)
         matchups[(home, d)] = matchups[(away, d)] = f"{away}@{home}"
     games: dict = defaultdict(dict)
-    marks = ",".join("?" * len(COLUMNS))
     try:
-        rows = hist.execute(
-            "SELECT player, period, team, position, market, value FROM player_game_logs "
-            f"WHERE sport=? AND period >= ? AND market IN ({marks})", (sport, lo, *COLUMNS)).fetchall()
+        rows = _logs(hist, sport, lo, teams)
     except Exception:                                         # noqa: BLE001 — no logs table
         rows = []
     for player, period, team, position, market, value in rows:
-        g = games[player].setdefault(_day(period), {"team": _canon(team)})
+        g = games[player].setdefault(_day(period), {"team": _canon(team, sport)})
         g[market] = float(value or 0.0)
         if market == "min":
             g["start"] = str(position or "") == "S"
@@ -177,15 +210,38 @@ def load(hist, first_day: str, sport: str = "nba") -> dict:
         d = eid[:10] if eid[:4].isdigit() and eid[4:5] == "-" else _eastern_day(start)
         if not d:
             continue
-        home, away = _canon(home), _canon(away)
+        home, away = _canon(home, sport), _canon(away, sport)
         mine, theirs = lines.setdefault((home, d), {}), lines.setdefault((away, d), {})
         if market == "spread":                                # stored as the HOME club's number
             mine["spread"], theirs["spread"] = float(line), -float(line)
         else:
             mine["total"] = theirs["total"] = float(line)
+    # COLLEGE'S FAST AND SLOW GAMES are read against the league's usual
+    # total (engine/nba/scout.LEAGUE): every final's total by day, for the
+    # norm before each pick's (`_norm`). A query of its own, so the NBA's
+    # read is the one it was.
+    finals: list = []
+    if sport != "nba":
+        try:
+            finals = sorted((_day(p), float(h) + float(a)) for p, h, a in hist.execute(
+                "SELECT period, home_score, away_score FROM games WHERE sport=? AND period >= ? "
+                "AND home_score IS NOT NULL AND away_score IS NOT NULL AND home_score + away_score > 0",
+                (sport, lo)).fetchall())
+        except Exception:                                     # noqa: BLE001 — no scores stored
+            finals = []
     return {"games": dict(games), "club_days": {t: sorted(ds) for t, ds in club_days.items()},
             "played": dict(played), "members": dict(members), "matchups": matchups, "lines": lines,
-            "news": {}}
+            "news": {}, "sport": sport, "finals": finals}
+
+
+def _norm(data: dict, day: str):
+    """The league's average total over its latest NORM_FINALS finals before
+    ``day`` (nba_build.total_norm's), or None with too few stored."""
+    import bisect
+    finals = data.get("finals") or []
+    i = bisect.bisect_left(finals, (day,))
+    last = [t for _d, t in finals[max(0, i - NORM_FINALS):i]]
+    return round(sum(last) / len(last), 1) if len(last) >= NORM_MIN_FINALS else None
 
 
 def _value(g: dict, market: str):
@@ -243,7 +299,17 @@ def news(team: str, day: str, prior: list, data: dict) -> tuple:
     if not there:
         cache[(team, day)] = (None, None)
         return cache[(team, day)]
-    recent = set(prior[:NEW_ABSENCE_GAMES])
+    sat_from = prior
+    if data.get("sport") == "cbb":
+        # College: this season's games only, or a senior who played last
+        # March would have "sat" every opener.
+        from ..seasons import season_of
+        try:
+            now = season_of("cbb", day)
+            sat_from = [d for d in prior if season_of("cbb", d) == now]
+        except (ValueError, TypeError):
+            sat_from = prior
+    recent = set(sat_from[:NEW_ABSENCE_GAMES])
     sat, back = set(), set()
     games = data.get("games") or {}
     for other in (data.get("members") or {}).get(team) or ():
@@ -273,8 +339,9 @@ def context(pick: dict, data: dict) -> dict | None:
     mine = (data.get("games") or {}).get(name) or {}
     if not day or not mine:
         return None
+    sport = data.get("sport") or "nba"
     tonight = mine.get(day)
-    team = (tonight or {}).get("team") or _canon(pick.get("team"))
+    team = (tonight or {}).get("team") or _canon(pick.get("team"), sport)
     if not team:
         older = sorted((d for d in mine if d < day), reverse=True)
         team = mine[older[0]]["team"] if older else ""
@@ -285,7 +352,7 @@ def context(pick: dict, data: dict) -> dict | None:
     from . import window as _w
     from ..seasons import season_of
     try:
-        games_season = _w.this_season(before, "nba", season_of("nba", day))
+        games_season = _w.this_season(before, sport, season_of(sport, day))
     except (ValueError, TypeError):
         games_season = None
     days = data.get("club_days", {}).get(team) or []
@@ -304,7 +371,8 @@ def context(pick: dict, data: dict) -> dict | None:
     mate_out = None if sat is None else bool(sat - {name})
     mate_back = None if back is None else bool(back - {name})
     line = (data.get("lines") or {}).get((team, day)) or {}
-    return {"starter": bool(rows[0].get("start")), "spread": line.get("spread"), "total": line.get("total"),
+    extra = {} if sport == "nba" else {"league": sport, "total_norm": _norm(data, day)}
+    return {**extra, "starter": bool(rows[0].get("start")), "spread": line.get("spread"), "total": line.get("total"),
             "rest": rest, "values": _series(rows, pick.get("market") or "")[:10],
             "minutes": [float(g.get("min", 0.0) or 0.0) for g in rows][:10],
             "games_season": games_season, "missed_last": bool(missed),
@@ -318,7 +386,9 @@ def flagged(rows: list[dict], hist, sport: str = "nba") -> list[dict]:
     each."""
     days = [_day(r.get("day") or r.get("game_day") or r.get("date")) for r in rows]
     days = [d for d in days if d]
-    data = load(hist, min(days), sport) if days else {}
+    # College reads only its picks' own clubs (`_logs`); the NBA reads all.
+    teams = None if sport == "nba" else {r.get("team") for r in rows if r.get("team")}
+    data = load(hist, min(days), sport, teams) if days else {}
     for r in rows:
         ctx = context(r, data) if data else None
         r["ctx"] = ctx

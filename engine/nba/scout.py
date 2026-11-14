@@ -176,12 +176,49 @@ VERDICT = {
 #: The flags a card shows: the ones still measured to go wrong.
 CARD = tuple(c for c in FLAGS if VERDICT.get(c, ("",))[0] == "warning")
 
-#: COLLEGE'S VERDICTS, its own seasons' (docs/CBB_LAB.md, "The scout"). A
-#: flag never reaches a college card on the NBA's word: a league with no
-#: verdict for a flag shows nothing for it.
-VERDICT_CBB: dict = {}
-#: Each league's verdicts.
+#: WHAT FIVE COLLEGE SEASONS SAID (2026-11-14, docs/CBB_LAB.md "The scout"):
+#: every Division I regular-season game of 2021-22 to 2025-26 a man of 15+
+#: minutes a game played, through the board's own projection at college's
+#: tuning, by the bar written before the run (a WARNING is under what we
+#: said in every judged season, under both spreads the board can run, by 1%
+#: or more on average). The game-script flags read OUR RATINGS' spread and
+#: the two schools' scoring as stand-ins for the books' lines, which the
+#: seasons do not carry, over the four seasons with a schedule (2022-23 on);
+#: a man barely into his season needs last season's games, so four too.
+#: College is not the NBA: an over on the second of two straight days and a
+#: minutes jump still go wrong (college runs no role-jump rule, and plays
+#: two days running only in its tournaments), his first game back goes
+#: wrong by far more, and an under in a projected shootout does not.
+VERDICT_CBB = {
+    "mate_out_under": ("warning", "in five college seasons, unders like this hit 4-6% less often than our "
+                                  "number said (3-4% once the minutes his absence opens are on)"),
+    "back_over": ("warning", "in five college seasons, overs like this hit 7-12% less often than our number "
+                             "said, even after the minutes his first game back takes out"),
+    "role_down_over": ("warning", "in five college seasons, overs like this hit 2-5% less often than our "
+                                  "number said: a drop in his minutes mostly holds"),
+    "b2b_over": ("warning", "in five college seasons, overs like this hit 1-3% less often than our number said"),
+    "mate_back_over": ("warning", "in five college seasons, overs like this hit about 2% less often than our "
+                                  "number said"),
+    "role_up_under": ("warning", "in five college seasons, unders like this hit 1-2% less often than our "
+                                 "number said: a jump in his minutes mostly holds"),
+    "thin": ("warning", "in four college seasons, our number ran 1-5% hot on men this early in their season"),
+    "blowout_over": ("refused", "in four college seasons, overs like this hit more often than our number "
+                                "said, not less"),
+    "fast_under": ("refused", "in four college seasons, unders like this hit as often as our number said "
+                              "or more"),
+    "slow_over": ("priced", "overs like this hit less often, and our number already says so"),
+    "hot_hand_over": ("priced", "a hot shooting run cools — our shooting read already regresses it"),
+    "boom_bust": ("mixed", "in five college seasons it came and went with the spread our number used: "
+                           "not a warning"),
+    "line_stretch_over": ("unmeasured", "needs the books' lines, which the measured seasons do not have"),
+    "line_shrink_under": ("unmeasured", "needs the books' lines, which the measured seasons do not have"),
+}
+#: Each league's verdicts. A flag never reaches a card on another league's
+#: word: a league with no verdict for a flag shows nothing for it.
 VERDICTS = {"nba": VERDICT, "cbb": VERDICT_CBB}
+#: The leagues whose builds hand the scout its facts (the WNBA was not
+#: measured).
+LEAGUES = tuple(VERDICTS)
 
 
 def _verdicts(league) -> dict:

@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PH. The scout reads college by college's own seasons** (step 536; 14
+November). Nothing to run. The NBA scout's fourteen flags (the spots a
+basketball person hesitates in) were measured on NBA games only, and
+college's cards carried none. Each was measured on five Division I seasons
+through the board's own projection at college's tuning, by a bar written
+before the run, with college's three game-script thresholds committed
+first (docs/CBB_LAB.md, "The scout"). Seven are warnings on college's
+cards: an under while a regular teammate sits (4-6% under what we said), an
+over in his first game back (7-12%), an over after his minutes dropped,
+an over on the second of two straight days, an over the night a regular
+returns, an under after his minutes jumped, a man barely into his season.
+A projected blowout and a projected shootout are refused for college (the
+shootout is an NBA warning). A flag moves no number: college's graded
+record learns the same flags the NBA's does, and only one it proves on
+games the fit never saw lowers a chance. The first week of a college season
+puts "barely into his season" on most cards, as measured.
+
 **PG. A small school by its name, not its key** (step 535; 14 November).
 Nothing to run. Checking every college page against the night's real
 games, the game page of VMI against Mary Baldwin named Mary Baldwin

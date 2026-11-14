@@ -71,12 +71,17 @@ SPORTS = ("nfl", "cfb")
 #: its own `annotate` (likelyboard); each settled pick's situation is rebuilt
 #: from the stored games by engine/nba/scoutrecord. The same fit, the same
 #: five folds by game, the same bar; fitted on the NBA's own record only.
-LEARNS = SPORTS + ("nba",)
+#: College basketball's (2026-11-14) are the same flags, read by college's
+#: own measured verdicts (engine/nba/scout.VERDICT_CBB) and rebuilt the same
+#: way (engine/nba/scoutrecord), fitted on college's own record only.
+LEARNS = SPORTS + ("nba", "cbb")
+#: The basketball leagues, whose flags are engine/nba/scout's.
+HOOPS = ("nba", "cbb")
 
 
 def note(code: str, sport: str = "nfl") -> str:
     """A flag in words, from its own league's scout."""
-    if sport == "nba":
+    if sport in HOOPS:
         from .nba import scout as _nba_scout
         return _nba_scout.FLAGS.get(code, code)
     return SC.note(code, sport)
@@ -264,7 +269,7 @@ def context(pick: dict, games: dict, by_team: dict, logs: dict, sport: str = "nf
 def flagged_journal(ledger, hist, sport: str = "nfl") -> list[dict]:
     """The journal with each pick's situation and flags attached."""
     rows = journal(ledger, sport)
-    if sport == "nba":
+    if sport in HOOPS:
         from .nba import scoutrecord
         return scoutrecord.flagged(rows, hist, sport)
     games, by_team, logs = history_index(hist, {r["player"] for r in rows}, sport)
