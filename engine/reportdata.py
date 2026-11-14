@@ -167,6 +167,11 @@ def _player_form(conn, season: int, players: dict, sport: str = "nfl", schedule=
             for g in rows[:LAST_N]:
                 g["where"] = venue(g["season"], g.get("week"), g["team"], schedule)
         rec = {"games": rows[:LAST_N]}
+        # HIS WHOLE SEASON, GAME BY GAME (2026-11-14): Ethan's reports show a
+        # receiver's game log and how often he clears a number ("6+ catches
+        # in 5 of 8"); the card reads both off this (gamereport.hit_lines).
+        rec["log"] = [{"wk": g.get("week") if g.get("week") is not None else g.get("day"),
+                       "opp": g.get("opp") or "", "s": dict(g.get("s") or {})} for g in cur]
         if cur:
             rec["season"] = _totals(cur)
         elif prior:

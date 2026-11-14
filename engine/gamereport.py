@@ -634,6 +634,85 @@ def form_rz(group: str, rz: dict) -> str:
     return "; ".join(bits)
 
 
+#: A board market and the logged numbers it settles on (a touchdown is
+#: either kind).
+HIT_MARKETS = {"receptions": ("receptions",), "rec_yds": ("rec_yds",), "rush_yds": ("rush_yds",),
+               "rush_att": ("rush_att",), "pass_yds": ("pass_yds",), "pass_cmp": ("pass_cmp",),
+               "pass_att": ("pass_att",), "pass_td": ("pass_td",), "anytime_td": ("rec_td", "rush_td"),
+               "rush_rec_yds": ("rush_yds", "rec_yds"), "pass_rush_yds": ("pass_yds", "rush_yds")}
+HIT_WORDS = {"receptions": "catches", "rec_yds": "receiving yards", "rush_yds": "rushing yards",
+             "rush_att": "carries", "pass_yds": "passing yards", "pass_cmp": "completions",
+             "pass_att": "pass attempts", "pass_td": "passing touchdowns", "anytime_td": "a touchdown",
+             "rush_rec_yds": "rushing and receiving yards", "pass_rush_yds": "passing and rushing yards"}
+#: His last games a hit line counts beside the season.
+HIT_RECENT = 5
+
+
+def _board_lines(c: "Ctx", player: str) -> list:
+    """(market, side, line) for each number the board posts on him: its Most
+    Likely picks and its Edge picks, once each."""
+    out, seen = [], set()
+    for k in ("most_likely", "recommendations"):
+        for row in c.result.get(k) or []:
+            if not isinstance(row, dict) or row.get("player") != player:
+                continue
+            if k == "recommendations" and not row.get("recommended"):
+                continue
+            mk, line = row.get("market"), row.get("line")
+            side = str(row.get("side") or "").upper()
+            side = "OVER" if side in ("YES", "Y") else side
+            if mk not in HIT_MARKETS or line is None or side not in ("OVER", "UNDER"):
+                continue
+            key = (mk, side, float(line))
+            if key not in seen:
+                seen.add(key)
+                out.append(key)
+    return out
+
+
+def hit_lines(c: "Ctx", r: dict) -> list:
+    """"Over 46.5 receiving yards: 5 of 8 games this season, 4 of his last
+    5" — for each number the board posts on him, how often his own games
+    cleared it (Ethan's reports: "SBR has him over 46.5 in 62% of games")."""
+    log = (c.form.get(r.get("player")) or {}).get("log") or []
+    if len(log) < 3:
+        return []
+    out = []
+    for mk, side, line in _board_lines(c, r.get("player")):
+        vals = [sum(float((g.get("s") or {}).get(m) or 0.0) for m in HIT_MARKETS[mk]) for g in log]
+        hit = [(v > line) if side == "OVER" else (v < line) for v in vals]
+        recent = hit[:HIT_RECENT]
+        what = ("Scored" if mk == "anytime_td" and side == "OVER" else
+                f"{'Over' if side == 'OVER' else 'Under'} {line:g} {HIT_WORDS[mk]}")
+        out.append(f"{what}: {sum(hit)} of {len(hit)} games this season"
+                   + (f", {sum(recent)} of his last {len(recent)}" if len(hit) > len(recent) else ""))
+    return out
+
+
+def season_log(group: str, log: list) -> str:
+    """His season game by game, newest first: "Wk 9 PHI 5-43 (8) · Wk 7 HOU
+    7-111" — catches-yards (targets) for a receiver, carries-yards for a
+    back, completions/attempts-yards for a quarterback."""
+    bits = []
+    for g in log[:10]:
+        s, wk = g.get("s") or {}, g.get("wk")
+        head = (f"Wk {wk}" if isinstance(wk, int) else str(wk or "")[5:]) + (f" {g['opp']}" if g.get("opp") else "")
+        if group == "qb":
+            line = f"{_n(s.get('pass_cmp'))}/{_n(s.get('pass_att'))}-{_n(s.get('pass_yds'))}"
+            if (s.get("rush_yds") or 0) >= 15:
+                line += f", {_n(s.get('rush_yds'))} rush"
+        elif group == "rb":
+            line = f"{_n(s.get('rush_att'))}-{_n(s.get('rush_yds'))}"
+            if s.get("receptions"):
+                line += f", {_n(s.get('receptions'))}-{_n(s.get('rec_yds'))} rec"
+        else:
+            line = f"{_n(s.get('receptions'))}-{_n(s.get('rec_yds'))}" + (
+                f" ({_n(s.get('targets'))})" if s.get("targets") is not None else "")
+        td = _n(s.get("rec_td")) + _n(s.get("rush_td")) + (_n(s.get("pass_td")) if group == "qb" else 0)
+        bits.append(f"{head} {line}" + (f", {td} TD" if td else ""))
+    return " · ".join(bits)
+
+
 def form_lines(c: "Ctx", r: dict) -> list:
     """[[label, [lines]]] for the player's card: this season (or last,
     when he has not played in this one), his last three games, a trend
@@ -675,6 +754,15 @@ def form_lines(c: "Ctx", r: dict) -> list:
         rz = form_rz(group, f.get("rz") or {})
         if rz:
             out.append(["Red zone", [rz]])
+    # HIS SEASON GAME BY GAME, and how often it clears the board's numbers.
+    log = f.get("log") or []
+    if len(log) > len(f.get("games") or []):
+        line = season_log(group, log)
+        if line:
+            out.append(["Game log", [line]])
+    hits = hit_lines(c, r)
+    if hits:
+        out.append(["At the board's numbers", hits])
     return out
 
 
