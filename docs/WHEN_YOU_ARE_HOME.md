@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QA. A player's card shows his season game by game, and how often it
+clears the board's numbers** (step 555; 14 November). Nothing to run. Your
+reports list a receiver's game log and how often he clears a number ("6+
+catches in 5 of 8", "over 46.5 in 62% of games"); our cards showed his last
+three games. Each key player's card in a football report now carries his
+season game by game ("Wk 9 PHI 5-53 (6), 1 TD · Wk 7 HOU 3-31 (4) · ...":
+catches-yards and targets for a receiver, carries-yards for a back,
+completions/attempts-yards for a quarterback), and for each number the board
+posts on him — its Most Likely and Edge picks — how many of his games this
+season cleared it, and how many of his last five ("Over 46.5 receiving
+yards: 4 of 6 games this season, 4 of his last 5").
+
 **PZ. Every NFL report opens on its angles** (step 554; 14 November).
 Nothing to run. You: your reports find "good matchups" a defence at a time
 — the Giants' blitz forcing Daniels to run, Washington's tight-end coverage,
