@@ -180,6 +180,112 @@ college.
 - **The scout's flags** and **first basket** were measured on the NBA's
   games and stay the NBA's.
 
+## The tournament model
+
+Ethan, 2026-11-14: *"make it like nba cup and shit I want all the features
+like this is a complete sport."* The NCAA tournament race
+(`engine/ncaarace`, the Race page on college) plays the rest of the season
+out: every game left, each conference's tournament, the committee's
+selection and the bracket. It rests on three things, each measured here on
+the hoopR schedules (`mbb/schedules/parquet/mbb_schedule_{2023..2026}`):
+every Division I game of 2022-23 to 2025-26 (6,261, 6,249, 6,299 and 6,318),
+with ESPN's neutral-site flag, each conference tournament's billing ("SEC
+Tournament - Final") and each NCAA tournament game's seeds.
+
+### The ratings (`engine/cbbratings`)
+
+Points better than an average Division I team on a neutral floor, adjusted
+for every opponent, each margin capped; last season's rating counts as a few
+games of this one. The home court and the small schools' level, fitted on
+each full season:
+
+| | 2022-23 | 2023-24 | 2024-25 | 2025-26 | **Carried** |
+|---|---|---|---|---|---|
+| Home court (points) | 3.20 | 2.83 | 2.93 | 2.65 | **2.8** (the last three) |
+| A school below Division I | −22.1 | −22.8 | −23.7 | −23.9 | **−23.5** |
+
+Then each fortnight's ratings predicting the next fortnight's games, every
+Division I game of 2023-24 to 2025-26 (15,945), last season's ratings as the
+prior. The margin's miss (RMSE, points) and the winner's Brier at a spread
+of 10.75:
+
+| Cap | Last season kept | Worth (games) | RMSE | Nov–Dec | Brier |
+|---|---|---|---|---|---|
+| 20 | 0.50 | 10 | 12.193 | 13.240 | 0.1890 |
+| 25 | 0.65 | 6 | 11.833 | 12.642 | 0.1857 |
+| 25 | 0.80 | 3 | 11.700 | 12.379 | 0.1852 |
+| none | 0.80 | 6 | 11.732 | 12.396 | 0.1869 |
+| 30 | 1.00 | 2 | 11.618 | 12.202 | 0.1856 |
+| **30** | **1.00** | **3** | **11.599** | **12.174** | **0.1850** |
+| 35 | 1.00 | 3 | 11.593 | — | 0.1852 |
+| 40 | 1.00 | 3 | 11.612 | — | 0.1857 |
+
+Fifty-four settings in all. The carried one (cap 30, all of last season's
+rating, worth three games) is the best Brier and within 0.006 points of the
+best margin; it is 11.50, 11.64 and 11.66 season by season. Keeping all of
+last season's number, not shrinking it, read best at every cap: a college
+team's level carries over more than its roster turnover suggests.
+
+The spread for a game's chance, the Brier on the same games:
+
+| 10.25 | 10.5 | **10.75** | 11.0 | 11.25 |
+|---|---|---|---|---|
+| 0.18507 | 0.18501 | **0.18499** | 0.18500 | 0.18504 |
+
+The margins themselves miss by 11.6; the best spread for the chance is a
+little narrower, because that miss includes the ratings' own error.
+
+### The committee, stood in for
+
+Each conference's champion is the winner of its tournament's game billed
+"Final" or "Championship", through selection Sunday itself: 2026's Atlantic
+10 and Ivy finals were played that afternoon, and the America East bills its
+event "Playoffs". Read that way, all 32, 31 and 31 champions were found, and
+every one was in the field.
+
+The at-large teams are the best by a selection score: our rating plus a
+weight for every win above what the bubble's team (the *n*th best) would
+expect against the same Division I schedule. Against the 110 teams the
+committee took at large in 2024, 2025 and 2026, and how far each of the
+sixty-four placed seeds is from the line the committee gave it:
+
+| Bubble | Weight 1.0 | 1.5 | 2.0 | 3.0 |
+|---|---|---|---|---|
+| 30th best | 104 / 0.73 | 104 / 0.74 | 105 / 0.72 | 105 / 0.78 |
+| **45th best** | 104 / 0.67 | **104 / 0.69** | 104 / 0.69 | 105 / 0.77 |
+| 60th best | 102 / 0.70 | 102 / 0.69 | 103 / 0.70 | 103 / 0.70 |
+
+The carried stand-in, the 45th best at 1.5, named **104 of 110** and seeded
+the field within **0.69** of a line on average. The first pass (a coarser
+grid) put it best of 24 at naming and at seeding together; our rating alone,
+with no résumé at all, named seven fewer. The committee's rule against
+early meetings of conference rivals and its quadrants are not modelled.
+
+### The tournament's own games
+
+The ratings on selection Sunday, each NCAA tournament game on a neutral
+floor at a spread of 10.75:
+
+| | 2023-24 | 2024-25 | 2025-26 |
+|---|---|---|---|
+| Games | 67 | 67 | 67 |
+| Brier | 0.1872 | 0.1433 | 0.1567 |
+| The favourite won | 70.1% | 80.6% | 73.1% |
+
+### A dress rehearsal on 2025-26
+
+The race built on 2025-26's own games, as the box will build it:
+
+- **15 January:** 3,434 games played and 2,475 left. The field if the
+  season had ended that day had Michigan, Arizona, Duke and UConn as the 1
+  seeds. Our ratings played the rest out 2,000 times in 2.9 seconds.
+- **12 March:** the conference tournaments under way, the regular season
+  done. Each one-bid league's leaders were near even for the bid.
+- **The tournament's first weekend:** the bracket was read off the
+  scoreboard. That was 68 teams, the First Four's results, every
+  first-round result and the Final Four's pairs once the scoreboard listed
+  them.
+
 ## Reproducing it
 
 The scripts are research, not the site: the hoopR player boxes for

@@ -14,8 +14,7 @@ is the basketball build's third league (`nba_build.py --league cbb`,
 college's games. **Done** means built, tested and running for college.
 **Different** means college does the same job its own way, and says how.
 **Not possible** means the data or the idea does not exist for college.
-**March** means it waits for the NCAA tournament field. Measured numbers are
-in `docs/CBB_LAB.md`.
+**Next** means it is being built. Measured numbers are in `docs/CBB_LAB.md`.
 
 ## The picks: posted, recorded, settled
 
@@ -97,19 +96,16 @@ in `docs/CBB_LAB.md`.
 | Alerts, follows, push | Done | Every league |
 | Lab replay | Done | Once the box holds college's seasons |
 
-## March: the NCAA tournament
+## The NCAA tournament
 
 The NBA's two season-long pages have one college analog, the NCAA
-tournament, and it waits for its field:
+tournament:
 
-- **The race** (the NBA Cup's page). The tournament's 68 are named on
-  Selection Sunday; the bracket and each school's chances come with it.
-- **Futures** (title odds against our own simulation). Every number on the
-  futures page is a simulation of the rest of the season, never a read of
-  a price, and a college title needs the bracket to simulate.
-- **Long Shots** (the NBA's first basket). The books post first-basket props
-  on NBA games, almost never on college ones, and our first-basket model
-  was measured on the NBA's play-by-play.
+| NBA tool | College | How |
+|---|---|---|
+| The NBA Cup's page (the race) | Done *(11-14)* | `engine/ncaarace`, the Race page: the field if the season ended today, the bubble, every conference's race, each school's chances and games at our price, the games that swing the bubble; from Selection Sunday the bracket off the scoreboard. Ratings adjusted for every opponent (`engine/cbbratings`) and a stand-in for the committee, both measured (docs/CBB_LAB.md, "The tournament model") |
+| Futures (title odds against our simulation) | Next | The race already plays the title out; the futures page will set it beside the books' title prices |
+| Long Shots (the NBA's first basket) | Not possible | The books post first-basket props on NBA games, almost never on college ones, and our first-basket model was measured on the NBA's play-by-play |
 
 ## Not possible for college
 

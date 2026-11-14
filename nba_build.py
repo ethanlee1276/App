@@ -2313,6 +2313,22 @@ def main() -> None:
                 _cconn.close()
         except Exception as _cx:                              # noqa: BLE001
             print(f"  ⚠️  NBA Cup skipped: {type(_cx).__name__}: {_cx}")
+    # THE NCAA TOURNAMENT (engine/ncaarace; Ethan, 2026-11-14: "make it like
+    # nba cup ... I want all the features like this is a complete sport"):
+    # the field if the season ended today, the bubble, every conference's
+    # race and our chances, and from selection Sunday the bracket — college
+    # basketball's NBA Cup page. Played out again at most every two hours,
+    # and never at the board's expense.
+    if args.league == "cbb":
+        try:
+            from engine import ncaarace as _ncaa
+            _nconn = connect()
+            try:
+                print(f"  {_ncaa.publish(_nconn, datetime.date.fromisoformat(args.date), out_path=str(Path(args.out).with_name('ncaa_race.json')))}")
+            finally:
+                _nconn.close()
+        except Exception as _nx:                              # noqa: BLE001
+            print(f"  ⚠️  NCAA race skipped: {type(_nx).__name__}: {_nx}")
     _clock.mark("pick of the day journal + NBA Cup")
     if picks_result:
         c = picks_result["counts"]

@@ -1,8 +1,11 @@
-"""The race pages: the NFL's and college football's playoff races and the NBA Cup.
+"""The race pages: the NFL's and college football's playoff races, the NBA
+Cup and the NCAA tournament.
 
 Ethan, 2026-10-29: "do all 3" — the second and third of which were the
-playoff race and the Cup tracker; and 2026-11-03, the NFL's: "do all of
-them". One page a league (js/race.js, loaded the
+playoff race and the Cup tracker; 2026-11-03, the NFL's: "do all of
+them"; and 2026-11-14, college basketball's: "make it like nba cup ... I
+want all the features like this is a complete sport". One page a league
+(js/race.js, loaded the
 first time it opens), named for its league in the menu, and quiet for every
 league that has no race.
 
@@ -44,6 +47,24 @@ def _fixtures():
     return cfp, cup
 
 
+def _ncaa():
+    import test_the_ncaa_tournament_race as N
+    out = N.built(sims=200)
+    out["generated_at"] = "2026-11-14T18:00:00"
+    return out
+
+
+def _ncaa_bracket(done_through="r64", night="r32"):
+    import test_the_ncaa_tournament_race as N
+    from engine import ncaarace
+    games = N._tournament(done_through)
+    day = ncaarace.nights(N.SEASON)[night][0]
+    out = ncaarace.build(games, N.ratings(games, day), day, names={t: f"School {t}" for t in N._teams()},
+                         sims=200, seed=1)
+    out["generated_at"] = "2027-03-20T18:00:00"
+    return out
+
+
 def _nfl():
     import test_the_nfl_playoff_race as N
     from engine import nflrace
@@ -72,22 +93,29 @@ def test_the_page_is_wired_where_every_page_is():
 
 
 def test_the_row_is_named_for_its_league_and_quiet_elsewhere():
-    assert '.sb-race").forEach((el) => { el.textContent = state.sport === "nba" ? "NBA Cup" : "Playoff race"; });' in APP
+    assert ('el.textContent = state.sport === "nba" ? "NBA Cup" : state.sport === "cbb" ? "NCAA tournament" '
+            ': "Playoff race";') in APP
     hidden = APP[APP.index("const HIDDEN_VIEWS = {"):APP.index("\n};", APP.index("const HIDDEN_VIEWS = {"))]
     for sport in ("mlb", "wnba", "nhl", "ufc", "polymarket", "fantasy"):
         line = next(ln for ln in hidden.splitlines() if ln.strip().startswith(f"{sport}:")
                     or f" {sport}: [" in ln)
         assert '"race"' in line, sport
-    for sport in ("nba", "cfb"):
+    for sport in ("nba", "cfb", "cbb"):
         line = next(ln for ln in hidden.splitlines() if ln.strip().startswith(f"{sport}:"))
         assert '"race"' not in line, sport
     assert "  nfl: [], mlb: [\"race\"]," in hidden, "the NFL's race is open (2026-11-03)"
+    why = APP[APP.index("const HIDDEN_WHY = {"):APP.index("\n};", APP.index("const HIDDEN_WHY = {"))]
+    cbb = why[why.index("  cbb: {"):why.index("},", why.index("  cbb: {"))]
+    assert "race:" not in cbb, "college basketball's race is open (2026-11-14)"
+    assert "the NBA Cup and the NCAA tournament" in APP[APP.index("const RACE_WHY"):APP.index("\n", APP.index("const RACE_WHY"))]
 
 
 def test_it_reads_through_the_entitled_route():
-    assert 'const RACE_FILES = { nfl: "nfl_race.json", cfb: "cfp_race.json", nba: "nba_cup.json" };' in RACE
+    assert ('const RACE_FILES = { nfl: "nfl_race.json", cfb: "cfp_race.json", nba: "nba_cup.json", '
+            'cbb: "ncaa_race.json" };') in RACE
     assert "const res = await paidFetch(name);" in RACE
     assert "data/cfp_race" not in RACE and "data/nba_cup" not in RACE and "data/nfl_race" not in RACE
+    assert "data/ncaa_race" not in RACE
 
 
 # --- what each reader sees ----------------------------------------------------------
@@ -103,7 +131,9 @@ def _render(fn, payload):
     {RACE}
     console.log(JSON.stringify({fn}({json.dumps(payload)})));
     """
-    out = subprocess.run(["node", "-e", js], capture_output=True, text=True)
+    # On stdin: a season of college basketball is more than a command
+    # line holds.
+    out = subprocess.run(["node", "-"], input=js, capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     return json.loads(out.stdout)
 
@@ -154,6 +184,40 @@ def test_the_nfl_race_for_a_member_and_for_a_reader_without_a_plan():
     assert "The games that swing it" not in html and "<span>No. 1</span>" not in html
 
 
+def test_the_ncaa_tournament_for_a_member_and_for_a_reader_without_a_plan():
+    d = _ncaa()
+    html = _render("ncaaHTML", d)
+    for part in ("If the season ended today", "The bubble", "Last four in", "First four out", "The contenders",
+                 "The conference races", "’s region", ">First Four<", "Selection Sunday", ">auto<"):
+        assert part in html, part
+    assert "member-lock" not in html and "School T000" in html
+    top = d["teams"][0]["team"]
+    c = d["chances"][top]["title"]
+    assert (f"{round(c * 100)}%" if 0.005 <= c <= 0.995 else ">99%") in html
+    if d["swing"]:
+        assert "The games that swing it" in html
+    pub = gate.redact(d, "ncaa_race.json")
+    html = _render("ncaaHTML", pub)
+    assert "If the season ended today" in html and "The bubble" in html and "The conference races" in html
+    assert "member-lock" in html and "Our chances are for members" in html
+    assert "The contenders" not in html and "The games that swing it" not in html and "<span>Bid</span>" not in html
+
+
+def test_from_selection_sunday_the_college_page_is_the_bracket():
+    d = _ncaa_bracket()
+    html = _render("ncaaHTML", d)
+    for part in ("The First Four", "The East region", "The Midwest region", "Sweet 16", "Elite Eight",
+                 "The Final Four", "National championship", "Our chances", "final score"):
+        assert part in html, part
+    assert "If the season ended today" not in html and "member-lock" not in html
+    html = _render("ncaaHTML", gate.redact(d, "ncaa_race.json"))
+    assert "The East region" in html and "member-lock" in html
+    # The first round still to play: our line on each game, a member's only.
+    d = _ncaa_bracket(done_through="", night="r64")
+    assert "our line School" in _render("ncaaHTML", d)
+    assert "our line School" not in _render("ncaaHTML", gate.redact(d, "ncaa_race.json"))
+
+
 def test_before_group_play_no_one_leads_the_cup():
     """At 0-0 the order is our rating's; the night before group play the
     page tagged a leader in every group and a wild-card holder anyway."""
@@ -175,6 +239,7 @@ def _browser():
     import rendercheck
     cfp, cup = _fixtures()
     nfl = _nfl()
+    ncaa = _ncaa()
     srv, port = rendercheck._serve()
     got, errs = {}, []
     try:
@@ -185,7 +250,7 @@ def _browser():
             browser = pw.chromium.launch(**kw)
             try:
                 for sport, name, payload in (("cfb", "cfp_race.json", cfp), ("nba", "nba_cup.json", cup),
-                                             ("nfl", "nfl_race.json", nfl)):
+                                             ("nfl", "nfl_race.json", nfl), ("cbb", "ncaa_race.json", ncaa)):
                     for who in ("member", "free"):
                         ctx = browser.new_context(viewport={"width": 390, "height": 844}, service_workers="block",
                                                   is_mobile=True, has_touch=True)
@@ -227,13 +292,15 @@ def test_in_a_browser_both_pages_draw_at_a_phones_width():
     assert not errs, errs
     for (sport, who), g in got.items():
         assert g["view"] == "race", (sport, who, g)
-        assert g["label"] == ("NBA Cup" if sport == "nba" else "Playoff race")
+        assert g["label"] == {"nba": "NBA Cup", "cbb": "NCAA tournament"}.get(sport, "Playoff race")
         assert not g["wide"], f"{sport} {who}: the page scrolls sideways at 390px"
         assert g["lock"] == (who == "free"), (sport, who)
     assert "IF IT STARTED TODAY" in got[("cfb", "member")]["text"].upper()
     assert "THE GROUPS" in got[("nba", "free")]["text"].upper()
     assert "IF THE SEASON ENDED TODAY" in got[("nfl", "free")]["text"].upper()
     assert "THE GAMES THAT SWING IT" in got[("nfl", "member")]["text"].upper() or not nfl_swing()
+    assert "IF THE SEASON ENDED TODAY" in got[("cbb", "free")]["text"].upper()
+    assert "THE CONTENDERS" in got[("cbb", "member")]["text"].upper()
 
 
 if __name__ == "__main__":

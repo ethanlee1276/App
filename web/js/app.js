@@ -510,10 +510,12 @@ const HIDDEN_VIEWS = {
   // College basketball (2026-11-13): no first-basket market is bought for
   // it, no title futures are built, and every gym is indoors. Parlays stay:
   // the two-leg builder pairs its Edge and Most Likely picks (engine/parlays).
-  cbb: ["longshots", "futures", "weather", "race"],
+  // The race OPENED 2026-11-14: the NCAA tournament (engine/ncaarace).
+  cbb: ["longshots", "futures", "weather"],
   cfb: [],
-  // The race page is the NFL's and college football's playoffs and the NBA
-  // Cup (js/race.js); the NFL's opened 2026-11-03 (engine/nflrace).
+  // The race page is the NFL's and college football's playoffs, the NBA
+  // Cup and the NCAA tournament (js/race.js); the NFL's opened 2026-11-03
+  // (engine/nflrace), college basketball's 2026-11-14 (engine/ncaarace).
   nfl: [], mlb: ["race"],
 };
 
@@ -656,7 +658,9 @@ function applySport() {
   // projection layer, so every prop-shaped page goes with it.
   const hidden = HIDDEN_VIEWS[state.sport] || [];
   markOffRows(hidden);
-  document.querySelectorAll(".sb-race").forEach((el) => { el.textContent = state.sport === "nba" ? "NBA Cup" : "Playoff race"; });
+  document.querySelectorAll(".sb-race").forEach((el) => {
+    el.textContent = state.sport === "nba" ? "NBA Cup" : state.sport === "cbb" ? "NCAA tournament" : "Playoff race";
+  });
   if (hidden.includes(state.view)) switchView("recommended");
   const gt = document.getElementById("games-title");
   // innerHTML, not textContent: this is the page's hero and it carries a
@@ -721,7 +725,7 @@ function applyNavLeagues() {
  * because no weather feed covers college venues. One sentence for both
  * would have to be vague enough to be useless. These mirror the comments
  * already sitting on HIDDEN_VIEWS above. */
-const RACE_WHY = "the race pages are the NFL’s and college football’s playoffs and the NBA Cup";
+const RACE_WHY = "the race pages are the NFL’s and college football’s playoffs, the NBA Cup and the NCAA tournament";
 const HIDDEN_WHY = {
   // The "likely" reasons LEFT both hoops entries 2026-08-31 — the claim
   // "basketball prices neither" went stale when nba_build started
@@ -735,7 +739,7 @@ const HIDDEN_WHY = {
          weather: "played indoors", race: RACE_WHY },
   cbb: { longshots: "no first-basket market is bought for college games",
          futures: "the title odds come with the NCAA tournament in March",
-         weather: "played indoors", race: RACE_WHY },
+         weather: "played indoors" },
   ufc: { parlays: "§9.1 caps a card at two legs in one fight, and we price "
                   + "fight winners only — there is no pair to screen",
          futures: "a fight card has no season-long market",

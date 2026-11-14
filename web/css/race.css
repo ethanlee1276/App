@@ -83,3 +83,18 @@
 .rc-twelve { columns: 2 220px; column-gap: 24px; }
 .rc-twelve li { break-inside: avoid; }
 .rc-twelve small { color: var(--text-mute); }
+/* The NCAA tournament's projected regions (ncFieldHTML): one line a school,
+   a hairline between first-round games; "auto" marks today's automatic bid. */
+.rc-reg { display: grid; padding: 2px 0 6px; }
+.rc-reg-m { display: grid; padding: 3px 0; border-bottom: 1px solid color-mix(in oklab, var(--text) 8%, transparent); }
+.rc-reg-m:last-child { border-bottom: none; }
+.rc-reg-l { display: grid; grid-template-columns: 20px 20px minmax(0, 1fr) auto; column-gap: 8px; align-items: center;
+  padding: 2px 12px; font-size: var(--fs-sm); }
+.rc-reg-l .rc-name small { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700; }
+.rc-reg-l > small { color: var(--text-mute); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.rc-tag { margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--panel-2); color: var(--text-mute);
+  font-size: var(--fs-2xs); font-weight: 700; vertical-align: 1px; }
+.rc-rec { white-space: nowrap; }
+.rc-more > summary { cursor: pointer; list-style: none; padding: 10px 14px; color: var(--text-mute); font-size: var(--fs-xs);
+  font-weight: 700; border-top: 1px solid color-mix(in oklab, var(--text) 8%, transparent); }
+.rc-more > summary::-webkit-details-marker { display: none; }

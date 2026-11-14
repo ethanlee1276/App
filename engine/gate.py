@@ -296,6 +296,12 @@ PAID_KEYS_BY_FILE = {
     # the seeds if it ended today are facts off the results, free; the
     # chances, the games left at our price and the swing games are ours.
     "nfl_race.json": ("chances", "remaining", "swing"),
+    # The NCAA tournament race (engine/ncaarace, 2026-11-14): the
+    # conference races, the field if the season ended today and the bubble
+    # are free, as every race's "if it ended today" is; the chances, each
+    # school's games at our price, its chance at the automatic bid, the
+    # swing games and our line on each tournament game are the model's.
+    "ncaa_race.json": ("chances", "remaining", "swing", "bracket_lines", "bids"),
 }
 
 
@@ -475,8 +481,10 @@ KNOWN_BOARDS = (
     "record.json", "record_head.json", "injuries.json", "news.json", "fantasy.json",
     "memecoins.json",
     # The races, written by cfb_build, nba_build and nfl_build
-    # (engine/cfprace, engine/nbacup, engine/nflrace). Mixed: see MIXED_FILES.
-    "cfp_race.json", "nba_cup.json", "nfl_race.json",
+    # (engine/cfprace, engine/nbacup, engine/nflrace), and the NCAA
+    # tournament's by nba_build for college (engine/ncaarace). Mixed: see
+    # MIXED_FILES.
+    "cfp_race.json", "nba_cup.json", "nfl_race.json", "ncaa_race.json",
     # Zeno's bets, written beside record.json by ledger.export_json and on
     # every owner post (engine/zeno.publish_tickets). Paid whole.
     "zeno.json",
@@ -518,9 +526,10 @@ MIXED_FILES = (
     # `ranks` are ordinary words and a global entry would strip them off
     # any future board that happened to use the name.
     "fantasy.json", "memecoins.json",
-    # The College Football Playoff race, the NBA Cup and the NFL's race:
-    # free standings, a paid model half (PAID_KEYS_BY_FILE).
-    "cfp_race.json", "nba_cup.json", "nfl_race.json",
+    # The College Football Playoff race, the NBA Cup, the NFL's race and
+    # the NCAA tournament's: free standings, a paid model half
+    # (PAID_KEYS_BY_FILE).
+    "cfp_race.json", "nba_cup.json", "nfl_race.json", "ncaa_race.json",
     # The day's top pick and every league's Pick of the Day: free picks,
     # members' leans and best bets (`free_top_pick`).
     "day_top_pick.json",

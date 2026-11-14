@@ -9338,6 +9338,41 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PA. The NCAA tournament race** (step 529; 14 November). One read-only
+command, once the college build has run a few times. You, on the list: "make
+it like nba cup ... I want all the features like this is a complete sport."
+College basketball's Race page is the NCAA tournament, the NBA Cup's
+analog:
+
+- **The field if the season ended today.** The 68 seeded in four regions,
+  each conference's leader as its automatic bid.
+- **The bubble.** The last four in, the first four out and the next four
+  out.
+- **Every conference's race.**
+- **For members:** each school's chance to make the field, earn a top-four
+  seed, reach the Sweet 16 and the Final Four and win it all. Also its next
+  games at our price, its chance at its conference's automatic bid, and the
+  coming days' games that swing the bubble.
+
+From Selection Sunday (14 March) the page is the bracket itself, off the
+scoreboard: every result as it lands and our line on each game left. The
+ratings and the committee's stand-in are measured on four college seasons
+(docs/CBB_LAB.md, "The tournament model"). The stand-in named 104 of the 110
+teams the committee took at large in 2024 to 2026.
+
+The college build reads the season off ESPN's scoreboard twenty days a
+build, the days to date first. It keeps each day small in
+`data/cache/cbb_slate_*.json` and lets the full scoreboards go, then plays
+the race out at most every two hours. Its line in the build log reads
+`NCAA race: still reading the season off the scoreboard (N day(s) to go)`
+until then. November's ratings lean on last season's games: if 00a's
+backfill (`ingest.py cbb --seasons 2025-2026`) has not run, every school
+starts the season even, and the page says so. To see the race once built:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/ncaa_race.json')); t=d['today']; print(d['generated_at'], d['played'], 'played', d['games_left'], 'left', d['sims'], 'seasons; last season read for', d.get('prior')); print('1 seeds:', [r['name'] for r in t['field'] if r.get('seed') == 1]); print('last four in:', [r['name'] for r in t.get('last_four_in', [])]); print('title:', sorted(((round(c['title'], 3), k) for k, c in d['chances'].items()), reverse=True)[:6])"
+```
+
 **OZ. Polymarket: college asks four ways until one answers** (step 528; 13
 November). Nothing to run. You, on OY: "try other options too." Every
 college build now asks Polymarket in four shapes, stopping at the first

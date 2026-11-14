@@ -82,13 +82,13 @@ def test_every_file_they_read_is_free_on_disk():
     team = SERVER[SERVER.index("    def _team(self"):]
     team = team[:team.index("\n    def ", 10)]
     assert "NOT GATED" in team and "_entitled" not in team, "a team's page is finished scorelines"
-    for f in ("nfl_race.json", "cfp_race.json", "nba_cup.json"):
+    for f in ("nfl_race.json", "cfp_race.json", "nba_cup.json", "ncaa_race.json"):
         # The brackets add our line on each knockout game (2026-11-03).
         assert f in gate.MIXED_FILES and {"chances", "remaining", "swing"} <= set(gate.PAID_KEYS_BY_FILE[f]), f
     assert "const res = await paidFetch(name);" in RACE, "the entitled route, the public copy for a free reader"
-    # Each race view locks our chances in place; the college race has two views,
-    # the race before selection day and the playoff bracket after it.
-    for view in ("nflHTML", "cfpHTML", "cfpPlayoffHTML", "cupHTML"):
+    # Each race view locks our chances in place; the college races have two
+    # views each, the race before selection day and the bracket after it.
+    for view in ("nflHTML", "cfpHTML", "cfpPlayoffHTML", "cupHTML", "ncaaHTML", "ncBracketHTML"):
         assert 'memberLockHTML("Our chances are for members"' in _fn(RACE, view), view
 
 

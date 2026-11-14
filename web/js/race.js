@@ -1,6 +1,8 @@
 /* THE RACES (Ethan, 2026-10-29: "do all 3"; the NFL's, 2026-11-03: "do all
-   of them") — the NFL's and college football's playoff races and the NBA
-   Cup, one page each league, loaded the first time it
+   of them"; college basketball's, 2026-11-14: "make it like nba cup ... I
+   want all the features like this is a complete sport") — the NFL's and
+   college football's playoff races, the NBA Cup and the NCAA tournament,
+   one page each league, loaded the first time it
    opens (app.js loadRoom). A classic script like app.js: it shares the
    page's globals, and `renderRace` here replaces app.js's stub.
 
@@ -11,8 +13,9 @@
    a plan is served the file with them emptied (engine/gate,
    PAID_KEYS_BY_FILE); the page says what is behind them, never a number. */
 
-const RACE_FILES = { nfl: "nfl_race.json", cfb: "cfp_race.json", nba: "nba_cup.json" };
-const RACE_TITLES = { nfl: "NFL playoff race", cfb: "College Football Playoff race", nba: "NBA Cup" };
+const RACE_FILES = { nfl: "nfl_race.json", cfb: "cfp_race.json", nba: "nba_cup.json", cbb: "ncaa_race.json" };
+const RACE_TITLES = { nfl: "NFL playoff race", cfb: "College Football Playoff race", nba: "NBA Cup",
+                      cbb: "NCAA tournament" };
 
 /* A chance as a reader takes it in: whole points, and never "0%" or
    "100%" for something a run of the season merely did not see happen —
@@ -53,7 +56,7 @@ async function renderRace() {
   if (!file) {
     if (sub) sub.textContent = "";
     host.innerHTML = `<div class="empty-slate"><h3>No race for this league</h3>
-      <p>The race pages are the NFL’s and college football’s playoffs and the NBA Cup.</p></div>`;
+      <p>The race pages are the NFL’s and college football’s playoffs, the NBA Cup and the NCAA tournament.</p></div>`;
     return;
   }
   host.innerHTML = `<div class="rc-wait" role="status">Loading the race…</div>`;
@@ -61,17 +64,23 @@ async function renderRace() {
   if (state.view !== "race" || state.sport !== sport) return;
   if (!d || (!d.today && !d.groups)) {
     host.innerHTML = `<div class="empty-slate"><h3>The race has not been built yet</h3>
-      <p>It is played out on every ${sport === "nba" ? "NBA" : sport === "nfl" ? "NFL" : "college"} build; the next one fills this page.</p></div>`;
+      <p>${sport === "cbb"
+        ? "It is played out on the college basketball build once the season’s schedule has been read off the scoreboard; the next one fills this page."
+        : `It is played out on every ${sport === "nba" ? "NBA" : sport === "nfl" ? "NFL" : "college"} build; the next one fills this page.`}</p></div>`;
     return;
   }
-  if (sub) sub.textContent = sport === "nba"
+  if (sub) sub.textContent = sport === "cbb"
+    ? ((d.bracket || {}).set
+      ? `— the 68 the committee named. Our ratings play the bracket out ${Number(d.sims || 0).toLocaleString()} times.`
+      : `— 68 teams: every conference’s champion and the committee’s at-large picks. Our ratings play the rest of the season ${Number(d.sims || 0).toLocaleString()} times.`)
+    : sport === "nba"
     ? `— the groups, the differential tiebreaker and our chances, ${Number(d.sims || 0).toLocaleString()} tournaments played out.`
     : sport === "nfl"
       ? `— 14 teams, 7 a conference. Our ratings play the rest of the season ${Number(d.sims || 0).toLocaleString()} times.`
       : (d.bracket || {}).set
         ? `— the twelve the committee named. Our game model plays the playoff out ${Number(d.sims || 0).toLocaleString()} times.`
         : `— 12 teams. Our game model plays the rest of the season ${Number(d.sims || 0).toLocaleString()} times.`;
-  host.innerHTML = sport === "nba" ? cupHTML(d) : sport === "nfl" ? nflHTML(d) : cfpHTML(d);
+  host.innerHTML = sport === "nba" ? cupHTML(d) : sport === "nfl" ? nflHTML(d) : sport === "cbb" ? ncaaHTML(d) : cfpHTML(d);
 }
 
 /* ---------------- college football ---------------- */
@@ -538,4 +547,259 @@ function cupHTML(d) {
       "Every team’s chance to win its group, take the wild card, reach the final and win the Cup — every group game left at our price and margin, and our line on every knockout game.")
       : cupOddsHTML(d)}
     ${d.generated_at ? `<p class="rc-note">Built ${escapeHtml(String(d.generated_at).replace("T", " ").slice(0, 16))}.</p>` : ""}`;
+}
+
+/* ---------------- college basketball: the NCAA tournament ----------------
+   Ethan, 2026-11-14: "make it like nba cup and shit I want all the features
+   like this is a complete sport." engine/ncaarace plays the season out: the
+   field if it ended today, the bubble and the conference races are free;
+   each school's chances, its games ahead at our price, the games that swing
+   the field and our line on every tournament game are members'. From
+   selection Sunday the page is the bracket itself, off the scoreboard. */
+
+/* A school's name as a reader knows it ("Duke", not "Blue Devils"): the
+   board's table first (every school a build has seen), then the race's own
+   names, then the code. */
+function ncNm(d, t) {
+  if (!t) return "";
+  const c = ((typeof teamsForSport === "function" && teamsForSport("cbb")) || {})[t];
+  return (c && (c.short || c.name)) || ((d && d.names) || {})[t] || String(t);
+}
+
+/* One school on a projected region's line: its mark, its seed, its name
+   (a poll rank before it), "auto" for today's automatic bid, its record. A
+   First Four pair is both schools on one line. */
+function ncLine(d, rows, seed) {
+  if (!rows || !rows.length) return `<div class="rc-reg-l rc-empty"><span></span><span class="rc-seed">${seed}</span><span class="rc-name">—</span><small></small></div>`;
+  if (rows.length > 1) {
+    const [a, b] = rows;
+    return `<div class="rc-reg-l">${teamMarkIn("cbb", a.team, 20)}<span class="rc-seed">${seed}</span>
+      <span class="rc-name">${escapeHtml(ncNm(d, a.team))} / ${escapeHtml(ncNm(d, b.team))}<span class="rc-tag">First Four</span></span>
+      <small><span class="rc-rec">${escapeHtml(a.record || "")}</span> · <span class="rc-rec">${escapeHtml(b.record || "")}</span></small></div>`;
+  }
+  const r = rows[0];
+  return `<div class="rc-reg-l">${teamMarkIn("cbb", r.team, 20)}<span class="rc-seed">${seed}</span>
+    <span class="rc-name">${r.rank ? `<small>#${r.rank}</small> ` : ""}${escapeHtml(ncNm(d, r.team))}${
+      r.bid === "auto" ? `<span class="rc-tag">auto</span>` : ""}</span>
+    <small class="rc-rec">${escapeHtml(r.record || "")}</small></div>`;
+}
+
+/* THE FIELD IF THE SEASON ENDED TODAY: four regions, each named for its 1
+   seed (the committee names the real ones on selection Sunday), each with
+   its eight first-round games in bracket order, one line a school. */
+function ncFieldHTML(d) {
+  const t = d.today || {};
+  const rows = t.field || [];
+  if (!rows.length) return "";
+  const by = [{}, {}, {}, {}];
+  rows.forEach((r) => {
+    if (r.region == null || !r.seed || !by[r.region]) return;
+    (by[r.region][r.seed] = by[r.region][r.seed] || []).push(r);
+  });
+  const fr = (d.format || {}).first_round || [[1, 16], [8, 9], [5, 12], [4, 13], [6, 11], [3, 14], [7, 10], [2, 15]];
+  const tops = t.region_tops || [];
+  const auto = (d.format || {}).auto || 0;
+  return `<div class="section-title">If the season ended today
+      <span class="sub">— ${auto} conference leaders as the automatic bids (“auto”), the rest at large by our selection score, seeded on the S-curve.</span></div>
+    <div class="rc-grid">${[0, 1, 2, 3].map((i) => `<div class="rc-card rc-flush">
+      <div class="rc-conf-h">${tops[i] ? `${escapeHtml(ncNm(d, tops[i]))}’s region` : `Region ${i + 1}`}</div>
+      <div class="rc-reg">${fr.map(([a, b]) => `<div class="rc-reg-m">${ncLine(d, by[i][a], a)}${ncLine(d, by[i][b], b)}</div>`).join("")}</div>
+    </div>`).join("")}</div>`;
+}
+
+function ncBubbleHTML(d) {
+  const t = d.today || {};
+  const list = (title, rows) => (rows && rows.length) ? `<div class="rc-card"><b>${title}</b>
+    <ol class="rc-tb">${rows.map((r) => `<li>${escapeHtml(ncNm(d, r.team))} <small>${escapeHtml(r.record || "")} · ${
+      escapeHtml(r.conf || "")}</small></li>`).join("")}</ol></div>` : "";
+  const body = list("Last four in", t.last_four_in) + list("First four out", t.first_four_out) + list("Next four out", t.next_four_out);
+  return body ? `<div class="section-title">The bubble
+      <span class="sub">— either side of the cut today. The last four in play the First Four in Dayton.</span></div>
+    <div class="rc-grid">${body}</div>` : "";
+}
+
+/* THE CONTENDERS: every school in today's field and the likeliest of the
+   rest, each one's chances, and under it its next games at our price. The
+   first NC_SHOWN are open; the rest — mostly one-bid leagues' hopefuls,
+   each at its conference's automatic bid — fold under one line. */
+const NC_SHOWN = 36;
+function ncTeamsHTML(d) {
+  const ch = d.chances || {}, rem = d.remaining || {};
+  const rows = (d.teams || []).filter((r) => ch[r.team]);
+  if (!rows.length) return "";
+  const one = (r) => {
+        const c = ch[r.team];
+        const games = rem[r.team] || [];
+        return `<details class="rc-team">
+          <summary class="rc-row">
+            <span class="rc-who">${teamMarkIn("cbb", r.team, 22)}<span><b>${r.rank ? `#${r.rank} ` : ""}${escapeHtml(ncNm(d, r.team))}</b>
+              <small><span class="rc-rec">${escapeHtml(r.record)}</span> · ${escapeHtml(r.conf || "")} <span class="rc-rec">${
+                escapeHtml(r.conf_record || "")}</span></small></span></span>
+            <span class="rc-p rc-lead">${rcPct(c.field)}</span><span class="rc-p">${rcPct(c.top4)}</span>
+            <span class="rc-p">${rcPct(c.s16)}</span><span class="rc-p">${rcPct(c.f4)}</span>
+            <span class="rc-p">${rcPct(c.title)}</span></summary>
+          <div class="rc-games">
+            ${games.length ? games.map((g) => `<span class="rc-game">${escapeHtml(rcDay(g.date))} ·
+              ${g.home || g.neutral ? "vs" : "at"} ${escapeHtml(ncNm(d, g.opp))}
+              <b class="${g.p >= 0.5 ? "pos" : "neg"}">${rcPct(g.p)}</b></span>`).join("")
+              : `<span class="rc-game">No regular-season games left.</span>`}
+            <p class="rc-note">Projected ${c.proj ? `${c.proj[0]}–${c.proj[1]}` : "—"}${
+              c.conf_proj ? `, ${c.conf_proj[0]}–${c.conf_proj[1]} in its conference` : ""} · its conference’s automatic bid ${rcPct(c.auto)}${
+              c.seed != null ? ` · average seed ${c.seed} when in` : ""}.</p>
+          </div></details>`;
+  };
+  const shown = rows.slice(0, NC_SHOWN), rest = rows.slice(NC_SHOWN);
+  return `<div class="section-title">The contenders
+      <span class="sub">— each school’s chance to make the field, earn a top-four seed, reach the Sweet 16 (S16) and the Final Four (F4) and win it all. Tap a school.</span></div>
+    <div class="rc-card rc-flush">
+      <div class="rc-row rc-head"><span>School</span><span>Field</span><span>Top 4</span><span>S16</span><span>F4</span><span>Title</span></div>
+      ${shown.map(one).join("")}
+      ${rest.length ? `<details class="rc-more"><summary>Every other school with a chance (${rest.length})</summary>
+        ${rest.map(one).join("")}</details>` : ""}
+    </div>`;
+}
+
+/* THE GAMES THAT SWING IT: the coming days' games that move the field
+   most, each school they move and its chance either way, the better way
+   green — a team not in the game is listed only when the move is too big
+   for chance (engine/ncaarace.swings). */
+function ncSwingHTML(d) {
+  const sw = d.swing || [];
+  if (!sw.length) return "";
+  return `<div class="section-title">The games that swing it
+      <span class="sub">— the next few days’ games that move the bubble most: each school’s chance to make the field, either way the game goes.</span></div>
+    <div class="rc-grid">${sw.map((g) => `<div class="rc-card">
+      <div class="rc-sw-h">${teamMarkIn("cbb", g.away, 20)}<b>${escapeHtml(ncNm(d, g.away))}</b>
+        ${g.neutral ? "vs" : "at"} ${teamMarkIn("cbb", g.home, 20)}<b>${escapeHtml(ncNm(d, g.home))}</b></div>
+      <p class="rc-note">${escapeHtml(rcDay(g.date))} · ${escapeHtml(ncNm(d, g.home))} ${rcPct(g.p_home)} to win</p>
+      <div class="rc-row rc-sw rc-head"><span>To make the field</span><span>${escapeHtml(ncNm(d, g.home))} win</span>
+        <span>${escapeHtml(ncNm(d, g.away))} win</span></div>
+      ${(g.moves || []).map((m) => `<div class="rc-row rc-sw"><span class="rc-who"><span>${escapeHtml(ncNm(d, m.team))}</span></span>
+        <span class="rc-p ${m.if_home > m.if_away ? "pos" : "neg"}">${rcPct(m.if_home)}</span>
+        <span class="rc-p ${m.if_away > m.if_home ? "pos" : "neg"}">${rcPct(m.if_away)}</span></div>`).join("")}
+    </div>`).join("")}</div>`;
+}
+
+/* EVERY CONFERENCE'S RACE: its schools by conference record, today's leader
+   (or, once its tournament is played, its champion) marked; for a member,
+   each school's chance at the automatic bid. Folded, one line each. */
+function ncConfHTML(d, locked) {
+  const cs = d.conferences || {};
+  const keys = Object.keys(cs);
+  if (!keys.length) return "";
+  const bids = d.bids || {};
+  return `<div class="section-title">The conference races
+      <span class="sub">— by conference record. Every conference’s tournament champion goes in automatically.</span></div>
+    ${keys.map((k) => {
+      const c = cs[k];
+      const lead = c.champion || c.leader;
+      return `<details class="rc-card rc-flush rc-conf">
+        <summary class="rc-conf-h">${escapeHtml(c.name || k)}${lead ? ` · ${c.champion ? "champion" : "leads"}: ${escapeHtml(ncNm(d, lead))}` : ""}${
+          c.auto_bid === false ? " · no automatic bid" : ""}</summary>
+        <div class="rc-row rc-crow rc-head"><span>School</span><span>Conf</span><span>All</span>${locked ? "" : "<span>Bid</span>"}</div>
+        ${(c.teams || []).map((r, i) => `<div class="rc-row rc-crow${r.team === lead ? " rc-lead-row" : ""}">
+          <span class="rc-who">${teamMarkIn("cbb", r.team, 18)}<span>${i + 1}. ${r.rank ? `#${r.rank} ` : ""}${escapeHtml(ncNm(d, r.team))}${
+            r.out ? "<small>out of its tournament</small>" : ""}</span></span>
+          <span class="rc-p">${escapeHtml(r.conf_record)}</span><span class="rc-p">${escapeHtml(r.record)}</span>${
+          locked ? "" : `<span class="rc-p">${r.team === c.champion ? "in" : rcPct(bids[r.team] || 0)}</span>`}</div>`).join("")}
+      </details>`;
+    }).join("")}`;
+}
+
+/* ONE BRACKET GAME: both schools with their seeds and, once it is played,
+   the score with the winner bold; our line on a game still to play is a
+   member's. A side not yet decided says where it comes from. */
+function ncSlotSide(d, team, seed, score, won, tbd) {
+  if (!team) return `<div class="rc-side rc-empty"><span></span><span class="rc-seed">${seed || ""}</span><span class="rc-name">${escapeHtml(tbd || "To be decided")}</span></div>`;
+  return `<div class="rc-side${won === true ? " rc-won" : won === false ? " rc-lost" : ""}">${teamMarkIn("cbb", team, 22)}
+    <span class="rc-seed">${seed || ""}</span><b class="rc-name">${escapeHtml(ncNm(d, team))}</b>
+    ${score != null ? `<span class="rc-score">${escapeHtml(String(Math.round(score)))}</span>` : ""}</div>`;
+}
+function ncSlotHTML(d, s, tbd, where) {
+  if (!s) return "";
+  const line = s.id ? (d.bracket_lines || {})[s.id] : null;
+  const done = !!s.w;
+  const note = [where || "", s.date ? rcDay(s.date) : "", done ? "final score" : ""].filter(Boolean).join(" · ");
+  return `<div class="rc-match rc-ko${done ? " rc-done" : ""}">
+    ${ncSlotSide(d, s.a, s.sa, s.as, done ? s.w === s.a : null, (tbd || [])[0])}
+    ${ncSlotSide(d, s.b, s.sb, s.bs, done ? s.w === s.b : null, (tbd || [])[1])}
+    ${note || (line && !done) ? `<span class="rc-host">${escapeHtml(note)}${
+      line && !done ? `${note ? " · " : ""}our line ${escapeHtml(ncNm(d, line.home))} <b>${rcPct(line.p_home)}</b>` : ""}</span>` : ""}</div>`;
+}
+
+/* THE BRACKET, FROM SELECTION SUNDAY: the First Four, each region's four
+   rounds, the Final Four and the title game, every result as it lands and
+   the champion on top; then each school's chance to go on, for members. */
+function ncBracketHTML(d, locked) {
+  const b = d.bracket || {};
+  const nights = d.nights || {};
+  const span = (k) => [].concat(nights[k] || []).map(rcDay).join(" – ");
+  const ROUND = [["r64", "First round"], ["r32", "Second round"], ["s16", "Sweet 16"], ["e8", "Elite Eight"]];
+  const ch = d.chances || {};
+  const seeds = b.seeds || {};
+  const alive = Object.keys(seeds).filter((t) => ch[t]).sort((x, y) => (ch[y].title || 0) - (ch[x].title || 0)
+    || (ch[y].f4 || 0) - (ch[x].f4 || 0));
+  const odds = locked ? memberLockHTML("Our chances are for members",
+      "Each school’s chance to reach the second round, the Sweet 16, the Elite Eight and the Final Four and to win it all — and our line on every tournament game still to play.")
+    : `<div class="section-title">Our chances
+        <span class="sub">— each of the 68 to reach each round and win it all, every result in kept.</span></div>
+      <div class="rc-card rc-flush">
+        <div class="rc-row rc-head"><span>School</span><span>R32</span><span>S16</span><span>E8</span><span>F4</span><span>Title</span></div>
+        ${alive.map((t) => {
+          const c = ch[t];
+          return `<div class="rc-row"><span class="rc-who">${teamMarkIn("cbb", t, 20)}<span><b>${seeds[t][0]} ${escapeHtml(ncNm(d, t))}</b>
+            <small>${escapeHtml(seeds[t][1])}</small></span></span>
+            <span class="rc-p">${rcPct(c.r32)}</span><span class="rc-p">${rcPct(c.s16)}</span><span class="rc-p">${rcPct(c.e8)}</span>
+            <span class="rc-p">${rcPct(c.f4)}</span><span class="rc-p rc-lead">${rcPct(c.title)}</span></div>`;
+        }).join("")}
+      </div>`;
+  const semis = b.semis || [];
+  return `${b.champion ? `<div class="rc-card rc-champ">${teamMarkIn("cbb", b.champion, 28)}<b>${escapeHtml(ncNm(d, b.champion))} win the national championship</b></div>` : ""}
+    ${(b.first_four || []).length ? `<div class="section-title">The First Four · ${escapeHtml(span("first_four"))}
+        <span class="sub">— in Dayton; each winner takes its place in the first round.</span></div>
+      <div class="rc-grid">${b.first_four.map((s) => ncSlotHTML(d, s, null, `${s.region || ""} ${s.sa} seed`.trim())).join("")}</div>` : ""}
+    ${(b.regions || []).map((reg) => `<div class="section-title">The ${escapeHtml(reg.name)} region</div>
+      <div class="rc-brk">${reg.rounds.map((rnd, k) => `<div class="rc-col"><div class="rc-col-h">${ROUND[k][1]} · ${escapeHtml(span(ROUND[k][0]))}</div>
+        ${rnd.map((s) => ncSlotHTML(d, s, k ? ["Winner of the game before", "Winner of the game before"] : ["First Four winner", "First Four winner"])).join("")}</div>`).join("")}</div>`).join("")}
+    <div class="section-title">The Final Four · ${escapeHtml(d.site || "")}
+      <span class="sub">— ${semis.length ? semis.map((p) => `${escapeHtml(p[0])} against ${escapeHtml(p[1])}`).join(", ") : ""}${
+        b.semis_from === "ours" ? " (our reading of the committee’s order until the scoreboard lists the games)" : ""}.</span></div>
+    <div class="rc-brk">
+      <div class="rc-col"><div class="rc-col-h">National semifinals · ${escapeHtml(span("f4"))}</div>
+        ${(b.final_four || []).map((s, i) => ncSlotHTML(d, s, semis[i] ? [`${semis[i][0]} champion`, `${semis[i][1]} champion`] : [])).join("")}</div>
+      <div class="rc-col"><div class="rc-col-h">National championship · ${escapeHtml(span("final"))}</div>
+        ${ncSlotHTML(d, b.final, ["Semifinal winner", "Semifinal winner"])}</div>
+    </div>
+    ${odds}`;
+}
+
+function ncNoteHTML(d, locked) {
+  const a = d.assumptions || {};
+  const built = d.generated_at ? ` Built ${escapeHtml(String(d.generated_at).replace("T", " ").slice(0, 16))}.` : "";
+  return `<p class="rc-note">The 2026–27 tournament: 68 teams, every Division I conference’s tournament champion and
+      the committee’s at-large picks, seeded 1–16 in four regions; the First Four in Dayton, then six rounds to the
+      title game in ${escapeHtml(d.site || "the Final Four’s city")}. ${locked ? "" : `Our selection score is a stand-in for the
+      committee: our rating plus ${a.resume_points || 1.5} points for every win above what the
+      ${a.bubble_rank || 45}th-best team would manage against the same schedule. On the last three seasons it named 104 of
+      the 110 teams the committee took at large and seeded the field within 0.7 of a line on average. Conference
+      tournaments not yet played are stood in for by each conference’s top eight, and the committee’s rule against early
+      meetings of conference rivals is not modelled.`}${d.prior && d.prior.schools === 0
+        ? " Last season’s games are not on the box yet, so every school started this season even."
+        : ""}${built}</p>`;
+}
+
+function ncaaHTML(d) {
+  const locked = rcLocked(d);
+  if (d.bracket && d.bracket.set) return ncBracketHTML(d, locked) + ncConfHTML(d, locked) + ncNoteHTML(d, locked);
+  const nt = d.nights || {};
+  return `<p class="rc-note rc-lede">${plural(d.played || 0, "game")} played, ${Number(d.games_left || 0).toLocaleString()} left
+      before the conference tournaments · Selection Sunday ${escapeHtml(rcDay(nt.selection))} · the Final Four
+      ${escapeHtml(rcDay([].concat(nt.f4 || [])[0]))}${d.site ? `, ${escapeHtml(d.site)}` : ""}.</p>
+    ${ncFieldHTML(d)}
+    ${ncBubbleHTML(d)}
+    ${locked ? memberLockHTML("Our chances are for members",
+      "Every contender’s chance to make the field, earn a top-four seed, reach the Sweet 16 and the Final Four and win it all — each game it has ahead at our price, every school’s chance at its conference’s automatic bid, and the games that swing the bubble.")
+      : ncTeamsHTML(d) + ncSwingHTML(d)}
+    ${ncConfHTML(d, locked)}
+    ${ncNoteHTML(d, locked)}`;
 }
