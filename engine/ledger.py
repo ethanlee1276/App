@@ -11299,6 +11299,13 @@ def _two_leg_record(conn) -> dict:
         out.update(parlayledger.report_twoleg(conn))
     except Exception as exc:                                  # noqa: BLE001
         out["error"] = f"{type(exc).__name__}: {exc}"
+    # EACH GAME'S PARLAYS (engine/gameparlays, 2026-11-14), apart: the
+    # three-leg tickets and the scorer pairs, tracked from their first day.
+    try:
+        from . import parlayledger
+        out["game"] = parlayledger.report_game_parlays(conn)
+    except Exception as exc:                                  # noqa: BLE001
+        out["game"] = {"error": f"{type(exc).__name__}: {exc}"}
     t1 = _time.monotonic()
     try:
         out["backtest"] = _two_leg_backtest(conn)

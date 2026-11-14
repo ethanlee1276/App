@@ -188,6 +188,10 @@ PAID_KEYS = (
     # name. No prop picks are in it; the reads are the paid half all the
     # same. Remembered in the edit that made it, the only time it is cheap.
     "game_reports",
+    # EACH GAME'S PARLAYS (engine/gameparlays, 2026-11-14): four three-leg
+    # tickets and three scorer pairs a game, every leg a paid pick with our
+    # chance — the boards under a ninth name, so a paid key.
+    "game_parlays",
     "edge_board",
     "futures",
     # UFC NAMES ITS PICKS DIFFERENTLY, AND THAT WAS A LIVE HOLE. Found

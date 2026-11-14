@@ -356,15 +356,99 @@ def log_twoleg(conn, two_leg: dict, sport: str, date: str) -> int:
     return wrote
 
 
-def report_twoleg(conn, recent: int = 12) -> dict:
+# --- each game's parlays (engine/gameparlays) -----------------------------------------
+#: The paper bucket a game parlay's legs are journaled in when the board
+#: did not journal them itself (a scorer off the whole touchdown field):
+#: outside every headline book (ledger.RECOMMENDED_CATEGORIES), graded by
+#: the same settle pass as everything else, so every ticket can settle.
+PARLAY_LEG_CATEGORY = "parlay_leg"
+
+
+def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
+    """Journal every ticket a board's game parlays posted (engine/gameparlays:
+    four three-leg tickets and three scorer pairs a game), each under its
+    own source, tracked at a stake of nothing, graded at the least price
+    its card says to take it at. Returns tickets newly written; a ticket
+    already journaled for its day is left alone."""
+    ensure_schema(conn)
+    if not isinstance(gp, dict) or not sport or not date:
+        return 0
+    from .gameparlays import SOURCES
+    wrote = 0
+    for x in gp.get("games") or []:
+        for kind, source in SOURCES.items():
+            key_name = "threes" if kind == "three" else "scorers"
+            for t in x.get(key_name) or []:
+                legs = t.get("legs") or []
+                if len(legs) < 2:
+                    continue
+                key = legs_key(legs)
+                if conn.execute("SELECT 1 FROM parlays WHERE sport=? AND date=? AND legs_key=?",
+                                (sport, date, key)).fetchone():
+                    continue
+                books = {(l.get("book") or "").strip() for l in legs if l.get("book")}
+                take = t.get("take_dec")
+                cur = conn.execute(
+                    "INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, qualified,"
+                    " was_play, naive_product_dec, quoted_dec, assumed_dec, price_basis, book, correlation_tax,"
+                    " modeled_joint, implied_joint, independent_joint, conditional_reasoning, stake_units,"
+                    " notional_units, source, status) VALUES (?,?,?,?,?,?,?,1,0,?,NULL,?,?,?,NULL,?,?,?,?,0,?,?,'open')",
+                    (datetime.datetime.now().isoformat(timespec="seconds"), sport, date, key,
+                     "same_game", len(legs), x.get("game") or "", t.get("naive_dec"), take,
+                     "the least price the card says to take it at: our fair price and 5%",
+                     "|".join(sorted(books)) or None, t.get("joint"),
+                     round(1.0 / float(take), 4) if take else None, t.get("independent"),
+                     "; ".join(t.get("links") or []) or (t.get("script") or ""),
+                     NOTIONAL_UNITS, source))
+                for i, l in enumerate(legs, start=1):
+                    conn.execute(
+                        "INSERT INTO parlay_legs (parlay_id, leg_no, player, team, market, side, line, odds, book,"
+                        " p_final, status) VALUES (?,?,?,?,?,?,?,?,?,?,'open')",
+                        (cur.lastrowid, i, l.get("player"), l.get("team"), l.get("market"),
+                         str(l.get("side") or "").upper() or None,
+                         l.get("line") if l.get("line") is not None else 0.5, l.get("odds"), l.get("book"),
+                         l.get("p")))
+                wrote += 1
+    if wrote:
+        conn.commit()
+    return wrote
+
+
+def journal_game_parlay_legs(conn, board: dict, sport: str) -> int:
+    """Every leg of a board's game parlays on paper (PARLAY_LEG_CATEGORY),
+    so each ticket's legs have rows the settle pass grades. A leg the
+    board's own books already hold is journaled here too, under this
+    bucket: the ticket reads this bucket first, and a pick is one row a
+    bucket (ledger.log_most_likely's own rule)."""
+    from . import ledger as L
+    from .gameparlays import journal_rows
+    rows = journal_rows(board.get("game_parlays") or {})
+    if not rows:
+        return 0
+    return L.log_most_likely(conn, {"sport": sport, "date": board.get("date") or "",
+                                    "games": board.get("games") or [], "most_likely": rows},
+                             depth=None, category=PARLAY_LEG_CATEGORY, grade_label="Parlay leg")
+
+
+def report_game_parlays(conn, recent: int = 12) -> dict:
+    """Each game's parlays on the record (engine/gameparlays): the three-leg
+    tickets and the scorer pairs, each apart, the way `report_twoleg`
+    reports its pools."""
+    from .gameparlays import SOURCES
+    return report_twoleg(conn, recent, sources=SOURCES)
+
+
+def report_twoleg(conn, recent: int = 12, sources: dict | None = None) -> dict:
     """The Record page's two-leg parlays, each pool apart and never blended
     with the singles: graded, won, the notional units and ROI (one unit a
     ticket), the units really staked and what they returned, by kind and by
-    league, and the newest graded tickets with their legs."""
+    league, and the newest graded tickets with their legs. ``sources`` is
+    another {pool: source} to report the same way (each game's parlays)."""
     ensure_schema(conn)
-    from .twoleg import SOURCES
+    if sources is None:
+        from .twoleg import SOURCES as sources
     out = {}
-    for pool, source in SOURCES.items():
+    for pool, source in sources.items():
         rows = conn.execute("SELECT * FROM parlays WHERE source=? ORDER BY date, id", (source,)).fetchall()
         graded = [r for r in rows if r["status"] in ("won", "lost")]
 
@@ -505,8 +589,11 @@ def resettle(conn) -> dict:
     return {"fixed": fixed, "reopened": reopened}
 
 
-#: The singles books a two-leg ticket's legs were taken from (engine/twoleg).
-TWO_LEG_CATS = {"two_edge": ("main", "paper"), "two_likely": ("likely", "likely_live", "board")}
+#: The singles books a two-leg ticket's legs were taken from (engine/twoleg),
+#: and a game parlay's (engine/gameparlays): its own paper bucket first,
+#: which holds every leg it posted.
+TWO_LEG_CATS = {"two_edge": ("main", "paper"), "two_likely": ("likely", "likely_live", "board"),
+                "game_three": (PARLAY_LEG_CATEGORY,), "game_td": (PARLAY_LEG_CATEGORY,)}
 
 
 def _matching_bet(conn, p, leg):
@@ -1125,6 +1212,8 @@ BOARD_FILES = {
     "wnba": "web/data/wnba.json",
     "ufc": "web/data/ufc.json",
     "cbb": "web/data/cbb.json",
+    # Hockey has no two-leg page; its game parlays journal from here.
+    "nhl": "web/data/nhl.json",
 }
 
 
@@ -1180,6 +1269,16 @@ def journal_built_boards(conn, root) -> dict:
                 wrote += log_twoleg(conn, tl, sport, tl.get("date") or board.get("date") or "")
             except sqlite3.Error as exc:
                 skipped.append(f"{sport}/two_leg: {exc}")
+        # EACH GAME'S PARLAYS (engine/gameparlays, 2026-11-14): the legs on
+        # paper first, so every ticket's legs have rows to settle from,
+        # then the tickets.
+        gp = board.get("game_parlays")
+        if isinstance(gp, dict) and gp.get("games"):
+            try:
+                journal_game_parlay_legs(conn, board, sport)
+                wrote += log_game_parlays(conn, gp, sport, board.get("date") or gp.get("date") or "")
+            except sqlite3.Error as exc:
+                skipped.append(f"{sport}/game_parlays: {exc}")
     return {"journaled": wrote, "skipped": skipped}
 
 

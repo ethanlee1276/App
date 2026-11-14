@@ -2546,6 +2546,9 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
     scorers = scorer_sentence(c)
     if scorers:
         items.append(scorers)
+    par = parlay_sentence(c)
+    if par:
+        items.append(par)
     outs = [r for r in c.scan.get("injuries") or [] if isinstance(r, dict)
             and str(r.get("status") or "").upper() not in ("QUESTIONABLE", "")]
     gone = absent_sentence(c, outs)
@@ -2576,9 +2579,62 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
     return sec
 
 
+def _game_parlays(c: Ctx) -> dict | None:
+    from .gameparlays import for_game
+    return for_game(c.result, c.home, c.away)
+
+
+def sec_parlays(c: Ctx) -> dict | None:
+    """THE PARLAYS FOR THIS GAME (engine/gameparlays; Ethan, 2026-11-14:
+    "for each game ... make 4 3-leg parlays ... and 3 2-leg touchdown
+    parlays ... do the same shit that the report's doing"). Four three-leg
+    tickets and three scorer pairs off the board's own picks, each with
+    its price to take it, the script it needs, its backups and caveats —
+    and the record's word on same-game parlays."""
+    from .gameparlays import card
+    gp = _game_parlays(c)
+    if not gp:
+        return None
+    blocks = []
+    threes = [card(t, i, "three", c.sport) for i, t in enumerate(gp.get("threes") or [], 1)]
+    if threes:
+        blocks += [_h("Three-leg parlays"), {"type": "parlays", "kind": "three", "items": threes}]
+    elif gp.get("threes_note"):
+        blocks.append(_p(f"No three-leg parlay: {gp['threes_note']}"))
+    pairs = [card(t, i, "scorers", c.sport) for i, t in enumerate(gp.get("scorers") or [], 1)]
+    if pairs:
+        blocks += [_h("Touchdown pairs" if c.sport in ("nfl", "cfb") else "Scorer pairs"),
+                   {"type": "parlays", "kind": "scorers", "items": pairs}]
+    elif gp.get("scorers_note"):
+        blocks.append(_p(gp["scorers_note"]))
+    if not blocks:
+        return None
+    note = ((c.result.get("game_parlays") or {}).get("note") or "")
+    if note:
+        blocks.append({"type": "note", "text": note})
+    return _section("parlays", "Parlays for this game", blocks)
+
+
+def parlay_sentence(c: Ctx) -> str:
+    """The short version's parlay lines: the likeliest three-leg ticket and
+    the likeliest scorer pair, each with its price to take it."""
+    from .gameparlays import pick_words
+    gp = _game_parlays(c)
+    if not gp:
+        return ""
+    bits = []
+    for key, word in (("threes", "Best three-leg parlay"),
+                      ("scorers", "Best touchdown pair" if c.sport in ("nfl", "cfb") else "Best scorer pair")):
+        t = next(iter(gp.get(key) or []), None)
+        if t:
+            bits.append(f"{word}: {' + '.join(pick_words(l) for l in t['legs'])} — {float(t['joint']):.0%} by our "
+                        f"numbers, take it at {t['take_words']} or better")
+    return _sentence(". ".join(bits)) if bits else ""
+
+
 SECTIONS = (sec_facts, sec_meetings, sec_market, sec_rankings, sec_identity, sec_injuries,
             sec_matchups, sec_trenches, sec_redzone, sec_context, sec_scripts, sec_watch,
-            sec_weather, sec_before)
+            sec_parlays, sec_weather, sec_before)
 
 
 def _words(sections) -> int:
@@ -2874,6 +2930,17 @@ def to_text(report: dict) -> str:
                                + (f" [{v['status']}]" if v.get("status") else "")
                                + (f": {v['text']}" if v.get("text") else ""))
                     out += _form_text(v)
+            elif t == "parlays":
+                for v in b["items"]:
+                    out.append(f"  • {v['title']}: {v.get('price_line') or ''}")
+                    for leg in v.get("legs") or []:
+                        out.append(f"      - {leg['pick']}" + (f" ({leg['price']})" if leg.get("price") else "")
+                                   + (f", {float(leg['chance']):.0%}" if leg.get("chance") else ""))
+                        out += [f"          · {w}" for w in leg.get("why") or []]
+                    if v.get("script"):
+                        out.append(f"      {v['script']}")
+                    out += [f"      Backup: {x}" for x in v.get("backups") or []]
+                    out += [f"      Caveat: {x}" for x in v.get("caveats") or []]
     return "\n".join(out)
 
 

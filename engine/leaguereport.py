@@ -47,8 +47,8 @@ from __future__ import annotations
 
 from .gamereport import (KEY, Ctx, _f, _h, _join, _list, _num, _ord, _p, _pct, _section,
                          _sentence, a_pct, absent_sentence, cap, finish, kickoff_words, line_words,
-                         log_changes, market_sentence, ml_chances, named, player_clause, sec_market,
-                         shine_lines, summary, team_be, team_np, team_owner)
+                         log_changes, market_sentence, ml_chances, named, parlay_sentence, player_clause,
+                         sec_market, sec_parlays, shine_lines, summary, team_be, team_np, team_owner)
 
 #: The leagues this module writes.
 SPORTS = ("mlb", "nhl", "nba", "wnba", "cbb")
@@ -414,10 +414,14 @@ def mlb_short(c: Ctx, built: dict) -> dict | None:
     items += _shine_short(c, _reads(c, not_pos={"SP", "P", "RP"}))
     if c.g.get("lineups_confirmed") is False:
         items.append("The lineups are not out yet; they post two to four hours before first pitch.")
+    par = parlay_sentence(c)
+    if par:
+        items.append(par)
     return _section("short", "The short version", [_list(items)])
 
 
-MLB = ((mlb_facts, sec_market, mlb_pitching, mlb_watch, mlb_park, mlb_injuries, mlb_before), mlb_short)
+MLB = ((mlb_facts, sec_market, mlb_pitching, mlb_watch, mlb_park, mlb_injuries, sec_parlays, mlb_before),
+       mlb_short)
 
 
 def mlb_more(g: dict, result: dict) -> dict:
@@ -583,10 +587,14 @@ def nhl_short(c: Ctx, built: dict) -> dict | None:
     gone = absent_sentence(c, outs)
     if gone:
         items.append(gone)
+    par = parlay_sentence(c)
+    if par:
+        items.append(par)
     return _section("short", "The short version", [_list(items)])
 
 
-NHL = ((nhl_facts, sec_market, nhl_tape, nhl_goalies, nhl_watch, nhl_injuries, nhl_before), nhl_short)
+NHL = ((nhl_facts, sec_market, nhl_tape, nhl_goalies, nhl_watch, nhl_injuries, sec_parlays, nhl_before),
+       nhl_short)
 
 
 def nhl_more(g: dict, result: dict) -> dict:
@@ -812,10 +820,14 @@ def nba_short(c: Ctx, built: dict) -> dict | None:
     if any("blowout" in (_spot(c, t).get("flags") or []) for t in c.teams):
         items.append("Blowout watch: with a spread of 10 or more, the starters' minutes are the first thing "
                      "a coach takes back if it turns lopsided.")
+    par = parlay_sentence(c)
+    if par:
+        items.append(par)
     return _section("short", "The short version", [_list(items)])
 
 
-NBA = ((nba_facts, sec_market, nba_tape, nba_watch, nba_carry, nba_defense, nba_injuries, nba_before), nba_short)
+NBA = ((nba_facts, sec_market, nba_tape, nba_watch, nba_carry, nba_defense, nba_injuries, sec_parlays,
+        nba_before), nba_short)
 
 
 def nba_more(g: dict, meta: dict | None) -> dict:

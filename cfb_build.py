@@ -2466,6 +2466,14 @@ def main() -> None:
             # is offered the whole thing and applies its own bar first
             # (engine.cfb.tds.CFB_WATCH_LIMIT).
             out["longshot_watch"] = watch[:_tds.CFB_WATCH_LIMIT]
+            # EVERY QUOTED SCORER, SLIM, as the NFL's (engine/pipeline
+            # td_field_rows): each game's touchdown pairs read the whole
+            # field, not the page's shelf (engine/gameparlays, 2026-11-14).
+            try:
+                from engine.pipeline import td_field_rows as _td_field_rows
+                out["td_field"] = _td_field_rows(watch)
+            except Exception:                                 # noqa: BLE001
+                out["td_field"] = []
             # THE MAIN BOARD, ranked by likelihood rather than edge. The
             # college board prices touchdowns and nothing else, so this
             # is that one market ordered honestly — but it belongs on the
@@ -2894,6 +2902,15 @@ def main() -> None:
     # market section reads the crowd and the opener. What the feed knows
     # of a game and the board leaves off — a neutral site, a conference
     # game — rides in beside it.
+    # EACH GAME'S PARLAYS BEFORE ITS REPORT (engine/gameparlays): college's
+    # report is written before the parlay hook further down, and it says
+    # the game's three-leg tickets and touchdown pairs. The hook builds
+    # them again over the same board; the answer is the same.
+    try:
+        from engine import gameparlays as _gpar
+        _gpar.attach(out, "cfb")
+    except Exception as _gpexc:                               # noqa: BLE001
+        print(f"  ⚠️  game parlays skipped: {_gpexc}")
     try:
         from engine import gamereport as _greport
         from engine.seasons import season_of as _gr_season_of

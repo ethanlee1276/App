@@ -1608,6 +1608,17 @@ svg[data-scrub] { touch-action: pan-y; }
 .tl-what span { color: var(--text-mute); font-size: var(--fs-sm); }
 .tl-foot { margin-top: 6px; }
 .tl-why, .tl-rec { margin: 4px 0 10px; color: var(--text-mute); }
+/* Each game's parlays (app.js gameParlaysHTML, engine/gameparlays): a fold
+   a game, a card a ticket — its legs in order, each with its price, our
+   chance and why, then the script, backups and caveats. */
+.gp-ticket { padding: 12px 14px; margin: 8px 0 10px; }
+.gp-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.gp-joint { font-weight: 700; color: var(--good); font-variant-numeric: tabular-nums; }
+.gp-legs { margin: 6px 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.gp-px { color: var(--text-mute); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.gp-p { font-weight: 600; font-size: var(--fs-sm); color: var(--good); font-variant-numeric: tabular-nums; }
+.gp-why, .gp-list { margin: 4px 0; padding-left: 18px; color: var(--text-mute); font-size: var(--fs-sm); display: grid; gap: 3px; }
+.gp-sub { margin: 8px 0 2px; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); }
 
 .empty { color: var(--text-dim); text-align: center; padding: 50px; grid-column: 1 / -1; }
 

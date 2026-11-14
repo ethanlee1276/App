@@ -475,7 +475,10 @@ const HIDDEN_VIEWS = {
   // The WNBA has no futures board: engine/futures.py has a shape for it but
   // futures_build.py does not run it, because there is no outrights key for
   // the league and its season is nearly over by the time this ships.
-  wnba: ["longshots", "futures", "weather", "race", "parlays"],
+  // Parlays OPENED 2026-11-14 for every league with props: each game's
+  // three-leg tickets (engine/gameparlays; Ethan: "for each game, when it
+  // comes to every sport, I want you to make 4 3-leg parlays").
+  wnba: ["longshots", "futures", "weather", "race"],
   // §9.1 caps UFC at two legs in ONE fight, and every construction §9.3
   // permits pairs a winner with a method, distance or round-group market.
   // We price fight winners and nothing else, so there is no pair to screen
@@ -506,7 +509,9 @@ const HIDDEN_VIEWS = {
   // difference for it to branch on.
   // Hockey has no long-shot board (the anytime scorer rides the props and
   // Most Likely) and no futures pull yet; every rink is indoors.
-  nhl: ["longshots", "futures", "weather", "race", "parlays"],
+  // Parlays OPENED 2026-11-14: each game's three-leg tickets and its
+  // goal-scorer pairs (engine/gameparlays).
+  nhl: ["longshots", "futures", "weather", "race"],
   // College basketball (2026-11-13): no first-basket market is bought for
   // it, no title futures are built, and every gym is indoors. Parlays stay:
   // the two-leg builder pairs its Edge and Most Likely picks (engine/parlays).
@@ -11895,19 +11900,97 @@ function tlRecordLine(rec, pool) {
     + `${signedPct(bt.roi)} (the same picks as singles ${signedPct(bt.singles_roi)})` : "") + ".";
 }
 
+/* EACH GAME'S PARLAYS (engine/gameparlays; Ethan, 2026-11-14: "for each
+   game, when it comes to every sport, I want you to make 4 3-leg parlays
+   ... and 3 2-leg touchdown parlays"). A fold a game: its three-leg
+   tickets and its scorer pairs, each leg with its price, our chance and
+   why, the script the ticket needs, its backups and caveats — every one
+   tracked on the record, none staked. */
+function gpPick(l) {
+  const m = String(l.market || "");
+  if (m === "anytime_td") return `${l.player} to score a touchdown`;
+  if (m === "anytime_goal" || m === "goals") return `${l.player} to score a goal`;
+  const line = l.line == null ? "" : ` ${l.line}`;
+  return `${l.player || ""} ${String(l.side || "").toLowerCase()}${line} ${
+    String(l.market_label || m.replace(/_/g, " ")).toLowerCase()}`.replace(/\s+/g, " ").trim();
+}
+function gpOdds(o) {
+  const n = Number(o);
+  return Number.isFinite(n) && n ? (n > 0 ? `+${n}` : String(n)) : "";
+}
+function gpTicketHTML(t, n, kind) {
+  const word = kind === "three" ? `Parlay ${n}`
+    : `${["nfl", "cfb"].includes(state.sport) ? "Touchdown" : "Scorer"} pair ${n}`;
+  const li = (xs) => (xs || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+  return `<div class="card gp-ticket">
+    <div class="gp-head"><b>${escapeHtml(word)}</b>
+      <span class="gp-joint">${Math.round(Number(t.joint || 0) * 100)}% by our numbers</span></div>
+    <p class="set-note">Fair ${escapeHtml(t.fair_words || "")} · take it at <b>${escapeHtml(t.take_words || "")}</b> or better${
+      t.naive_words ? ` · the legs’ own prices multiplied pay ${escapeHtml(t.naive_words)}, and a book’s same-game price pays less` : ""}</p>
+    <ol class="gp-legs">${(t.legs || []).map((l) => `<li><b>${escapeHtml(gpPick(l))}</b>
+      <span class="gp-px">${escapeHtml([gpOdds(l.odds), l.book || ""].filter(Boolean).join(" "))}</span>
+      <span class="gp-p">${Math.round(Number(l.p || 0) * 100)}%</span>
+      ${(l.why || []).length ? `<ul class="gp-why">${li(l.why)}</ul>` : ""}</li>`).join("")}</ol>
+    ${t.script ? `<p class="set-note">What it needs: ${escapeHtml(t.script)}${t.script_chance != null
+      ? ` — about ${Math.round(Number(t.script_chance) * 100)}% likely by the lines` : ""}</p>` : ""}
+    ${(t.backups || []).length ? `<div class="gp-sub">Backups</div><ul class="gp-list">${(t.backups || []).map((b) =>
+      `<li>If ${escapeHtml(b.for || "")} is out or his number moves: ${escapeHtml(gpPick(b.leg || {}))} (${
+        escapeHtml(gpOdds((b.leg || {}).odds))}, ${Math.round(Number((b.leg || {}).p || 0) * 100)}%)</li>`).join("")}</ul>` : ""}
+    ${(t.caveats || []).length ? `<div class="gp-sub">Caveats</div><ul class="gp-list">${li(t.caveats)}</ul>` : ""}
+  </div>`;
+}
+/* Their record so far (record.json two_leg.game, engine/parlayledger
+   .report_game_parlays): graded, won, and what one unit a ticket made. */
+function gpRecordLine(rec) {
+  const g = ((rec || {}).two_leg || {}).game || {};
+  const bits = [["three", "three-leg"], ["scorers", "pairs"]].map(([k, w]) => {
+    const x = g[k] || {};
+    if (!x.graded) return x.open ? `${w}: ${x.open} open, none graded yet` : "";
+    return `${w}: ${x.wins} of ${x.graded} hit, ${x.net_units >= 0 ? "+" : ""}${x.net_units} units at the take-it price`;
+  }).filter(Boolean);
+  return bits.length ? `Our record so far — ${bits.join(" · ")}` : "";
+}
+function gameParlaysHTML(gp) {
+  const games = (gp && gp.games) || [];
+  if (!games.length) return "";
+  const pair = ["nfl", "cfb"].includes(state.sport) ? "touchdown" : state.sport === "nhl" ? "goal-scorer" : "scorer";
+  return `<div class="section-title">Each game’s parlays <span class="sub">— four three-leg tickets and three ${pair}
+      pairs a game, from our own picks; every one tracked on the Record page, none staked</span></div>
+    <div class="mini tl-rec" data-gp-rec="1"></div>
+    ${gp.note ? `<p class="set-note tl-rule">${escapeHtml(gp.note)}</p>` : ""}
+    ${games.map((g) => `<details class="gs-game gp-game"><summary><span class="gs-game-k">${teamMarkIn(state.sport, g.away, 18)}
+        ${escapeHtml(teamName(g.away))} @ ${teamMarkIn(state.sport, g.home, 18)} ${escapeHtml(teamName(g.home))}</span>
+        <span class="gs-game-n">${(g.threes || []).length} three-leg · ${(g.scorers || []).length} pairs</span></summary>
+      ${(g.threes || []).map((t, i) => gpTicketHTML(t, i + 1, "three")).join("")
+        || `<p class="set-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}
+      ${(g.scorers || []).map((t, i) => gpTicketHTML(t, i + 1, "scorers")).join("")
+        || (g.scorers_note ? `<p class="set-note">${escapeHtml(g.scorers_note)}</p>` : "")}
+    </details>`).join("")}`;
+}
+
 function renderParlayPage() {
   const host = document.getElementById("parlays-body");
   if (!host) return;
   const d = state.data || {};
   const z = d.two_leg;
+  const games = d.locked && d.locked.game_parlays
+    ? memberLockHTML("Each game’s parlays", "Four three-leg parlays and three touchdown pairs for every game, built from our own picks.")
+    : gameParlaysHTML(d.game_parlays);
   if (!z || typeof z !== "object" || !z.edge) {
-    host.innerHTML = d.locked && d.locked.two_leg
+    host.innerHTML = games || (d.locked && d.locked.two_leg
       ? memberLockHTML("Two-leg parlays from our picks",
           "Tonight’s same-game and two-game parlays, built from the Edge picks and the Most Likely list, each graded on the Record page.")
-      : `<div class="card"><p class="set-note">No parlays on this board yet: they build with the board, two legs from our picks.</p></div>`;
+      : `<div class="card"><p class="set-note">No parlays on this board yet: they build with the board, two legs from our picks.</p></div>`);
+    if (games) {
+      revealChildren(host);
+      loadRecordOnce().then((rec) => {
+        const el = host.querySelector("[data-gp-rec]");
+        if (el) el.textContent = gpRecordLine(rec);
+      });
+    }
     return;
   }
-  host.innerHTML = `<p class="set-note tl-rule">A two-leg parlay does what its legs do, about twice: where the
+  host.innerHTML = `${games}<p class="set-note tl-rule">A two-leg parlay does what its legs do, about twice: where the
       picks beat their price it wins about twice as fast, and where they pay the juice it loses about twice as
       fast. So money rides only on a two-game parlay whose legs are both picks we stake. Same-game pairs are
       tracked: pairing our past picks, they lost while two-game pairs made money. Every one is graded on the
@@ -11922,10 +12005,14 @@ function renderParlayPage() {
           : `<div class="card"><p class="set-note">${escapeHtml(x.note || "No pair on tonight’s board makes sense yet.")}</p></div>`}`;
     }).join("")}`;
   revealChildren(host);
-  loadRecordOnce().then((rec) => TL_POOLS.forEach(([pool]) => {
-    const el = host.querySelector(`[data-tl-rec="${pool}"]`);
-    if (el) el.textContent = tlRecordLine(rec, pool);
-  }));
+  loadRecordOnce().then((rec) => {
+    TL_POOLS.forEach(([pool]) => {
+      const el = host.querySelector(`[data-tl-rec="${pool}"]`);
+      if (el) el.textContent = tlRecordLine(rec, pool);
+    });
+    const gpEl = host.querySelector("[data-gp-rec]");
+    if (gpEl) gpEl.textContent = gpRecordLine(rec);
+  });
 }
 
 function longshotEmptyReason(mlb) {

@@ -388,7 +388,32 @@ def _td_board_fairs(candidates: list, slate, census: dict | None = None) -> dict
 #: What each scorer carries into `td_field` (the game plan's "Who scores").
 _TD_FIELD_KEYS = ("player", "team", "opponent", "position", "headshot", "model_prob", "odds", "book",
                   "implied_total", "rz_chances", "goal_line", "goal_line_text", "injury_status",
-                  "market", "market_label", "side", "line")
+                  "market", "market_label", "side", "line",
+                  # WHY HIM (engine/gameparlays, 2026-11-14): the touchdown
+                  # model's own reasons — his goal-line work, his red-zone
+                  # share, the defence, the weather — which each game's
+                  # touchdown pairs say on their cards.
+                  "reasons", "home", "away", "game_date", "kickoff")
+
+
+#: The touchdown model's footnotes about its own mechanics, left off the
+#: field's reasons (engine/gameparlays shows the rest on its cards).
+_TD_FOOTNOTES = ("Running back:", "Team total:", "Quarterback:", "Depth receiver:")
+
+
+def td_field_rows(rows) -> list[dict]:
+    """Every quoted scorer, slim (`td_field`): the keys above, his reasons
+    capped at five and without the model's footnotes. College's build
+    writes its own field through here too."""
+    out = []
+    for r in rows or []:
+        if not isinstance(r, dict):
+            continue
+        x = {k: r.get(k) for k in _TD_FIELD_KEYS}
+        x["reasons"] = [str(t) for t in (r.get("reasons") or [])
+                        if t and not str(t).startswith(_TD_FOOTNOTES)][:5]
+        out.append(x)
+    return out
 
 
 def _long_shots(slate, usage: dict | None = None,
@@ -1328,7 +1353,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # EVERY QUOTED SCORER, SLIM (engine/gameplan's "Who scores"): the
         # other model's six-candidate table per game needs the whole field,
         # not the page's five. Paid (gate.PAID_KEYS "td_field").
-        "td_field": [{k: r.get(k) for k in _TD_FIELD_KEYS} for r in ls_watch],
+        "td_field": td_field_rows(ls_watch),
         # THE OTHER BOARD, and the one the measurements actually support.
         # `long_shots` ranks by edge, which the model is demonstrably bad
         # at (claimed-edge AUC 0.468 on the site's own settle pass);

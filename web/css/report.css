@@ -59,3 +59,18 @@
 .gr-form dt { color: var(--text-mute); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .gr-form dd { margin: 0; display: grid; gap: 2px; color: var(--text-dim); min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 420px) { .gr-form-row { grid-template-columns: 1fr; row-gap: 2px; } }
+
+/* EACH GAME'S PARLAYS (engine/gameparlays): a card a ticket, its legs in
+   order with their prices and chances, the script, backups and caveats. */
+.gr-parlays { display: grid; gap: 10px; margin: 6px 0 10px; }
+.gr-parlay { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
+.gr-parlay-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.gr-parlay-price { margin: 4px 0 6px; font-size: .86em; color: var(--text-mute); }
+.gr-parlay-legs { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.gr-parlay-legs > li { cursor: pointer; }
+.gr-parlay-pick { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.gr-parlay-px { font-size: .86em; color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.gr-parlay-p { font-size: .82em; font-weight: 600; color: var(--good); font-variant-numeric: tabular-nums; }
+.gr-parlay-script { margin: 8px 0 2px; font-size: .9em; }
+.gr-parlay-sub { margin: 8px 0 2px; font-size: .78em; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-mute); }

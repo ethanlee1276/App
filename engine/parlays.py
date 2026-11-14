@@ -1984,6 +1984,15 @@ def attach(slate: dict, sport: str, state: str | None = None,
     `state`), and in a drawdown every two-leg parlay is tracked, none staked.
     """
     from . import twoleg
+    # EACH GAME'S PARLAYS (engine/gameparlays; Ethan, 2026-11-14: "for each
+    # game, when it comes to every sport, I want you to make 4 3-leg
+    # parlays ... and 3 2-leg touchdown parlays"), for every league with
+    # props, before the two-leg page's own leagues are asked for.
+    try:
+        from . import gameparlays
+        gameparlays.attach(slate, sport)
+    except Exception:                                         # pragma: no cover - guard
+        pass
     if str(sport or "").lower() not in twoleg.SPORTS:
         return slate
     st = state if state is not None else bankroll_state(sport)
@@ -2126,6 +2135,10 @@ SLATE_BOARDS = {
     # publish two parlays against a rule that permits one. Nothing
     # exempted it — it was left out when the sport was added.
     "ufc": "web/data/ufc.json",
+    # Hockey journals its game parlays from the ledger's board list
+    # (engine/parlayledger.BOARD_FILES, 2026-11-14), so it is here too; it
+    # posts no Parlay Zone ticket, so there is nothing of it to demote.
+    "nhl": "web/data/nhl.json",
 }
 
 

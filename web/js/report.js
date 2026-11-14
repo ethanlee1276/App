@@ -5,11 +5,14 @@
    but everything else it valuable information too have typed out so the
    user can just read it."
 
-   engine/gamereport writes the report from what the board holds — no line,
-   price or probability on a player anywhere in it — and this draws it block
-   by block: paragraphs, headings, lists, tables, notes, and the players in
-   the scan's own card shape. Each player opens his player page; the report
-   points at a player, never at a bet.
+   engine/gamereport writes the report from what the board holds and this
+   draws it block by block: paragraphs, headings, lists, tables, notes, and
+   the players in the scan's own card shape. Each player opens his player
+   page. Since 2026-11-14 the report also carries each game's parlays
+   (engine/gameparlays; Ethan: "for each game ... make 4 3-leg parlays ...
+   and 3 2-leg touchdown parlays"), the one place it names a price: every
+   leg is a pick the board already posts, and the ticket says the price to
+   take it at.
 
    LOADED ON FIRST USE (app.js loadReport), like js/extras.js and
    js/slip.js: the first game page with a report asks for it, so the
@@ -80,6 +83,26 @@
         </div>`;
       }).join("")}</div>`;
     }
+    /* EACH GAME'S PARLAYS (engine/gameparlays, 2026-11-14): four three-leg
+       tickets and three scorer pairs, each leg with its price, our chance
+       and why, the script the ticket needs, its backups and caveats. */
+    if (b.type === "parlays") {
+      const items = (xs) => (xs || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+      return `<div class="gr-parlays">${(b.items || []).map((t) => `<div class="gr-parlay">
+        <div class="gr-parlay-head"><b>${escapeHtml(t.title || "")}</b></div>
+        ${t.price_line ? `<p class="gr-parlay-price">${escapeHtml(t.price_line)}</p>` : ""}
+        <ol class="gr-parlay-legs">${(t.legs || []).map((l) => `<li${l.player
+          ? ` data-open="player:${escapeAttr(slugify(l.player))}"` : ""}>
+          <span class="gr-parlay-pick"><b>${escapeHtml(l.pick || "")}</b>${l.price
+            ? ` <span class="gr-parlay-px">${escapeHtml(l.price)}</span>` : ""}${l.chance
+            ? ` <span class="gr-parlay-p">${Math.round(Number(l.chance) * 100)}%</span>` : ""}</span>
+          ${(l.why || []).length ? `<ul class="gr-why">${items(l.why)}</ul>` : ""}</li>`).join("")}</ol>
+        ${t.script ? `<p class="gr-parlay-script">${escapeHtml(t.script)}</p>` : ""}
+        ${(t.links || []).length ? `<ul class="gr-list gr-parlay-links">${items(t.links)}</ul>` : ""}
+        ${(t.backups || []).length ? `<div class="gr-parlay-sub">Backups</div><ul class="gr-list">${items(t.backups)}</ul>` : ""}
+        ${(t.caveats || []).length ? `<div class="gr-parlay-sub">Caveats</div><ul class="gr-list">${items(t.caveats)}</ul>` : ""}
+      </div>`).join("")}</div>`;
+    }
     return "";
   }
 
@@ -109,6 +132,17 @@
               : `• ${v.player}${who ? ` (${who})` : ""}${v.label ? ` — ${v.label}` : ""}${v.status ? ` (${v.status})` : ""}${v.text ? `: ${v.text}` : ""}`);
             (v.why || []).forEach((w) => out.push(`    – ${w}`));
             (v.form || []).forEach(([k, lines]) => out.push(`    ${k}: ${(lines || []).join(" | ")}`));
+          }
+        } else if (b.type === "parlays") {
+          for (const t of b.items || []) {
+            out.push(`• ${t.title}: ${t.price_line || ""}`);
+            for (const l of t.legs || []) {
+              out.push(`    – ${l.pick}${l.price ? ` (${l.price})` : ""}${l.chance ? `, ${Math.round(Number(l.chance) * 100)}%` : ""}`);
+              (l.why || []).forEach((w) => out.push(`        · ${w}`));
+            }
+            if (t.script) out.push(`    ${t.script}`);
+            (t.backups || []).forEach((x) => out.push(`    Backup: ${x}`));
+            (t.caveats || []).forEach((x) => out.push(`    Caveat: ${x}`));
           }
         }
       }

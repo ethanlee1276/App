@@ -107,7 +107,10 @@ def test_the_plan_carries_it_and_the_field_is_paid():
     assert "td_field" in gate.PAID_KEYS
     assert "${step(by.who, rows(by.who, \"who\"))}" in APP
     src = open(os.path.join(ROOT, "engine", "pipeline.py"), encoding="utf-8").read()
-    assert '"td_field": [{k: r.get(k) for k in _TD_FIELD_KEYS} for r in ls_watch]' in src
+    # Since 2026-11-14 through td_field_rows, which keeps each scorer's
+    # reasons for his game's touchdown pairs (engine/gameparlays).
+    assert '"td_field": td_field_rows(ls_watch),' in src
+    assert "x = {k: r.get(k) for k in _TD_FIELD_KEYS}" in src
     usage = open(os.path.join(ROOT, "engine", "nflusage.py"), encoding="utf-8").read()
     assert "'i10_tgt')" in usage
 
