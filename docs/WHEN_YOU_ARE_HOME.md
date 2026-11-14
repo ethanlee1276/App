@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QD. The Pick of the Day page wears its logos and names** (step 558; 14
+November). Nothing to run. You: "the pick of the day screen is missing logos
+and shit." Your screenshots showed four things, and each is fixed:
+- **Both college cards had a grey "NCAA" text box** where the NBA's and the
+  NHL's had their league's logo. ESPN keeps no league logo under "ncaa", so
+  the image failed every time. College football and college basketball now
+  draw their sport's ball in the chip, the league row's own crest.
+- **The Rice pick wore a "RIC" text badge and read "RICE vs TULN".** That
+  page loads no league's board, and college's schools ride only in their
+  own. Each card now carries its teams' ESPN ids, names and colours, off the
+  board's own team table, so it shows Rice's logo and "Rice vs Tulane". The
+  public copy keeps them only when it keeps the pick, so a lean's teams stay
+  private.
+- **The bet read "RICE ML Moneyline"** (the journal's name for the bet). It
+  now reads "Rice Moneyline", on the home card too.
+- **The NBA's "Best on the board" line had no face.** The best bet now
+  carries his photo, or the side's logo, beside it.
+
 **QC. The posted picks, read against the matchup reads, every league**
 (step 557; 14 November). One read-only command; paste it back. You: "audit
 all the picks and all that shit and remove and add anything we need to."

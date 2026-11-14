@@ -679,6 +679,9 @@ def free_potd(card, locked: dict | None = None, where: str = "pick_of_the_day") 
         out.pop(k, None)
     if _is_lean(out.get("pick")):
         out["pick"] = None
+        # The pick's teams go with it (`potd.team_marks`): a lean's two
+        # schools are the lean, in another key.
+        out.pop("marks", None)
         out["verdict"] = {**(out.get("verdict") if isinstance(out.get("verdict"), dict) else {}),
                           "call": "no bet", "stake": 0.0, "why": LEAN_WHY}
     return out

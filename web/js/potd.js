@@ -124,19 +124,48 @@ function pdTally(r) {
     Math.round((r.win_rate || 0) * 100)}% hit`;
 }
 
+/* THE CARD'S OWN TEAMS (engine/potd.team_marks; Ethan, 2026-11-14, a
+   screenshot of this page: "missing logos and shit"). This page loads no
+   league's board, so a college pick's school had no table to be found in:
+   Rice wore a "RIC" text badge and the line read "RICE vs TULN". Each card
+   now carries its teams' ESPN ids, names and colours, and they win over the
+   league's own table wherever both have the team. */
+function pdTeamName(sport, abbr, marks) {
+  const m = marks && marks[abbr];
+  const said = m && (m.nick || m.short);
+  return said ? String(said).replace(/[<>"'`]/g, "") : teamNameIn(sport, abbr);
+}
+function pdTeamMark(sport, abbr, size, marks) {
+  return marks && marks[abbr] && typeof teamMark === "function"
+    ? teamMark(abbr, size, marks, sport) : teamMarkIn(sport, abbr, size);
+}
+
 // The pick's face: a player's photo, a side's logo, a total's league mark.
-function pdMark(pick, sport) {
+function pdMark(pick, sport, marks) {
   const m = String(pick.market || "").toLowerCase();
   if (m === "total") return leagueMark(sport, 30);
   if (["moneyline", "spread", "team_total"].includes(m) || (!pick.player && pick.team))
-    return teamMarkIn(sport, pick.team || pick.player, 30);
+    return pdTeamMark(sport, pick.team || pick.player, 30, marks);
   return playerAvatar(pick.player, pick.team, { size: 30, headshot: pick.headshot });
 }
 
+// The board's best bet's face, beside its words: his photo, the side's logo,
+// or the league's mark for a total (engine/potd.BOARD_BEST_FIELDS, `marks`).
+function pdBestMark(bb, sport) {
+  const m = String(bb.market || "").toLowerCase();
+  let mark;
+  if (m === "total") mark = leagueMark(sport, 18);
+  else if (["moneyline", "spread", "team_total"].includes(m) || !bb.player) {
+    const abbr = bb.team || String(bb.player || "").split(/\s+/)[0];
+    mark = abbr ? pdTeamMark(sport, abbr, 18, bb.marks) : "";
+  } else mark = playerAvatar(bb.player, bb.team, { size: 18, headshot: bb.headshot });
+  return mark ? `<span class="pd-best-mark">${mark}</span>` : "";
+}
+
 function pdBetHTML(card, sport) {
-  const pick = card.pick;
+  const pick = card.pick, marks = card.marks || null;
   const pays = pick.payout_units == null ? "" : `pays ${Number(pick.payout_units).toFixed(2)}u on 1u`;
-  const vs = pick.opponent ? `${teamNameIn(sport, pick.team)} vs ${teamNameIn(sport, pick.opponent)}` : "";
+  const vs = pick.opponent ? `${pdTeamName(sport, pick.team, marks)} vs ${pdTeamName(sport, pick.opponent, marks)}` : "";
   const price = pick.odds != null ? american(pick.odds) + (pick.book ? ` at ${escapeHtml(pick.book)}` : "") : escapeHtml(pick.book || "");
   const fair = pick.fair_prob == null ? null : Math.round(pick.fair_prob * 100);
   const theirs = pick.price_implied != null ? Math.round(pick.price_implied * 100) : null;
@@ -146,8 +175,8 @@ function pdBetHTML(card, sport) {
     : `<p class="pd-fair"><b>${fair}%</b> ${PD_WITNESS[pick.evidence] || "the market’s fair"}${
         theirs != null ? ` · this price implies ${theirs}%` : ""}</p>`;
   // A graded pick has nothing left to bet; its card still shares.
-  return `<div class="pd-bet"><span class="pick-id">${pdMark(pick, sport)}</span>
-      <span class="pd-bet-t"><b>${potdBetText(pick, sport)}</b>
+  return `<div class="pd-bet"><span class="pick-id">${pdMark(pick, sport, marks)}</span>
+      <span class="pd-bet-t"><b>${potdBetText(pick, sport, marks)}</b>
         <small>${[price, pays, vs].filter(Boolean).join(" · ")}</small></span></div>
     ${why}<div class="pd-acts">${card.result ? "" : betItHTML(pick, "btn primary potd-betit")}
       <button type="button" class="btn ghost pd-share" data-pd-share="${escapeAttr(sport)}">Share card</button></div>`;
@@ -170,15 +199,15 @@ function pdResultHTML(res) {
    lose, in place of the record so far. The footer is the site's claim:
    journaled at this price, graded in public. */
 function pdShareData(card, sport, rec) {
-  const pick = (card || {}).pick || {};
+  const pick = (card || {}).pick || {}, marks = (card || {}).marks || null;
   const plain = (html) => { const t = document.createElement("textarea"); t.innerHTML = String(html == null ? "" : html); return t.value; };
   const m = String(pick.market || "");
   const team = pick.team || pick.player || "";
-  const bet = plain(potdBetText(pick, sport));
+  const bet = plain(potdBetText(pick, sport, marks));
   const isTeam = ["moneyline", "spread", "team_total", "total"].includes(m) || (!pick.player && !!pick.team);
   const who = m === "total"
-    ? (pick.opponent ? `${plain(teamNameIn(sport, team))} vs ${plain(teamNameIn(sport, pick.opponent))}` : bet)
-    : isTeam ? plain(teamNameIn(sport, team)) : String(pick.player || "");
+    ? (pick.opponent ? `${plain(pdTeamName(sport, team, marks))} vs ${plain(pdTeamName(sport, pick.opponent, marks))}` : bet)
+    : isTeam ? plain(pdTeamName(sport, team, marks)) : String(pick.player || "");
   const what = m === "total" ? bet : bet.startsWith(who) ? bet.slice(who.length).trim() || bet : bet;
   const day = String(card.date || "").slice(0, 10);
   const when = /^\d{4}-\d{2}-\d{2}$/.test(day)
@@ -241,7 +270,7 @@ function pdCardHTML(sport, card, ctx) {
     const bb = card.board_best;
     const n = Number(locked[`leagues.${sport}.board_best`] || 0);
     body = potdCallStrip(card) + (bb
-      ? `<p class="pd-best">${icon("star", 13)} Best on the board${bb.tonight ? " tonight" : ""}: <b>${escapeHtml(bb.label || "")}</b> ${
+      ? `<p class="pd-best">${icon("star", 13)} Best on the board${bb.tonight ? " tonight" : ""}: ${pdBestMark(bb, sport)}<b>${escapeHtml(bb.label || "")}</b> ${
           bb.odds != null ? american(bb.odds) : ""}${bb.book ? ` at ${escapeHtml(bb.book)}` : ""}</p>`
       : n && walled
         ? `<p class="pd-best pd-locked">${icon("lock", 12)} Members see the board’s best bet tonight${

@@ -535,11 +535,14 @@ const HIDDEN_VIEWS = {
 let _cfbTeams = null;
 /* …and college basketball's 365, the same way (its board's `teams`). */
 let _cbbTeams = null;
+// College's schools ride only in college's own board (`_cfbTeams`,
+// `_cbbTeams`): on another tab, state.data is THAT league's board, and its
+// table would name the wrong teams, so it is read only on college's own tab.
 function teamsForSport(sport) {
   if (sport === "mlb") return typeof MLB_TEAMS !== "undefined" ? MLB_TEAMS : {};
   if (sport === "nba") return typeof NBA_TEAMS !== "undefined" ? NBA_TEAMS : {};
   if (sport === "wnba") return typeof WNBA_TEAMS !== "undefined" ? WNBA_TEAMS : {};
-  if (sport === "cfb") return _cfbTeams || (state.data && state.data.teams) || {};
+  if (sport === "cfb") return _cfbTeams || (state.sport === "cfb" && state.data && state.data.teams) || {};
   if (sport === "cbb") return _cbbTeams || (state.sport === "cbb" && state.data && state.data.teams) || {};
   if (sport === "nhl") return typeof NHL_TEAMS !== "undefined" ? NHL_TEAMS : {};
   return typeof TEAMS !== "undefined" ? TEAMS : {};
@@ -3784,15 +3787,24 @@ function potdVenueArt(src) {
 /* THE DAY'S BET IN WORDS — the home card's and every league's card on the
    Pick of the Day page (js/potd.js), so one bet is never worded two ways.
    `teamName` is the card's league's: the page draws seven leagues at once. */
-function potdBetText(pick, sport) {
-  const teamName = (a) => teamNameIn(sport, a);
+function potdBetText(pick, sport, names) {
+  // A card's own teams (engine/potd.team_marks) name a school the league's
+  // table on this page does not hold (js/potd.js pdTeamName).
+  const teamName = (a) => {
+    const m = names && names[a], said = m && (m.nick || m.short);
+    return said ? String(said).replace(/[<>"'`]/g, "") : teamNameIn(sport, a);
+  };
   /* The bet in words. A team market's `player` holds an ABBREVIATION and
      a game total's holds the journal key, so neither is a name to print
      — the same rule the Live tab's rows follow. */
   const isTeam = ["moneyline", "spread", "team_total", "total"].includes(pick.market);
   const label = pick.market_label || pick.market || "";
   let text;
-  if (pick.market === "moneyline") text = `${teamName(pick.player || pick.team)} Moneyline`;
+  /* THE TEAM, NOT THE JOURNAL'S NAME FOR THE BET. A moneyline's `player`
+     is the journal's "RICE ML", which no team table holds, so the card read
+     "RICE ML Moneyline" (Ethan's screenshot, 2026-11-14). */
+  if (pick.market === "moneyline")
+    text = `${teamName(pick.team || String(pick.player || "").replace(/\s+ML$/i, ""))} Moneyline`;
   else if (pick.market === "total") text = `${escapeHtml(label)} ${escapeHtml(pick.side || "")} ${pick.line}`;
   else if (isTeam) {
     /* THE LINE, ONCE. A game spread row carries the SIGNED NUMBER as its

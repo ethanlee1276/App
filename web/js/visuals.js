@@ -580,11 +580,22 @@ function teamMark(abbr, size = 20, src = null, sport = null) {
    resize the team logos use; the drawn monogram underneath (the same
    chip shape teamMark falls back to, in house neutrals) shows only when
    the CDN image is absent, so a dead host changes nothing. */
+/* COLLEGE HAS NO LEAGUE LOGO TO LOAD (Ethan, 2026-11-14, the Pick of the
+   Day page: both college cards wore a grey "NCAA" text box beside the NBA's
+   and the NHL's real marks). ESPN files college's schools under "ncaa" but
+   keeps no league logo by that name, so the image failed every time and the
+   chip under it said the word. A college league draws its sport's ball in
+   the chip instead — the league row's own crest (app.js LEAGUE_GLYPH) — and
+   asks for no image. */
+const COLLEGE_GLYPH = { cfb: ["football", "College football"], cbb: ["basketball", "College basketball"] };
+
 function leagueMark(sport, size = 20) {
   const s = (sport || "").toLowerCase();
-  const key = ESPN_LEAGUE[s];
+  const glyph = COLLEGE_GLYPH[s];
+  const ball = glyph && typeof ICON_PATHS !== "undefined" ? ICON_PATHS[glyph[0]] : "";
+  const key = ball ? "" : ESPN_LEAGUE[s];
   const uid = "lm" + Math.random().toString(36).slice(2, 7);
-  const label = (key === "ncaa" ? "NCAA" : s.toUpperCase() || "?");
+  const label = ball ? glyph[1] : (ESPN_LEAGUE[s] === "ncaa" ? "NCAA" : s.toUpperCase() || "?");
   const img = key && !storeArt()
     ? `<img class="team-logo" src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/${key}.png&w=${size * 2}&h=${size * 2}"
             width="${size}" height="${size}" alt="" loading="lazy"
@@ -603,9 +614,11 @@ function leagueMark(sport, size = 20) {
     </defs>
     <rect x="1" y="1" width="22" height="22" rx="6.5" fill="url(#${uid})"
           stroke="#1a2138" stroke-width="1"/>
-    <text x="12" y="15.4" text-anchor="middle" font-family="system-ui, sans-serif"
+    ${ball ? `<g transform="translate(4 4)" fill="none" stroke="#ffffff" stroke-width="1.6"
+          stroke-linecap="round" stroke-linejoin="round">${ball}</g>`
+      : `<text x="12" y="15.4" text-anchor="middle" font-family="system-ui, sans-serif"
           font-size="${label.length > 3 ? 6 : 7.5}" font-weight="800"
-          fill="#ffffff">${escapeAttr(label.slice(0, 4))}</text>
+          fill="#ffffff">${escapeAttr(label.slice(0, 4))}</text>`}
   </svg>${img}</span>`;
 }
 

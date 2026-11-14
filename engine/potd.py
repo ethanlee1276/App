@@ -1763,7 +1763,42 @@ def _board_date(result: dict) -> str:
 #: What the card prints of the board's best bet on a day it names no pick.
 BOARD_BEST_FIELDS = ("player", "team", "market", "market_label", "side",
                      "line", "odds", "book", "stake_units", "ev_per_unit",
-                     "game_date", "kickoff")
+                     "game_date", "kickoff",
+                     # HIS FACE AND THE OTHER SIDE (2026-11-14): the Pick of
+                     # the Day page draws the best bet's photo or its team's
+                     # logo beside it, and names the game it is in.
+                     "headshot", "opponent")
+
+#: A TEAM'S MARK, ON THE CARD (Ethan, 2026-11-14, a screenshot of the Pick of
+#: the Day page: "missing logos and shit"). The Rice pick wore a "RIC" text
+#: badge and read "RICE vs TULN": that page holds every league's card and
+#: loads no league's board, and college's schools ride only in their own
+#: board file (761 of them, five megabytes public). So each card carries
+#: what it draws — its teams' ESPN ids, names and colours, off the board's
+#: own team table (`team_marks`). The pick's go on the card (the public copy
+#: keeps them exactly when it keeps the pick, gate.free_potd); the board's
+#: best bet's ride inside `board_best`, members' only like the rest of it.
+MARK_FIELDS = ("id", "name", "nick", "short", "loc", "primary", "secondary", "logo")
+
+
+def team_marks(result: dict, *teams) -> dict:
+    """{abbr: {id, name, nick, colours, logo}} for each of ``teams`` the
+    board's team table knows; {} when it knows none. College football's
+    table calls its second colour ``alt``; the page reads ``secondary``."""
+    table = (result or {}).get("teams") if isinstance(result, dict) else None
+    out: dict = {}
+    if not isinstance(table, dict):
+        return out
+    for t in teams:
+        row = table.get(t) if t else None
+        if not isinstance(row, dict) or t in out:
+            continue
+        m = {k: row[k] for k in MARK_FIELDS if row.get(k) not in (None, "")}
+        if "secondary" not in m and row.get("alt"):
+            m["secondary"] = row["alt"]
+        if m:
+            out[t] = m
+    return out
 
 
 def _bet_words(row: dict) -> str:
@@ -2006,6 +2041,20 @@ def attach(result: dict, sport: str, now=None, cut=None,
             best, n = board_best(result, now=now)
             if best:
                 got["board_best"], got["board_staked"] = best, n
+    except Exception:                                         # noqa: BLE001
+        pass
+    # THE CARD'S TEAMS, AS THE PAGE DRAWS THEM (`team_marks`), stamped
+    # every build like the best bet above, so a carried card wears today's.
+    got.pop("marks", None)
+    try:
+        if isinstance(got.get("pick"), dict):
+            marks = team_marks(result, got["pick"].get("team"), got["pick"].get("opponent"))
+            if marks:
+                got["marks"] = marks
+        if isinstance(got.get("board_best"), dict):
+            marks = team_marks(result, got["board_best"].get("team"), got["board_best"].get("opponent"))
+            if marks:
+                got["board_best"]["marks"] = marks
     except Exception:                                         # noqa: BLE001
         pass
     if pick is None:
