@@ -50,7 +50,9 @@ def test_the_college_build_reads_it_everywhere_the_nfl_does():
         assert bit in BUILD, bit
     scan = open(os.path.join(ROOT, "engine", "gamescan.py"), encoding="utf-8").read()
     assert 'injuries=[i for i in injuries or [] if getattr(i, "team", "") in (home, away)],' in scan
-    assert 'pulled=gd.get("pulled_players") or [], weather=gd.get("weather"))' in scan
+    # The college scan is handed its implied points too since 2026-11-14
+    # (engine/gamescan.implied_points_row), after the forecast.
+    assert 'pulled=gd.get("pulled_players") or [], weather=gd.get("weather"),' in scan
 
 
 def test_a_player_every_book_took_down_is_pulled_in_college_too():
