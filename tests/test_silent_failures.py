@@ -308,6 +308,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # "error" and the error's text, printed by `ingest.py cbb --probe` —
         # the failure is the answer, and no answered request looks like it.
         "_row",
+        # THE REPORT'S ANGLES (engine/angles.for_game, 2026-11-14), caught by
+        # this sweep the day they were written. Its [] is also a game with
+        # nothing to say, so a failure prints "angles not read for AWAY@HOME
+        # (<error>)" in the build's log; the angles found before it stand,
+        # and a failure must never cost the report its other sections.
+        "for_game",
     }
 
     def broad(h):

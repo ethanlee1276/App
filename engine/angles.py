@@ -305,6 +305,11 @@ def for_game(c, tables: dict) -> list[dict]:
                 bits.append(f"{name} has {' and '.join(use)} — {top['share']:.0%} of its red-zone touches")
                 out.append({"team": off, "player": name, "pos": (who or {}).get("pos") or "", "tone": "up",
                             "points_to": "a touchdown", "text": "; ".join(bits)})
-    except Exception:                                        # noqa: BLE001
+    except Exception as exc:                                 # noqa: BLE001
+        # A failure must never cost the report its other sections, and the
+        # angles found before it stand. But [] is also what a game with
+        # nothing to say returns, so the failure prints its own line in the
+        # build's log, which no quiet game does (tests/test_silent_failures).
+        print(f"  ⚠️ angles not read for {getattr(c, 'away', '?')}@{getattr(c, 'home', '?')} ({exc})")
         return out
     return out

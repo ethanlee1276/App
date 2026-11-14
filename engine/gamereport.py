@@ -2943,7 +2943,10 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             try:
                 from . import angles as _angles
                 angle_tables = _angles.nfl_tables(conn, season, before_week=_week_of(result))
-            except Exception:                                # noqa: BLE001
+            except Exception as exc:                         # noqa: BLE001
+                # {} is also a season with no games logged yet, so the
+                # failure says so; the reports still build without them.
+                print(f"  ⚠️ the angles' tables not read ({exc})")
                 angle_tables = {}
         _t = _clock.lap("game reports", "angles", _t)
         if ideas is None and sport == "nfl":
