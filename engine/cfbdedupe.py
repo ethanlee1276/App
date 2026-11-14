@@ -28,9 +28,13 @@ one opponent, rows a day or less apart are one game. The official row is
 kept (not a `-box` copy, ESPN's number before another key, the earlier day
 first), and the rest go. Where a box copy's number differs from the kept
 one, the count and a few examples are printed (Barkate at Notre Dame: 144
-and 92). Those copies were read mid-game, from the live board's cached
-summary on a failed read (engine/boxsettle, step QQ), so the official row
-is the one to keep. Games: one pair's rows a day or
+and 92). Barkate's copies were read mid-game, from the live board's cached
+summary on a failed read (engine/boxsettle, step QQ). Most of the rest are
+not: Ethan's run, 2026-11-14, found 4,406 in 2026, some of them above the
+play file's number (A'Marion Peterson: 5 carries in the box, 4 in the play
+file), which no mid-game copy can be. The two sources count differently, and
+which one college grades on is the decision under RUN_NEXT 00e (step QY).
+The play file's row is kept here, as college grades today. Games: one pair's rows a day or
 less apart with the same final score are one game. The away@home row on the
 earlier day is kept, it takes any line or note only the others carried,
 and the rest go.

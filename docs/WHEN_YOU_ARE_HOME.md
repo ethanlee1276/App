@@ -9338,6 +9338,74 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QY. The box-score copies were not all read mid-game: 00e's decision is
+back** (step 579; 14 November). Nothing to run; one decision, under 00e.
+QQ said a final box score and the play file agree, so the copies that
+disagreed had been read mid-game. Your cleanup run showed that's wrong. It
+removed 130,078 duplicate rows, and in 2026 it found 4,406 box copies that
+differ from the play file's row, some of them higher. A'Marion Peterson had 5
+carries in the box against 4 in the play file, and 51 rushing yards against
+43. A copy taken mid-game can't be higher than the final, so most of these
+are the two sources counting differently. Barkate's 75 and 92 against 144
+were a mid-game read (QQ's fix stands). The question is back as a yes or no
+under 00e: grade college on ESPN's box score, the one the books settle on?
+The corrections are in QQ's and QJ's text, 00e, and engine/cfbdedupe.
+
+**QX. Every matchup read gets its pick on its side** (step 578; 14
+November). Nothing to run. You wrote: "it would not make any sense to make
+players favoitable and breakout canidates and not give them props and some
+for players we thinnk will do bad, it doesnt make sense to not take the
+unders". A read got a pick only when its side cleared the Most Likely list's
+bar: 55%, and 60% for NFL props (your 10-31 tightening). An under almost
+never clears it, because the books hang few alternate unders and a main-line
+under is priced near a coin flip, so those cards read "No Most Likely pick".
+Now every read the list carries nothing for on its side gets one matchup
+pick: the likeliest number on that side, either the posted line or the rung
+the Most Likely board found, at a real sportsbook at -250 or better, when our
+number there is at least 50% (engine/matchpicks.READ_PICK_MIN). That covers
+every read, past the old four-a-game cap. The read carries it, and the game
+page's cards and the report's player cards name it. Under 50% the card says
+our number disagrees. The chance is the model's, unchanged. These picks are
+tracked on paper as matchup picks, so the record will show how a read's own
+side does. On the one Most Likely board an NFL read pick under 60% shows as
+held back, which keeps your bar. A no-pick card now names the bar the list
+actually used, 60% for NFL props, instead of always saying 55%.
+
+**QW. Each game's touchdown pairs are chosen on our research** (step 577;
+14 November). Nothing to run. You wrote: "make sure we are making the TD
+parlays based off reaseerach we do and the breakout canidates and game
+scripts and all of that and not just based off the player lines". The pairs
+were the game's likeliest priced scorers, which reads like the shortest
+prices. Now each football scorer gets a research score out of 13
+(engine/gameparlays.research), built from:
+- the matchup the matchup picks already use (engine/matchpicks.td_matchup):
+  his team's expected points, the defence at his position (the run defence
+  for a back or a quarterback), his red-zone chances and red-zone trips
+  both ways;
+- his share of the targets or carries;
+- the read: a breakout candidate +2, a good matchup +1, a tough one -1 (not
+  for his team's go-to scorer), and an "avoid" read is never a leg;
+- the game script: a back on a side favoured by 3 or more +1, an underdog
+  by 7 or more -1, and a receiver or tight end in a shootout total +1.
+
+A scorer needs a red-zone role and 4 of the 13 points. Scorers and pairs are
+ranked on research first and our chance second. Each leg shows its research
+score and leads with its case: the read, the defence, the script, then its
+own reasons. The chance a pair shows is still our model's. A game with fewer
+than three pairs says how many of its priced scorers carry a research case.
+Hockey's goal-scorer pairs have no read and still rank on the chance.
+
+**QV. No tackle, sack or kicking leg on any parlay** (step 576; 14
+November). Nothing to run. You wrote: "i dont wanna use tackle picks or
+anything like that. and not kicker points either". One list
+(engine/parlays.NO_PARLAY_MARKETS) is checked by:
+- the leg maker every two-leg ticket and every game ticket goes through
+  (engine/twoleg._leg);
+- the parlay screen's leg gate;
+- the builder's "stacks well with".
+
+Those props stay on the boards as single picks.
+
 **QU. A game's parlays also draw on the Most Likely rows its seats dropped**
 (step 575; 14 November). Nothing to run. With QS live the NFL board counted
 28 three-leg tickets across 13 games, up from 14 but still about two a game.
@@ -9410,8 +9478,9 @@ that doesn't say its game is over is now never filed; a later pass, or the
 official file, files the game (engine/boxsettle.ingest_for_open). Bets
 graded on such a copy are re-graded when the official rows land
 (`ledger.resettle_mismatches`), and QJ's cleanup removes the copies already
-stored. It also withdraws the decision under 00e: a final box score and the
-play file agree, so college keeps grading on the play file.
+stored. (Corrected by QY: it does not settle 00e. Your cleanup run found box
+copies higher than the play file, which no mid-game copy can be, so 00e's
+decision is back.)
 
 **QP. A game's parlays may pair legs that want opposite leads** (step 570;
 14 November). Nothing to run. The first NFL board built on today's code
@@ -9545,8 +9614,9 @@ cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.cfbdedupe --apply
 ```
 
 It also prints where a box copy's number differs from the kept official one
-(Barkate at Notre Dame: 144 against 92). Those copies were read mid-game
-(step QQ), so the play file stays the one college grades on.
+(Barkate at Notre Dame: 144 against 92). Barkate's were read mid-game (step
+QQ), but most of the 4,406 your run found are the two sources counting
+differently (step QY), so 00e asks which one college grades on.
 
 **QI. College reads stop counting a player's own team against him**
 (step 563; 14 November). Nothing to run. Your picks audit (QC) listed
