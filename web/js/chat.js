@@ -183,7 +183,17 @@ function pcFacts(p, d, plays, full) {
   return out;
 }
 
-function pcBodyHTML(p, d, plays, full) {
+/* A player's ESPN headshot from his ESPN id, as the box score carries it
+   (livescore_build.pbp_players; the gamecast's own FACE_DIR): the play
+   cards and the Live tab's feed draw a face rather than his initials. */
+const ESPN_FACE_DIR = { nfl: "nfl", cfb: "college-football", nba: "nba", wnba: "wnba", nhl: "nhl",
+                        cbb: "mens-college-basketball" };
+function espnFace(league, id) {
+  const dir = ESPN_FACE_DIR[league];
+  return dir && id ? `https://a.espncdn.com/i/headshots/${dir}/players/full/${encodeURIComponent(id)}.png` : "";
+}
+
+function pcBodyHTML(p, d, plays, full, league) {
   d = d || {};
   const people = pcPeople(p);
   // Football and baseball name the player whether or not the box has his
@@ -195,7 +205,12 @@ function pcBodyHTML(p, d, plays, full) {
     return ln || named ? `<span class="pcard-line"><b>${chEsc(pcShort(n))}</b>${ln ? ` · ${chEsc(ln)}` : ""}</span>` : "";
   }).join("");
   const team = p.kind === "atbat" ? (p.half === "T" ? d.away : d.home) : p.team;
-  const face = people[0] && typeof playerAvatar === "function" ? playerAvatar(people[0], team, { size: 40 }) : "";
+  // His face where the box carries his ESPN id (app.js espnFace), his
+  // initials where it does not.
+  const row = people[0] ? pcBox(d.players, people[0]) : null;
+  const shot = row && row.id ? espnFace(league, row.id) : "";
+  const face = people[0] && typeof playerAvatar === "function"
+    ? playerAvatar(people[0], team, { size: 40, headshot: shot || null }) : "";
   const win = pcWin(p, d);
   const chip = p.swing && !(p.kind === "atbat" && /home run/i.test(String(p.event || ""))) ? PC_SWING[p.swing] : "";
   return `<div class="pcard-row">${face ? `<span class="pcard-face">${face}</span>` : ""}<div class="pcard-main">
@@ -265,7 +280,8 @@ function pfItemHTML(x) {
   const lv = g.live || {};
   const [a, h] = p.away_score != null ? [p.away_score, p.home_score] : [lv.away_score, lv.home_score];
   const per = p.kind === "atbat" ? `${p.half === "T" ? "Top" : "Bot"} ${p.inning || ""}`
-    : p.period ? (sport === "nhl" ? hockeyPeriod(p.period) : p.period <= 4 ? `Q${p.period}` : "OT") : "";
+    : p.period ? (sport === "nhl" ? hockeyPeriod(p.period) : sport === "cbb" ? halfPeriod(p.period)
+      : p.period <= 4 ? `Q${p.period}` : "OT") : "";
   const when = [per, p.kind === "football" ? fbClock(p.clock) : p.clock].filter(Boolean).join(" ");
   const secs = p.at ? Math.max(0, Math.round((Date.now() - Date.parse(p.at)) / 1000)) : null;
   const ago = secs == null || isNaN(secs) ? "" : secs < 60 ? "now" : secs < 3600 ? `${Math.round(secs / 60)}m` : `${Math.round(secs / 3600)}h`;
@@ -276,7 +292,7 @@ function pfItemHTML(x) {
     <div class="pf-top"><span class="pf-lg">${(SPORT_META[sport] || {}).logo || ""}</span>
       <b>${escapeHtml(score)}</b>
       <span class="pf-when">${escapeHtml(when)}</span>${ago ? `<time class="pf-ago">${ago}</time>` : ""}${pcRate(p)}</div>
-    ${pcBodyHTML(p, g, g.big || [], false)}
+    ${pcBodyHTML(p, g, g.big || [], false, sport)}
     <div class="pf-acts">${chatPlayBadge(room, p)}${pcShareHTML(sport, event, p, `${pcTitle(p, g)} · ${score}`)}<button type="button" class="pf-open">Open the game →</button></div>
   </article>`;
 }
@@ -1377,7 +1393,8 @@ const chatPlayTitle = (p) => playTitleOf(p, CH.d || {});
 
 function chatPlayWhen(p) {
   if (p.kind === "atbat") return `${p.half === "T" ? "Top" : "Bottom"} ${p.inning || ""}`;
-  const per = p.period ? (CH.league === "nhl" ? `P${p.period}` : `Q${p.period}`) : "";
+  const per = p.period ? (CH.league === "nhl" ? `P${p.period}` : CH.league === "cbb" ? halfPeriod(p.period)
+    : `Q${p.period}`) : "";
   return [per, p.clock].filter(Boolean).join(" ");
 }
 
@@ -1402,7 +1419,7 @@ function chatPlayCardHTML(p, inThread) {
   const d = CH.d || {};
   return `<article class="gch-playcard${p.scoring || p.kind === "goal" ? " gch-scored" : ""}${p.turnover ? " gch-turned" : ""}" data-play="${chEsc(key)}">
     <div class="gch-play-when">${chEsc(chatPlayWhen(p))}${score ? `<span>${chEsc(score)}</span>` : ""}${pcRate(p)}</div>
-    ${pcBodyHTML(p, d, chatAllPlays(), true)}
+    ${pcBodyHTML(p, d, chatAllPlays(), true, CH.league)}
     <div class="gch-acts">${chatPlayFacesHTML(key)}${inThread ? "" : `<button type="button" class="gch-act gch-thread-btn" data-gch="thread" data-play="${chEsc(key)}">${
       n ? `${n} repl${n === 1 ? "y" : "ies"}` : "Talk about it"}</button>`}${pcShareHTML(CH.league, CH.event, p, `${pcTitle(p, d)}${score ? ` · ${score}` : ""}`)}</div></article>`;
 }

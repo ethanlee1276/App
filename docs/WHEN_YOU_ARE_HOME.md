@@ -9338,6 +9338,28 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PF. The Play feed opens; college plays read their halves** (step 534;
+14 November). Nothing to run. You, on the Live tab with 23 college games
+on: "clicking the play feed button throws an error and glitches the page."
+
+- **The crash.** The Games / Play feed pair is drawn with the league chips'
+  own class, and the chips' handler caught it too. A tap on Play feed set
+  the league to nothing, and the redraw threw on its name. That happened
+  in every league. The handler now answers the league chips only.
+- **College's plays.** On the same screen a college game's plays read "Q2
+  5:46" under a card that said H2. They now read H1, H2, then OT and 2OT,
+  on the card, in the feed, on the game page, in its chat and in the
+  gamecast.
+- **Faces.** The feed drew every player's initials. The live file now keeps
+  each player's ESPN id, and a play card shows his headshot from it.
+- **The league's name.** The Live tab's chips and card tags call the
+  league NCAAB, as the league row does, not CBB. So do the Pick of the
+  Day header and the other lines that printed the code.
+
+Checked in a browser against the 61 college games live at 01:45 UTC: no
+error, every play reading H1 or H2
+(tests/test_the_play_feed_opens_on_college).
+
 **PE. Eight leagues on one row** (step 533; 14 November). Nothing to run.
 You, with the folded Duo's league row circled: "fit this better." College
 basketball made the leagues eight, and at 48px a button the eighth (UFC)

@@ -37,6 +37,7 @@ def _node(js):
         return None
     prog = f"""
       const LEAGUE_LABEL = {{ nfl: "NFL", cfb: "College", mlb: "MLB" }};
+      const lgCode = (s) => LEAGUE_LABEL[s] || String(s || "").toUpperCase();
       const SPORT_CODES = ["mlb", "nfl", "cfb"];
       const passesFilters = (r) => r.grade !== "Pass";
       const passesGameBet = (b) => b.ok !== false;

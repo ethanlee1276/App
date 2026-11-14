@@ -56,7 +56,8 @@ def test_the_shelf_is_data_driven_not_a_league_list():
     i = body.index("const shelved")
     block = body[i:body.index("host.innerHTML", i)]
     code = re.sub(r"/\*.*?\*/", "", block, flags=re.S)
-    assert "SPORT_META[s]" in code and "LEAGUE_LABEL[s]" in code
+    # The one table, through its one helper (app.js lgCode, 2026-11-14).
+    assert "SPORT_META[s]" in code and "lgCode(s)" in code
     for word in ('"MLB"', '"CFB"', '"NFL"', "'mlb'", "'cfb'"):
         assert word not in code, f"{word} hardcoded in the shelf builder"
 

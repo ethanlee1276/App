@@ -38,6 +38,7 @@ def _node(js):
     prog = "\n".join([
         "let state = { sport: 'cfb', data: {} }; let _oneBoard = true;",
         "const LEAGUE_LABEL = { cfb: 'College football', nfl: 'NFL' };",
+        "const lgCode = (s) => LEAGUE_LABEL[s] || String(s || '').toUpperCase();",
         "const escapeHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');",
         "const escapeAttr = escapeHtml;",
         "const isWalled = () => false; const memberLockHTML = () => '';",

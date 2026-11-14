@@ -1052,6 +1052,8 @@ const teamMarkIn = (sport, a, size = 20) =>
 //: Bengal from a Red.
 const LEAGUE_LABEL = { nfl: "NFL", mlb: "MLB", nba: "NBA", wnba: "WNBA",
                        nhl: "NHL", cfb: "CFB", ufc: "UFC", cbb: "NCAAB" };
+// A league's code as the strip names it (college basketball is NCAAB, not CBB).
+const lgCode = (s) => LEAGUE_LABEL[s] || String(s || "").toUpperCase();
 function leagueBadge(sport) {
   const k = String(sport || "").toLowerCase();
   if (!LEAGUE_LABEL[k]) return "";
@@ -3860,7 +3862,7 @@ async function renderPickOfTheDay() {
     host.innerHTML = `<p class="list-note potd-offday" style="margin:0 0 12px">${icon('clock', 12)} ${escapeHtml(String(got.note || ""))}</p>`;
     return;
   }
-  const league = (SPORT_META[state.sport] || {}).name || state.sport.toUpperCase();
+  const league = (SPORT_META[state.sport] || {}).name || lgCode(state.sport);
   const pick = got.pick;
   /* THE RECORD, UNDER THE CLAIM. A showcase pick with no scoreboard
      beside it is the thing every tout site does; this is the half that
@@ -4223,7 +4225,7 @@ async function renderDayTopPick() {
     return;
   }
   const from = String(top.sport || "");
-  const name = (SPORT_META[from] || {}).name || from.toUpperCase();
+  const name = (SPORT_META[from] || {}).name || lgCode(from);
   const beat = (top.runners_up || []).length;
   const head = "Today’s Top Pick";
   if (from === state.sport) {
@@ -4266,7 +4268,7 @@ function renderProbation() {
   if (!d.probation) { host.innerHTML = ""; return; }
   const t = d.tuning || {};
   host.innerHTML = `<div class="card" style="--tone:var(--warn);margin-bottom:12px">
-    <div class="player">${iconMark("warn")}${escapeHtml((SPORT_META[state.sport] || {}).name || state.sport.toUpperCase())} is on probation — graded, not bet</div>
+    <div class="player">${iconMark("warn")}${escapeHtml((SPORT_META[state.sport] || {}).name || lgCode(state.sport))} is on probation — graded, not bet</div>
     <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
       ${escapeHtml((d.probation_reasons || [])[0] || t.note
         || "This league’s tuning has not been fitted to its own results yet.")}
@@ -6018,8 +6020,7 @@ function renderLivePicks() {
      that state legible instead of wrong-looking. It is also the guard
      that survives the next bug of this shape: a panel that names its
      league cannot show another one's silently. */
-  const leagueNow = LEAGUE_LABEL[state.sport]
-    || String(state.sport || "").toUpperCase();
+  const leagueNow = lgCode(state.sport);
   const leagueTag = `<span class="lb-of-league">${escapeHtml(leagueNow)}</span>`;
   if (trackerErr) {
     // A broken tracker must say so — an empty space reads as "no bets".
@@ -6660,7 +6661,7 @@ async function renderTailFade() {
       <div class="tf-call ${c.result}">
         <span>${escapeHtml(c.stance === "tail" ? "Tailed" : "Faded")}
           <b>${escapeHtml(c.player)}</b> ${escapeHtml(c.side)} ${c.line ?? ""}
-          · ${escapeHtml((c.sport || "").toUpperCase())}</span>
+          · ${escapeHtml(lgCode(c.sport))}</span>
         <span class="tf-res">${c.result === "won" ? icon("check") : c.result === "lost" ? icon("cross") : ""} ${escapeHtml(c.result)}</span>
       </div>`).join("");
   host.innerHTML = `
@@ -8134,7 +8135,7 @@ function tonightLeagueOrder(codes, current) {
    screen first, then All sports. A league button switches the board the
    way the strip does; All is this page's own scope. */
 function tonightChipsHTML(scope, sport) {
-  const lg = (s) => LEAGUE_LABEL[s] || String(s || "").toUpperCase();
+  const lg = lgCode;
   const items = tonightLeagueOrder([...SPORT_CODES, ...(SPORT_CODES.includes(sport) ? [] : [sport])], sport)
     .map((s) => ({ key: s, label: lg(s) }));
   items.push({ key: "all", label: "All sports" });
@@ -8166,7 +8167,7 @@ async function tonightBoards() {
    and put back after, the way the play-by-play page draws a park. */
 function tonightLeagueHTML(s, d) {
   const t = tonightPick(d);
-  const lg = LEAGUE_LABEL[s] || s.toUpperCase();
+  const lg = lgCode(s);
   const logo = (SPORT_META[s] || {}).logo || "";
   const head = `<div class="section-title tn-league" data-tonight-league="${s}">${logo} ${escapeHtml(lg)}
       <span class="sub">— ${t.n ? `${t.n} bet${t.n === 1 ? "" : "s"} clear the bar` : "nothing clears the bar"}${
@@ -8207,7 +8208,7 @@ async function renderTonightAll(host) {
   if (_tonightScope !== "all" || state.view !== "tonight") return;
   const order = tonightLeagueOrder(SPORT_CODES, state.sport);
   const blocks = order.map((s) => boards[s] ? tonightLeagueHTML(s, boards[s])
-    : `<div class="section-title tn-league">${(SPORT_META[s] || {}).logo || ""} ${escapeHtml(LEAGUE_LABEL[s] || s.toUpperCase())}
+    : `<div class="section-title tn-league">${(SPORT_META[s] || {}).logo || ""} ${escapeHtml(lgCode(s))}
         <span class="sub">— no board built for this league yet</span></div>`);
   host.innerHTML = `${tonightChipsHTML("all", state.sport)}
     <div class="section-title">Tonight, every league
@@ -13682,7 +13683,7 @@ function renderSearchScope() {
       class="al-cat scope-chip${s === state.sport ? " on" : ""}"
       data-scope="${s}" aria-pressed="${s === state.sport}">
       ${(SPORT_META[s] || {}).logo || (s === "ufc" ? "🥊" : "")}
-      ${escapeHtml(LEAGUE_LABEL[s] || s.toUpperCase())}</button>`).join("");
+      ${escapeHtml(lgCode(s))}</button>`).join("");
 }
 
 /* Hopping leagues from the scope row CARRIES THE TYPED NAME ACROSS. The
@@ -13799,8 +13800,7 @@ async function renderPlayers() {
            guess, it is his name typed backwards. Calling that a "closest
            match" would apologise for finding exactly the right man. */
         const guessed = hits.length && hits.every((m) => (m.rank || 0) >= 3);
-        const lgName = LEAGUE_LABEL[state.sport] ||
-          String(state.sport || "").toUpperCase();
+        const lgName = lgCode(state.sport);
         host.innerHTML = `
           <div class="section-title minor">${
             guessed ? "Closest matches" : `Found in ${escapeHtml(lgName)}`}
@@ -13810,7 +13810,7 @@ async function renderPlayers() {
                  so ${drawn.length + rest.length > 1 ? "these are the nearest names"
                                                      : "this is the nearest name"}`
               : `nothing priced on tonight’s
-                 ${escapeHtml(String(state.sport || "").toUpperCase())} board for
+                 ${escapeHtml(lgCode(state.sport))} board for
                  “${escapeHtml(state.search)}”, so this is what we store on
                  ${drawn.length + rest.length > 1 ? "them" : "him"}`}</span></div>
           <div class="player-grid">${drawn.map((m) => m.sport === "ufc"
@@ -13872,7 +13872,7 @@ async function renderPlayers() {
          true thing instead: profiles are prop cards, and this league
          has none priced tonight. */
       host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("search", 30)}</div>
-        <div class="es-title">No priced props on the ${escapeHtml(String(state.sport || "").toUpperCase())} board tonight</div>
+        <div class="es-title">No priced props on the ${escapeHtml(lgCode(state.sport))} board tonight</div>
         <div class="es-sub">Player profiles are built from the board’s prop cards, so there
         are none to draw until a slate prices. The page fills as soon as one does.</div></div>`;
       return;
@@ -13884,7 +13884,7 @@ async function renderPlayers() {
        the wrong tab" become indistinguishable again, which was the
        whole 08-23 complaint about the last scoped box. */
     host.innerHTML = `<div class="empty">No
-      ${escapeHtml(LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase())}
+      ${escapeHtml(lgCode(state.sport))}
       players match “${escapeHtml(state.search)}” — the search looks only at
       the league whose tab is lit, so switch the sport up top to look in
       another one.</div>`;
@@ -13904,7 +13904,7 @@ async function renderPlayers() {
   const shown = capped ? players.slice(0, cap) : players;
   // SAY WHEN THIS IS A GUESS, the way the league search does: a corrected
   // spelling presented as what was asked for is its own kind of lying.
-  const lgWord = LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase();
+  const lgWord = lgCode(state.sport);
   const keep = ccKeep(host);
   host.innerHTML = (capped ? `<p class="browse-note">Showing ${shown.length}
       of ${players.length} players with a prop on tonight’s board —
@@ -17842,7 +17842,7 @@ async function renderFeedZone() {
       case "edge_appeared": return {
         ic: "rising", tone: "good",
         title: `Edge appeared: ${who} ${escapeHtml(e.side || "")} ${e.line ?? ""} ${mkt}`,
-        cond: `${e.ev != null ? `+${(e.ev * 100).toFixed(1)}% EV · ` : ""}${escapeHtml(e.book || "")} ${px(e.odds)} · ${escapeHtml((e.sport || "").toUpperCase())}`,
+        cond: `${e.ev != null ? `+${(e.ev * 100).toFixed(1)}% EV · ` : ""}${escapeHtml(e.book || "")} ${px(e.odds)} · ${escapeHtml(lgCode(e.sport))}`,
       };
       case "edge_died": return {
         ic: "falling", tone: "bad",
@@ -17891,7 +17891,7 @@ async function renderFeedZone() {
          events, in the same stream as the market's churn. */
       case "settle_recap": return {
         ic: "trophy", tone: (e.net_u || 0) >= 0 ? "good" : "bad",
-        title: `${(e.sport || "mlb").toUpperCase()} last night: ${e.w}-${e.l}${e.p ? `-${e.p}` : ""} · ${
+        title: `${lgCode(e.sport || "mlb")} last night: ${e.w}-${e.l}${e.p ? `-${e.p}` : ""} · ${
           e.net_u >= 0 ? "+" : ""}${e.net_u}u`,
         cond: `${e.date} fully graded — every pick is on the Record page`,
       };
@@ -21914,7 +21914,7 @@ function renderTeamHits() {
         data-team-sport="${escapeAttr(t.sport)}"
         data-team-open="${escapeAttr(t.sport === "cfb" ? t.abbr : t.name)}">
         ${teamMark(t.abbr, 16, teamsForSport(t.sport), t.sport)}
-        ${escapeHtml(t.name)}${t.sport === state.sport ? "" : ` <small class="tm-hit-lg">${t.sport.toUpperCase()}</small>`}</button>`).join("")}
+        ${escapeHtml(t.name)}${t.sport === state.sport ? "" : ` <small class="tm-hit-lg">${lgCode(t.sport)}</small>`}</button>`).join("")}
     </div>`;
 }
 
@@ -27022,7 +27022,7 @@ async function renderHomePerf() {
   const tracked = (_perfCache.tracked_sports || []).includes(state.sport);
   const section = tracked ? (_perfCache.by_sport || {})[state.sport] : null;
   const scopedToSport = !!(section && (section.overall || {}).settled);
-  const sportName = tracked ? String(state.sport || "").toUpperCase() : "";
+  const sportName = tracked ? lgCode(state.sport) : "";
   const all = scopedToSport ? section.overall : (_perfCache.overall || {});
   if (!all.settled) { host.innerHTML = ""; return; }
   // Range chips on the overview chart (Ethan's desktop render,
@@ -27713,7 +27713,7 @@ const LIVE_FEED_STALE_S = 600;
    the shelf already says nobody is playing, and repeating it here
    would put a warning on every quiet Tuesday. */
 function liveFeedWhy(sport, feed, now) {
-  const label = LEAGUE_LABEL[sport] || String(sport || "").toUpperCase();
+  const label = lgCode(sport);
   if (!feed) return "";
   if (!feed.ok)
     return `${label} live scores could not be loaded — the scoreboard file did not answer.`;
@@ -27908,7 +27908,7 @@ function liveCardHTML({ sport, g, bets }) {
       ? ` data-pbp="${escapeAttr(String(g.event_id || g.game_pk))}"` : ""}>
     <div class="lb-head"><span class="lb-live">${icon("dot", 10)} LIVE</span>
       <span class="lb-sit">${situation}</span>
-      <span class="lb-league">${sport.toUpperCase()}</span></div>
+      <span class="lb-league">${escapeHtml(lgCode(sport))}</span></div>
     ${watchHTML(g, sport, "lb-watch")}
     <div class="lb-score">
       <span class="lb-team">${mark(g.away)}<em>${escapeHtml(g.away)}</em></span>
@@ -28135,7 +28135,7 @@ function pbpPropsHTML(d, league) {
       "Members see the Edge picks, the Most Likely picks and the Pick of the Day on this game, each tracked live with its chance to cash.");
   }
   if (state.sport !== league) {
-    return `<p class="rail-quiet">Our picks are kept on each league’s own board — open the ${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())} tab to see them on this game.</p>`;
+    return `<p class="rail-quiet">Our picks are kept on each league’s own board — open the ${escapeHtml(lgCode(league))} tab to see them on this game.</p>`;
   }
   const { potd, likely, edge } = pbpOurPicks(d);
   if (!potd.length && !likely.length && !edge.length) return `<p class="rail-quiet">No Most Likely or edge picks on this game.</p>`;
@@ -29097,6 +29097,7 @@ function pbpGroups(d) {
   const label = d.league === "mlb"
     ? (p) => `${p.half || ""}${p.inning || ""}`
     : d.league === "nhl" ? (p) => hockeyPeriod(p.period)
+    : d.league === "cbb" ? (p) => halfPeriod(p.period)
     : (p) => (p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "");
   const groups = [];
   const byKey = {};
@@ -29176,6 +29177,12 @@ const PLAYS_EMPTY = {
    period 5. */
 function hockeyPeriod(n) {
   return !n ? "" : n <= 3 ? `P${n}` : n === 4 ? "OT" : n === 5 ? "SO" : `${n - 3}OT`;
+}
+/* College basketball plays two halves (Ethan, 2026-11-14, a college game's
+   plays reading "Q2 5:46" under a card that said H2): H1, H2, then OT, 2OT.
+   ESPN numbers the periods 1, 2, 3... for both. */
+function halfPeriod(n) {
+  return !n ? "" : n <= 2 ? `H${n}` : n === 3 ? "OT" : `${n - 2}OT`;
 }
 
 /* A FOOTBALL PLAY IN PLAIN WORDS (Ethan, 2026-10-25, on a live NFL game:
@@ -29370,9 +29377,12 @@ function playsHTML(g) {
   /* HOCKEY RIDES THE SAME ROW (Ethan, 2026-10-04: "Nhl play by plays
      are not working" — the league had no source): its periods, and a
      goal tagged as a goal rather than as points. */
+  // College's halves: the caller names the league, or the room says it.
+  const halves = g.league === "cbb" || String(g.room || "").startsWith("cbb_");
   const hoopsRow = (p) => {
     const ice = p.kind === "hockey";
-    const q = ice ? hockeyPeriod(p.period) : p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "";
+    const q = ice ? hockeyPeriod(p.period) : halves ? halfPeriod(p.period)
+      : p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "";
     const when = `${q}${p.clock ? ` ${p.clock}` : ""}`;
     const tag = ice ? (p.scoring ? ` <span class="lb-rbi">GOAL</span>` : "")
       : p.scoring && p.points ? ` <span class="lb-rbi">+${p.points}</span>`
@@ -29604,7 +29614,7 @@ function liveHoldDetailHTML(live) {
 function liveQuietLine() {
   const d = state.data || {};
   const first = firstStartOnCard();
-  const league = LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase();
+  const league = lgCode(state.sport);
   const queued = liveTrackerRows([...(d.live_picks || []), ...(d.live_potd || [])])
     .filter((r) => r.phase === "upcoming").length;
   const bits = [];
@@ -29723,7 +29733,7 @@ async function renderLiveBoard() {
     ? liveFeedWhyHTML(_liveChip, _liveFeedState, Date.now()) : "";
   const nothingHere = _liveChip !== "all" && !shown.length
     ? `<p class="rail-quiet" style="margin:0 0 ${darkWhy ? 6 : 22}px">No ${escapeHtml(
-        LEAGUE_LABEL[_liveChip] || _liveChip.toUpperCase())} games in progress
+        lgCode(_liveChip))} games in progress
         right now — ${games.length} live across the other leagues (choose All).</p>
        ${darkWhy}`
     : "";
@@ -29744,7 +29754,7 @@ async function renderLiveBoard() {
       + Object.keys(LIVE_FEEDS).filter((s) => bySport[s]).map((s) => `
         <div class="lb-shelf">
           <span class="lb-shelf-logo">${(SPORT_META[s] || {}).logo || ""}</span>
-          ${escapeHtml(LEAGUE_LABEL[s] || s.toUpperCase())}
+          ${escapeHtml(lgCode(s))}
           <span class="mini">— ${bySport[s]} live</span></div>
         <div class="lb-grid">${games.filter((x) => x.sport === s)
           .map(liveCardHTML).join("")}</div>`).join("")
@@ -29753,7 +29763,7 @@ async function renderLiveBoard() {
     <div class="section-title">Live now</div><div class="yp-host"></div>
     ${leagueChipsHTML([{ key: "games", label: "Games" }, { key: "feed", label: "Play feed" }],
                       { group: "pf-view", attr: "data-live-view", active: _liveView, label: "How the live games are shown" })}
-    ${leagueChipsHTML(chips.map((s) => ({ key: s, label: s === "all" ? "All" : s.toUpperCase(),
+    ${leagueChipsHTML(chips.map((s) => ({ key: s, label: s === "all" ? "All" : lgCode(s),
                                           n: s === "all" ? games.length : (bySport[s] || 0) })),
                       { group: "lb-chips", attr: "data-chip", active: _liveChip })}
     ${nothingHere}${shelved}`;
@@ -29796,9 +29806,15 @@ async function renderLiveBoard() {
      "All" stays a pure filter, because bets cannot be all-league — one
      board is loaded at a time. That state is the reason every panel
      below now carries its league in the header. */
-  host.querySelectorAll(".lb-chip").forEach((b) =>
+  /* THE LEAGUE CHIPS ONLY. The Games / Play feed pair is drawn by the
+     same helper with the same class, and this handler caught it too: a
+     tap on "Play feed" set the league to undefined and the redraw threw
+     on its name (Ethan, 2026-11-14: "clicking the play feed button throws
+     an error and glitches the page"). */
+  host.querySelectorAll(".lb-chip[data-chip]").forEach((b) =>
     b.addEventListener("click", () => {
       const want = b.dataset.chip;
+      if (!want) return;
       _liveChip = want;
       /* LIVE_FEEDS, NOT SPORT_CODES: the route list never carried hockey,
          so the NHL chip filtered the cards and left the MLB bets under
@@ -30436,7 +30452,7 @@ function deckGameHTML(x) {
       <i style="width:${homePct}%"></i></div>` : "";
   const lead = wp ? ` · ${escapeHtml(wp.leader || (homePct >= 50 ? g.home : g.away))}&nbsp;${Math.max(homePct, 100 - homePct)}%&nbsp;to&nbsp;win` : "";
   return `<button type="button" class="hd-game" data-lsport="${escapeAttr(x.sport)}">
-    <div class="hd-game-top"><span class="hd-lg">${escapeHtml(LEAGUE_LABEL[x.sport] || String(x.sport).toUpperCase())}</span>
+    <div class="hd-game-top"><span class="hd-lg">${escapeHtml(lgCode(x.sport))}</span>
       <span class="hd-live${hold ? " hold" : ""}"><i class="live-dot${hold ? " paused" : ""}"></i>${
         hold ? escapeHtml(hold) : "LIVE"}</span></div>
     ${row(g.away, lv.away_score)}${row(g.home, lv.home_score)}${wpBar}
@@ -30454,7 +30470,7 @@ async function deckLiveHTML(riding, rows) {
   if (deckHasStadiums()) return "";
   const fast = await fetchFastLiveAll();
   const live = deckLiveGames(fast, riding, state.sport);
-  const league = LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase();
+  const league = lgCode(state.sport);
   let inner;
   if (live.length) {
     inner = `<div class="hd-strip">${live.map(deckGameHTML).join("")}</div>`;

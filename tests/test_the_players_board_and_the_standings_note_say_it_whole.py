@@ -34,7 +34,8 @@ def test_the_players_empty_board_is_the_slate():
     branch = body[i:body.index("return;", i)]
     assert 'class="empty-slate"' in branch and 'class="es-title"' in branch and 'class="es-sub"' in branch
     assert 'class="empty"' not in branch, "the centred box of prose is back"
-    assert "No priced props on the ${escapeHtml(String(state.sport || \"\").toUpperCase())} board tonight" in branch, \
+    # By the strip's own name (app.js lgCode: college basketball is NCAAB).
+    assert "No priced props on the ${escapeHtml(lgCode(state.sport))} board tonight" in branch, \
         "the title names the league"
     assert 'icon("search"' in branch
 

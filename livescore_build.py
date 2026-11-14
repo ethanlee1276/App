@@ -581,8 +581,14 @@ def pbp_players(league: str, payload: dict, g: dict) -> list[dict]:
                 stats[k] = float(v)
             except (TypeError, ValueError):
                 continue
-        out.append({"player": r.get("player"), "team": r.get("team", ""),
-                    "position": r.get("position", ""), "stats": stats})
+        row = {"player": r.get("player"), "team": r.get("team", ""),
+               "position": r.get("position", ""), "stats": stats}
+        # HIS ESPN ID, for his face on the play cards and the feed (Ethan,
+        # 2026-11-14, on college: "make sure we're pulling headshots"; the
+        # feed drew initials for every league). Only when the box has one.
+        if r.get("espn_id"):
+            row["id"] = str(r["espn_id"])
+        out.append(row)
     return out
 
 

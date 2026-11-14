@@ -55,6 +55,7 @@ def _node(js):
         return None
     prog = f"""
       {_const("LEAGUE_LABEL")}
+      {_const("lgCode")}
       {_fn("deckFirstWord")}
       {_fn("formatKickoff")}
       const tzTime = (d) => d.toISOString();

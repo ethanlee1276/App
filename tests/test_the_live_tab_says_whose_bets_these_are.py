@@ -68,6 +68,7 @@ def tap_chip(chip, sport="mlb", bar=("mlb", "nfl", "cfb")):
     const state = {{ sport: {json.dumps(sport)}, view: "live", data: {{}} }};
     const LIVE_FEEDS = {{ mlb: "m.json", nfl: "n.json", cfb: "c.json" }};
     const LEAGUE_LABEL = {{ mlb: "MLB", nfl: "NFL", cfb: "CFB" }};
+    const lgCode = (s) => LEAGUE_LABEL[s] || String(s || "").toUpperCase();
     const SPORT_META = {{ mlb: {{ logo: "" }}, nfl: {{ logo: "" }}, cfb: {{ logo: "" }} }};
     const SPORT_CODES = ["mlb", "nfl", "cfb", "nba", "wnba"];
     let _liveChip = "all", _liveChipSport = null, _liveFeedState = {{}};
@@ -109,7 +110,9 @@ def tap_chip(chip, sport="mlb", bar=("mlb", "nfl", "cfb")):
     let chips = [];
     let redraws = 0;
     const host = {{ innerHTML: "",
-      querySelectorAll: (sel) => (sel === ".lb-chip" ? chips : []) }};
+      // The league chips only (2026-11-14): the Games / Play feed pair
+      // shares their class and is not a league.
+      querySelectorAll: (sel) => (sel === ".lb-chip[data-chip]" ? chips : []) }};
 
     // The sportbar. Its button is the real switcher, so the stub does
     // what the real handler does: move state.sport and reload, which on
@@ -213,6 +216,7 @@ def draw_bets(sport="nfl", rows=(), potd=(), elsewhere=0):
     const state = {{ sport: {json.dumps(sport)}, view: "live",
                     data: {json.dumps(data)} }};
     const LEAGUE_LABEL = {{ mlb: "MLB", nfl: "NFL", cfb: "CFB" }};
+    const lgCode = (s) => LEAGUE_LABEL[s] || String(s || "").toUpperCase();
     {_fn("escapeHtml")}
     {_fn("emptySlate")}
     const icon = () => "";

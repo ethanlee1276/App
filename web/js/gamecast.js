@@ -1134,7 +1134,8 @@
     if (!p) return "";
     const foot = p.kind === "football";
     const when = foot ? `${p.period ? `Q${p.period}` : ""}${p.clock ? ` ${typeof fbClock === "function" ? fbClock(p.clock) : p.clock}` : ""}`.trim()
-      : `${p.period ? (league === "nhl" ? hockeyPeriod(p.period) : (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`)) : ""}${p.clock ? ` ${p.clock}` : ""}`.trim();
+      : `${p.period ? (league === "nhl" ? hockeyPeriod(p.period) : league === "cbb" ? halfPeriod(p.period)
+        : (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`)) : ""}${p.clock ? ` ${p.clock}` : ""}`.trim();
     const words = foot && typeof footballWords === "function" ? footballWords(p, d) : null;
     const tag = p.turnover ? `<span class="gc-tag turnover">Turnover</span>`
       : p.scoring ? `<span class="gc-tag">${foot ? ({ TD: "Touchdown", FG: "Field goal" }[words && words.tag] || "Score") : (league === "nhl" ? "Goal" : `+${p.points || ""}`)}</span>` : p.penalty ? `<span class="gc-tag">Flag</span>` : "";

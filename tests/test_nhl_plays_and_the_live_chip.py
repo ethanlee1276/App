@@ -129,7 +129,7 @@ def test_the_page_words_hockey_in_periods_and_goals():
 
 def test_the_nhl_chip_switches_the_league_and_its_bets():
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
-    i = app.index('host.querySelectorAll(".lb-chip").forEach')
+    i = app.index('host.querySelectorAll(".lb-chip[data-chip]").forEach')
     handler = app[i:i + 2500]
     assert "LIVE_FEEDS[want]" in handler, "the chip switches every league with a live feed"
     j = app.index("const LIVE_FEEDS = {")

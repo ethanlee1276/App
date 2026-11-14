@@ -262,7 +262,7 @@ def test_the_page_scopes_the_search_to_the_tab_and_says_so_when_empty():
     # function would leave the test passing with the two halves in
     # different branches, which is the state it exists to refuse.
     k = apology.index("players match “${")
-    assert "LEAGUE_LABEL[state.sport]" in apology[k - 300:k], \
+    assert "lgCode(state.sport)" in apology[k - 300:k], \
         "an empty scoped answer must name the league it looked in"
     assert "switch the sport" in apology[k:k + 300]
 
@@ -286,7 +286,7 @@ def test_the_search_page_wears_its_scope_and_a_hop_keeps_the_typed_name():
     fn = js[js.index("function renderSearchScope("):]
     fn = fn[:fn.index("\n}")]
     assert 's === state.sport ? " on"' in fn, "the lit chip is the scope"
-    assert "LEAGUE_LABEL[s]" in fn, "league names come from the one table"
+    assert "lgCode(s)" in fn, "league names come from the one table (app.js lgCode)"
     j = js.index('e.target.closest(".scope-chip")')
     # The handler's own end, not a byte count: `});` closes the listener.
     hop = js[j:js.index("\n  });", j) + 6]

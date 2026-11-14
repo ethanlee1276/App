@@ -3763,7 +3763,7 @@ function pbpRailHTML(d, league) {
         g.sub ? ` — ${escapeHtml(g.sub)}` : ""}</span>${
         g.tag ? `<span class="pbp-tag${/TURNOVER|INTERCEPTION|FUMBLE|SAFETY/.test(g.tag) ? " turnover" : /TOUCHDOWN|FIELD GOAL|SCORE/.test(g.tag) ? " score" : g.tag === "IN PROGRESS" ? " live" : ""}">${escapeHtml(g.tag)}</span>` : ""}</div>
       ${mlb ? g.rows.map((r) => pbpRowHTML(r, league, g.batting, pbpRoom(d, league))).join("")
-            : (playsHTML({ plays: g.rows, home: d.home, away: d.away, room: pbpRoom(d, league) }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`)}
+            : (playsHTML({ plays: g.rows, home: d.home, away: d.away, league, room: pbpRoom(d, league) }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`)}
     </div>`;
   const more = total - shown.reduce((a, g) => a + g.rows.length, 0);
   return `${shown.length ? shown.map(group).join("") : `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`}
@@ -5691,7 +5691,7 @@ function gpDrivesHTML(d, league) {
           <span class="gp-dr-t"><b>${escapeHtml(result || teamNameIn(league, dr.team))}</b>${words ? `<span class="gp-dr-play">${escapeHtml(words)}</span>` : ""}
             <span class="gp-dr-meta">${n} play${n === 1 ? "" : "s"}, ${Number(dr.yards || 0)} yard${Number(dr.yards) === 1 ? "" : "s"}${dr.elapsed ? `, ${escapeHtml(dr.elapsed)}` : ""}</span></span>
           ${score}</summary>
-        ${playsHTML({ plays: rows, home: d.home, away: d.away, room: pbpRoom(d, league) }) || `<p class="rail-quiet">No plays yet.</p>`}</details>`;
+        ${playsHTML({ plays: rows, home: d.home, away: d.away, league, room: pbpRoom(d, league) }) || `<p class="rail-quiet">No plays yet.</p>`}</details>`;
   }).join("");
 }
 /* THE PLAY-BY-PLAY TAB, LIVE (Ethan, 2026-11-01, with another app's drive
