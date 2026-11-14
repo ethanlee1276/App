@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QU. A game's parlays also draw on the Most Likely rows its seats dropped**
+(step 575; 14 November). Nothing to run. With QS live the NFL board counted
+28 three-leg tickets across 13 games, up from 14 but still about two a game.
+A posted number is mostly a main line at about -110, where our chance rarely
+reaches 60%. Your legs are a prop's likeliest number on its alternate
+ladder ("Nabers 5+ receptions (max -250)"), which is what the Most Likely
+board computes for every prop it ranks, held to its floor, its -250 cap and
+its credibility bar, before it seats eight a market. The rest ride on the
+board for the Pick of the Day; the parlays read them now too
+(engine/gameparlays.pool_legs). College football builds its parlays twice,
+once before the Pick of the Day takes those rows and once after; the first
+build now stands.
+
 **QT. Polymarket's trade tape is read off its Data API v2** (step 574; 14
 November). Nothing to run. QN's census named the cause on its first build:
 every Polymarket trade read, in every league, answered "HTTP Error 410:

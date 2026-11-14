@@ -169,6 +169,39 @@ def test_every_priced_prop_is_a_leg_inside_the_cap():
         "two posted picks alone make no three-leg ticket"
 
 
+def test_the_rows_the_most_likely_seats_dropped_are_legs_and_built_once():
+    """Live, with every posted number in the pool, the NFL board counted 28
+    three-leg tickets across 13 games: a posted number is mostly a main line,
+    where our chance rarely reaches the floor. A prop's likeliest number on
+    its ladder is what the Most Likely board computes for every prop and
+    seats eight a market; the rest ride on the board for the Pick of the Day
+    (`potd.POOL_KEY`). They are legs now."""
+    from engine.potd import POOL_KEY
+    b = {"date": "2099-W10", "games": [GAME],
+         "most_likely": [_ml("Malik Nabers", "NYG", "WR", "receptions", "Over", 4.5, 0.72, -250, "Receptions"),
+                         _ml("Jayden Daniels", "WAS", "QB", "rush_yds", "Over", 24.5, 0.68, -200, "Rushing Yards")],
+         POOL_KEY: [_ml("Cam Skattebo", "NYG", "RB", "rush_att", "Over", 11.5, 0.67, -200, "Rush Attempts"),
+                    _ml("Isaiah Likely", "NYG", "TE", "receptions", "Over", 3.5, 0.70, -225, "Receptions"),
+                    _ml("Chig Okonkwo", "WAS", "TE", "receptions", "Over", 2.5, 0.66, -190, "Receptions"),
+                    _ml("Stefon Diggs", "WAS", "WR", "rec_yds", "Over", 29.5, 0.665, -225, "Receiving Yards"),
+                    dict(_ml("Terry McLaurin", "WAS", "WR", "receptions", "Over", 2.5, 0.75, -200, "Receptions"),
+                         bettable=False)]}
+    legs = {l["player"] for l in GP.legs_for(b, "nfl")}
+    assert {"Cam Skattebo", "Isaiah Likely", "Chig Okonkwo", "Stefon Diggs"} <= legs and "Terry McLaurin" not in legs
+    GP.attach(b, "nfl")
+    first = b["game_parlays"]
+    assert first.get("pooled") and len(first["games"][0]["threes"]) == 4, first["games"][0].get("threes_note")
+    # College builds them again after the Pick of the Day has taken the pool:
+    # the build made with it stands.
+    b.pop(POOL_KEY)
+    GP.attach(b, "nfl")
+    assert b["game_parlays"] is first
+    # A board that never had the pool builds as before.
+    c = {k: v for k, v in b.items() if k != "game_parlays"}
+    GP.attach(c, "nfl")
+    assert not c["game_parlays"].get("pooled")
+
+
 def test_three_touchdown_pairs_with_his_reasons():
     gp = GP.build(board(), "nfl")
     pairs = gp["games"][0]["scorers"]

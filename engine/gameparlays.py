@@ -186,13 +186,41 @@ def priced_legs(board: dict, sport: str, now=None) -> list[dict]:
     return out
 
 
+def pool_legs(board: dict, sport: str, now=None) -> list[dict]:
+    """The Most Likely rows the board's seat caps dropped, as legs.
+
+    WHY (2026-11-14). With every priced prop's posted number in the pool
+    (`priced_legs`) the NFL board counted 28 three-leg tickets across 13
+    games: a posted number is mostly a main line at about -110, where our
+    tempered chance rarely reaches LEG_FLOOR. Ethan's legs are a prop's
+    likeliest number on its alternate ladder ("Nabers 5+ receptions (max
+    -250)"), which is exactly what the Most Likely board computes for every
+    prop it ranks (likely.rungs, held to its floor, its -250 cap and its
+    credibility bar) and then seats eight a market. The rest ride on the
+    board for the Pick of the Day (`potd.POOL_KEY`) until `potd.attach`
+    takes them; read here, they cost nothing more to price."""
+    from . import twoleg as T
+    from .potd import POOL_KEY
+    out = []
+    for r in board.get(POOL_KEY) or []:
+        if not isinstance(r, dict) or r.get("bettable") is False or r.get("_game_leg"):
+            continue
+        if str(r.get("injury_status") or "").strip().upper() in _OUT:
+            continue
+        leg = T._leg(r, r.get("model_prob"), "likely")
+        if leg and not T._started(leg, now):
+            out.append(leg)
+    return out
+
+
 def legs_for(board: dict, sport: str, now=None) -> list[dict]:
-    """The board's priced picks as legs — Most Likely, Edge, and every other
-    prop it priced at a named book (`priced_legs`), the more likely copy of
-    a pick kept — at LEG_FLOOR or better."""
+    """The board's priced picks as legs — Most Likely, Edge, the Most Likely
+    rows its seat caps dropped (`pool_legs`) and every other prop it priced
+    at a named book (`priced_legs`), the more likely copy of a pick kept —
+    at LEG_FLOOR or better."""
     from . import twoleg as T
     got: dict = {}
-    for get in (T.likely_legs, T.edge_legs, priced_legs):
+    for get in (T.likely_legs, T.edge_legs, pool_legs, priced_legs):
         try:
             rows = get(board, sport, now)
         except Exception:                                    # noqa: BLE001
@@ -762,11 +790,22 @@ def build(board: dict, sport: str, now=None) -> dict:
 
 def attach(board: dict, sport: str) -> dict:
     """Hang each game's parlays on the board as `game_parlays` (a paid
-    key, engine/gate.PAID_KEYS). Never raises."""
+    key, engine/gate.PAID_KEYS). Never raises.
+
+    ONCE, WHILE THE POOL IS THERE. College football builds them before its
+    report and again from the parlay hook after `potd.attach` has taken the
+    Most Likely pool (`pool_legs`); the second pass would build from fewer
+    legs and replace the first. A build made with the pool stands."""
+    from .potd import POOL_KEY
     if str(sport or "").lower() not in SPORTS:
+        return board
+    have = board.get("game_parlays")
+    if isinstance(have, dict) and have.get("pooled") and POOL_KEY not in board:
         return board
     try:
         board["game_parlays"] = build(board, sport)
+        if POOL_KEY in board:
+            board["game_parlays"]["pooled"] = True
     except Exception as exc:                                 # noqa: BLE001
         board["game_parlays"] = {"sport": sport, "games": [], "note": f"the game parlays did not build: {exc}"}
     return board
