@@ -11912,7 +11912,7 @@ function renderParlayPage() {
       fast. So money rides only on a two-game parlay whose legs are both picks we stake. Same-game pairs are
       tracked: pairing our past picks, they lost while two-game pairs made money. Every one is graded on the
       <a href="#record">Record page</a>.</p>
-    ${z.drawdown && z.note ? `<p class="set-note tl-rule">${escapeHtml(z.note)}</p>` : ""}
+    ${(z.drawdown || z.probation) && z.note ? `<p class="set-note tl-rule">${escapeHtml(z.note)}</p>` : ""}
     ${TL_POOLS.map(([pool, title, sub]) => {
       const x = z[pool] || {};
       const ts = x.tickets || [];

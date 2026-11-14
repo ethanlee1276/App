@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PI. College's Parlays page builds** (step 537; 14 November). Nothing to
+run. College's board showed a Parlays tab, but the two-leg builder ran
+only for the four leagues named on 31 October, so college's page could
+only say "No parlays on this board yet". It builds from college's own Edge
+and Most Likely picks now, same-game and two-game; the same-game link
+reads the published priors (two overs in one game share its pace) until
+college's own games measure one. College is on probation, and so is every
+parlay of its picks: tracked and graded, none staked, and the page says
+why. The stake rule had read an Edge book with no record as staked, so a
+probation board now holds every parlay back itself, in any league.
+
 **PH. The scout reads college by college's own seasons** (step 536; 14
 November). Nothing to run. The NBA scout's fourteen flags (the spots a
 basketball person hesitates in) were measured on NBA games only, and

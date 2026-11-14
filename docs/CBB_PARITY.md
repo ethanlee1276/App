@@ -92,7 +92,7 @@ Measured numbers are in `docs/CBB_LAB.md`.
 | Player charts | Done *(11-13)* | The shot chart on the college court (a 12-foot lane, the three-point line at 22 feet 1.75 inches), by half, against college's own zone percentages; the matchup view against tonight's defense; the role chart |
 | Live game page | Done | The court render, two halves, the play feed |
 | Game page, team page, standings | Done | Standings by conference with the overall record |
-| Parlay checker and parlays | Done | The WNBA's screen with a wider blowout spread; cross-game tickets on the default screen |
+| Parlay checker and parlays | Done *(11-14)* | The Parlays page's two-leg tickets from college's own Edge and Most Likely picks (`engine/twoleg`), same-game and two-game, every one tracked and none staked while college is on probation; the same-game link reads the published priors until college's own games measure one. The checker screens a slip with a wider blowout spread |
 | Alerts, follows, push | Done | Every league |
 | Lab replay | Done | Once the box holds college's seasons |
 

@@ -164,7 +164,8 @@ def test_the_board_hook_measures_the_drawdown_and_passes_it_on():
     assert board["two_leg"]["drawdown"] is True
     assert not any(t["staked"] for p in ("edge", "likely") for t in board["two_leg"][p]["tickets"])
     other = {"recommendations": [], "most_likely": []}
-    assert "two_leg" not in P.attach(other, "nhl", state="normal"), "the four leagues only"
+    assert "two_leg" not in P.attach(other, "nhl", state="normal"), \
+        "the five leagues only (college basketball joined 2026-11-14)"
 
 
 def test_attach_runs_for_the_four_leagues_and_never_raises():

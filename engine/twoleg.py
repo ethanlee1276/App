@@ -66,8 +66,14 @@ import itertools
 import json
 
 #: The leagues the Parlays page runs for (Ethan: "NBA MLB college football
-#: and NFL").
-SPORTS = ("nfl", "cfb", "nba", "mlb")
+#: and NFL"), and college basketball (2026-11-14; Ethan, 2026-11-13: every
+#: NBA tool on college): its page showed a Parlays tab that this list never
+#: built. A league the same-game link has not measured reads the published
+#: priors (parlays.rho_for: two overs in one game share its pace, +0.10;
+#: two unders are killed), never another league's measurement. And a board
+#: on probation, as college's is, has every parlay tracked, none staked
+#: (`build`).
+SPORTS = ("nfl", "cfb", "nba", "mlb", "cbb")
 SAME_GAME = "same_game"
 TWO_GAME = "two_game"
 KIND_WORDS = {SAME_GAME: "Same game", TWO_GAME: "Two games"}
@@ -352,18 +358,29 @@ def build(board: dict, sport: str, plan: dict | None = None, now=None,
             plan = L.stake_plan()
         except Exception:                                     # noqa: BLE001
             plan = {}
+    # PROBATION, ENFORCED HERE TOO (engine/probation, 2026-11-14): a board
+    # whose singles are journaled and graded but never staked cannot stake
+    # a parlay of them. The stake rule (`staked`) reads the league's record,
+    # which knows nothing of probation; the board says it. College's board
+    # opened the Parlays page on probation, and an Edge book with no record
+    # reads as staked.
+    probation = bool(board.get("probation"))
     out = {"sport": sp, "date": board.get("date") or "", "stake_units": STAKE_UNITS,
-           "sgp_cut": SGP_CUT, "two_book_cut": TWO_BOOK_CUT, "drawdown": bool(drawdown)}
+           "sgp_cut": SGP_CUT, "two_book_cut": TWO_BOOK_CUT, "drawdown": bool(drawdown),
+           "probation": probation}
     if drawdown:
         out["note"] = ("The drawdown breaker is on: every parlay is tracked, none staked, "
                        "until the singles' stakes are whole again.")
+    elif probation:
+        out["note"] = ("This league is on probation: its picks are graded, not staked, so every parlay "
+                       "is tracked and none staked until its singles are.")
     for pool, get in (("edge", edge_legs), ("likely", likely_legs)):
         try:
             legs = get(board, sp, now)
             cands = candidates(sp, legs)
             tickets = choose(cands, pool)
             for t in tickets:
-                t["staked"] = (not drawdown) and staked(sp, t, plan)
+                t["staked"] = (not drawdown) and (not probation) and staked(sp, t, plan)
                 t["stake_units"] = STAKE_UNITS if t["staked"] else 0.0
             out[pool] = {"tickets": tickets, "legs": len(legs), "considered": len(cands),
                          "same_game": sum(1 for t in tickets if t["kind"] == SAME_GAME),
@@ -395,7 +412,8 @@ def report(b: dict) -> str:
         x = b.get(pool) or {}
         parts.append(f"{word} {x.get('same_game', 0)} same-game + {x.get('two_game', 0)} two-game "
                      f"from {x.get('legs', 0)} legs")
-    return "  Two-leg parlays: " + "; ".join(parts) + ("; drawdown: all tracked" if b.get("drawdown") else "")
+    return "  Two-leg parlays: " + "; ".join(parts) + ("; drawdown: all tracked" if b.get("drawdown") else
+                                                      "; probation: all tracked" if b.get("probation") else "")
 
 
 # --- what it would have done: the journal, paired the same way ----------------------------
