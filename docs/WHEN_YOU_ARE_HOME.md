@@ -9338,6 +9338,34 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PX. Every game gets four three-leg parlays and three touchdown pairs**
+(step 552; 14 November). Nothing to run. You: "for each game, when it comes
+to every sport, I want you to make 4 3-leg parlays ... and 3 2-leg
+touchdown parlays", built like your own reports' tickets, with "no legs
+[that] have conflicts and backups", and of your Commanders–Giants pair:
+Likely and Skattebo, the Commanders weak against tight ends, the rain, his
+red-zone work. Every board now builds them per game (engine/gameparlays),
+off the picks it already posts: the game's Most Likely and Edge picks at 60%
+or better, and for the pairs every scorer the touchdown model priced. No two
+legs that conflict — no player twice, no quarterback against his own
+receiver, no two unders, and no two legs that need the game to go opposite
+ways (a back's carries want his team ahead, a receiver's catches want it
+chasing), the board's own game-script view; two teammates' catches may share
+a ticket, with a caveat. Each ticket says our chance with the legs'
+correlation, the fair price, the price to take it at (fair plus 5%: "bet only
+at +210 or better"), what the legs' own prices multiplied pay, the script it
+needs and how likely the lines make it, a backup for each leg, and its
+caveats, including when no book is likely to pay the price it needs. Each
+leg says why: for a scorer, his goal-line and red-zone work, what the
+defence gives up to his position, the rain for a back, the points his team
+is expected to score. They are in every game report ("Parlays for this
+game", and the short version names the best of each) and on the Parlays
+page, now open for hockey and the WNBA too; basketball's pages say it has no
+scorer market. Every ticket is journaled and graded on the record from the
+box scores, its legs on paper in their own bucket, staked at nothing:
+same-game parlays have lost money on our record so far, so they earn their
+stakes the way every other book does.
+
 **PW. A matchup read counts each factor once, and a go-to scorer stays
 one** (step 551; 14 November). Nothing to run. You, on Duke at Miami: Duke's
 back has 17 touchdowns, 13 rushing and 4 receiving, and the report marked him
