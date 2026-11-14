@@ -9350,11 +9350,8 @@ name in no time. Their spreads, totals and moneylines therefore keep the
 flat 0.5 haircut until their own record measures one. The verdicts now list
 each held fit under its reason: "no game-line model of its own here", "too
 few graded games", "too loose to act on", "never disagreed with the close"
-or "unusable fit" (keys only, as the verdicts' note says). To see them:
-
-```
-cd /srv/qellys && curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys; print(json.dumps(json.load(sys.stdin)['chores']['settle']['phases']['last_learned']['verdicts']['game lines'], indent=1))"
-```
+or "unusable fit" (keys only, as the verdicts' note says), on the
+heartbeat after the next settle pass.
 
 **QN. The money split asks Polymarket's trade tape the way it requires**
 (step 568; 14 November). Nothing to run. A game page's "where the money is
