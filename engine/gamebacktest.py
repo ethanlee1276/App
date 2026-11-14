@@ -713,7 +713,7 @@ class GameLineBacktest:
     #: Games whose stored close carries a LINE but no price. They measure
     #: the projection and can never be bet — counted apart so the gap is
     #: visible rather than inferred from a small `n_bets`.
-    unpriced: int = 0           # priced, but over the credibility ceiling
+    unpriced: int = 0           # of games_quoted: a closing line and no price, measured, never bet
     mae: float = 0.0           # mean |projection - closing number|, in points
     # WHERE THE NUMBERS CAME FROM. A harvested close is one book's quote at
     # one instant; a schedule close is the market's closing consensus. Beating

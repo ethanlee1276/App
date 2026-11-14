@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PK. The Lab draws** (step 539; 14 November). Nothing to run. You, with a
+screenshot of the Lab: "the lab shows this every time u click on the page.
+its never worked so we need to dive into that and fix that." It said
+"Sorry — part of this page failed to draw ... (reading 'toLocaleString')"
+on every visit. Each game-line market's count was read as `games_priced`,
+which the replay (engine/lab.py) has never written: it writes
+`games_quoted`, since 28 August, the fix that first put game lines on the
+page. From that day the first league with graded game lines (MLB's 17,457
+closes, the NFL's) threw, and the throw took every league's block with
+it; the page's own test was fed the page's spelling, so it stayed green.
+The page reads the writer's field now and says "2,345 games graded · MAE
+10.42 vs close · 12 of them had no price to bet"; every count on it prints
+a dash where the replay wrote nothing; each league's block is drawn on its
+own, so one that cannot be drawn says so and the rest still show; and the
+new test builds the page's data with the replay's own code and draws the
+members' Lab in a browser.
+
 **PJ. College's own address, and its live lane counted** (step 538; 14
 November). One command, once. Every league's board had a clean path
 (qellysbook.com/nba) but college basketball's. qellysbook.com/cbb now

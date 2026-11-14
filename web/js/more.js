@@ -311,6 +311,15 @@ function fightEyebrowHTML(m) {
    everybody reads first is the one least entitled to be believed. */
 const LAB_ROI_MIN_BETS = 100;
 
+/* A count as the Lab prints it, or a dash where the replay wrote none.
+   Every count here went through a bare `.toLocaleString()`, so one field
+   the page expected and the replay did not write blanked the whole Lab:
+   Ethan, 2026-11-14, "its never worked". The game lines read
+   `games_priced`, which engine/lab has never written (it writes
+   `games_quoted`, since 2026-08-28: the fix that first put game lines on
+   this page is the change that took the page down). */
+const labN = (x) => (x == null || !Number.isFinite(Number(x)) ? "—" : Number(x).toLocaleString());
+
 function labSkillTile(m) {
   const sk = m.skill;
   if (!sk) return recTile("Skill vs guessing", "—",
@@ -337,7 +346,7 @@ function labBins(m) {
       <td class="num">${(b.hit_rate * 100).toFixed(0)}%</td>
       <td class="num ${gap >= 0 ? "pos" : "neg"}">${gap >= 0 ? "+" : ""}${(gap * 100).toFixed(0)}</td>
       <td><span class="lab-bar ${gap >= 0 ? "pos" : "neg"}" style="width:${w}%"></span></td>
-      <td class="num">${b.n.toLocaleString()}</td></tr>`;
+      <td class="num">${labN(b.n)}</td></tr>`;
   }).join("");
   return `<table class="agate lab-bins">
     <thead><tr><th>Said</th><th class="num">Predicted</th><th class="num">Actual</th>
@@ -379,7 +388,7 @@ function labPropCard(m, note) {
   const thin = (headline.n_bets || 0) < LAB_ROI_MIN_BETS;
   const roiSub = mixed
     ? (bookSeg
-        ? `${bookSeg.n_bets.toLocaleString()} bets met a real close`
+        ? `${labN(bookSeg.n_bets)} bets met a real close`
           + (thin ? ` — under ${LAB_ROI_MIN_BETS}, noise not a result`
                   : " — market-relative")
         : "no bet met a real close — nothing here is market-relative")
@@ -395,14 +404,14 @@ function labPropCard(m, note) {
   const seg = Object.entries(m.segments || {}).map(([basis, g]) =>
     `<div class="hd-row lab-row">
       <span class="hd-what"><b>${basis === "book" ? "vs real book lines" : "vs naive baseline"}</b>
-        <span>${g.n_bets.toLocaleString()} bets · ${g.wins.toLocaleString()} won${g.win_rate != null ? ` · ${(g.win_rate * 100).toFixed(1)}%` : ""}</span></span>
-      <span class="hd-state"><b class="${toneOf(g.roi)}">${g.roi >= 0 ? "+" : ""}${(g.roi * 100).toFixed(1)}% ROI</b>
-        <span class="hd-vs">${g.net >= 0 ? "+" : ""}${g.net.toFixed(2)}u</span></span>
+        <span>${labN(g.n_bets)} bets · ${labN(g.wins)} won${g.win_rate != null ? ` · ${(g.win_rate * 100).toFixed(1)}%` : ""}</span></span>
+      <span class="hd-state"><b class="${toneOf(g.roi)}">${g.roi == null ? "—" : `${g.roi >= 0 ? "+" : ""}${(g.roi * 100).toFixed(1)}% ROI`}</b>
+        <span class="hd-vs">${g.net == null ? "" : `${g.net >= 0 ? "+" : ""}${g.net.toFixed(2)}u`}</span></span>
     </div>`).join("");
   return `<div class="card lab-card">
     <div class="lab-head"><strong>${escapeHtml(m.label)}</strong>
       <span class="chip ${naive ? "warn" : outcomes ? "" : "good"}">${naive ? "naive lines" : outcomes ? "outcomes only" : m.basis === "mixed" ? "mixed basis" : "real closes"}</span>
-      <span class="mini">${m.n.toLocaleString()} settled props</span></div>
+      <span class="mini">${labN(m.n)} settled props</span></div>
     ${labReachNote(m)}
     <div class="stats rec-kpis">
       ${labSkillTile(m)}
@@ -509,9 +518,10 @@ function labRippleHTML(rp) {
 function labGameTable(games) {
   const rows = (games.markets || []).map((g) => `<div class="hd-row lab-row">
     <span class="hd-what"><b>${escapeHtml(marketWord(g.market))}</b>
-      <span>${g.games_priced.toLocaleString()} games priced${g.mae != null ? ` · MAE ${g.mae.toFixed(2)} vs close` : ""}</span></span>
+      <span>${labN(g.games_quoted)} games graded${g.mae != null ? ` · MAE ${g.mae.toFixed(2)} vs close` : ""}${
+        g.unpriced ? ` · ${labN(g.unpriced)} of them had no price to bet` : ""}</span></span>
     <span class="hd-state"><b class="${toneOf(g.roi)}">${g.roi != null ? (g.roi >= 0 ? "+" : "") + (g.roi * 100).toFixed(1) + "% ROI" : "—"}</b>
-      <span class="hd-vs">${g.n_bets} bets${g.win_rate != null ? ` · ${(g.win_rate * 100).toFixed(1)}%` : ""}</span></span>
+      <span class="hd-vs">${labN(g.n_bets)} bets${g.win_rate != null ? ` · ${(g.win_rate * 100).toFixed(1)}%` : ""}</span></span>
   </div>`).join("");
   if (!rows) return `<p class="mini" style="padding:4px 0">${escapeHtml(games.unavailable || "")}</p>`;
   return `<div class="hd-card lab-rows">${rows}</div>`;
@@ -585,6 +595,29 @@ async function labWalled() {
   return !!(s && s.paywall && !s.entitled);
 }
 
+/* One league's block of the members' Lab: its prop cards, its game lines
+   graded against real closes, and its usage ripple. Its own function so
+   `renderLab` can draw each league apart (2026-11-14). */
+function labSportHTML(sport, d) {
+  const s = d.sports[sport];
+  const props = s.props || {}, games = s.game_lines || {};
+  const cards = (props.markets || []).map((m) => labPropCard(m, d.basis_note)).join("");
+  return `<div class="lab-sport">
+    <div class="section-title">${lgCode(sport)}
+      ${labSeasonWord(props) || s.replayed_at ? `<span class="sub">— ${[escapeHtml(labSeasonWord(props)),
+        /* Each sport carries its own replay date since 2026-11-03: a run
+           publishes them one at a time (engine/lab.SPORT_ORDER). */
+        s.replayed_at ? `replayed ${escapeHtml(formatStamp(s.replayed_at))}` : ""].filter(Boolean).join(" · ")}</span>` : ""}</div>
+    ${labCarried(props)}
+    ${cards || `<p class="mini">Player props — ${escapeHtml(props.unavailable || "nothing replayed")}</p>`}
+    <div class="mini" style="margin-top:10px;opacity:.75">Game lines (spread &amp; total),
+      graded against real closing numbers</div>
+    ${labCarried(games)}
+    ${labGameTable(games)}
+    ${labRippleHTML(s.ripple)}
+  </div>`;
+}
+
 async function renderLab() {
   const host = document.getElementById("lab-body");
   if (!host) return;
@@ -609,23 +642,15 @@ async function renderLab() {
     return (s.props || {}).markets || ((s.game_lines || {}).markets);
   };
   const blocks = order.filter((s) => d.sports[s] && has(s)).map((sport) => {
-    const s = d.sports[sport];
-    const props = s.props || {}, games = s.game_lines || {};
-    const cards = (props.markets || []).map((m) => labPropCard(m, d.basis_note)).join("");
-    return `<div class="lab-sport">
-      <div class="section-title">${lgCode(sport)}
-        ${labSeasonWord(props) || s.replayed_at ? `<span class="sub">— ${[escapeHtml(labSeasonWord(props)),
-          /* Each sport carries its own replay date since 2026-11-03: a run
-             publishes them one at a time (engine/lab.SPORT_ORDER). */
-          s.replayed_at ? `replayed ${escapeHtml(formatStamp(s.replayed_at))}` : ""].filter(Boolean).join(" · ")}</span>` : ""}</div>
-      ${labCarried(props)}
-      ${cards || `<p class="mini">Player props — ${escapeHtml(props.unavailable || "nothing replayed")}</p>`}
-      <div class="mini" style="margin-top:10px;opacity:.75">Game lines (spread &amp; total),
-        graded against real closing numbers</div>
-      ${labCarried(games)}
-      ${labGameTable(games)}
-      ${labRippleHTML(s.ripple)}
-    </div>`;
+    try { return labSportHTML(sport, d); } catch (e) {
+      /* ONE LEAGUE'S REPLAY THAT DOES NOT DRAW COSTS THAT LEAGUE'S BLOCK,
+         never the page (2026-11-14): the game lines' missing field took
+         every league down with it, every visit, since 2026-08-28. */
+      try { console.error("lab:", sport, e); } catch (_e) { /* no console */ }
+      return `<div class="lab-sport"><div class="section-title">${lgCode(sport)}</div>
+        <p class="mini">This league’s replay could not be drawn just now (${escapeHtml(String((e && e.message) || e))}).
+        The other leagues’ are below.</p></div>`;
+    }
   }).join("");
   /* Sports with nothing replayed collapse into one honest table instead
      of six near-empty sections. A gap stated once is information; a gap

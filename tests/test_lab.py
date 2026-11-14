@@ -369,8 +369,9 @@ def test_the_page_says_a_kept_section_is_kept_and_when():
     body = app[i:j]
     assert "carried_from" in body and "carry_reason" in body
     assert "Replayed ${escapeHtml(section.carried_from)}" in body
-    k = app.index("async function renderLab(")
-    assert app[k:k + 3000].count("labCarried(") == 2, \
+    # Each league's block is its own function since 2026-11-14.
+    k = app.index("function labSportHTML(")
+    assert app[k:app.index("\n}\n", k)].count("labCarried(") == 2, \
         "both the props and the game-lines section must say when they are kept"
 
 
@@ -396,8 +397,11 @@ def test_the_lab_measures_the_usage_ripple_and_the_page_shows_the_verdict():
 
     app = app_js()
     assert "function labRippleHTML(" in app
-    k = app.index("async function renderLab(")
+    # Each league's block is its own function since 2026-11-14, so a league
+    # that does not draw costs only its block (labSportHTML).
+    k = app.index("function labSportHTML(")
     assert "${labRippleHTML(s.ripple)}" in app[k:k + 4000]
+    assert "try { return labSportHTML(sport, d); } catch (e) {" in app[app.index("async function renderLab("):]
     i = app.index("function labRippleHTML(")
     assert "prices\n      nothing until a market clears" in app[i:i + 800] \
         or "prices" in app[i:i + 800] and "clears here" in app[i:i + 800]

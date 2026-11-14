@@ -41,6 +41,7 @@ def _node(js):
       const _marketWords = {{}};
       {_fn("marketWord")}
       {_fn("labRippleHTML")}
+      const labN = (x) => (x == null || !Number.isFinite(Number(x)) ? "—" : Number(x).toLocaleString());
       {_fn("labGameTable")}
       console.log(JSON.stringify((() => {{ {js} }})()));
     """
@@ -60,8 +61,8 @@ def test_the_ripple_and_the_game_lines_are_rows_with_names():
         rush_yds: { n: 212, n_measured: 148, resid_mean: 6.4, resid_se: 2.1, bets: 61, roi: 0.084, verdict: "clears", reason: "residual over two standard errors" },
         rec_yds: { n: 0, n_measured: 0, verdict: "not enough" } }, measured_at: "2026-09-21T14:21:02" }),
       games: labGameTable({ markets: [
-        { market: "spread", games_priced: 2345, mae: 10.42, n_bets: 312, win_rate: 0.522, roi: -0.004 },
-        { market: "moneyline", games_priced: 2345, mae: null, n_bets: 401, win_rate: 0.566, roi: 0.018 } ] }),
+        { market: "spread", games_quoted: 2345, mae: 10.42, n_bets: 312, win_rate: 0.522, roi: -0.004 },
+        { market: "moneyline", games_quoted: 2345, mae: null, n_bets: 401, win_rate: 0.566, roi: 0.018 } ] }),
       none: labGameTable({ unavailable: "no harvested closing lines" }) };""")
     if got is None:
         print("  SKIP node not installed"); return
@@ -78,9 +79,9 @@ def test_the_ripple_and_the_game_lines_are_rows_with_names():
     assert "prices nothing until a market clears here" in r, "the ripple's standing caveat"
     assert "Measured 2026-09-21" in r
     assert g.count('<div class="hd-row lab-row">') == 2
-    assert "<b>Spread</b>" in g and "2,345 games priced · MAE 10.42 vs close" in g
+    assert "<b>Spread</b>" in g and "2,345 games graded · MAE 10.42 vs close" in g
     assert '<b class="neg">-0.4% ROI</b> <span class="hd-vs">312 bets · 52.2%</span>' in g
-    assert "<b>Moneyline</b>" in g and "2,345 games priced</span>" in g and '<b class="pos">+1.8% ROI</b>' in g
+    assert "<b>Moneyline</b>" in g and "2,345 games graded</span>" in g and '<b class="pos">+1.8% ROI</b>' in g
     assert "no harvested closing lines" in got["none"] and "hd-row" not in got["none"]
 
 
@@ -89,7 +90,9 @@ def test_the_priced_against_segments_are_rows_too():
     assert "<th>Priced against</th>" not in card and "<table class=\"agate\"><thead><tr><th>Priced" not in card
     assert '`<div class="hd-row lab-row">' in card
     assert '<div class="lab-rows"><div class="lab-rows-head">Priced against</div>${seg}</div>' in card
-    assert "% ROI</b>" in card and "g.net.toFixed(2)}u" in card, "ROI and net both survive"
+    # A segment without an ROI or a net prints a dash or nothing (2026-11-14).
+    assert "% ROI`}</b>" in card and "g.net.toFixed(2)}u" in card, "ROI and net both survive"
+    assert 'g.roi == null ? "—"' in card and 'g.net == null ? ""' in card
     assert "labBins(m)" in card and '<table class="agate lab-bins">' in _fn("labBins"), \
         "the calibration table fits a phone and stays a table"
 

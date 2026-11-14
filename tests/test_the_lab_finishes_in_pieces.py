@@ -201,7 +201,8 @@ def test_a_carried_section_is_dated_by_its_own_sport():
 
 def test_the_page_shows_each_sports_replay_date():
     src = (ROOT / "web" / "js" / "more.js").read_text(encoding="utf-8")
-    i = src.index("async function renderLab(")
+    # Each league's block is drawn by its own function since 2026-11-14.
+    i = src.index("function labSportHTML(")
     body = src[i:src.index("\n}\n", i)]
     assert "s.replayed_at ? `replayed ${escapeHtml(formatStamp(s.replayed_at))}`" in body
     assert gate.PAID_FILES and "backtest.json" in gate.PAID_FILES
