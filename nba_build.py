@@ -1333,6 +1333,10 @@ def main() -> None:
             # The book's college names, joined to the night's schools by the
             # college resolver (`college_lookup`, `oddsapi._slate_resolver`).
             slate.team_lookup = college_lookup(all_games)
+            # The night's other games are known, not dropped
+            # (`oddsapi.OddsAttachResult.off_board_events`).
+            slate.night_pairs = [(g["home"], g["away"]) for g in all_games
+                                 if g.get("home") and g.get("away")]
         thin_counts = 0
         for player, h in hist.items():
             if len(h["minutes"]) >= 3:
@@ -1417,6 +1421,9 @@ def main() -> None:
                                  if d.get("mapped_to") else ""))
                     print(f"    Every prop in those games is counted under "
                           f"'no real book price'.")
+                if getattr(res, "off_board_events", 0):
+                    odds_note += (f"; {res.off_board_events} more game(s) tonight "
+                                  f"not on the props board")
                 # A price from a game the player's team is not in, refused
                 # (`_Prop.team`) — counted, because a refusal nobody can see
                 # looks exactly like a book that never priced him.

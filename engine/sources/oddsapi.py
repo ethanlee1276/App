@@ -2140,6 +2140,12 @@ class OddsAttachResult:
     # four-game slate is matched against every upcoming fixture. Counted,
     # never reported as a fault — they are supposed to miss.
     other_day_events: int = 0
+    # TONIGHT'S GAMES OFF THE PROPS BOARD (college, 2026-11-14). College
+    # prices players for the few games it buys (nba_build.college_board_
+    # games) and hands the whole night's pairs as `slate.night_pairs`; an
+    # event for one of the others is the cap working, not a wiring fault,
+    # and was read as "54 event(s) DROPPED" on Saturday's noon board.
+    off_board_events: int = 0
     #: Events refused because they are the OTHER meeting of the same two
     #: teams — see `same_meeting`. Counted rather than swallowed: a
     #: rematch quietly relabelled onto this week's game is the wrong
@@ -2852,6 +2858,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
 
     # Which team pairs are in this slate?
     slate_pairs = {frozenset((g.home, g.away)) for g in slate.games}
+    # …and tonight's whole slate, where it is bigger (`off_board_events`).
+    night_pairs = {frozenset(p) for p in (getattr(slate, "night_pairs", None) or ())}
 
     events = list_events(key, ttl=ttl, sport=sport, cache_only=cache_only)
     # A pair can hold TWO games (MLB doubleheader) — keep them all, matched
@@ -2995,6 +3003,11 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             result.other_day_events += 1            # tomorrow's game, inside the padded window
             continue
         if frozenset((home, away)) not in slate_pairs:
+            # Tonight's game, just not one the props board buys
+            # (`off_board_events`): counted, never a fault.
+            if frozenset((home, away)) in night_pairs:
+                result.off_board_events += 1
+                continue
             # A later date's game is not a fault and never reaches here —
             # it returned above. What is left is a pair that should be on
             # THIS slate and is not, which is a wiring bug between our

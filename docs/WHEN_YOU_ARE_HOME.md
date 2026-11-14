@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QE. College's odds line counts the games it does not buy** (step 559; 14
+November). Nothing to run. College prices players for the five games a
+pull buys, while the odds event list holds the whole night, so Saturday's
+noon board read "matched 2 props across 5 events (cached); 54 event(s)
+DROPPED — see the odds diagnosis". Those 54 were the night's other games,
+filed under "mapped, but that pair is not on our slate", the label kept
+for a broken name join. A game on tonight's slate but off the props board
+is now counted apart and said plainly ("54 more game(s) tonight not on the
+props board"). A team name the map does not know is still a drop, as before.
+
 **QD. The Pick of the Day page wears its logos and names** (step 558; 14
 November). Nothing to run. You: "the pick of the day screen is missing logos
 and shit." Your screenshots showed four things, and each is fixed:
@@ -9744,6 +9754,17 @@ The backfill finished at about 10:05am: 6,765 games and 1,911,896
 player-log rows new, college's history now 7,138 games and 2,030,000 rows
 over the 2025 and 2026 seasons. The next college build reads two seasons
 for every returning player.
+
+The noon pull (12:05pm, read off the public board at 2pm): the board now
+builds props (`props_built` 1,005) and priced what the books had posted.
+All nine books answered for each of the five games bought, and only LSU at
+Gonzaga carried player props (one market and five ladders); the other four
+had game lines only, two hours before the 2pm tips. `props_analyzed` went
+from 0 to 1, so the board is working and the books are the limit. The race
+read last season too (`prior.schools` 365). The board's odds line also said
+"54 event(s) DROPPED", which was the night's other games, the ones the
+pull does not buy, not a broken name join (step QE). The 6pm pull is the
+real test: Friday's found player props on all five games it bought.
 
 **PK. The Lab draws** (step 539; 14 November). Nothing to run. You, with a
 screenshot of the Lab: "the lab shows this every time u click on the page.
