@@ -9338,6 +9338,27 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PZ. Every NFL report opens on its angles** (step 554; 14 November).
+Nothing to run. You: your reports find "good matchups" a defence at a time
+— the Giants' blitz forcing Daniels to run, Washington's tight-end coverage,
+the red-zone usage — and on our site that information was "not that updated
+... and it's very hard to find". Each NFL report now opens, after the short
+version, on "The angles" (engine/angles): for each offence against the
+defence it faces, its top receiver against what that defence has given the
+top receiver it faced each week ("Washington gives up 108 yards and 8.0
+catches a game to the top receiver it faces, the most in the league, and 4
+of 4 topped 90 → catches and yards"); its tight end against the tight-end
+funnel, with the touchdowns allowed; its quarterback's legs against the
+blitz — the defence's blitz rate this season, lately and in the teams' own
+meeting, his scrambles a game, and what the last quarterbacks ran for
+against it; and its red-zone scorer, with how often the offence runs inside
+the 20 and his share of the touches. A defence that holds a position down
+is said too, under "Where to be careful". The numbers are this season's,
+off the game logs and this season's FTN charting (which now keeps each
+defence's blitz week by week, whom it faced, and each quarterback's
+scrambles). They are shown, not counted: the board prices each defence on
+its own measured scale.
+
 **PY. The report's facts are this season's, and right** (step 553; 14
 November). Nothing to run. You: "I feel like we're not pulling the most
 recent data and information ... it's not that updated and it's not correct
