@@ -468,6 +468,25 @@ HITTER_FAMILIES = {"bat"}
 # process into a lottery ticket.
 EXTREME_MARKETS = {"anytime_td", "home_runs", "fg3m", "stl", "blk", "tov", "goals", "anytime_goal"}
 HOCKEY_SCORING = {"nhlpoint", "nhlgoal"}
+#: NEVER ON A PARLAY (2026-11-14). Ethan, of the game reports' parlays: "i
+#: dont wanna use tackle picks or anything like that. and not kicker points
+#: either. so please dont incluide those." A defender's props and a kicker's
+#: stay on the boards as singles; no ticket the site builds or suggests
+#: carries one — the game reports' (engine/gameparlays), the two-leg tickets
+#: (engine/twoleg, whose `_leg` every one of those legs passes through), this
+#: screen's (`_leg_eligible`) and the builder's "stacks well with"
+#: (engine/parlaybuild). The names past the board's three are the spellings a
+#: feed or a slip uses for the same props.
+NO_PARLAY_MARKETS = frozenset({
+    "tackles_ast", "tackles", "solo_tackles", "tackles_solo", "tackle_assists", "sacks", "def_sacks",
+    "def_int", "kick_pts", "kicking_points", "fg_made", "field_goals", "field_goals_made", "pats",
+    "pat_made", "extra_points"})
+
+
+def parlay_market(market) -> bool:
+    """A market a parlay may carry: never a tackle, sack or kicking prop
+    (NO_PARLAY_MARKETS)."""
+    return str(market or "").strip().lower() not in NO_PARLAY_MARKETS
 
 
 # --- §1: the maths -----------------------------------------------------------
@@ -1277,6 +1296,9 @@ def _leg_eligible(sport: str, leg: dict, game: dict | None,
     single. What is added here is the set of bans that apply to a leg
     *because* it is going inside a ticket.
     """
+    if not parlay_market(leg.get("market")):
+        return (f"{leg.get('market_label') or leg.get('market')} never rides on a parlay — no tackle, "
+                f"sack or kicking legs (Ethan, 2026-11-14)")
     basis = leg.get("leg_basis") or "edge"
     if basis == "edge" and not leg.get("recommended"):
         return ("not a recommended single — §0: a leg that would not be a bet "

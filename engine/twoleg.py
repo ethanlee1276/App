@@ -183,6 +183,12 @@ def likely_legs(board: dict, sport: str, now=None) -> list[dict]:
 
 
 def _leg(r: dict, p, pool: str) -> dict | None:
+    from .parlays import parlay_market
+    # No tackle, sack or kicking leg on any ticket (parlays.NO_PARLAY_MARKETS;
+    # Ethan, 2026-11-14). Every leg of these tickets and of each game's
+    # (engine/gameparlays) is made here.
+    if not parlay_market(r.get("market")):
+        return None
     try:
         p = float(p)
     except (TypeError, ValueError):

@@ -194,6 +194,8 @@ def stacks(sport: str, legs: list[dict], pool: list) -> list[dict]:
         c = clean(raw)
         if not c or (c.get("player"), c.get("market"), str(c.get("side") or "").upper()) in seen:
             continue
+        if not P.parlay_market(c.get("market")):
+            continue                        # never suggests a tackle, sack or kicking leg (parlays.NO_PARLAY_MARKETS)
         if P.check_ticket(sport, legs + [c]).get("ok") is not True:
             continue
         rs = []
