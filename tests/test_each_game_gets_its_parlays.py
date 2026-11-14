@@ -219,6 +219,37 @@ def test_the_report_section_draws():
     assert line.startswith("Best three-leg parlay:") and "Best touchdown pair:" in line, line
 
 
+def test_the_heartbeat_counts_each_leagues_tickets_and_reports():
+    """Both keys are paid and stripped from the public copy; the heartbeat
+    is where anyone sees a league built them (launch._board_counts)."""
+    import json
+    import os
+    import tempfile
+    import launch as L
+    board = {"most_likely": [], "recommendations": [], "game_bets": [],
+             "game_parlays": {"games": [{"home": "MIA"}, {"home": "NYG"}],
+                              "counts": {"games": 2, "threes": 8, "scorers": 6}, "note": "tracked"},
+             "game_reports": [{"game": "DUKE@MIA"}, {"game": "WAS@NYG"}]}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(board, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+            broken = dict(board, game_parlays={"sport": "nfl", "games": [],
+                                               "note": "the game parlays did not build: KeyError"})
+            with open(path, "w") as fh:
+                json.dump(broken, fh)
+            bad = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert (got["parlay_games"], got["sgp_threes"], got["td_pairs"], got["reports"]) == (2, 8, 6, 2), got
+    assert "parlay_error" not in got
+    assert bad["parlay_games"] == 0 and "did not build: KeyError" in bad["parlay_error"], bad
+
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0

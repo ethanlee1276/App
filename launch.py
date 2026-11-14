@@ -551,6 +551,22 @@ def _board_counts(path: str) -> dict:
     # only when true, so an in-season board's counts read as they did.
     if b.get("status") == "offseason":
         out["offseason"] = True
+    # THE GAME PARLAYS AND THE REPORTS, COUNTED (2026-11-14). Both are paid
+    # keys, stripped from the public copy, so the heartbeat is where anyone
+    # can see a league built them: four three-leg tickets and three scorer
+    # pairs a game (engine/gameparlays), one report a game. A build that
+    # failed says why. Present only when the board carries them.
+    gp = b.get("game_parlays")
+    if isinstance(gp, dict) and isinstance(gp.get("games"), list):
+        c = gp.get("counts") if isinstance(gp.get("counts"), dict) else {}
+        out["parlay_games"] = int(c.get("games") or len(gp["games"]))
+        out["sgp_threes"] = int(c.get("threes") or 0)
+        out["td_pairs"] = int(c.get("scorers") or 0)
+        if not gp["games"] and "did not build" in str(gp.get("note") or ""):
+            out["parlay_error"] = str(gp["note"])[:200]
+    reps = b.get("game_reports")
+    if isinstance(reps, list) and reps:
+        out["reports"] = len(reps)
     return out
 
 
