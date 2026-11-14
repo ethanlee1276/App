@@ -50,10 +50,15 @@ GSAX_EDGE = 3.0
 KEY_SKATERS = 9
 
 
-def _label(pro: list, con: list, breakout: bool) -> tuple[str, str]:
-    score = len(pro) - len(con)
-    key = ("breakout" if score >= 3 and breakout else "good" if score >= 2
-           else "neutral" if score >= 0 else "tough" if score == -1 else "avoid")
+def _label(pro: list, con: list, breakout: bool, fam: dict | None = None,
+           featured: bool = False) -> tuple[str, str]:
+    """ONE VOTE A FAMILY (engine/readlogic, 2026-11-14): the shots a
+    defence allows and the chances it allows are one reason — the defence
+    — not two; and a skater who shoots three times a night, or a starter
+    in net, is never "avoid"."""
+    from ..readlogic import ladder, score as _score
+    key = ladder(_score(pro, con, fam), featured=featured, breakout_ok=breakout,
+                 good_at=2, breakout_at=3)
     return key, LABELS[key]
 
 
@@ -99,60 +104,69 @@ def read_skater(name: str, p: dict, team: str, opp: str, teams: dict, ctx: dict,
                 headshot: str = "", xp: dict | None = None, pp: dict | None = None) -> dict:
     """One skater's read against tonight's opponent. ``xp`` is his
     engine.nhl.xg player summary, when the shot model has him."""
+    from .. import readlogic as RL
     pro, con, notes = [], [], []
+    fam: dict = {}
+
+    def said(lst, text, family):
+        lst.append(text)
+        fam[text] = family
     me, them = ctx.get(team) or {}, ctx.get(opp) or {}
     shots_rank = _ranks(teams, "sog_against", high_is_more=True).get(opp)
     ga_rank = _ranks(teams, "ga", high_is_more=True).get(opp)
     xga_rank = _ranks(teams, "xga_ev", high_is_more=True).get(opp)
     if shots_rank and shots_rank <= RANK_EDGE:
-        pro.append(f"{opp} gives up {_most(shots_rank, 'most')} shots a game")
+        said(pro, f"{opp} gives up {_most(shots_rank, 'most')} shots a game", RL.DEFENSE)
     elif shots_rank and shots_rank > len(teams) - RANK_EDGE:
-        con.append(f"{opp} allows {_most(len(teams) - shots_rank + 1, 'fewest')} shots a game")
+        said(con, f"{opp} allows {_most(len(teams) - shots_rank + 1, 'fewest')} shots a game", RL.DEFENSE)
     if xga_rank and xga_rank <= RANK_EDGE:
-        pro.append(f"{opp} gives up {_most(xga_rank, 'most')} 5-on-5 chances (expected goals against)")
+        said(pro, f"{opp} gives up {_most(xga_rank, 'most')} 5-on-5 chances (expected goals against)", RL.DEFENSE)
     elif xga_rank and xga_rank > len(teams) - RANK_EDGE:
-        con.append(f"{opp} allows {_most(len(teams) - xga_rank + 1, 'fewest')} 5-on-5 chances")
+        said(con, f"{opp} allows {_most(len(teams) - xga_rank + 1, 'fewest')} 5-on-5 chances", RL.DEFENSE)
     sv, lsv = them.get("sv"), league.get("sv", M.LEAGUE_SV)
     gsax = them.get("gsax")
     if them.get("starter") and them.get("starter_sure") and gsax is not None:
         if gsax <= -GSAX_EDGE:
-            pro.append(f"Faces {them['starter']}, {gsax:+.1f} goals saved above expected lately — letting in more than his shots are worth")
+            said(pro, f"Faces {them['starter']}, {gsax:+.1f} goals saved above expected lately — letting in more than his shots are worth",
+                 RL.GOALIE)
         elif gsax >= GSAX_EDGE:
-            con.append(f"Faces {them['starter']}, {gsax:+.1f} goals saved above expected lately")
+            said(con, f"Faces {them['starter']}, {gsax:+.1f} goals saved above expected lately", RL.GOALIE)
     elif them.get("starter") and them.get("starter_sure") and sv is not None:
         if sv <= lsv - SV_EDGE:
-            pro.append(f"Faces {them['starter']}, .{round(sv * 1000):03d} save rate — below the league")
+            said(pro, f"Faces {them['starter']}, .{round(sv * 1000):03d} save rate — below the league", RL.GOALIE)
         elif sv >= lsv + SV_EDGE:
-            con.append(f"Faces {them['starter']}, .{round(sv * 1000):03d} save rate — among the better starters")
+            said(con, f"Faces {them['starter']}, .{round(sv * 1000):03d} save rate — among the better starters",
+                 RL.GOALIE)
     elif ga_rank and ga_rank <= RANK_EDGE:
-        pro.append(f"{opp} allows {_most(ga_rank, 'most')} goals a game")
+        said(pro, f"{opp} allows {_most(ga_rank, 'most')} goals a game", RL.GOALIE)
     xg = me.get("xg")
     if xg is not None and xg >= HIGH_XG:
-        pro.append(f"{team} is expected to score {xg:.1f} — a high-event night")
+        said(pro, f"{team} is expected to score {xg:.1f} — a high-event night", RL.POINTS)
     elif xg is not None and xg <= LOW_XG:
-        con.append(f"{team} is expected to score only {xg:.1f}")
+        said(con, f"{team} is expected to score only {xg:.1f}", RL.POINTS)
     games = [g for g in (p.get("games") or []) if g.get("toi", 0) > 0]
     t5 = [g["toi"] for g in games[:5]]
     t15 = [g["toi"] for g in games[5:15]]
     if len(t5) == 5 and len(t15) >= 5:
         move = sum(t5) / 5 / (sum(t15) / len(t15)) - 1
         if move >= 0.10:
-            pro.append(f"Ice time up {move:.0%} over his last five games")
+            said(pro, f"Ice time up {move:.0%} over his last five games", RL.ROLE)
         elif move <= -0.10:
-            con.append(f"Ice time down {abs(move):.0%} over his last five games")
+            said(con, f"Ice time down {abs(move):.0%} over his last five games", RL.ROLE)
     if them.get("b2b") and not me.get("b2b"):
-        pro.append(f"{opp} is on the second night of a back-to-back")
+        said(pro, f"{opp} is on the second night of a back-to-back", RL.SCHEDULE)
     elif me.get("b2b") and not them.get("b2b"):
-        con.append(f"{team} is on the second night of a back-to-back")
+        said(con, f"{team} is on the second night of a back-to-back", RL.SCHEDULE)
     sog = [g.get("sog", 0.0) for g in games[:10]]
     ppg = sum(g.get("ppg", 0.0) for g in games[:20])
     ratio = M.opp_pp_ratio(teams, opp)
     if pp and pp.get("unit"):
         notes.append(f"Power-play unit {pp['unit']}: {pp['pp_points']} power-play point(s) lately")
         if pp["unit"] == 1 and ratio is not None and ratio >= 1 + PP_EDGE:
-            pro.append(f"Top power-play unit, and {opp} concedes {ratio - 1:.0%} more power-play chances than average")
+            said(pro, f"Top power-play unit, and {opp} concedes {ratio - 1:.0%} more power-play chances than average",
+                 RL.SPECIAL_TEAMS)
         elif pp["unit"] == 1 and ratio is not None and ratio <= 1 - PP_EDGE:
-            con.append(f"{opp} concedes {1 - ratio:.0%} fewer power-play chances than average")
+            said(con, f"{opp} concedes {1 - ratio:.0%} fewer power-play chances than average", RL.SPECIAL_TEAMS)
     elif ppg >= 3:
         notes.append(f"{int(ppg)} power-play goals in his last 20 — on the top unit")
     if len(sog) >= 5:
@@ -163,7 +177,8 @@ def read_skater(name: str, p: dict, team: str, opp: str, teams: dict, ctx: dict,
                      + (f" — finishing {'hot, due to cool' if luck > 0 else 'cold, due to warm'}"
                         if abs(luck) >= M.LUCK_GOALS else ""))
     volume = len(sog) >= 5 and sum(sog) / len(sog) >= 3.0
-    key, label = _label(pro, con, volume)
+    top_pp = bool(pp and pp.get("unit") == 1)
+    key, label = _label(pro, con, volume, fam, featured=volume or top_pp)
     toi = sum(t5) / len(t5) if t5 else None
     return {"player": name, "team": team, "opp": opp, "pos": p.get("position") or "",
             "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": list(SKATER_LEANS),
@@ -173,26 +188,34 @@ def read_skater(name: str, p: dict, team: str, opp: str, teams: dict, ctx: dict,
 def read_goalie(name: str, team: str, opp: str, teams: dict, ctx: dict, headshot: str = "") -> dict:
     """The probable starter's read: how many shots he should see, and
     whether the game stays close enough for them to count."""
+    from .. import readlogic as RL
     pro, con, notes = [], [], []
+    fam: dict = {}
+
+    def said(lst, text, family):
+        lst.append(text)
+        fam[text] = family
     me, them = ctx.get(team) or {}, ctx.get(opp) or {}
     shots_rank = _ranks(teams, "sog_for", high_is_more=True).get(opp)
+    # The shots he should face are ONE question — how many come at him —
+    # whether it is asked of their attack or of his own team's defence.
     if shots_rank and shots_rank <= RANK_EDGE:
-        pro.append(f"{opp} shoots {_most(shots_rank, 'most')} a game")
+        said(pro, f"{opp} shoots {_most(shots_rank, 'most')} a game", RL.DEFENSE)
     elif shots_rank and shots_rank > len(teams) - RANK_EDGE:
-        con.append(f"{opp} shoots {_most(len(teams) - shots_rank + 1, 'fewest')} a game")
+        said(con, f"{opp} shoots {_most(len(teams) - shots_rank + 1, 'fewest')} a game", RL.DEFENSE)
     allow_rank = _ranks(teams, "sog_against", high_is_more=True).get(team)
     if allow_rank and allow_rank <= RANK_EDGE:
-        pro.append(f"{team} gives up {_most(allow_rank, 'most')} shots — busy night in net")
+        said(pro, f"{team} gives up {_most(allow_rank, 'most')} shots — busy night in net", RL.DEFENSE)
     elif allow_rank and allow_rank > len(teams) - RANK_EDGE:
-        con.append(f"{team} allows {_most(len(teams) - allow_rank + 1, 'fewest')} shots")
+        said(con, f"{team} allows {_most(len(teams) - allow_rank + 1, 'fewest')} shots", RL.DEFENSE)
     if me.get("xg") is not None and them.get("xg") is not None and them["xg"] - me["xg"] >= 1.0:
-        con.append("A lopsided game — the goalie can be pulled and the script changes")
+        said(con, "A lopsided game — the goalie can be pulled and the script changes", RL.BLOWOUT)
     if not me.get("starter_sure"):
-        con.append("Starter not settled — the back-to-back or a split crease")
+        said(con, "Starter not settled — the back-to-back or a split crease", RL.ROLE)
     notes.append(f"Started {me.get('starter_share', 0):.0%} of {team}'s last {M.STARTER_WINDOW}")
     if me.get("gsax") is not None:
         notes.append(f"{me['gsax']:+.1f} goals saved above expected lately")
-    key, label = _label(pro, con, False)
+    key, label = _label(pro, con, False, fam, featured=bool(me.get("starter_sure")))
     return {"player": name, "team": team, "opp": opp, "pos": "G", "read": key, "label": label,
             "pro": pro, "con": con, "notes": notes, "lean": list(GOALIE_LEANS), "headshot": headshot,
             "usage": {"starter_share": me.get("starter_share")}}

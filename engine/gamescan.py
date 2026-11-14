@@ -830,8 +830,11 @@ def _label(score: int, volume: bool) -> tuple[str, str]:
     volume to use a good matchup), but it no longer counts here, so the
     scale stands even: one counted reason leans a read, two make it strong,
     where a starter's share used to stand in for one of them."""
-    key = ("breakout" if score >= 2 and volume else "good" if score >= 1
-           else "neutral" if score == 0 else "tough" if score == -1 else "avoid")
+    # ONE RULE FOR EVERY LEAGUE (engine/readlogic, 2026-11-14): a featured
+    # player — the volume to use a good spot is the same volume that keeps
+    # him on the field in a bad one — is never "avoid".
+    from .readlogic import ladder
+    key = ladder(score, featured=volume, breakout_ok=volume, good_at=1, breakout_at=2)
     return key, dict(READS)[key]
 
 
@@ -1414,6 +1417,15 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     group = _POS_GROUP.get((pos or "").upper(), "")
     u = usage or {}
     pro, con, notes, role = [], [], [], []
+    # EACH REASON'S FAMILY (engine/readlogic): two numbers about one
+    # defence are one vote, not two (Ethan, 2026-11-14: "we're kind of
+    # judging too many things off too many factors").
+    from . import readlogic as RL
+    fam: dict = {}
+
+    def said(lst, text, family):
+        lst.append(text)
+        fam[text] = family
     o, d = ratings.get(team) or {}, ratings.get(opp) or {}
     measured = bool(allowed)
     lean: list = []
@@ -1427,9 +1439,9 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             return
         sign, text = _allowed_line(allowed, stat, opp, n_teams)
         if sign > 0:
-            pro.append(text)
+            said(pro, text, RL.DEFENSE)
         elif sign < 0:
-            con.append(text)
+            said(con, text, RL.DEFENSE)
 
     def own_position(stats):
         """What the defence gives up to HIS position — shown, not counted:
@@ -1444,17 +1456,19 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             return
         where = f" ({line_words})" if line_words else ""
         if points >= POINTS_HIGH:
-            pro.append(f"The lines expect {team} to score about {points:.0f}{where}")
+            said(pro, f"The lines expect {team} to score about {points:.0f}{where}", RL.POINTS)
         elif points <= POINTS_LOW:
-            con.append(f"The lines expect {team} to score only about {points:.0f}{where}")
+            said(con, f"The lines expect {team} to score only about {points:.0f}{where}", RL.POINTS)
 
     def unit(side_rank, words, soft_is_pro=True):
         """A unit rank: counted where nothing measured stands in (college),
         a note where it was measured and found flat (the NFL)."""
         if _weak(side_rank, n_teams):
-            (notes if measured else (pro if soft_is_pro else con)).append(f"{words} ranks {_ord(side_rank)}")
+            text = f"{words} ranks {_ord(side_rank)}"
+            notes.append(text) if measured else said(pro if soft_is_pro else con, text, RL.DEFENSE)
         elif _strong(side_rank, n_teams):
-            (notes if measured else (con if soft_is_pro else pro)).append(f"{words} ranks {_ord(side_rank)}")
+            text = f"{words} ranks {_ord(side_rank)}"
+            notes.append(text) if measured else said(con if soft_is_pro else pro, text, RL.DEFENSE)
 
     # WHICH SEASONS HIS USAGE IS (blend_usage): said once, with last
     # season's own rate, so a quiet start reads beside what he did before.
@@ -1505,7 +1519,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                                  f"{sch[look]:.0%} of the time")
         for m in mates_out or []:
             text, counted = mate_line(m, word)
-            (pro if counted else notes).append(text)
+            said(pro, text, RL.TEAMMATES) if counted else notes.append(text)
     elif group == "rb":
         lean = ["rush_yds", "rush_att", "anytime_td"]
         cs = u.get("carry_share") or 0.0
@@ -1521,17 +1535,18 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         unit(rr, f"{opp}'s run defense")
         own = _rank(o, "off", "rushing")
         if own and own >= round(n_teams * 0.78):
-            (notes if measured else con).append(f"{team}'s run game ranks {_ord(own)}")
+            text = f"{team}'s run game ranks {_ord(own)}"
+            notes.append(text) if measured else said(con, text, RL.OWN_TEAM)
         scoring()
         # College only: how the lines meet. A front that stuffs runs at
         # the line against a line that cannot get push.
         stuff, push = _rank(d, "def", "stuff"), _rank(o, "off", "line")
         if _strong(stuff, n_teams) and _weak(push, n_teams):
-            con.append(f"{opp} stuffs runs at the line ({_ord(stuff)}) and {team}'s "
-                       f"run blocking ranks {_ord(push)}")
+            said(con, f"{opp} stuffs runs at the line ({_ord(stuff)}) and {team}'s "
+                      f"run blocking ranks {_ord(push)}", RL.TRENCHES)
         elif _weak(stuff, n_teams) and _strong(push, n_teams):
-            pro.append(f"{team}'s run blocking ranks {_ord(push)} against a front "
-                       f"that stops few runs at the line ({_ord(stuff)})")
+            said(pro, f"{team}'s run blocking ranks {_ord(push)} against a front "
+                      f"that stops few runs at the line ({_ord(stuff)})", RL.TRENCHES)
         mt = (tackling or {}).get(opp)
         if mt is not None and mt >= 0.10:
             notes.append(f"{opp} misses {mt:.0%} of its tackles")
@@ -1540,11 +1555,11 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             stingy = (_allowed_line(allowed, "rb_rush_yds", opp, n_teams)[0] < 0 if measured
                       else bool(rr and rr <= round(n_teams * 0.31)))
             if stingy:
-                pro.append(f"{u['targets_pg']:g} targets a game — a strong run defense pushes "
-                           f"the ball to him through the air")
+                said(pro, f"{u['targets_pg']:g} targets a game — a strong run defense pushes "
+                          f"the ball to him through the air", RL.ROLE)
         for m in mates_out or []:
             text, counted = mate_line(m, "carries")
-            (pro if counted else notes).append(text)
+            said(pro, text, RL.TEAMMATES) if counted else notes.append(text)
     elif group == "qb":
         lean = ["pass_yds", "pass_td", "pass_att", "pass_cmp"]
         volume = True
@@ -1554,13 +1569,14 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
         scoring()
         havoc = _rank(d, "def", "havoc")
         if _strong(havoc, n_teams):
-            con.append(f"{opp}'s defense ranks {_ord(havoc)} in havoc — sacks, tackles for loss, takeaways")
+            said(con, f"{opp}'s defense ranks {_ord(havoc)} in havoc — sacks, tackles for loss, takeaways",
+                 RL.DEFENSE)
         rush, prot = _rank(d, "def", "pressure"), _rank(o, "off", "pressure")
         if _strong(rush, n_teams) and ((prot and prot >= round(n_teams * 0.62)) or line_out):
-            (notes if measured else con).append(
-                f"{opp}'s pass rush ranks {_ord(rush)}"
-                + (f" and {team} is without {', '.join(line_out)}" if line_out
-                   else f" against the {_ord(prot)} pass protection"))
+            text = (f"{opp}'s pass rush ranks {_ord(rush)}"
+                    + (f" and {team} is without {', '.join(line_out)}" if line_out
+                       else f" against the {_ord(prot)} pass protection"))
+            notes.append(text) if measured else said(con, text, RL.TRENCHES)
         # HIS LEGS (QB_RUNS_CARRIES): his carries and yards a game, and what
         # this defence gives up to quarterbacks on the ground at any rank.
         # Said, never counted: in the NFL that rating measured nothing beyond
@@ -1580,13 +1596,15 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     # THE WEATHER, as the board priced him (WEATHER_STEP).
     wx_sign, wx_text = weather_line(group, pos, weather)
     if wx_sign > 0:
-        pro.append(wx_text)
+        said(pro, wx_text, RL.WEATHER)
     elif wx_sign < 0:
-        con.append(wx_text)
+        said(con, wx_text, RL.WEATHER)
     if wx_text and group == "rb" and "rec_yds" in lean and wx_sign > 0:
         notes.append("His catches come down in rain (a back's receiving yards ×0.79 there, "
                      "measured 2016-2025); the extra is in his carries")
-    score = len(pro) - len(con)
+    # ONE VOTE A FAMILY (engine/readlogic.score): the defence he faces is
+    # one reason however many of its numbers say the same thing.
+    score = RL.score(pro, con, fam)
     key, label = _label(score, volume)
     # His share is said with what was noticed and not counted, first.
     notes = role + notes
@@ -1596,6 +1614,14 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     winning = pro if score > 0 else con if score < 0 else []
     if wx_text and winning == [wx_text]:
         lean = [m for m in lean if m in WEATHER_LEAN.get(group, ())]
+    # A BACK'S CARRIES ARE HIS ROLE AND THE SCRIPT, NOT THE DEFENCE
+    # (engine/readlogic, 2026-11-14): a stingy front takes yards a carry,
+    # not the carries, so a read that rests on the defence alone leans his
+    # yards and leaves his carries be. The points the lines expect, the
+    # rain, or a teammate's carries opening up do move them.
+    if group == "rb" and "rush_att" in lean and winning:
+        if not {fam.get(t) for t in winning} & {RL.POINTS, RL.WEATHER, RL.TEAMMATES}:
+            lean = [m for m in lean if m != "rush_att"]
     # WHAT THE CHARTING AND THE TRACKING SAY (engine/sources/ftn, ngs):
     # shown, never counted — chartfit and ngsfit found no lift in any of it.
     notes += charting_notes(group, opp, charting, charting_def, tracking)
@@ -2127,6 +2153,29 @@ def tracking_tables(season: int, week=None, keep: bool = False) -> dict:
                         (NGS.__file__, FE.__file__, __file__))
 
 
+def implied_points_row(gd: dict) -> tuple[dict, dict]:
+    """`implied_points` from a built board's game row (college's): its
+    ``spread`` is the home line (negative: home favoured) and its
+    ``total`` the posted total — ({}, {}) when either is missing.
+
+    THE COLLEGE READ NEVER HEARD THE LINES (2026-11-14). `attach_cfb`
+    handed `scan_game` no points, so "the lines expect Duke to score about
+    21" could not count for or against anyone in a college game — Ethan,
+    of Duke at Miami: "the total's high in that game and it's expecting
+    both teams to score". The NFL's read has counted them since September."""
+    try:
+        total, spread = float((gd or {}).get("total")), float((gd or {}).get("spread"))
+    except (TypeError, ValueError):
+        return {}, {}
+    home, away = (gd or {}).get("home"), (gd or {}).get("away")
+    if not home or not away or total <= 0:
+        return {}, {}
+    fmt = lambda x: "pick'em" if x == 0 else f"{x:+g}".replace("-", "−")   # noqa: E731
+    return ({home: (total - spread) / 2, away: (total + spread) / 2},
+            {home: f"{fmt(spread)} at home, total {total:g}",
+             away: f"{fmt(-spread)} on the road, total {total:g}"})
+
+
 def implied_points(g) -> tuple[dict, dict]:
     """({team: points the lines expect}, {team: the lines in words}) from a
     slate game's POSTED spread and total — ({}, {}) when either is a
@@ -2454,6 +2503,10 @@ def attach_nfl(result: dict, slate, season: int, week: int, depth_rows=None,
         n += 1
     _t = _clock.lap("matchup scan", "the games", _t)
     stamp_touchdowns(reads, result)
+    # THE GO-TO SCORERS (engine/readlogic rule 3): a read that runs against
+    # his team's likeliest scorer says both.
+    from .readlogic import mark_scorers
+    mark_scorers(reads)
     _clock.lap("matchup scan", "touchdown stamps", _t)
     return n
 
@@ -2618,10 +2671,12 @@ def attach_cfb(out: dict, season: int, resolve, fetch=None, usage: dict | None =
             continue
         gprops = [r for r in props if r.get("team") in (home, away)
                   and (r.get("opponent") in (home, away) or not r.get("opponent"))]
+        pts, words = implied_points_row(gd)
         scan = scan_game(home, away, ratings=ratings, charts={}, defenders_now={},
                          props=gprops, opponent_adjusted=False, usage=usage or {},
                          injuries=[i for i in injuries or [] if getattr(i, "team", "") in (home, away)],
-                         pulled=gd.get("pulled_players") or [], weather=gd.get("weather"))
+                         pulled=gd.get("pulled_players") or [], weather=gd.get("weather"),
+                         points=pts, line_words=words)
         reads[f"{away}@{home}"] = {"players": scan.pop("players"),
                                    "microscope": scan.pop("microscope")}
         # THE SAME FURNITURE THE NFL SCAN CARRIES (Ethan, 2026-09-26: "we
@@ -2638,6 +2693,10 @@ def attach_cfb(out: dict, season: int, resolve, fetch=None, usage: dict | None =
     # scorer list (the page's shelf is sliced later), as attach_nfl does.
     stamp_touchdowns(reads, {"long_shots": out.get("long_shots") or [],
                              "longshot_watch": watch if watch is not None else out.get("longshot_watch") or []})
+    # Duke's back at Miami (engine/readlogic rule 3): tough for yards, and
+    # still the man Duke's touchdowns go through.
+    from .readlogic import mark_scorers
+    mark_scorers(reads)
     return n
 
 

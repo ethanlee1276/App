@@ -118,16 +118,28 @@ def _hand_word(bats: str) -> str:
     return "lefties" if (bats or "").upper() in ("L", "S") else "righties"
 
 
-def _label(pro: list, con: list, breakout: bool) -> tuple[str, str]:
-    score = len(pro) - len(con)
-    key = ("breakout" if score >= 3 and breakout else "good" if score >= 2
-           else "neutral" if score >= 0 else "tough" if score == -1 else "avoid")
+def _label(pro: list, con: list, breakout: bool, fam: dict | None = None,
+           featured: bool = False) -> tuple[str, str]:
+    """ONE VOTE A FAMILY (engine/readlogic, 2026-11-14): the slugging a
+    starter allows a hitter's side, his expected ERA and how his mix plays
+    against the hitter's whiffs are one reason — the starter — not three;
+    and a bat at the top of the order, or a starting pitcher, is never
+    "avoid"."""
+    from ..readlogic import ladder, score as _score
+    key = ladder(_score(pro, con, fam), featured=featured, breakout_ok=breakout,
+                 good_at=2, breakout_at=3)
     return key, LABELS[key]
 
 
 def read_hitter(prop, game, park, arsenal: dict | None = None) -> dict:
     """One hitter against tonight's starter, park and pen."""
+    from .. import readlogic as RL
     pro, con, notes = [], [], []
+    fam: dict = {}
+
+    def said(lst, text, family):
+        lst.append(text)
+        fam[text] = family
     team, opp = prop.team, prop.opponent
     sp = (game.pitchers or {}).get(opp)
     breakout = False
@@ -135,18 +147,18 @@ def read_hitter(prop, game, park, arsenal: dict | None = None) -> dict:
     if sp:
         hand = (sp.throws or "R").upper()
         if prop.platoon_factor >= PLATOON_EDGE:
-            pro.append(prop.platoon_note or f"Hits {hand}HP better than his average")
+            said(pro, prop.platoon_note or f"Hits {hand}HP better than his average", RL.PLATOON)
         elif prop.platoon_factor <= 2 - PLATOON_EDGE:
-            con.append(prop.platoon_note or f"Struggles against {hand}HP")
+            said(con, prop.platoon_note or f"Struggles against {hand}HP", RL.PLATOON)
         side_slg = sp.slg_allowed_vs_l if (prop.bats or "R").upper() in ("L", "S") else sp.slg_allowed_vs_r
         if side_slg >= SLG_SOFT:
-            pro.append(f"{sp.name} allows a .{side_slg * 1000:.0f} SLG to {_hand_word(prop.bats)}")
+            said(pro, f"{sp.name} allows a .{side_slg * 1000:.0f} SLG to {_hand_word(prop.bats)}", RL.PITCHER)
         elif side_slg <= SLG_STINGY:
-            con.append(f"{sp.name} holds {_hand_word(prop.bats)} to a .{side_slg * 1000:.0f} SLG")
+            said(con, f"{sp.name} holds {_hand_word(prop.bats)} to a .{side_slg * 1000:.0f} SLG", RL.PITCHER)
         if sp.xera >= XERA_BAD:
-            pro.append(f"{sp.name}'s expected ERA is {sp.xera:.2f}")
+            said(pro, f"{sp.name}'s expected ERA is {sp.xera:.2f}", RL.PITCHER)
         elif sp.xera <= XERA_GOOD:
-            con.append(f"{sp.name}'s expected ERA is {sp.xera:.2f} — a tough starter")
+            said(con, f"{sp.name}'s expected ERA is {sp.xera:.2f} — a tough starter", RL.PITCHER)
         # HOW HE HANDLES WHAT THIS STARTER THROWS (arsenal.matchup): his own
         # whiff rate by pitch type (Savant's arsenal board), re-weighted by
         # the starter's mix over his last starts — against his usual. The
@@ -161,9 +173,9 @@ def read_hitter(prop, game, park, arsenal: dict | None = None) -> dict:
                 what = (f"against {sp.name}'s mix ({_mix_words(mx['shares'])}): whiffs "
                         f"{m['whiff_vs_mix']:.0%}, his usual {m['whiff_baseline']:.0%}")
                 if m["whiff_delta"] <= -WHIFF_DELTA:
-                    pro.append("Sees the ball well " + what)
+                    said(pro, "Sees the ball well " + what, RL.PITCHER)
                 elif m["whiff_delta"] >= WHIFF_DELTA:
-                    con.append("Swings and misses more " + what)
+                    said(con, "Swings and misses more " + what, RL.PITCHER)
                 else:
                     notes.append("No edge " + what)
         if prop.vs_pitcher_avg is not None:
@@ -175,38 +187,39 @@ def read_hitter(prop, game, park, arsenal: dict | None = None) -> dict:
             gap = sc.xslg - sc.slg
             if gap >= XSLG_GAP:
                 breakout = True
-                pro.append(f"Hitting better than his results — xSLG .{sc.xslg * 1000:.0f} "
-                           f"vs SLG .{sc.slg * 1000:.0f}")
+                said(pro, f"Hitting better than his results — xSLG .{sc.xslg * 1000:.0f} "
+                          f"vs SLG .{sc.slg * 1000:.0f}", RL.CONTACT)
             elif gap <= -XSLG_GAP:
-                con.append(f"Results ahead of his contact — SLG .{sc.slg * 1000:.0f} "
-                           f"vs xSLG .{sc.xslg * 1000:.0f}")
+                said(con, f"Results ahead of his contact — SLG .{sc.slg * 1000:.0f} "
+                          f"vs xSLG .{sc.xslg * 1000:.0f}", RL.CONTACT)
         if sc.barrel_pct is not None and sc.barrel_pct >= BARREL_POWER:
             power = True
-            pro.append(f"Barrels {sc.barrel_pct:.0%} of his batted balls")
+            said(pro, f"Barrels {sc.barrel_pct:.0%} of his batted balls", RL.CONTACT)
     if prop.lineup_spot and prop.lineup_spot <= 3:
-        pro.append(f"Bats {_ord(prop.lineup_spot)} — the most trips to the plate")
+        said(pro, f"Bats {_ord(prop.lineup_spot)} — the most trips to the plate", RL.LINEUP)
     elif prop.lineup_spot >= 8:
-        con.append(f"Bats {_ord(prop.lineup_spot)} — the fewest trips to the plate")
+        said(con, f"Bats {_ord(prop.lineup_spot)} — the fewest trips to the plate", RL.LINEUP)
     hr = park.hr_factor
     by_hand = park.hr_factor_lhb if (prop.bats or "R").upper() == "L" else park.hr_factor_rhb
     if by_hand is not None:
         hr = by_hand
     if hr >= 1.10:
-        pro.append(f"{park.name} boosts home runs for {_hand_word(prop.bats)} ({(hr - 1) * 100:+.0f}%)")
+        said(pro, f"{park.name} boosts home runs for {_hand_word(prop.bats)} ({(hr - 1) * 100:+.0f}%)", RL.PARK)
         power = power or hr >= 1.15
     elif hr <= 0.90:
-        con.append(f"{park.name} suppresses home runs for {_hand_word(prop.bats)} ({(hr - 1) * 100:+.0f}%)")
+        said(con, f"{park.name} suppresses home runs for {_hand_word(prop.bats)} ({(hr - 1) * 100:+.0f}%)", RL.PARK)
     w = game.weather
     if w and not w.roof_closed and w.wind_dir_rel == "out" and w.wind_mph >= WIND_OUT_MPH:
-        pro.append(f"Wind blowing out at {w.wind_mph:.0f} mph")
+        said(pro, f"Wind blowing out at {w.wind_mph:.0f} mph", RL.WEATHER)
     elif w and not w.roof_closed and w.wind_dir_rel == "in" and w.wind_mph >= WIND_OUT_MPH:
-        con.append(f"Wind blowing in at {w.wind_mph:.0f} mph")
+        said(con, f"Wind blowing in at {w.wind_mph:.0f} mph", RL.WEATHER)
     fat = (game.bullpen_fatigue or {}).get(opp)
     if fat is not None and fat >= 6.0:
-        pro.append(f"{opp}'s bullpen worked {fat:.1f} relief innings the last two days")
+        said(pro, f"{opp}'s bullpen worked {fat:.1f} relief innings the last two days", RL.BULLPEN)
     if prop.streak_note:
         notes.append(prop.streak_note)
-    key, label = _label(pro, con, breakout)
+    key, label = _label(pro, con, breakout, fam,
+                        featured=bool(prop.lineup_spot) and prop.lineup_spot <= 4)
     lean = HITTER_LEANS + (POWER_LEANS if power else [])
     return {"player": prop.player, "team": team, "opp": opp, "pos": prop.position or "",
             "read": key, "label": label, "pro": pro, "con": con, "notes": notes, "lean": lean,
@@ -217,45 +230,54 @@ def read_hitter(prop, game, park, arsenal: dict | None = None) -> dict:
 
 def read_starter(prop, game, park) -> dict:
     """One starting pitcher against tonight's lineup, park and umpire."""
+    from .. import readlogic as RL
     pro, con, notes = [], [], []
+    fam: dict = {}
+
+    def said(lst, text, family):
+        lst.append(text)
+        fam[text] = family
     team, opp = prop.team, prop.opponent
     me = (game.pitchers or {}).get(team)
     opp_k = (game.team_k_rate or {}).get(opp)
     if opp_k is not None:
         if opp_k >= K_RATE_HIGH:
-            pro.append(f"{opp} strikes out {opp_k:.1%} of the time (league {LEAGUE_K_RATE:.0%})")
+            said(pro, f"{opp} strikes out {opp_k:.1%} of the time (league {LEAGUE_K_RATE:.0%})", RL.DEFENSE)
         elif opp_k <= K_RATE_LOW:
-            con.append(f"{opp} rarely strikes out ({opp_k:.1%})")
+            said(con, f"{opp} rarely strikes out ({opp_k:.1%})", RL.DEFENSE)
     breakout = False
     if me:
+        # His own stuff is one reason, however many numbers say it.
         if me.k_rate >= SP_K_ELITE:
             breakout = True
-            pro.append(f"Strikes out {me.k_rate:.0%} of the batters he faces")
+            said(pro, f"Strikes out {me.k_rate:.0%} of the batters he faces", RL.CONTACT)
         if me.xera <= XERA_GOOD:
-            pro.append(f"Expected ERA {me.xera:.2f}")
+            said(pro, f"Expected ERA {me.xera:.2f}", RL.CONTACT)
         elif me.xera >= XERA_BAD:
-            con.append(f"Expected ERA {me.xera:.2f}")
+            said(con, f"Expected ERA {me.xera:.2f}", RL.CONTACT)
     sc = prop.statcast
     if sc is not None and sc.csw_pct is not None:
         if sc.csw_pct >= CSW_ELITE:
             breakout = True
-            pro.append(f"Called strikes plus whiffs on {sc.csw_pct:.1%} of pitches")
+            said(pro, f"Called strikes plus whiffs on {sc.csw_pct:.1%} of pitches", RL.CONTACT)
         elif sc.csw_pct <= CSW_LOW:
-            con.append(f"Only {sc.csw_pct:.1%} called strikes plus whiffs")
+            said(con, f"Only {sc.csw_pct:.1%} called strikes plus whiffs", RL.CONTACT)
     if game.ump_k_factor >= 1.03 and game.plate_umpire:
-        pro.append(f"Plate umpire {game.plate_umpire} calls a big zone ({(game.ump_k_factor - 1) * 100:+.0f}% strikeouts)")
+        said(pro, f"Plate umpire {game.plate_umpire} calls a big zone ({(game.ump_k_factor - 1) * 100:+.0f}% strikeouts)",
+             RL.UMPIRE)
     elif game.ump_k_factor <= 0.97 and game.plate_umpire:
-        con.append(f"Plate umpire {game.plate_umpire} calls a tight zone ({(game.ump_k_factor - 1) * 100:+.0f}% strikeouts)")
+        said(con, f"Plate umpire {game.plate_umpire} calls a tight zone ({(game.ump_k_factor - 1) * 100:+.0f}% strikeouts)",
+             RL.UMPIRE)
     if park.k_factor >= 1.04:
-        pro.append(f"{park.name} adds strikeouts ({(park.k_factor - 1) * 100:+.0f}%)")
+        said(pro, f"{park.name} adds strikeouts ({(park.k_factor - 1) * 100:+.0f}%)", RL.PARK)
     elif park.k_factor <= 0.96:
-        con.append(f"{park.name} takes strikeouts away ({(park.k_factor - 1) * 100:+.0f}%)")
+        said(con, f"{park.name} takes strikeouts away ({(park.k_factor - 1) * 100:+.0f}%)", RL.PARK)
     own = (game.bullpen_fatigue or {}).get(team)
     if own is not None and own >= 6.0:
-        pro.append(f"His own bullpen is tired ({own:.1f} relief innings in two days) — a longer leash")
+        said(pro, f"His own bullpen is tired ({own:.1f} relief innings in two days) — a longer leash", RL.BULLPEN)
     if prop.streak_note:
         notes.append(prop.streak_note)
-    key, label = _label(pro, con, breakout)
+    key, label = _label(pro, con, breakout, fam, featured=True)
     return {"player": prop.player, "team": team, "opp": opp, "pos": "SP",
             "read": key, "label": label, "pro": pro, "con": con, "notes": notes,
             "lean": list(PITCHER_LEANS), "headshot": getattr(prop, "headshot", "") or "",

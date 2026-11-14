@@ -121,7 +121,11 @@ def test_the_board_s_dict_reads_like_the_slate_s_own_and_a_roof_counts_nothing()
 def test_every_scan_hands_its_reads_the_forecast():
     src = (ROOT / "engine" / "gamescan.py").read_text(encoding="utf-8")
     assert 'weather=getattr(g, "weather", None) or gd.get("weather"))' in src, "the NFL's slate game"
-    assert 'weather=gd.get("weather"))' in src, "college's built game"
+    # College's call hands its reads the lines too since 2026-11-14 (its
+    # implied points, engine/gamescan.implied_points_row), so the forecast
+    # is no longer the call's last argument.
+    assert 'weather=gd.get("weather"),\n                         points=pts, line_words=words)' in src, \
+        "college's built game"
     assert "contact=(contact or {}).get(opp[team]), weather=weather)" in src, "every read"
 
 

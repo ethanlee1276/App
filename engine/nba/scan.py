@@ -83,6 +83,9 @@ MIN_MPG = 12.0
 STARTER_MPG = 28.0
 #: The blowout watch's spread (engine/nba/schedspots).
 BLOWOUT_SPREAD = 10.0
+#: A player running this share of his team's plays while on the floor is
+#: featured whatever his minutes (engine/readlogic rule 2).
+FEATURED_USAGE = 0.25
 #: The schedule spots that tire a team, and how a read says each.
 TIRED = {"b2b_home": "on the second night of a back-to-back",
          "3in4": "playing a third game in four nights",
@@ -378,27 +381,41 @@ def lean_markets(made: dict, side: str, soft: set, hard: set) -> list:
 def read_player(name: str, h: dict, team: str, opp: str, *, dvp: dict | None = None,
                 env: dict | None = None, rest: dict | None = None, vacancy: dict | None = None,
                 nights: dict | None = None, status: str = "", headshot: str = "") -> dict:
-    """One player's read against tonight's opponent."""
+    """One player's read against tonight's opponent.
+
+    ONE VOTE A FAMILY (engine/readlogic, 2026-11-14): the defence's ranks
+    in his points and his rebounds are one reason — the defence — not two,
+    and a starter's minutes are never "avoid"."""
+    from .. import readlogic as RL
     pro, con, notes = [], [], []
+    fam: dict = {}
+
+    def said(lst, text, family):
+        lst.append(text)
+        fam[text] = family
     made = production(h)
     d_pro, d_con, soft, hard = _dvp_reasons(made, opp, (dvp or {}).get(opp) or {})
-    pro += d_pro
-    con += d_con
+    for x in d_pro:
+        said(pro, x, RL.DEFENSE)
+    for x in d_con:
+        said(con, x, RL.DEFENSE)
     e = (env or {}).get(team) or {}
     imp, lg = _f(e.get("implied")), _f(e.get("league_pts"))
     pace, lp = _f(e.get("pace")), _f(e.get("league_pace"))
     if imp is not None and lg is not None:
         if imp >= lg + IMPLIED_EDGE:
-            pro.append(f"{team} is expected to score {imp:.1f} by the lines — {_signed(imp - lg)} on the league's average")
+            said(pro, f"{team} is expected to score {imp:.1f} by the lines — {_signed(imp - lg)} on the league's average",
+                 RL.POINTS)
         elif imp <= lg - IMPLIED_EDGE:
-            con.append(f"{team} is expected to score only {imp:.1f} by the lines — {_signed(imp - lg)} on the league's average")
+            said(con, f"{team} is expected to score only {imp:.1f} by the lines — {_signed(imp - lg)} on the league's average",
+                 RL.POINTS)
     elif pace is not None and lp is not None:
         if pace >= lp + PACE_EDGE:
-            pro.append(f"A fast game: {team} and {opp} average {pace:.1f} possessions per 48 between them "
-                       f"({_signed(pace - lp)} on the league)")
+            said(pro, f"A fast game: {team} and {opp} average {pace:.1f} possessions per 48 between them "
+                      f"({_signed(pace - lp)} on the league)", RL.PACE)
         elif pace <= lp - PACE_EDGE:
-            con.append(f"A slow game: {team} and {opp} average {pace:.1f} possessions per 48 between them "
-                       f"({_signed(pace - lp)} on the league)")
+            said(con, f"A slow game: {team} and {opp} average {pace:.1f} possessions per 48 between them "
+                      f"({_signed(pace - lp)} on the league)", RL.PACE)
     role = False
     mins = [float(m) for m in (h.get("minutes") or []) if m is not None]
     m5 = _avg(mins[:5]) if len(mins) >= 5 else None
@@ -406,20 +423,21 @@ def read_player(name: str, h: dict, team: str, opp: str, *, dvp: dict | None = N
     if m5 is not None and m_before:
         move = m5 / m_before - 1
         if move >= MIN_TREND:
-            pro.append(f"Minutes up {move:.0%} over his last five ({m5:.1f} a game, {m_before:.1f} before)")
+            said(pro, f"Minutes up {move:.0%} over his last five ({m5:.1f} a game, {m_before:.1f} before)", RL.ROLE)
             role = True
         elif move <= -MIN_TREND:
-            con.append(f"Minutes down {abs(move):.0%} over his last five ({m5:.1f} a game, {m_before:.1f} before)")
+            said(con, f"Minutes down {abs(move):.0%} over his last five ({m5:.1f} a game, {m_before:.1f} before)",
+                 RL.ROLE)
     u5 = usage_share(h, team, nights, 0, 5)
     u_before = usage_share(h, team, nights, 5, 15)
     if u5 is not None and u_before is not None:
         if u5 - u_before >= USAGE_EDGE:
-            pro.append(f"Usage up: {u5:.0%} of {team}'s plays while he is on the floor over his last five, "
-                       f"{u_before:.0%} before")
+            said(pro, f"Usage up: {u5:.0%} of {team}'s plays while he is on the floor over his last five, "
+                      f"{u_before:.0%} before", RL.ROLE)
             role = True
         elif u_before - u5 >= USAGE_EDGE:
-            con.append(f"Usage down: {u5:.0%} of {team}'s plays while he is on the floor over his last five, "
-                       f"{u_before:.0%} before")
+            said(con, f"Usage down: {u5:.0%} of {team}'s plays while he is on the floor over his last five, "
+                      f"{u_before:.0%} before", RL.ROLE)
     v = (vacancy or {}).get(team) or {}
     gone = [(n, m) for n, m in v.get("out") or [] if n != name]
     if gone:
@@ -427,22 +445,22 @@ def read_player(name: str, h: dict, team: str, opp: str, *, dvp: dict | None = N
         inh = v.get("inherit") or {}
         b = (inh.get("beneficiaries") or {}).get(name) if inh.get("player") == big else None
         if inh.get("enough") and b and float(b.get("delta") or 0) >= INHERIT_EDGE:
-            pro.append(f"In the {inh.get('n_out')} games {big} missed, he took {b['without']:.0%} of {team}'s "
-                       f"points ({b['with']:.0%} with {big} playing)")
+            said(pro, f"In the {inh.get('n_out')} games {big} missed, he took {b['without']:.0%} of {team}'s "
+                      f"points ({b['with']:.0%} with {big} playing)", RL.TEAMMATES)
             role = True
         elif big_m >= VACANCY_MPG and (made.get("min") or 0) >= MIN_MPG:
             notes.append(f"{big} is out ({big_m:.0f} minutes a game) — his minutes and shots go to the "
                          f"rest of the rotation")
     mine, theirs = (rest or {}).get(team, ""), (rest or {}).get(opp, "")
     if theirs in TIRED and mine not in TIRED:
-        pro.append(f"{opp} is {TIRED[theirs]}")
+        said(pro, f"{opp} is {TIRED[theirs]}", RL.SCHEDULE)
     elif mine in TIRED and theirs not in TIRED:
-        con.append(f"{team} is {TIRED[mine]}")
+        said(con, f"{team} is {TIRED[mine]}", RL.SCHEDULE)
     sp = _f(e.get("spread"))
     if sp is not None and abs(sp) >= BLOWOUT_SPREAD and (made.get("min") or 0) >= STARTER_MPG:
         num = f"{abs(sp):g}"
-        con.append(f"{_a(num).capitalize()} {num}-point spread — a starter's fourth quarter is the first thing "
-                   f"a blowout takes")
+        said(con, f"{_a(num).capitalize()} {num}-point spread — a starter's fourth quarter is the first thing "
+                  f"a blowout takes", RL.BLOWOUT)
     # WHAT IS SHOWN, NEVER COUNTED.
     if status and status not in OUT:
         notes.insert(0, f"{name} is listed {status} himself — this read assumes he plays")
@@ -459,9 +477,12 @@ def read_player(name: str, h: dict, team: str, opp: str, *, dvp: dict | None = N
         a3, m3 = sum(g["fg3a"] for g in att), sum(g.get("fg3m") or 0 for g in att)
         if a3 >= 5:
             notes.append(f"{m3:.0f} of {a3:.0f} from three over his last five ({m3 / a3:.0%})")
-    score = len(pro) - len(con)
-    key = ("breakout" if score >= 3 and role else "good" if score >= 2 else "neutral" if score >= 0
-           else "tough" if score == -1 else "avoid")
+    score = RL.score(pro, con, fam)
+    # A STARTER'S MINUTES ARE A FLOOR (engine/readlogic rule 2): a man who
+    # plays 28 minutes, or runs a quarter of his team's plays, can have a
+    # tough night; he is not a man to avoid.
+    featured = (made.get("min") or 0) >= STARTER_MPG or (u5 or 0) >= FEATURED_USAGE
+    key = RL.ladder(score, featured=featured, breakout_ok=role, good_at=2, breakout_at=3)
     side = "over" if key in ("breakout", "good") else "under" if key in ("tough", "avoid") else ""
     usage = {"mpg": None if made.get("min") is None else round(made["min"], 1),
              "min5": None if m5 is None else round(m5, 1),

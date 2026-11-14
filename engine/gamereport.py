@@ -1402,13 +1402,19 @@ def sec_matchups(c: Ctx) -> dict | None:
         items = []
         for r, why in zip(keys, whys):
             tone, label = VERDICT.get(r.get("read"), ("neutral", "NEUTRAL"))
+            scorer = scorer_words(c, r) if _go_to(r) else ""
+            if scorer and tone == "unfavorable":
+                # Duke's back at Miami (engine/readlogic rule 3): the yards
+                # are tough, the touchdowns still go through him.
+                tone, label = "neutral", "UNFAVORABLE FOR YARDS — STILL THE GO-TO SCORER"
             pos = str(r.get("pos") or "").upper()
             against = {"QB": f"{dfn}'s pass defense", "RB": f"{dfn}'s run defense",
                        "FB": f"{dfn}'s run defense"}.get(pos, f"{dfn}'s coverage")
             items.append({"player": r.get("player"), "team": off, "pos": pos,
                           "headshot": r.get("headshot") or "", "verdict": tone, "label": label,
                           "title": f"{r.get('player')} vs {against}", "role": _role_line(r),
-                          "why": [_sentence(w) for w in why if w not in common][:4],
+                          "why": ([_sentence(cap(scorer))] if scorer else [])
+                          + [_sentence(w) for w in why if w not in common][:4],
                           "form": form_lines(c, r)})
         if items:
             sub.append({"type": "verdicts", "items": items})
@@ -1673,7 +1679,8 @@ def sec_scripts(c: Ctx) -> dict | None:
 def sec_watch(c: Ctx) -> dict | None:
     shine = sorted((r for r in c.reads if r.get("read") in ("breakout", "good")),
                    key=lambda r: (r.get("read") != "breakout", -_volume(r)))
-    struggle = sorted((r for r in c.reads if r.get("read") in ("tough", "avoid") and _is_key(r)),
+    struggle = sorted((r for r in c.reads if r.get("read") in ("tough", "avoid") and _is_key(r)
+                       and not _go_to(r)),
                       key=lambda r: (r.get("read") != "avoid", -_volume(r)))
 
     def item(r, tone):
@@ -2221,6 +2228,60 @@ def player_clause(c: Ctx, r: dict, tone: str, tag: bool = True) -> str:
     return f"{who} — {why}" if why else who
 
 
+def _go_to(r: dict) -> bool:
+    """His team's go-to scorer (engine/readlogic.mark_scorers)."""
+    return bool(((r or {}).get("scoring") or {}).get("go_to"))
+
+
+def season_tds(c: Ctx, r: dict) -> tuple:
+    """(touchdowns, rushing, receiving, games) this season, off his logs —
+    (None, None, None, None) without them."""
+    t = ((c.form.get(r.get("player")) or {}).get("season")) or {}
+    st, n = t.get("s") or {}, int(t.get("games") or 0)
+    if not n:
+        return None, None, None, None
+    rush, rec = _n(st.get("rush_td")), _n(st.get("rec_td"))
+    return rush + rec, rush, rec, n
+
+
+def scorer_words(c: Ctx, r: dict) -> str:
+    """"17 touchdowns in 9 games this season (13 rushing, 4 receiving);
+    Duke's likeliest scorer by our touchdown numbers (48%), with Duke
+    expected to score about 21" — a go-to scorer's line. Ethan,
+    2026-11-14, of Duke's back at Miami: "he's probably their go-to guy to
+    score ... the total's high in that game and it's expecting both teams
+    to score"."""
+    from .readlogic import scoring_words
+    said = scoring_words(r, team_words=c.name(str(r.get("team") or "")))
+    if not said:
+        return ""
+    tds, rush, rec, n = season_tds(c, r)
+    if tds:
+        split = ([f"{rush} rushing"] if rush else []) + ([f"{rec} receiving"] if rec else [])
+        lead = (f"{_count(tds, 'touchdown')} in {_count(n, 'game')} this season"
+                + (f" ({', '.join(split)})" if len(split) == 2 else ""))
+        # The sentence opens on the team's name, which keeps its capital.
+        return f"{lead}; {said}"
+    return said
+
+
+def scorer_sentence(c: Ctx) -> str:
+    """The short version's touchdown read: each side's go-to scorer, with
+    why. "" when neither side has one."""
+    bits = []
+    for t in c.teams:
+        r = next((x for x in c.reads if x.get("team") == t and _go_to(x)), None)
+        if not r:
+            continue
+        pw = pos_word(c, r.get("pos"))
+        words = scorer_words(c, r)
+        bits.append(f"{r.get('player')}" + (f", {team_owner(c, t)} {pw}" if pw else "")
+                    + (f" — {words}" if words else ""))
+    if not bits:
+        return ""
+    return _sentence("Likeliest to score: " + ". ".join([bits[0]] + [cap(b) for b in bits[1:]]))
+
+
 def shine_lines(c: Ctx, reads: list, shine_n: int = 3, struggle_n: int = 2, key_only: bool = False) -> list:
     """Who could have a big day and who could have a hard one, each with
     the reason that says why."""
@@ -2232,7 +2293,10 @@ def shine_lines(c: Ctx, reads: list, shine_n: int = 3, struggle_n: int = 2, key_
     shine.sort(key=lambda r: (r.get("read") != "breakout", -_volume(r), -len(r.get("pro") or [])))
     if shine:
         out.append("Who could have a big day: " + ". ".join(player_clause(c, r, "up") for r in shine[:shine_n]))
-    struggle = [r for r in reads if r.get("read") in ("tough", "avoid") and (not key_only or _is_key(r))]
+    # A go-to scorer is not a man to have a hard day (engine/readlogic rule
+    # 3): his card says the yards are tough and the touchdowns still his.
+    struggle = [r for r in reads if r.get("read") in ("tough", "avoid") and (not key_only or _is_key(r))
+                and not _go_to(r)]
     struggle.sort(key=lambda r: (r.get("read") != "avoid", -_volume(r), -len(r.get("con") or [])))
     if struggle:
         out.append("Who could have a hard day: " + ". ".join(player_clause(c, r, "down")
@@ -2479,6 +2543,9 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
                      + " A perfect passer rating is 158.3, so the receivers who line up across from "
                      + ("them have" if n_soft > 1 else "him have") + " the easier matchup.")
     items += shine_lines(c, c.reads, key_only=True)
+    scorers = scorer_sentence(c)
+    if scorers:
+        items.append(scorers)
     outs = [r for r in c.scan.get("injuries") or [] if isinstance(r, dict)
             and str(r.get("status") or "").upper() not in ("QUESTIONABLE", "")]
     gone = absent_sentence(c, outs)
