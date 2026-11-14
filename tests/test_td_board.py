@@ -319,6 +319,12 @@ def test_role_prefers_the_roster_position_and_falls_back_to_the_mix():
     # rather than crashing the lookup.
     assert T.role_of({"carries": 0.0, "receptions": 3.0,
                       "position": "OL"}) == "WR"
+    # A "QB" whose throws are on file and who barely throws is the box's
+    # passing-group guess (the picks audit, 2026-11-14: Boston College's
+    # four quarterbacks, one with 13% of its catches): his mix decides.
+    assert T.role_of({"carries": 0.3, "receptions": 2.0, "pass_att": 1.0, "position": "QB"}) == "WR"
+    assert T.role_of({"carries": 8.0, "receptions": 0.4, "pass_att": 0.5, "position": "QB"}) == "RB"
+    assert T.role_of({"carries": 9.0, "receptions": 0.0, "pass_att": 24.0, "position": "QB"}) == "QB"
 
 
 def test_the_position_travels_from_the_log_to_the_usage_row():

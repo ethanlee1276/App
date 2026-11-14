@@ -73,6 +73,20 @@ def test_the_contradictions_a_reader_would_catch_are_named():
     assert not any(f["kind"] == "REASON AGAINST" for f in C.scan(d, now=NOW))
 
 
+def test_a_small_counts_skew_is_not_a_projection_contradiction():
+    """The NHL board's self-check, 2026-11-14: 32 PROJECTION flags and no
+    pick under even. A count's mean sits above its median, so an under at
+    2.5 shots on a 2.8 projection is still the likelier side."""
+    def flags(line, proj):
+        d = _clean()
+        d["most_likely"].append(dict(player="E. Skater", market="shots", side="UNDER", line=line,
+                                     model_prob=0.56, projection=proj, kickoff=LATER))
+        return [f for f in C.scan(d, now=NOW) if f["kind"] == "PROJECTION" and f["player"] == "E. Skater"]
+    assert flags(2.5, 2.8) == [], "an under just past a small line is the skew"
+    assert flags(2.5, 3.2), "a full shot past it is a contradiction"
+    assert flags(60.5, 60.9), "a yardage line is no small count"
+
+
 def test_a_plus_money_edge_under_even_is_a_value_bet_not_a_contradiction():
     d = _clean()
     d["recommendations"].append(_edge("C. End", "receptions", "OVER", 4.5, 0.46, 4.8, odds=140))

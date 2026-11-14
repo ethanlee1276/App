@@ -252,7 +252,7 @@ def usage_table(conn, season: int | None = None,
             "COUNT(DISTINCT game_id) AS games FROM player_game_logs "
             "WHERE sport='cfb' AND season=? "
             "AND market IN ('carries','receptions','rush_yds','rec_yds',"
-            "'anytime_td','rz_car','rz_rec') "
+            "'anytime_td','rz_car','rz_rec','pass_att') "
             "GROUP BY team, player, market", (season,)):
         t = out.setdefault(r["team"], {})
         u = t.setdefault(normalize_name(r["player"]),
@@ -569,6 +569,13 @@ def resolve_side(norm: str, home: str, away: str, usage: dict,
 #: not in the table and falls through to the usage mix, which is the
 #: right answer for a player being priced on what he actually did.
 ROSTER_ROLES = {"QB": "QB", "RB": "RB", "FB": "RB", "WR": "WR", "TE": "TE"}
+#: A quarterback throws: under this many attempts a game, a "QB" label on a
+#: man who catches passes or carries a back's load is the box score's guess
+#: (cfbdata.GROUP_POS: anyone first seen in the passing block, a receiver
+#: who threw one trick-play pass among them), and his mix decides instead.
+#: The picks audit, 2026-11-14: Boston College listed four quarterbacks,
+#: one with 13% of its catches and one with 30% of its carries.
+QB_MIN_ATTEMPTS = 3.0
 
 
 def role_of(u: dict) -> str:
@@ -593,6 +600,11 @@ def role_of(u: dict) -> str:
     baseline less than the reverse.
     """
     seen = ROSTER_ROLES.get(str(u.get("position") or "").strip().upper())
+    # Only where his throws are on file: the box's passing-group guess needs
+    # a passing row to make, so a man it mislabelled always has one.
+    if seen == "QB" and "pass_att" in u and float(u.get("pass_att") or 0.0) < QB_MIN_ATTEMPTS \
+            and (float(u.get("receptions") or 0.0) >= 0.5 or float(u.get("carries") or 0.0) >= 4.0):
+        seen = None
     if seen:
         return seen
     if u["carries"] >= 2.0 and u["carries"] >= u["receptions"] * 1.5:

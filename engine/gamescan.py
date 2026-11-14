@@ -1610,20 +1610,27 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             dvp("anytime_td")
         rr = _rank(d, "def", "rushing")
         unit(rr, f"{opp}'s run defense")
+        # HIS OWN TEAM IS IN HIS NUMBERS (the picks audit, 2026-11-14:
+        # Stanford's Micah Ford read "Avoid" on "STAN's run game ranks 99th"
+        # and "STAN's run blocking ranks 93rd"). His run game and his line
+        # are the same every week; his carries, his yards and the book's
+        # line were all made behind them. Said, never counted — the NFL's
+        # rule since its numbers were measured.
         own = _rank(o, "off", "rushing")
         if own and own >= round(n_teams * 0.78):
-            text = f"{team}'s run game ranks {_ord(own)}"
-            notes.append(text) if measured else said(con, text, RL.OWN_TEAM)
+            notes.append(f"{team}'s run game ranks {_ord(own)}")
         scoring()
         # College only: how the lines meet. A front that stuffs runs at
-        # the line against a line that cannot get push.
+        # the line against a line that cannot get push. The front is the
+        # defence he faces, so it votes with the defence (one family),
+        # never as a second reason beside its own run-defense rank.
         stuff, push = _rank(d, "def", "stuff"), _rank(o, "off", "line")
         if _strong(stuff, n_teams) and _weak(push, n_teams):
             said(con, f"{opp} stuffs runs at the line ({_ord(stuff)}) and {team}'s "
-                      f"run blocking ranks {_ord(push)}", RL.TRENCHES)
+                      f"run blocking ranks {_ord(push)}", RL.DEFENSE)
         elif _weak(stuff, n_teams) and _strong(push, n_teams):
             said(pro, f"{team}'s run blocking ranks {_ord(push)} against a front "
-                      f"that stops few runs at the line ({_ord(stuff)})", RL.TRENCHES)
+                      f"that stops few runs at the line ({_ord(stuff)})", RL.DEFENSE)
         mt = (tackling or {}).get(opp)
         if mt is not None and mt >= 0.10:
             notes.append(f"{opp} misses {mt:.0%} of its tackles")
@@ -1653,7 +1660,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
             text = (f"{opp}'s pass rush ranks {_ord(rush)}"
                     + (f" and {team} is without {', '.join(line_out)}" if line_out
                        else f" against the {_ord(prot)} pass protection"))
-            notes.append(text) if measured else said(con, text, RL.TRENCHES)
+            # The pass rush is the defence he faces: one family with it.
+            notes.append(text) if measured else said(con, text, RL.DEFENSE)
         # HIS LEGS (QB_RUNS_CARRIES): his carries and yards a game, and what
         # this defence gives up to quarterbacks on the ground at any rank.
         # Said, never counted: in the NFL that rating measured nothing beyond

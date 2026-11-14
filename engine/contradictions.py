@@ -52,6 +52,9 @@ PROB_GAP = 0.05
 #: A projection this far off the Edge row's for the same prop is a second
 #: number for one player.
 PROJ_GAP = 0.05
+#: An under on a count line this small, projected this little above it, is
+#: the count's skew, not a contradiction (check 5).
+SKEW_LINE, SKEW_GAP = 4.5, 0.5
 #: Statuses that mean he is not playing (or not expected to): football's,
 #: then the basketball injury report's own words (nba_build.OUT_STATUSES).
 OUT = {"OUT", "IR", "DOUBTFUL", "SUSPENDED", "PUP", "NFI",
@@ -232,10 +235,15 @@ def scan(d: dict, now: _dt.datetime | None = None) -> list[dict]:
         if p is not None and p < 0.5 and e["market"] != "anytime_td" and not plus:
             flag("UNDER 50%", e["player"], f"{_desc(e)} — posted on a side our chance puts under even")
         # 5. THE PROJECTION ON THE OTHER SIDE OF THE LINE FROM THE PICK.
+        #    A small count's mean sits above its median, so an under at 2.5
+        #    shots on a 2.6 projection is a 52% under, not a contradiction —
+        #    the NHL board's self-check read 32 of those on 2026-11-14 with
+        #    no pick under even. Only an under within SKEW_GAP of a small
+        #    line (SKEW_LINE) is spared; an over below the line never is.
         if proj is not None and line is not None and e["market"] != "anytime_td":
             if e["side"] == "over" and proj < line:
                 flag("PROJECTION", e["player"], f"{_desc(e)} with a projection of {proj:.1f}, under the line")
-            if e["side"] == "under" and proj > line:
+            if e["side"] == "under" and proj > line and not (line <= SKEW_LINE and proj - line <= SKEW_GAP):
                 flag("PROJECTION", e["player"], f"{_desc(e)} with a projection of {proj:.1f}, over the line")
         # 6. A REASON PRINTED UNDER THE PICK THAT ARGUES THE OTHER WAY.
         want = 1 if e["side"] == "over" else -1

@@ -92,6 +92,28 @@ def test_dukes_back_at_miami_reads_neutral_with_the_defense_said():
     assert "rush_att" in rain["lean"], "the points the lines expect do move a back's carries"
 
 
+def _stanford(ratings):
+    from engine import gamescan as G
+    usage = {"carry_share": 0.43, "carries_pg": 14.0, "games": 9, "targets_pg": 1.5}
+    return G.player_read("Micah Ford", "STAN", "VT", "RB", usage=usage, ratings=ratings, room={}, scheme={},
+                         split={}, tackling={}, line_out=[], mates_out=[], n_teams=134, points=21.0)
+
+
+def test_his_own_team_is_in_his_numbers_and_the_front_votes_with_the_defense():
+    """The picks audit, 2026-11-14: Micah Ford read "Avoid" on "STAN's run
+    game ranks 99th" and "VT stuffs runs at the line (8th) and STAN's run
+    blocking ranks 93rd" — his own run game counted against him, and the
+    front counted as a second reason beside the defense it belongs to."""
+    x = _stanford({"VT": {"def": {"rushing": {"rank": 60}, "stuff": {"rank": 8}}},
+                   "STAN": {"off": {"rushing": {"rank": 120}, "line": {"rank": 93}}}})
+    assert x["con"] == ["VT stuffs runs at the line (8th) and STAN's run blocking ranks 93rd"], x["con"]
+    assert "STAN's run game ranks 120th" in x["notes"], "said, never counted"
+    assert x["read"] == "tough", "one reason against a back without the volume, never avoid"
+    y = _stanford({"VT": {"def": {"rushing": {"rank": 5}, "stuff": {"rank": 8}}},
+                   "STAN": {"off": {"rushing": {"rank": 60}, "line": {"rank": 93}}}})
+    assert len(y["con"]) == 2 and y["read"] == "tough", "the run defense and its front are one reason"
+
+
 def test_the_go_to_scorer_says_both():
     reads = {"DUKE@MIA": {"players": [
         {"player": "Duke Back", "team": "DUKE", "pos": "RB", "read": "tough", "label": "Tough matchup",
