@@ -1,0 +1,124 @@
+"""Where a long call spends its time, by the function it called, sampled.
+
+The record export (ledger.export_json) is one call of some seventy sections
+and took 148.6 seconds on the box on 7 November, every ten minutes on a game
+day, with nothing to say which section. cProfile would say, at a cost of
+another minute or two a run; this does not need to be exact. A thread looks
+at the calling thread's stack about twenty times a second and credits each
+look to the function the measured call was running directly at that moment
+(``(self)`` for the call's own lines), so the totals are seconds per section,
+to about a twentieth of a second each, for almost nothing.
+
+Standard library only. Never raises into the measured call: a sampler that
+fails stops sampling, reports what it had, and says why (``error``).
+"""
+from __future__ import annotations
+
+import sys
+import threading
+import time
+
+#: How often the stack is looked at.
+INTERVAL_S = 0.05
+
+
+class Sampler:
+    """Sample this thread's stack while the ``with`` block runs, crediting
+    each sample to the direct callee of the frame running ``root`` (a code
+    object, e.g. ``ledger.export_json.__code__``).
+
+        with Sampler(export_json.__code__) as s:
+            export_json(...)
+        s.seconds()   # {"_two_leg_record": 10.4, "performance": 4.0, ...}
+    """
+
+    def __init__(self, root, interval: float = INTERVAL_S, clock=time.monotonic, depth: int = 1,
+                 qualify: bool = False):
+        self.root = root
+        self.interval = float(interval)
+        #: How many calls below ``root`` a sample names: 1, the direct callee
+        #: (``"fetch"``); 2, that and its own callee (``"fetch>loads"``).
+        self.depth = max(1, int(depth))
+        #: Each name carries its module (``"selectionfit.refresh"``), for a
+        #: call whose sections share a function name: the settle pass's
+        #: learners are six modules' ``refresh``.
+        self.qualify = bool(qualify)
+        self.clock = clock
+        self.counts: dict = {}
+        self.samples = 0
+        self.elapsed = 0.0
+        #: Why sampling stopped early, or None: an empty answer must not read
+        #: as a call with nothing to say.
+        self.error: str | None = None
+        self._tid = None
+        self._stop = threading.Event()
+        self._thread = None
+        self._t0 = None
+
+    def __enter__(self):
+        self._tid = threading.get_ident()
+        self._t0 = self.clock()
+        self._thread = threading.Thread(target=self._run, name="stacksample", daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
+        self.elapsed = self.clock() - (self._t0 or self.clock())
+        return False
+
+    def _run(self):
+        try:
+            while not self._stop.wait(self.interval):
+                frame = sys._current_frames().get(self._tid)
+                name = self.callee(frame, self.root, self.depth, self.qualify)
+                if name is not None:
+                    self.counts[name] = self.counts.get(name, 0) + 1
+                    self.samples += 1
+        except Exception as exc:                             # noqa: BLE001
+            # NAMED, NOT SILENT: the call it measures goes on; ``error``
+            # says sampling stopped and why, beside whatever it had.
+            self.error = f"{type(exc).__name__}: {exc}"
+            return
+
+    @staticmethod
+    def callee(frame, root, depth: int = 1, qualify: bool = False):
+        """The direct callee of the innermost frame running ``root`` on this
+        stack (``(self)`` when ``root`` is the frame running), or None when
+        ``root`` is not on it; with ``depth`` above 1, that callee and the
+        calls under it, outermost first, joined by ``>``; with ``qualify``,
+        each named with the last part of its module's name."""
+        below: list = []
+        while frame is not None:
+            if frame.f_code is root:
+                if not below:
+                    return "(self)"
+                return ">".join(_named(f, qualify) for f in reversed(below[-depth:]))
+            below.append(frame)
+            frame = frame.f_back
+        return None
+
+    def seconds(self, top: int = 15) -> dict:
+        """The ``top`` callees by seconds, each its share of the samples
+        times the block's own length, to 0.1 s; the rest summed as
+        ``(rest)``."""
+        if not self.samples:
+            return {}
+        scale = self.elapsed / self.samples
+        ranked = sorted(self.counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        out = {k: round(n * scale, 1) for k, n in ranked[:top]}
+        rest = sum(n for _k, n in ranked[top:])
+        if rest:
+            out["(rest)"] = round(rest * scale, 1)
+        return out
+
+
+def _named(frame, qualify: bool) -> str:
+    """A frame's function name, with its module's last name in front when
+    ``qualify`` (``"journalfit.refresh"``)."""
+    if not qualify:
+        return frame.f_code.co_name
+    module = str(frame.f_globals.get("__name__") or "?").rsplit(".", 1)[-1]
+    return f"{module}.{frame.f_code.co_name}"

@@ -1,0 +1,1333 @@
+"""The Lab — every walk-forward harness, run on a cadence and published.
+
+The measured-evidence loop has always existed: half a dozen backtests
+replay the PRODUCTION pricer over stored history and report whether the
+model actually forecasts better than guessing. All of it printed to a
+terminal and vanished. You could not see any of it from a phone, and a
+measurement nobody reads is not a measurement.
+
+This module runs what each sport's stored data actually supports,
+normalizes every harness into one shape, and writes
+``web/data/backtest.json`` for the site's Lab page. It runs weekly from
+the maintenance pass — never a command anyone has to remember.
+
+What each sport supports, and why the gaps are gaps:
+
+* **Player props** — MLB replays its own ingested game logs and, where
+  a closing price was harvested, prices against *the number a bettor
+  could actually have taken*. NFL's harness needs a weekly-stats CSV
+  the release feed gates. NBA / WNBA / CFB have no prop harness at all:
+  their projections ship, but nothing replays them, and saying so is
+  the point of the coverage matrix.
+* **Game lines** — spreads and totals replay through the production
+  pricer for every sport with harvested closes.
+
+Two honesty rules the page inherits from the harnesses:
+
+* **Basis.** A prop priced against a naive baseline line measures
+  predictive skill, NOT an edge over the market. Only the book-priced
+  subset speaks to beating a book, so basis travels with every number
+  and the page refuses to headline a naive ROI.
+* **Skill, not Brier.** "Brier 0.2417" reads like a score out of
+  something; it is not. The bar is what you would score predicting the
+  base rate every time, and the sharpness figure catches the other
+  failure — a model that hedges toward the base rate is perfectly
+  calibrated and perfectly useless.
+
+Standard library only; reads the databases the ingests already fill.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import json
+from pathlib import Path
+
+#: Absolute, because the launcher and the maintenance pass do not run from
+#: the repo root — a relative default would quietly write the page's data
+#: into whatever directory happened to be current.
+LAB_PATH = Path(__file__).resolve().parents[1] / "web" / "data" / "backtest.json"
+
+#: Backtests are CPU-heavy and their inputs move slowly — a week's fresh
+#: results change a season-long walk-forward by very little. Weekly keeps
+#: the page current without spending an evening's compute every launch.
+LAB_EVERY_DAYS = 7
+
+#: The sports the Lab replays, in the order a run takes them when they are
+#: equally old. ONE SPORT AT A TIME, EACH PUBLISHED AS IT LANDS (2026-11-03):
+#: the page was stamped 2026-09-29 for five weeks because the run built
+#: every sport in memory and published only at the end. The NBA and WNBA
+#: replays joined it on 2026-10-01 and the NFL gained five markets on
+#: 10-10; once the whole pass outgrew the chores' one-hour ceiling
+#: (engine.maintenance.WEEKLY_JOB_TIMEOUT_S) it was cut off every night
+#: with nothing written, and was due again the next night, from the start.
+SPORT_ORDER = ("mlb", "nfl", "cfb", "nba", "cbb", "wnba", "ufc")
+
+#: When the Lab last STARTED each sport, so a sport a run was cut off in
+#: goes to the back of the next run's line instead of blocking the rest.
+ATTEMPTS_PATH = Path(__file__).resolve().parents[1] / "data" / "cache" / "lab_attempts.json"
+
+#: MLB prop markets worth replaying. Home runs have their own dedicated
+#: harness (hr_backtest.py) because a rare event needs different bars.
+MLB_MARKETS = ("total_bases", "hits", "strikeouts")
+
+#: Game-line markets, and the sports whose closes can carry them.
+GAME_MARKETS = ("total", "spread")
+GAME_SPORTS = ("nfl", "mlb", "cfb", "nba", "wnba", "cbb")
+
+#: A walk-forward needs a real history before its numbers mean anything.
+MIN_HISTORY = 8
+
+#: THE MLB REPLAY FITS ITS RUN (2026-11-05). On 4 November MLB alone ran
+#: past 85 minutes, every stored season walked for three markets, against
+#: a run's ceiling of an hour (engine.maintenance.WEEKLY_JOB_TIMEOUT_S),
+#: the other sports and MLB's own game lines still to come. The page is
+#: about the latest two seasons, so those are what it walks; a market
+#: starts only while the time left covers it, at the pace of the market
+#: before; a market the run did not reach keeps the numbers of the last
+#: run that measured it, dated (carry_forward).
+LAB_MLB_PROPS_BUDGET_S = 30 * 60
+LAB_MLB_SEASONS = 2
+
+#: Sports with no player-prop harness, and the honest reason. Absence
+#: rendered as an explicit row beats a sport quietly missing from a page.
+NO_PROP_HARNESS = {
+    # NBA and WNBA left this dict on 2026-09-30 (audit B1-1): the board's
+    # own evaluate_prop is replayed over stored logs by engine.hoopsreplay.
+    # CFB left this dict on 2026-08-31: engine.cfbtdfit IS a walk-forward
+    # prop harness (29,047 graded player-weeks) and had been for days
+    # while this page — the site's trust furniture — told subscribers
+    # the college touchdown board ships unmeasured. See cfb_props().
+    "ufc": "fight picks are graded forward in the journal, not backtested",
+}
+
+
+def _round(x, n=4):
+    try:
+        return round(float(x), n)
+    except (TypeError, ValueError):
+        return None
+
+
+def report_to_dict(report, market: str = "", label: str = "") -> dict:
+    """One :class:`engine.backtest.BacktestReport` as plain JSON.
+
+    ``basis`` is the headline honesty flag: "book" means every number
+    below was priced against a harvested closing line, "naive" means the
+    baseline, "mixed" means both and the segments carry the split.
+    """
+    used, total = report.used_real_lines, report.total_priced
+    basis = "naive"
+    if used and used >= total:
+        basis = "book"
+    elif used:
+        basis = "mixed"
+    out = {
+        "market": market,
+        "label": label or market,
+        "n": report.n,
+        "mae": _round(report.mae, 3),
+        "rmse": _round(report.rmse, 3),
+        "brier": _round(report.brier),
+        "ece": _round(report.ece, 3),
+        "skill": None,
+        "bins": [{"lo": _round(b.lo, 2), "hi": _round(b.hi, 2), "n": b.n,
+                  "mean_pred": _round(b.mean_pred, 3),
+                  "hit_rate": _round(b.hit_rate, 3)}
+                 for b in report.bins if b.n],
+        "n_bets": report.n_bets,
+        "wins": report.wins,
+        "win_rate": _round(report.win_rate, 3),
+        "roi": _round(report.roi, 4),
+        "net_units": _round(report.net_units, 2),
+        "units_staked": _round(report.units_staked, 2),
+        "used_real_lines": used,
+        "total_priced": total,
+        "basis": basis,
+        "segments": {},
+    }
+    sk = report.skill()
+    if sk:
+        out["skill"] = {"n": sk["n"], "base_rate": _round(sk["base_rate"], 4),
+                        "base_brier": _round(sk["base_brier"]),
+                        "skill": _round(sk["skill"], 4),
+                        "hedged": _round(sk["hedged"], 3)}
+    for name, g in (report.segments or {}).items():
+        out["segments"][name] = {
+            "n_bets": g.get("n_bets", 0), "wins": g.get("wins", 0),
+            "win_rate": _round(g.get("win_rate"), 3),
+            "roi": _round(g.get("roi"), 4), "net": _round(g.get("net"), 2),
+            # THE GRADE LADDER, PER BASIS. `evaluate` has bucketed each
+            # segment by grade all along and this dropped the buckets on
+            # the way out, so the page could show that A and B+ disagree
+            # and never which pricing produced the disagreement. The
+            # whole question — does the top band earn its billing against
+            # a real book — is a per-grade record inside the "book"
+            # segment, and it was the one number not carried across.
+            # THE SIDE SPLIT, for the same reason the grades are here.
+            # `evaluate` has bucketed it all along and this dropped it.
+            # Measured on 2025 NFL props: a naive-basis segment reading
+            # "256 bets, 57.1%, +8.7%" is 129 overs at 44.2% (-8.5%) and
+            # 127 unders at 66.1% (+26.1%). Those are not one number, and
+            # the blended one describes neither side of the board.
+            "sides": {side: {
+                "n_bets": s.get("n_bets", 0), "wins": s.get("wins", 0),
+                "win_rate": _round((s["wins"] / s["n_bets"])
+                                   if s.get("n_bets") else None, 3),
+                "roi": _round(s.get("roi"), 4),
+                "net": _round(s.get("net"), 2)}
+                for side, s in (g.get("sides") or {}).items()},
+            "grades": {grade: {
+                "n_bets": b.get("n_bets", 0), "wins": b.get("wins", 0),
+                "win_rate": _round((b["wins"] / b["n_bets"])
+                                   if b.get("n_bets") else None, 3),
+                "roi": _round(b.get("roi"), 4),
+                "net": _round(b.get("net"), 2)}
+                for grade, b in (g.get("grades") or {}).items()},
+        }
+    return out
+
+
+# --- player props ------------------------------------------------------------
+def mlb_props(conn, markets=MLB_MARKETS, min_history: int = MIN_HISTORY,
+              log=print, seasons=None) -> list[dict]:
+    """Replay MLB props over ingested logs, priced against harvested closes
+    wherever one exists (see engine.mlb.backtest.settled_props_from_logs)."""
+    return _mlb_markets(conn, markets, min_history, log, seasons, None)[0]
+
+
+def _mlb_markets(conn, markets, min_history, log, seasons, deadline):
+    """``(market dicts, markets not reached)``. With a ``deadline`` a
+    market starts only while the time left covers its games at the pace
+    the market before it walked; the first always starts."""
+    import time as _time
+    from . import db as _db
+    from .mlb.backtest import backtest_from_logs
+    from .mlb.models import MARKET_LABELS
+
+    out, missed = [], []
+    pace = None                                    # seconds per game walked
+    for k, market in enumerate(markets):
+        t0 = _time.monotonic()
+        try:
+            entries = _db.entries_for_market(conn, "mlb", market,
+                                             min_games=min_history + 1,
+                                             seasons=seasons)
+            if not entries:
+                continue
+            games = sum(len(e["values"]) for e in entries)
+            if deadline is not None:
+                left = deadline - _time.monotonic()
+                need = pace * games if pace is not None else 0.0
+                if left <= 0 or need > left:
+                    missed = list(markets[k:])
+                    log(f"  lab: mlb stopped at the run's time limit: "
+                        f"{', '.join(missed)} not replayed this run "
+                        f"({left / 60:.0f} min left, {need / 60:.0f} needed)")
+                    break
+            real = _db.closing_odds_by_date(conn, "mlb", market)
+            rep = backtest_from_logs(entries, market,
+                                     min_history=min_history,
+                                     real_lines=real or {})
+            took = _time.monotonic() - t0
+            pace = took / games if games else pace
+            if deadline is not None:
+                log(f"  lab: mlb {market} replayed: {games:,} games in {took / 60:.0f} min")
+            if rep.n:
+                out.append(report_to_dict(
+                    rep, market, MARKET_LABELS.get(market, market)))
+        except Exception as exc:                   # noqa: BLE001
+            log(f"  lab: mlb {market} skipped — {exc}")
+    return out, missed
+
+
+def latest_seasons(conn, sport: str, n: int) -> list[int]:
+    """The ``n`` latest seasons the history file holds for ``sport``,
+    oldest first; empty when it holds none or cannot be read."""
+    try:
+        rows = conn.execute("SELECT DISTINCT season FROM player_game_logs WHERE sport=? "
+                            "ORDER BY season DESC LIMIT ?", (sport, int(n))).fetchall()
+    except Exception:                              # noqa: BLE001
+        return []
+    return sorted(int(r[0]) for r in rows if r[0] is not None)
+
+
+def mlb_section(conn, log=print, budget_s: float | None = None,
+                seasons_back: int | None = LAB_MLB_SEASONS) -> dict:
+    """MLB's props section: the latest ``seasons_back`` seasons, the
+    markets reached inside ``budget_s``, and the ones not reached named
+    (``not_reached``) so the page keeps their last numbers, dated."""
+    import time as _time
+    seasons = latest_seasons(conn, "mlb", seasons_back) if seasons_back else []
+    deadline = _time.monotonic() + budget_s if budget_s else None
+    markets, missed = _mlb_markets(conn, MLB_MARKETS, MIN_HISTORY, log,
+                                   seasons or None, deadline)
+    sec: dict = ({"markets": markets} if markets else
+                 {"unavailable": "no ingested game logs deep enough to replay yet"})
+    if seasons:
+        sec["seasons"] = seasons
+    if missed:
+        sec["not_reached"] = missed
+    return sec
+
+
+def hoops_props(conn, sport: str, log=print, budget_s: float | None = None,
+                missed: list | None = None) -> list[dict]:
+    """The NBA / WNBA board's own pricer replayed over stored logs
+    (engine.hoopsreplay, audit B1-1). With ``budget_s`` a market starts
+    only while the time left covers it (`hoopsreplay.replay`); the ones not
+    reached go into ``missed``."""
+    import time as _time
+    from .hoopsreplay import replay
+    from .nba.pipeline import MARKET_LABELS
+    deadline = _time.monotonic() + budget_s if budget_s else None
+    try:
+        return [report_to_dict(rep, m, MARKET_LABELS.get(m, m))
+                for m, rep, _counts in replay(conn, sport, deadline=deadline, missed=missed)]
+    except Exception as exc:                       # noqa: BLE001
+        log(f"  lab: {sport} props skipped — {exc}")
+        return []
+
+
+#: THE PUBLIC SUMMARY of the replay (audit B1-1): how well the models
+#: forecast stored history, beside the journal's own Brier on the Record
+#: page. Calibration numbers only — Brier, skill over the base rate, ECE,
+#: how many were priced and on what basis. The replay's simulated bets,
+#: ROI, grades and bins stay in backtest.json, which is sealed.
+SUMMARY_FIELDS = ("n", "brier", "ece", "skill", "basis")
+
+
+def replay_summary(doc: dict) -> dict:
+    """``{sport: {"n", "brier", "ece", "skill", "basis", "markets"}}``,
+    n-weighted over each sport's prop markets, plus ``generated_at``."""
+    out: dict = {}
+    for sport, blob in (doc.get("sports") or {}).items():
+        mk = [m for m in ((blob or {}).get("props") or {}).get("markets") or []
+              if m.get("n") and m.get("brier") is not None]
+        if not mk:
+            continue
+        n = sum(m["n"] for m in mk)
+
+        def wavg(get):
+            pairs = [(get(m), m["n"]) for m in mk if get(m) is not None]
+            w = sum(k for _, k in pairs)
+            return round(sum(v * k for v, k in pairs) / w, 4) if w else None
+
+        bases = {m.get("basis") or "naive" for m in mk}
+        out[sport] = {
+            "n": n,
+            "brier": wavg(lambda m: m.get("brier")),
+            "ece": wavg(lambda m: m.get("ece")),
+            "skill": wavg(lambda m: (m.get("skill") or {}).get("skill")),
+            "basis": bases.pop() if len(bases) == 1 else "mixed",
+            "markets": [m.get("label") or m.get("market") for m in mk],
+            "carried_from": ((blob.get("props") or {}).get("carried_from")
+                             or None),
+        }
+    if out:
+        out["generated_at"] = str(doc.get("generated_at") or "")[:10]
+    return out
+
+
+def published_summary() -> dict:
+    """The summary of the last Lab run, read from the sealed copy the
+    subscriber page is served. `{}` when there is none."""
+    return replay_summary(_previous_page(LAB_PATH))
+
+
+#: The NFL prop markets a harvested close can be joined to. The four
+#: `SPORT_CONFIG["nfl"]["markets"]` buys, plus the scorer market — stored
+#: under the same names `harvest_odds.py` writes.
+#:
+#: `anytime_td` matters more than the others here. A scorer prop is built
+#: with NO proxy line on purpose (nflverse.build_slate: "a scorer market
+#: priced against a made-up -110 would put fake edges on a longshot
+#: board"), so the touchdown board is the one market that CANNOT be
+#: replayed at all without a purchased price. Every other market has a
+#: baseline to fall back on; this one has silence.
+NFL_MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds", "anytime_td")
+
+
+def _seasons_to_try(season: int | None) -> list:
+    """The season asked for, or the current one and the one before it.
+
+    An explicit season is honoured exactly — a caller naming 2023 means
+    2023 and must not silently get 2022.
+    """
+    from .pipeline import nfl_season_of
+    if season:
+        return [int(season)]
+    current = nfl_season_of(None)
+    return [current, current - 1]
+
+
+def nfl_closes(conn, markets=NFL_MARKETS) -> dict:
+    """``{market: {(player, date): close}}`` — `closing_odds_by_date` for
+    each NFL prop market. Each is a scan of the history file's NFL tape,
+    so the Lab reads them once and hands them on (`nfl_props`'
+    ``closes_out``, `ripple_section`)."""
+    from . import db as _db
+    out: dict = {}
+    for market in markets:
+        try:
+            out[market] = _db.closing_odds_by_date(conn, "nfl", market)
+        except Exception as exc:                   # noqa: BLE001
+            raise RuntimeError(f"nfl {market} closes unreadable — {exc}") from exc
+    return out
+
+
+def _keyed_closes(closes: dict, markets=NFL_MARKETS) -> dict:
+    out: dict = {}
+    for market in markets:
+        for (player, date), quote in (closes.get(market) or {}).items():
+            out[(player, market, date)] = quote
+    return out
+
+
+def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
+    """``{(normalized player, market, date): close}`` for the NFL props.
+
+    `closing_odds_by_date` answers one market at a time and drops the
+    market from its key; the backtest needs it back, because a player has
+    a receptions close and a receiving-yards close on the same day and
+    they are different bets.
+    """
+    return _keyed_closes(nfl_closes(conn, markets), markets)
+
+
+#: THE NFL REPLAY'S SHARE OF THE LAB'S RUN (2026-11-05). The live heartbeat
+#: that morning: the run cut off after 99 minutes in "lab: replaying nfl (1
+#: of 6)", publishing nothing, as every night since 29 September. The walk
+#: rebuilds a full slate per week, twelve weeks, on one niced vCPU beside
+#: the boards. It now stops at this and publishes the weeks it reached,
+#: newest first, so the NFL lands and the run moves on to the next sport.
+#: THE CLOSES COUNT AGAINST IT (2026-11-07): the five markets' closes, a
+#: scan of the history file's NFL tape each, were read before the clock
+#: started, and the usage ripple read three of the same five again after
+#: it; the replay now reads them inside this limit and the ripple reuses
+#: them. A week starts only with time left for one at the pace of the
+#: last (`backtest.backtest_from_stats`), so the walk ends inside it too.
+LAB_NFL_PROPS_BUDGET_S = 30 * 60
+#: The NBA's and the WNBA's props: every market walks the same games, so the
+#: one before tells how long the next takes (`hoopsreplay.replay`).
+LAB_HOOPS_PROPS_BUDGET_S = 25 * 60
+
+#: THE WHOLE RUN FITS THE HOUR (2026-11-05). The chores stop a weekly child
+#: at its hour, and a sport cut off mid-replay publishes nothing: on 4 and 5
+#: November the run spent 85 and 99 minutes inside its first sport and the
+#: page stayed dated 29 September (the owner's desk: "The Lab's WNBA numbers
+#: are 37 days old", six sports late). Each sport now gets what is left of
+#: this, less `LAB_SPORT_RESERVE_S` for its game lines and its publish, and
+#: no sport starts with under `LAB_SPORT_MIN_S` left: the ones not started
+#: are tomorrow's first, never marked tried.
+LAB_RUN_BUDGET_S = 50 * 60
+LAB_SPORT_MIN_S = 6 * 60
+LAB_SPORT_RESERVE_S = 5 * 60
+
+
+def nfl_replay(season: int | None, weeks: list, real: dict, log=print,
+               progress=None, deadline: float | None = None):
+    """``(report, season, tried)`` — the newest season that produced one.
+
+    ONE implementation, because the second one was wrong. The `--bets`
+    path reimplemented this loop and left out the `DataUnavailable`
+    arm, so it crashed on an unplayed 2026 instead of falling back to
+    2025 — the exact failure the fallback exists to prevent, in a copy of
+    the fallback.
+    """
+    from .backtest import backtest_from_stats
+    from .sources.fetch import DataUnavailable
+    tried: list = []
+    for candidate in _seasons_to_try(season):
+        try:
+            if progress:
+                progress(f"replaying {candidate} weeks "
+                         f"{weeks[0]}-{weeks[-1]} …")
+            rep = backtest_from_stats(candidate, weeks, real_lines=real,
+                                      log=progress, deadline=deadline,
+                                      newest_first=deadline is not None)
+        except DataUnavailable as exc:
+            tried.append(f"{candidate}: {str(exc).split(chr(10))[0]}")
+            continue
+        except Exception as exc:                   # noqa: BLE001
+            log(f"  lab: nfl props {candidate} skipped — {exc}")
+            tried.append(f"{candidate}: {exc}")
+            continue
+        if rep.n:
+            return rep, candidate, tried
+        tried.append(f"{candidate}: no settled props in weeks "
+                     f"{weeks[0]}–{weeks[-1]}")
+    return None, _seasons_to_try(season)[0], tried
+
+
+def nfl_props(season: int | None = None, weeks=None, log=print,
+              conn=None, budget_s: float | None = None,
+              closes_out: dict | None = None) -> dict:
+    """Replay NFL props walk-forward. The weekly-stats feed is release-gated,
+    so "no CSV on this machine" is the normal state and reported as such.
+
+    Priced against harvested closes wherever one exists — `conn` is the
+    history DB, and without it every prop falls back to the recent-form
+    proxy the way this always did. ``budget_s`` covers the closes' read as
+    well as the walk (LAB_NFL_PROPS_BUDGET_S); ``closes_out``, when given,
+    is filled with them by market (`nfl_closes`) for the usage ripple,
+    left empty when they could not be read.
+    """
+    import time as _time
+    deadline = _time.monotonic() + budget_s if budget_s else None
+
+    weeks = list(weeks or range(6, 18))
+    real: dict = {}
+    if conn is not None:
+        try:
+            closes = nfl_closes(conn)
+            real = _keyed_closes(closes)
+            if closes_out is not None:
+                closes_out.update(closes)
+        except Exception as exc:                   # noqa: BLE001
+            log(f"  lab: nfl closes unavailable — {exc}")
+
+    # THE SEASON WITH GAMES IN IT, not the one the calendar is in.
+    # `nfl_season_of` is right about what it answers — on 2026-08-27 the
+    # 2026 season IS the current one — and wrong as a backtest default,
+    # because that season has not been played. A lab run in August was
+    # therefore guaranteed to replay an empty season and report
+    # "unavailable" while four thousand credits of 2025 closing prices
+    # sat in the database unread.
+    #
+    # One step back is enough and no further: an offseason run wants last
+    # season, and a run in week 2 wants last season too (six weeks of
+    # priors do not exist yet). Both are "the current season produced
+    # nothing", so both are the same fallback.
+    rep, season, tried = nfl_replay(season, weeks, real, log=log,
+                                    progress=log if budget_s else None, deadline=deadline)
+    if rep is None:
+        return {"unavailable": "; ".join(tried) or "nothing to replay",
+                "season": season}
+    covered = list(getattr(rep, "weeks_covered", None) or [])
+    span = [covered[0], covered[-1]] if covered else [weeks[0], weeks[-1]]
+    d = report_to_dict(rep, "all", "All prop markets")
+    d["season"] = season
+    d["weeks"] = span
+    if covered:
+        d["weeks_replayed"] = len(covered)
+    if getattr(rep, "stopped_early", False):
+        d["stopped_early"] = True
+    markets = [d]
+    # THE TOUCHDOWN BOARD, REPORTED APART. A +450 scorer market and a
+    # -110 yardage market do not share a meaningful win rate, and one
+    # blended row would describe neither — so it gets its own entry the
+    # way it gets its own report.
+    if rep.longshots is not None and rep.longshots.n:
+        td = report_to_dict(rep.longshots, "anytime_td", "Anytime touchdown")
+        td["season"] = season
+        td["weeks"] = span
+        markets.append(td)
+    return {"markets": markets, "season": season}
+
+
+def cfb_props(log=print, conn=None, runner=None) -> dict:
+    """The college touchdown harness, on the Lab page at last.
+
+    `engine.cfbtdfit` replays the exact role chain the college board
+    prices — walk-forward, weeks strictly before the week being graded —
+    and its pairs are what fitted `cfb:anytime_td`. This page said "no
+    walk-forward prop harness yet" the whole time, which told a reader
+    the one market the college board actually prices was unmeasured.
+
+    BASIS IS "outcomes", A THIRD KIND. "book" means priced against
+    harvested closes and "naive" against a baseline line; this is
+    neither — a touchdown has no line, and no college closes are joined
+    in the replay. It is graded purely against who scored: predictive
+    skill, never an edge over a book, and the card says so instead of
+    wearing the market-relative chip.
+
+    ``runner`` is injectable so the suite can grade this shaping without
+    a six-figure replay. ``conn`` is the SAME history handle the rest of
+    the lab replays — the first cut opened the ambient DB instead, so a
+    seeded test database saw the real box's college seasons and the
+    suite ran the full replay by accident.
+    """
+    from . import db as _db
+    from .cfbtdfit import run as _run
+    runner = runner or (lambda: _run(conn if conn is not None
+                                     else _db.connect()))
+    try:
+        rep = runner()
+    except Exception as exc:                              # noqa: BLE001
+        return {"unavailable": f"college replay failed: {exc}"}
+    if not rep.n:
+        return {"unavailable": "no ingested college player logs to replay "
+                               "— the Monday backfill fills them"}
+    base = rep.base_rate
+    base_brier = base * (1.0 - base)
+    hedged = (sum(1 for p, _ in rep.pairs if abs(p - base) <= 0.05)
+              / rep.n) if rep.pairs else 0.0
+    m = {
+        "market": "anytime_td", "label": "Anytime touchdown",
+        "basis": "outcomes",
+        "basis_note": ("graded against who actually scored — predictive "
+                       "skill, not an edge over a book; no college closing "
+                       "prices are joined in this replay"),
+        "n": rep.n,
+        "brier": _round(rep.brier),
+        "mae": None, "ece": None,
+        "skill": ({"n": rep.n, "base_rate": _round(base, 4),
+                   "base_brier": _round(base_brier),
+                   "skill": _round(1.0 - rep.brier / base_brier, 4),
+                   "hedged": _round(hedged, 3)}
+                  if rep.n >= 100 and base_brier else None),
+        "bins": [{"lo": _round(lo, 2), "hi": _round(hi, 2), "n": b["n"],
+                  "mean_pred": _round(b["claimed"], 3),
+                  "hit_rate": _round(b["landed"], 3)}
+                 for (lo, hi), b in sorted(rep.bands.items()) if b["n"]],
+        # No ROI columns AT ALL, rather than zeros pretending to be a
+        # record: nothing here ever met a price.
+        "n_bets": 0, "wins": 0, "win_rate": None, "roi": None,
+        "net_units": None, "segments": {},
+    }
+    return {"markets": [m]}
+
+
+# --- game lines --------------------------------------------------------------
+def game_lines(conn, sport: str, log=print) -> dict:
+    """Spreads and totals through the production pricer, graded on real
+    closing numbers.
+
+    ``engine.gamebets`` refuses to price a sport whose scoring baseline
+    and variances were never registered, rather than quietly borrowing
+    another league's — so a refusal is reported as the honest gap it is.
+    CFB registers its own at import, which is what every real build
+    relies on; NBA and WNBA have none, so their game lines genuinely
+    cannot be replayed yet.
+    """
+    from .gamebacktest import backtest_game_lines
+    if sport == "cfb":
+        from .cfb import ratings as _cfb_ratings      # noqa: F401  (installs)
+
+    out, refusal = [], None
+    for market in GAME_MARKETS:
+        try:
+            r = backtest_game_lines(conn, sport, market=market)
+        except ValueError as exc:
+            refusal = str(exc).split(" — ")[0]
+            continue
+        except Exception as exc:                   # noqa: BLE001
+            log(f"  lab: {sport} {market} skipped — {exc}")
+            continue
+        # `games_quoted`, and the field name is the whole bug. This read
+        # `games_priced`, which `GameLineBacktest` has never had, through
+        # a `getattr(..., 0)` that turned the mistake into a silent zero
+        # — so EVERY game-line market was skipped, for every sport, on
+        # every run, and the Lab reported "no harvested closing lines
+        # stored for this sport" on a database holding 17,457 MLB closes
+        # and 899 replayable NFL games. An AttributeError would have been
+        # loud on the first run; the default made it invisible for the
+        # life of the feature. Attribute access, deliberately, so the
+        # next rename fails instead of lying.
+        if not r.games_quoted:
+            continue
+        out.append({
+            "market": market,
+            "games_seen": r.games_seen,
+            "games_quoted": r.games_quoted,
+            # Games whose stored close carries a LINE but no price. They
+            # measure the projection and can never be bet, so they are
+            # counted apart rather than folded into either number.
+            "unpriced": r.unpriced,
+            "n_bets": r.n_bets,
+            "wins": r.wins,
+            "win_rate": _round(r.wins / r.n_bets, 3) if r.n_bets else None,
+            "roi": _round(r.roi, 4),
+            "net": _round(r.net, 2),
+            "mae": _round(r.mae, 3),
+            "refused": r.refused,
+            "source": r.source,
+        })
+    if out:
+        return {"markets": out}
+    if refusal:
+        return {"unavailable": refusal}
+    return {"unavailable": "no harvested closing lines stored for this sport"}
+
+
+# --- the whole lab -----------------------------------------------------------
+def ripple_section(hconn, log=print, closes: dict | None = None) -> dict:
+    """Does a same-position teammate's absence carry information the NFL
+    close does not? `engine.ripplefit` answers per market, stores the
+    verdict where a pricing hook would read it, and this puts the table
+    on the Lab page. Minutes, not hours: it joins logs to closes and
+    never rebuilds a slate. ``closes`` are the replay's (`nfl_closes`);
+    without them it reads its own. A failure is a reason on the page,
+    never a dead Lab."""
+    try:
+        from . import ripplefit
+        return ripplefit.run(hconn, log=log, closes=closes)
+    except Exception as exc:                                  # noqa: BLE001
+        log(f"  lab: usage ripple skipped — {exc}")
+        return {"unavailable": f"usage ripple not measured — {exc}"}
+
+
+def build(conn=None, hconn=None, log=print, nfl: bool = True) -> dict:
+    """Run every harness this machine's data supports and return the page's
+    JSON. Each sport reports what it HAS and, where it has nothing, why."""
+    from . import db as _db
+
+    close = False
+    if hconn is None:
+        hconn = _db.connect()
+        close = True
+    try:
+        sports = {sp: build_sport(sp, hconn, log=log, nfl=nfl) for sp in SPORT_ORDER}
+        return _page_shell(sports)
+    finally:
+        if close:
+            hconn.close()
+
+
+def _page_shell(sports: dict) -> dict:
+    """The page around its sports: the stamp of this publish and the notes
+    every page carries."""
+    return {
+        "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "sports": sports,
+        "min_history": MIN_HISTORY,
+        "every_days": LAB_EVERY_DAYS,
+        # The caveat that must never be dropped in rendering: a naive
+        # basis measures skill against a trailing average, not an edge
+        # over a book, and the two get confused constantly.
+        "basis_note": ("A prop priced against a NAIVE baseline line "
+                       "measures predictive skill, not an edge over the "
+                       "market. Only book-priced rows speak to beating "
+                       "a sportsbook."),
+    }
+
+
+def build_sport(sport: str, hconn, log=print, nfl: bool = True,
+                budget_s: float | None = None) -> dict:
+    """One sport's section of the page, stamped with when it was replayed
+    (``replayed_at``) — each sport carries its own date now that a run
+    publishes them one at a time. ``budget_s`` is what the run has left for
+    this sport's props (`run_if_due`); each sport's own limit caps it."""
+    def cap(limit: float) -> float:
+        return limit if budget_s is None else max(60.0, min(limit, budget_s))
+    if sport == "mlb":
+        blob = {"props": mlb_section(hconn, log=log, budget_s=cap(LAB_MLB_PROPS_BUDGET_S)),
+                "game_lines": game_lines(hconn, "mlb", log=log)}
+    elif sport == "nfl":
+        # The closes are read once, inside the replay's limit, and the
+        # ripple reuses them (LAB_NFL_PROPS_BUDGET_S). Built in this order.
+        closes: dict = {}
+        blob = {"props": nfl_props(log=log, conn=hconn, budget_s=cap(LAB_NFL_PROPS_BUDGET_S),
+                                   closes_out=closes)
+                if nfl else {"unavailable": "skipped"},
+                "game_lines": game_lines(hconn, "nfl", log=log),
+                # The usage ripple against the close — the pricing half of
+                # Ethan's Pacheco question, measured here weekly so the
+                # verdict lands on the page without anyone running anything.
+                "ripple": ripple_section(hconn, log=log, closes=closes or None)
+                if nfl else {"unavailable": "skipped"}}
+    elif sport == "cfb":
+        blob = {"props": cfb_props(log=log, conn=hconn),
+                "game_lines": game_lines(hconn, "cfb", log=log)}
+    elif sport in ("nba", "wnba", "cbb"):
+        missed: list = []
+        props = hoops_props(hconn, sport, log=log, budget_s=cap(LAB_HOOPS_PROPS_BUDGET_S), missed=missed)
+        sec = ({"markets": props} if props else
+               {"unavailable": "no ingested game logs deep enough to replay yet"})
+        if props and missed:
+            # Kept beside this run's markets from the run that measured them
+            # (`carry_forward`), and named on the page.
+            sec["not_reached"] = missed
+            log(f"  lab: {sport} stopped at its time limit: {', '.join(missed)} not replayed this run")
+        blob = {"props": sec, "game_lines": game_lines(hconn, sport, log=log)}
+    elif sport == "ufc":
+        blob = {"props": {"unavailable": NO_PROP_HARNESS["ufc"]},
+                "game_lines": {"unavailable": "a fight has no spread or total to "
+                                              "replay — the moneyline is the market"}}
+    else:
+        raise ValueError(f"the Lab replays no {sport!r}")
+    blob["replayed_at"] = _dt.datetime.now().isoformat(timespec="seconds")
+    return blob
+
+
+def replayed_sports(doc: dict) -> list[str]:
+    """The sports a published page actually measured — a props or a
+    game-lines section with markets in it. The rest of the page is
+    reasons."""
+    out = []
+    for sport, blob in (doc.get("sports") or {}).items():
+        if not isinstance(blob, dict):
+            continue
+        if ((blob.get("props") or {}).get("markets")
+                or (blob.get("game_lines") or {}).get("markets")):
+            out.append(sport)
+    return out
+
+
+def _due(path: Path, today: _dt.date) -> bool:
+    """Is a replay owed? Weekly — unless the page on disk measured
+    nothing, in which case the answer is yes regardless of its date.
+
+    A PAGE WITH NOTHING REPLAYED IS NOT A RUN. Ethan, 2026-09-14: The Lab
+    read "not replayed yet" for every sport — NFL "skipped", MLB "no
+    ingested game logs deep enough", every game-line market "no
+    harvested closing lines stored" — stamped 2026-09-10 10:45:52, over a
+    database that had four NFL seasons and seventeen thousand MLB closes.
+    The page was the test suite's four-game seeded fixture, filed into
+    the live data/built by a gate fallback (fixed in engine.gate), and
+    because it carried a fresh `generated_at` this function counted it as
+    the week's run and kept the real replay from starting for the seven
+    days that follow. The weekly cadence exists to save an hour of CPU
+    on a page that has answers; a page with none has nothing to save.
+    The daily chores still cap attempts at one per day (`lab_attempted`
+    in engine.maintenance), so a box whose data really is too thin
+    retries once a night, niced, and says so.
+
+    READ THROUGH `gate.board_source`, not the public path. With the
+    paywall on the public copy is a sealed stub — stamps and a locked
+    block, no sports — which this test would otherwise read as "measured
+    nothing" and re-run the lab every night on a box whose private page
+    is full.
+
+    PER SPORT (2026-11-03): owed when any sport is — see `due_sports`.
+    """
+    from . import gate
+    try:
+        doc = json.loads(Path(gate.board_source(path)).read_text())
+    except (OSError, ValueError, AttributeError):
+        return True
+    return bool(due_sports(doc if isinstance(doc, dict) else {}, today))
+
+
+def _date_of(stamp) -> _dt.date | None:
+    try:
+        return _dt.date.fromisoformat(str(stamp or "")[:10])
+    except ValueError:
+        return None
+
+
+def _replay_still_holds(sport: str, replayed: _dt.date, today: _dt.date) -> bool:
+    """True when ``sport`` is at rest today and its replay of ``replayed``
+    came after its season ended: nothing has been played since, so the
+    replay stands. Never raises; a calendar that cannot be read holds
+    nothing back."""
+    try:
+        from .oddsplan import resting, season_ended
+        if not resting(sport, today):
+            return False
+        ended = season_ended(sport, today)
+        return ended is not None and replayed > ended
+    except Exception:                                      # noqa: BLE001
+        return False
+
+
+def due_sports(doc: dict, today: _dt.date, attempts: dict | None = None) -> list[str]:
+    """The sports a run owes, in the order to take them.
+
+    A sport is owed when its own replay (``replayed_at``; a page written
+    before the stamps existed dates every sport by the page) is a week
+    old, or when the page does not carry it at all. A page that measured
+    nothing owes everything, whatever its date (see `_due`).
+
+    THE ORDER: oldest first by the later of its replay and the last time
+    a run STARTED it (``attempts``) — so a sport a run was cut off in goes
+    to the back of tomorrow's line, and one harness that cannot finish in
+    the hour never starves the rest.
+
+    A SPORT AT REST IS REPLAYED ONCE (2026-11-07). Out of season with its
+    next season more than three weeks off (`oddsplan.resting`), it plays no
+    new games, so a replay says what the last one said: MLB went first every
+    week, half an hour of the box's one CPU, on a season already over. It is
+    owed once more only when its last replay came before its season ended
+    (so the final games are in it), and then not again until it comes near
+    its next season."""
+    page = _date_of(doc.get("generated_at"))
+    sports = doc.get("sports") if isinstance(doc.get("sports"), dict) else {}
+    everything = page is None or not replayed_sports(doc)
+    owed = []
+    for sp in SPORT_ORDER:
+        blob = sports.get(sp)
+        if everything or not isinstance(blob, dict):
+            owed.append(sp)
+            continue
+        stamp = _date_of(blob.get("replayed_at")) or page
+        if _replay_still_holds(sp, stamp, today):
+            continue
+        if (today - stamp).days >= LAB_EVERY_DAYS:
+            owed.append(sp)
+    attempts = attempts or {}
+    far = _dt.date.min
+
+    def age(sp):
+        blob = sports.get(sp) if isinstance(sports.get(sp), dict) else {}
+        done = (_date_of(blob.get("replayed_at")) or page or far) if blob else far
+        tried = _date_of(attempts.get(sp)) or far
+        return (max(done, tried), SPORT_ORDER.index(sp))
+    return sorted(owed, key=age)
+
+
+def _attempts_path_for(page: Path) -> Path:
+    """The attempts file IN THE PAGE'S OWN TREE — a page at
+    <tree>/web/data/backtest.json keeps it at <tree>/data/cache, a flat
+    one beside itself — so a run pointed at a scratch tree (the suite)
+    never writes into this checkout's data (see
+    tests/test_gate_foreign_tree.py for the same rule on the page)."""
+    page = Path(page)
+    if page.resolve() == LAB_PATH:
+        return ATTEMPTS_PATH
+    if page.parent.name == "data" and page.parent.parent.name == "web":
+        return page.parent.parent.parent / "data" / "cache" / "lab_attempts.json"
+    return page.with_name("lab_attempts.json")
+
+
+def _read_attempts(path: Path) -> dict:
+    try:
+        d = json.loads(Path(path).read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _mark_attempt(path: Path, sport: str, today: _dt.date) -> None:
+    """Written BEFORE the sport's replay starts — a run cut off inside it
+    leaves the mark behind, which is the point."""
+    d = _read_attempts(path)
+    d[sport] = today.isoformat()
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        tmp = Path(path).with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(d, sort_keys=True), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass
+
+
+def merge_sport(previous: dict, sport: str, blob: dict) -> tuple[dict, list[str]]:
+    """The page with one sport replaced: every other sport kept as it was
+    — and DATED as it was, so a sport this run did not reach never borrows
+    the new page's stamp — and a section this sport could not measure
+    carried from its last measurement (`carry_forward`)."""
+    stamp = str(previous.get("generated_at") or "")
+    sports = {}
+    for sp, was in (previous.get("sports") or {}).items():
+        if isinstance(was, dict):
+            was = dict(was)
+            if not was.get("replayed_at") and stamp:
+                was["replayed_at"] = stamp
+        sports[sp] = was
+    one = {"generated_at": stamp, "sports": {sport: blob}}
+    kept = carry_forward(one, {"generated_at": stamp, "sports": sports})
+    sports[sport] = one["sports"][sport]
+    return _page_shell(sports), kept
+
+
+#: The sports the last `run_if_due` in this process replayed, failed and
+#: left for the next run: the `--auto` lane's last line names them
+#: (`status_line`), and that line is what the heartbeat keeps.
+LAST_RUN: dict = {}
+
+
+def status_line(status: str) -> str:
+    """The `--auto` lane's one line: the status word, and the sports it
+    replayed (and failed, and left waiting). The heartbeat keeps a weekly
+    job's last line, and "lab: ok" alone never said which sports a run
+    reached (8 November: the NFL's replay was the question)."""
+    parts = []
+    for key, word in (("done", "replayed"), ("failed", "failed"), ("waiting", "waiting")):
+        if LAST_RUN.get(key):
+            parts.append(f"{word} {', '.join(LAST_RUN[key])}")
+    return f"lab: {status}" + (f" ({'; '.join(parts)})" if parts else "")
+
+
+def run_if_due(hconn=None, log=print, path: Path | str | None = None,
+               force: bool = False, today: _dt.date | None = None,
+               nfl: bool = True, attempts_path: Path | str | None = None,
+               build_one=None, budget_s: float | None = LAB_RUN_BUDGET_S,
+               clock=None) -> str:
+    """The automatic lane. Returns a status word rather than raising — the
+    settle pass must never fail because a backtest did.
+
+    ONE SPORT AT A TIME, EACH PUBLISHED AS IT LANDS (see SPORT_ORDER): a
+    run cut off at the chores' ceiling keeps every sport it finished, and
+    the next run picks up the rest. ``build_one`` is for tests."""
+    import inspect
+    import time as _time
+    from . import gate
+    p = Path(path if path is not None else LAB_PATH)
+    ap = Path(attempts_path if attempts_path is not None else _attempts_path_for(p))
+    today = today or _dt.date.today()
+    page = _previous_page(p)
+    todo = list(SPORT_ORDER) if force else due_sports(page, today, _read_attempts(ap))
+    LAST_RUN.clear()
+    if not todo:
+        return "already"
+    build_one = build_one or build_sport
+    try:
+        takes_budget = "budget_s" in inspect.signature(build_one).parameters
+    except (TypeError, ValueError):
+        takes_budget = False
+    clock = clock or _time.monotonic
+    deadline = clock() + budget_s if budget_s else None
+    close = False
+    if hconn is None:
+        from . import db as _db
+        hconn = _db.connect()
+        close = True
+    done, failed, waiting = [], [], []
+    try:
+        for i, sport in enumerate(todo):
+            # The first sport always starts; after it, one starts only with
+            # time enough left to finish (LAB_RUN_BUDGET_S).
+            if deadline is not None and (done or failed) and deadline - clock() < LAB_SPORT_MIN_S:
+                waiting = list(todo[i:])
+                log(f"  lab: stopped at the run's time limit ({max(0.0, deadline - clock()) / 60:.0f} min left): "
+                    f"{', '.join(waiting)} first in the next run")
+                break
+            _mark_attempt(ap, sport, today)
+            t0 = clock()
+            # The line the reaper keeps when a run is cut off: which sport
+            # the hour ran out in (python -u, so it is on disk at once).
+            log(f"  lab: replaying {sport} ({len(done) + len(failed) + 1} of {len(todo)})…")
+            kw = {}
+            if takes_budget and deadline is not None:
+                kw["budget_s"] = max(60.0, deadline - clock() - LAB_SPORT_RESERVE_S)
+            try:
+                blob = build_one(sport, hconn, log=log, nfl=nfl, **kw)
+            except Exception as exc:               # noqa: BLE001
+                log(f"  lab: {sport} skipped — {type(exc).__name__}: {exc}")
+                failed.append(sport)
+                continue
+            # THROUGH THE GATE. backtest.json is in gate.PAID_FILES — sealed
+            # in its entirety on the public path — and this once wrote the
+            # whole thing there directly, so every weekly Lab run put the
+            # backtests back on the open web until the next `--seal`.
+            page, kept = merge_sport(page, sport, blob)
+            gate.publish(page, p, p.name)
+            done.append(sport)
+            log(f"  lab: {sport} replayed in {(clock() - t0) / 60:.0f} min → {p}"
+                + (f" (kept {', '.join(kept)} from the last run that measured them)" if kept else ""))
+    finally:
+        if close:
+            hconn.close()
+        LAST_RUN.update(done=list(done), failed=list(failed), waiting=list(waiting))
+    if not done:
+        return "failed"
+    log(f"  lab: replayed {', '.join(done)}" + (f"; {', '.join(failed)} failed" if failed else "")
+        + (f"; {', '.join(waiting)} wait for the next run" if waiting else ""))
+    return "ok" if not (failed or waiting) else "partial"
+
+
+def _previous_page(public: Path) -> dict:
+    """The page this run is about to replace, read where the subscriber
+    reads it. `{}` when there is none or it will not parse."""
+    from . import gate
+    try:
+        return json.loads(Path(gate.board_source(public)).read_text())
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def carry_forward(out: dict, previous: dict) -> list[str]:
+    """A section that measured nothing keeps the last one that did.
+
+    In place, on ``out``; returns the ``sport/section`` labels it kept.
+    A run with the NFL replay switched off (`backtest_lab.py --no-nfl`),
+    a database locked at the moment a harness read it, a season that
+    has not started — each of these used to publish "skipped" or "no
+    ingested game logs" OVER a section that had numbers on it a week
+    ago, and the page then carried the reason where the measurement had
+    been. The measurement is the page. It is kept, and DATED: the
+    section carries ``carried_from``, the stamp of the run that made it,
+    so the page can say "replayed 2026-09-03" instead of passing a
+    week-old number off as tonight's. The stamp survives a second carry
+    — it is the measurement's date, not the last carry's.
+
+    Only a section WITH markets is kept; a previous reason never
+    replaces a present one, and a present measurement is never
+    displaced by an older one.
+    """
+    kept: list[str] = []
+    prev_sports = previous.get("sports") or {}
+    page_stamp = str(previous.get("generated_at") or "")[:10]
+    for sport, blob in (out.get("sports") or {}).items():
+        was = prev_sports.get(sport) or {}
+        # The sport's own replay date where it has one (each sport is
+        # stamped since 2026-11-03), the page's before that.
+        stamp = str(was.get("replayed_at") or "")[:10] or page_stamp
+        for section in ("props", "game_lines"):
+            now_sec = blob.get(section) or {}
+            old_sec = was.get(section) or {}
+            # A MARKET THE RUN'S TIME DID NOT REACH (mlb_section) keeps its
+            # last measurement beside the ones this run made, each dated.
+            if now_sec.get("markets") and now_sec.get("not_reached") and old_sec.get("markets"):
+                have = {m.get("market") for m in now_sec["markets"]}
+                for om in old_sec["markets"]:
+                    mk = om.get("market")
+                    if mk in now_sec["not_reached"] and mk not in have:
+                        c = dict(om)
+                        c["carried_from"] = om.get("carried_from") or old_sec.get("carried_from") or stamp
+                        now_sec["markets"].append(c)
+                        kept.append(f"{sport}/{section}/{mk}")
+                continue
+            if now_sec.get("markets") or not old_sec.get("markets"):
+                continue
+            carried = dict(old_sec)
+            carried["carried_from"] = old_sec.get("carried_from") or stamp
+            # The reason this run gave, kept beside the number it did
+            # not replace — so a reader can see WHY tonight measured
+            # nothing without losing what last week measured.
+            carried["carry_reason"] = now_sec.get("unavailable") or ""
+            blob[section] = carried
+            kept.append(f"{sport}/{section}")
+    return kept
+
+
+# --- the command line --------------------------------------------------------
+def _pct(x):
+    return "—" if x is None else f"{x:.1%}"
+
+
+def _print_market(m, indent="    ") -> None:
+    """One market's replay, with the pricing basis it was measured on.
+
+    The basis leads because it decides what every number under it means:
+    "book" is a claim about beating a market, "naive" is a claim about the
+    projection and nothing else.
+    """
+    # THE SEASON IS PART OF THE HEADLINE, because the replay silently
+    # falls back one when the current season has not produced enough
+    # games yet — so all through an offseason and the first weeks of a
+    # new one, these numbers are LAST season's, and a reader with no year
+    # in front of them has no way to know that.
+    season = m.get("season")
+    head = f"{indent}{m.get('label') or m.get('market')}"
+    if season:
+        head += f" [{season}]"
+    n, basis = m.get("n") or 0, m.get("basis") or "naive"
+    used, total = m.get("used_real_lines") or 0, m.get("total_priced") or 0
+    share = f" ({used}/{total} priced on real closes)" if total else ""
+    print(f"{head}: {n} settled · basis {basis}{share}")
+    if m.get("n_bets"):
+        print(f"{indent}  all bets   {m['n_bets']:>4}  "
+              f"win {_pct(m.get('win_rate'))}  roi {_pct(m.get('roi'))}")
+    for name in ("book", "naive"):
+        seg = (m.get("segments") or {}).get(name)
+        if not seg or not seg.get("n_bets"):
+            continue
+        label = "vs the book" if name == "book" else "vs a proxy"
+        print(f"{indent}  {label:<10} {seg['n_bets']:>4}  "
+              f"win {_pct(seg.get('win_rate'))}  roi {_pct(seg.get('roi'))}")
+        # The two sides, because a segment's blended number can hide a
+        # board that is winning on one and losing on the other.
+        sides = seg.get("sides") or {}
+        if len(sides) > 1:
+            for side in ("OVER", "UNDER"):
+                sd = sides.get(side)
+                if sd and sd.get("n_bets"):
+                    print(f"{indent}      {side:<5} {sd['n_bets']:>4}  "
+                          f"win {_pct(sd.get('win_rate'))}  "
+                          f"roi {_pct(sd.get('roi'))}")
+        # The grade ladder, inside this basis. The question the harvest
+        # was bought to answer lives here and nowhere else.
+        for grade in ("A+", "A", "B+"):
+            g = (seg.get("grades") or {}).get(grade)
+            if g and g.get("n_bets"):
+                print(f"{indent}      {grade:<3} {g['n_bets']:>4}  "
+                      f"win {_pct(g.get('win_rate'))}  "
+                      f"roi {_pct(g.get('roi'))}")
+
+
+def _implied(odds) -> float | None:
+    from .odds import implied_or_none
+    return implied_or_none(odds, parse=int)
+
+
+def dump_bets(report, limit: int = 0, indent: str = "  ") -> None:
+    """Every settled BET behind a report, and the price band it sat in.
+
+    THE QUESTION THE AGGREGATES CANNOT ANSWER. The touchdown board's
+    first book-priced result was 7-for-40 at -48.9% ROI. At n=40 a 17.5%
+    hit rate is statistically ordinary — the SE is 6 points — while that
+    ROI implies an average winning payout near +92, which is not a
+    longshot price at all. Those two readings point in different
+    directions and only the rows can settle it: a board quietly taking
+    -150s and calling them longshots looks exactly like a board with a
+    broken model, until you print the prices.
+    """
+    bets = [s for s in (getattr(report, "settled", None) or [])
+            if s.recommended]
+    if not bets:
+        print(f"{indent}(no settled bets)")
+        return
+    # BANDS THE BOARD CAN ACTUALLY REACH. The first cut used generic
+    # sportsbook bands, several of which the scorer board is forbidden to
+    # enter: `longshots.NFL_TD_ODDS` is (-150, 700) and `in_odds_window`
+    # is an inclusive `lo <= odds <= hi`, so nothing shorter than -150 or
+    # longer than +700 can ever be picked. A table of mostly-empty rows
+    # invites reading a structural zero as a finding — and it made me
+    # tell Ethan that a "-299..-150" cluster would prove the board was
+    # buying favourites, when that band cannot hold anything but -150.
+    #
+    # The last row is the one that would be a real finding: a price
+    # OUTSIDE the board's own window means the window is not being
+    # enforced where the picks are made.
+    bands = {"-150..-101 (favourite)": 0, "-100..+100 (coin flip)": 0,
+             "+101..+250": 0, "+251..+400": 0, "+401..+700": 0,
+             "OUTSIDE the odds window": 0}
+    won = dict.fromkeys(bands, 0)
+    staked = dict.fromkeys(bands, 0.0)
+    net = dict.fromkeys(bands, 0.0)
+
+    def band_of(o):
+        if o < -150 or o > 700:
+            return "OUTSIDE the odds window"
+        if o <= -101:
+            return "-150..-101 (favourite)"
+        if o <= 100:
+            return "-100..+100 (coin flip)"
+        if o <= 250:
+            return "+101..+250"
+        if o <= 400:
+            return "+251..+400"
+        return "+401..+700"
+
+    from .odds import american_to_decimal
+    for s in bets:
+        b = band_of(int(s.odds))
+        bands[b] += 1
+        stake = s.stake_units if s.stake_units > 0 else 1.0
+        if s.outcome is None:                 # a push stakes nothing
+            continue
+        staked[b] += stake
+        if s.outcome == 1:
+            won[b] += 1
+            net[b] += (american_to_decimal(s.odds) - 1.0) * stake
+        else:
+            net[b] -= stake
+
+    print(f"{indent}by price band")
+    print(f"{indent}  {'band':<18}{'bets':>5}{'won':>5}{'win%':>8}{'roi':>9}")
+    for b, n in bands.items():
+        if not n:
+            continue
+        wr = f"{won[b] / n:.1%}" if n else "—"
+        roi = f"{net[b] / staked[b]:+.1%}" if staked[b] else "—"
+        print(f"{indent}  {b:<18}{n:>5}{won[b]:>5}{wr:>8}{roi:>9}")
+
+    rows = sorted(bets, key=lambda s: int(s.odds))
+    if limit:
+        rows = rows[:limit]
+    print(f"{indent}\n{indent}every bet, shortest price first")
+    print(f"{indent}  {'player':<24}{'price':>7}{'model':>8}"
+          f"{'implied':>9}{'grade':>7}  result")
+    for s in rows:
+        imp = _implied(s.odds)
+        print(f"{indent}  {str(s.player)[:24]:<24}{int(s.odds):>+7}"
+              f"{s.hit_prob:>8.1%}{(f'{imp:.1%}' if imp else '—'):>9}"
+              f"{(s.grade or '—'):>7}  "
+              f"{'WON' if s.outcome == 1 else 'push' if s.outcome is None else 'lost'}")
+
+
+def main(argv=None) -> int:
+    """Replay every harness this machine's data supports and print it.
+
+        python3 -m engine.lab
+        python3 -m engine.lab --sport nfl
+        python3 -m engine.lab --season 2025
+
+    It existed only as a nightly side effect that wrote JSON — running the
+    module directly printed nothing at all, twice, while its numbers were
+    the whole point of a four-thousand-credit harvest.
+    """
+    import argparse
+    from . import db as _db
+    ap = argparse.ArgumentParser(description="Replay the models and report.")
+    ap.add_argument("--sport", default="", help="Only this sport")
+    ap.add_argument("--season", type=int, default=0,
+                    help="NFL season to replay (default: the newest with games)")
+    ap.add_argument("--json", action="store_true", help="Dump the raw JSON")
+    ap.add_argument("--bets", action="store_true",
+                    help="Print every settled NFL bet with its price and "
+                         "result, plus a per-price-band summary")
+    ap.add_argument("--auto", action="store_true",
+                    help="The maintenance lane: build and publish the lab "
+                         "if it is due, print one status line. Run as a "
+                         "child of the server since 2026-09-02 so the "
+                         "replay's memory never sits in the serving process")
+    args = ap.parse_args(argv)
+
+    hconn = _db.connect()
+    if args.auto:
+        status = run_if_due(hconn=hconn, log=print)
+        print(status_line(status))
+        return 0
+    if args.bets:
+        # ITS OWN PATH, and NFL only. The bet rows live on the
+        # BacktestReport, which `build()` has already flattened to JSON by
+        # the time it returns — and re-running the walk-forward a second
+        # time just to recover them would double the slowest thing here.
+        weeks = list(range(6, 18))
+        # The one caller with a human waiting on it.
+        rep, season, tried = nfl_replay(
+            args.season or None, weeks, nfl_real_lines(hconn),
+            progress=lambda m: print(m, flush=True))
+        if rep is None:
+            print("nothing to replay — " + ("; ".join(tried) or "no reason given"))
+            return 0
+        print(f"\nNFL {season} · all prop markets")
+        dump_bets(rep)
+        print(f"\nNFL {season} · anytime touchdown")
+        if rep.longshots is not None and rep.longshots.n:
+            dump_bets(rep.longshots)
+        else:
+            # NOT the same as "measured, found nothing". A scorer prop is
+            # built with no line at all, so with no harvested touchdown
+            # closes there is nothing for the board to price.
+            print("  (no scorer prop carried a harvested price — nothing to "
+                  "settle. `harvest_odds.py nfl --markets anytime_td`)")
+        return 0
+    if args.season:
+        # An explicit season only reaches the NFL prop harness, which is
+        # the only one that takes one.
+        out = {"sports": {"nfl": {
+            "props": nfl_props(season=args.season, conn=hconn),
+            "game_lines": game_lines(hconn, "nfl")}}}
+    else:
+        out = build(hconn=hconn)
+    if args.json:
+        import json as _json
+        print(_json.dumps(out, indent=2, sort_keys=True))
+        return 0
+
+    print("\nModel replay — every number is priced, and says what against\n")
+    for sport, blob in (out.get("sports") or {}).items():
+        if args.sport and sport != args.sport:
+            continue
+        print(f"{sport.upper()}")
+        props = blob.get("props") or {}
+        if props.get("unavailable"):
+            print(f"    props: {props['unavailable']}")
+        for m in props.get("markets") or []:
+            _print_market(m)
+        gl = blob.get("game_lines") or {}
+        if gl.get("unavailable"):
+            print(f"    game lines: {gl['unavailable']}")
+        for m in gl.get("markets") or []:
+            quoted, unpriced = m.get("games_quoted", 0), m.get("unpriced", 0)
+            note = f", {unpriced} with no price" if unpriced else ""
+            print(f"    {m['market']}: {quoted} game(s) quoted{note}  "
+                  f"line MAE {m.get('mae')}  ({m.get('source', '')})")
+            if m.get("n_bets"):
+                print(f"      {m['n_bets']} bet(s)  "
+                      f"win {_pct(m.get('win_rate'))}  roi {_pct(m.get('roi'))}")
+            else:
+                print(f"      no bet cleared the bar "
+                      f"({m.get('refused', 0)} refused as not credible)")
+        print()
+    return 0
+
+
+if __name__ == "__main__":
+    import sys as _sys
+    _sys.exit(main())

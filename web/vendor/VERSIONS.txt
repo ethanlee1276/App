@@ -1,0 +1,7 @@
+# Vendored front-end libraries (audit E-20). Upgrading one means
+# replacing the file AND this line; tests/test_security_housekeeping.py
+# holds the file to the hash recorded here.
+# name                version   sha256
+apexcharts.min.js     4.4.0     f4f5a1cfe4f5a5f9092968b011eb26d775f69289285ec2a8d9003be067780990
+apexcharts.css        4.4.0     277b0315e6d3c081622b04bba0ee162a40b928845fd8da233404e41609918589
+echarts.min.js        5.6.1     bf4a223524e40b77c304bec67e1222cf551f14880cf42c69dc046558e11c07b1

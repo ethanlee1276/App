@@ -1,0 +1,304 @@
+"""A teamless college prop's team is read from one span of the season, once
+a pass, and the settle rules exactly as before (engine/ledger._cfb_team_span,
+_recent_cfb_team, _CFB_TEAM_SPAN_SQL; settle_from_history's grade_parts
+absent_cfb, absent_nfl, their bet counts and absent_team_reads).
+
+The 18:10 settle pass on Saturday 7 November, with the day-file fix live,
+still spent 37.6 of its 38.7 grading seconds in the absent-player rule. A
+college prop with no team on it looks for his team on his own stat rows of
+the 45 days before its date, and that read names no season: no index serves
+a day range without one, so it planned as a walk of every college stat row
+the box keeps, every season and market, then a sort. Kept per window, it
+ran once for each distinct date among the teamless props still waiting,
+every five-minute pass. What these hold:
+
+  * the settle notes one span covering every open teamless college prop's
+    window, and inside the pass's name index the span is read once, through
+    the season, whatever the number of dates;
+  * every bet comes out exactly as it does outside an index;
+  * a window the span does not hold is read on its own, and answers the same;
+  * the span read plans through the primary key with its season, where the
+    plain read can only use the sport;
+  * the grade's parts split the rule's time by half, count the bets that
+    reached each, and count the team reads.
+
+Run directly: `python3 tests/test_a_teamless_college_prop_reads_one_span_a_pass.py`
+"""
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from engine import db, ledger                                      # noqa: E402
+
+SPAN_HEAD = ledger._CFB_TEAM_SPAN_SQL.split("{marks}")[0]
+
+
+class _Counting:
+    """A history connection that counts the college team reads by kind."""
+    def __init__(self, conn):
+        self.conn, self.plain, self.span = conn, 0, 0
+
+    def execute(self, sql, args=()):
+        if sql == ledger._CFB_TEAM_SQL:
+            self.plain += 1
+        elif sql.startswith(SPAN_HEAD):
+            self.span += 1
+        return self.conn.execute(sql, args)
+
+
+def _log(day, player, team, market="rec_yds", value=40.0, box=True, season=2026):
+    return {"sport": "cfb", "season": season, "period": day,
+            "game_id": f"{team}-{day}" + ("-box" if box else ""), "player": player,
+            "team": team, "opponent": "X", "position": "WR", "home": 1,
+            "market": market, "value": value}
+
+
+def _game(day, home, away):
+    return {"sport": "cfb", "season": 2026, "period": day, "game_id": f"{away}@{home}-{day}",
+            "home": home, "away": away, "home_score": 31, "away_score": 17, "spread": 0.0,
+            "total": 50.5, "roof": "", "surface": "", "temp": None, "wind": None, "extra": None}
+
+
+def _history():
+    """Ohio State's and Boise State's Saturdays, filed; their stars' earlier
+    rows name their schools; nobody's rows on the days the props are dated."""
+    h = db.connect(":memory:")
+    db.upsert_player_logs(h, [
+        _log("2026-10-10", "Chris Olave", "OSU"),
+        _log("2026-10-10", "José Núñez", "BOIS"),
+        _log("2026-08-30", "José Núñez", "UNM"),         # his old school, older row
+        *[_log(d, "A Teammate", "OSU") for d in ("2026-10-17", "2026-10-24", "2026-10-31")],
+        *[_log(d, "B Teammate", "BOIS") for d in ("2026-10-17", "2026-10-24", "2026-10-31")],
+        _log("2026-10-24", "B Teammate", "BOIS", box=False),   # the play file, too
+        _log("2025-11-01", "Chris Olave", "OSU", season=2025),
+    ])
+    db.upsert_games(h, [_game(d, "OSU", "MICH") for d in ("2026-10-17", "2026-10-24", "2026-10-31")]
+                    + [_game(d, "BOIS", "UNLV") for d in ("2026-10-17", "2026-10-24", "2026-10-31")])
+    return h
+
+
+BETS = [  # (date, player, market): every one teamless, none with a stat row that day
+    ("2026-10-17", "Chris Olave", "rush_yds"),
+    ("2026-10-24", "Chris Olave", "rush_yds"),
+    ("2026-10-31", "Chris Olave", "rush_yds"),
+    ("2026-10-24", "Jose Nunez", "rush_yds"),
+    ("2026-10-31", "José Núñez", "receptions"),   # a play-file market
+    ("2026-10-31", "Nobody Known", "rush_yds"),   # no rows, on no roster: stays open
+]
+
+
+def _journal():
+    led = ledger.connect(":memory:")
+    ledger.configure_bankroll(led, starting=1000, unit_pct=1.0)
+    for day, player, market in BETS:
+        led.execute(
+            "INSERT INTO bets (ts, sport, date, player, market, side, line, book, odds, "
+            "stake_units, stake_dollars, status, category) VALUES "
+            "('t','cfb',?,?,?,'OVER',10.5,'FanDuel',-110,0.1,1.0,'open','main')",
+            (day, player, market))
+    led.commit()
+    return led
+
+
+def _settle(indexed: bool):
+    led, hist = _journal(), _Counting(_history())
+    ledger.take_grade_parts()
+    if indexed:
+        with ledger.name_index():
+            ledger.settle_from_history(led, hist)
+    else:
+        ledger.settle_from_history(led, hist)
+    rows = [tuple(r) for r in led.execute(
+        "SELECT date, player, market, status, why_note FROM bets ORDER BY id")]
+    return rows, hist, ledger.take_grade_parts()
+
+
+def test_the_span_is_read_once_a_pass_and_every_bet_rules_the_same():
+    plain, plain_hist, _ = _settle(indexed=False)
+    kept, kept_hist, parts = _settle(indexed=True)
+    assert kept == plain, (kept, plain)
+    assert plain_hist.plain == len(BETS) and plain_hist.span == 0, \
+        ("outside an index, one window read a bet", plain_hist.plain, plain_hist.span)
+    assert kept_hist.span == 1 and kept_hist.plain == 0, (kept_hist.span, kept_hist.plain)
+    status = {(d, p, m): s for d, p, m, s, _w in kept}
+    # Two days' Olave props and Núñez's rush voided off filed box scores;
+    # the play-file market waits; the stranger stays open.
+    assert status[("2026-10-24", "Chris Olave", "rush_yds")] == "void"
+    assert status[("2026-10-24", "Jose Nunez", "rush_yds")] == "void"
+    assert status[("2026-10-31", "Nobody Known", "rush_yds")] == "open"
+    assert parts["absent_team_reads"] == 1
+    assert parts["absent_n_cfb"] == len(BETS) and "absent_n_nfl" not in parts
+    assert 0.0 <= parts["absent_cfb"] <= parts["absent"] + 0.1
+
+
+def test_the_span_covers_every_teamless_college_props_window():
+    rows = [
+        {"sport": "cfb", "market": "rush_yds", "category": "main", "team": None, "date": "2026-10-24"},
+        {"sport": "cfb", "market": "rec_yds", "category": "main", "team": "", "date": "2026-11-07"},
+        {"sport": "cfb", "market": "rec_yds", "category": "main", "team": "OSU", "date": "2026-08-01"},
+        {"sport": "cfb", "market": "spread", "category": "main", "team": None, "date": "2026-08-02"},
+        {"sport": "cfb", "market": "rec_yds", "category": "predmarket", "team": None, "date": "2026-08-03"},
+        {"sport": "nfl", "market": "rec_yds", "category": "main", "team": None, "date": "2026-W09"},
+        {"sport": "cfb", "market": "rec_yds", "category": "main", "team": None, "date": "W09"},
+    ]
+    assert ledger._cfb_team_span(rows) == ("2026-09-09", "2026-11-07")
+    assert ledger._cfb_team_span(rows[2:]) is None
+    assert ledger.CFB_TEAM_LOOKBACK_DAYS == 45
+
+
+def test_a_window_the_span_does_not_hold_is_read_on_its_own_and_answers_the_same():
+    h = _Counting(_history())
+    asks = [("2026-09-01", "2026-10-16", "chris olave"), ("2026-07-16", "2026-08-31", "jose nunez"),
+            ("2025-09-17", "2025-11-01", "chris olave"), ("2026-09-01", "2026-10-16", "nobody")]
+    plain = [ledger._recent_cfb_team(h, a, b, t) for a, b, t in asks]
+    assert plain == ["OSU", "UNM", "OSU", None], plain
+    with ledger.name_index():
+        ledger._name_index_now()["cfb_team_span"] = ("2026-09-15", "2026-11-07")
+        kept = [ledger._recent_cfb_team(h, a, b, t) for a, b, t in asks]
+        assert h.span == 3, "three windows outside the span, each read once"
+        again = [ledger._recent_cfb_team(h, a, b, t) for a, b, t in asks]
+        assert h.span == 3 and again == kept
+        inside = ledger._recent_cfb_team(h, "2026-09-16", "2026-10-31", "jose nunez")
+        assert inside == "BOIS" and h.span == 4, "the span itself, read once"
+        assert ledger._recent_cfb_team(h, "2026-10-01", "2026-11-07", "chris olave") == "OSU"
+        assert h.span == 4
+    assert kept == plain
+
+
+def test_the_span_read_goes_through_the_season():
+    h = db.connect(":memory:")
+    sql = ledger._CFB_TEAM_SPAN_SQL.format(marks="?,?")
+    plan = " ".join(str(tuple(r)) for r in h.execute(
+        "EXPLAIN QUERY PLAN " + sql, (2025, 2026, "2026-09-23", "2026-11-07")))
+    assert "sqlite_autoindex_player_game_logs_1 (sport=? AND season=?" in plan, plan
+    old = " ".join(str(tuple(r)) for r in h.execute(
+        "EXPLAIN QUERY PLAN " + ledger._CFB_TEAM_SQL, ("2026-09-23", "2026-11-07")))
+    assert "season=?" not in old, "the plain read cannot use a season it does not name"
+
+
+
+def _links_history(today):
+    """One of each link the college rule can stop at, dated off today (the
+    play-file wait counts its days from today)."""
+    import datetime as _dt
+    day = (today - _dt.timedelta(days=1)).isoformat()
+    before = (today - _dt.timedelta(days=20)).isoformat()
+    h = db.connect(":memory:")
+    db.upsert_player_logs(h, [
+        _log(before, "Kurtis Rourke", "IU"), _log(before, "Aidan Chiles", "MSU"),
+        _log(before, "Lonely Back", "UCF"),
+        _log(day, "IU Teammate", "IU"),                    # IU's box score, no play file, no first TD
+    ])
+    db.upsert_games(h, [_game(day, "IU", "PUR"), _game(day, "MSU", "MICH")])   # MSU's box never filed
+    return h, day
+
+
+def test_the_grade_counts_the_link_each_college_prop_stops_at_and_times_its_reads():
+    """WHICH LINK, AND WHERE THE SECONDS GO (2026-11-10): 112 college props
+    went through the rule at 03:17 on 10 November, 5.4 seconds, and nothing
+    said whether they wait on a play file or a box score that will come, or
+    on a team no feed will ever name. Counted inside the pass's index only;
+    the bets rule exactly as they do outside one."""
+    import datetime as _dt
+    today = _dt.date.today()
+
+    def _run(indexed):
+        hist, day = _links_history(today)
+        led = ledger.connect(":memory:")
+        ledger.configure_bankroll(led, starting=1000, unit_pct=1.0)
+        for player, market in (("Kurtis Rourke", "receptions"), ("Kurtis Rourke", "rush_yds"),
+                               ("Aidan Chiles", "rush_yds"), ("Lonely Back", "rush_yds"),
+                               ("Nobody Known", "rush_yds")):
+            led.execute(
+                "INSERT INTO bets (ts, sport, date, player, market, side, line, book, odds, "
+                "stake_units, stake_dollars, status, category) VALUES "
+                "('t','cfb',?,?,?,'OVER',10.5,'FanDuel',-110,0.1,1.0,'open','main')",
+                (day, player, market))
+        led.commit()
+        ledger.take_grade_parts()
+        if indexed:
+            with ledger.name_index():
+                ledger.settle_from_history(led, hist)
+        else:
+            ledger.settle_from_history(led, hist)
+        rows = [tuple(r) for r in led.execute("SELECT player, market, status FROM bets ORDER BY id")]
+        return rows, ledger.take_grade_parts()
+
+    plain, plain_parts = _run(False)
+    kept, parts = _run(True)
+    assert kept == plain, (kept, plain)
+    assert dict(((p, m), s) for p, m, s in kept) == {
+        ("Kurtis Rourke", "receptions"): "open", ("Kurtis Rourke", "rush_yds"): "void",
+        ("Aidan Chiles", "rush_yds"): "open", ("Lonely Back", "rush_yds"): "open",
+        ("Nobody Known", "rush_yds"): "open"}, kept
+    assert parts["absent_why_cfb"] == {"box not filed": 1, "no final": 1, "no team": 1,
+                                       "play file": 1, "void": 1}, parts["absent_why_cfb"]
+    assert sum(parts["absent_why_cfb"].values()) == parts["absent_n_cfb"] == 5
+    assert all(parts[f"absent_cfb_{r}"] >= 0.0 for r in ("team", "finals", "files")), parts
+    assert "absent_why_cfb" not in plain_parts and "absent_cfb_team" not in plain_parts, \
+        "outside a pass's index nothing is kept"
+    hist, day = _links_history(today)
+    b = {"sport": "cfb", "market": "rush_yds", "category": "main", "date": day, "player": "Nobody Known"}
+    assert "no team for him" in ledger.absent_blocker(hist, b), "the settle check's words, unchanged"
+
+
+
+def test_a_prop_on_days_with_nothing_final_waits_without_a_team_lookup():
+    """NOTHING FINAL YET (2026-11-10): at 03:58 on 10 November 111 of the 112
+    college props stopped at "no final game", props on games not played
+    yet, and all 7.3 seconds went to finding each man's team first. Inside
+    the pass's index the days are asked once whether any college game on
+    them is final; with none, the bet waits as before and no team is read.
+    The settle check, outside an index, still names the team."""
+    import datetime as _dt
+    today = _dt.date.today()
+    ahead = (today + _dt.timedelta(days=3)).isoformat()      # nothing final within a day of it
+
+    def _run(indexed):
+        hist, _day = _links_history(today)
+        counted = _Counting(hist)
+        led = ledger.connect(":memory:")
+        ledger.configure_bankroll(led, starting=1000, unit_pct=1.0)
+        for player in ("Kurtis Rourke", "Aidan Chiles", "Nobody Known"):
+            led.execute(
+                "INSERT INTO bets (ts, sport, date, player, market, side, line, book, odds, "
+                "stake_units, stake_dollars, status, category) VALUES "
+                "('t','cfb',?,?,'rush_yds','OVER',10.5,'FanDuel',-110,0.1,1.0,'open','main')",
+                (ahead, player))
+        led.commit()
+        ledger.take_grade_parts()
+        if indexed:
+            with ledger.name_index():
+                ledger.settle_from_history(led, counted)
+        else:
+            ledger.settle_from_history(led, counted)
+        rows = [tuple(r) for r in led.execute("SELECT player, status FROM bets ORDER BY id")]
+        return rows, counted, ledger.take_grade_parts(), hist
+
+    plain, plain_hist, _p, _h = _run(False)
+    kept, kept_hist, parts, hist = _run(True)
+    assert kept == plain and {s for _p2, s in kept} == {"open"}, (kept, plain)
+    assert parts["absent_why_cfb"] == {"nothing final yet": 3}, parts["absent_why_cfb"]
+    assert kept_hist.span == 0 and kept_hist.plain == 0, "no team read for a game not yet final"
+    assert plain_hist.plain == 3, "outside an index the rule reads as it always did"
+    b = {"sport": "cfb", "market": "rush_yds", "category": "main", "date": ahead, "player": "Kurtis Rourke"}
+    assert ledger.absent_blocker(hist, b).startswith("IU has no final game a day either side"), \
+        ledger.absent_blocker(hist, b)
+
+
+if __name__ == "__main__":
+    fails = 0
+    tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+    for name, fn in tests:
+        try:
+            fn()
+            print(f"  ok  {name}")
+        except Exception as exc:                                    # noqa: BLE001
+            import traceback
+            fails += 1
+            print(f"FAIL  {name}: {type(exc).__name__}: {exc}")
+            traceback.print_exc(limit=5)
+    print(f"\n{len(tests) - fails} tests passed." if not fails else f"\n{fails} failed.")
+    sys.exit(1 if fails else 0)

@@ -1,0 +1,130 @@
+"""The game page draws BOTH books, and never adds them together.
+
+Ethan, 2026-09-09, on the Week 1 opener's game page: "when you click on a
+game on the reccomended page and u scroll down to the reccomended props,
+is that showing just edge bets? if so, we need to show both edge bets and
+most likley bets."
+
+It was showing just the edge book. `renderGamePage` read
+`recommendations`, `game_bets` and `long_shots` — all one book — and
+never touched `most_likely`, so NE @ SEA rendered with one prop on it
+while two of its players sat on the Most Likely board with nothing on
+screen to say so.
+
+The other half of this is the half that could rot quietly: the two books
+do not share a record (tests/test_books_never_bleed.py), so the
+likelihood rows must reach the page WITHOUT reaching the headline
+"Recommended" count. Source-level pins, in the same style as the other
+game-page tests.
+"""
+
+import os
+import re
+import sys
+from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _js():
+    return app_js()
+
+
+def _fn(js, name):
+    i = js.index(f"function {name}(")
+    # `async function foo` — back up over the keyword or the slice starts
+    # mid-declaration and the body no longer parses as what it is.
+    if js[max(0, i - 6):i] == "async ":
+        i -= 6
+    j = js.index("\nfunction ", i + 1)
+    return js[i:j]
+
+
+def _nocomments(src):
+    """Comments out, THEN grep.
+
+    A negative or ordering assertion that greps a function's text is
+    satisfied by a comment quoting the very string it bans — and the
+    comment above this feature quotes both "Recommended" and "likelies"
+    while explaining why they must stay apart. Ask the code.
+    """
+    src = re.sub(r"/\*.*?\*/", " ", src, flags=re.S)
+    return re.sub(r"(?m)^\s*//.*$", " ", src)
+
+
+def test_the_game_page_reads_the_likelihood_board():
+    page = _nocomments(_fn(_js(), "renderGamePage"))
+    assert "state.data.most_likely" in page, \
+        "the game page never reads the Most Likely board"
+    # Through the SAME gate the Most Likely page applies, so a row refused
+    # there cannot surface here instead.
+    assert "showableLikelyRow" in page, \
+        "likelihood rows reach this page without the board's own gate"
+    # And scoped to THIS game, not the whole slate.
+    i = page.index("state.data.most_likely")
+    assert "propInGame" in page[i:i + 400], \
+        "the whole slate's likelihood rows are drawn on one game's page"
+
+
+def test_those_rows_are_drawn_with_the_board_s_own_card():
+    page = _nocomments(_fn(_js(), "renderGamePage"))
+    assert "likelies.map(likelyCard)" in page, \
+        "the rows are computed and never rendered"
+    assert "Most likely to hit" in page, "the section has no heading"
+
+
+def test_the_headline_recommended_count_is_the_edge_book_only():
+    """The books do not share a record, and this tile is where they would
+    first be quietly added together."""
+    page = _nocomments(_fn(_js(), "renderGamePage"))
+    # Renamed "Edge picks" (Ethan, 2026-09-27: "wondering if these numbers
+    # are correct" — "Recommended 2" beside "Most likely 0" said nothing
+    # about which book either counted).
+    # The count tiles went on 2026-10-25 (the jump chips already carried
+    # each section's count); the edge book's own chips are what count now,
+    # and neither may add the likelihood board in.
+    for chip in ('["gp-sec-props", shown.length ? `Edge picks · ${shown.length}` : "Edge picks"]',
+                 '["gp-sec-bets", `Game bets · ${betsShown.length}`]'):
+        assert chip in page, f"the edge book's chip moved: {chip}"
+    assert '<div class="k">Edge picks</div>' not in page
+
+
+def test_the_likelihood_rows_get_their_own_labelled_chip():
+    """Its own count, on its own button, never inside the edge count. The
+    tile that said so went with the other four on 2026-10-25; the jump
+    chip carries the same count and the section under it says which book
+    it is."""
+    page = _nocomments(_fn(_js(), "renderGamePage"))
+    assert '`${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`' in page
+    assert '["gp-sec-likely", `Most likely · ${likelies.length}`]' in page
+    assert "kept in its own book, never in the headline record" in page, \
+        "the section does not say these are tracked separately"
+
+
+def test_the_likelihood_section_leads():
+    """Ethan, 2026-09-09, once it was on the page: "we should show the
+    most likley to hit first."
+
+    It is the section with rows on it most nights — the edge book refuses
+    far more than it takes, and on the Week 1 opener it was one prop
+    against two likelihood rows. Leading with the empty half buried the
+    full one under a scroll.
+
+    Pinned by POSITION, because nothing else would notice: moving a
+    section is a cut and a paste that renders perfectly either way."""
+    page = _nocomments(_fn(_js(), "renderGamePage"))
+    lead = page.index("Most likely to hit")
+    for later in ('<div class="section-title">Game bets',
+                  "Edge picks · this game",
+                  '<div class="section-title">Long shots'):
+        assert lead < page.index(later), \
+            f"the likelihood section fell below {later!r}"
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")

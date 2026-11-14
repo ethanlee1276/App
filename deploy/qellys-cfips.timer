@@ -1,0 +1,14 @@
+# Weekly, with a random delay so a fleet of boxes does not hit
+# cloudflare.com at the same second, and Persistent so a box that was off
+# on the day catches up at boot.
+
+[Unit]
+Description=Qellys Cloudflare IP list refresh clock
+
+[Timer]
+OnCalendar=weekly
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
