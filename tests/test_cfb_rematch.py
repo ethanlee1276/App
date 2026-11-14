@@ -28,6 +28,7 @@ here. `other_day` already carried "ONE DEFINITION, TWO CALLERS" in its
 docstring for exactly this reason; this is the third.
 """
 
+import datetime
 import os
 import sys
 
@@ -53,6 +54,10 @@ def _ev(home, away, when, home_price, away_price):
 
 
 LOOKUP = {"alabama": "BAMA", "auburn": "AUB"}
+#: The fixtures' Saturday morning, before their kickoffs: a game that has
+#: started is no longer priced by the pull (cfb_build._under_way), and these
+#: fixtures are dated in September 2026.
+BEFORE_KICKOFF = datetime.datetime(2026, 9, 12, 12, 0, tzinfo=datetime.timezone.utc).timestamp()
 
 
 def _attach(events, games=None, monkey=True):
@@ -65,7 +70,7 @@ def _attach(events, games=None, monkey=True):
     cfb_build.cfbdata.resolve_team = lambda name, lk: LOOKUP.get(
         str(name).strip().lower())
     try:
-        return cfb_build.attach_odds(games, LOOKUP, cache_only=True)
+        return cfb_build.attach_odds(games, LOOKUP, cache_only=True, now=BEFORE_KICKOFF)
     finally:
         O.fetch_sport_odds = real_fetch
         O.sport_cache_age = real_age

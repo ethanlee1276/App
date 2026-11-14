@@ -80,7 +80,7 @@ def _under_way(ev: dict, game: dict, now: float | None = None) -> bool:
     return start.timestamp() <= (_time.time() if now is None else now)
 
 
-def pregame_lines(gds: list, now: float | None = None, conn=None) -> int:
+def lines_at_kickoff(gds: list, now: float | None = None, conn=None) -> int:
     """Each started game's last spread and total before kickoff, off the
     line tape every build writes (engine/lineledger), onto the board's game.
     `attach_odds` leaves a started game unpriced; this gives it back the
@@ -133,13 +133,17 @@ def pregame_lines(gds: list, now: float | None = None, conn=None) -> int:
 
 
 def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
-                api_key: str | None = None) -> tuple[dict, str]:
+                api_key: str | None = None,
+                now: float | None = None) -> tuple[dict, str]:
     """``{game_id: {...market prices...}}`` plus a human note.
 
     One request covers the entire board. Events whose team names can't be
     resolved are counted rather than silently dropped — an unmatched school
     is a bug in the name map, and a board that quietly prices 40 of 60
     games looks exactly like a light Saturday.
+
+    ``now`` (epoch seconds, default the clock) is when a game counts as
+    started (`_under_way`); a test dates its fixture by it.
     """
     from engine.sources import oddsapi
     from engine import bookvig
@@ -225,8 +229,8 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
         # number was written as the game's line: the reads, the report and
         # the scorer chances all read it as the pregame line. A started
         # game keeps the last line it had before kickoff instead
-        # (`pregame_lines`); the live numbers are the live block's.
-        if _under_way(ev, game):
+        # (`lines_at_kickoff`); the live numbers are the live block's.
+        if _under_way(ev, game, now):
             under_way += 1
             continue
         # The parsers key on the exact strings this feed uses, so build the
@@ -1909,8 +1913,8 @@ def main() -> None:
         lines = priced.get(g["game_id"]) or {}
         gd["spread"] = (lines.get("spread") or [None])[0]
         gd["total"] = (lines.get("total") or [None])[0]
-    # A STARTED GAME'S PREGAME LINE, back off the tape (`pregame_lines`).
-    _kept = pregame_lines(out["games"])
+    # A STARTED GAME'S PREGAME LINE, back off the tape (`lines_at_kickoff`).
+    _kept = lines_at_kickoff(out["games"])
     if _kept:
         print(f"  {_kept} game(s) under way kept at their last pregame line")
     _clock.lap("opponent-adjusted ratings + game lines", "games + lines", _t)

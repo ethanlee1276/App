@@ -18,6 +18,7 @@ cards demoted after their verdict.
 Run directly: `python3 tests/test_cfb_sharp_first.py`
 """
 
+import datetime
 import inspect
 import os
 import sys
@@ -31,6 +32,11 @@ from engine.cfb.pipeline import (CFB_MODEL_GAME_RECOMMENDATIONS,  # noqa: E402
                                  CFB_NO_ANCHOR, demote_model_card)
 from engine.gamebets import SHARP_MIN_EV, SHARP_SUSPECT_EV      # noqa: E402
 from engine.teamrates import TeamRating                         # noqa: E402
+
+#: The fixtures' Saturday morning, before their kickoffs: a game that has
+#: started is no longer priced by the pull (cfb_build._under_way), and these
+#: fixtures are dated in September 2026.
+BEFORE_KICKOFF = datetime.datetime(2026, 9, 12, 12, 0, tzinfo=datetime.timezone.utc).timestamp()
 
 
 def _game(i=0, home="TOL", away="BGSU", conf="SEC", **kw):
@@ -101,7 +107,7 @@ def test_attach_odds_carries_the_sharp_pair_on_the_entry():
     oddsapi.fetch_sport_odds = lambda *a, **k: ([_event()], {})
     try:
         priced, _note = CB.attach_odds([_game()], {"toledo": "TOL", "bowling green": "BGSU"},
-                                       cache_only=True)
+                                       cache_only=True, now=BEFORE_KICKOFF)
     finally:
         oddsapi.fetch_sport_odds = real
     entry = priced["g0"]

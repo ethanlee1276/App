@@ -28,6 +28,7 @@ would be a lie:
 Run directly: `python3 tests/test_spread_total_book.py`
 """
 
+import datetime
 import json
 import os
 import sys
@@ -38,6 +39,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.models import Game, Weather                         # noqa: E402
 from engine.sources import oddsapi as oa                        # noqa: E402
+
+#: The fixtures' Saturday morning, before their kickoffs: a game that has
+#: started is no longer priced by the pull (cfb_build._under_way), and these
+#: fixtures are dated in September 2026.
+BEFORE_KICKOFF = datetime.datetime(2026, 9, 12, 12, 0, tzinfo=datetime.timezone.utc).timestamp()
 
 TEAMS = {"Minnesota Vikings": "MIN", "Green Bay Packers": "GB"}
 
@@ -280,7 +286,8 @@ def test_the_college_pull_keys_its_books_by_side():
             "kickoff": "2026-09-12T19:30Z", "date": "2026-09-12"}
     try:
         priced, _note = CB.attach_odds(
-            [game], {"toledo": "TOL", "bowling green": "BGSU"}, cache_only=True)
+            [game], {"toledo": "TOL", "bowling green": "BGSU"}, cache_only=True,
+            now=BEFORE_KICKOFF)
     finally:
         oddsapi.fetch_sport_odds = real
     entry = priced["g0"]

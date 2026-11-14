@@ -56,7 +56,7 @@ def test_a_started_game_reads_its_last_line_before_kickoff():
              "spread": 18.5, "total": 34.5}
     later = {"home": "ND", "away": "BC", "date": date, "state": "scheduled",
              "kickoff": _iso(kick + dt.timedelta(hours=8)), "spread": -29.5, "total": 51.5}
-    assert B.pregame_lines([smu, never, later], conn=conn) == 1
+    assert B.lines_at_kickoff([smu, never, later], conn=conn) == 1
     assert (smu["spread"], smu["total"]) == (7.5, 56.5), "the last line before kickoff, never the in-play one"
     assert (never["spread"], never["total"]) == (None, None), "no pregame line: nothing, not the live number"
     assert (later["spread"], later["total"]) == (-29.5, 51.5), "a game still to play keeps this build's line"
@@ -66,8 +66,12 @@ def test_the_pull_leaves_a_started_game_unpriced_and_says_so():
     src = (ROOT / "cfb_build.py").read_text(encoding="utf-8")
     i = src.index("def attach_odds(")
     body = src[i:src.index("\ndef ", i + 10)]
-    assert "if _under_way(ev, game):" in body and "under way, kept at their pregame line" in body
-    assert '_kept = pregame_lines(out["games"])' in src
+    assert "if _under_way(ev, game, now):" in body and "under way, kept at their pregame line" in body
+    assert '_kept = lines_at_kickoff(out["games"])' in src
+    # Not `pregame_lines`: the football and baseball builds may not carry
+    # "game_lines(" at all (test_basketball_and_hockey_name_their_pick_from_
+    # game_lines, the boards' own bars), and the old name held it.
+    assert "game_lines(" not in src
     assert time.time() > 0
 
 
