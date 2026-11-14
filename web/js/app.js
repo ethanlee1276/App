@@ -11902,70 +11902,21 @@ function tlRecordLine(rec, pool) {
 
 /* EACH GAME'S PARLAYS (engine/gameparlays; Ethan, 2026-11-14: "for each
    game, when it comes to every sport, I want you to make 4 3-leg parlays
-   ... and 3 2-leg touchdown parlays"). A fold a game: its three-leg
-   tickets and its scorer pairs, each leg with its price, our chance and
-   why, the script the ticket needs, its backups and caveats — every one
-   tracked on the record, none staked. */
-function gpPick(l) {
-  const m = String(l.market || "");
-  if (m === "anytime_td") return `${l.player} to score a touchdown`;
-  if (m === "anytime_goal" || m === "goals") return `${l.player} to score a goal`;
-  const line = l.line == null ? "" : ` ${l.line}`;
-  return `${l.player || ""} ${String(l.side || "").toLowerCase()}${line} ${
-    String(l.market_label || m.replace(/_/g, " ")).toLowerCase()}`.replace(/\s+/g, " ").trim();
-}
-function gpOdds(o) {
-  const n = Number(o);
-  return Number.isFinite(n) && n ? (n > 0 ? `+${n}` : String(n)) : "";
-}
-function gpTicketHTML(t, n, kind) {
-  const word = kind === "three" ? `Parlay ${n}`
-    : `${["nfl", "cfb"].includes(state.sport) ? "Touchdown" : "Scorer"} pair ${n}`;
-  const li = (xs) => (xs || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
-  return `<div class="card gp-ticket">
-    <div class="gp-head"><b>${escapeHtml(word)}</b>
-      <span class="gp-joint">${Math.round(Number(t.joint || 0) * 100)}% by our numbers</span></div>
-    <p class="set-note">Fair ${escapeHtml(t.fair_words || "")} · take it at <b>${escapeHtml(t.take_words || "")}</b> or better${
-      t.naive_words ? ` · the legs’ own prices multiplied pay ${escapeHtml(t.naive_words)}, and a book’s same-game price pays less` : ""}</p>
-    <ol class="gp-legs">${(t.legs || []).map((l) => `<li><b>${escapeHtml(gpPick(l))}</b>
-      <span class="gp-px">${escapeHtml([gpOdds(l.odds), l.book || ""].filter(Boolean).join(" "))}</span>
-      <span class="gp-p">${Math.round(Number(l.p || 0) * 100)}%</span>
-      ${(l.why || []).length ? `<ul class="gp-why">${li(l.why)}</ul>` : ""}</li>`).join("")}</ol>
-    ${t.script ? `<p class="set-note">What it needs: ${escapeHtml(t.script)}${t.script_chance != null
-      ? ` — about ${Math.round(Number(t.script_chance) * 100)}% likely by the lines` : ""}</p>` : ""}
-    ${(t.backups || []).length ? `<div class="gp-sub">Backups</div><ul class="gp-list">${(t.backups || []).map((b) =>
-      `<li>If ${escapeHtml(b.for || "")} is out or his number moves: ${escapeHtml(gpPick(b.leg || {}))} (${
-        escapeHtml(gpOdds((b.leg || {}).odds))}, ${Math.round(Number((b.leg || {}).p || 0) * 100)}%)</li>`).join("")}</ul>` : ""}
-    ${(t.caveats || []).length ? `<div class="gp-sub">Caveats</div><ul class="gp-list">${li(t.caveats)}</ul>` : ""}
-  </div>`;
-}
-/* Their record so far (record.json two_leg.game, engine/parlayledger
-   .report_game_parlays): graded, won, and what one unit a ticket made. */
-function gpRecordLine(rec) {
-  const g = ((rec || {}).two_leg || {}).game || {};
-  const bits = [["three", "three-leg"], ["scorers", "pairs"]].map(([k, w]) => {
-    const x = g[k] || {};
-    if (!x.graded) return x.open ? `${w}: ${x.open} open, none graded yet` : "";
-    return `${w}: ${x.wins} of ${x.graded} hit, ${x.net_units >= 0 ? "+" : ""}${x.net_units} units at the take-it price`;
-  }).filter(Boolean);
-  return bits.length ? `Our record so far — ${bits.join(" · ")}` : "";
-}
-function gameParlaysHTML(gp) {
-  const games = (gp && gp.games) || [];
-  if (!games.length) return "";
-  const pair = ["nfl", "cfb"].includes(state.sport) ? "touchdown" : state.sport === "nhl" ? "goal-scorer" : "scorer";
-  return `<div class="section-title">Each game’s parlays <span class="sub">— four three-leg tickets and three ${pair}
-      pairs a game, from our own picks; every one tracked on the Record page, none staked</span></div>
-    <div class="mini tl-rec" data-gp-rec="1"></div>
-    ${gp.note ? `<p class="set-note tl-rule">${escapeHtml(gp.note)}</p>` : ""}
-    ${games.map((g) => `<details class="gs-game gp-game"><summary><span class="gs-game-k">${teamMarkIn(state.sport, g.away, 18)}
-        ${escapeHtml(teamName(g.away))} @ ${teamMarkIn(state.sport, g.home, 18)} ${escapeHtml(teamName(g.home))}</span>
-        <span class="gs-game-n">${(g.threes || []).length} three-leg · ${(g.scorers || []).length} pairs</span></summary>
-      ${(g.threes || []).map((t, i) => gpTicketHTML(t, i + 1, "three")).join("")
-        || `<p class="set-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}
-      ${(g.scorers || []).map((t, i) => gpTicketHTML(t, i + 1, "scorers")).join("")
-        || (g.scorers_note ? `<p class="set-note">${escapeHtml(g.scorers_note)}</p>` : "")}
-    </details>`).join("")}`;
+   ... and 3 2-leg touchdown parlays"): drawn by js/report.js, loaded on
+   first use (loadReport), as the game report's own cards, with their
+   record so far. */
+function fillGameParlays(host, d) {
+  const el = host.querySelector("[data-gp-host]");
+  if (!el) return;
+  loadReport().then((R) => {
+    if (!R || !R.gameParlays) return;
+    el.innerHTML = R.gameParlays(d.game_parlays, state.sport);
+    revealChildren(el);
+    loadRecordOnce().then((rec) => {
+      const line = el.querySelector("[data-gp-rec]");
+      if (line && R.gameParlaysRecord) line.textContent = R.gameParlaysRecord(rec);
+    });
+  });
 }
 
 function renderParlayPage() {
@@ -11975,7 +11926,7 @@ function renderParlayPage() {
   const z = d.two_leg;
   const games = d.locked && d.locked.game_parlays
     ? memberLockHTML("Each game’s parlays", "Four three-leg parlays and three touchdown pairs for every game, built from our own picks.")
-    : gameParlaysHTML(d.game_parlays);
+    : (((d.game_parlays || {}).games || []).length ? `<div data-gp-host></div>` : "");
   if (!z || typeof z !== "object" || !z.edge) {
     host.innerHTML = games || (d.locked && d.locked.two_leg
       ? memberLockHTML("Two-leg parlays from our picks",
@@ -11983,10 +11934,7 @@ function renderParlayPage() {
       : `<div class="card"><p class="set-note">No parlays on this board yet: they build with the board, two legs from our picks.</p></div>`);
     if (games) {
       revealChildren(host);
-      loadRecordOnce().then((rec) => {
-        const el = host.querySelector("[data-gp-rec]");
-        if (el) el.textContent = gpRecordLine(rec);
-      });
+      fillGameParlays(host, d);
     }
     return;
   }
@@ -12005,14 +11953,11 @@ function renderParlayPage() {
           : `<div class="card"><p class="set-note">${escapeHtml(x.note || "No pair on tonight’s board makes sense yet.")}</p></div>`}`;
     }).join("")}`;
   revealChildren(host);
-  loadRecordOnce().then((rec) => {
-    TL_POOLS.forEach(([pool]) => {
-      const el = host.querySelector(`[data-tl-rec="${pool}"]`);
-      if (el) el.textContent = tlRecordLine(rec, pool);
-    });
-    const gpEl = host.querySelector("[data-gp-rec]");
-    if (gpEl) gpEl.textContent = gpRecordLine(rec);
-  });
+  loadRecordOnce().then((rec) => TL_POOLS.forEach(([pool]) => {
+    const el = host.querySelector(`[data-tl-rec="${pool}"]`);
+    if (el) el.textContent = tlRecordLine(rec, pool);
+  }));
+  fillGameParlays(host, d);
 }
 
 function longshotEmptyReason(mlb) {

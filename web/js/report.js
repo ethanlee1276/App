@@ -242,5 +242,66 @@
     return `<div id="gp-sec-report" class="gr">${head}${tools}${toc}<div class="card gr-card">${body}</div></div>`;
   }
 
-  window.QBReport = { html, block, toText, teaser };
+  /* EACH GAME'S PARLAYS ON THE PARLAYS PAGE (app.js fillGameParlays): the
+     board's tickets (engine/gameparlays) as the report's own cards — the
+     words engine/gameparlays.card writes for the report, here in the page. */
+  const SCORE = { anytime_td: "to score a touchdown", anytime_goal: "to score a goal", goals: "to score a goal" };
+  function pickWords(l) {
+    const m = String(l.market || "");
+    if (SCORE[m]) return `${l.player} ${SCORE[m]}`;
+    const line = l.line == null ? "" : ` ${l.line}`;
+    return `${l.player || ""} ${String(l.side || "").toLowerCase()}${line} ${
+      String(l.market_label || m.replace(/_/g, " ")).toLowerCase()}`.replace(/\s+/g, " ").trim();
+  }
+  function oddsWords(o) {
+    const n = Number(o);
+    return Number.isFinite(n) && n ? (n > 0 ? `+${n}` : String(n)) : "";
+  }
+  function card(t, n, kind, sport) {
+    const pct = (x) => `${Math.round(Number(x || 0) * 100)}%`;
+    const title = kind === "three" ? `Parlay ${n}`
+      : `${["nfl", "cfb"].includes(sport) ? "Touchdown" : "Scorer"} pair ${n}`;
+    let price = `${pct(t.joint)} by our numbers (${pct(t.independent)} if the legs were unrelated) · fair ${
+      t.fair_words || ""} · take it at ${t.take_words || ""} or better`;
+    if (t.naive_words) price += ` · the legs’ own prices multiplied pay ${t.naive_words}, and a book’s same-game price pays less`;
+    const script = t.script ? `What it needs: ${t.script}${t.script_chance != null
+      ? ` — about ${pct(t.script_chance)} likely by the lines` : ""}` : "";
+    return {
+      title, price_line: price, script, links: t.links || [], caveats: t.caveats || [],
+      legs: (t.legs || []).map((l) => ({ pick: pickWords(l), player: l.player,
+        price: [oddsWords(l.odds), l.book || ""].filter(Boolean).join(" "), chance: l.p, why: l.why || [] })),
+      backups: (t.backups || []).map((b) => `If ${b.for} is out or his number moves: ${pickWords(b.leg || {})} (${
+        oddsWords((b.leg || {}).odds)}, ${pct((b.leg || {}).p)})`),
+    };
+  }
+  function gameParlays(gp, sport) {
+    const games = (gp && gp.games) || [];
+    if (!games.length) return "";
+    const pair = ["nfl", "cfb"].includes(sport) ? "touchdown" : sport === "nhl" ? "goal-scorer" : "scorer";
+    return `<div class="section-title">Each game’s parlays <span class="sub">— four three-leg tickets and three ${pair}
+        pairs a game, from our own picks; every one tracked on the Record page, none staked</span></div>
+      <div class="mini tl-rec" data-gp-rec="1"></div>
+      ${gp.note ? `<p class="set-note tl-rule">${escapeHtml(gp.note)}</p>` : ""}
+      ${games.map((g) => `<details class="gs-game gr-parlay-game"><summary><span class="gs-game-k">${
+        escapeHtml(teamName(g.away))} @ ${escapeHtml(teamName(g.home))}</span>
+        <span class="gs-game-n">${(g.threes || []).length} three-leg · ${(g.scorers || []).length} pairs</span></summary>
+        ${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
+          : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}
+        ${(g.scorers || []).length ? block({ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) })
+          : (g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : "")}
+      </details>`).join("")}`;
+  }
+  /* Their record so far (record.json two_leg.game, engine/parlayledger
+     .report_game_parlays). */
+  function gameParlaysRecord(rec) {
+    const g = ((rec || {}).two_leg || {}).game || {};
+    const bits = [["three", "three-leg"], ["scorers", "pairs"]].map(([k, w]) => {
+      const x = g[k] || {};
+      if (!x.graded) return x.open ? `${w}: ${x.open} open, none graded yet` : "";
+      return `${w}: ${x.wins} of ${x.graded} hit, ${x.net_units >= 0 ? "+" : ""}${x.net_units} units at the take-it price`;
+    }).filter(Boolean);
+    return bits.length ? `Our record so far — ${bits.join(" · ")}` : "";
+  }
+
+  window.QBReport = { html, block, toText, teaser, gameParlays, gameParlaysRecord };
 })();

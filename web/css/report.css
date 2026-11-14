@@ -63,7 +63,7 @@
 /* EACH GAME'S PARLAYS (engine/gameparlays): a card a ticket, its legs in
    order with their prices and chances, the script, backups and caveats. */
 .gr-parlays { display: grid; gap: 10px; margin: 6px 0 10px; }
-.gr-parlay { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
+.gr-parlay { border-radius: 10px; padding: 10px 12px; background: var(--panel-2); }
 .gr-parlay-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .gr-parlay-price { margin: 4px 0 6px; font-size: .86em; color: var(--text-mute); }
 .gr-parlay-legs { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
