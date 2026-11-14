@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PD. The NCAA race waits for the whole schedule** (step 532; 14
+November). Nothing to run. The box's first race (00:55 UTC) was played out
+with only six days of the schedule ahead read, and said "437 games left"
+for a season with thousands to go. The two-hour hold then stopped later
+builds from reading the rest, so it would have taken most of a day to
+fill. The race is now built only once the whole season's schedule is read
+(twenty days a build, about seven builds from a fresh box), and a race
+built before that is never held. Until then the page keeps the race it
+has, and the build's line reads `NCAA race: still reading the season off
+the scoreboard (N day(s) to go)`.
+
 **PC. A forecast for games abroad: MET Norway** (step 531; 14 November).
 One read-only command. You, on decision 8b: "Yes if free." It is free: no
 key and no account, and commercial use is allowed on two conditions, both

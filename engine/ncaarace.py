@@ -999,8 +999,10 @@ WEEK_TTL = 12 * 3600
 AHEAD_TTL = 3 * 24 * 3600
 #: The scoreboard is asked at most this many times a build: a fresh box
 #: reads a season in a handful of builds rather than all at once, the days
-#: to date first (the race waits for those), the weeks ahead after.
+#: to date first, the weeks ahead after. The race waits for all of them...
 READS_PER_BUILD = 20
+#: ...but for this many days ahead the scoreboard keeps refusing.
+AHEAD_SLACK = 3
 
 
 def _slate_path(date: str):
@@ -1053,9 +1055,9 @@ def _kept_day(date: str) -> list | None:
 
 def load_season(season: int, today: _dt.date, fetch=None, reads: int = READS_PER_BUILD) -> tuple:
     """The season's games, its first day to the title game, each day on the
-    lifetime it needs. Returns (games, days to date not yet read): a day the
-    build's reads did not reach is read by the next build, the days before
-    today first."""
+    lifetime it needs. Returns (games, days to date not yet read, days ahead
+    not yet read): a day the build's reads did not reach is read by the next
+    build, the days before today first."""
     import time
     lo = _dt.date(season, *SEASON_START)
     hi = _dt.date.fromisoformat(nights(season)["final"][-1])
@@ -1089,15 +1091,17 @@ def load_season(season: int, today: _dt.date, fetch=None, reads: int = READS_PER
             day_rows(x.isoformat(), fetch)
         except Exception:                                          # noqa: BLE001
             pass                                                   # the kept file stands
-    games, missing = [], 0
+    games, missing, ahead = [], 0, 0
     for x in days:
         rows = _kept_day(x.isoformat())
         if rows is None:
             if x <= today:
                 missing += 1
+            else:
+                ahead += 1
             continue
         games += rows
-    return games, missing
+    return games, missing, ahead
 
 
 def prior_ratings(conn, season: int) -> dict:
@@ -1131,16 +1135,25 @@ def publish(conn, day: _dt.date, out_path: str = "web/data/ncaa_race.json", fetc
         held = json.loads(Path(gate.board_source(p)).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         held = None
-    if held and held.get("generated_at") and held.get("date") == day.isoformat():
+    # HELD ONLY IF BUILT ON THE WHOLE SEASON. The first race on the box
+    # (2026-11-14, 00:55 UTC) was played out with six days of the schedule
+    # ahead read, "437 games left", and the two-hour hold then kept every
+    # later build from reading the rest. A race is built on the whole
+    # season's schedule now, and one that was not is never held.
+    if held and held.get("generated_at") and held.get("date") == day.isoformat() \
+            and held.get("schedule") == "whole":
         try:
             age = time.time() - _dt.datetime.fromisoformat(held["generated_at"]).timestamp()
         except ValueError:
             age = REBUILD_S
         if 0 <= age < REBUILD_S:
             return f"NCAA race: built {int(age // 60)} min ago, played out again at {REBUILD_S // 3600} hours"
-    games, missing = load_season(season, day, fetch)
-    if missing:
-        return f"NCAA race: still reading the season off the scoreboard ({missing} day(s) to go), not built yet"
+    games, missing, ahead = load_season(season, day, fetch)
+    # A day ahead the scoreboard keeps refusing must not hold the race up for
+    # good: a handful (`AHEAD_SLACK`) may still be unread.
+    if missing or ahead > AHEAD_SLACK:
+        return (f"NCAA race: still reading the season off the scoreboard ({missing + ahead} day(s) to go), "
+                "not built yet")
     if not games:
         return "NCAA race: no games read off the scoreboard, not built"
     prior = prior_ratings(conn, season) if conn is not None else {}
@@ -1153,6 +1166,8 @@ def publish(conn, day: _dt.date, out_path: str = "web/data/ncaa_race.json", fetc
     names = {c: (card.get("short") or card.get("name") or c) for c, card in cbbteams.cards().items()}
     out = build(games, ratings, day.isoformat(), names=names)
     out["inputs"] = inputs
+    out["schedule"] = "whole"
+    out["days_unread"] = ahead
     out["prior"] = {"season": season - 1, "schools": len(prior)}
     out["generated_at"] = _dt.datetime.now().isoformat(timespec="seconds")
     p.parent.mkdir(parents=True, exist_ok=True)

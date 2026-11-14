@@ -420,16 +420,16 @@ def test_the_season_is_read_a_few_days_a_build_and_kept_small():
     day = dt.date.fromisoformat(TODAY)
     with _Cache() as cache:
         asked = []
-        games, missing = NR.load_season(SEASON, day, _scoreboard(asked), reads=40)
-        assert len(asked) == 40 and missing > 0, "a fresh box reads in steps"
+        games, missing, ahead = NR.load_season(SEASON, day, _scoreboard(asked), reads=40)
+        assert len(asked) == 40 and missing > 0 and ahead > 0, "a fresh box reads in steps"
         assert max(asked) <= TODAY, "the days to date first"
-        while missing:
-            games, missing = NR.load_season(SEASON, day, _scoreboard(asked), reads=40)
+        while missing or ahead:
+            games, missing, ahead = NR.load_season(SEASON, day, _scoreboard(asked), reads=40)
+        assert len(asked) == len(set(asked)) == (NR.window(SEASON)[1] - NR.window(SEASON)[0]).days + 1 \
+            - NR.AFTER_TITLE_DAYS, "every day of the season read once"
         first = len(asked)
-        games, missing = NR.load_season(SEASON, day, _scoreboard(asked), reads=40)
-        again = asked[first:]
-        assert again and all(d > TODAY or d >= (day - dt.timedelta(days=3)).isoformat() for d in again), \
-            "a settled day is never asked again"
+        games, missing, ahead = NR.load_season(SEASON, day, _scoreboard(asked), reads=40)
+        assert len(asked) == first, "a season read asks nothing until a day goes stale"
         assert {g["id"] for g in games} >= {g["id"] for g in season(TODAY) if g["date"] < TODAY}
         files = list(cache.glob("cbb_slate_*.json"))
         assert files and sum(f.stat().st_size for f in files) < 2_000_000
@@ -449,7 +449,9 @@ def test_the_race_is_published_through_the_gate_and_held_two_hours():
                 if "still reading" not in line:
                     break
             assert line.startswith("NCAA race:") and "seasons" in line, line
+            assert len(asked) == len(set(asked)) >= 150, "built only once the whole season's schedule was read"
             full = json.loads(Path(gate.board_source(out)).read_text())
+            assert full["schedule"] == "whole" and full["days_unread"] == 0
             pub = json.loads(out.read_text())
             # Both copies written; with the paywall on the public one is
             # `gate.redact`'s (test_a_reader_without_a_plan_gets_the_facts_only).
@@ -466,13 +468,16 @@ def test_the_race_is_published_through_the_gate_and_held_two_hours():
                 held = json.loads(src.read_text())
                 held["generated_at"] = (dt.datetime.now() - dt.timedelta(hours=3)).isoformat(timespec="seconds")
                 src.write_text(json.dumps(held))
-            NR.load_season(SEASON, day, _scoreboard(asked), reads=500)
-            two_hours_on()
-            line = NR.publish(None, day, out_path=str(out), fetch=_scoreboard(asked))
-            assert "seasons" in line, "the days ahead read since: played again"
             two_hours_on()
             line = NR.publish(None, day, out_path=str(out), fetch=_scoreboard(asked))
             assert line == "NCAA race: no score or game has moved since its last build — kept", line
+            # A race built before the whole season was read is never held.
+            held = json.loads(src.read_text())
+            held.pop("schedule")
+            held["generated_at"] = dt.datetime.now().isoformat(timespec="seconds")
+            src.write_text(json.dumps(held))
+            line = NR.publish(None, day, out_path=str(out), fetch=_scoreboard(asked))
+            assert "min ago" not in line, line
     finally:
         NR.SIMS = keep
     assert NR.publish(None, dt.date(2026, 7, 4), out_path=str(out)) == "NCAA race: out of season, not built"
