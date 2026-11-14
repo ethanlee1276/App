@@ -71,7 +71,7 @@ def _nfl_box():
     """One finished game: a quarterback who never ran, a back, a receiver,
     a tight end, both kickers (one feed without a PTS column) and a
     linebacker."""
-    return {"boxscore": {"players": [
+    return {"header": {"competitions": [{"status": {"type": {"state": "post", "completed": True}}}]}, "boxscore": {"players": [
         {"team": {"abbreviation": "DET"}, "statistics": [
             {"name": "passing", "labels": ["C/ATT", "YDS", "AVG", "TD", "INT", "SACKS", "QBR", "RTG"],
              "athletes": [_ath("Jared Goff", "QB", ["24/33", "281", "8.5", "2", "1", "2-14", "70.1", "101.2"])]},

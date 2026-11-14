@@ -27,10 +27,10 @@ THIS REMOVES WHAT THEY LEFT. Stat lines: within one player's market against
 one opponent, rows a day or less apart are one game. The official row is
 kept (not a `-box` copy, ESPN's number before another key, the earlier day
 first), and the rest go. Where a box copy's number differs from the kept
-one, the count and a few examples are printed: the play file's yards can
-differ from the box score's (Barkate at Notre Dame: 144 and 92), and the
-books settle on the box score. Which source college grades on is a
-decision this reports on and does not make. Games: one pair's rows a day or
+one, the count and a few examples are printed (Barkate at Notre Dame: 144
+and 92). Those copies were read mid-game, from the live board's cached
+summary on a failed read (engine/boxsettle, step QQ), so the official row
+is the one to keep. Games: one pair's rows a day or
 less apart with the same final score are one game. The away@home row on the
 earlier day is kept, it takes any line or note only the others carried,
 and the rest go.

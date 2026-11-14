@@ -54,7 +54,7 @@ MICH, OSU = _team("MICH", "130", "Michigan Wolverines"), _team("OSU", "194", "Oh
 
 
 def _payload(yards="112"):
-    return {"boxscore": {"players": [
+    return {"header": {"competitions": [{"status": {"type": {"state": "post", "completed": True}}}]}, "boxscore": {"players": [
         {"team": MICH, "statistics": [
             {"name": "rushing", "labels": ["CAR", "YDS", "AVG", "TD", "LONG"],
              "athletes": [{"athlete": {"displayName": "Donovan Edwards",

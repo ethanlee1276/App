@@ -522,6 +522,18 @@ def ingest_for_open(lconn, hconn, league: str, log=print,
             continue
         try:
             payload = _final_summary(fetch_summary, league, eid)
+            # NEVER A BOX SCORE TAKEN WHILE IT WAS PLAYED (2026-11-14). The
+            # fresh read above can come back as the stale copy: on a network
+            # failure `fetch.fetch_text` returns the cached file, and the live
+            # board writes that same file (espn_{league}_live_{event}.json)
+            # every few seconds while the game is on. Cooper Barkate's Notre
+            # Dame game was filed from two such copies, 75 and 92 receiving
+            # yards, against the play file's 144, and graded on them. A copy
+            # that does not say its game is over is left for a later pass.
+            if not summary_final(payload):
+                res["skipped"].append(f"{league} {g['away']}@{g['home']}: the summary does not say the "
+                                      "game is over yet — a box score read mid-game is never filed")
+                continue
             rows = nfl_rows(payload, g) if league == "nfl" else cfb_rows(payload, g)
         except Exception as exc:                          # noqa: BLE001
             res["skipped"].append(f"{league} {g['away']}@{g['home']}: {exc}")

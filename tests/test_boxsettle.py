@@ -54,7 +54,7 @@ def _team(abbr, tid, name):
 
 
 def _nfl_summary():
-    return {"boxscore": {"players": [
+    return {"header": {"competitions": [{"status": {"type": {"state": "post", "completed": True}}}]}, "boxscore": {"players": [
         {"team": _team("DET", "8", "Detroit Lions"), "statistics": [
             {"name": "receiving", "labels": ["REC", "YDS", "AVG", "TD", "LONG", "TGTS"],
              "athletes": [{"athlete": {"displayName": "Amon-Ra St. Brown",
@@ -157,7 +157,7 @@ def test_college_rows_are_keyed_like_the_backfill_and_grade():
     _bet(L, "cfb", YESTERDAY, "Donovan Edwards", market="rush_yds", line=70.5, game_day=YESTERDAY)
     _game(H, "cfb", 2026, YESTERDAY, "401999", home, away, YESTERDAY,
           extra={"espn_game_id": "401999"})
-    payload = {"boxscore": {"players": [
+    payload = {"header": {"competitions": [{"status": {"type": {"state": "post", "completed": True}}}]}, "boxscore": {"players": [
         {"team": mich, "statistics": [
             {"name": "rushing", "labels": ["CAR", "YDS", "AVG", "TD", "LONG"],
              "athletes": [{"athlete": {"displayName": "Donovan Edwards",
@@ -225,7 +225,7 @@ def test_a_college_game_filed_on_the_utc_next_day_still_grades():
     _bet(L, "cfb", YESTERDAY, "Some Receiver", market="rec_yds", line=40.5, game_day=YESTERDAY)
     _game(H, "cfb", 2026, TODAY.isoformat(), "401555", home, away, None,   # UTC next day, no date
           extra={"espn_game_id": "401555"})
-    payload = {"boxscore": {"players": [
+    payload = {"header": {"competitions": [{"status": {"type": {"state": "post", "completed": True}}}]}, "boxscore": {"players": [
         {"team": haw, "statistics": [
             {"name": "receiving", "labels": ["REC", "YDS", "AVG", "TD", "LONG"],
              "athletes": [{"athlete": {"displayName": "Some Receiver",

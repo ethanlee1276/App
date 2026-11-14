@@ -72,6 +72,36 @@ def test_a_fetcher_without_a_ttl_is_asked_plainly():
     assert calls == [("nfl", "9")]
 
 
+def test_a_copy_taken_mid_game_is_never_filed():
+    """On a network failure the fetcher hands back the cached file, and the
+    live board writes that file every few seconds while the game is on:
+    Barkate's Notre Dame game was filed from two such copies (75 and 92
+    receiving yards, against the play file's 144) and graded on them."""
+    import datetime as dt
+    import json
+    import tempfile
+    from engine import db, ledger
+    t = Path(tempfile.mkdtemp())
+    L = ledger.connect(t / "l.db")
+    ledger.configure_bankroll(L, starting=1000, unit_pct=1)
+    H = db.connect(t / "h.db")
+    day = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+    L.execute("INSERT INTO bets (ts, sport, date, game_day, player, market, side, line, odds, stake_units, "
+              "stake_dollars, status, category) VALUES (?, 'cfb', ?, '', 'Cooper Barkate', 'rec_yds', 'OVER', "
+              "99.5, -110, 1, 10, 'open', 'main')", (f"{day}T12:00:00", day))
+    L.commit()
+    H.execute("INSERT INTO games (sport, season, period, game_id, date, home, away, home_score, away_score, extra) "
+              "VALUES ('cfb', 2026, ?, '401858291', ?, 'ND', 'MIA', 31, 24, ?)",
+              (day, day, json.dumps({"espn_game_id": "401858291"})))
+    H.commit()
+    mid = _summary("in", False)
+    res = B.ingest_for_open(L, H, "cfb", log=lambda *a: None, fetch_rows=lambda lg: [],
+                            fetch_summary=lambda league, eid, ttl=4: mid)
+    assert res["rows"] == 0 and res["games"] == 0, res
+    assert any("never filed" in x for x in res["skipped"]), res["skipped"]
+    assert H.execute("SELECT COUNT(*) FROM player_game_logs").fetchone()[0] == 0
+
+
 def test_the_ingest_reads_through_the_rule_and_the_real_fetcher_takes_a_ttl():
     src = inspect.getsource(B.ingest_for_open)
     assert "_final_summary(fetch_summary, league, eid)" in src

@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QQ. The same-night settle never files a box score read mid-game** (step
+571; 14 November). Nothing to run. Cooper Barkate's Notre Dame game was
+filed from two box-score copies that disagreed with each other, 75 and 92
+receiving yards, against the play file's 144, and the same-night settle
+grades on those copies until the official file lands. The settle reads a
+finished game's summary fresh when its cached copy isn't final, but on a
+network failure the fetcher returns the cached file, and the live board
+writes that same file every few seconds while the game is on. A failed
+read on a busy Saturday therefore filed a snapshot from mid-game. A summary
+that doesn't say its game is over is now never filed; a later pass, or the
+official file, files the game (engine/boxsettle.ingest_for_open). Bets
+graded on such a copy are re-graded when the official rows land
+(`ledger.resettle_mismatches`), and QJ's cleanup removes the copies already
+stored. It also withdraws the decision under 00e: a final box score and the
+play file agree, so college keeps grading on the play file.
+
 **QP. A game's parlays may pair legs that want opposite leads** (step 570;
 14 November). Nothing to run. The first NFL board built on today's code
 counted 13 three-leg tickets across 13 games and 34 touchdown pairs (the
@@ -9469,10 +9485,9 @@ Then, if the counts look like the PU run, the removal:
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.cfbdedupe --apply
 ```
 
-It also prints where a box copy's number differs from the kept official one.
-The play file's yards can differ from the box score's (Barkate at Notre
-Dame: 144 against 92), and the books settle on the box score. Which one
-college grades on is your call (see RUN_NEXT 00e).
+It also prints where a box copy's number differs from the kept official one
+(Barkate at Notre Dame: 144 against 92). Those copies were read mid-game
+(step QQ), so the play file stays the one college grades on.
 
 **QI. College reads stop counting a player's own team against him**
 (step 563; 14 November). Nothing to run. Your picks audit (QC) listed
