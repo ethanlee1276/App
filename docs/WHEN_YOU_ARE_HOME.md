@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QB. A rematch says what each side did the first time, and what has
+changed since** (step 556; 14 November). Nothing to run. Your Commanders–Giants
+report opened its history on the week 5 tie ("Winston threw 33/54 for 326
+... Nabers went 11-121-1 on 20 targets") and then "what changed": McCarthy
+replacing Winston, McLaurin, Brown and Croskey-Merritt on IR, the game moving
+to MetLife. Our "When they last met" section listed the scores, spreads and
+totals only. When two NFL teams meet a second time in a season, the section
+now adds "When they met in week N": each side's key players' lines in that
+game, off their own game logs (catches-yards and targets, carries-yards,
+completions/attempts-yards), and "What has changed since": a quarterback who
+starts now and did not throw a pass in that game, the players each team has
+on a reserve list now (with a reminder to check whether they played the
+first time), and the field, when the game moves.
+
 **QA. A player's card shows his season game by game, and how often it
 clears the board's numbers** (step 555; 14 November). Nothing to run. Your
 reports list a receiver's game log and how often he clears a number ("6+

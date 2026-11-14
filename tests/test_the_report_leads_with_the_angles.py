@@ -159,6 +159,29 @@ def test_a_card_shows_his_game_log_and_how_often_he_clears_the_boards_number():
     assert GR.hit_lines(C, {"player": "Nobody"}) == []
 
 
+def test_a_rematch_says_what_they_did_and_what_changed():
+    from engine import gamereport as GR
+    g = {"home": "NYG", "away": "WAS", "date": "2099-11-12", "scan": {"reserve": {
+        "WAS": [{"player": "Terry McLaurin", "position": "WR", "status": "on injured reserve", "what": "24% of the targets"}]}}}
+    result = {"scan_reads": {"WAS@NYG": {"players": [
+        {"player": "Malik Nabers", "team": "NYG", "pos": "WR", "usage": {"tgt_share": 0.30}},
+        {"player": "J.J. McCarthy", "team": "NYG", "pos": "QB", "usage": {}},
+        {"player": "Jayden Daniels", "team": "WAS", "pos": "QB", "usage": {}}]}}}
+    form = {"Malik Nabers": {"log": [{"wk": 5, "opp": "WAS", "s": {"receptions": 11, "rec_yds": 121, "targets": 20,
+                                                                   "rec_td": 1}}]},
+            "J.J. McCarthy": {"log": [{"wk": 9, "opp": "PHI", "s": {"pass_att": 19, "pass_cmp": 12, "pass_yds": 127}}]},
+            "Jayden Daniels": {"log": [{"wk": 5, "opp": "NYG", "s": {"pass_att": 25, "pass_cmp": 17, "pass_yds": 199,
+                                                                     "rush_yds": 103, "rush_att": 9, "rush_td": 2}}]}}
+    c = GR.Ctx(g, result, sport="nfl", form=form)
+    c.season = 2099
+    blocks = GR.rematch_blocks(c, {"season": 2099, "week": 5, "home": "WAS", "away": "NYG"})
+    text = " | ".join(str(b.get("text") or b.get("items")) for b in blocks)
+    assert "When they met in week 5" in text and "Malik Nabers 11 catches on 20 targets, 121 yds, 1 TD" in text, text
+    assert "J.J. McCarthy starts for" in text and "did not throw a pass in that game" in text, text
+    assert "Terry McLaurin" in text and "moves to" in text, text
+    assert GR.rematch_blocks(c, {"season": 2098, "week": 5, "home": "WAS"}) == [], "last season's is no rematch"
+
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0

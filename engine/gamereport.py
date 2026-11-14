@@ -1024,10 +1024,68 @@ def sec_meetings(c: Ctx) -> dict | None:
         ov = sum(1 for m in totals if m["ou"] == "over")
         un = sum(1 for m in totals if m["ou"] == "under")
         head += f"; {ov} went over the total and {un} under"
-    return _section("meetings", "When they last met", [
-        _p(head), _list(meeting_line(m) for m in ms),
-        {"type": "note", "text": "Each line is the closing spread and total the game was played at "
-                                 "(nflverse's schedule file); the newest meeting first."}])
+    blocks = [_p(head), _list(meeting_line(m) for m in ms)]
+    blocks += rematch_blocks(c, ms[0])
+    blocks.append({"type": "note", "text": "Each line is the closing spread and total the game was played at "
+                                           "(nflverse's schedule file); the newest meeting first."})
+    return _section("meetings", "When they last met", blocks)
+
+
+#: A rematch's box: this many of the board's key players a side.
+REMATCH_N = 4
+
+
+def rematch_blocks(c: Ctx, m: dict) -> list:
+    """A same-season rematch (Ethan's Commanders–Giants report: "Week 5: 27-27
+    OT tie. Winston threw 33/54 for 326 ... Nabers went 11-121-1 on 20
+    targets ... What changed: McCarthy replaces Winston ... WAS lost McLaurin,
+    Brown and Croskey-Merritt to IR ... The game moves to MetLife"): what the
+    board's own players did in it, off their logs, and what has changed
+    since — a quarterback who is not the one who played it, the men now on
+    a reserve list, the other team's field."""
+    if not m or c.sport != "nfl" or m.get("week") is None or int(m.get("season") or 0) != int(c.season or 0):
+        return []
+    wk = int(m["week"])
+    lines, played_qb = [], {}
+    for t in c.teams:
+        mine = []
+        for r in c.reads:
+            if r.get("team") != t:
+                continue
+            log = (c.form.get(r.get("player")) or {}).get("log") or []
+            g = next((x for x in log if x.get("wk") == wk), None)
+            if not g:
+                continue
+            group = FORM_GROUPS.get(str(r.get("pos") or "").upper())
+            if not group:
+                continue
+            mine.append((_volume(r), f"{r.get('player')} {form_game(group, {'s': g.get('s') or {}})}"))
+        mine.sort(key=lambda x: -x[0])
+        if mine:
+            lines.append(f"{c.name(t)}: " + "; ".join(x[1] for x in mine[:REMATCH_N]))
+    for r in c.reads:
+        if str(r.get("pos") or "").upper() != "QB":
+            continue
+        log = (c.form.get(r.get("player")) or {}).get("log") or []
+        played_qb[r.get("team")] = any(x.get("wk") == wk and (x.get("s") or {}).get("pass_att") for x in log)
+    out = []
+    if lines:
+        out += [_h(f"When they met in week {wk}"), _list(lines)]
+    changed = []
+    for t in c.teams:
+        qb = next((r.get("player") for r in c.reads if r.get("team") == t
+                   and str(r.get("pos") or "").upper() == "QB"), None)
+        if qb and played_qb.get(t) is False:
+            changed.append(f"{qb} starts for {c.name(t)} and did not throw a pass in that game")
+        res = [x.get("player") for x in (c.scan.get("reserve") or {}).get(t) or [] if x.get("player")]
+        if res:
+            changed.append(f"{c.name(t)} is without {_join(res)}, on a reserve list now — check whether "
+                           f"{'he' if len(res) == 1 else 'they'} played in the first meeting")
+    if m.get("home") and m["home"] != c.home and not m.get("neutral"):
+        changed.append(f"The game moves to {c.name(c.home)}'s field — the first was at {c.name(m['home'])}'s")
+    if changed:
+        out += [_h("What has changed since"), _list(changed)]
+    return out
 
 
 def sec_market(c: Ctx) -> dict | None:
