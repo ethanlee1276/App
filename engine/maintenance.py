@@ -821,6 +821,9 @@ PRUNABLE_CACHE_PREFIXES = (
     # (hours), keyless refetch; and wxsource.py's side-by-side Open-Meteo
     # read, an hour. The same class as meteo_ and the desk's nws_*.
     "nws_grid_", "nws_hourly_", "wxcompare_om_",
+    # MET Norway's forecast for a venue abroad (engine/sources/metno,
+    # 2026-11-14): hours, keyless refetch, the same class.
+    "metno_",
     # College kickoff forecasts (engine/cfb/wx.py): hours-long TTL,
     # keyless refetch, tiny — the same class as meteo_ and nws_*.
     "cfb_wx_",

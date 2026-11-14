@@ -650,6 +650,9 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
             # every outdoor park as "weather not pulled" — the flag the
             # NFL fix taught it to ask for was never sent from here.
             "measured": bool(getattr(w, "measured", False)),
+            # MET Norway's forecast (Toronto, a series abroad), credited on
+            # the page (engine/sources/metno); absent otherwise.
+            **({"source": w.source} if getattr(w, "source", "") else {}),
         },
         # §5.1's encoding contract, computed rather than assumed.
         "conditions": _conditions(g, park, results),

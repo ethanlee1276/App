@@ -9338,6 +9338,29 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PC. A forecast for games abroad: MET Norway** (step 531; 14 November).
+One read-only command. You, on decision 8b: "Yes if free." It is free: no
+key and no account, and commercial use is allowed on two conditions, both
+built in:
+
+- **Credit.** The site credits "Weather data from MET Norway" wherever one
+  of its readings shows: the game page's conditions line, and the weather
+  page's row and a linked line under it.
+- **Name yourself.** Each request names the site in its User-Agent (the
+  site's name and address, as the NWS requests do, never a person).
+
+Where the National Weather Service has no forecast (London, Munich,
+Frankfurt, Madrid, Dublin, Mexico City, São Paulo, Toronto), the boards now
+read MET Norway's in the same hourly table. A game abroad gets its
+temperature, wind and rain chance instead of "weather not pulled". US games
+read the NWS exactly as before. This prints what MET answers the box for
+each venue abroad, noon UTC tomorrow; nothing but its forecast cache is
+written:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.sources.metno
+```
+
 **PB. College basketball's title futures** (step 530; 14 November). One
 command, one Odds API credit, whenever you want fresh prices (weekly is
 plenty). College's Futures page is the NCAA tournament race's own run: each

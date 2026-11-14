@@ -6380,6 +6380,9 @@ def preflight() -> None:
         # Weather Service, and Open-Meteo until QB_WEATHER_SOURCE names nws.
         ("Weather (National Weather Service)", "https://api.weather.gov/points/40.8135,-74.0745"),
         ("Weather (Open-Meteo, until the switch)", "https://api.open-meteo.com/v1/forecast?latitude=40&longitude=-74&hourly=temperature_2m"),
+        # Games abroad (2026-11-14, `engine.sources.metno`): MET Norway,
+        # where the NWS has no forecast.
+        ("Weather abroad (MET Norway)", "https://api.met.no/weatherapi/locationforecast/2.0/status"),
         ("UFC fighter data (ESPN MMA)", "https://site.web.api.espn.com/apis/search/v2?query=jones&limit=1"),
         ("Injury reports (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"),
         ("Meme coins (DexScreener)", "https://api.dexscreener.com/token-boosts/top/v1"),

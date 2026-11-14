@@ -108,6 +108,9 @@ class MLBWeather:
     #: The defaults above are a neutral prior, and a card must not print a
     #: prior as a reading (tests/test_unmeasured_weather — the NFL's bug).
     measured: bool = False
+    #: "met-norway" when the forecast is MET Norway's (Toronto, a series
+    #: abroad; engine/sources/metno), credited on the page.
+    source: str = ""
 
 
 @dataclass

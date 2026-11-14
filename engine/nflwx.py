@@ -234,6 +234,7 @@ def attach(games, forecast=None) -> int:
             snow=likely and temp <= FREEZING_F,
             measured=True,
             forecast=True,
+            source=str(got.get("source") or ""),
         )
         stamped += 1
     return stamped

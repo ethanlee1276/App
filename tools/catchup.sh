@@ -838,6 +838,9 @@ SH
 run PA "The NCAA tournament race, once built" 60 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -c "import json; d=json.load(open('data/built/ncaa_race.json')); t=d['today']; print(d['generated_at'], d['played'], 'played', d['games_left'], 'left', d['sims'], 'seasons; last season read for', d.get('prior')); print('1 seeds:', [r['name'] for r in t['field'] if r.get('seed') == 1]); print('last four in:', [r['name'] for r in t.get('last_four_in', [])]); print('title:', sorted(((round(c['title'], 3), k) for k, c in d['chances'].items()), reverse=True)[:6])"
 SH
+run PC "MET Norway's forecast for each venue abroad" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -m engine.sources.metno
+SH
 run IS "Your renewal day is the 1st" 60 <<'SH'
 cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_ODDS_RESET_DAY=' /etc/qellys/env | xargs) python3 -m engine.oddsplan | head -6
 SH

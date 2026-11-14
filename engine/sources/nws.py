@@ -21,10 +21,13 @@ Open-Meteo's hourly table, in UTC: ``time`` ("YYYY-MM-DDTHH:MM"),
 the NFL's kickoff reading (`engine.nflwx`) and MLB's first-pitch reading
 (`engine.mlb.sources.mlbstats.park_weather`) read it with no change at all.
 
-US ONLY. Outside the US (a London, Munich or Rio game) the points lookup
-answers 404 and the game keeps "weather not pulled": a miss is a miss, the
-rule the whole weather layer runs on. Nothing is invented and nothing falls
-back to another feed.
+US ONLY, AND MET NORWAY BEYOND IT (2026-11-14; Ethan, on the decision:
+"Yes if free"). Outside the US (a London, Munich or Rio game) the points
+lookup answers 404, and the forecast is MET Norway's instead
+(`engine.sources.metno`: worldwide, free, no key, commercial use with a
+credit), in the same table with ``"source": "met-norway"`` so the site can
+credit it. Where neither answers the game keeps "weather not pulled": a
+miss is a miss, the rule the whole weather layer runs on.
 
 Which source the boards read is `source()`: ``QB_WEATHER_SOURCE`` (``nws`` or
 ``open-meteo``). The default stays Open-Meteo until the box's side-by-side
@@ -157,9 +160,28 @@ def forecast(lat: float, lon: float, ttl: int = 3 * 3600, fetch=None) -> dict:
     get = fetch or _get
     url = forecast_url(lat, lon, fetch=get)
     if not url:
-        return {"hourly": {}, "source": "nws"}
+        # NOT A US PLACE (or the NWS will not say where it is): MET Norway's
+        # forecast, credited (`engine.sources.metno`). A caller that handed
+        # in its own fetch (a test) is never sent to the real MET instead.
+        return _abroad(lat, lon, ttl, injected=fetch is not None)
     try:
         payload = get(url, f"nws_hourly_{lat:.4f}_{lon:.4f}.json", ttl)
     except Exception:                                     # noqa: BLE001
         return {"hourly": {}, "source": "nws"}
     return hourly_table(payload)
+
+
+def _abroad(lat: float, lon: float, ttl: int, injected: bool = False) -> dict:
+    """MET Norway's forecast for a place the NWS does not cover; an empty
+    table if it will not answer either."""
+    if injected and ABROAD_FETCH is None:
+        return {"hourly": {}, "source": "nws"}
+    try:
+        from . import metno
+        return metno.forecast(lat, lon, ttl=ttl, fetch=ABROAD_FETCH)
+    except Exception:                                     # noqa: BLE001
+        return {"hourly": {}, "source": "nws"}
+
+
+#: MET Norway's fetch, swapped only by tests (None: the real one).
+ABROAD_FETCH = None

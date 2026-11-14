@@ -1668,6 +1668,9 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
             "forecast": bool(getattr(w, "forecast", False)),
             # A retractable roof read as closed (engine/nflwx.retractable_unset).
             "retractable": bool(getattr(w, "retractable", False)),
+            # MET Norway's forecast for a game abroad, credited on the page
+            # (engine/sources/metno); absent for every other reading.
+            **({"source": w.source} if getattr(w, "source", "") else {}),
         },
         # §5.1's encoding contract, computed rather than assumed.
         "conditions": _conditions(g, results),

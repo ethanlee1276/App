@@ -449,6 +449,7 @@ def park_weather(park_key: str, first_pitch: str | None = None) -> MLBWeather:
         humidity=float(hum if hum is not None else 50.0) / 100.0,
         precip_chance=float(precip or 0.0) / 100.0,
         measured=True,
+        source="met-norway" if (data or {}).get("source") == "met-norway" else "",
     )
 
 

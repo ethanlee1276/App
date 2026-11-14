@@ -151,13 +151,18 @@ def pick_hour(payload: dict, kickoff_iso: str) -> dict | None:
     w = col("wind_speed_10m")
     if t is None or w is None:
         return None
-    return {
+    out = {
         "temp_f": round(float(t)),
         "wind_mph": round(float(w)),
         "wind_dir": compass(col("wind_direction_10m")),
         "precip_chance": round(float(col("precipitation_probability") or 0)
                                / 100.0, 2),
     }
+    # A reading from MET Norway (a venue abroad, engine/sources/metno) says
+    # so, for its credit on the page; every other reading is as it was.
+    if (payload or {}).get("source") == "met-norway":
+        out["source"] = "met-norway"
+    return out
 
 
 def attach(games: list, vidx: dict, forecast=None) -> int:

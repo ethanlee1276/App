@@ -17593,7 +17593,8 @@ function renderWeather() {
          <span class="wx-wind${windy ? " windy" : ""}"
            title="${windy ? "12mph+ moves totals" : ""}">${
            Math.round(w.wind_mph || 0)}mph${
-           w.wind_dir ? " " + escapeHtml(w.wind_dir) : ""}${precip}</span>`;
+           w.wind_dir ? " " + escapeHtml(w.wind_dir) : ""}${precip}${
+           w.source === "met-norway" ? " · MET Norway" : ""}</span>`;
     return `<div class="wx-row" data-gid="${escapeHtml(gameId(g))}">
       <span class="wx-teams">${teamMark(g.away, 22)} ${escapeHtml(g.away)}
         <em>@</em> ${teamMark(g.home, 22)} ${escapeHtml(g.home)}</span>
@@ -17621,8 +17622,13 @@ function renderWeather() {
         <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span>
         <span class="kx-num kx-e"><span style="color:var(--${r.edge_pts > 0 ? "good" : "bad"})">${r.edge_pts > 0 ? "+" : ""}${r.edge_pts}</span></span>
       </div>`).join("")}</div>` : "";
+  // MET NORWAY'S CREDIT (engine/sources/metno, 2026-11-14): a game abroad
+  // reads its forecast, and its licence asks for the credit beside it.
+  const metno = games.some((g) => (g.weather || {}).source === "met-norway")
+    ? `<p class="muted wx-credit">Forecasts for games outside the US:
+        <a href="https://www.met.no/en" target="_blank" rel="noopener">Weather data from MET Norway</a>.</p>` : "";
   host.innerHTML = (games.length ? `<div class="card" style="padding:0">
-      ${games.map(row).join("")}</div>` :
+      ${games.map(row).join("")}</div>${metno}` :
     `<div class="empty-slate"><div class="es-icon">${icon("cloud", 30)}</div>
       <div class="es-title">No conditions to report</div>
       <div class="es-sub">The slate carries a weather reading for every outdoor game once

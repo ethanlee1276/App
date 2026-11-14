@@ -180,6 +180,9 @@ class Weather:
     #: .attach): read as closed, with ``dome`` set, and said so on the card
     #: rather than called a dome.
     retractable: bool = False
+    #: Whose forecast it is when not the boards' usual one: "met-norway"
+    #: for a game abroad (engine/sources/metno), credited on the page.
+    source: str = ""
 
 
 @dataclass

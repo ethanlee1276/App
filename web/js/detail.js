@@ -1809,7 +1809,10 @@ function renderGamePage() {
     // Same rule as the strip card: an unmeasured prior is not a forecast.
     : w.measured === false ? "Outdoor · weather not pulled"
     : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}${
-      isLive || isFinal ? "" : mlb ? " · first-pitch forecast" : " · kickoff forecast"}`;
+      isLive || isFinal ? "" : mlb ? " · first-pitch forecast" : " · kickoff forecast"}${
+      // A game abroad reads MET Norway's forecast (engine/sources/metno),
+      // and its licence asks for the credit wherever its data shows.
+      w.source === "met-norway" ? " · weather data from MET Norway" : ""}`;
   const gpLines = gameMarketsHTML(g, { mlb, isFinal, open: true });
   const gpCrowd = isFinal ? "" : crowdStripHTML(g);
   const gpMoney = isFinal ? "" : gameMoneyHTML(g);
