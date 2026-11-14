@@ -64,6 +64,74 @@ def ingest_results(conn, games: list[dict]) -> int:
     return upsert_games(conn, rows) if rows else 0
 
 
+def _under_way(ev: dict, game: dict, now: float | None = None) -> bool:
+    """Has this game started? Its own state first, then the event's start."""
+    import datetime as _dtm
+    import time as _time
+    if str(game.get("state") or "").lower() in ("live", "final", "in", "post"):
+        return True
+    t = str(ev.get("commence_time") or game.get("kickoff") or "")
+    try:
+        start = _dtm.datetime.fromisoformat(t.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if start.tzinfo is None:
+        return False
+    return start.timestamp() <= (_time.time() if now is None else now)
+
+
+def pregame_lines(gds: list, now: float | None = None, conn=None) -> int:
+    """Each started game's last spread and total before kickoff, off the
+    line tape every build writes (engine/lineledger), onto the board's game.
+    `attach_odds` leaves a started game unpriced; this gives it back the
+    pregame line it had, or nothing when the board never priced it before
+    kickoff. Returns games restored. Never raises."""
+    import datetime as _dtm
+    try:
+        from engine import lineledger as _ll
+        todo = {}
+        for gd in gds or []:
+            if not isinstance(gd, dict) or not gd.get("home") or not gd.get("away"):
+                continue
+            if not _under_way({}, gd, now):
+                continue
+            try:
+                kick = _dtm.datetime.fromisoformat(str(gd.get("kickoff") or "").replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if kick.tzinfo is None:
+                continue
+            cut = kick.astimezone(_dtm.timezone.utc).strftime("%Y-%m-%dT%H:%M:00Z")
+            todo[f"{str(gd.get('date') or '')[:10]}-{gd['away']}@{gd['home']}"] = (gd, cut)
+        if not todo:
+            return 0
+        own = conn is None
+        if own:
+            from engine import db as _db
+            conn = _db.connect()
+        try:
+            tape = _ll.pregame_tape(conn, "cfb", set(todo), max(c for _g, c in todo.values()))
+        finally:
+            if own:
+                conn.close()
+        n = 0
+        for eid, (gd, cut) in todo.items():
+            sp = tot = None
+            for taken, market, player, line, _over in tape.get(eid, ()):
+                if taken >= cut or line is None:
+                    continue
+                if market == "spread" and player == gd["home"]:
+                    sp = float(line)
+                elif market == "total" and player == _ll.TOTAL_KEY:
+                    tot = float(line)
+            gd["spread"], gd["total"] = sp, tot
+            n += int(sp is not None or tot is not None)
+        return n
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  pregame lines for started games not read ({exc})")
+        return 0
+
+
 def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
                 api_key: str | None = None) -> tuple[dict, str]:
     """``{game_id: {...market prices...}}`` plus a human note.
@@ -83,7 +151,7 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
     # away — see `oddsapi.slate_days` and the note on the two refusals in
     # the loop below.
     days = oddsapi.slate_days(games)
-    other_day = reversed_events = 0
+    other_day = reversed_events = under_way = 0
     try:
         events, _quota = oddsapi.fetch_sport_odds(
             "cfb", api_key=api_key, cache_only=cache_only)
@@ -149,6 +217,17 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
         # board did on the night of the season opener.
         if not oddsapi.same_meeting(home, away, game):
             reversed_events += 1
+            continue
+        # A GAME UNDER WAY IS PRICED IN PLAY (the picks audit, 2026-11-14:
+        # "SMU +42.5 at home" and "RUTG expected to score about 0, +31.5,
+        # total 31.5" on a board built while those games were being
+        # played). The one request quotes a started game in play, and that
+        # number was written as the game's line: the reads, the report and
+        # the scorer chances all read it as the pregame line. A started
+        # game keeps the last line it had before kickoff instead
+        # (`pregame_lines`); the live numbers are the live block's.
+        if _under_way(ev, game):
+            under_way += 1
             continue
         # The parsers key on the exact strings this feed uses, so build the
         # map from the event itself rather than guessing at spellings.
@@ -227,6 +306,8 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
         note += f" · {other_day} fixture(s) for another week"
     if reversed_events:
         note += f" · {reversed_events} the other meeting of the same pair"
+    if under_way:
+        note += f" · {under_way} under way, kept at their pregame line"
     if cache_only:
         note += " (cached)"
     return priced, note
@@ -1828,6 +1909,10 @@ def main() -> None:
         lines = priced.get(g["game_id"]) or {}
         gd["spread"] = (lines.get("spread") or [None])[0]
         gd["total"] = (lines.get("total") or [None])[0]
+    # A STARTED GAME'S PREGAME LINE, back off the tape (`pregame_lines`).
+    _kept = pregame_lines(out["games"])
+    if _kept:
+        print(f"  {_kept} game(s) under way kept at their last pregame line")
     _clock.lap("opponent-adjusted ratings + game lines", "games + lines", _t)
 
     _clock.mark("opponent-adjusted ratings + game lines")
