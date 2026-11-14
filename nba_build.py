@@ -573,7 +573,7 @@ def schedule_density(schedule_days: dict, team: str, date: str) -> dict:
     try:
         d0 = _d.date.fromisoformat(date)
     except ValueError:
-        return {"rest": "1day", "games_in_4": 0, "games_in_6": 0}
+        return {"rest": "1day", "games_in_4": 0, "games_in_6": 0, "rest_days": None}
     played = set()
     for offset in range(1, 7):
         day = (d0 - _d.timedelta(days=offset)).isoformat()
@@ -582,7 +582,11 @@ def schedule_density(schedule_days: dict, team: str, date: str) -> dict:
                 played.add(offset)
     in_4 = sum(1 for o in played if o <= 3)
     in_6 = sum(1 for o in played if o <= 5)
-    return {"rest": rest_from(played), "games_in_4": in_4 + 1, "games_in_6": in_6 + 1}
+    # The days since the club's last game, 1 the night before (7: none in
+    # the six read), journaled with each pick so the record can be sliced by
+    # it (engine/losspatterns.rest_band).
+    return {"rest": rest_from(played), "games_in_4": in_4 + 1, "games_in_6": in_6 + 1,
+            "rest_days": min(played) if played else 7}
 
 
 def rest_from(played: set) -> str:
@@ -1739,6 +1743,8 @@ def main() -> None:
                 "days_off": _ctx_layoff(h.get("dates"), args.date),
                 "rest": density.get(h["team"], {}).get(
                     "rest", "b2b_home" if h["team"] in played_yday else "1day"),
+                "rest_days": density.get(h["team"], {}).get(
+                    "rest_days", 1 if h["team"] in played_yday else None),
                 "density": density.get(h["team"], {}),
                 "freshness": fresh,
                 "schedule_fit": schedule_fit(density.get(h["team"], {})),

@@ -239,12 +239,37 @@ def lineup_band(slot, confirmed) -> str | None:
     return f"{'confirmed' if confirmed else 'projected'} {tier}"
 
 
-def rest_band(days) -> str | None:
+#: THE LEAGUES THAT PLAY NIGHTS IN A ROW (2026-11-14). Their schedule
+#: dimension is the back-to-back, not football's short week. The hypothesis
+#: lab's own watchlist asked for it ("WNBA ast OVERs ... crossed with
+#: back-to-back scheduling — the rest menu has no basketball-appropriate
+#: value"), and it is why the lab held 79 hypotheses and not one for the
+#: NBA, hockey or college: football's bands on a basketball pick read a
+#: back-to-back as a "short week", and no basketball or hockey pick was
+#: journaled with its rest at all.
+NIGHTLY_LEAGUES = frozenset({"nba", "wnba", "cbb", "nhl"})
+
+
+def rest_band(days, sport=None) -> str | None:
     """Days of rest at kickoff, banded. Football's schedule dimension:
     a four-day Thursday turnaround and a fortnight off a bye are
     different teams wearing the same logo. Delegates to engine.fatigue
     so the board and the miner can never drift apart on where a band
-    starts."""
+    starts. A league that plays nights in a row (`NIGHTLY_LEAGUES`) bands
+    the days since its team's last game instead: 1 is the second night of
+    a back-to-back."""
+    if str(sport or "").lower() in NIGHTLY_LEAGUES:
+        try:
+            d = int(days)
+        except (TypeError, ValueError):
+            return None
+        if d <= 0:
+            return None                   # unknown, not "no rest"
+        if d == 1:
+            return "back-to-back"
+        if d == 2:
+            return "one day off"
+        return "two days off or more"
     from .fatigue import rest_band as _band
     return _band(days)
 
@@ -393,7 +418,7 @@ def features_of(side=None, odds=None, prob=None, book=None,
         "park": park_band(park_hr, roofed),
         "wind": wind_band(wind_out, roofed, sport),
         "slot": lineup_band(lineup_slot, bool(lineup_conf)),
-        "rest": rest_band(rest_days),
+        "rest": rest_band(rest_days, sport),
         "clock": clock_band(body_clock),
         # Two separate dimensions on purpose: the opposing pen is what
         # lifts a hitter's number, the own pen is what lengthens a

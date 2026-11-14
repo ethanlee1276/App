@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PR. The record can ask about a back-to-back** (step 546; 14 November).
+Nothing to run. You asked whether the hypothesis lab works for every sport.
+It runs (79 hypotheses on the Record page, retested tonight, proposed weekly
+since August), and not one is about the NBA, the NHL or college basketball,
+though it reads their settled picks. Its own watchlist said why: "WNBA ast
+OVERs ... crossed with back-to-back scheduling — the rest menu has no
+basketball-appropriate value". The rest bands it and the loss miner test
+were football's (short week, normal week, off a bye), and no basketball or
+hockey pick was journaled with its rest at all. A league that plays nights
+in a row now bands the days since its team's last game (back-to-back, one
+day off, two days off or more), every NBA, WNBA, college and hockey pick
+journals those days from today, and the loss veto reads them, so a rest
+slice the record closes is refused on the board too. It pays forward: the
+lab can propose on it once about 40 picks fall in a band (the miner's
+floor), a week or two of NBA nights.
+
 **PQ. The heartbeat says what each learner concluded, league by league**
 (step 545; 14 November). Nothing to run. Until now the public heartbeat
 said how long each learner ran and the box's own log said what it found, so

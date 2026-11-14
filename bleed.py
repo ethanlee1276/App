@@ -240,7 +240,7 @@ DIMENSIONS = {
                               "open air"),
     "capture lag": lambda b: lead_band(b.get("lead_min")),
     "horizon":     lambda b: horizon_band(b.get("horizon_days")),
-    "rest":        lambda b: rest_band(b.get("rest_days")),
+    "rest":        lambda b: rest_band(b.get("rest_days"), b.get("sport")),
     "clock":       lambda b: clock_band(b.get("body_clock")),
     "pen own":     lambda b: pen_band(b.get("pen_own")),
     "pen opp":     lambda b: pen_band(b.get("pen_opp")),

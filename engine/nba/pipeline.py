@@ -340,7 +340,7 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
                          "and cannot price an in-play market"]
     _block = lp_veto(tune.key, stat, side=side, odds=odds, prob=p_final,
                      book=prop.get("book"), horizon_days=0,
-                     lead_min=_lead)
+                     lead_min=_lead, rest_days=prop.get("rest_days"))
     if _block:
         fails = fails + [_block]
     # THE INJURY BOARD (nba_build.hoops_injuries, 2026-10-13). Ruled out
@@ -416,6 +416,9 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
         # can be read field against field (ledger._bet_clv_matched).
         "fair_consensus": prop.get("fair_consensus"),
         "consensus_books": prop.get("consensus_books") or 0,
+        # The days since his team's last game (1: the second night of a
+        # back-to-back), journaled so the record can be sliced by it.
+        "rest_days": prop.get("rest_days"),
         "context": context_notes,
         "chain": pj.get("chain"),
     }

@@ -196,6 +196,23 @@ def rung_probs(proj: dict, market: str, alts, main_line=None, main_over=None,
 
 
 # --- one prop ---------------------------------------------------------------
+def _rest_days(team_ctx: dict, date: str):
+    """Days since this team's last game before ``date`` (1: it played last
+    night), off the last ten game dates the slate's context holds; None
+    when none is known (engine/losspatterns.rest_band reads None as
+    unknown, never as rested)."""
+    import datetime as _d
+    try:
+        d0 = _d.date.fromisoformat(str(date)[:10])
+        before = [_d.date.fromisoformat(str(x)[:10]) for x in (team_ctx.get("last10") or ())
+                  if x and str(x)[:10] < str(date)[:10]]
+    except ValueError:
+        return None
+    if before:
+        return (d0 - max(before)).days
+    return 1 if team_ctx.get("b2b") else None
+
+
 def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str,
                ctx: dict | None = None, teams: dict | None = None, league: dict | None = None) -> dict | None:
     """The shared-schema recommendation for one priced prop, or None.
@@ -247,8 +264,9 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
     from engine.betting import apply_selection
     from engine.losspatterns import veto as _lp_veto
     win, edge = apply_selection(win, edge, SPORT)
+    rest_days = _rest_days((ctx or {}).get(prop.team) or {}, date)
     loss_block = _lp_veto(SPORT, prop.market, side=side, odds=odds, prob=win,
-                          book=book, horizon_days=0)
+                          book=book, horizon_days=0, rest_days=rest_days)
     ev = expected_value(win, odds)
     label = M.MARKET_LABELS.get(prop.market, prop.market)
     vals = [float(v) for v in proj.get("recent") or []]
@@ -365,6 +383,9 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         "proj_low": round(max(0.0, proj["mean"] - sd), 1), "proj_high": round(proj["mean"] + sd, 1),
         "hit_prob": round(win, 4), "raw_prob": round(raw, 4), "fair_prob": round(fair, 4),
         "loss_pattern": loss_block or "",
+        # The days since his team's last game (1: the second night of a
+        # back-to-back), journaled so the record can be sliced by it.
+        "rest_days": rest_days,
         # Which market the haircut trusted, and what the other books said.
         "market_source": "sharp" if sharp else "books",
         "sharp_value": sharp_val,
