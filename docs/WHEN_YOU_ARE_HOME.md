@@ -9339,16 +9339,34 @@ waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
 **PJ. College's own address, and its live lane counted** (step 538; 14
-November). Nothing to run: the deploy installs the Caddyfile itself, after
-validating it. Every league's board had a clean path (qellysbook.com/nba)
-but college basketball's, so a shared college link unfurled as the
-generic site card and opened on another league. qellysbook.com/cbb opens
-college's board, with its own title and preview text. And college's live
-line lane ran from opening night without hours in the odds plan's
-forecast: the plan now counts the 5 hours a college game day adds outside
-the NBA's evening (measured on 2025-26's schedule; every live lane shares
-one cadence clock, so the NBA's evening is no new spend). About 45 credits
-a college game day, inside the plan.
+November). One command, once. Every league's board had a clean path
+(qellysbook.com/nba) but college basketball's. qellysbook.com/cbb now
+opens college's board, the app reading the league off the address; what
+waits is the link preview, college's own title and description when the
+address is shared, which Caddy hands to the app only once the new
+Caddyfile is installed. The automatic update pulls code and restarts the
+site but never installs a Caddyfile (letting a push reconfigure the web
+server as root is the kind of power its audit took away), so it is this,
+with Caddy checking the file first; one that does not validate stops here
+and the running one stays:
+
+```
+cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+```
+
+Then, read-only, the address answering with its own title (it prints
+`<title>College basketball · Qellys Book</title>`; the plain site title
+means Caddy still has the old file):
+
+```
+curl -s https://qellysbook.com/cbb | grep -o '<title>[^<]*</title>'
+```
+
+And college's live line lane ran from opening night without hours in the
+odds plan's forecast: the plan now counts the 5 hours a college game day
+adds outside the NBA's evening (measured on 2025-26's schedule; every live
+lane shares one cadence clock, so the NBA's evening is no new spend).
+About 45 credits a college game day, inside the plan.
 
 **PI. College's Parlays page builds** (step 537; 14 November). Nothing to
 run. College's board showed a Parlays tab, but the two-leg builder ran

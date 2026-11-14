@@ -841,6 +841,9 @@ SH
 run PC "MET Norway's forecast for each venue abroad" 120 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -m engine.sources.metno
 SH
+run PJ "College basketball's own address answers with its own title" 60 <<'SH'
+curl -s https://qellysbook.com/cbb | grep -o '<title>[^<]*</title>'
+SH
 run IS "Your renewal day is the 1st" 60 <<'SH'
 cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_ODDS_RESET_DAY=' /etc/qellys/env | xargs) python3 -m engine.oddsplan | head -6
 SH
