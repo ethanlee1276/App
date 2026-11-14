@@ -9338,6 +9338,32 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PW. A matchup read counts each factor once, and a go-to scorer stays
+one** (step 551; 14 November). Nothing to run. You, on Duke at Miami: Duke's
+back has 17 touchdowns, 13 rushing and 4 receiving, and the report marked him
+a bad matchup because Miami's run defense ranks 5th, when the total is high
+and he is Duke's go-to scorer; "we're kind of judging too many things off
+too many factors ... audit all of that for every sport". What the audit
+found: every league's read counted its reasons a point each, so one strong
+defence counted two or three times (an NFL back's by the rushing yards and
+again by the touchdowns it allows backs, a basketball defence once a stat, a
+hockey defence by its shots and again by its chances, a starting pitcher by
+the slugging he allows and again by his expected ERA); nothing a player does
+himself could stop an "avoid"; and college's read was never handed the lines
+at all, so its implied points could not count either way. One rule now runs
+every league's read (engine/readlogic): a factor votes once however many of
+its numbers agree; a featured player (most of the carries, a fifth of the
+targets, a starting quarterback, a starter's minutes, a skater who shoots
+three times a night, the top of the order, a starting pitcher) can read
+tough, never avoid; college's read hears its implied points; a stingy front
+no longer leans a back's carries under, only his yards; and a read that runs
+against his team's go-to scorer (its best touchdown chance, 35% or more)
+says both on his card ("Unfavorable for yards — still the go-to scorer",
+with his touchdowns and our chance), stays off the "could have a hard day"
+lists, and the short version names each side's likeliest scorer. What moves
+on the board: some Most Likely seats, because a read picks the side among
+numbers that already clear every bar; no number changes.
+
 **PV. Game reports stop touting a ruled-out player, and mark a
 questionable one** (step 550; 14 November). Nothing to run. You, on the
 Miami–Duke report: Malachi Toney was under "Who could have a big day" and
