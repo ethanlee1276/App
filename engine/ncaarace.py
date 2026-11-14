@@ -944,6 +944,11 @@ def build(games: list, ratings: dict, today: str, names: dict | None = None, sim
             if t in ch:
                 ch[t]["proj"] = [round(r["w"] + ew, 1), round(r["l"] + len(mine) - ew, 1)]
                 ch[t]["conf_proj"] = [round(r["cw"] + ecw, 1), round(r["cl"] + len(same) - ecw, 1)]
+                # Its wins' 10th to 90th, each game left one draw (the
+                # futures page's band).
+                sd = sum(x["p"] * (1 - x["p"]) for x in mine) ** 0.5
+                ch[t]["proj_band"] = [max(r["w"], int(round(r["w"] + ew - 1.2816 * sd))),
+                                      min(r["w"] + len(mine), int(round(r["w"] + ew + 1.2816 * sd)))]
             remaining[t] = mine[:NEXT_GAMES]
     conferences = {}
     for c in sorted({conf[t] for t in di}, key=lambda c: (cbbteams.conference(c) or c)):
@@ -1152,11 +1157,132 @@ def publish(conn, day: _dt.date, out_path: str = "web/data/ncaa_race.json", fetc
     out["generated_at"] = _dt.datetime.now().isoformat(timespec="seconds")
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p, p.name)
+    # The futures page, off the same run: our title chances beside the
+    # books' prices already kept (a build never spends; futures_build.py
+    # cbb --odds pulls them, one credit). Never at the race's expense.
+    fut = ""
+    try:
+        fut = write_futures(out, p.with_name("futures_cbb.json"), cache_only=True)
+    except Exception as exc:                                       # noqa: BLE001
+        fut = f"futures not written ({type(exc).__name__}: {exc})"
     b = out.get("bracket")
     if b:
         decided = sum(1 for reg in b["regions"] for rnd in reg["rounds"] for s in rnd if s.get("w"))
         return (f"NCAA tournament: {decided} bracket game(s) decided"
-                + (f" — {b['champion']} the champion" if b.get("champion") else ""))
+                + (f" — {b['champion']} the champion" if b.get("champion") else "") + f"; {fut}")
     top = sorted(out["chances"].items(), key=lambda kv: -kv[1]["title"])[:4]
     return (f"NCAA race: {out['played']} games played, {out['games_left']} left, {out['sims']} seasons — "
-            + ", ".join(f"{t} {c['title']:.0%}" for t, c in top))
+            + ", ".join(f"{t} {c['title']:.0%}" for t, c in top) + f"; {fut}")
+
+
+# --- the futures page --------------------------------------------------------------------
+#: How the futures page says where college's numbers come from (its
+#: ``doctrine``; the other leagues' is futures_build.DOCTRINE).
+FUTURES_DOCTRINE = (
+    "Every number here comes from playing the rest of the college season out — every game left, each "
+    "conference's tournament, the committee's selection and the NCAA tournament's bracket — two thousand "
+    "times, the same run as the Race page, not from reading a price. Futures are the market a book posts "
+    "earliest and revisits least, which is where the edge argument comes from — and the market least likely "
+    "to hold a sure thing, because the horizon is months and the stake is tied up for all of it.")
+FUTURES_HOW = (
+    "Each game left is one draw at our win chance from ratings adjusted for every opponent, the home court "
+    "off a neutral floor. Each conference's tournament is its top eight by conference record, single "
+    "elimination; the at-large picks stand in for the committee by our rating and each school's wins above a "
+    "bubble team's; the bracket is seeded on the S-curve and played out game by game. Assumed, and worth "
+    "knowing: ratings hold for the rest of the season — no injuries, no transfers, no regression — and every "
+    "game is independent.")
+#: Rows the futures page lists for college (the other leagues' twenty).
+FUTURES_ROWS = 30
+
+
+def title_prices(cache_only: bool = True) -> tuple:
+    """(``{team: {"odds", "book", "implied"}}``, why it is empty): the
+    national title's best price per school. The books' runners are matched
+    by the names college's game lines learned (`cbbteams.load`) and each
+    school's ESPN name (`cbbteams.cards`), exactly once normalised; a runner
+    matched to no school is dropped, never guessed (`oddsapi.parse_outrights`).
+    ``cache_only`` by default: a build never spends."""
+    try:
+        from . import cbbteams
+        from .sources import oddsapi
+        names = {c.get("name"): code for code, c in cbbteams.cards().items() if c.get("name")}
+        names.update(cbbteams.load() or {})
+        payload, _ = oddsapi.fetch_outrights("cbb", cache_only=cache_only)
+        got = oddsapi.parse_outrights(payload, names)
+        if not got:
+            return {}, ("no title prices kept yet — futures_build.py cbb --odds pulls them" if cache_only
+                        else "the futures market answered with no prices for college")
+        return got, ""
+    except Exception as exc:                                       # noqa: BLE001
+        return {}, f"{type(exc).__name__}: {exc}"
+
+
+def futures_payload(race: dict, prices: dict | None = None, price_note: str = "") -> dict:
+    """The futures page's shape (futuresdata.project's) off a race: each
+    contender's record, projected wins with a band, its chance at its
+    conference's automatic bid ("Bid") and the field ("Field"), and the
+    title — beside the best book price and the gap, in points."""
+    prices = prices or {}
+    ch = race.get("chances") or {}
+    bracket = bool((race.get("bracket") or {}).get("set"))
+    rows = []
+    for r in race.get("teams") or []:
+        c = ch.get(r["team"])
+        if not c:
+            continue
+        w, l = (int(x) for x in str(r.get("record") or "0-0").split("-")[:2])
+        proj = c.get("proj") or [w, l]
+        band = c.get("proj_band") or [w, w]
+        row = {"team": r["team"], "name": r.get("name") or r["team"], "conference": r.get("conf") or "",
+               "wins": w, "losses": l, "proj_wins": float(proj[0]),
+               "proj_wins_lo": band[0], "proj_wins_hi": band[1],
+               "p_division": None if bracket else c.get("auto"),
+               "p_playoffs": 1.0 if bracket else c.get("field"), "p_title": c.get("title", 0.0)}
+        p = prices.get(r["team"])
+        if p:
+            row.update(title_odds=p["odds"], title_book=p["book"], title_implied=p["implied"],
+                       title_edge_pts=round((row["p_title"] - p["implied"]) * 100, 1))
+        rows.append(row)
+    rows.sort(key=lambda x: (-x["p_title"], -(x["p_playoffs"] or 0), x["team"]))
+    played = int(race.get("played") or 0)
+    # The share of a rating that is still last season's: three games of it
+    # against the games each school has played (two a game, over every
+    # school in a conference).
+    schools = sum(len(c.get("teams") or []) for c in (race.get("conferences") or {}).values()) or 1
+    per = 2.0 * played / schools
+    prior = (race.get("prior") or {}).get("schools")
+    share = round(CR.PRIOR_GAMES / (CR.PRIOR_GAMES + per), 2) if prior else 0.0
+    out = {"sport": "cbb", "season": race.get("season"), "teams": rows, "trials": race.get("sims", 0),
+           "fixtures_remaining": race.get("games_left", 0), "games_played": played, "prior_share": share,
+           "note": ("Each school's rating counts last season's as three games of this one, so early in the "
+                    "season it leans on last year" if share else ""),
+           "priced": len([x for x in rows if x.get("title_odds") is not None]),
+           "labels": {"group": "Conf", "div": "Bid", "po": "Field"}, "rows_shown": FUTURES_ROWS,
+           "doctrine": FUTURES_DOCTRINE, "how": FUTURES_HOW, "season_totals": [],
+           "race_built": race.get("generated_at"), "generated_at": _dt.datetime.now().isoformat(timespec="seconds")}
+    if price_note and not out["priced"]:
+        out["price_note"] = price_note
+    return out
+
+
+def write_futures(race: dict, path, cache_only: bool = True) -> str:
+    """futures_cbb.json off ``race``, through the gate (paid whole). Returns
+    the build-log part."""
+    from pathlib import Path
+    from . import gate
+    prices, why = title_prices(cache_only=cache_only)
+    out = futures_payload(race, prices, why)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    gate.publish(out, path, path.name)
+    return f"futures: {len(out['teams'])} school(s), {out['priced']} priced" + (f" ({why})" if why else "")
+
+
+def futures_from_race(race_path: str = "web/data/ncaa_race.json", live_odds: bool = False) -> dict:
+    """The futures payload off the race last built (its full copy), for
+    futures_build.py: with ``live_odds`` the one-credit title pull."""
+    from pathlib import Path
+    from . import gate
+    race = json.loads(Path(gate.board_source(Path(race_path))).read_text(encoding="utf-8"))
+    prices, why = title_prices(cache_only=not live_odds)
+    return futures_payload(race, prices, why)

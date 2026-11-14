@@ -731,6 +731,10 @@ FUTURES_KEYS = {
     "nba": "basketball_nba_championship_winner",
     "cfb": "americanfootball_ncaaf_championship_winner",
     "nhl": "icehockey_nhl_championship_winner",
+    # Men's college basketball's national title (2026-11-14): the same one
+    # market and one region, one credit a pull, read beside the NCAA
+    # tournament race's own title chances (engine/ncaarace.futures_from_race).
+    "cbb": "basketball_ncaab_championship_winner",
 }
 
 #: A week. Futures are the slowest market a book runs — a division number

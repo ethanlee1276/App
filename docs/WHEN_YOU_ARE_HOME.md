@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PB. College basketball's title futures** (step 530; 14 November). One
+command, one Odds API credit, whenever you want fresh prices (weekly is
+plenty). College's Futures page is the NCAA tournament race's own run: each
+school's projected record with its band, its chance at its conference's
+automatic bid ("Bid") and the field ("Field"), and the national title, set
+beside the books' best title price with the gap in points. It is rebuilt
+beside every race, from the title prices already kept, so a build never
+spends. This pulls them, one market and one region:
+
+```
+cd /srv/qellys && sudo -u qellys python3 futures_build.py cbb --odds
+```
+
+It prints how many schools it priced. A book's runner is matched to a school
+by a name the college game lines have already met, or the school's own ESPN
+name; one matched to neither is left unpriced, never guessed. The page shows
+whatever was last pulled until the next pull.
+
 **PA. The NCAA tournament race** (step 529; 14 November). One read-only
 command, once the college build has run a few times. You, on the list: "make
 it like nba cup ... I want all the features like this is a complete sport."

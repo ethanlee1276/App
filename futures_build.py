@@ -32,6 +32,12 @@ from engine import futuresdata as FD                    # noqa: E402
 from engine import gate
 
 SPORTS = ("nfl", "mlb", "cfb", "nba", "nhl")
+#: …and men's college basketball (2026-11-14), whose season is the NCAA
+#: tournament race's own run (engine/ncaarace): this build only reads the
+#: race last built and, with --odds, pulls the title prices — one credit. Not
+#: in SPORTS, so the loop's daily rebuild (launch._run_futures) leaves it to
+#: the college build, which writes it beside every race.
+EXTRA = ("cbb",)
 
 #: Season-total markets worth publishing per sport — the ones a book posts
 #: futures on and our logs already carry. CFB is absent on purpose: there
@@ -66,6 +72,9 @@ OUT = ROOT / "web" / "data"
 
 
 def build(sport: str, conn, trials: int = 20000, live_odds: bool = False) -> dict:
+    if sport == "cbb":
+        from engine import ncaarace
+        return ncaarace.futures_from_race(str(OUT / "ncaa_race.json"), live_odds=live_odds)
     out = FD.project(conn, sport, trials=trials, live_odds=live_odds)
     left = out.pop("games_left", {}) or {}
     markets = []
@@ -94,11 +103,11 @@ def main(argv: list[str]) -> None:
     for a in argv[1:]:
         if a.startswith("--trials="):
             trials = int(a.split("=", 1)[1])
-    want = SPORTS if (not args or args[0] == "all") else [args[0]]
+    want = SPORTS + EXTRA if (not args or args[0] == "all") else [args[0]]
     conn = hist_db.connect()
     OUT.mkdir(parents=True, exist_ok=True)
     for sport in want:
-        if sport not in SPORTS:
+        if sport not in SPORTS + EXTRA:
             print(f"  ✗ {sport}: not a futures sport")
             continue
         try:

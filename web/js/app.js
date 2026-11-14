@@ -511,7 +511,9 @@ const HIDDEN_VIEWS = {
   // it, no title futures are built, and every gym is indoors. Parlays stay:
   // the two-leg builder pairs its Edge and Most Likely picks (engine/parlays).
   // The race OPENED 2026-11-14: the NCAA tournament (engine/ncaarace).
-  cbb: ["longshots", "futures", "weather"],
+  // Futures OPENED the same day: the race's own title chances beside the
+  // books' (engine/ncaarace.futures_payload).
+  cbb: ["longshots", "weather"],
   cfb: [],
   // The race page is the NFL's and college football's playoffs, the NBA
   // Cup and the NCAA tournament (js/race.js); the NFL's opened 2026-11-03
@@ -738,7 +740,6 @@ const HIDDEN_WHY = {
          futures: "no hockey outrights are pulled yet",
          weather: "played indoors", race: RACE_WHY },
   cbb: { longshots: "no first-basket market is bought for college games",
-         futures: "the title odds come with the NCAA tournament in March",
          weather: "played indoors" },
   ufc: { parlays: "§9.1 caps a card at two legs in one fight, and we price "
                   + "fight winners only — there is no pair to screen",
@@ -4685,22 +4686,28 @@ function futuresDoctrine(d) {
        these numbers are real arithmetic on stale inputs, and they will be
        replaced by this year’s evidence within a few weeks of kickoff.</div>`
     : "";
+  // A league whose season is played out its own way says how (`how`:
+  // college basketball's conference tournaments, selection and bracket).
   return `${warn}${recDisclosure("How these numbers are made", `${escapeHtml(d.doctrine || "")}
-    Each remaining game is one draw from the two teams' ratings plus home
+    ${d.how ? escapeHtml(d.how) : `Each remaining game is one draw from the two teams' ratings plus home
     advantage; wins accumulate, division winners are the most wins, the
     playoff field fills per the league’s own shape, and the bracket is played
     out game by game. Assumed, and worth knowing: ratings hold for the rest
     of the season — no injuries, no trades, no regression — every game is
-    independent, and home advantage is one constant per sport.`)}`;
+    independent, and home advantage is one constant per sport.`}`)}`;
 }
 
 function futuresTeamTable(d) {
   const priced = (d.teams || []).some((t) => t.title_odds != null);
-  const rows = (d.teams || []).slice(0, 20).map((t) => {
+  // A league can name its own columns and length: college's "Div" is its
+  // conference's automatic bid and its "Playoff" the NCAA tournament's
+  // field (engine/ncaarace.futures_payload).
+  const lab = d.labels || {};
+  const rows = (d.teams || []).slice(0, d.rows_shown || 20).map((t) => {
     const edge = t.title_edge_pts;
     const eCls = edge == null ? "" : edge > 0 ? "pos" : edge < 0 ? "neg" : "";
     return `<div class="fx-row">
-      <span class="fx-team">${escapeHtml(t.team)}</span>
+      <span class="fx-team">${escapeHtml(t.name || t.team)}</span>
       <span class="fx-grp">${escapeHtml(t.conference || "")}${t.division ? " " + escapeHtml(t.division) : ""}</span>
       <span class="fx-rec">${t.wins}-${t.losses}${t.otl != null ? "-" + t.otl : ""}</span>
       ${d.points_league && t.proj_points != null
@@ -4721,9 +4728,9 @@ function futuresTeamTable(d) {
       finish happens across ${(d.trials || 0).toLocaleString()} simulated seasons.</span></div>
     <div class="card fx-table${priced ? " priced" : ""}" style="padding:0">
       <div class="fx-row fx-head">
-        <span class="fx-team">Team</span><span class="fx-grp">Group</span>
+        <span class="fx-team">Team</span><span class="fx-grp">${escapeHtml(lab.group || "Group")}</span>
         <span class="fx-rec">${d.points_league ? "W-L-OT" : "W-L"}</span><span class="fx-proj">${d.points_league ? "Pts" : "Proj"}</span>
-        <span class="fx-div">Div</span><span class="fx-po">Playoff</span>
+        <span class="fx-div">${escapeHtml(lab.div || "Div")}</span><span class="fx-po">${escapeHtml(lab.po || "Playoff")}</span>
         <span class="fx-ttl">Title</span>
         ${priced ? `<span class="fx-odds">Book</span><span class="fx-edge">Edge</span>` : ""}
       </div>${rows}</div>

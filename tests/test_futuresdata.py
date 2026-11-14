@@ -389,7 +389,9 @@ def test_a_build_cannot_spend_by_accident():
 
 def test_every_futures_sport_has_a_key():
     from engine.sources.oddsapi import FUTURES_KEYS
-    assert set(FUTURES_KEYS) == {"nfl", "mlb", "nba", "cfb", "nhl"}
+    # Men's college basketball's title (2026-11-14) rides the same one
+    # market and one region (engine/ncaarace.title_prices).
+    assert set(FUTURES_KEYS) == {"nfl", "mlb", "nba", "cfb", "nhl", "cbb"}
 
 
 def test_the_best_price_for_the_bettor_wins():

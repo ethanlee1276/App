@@ -319,6 +319,8 @@ def paid_keys_for(name: str = "") -> tuple:
 PAID_FILES = (
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
     "futures_nfl.json", "backtest.json", "kalshi.json",
+    # College basketball's title futures (engine/ncaarace, 2026-11-14).
+    "futures_cbb.json",
     # `day_top_pick.json` was here, paid whole, while the per-league card
     # was paid. It is the same object promoted to the top level, so it went
     # free with the card on 2026-10-30 — see MIXED_FILES and `free_top_pick`.
@@ -477,7 +479,7 @@ KNOWN_BOARDS = (
     "recommendations.json", "mlb_recommendations.json", "nba.json",
     "wnba.json", "cfb.json", "ufc.json", "nhl.json", "cbb.json",
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
-    "futures_nfl.json", "backtest.json", "kalshi.json", "predmarkets.json",
+    "futures_nfl.json", "futures_cbb.json", "backtest.json", "kalshi.json", "predmarkets.json",
     "record.json", "record_head.json", "injuries.json", "news.json", "fantasy.json",
     "memecoins.json",
     # The races, written by cfb_build, nba_build and nfl_build
