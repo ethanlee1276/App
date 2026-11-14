@@ -234,6 +234,21 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         if best is None or cand[0] > best[0]:
             best = cand
     edge, side, raw, win, odds, fair, credible = best
+    # WHAT THE RECORD HAS LEARNED, applied as every other board applies it
+    # (2026-11-14; Ethan: "make sure ... all of the learning is working ...
+    # for every single sport"). This board priced with none of it. The
+    # selection haircut (engine/selectionfit: what our own settled picks
+    # landed against what we said), after the side is chosen so it never
+    # flips one; and the loss patterns' closed slices (engine/losspatterns),
+    # a refusal. The journal's temperatures wait for a clean fit: the
+    # store's hockey fits were refitted from claims un-corrected as if this
+    # board had applied them (engine/journalfit.UNCORRECTED_BOARDS), and
+    # are refitted clean from tonight.
+    from engine.betting import apply_selection
+    from engine.losspatterns import veto as _lp_veto
+    win, edge = apply_selection(win, edge, SPORT)
+    loss_block = _lp_veto(SPORT, prop.market, side=side, odds=odds, prob=win,
+                          book=book, horizon_days=0)
     ev = expected_value(win, odds)
     label = M.MARKET_LABELS.get(prop.market, prop.market)
     vals = [float(v) for v in proj.get("recent") or []]
@@ -336,7 +351,9 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
     eh = EH.assess_prop(prop.market, side, line, win, fair, edge, odds, book, credible, proj, p,
                         prop.team, opponent, ctx=ctx, teams=teams, league=league,
                         quotes=_lines_dicts(prop.lines), scalpy_pass="; ".join(passes))
-    pick = eh["play"]
+    pick = eh["play"] and not loss_block
+    if loss_block:
+        reasons.insert(0, loss_block)
     warnings = [] if pick else ([] if credible else ["Our number disagrees with the market by more than we credit"])
     return {
         "player": prop.player, "team": prop.team, "opponent": opponent,
@@ -347,6 +364,7 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         "projection": round(proj["mean"], 2),
         "proj_low": round(max(0.0, proj["mean"] - sd), 1), "proj_high": round(proj["mean"] + sd, 1),
         "hit_prob": round(win, 4), "raw_prob": round(raw, 4), "fair_prob": round(fair, 4),
+        "loss_pattern": loss_block or "",
         # Which market the haircut trusted, and what the other books said.
         "market_source": "sharp" if sharp else "books",
         "sharp_value": sharp_val,

@@ -104,8 +104,27 @@ def _fitted_at(stored: dict, path) -> dict:
     return out
 
 
+#: THE BOARDS THAT PRICE WITH NO JOURNAL TEMPERATURE (2026-11-14). Every
+#: hockey Edge row was stamped with the store's hockey temperature at
+#: journal time (ledger.log_recommendations reads the store, not the
+#: pricer), and every row with no stamp was inferred to carry the stored
+#: one, while neither the NHL's pricer (nhl_build.price_prop) nor the UFC's
+#: has ever applied one: each refit un-corrected claims nothing had
+#: corrected and fitted on numbers nobody published, compounding night on
+#: night. Every row of these sports is the model's own claim. The day one
+#: of these pricers applies a temperature, it writes what it applied on its
+#: rows and leaves this list.
+UNCORRECTED_BOARDS = frozenset({"nhl", "ufc"})
+
+
 def _correction_for(row, entry, stamp):
     """``((temperature, intercept), provenance)`` for one journal row."""
+    try:
+        sport = str(row["sport"] or "").lower()
+    except (KeyError, IndexError):
+        sport = ""
+    if sport in UNCORRECTED_BOARDS:
+        return None, "raw"
     t, b = row["cal_temp"], row["cal_bias"]
     if t is not None:
         # The row carries what was actually applied to it. Nothing to infer.

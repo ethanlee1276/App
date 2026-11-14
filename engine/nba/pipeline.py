@@ -296,6 +296,17 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     if p_final is None:
         return {"kind": "skip", "why": clamp_note, "player": prop["player"],
                 "market": label}
+    # THE SELECTION HAIRCUT (engine/selectionfit; 2026-11-14): what our own
+    # settled picks in this league have landed against what we said, the
+    # correction every other board's pricer applies after its market shrink
+    # (engine/betting.apply_selection). Never applied here, and the record
+    # showed the cost: the NBA's Edge picks claimed 51.9% and landed 44.9%
+    # over 227 settled. After the side is chosen, so it can never flip one,
+    # and before the gate, the edge, the grade and the stake, so each reads
+    # the corrected number. No store, or a league under its floor with
+    # nothing to borrow: the number comes back untouched.
+    from ..selectionfit import apply_haircut
+    p_final = round(apply_haircut(tune.key, p_final), 4)
 
     fails = approval_gate(p_final, odds, hold, grade,
                           high_hold_market=stat in HIGH_HOLD_MARKETS,

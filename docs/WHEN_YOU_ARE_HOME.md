@@ -9338,6 +9338,32 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PP. Every board applies what its own record learned** (step 544; 14
+November). Nothing to run. The second thing the audit found, and the one
+that touches picks. The selection haircut (what our own settled picks
+landed against what we said, the correction the NFL's, college football's
+and MLB's pricers apply) was never applied by the basketball board, the
+NBA's, the WNBA's and college's, or by the NHL's. The public record shows
+what it was missing: the NBA's Edge picks claimed 51.9% and landed 44.9%
+over 227 settled, and the ones claiming 55-60% landed 36.7%. Both apply it
+now, after the side is chosen and before the gate, the edge and the stake,
+each league by its own fit (or the pooled one where it has none of its
+own and may borrow). Expect fewer NBA Edge picks with smaller edges where
+the record says we over-claimed; Most Likely is untouched. The NHL's Edge
+board also refuses a pick in a slice the loss patterns have closed, as
+every other board does.
+
+Two learners were reading those boards wrong. The haircut's refit
+un-shifted every sport's newest rows as if each board had applied it, so
+raw basketball and hockey claims were read as surer than they were said,
+in their own fits and in the pooled one the young leagues borrow; a row of
+theirs from before 16:00 UTC today is read as raw. And the journal's
+temperature fit un-corrected every hockey and UFC claim by the stored
+temperature, though neither board has ever applied one, compounding night
+on night; every row of theirs is the model's own claim now, and tonight's
+learning pass refits them clean. Nothing on the hockey or UFC board reads
+those temperatures yet; once tonight's fit is clean the hockey board can.
+
 **PO. Two messages that sent you the wrong way** (step 543; 14 November).
 One command, the title prices, corrected. Step PB's command printed "No
 Odds API key ... get a free key" when you ran it: the key is there, in the

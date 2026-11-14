@@ -256,6 +256,33 @@ def _settled(lconn, categories=LEARNING_CATEGORIES) -> list:
         f"ORDER BY ts, rowid", tuple(categories)).fetchall()
 
 
+#: THE BOARDS THAT APPLIED THE HAIRCUT LATE, and the moment they started
+#: (UTC, the journal's own clock; 2026-11-14). Ethan: "make sure ... all of
+#: the learning is working ... for every single sport". The audit found the
+#: haircut applied by three pricers only (engine/betting for the NFL and
+#: college football, engine/mlb/betting), while every sport's settled picks
+#: were fitted, and un-shifted by the live shift as if each board had
+#: applied it. The basketball pipeline (the NBA, the WNBA, college) and the
+#: NHL's never had: their claims were raw, so un-shifting them made each
+#: one look surer than it was said, inside their own fits and inside the
+#: pooled one the young sports borrow. The public record says what it was
+#: missing: the NBA's Edge picks claimed 51.9% and landed 44.9% over 227
+#: settled, the ones claiming 55-60% landed 36.7%. Those boards apply it
+#: from this moment; a row of theirs logged before it is raw, whatever the
+#: store's stamp says.
+LATE_BOARDS_FROM = "2026-11-14T16:00:00"
+HAIRCUT_FROM = {"nba": LATE_BOARDS_FROM, "wnba": LATE_BOARDS_FROM,
+                "cbb": LATE_BOARDS_FROM, "nhl": LATE_BOARDS_FROM}
+
+
+def _sport_of(row) -> str:
+    """A journal row's sport, or "" for a row read without one."""
+    try:
+        return str(row["sport"] or "").lower()
+    except (KeyError, IndexError):
+        return ""
+
+
 def _pairs(rows, prior_shift: float, stamp: str) -> list:
     """(raw claim, did it win) — with any already-applied shift removed.
 
@@ -263,7 +290,8 @@ def _pairs(rows, prior_shift: float, stamp: str) -> list:
     live, so its journaled `hit_prob` is post-haircut and has to be
     un-shifted before it can say anything about the model's own claim.
     Rows before it are raw already. Getting this backwards is how a
-    correction compounds itself into the floor.
+    correction compounds itself into the floor. A row from a board that
+    applied no haircut yet (`HAIRCUT_FROM`) is raw whatever ``stamp`` says.
     """
     out = []
     for r in rows:
@@ -271,7 +299,8 @@ def _pairs(rows, prior_shift: float, stamp: str) -> list:
         if p is None or not 0.0 < float(p) < 1.0:
             continue
         p = float(p)
-        if prior_shift and stamp and (r["ts"] or "") >= stamp:
+        ts = r["ts"] or ""
+        if prior_shift and stamp and ts >= stamp and ts >= HAIRCUT_FROM.get(_sport_of(r), ""):
             p = unshift_prob(p, prior_shift)
             if not 0.0 < p < 1.0:
                 continue
