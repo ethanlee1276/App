@@ -864,6 +864,9 @@ for k, v in list(many.items())[:12]:
     print("  ", k, "->", sorted(v))
 PY
 SH
+run QJ "College games filed more than once: what the cleanup would remove (writes nothing)" 300 <<'SH'
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.cfbdedupe
+SH
 run QC "The posted picks, read against the matchup reads, every league" 180 <<'SH'
 cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.pickaudit
 SH

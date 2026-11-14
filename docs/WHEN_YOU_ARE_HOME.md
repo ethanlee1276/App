@@ -9338,6 +9338,83 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QJ. A college game is filed once** (step 564; 14 November). Two box
+commands, the first read-only; paste both back. Your PU run showed every
+2026 Miami game of Cooper Barkate's filed two or three times: the official
+row ("401858249"), the same-night box score's copy under the schedule's key
+("MIA@CLEM-box"), and sometimes another under ESPN's ("401858249-box"). The
+Notre Dame game sat on two days, and the games table held it three times.
+Across 2026, 53,072 of 107,233 college (player, market, opponent) keys sat
+under two or more game ids. Beyond the reports' game logs and hit rates,
+grading treats two rows of one game as a doubleheader and voids a bet whose
+rows fall either side of its line. Three writers made them, each now fixed:
+- **The same-night box settle never purged a college game's copies.** It
+  looked for the official rows under the schedule's key, and the play file
+  keys a game by ESPN's number. It now finds the game by its two teams over
+  a day either side (engine/boxsettle).
+- **It filed one copy for every games row of a game.** That's its ESPN id
+  and away@home, plus a night game's Eastern and UTC days. Now it files one.
+- **The play file's join took whichever of a night game's two days came
+  out last.** So a later run filed the same game again under the other day
+  (Barkate's 2025 title game on 12-06 and 12-07). The Eastern day now
+  always wins (engine/ingest.cfb_games_for).
+
+What they left is removed by one command: the official row stays, the copies
+go, and a duplicated games row gives its line to the one kept. First the
+read-only count:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.cfbdedupe
+```
+
+Then, if the counts look like the PU run, the removal:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.cfbdedupe --apply
+```
+
+It also prints where a box copy's number differs from the kept official one.
+The play file's yards can differ from the box score's (Barkate at Notre
+Dame: 144 against 92), and the books settle on the box score. Which one
+college grades on is your call (see RUN_NEXT 00e).
+
+**QI. College reads stop counting a player's own team against him**
+(step 563; 14 November). Nothing to run. Your picks audit (QC) listed
+Stanford's Micah Ford as "Avoid" on "STAN's run game ranks 99th" and "VT
+stuffs runs at the line (8th) and STAN's run blocking ranks 93rd". His own
+run game and his own line are the same every week, and his carries, his
+yards and the book's line were all made behind them. They're now said,
+never counted, as the NFL has done since its numbers were measured. The
+opponent's front votes with its defense (one reason), never as a second
+reason beside its run-defense rank; the same goes for a pass rush against a
+quarterback. The audit also listed four Boston College "quarterbacks", one
+with 13% of the catches and one with 30% of the carries. The box score
+labels a player by the first group it lists him in, so a receiver who threw
+a trick-play pass became a quarterback. A "QB" whose throws are on file and
+who throws fewer than three passes a game, but catches passes or carries a
+back's load, is now read by his carries and catches. And the self-check's
+32 NHL "projection" flags were an under on a small count, like 2.5 shots on
+a 2.6 projection, which is still the likelier side because a count's mean
+sits above its median. Unders within half a unit of a small line no longer
+count as contradictions; an over below its line always does.
+
+**QH. A started college game keeps its pregame line** (step 562; 14
+November). Nothing to run. Your picks audit read "The lines expect SMU to
+score only about 7 (+42.5 at home, total 56.5)" and "RUTG ... about 0
+(+31.5, total 31.5)". Both were games under way: the one request college
+buys quotes a started game in play, and that number was written as the
+game's line. The reads, the report and the scorer chances read a blowout
+in progress as the pregame line. A started game is now left out of that
+pull and given back its last line before kickoff from the line tape every
+build keeps. The live numbers stay in the live block.
+
+**QG. The heartbeat counts each league's parlays and reports** (step 561;
+14 November). Nothing to run. The game parlays and the reports are paid,
+so the public files strip them, and nobody outside the box could see a
+league had built them. Each board's heartbeat entry now carries
+`parlay_games`, `sgp_threes`, `td_pairs` and `reports`, or `parlay_error`
+when a build failed.
+
 **QF. One reason against a workhorse no longer makes him unfavorable**
 (step 560; 14 November). Nothing to run. You, with two won Duke–Miami
 parlays (Mark Fletcher Jr. and Nate Sheppard to score, and Sheppard 60+
@@ -9600,6 +9677,10 @@ for k, v in list(many.items())[:12]:
     print("  ", k, "->", sorted(v))
 PY
 ```
+
+What it showed (your run, 3:40pm on 14 November): three writers, each
+filing the same game again (step QJ has the causes, the fixes and the
+cleanup).
 
 **PT. The board says what the books posted** (step 548; 14 November).
 Nothing to run. Telling "we did not buy college's props" from "we bought

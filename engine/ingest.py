@@ -832,9 +832,16 @@ def cfb_games_for(conn, season: int) -> dict:
     """
     import json as _json
     out: dict = {}
+    # EARLIEST FIRST, AND THE FIRST STANDS (Ethan's catch-up run,
+    # 2026-11-14: Barkate's 2025 title game filed as 401777328 on both
+    # 12-06 and 12-07). One game can sit in this table twice, its Eastern
+    # day from the schedule and its UTC day from the mirror, and whichever
+    # row came out last set the date the play file's rows were written
+    # under, so a later run wrote the same game again under the other day.
+    # The earlier day — the Eastern game day — now always wins.
     for r in conn.execute(
             "SELECT game_id, period, home, away, home_score, away_score, extra "
-            "FROM games WHERE sport='cfb' AND season=?", (int(season),)):
+            "FROM games WHERE sport='cfb' AND season=? ORDER BY period, game_id", (int(season),)):
         try:
             extra = _json.loads(r["extra"] or "{}")
         except (ValueError, TypeError):
@@ -867,10 +874,10 @@ def cfb_games_for(conn, season: int) -> dict:
         # game just counts a skip. Same for `cfblines.parse_lines`.
         # Aliasing here rather than teaching each parser both names keeps
         # the knowledge in the one place that already holds both.
-        out[str(r["game_id"])] = entry
+        out.setdefault(str(r["game_id"]), entry)
         espn_id = str(extra.get("espn_game_id") or "").strip()
         if espn_id:
-            out[espn_id] = entry
+            out.setdefault(espn_id, entry)
     return out
 
 

@@ -128,6 +128,20 @@ def finished_games_with_open_props(lconn, hconn, league: str,
                else (None, str(g["period"])))
         if key in wanted:
             out.append(dict(g))
+    if league != "nfl":
+        # ONE COLLEGE GAME ONCE. The games table can hold one game under its
+        # ESPN id and away@home, and a night game on two days; each row here
+        # filed its own provisional copy of the same box score (Barkate's
+        # Notre Dame game: three). The earliest row of a pair stands for it.
+        seen, kept = {}, []
+        for g in out:
+            k = (str(g["home"]), str(g["away"]))
+            days = set(_days_around(g["period"]))
+            if any(k == sk and str(sp) in days for sk, sp in seen.items()):
+                continue
+            seen[k] = g["period"]
+            kept.append(g)
+        out = kept
     return out
 
 
@@ -163,7 +177,48 @@ def _season_terms(league: str, g: dict) -> tuple:
     return " AND season IN (?, ?, ?)", [s - 1, s, s + 1]
 
 
+def _days_around(period: str) -> list:
+    """A college game's period and a day either side: the schedule files a
+    night game under its Eastern day and the results mirror under its UTC
+    one (Hawaii-UNLV, 09-05 and 09-06), so its rows can sit on either."""
+    try:
+        d = _dt.date.fromisoformat(str(period)[:10])
+    except ValueError:
+        return [str(period)]
+    return [(d + _dt.timedelta(days=k)).isoformat() for k in (-1, 0, 1)]
+
+
+def _college_game_terms(g: dict) -> tuple:
+    """``(sql, args)`` for a college game's rows by its two teams over its
+    days, whatever id each writer keyed them under."""
+    days = _days_around(g["period"])
+    pair = [str(g["home"]), str(g["away"])]
+    return ((f" AND period IN ({','.join('?' * len(days))}) AND team IN (?,?) AND opponent IN (?,?)"),
+            [*days, *pair, *pair])
+
+
+def _by_teams(league: str, g: dict) -> bool:
+    """A college game whose two teams are known is found by them; a caller
+    that passes only an id is answered as before."""
+    return league != "nfl" and bool(g.get("home")) and bool(g.get("away"))
+
+
 def has_official_rows(hconn, league: str, g: dict) -> bool:
+    if _by_teams(league, g):
+        # COLLEGE'S OFFICIAL ROWS CARRY ESPN'S NUMBER (Ethan's catch-up run,
+        # 2026-11-14: Cooper Barkate's Miami games each filed as
+        # "401858249" beside "MIA@CLEM-box" and "401858249-box", all kept).
+        # The play file keys a game by ESPN's id; the schedule rows this
+        # settle walks are keyed away@home, so asking for the official rows
+        # by the schedule's own id found none, and no provisional college
+        # row was ever purged. The game is found by its two teams over its
+        # days instead, under any id that is not a provisional one.
+        terms, targs = _season_terms(league, g)
+        gt, gargs = _college_game_terms(g)
+        return hconn.execute(
+            f"SELECT 1 FROM player_game_logs WHERE sport=?{terms}{gt} "
+            f"AND game_id NOT LIKE '%{BOX_SUFFIX}' LIMIT 1",
+            (league, *targs, *gargs)).fetchone() is not None
     ids = _official_ids(league, g)
     marks = ",".join("?" * len(ids))
     terms, targs = _season_terms(league, g)
@@ -176,10 +231,17 @@ def has_official_rows(hconn, league: str, g: dict) -> bool:
 def purge_provisional(hconn, league: str, g: dict) -> int:
     """Remove a game's provisional rows once its official ones are filed.
     They were written under the game's own season (`cfb_rows`, `nfl_rows`),
-    so the same lookup as `has_official_rows` finds every one."""
+    so the same lookup as `has_official_rows` finds every one — for college,
+    by the two teams over the game's days, every provisional id at once."""
+    terms, targs = _season_terms(league, g)
+    if _by_teams(league, g):
+        gt, gargs = _college_game_terms(g)
+        cur = hconn.execute(
+            f"DELETE FROM player_game_logs WHERE sport=?{terms}{gt} "
+            f"AND game_id LIKE '%{BOX_SUFFIX}'", (league, *targs, *gargs))
+        return cur.rowcount or 0
     ids = [i + BOX_SUFFIX for i in _official_ids(league, g)]
     marks = ",".join("?" * len(ids))
-    terms, targs = _season_terms(league, g)
     cur = hconn.execute(
         f"DELETE FROM player_game_logs WHERE sport=?{terms} AND period=? "
         f"AND game_id IN ({marks})", (league, *targs, str(g["period"]), *ids))
