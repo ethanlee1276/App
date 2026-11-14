@@ -83,8 +83,13 @@ def test_four_three_leg_parlays_with_no_conflict():
         names = [l["player"] for l in t["legs"]]
         assert len(names) == 3 and len(set(names)) == 3, "no player twice"
         mk = {(l["player"], l["market"]) for l in t["legs"]}
-        assert not {("Cam Skattebo", "rush_att"), ("Malik Nabers", "receptions")} <= mk, \
-            "his carries want the Giants ahead, Nabers's catches want them chasing — never one ticket"
+        # (Pin updated 2026-11-14: his carries want the Giants ahead and
+        # Nabers's catches want them chasing. They were never one ticket, and
+        # that refused Ethan's own; they may share one now, priced as
+        # unrelated, and the ticket says the scripts pull apart.)
+        if {("Cam Skattebo", "rush_att"), ("Malik Nabers", "receptions")} <= mk:
+            assert any("scripts pull apart" in c for c in t["caveats"]), t["caveats"]
+            assert t["script"].startswith("a close game"), t["script"]
         assert t["take"] > t["fair"] if t["fair"] > 0 else True
         assert 0 < t["joint"] < 1 and t["script"]
         assert not t["staked"] and t["stake_units"] == 0.0, "tracked, never staked"
@@ -100,6 +105,31 @@ def test_four_three_leg_parlays_with_no_conflict():
     for t in both:
         assert any("passing game" in c for c in t["caveats"]), t["caveats"]
     assert all(t.get("backups") is not None for t in g["threes"])
+
+
+def test_his_own_ticket_is_built_and_priced():
+    """Ethan's report: Nabers 5+ receptions (max -250) + Skattebo 12+ rush
+    attempts (max -200) + Daniels 25+ rush yds (max -250), "~32-33% with
+    mildly positive correlation, so the fair price is ≈ +205". The first cut
+    refused it: the back's carries and the receiver's catches want opposite
+    Giants leads. Now it is priced, the pair as unrelated, and said."""
+    b = board()
+    legs = {(l["player"], l["market"]): l for l in GP.enrich(GP.legs_for(b, "nfl"), b)}
+    trio = [legs[("Malik Nabers", "receptions")], legs[("Cam Skattebo", "rush_att")],
+            legs[("Jayden Daniels", "rush_yds")]]
+    t = GP.ticket("nfl", trio, GAME)
+    assert t is not None, "his ticket"
+    indep = 0.72 * 0.67 * 0.68
+    assert indep - 0.001 <= t["joint"] < indep + 0.03, (t["joint"], indep)     # only the two 0.10 floors lift it
+    assert any("scripts pull apart" in c for c in t["caveats"]), t["caveats"]
+    assert t["script"].startswith("a close game") and 0 < t["script_chance"] < 1, t
+    # A leg that needs points beside one that needs a quiet game is still refused.
+    under = dict(legs[("Malik Nabers", "receptions")], player="Daniel Jones", position="QB", market="pass_yds",
+                 side="Under", line=199.5, p=0.66)
+    over = dict(legs[("Jayden Daniels", "rush_yds")], player="Jayden Daniels", position="QB", market="pass_yds",
+                side="Over", line=210.5, p=0.66)
+    ok, _rho, why, _cav = GP.pair_link("nfl", under, over, GAME)
+    assert not ok, why
 
 
 def test_three_touchdown_pairs_with_his_reasons():

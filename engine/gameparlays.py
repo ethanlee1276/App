@@ -25,10 +25,12 @@ never a man the board already dropped for an injury.
 NO CONFLICTS. Every pair of legs passes the clash taxonomy
 (engine/parlays.relate): no player twice, no quarterback against his own
 receiver, no quarterback and a back of one team (they want opposite
-scripts), no two unders. And no two legs that need the game to go opposite
-ways (`script_need`, the board's own game-script view, js/app.js
-scriptNeed): a back's carries want his team ahead, a receiver's catches
-want his team chasing, a quarterback's yards and a touchdown want points.
+scripts), no two unders. And no leg that needs points beside one that needs
+a quiet game (`script_need`, the board's own game-script view, js/app.js
+scriptNeed): a quarterback's yards and a touchdown want points. Two legs
+that want opposite leads (a back's carries want his team ahead, a
+receiver's catches want it chasing) share a ticket the way his own reports
+pair them, priced as unrelated and said (OPPOSED_SCRIPT_RHO).
 One exception his reports make and the doctrine does not: two teammates'
 catches may share a ticket (the doctrine's "possession pie") at their
 measured correlation, and the ticket says both need the same passing game.
@@ -103,6 +105,24 @@ MAX_USES = 2
 #: of one team share its touchdowns and rise with them: priced as unrelated.
 SAME_TEAM_CATCH_RHO = 0.10
 SAME_TEAM_SCORER_RHO = 0.0
+#: TWO LEGS THAT WANT OPPOSITE LEADS, priced instead of refused (2026-11-14).
+#: A back's carries want his team ahead and a receiver's catches want it
+#: chasing, so the first cut never put them on one ticket — and so refused
+#: the ticket in Ethan's own report this docstring opens with: Nabers 5+
+#: receptions with Skattebo 12+ rush attempts (two Giants) and Daniels 25+
+#: rushing, "~32-33% with mildly positive correlation ... bet only at +210
+#: or better". The rule left the NFL's first board under it with 13
+#: three-leg tickets across 13 games, where he asked for four a game. The
+#: script pulls the pair apart about as much as the shared pace ties it
+#: together (the measured run-game script, +0.36 between a back's carries
+#: and his team's lead, against the +0.10 every same-game pair of overs
+#: carries), so it is priced as unrelated, never as linked, and the ticket
+#: says the scripts pull apart. Not measured as a pair. A leg that needs
+#: points beside one that needs a quiet game is still refused.
+OPPOSED_SCRIPT_RHO = 0.0
+#: A close game, for a ticket whose legs want opposite leads: within one
+#: score either way.
+CLOSE_GAME = {"nfl": 7.0, "cfb": 7.0}
 #: The scoring markets, by league: what a "touchdown parlay" is in each.
 SCORER_MARKETS = {"nfl": ("anytime_td",), "cfb": ("anytime_td",), "nhl": ("anytime_goal", "goals")}
 #: The journal's books (engine/parlayledger `source`).
@@ -356,11 +376,15 @@ def script_words(needs: list[dict], game: dict | None, sport: str) -> tuple[str,
     make it — football only, else None)."""
     if not game:
         return "", None
-    m = next((n["margin"] for n in needs if n["margin"]), 0)
+    leads = {n["margin"] for n in needs if n["margin"]}
+    mixed = len(leads) > 1                 # two legs want opposite leads (OPPOSED_SCRIPT_RHO)
+    m = 0 if mixed else next(iter(leads), 0)
     p = next((n["points"] for n in needs if n["points"]), 0)
     home, away = game.get("home") or "", game.get("away") or ""
     bits = []
-    if m:
+    if mixed:
+        bits.append("a close game — its legs want opposite leads")
+    elif m:
         bits.append(f"{home if m > 0 else away} ahead")
     if p:
         bits.append("a high-scoring game" if p > 0 else "a low-scoring game")
@@ -370,9 +394,12 @@ def script_words(needs: list[dict], game: dict | None, sport: str) -> tuple[str,
         spread, total = float(game.get("spread")), float(game.get("total"))
     except (TypeError, ValueError):
         spread = total = None
-    if sport in HIGH_TOTAL and spread is not None and total is not None and (m or p):
+    if sport in HIGH_TOTAL and spread is not None and total is not None and (m or p or mixed):
         mean = -spread                                      # the home margin the line expects
         c_m = (_phi(mean / SCRIPT_SD) if m > 0 else 1.0 - _phi(mean / SCRIPT_SD)) if m else 1.0
+        if mixed:
+            close = CLOSE_GAME.get(sport, 7.0)
+            c_m = _phi((close - mean) / SCRIPT_SD) - _phi((-close - mean) / SCRIPT_SD)
         hi = 1.0 - _phi((HIGH_TOTAL[sport] - total) / SCRIPT_SD)
         c_p = (hi if p > 0 else 1.0 - hi) if p else 1.0
         chance = round(c_m * c_p, 3)
@@ -413,8 +440,10 @@ def pair_link(sport: str, a: dict, b: dict, game: dict | None) -> tuple:
             return False, rho, why, ""
     na, nb = script_need(a, game), script_need(b, game)
     if na["margin"] * nb["margin"] < 0:
-        return False, rel.rho, (f"{a.get('player')} needs {na['why_margin']}; {b.get('player')} needs "
-                                f"{nb['why_margin']} — the game that cashes one sinks the other"), ""
+        opposed = (f"{a.get('player')} needs {na['why_margin']}; {b.get('player')} needs "
+                   f"{nb['why_margin']} — the scripts pull apart, so a close game suits this ticket best")
+        caveat = "; ".join(x for x in (caveat, opposed) if x)
+        rho, why = min(rho, OPPOSED_SCRIPT_RHO), "opposite scripts — priced as unrelated, not linked"
     if na["points"] * nb["points"] < 0:
         return False, rel.rho, (f"{a.get('player')} needs {na['why_points']}; {b.get('player')} needs "
                                 f"{nb['why_points']}"), ""

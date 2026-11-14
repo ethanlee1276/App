@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QP. A game's parlays may pair legs that want opposite leads** (step 570;
+14 November). Nothing to run. The first NFL board built on today's code
+counted 13 three-leg tickets across 13 games and 34 touchdown pairs (the
+heartbeat's new per-board counts), where you asked for four tickets and
+three pairs a game. One rule did most of that: two legs that want opposite
+leads were never put on one ticket, so a team's back (his carries want his
+team ahead) never rode with its receiver (his catches want it chasing). That
+refused your own ticket: Nabers 5+ receptions, Skattebo 12+ rush attempts
+and Daniels 25+ rushing yards, which you priced at about 32-33% "with mildly
+positive correlation". Such a pair now shares a ticket, priced as unrelated
+(the script pulls it apart about as much as the shared pace ties it
+together; not measured as a pair), and the ticket says the scripts pull
+apart and that it wants a close game, with how likely the lines make one. A
+leg that needs points beside one that needs a quiet game is still refused,
+as are the clash rules (no player twice, no quarterback against his own
+receiver, no two unders). Every ticket is still tracked and staked at
+nothing (engine/gameparlays.OPPOSED_SCRIPT_RHO).
+
 **QO. The heartbeat says why the game-line calibration held each fit**
 (step 569; 14 November). Nothing to run. The heartbeat's learner verdicts
 named the game-line fits that adopted (NFL, college football and MLB) and
