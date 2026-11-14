@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QM. Game bets obey the record's closures** (step 567; 14 November).
+Nothing to run. The loss miner reads every settled bet with a stated chance,
+game bets included, and closes a slice the record convicts; a market that
+has lost over its whole record is stopped (engine/shelfstop), and the
+hypothesis lab's confirmed rules close slices too. All three are enforced in
+one place, `losspatterns.veto`, and every prop board and college football's
+game plays ask it. The NFL's and MLB's spreads, totals and moneylines never
+did, so a convicted pocket or a stopped game shelf kept posting and staking.
+They ask it now, last, with what the journal writes for a game bet (the
+market and side as journaled, the price, our chance, the shop, days and
+minutes to kickoff, rest, body clock, football's wind). A game bet in a
+closed slice is shown with the closure on its card and not staked
+(engine/gamebets.loss_veto). The heartbeat's verdicts showed 7 NFL closures
+and 1 MLB closure on Saturday; whether any is on a game market is in the
+store, not on the heartbeat, so a game bet withdrawn this way says so on
+its own card.
+
 **QL. College basketball buys the games the books post players on**
 (step 566; 14 November). Nothing to run. College basketball's board priced
 no player props again on Saturday (Edge 0, Most Likely 0 at 4 PM ET). Its

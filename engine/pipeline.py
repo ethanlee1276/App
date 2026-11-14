@@ -818,7 +818,11 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     # NULL rather than "balanced", so an unmeasured pick never pools with
     # a genuinely balanced defence.
     d["opp_zone_rate"] = _opp_zone_rate(g, d)
-    return d
+    # THE LOSS MINER'S CLOSURES, on the game cards too (`gamebets.
+    # loss_veto`): asked last, once the rest and the body clock are on the
+    # card, with what the journal will write for this bet.
+    from .gamebets import apply_loss_veto as _apply_loss_veto
+    return _apply_loss_veto("nfl", d, g)
 
 
 #: (season, opponent) → zone rate. A season's participation file is ~49 MB

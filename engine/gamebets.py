@@ -507,6 +507,67 @@ def price_moneyline(home: str, away: str, win_prob_home: float,
     )
 
 
+#: The journal's side for a game card (`ledger.log_recommendations`): a
+#: moneyline and a spread are written as an OVER on the team taken, a total
+#: and a team total as their own side.
+_JOURNAL_SIDE = {"moneyline": "OVER", "spread": "OVER"}
+
+
+def loss_veto(sport: str, d: dict, g=None, today=None) -> str | None:
+    """The loss miner's closed slice this game card falls in, or None.
+
+    GAME BETS NEVER ASKED (2026-11-14, the learning audit's second pass).
+    `engine.losspatterns` mines every settled bet with a stated chance, game
+    bets included, and closes a slice the record convicts ("nfl spread,
+    -150 to -200"); `losspatterns.veto` is where a closure is enforced, and
+    every prop board and college football's game plays ask it. The NFL's
+    and MLB's game cards never did, so a convicted pocket of spreads,
+    totals or moneylines kept posting. Asked here with the dimensions the
+    journal writes for a game bet and nothing else: the market and side as
+    `ledger.log_recommendations` spells them, the price, our chance, the
+    shop, days to the game, minutes to kickoff, the side's rest and body
+    clock, and football's wind. A dimension the card cannot say is left
+    out, and an unknown never matches a closure. Never raises."""
+    bt = str(d.get("bet_type") or "")
+    if bt not in ("moneyline", "spread", "total", "team_total"):
+        return None
+    try:
+        import datetime as _dtm
+        from .losspatterns import minutes_until, veto
+        side = _JOURNAL_SIDE.get(bt) or str(d.get("side") or "OVER").upper()
+        env: dict = {}
+        w = getattr(g, "weather", None) if g is not None else None
+        if sport in ("nfl", "cfb") and w is not None:
+            env = {"roofed": bool(getattr(w, "dome", False)),
+                   "wind_out": None if getattr(w, "dome", False) or not getattr(w, "measured", False)
+                   else round(float(getattr(w, "wind_mph", 0) or 0), 1)}
+        horizon = None
+        try:
+            day = today or _dtm.datetime.now(_dtm.timezone.utc).date()
+            horizon = (_dtm.date.fromisoformat(str(d.get("date") or "")[:10]) - day).days
+        except (TypeError, ValueError):
+            horizon = None
+        return veto(sport, bt, side=side, odds=d.get("odds"), prob=d.get("win_prob"),
+                    book=d.get("book") or None, horizon_days=horizon,
+                    lead_min=minutes_until(d.get("kickoff") or getattr(g, "kickoff", None)),
+                    rest_days=d.get("rest_days"), body_clock=d.get("body_clock"), **env)
+    except Exception:                                     # noqa: BLE001
+        return None
+
+
+def apply_loss_veto(sport: str, d: dict, g=None) -> dict:
+    """Withdraw a game card's recommendation when `loss_veto` names a
+    closed slice, with the closure on the card. Shown, never posted, the
+    stale price's rule; the grade and the stake fall to Pass and nothing."""
+    block = loss_veto(sport, d, g)
+    if block:
+        d["recommended"] = False
+        d["grade"], d["stake_units"] = "Pass", 0.0
+        d["loss_veto"] = block
+        d.setdefault("warnings", []).append(block)
+    return d
+
+
 def attach_books(d: dict, g) -> dict:
     """Name the book posting the side this card actually took.
 

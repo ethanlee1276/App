@@ -189,7 +189,9 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
         # DH team bet against ITS game, not a coin-flip choice of two.
         d["doubleheader"] = True
         d["game_number"] = g.game_number
-    return d
+    # The loss miner's closures, on the game cards too (`gamebets.loss_veto`).
+    from ..gamebets import apply_loss_veto as _apply_loss_veto
+    return _apply_loss_veto("mlb", d, g)
 
 
 # Measured against real closing moneylines (walk-forward over the harvested
