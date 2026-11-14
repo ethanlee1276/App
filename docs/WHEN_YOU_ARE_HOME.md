@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PT. The board says what the books posted** (step 548; 14 November).
+Nothing to run. Telling "we did not buy college's props" from "we bought
+them and the books had posted nothing" took PL's command on the box. Every
+basketball board (the NBA's, the WNBA's, college's) now carries
+`prop_menu`, read off its paid pulls' own cached payloads: for each game
+bought in the last day whose tip is not long past, how many books answered,
+how many standard player markets and how many ladders they carried, and
+when it was pulled (menus, never a price). The build's log line reads
+`Prop menus: 5 game(s) bought: 1 with player props, 1 with ladders only, 3
+with none`. A week of these says whether college's 7am pull buys anything:
+on Saturday it bought five games and found one with ladders, where Friday's
+6pm pull found all five with player markets. Public:
+https://qellysbook.com/data/cbb.json, under `prop_menu`.
+
 **PS. The record can ask about a basketball player's minutes** (step 547;
 14 November). Nothing to run. A basketball prop is a minutes bet wearing a
 stat's name, and every basketball pick has journaled the minutes it assumed

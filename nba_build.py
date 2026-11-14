@@ -1777,6 +1777,17 @@ def main() -> None:
             "teams_on_b2b": sorted(played_yday & teams),
         })
         out.update(status="slate", **picks_result)
+        # WHAT THE BOOKS POSTED for each game the league's prop pulls bought
+        # (engine/propmenu, 2026-11-14): books, standard player markets,
+        # ladders, when it was pulled. A fact about the menus, never a price,
+        # so a board with no props says on its face whether we did not buy
+        # or the books had posted nothing.
+        try:
+            from engine import propmenu as _pm
+            out["prop_menu"] = _pm.census(args.league)
+            print(f"  Prop menus: {_pm.summary(out['prop_menu'])}")
+        except Exception as _pmx:                           # noqa: BLE001
+            print(f"  ⚠️  prop menus unread: {_pmx}")
         # The build's own drops and the pipeline's, in one table. Without the
         # first two rows an empty board reads as "the model hated everything"
         # when the truth is usually "no book had priced any of it yet".
