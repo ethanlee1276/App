@@ -9338,6 +9338,29 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PY. The report's facts are this season's, and right** (step 553; 14
+November). Nothing to run. You: "I feel like we're not pulling the most
+recent data and information ... it's not that updated and it's not correct
+most of the time." Set against your Commanders–Giants reports, Thursday's
+scan had four things wrong, and each is fixed. Daron Payne, on Washington's
+injured reserve, was named one of its pass rushers: the weekly injury report
+never lists a man on IR, so the scan now reads the roster's reserve lists
+(nflverse's own status) — a man on one is never named as a pass rusher, and
+the report's injuries section names each side's reserve-list players who
+mattered, with what they had this season ("Terry McLaurin (WR) — on injured
+reserve; he had 24% of the targets this season"). The Giants' nickel was
+read as never targeted because the depth chart calls him Dru Phillips and
+PFR Andru Phillips; a defender is now matched by his last name on his team
+when his first name is spelled two ways. Last season's coverage table (man
+and zone, shells, its blitz rate) was said plainly beside this season's
+charting; this season's blitz and box numbers now come first, and last
+season's say they are last season's. And ESPN's board keeps a "questionable"
+after the club drops it (your report caught it on Skattebo and McCarthy):
+once a club has filed its game designations, the live board's questionable
+or doubtful tag on a man the club did not list is dropped, while its outs
+and reserve moves still land. That last one reaches the board too: a man
+held for a stale tag gets his props back.
+
 **PX. Every game gets four three-leg parlays and three touchdown pairs**
 (step 552; 14 November). Nothing to run. You: "for each game, when it comes
 to every sport, I want you to make 4 3-leg parlays ... and 3 2-leg
