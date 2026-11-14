@@ -9338,6 +9338,28 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QC. The posted picks, read against the matchup reads, every league**
+(step 557; 14 November). One read-only command; paste it back. You: "audit
+all the picks and all that shit and remove and add anything we need to."
+The reads were fixed at the rule (step PW): one vote per factor, a featured
+player never "avoid", a go-to scorer's tough draw said as one. I checked
+every rule that turns a read into a pick or pulls one: the matchup picks,
+the Most Likely board's matchup check, the game plan's plays to avoid, the
+touchdown scenarios and the long-shot warning. None lets one rank sink a
+go-to scorer's touchdown. What the boards post is only on the box (the
+public copy has the picks taken out), so this reads each league's private
+board (engine/pickaudit) and prints three things: the self-check's count
+by kind (a pick its read argues against, a play to avoid another board
+posts); every could-struggle read on a key player, with its reasons on each
+side, go-to scorers first; and every go-to scorer with no touchdown pick on
+any board, with his chance, his price and why, when the board says (the
+injury report, the -250 cap). Each finding becomes a rule change, never a
+hand-edited pick:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.pickaudit
+```
+
 **QB. A rematch says what each side did the first time, and what has
 changed since** (step 556; 14 November). Nothing to run. Your Commanders–Giants
 report opened its history on the week 5 tie ("Winston threw 33/54 for 326
