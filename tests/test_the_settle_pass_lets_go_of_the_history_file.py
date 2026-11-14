@@ -72,7 +72,7 @@ def _official(H):
 
 
 def _summary(home, home_name, player):
-    return {"boxscore": {"players": [
+    return {"header": {"competitions": [{"status": {"type": {"state": "post", "completed": True}}}]}, "boxscore": {"players": [
         {"team": {"abbreviation": home, "id": "2", "displayName": home_name}, "statistics": [
             {"name": "receiving", "labels": ["REC", "YDS", "AVG", "TD", "LONG", "TGTS"],
              "athletes": [{"athlete": {"displayName": player, "position": {"abbreviation": "WR"}},

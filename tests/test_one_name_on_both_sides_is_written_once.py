@@ -54,7 +54,7 @@ def _payload():
     """Each side a TEAM rushing line and a receiver called Jordan Smith."""
     rush = ["CAR", "YDS", "AVG", "TD", "LONG"]
     rec = ["REC", "YDS", "AVG", "TD", "LONG"]
-    return {"boxscore": {"players": [
+    return {"header": {"competitions": [{"status": {"type": {"state": "post", "completed": True}}}]}, "boxscore": {"players": [
         {"team": MICH, "statistics": [
             {"name": "rushing", "labels": rush,
              "athletes": [_ath("Donovan Edwards", ["18", "112", "6.2", "2", "41"], "RB"),
