@@ -53,6 +53,28 @@ def test_each_learners_verdict_by_league():
     assert M.verdict_journal({}) == {} and M.verdict_hypotheses({}) == {}
 
 
+def test_the_game_line_calibration_says_why_it_held_each_fit():
+    """The heartbeat named the adopted fits only, so basketball's and
+    hockey's game lines, which the calibration has no model for (0.0
+    seconds a fit on 14 November), read as a learner that had stopped."""
+    gc = {"adopted": [{"key": "nfl:spread", "shrink": 0.03}],
+          "held": [{"key": "nba:spread", "why": "no scoring baseline registered for 'nba'"},
+                   {"key": "nba:moneyline", "why": "no win-probability curve registered for 'nba'"},
+                   {"key": "cbb:total", "why": "212 games, needs 400"},
+                   {"key": "wnba:total", "why": "0 graded games with a close"},
+                   {"key": "cfb:moneyline", "why": "slope ±0.311 is looser than the ±0.25 needed to act on"},
+                   {"key": "x:y", "why": "unusable fit"}]}
+    said = M.verdict_gamecal_held(gc)
+    assert said == {"held": {"no game-line model of its own here": ["nba:moneyline", "nba:spread"],
+                             "too few graded games": ["cbb:total", "wnba:total"],
+                             "too loose to act on": ["cfb:moneyline"],
+                             "unusable fit": ["x:y"]}}, said
+    assert "0.311" not in json.dumps(said) and "212" not in json.dumps(said), "keys only"
+    assert M.verdict_gamecal_held({"adopted": [], "held": []}) == {}
+    src = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
+    assert 'verdicts["game lines"].update(verdict_gamecal_held(gc))' in src
+
+
 def test_the_verdicts_are_kept_with_the_last_pass_that_learned():
     state = {}
     phases = {"learn": 356.4, "learn_parts": {"gamecal.refresh": 173.5},

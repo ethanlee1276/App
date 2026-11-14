@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**QO. The heartbeat says why the game-line calibration held each fit**
+(step 569; 14 November). Nothing to run. The heartbeat's learner verdicts
+named the game-line fits that adopted (NFL, college football and MLB) and
+nothing else, and its timings showed 0.0 seconds a fit for every NBA, NHL,
+WNBA and college basketball market, which read as a learner that had
+stopped. It hadn't. The calibration walks the football and baseball points
+model and has no model for those leagues' game lines, which their own
+boards price (hockey's goals model, basketball's), so it refuses them by
+name in no time. Their spreads, totals and moneylines therefore keep the
+flat 0.5 haircut until their own record measures one. The verdicts now list
+each held fit under its reason: "no game-line model of its own here", "too
+few graded games", "too loose to act on", "never disagreed with the close"
+or "unusable fit" (keys only, as the verdicts' note says). To see them:
+
+```
+cd /srv/qellys && curl -s https://qellysbook.com/data/heartbeat.json | python3 -c "import json,sys; print(json.dumps(json.load(sys.stdin)['chores']['settle']['phases']['last_learned']['verdicts']['game lines'], indent=1))"
+```
+
 **QN. The money split asks Polymarket's trade tape the way it requires**
 (step 568; 14 November). Nothing to run. A game page's "where the money is
 going" bars are read off the two prediction markets' trade tapes. Every

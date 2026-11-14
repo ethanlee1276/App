@@ -1332,6 +1332,31 @@ def verdict_hypotheses(hs: dict) -> dict:
     return dict(sorted(out.items()))
 
 
+#: Why the game-line calibration held a fit, in the reader's words, by the
+#: start of the reason it gave (`gamecal.refresh`'s "held"). Keys only.
+_GAMECAL_HELD = (("no ", "no game-line model of its own here"),
+                 ("the model never disagreed", "never disagreed with the close"),
+                 ("slope ", "too loose to act on"))
+
+
+def verdict_gamecal_held(gc: dict) -> dict:
+    """``{"held": {reason: [keys]}}`` for the game-line fits that did not
+    adopt, or ``{}``. The heartbeat named the adopted ones only, so the
+    leagues the calibration has no model for (basketball's and hockey's
+    game lines, whose own boards price them: 0.0 seconds a fit) read as a
+    learner that had quietly stopped. A thin league says "too few graded
+    games"; nothing fitted is shown."""
+    out: dict = {}
+    for h in (gc or {}).get("held") or []:
+        why = str((h or {}).get("why") or "")
+        reason = next((said for start, said in _GAMECAL_HELD if why.startswith(start)), None)
+        if reason is None:
+            reason = ("too few graded games" if ("graded games" in why or "games, needs" in why)
+                      else "unusable fit")
+        out.setdefault(reason, []).append(str((h or {}).get("key")))
+    return {"held": {k: sorted(v) for k, v in sorted(out.items())}} if out else {}
+
+
 def _learn_sampled(learn, phases: dict) -> None:
     """``learn()``, the settle pass's hourly learners, with where its time
     went on the phases as ``learn_parts``: each learner's seconds, sampled
@@ -1530,6 +1555,7 @@ def settle_open(log=print, state_path: Path | None = None,
                 from . import gamecal
                 gc = gamecal.refresh(hconn)
                 verdicts["game lines"] = {"adopted": sorted(str(a.get("key")) for a in gc.get("adopted") or [])}
+                verdicts["game lines"].update(verdict_gamecal_held(gc))
                 for a in gc["adopted"]:
                     log(f"  game-line calibration: {a['key']} keeps "
                         f"{a['shrink']:.0%} of a disagreement with the close "
