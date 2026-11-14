@@ -9362,8 +9362,12 @@ what it was missing: the NBA's Edge picks claimed 51.9% and landed 44.9%
 over 227 settled, and the ones claiming 55-60% landed 36.7%. Both apply it
 now, after the side is chosen and before the gate, the edge and the stake,
 each league by its own fit (or the pooled one where it has none of its
-own and may borrow). Expect fewer NBA Edge picks with smaller edges where
-the record says we over-claimed; Most Likely is untouched. The NHL's Edge
+own and may borrow). Where a league's correction is in force, expect fewer
+Edge picks with smaller edges; where its own fit has not yet passed its
+test and it may not borrow, nothing moves until it does (the first NBA
+build on this code, 10:14, still recommended 22, as at 9:20; tonight's
+learning pass says which leagues have one, step PQ). Most Likely is
+untouched. The NHL's Edge
 board also refuses a pick in a slice the loss patterns have closed, as
 every other board does.
 
