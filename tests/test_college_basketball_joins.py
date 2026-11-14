@@ -274,6 +274,18 @@ def test_the_league_is_registered_where_the_nba_is():
     assert "cbb" in ledger.TRACKED_SPORTS and "cbb" in ledger.POTD_LEAGUES
     assert "cbb" not in ledger.LIKELY_LIVE_SPORTS, "on probation: nothing staked"
     assert "cbb" in potd.TOP_PICK_LEAGUES and ("cbb",) in oddsplan.TIERS
+    # Its live lane is counted (2026-11-14): the hours outside the NBA's
+    # evening, on the one cadence clock every live lane shares.
+    assert oddsplan.LIVE_HOURS["cbb"] == 5
+    import datetime as _d
+    sat = _d.date(2026, 11, 21)
+    with_live = oddsplan.day_need("cbb", sat, games=40)
+    oddsplan.LIVE_HOURS.pop("cbb")
+    try:
+        without = oddsplan.day_need("cbb", sat, games=40)
+    finally:
+        oddsplan.LIVE_HOURS["cbb"] = 5
+    assert with_live - without == 5 * oddsplan.LIVE_PULLS_PER_HOUR * oddsplan.LIVE_CREDITS == 45
     assert oddsapi.SPORT_CONFIG["cbb"]["sport_key"] == "basketball_ncaab"
     assert "cbb" in espninjuries.LEAGUES and "cbb" in news.FEEDS
     for name in ("cbb.json", "live_cbb.json", "rosters_cbb.json", "standings_cbb.json"):

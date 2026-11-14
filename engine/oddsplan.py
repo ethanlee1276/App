@@ -275,7 +275,13 @@ LINES_BY_WEEKDAY = {"nba": (43,) * 7, "wnba": (43,) * 7,
 #: Hours a game day has a game in progress, for the live-line lane
 #: (`launch.MLB_LINES_CLOCK` and its kin). The football leagues' live line
 #: is their lines lane, counted above.
-LIVE_HOURS = {"nba": 6, "nhl": 6, "mlb": 4, "wnba": 4}
+#: COLLEGE BASKETBALL'S (2026-11-14): its live lane (launch.CBB_LINES_CLOCK)
+#: ran from opening night with no hours here, so the plan never counted it.
+#: Every live lane shares one cadence clock (livelines.last_pull_ts), so the
+#: hours college adds are those outside the NBA's evening: 4.9 a game day
+#: over 2025-26's schedule (a game in progress 10 hours a game day, 13 on a
+#: Saturday, 7 p.m. to 1 a.m. Eastern already the NBA's).
+LIVE_HOURS = {"nba": 6, "nhl": 6, "mlb": 4, "wnba": 4, "cbb": 5}
 
 #: WHEN EACH LEAGUE PLAYS, as (phase, first (month, day), last (month, day)).
 #: Approximate and year-agnostic: they only share the month across days.

@@ -221,7 +221,7 @@ qellysbook.com {
 			header_up X-Forwarded-Host {host}
 		}
 	}
-	@sections path /mlb /nfl /nba /wnba /cfb /ufc /record /live /tonight /streak /feed /scanner /longshots /futures /injuries /weather /standings /rosters /players /mybets /bankroll /lab /intel /fantasy /about /why /methodology /status /changelog
+	@sections path /mlb /nfl /nba /wnba /cfb /cbb /ufc /record /live /tonight /streak /feed /scanner /longshots /futures /injuries /weather /standings /rosters /players /mybets /bankroll /lab /intel /fantasy /about /why /methodology /status /changelog
 	handle @sections {
 		reverse_proxy 127.0.0.1:8000 {
 			# HOLD THE REQUEST WHILE THE APP RESTARTS.

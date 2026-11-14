@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PJ. College's own address, and its live lane counted** (step 538; 14
+November). Nothing to run: the deploy installs the Caddyfile itself, after
+validating it. Every league's board had a clean path (qellysbook.com/nba)
+but college basketball's, so a shared college link unfurled as the
+generic site card and opened on another league. qellysbook.com/cbb opens
+college's board, with its own title and preview text. And college's live
+line lane ran from opening night without hours in the odds plan's
+forecast: the plan now counts the 5 hours a college game day adds outside
+the NBA's evening (measured on 2025-26's schedule; every live lane shares
+one cadence clock, so the NBA's evening is no new spend). About 45 credits
+a college game day, inside the plan.
+
 **PI. College's Parlays page builds** (step 537; 14 November). Nothing to
 run. College's board showed a Parlays tab, but the two-leg builder ran
 only for the four leagues named on 31 October, so college's page could

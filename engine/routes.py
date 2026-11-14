@@ -95,6 +95,8 @@ SECTIONS = {
     "nba":  ("sport", "nba", "NBA", "The NBA board: player props priced against the book, with the projection behind each one."),
     "wnba": ("sport", "wnba", "WNBA", "The WNBA board: player props priced against the book, with the projection behind each one."),
     "cfb":  ("sport", "cfb", "College football", "The college football board: player props, game bets and touchdown long shots."),
+    # College basketball (2026-11-14): its board had no address of its own.
+    "cbb":  ("sport", "cbb", "College basketball", "The college basketball board: player props and game bets on every Division I game, the projection behind each one, and the NCAA tournament race."),
     "ufc":  ("view", "ufc", "UFC", "The fight card, the weigh-ins and what the model makes of each bout."),
     # sections
     "record":    ("view", "record", "Track record", "Every pick graded in public — wins, losses and closing-line value, with the sample size beside every number."),
