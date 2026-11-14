@@ -129,7 +129,11 @@ def test_a_read_the_board_cannot_agree_with_says_so():
     _, rep = _build([under_only], {("Under", "GB", "rush_yds"): OVER})
     assert rep[("Under", "GB")]["status"] == "other_side", rep
     _, rep = _build([], {("Nobody", "GB", "rush_yds"): OVER})
-    assert rep[("Nobody", "GB")] == {"status": "none", "priced": False, "refused": "", "best": None}
+    # (Pin updated 2026-11-14: the no-pick card names the bar the list asked,
+    # so the NFL's props read 60%, not the shared 55% — likely.LANE_MIN_PROB.)
+    got = dict(rep[("Nobody", "GB")])
+    assert got.pop("bar") >= K.MIN_PROB
+    assert got == {"status": "none", "priced": False, "refused": "", "best": None}
 
 
 def test_a_turned_down_pick_says_the_boards_reason():

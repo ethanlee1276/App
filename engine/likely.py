@@ -1410,7 +1410,7 @@ def _main_candidate(row: dict, side, fits=None, band=None):
 
 
 def _lean_report(board: list, leans: dict, lean_props: dict, fits=None,
-                 why: dict | None = None) -> dict:
+                 why: dict | None = None, bar: float | None = None) -> dict:
     """{(player, team): what his read got} — see `build`'s ``lean_report``.
 
     "pick": a board row on the read's side (the likeliest, if several).
@@ -1479,7 +1479,10 @@ def _lean_report(board: list, leans: dict, lean_props: dict, fits=None,
                 if _side(c["side"]) == lean.get("side") and (best is None or c["prob"] > best["prob"]):
                     best = dict(c, market=row.get("market"),
                                 market_label=row.get("market_label") or row.get("market"))
+        # THE BAR THE LIST ASKED (``bar``), so the card names the right one:
+        # the NFL's props ask 60%, not the shared 55% (LANE_MIN_PROB).
         out[k] = {"status": "none", "priced": bool(lean_props.get(k)), "refused": refused,
+                  **({"bar": round(float(bar), 4)} if bar is not None else {}),
                   "best": None if best is None else {
             "market": best["market"], "market_label": best["market_label"], "side": best["side"],
             "line": best["line"], "odds": best["odds"], "book": best["book"],
@@ -3372,7 +3375,9 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
                             str(r.get("since") or ""),
                             -float(r["model_prob"] or 0.0)))
     if lean_report is not None and leans:
-        lean_report.update(_lean_report(out, leans, lean_props, fits, why_left))
+        lean_report.update(_lean_report(out, leans, lean_props, fits, why_left,
+                                        bar=max(_floor(SPORT_MIN_PROB.get(sport)),
+                                                float(lane_floors(sport).get("prop") or 0.0))))
     if turnover is not None:
         turnover.update(_turnover(out, held, why_left, outranked, stamp,
                                   by_margin))

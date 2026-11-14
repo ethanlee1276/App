@@ -40,7 +40,11 @@ what the board already holds, in the outside reports' order:
 
 WHAT IT IS NOT. No prop picks, as asked: no line, no price and no
 probability on any player — not the scan's microscope, not the game plan's
-plays, not a read's touchdown chance or its leaning markets. The game
+plays, not a read's touchdown chance or its leaning markets. Two exceptions,
+both Ethan's own asks of 2026-11-14: each game's parlays (`sec_parlays`), and
+each read's own pick on its side beside the read (`read_pick`: "it would not
+make any sense to make players favoitable and breakout canidates and not give
+them props"). The game
 lines and the drive simulator's shares are the game's, and the report
 says the simulator is a simulation, not a pick.
 
@@ -1588,7 +1592,9 @@ def sec_matchups(c: Ctx) -> dict | None:
                           "title": f"{r.get('player')} vs {against}", "role": _role_line(r),
                           "why": ([_sentence(cap(scorer))] if scorer else [])
                           + [_sentence(w) for w in why if w not in common][:4],
-                          "form": form_lines(c, r)})
+                          "form": form_lines(c, r),
+                          # His pick on the read's side (`read_pick`).
+                          **({"pick": read_pick(r)} if read_pick(r) else {})})
         if items:
             sub.append({"type": "verdicts", "items": items})
         room = cov.get(dfn) or {}
@@ -1849,6 +1855,43 @@ def sec_scripts(c: Ctx) -> dict | None:
     return _section("scripts", "How the game could go", blocks)
 
 
+def _pick_words(p: dict) -> str:
+    """"Over 4.5 receptions (−110, 62%)" — one board row as a read's card says it."""
+    side = str(p.get("side") or "").strip().lower()
+    side = "Over" if side in ("over", "yes") else "Under" if side in ("under", "no") else side.capitalize()
+    line = _f(p.get("line"))
+    what = str(p.get("market_label") or p.get("market") or "").replace("_", " ").lower()
+    bits = [b for b in (_odds(p.get("odds")), _pct(p.get("model_prob"))) if b]
+    return " ".join(x for x in (side, f"{line:g}" if line is not None else "", what) if x) + (
+        f" ({', '.join(bits)})" if bits else "")
+
+
+def read_pick(r: dict) -> str:
+    """WHAT THE BOARD DID WITH THIS READ, in one line (Ethan, 2026-11-14: "it
+    would not make any sense to make players favoitable and breakout
+    canidates and not give them props and some for players we thinnk will do
+    bad, it doesnt make sense to not take the unders"): his Most Likely pick
+    on the read's side (engine/gamescan.stamp_picks), else his matchup pick
+    there (engine/matchpicks.stamp_reads — every read our number agrees with
+    has one), else the list's pick the other way, else that our number
+    disagrees. "" when none of his props is priced."""
+    if not isinstance(r, dict):
+        return ""
+    if r.get("pick"):
+        return f"Most Likely pick: {_pick_words(r['pick'])}"
+    if r.get("matchup_pick"):
+        return f"Matchup pick: {_pick_words(r['matchup_pick'])}"
+    if r.get("pick_other_side"):
+        return (f"Our Most Likely pick on him goes the other way: {_pick_words(r['pick_other_side'])} — "
+                f"our number disagrees with this read")
+    best = ((r.get("no_pick") or {}).get("best")) or {}
+    p = _f(best.get("model_prob"))
+    if p is not None and p < 0.5:
+        return (f"No pick: our number disagrees with this read — his likeliest "
+                f"{'over' if str(best.get('side')).lower() == 'over' else 'under'} is {_pick_words(best)}")
+    return ""
+
+
 def sec_watch(c: Ctx) -> dict | None:
     shine = sorted((r for r in c.reads if r.get("read") in ("breakout", "good")),
                    key=lambda r: (r.get("read") != "breakout", -_volume(r)))
@@ -1862,6 +1905,10 @@ def sec_watch(c: Ctx) -> dict | None:
                "headshot": r.get("headshot") or "", "tone": tone,
                "label": r.get("label") or "", "role": _role_line(r),
                "text": " ".join(_sentence(w) for w in why)}
+        # HIS PICK ON THE READ'S SIDE (`read_pick`).
+        pick = read_pick(r)
+        if pick:
+            out["pick"] = pick
         # MAY SIT (engine/availability): the mark beside his read, and why,
         # before anything the read says.
         if r.get("availability"):
@@ -3132,6 +3179,8 @@ def to_text(report: dict) -> str:
                                + (f" [{v['status']}]" if v.get("status") else "")
                                + (f" — {v['role']}" if v.get("role") else ""))
                     out += [f"      - {w}" for w in v.get("why") or []]
+                    if v.get("pick"):
+                        out.append(f"      {v['pick']}")
                     out += _form_text(v)
             elif t == "players":
                 for v in b["items"]:
@@ -3140,13 +3189,17 @@ def to_text(report: dict) -> str:
                                + (f" — {v['label']}" if v.get("label") else "")
                                + (f" [{v['status']}]" if v.get("status") else "")
                                + (f": {v['text']}" if v.get("text") else ""))
+                    if v.get("pick"):
+                        out.append(f"      {v['pick']}")
                     out += _form_text(v)
             elif t == "parlays":
                 for v in b["items"]:
                     out.append(f"  • {v['title']}: {v.get('price_line') or ''}")
                     for leg in v.get("legs") or []:
                         out.append(f"      - {leg['pick']}" + (f" ({leg['price']})" if leg.get("price") else "")
-                                   + (f", {float(leg['chance']):.0%}" if leg.get("chance") else ""))
+                                   + (f", {float(leg['chance']):.0%}" if leg.get("chance") else "")
+                                   + (f", research {leg['research']} of {leg.get('research_of')}"
+                                      if leg.get("research") is not None else ""))
                         out += [f"          · {w}" for w in leg.get("why") or []]
                     if v.get("script"):
                         out.append(f"      {v['script']}")

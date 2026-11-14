@@ -10539,13 +10539,15 @@ function scanTopRows(d) {
    behind every read it agrees with or says nothing about, and its tag
    says so. */
 function scanAgree(x) {
-  return x.pick ? 2 : x.pick_other_side ? 0 : 1;
+  /* A read's own matchup pick agrees with it too (engine/matchpicks
+     .READ_PICK_MIN, 2026-11-14). */
+  return x.pick || x.matchup_pick ? 2 : x.pick_other_side ? 0 : 1;
 }
 function scanStrength(x, shine) {
   const tier = shine ? ({ breakout: 2, good: 1 }[x.read] || 0) : ({ avoid: 2, tough: 1 }[x.read] || 0);
   const pro = (x.pro || []).length, con = (x.con || []).length;
   const net = shine ? pro - con : con - pro;
-  const p = x.pick || (shine ? null : x.pick_other_side);
+  const p = x.pick || x.matchup_pick || (shine ? null : x.pick_other_side);
   const chance = Number((p && p.model_prob) ?? (shine && x.td ? x.td.model_prob : 0)) || 0;
   return { agree: scanAgree(x), tier, net, chance };
 }
@@ -13474,6 +13476,18 @@ function scanPickHTML(x, cls = "ms-pick") {
     p.line != null ? escapeHtml(String(p.line)) + " " : ""}${escapeHtml(p.market_label || p.market || "")} · ${
     escapeHtml(oddsTxt(p.odds))} · ${wholePct(p.model_prob)}`;
   if (x.pick) return `<span class="${cls} good"><b>Most Likely pick:</b> ${say(x.pick)}</span>`;
+  /* THE READ'S OWN PICK (engine/matchpicks.READ_PICK_MIN; Ethan, 2026-11-14:
+     "it would not make any sense to make players favoitable and breakout
+     canidates and not give them props ... it doesnt make sense to not take
+     the unders"): the likeliest number on the read's side where our number
+     agrees, on the one Most Likely board as a matchup pick, tracked on paper. */
+  if (x.matchup_pick) {
+    const m = x.matchup_pick;
+    const under = Number(m.model_prob) < Number((x.no_pick || {}).bar || 0.55);
+    return `<span class="${cls} good"><b>Matchup pick:</b> ${say(m)}${under
+      ? ` — our number agrees with the read; under the Most Likely list’s ${wholePct((x.no_pick || {}).bar || 0.55)}, so it rides as the read’s pick, tracked on paper`
+      : " — the read’s side, where our number agrees"}.</span>`;
+  }
   if (x.pick_other_side) {
     return `<span class="${cls} warn"><b>Our Most Likely pick on him goes the other way:</b> ${say(x.pick_other_side)}
       — the model’s likeliest number disagrees with this read.</span>`;
@@ -13484,9 +13498,14 @@ function scanPickHTML(x, cls = "ms-pick") {
        still turned down (Gibbs, 2026-09-25: "no pick" beside a 72% over,
        and nothing said why). */
     const refused = x.no_pick.refused ? ` The board turned it down: ${x.no_pick.refused}.` : "";
+    const bar = Number(x.no_pick.bar || 0.55);
+    /* OUR NUMBER DISAGREES (2026-11-14): every read whose side our number has
+       at even or better carries that pick now (engine/matchpicks), so a read
+       left here is one the model says loses more often than not. */
     const why = !x.no_pick.priced ? "the books have not priced his props yet."
-      : b ? `his likeliest ${side} at −250 or better is ${say(b)}${Number(b.model_prob) < 0.55
-          ? " — under the 55% the board needs." : "."}${Number(b.model_prob) < 0.55 ? "" : refused}`
+      : b && Number(b.model_prob) < 0.5 ? `our number disagrees with this read: his likeliest ${side} at −250 or better is ${say(b)}.`
+      : b ? `his likeliest ${side} at −250 or better is ${say(b)}${Number(b.model_prob) < bar
+          ? ` — under the ${wholePct(bar)} the board needs.` : "."}${Number(b.model_prob) < bar ? "" : refused}`
       /* ONE REASON, THE TRUE ONE (Gibbs, 2026-10-06: "none of his overs is
          priced at −250 or better … The board turned it down: no book has a
          main line on it" — two answers that cannot both be the reason).

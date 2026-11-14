@@ -2387,7 +2387,8 @@ def stamp_picks(scan_reads: dict, report: dict, board: list | None = None) -> in
                 x["pick_other_side"] = got["pick"]
             else:
                 x["no_pick"] = {"best": got.get("best"), "priced": got.get("priced", True),
-                                "refused": got.get("refused") or ""}
+                                "refused": got.get("refused") or "",
+                                **({"bar": got["bar"]} if got.get("bar") is not None else {})}
             n += 1
     return n
 

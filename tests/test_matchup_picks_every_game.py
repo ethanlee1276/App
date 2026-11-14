@@ -101,8 +101,18 @@ def test_yards_and_catches_follow_the_read_where_our_number_agrees():
     ]
     got = M.prop_picks(GAME, reads, props)
     by = {(r["player"], r["market"]): r for r in got}
+    # (Pin updated 2026-11-14: a read the Most Likely list carries nothing for
+    # on its side gets its one pick when our number there is at least even —
+    # Coin Flip's 52% over is that pick now, said as the read's own
+    # (matchpicks.READ_PICK_MIN; Ethan: "it would not make any sense to make
+    # players favoitable and breakout canidates and not give them props").)
     assert set(by) == {("Davante Adams", "receptions"), ("Davante Adams", "rec_yds"),
-                       ("Rhamondre Stevenson", "rush_yds")}, by
+                       ("Rhamondre Stevenson", "rush_yds"), ("Coin Flip", "rec_yds")}, by
+    coin = by[("Coin Flip", "rec_yds")]
+    assert coin.get("read_pick") and "under the 55%" in coin["read_note"], coin
+    assert not by[("Davante Adams", "rec_yds")].get("read_pick"), "his second market is an extra, at 55%"
+    flip = M.prop_picks(GAME, reads[2:], [_prop("Coin Flip", "rec_yds", "OVER", 30.5, 0.49)])
+    assert flip == [], "under even our number disagrees with the read: no pick"
     st = by[("Rhamondre Stevenson", "rush_yds")]
     assert st["side"] == "UNDER" and abs(st["model_prob"] - 0.60) < 1e-9
     assert (st["odds"], st["book"]) == (-115, "DraftKings"), "Novig +105 against -115 is not close"

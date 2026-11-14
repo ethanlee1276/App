@@ -71,6 +71,8 @@
 .gr-parlay-pick { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
 .gr-parlay-px { font-size: .86em; color: var(--text-mute); font-variant-numeric: tabular-nums; }
 .gr-parlay-p { font-size: .82em; font-weight: 600; color: var(--good); font-variant-numeric: tabular-nums; }
+.gr-parlay-r { font-size: .78em; color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.gr-person-pick { margin: 6px 0 0; font-size: .88em; font-weight: 600; }
 .gr-parlay-script { margin: 8px 0 2px; font-size: .9em; }
 .gr-parlay-sub { margin: 8px 0 2px; font-size: .78em; text-transform: uppercase; letter-spacing: .04em;
   color: var(--text-mute); }

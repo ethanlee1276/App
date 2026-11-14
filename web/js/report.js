@@ -79,6 +79,7 @@
           ${b.type === "verdicts"
             ? ((v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>` : "")
             : v.text ? `<p class="gr-person-text">${escapeHtml(v.text)}</p>` : ""}
+          ${v.pick ? `<p class="gr-person-pick">${escapeHtml(v.pick)}</p>` : ""}
           ${form(v.form)}
         </div>`;
       }).join("")}</div>`;
@@ -95,7 +96,8 @@
           ? ` data-open="player:${escapeAttr(slugify(l.player))}"` : ""}>
           <span class="gr-parlay-pick"><b>${escapeHtml(l.pick || "")}</b>${l.price
             ? ` <span class="gr-parlay-px">${escapeHtml(l.price)}</span>` : ""}${l.chance
-            ? ` <span class="gr-parlay-p">${Math.round(Number(l.chance) * 100)}%</span>` : ""}</span>
+            ? ` <span class="gr-parlay-p">${Math.round(Number(l.chance) * 100)}%</span>` : ""}${l.research != null
+            ? ` <span class="gr-parlay-r" title="Our research case: his team’s expected points, the defence he faces, his usage and red-zone work, the matchup read and the game script">research ${escapeHtml(String(l.research))} of ${escapeHtml(String(l.research_of || 13))}</span>` : ""}</span>
           ${(l.why || []).length ? `<ul class="gr-why">${items(l.why)}</ul>` : ""}</li>`).join("")}</ol>
         ${t.script ? `<p class="gr-parlay-script">${escapeHtml(t.script)}</p>` : ""}
         ${(t.links || []).length ? `<ul class="gr-list gr-parlay-links">${items(t.links)}</ul>` : ""}
@@ -131,13 +133,15 @@
               ? `• ${v.title} — ${v.label}${v.role ? ` (${v.role})` : ""}`
               : `• ${v.player}${who ? ` (${who})` : ""}${v.label ? ` — ${v.label}` : ""}${v.status ? ` (${v.status})` : ""}${v.text ? `: ${v.text}` : ""}`);
             (v.why || []).forEach((w) => out.push(`    – ${w}`));
+            if (v.pick) out.push(`    ${v.pick}`);
             (v.form || []).forEach(([k, lines]) => out.push(`    ${k}: ${(lines || []).join(" | ")}`));
           }
         } else if (b.type === "parlays") {
           for (const t of b.items || []) {
             out.push(`• ${t.title}: ${t.price_line || ""}`);
             for (const l of t.legs || []) {
-              out.push(`    – ${l.pick}${l.price ? ` (${l.price})` : ""}${l.chance ? `, ${Math.round(Number(l.chance) * 100)}%` : ""}`);
+              out.push(`    – ${l.pick}${l.price ? ` (${l.price})` : ""}${l.chance ? `, ${Math.round(Number(l.chance) * 100)}%` : ""}${
+                l.research != null ? `, research ${l.research} of ${l.research_of || 13}` : ""}`);
               (l.why || []).forEach((w) => out.push(`        · ${w}`));
             }
             if (t.script) out.push(`    ${t.script}`);
@@ -269,7 +273,8 @@
     return {
       title, price_line: price, script, links: t.links || [], caveats: t.caveats || [],
       legs: (t.legs || []).map((l) => ({ pick: pickWords(l), player: l.player,
-        price: [oddsWords(l.odds), l.book || ""].filter(Boolean).join(" "), chance: l.p, why: l.why || [] })),
+        price: [oddsWords(l.odds), l.book || ""].filter(Boolean).join(" "), chance: l.p, why: l.why || [],
+        research: l.research, research_of: l.research_of })),
       backups: (t.backups || []).map((b) => `If ${b.for} is out or his number moves: ${pickWords(b.leg || {})} (${
         oddsWords((b.leg || {}).odds)}, ${pct((b.leg || {}).p)})`),
     };
