@@ -5522,6 +5522,19 @@ def _write_day_top_pick() -> None:
                   f"unreadable ({type(exc).__name__}: {exc}) — "
                   f"publishing none rather than an unlocked claim")
             top = potd.day_top_pick(boards, today, locked={})
+        # A LEAGUE WHOSE SEASON IS OVER HAS NO CARD (Ethan's screenshot of
+        # the Pick of the Day page, 2026-11-14: MLB's "No pick today: the
+        # board had no rows" between the leagues that play). Their boards
+        # still build each day, dated today, so `day_top_pick` kept their
+        # cards; the list that greys their buttons (`_seasons_public`) takes
+        # them off the page. The day's top pick keeps its own league's card.
+        try:
+            over = set((_seasons_public() or {}).get("over") or [])
+            if over and isinstance(top.get("leagues"), dict):
+                top["leagues"] = {s: c for s, c in top["leagues"].items()
+                                  if s not in over or s == top.get("sport")}
+        except Exception as exc:                              # noqa: BLE001
+            print(f"  ⚠️  day top pick: the season list is unreadable ({exc}); every league's card kept")
         # WHICH FILES WERE NOT THERE, in the artifact itself. A census
         # entry saying "nfl: no board" is true and unactionable; the path
         # says whether the build never ran, the publish never landed, or

@@ -9355,6 +9355,10 @@ and shit." Your screenshots showed four things, and each is fixed:
   now reads "Rice Moneyline", on the home card too.
 - **The NBA's "Best on the board" line had no face.** The best bet now
   carries his photo, or the side's logo, beside it.
+- **MLB's card said "No pick today: the board had no rows"** in November, and
+  so did the WNBA's. Their boards still build each day, so their cards kept
+  their place. A league whose season is over (the same list that greys its
+  button) is now left off the page.
 
 **QC. The posted picks, read against the matchup reads, every league**
 (step 557; 14 November). One read-only command; paste it back. You: "audit

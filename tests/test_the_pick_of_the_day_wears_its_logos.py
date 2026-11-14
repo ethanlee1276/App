@@ -210,6 +210,33 @@ def test_the_college_table_is_never_another_leagues():
     assert 'if (sport === "cfb") return _cfbTeams || (state.sport === "cfb" && state.data && state.data.teams) || {};' in body
 
 
+# --- a league whose season is over has no card -------------------------------------
+def test_a_league_out_of_season_is_left_off_the_page():
+    """MLB's and the WNBA's boards still build each November day, dated
+    today, so the page showed "No pick today: the board had no rows" for
+    both between the leagues that play (Ethan's first screenshot)."""
+    import datetime as _dt
+    import tempfile
+    import launch
+    from test_day_top_pick import _run_writer
+    today = _dt.date.today().isoformat()
+    empty = {"date": today, "pick": None, "note": "No pick today: the board had no rows",
+             "verdict": {"call": "no bet", "why": "No pick today: the board had no rows"}}
+    boards = {"mlb": {"pick_of_the_day": dict(empty, sport="mlb")},
+              "nba": {"pick_of_the_day": dict(empty, sport="nba", note="nothing cleared")}}
+    was = launch._seasons_public
+    launch._seasons_public = lambda day=None: {"over": ["mlb", "wnba"]}
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload, printed, _claims = _run_writer(tmp, boards)
+    finally:
+        launch._seasons_public = was
+    assert payload is not None, printed
+    assert "nba" in payload["leagues"] and "mlb" not in payload["leagues"], payload["leagues"].keys()
+    src = (ROOT / "launch.py").read_text()
+    assert 'if s not in over or s == top.get("sport")}' in src, "the day's top pick keeps its own league's card"
+
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0
