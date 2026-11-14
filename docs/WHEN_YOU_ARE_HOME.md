@@ -9354,7 +9354,10 @@ on: "clicking the play feed button throws an error and glitches the page."
   each player's ESPN id, and a play card shows his headshot from it.
 - **The league's name.** The Live tab's chips and card tags call the
   league NCAAB, as the league row does, not CBB. So do the Pick of the
-  Day header and the other lines that printed the code.
+  Day header, the standings, rosters and Lab pages, the rosters page's own
+  note, and the other lines that printed the code. The Futures page's
+  subtitle says "played out thousands of times", true for every league
+  (college's run is two thousand, the others' twenty).
 
 Checked in a browser against the 61 college games live at 01:45 UTC: no
 error, every play reading H1 or H2

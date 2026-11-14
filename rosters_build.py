@@ -47,6 +47,9 @@ from engine.seasons import season_of
 # where it costs far less — basketball counts a minute played, so anyone
 # who got off the bench is on the page.
 FROM_LOGS = ("mlb", "nba", "wnba", "cfb", "nhl", "cbb")
+#: A league as the page names it, where that is not its code in capitals
+#: (the strip's NCAAB; web/js/app.js LEAGUE_LABEL).
+LEAGUE_NAME = {"cbb": "NCAAB"}
 
 #: The league's current roster first (2026-10-03, Ethan: "make sure we're
 #: pulling all live data for NHL, like all live rosters and injuries ... I
@@ -193,7 +196,7 @@ def payload_for(conn, sport: str, today: str | None = None) -> dict:
         # happened to land on — telling somebody to ingest last year to fix
         # an empty page this year is advice that cannot work.
         "note": "" if out["player_count"] else (
-            f"No {sport.upper()} game logs on file. Rosters here are built "
+            f"No {LEAGUE_NAME.get(sport, sport.upper())} game logs on file. Rosters here are built "
             f"from who actually appeared, so they fill in with the history "
             f"ingest: python3 ingest.py {sport} --seasons {season}"),
     })

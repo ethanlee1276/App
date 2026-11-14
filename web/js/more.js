@@ -613,7 +613,7 @@ async function renderLab() {
     const props = s.props || {}, games = s.game_lines || {};
     const cards = (props.markets || []).map((m) => labPropCard(m, d.basis_note)).join("");
     return `<div class="lab-sport">
-      <div class="section-title">${sport.toUpperCase()}
+      <div class="section-title">${lgCode(sport)}
         ${labSeasonWord(props) || s.replayed_at ? `<span class="sub">— ${[escapeHtml(labSeasonWord(props)),
           /* Each sport carries its own replay date since 2026-11-03: a run
              publishes them one at a time (engine/lab.SPORT_ORDER). */
@@ -632,7 +632,7 @@ async function renderLab() {
      restated six times over is what buries the page that has data. */
   const gaps = order.filter((s) => d.sports[s] && !has(s)).map((sport) => {
     const s = d.sports[sport];
-    return `<tr><td>${sport.toUpperCase()}</td>
+    return `<tr><td>${lgCode(sport)}</td>
       <td>${escapeHtml((s.props || {}).unavailable || "—")}</td>
       <td>${escapeHtml((s.game_lines || {}).unavailable || "—")}</td></tr>`;
   }).join("");
@@ -2366,7 +2366,7 @@ async function renderStandings() {
   const title = document.getElementById("standings-title");
   const isFootball = sport === "nfl" || sport === "cfb";
   if (title) title.childNodes[0].nodeValue =
-    `${(SPORT_META[sport] || {}).label || sport.toUpperCase()} ${
+    `${(SPORT_META[sport] || {}).label || lgCode(sport)} ${
       isFootball ? "rankings & standings" : "standings"} `;
   const sub = document.getElementById("standings-sub");
   if (sub) {
@@ -2476,12 +2476,12 @@ async function renderRosters() {
     || "Search a team or a player…";
   const title = document.getElementById("rosters-title");
   if (title) title.childNodes[0].nodeValue =
-    `${(SPORT_META[sport] || {}).label || sport.toUpperCase()} rosters `;
+    `${(SPORT_META[sport] || {}).label || lgCode(sport)} rosters `;
   const teams = d.teams || {};
   const abbrs = Object.keys(teams).sort();
   if (!abbrs.length) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("list", 30)}</div>
-      <h3>No roster data for ${escapeHtml(sport.toUpperCase())}</h3>
+      <h3>No roster data for ${escapeHtml(lgCode(sport))}</h3>
       <p>${escapeHtml(d.note
         || "Rosters for this sport have not been built yet.")}</p></div>`;
     return;
