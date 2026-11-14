@@ -71,7 +71,8 @@
           <div class="gr-person-head">${playerAvatar(v.player, v.team, { size: 36, headshot: v.headshot })}
             <span class="gr-person-who"><b>${escapeHtml(b.type === "verdicts" ? v.title : v.player)}</b>
               <span>${escapeHtml(who)}</span></span>
-            ${v.label ? `<span class="ms-read-tag ${tone}">${escapeHtml(v.label)}</span>` : ""}</div>
+            ${v.label ? `<span class="ms-read-tag ${tone}">${escapeHtml(v.label)}</span>` : ""}
+            ${v.status ? `<span class="ms-read-tag gr-status">${escapeHtml(v.status)}</span>` : ""}</div>
           ${b.type === "verdicts"
             ? ((v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>` : "")
             : v.text ? `<p class="gr-person-text">${escapeHtml(v.text)}</p>` : ""}
@@ -105,7 +106,7 @@
             const who = [v.team, v.pos].filter(Boolean).join(" ");
             out.push(b.type === "verdicts"
               ? `• ${v.title} — ${v.label}${v.role ? ` (${v.role})` : ""}`
-              : `• ${v.player}${who ? ` (${who})` : ""}${v.label ? ` — ${v.label}` : ""}${v.text ? `: ${v.text}` : ""}`);
+              : `• ${v.player}${who ? ` (${who})` : ""}${v.label ? ` — ${v.label}` : ""}${v.status ? ` (${v.status})` : ""}${v.text ? `: ${v.text}` : ""}`);
             (v.why || []).forEach((w) => out.push(`    – ${w}`));
             (v.form || []).forEach(([k, lines]) => out.push(`    ${k}: ${(lines || []).join(" | ")}`));
           }

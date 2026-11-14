@@ -116,9 +116,17 @@ def _verdict(r: dict, tone: str | None = None, both: bool = False) -> dict:
     else:
         why = (pro if tone == "up" else con)[:3]
     notes = [str(x) for x in r.get("notes") or [] if x][:1]
-    return {"title": r.get("player"), "player": r.get("player"), "team": r.get("team"),
-            "pos": r.get("pos") or "", "label": r.get("label") or "", "verdict": tone,
-            "headshot": r.get("headshot") or "", "why": [_sentence(w) for w in why + notes]}
+    out = {"title": r.get("player"), "player": r.get("player"), "team": r.get("team"),
+           "pos": r.get("pos") or "", "label": r.get("label") or "", "verdict": tone,
+           "headshot": r.get("headshot") or "", "why": [_sentence(w) for w in why + notes]}
+    # MAY SIT (engine/availability, 2026-11-14): the mark, and why, first; the
+    # scan's own "listed questionable" note gives way to it.
+    if r.get("availability"):
+        from .availability import LABELS
+        out["status"] = LABELS.get(r["availability"], "")
+        out["why"] = [_sentence(r.get("availability_note") or "")] + [
+            w for w in out["why"] if "listed questionable" not in w and "is listed" not in w]
+    return out
 
 
 def shine_struggle(c: Ctx, reads: list) -> list:
@@ -855,7 +863,31 @@ def nba_meta(games: list, hist: dict, listed: dict, dvp: dict | None = None, dvp
                for p, i in (listed or {}).items() if (hist.get(p) or {}).get("team") in (a, h)]
         out[f"{a}@{h}"] = {"carry": carry, "injuries": sorted(inj, key=lambda i: (i["team"], i["player"])),
                            "injuries_read": bool(injuries_read),
-                           "dvp": {t: (dvp or {}).get(t) or {} for t in (a, h)}, "dvp_last": bool(dvp_last)}
+                           "dvp": {t: (dvp or {}).get(t) or {} for t in (a, h)}, "dvp_last": bool(dvp_last),
+                           "missed": missed_last(hist, (a, h), listed)}
+    return out
+
+
+def missed_last(hist: dict, teams, listed: dict | None = None) -> dict:
+    """``{name key: {"team", "game", "kind"}}``: each rotation player of the
+    two teams (three or more stored games) with no game on his team's newest
+    night and no line on the injury report (engine/availability). College's
+    injury report is all but empty, so on college this is the only word the
+    report has that a man may sit; on the NBA it catches a rest night the
+    report never listed."""
+    from .availability import _key
+    newest: dict = {}
+    for x in (hist or {}).values():
+        t, d = (x or {}).get("team"), ((x or {}).get("dates") or [None])[0]
+        if t in teams and d and str(d) > newest.get(t, ""):
+            newest[t] = str(d)[:10]
+    out: dict = {}
+    for p, x in (hist or {}).items():
+        t, dates = (x or {}).get("team"), (x or {}).get("dates") or []
+        if t not in newest or len(x.get("minutes") or []) < 3 or not dates or p in (listed or {}):
+            continue
+        if str(dates[0])[:10] < newest[t]:
+            out[_key(p)] = {"team": t, "game": {"day": newest[t]}, "kind": "dnp"}
     return out
 
 

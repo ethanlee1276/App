@@ -376,6 +376,16 @@ class Ctx:
             EDGE_GAP = 10
         self.gap_bar = max(EDGE_GAP, round(n_teams * EDGE_SHARE))
         self.sched_row = self._sched_row()
+        # WHO MAY NOT PLAY (engine/availability, 2026-11-14; Ethan: an injured
+        # player was still "could have a big day", in every sport). A man
+        # ruled out or doubtful has no read on the page; a questionable one,
+        # or one with no line in his team's last game, keeps his read,
+        # marked, and stays out of the short version.
+        try:
+            from .availability import annotate
+            self.reads = annotate(self)
+        except Exception:                                    # noqa: BLE001
+            pass
 
     def name(self, team: str) -> str:
         return self.names.get(team, team)
@@ -1672,6 +1682,12 @@ def sec_watch(c: Ctx) -> dict | None:
                "headshot": r.get("headshot") or "", "tone": tone,
                "label": r.get("label") or "", "role": _role_line(r),
                "text": " ".join(_sentence(w) for w in why)}
+        # MAY SIT (engine/availability): the mark beside his read, and why,
+        # before anything the read says.
+        if r.get("availability"):
+            from .availability import LABELS
+            out["status"] = LABELS.get(r["availability"], "")
+            out["text"] = (_sentence(r.get("availability_note") or "") + " " + out["text"]).strip()
         # A key player's season is on his card under "Who's guarding
         # who" already; the rest carry theirs here.
         if not _is_key(r):
@@ -2209,6 +2225,9 @@ def shine_lines(c: Ctx, reads: list, shine_n: int = 3, struggle_n: int = 2, key_
     """Who could have a big day and who could have a hard one, each with
     the reason that says why."""
     out = []
+    # A man who may sit is never the game's headline (engine/availability):
+    # his card says why, in Players to watch.
+    reads = [r for r in reads if not r.get("availability")]
     shine = [r for r in reads if r.get("read") in ("breakout", "good")]
     shine.sort(key=lambda r: (r.get("read") != "breakout", -_volume(r), -len(r.get("pro") or [])))
     if shine:
@@ -2775,7 +2794,9 @@ def to_text(report: dict) -> str:
                     out.append(f"  ({b['note']})")
             elif t == "verdicts":
                 for v in b["items"]:
-                    out.append(f"  • {v['title']} = {v['label']}" + (f" — {v['role']}" if v.get("role") else ""))
+                    out.append(f"  • {v['title']} = {v['label']}"
+                               + (f" [{v['status']}]" if v.get("status") else "")
+                               + (f" — {v['role']}" if v.get("role") else ""))
                     out += [f"      - {w}" for w in v.get("why") or []]
                     out += _form_text(v)
             elif t == "players":
@@ -2783,6 +2804,7 @@ def to_text(report: dict) -> str:
                     who = " ".join(str(x) for x in (v.get("team"), v.get("pos")) if x)
                     out.append(f"  • {v['player']}" + (f" ({who})" if who else "")
                                + (f" — {v['label']}" if v.get("label") else "")
+                               + (f" [{v['status']}]" if v.get("status") else "")
                                + (f": {v['text']}" if v.get("text") else ""))
                     out += _form_text(v)
     return "\n".join(out)

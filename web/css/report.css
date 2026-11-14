@@ -40,6 +40,10 @@
 .gr-person-head { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center;
   column-gap: 10px; row-gap: 6px; }
 .gr-person-head .ms-read-tag { grid-column: 2; justify-self: start; }
+/* A man who may sit (engine/availability): questionable, or no line in his
+   team's last game. Amber, beside the read, never in its place. */
+.gr-person-head .ms-read-tag.gr-status { color: var(--warn); border-color: transparent;
+  background-color: color-mix(in oklab, currentColor 14%, transparent); }
 .gr-person-who { display: grid; min-width: 0; }
 .gr-person-who b { overflow-wrap: anywhere; }
 .gr-person-who span { color: var(--text-mute); font-size: var(--fs-xs); }
