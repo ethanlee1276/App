@@ -844,6 +844,26 @@ SH
 run PJ "College basketball's own address answers with its own title" 60 <<'SH'
 curl -s https://qellysbook.com/cbb | grep -o '<title>[^<]*</title>'
 SH
+run PU "Why a college football player's game is listed twice" 120 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 - <<'PY'
+from engine import db
+from collections import defaultdict
+c = db.connect()
+print("== Cooper Barkate, every stored row (season, period, game_id, market, value):")
+for r in c.execute("SELECT season, period, game_id, market, value FROM player_game_logs WHERE sport='cfb' AND player='Cooper Barkate' AND market IN ('rec_yds','receptions') ORDER BY period, game_id, market"):
+    print("  ", tuple(r))
+print("== games rows involving MIA since 2026-10-15:")
+for r in c.execute("SELECT season, period, game_id, home, away, home_score, away_score, date FROM games WHERE sport='cfb' AND (home='MIA' OR away='MIA') AND COALESCE(date,period) >= '2026-10-15' ORDER BY COALESCE(date,period)"):
+    print("  ", tuple(r))
+dup = defaultdict(set)
+for r in c.execute("SELECT player, market, opponent, game_id FROM player_game_logs WHERE sport='cfb' AND season=2026"):
+    dup[(r["player"], r["market"], r["opponent"])].add(str(r["game_id"]).replace("-box", ""))
+many = {k: v for k, v in dup.items() if len(v) > 1}
+print("== cfb 2026 (player, market, opponent) under 2+ distinct game ids:", len(many), "of", len(dup))
+for k, v in list(many.items())[:12]:
+    print("  ", k, "->", sorted(v))
+PY
+SH
 run PL "College's prop pulls: the pacer's decisions and what each pull held" 60 <<'SH'
 cd /srv/qellys && sudo -u qellys python3 -c "
 import glob, json, os, time

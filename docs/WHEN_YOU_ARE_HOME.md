@@ -9338,6 +9338,60 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PV. Game reports stop touting a ruled-out player, and mark a
+questionable one** (step 550; 14 November). Nothing to run. You, on the
+Miami–Duke report: Malachi Toney was under "Who could have a big day" and
+"Could shine" while he was ruled out, and you said it affects every sport,
+not just college football. One rule now runs every report's player reads
+(engine/availability): a man who is out, doubtful, suspended, on an injured
+list, or whose props every book has taken down gets no read at all; a man
+listed questionable, day-to-day or a game-time decision keeps his read but
+wears an amber "Questionable" mark and is kept out of the short version's
+"big day / hard day" lines, so the game is never summed up through someone
+who may sit; and a man with no line in his team's last game and nothing on
+the injury report wears a "Missed last game" mark with the game he missed.
+Football reads it off the report's own form, basketball off the build's
+player history; the page and the copied-text report both show the mark. The
+board's own picks are unchanged — an injured player's pick was already held
+for the lineup; this is the human-readable report catching up.
+
+**PU. Why a college football player's game is listed twice** (step 549; 14
+November). One read-only command; paste it back. You, on the Miami–Duke
+report: Cooper Barkate's "Last 3" showed Notre Dame on both 7 November and
+8 November, with different numbers, and the public logs
+(https://qellysbook.com/api/players/logs?sport=cfb&player=Cooper%20Barkate)
+hold the same game under two dates — his 92-yard line sits under 11-07 and
+11-08 both. One real game is stored under two `period` values, which
+inflates his season totals, his form lines on the report, and can void a
+bet whose two rows disagree (the settler's duplicate rule). It is almost
+certainly the same-night box-score settle (engine/boxsettle) filing its
+provisional rows under one date and the official backfill
+(engine/sources/cfbstats) under another, so the provisional ones are never
+purged. This dumps every stored row for him, the games rows for Miami, and
+how many college players carry the same opponent under two game ids, so the
+fix lands on the real cause rather than a guess:
+
+```
+cd /srv/qellys && sudo -u qellys python3 - <<'PY'
+from engine import db
+from collections import defaultdict
+c = db.connect()
+print("== Cooper Barkate, every stored row (season, period, game_id, market, value):")
+for r in c.execute("SELECT season, period, game_id, market, value FROM player_game_logs WHERE sport='cfb' AND player='Cooper Barkate' AND market IN ('rec_yds','receptions') ORDER BY period, game_id, market"):
+    print("  ", tuple(r))
+print("== games rows involving MIA since 2026-10-15:")
+for r in c.execute("SELECT season, period, game_id, home, away, home_score, away_score, date FROM games WHERE sport='cfb' AND (home='MIA' OR away='MIA') AND COALESCE(date,period) >= '2026-10-15' ORDER BY COALESCE(date,period)"):
+    print("  ", tuple(r))
+dup = defaultdict(set)
+for r in c.execute("SELECT player, market, opponent, game_id FROM player_game_logs WHERE sport='cfb' AND season=2026"):
+    dup[(r["player"], r["market"], r["opponent"])].add(str(r["game_id"]).replace("-box", ""))
+many = {k: v for k, v in dup.items() if len(v) > 1}
+print("== cfb 2026 (player, market, opponent) under 2+ distinct game ids:", len(many), "of", len(dup))
+for k, v in list(many.items())[:12]:
+    print("  ", k, "->", sorted(v))
+PY
+```
+
 **PT. The board says what the books posted** (step 548; 14 November).
 Nothing to run. Telling "we did not buy college's props" from "we bought
 them and the books had posted nothing" took PL's command on the box. Every
