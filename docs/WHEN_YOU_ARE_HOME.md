@@ -9338,6 +9338,29 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**PL. Why college's board has no player props** (step 540; 14 November).
+One read-only command; paste it back. College's board priced no player
+props on its first two days (`props_analyzed` 0 at 4:55pm Eastern on the
+13th and at 8:44am on the 14th; its game lines are there, 52 of 71 games
+this morning). The month's plan funds college today (315 credits, four
+pulls of 78 at its 7am, noon and 6pm windows), and the five games it buys
+have their game lines, so the team names join. That leaves two causes,
+and only the box can tell them apart: the pacer held college's pulls, or
+a pull landed and the books had posted nothing for its five games (three
+of this morning's five are 16- to 40-point mismatches, the kind books
+skip). This prints the pacer's college decisions over the last two days,
+then what each of the last ten cached college pulls held, the game, how
+many books and which markets:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+import glob, json, os, time
+from engine import oddsbudget as ob
+for r in ob.decisions(since=time.time() - 48 * 3600, lane='cbb')[-20:]: print(r['iso'], 'bought' if r['ok'] else 'held', r.get('credits'), r['reason'][:150])
+for f in sorted(glob.glob('data/cache/odds_event_cbb_*.json'), key=os.path.getmtime)[-10:]: d = json.load(open(f)); bks = d.get('bookmakers') or []; print(time.strftime('%m-%d %H:%M', time.localtime(os.path.getmtime(f))), d.get('away_team'), '@', d.get('home_team'), len(bks), 'books', sorted({m.get('key') for b in bks for m in b.get('markets') or []}))
+"
+```
+
 **PK. The Lab draws** (step 539; 14 November). Nothing to run. You, with a
 screenshot of the Lab: "the lab shows this every time u click on the page.
 its never worked so we need to dive into that and fix that." It said

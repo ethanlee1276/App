@@ -844,6 +844,14 @@ SH
 run PJ "College basketball's own address answers with its own title" 60 <<'SH'
 curl -s https://qellysbook.com/cbb | grep -o '<title>[^<]*</title>'
 SH
+run PL "College's prop pulls: the pacer's decisions and what each pull held" 60 <<'SH'
+cd /srv/qellys && sudo -u qellys python3 -c "
+import glob, json, os, time
+from engine import oddsbudget as ob
+for r in ob.decisions(since=time.time() - 48 * 3600, lane='cbb')[-20:]: print(r['iso'], 'bought' if r['ok'] else 'held', r.get('credits'), r['reason'][:150])
+for f in sorted(glob.glob('data/cache/odds_event_cbb_*.json'), key=os.path.getmtime)[-10:]: d = json.load(open(f)); bks = d.get('bookmakers') or []; print(time.strftime('%m-%d %H:%M', time.localtime(os.path.getmtime(f))), d.get('away_team'), '@', d.get('home_team'), len(bks), 'books', sorted({m.get('key') for b in bks for m in b.get('markets') or []}))
+"
+SH
 run IS "Your renewal day is the 1st" 60 <<'SH'
 cd /srv/qellys && sudo -u qellys env $(sudo grep -E '^QB_ODDS_RESET_DAY=' /etc/qellys/env | xargs) python3 -m engine.oddsplan | head -6
 SH

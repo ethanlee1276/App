@@ -11281,7 +11281,7 @@ function obRingHTML(r) {
 }
 function obFaceHTML(r) {
   if (r.kind === "game") return `<span class="ob-face">${likelyGameMark(r, 52)}</span>`;
-  const logo = logoUrl(r.team, state.sport, 20);
+  const logo = logoUrl(team(r.team, teamsForSport(state.sport)).id || r.team, state.sport, 20);
   return `<span class="ob-face">${playerAvatar(r.player, r.team, { size: 52, map: nflMap(), headshot: r.headshot })}${
     logo ? `<img class="ob-logo" src="${escapeAttr(logo)}" alt="" loading="lazy" data-onerr="remove"/>` : ""}</span>`;
 }

@@ -1009,7 +1009,8 @@ const PARLAY_RATE_FLOOR = 10;
    where that shows. Below PARLAY_RATE_FLOOR a pool prints its record and
    units, no rate. */
 const TL_KIND_WORD = { all: "All", same_game: "Same game", two_game: "Two games" };
-const TL_SPORT_ORDER = ["all", "nfl", "cfb", "nba", "mlb"];
+// College basketball joined the two-leg builder on 2026-11-14 (engine/twoleg.SPORTS).
+const TL_SPORT_ORDER = ["all", "nfl", "cfb", "nba", "cbb", "mlb"];
 // Even money is spelled −100, as engine/parlays.decimal_to_american spells it.
 const tlAmerican = (dec) => (dec > 2 ? Math.round((dec - 1) * 100) : -Math.round(100 / (dec - 1)));
 const tlUnits = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x || 0).toFixed(2)}u`);
@@ -1046,7 +1047,7 @@ function recTwoLegSection(tl) {
         <th class="num">Parlays</th><th class="num">Both hit</th><th class="num">ROI</th>
         <th class="num">As singles</th><th class="num">Units</th></tr></thead><tbody>${rows.map((r) => `<tr${
           r.kind === "all" ? ' class="tl-bt-all"' : ""}>
-        <td>${r.sport === "all" ? "All four" : escapeHtml(r.sport.toUpperCase())}</td>
+        <td>${r.sport === "all" ? "All leagues" : escapeHtml(typeof lgCode === "function" ? lgCode(r.sport) : r.sport.toUpperCase())}</td>
         <td>${escapeHtml(TL_KIND_WORD[r.kind] || r.kind)}</td>
         <td class="num">${r.parlays}</td>
         <td class="num">${pct0(r.win_rate)}</td>

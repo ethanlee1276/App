@@ -98,6 +98,25 @@ def test_the_board_hook_hangs_colleges_tickets_and_the_page_says_why():
         in app, "the page draws the probation note as it draws the drawdown's"
 
 
+def test_the_record_page_orders_college_with_the_parlay_leagues():
+    rec = _read("web", "js", "record.js")
+    assert 'const TL_SPORT_ORDER = ["all", "nfl", "cfb", "nba", "cbb", "mlb"];' in rec, \
+        "a college row sorts beside the others, never above the all-leagues row"
+    assert '"All leagues"' in rec and '"All four"' not in rec, "five leagues now, and a word that keeps"
+
+
+def test_a_college_card_badges_its_school_by_espns_id():
+    """ESPN keys college logos by school id (engine/cbbteams cards carry
+    it); the Most Likely card's badge asked for the abbreviation, which
+    names no logo, so the badge removed itself on every college card."""
+    app = _read("web", "js", "app.js")
+    assert "logoUrl(team(r.team, teamsForSport(state.sport)).id || r.team, state.sport, 20)" in app
+    import re
+    for f in ("teams.js", "teams_nba.js", "teams_wnba.js", "teams_nhl.js", "teams_mlb.js"):
+        assert not re.search(r'\bid\s*:|"id"\s*:', _read("web", "js", f)), \
+            f"{f}: a pro league's colours never carry an id, so its badge keeps its abbreviation"
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
