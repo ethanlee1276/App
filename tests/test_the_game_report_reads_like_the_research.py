@@ -279,8 +279,8 @@ def test_every_number_is_the_boards_own():
 def test_a_shared_reason_is_said_once_and_his_share_of_the_work_is_his_line():
     rep = _report()
     matchups = next(s for s in rep["sections"] if s["key"] == "matchups")
-    shared = [b["text"] for b in matchups["blocks"] if b["type"] == "p" and b["text"].startswith("For all of DET")]
-    assert shared and "For all of DET's key players: the lines expect DET to score about 28" in shared[0], shared
+    shared = [b["text"] for b in matchups["blocks"] if b["type"] == "p" and b["text"].startswith("True for every DET")]
+    assert shared and "True for every DET player below: the lines expect DET to score about 28" in shared[0], shared
     det = [v for b in matchups["blocks"] if b["type"] == "verdicts" for v in b["items"] if v["team"] == "DET"]
     gibbs = next(v for v in det if v["player"] == "Jahmyr Gibbs")
     assert gibbs["label"] == "FAVORABLE — breakout candidate" and gibbs["verdict"] == "favorable"

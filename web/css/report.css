@@ -20,16 +20,24 @@
 .gr-list { margin: 6px 0; padding-left: 20px; display: grid; gap: 7px; font-size: var(--fs-lg);
   line-height: var(--lh-snug); color: var(--text); max-width: var(--measure-wide); }
 .gr-list li::marker { color: var(--brand); }
-/* WHO GETS THE BALL, IN COLOUR (engine/gamereport.name_tones, 2026-11-15):
-   each named player in his matchup read's colour — green for a breakout
-   candidate or a favorable matchup, red for an unfavorable one — and the
-   name opens the player's page. The key sits under the section's title. */
+/* WHO'S WHO, IN COLOUR (engine/gamereport.color_names, 2026-11-15): each
+   named player in his matchup read's colour, the same in every section —
+   green for a breakout candidate or a favorable matchup, red for an
+   unfavorable one — and the name opens the player's page. The injury words
+   in theirs (out and doubtful red, questionable amber), a line's lead-in
+   bold, a table's ranks green in the league's top quarter and red in its
+   bottom quarter. One key at the top says so. */
 .gr-name { font-weight: 700; }
-.gr-name.up { color: var(--good); }
-.gr-name.down { color: var(--bad); }
+.gr-name.up, .gr-rank.up { color: var(--good); }
+.gr-name.down, .gr-rank.down, .gr-mark.down { color: var(--bad); }
+.gr-mark.warn { color: var(--warn); }
+.gr-rank, .gr-mark { font-weight: 700; }
 .gr-name[data-open] { cursor: pointer; }
 .gr-name[data-open]:hover { text-decoration: underline; text-underline-offset: 2px; }
-.gr-name-key { margin: 0 0 8px; }
+.gr-lead { font-weight: 700; }
+/* The first section's own rule sits under it. */
+.gr-key { margin: 0 0 2px; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--text-dim);
+  max-width: var(--measure-wide); }
 .gr-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .gr-table-wrap { margin: 12px 0; overflow-x: auto; }
 .gr-table-title { font-size: var(--fs-sm); font-weight: 700; color: var(--text); margin-bottom: 4px; }
@@ -57,7 +65,8 @@
   background-color: color-mix(in oklab, currentColor 14%, transparent); }
 .gr-person-who { display: grid; min-width: 0; }
 .gr-person-who b { overflow-wrap: anywhere; }
-.gr-person-who span { color: var(--text-mute); font-size: var(--fs-xs); }
+/* The team-and-position line only: a coloured name inside the title keeps the title's size. */
+.gr-person-who > span { color: var(--text-mute); font-size: var(--fs-xs); }
 .gr-why { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--fs-sm);
   color: var(--text-dim); }
 .gr-person-text { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }

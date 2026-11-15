@@ -47,9 +47,8 @@ from __future__ import annotations
 
 from .gamereport import (KEY, Ctx, _f, _h, _join, _list, _num, _ord, _p, _pct, _section,
                          _sentence, a_pct, absent_sentence, cap, finish, kickoff_words, line_words,
-                         log_changes, market_sentence, ml_chances, name_tones, named, parlay_sentence,
-                         player_clause, sec_market, sec_parlays, shine_lines, summary, team_be, team_np,
-                         team_owner)
+                         log_changes, market_sentence, ml_chances, named, parlay_sentence, player_clause,
+                         sec_market, sec_parlays, shine_lines, summary, team_be, team_np, team_owner)
 
 #: The leagues this module writes.
 SPORTS = ("mlb", "nhl", "nba", "wnba", "cbb")
@@ -492,6 +491,7 @@ def nhl_tape(c: Ctx) -> dict | None:
                      _num(a.get("xg"), 2) if _f(a.get("xg")) is not None else "—",
                      _num(h.get("xg"), 2) if _f(h.get("xg")) is not None else "—"])
     blocks = [{"type": "table", "title": "Tale of the tape", "head": ["", c.away, c.home], "rows": rows,
+               "rank_of": n,
                "note": f"Ranks out of {n}; 1st is the best — the most for, the fewest against. xG is "
                        "expected goals, the quality of the chances, from our own shot model; tonight's "
                        "figure is the game model's, goalies and rest included."}]
@@ -691,10 +691,8 @@ def nba_carry(c: Ctx) -> dict | None:
                           "label": "Starter" if r.get("starter") else "", "tone": "",
                           "text": (f"{', '.join(bits)} a game over his last {r.get('games')}"
                                    if bits else "")})
-        # His name in his matchup read's colour (gamereport.NAME_TONE), as
-        # the football report's "who gets the ball" lines.
-        tones = name_tones(c, t, items)
-        blocks += [_h(f"{c.name(t)}"), {"type": "players", "items": items, **({"names": tones} if tones else {})}]
+        # His name wears his matchup read's colour (gamereport.color_names).
+        blocks += [_h(f"{c.name(t)}"), {"type": "players", "items": items}]
     if not blocks:
         return None
     return _section("carry", "Who carries each team", blocks)
@@ -745,7 +743,10 @@ def nba_tape(c: Ctx) -> dict | None:
         return str(v or "—") + (f" ({_ord(int(rk))})" if rk and v not in (None, "—") else "")
     table = [[r["label"], cell(r.get("a"), r.get("ar")), cell(r.get("h"), r.get("hr"))] for r in rows]
     note = " ".join(x for x in (t.get("basis"), t.get("note")) if x)
+    # The page colours each rank by its quarter of the league (js/report.js);
+    # pace is no better or worse at either end, so its row stays plain.
     blocks = [{"type": "table", "title": "Tale of the tape", "head": ["", c.away, c.home], "rows": table,
+               "rank_of": int(t.get("teams") or 30), "rank_skip": [r["label"] for r in rows if r.get("plain")],
                "note": _sentence(note) if note else ""}]
     edges = [e.get("text") for e in t.get("edges") or [] if isinstance(e, dict) and e.get("text")]
     if edges:

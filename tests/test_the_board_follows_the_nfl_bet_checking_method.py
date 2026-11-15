@@ -132,7 +132,7 @@ def test_the_report_carries_the_four_scripts_and_who_can_score():
                  "Script D, a blowout (20% of the simulated games): DET's starters can sit in the fourth",
                  "— Who can score for Lions —",
                  "Jahmyr Gibbs (RB): 43% to score, at +333; 20% of DET's red-zone chances; GB allows the "
-                 "second-most touchdowns to running backs; the matchup backs him"):
+                 "second-most touchdowns to running backs; the touchdown matchup backs him"):
         assert want in text, want
     # Which scripts a pick holds in (rule 6: "Prefer props that can hit under
     # multiple scripts").

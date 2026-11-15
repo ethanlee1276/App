@@ -27,11 +27,18 @@
   /* WHO GETS THE BALL, IN COLOUR (Ethan, 2026-11-15, circling DET's "who
      gets the ball" line: "we can make the letters of there name green or
      red depending on in they are a breakout or favorite candidate or a
-     unfavorable matchup"). A block's `names` (engine/gamereport.name_tones)
-     says each named player's matchup read: his name is green for a
-     breakout candidate or a favorable matchup, red for an unfavorable one,
-     plain for a neutral one, and every one opens the player's page. */
+     unfavorable matchup"), AND THEN THE WHOLE REPORT ("Make the game report
+     less confusing too I liked the names colored it made it easier to
+     read"). A block's `names` (engine/gamereport.color_names) says each
+     named player's matchup read: his name is green for a breakout
+     candidate or a favorable matchup, red for an unfavorable one, plain for
+     a neutral one, the same in every section, and every one opens the
+     player's page. Its `marks` colour the injury words (out and doubtful
+     red, questionable amber); a line's lead-in ("Who gets the targets:",
+     "Kickoff:") is bold, so its subject stands out; and a table's ranks are
+     green in the league's top quarter and red in its bottom quarter. */
   const isWordChar = (ch) => !!ch && /[\p{L}\p{N}]/u.test(ch);
+  const MARK = { down: "down", warn: "warn", up: "up" };
   function nameTag(name, v, inner) {
     const tone = TONE[(v || {}).tone] || "";
     const label = String((v || {}).label || "");
@@ -39,23 +46,63 @@
       label ? ` title="${escapeAttr(label)}"` : ""}>${inner}${tone && label
       ? `<span class="gr-sr"> (${escapeHtml(label.toLowerCase())})</span>` : ""}</span>`;
   }
-  /* A line with its named players marked: one pass, longest names first,
-     so a name inside a longer one is left alone, and only where it stands
-     as a whole name. */
-  function named(text, names) {
+  /* Text with its named players and marked words drawn: one pass, longest
+     first, so a name inside a longer one is left alone, and only where it
+     stands whole. */
+  function painted(text, names, marks) {
     const out = escapeHtml(text);
-    const keys = Object.keys(names || {}).filter(Boolean).sort((a, b) => b.length - a.length);
-    if (!keys.length) return out;
-    const by = new Map(keys.map((k) => [escapeHtml(k), k]));
-    const re = new RegExp([...by.keys()].map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "g");
-    return out.replace(re, (m, at, s) => (isWordChar(s[at - 1]) || isWordChar(s[at + m.length]))
-      ? m : nameTag(by.get(m), names[by.get(m)], m));
+    const by = new Map();
+    Object.keys(names || {}).filter(Boolean).forEach((k) => by.set(escapeHtml(k), ["name", k]));
+    Object.keys(marks || {}).filter((k) => k && MARK[marks[k]]).forEach((k) => {
+      if (!by.has(escapeHtml(k))) by.set(escapeHtml(k), ["mark", k]);
+    });
+    if (!by.size) return out;
+    const keys = [...by.keys()].sort((x, y) => y.length - x.length);
+    const re = new RegExp(keys.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "g");
+    return out.replace(re, (m, at, str) => {
+      if (isWordChar(str[at - 1]) || isWordChar(str[at + m.length])) return m;
+      const [kind, k] = by.get(m);
+      return kind === "name" ? nameTag(k, names[k], m) : `<span class="gr-mark ${MARK[marks[k]]}">${m}</span>`;
+    });
   }
-  /* The key, under the title of a section that colours a name. */
-  const NAME_KEY = `<p class="gr-note gr-name-key"><span class="gr-name up">Green</span>: a breakout candidate or a
-    favorable matchup · <span class="gr-name down">Red</span>: an unfavorable matchup · tap a name to open the player’s page</p>`;
-  const colours = (blocks) => (blocks || []).some((b) =>
-    Object.values((b && b.names) || {}).some((v) => TONE[(v || {}).tone]));
+  /* A line's lead-in, up to its first colon, in bold: "Who gets the
+     targets:", "Kickoff:", "Script A, DET controls it (17% of …):". Only a
+     short one with no sentence inside it. */
+  function named(text, names, marks, lead) {
+    const t = String(text == null ? "" : text);
+    const m = lead ? /^([^:]{2,60}?):\s/.exec(t) : null;
+    if (!m || /[.!?]\s/.test(m[1])) return painted(t, names, marks);
+    const head = t.slice(0, m[1].length + 1);
+    return `<b class="gr-lead">${painted(head, names, marks)}</b>${painted(t.slice(head.length), names, marks)}`;
+  }
+  /* A rank in a table ("+0.19 · 4th", "3.60 (3rd)") in its colour: the
+     top quarter of the league green, the bottom quarter red. */
+  function rankCell(cell, of) {
+    const t = String(cell == null ? "" : cell);
+    const m = /^(.*?)( · |\s\()(\d+)(st|nd|rd|th)(\)?)$/.exec(t);
+    const n = Number(of) || 0;
+    if (!m || !n) return null;
+    const r = Number(m[3]), q = Math.ceil(n / 4);
+    const tone = r <= q ? "up" : r > n - q ? "down" : "";
+    return `${escapeHtml(m[1] + m[2])}${tone ? `<span class="gr-rank ${tone}">` : ""}${escapeHtml(m[3] + m[4])}${
+      tone ? "</span>" : ""}${escapeHtml(m[5])}`;
+  }
+  /* The key, once, at the top of a report that colours anything. */
+  function colourKey(secs) {
+    const blocks = secs.flatMap((s) => s.blocks || []);
+    const names = blocks.some((b) => Object.values((b && b.names) || {}).some((v) => TONE[(v || {}).tone]));
+    const ranks = blocks.some((b) => b && b.type === "table" && b.rank_of);
+    const bits = [];
+    if (names) {
+      bits.push(`<span class="gr-name up">Green names</span> are a breakout candidate or a favorable matchup,
+        <span class="gr-name down">red names</span> an unfavorable one; tap a name for the player’s page.`);
+    }
+    if (ranks) {
+      bits.push(`In the tables, a <span class="gr-rank up">green rank</span> is the league’s top quarter and a
+        <span class="gr-rank down">red rank</span> its bottom quarter.`);
+    }
+    return bits.length ? `<p class="gr-key"><b class="gr-lead">Reading the colors:</b> ${bits.join(" ")}</p>` : "";
+  }
 
   /* What a league's report holds, for the reader without the paid key
      (engine/gamereport, engine/leaguereport). */
@@ -83,11 +130,11 @@
 
   function block(b) {
     if (!b || !b.type) return "";
-    if (b.type === "p") return `<p class="gr-p">${escapeHtml(b.text)}</p>`;
+    if (b.type === "p") return `<p class="gr-p">${named(b.text, b.names, b.marks, true)}</p>`;
     if (b.type === "h") return `<h4 class="gr-h">${escapeHtml(b.text)}</h4>`;
-    if (b.type === "note") return `<p class="gr-note">${escapeHtml(b.text)}</p>`;
+    if (b.type === "note") return `<p class="gr-note">${named(b.text, b.names, b.marks)}</p>`;
     if (b.type === "list") {
-      return `<ul class="gr-list">${(b.items || []).map((t) => `<li>${named(t, b.names)}</li>`).join("")}</ul>`;
+      return `<ul class="gr-list">${(b.items || []).map((t) => `<li>${named(t, b.names, b.marks, true)}</li>`).join("")}</ul>`;
     }
     if (b.type === "table") {
       const head = b.head || [];
@@ -95,7 +142,8 @@
         <table class="agate gr-table"><thead><tr>${head.map((h, i) =>
           `<th${i ? ' class="num"' : ""}>${escapeHtml(h)}</th>`).join("")}</tr></thead>
         <tbody>${(b.rows || []).map((r) => `<tr>${r.map((c, i) =>
-          `<td${i ? ' class="num"' : ""}>${escapeHtml(String(c))}</td>`).join("")}</tr>`).join("")}</tbody></table>
+          `<td${i ? ' class="num"' : ""}>${(i && b.rank_of && !(b.rank_skip || []).includes(r[0])
+            && rankCell(c, b.rank_of)) || named(String(c), b.names)}</td>`).join("")}</tr>`).join("")}</tbody></table>
         ${b.note ? `<p class="gr-note">${escapeHtml(b.note)}</p>` : ""}</div>`;
     }
     if (b.type === "verdicts" || b.type === "players") {
@@ -110,15 +158,15 @@
         return `<div class="gr-person ${tone}"${door}>
           <div class="gr-person-head">${playerAvatar(v.player, v.team, { size: 36, headshot: v.headshot })}
             <span class="gr-person-who"><b${ntone ? ` class="gr-name ${ntone}" title="${escapeAttr(nt.label || "")}"` : ""}>${
-              escapeHtml(b.type === "verdicts" ? v.title : v.player)}${ntone && nt.label
+              b.type === "verdicts" ? named(v.title, b.names) : escapeHtml(v.player)}${ntone && nt.label
               ? `<span class="gr-sr"> (${escapeHtml(String(nt.label).toLowerCase())})</span>` : ""}</b>
               <span>${escapeHtml(who)}</span></span>
             ${v.label ? `<span class="ms-read-tag ${tone}">${escapeHtml(v.label)}</span>` : ""}
             ${v.status ? `<span class="ms-read-tag gr-status">${escapeHtml(v.status)}</span>` : ""}</div>
           ${b.type === "verdicts"
-            ? ((v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>` : "")
-            : v.text ? `<p class="gr-person-text">${escapeHtml(v.text)}</p>` : ""}
-          ${v.pick ? `<p class="gr-person-pick">${escapeHtml(v.pick)}</p>` : ""}
+            ? ((v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${named(w, b.names, null, true)}</li>`).join("")}</ul>` : "")
+            : v.text ? `<p class="gr-person-text">${named(v.text, b.names)}</p>` : ""}
+          ${v.pick ? `<p class="gr-person-pick">${named(v.pick, b.names)}</p>` : ""}
           ${form(v.form)}
         </div>`;
       }).join("")}</div>`;
@@ -133,7 +181,7 @@
         ${t.price_line ? `<p class="gr-parlay-price">${escapeHtml(t.price_line)}</p>` : ""}
         <ol class="gr-parlay-legs">${(t.legs || []).map((l) => `<li${l.player
           ? ` data-open="player:${escapeAttr(slugify(l.player))}"` : ""}>
-          <span class="gr-parlay-pick"><b>${escapeHtml(l.pick || "")}</b>${l.price
+          <span class="gr-parlay-pick"><b>${named(l.pick || "", b.names)}</b>${l.price
             ? ` <span class="gr-parlay-px">${escapeHtml(l.price)}</span>` : ""}${l.chance
             ? ` <span class="gr-parlay-p">${Math.round(Number(l.chance) * 100)}%</span>` : ""}${l.research != null
             ? ` <span class="gr-parlay-r" title="Our research score: his team’s expected points, the defense he faces, his usage and red-zone work, the matchup read and the game script">research score ${escapeHtml(String(l.research))} of ${escapeHtml(String(l.research_of || 13))}</span>` : ""}</span>
@@ -277,14 +325,14 @@
         extra = `<div class="gr-extra">${extras.scripts}</div>`;
       }
       return `<section class="gr-sec" id="gr-${escapeAttr(s.key)}"><h3 class="gr-title">${escapeHtml(s.title)}</h3>
-        ${colours(blocks) ? NAME_KEY : ""}${blocks.map(block).join("")}${extra}</section>`;
+        ${blocks.map(block).join("")}${extra}</section>`;
     }).join("");
     const url = (extras && extras.url) || "";
     shown.set(r.game, { r, url });
     const tools = `<div class="gr-tools">
       <button type="button" class="btn ghost" data-gr-copy="${escapeAttr(r.game)}">Copy the report</button>
       <button type="button" class="btn ghost" data-gr-share="${escapeAttr(r.game)}">Share this game</button></div>`;
-    return `<div id="gp-sec-report" class="gr">${head}${tools}${toc}<div class="card gr-card">${body}</div></div>`;
+    return `<div id="gp-sec-report" class="gr">${head}${tools}${toc}<div class="card gr-card">${colourKey(secs)}${body}</div></div>`;
   }
 
   /* EACH GAME'S PARLAYS ON THE PARLAYS PAGE (app.js fillGameParlays): the

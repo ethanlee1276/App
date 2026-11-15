@@ -15,8 +15,13 @@ a breakout or favorite candidate or a unfavorable matchup". So
     same;
   * a player ruled out or doubtful has no read on the page, so his name is
     never coloured;
-  * a key under the section's title says what the colours mean, and the
-    copied report stays words alone.
+  * a key says what the colours mean, and the copied report stays words
+    alone.
+
+Since the same day the colours run the whole report, not just these lines
+(Ethan: "I liked the names colored it made it easier to read";
+engine/gamereport.color_names, tests/test_the_report_reads_at_a_glance.py),
+with one key at the top.
 
     python3 tests/test_the_report_colours_who_gets_the_ball.py
 """
@@ -70,8 +75,11 @@ def test_the_lines_that_say_who_gets_the_ball_carry_their_players_reads():
     assert "Brock Wright" not in det["names"], "6% of the targets is under the tree's floor: not in the line"
     rz = _sec(rep, "redzone")["blocks"][0]
     assert (rz["names"]["Matthew Golden"]["tone"], rz["names"]["Jahmyr Gibbs"]["tone"]) == ("down", "up")
-    # The scorer lists say in words what backs each scorer; they stay plain.
-    assert all("names" not in b for b in _sec(rep, "redzone")["blocks"][1:])
+    # The scorer lists too, since the colours run the whole report: each
+    # line says "the touchdown matchup" for what the defense gives up in
+    # touchdowns, so it never reads against his colour.
+    scorers = [b for b in _sec(rep, "redzone")["blocks"][1:] if b["type"] == "list"]
+    assert scorers and all(b.get("names") for b in scorers)
     # A block that names nobody carries nothing, and the reading time
     # counts words, not colours.
     assert all("names" not in b for b in _sec(rep, "facts")["blocks"])
@@ -151,12 +159,12 @@ def test_the_page_colours_each_name_opens_his_page_and_keys_the_colours():
     # A neutral read: his page opens, no colour, nothing hidden said.
     assert ('<span class="gr-name" data-open="player:amon-ra-st-brown" title="Neutral matchup">'
             'Amon-Ra St. Brown</span>') in ident
-    # The key, once, under the title of each section that colours a name —
-    # in words that fit every league's players.
-    assert ident.count("gr-name-key") == 1 and ident.index("gr-name-key") < ident.index("gr-h")
-    assert "tap a name to open the player’s page" in ident and " his page" not in ident
-    assert _section_html(got["full"], "redzone").count("gr-name-key") == 1
-    assert "gr-name" not in _section_html(got["full"], "facts")
+    # The key, once, at the top of the report, in words that fit every
+    # league's players.
+    full = got["full"]
+    assert full.count('class="gr-key"') == 1 and full.index('class="gr-key"') < full.index('id="gr-short"')
+    assert "tap a name for the player’s page" in full and " his page" not in full
+    assert "gr-name" not in _section_html(full, "facts")
     # The copied report is words.
     assert "gr-name" not in got["text"] and "<span" not in got["text"]
     assert "Who gets the targets: Christian Watson (WR) 21% of the targets" in got["text"]
@@ -189,7 +197,8 @@ def test_a_name_is_marked_only_where_it_stands_whole():
 
 def test_the_colours_are_the_sites_own_good_and_bad():
     css = REPORT_CSS.read_text(encoding="utf-8")
-    assert ".gr-name.up { color: var(--good); }" in css and ".gr-name.down { color: var(--bad); }" in css
+    assert ".gr-name.up, .gr-rank.up { color: var(--good); }" in css
+    assert ".gr-name.down, .gr-rank.down, .gr-mark.down { color: var(--bad); }" in css
     assert ".gr-name[data-open] { cursor: pointer; }" in css
     assert ".gr-sr { position: absolute; width: 1px; height: 1px;" in css, "said to a screen reader, not drawn"
 

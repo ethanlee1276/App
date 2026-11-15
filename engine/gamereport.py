@@ -810,17 +810,9 @@ def _p(text):
     return {"type": "p", "text": text} if text else None
 
 
-def _list(items, names: dict | None = None):
-    """A list block. ``names`` ({name: name_tones' entry}) rides along for
-    the names its lines say, so the page can colour them."""
+def _list(items):
     items = [_sentence(i) for i in items if i]
-    if not items:
-        return None
-    b = {"type": "list", "items": items}
-    said = {n: v for n, v in (names or {}).items() if any(n in i for i in items)}
-    if said:
-        b["names"] = said
-    return b
+    return {"type": "list", "items": items} if items else None
 
 
 def name_tones(c: "Ctx", team: str, players) -> dict:
@@ -1293,7 +1285,7 @@ def _table_for(c: Ctx, off: str, dfn: str) -> dict | None:
     if not rows:
         return None
     return {"type": "table", "title": f"{c.name(off)} offense vs {c.name(dfn)} defense",
-            "head": ["", f"{off} off", f"{dfn} def", "Edge"], "rows": rows}
+            "head": ["", f"{off} off", f"{dfn} def", "Edge"], "rows": rows, "rank_of": c.n_teams}
 
 
 def sec_rankings(c: Ctx) -> dict | None:
@@ -1315,7 +1307,7 @@ def sec_rankings(c: Ctx) -> dict | None:
             played = _join(f"{_plural(nums[t]['games'], 'game')} for {t}" for t in c.teams
                            if nums[t].get("games"))
             blocks.append({"type": "table", "title": "This season's numbers",
-                           "head": ["", c.away, c.home], "rows": rows,
+                           "head": ["", c.away, c.home], "rows": rows, "rank_of": c.n_teams,
                            "note": (f"Through {played}. " if played else "")
                                    + "Each rank is against the whole league; 1st is best."})
     u0 = c.units.get(c.home) or c.units.get(c.away) or {}
@@ -1387,7 +1379,6 @@ def sec_identity(c: Ctx) -> dict | None:
             lines.append(f"On offense {t} {_join(style)}" +
                          (f" (charted, weeks 1–{weeks} of {season_ch})" if season_ch and weeks and o else ""))
         mine = c.reads_for(t)
-        tones = {}
         tree = sorted((r for r in mine if str(r.get("pos") or "").upper() in ("WR", "TE", "RB")
                        and (_usage(r).get("tgt_share") or 0) >= TREE_SHARE),
                       key=lambda r: -(_usage(r).get("tgt_share") or 0))
@@ -1398,7 +1389,6 @@ def sec_identity(c: Ctx) -> dict | None:
                                      f"{word}" + (f", {_num(_caught(_usage(r))[1])} a game"
                                                   if _f(_caught(_usage(r))[1]) is not None else "")
                                      for r in tree[:5]))
-            tones.update(name_tones(c, t, tree[:5]))
         backs = sorted((r for r in mine if str(r.get("pos") or "").upper() in ("RB", "FB", "QB")
                         and (_usage(r).get("carry_share") or 0) >= BACKFIELD_SHARE),
                        key=lambda r: -(_usage(r).get("carry_share") or 0))
@@ -1407,7 +1397,6 @@ def sec_identity(c: Ctx) -> dict | None:
                 f"{r['player']} ({r.get('pos')}) {_pct(_usage(r)['carry_share'])} of the carries"
                 + (f", {_num(_usage(r).get('carries_pg'))} a game" if _f(_usage(r).get("carries_pg")) is not None
                    else "") for r in backs[:3]))
-            tones.update(name_tones(c, t, backs[:3]))
         d = scheme.get(t) or {}
         cov = []
         if _f(d.get("zone")) is not None and _f(d.get("man")) is not None:
@@ -1453,7 +1442,7 @@ def sec_identity(c: Ctx) -> dict | None:
                          if old else
                          f"On defense {t} {_join(cov)}" + (f" ({sch_season} charting)" if sch_season else ""))
         if lines:
-            blocks += [_h(c.name(t)), _list(lines, tones)]
+            blocks += [_h(c.name(t)), _list(lines)]
     return _section("identity", "How each team plays", blocks)
 
 
@@ -1667,7 +1656,7 @@ def sec_matchups(c: Ctx) -> dict | None:
             text = "; ".join(said)
             if text.split(" ")[0] in ("The", "Only", "A", "An", "His", "He", "Takes"):
                 text = text[:1].lower() + text[1:]
-            sub.append(_p(f"For all of {off}'s key players: {text}"))
+            sub.append(_p(f"True for every {off} player below: {text}"))
         items = []
         for r, why in zip(keys, whys):
             tone, label = VERDICT.get(r.get("read"), ("neutral", "NEUTRAL"))
@@ -1697,12 +1686,19 @@ def sec_matchups(c: Ctx) -> dict | None:
 
         def _cg(cn, team=dfn):
             return _cov_grade(c.grades, team, cn.get("name") or "")
+        w = None
         if room.get("weakest"):
             w = next((cn for cn in corners if cn.get("name") == room["weakest"]), None)
             if w and w.get("targets"):
                 notes.append(f"The soft spot in {dfn}'s coverage: {_corner_line(w, _cg(w))}")
-        if corners:
-            notes.append(f"{dfn}'s corners: " + "; ".join(_corner_line(cn, _cg(cn)) for cn in corners))
+            else:
+                w = None
+        # The soft spot is said once (2026-11-15): the corners' line names
+        # the others.
+        rest = [cn for cn in corners if cn is not w]
+        if rest:
+            notes.append(f"{dfn}'s {'other ' if w else ''}corners: "
+                         + "; ".join(_corner_line(cn, _cg(cn)) for cn in rest))
         if room.get("missing"):
             notes.append(f"{dfn} is without {_join(room['missing'])} in the secondary")
         notes += funnel_lines(c, dfn)
@@ -1857,12 +1853,15 @@ def td_chance_lines(c: Ctx, off: str) -> list:
             funnel = rank <= TD_FUNNEL_RANK
             bits.append(f"{dfn} allows {_place(rank, of, 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'his position')}")
         usage = share is not None and share >= TD_USAGE_SHARE
+        # THE TOUCHDOWN MATCHUP, SAID AS ONE (2026-11-15): his name wears
+        # his whole matchup read's colour, which can differ from what this
+        # defense gives up in touchdowns to his position.
         if usage and funnel:
-            bits.append("usage and matchup both back him")
+            bits.append("his red-zone share and the touchdown matchup both back him")
         elif usage:
-            bits.append("his usage backs him")
+            bits.append("his red-zone share backs him")
         elif funnel:
-            bits.append("the matchup backs him")
+            bits.append("the touchdown matchup backs him")
         meets = p >= 0.45 or (p >= 0.40 and usage)
         if meets:
             bits.append("meets our touchdown rule")
@@ -1879,7 +1878,7 @@ def sec_redzone(c: Ctx) -> dict | None:
     league is "about average", and the red zone is "inside the 20"."""
     nums = c.scan.get("numbers") or {}
     rz = c.scan.get("redzone") or {}
-    lines, tones = [], {}
+    lines = []
     for off in c.teams:
         dfn = c.opp[off]
         o, d = (nums.get(off) or {}).get("rz_off") or {}, (nums.get(dfn) or {}).get("rz_def") or {}
@@ -1910,10 +1909,12 @@ def sec_redzone(c: Ctx) -> dict | None:
                           for r in c.reads_for(off)), key=lambda x: -(x[1] or 0))
         chances = [(p, v) for p, v in chances if p and v and v >= 0.3][:3]
         if chances:
-            lines.append(f"Who gets {off}'s chances inside the 20 (carries and targets a game, by our "
-                         f"numbers): " + ", ".join(f"{p} about {_num(v)}" for p, v in chances) + ".")
-            tones.update(name_tones(c, off, [p for p, _v in chances]))
-    blocks = [_list(lines, tones)] if lines else []
+            # NAMES FIRST (2026-11-15, "make the game report less confusing"):
+            # the measure after them, once.
+            lines.append(f"Who gets {off}'s chances inside the 20: "
+                         + ", ".join(f"{p} (about {_num(v)})" for p, v in chances)
+                         + " — carries and targets a game there, by our numbers.")
+    blocks = [_list(lines)] if lines else []
     for off in c.teams:
         scorers = td_chance_lines(c, off)
         if scorers:
@@ -3336,7 +3337,7 @@ def _words(sections) -> int:
             n += len(x.split())
         elif isinstance(x, dict):
             for k, v in x.items():
-                if k not in ("type", "headshot", "verdict", "tone", "key", "names"):
+                if k not in ("type", "headshot", "verdict", "tone", "key", "names", "marks", "rank_of", "rank_skip"):
                     count(v)
         elif isinstance(x, list):
             for v in x:
@@ -3363,7 +3364,7 @@ def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
 #: `plain` leaves them as they are.
 PLAIN_SKIP = frozenset(("type", "kind", "key", "player", "team", "headshot", "pos", "verdict", "tone",
                         "status", "href", "url", "id", "logo", "color", "side", "market", "game", "slug",
-                        "names"))
+                        "names", "marks", "rank_of", "rank_skip"))
 
 
 def plain(text: str) -> str:
@@ -3399,6 +3400,72 @@ def plain_all(x, key: str = ""):
     return x
 
 
+#: Keys that hold codes, flags or the passes' own marks, never words a reader
+#: sees with a name in them.
+_NOT_TEXT = frozenset(("type", "kind", "key", "headshot", "verdict", "tone", "status", "names", "marks",
+                       "href", "url", "id", "logo", "color", "side", "market", "game", "slug", "rank_of",
+                       "rank_skip"))
+
+
+def _texts(x, key: str = "") -> list:
+    """Every string a block shows (its items, cells, titles, card words,
+    a card's player), for the passes below."""
+    if isinstance(x, str):
+        return [] if key in _NOT_TEXT else [x]
+    if isinstance(x, list):
+        return [t for v in x for t in _texts(v, key)]
+    if isinstance(x, dict):
+        return [t for k, v in x.items() if k not in _NOT_TEXT for t in _texts(v, k)]
+    return []
+
+
+def color_names(c: Ctx, sections: list) -> list:
+    """WHO'S WHO, IN COLOUR, THE WHOLE WAY DOWN (Ethan, 2026-11-15: "Make the
+    game report less confusing too I liked the names colored it made it
+    easier to read"). The colours began on the lines that say who gets the
+    ball; now every block that names a player with a read in this game
+    carries his tone (NAME_TONE, `names`), so js/report.js colours him the
+    same wherever the report says him: green for a breakout candidate or a
+    favorable matchup, red for an unfavorable one, plain for a neutral one.
+    A player ruled out or doubtful has no read on the page
+    (engine/availability), so he is never coloured. Every league's report."""
+    tones: dict = {}
+    for t in c.teams:
+        for name, v in name_tones(c, t, c.reads_for(t)).items():
+            tones.setdefault(name, v)
+    for sec in sections:
+        for b in sec.get("blocks") or []:
+            if not isinstance(b, dict):
+                continue
+            texts = _texts(b)
+            said = {n: v for n, v in tones.items() if any(n in x for x in texts)}
+            if said:
+                b["names"] = said
+    return sections
+
+
+#: The injury words, coloured where the injury list says them (`marks`):
+#: out and doubtful in red, questionable in amber.
+STATUS_TONE = {"out": "down", "doubtful": "down", "questionable": "warn"}
+
+
+def mark_statuses(sections: list) -> list:
+    """The status word on each injury line in its colour (2026-11-15) —
+    the lists of the injuries section only, where every "out" is one."""
+    import re
+    for sec in sections:
+        if sec.get("key") != "injuries":
+            continue
+        for b in sec.get("blocks") or []:
+            if not isinstance(b, dict) or b.get("type") != "list":
+                continue
+            texts = _texts(b)
+            marks = {w: t for w, t in STATUS_TONE.items() if any(re.search(rf"\b{w}\b", x) for x in texts)}
+            if marks:
+                b["marks"] = marks
+    return sections
+
+
 def finish(c: Ctx, sections_fns, short_fn) -> dict:
     """The report: every section that has something to say, the short
     version written last from what they found and put first, what changed
@@ -3412,6 +3479,8 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
     moved = sec_changes(c)
     sections = plain_all([x for x in (short, moved) if x] + list(built.values()))
     words = _words(sections)
+    color_names(c, sections)
+    mark_statuses(sections)
     g = c.g
     return {"game": f"{c.away}@{c.home}", "away": c.away, "home": c.home, "sport": c.sport,
             "date": g.get("date") or "", "kickoff": g.get("kickoff") or "",

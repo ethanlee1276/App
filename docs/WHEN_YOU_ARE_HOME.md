@@ -9338,6 +9338,32 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RL. The game reports read at a glance** (step 592; 15 November). Nothing
+to run. You liked the colored names and asked for the reports to be less
+confusing. Every league's report now:
+- **Colors every player with a read, everywhere he's named.** The short
+  version, how each team plays, who's guarding who, the red zone, the
+  scripts, the players to watch and the parlays. Green is a breakout
+  candidate or a favorable matchup, red an unfavorable one, and a player
+  keeps one color all the way down.
+- **Colors the tables' ranks.** Green is the league's top quarter, red its
+  bottom quarter: the NFL and college unit rankings, this season's numbers,
+  and the NHL and NBA tale of the tape (NBA pace stays plain, since fastest
+  isn't better or worse).
+- **Colors the injury words.** Out and doubtful in red, questionable in
+  amber.
+- **Puts each line's lead-in in bold** ("Who gets the targets:", "Kickoff:",
+  "Where the matchup tilts:"), so you can see what a line is about before
+  reading it.
+- **Has one key at the top** saying what the colors mean, instead of one
+  under each section.
+- **Fixes the wording that read worst:** "True for every GB player below"
+  instead of "For all of GB's key players"; the weakest corner named once
+  instead of twice; the red zone's "who gets the chances" with the names
+  first; and a scorer's line says "the touchdown matchup", so it never reads
+  against his color.
+The copied report stays plain words.
+
 **RK. The game chat bar stays at the foot of the screen** (step 591; 15
 November). Nothing to run. Your open Duo's screenshot of NE @ DET had the
 chat bar halfway up the screen, over "Where the money is going". The
