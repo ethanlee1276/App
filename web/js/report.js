@@ -35,8 +35,10 @@
      a neutral one, the same in every section, and every one opens the
      player's page. Its `marks` colour the injury words (out and doubtful
      red, questionable amber); a line's lead-in ("Who gets the targets:",
-     "Kickoff:") is bold, so its subject stands out; and a table's ranks are
-     green in the league's top quarter and red in its bottom quarter. */
+     "Kickoff:") is bold, so its subject stands out; and a rank is green in
+     the league's top third and red in its bottom third, in a table and in a
+     sentence alike (Ethan, 2026-11-15, "(3rd in the league)" and "(28th)"
+     circled: "if it's good, then green, if it's bad, then red"). */
   const isWordChar = (ch) => !!ch && /[\p{L}\p{N}]/u.test(ch);
   const MARK = { down: "down", warn: "warn", up: "up" };
   function nameTag(name, v, inner) {
@@ -46,62 +48,133 @@
       label ? ` title="${escapeAttr(label)}"` : ""}>${inner}${tone && label
       ? `<span class="gr-sr"> (${escapeHtml(label.toLowerCase())})</span>` : ""}</span>`;
   }
-  /* Text with its named players and marked words drawn: one pass, longest
-     first, so a name inside a longer one is left alone, and only where it
-     stands whole. */
-  function painted(text, names, marks) {
+  /* The league's size for the report being drawn (engine/gamereport
+     "rank_of"): a rank in a sentence is judged against it. */
+  let RANK_OF = 0;
+  /* Green in the top third of a league of n, red in the bottom third. */
+  function rankTone(r, n) {
+    if (!(r > 0) || !(n > 0)) return "";
+    const q = Math.ceil(n / 3);
+    return r <= q ? "up" : r > n - q ? "down" : "";
+  }
+  /* THE RANKS IN A SENTENCE, where 1st is the best: "(4th)", "(3rd in the
+     league)", "(12th in the country)", "(30th in the league; 13th this
+     season alone)", "(24th, allowing 3.4 a carry)", "(13th of 49 running
+     backs)", "ranks 22nd", "the league's 5th-ranked pass rush", and "the
+     third-worst", "the best rate". A rank with no good or bad side of its
+     own ("8th-most plays", "the 11th-fewest shots", "the third-highest
+     total") is left plain. */
+  const RANK_RE = "\\(\\d+(?:st|nd|rd|th)(?=(?: in the (?:league|country))?[);]|,| of \\d)"
+    + "|ranks \\d+(?:st|nd|rd|th)\\b"
+    + "|\\d+(?:st|nd|rd|th)(?= this season alone\\b|-ranked\\b)"
+    + "|(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|\\d+(?:st|nd|rd|th))-(?:best|worst)\\b"
+    + "|the (?:best|worst)(?= rate| in the)";
+  function rankPaint(m, rest) {
+    if (/(best|worst)$/.test(m)) {
+      return m.replace(/(?:[a-z0-9]+-)?(?:best|worst)$/, (w) => `<span class="gr-rank ${/best/.test(w) ? "up" : "down"}">${w}</span>`);
+    }
+    const k = /(\d+)(?:st|nd|rd|th)/.exec(m);
+    const tone = rankTone(Number(k[1]), Number((/^ of (\d+)/.exec(rest) || [])[1]) || RANK_OF);
+    return tone ? m.replace(k[0], `<span class="gr-rank ${tone}">${k[0]}</span>`) : m;
+  }
+  /* THE OTHER NUMBERS WITH A GOOD AND A BAD SIDE, each for the team or
+     player its sentence is about: what a defense gives up ("gives up the
+     second-most points" red, "allows the sixth-fewest" green — the near
+     third of the league only, as a rank), a result ("W 23-13" green, "L
+     21-45" red), a goalie's form ("has stopped 4.2 more goals than expected"
+     green, "has let in 3.4" red), a lineup against tonight's hand ("5%
+     better than its average" green), and rest ("the rest edge" green, "the
+     second night of a back-to-back" and a bullpen that "is tired" red). No
+     capture groups: the painter reads the match's offset off its arguments. */
+  const ORD = "(?:second|third|fourth|fifth|sixth|seventh|eighth|ninth|\\d+(?:st|nd|rd|th))";
+  const GOOD_RE = `(?:gives? up|allows?|allowed|gave up) the (?:${ORD}-)?(?:most|fewest)\\b`
+    + "|[WL] \\d+-\\d+"
+    + "|(?:stopped|let in) \\d+(?:\\.\\d+)? more goals? than expected"
+    + "|\\d+% (?:better|worse) than its average"
+    + "|the rest edge|the second night of a back-to-back|is tired";
+  const GOOD_ONE = new RegExp(`^(?:${GOOD_RE})$`);
+  const WORD_ORD = { second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9 };
+  function goodPaint(m) {
+    const give = /^(.* the )((?:([a-z0-9]+)-)?(most|fewest))$/.exec(m);
+    if (give) {
+      const n = give[3] ? WORD_ORD[give[3]] || parseInt(give[3], 10) : 1;
+      const q = RANK_OF > 0 ? Math.ceil(RANK_OF / 3) : 0;
+      if (!(n > 0) || n > q) return m;
+      return `${give[1]}<span class="gr-rank ${give[4] === "most" ? "down" : "up"}">${give[2]}</span>`;
+    }
+    const up = /^(?:W |stopped |\d+% better|the rest edge)/.test(m);
+    return `<span class="gr-mark ${up ? "up" : "down"}">${m}</span>`;
+  }
+  /* Text with its named players, marked words and ranks drawn: one pass,
+     longest first, so a name inside a longer one is left alone, and only
+     where it stands whole. A table's cell passes ranks false: its table
+     says its own league size (`rankCell`), or its ranks have no good side. */
+  function painted(text, names, marks, ranks = true) {
     const out = escapeHtml(text);
     const by = new Map();
     Object.keys(names || {}).filter(Boolean).forEach((k) => by.set(escapeHtml(k), ["name", k]));
     Object.keys(marks || {}).filter((k) => k && MARK[marks[k]]).forEach((k) => {
       if (!by.has(escapeHtml(k))) by.set(escapeHtml(k), ["mark", k]);
     });
-    if (!by.size) return out;
     const keys = [...by.keys()].sort((x, y) => y.length - x.length);
-    const re = new RegExp(keys.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "g");
+    const alts = keys.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).concat(ranks ? [RANK_RE, GOOD_RE] : []);
+    if (!alts.length) return out;
+    const re = new RegExp(alts.join("|"), "g");
     return out.replace(re, (m, at, str) => {
       if (isWordChar(str[at - 1]) || isWordChar(str[at + m.length])) return m;
-      const [kind, k] = by.get(m);
+      const hit = by.get(m);
+      if (!hit) return GOOD_ONE.test(m) ? goodPaint(m) : rankPaint(m, str.slice(at + m.length));
+      const [kind, k] = hit;
       return kind === "name" ? nameTag(k, names[k], m) : `<span class="gr-mark ${MARK[marks[k]]}">${m}</span>`;
     });
   }
   /* A line's lead-in, up to its first colon, in bold: "Who gets the
-     targets:", "Kickoff:", "Script A, DET controls it (17% of …):". Only a
-     short one with no sentence inside it. */
-  function named(text, names, marks, lead) {
+     targets:", "Kickoff:", "Script A, DET controls it (17% of …):",
+     "Amon-Ra St. Brown (WR):". Only a short one with no sentence inside it
+     (a sentence ends on a word or a number, not on "St." or "D.J."). */
+  function named(text, names, marks, lead, ranks = true) {
     const t = String(text == null ? "" : text);
     const m = lead ? /^([^:]{2,60}?):\s/.exec(t) : null;
-    if (!m || /[.!?]\s/.test(m[1])) return painted(t, names, marks);
+    if (!m || /(?:[a-z]{3,}|\d)[.!?]\s/.test(m[1])) return painted(t, names, marks, ranks);
     const head = t.slice(0, m[1].length + 1);
-    return `<b class="gr-lead">${painted(head, names, marks)}</b>${painted(t.slice(head.length), names, marks)}`;
+    return `<b class="gr-lead">${painted(head, names, marks, ranks)}</b>${painted(t.slice(head.length), names, marks, ranks)}`;
   }
   /* A rank in a table ("+0.19 · 4th", "3.60 (3rd)") in its colour: the
-     top quarter of the league green, the bottom quarter red. */
+     top third of the league green, the bottom third red (`rankTone`). */
   function rankCell(cell, of) {
     const t = String(cell == null ? "" : cell);
     const m = /^(.*?)( · |\s\()(\d+)(st|nd|rd|th)(\)?)$/.exec(t);
     const n = Number(of) || 0;
     if (!m || !n) return null;
-    const r = Number(m[3]), q = Math.ceil(n / 4);
-    const tone = r <= q ? "up" : r > n - q ? "down" : "";
+    const tone = rankTone(Number(m[3]), n);
     return `${escapeHtml(m[1] + m[2])}${tone ? `<span class="gr-rank ${tone}">` : ""}${escapeHtml(m[3] + m[4])}${
       tone ? "</span>" : ""}${escapeHtml(m[5])}`;
   }
-  /* The key, once, at the top of a report that colours anything. */
-  function colourKey(secs) {
-    const blocks = secs.flatMap((s) => s.blocks || []);
-    const names = blocks.some((b) => Object.values((b && b.names) || {}).some((v) => TONE[(v || {}).tone]));
-    const ranks = blocks.some((b) => b && b.type === "table" && b.rank_of);
+  /* The key, once, at the top of a report that colours anything: read off
+     the drawn sections, so it names only the colours a reader will see. */
+  function colourKey(body) {
+    const has = (cls, tones) => new RegExp(`class="${cls} (?:${tones})"`).test(body);
+    const names = has("gr-name", "up|down");
+    const ranks = has("gr-rank", "up|down");
+    const words = has("gr-mark", "up|down");
+    const amber = has("gr-mark", "warn");
+    if (!names && !ranks && !words && !amber) return "";
     const bits = [];
+    if (names || ranks || words) {
+      bits.push(`<span class="gr-name up">Green</span> is good for the team or player it’s about and
+        <span class="gr-name down">red</span> is bad, so a red number on a defense is good news for the
+        offense facing it.`);
+    }
     if (names) {
       bits.push(`<span class="gr-name up">Green names</span> are a breakout candidate or a favorable matchup,
         <span class="gr-name down">red names</span> an unfavorable one; tap a name for the player’s page.`);
     }
     if (ranks) {
-      bits.push(`In the tables, a <span class="gr-rank up">green rank</span> is the league’s top quarter and a
-        <span class="gr-rank down">red rank</span> its bottom quarter.`);
+      bits.push(`A <span class="gr-rank up">green rank</span> is in the league’s top third, a
+        <span class="gr-rank down">red rank</span> in its bottom third (1st is the best).`);
     }
-    return bits.length ? `<p class="gr-key"><b class="gr-lead">Reading the colors:</b> ${bits.join(" ")}</p>` : "";
+    if (amber) bits.push(`<span class="gr-mark warn">Amber</span> is a player listed as questionable.`);
+    return `<p class="gr-key"><b class="gr-lead">Reading the colors:</b> ${bits.join(" ")}</p>`;
   }
 
   /* What a league's report holds, for the reader without the paid key
@@ -143,7 +216,7 @@
           `<th${i ? ' class="num"' : ""}>${escapeHtml(h)}</th>`).join("")}</tr></thead>
         <tbody>${(b.rows || []).map((r) => `<tr>${r.map((c, i) =>
           `<td${i ? ' class="num"' : ""}>${(i && b.rank_of && !(b.rank_skip || []).includes(r[0])
-            && rankCell(c, b.rank_of)) || named(String(c), b.names)}</td>`).join("")}</tr>`).join("")}</tbody></table>
+            && rankCell(c, b.rank_of)) || named(String(c), b.names, null, false, false)}</td>`).join("")}</tr>`).join("")}</tbody></table>
         ${b.note ? `<p class="gr-note">${escapeHtml(b.note)}</p>` : ""}</div>`;
     }
     if (b.type === "verdicts" || b.type === "players") {
@@ -310,6 +383,7 @@
       return `<div id="gp-sec-report" class="gr">${head}<div class="card ms-locked"><b>The game report</b> —
         this game written out top to bottom: ${holds} — is part of the subscription.</div></div>`;
     }
+    RANK_OF = Number(r.rank_of) || 0;
     const secs = (r.sections || []).filter((s) => s && (s.blocks || []).length);
     const toc = secs.length > 2 ? `<nav class="std-chips gr-toc" aria-label="Sections of the report">${
       secs.map((s) => `<button type="button" class="chip" data-jump="gr-${escapeAttr(s.key)}">${
@@ -332,7 +406,7 @@
     const tools = `<div class="gr-tools">
       <button type="button" class="btn ghost" data-gr-copy="${escapeAttr(r.game)}">Copy the report</button>
       <button type="button" class="btn ghost" data-gr-share="${escapeAttr(r.game)}">Share this game</button></div>`;
-    return `<div id="gp-sec-report" class="gr">${head}${tools}${toc}<div class="card gr-card">${colourKey(secs)}${body}</div></div>`;
+    return `<div id="gp-sec-report" class="gr">${head}${tools}${toc}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
   }
 
   /* EACH GAME'S PARLAYS ON THE PARLAYS PAGE (app.js fillGameParlays): the

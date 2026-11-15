@@ -10,9 +10,10 @@ mark_statuses; js/report.js):
     who, the red zone, the scripts, the players to watch, the parlays —
     green for a breakout candidate or a favorable matchup, red for an
     unfavorable one;
-  * a table's ranks are green in the league's top quarter and red in its
-    bottom quarter, where 1st is the best (NBA pace, no better or worse at
-    either end, stays plain);
+  * a table's ranks are green in the league's top third and red in its
+    bottom third, where 1st is the best (NBA pace, no better or worse at
+    either end, stays plain; the scale was quarters until 2026-11-15, when
+    the sentences' ranks were coloured too — test_the_report_colours_its_numbers);
   * the injury list's words are coloured: out and doubtful red, questionable
     amber;
   * a line's lead-in ("Who gets the targets:", "Kickoff:") is bold, so its
@@ -90,7 +91,10 @@ def test_the_injury_words_are_marked_in_the_injury_list_alone():
     marks = [b.get("marks") for b in inj["blocks"] if b["type"] == "list"]
     assert {"out": "down"} in marks and {"questionable": "warn"} in marks, marks
     assert all("marks" not in b for b in inj["blocks"] if b["type"] != "list"), "a sentence's 'out' is no status"
-    assert all("marks" not in b for s in rep["sections"] if s["key"] != "injuries" for b in s["blocks"]), \
+    # Other sections mark their own words (the red zone's "than an average
+    # team"), never a status.
+    assert not [k for s in rep["sections"] if s["key"] != "injuries" for b in s["blocks"]
+                for k in (b.get("marks") or {}) if k in R.STATUS_TONE], \
         "'the inactive list comes out' is no status either"
 
 
@@ -163,7 +167,8 @@ def test_the_page_draws_lead_ins_ranks_and_injury_words():
     assert got["para"].startswith('<p class="gr-p"><b class="gr-lead">The line:</b> DET by 3')
     assert "gr-lead" not in got["note"], "the notes stay quiet"
     r = got["ranks"]
-    assert '+0.19 · <span class="gr-rank up">4th</span>' in r and '+0.19 · 22nd' in r
+    # Thirds of the league since 2026-11-15: 1st-11th green, 22nd-32nd red.
+    assert '+0.19 · <span class="gr-rank up">4th</span>' in r and '+0.19 · <span class="gr-rank down">22nd</span>' in r
     assert '−0.18 · <span class="gr-rank down">30th</span>' in r and "44% · 14th" in r
     assert '3.60 (<span class="gr-rank up">3rd</span>)' in r and '2.10 (<span class="gr-rank down">32nd</span>)' in r
     assert "101.2 (1st)" in r and "96.0 (30th)" in r, "pace is no better or worse"
@@ -176,7 +181,10 @@ def test_the_page_draws_lead_ins_ranks_and_injury_words():
 
 def test_one_key_at_the_top_and_none_where_nothing_is_coloured():
     rep = _research()._report()
-    bare = {**rep, "sections": [s for s in rep["sections"] if s["key"] in ("facts", "weather")]}
+    # The weather colours nothing (the facts do since 2026-11-15: a last
+    # game's W is green — test_the_report_colours_its_numbers).
+    bare = {**rep, "sections": [s for s in rep["sections"] if s["key"] == "weather"]}
+    assert bare["sections"] and all(s["blocks"] for s in bare["sections"]), "a bare report still has words"
     got = _node(f"const rep = {json.dumps(rep, ensure_ascii=False)}; const bare = {json.dumps(bare, ensure_ascii=False)};"
                 "process.stdout.write(JSON.stringify({full: R.html(rep, {}), bare: R.html(bare, {}),"
                 " text: R.toText(rep, '')}));")
@@ -186,7 +194,7 @@ def test_one_key_at_the_top_and_none_where_nothing_is_coloured():
     full = got["full"]
     assert full.count('class="gr-key"') == 1
     key = full[full.index('class="gr-key"'):full.index("</p>", full.index('class="gr-key"'))]
-    assert "Green names" in key and "red names" in key and "green rank" in key and "bottom quarter" in key
+    assert "Green names" in key and "red names" in key and "green rank" in key and "bottom third" in key
     assert full.index('class="gr-key"') < full.index('id="gr-short"'), "before the first section"
     assert 'class="gr-key"' not in got["bare"], "a report with nothing coloured has no key"
     for bad in ("undefined", "[object", "NaN"):

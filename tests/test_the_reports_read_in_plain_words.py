@@ -64,7 +64,7 @@ def test_the_red_zone_ethan_circled_reads_plainly():
     assert "GB scores a touchdown on 54% of its trips inside the 20 (the eighth-worst rate in the league)." in text
     assert "DET's defense gives up a touchdown on 80% of them (the third-worst)." in text
     assert ("GB runs about 10 plays a game inside the opponent's 20 (9% more than an average team); "
-            "DET's defense allows about 9.8 (6% more than an average team). Both are adjusted for the "
+            "DET's defense allows about 9.8 (6% more than an average defense). Both are adjusted for the "
             "teams they've played.") in text
     # Within 5% of the league is "about average".
     assert R._than_average(0.03) == "about average" and R._than_average(-0.2) == "20% fewer than an average team"

@@ -9338,6 +9338,40 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RN. The game report's numbers in green and red** (step 594; 15
+November). Nothing to run. You circled "(3rd in the league)" and "(28th)"
+in the short version and asked for the numbers to be green when they're
+good and red when they're bad, all through the report. Every league's
+report now:
+- **Colors every rank in a sentence**, not just the tables: the league's
+  top third green, its bottom third red, 1st the best. "The Packers'
+  passing game (4th in the league) faces the Lions' pass defense (22nd)",
+  "ranks 27th", "the league's 5th-ranked pass rush", "the eighth-worst
+  rate", "the third-best". A rank against another field keeps its own,
+  "(13th of 49 running backs)". The tables moved from quarters to the
+  same thirds.
+- **Colors what a defense gives up, for the defense:** "gives up the
+  second-most points" red, "the sixth-fewest passing yards" green (the
+  near third of the league only).
+- **Colors the other numbers with a side:** a last game's W green and L
+  red; a goalie who "has stopped 4.2 more goals than expected" green and
+  one who "has let in 3.4" red; a lineup that hits tonight's hand "5%
+  better than its average" green; the red zone's "more than an average
+  team" green and "more than an average defense" red; the rest edge and a
+  rested basketball team green; a back-to-back's second night, a third
+  game in four nights and a tired bullpen red.
+- **Leaves plain what has no good side:** "the 8th-most plays", "the
+  third-highest total", "3rd-down rate", and the middle third.
+- **Says so once, at the top:** "Green is good for the team or player it's
+  about and red is bad, so a red number on a defense is good news for the
+  offense facing it." The key names only the colors that game's report
+  uses.
+- The defense's red-zone line says "than an average defense" now (it said
+  "team"), and a name with initials, "Amon-Ra St. Brown (WR):", gets the
+  bold lead-in every other name gets.
+
+Copy the report still copies plain words.
+
 **RM. The game page above the report, in plain words** (step 593; 15
 November). Nothing to run. Your NE @ DET screenshots showed four more spots
 that read like code:

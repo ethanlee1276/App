@@ -197,7 +197,7 @@ def test_a_name_is_marked_only_where_it_stands_whole():
 
 def test_the_colours_are_the_sites_own_good_and_bad():
     css = REPORT_CSS.read_text(encoding="utf-8")
-    assert ".gr-name.up, .gr-rank.up { color: var(--good); }" in css
+    assert ".gr-name.up, .gr-rank.up, .gr-mark.up { color: var(--good); }" in css
     assert ".gr-name.down, .gr-rank.down, .gr-mark.down { color: var(--bad); }" in css
     assert ".gr-name[data-open] { cursor: pointer; }" in css
     assert ".gr-sr { position: absolute; width: 1px; height: 1px;" in css, "said to a screen reader, not drawn"

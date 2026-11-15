@@ -624,6 +624,12 @@ def nhl_more(g: dict, result: dict) -> dict:
 # ═══ NBA and WNBA ════════════════════════════════════════════════════════════════════
 REST_SHORT = {"b2b_home": "on the second night of a back-to-back", "3in4": "playing a third game in four nights",
               "4in6_road": "playing a fourth game in six nights", "2plus": "rested", "1day": "on one day off"}
+#: How each rest state reads for its team in the facts list (2026-11-15,
+#: Ethan: "if it's good, then green, if it's bad, then red"); one day off
+#: is the usual and stays plain. Marked here, not on the page, because the
+#: word "rested" means nothing on its own elsewhere ("for the rested and
+#: the tournament-worn alike").
+REST_TONE = {"b2b_home": "down", "3in4": "down", "4in6_road": "down", "2plus": "up"}
 
 #: The defence stats the report names, in order, with how each reads.
 DEF_STATS = (("pts", "points"), ("reb", "rebounds"), ("ast", "assists"), ("fg3m", "threes"))
@@ -646,11 +652,14 @@ def nba_facts(c: Ctx) -> dict | None:
     if sp.get("arena"):
         feet = _f(sp.get("feet"))
         items.append(f"Arena: {sp['arena']}" + (f" — {int(feet):,} feet up" if feet and feet >= 4000 else ""))
+    marks = {}
     for t in c.teams:
         s = _spot(c, t)
         bits = []
         if s.get("rest") in REST_SHORT:
             bits.append(REST_SHORT[s["rest"]])
+            if s["rest"] in REST_TONE:
+                marks[REST_SHORT[s["rest"]]] = REST_TONE[s["rest"]]
         if _f(s.get("miles")) and s.get("from") and s.get("from") != c.home:
             trip = f"traveled {int(s['miles']):,} miles from {s['from']}"
             if s.get("days_since"):
@@ -667,7 +676,10 @@ def nba_facts(c: Ctx) -> dict | None:
     if any("blowout" in (_spot(c, t).get("flags") or []) for t in c.teams):
         items.append("Blowout watch: a spread of 10 or more — starters' minutes are the first thing a "
                      "coach takes back in a lopsided game")
-    return _section("facts", "Game facts", [_list(items)])
+    block = _list(items)
+    if block and marks:
+        block["marks"] = marks
+    return _section("facts", "Game facts", [block])
 
 
 def _plural_days(n) -> str:

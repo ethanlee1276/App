@@ -28,7 +28,7 @@
    bold, a table's ranks green in the league's top quarter and red in its
    bottom quarter. One key at the top says so. */
 .gr-name { font-weight: 700; }
-.gr-name.up, .gr-rank.up { color: var(--good); }
+.gr-name.up, .gr-rank.up, .gr-mark.up { color: var(--good); }
 .gr-name.down, .gr-rank.down, .gr-mark.down { color: var(--bad); }
 .gr-mark.warn { color: var(--warn); }
 .gr-rank, .gr-mark { font-weight: 700; }

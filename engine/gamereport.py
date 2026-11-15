@@ -1801,13 +1801,22 @@ def _place(rank, of, good: str = "best", bad: str = "worst") -> str:
 AVERAGE_BAND = 0.05
 
 
-def _than_average(rel, more: str = "more", fewer: str = "fewer") -> str:
+def _than_average(rel, more: str = "more", fewer: str = "fewer", who: str = "team") -> str:
     """"20% fewer than an average team", "about average"."""
     if rel is None:
         return ""
     if abs(rel) < AVERAGE_BAND:
         return "about average"
-    return f"{_pct(abs(rel))} {more if rel > 0 else fewer} than an average team"
+    return f"{_pct(abs(rel))} {more if rel > 0 else fewer} than an average {who}"
+
+
+def _than_marks(marks: dict, offense: str, rel_o, defense: str, rel_d) -> None:
+    """The red zone's "than average" in its colour (2026-11-15, Ethan: "if
+    it's good, then green, if it's bad, then red"): more for an offense is
+    green, more allowed by a defense red; "about average" stays plain."""
+    for words, rel, up in ((offense, rel_o, True), (defense, rel_d, False)):
+        if words and words != "about average" and rel is not None:
+            marks[words] = "up" if (rel > 0) == up else "down"
 
 
 #: WHO CAN SCORE, RANKED (Ethan's NFL Bet checking chats: "line up in order
@@ -1878,7 +1887,7 @@ def sec_redzone(c: Ctx) -> dict | None:
     league is "about average", and the red zone is "inside the 20"."""
     nums = c.scan.get("numbers") or {}
     rz = c.scan.get("redzone") or {}
-    lines = []
+    lines, marks = [], {}
     for off in c.teams:
         dfn = c.opp[off]
         o, d = (nums.get(off) or {}).get("rz_off") or {}, (nums.get(dfn) or {}).get("rz_def") or {}
@@ -1894,13 +1903,15 @@ def sec_redzone(c: Ctx) -> dict | None:
         if ro.get("what") and _f(ro.get("off")) is not None and _f(rd.get("def")) is not None:
             # College's: drives that reach the opponent's 40, raw.
             rel_o, rel_d = _f(ro.get("off_rel")), _f(rd.get("def_rel"))
-            vo, vd = _than_average(rel_o), _than_average(rel_d)
+            vo, vd = _than_average(rel_o), _than_average(rel_d, who="defense")
+            _than_marks(marks, vo, rel_o, vd, rel_d)
             lines.append(f"{off} gets about {_num(ro['off'])} drives a game to the opponent's 40"
                          + (f" ({vo})" if vo else "")
                          + f"; {dfn}'s defense allows about {_num(rd['def'])}" + (f" ({vd})" if vd else "") + ".")
         elif _f(ro.get("off")) is not None and _f(rd.get("def")) is not None:
             rel_o, rel_d = _f(ro.get("off_rel")), _f(rd.get("def_rel"))
-            vo, vd = _than_average(rel_o), _than_average(rel_d)
+            vo, vd = _than_average(rel_o), _than_average(rel_d, who="defense")
+            _than_marks(marks, vo, rel_o, vd, rel_d)
             lines.append(f"{off} runs about {_num(ro['off'])} plays a game inside the opponent's 20"
                          + (f" ({vo})" if vo else "")
                          + f"; {dfn}'s defense allows about {_num(rd['def'])}" + (f" ({vd})" if vd else "")
@@ -1915,6 +1926,8 @@ def sec_redzone(c: Ctx) -> dict | None:
                          + ", ".join(f"{p} (about {_num(v)})" for p, v in chances)
                          + " — carries and targets a game there, by our numbers.")
     blocks = [_list(lines)] if lines else []
+    if blocks and marks:
+        blocks[0]["marks"] = marks
     for off in c.teams:
         scorers = td_chance_lines(c, off)
         if scorers:
@@ -3444,6 +3457,11 @@ def color_names(c: Ctx, sections: list) -> list:
     return sections
 
 
+#: How many teams a rank in a report's sentences is out of, where the board
+#: carries no scan of its own (the football boards' is ``Ctx.n_teams``): the
+#: page colours a rank by its third of the league (js/report.js).
+TEXT_RANK_OF = {"mlb": 30, "nba": 30, "wnba": 15, "cbb": 365, "nhl": 32}
+
 #: The injury words, coloured where the injury list says them (`marks`):
 #: out and doubtful in red, questionable in amber.
 STATUS_TONE = {"out": "down", "doubtful": "down", "questionable": "warn"}
@@ -3491,6 +3509,9 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
             "line": line_words(c),
             "built_at": c.result.get("built_at") or "",
             "words": words, "minutes": max(1, round(words / WORDS_A_MINUTE)),
+            # The league's size, for the page to colour a rank in a sentence
+            # ("the Patriots' big plays (3rd in the league)") by its third.
+            "rank_of": TEXT_RANK_OF.get(c.sport) or c.n_teams,
             "sections": sections}
 
 
