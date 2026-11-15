@@ -1694,7 +1694,7 @@ def sec_matchups(c: Ctx) -> dict | None:
         items = []
         for r, why in zip(keys, whys):
             tone, label = VERDICT.get(r.get("read"), ("neutral", "NEUTRAL"))
-            scorer = scorer_words(c, r) if _go_to(r) else ""
+            scorer = scorer_words(c, r, lead=True) if _go_to(r) else ""
             if scorer and tone == "unfavorable":
                 # Duke's back at Miami (engine/readlogic rule 3): the yards
                 # are tough, the touchdowns still go through him — said as
@@ -1933,6 +1933,28 @@ def rz_factor(rel) -> float | None:
     return max(lo, min(hi, 1.0 + v))
 
 
+def _rz_counts(td: dict) -> tuple:
+    """(words, games, a game) for his red-zone work as the play-by-play
+    counted it (the touchdown row's ``goal_line``): "14 carries (5 inside
+    the 5) and 2 targets (1 inside the 10)" over his last games. (None, 0,
+    None) when nothing was counted."""
+    gl = (td or {}).get("goal_line") or {}
+    try:
+        n = int(gl.get("games") or 0)
+        car, tgt = int(gl.get("rz_car") or 0), int(gl.get("rz_tgt") or 0)
+        i5, i10 = int(gl.get("i5_car") or 0), int(gl.get("i10_tgt") or 0)
+    except (TypeError, ValueError):
+        return None, 0, None
+    if n <= 0 or car + tgt <= 0:
+        return None, 0, None
+    bits = []
+    if car:
+        bits.append(f"{car} carr{'y' if car == 1 else 'ies'}" + (f" ({i5} inside the 5)" if i5 else ""))
+    if tgt:
+        bits.append(f"{tgt} target{'' if tgt == 1 else 's'}" + (f" ({i10} inside the 10)" if i10 else ""))
+    return " and ".join(bits), n, (car + tgt) / n
+
+
 def rz_usage_lines(c: Ctx, off: str, factor) -> list:
     """WHO GETS THE BALL INSIDE THE 20, AS COUNTS (Ethan, 2026-11-15,
     circling "carries and targets a game there, by our numbers": "we should
@@ -1949,24 +1971,12 @@ def rz_usage_lines(c: Ctx, off: str, factor) -> list:
     rows = []
     for r in c.reads_for(off):
         td = r.get("td") or {}
-        gl = td.get("goal_line") or {}
-        try:
-            n = int(gl.get("games") or 0)
-            car, tgt = int(gl.get("rz_car") or 0), int(gl.get("rz_tgt") or 0)
-            i5, i10 = int(gl.get("i5_car") or 0), int(gl.get("i10_tgt") or 0)
-        except (TypeError, ValueError):
+        words, n, per = _rz_counts(td)
+        if not words or not r.get("player"):
             continue
-        if n <= 0 or car + tgt <= 0 or not r.get("player"):
-            continue
-        per = (car + tgt) / n
-        bits = []
-        if car:
-            bits.append(f"{car} carr{'y' if car == 1 else 'ies'}" + (f" ({i5} inside the 5)" if i5 else ""))
-        if tgt:
-            bits.append(f"{tgt} target{'' if tgt == 1 else 's'}" + (f" ({i10} inside the 10)" if i10 else ""))
         share = _f(td.get("rz_share"))
         pos = str(r.get("pos") or "").upper()
-        text = (f"{r['player']}{f' ({pos})' if pos else ''}: " + " and ".join(bits)
+        text = (f"{r['player']}{f' ({pos})' if pos else ''}: {words}"
                 + f" in his last {n} game{'' if n == 1 else 's'} — {_num(per)} a game"
                 + (f", {_pct(share)} of {off}'s" if share else "")
                 + (f". Against {dfn}: about {_num(per * factor)} this game" if factor else "") + ".")
@@ -3025,25 +3035,59 @@ def season_tds(c: Ctx, r: dict) -> tuple:
     return rush + rec, rush, rec, n
 
 
-def scorer_words(c: Ctx, r: dict) -> str:
-    """"17 touchdowns in 9 games this season (13 rushing, 4 receiving);
-    Duke's likeliest scorer by our touchdown numbers (48%), with Duke
-    expected to score about 21" — a go-to scorer's line. Ethan,
-    2026-11-14, of Duke's back at Miami: "he's probably their go-to guy to
-    score ... the total's high in that game and it's expecting both teams
-    to score"."""
-    from .readlogic import scoring_words
-    said = scoring_words(r, team_words=c.name(str(r.get("team") or "")))
-    if not said:
+def scorer_words(c: Ctx, r: dict, lead: bool = False) -> str:
+    """WHY HE IS THE LIKELIEST SCORER, IN OUR DATA (Ethan, 2026-11-15,
+    circling "Lions's likeliest scorer by our touchdown numbers (64%), with
+    Lions expected to score about 26": "wanna make sure we are displaying
+    who's likely to score based off our data and the matchup and all that
+    shit and not just the books lines").
+
+    He is his team's best touchdown chance by our touchdown model
+    (readlogic.mark_scorers; engine/touchdowns): his share of the work, his
+    red-zone touches, his own touchdowns and what this defense gives up to
+    his position, on the points the game's lines expect his team to score.
+    No player's price is in it. The line used to show only the chance and
+    that team total; now it says our chance beside his price's, then the
+    evidence:
+
+    "64% to score by our numbers (his price, −175, says 64%): 11
+    touchdowns in 8 games this season (9 rushing, 2 receiving); 14 carries
+    (5 inside the 5) and 2 targets inside the 20 in his last 6 games, 36%
+    of the Lions' red-zone work; the Patriots give up the eighth-most
+    touchdowns to running backs".
+
+    ``lead`` opens on "the Lions' likeliest scorer — " for a card that does
+    not say it already. "" for any other read."""
+    s = (r or {}).get("scoring") or {}
+    if not s.get("go_to"):
         return ""
+    td = r.get("td") or {}
+    t = str(r.get("team") or "")
+    dfn = (getattr(c, "opp", None) or {}).get(t, "")
+    p = _f(s.get("prob"))
+    head = f"{_pct(p)} to score by our numbers" if p is not None else "the likeliest to score by our numbers"
+    odds = _f(td.get("odds"))
+    book = _implied(odds)
+    if odds and book is not None:
+        head += f" (his price, {_odds(odds)}, says {_pct(book)})"
+    parts = []
     tds, rush, rec, n = season_tds(c, r)
     if tds:
         split = ([f"{rush} rushing"] if rush else []) + ([f"{rec} receiving"] if rec else [])
-        lead = (f"{_count(tds, 'touchdown')} in {_count(n, 'game')} this season"
-                + (f" ({', '.join(split)})" if len(split) == 2 else ""))
-        # The sentence opens on the team's name, which keeps its capital.
-        return f"{lead}; {said}"
-    return said
+        parts.append(f"{_count(tds, 'touchdown')} in {_count(n, 'game')} this season"
+                     + (f" ({', '.join(split)})" if len(split) == 2 else ""))
+    words, games, _per = _rz_counts(td)
+    if words:
+        share = _f(td.get("rz_share"))
+        parts.append(f"{words} inside the 20 in his last {_count(games, 'game')}"
+                     + (f", {_pct(share)} of {team_owner(c, t)} red-zone work" if share else ""))
+    pos = str(r.get("pos") or "").upper()
+    x = ((getattr(c, "allowed", None) or {}).get(dfn) or {}).get(_TD_STAT.get(pos, "")) or {}
+    if dfn and x.get("rank") and x.get("of"):
+        parts.append(f"{team_np(c, dfn)} {team_be(c, dfn, 'give', 'gives')} up "
+                     f"{_place(x['rank'], x['of'], 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'his position')}")
+    text = head + (": " + "; ".join(parts) if parts else "")
+    return f"{team_owner(c, t)} likeliest scorer — {text}" if lead else text
 
 
 def scorer_sentence(c: Ctx) -> str:

@@ -221,7 +221,9 @@ def scoring_words(x: dict, team_words: str = "") -> str:
     if not s.get("go_to"):
         return ""
     who = team_words or str(x.get("team") or "his team")
-    text = f"{who}'s likeliest scorer by our touchdown numbers ({float(s['prob']):.0%})"
+    # "Duke's", but "Lions'" (a plural nickname: "Lions's" on 2026-11-15).
+    poss = f"{who}'" if who.endswith("s") and not who.endswith("ss") else f"{who}'s"
+    text = f"{poss} likeliest scorer by our touchdown numbers ({float(s['prob']):.0%})"
     try:
         imp = float(s.get("implied")) if s.get("implied") is not None else None
     except (TypeError, ValueError):

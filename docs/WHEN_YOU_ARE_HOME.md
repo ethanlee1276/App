@@ -9338,6 +9338,25 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RW. The likeliest scorer is said in our data and the matchup** (step 603;
+15 November). Nothing to run. You circled "Lions's likeliest scorer by our
+touchdown numbers (64%), with Lions expected to score about 26" and asked
+that who's likely to score come from our data and the matchup, not just the
+books' lines. **Who** was already ours: each team's likeliest scorer is its
+best touchdown chance by our touchdown model, which reads his share of the
+work, his red-zone touches, his own touchdowns and what this defense gives
+up to his position, on top of the points the game's lines expect his team
+to score. No player's price goes into it. What the line *said* was only the
+chance and that team total. Now the short version and his card say:
+- **Our chance beside his price's**: "64% to score by our numbers (his
+  price, −175, says 64%)", so you see where we and the books agree or not.
+- **The evidence**: "11 touchdowns in 8 games this season (9 rushing, 2
+  receiving); 14 carries (5 inside the 5) and 2 targets inside the 20 in his
+  last 6 games, 36% of the Lions' red-zone work; the Patriots give up the
+  eighth-most touchdowns to running backs".
+- **The grammar**: "the Lions'", never "Lions's"; the team total is no
+  longer the line's only reason.
+
 **RV. The red zone says the real counts, and what to expect this game**
 (step 602; 15 November). Nothing to run. You circled "Who gets NE's
 chances inside the 20: Rhamondre Stevenson (about 2), Corey Kiner (about

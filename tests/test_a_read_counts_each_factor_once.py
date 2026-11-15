@@ -144,6 +144,10 @@ class _Ctx:
     def name(self, t):
         return {"DUKE": "Duke", "MIA": "Miami"}.get(t, t)
 
+    def poss(self, t):
+        n = self.name(t)
+        return f"{n}'" if n.endswith("s") else f"{n}'s"
+
 
 def test_the_report_names_the_scorer_and_keeps_him_off_the_hard_day_list():
     from engine import gamereport as GR
@@ -152,8 +156,13 @@ def test_the_report_names_the_scorer_and_keeps_him_off_the_hard_day_list():
     form = {"Duke Back": {"season": {"games": 9, "s": {"rush_td": 13, "rec_td": 4}}}}
     c = _Ctx([back], form)
     words = GR.scorer_words(c, back)
-    assert words == ("17 touchdowns in 9 games this season (13 rushing, 4 receiving); Duke's likeliest scorer "
-                     "by our touchdown numbers (48%), with Duke expected to score about 21"), words
+    # 2026-11-15 ("displaying who's likely to score based off our data and the
+    # matchup ... and not just the books lines"): our chance, then the evidence
+    # (tests/test_the_likeliest_scorer_says_why_in_our_data), not the team total.
+    assert words == "48% to score by our numbers: 17 touchdowns in 9 games this season (13 rushing, 4 receiving)", words
+    assert GR.scorer_words(c, back, lead=True) == (
+        "Duke's likeliest scorer — 48% to score by our numbers: 17 touchdowns in 9 games this season "
+        "(13 rushing, 4 receiving)")
     src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
     i = src.index("def shine_lines(")
     assert "and not _go_to(r)" in src[i:i + 1500], "the short version's hard-day list skips him"
