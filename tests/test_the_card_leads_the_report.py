@@ -108,8 +108,11 @@ def test_each_pick_carries_what_the_research_carried():
     assert any(w.startswith("His work: 22% of the targets") for w in kraft["why"]), kraft["why"]
     assert kraft["kind"] == ("Receptions overs: 66% of 412 on our board at this chance (we said 65%); "
                              "25 of 30 in our hand-researched picks"), kraft["kind"]
-    # A tough read is not a reason for an over: Love's card names no "con".
-    assert not any("pressure" in w for w in love["why"]), love["why"]
+    # A tough read is not a reason for an over: Love's "con" is never one of
+    # his reasons. It is said once, last, as the main way the pick loses
+    # (2026-11-15, the research's final card).
+    assert not any("pressure" in w for w in love["why"][:-1]), love["why"]
+    assert love["why"][-1] == "The main way it loses: Detroit's pressure", love["why"]
     assert love["kind"] == ("Pass completions overs: 12 settled on our board at this chance, too few to say; "
                             "5 of 5 in our hand-researched picks"), love["kind"]
     assert ml["player"] == "" and ml["form"] == "" and ml["price"] == "FanDuel −140"

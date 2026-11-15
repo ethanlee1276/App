@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SD. Each pick on the card says the main way it loses** (step 610; 15
+November). Nothing to run. Your research's final card gave each pick "the
+reasoning and the main way each one loses". The card at the top of every
+report (step RR) had the reasoning. Now each pick ends with the player's
+strongest reason against it, from his matchup read, when the scan found one:
+"The main way it loses: Detroit's pressure". It is never shown as a reason
+for the pick.
+
 **SC. The hockey report does the research: the lines and the last meeting**
 (step 609; 15 November). Nothing to run. The NHL report had the tape, the
 goalies, and the breakout candidates and fades (step SA). What your

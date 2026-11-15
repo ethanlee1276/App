@@ -3557,7 +3557,16 @@ def card_why(c: Ctx, r: dict, angles: dict) -> list:
         if x not in seen:
             seen.add(x)
             keep.append(x)
-    return keep[:4]
+    keep = keep[:4]
+    # THE MAIN WAY IT LOSES (2026-11-15): the research's final card gave each
+    # pick "the reasoning and the main way each one loses". His read's
+    # strongest reason against this side, when the scan found one.
+    if rd and side in ("OVER", "UNDER"):
+        against = rd.get("con") if side == "OVER" else rd.get("pro")
+        first = next((str(x) for x in against or [] if x), "")
+        if first:
+            keep.append(f"The main way it loses: {first}")
+    return keep
 
 
 def card_kind(c: Ctx, r: dict) -> str:
