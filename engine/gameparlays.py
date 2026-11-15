@@ -912,9 +912,26 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
     backs = [f"If {b['for']} is out or his number moves: {pick_words(b['leg'])} "
              f"({_odds_words(b['leg'].get('odds'))}, {float(b['leg'].get('p') or 0):.0%})"
              for b in t.get("backups") or []]
-    return {"title": head, "price_line": price, "legs": legs, "script": script,
-            "links": list(t.get("links") or []), "backups": backs, "caveats": list(t.get("caveats") or []),
-            "joint": joint, "fair": t.get("fair"), "take": t.get("take")}
+    out = {"title": head, "price_line": price, "legs": legs, "script": script,
+           "links": list(t.get("links") or []), "backups": backs, "caveats": list(t.get("caveats") or []),
+           "joint": joint, "fair": t.get("fair"), "take": t.get("take")}
+    # THE TOUCHDOWN RULE ON A PAIR (decision 1 under RUN_NEXT 00f, Ethan's
+    # NFL Bet checking method: an anytime touchdown at 45%, or 40% with a
+    # red-zone role). The floor stays where it is; a pair whose two scorers
+    # are both 40% or better says so, and one that isn't says that too.
+    if kind != "three" and legs and sport in TD_RULE_SPORTS:
+        low = [l for l in legs if float(l.get("chance") or 0) < TD_RULE_PAIR]
+        out["td_rule"] = not low
+        out["rule_note"] = (f"Both scorers are {TD_RULE_PAIR:.0%} or better — our touchdown rule" if not low else
+                            f"Below our touchdown rule ({TD_RULE_PAIR:.0%} a scorer): "
+                            + ", ".join(f"{l.get('player')} {float(l.get('chance') or 0):.0%}" for l in low))
+    return out
+
+
+#: The touchdown rule's fallback (likelyboard.TD_RULE_FALLBACK): each scorer
+#: on a pair at 40% or better. Football, where the rule was written.
+TD_RULE_PAIR = 0.40
+TD_RULE_SPORTS = ("nfl", "cfb")
 
 
 def game_label(game: dict) -> str:

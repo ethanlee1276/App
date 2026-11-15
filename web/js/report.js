@@ -100,6 +100,7 @@
             ? ` <span class="gr-parlay-r" title="Our research score: his team’s expected points, the defense he faces, his usage and red-zone work, the matchup read and the game script">research score ${escapeHtml(String(l.research))} of ${escapeHtml(String(l.research_of || 13))}</span>` : ""}</span>
           ${(l.why || []).length ? `<ul class="gr-why">${items(l.why)}</ul>` : ""}</li>`).join("")}</ol>
         ${t.script ? `<p class="gr-parlay-script">${escapeHtml(t.script)}</p>` : ""}
+        ${t.rule_note ? `<p class="gr-parlay-rule${t.td_rule ? " ok" : ""}">${escapeHtml(t.rule_note)}</p>` : ""}
         ${(t.links || []).length ? `<ul class="gr-list gr-parlay-links">${items(t.links)}</ul>` : ""}
         ${(t.backups || []).length ? `<div class="gr-parlay-sub">Backups</div><ul class="gr-list">${items(t.backups)}</ul>` : ""}
         ${(t.caveats || []).length ? `<div class="gr-parlay-sub">Caveats</div><ul class="gr-list">${items(t.caveats)}</ul>` : ""}
@@ -145,6 +146,7 @@
               (l.why || []).forEach((w) => out.push(`        · ${w}`));
             }
             if (t.script) out.push(`    ${t.script}`);
+            if (t.rule_note) out.push(`    ${t.rule_note}`);
             (t.backups || []).forEach((x) => out.push(`    Backup: ${x}`));
             (t.caveats || []).forEach((x) => out.push(`    Caveat: ${x}`));
           }
@@ -270,8 +272,15 @@
     if (t.naive_words) price += ` · the legs’ own prices multiplied pay ${t.naive_words}, and a book’s same-game price pays less`;
     const script = t.script ? `What it needs: ${t.script}${t.script_chance != null
       ? ` — about ${pct(t.script_chance)} likely by the lines` : ""}` : "";
+    /* The touchdown rule on a pair (engine/gameparlays.card: each scorer 40%
+       or better), the same words the report prints. */
+    const low = kind !== "three" && ["nfl", "cfb"].includes(sport)
+      ? (t.legs || []).filter((l) => Number(l.p || 0) < 0.40) : null;
+    const rule = low == null ? {} : { td_rule: !low.length, rule_note: !low.length
+      ? "Both scorers are 40% or better — our touchdown rule"
+      : `Below our touchdown rule (40% a scorer): ${low.map((l) => `${l.player} ${pct(l.p)}`).join(", ")}` };
     return {
-      title, price_line: price, script, links: t.links || [], caveats: t.caveats || [],
+      title, price_line: price, script, links: t.links || [], caveats: t.caveats || [], ...rule,
       legs: (t.legs || []).map((l) => ({ pick: pickWords(l), player: l.player,
         price: [oddsWords(l.odds), l.book || ""].filter(Boolean).join(" "), chance: l.p, why: l.why || [],
         research: l.research, research_of: l.research_of })),

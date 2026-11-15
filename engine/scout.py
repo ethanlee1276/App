@@ -104,11 +104,25 @@ FLAGS = {
     # outside a team's top-2 targets need 15%+ target share"). A note
     # until the record proves it, like every flag here.
     "thin_target_over": "a receiving over outside his team's top-two targets, with under 15% of its "
-                        "targets — thin volume to hit a line on",
+                        "targets and under 5 a game — thin volume to hit a line on",
+    # Ethan's NFL Bet checking method (2026-11-15, "implementing that too ...
+    # how the most likely bets are selected"): the slate log's Oct 8 rule —
+    # "QB rush-attempt unders are fragile (Purdy 10 vs 4.5). Keep them off
+    # main cards" — and the master instructions' hard filter, "RB receiving
+    # overs ... unless 2-minute + route role is locked". Notes until the
+    # record proves them, like every flag here (engine/likelyctx).
+    "qb_rush_under": "a quarterback's rushing under — scrambles and late kneel-downs beat it",
+    "rb_route_over": "a running back's receiving over with under 10% of his team's targets — no locked "
+                     "route role to carry it",
 }
 #: A receiver outside the top two with less than this share of his team's
-#: targets is a thin-volume over (the post-mortem's rule).
+#: targets is a thin-volume over (the post-mortem's rule) — unless he sees
+#: SECONDARY_TARGETS a game: the rule's own alternative, "≥15% target share
+#: or ≥5 targets/game over the last 3 games" (Ethan's slate log, Oct 8).
 THIN_TARGET_SHARE = 0.15
+SECONDARY_TARGETS = 5.0
+#: A back with less than this share of the targets has no route role.
+RB_ROUTE_SHARE = 0.10
 
 #: SPOTS (Ethan, 2026-10-11: "what other things are there like this we can
 #: track for players" — then, of the list, "all of it"). The situations
@@ -213,7 +227,8 @@ def _cv(xs):
 def situation(market: str, side: str, line=None, position: str = "", values=None,
               game_spread=None, home: bool | None = None, total=None, wind=None, outdoor=None,
               weekday=None, games_season=None, missed_last=None,
-              tgt_share=None, tgt_rank=None, league: str = "nfl", hometown=None, spots=None) -> dict:
+              tgt_share=None, tgt_rank=None, league: str = "nfl", hometown=None, spots=None,
+              targets_pg=None) -> dict:
     """The situation from the pick and its game. ``values`` = his results in
     this market, NEWEST FIRST (the shape every row and the history carry).
     ``tgt_share`` is his share of his team's targets this season and
@@ -230,6 +245,7 @@ def situation(market: str, side: str, line=None, position: str = "", values=None
             "prior5": _avg(vals[3:8]) if len(vals) >= 6 else None,
             "games_season": games_season if games_season is not None else len(vals),
             "missed_last": missed_last, "tgt_share": tgt_share, "tgt_rank": tgt_rank,
+            "targets_pg": targets_pg,
             "league": league or "nfl", "hometown": bool(hometown),
             "spots": sorted(c for c in (spots or ()) if c in SPOTS)}
 
@@ -300,10 +316,17 @@ def flags(s: dict) -> list[str]:
                 out.add(f"{code}_over")
             if under:
                 out.add(f"{code}_under")
-    rank, share = s.get("tgt_rank"), s.get("tgt_share")
+    rank, share, tpg = s.get("tgt_rank"), s.get("tgt_share"), s.get("targets_pg")
+    pos = s.get("position") or ""
     if over and m in RECEIVING and rank is not None and share is not None \
-            and int(rank) > 2 and float(share) < t("THIN_TARGET_SHARE"):
+            and int(rank) > 2 and float(share) < t("THIN_TARGET_SHARE") \
+            and not (tpg is not None and float(tpg) >= t("SECONDARY_TARGETS")):
         out.add("thin_target_over")
+    if under and m in RUSHING and pos == "QB":
+        out.add("qb_rush_under")
+    if over and m in RECEIVING and pos in ("RB", "FB") and share is not None \
+            and float(share) < t("RB_ROUTE_SHARE"):
+        out.add("rb_route_over")
     return [f for f in FLAGS if f in out]
 
 

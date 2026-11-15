@@ -220,13 +220,25 @@ def test_the_report_comes_in_the_research_reports_order():
 
 
 def test_no_prop_pick_reaches_the_report_however_the_board_spelled_it():
-    """The microscope's line and price, the read's touchdown chance and
-    price, its leaning markets, its no-pick reason, the game plan's plays
-    and the Most Likely rows are all on this board, each with planted
-    numbers. Not one of them is in the report."""
-    text = _text(_report())
+    """The microscope's line and price, the read's leaning markets, its
+    no-pick reason, the game plan's plays and the Most Likely rows are all on
+    this board, each with planted numbers. Not one of them is in the report.
+    The read's touchdown chance and price are, in one place only: each
+    team's touchdown chances ranked (gamereport.td_chance_lines; Ethan,
+    2026-11-15 — his NFL Bet checking reports rank who can score with the
+    chance and the price)."""
+    rep = _report()
+    text = _text(rep)
     for mark in PICK_MARKS + ("43.2%",):
+        if mark == "+333":
+            continue
         assert mark not in text, mark
+    rz = next(s for s in rep["sections"] if s["key"] == "redzone")
+    lists = [b for b in rz["blocks"] if b["type"] == "list"]
+    scorers = [t for b in lists[1:] for t in b["items"]]
+    assert scorers and all("43% to score, at +333" in t for t in scorers), scorers
+    outside = [s for s in rep["sections"] if s["key"] != "redzone"]
+    assert "+333" not in _text(outside), "the touchdown price is said in the ranking alone"
 
 
 def test_every_number_is_the_boards_own():

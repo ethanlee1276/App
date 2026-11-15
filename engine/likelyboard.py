@@ -279,6 +279,75 @@ UNDER_MARKETS_HELD = {
 CFB_TIGHT_ENV = "QB_CFB_TIGHT"
 
 
+#: ETHAN'S NFL BET CHECKING METHOD ON THE BOARD (Ethan, 2026-11-15: "implementing
+#: that too the game reports and the website and how the most likely bets are
+#: selected like how we talked about"). His project's master instructions and
+#: slate log name the props to stay off (docs/NFL_BET_CHECKING_METHOD.md); the
+#: scout already raises each as a flag (engine/scout.FLAGS). A pick breaking
+#: one stays on the board, tracked like every pick, but tops out at Worth a
+#: look and says which rule — so the tiers follow his method while the record
+#: keeps measuring it (engine/likelyctx moves a chance only once a flag is
+#: proven). He also said "I care more about what genuinely will hit not my
+#: rules" (2026-10-22): a rule the record shows costs hits comes off here.
+METHOD_SPORTS = ("nfl", "cfb")
+METHOD_AVOID = {
+    "thin_target_over": "our rule: a reception over outside a team's top two targets needs 15% of the "
+                        "targets or 5 a game",
+    "qb_rush_under": "our rule: quarterback rushing unders stay off the main card",
+    "rb_route_over": "our rule: no running back receiving over without a locked route role",
+    "dog_run_over": "our rule: no rushing over on a team likely to trail",
+    "blowout_over": "our rule: no receiving or passing over when a blowout could take the fourth "
+                    "quarter away",
+    "wind_pass_over": "our rule: 15+ mph wind is a major downgrade for the passing game",
+    "fav_pass_over": "our rule: no passing over when the game script works against it",
+    "boom_bust": "our rule: no yardage over that needs one or two big plays",
+    "role_down_over": "our rule: no over on a role that has been shrinking",
+    "role_up_under": "our rule: no under on a role that has been growing",
+}
+#: The markets a rule speaks to where it is narrower than the flag: his
+#: blowout rule is about receiving and passing volume (a big favourite's back
+#: gets the clock-killing carries), and "needs a bomb" is a yardage over.
+METHOD_MARKETS = {"blowout_over": ("receptions", "rec_yds", "pass_att", "pass_cmp", "pass_yds"),
+                  "boom_bust": ("rush_yds", "rec_yds", "pass_yds")}
+#: HIS TOUCHDOWN RULE (the TD module; decision 1 under RUN_NEXT 00f): an
+#: anytime touchdown at 45%, or at 40% with "undeniable usage" — 30% of his
+#: team's red-zone chances.
+TD_RULE_PROB, TD_RULE_FALLBACK, TD_RULE_RZ_SHARE = 0.45, 0.40, 0.30
+
+
+def method_fails(r: dict, sport: str) -> list:
+    """The method's avoid rules this prop breaks, each as the card says it."""
+    if sport not in METHOD_SPORTS or lane_of(r) != "prop":
+        return []
+    out = []
+    for code in r.get("scout_flags") or ():
+        why = METHOD_AVOID.get(code)
+        if not why or why in out:
+            continue
+        markets = METHOD_MARKETS.get(code)
+        if markets and r.get("market") not in markets:
+            continue
+        if code == "boom_bust" and _side(r) != "over":
+            continue
+        out.append(why)
+    return out
+
+
+def td_rule(r: dict) -> dict:
+    """{"meets": bool, "why": str} — this touchdown pick against his rule:
+    45%, or 40% with 30% of the red-zone chances (``rz_share``)."""
+    prob = float(r.get("model_prob") or 0.0)
+    share = r.get("rz_share")
+    has = f", {float(share):.0%} of his team's red-zone chances" if share is not None else ""
+    if prob >= TD_RULE_PROB:
+        return {"meets": True, "why": f"{prob:.0%}{has} — meets our touchdown rule (45%)"}
+    if prob >= TD_RULE_FALLBACK and share is not None and float(share) >= TD_RULE_RZ_SHARE:
+        return {"meets": True, "why": f"{prob:.0%}{has} — meets our touchdown rule (40% with a red-zone "
+                                      f"role)"}
+    return {"meets": False, "why": f"{prob:.0%}{has} — our touchdown rule asks 45%, or 40% with "
+                                   f"{TD_RULE_RZ_SHARE:.0%} of the red-zone chances"}
+
+
 def _cfb_tight() -> bool:
     import os
     return os.environ.get(CFB_TIGHT_ENV, "").strip().lower() not in ("off", "0", "no", "false")
@@ -886,6 +955,19 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
             if t not in r["case_lines"]:
                 r["case_lines"].append(t)
 
+    # HIS SHARE OF THE RED-ZONE CHANCES (the touchdown rule): his carries and
+    # targets inside the 20 a game against his team's plays there.
+    for k in order:
+        r = pool[k]
+        if lane_of(r) != "td" or r.get("rz_share") is not None or not r.get("rz_chances"):
+            continue
+        ro = (((by_game.get(r.get("game")) or {}).get("scan") or {}).get("redzone") or {}).get(r.get("team")) or {}
+        try:
+            if float(ro.get("off") or 0) > 0:
+                r["rz_share"] = round(min(1.0, float(r["rz_chances"]) / float(ro["off"])), 3)
+        except (TypeError, ValueError):
+            pass
+
     # THE RECORD'S CORRECTION, BEFORE A SINGLE CHECK (engine/likelycal;
     # Ethan, 2026-10-03: "make the picks better ... I don't want to really
     # get rid of any most likely bets"). Each pick's chance is pulled
@@ -1008,6 +1090,24 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
             r["band_note"] = _cap
         else:
             r.pop("band_note", None)
+        # ETHAN'S METHOD (METHOD_AVOID, td_rule): a pick breaking one of his
+        # rules stays, tops out at Worth a look, and says which rule.
+        fails = method_fails(r, sport)
+        rule = td_rule(r) if lane == "td" and sport in METHOD_SPORTS else None
+        if rule:
+            r["td_rule"] = rule
+        else:
+            r.pop("td_rule", None)
+        why_capped = fails[0] if fails else (rule["why"] if rule and not rule["meets"] else None)
+        if fails:
+            r["method_fails"] = fails
+        else:
+            r.pop("method_fails", None)
+        if why_capped and tier in ("top", "strong"):
+            tier = "look"
+            r["method_note"] = f"Worth a look, not higher — {why_capped}"
+        else:
+            r.pop("method_note", None)
         # A TOUCHDOWN UNDER THE MAIN LIST'S BAR, BACKED BY THE MATCHUP.
         # Ethan, 2026-09-27, on Breece Hall at 42% reading "Top pick" beside
         # St. Brown at 52% reading "reserve — ranked, not recommended": he

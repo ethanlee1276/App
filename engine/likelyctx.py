@@ -403,7 +403,8 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
             outdoor=(not w.get("dome")) if w else None, weekday=_weekday(g) if g else None,
             missed_last=missed,
             tgt_share=u.get("tgt_share") if u.get("targets_pg") else None,
-            tgt_rank=tgt_rank.get(r["player"]), league=sport, hometown=mi is not None, spots=here)
+            tgt_rank=tgt_rank.get(r["player"]), league=sport, hometown=mi is not None, spots=here,
+            targets_pg=u.get("targets_pg"))
         codes = SC.flags(s)
         side = s["side"] or ("YES" if r["market"] == "anytime_td" else "")
         firm = {c for c in codes if c in SC.SPOT_FLAGS and proven(c, r["market"], side)}

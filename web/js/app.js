@@ -11435,13 +11435,20 @@ function obCardHTML(r, rank, opts = {}) {
     : `hits about ${Math.max(1, Math.round(Number(r.model_prob) * 10))} in 10`}${
     r.backed_note ? ` · ${escapeHtml(r.backed_note)}` : ""}</span>` : "";
   const band = r.band_note ? `<span class="ob-plain">${escapeHtml(r.band_note)}</span>` : "";
+  /* THE BOARD'S RULES (engine/likelyboard METHOD_AVOID, td_rule — Ethan's NFL
+     Bet checking method, 2026-11-15): a pick that breaks one tops out at
+     Worth a look and says which; a touchdown that meets the touchdown rule
+     says so. */
+  const method = r.method_note ? `<span class="ob-plain ob-method">${escapeHtml(r.method_note)}</span>`
+    : (r.td_rule && r.td_rule.meets ? `<span class="ob-plain ob-method ok">${icon("check", 11)} ${
+      escapeHtml(String(r.td_rule.why || "").replace(/^[^—]*—\s*/, ""))}</span>` : "");
   return `<div class="ob-card tier-${escapeAttr(r.tier || "look")}${rank === 1 ? " is-first" : ""}">
     ${rank ? `<span class="ob-rank">#${rank}</span>` : ""}
     <button class="ob-who" type="button"${door}>${obFaceHTML(r)}
       <span class="ob-what"><b>${escapeHtml(name || "")}</b>
         <span class="ob-bet">${escapeHtml(obBetLine(r))}${r.book ? ` <span class="ob-book">· ${escapeHtml(r.book)}</span>` : ""}${
           likelyNowHTML(r, true) ? ` <span class="ob-book">${escapeHtml(likelyNowHTML(r, true))}</span>` : ""}</span>
-        ${r.kind === "game" ? "" : hitChipsHTML(r)}${td}${band}${obWhyLine(r)}${pickWarnHTML(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
+        ${r.kind === "game" ? "" : hitChipsHTML(r)}${td}${band}${method}${obWhyLine(r)}${pickWarnHTML(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
     <div class="ob-checkcol">${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>
     <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}${betItHTML(r, "mini")}</span>
     <span class="ob-ringcol">${obRingHTML(r)}<span class="ob-tierword tier-${escapeAttr(r.tier || "look")}">${
@@ -13475,7 +13482,16 @@ function scanPickHTML(x, cls = "ms-pick") {
   const say = (p) => `${escapeHtml(low(p.side) === "yes" ? "Yes" : low(p.side) === "over" ? "Over" : "Under")} ${
     p.line != null ? escapeHtml(String(p.line)) + " " : ""}${escapeHtml(p.market_label || p.market || "")} · ${
     escapeHtml(oddsTxt(p.odds))} · ${wholePct(p.model_prob)}`;
-  if (x.pick) return `<span class="${cls} good"><b>Most Likely pick:</b> ${say(x.pick)}</span>`;
+  /* THE PRICE IT IS WORTH (engine/gamereport.take_at; Ethan's NFL Bet
+     checking method, rule 21 "maximum playable price"): our chance as a
+     price, never heavier than −250. */
+  const take = (p) => {
+    const q = Number(p.model_prob);
+    if (!(q > 0 && q < 1)) return "";
+    const fair = q >= 0.5 ? -100 * q / (1 - q) : 100 * (1 - q) / q;
+    return ` — take it at ${escapeHtml(oddsTxt(Math.round(Math.max(fair, -250))))} or better`;
+  };
+  if (x.pick) return `<span class="${cls} good"><b>Most Likely pick:</b> ${say(x.pick)}${take(x.pick)}</span>`;
   /* THE READ'S OWN PICK (engine/matchpicks.READ_PICK_MIN; Ethan, 2026-11-14:
      "it would not make any sense to make players favoitable and breakout
      canidates and not give them props ... it doesnt make sense to not take
@@ -13489,7 +13505,7 @@ function scanPickHTML(x, cls = "ms-pick") {
       const why = String(m.held_note).replace(/^held back:\s*/i, "");
       return `<span class="${cls} none"><b>Matchup pick, held back:</b> ${say(m)} — ${escapeHtml(why)}. Tracked on paper, not posted.</span>`;
     }
-    return `<span class="${cls} good"><b>Matchup pick${m.tier_label ? ` · ${escapeHtml(m.tier_label)}` : ""}:</b> ${say(m)} — the read’s side, and our number backs it.</span>`;
+    return `<span class="${cls} good"><b>Matchup pick${m.tier_label ? ` · ${escapeHtml(m.tier_label)}` : ""}:</b> ${say(m)} — the read’s side, and our number backs it${take(m)}.</span>`;
   }
   if (x.pick_other_side) {
     return `<span class="${cls} warn"><b>Our Most Likely pick on him goes the other way:</b> ${say(x.pick_other_side)}

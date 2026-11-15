@@ -9338,6 +9338,38 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RI. Your NFL Bet checking method, built into the board and the reports**
+(step 589; 15 November). Nothing to run. I read the export again end to end:
+the master instructions, both slate logs and all 213 of your messages in
+the 55 game chats. docs/NFL_BET_CHECKING_METHOD.md maps every rule to where
+the site does it. What changed:
+- **How Most Likely picks are chosen.** Your avoid rules now decide how high
+  a pick can go. A pick that breaks one stays on the board, tracked, but
+  tops out at Worth a look and its card says which rule:
+  - a reception over outside the top two targets with under 15% of the
+    targets and under 5 a game;
+  - a quarterback rushing under;
+  - a running back's receiving over without a route role;
+  - a rushing over on a team expected to trail;
+  - a receiving or passing over in a likely blowout;
+  - a passing over in 15+ mph wind or a script against it;
+  - a yardage over that needs a big play;
+  - a pick on a role that is moving.
+  The record keeps measuring each one, since you said you care more about
+  what hits than about the rules.
+- **Your touchdown rule (decision 1).** Every touchdown pick on the board is
+  checked against 45%, or 40% with 30% of his team's red-zone chances. One
+  short of it tops out at Worth a look. Each touchdown pair says whether both
+  scorers are 40% or better. The pairs' floor stays where it was.
+- **Your slate-log rules (decision 2).** They're on the board as above, and
+  the record measures each one.
+- **The game reports.** Your four scripts (A the favorite controls it, B the
+  underdog leads, C a close game, D a blowout), each with its share of the
+  simulated games and who it helps, and the game's picks ranked by how many
+  scripts they hold in. Each team's touchdown chances, ranked, beside what
+  the defense allows his position, with "usage and matchup both back him"
+  where they do. A take-it-at price on every pick, never past −250.
+
 **RH. The UFC tab shows UFC's fights, and "This week" follows the tab**
 (step 588; 15 November). Nothing to run. You sent Record → UFC: the chip
 said 43, the verdict said 0-0-0, and "This week" showed NBA and NFL picks.

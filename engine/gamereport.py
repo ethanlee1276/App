@@ -40,11 +40,14 @@ what the board already holds, in the outside reports' order:
 
 WHAT IT IS NOT. No prop picks, as asked: no line, no price and no
 probability on any player — not the scan's microscope, not the game plan's
-plays, not a read's touchdown chance or its leaning markets. Two exceptions,
-both Ethan's own asks of 2026-11-14: each game's parlays (`sec_parlays`), and
-each read's own pick on its side beside the read (`read_pick`: "it would not
-make any sense to make players favoitable and breakout canidates and not give
-them props"). The game
+plays, not a read's leaning markets. Three exceptions, each Ethan's own ask:
+each game's parlays (`sec_parlays`, 2026-11-14), each read's own pick on its
+side beside the read (`read_pick`, 2026-11-14: "it would not make any sense
+to make players favoitable and breakout canidates and not give them
+props"), and each team's touchdown chances ranked with their prices
+(`td_chance_lines`, 2026-11-15: build his NFL Bet checking reports' way into
+these — his reports rank who can score, with the chance and the price, next
+to what the defense allows the position). The game
 lines and the drive simulator's shares are the game's, and the report
 says the simulator is a simulation, not a pick.
 
@@ -276,6 +279,23 @@ def _odds(x) -> str:
     if v is None or v == 0:
         return ""
     return _minus(f"{int(round(v)):+d}")
+
+
+#: The heaviest price a pick is ever worth taking at (the board's cap;
+#: Ethan's method: "Never recommend a leg worse than -250").
+TAKE_CAP = -250
+
+
+def take_at(prob) -> str:
+    """The price a pick is worth taking at — "−163 or better" — from our
+    chance (its fair price), never heavier than TAKE_CAP: the method's
+    "maximum playable price" on every pick (Ethan's NFL Bet checking
+    project, rule 21). "" without a chance."""
+    p = _f(prob)
+    if p is None or not 0.0 < p < 1.0:
+        return ""
+    fair = -100.0 * p / (1.0 - p) if p >= 0.5 else 100.0 * (1.0 - p) / p
+    return f"{_odds(max(fair, TAKE_CAP))} or better"
 
 
 def _implied(x):
@@ -1756,6 +1776,63 @@ def _than_average(rel, more: str = "more", fewer: str = "fewer") -> str:
     return f"{_pct(abs(rel))} {more if rel > 0 else fewer} than an average team"
 
 
+#: WHO CAN SCORE, RANKED (Ethan's NFL Bet checking chats: "line up in order
+#: who has the best touchdown chances on each team", and "I want to know that
+#: next to the Dolphins tight end on the chart … like where each defense
+#: lacks in red zone defense"). A scorer's usage backs him at this share of
+#: his team's red-zone chances; the matchup backs him when the defense gives
+#: up touchdowns to his position at TD_FUNNEL_RANK or worse.
+TD_USAGE_SHARE = 0.30
+TD_FUNNEL_RANK = 10
+TD_LIST = 4
+_TD_STAT = {"RB": "rb_td", "FB": "rb_td", "WR": "wr_td", "TE": "te_td"}
+_TD_WORD = {"RB": "running backs", "FB": "running backs", "WR": "receivers", "TE": "tight ends"}
+
+
+def td_chance_lines(c: Ctx, off: str) -> list:
+    """``off``'s scorers by our touchdown chance: the price (and whether it is
+    past the −250 limit), his share of the red-zone chances, what the defense
+    gives up to his position, whether usage and matchup both back him, and
+    the touchdown rule (likelyboard.td_rule)."""
+    dfn = c.opp[off]
+    ro = (c.scan.get("redzone") or {}).get(off) or {}
+    team_rz = _f(ro.get("off"))
+    allowed = c.allowed.get(dfn) or {}
+    rows = []
+    for r in c.reads_for(off):
+        td = r.get("td") or {}
+        p = _f(td.get("model_prob"))
+        if p is None or p <= 0:
+            continue
+        pos = str(r.get("pos") or "").upper()
+        odds = _f(td.get("odds"))
+        bits = [f"{_pct(p)} to score" + (f", at {_odds(odds)}" + (" (past the −250 limit)" if odds < TAKE_CAP else "")
+                                         if odds is not None else "")]
+        share = None
+        if _f(td.get("rz_chances")) and team_rz:
+            share = min(1.0, float(td["rz_chances"]) / team_rz)
+            bits.append(f"{_pct(share)} of {off}'s red-zone chances")
+        x = allowed.get(_TD_STAT.get(pos, "")) or {}
+        funnel = None
+        if x.get("rank") and x.get("of"):
+            rank, of = int(x["rank"]), int(x["of"])
+            funnel = rank <= TD_FUNNEL_RANK
+            bits.append(f"{dfn} allows {_place(rank, of, 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'his position')}")
+        usage = share is not None and share >= TD_USAGE_SHARE
+        if usage and funnel:
+            bits.append("usage and matchup both back him")
+        elif usage:
+            bits.append("his usage backs him")
+        elif funnel:
+            bits.append("the matchup backs him")
+        meets = p >= 0.45 or (p >= 0.40 and usage)
+        if meets:
+            bits.append("meets our touchdown rule")
+        rows.append((p, f"{r.get('player')} ({pos or '—'}): " + "; ".join(bits)))
+    rows.sort(key=lambda x: -x[0])
+    return [t for _p, t in rows[:TD_LIST]]
+
+
 def sec_redzone(c: Ctx) -> dict | None:
     """THE RED ZONE, IN PLAIN WORDS (2026-11-14). Ethan circled two of these
     lines — "(23rd of 32, 1st the stingiest)" and "(0% below the league)" — and
@@ -1797,7 +1874,14 @@ def sec_redzone(c: Ctx) -> dict | None:
         if chances:
             lines.append(f"Who gets {off}'s chances inside the 20 (carries and targets a game, by our "
                          f"numbers): " + ", ".join(f"{p} about {_num(v)}" for p, v in chances) + ".")
-    return _section("redzone", "Red zone", [_list(lines)])
+    blocks = [_list(lines)] if lines else []
+    for off in c.teams:
+        scorers = td_chance_lines(c, off)
+        if scorers:
+            blocks += [_h(f"Who can score for {c.name(off)}"), _list(scorers)]
+    if not blocks:
+        return None
+    return _section("redzone", "Red zone", blocks)
 
 
 #: The schedule notes' own heads (engine/fatigue.state_for), as the team's
@@ -1971,6 +2055,114 @@ def confidence_words(conf) -> str:
     return f" ({s} confidence)"
 
 
+#: ETHAN'S FOUR SCRIPTS (his NFL Bet checking method, rule 6: "Build several
+#: realistic scripts before choosing props … Then determine whether the prop
+#: survives multiple realistic scripts. Prefer props that can hit under
+#: multiple scripts"), each a share of the simulator's games: A the favorite
+#: by 8–14, B the underdog wins, C the favorite by 1–7, D the favorite by 15+.
+SCRIPT_KEYS = ("A", "B", "C", "D")
+_RUSH = ("rush_yds", "rush_att")
+_AIR = ("pass_yds", "pass_att", "pass_cmp", "receptions", "rec_yds", "rush_rec_yds")
+#: Which scripts an over holds in, by who he plays for and what he does: a
+#: favorite's back runs out a lead (A, C, D); an underdog's runs only while
+#: it is close or ahead (B, C); a favorite throws when it trails or it is
+#: close, and its starters sit in a blowout (A, B, C); an underdog throws
+#: from behind and in garbage time (A, C, D). An under holds where the over
+#: does not.
+SCRIPT_FIT = {("fav", "run"): "ACD", ("dog", "run"): "BC", ("fav", "air"): "ABC", ("dog", "air"): "ACD"}
+
+
+def script_shares(c: Ctx) -> tuple | None:
+    """(favorite, underdog, {A: share, …}) off the simulator, or None."""
+    hist = (c.g.get("sim") or {}).get("margin_hist") or []
+    if len(hist) != len(SIM_BUCKETS):
+        return None
+    try:
+        by = {(side, lo): float(p) for (side, lo, _hi), p in zip(SIM_BUCKETS, hist)}
+    except (TypeError, ValueError):
+        return None
+    home_win = by[("home", 15)] + by[("home", 8)] + by[("home", 1)]
+    fav, dog = (c.home, c.away) if home_win >= 0.5 else (c.away, c.home)
+    f = "home" if fav == c.home else "away"
+    d = "away" if f == "home" else "home"
+    return fav, dog, {"A": by[(f, 8)], "B": by[(d, 1)] + by[(d, 8)] + by[(d, 15)], "C": by[(f, 1)],
+                      "D": by[(f, 15)]}
+
+
+def script_fit(market, side, team, fav) -> str:
+    """The scripts (of "ABCD") a pick holds in, or "" when the method's
+    scripts say nothing about its market."""
+    m = str(market or "")
+    kind = "run" if m in _RUSH else "air" if m in _AIR else ""
+    if not kind:
+        return ""
+    over = SCRIPT_FIT[("fav" if team == fav else "dog", kind)]
+    s = str(side or "").lower()
+    if s in ("over", "yes"):
+        return over
+    if s == "under":
+        return "".join(k for k in SCRIPT_KEYS if k not in over)
+    return ""
+
+
+def script_blocks(c: Ctx) -> list:
+    """The four scripts with their shares and who each one feeds, then the
+    game's picks by how many scripts they hold in."""
+    got = script_shares(c)
+    if not got:
+        return []
+    fav, dog, share = got
+    mine = {t: c.reads_for(t) for t in c.teams}
+
+    def lead_back(t):
+        backs = [r for r in mine[t] if str(r.get("pos") or "").upper() in ("RB", "FB")
+                 and (_usage(r).get("carry_share") or 0) > 0]
+        return max(backs, key=lambda r: _usage(r).get("carry_share") or 0).get("player") if backs else ""
+
+    def targets(t, n=2):
+        rec = sorted((r for r in mine[t] if (_usage(r).get("tgt_share") or 0) > 0),
+                     key=lambda r: -(_usage(r).get("tgt_share") or 0))
+        return [r.get("player") for r in rec[:n]]
+
+    def qb(t):
+        q = [r for r in mine[t] if str(r.get("pos") or "").upper() == "QB"]
+        return q[0].get("player") if q else ""
+    fb, ft, fq = lead_back(fav), targets(fav), qb(fav)
+    db, dt, dq = lead_back(dog), targets(dog), qb(dog)
+    who = {
+        "A": (f"{fav} controls it", _join([x for x in (
+            f"{fb}'s carries" if fb else "", f"{ft[0]}'s short targets" if ft else "") if x]
+            or [f"{fav}'s run game"]) + (f" carry the volume, and {dq} throws late" if dq else " carry the volume")),
+        "B": (f"{dog} leads", _join([x for x in (
+            f"{dq}'s attempts" if dq else "", _join(f"{p}'s targets" for p in dt) if dt else "") if x]
+            or [f"{dog}'s passing game"]) + " go up" + (f", and {fav} has to throw ({fq})" if fq else "")),
+        "C": ("a close game", "steady volume for " + _join([p for p in (ft[:1] + dt[:1] + [fb, db]) if p]
+                                                          or ["both offenses"])),
+        "D": ("a blowout", f"{fav}'s starters can sit in the fourth"
+              + (f", so {_join([p for p in (fb, ft[0] if ft else '') if p])} are at risk on overs"
+                 if fb or ft else "")
+              + (f", and {dog}'s garbage-time targets go to {dt[0]}" if dt else "")),
+    }
+    lines = [f"Script {k}, {who[k][0]} ({_pct(share[k])} of the simulated games): {who[k][1]}"
+             for k in SCRIPT_KEYS]
+    blocks = [_h("Four scripts"), _list(lines)]
+    picks = []
+    for r in c.reads:
+        pk = r.get("pick") or (r.get("matchup_pick") if not (r.get("matchup_pick") or {}).get("held_note") else None)
+        if not isinstance(pk, dict) or not pk:
+            continue
+        fit = script_fit(pk.get("market"), pk.get("side"), r.get("team"), fav)
+        if not fit:
+            continue
+        w = sum(share[k] for k in fit)
+        picks.append((len(fit), w, f"{r.get('player')}: {_pick_words(pk)} — holds in {_join(list(fit))} "
+                                   f"({_pct(w)} of the simulated games)"))
+    if picks:
+        picks.sort(key=lambda x: (-x[0], -x[1]))
+        blocks += [_h("Which picks hold up in the most scripts"), _list(p[2] for p in picks)]
+    return blocks
+
+
 def sec_scripts(c: Ctx) -> dict | None:
     blocks = []
     sc = (c.plan.get("script") or {})
@@ -2001,6 +2193,8 @@ def sec_scripts(c: Ctx) -> dict | None:
         bits.append(f"{_pct(sim['blowout'])} by 14 or more")
     if bits:
         blocks.append(_p(f"Of the simulated games, {_join(bits)}"))
+    # ETHAN'S FOUR SCRIPTS AND THE PICKS THAT SURVIVE THEM (`script_blocks`).
+    blocks += script_blocks(c)
     return _section("scripts", "How the game could go", blocks)
 
 
@@ -2029,7 +2223,8 @@ def read_pick(r: dict) -> str:
     if not isinstance(r, dict):
         return ""
     if r.get("pick"):
-        return f"Most Likely pick: {_pick_words(r['pick'])}"
+        take = take_at(r["pick"].get("model_prob"))
+        return f"Most Likely pick: {_pick_words(r['pick'])}" + (f" — take it at {take}" if take else "")
     mp = r.get("matchup_pick")
     if isinstance(mp, dict) and mp:
         # Held back by the one board (the NFL's 60%: Ethan, "hold them
@@ -2039,7 +2234,8 @@ def read_pick(r: dict) -> str:
             why = why[len("held back:"):].strip() if why.lower().startswith("held back:") else why
             return f"Matchup pick, held back: {_pick_words(mp)} — {why}"
         tier = f" ({mp['tier_label']})" if mp.get("tier_label") else ""
-        return f"Matchup pick{tier}: {_pick_words(mp)}"
+        take = take_at(mp.get("model_prob"))
+        return f"Matchup pick{tier}: {_pick_words(mp)}" + (f" — take it at {take}" if take else "")
     if r.get("pick_other_side"):
         return (f"Our Most Likely pick on him goes the other way: {_pick_words(r['pick_other_side'])} — "
                 f"our number disagrees with this read")
@@ -3418,6 +3614,8 @@ def to_text(report: dict) -> str:
                         out += [f"          · {w}" for w in leg.get("why") or []]
                     if v.get("script"):
                         out.append(f"      {v['script']}")
+                    if v.get("rule_note"):
+                        out.append(f"      {v['rule_note']}")
                     out += [f"      Backup: {x}" for x in v.get("backups") or []]
                     out += [f"      Caveat: {x}" for x in v.get("caveats") or []]
     return "\n".join(out)

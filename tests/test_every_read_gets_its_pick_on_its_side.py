@@ -171,11 +171,15 @@ def test_each_read_carries_its_pick_and_the_one_boards_verdict():
     assert by["Malik Nabers"]["matchup_pick"]["tier_label"] == "Strong"
     assert by["Rachaad White"]["matchup_pick"]["held_note"].startswith("held back: our chance is 60%")
     assert result["likely_board"]["read_picks_carded"] == 2
-    assert R.read_pick(by["Malik Nabers"]) == "Matchup pick (Strong): Over 4.5 receptions (−110, 58%)"
+    # The price it is worth, never heavier than −250 (gamereport.take_at;
+    # Ethan's method, rule 21: "Maximum playable price").
+    assert R.read_pick(by["Malik Nabers"]) == ("Matchup pick (Strong): Over 4.5 receptions (−110, 58%) — "
+                                               "take it at −138 or better")
     assert R.read_pick(by["Rachaad White"]).startswith(
         "Matchup pick, held back: Under 44.5 rush yds (−110, 60%) — our chance is 60%"), \
         R.read_pick(by["Rachaad White"])
-    assert R.read_pick(by["Cam Skattebo"]) == "Most Likely pick: Over 13.5 carries (−190, 66%)"
+    assert R.read_pick(by["Cam Skattebo"]) == ("Most Likely pick: Over 13.5 carries (−190, 66%) — take it at "
+                                               "−194 or better")
     assert R.read_pick(by["Darius Slayton"]).startswith("No pick: our number on his over is 52%")
     assert R.read_pick(by["Isaiah Likely"]).startswith("No pick: our number disagrees with this read")
     rob = R.read_pick(dict(by["Wan'Dale Robinson"], matchup_pick=None))
@@ -249,7 +253,7 @@ def test_the_card_draws_the_pick_the_hold_and_the_reason_in_words():
     assert got[0].startswith("Matchup pick, held back: Under 44.5 Rushing Yards · -110 · 57%"), got[0]
     assert "the NFL board asks 60%" in got[0] and got[0].endswith("Tracked on paper, not posted."), got[0]
     assert got[1].startswith("Matchup pick · Strong: Over 44.5"), got[1]
-    assert got[1].endswith("— the read’s side, and our number backs it."), got[1]
+    assert got[1].endswith("— the read’s side, and our number backs it — take it at -170 or better."), got[1]
     assert got[2] == ("No pick — our number on his over is 52%, close to a coin flip — a pick needs 55%, "
                       "so the read alone is not a bet."), got[2]
     assert "our number disagrees with this read: his likeliest over" in got[3], got[3]
