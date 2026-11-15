@@ -210,7 +210,7 @@ def test_the_scan_names_chances_allowed_and_finishing_luck():
     r = SC.read_skater("Shooter", {"position": "C", "games": games}, "AAA", "BBB", teams, ctx,
                        {"sv": 0.9}, xp={"ixg": 9.0, "goals": 3, "iff": 80, "sog": 60, "games": 20})
     text = " ".join(r["pro"] + r["notes"])
-    assert "5-on-5 chances" in text and "goals saved above expected" in text
+    assert "5-on-5 chances" in text and "Faces Leaky, who has let in 5.0 more goals than expected lately" in text
     assert "finishing cold, due to warm" in text
     t = SC.tape("AAA", "BBB", teams, ctx)
     assert t["sides"]["BBB"]["xga_ev"] == 3.5 and t["sides"]["BBB"]["ranks"]["xga_ev"] == 4

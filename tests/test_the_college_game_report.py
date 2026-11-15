@@ -157,11 +157,13 @@ def test_colleges_own_units_raw_ranks_and_scoring_chances():
     assert "CFBD's PPA" in text and "not adjusted for opponents" in text
     assert "adjusted for the opponents each team has faced" not in text
     # The edge bar is 30% of 136 schools: 41 ranks.
-    assert "IU's line yards rank 10th against MIA's run front (33rd)." in text
-    assert "MIA's runs stuffed at the line rank 70th against IU's stuff rate (7th) — edge IU" in text
-    assert "MIA gets about 5 scoring chances a game — drives that reach the opponent's 40 (about average)" in text
-    assert ("IU gets about 6.1 scoring chances a game — drives that reach the opponent's 40 "
-            "(22% above the average team); MIA allows about 4.4 (4% below average)") in text
+    assert "IU ranks 10th in line yards (how much its blockers give each run); MIA's run front ranks 33rd." in text
+    assert ("MIA ranks 70th at keeping its runs from being stuffed at or behind the line; IU's defense ranks 7th "
+            "at stuffing them — edge IU") in text
+    assert "MIA gets about 5 drives a game to the opponent's 40 (about average)" in text
+    assert ("IU gets about 6.1 drives a game to the opponent's 40 (22% more than an average team); "
+            "MIA's defense allows about 4.4 (about average).") in text
+    assert "the games in our history database" in text and "nflverse" not in text
     assert "red-zone plays" not in text
 
 

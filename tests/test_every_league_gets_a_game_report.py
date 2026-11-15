@@ -76,7 +76,7 @@ def _mlb_board():
              "umpire": {"name": "Pat Hoberg", "k": 1.04, "runs": 0.97},
              "league": {"slg": 0.4, "k_rate": 0.22}}}
     reads = [_read("Zack Wheeler", "PHI", "CHC", "SP", "good", "Good matchup",
-                   pro=["CHC strikes out 25.0% of the time (league 22%)", "Strikes out 29% of the batters he faces"],
+                   pro=["CHC strikes out 25.0% of the time (the league average is 22%)", "Strikes out 29% of the batters he faces"],
                    con=["Wind blowing out at 16 mph"]),
              _read("Javier Assad", "CHC", "PHI", "SP", "tough", "Tough matchup",
                    pro=["Expected ERA 4.60"], con=["PHI rarely strikes out (21.0%)", "Expected ERA 4.60"]),
@@ -109,9 +109,9 @@ def _nhl_board():
          "spread": -1.5, "total": 6.5, "home_ml": -175, "away_ml": 150, "nhl_tape": tape}
     reads = [_read("Auston Matthews", "TOR", "BOS", "C", "breakout", "Breakout spot",
                    pro=["BOS gives up the 6th-most shots a game", "TOR is expected to score 3.4 — a high-event night",
-                        "Faces Jeremy Swayman, -3.4 goals saved above expected lately"]),
+                        "Faces Jeremy Swayman, who has let in 3.4 more goals than expected lately"]),
              _read("David Pastrnak", "BOS", "TOR", "RW", "tough", "Tough matchup",
-                   con=["Faces Anthony Stolarz, +4.2 goals saved above expected lately"]),
+                   con=["Faces Anthony Stolarz, who has stopped 4.2 more goals than expected lately"]),
              _read("Anthony Stolarz", "TOR", "BOS", "G", "neutral", "Neutral",
                    pro=["BOS shoots the 11th-fewest a game"], con=["A lopsided game"])]
     return {"date": "2026-10-21", "games": [g], "scan_reads": {"BOS@TOR": {"players": reads}}}
@@ -170,17 +170,19 @@ def test_the_mlb_report_reads_the_pitching_matchup_the_park_and_the_reads():
                  "Ballpark: Wrigley Field — open air, grass; 355 feet to left, 400 to center, 353 to right",
                  "Lineups: not out yet", "Plate umpire: Pat Hoberg",
                  "The run line opened at PHI −1.5 and has not moved", "The total opened at 9 and is up 0.5",
-                 "Phillies' starter throws four-seamers 45%, sliders 30%, changeups 15%",
+                 "Phillies' starter's pitch mix: four-seamers 45%, sliders 30%, changeups 15%",
                  "PHI's lineup hits right-handed pitching 5% better than its average (8 hitters measured).",
                  "CHC's lineup hits right-handed pitching about its average (7 hitters measured)",
-                 "CHC strikes out 25.0% of the time (league 22%)",
-                 "The pens: Phillies' bullpen ranks 6th; Cubs' bullpen ranks 27th and threw 7.1 relief innings "
-                 "the last two days — tired",
-                 "Wrigley Field plays +4% home runs, +2% runs, ±0% strikeouts against an average park",
+                 "CHC strikes out 25.0% of the time (the league average is 22%)",
+                 "The bullpens: Phillies' bullpen ranks 6th; Cubs' bullpen ranks 27th and is tired after 7.1 "
+                 "relief innings over the last two days",
+                 "Compared with an average park, Wrigley Field sees 4% more home runs, 2% more runs and the "
+                 "usual strikeouts",
                  "Weather: 82°F, wind 16 mph blowing out",
-                 "Plate umpire Pat Hoberg: +4% strikeouts, −3% runs in his games",
+                 "The wind is blowing out at 16 mph, which adds about 19% to the chance of a home run",
+                 "Plate umpire Pat Hoberg: his games have 4% more strikeouts and 3% fewer runs than average",
                  "On the injured list: Bryce Harper (PHI).",
-                 "Lineups post two to four hours before first pitch"):
+                 "Lineups come out two to four hours before first pitch"):
         assert want in text, (want, text)
     # The starters' table, slugging by side as baseball writes it.
     tab = next(b for s in rep["sections"] if s["key"] == "pitching" for b in s["blocks"] if b["type"] == "table")
@@ -220,12 +222,12 @@ def test_the_nhl_report_reads_the_tape_the_goalies_and_the_injuries():
                  "Puck drop: Wednesday, Oct. 21, 7:00 PM ET",
                  "Bruins: the second night of a back-to-back",
                  "BOS has played 6 games this season, so last season still carries 40% of its numbers",
-                 "Jeremy Swayman for BOS — probable, not confirmed; .904 save rate; \u22123.4 goals saved above "
-                 "expected lately; started 70% of Bruins' recent games",
+                 "Jeremy Swayman for BOS — probable, not confirmed; .904 save rate; has let in 3.4 more goals "
+                 "than expected lately; started 70% of Bruins' recent games",
                  "Anthony Stolarz for TOR — confirmed",
-                 "TOR shoots the 2nd-most, and BOS allows the 6th-most shots — a busy night for BOS's goalie",
+                 "TOR shoots the second-most, and BOS allows the sixth-most shots — a busy night for BOS's goalie",
                  "Charlie McAvoy (BOS) — out, shoulder",
-                 "Every book took Brad Marchand's props down before puck drop",
+                 "Every sportsbook pulled its props on Brad Marchand before puck drop, so we treat him as out",
                  "Starting goalies are confirmed after the morning skate; not yet for BOS"):
         assert want in text, (want, text)
     tab = next(b for s in rep["sections"] if s["key"] == "tape" for b in s["blocks"] if b["type"] == "table")
@@ -251,12 +253,12 @@ def test_the_nba_report_reads_rest_who_carries_each_team_and_the_defences():
                  "Jayson Tatum for the Celtics (27.5 points a game over his last 4).",
                  "Blowout watch: with a spread of 10 or more, the starters' minutes are the first thing",
                  "Tip-off: Thursday, Oct. 22, 7:30 PM ET", "Arena: TD Garden",
-                 "Heat: on the second night of a back-to-back; 1,760 miles from DEN (a day ago); the clock moved "
-                 "ahead 2 hours",
+                 "Heat: on the second night of a back-to-back; traveled 1,760 miles from DEN a day ago; 2 time "
+                 "zones east of its last game",
                  "That puts BOS at about 113 points and MIA at about 101.5",
-                 "MIA's defence gives up the most points (118.2 a game, 2nd-most; league 113)",
-                 "MIA's defence gives up the fewest rebounds (41 a game, 2nd-fewest; league 44)",
-                 "BOS's defence gives up the fewest threes (10.1 a game, 1st-fewest; league 12.8)",
+                 "MIA's defense gives up the second-most points (118.2 a game; the league average is 113)",
+                 "MIA's defense gives up the second-fewest rebounds (41 a game; the league average is 44)",
+                 "BOS's defense gives up the fewest threes (10.1 a game; the league average is 12.8)",
                  "Per game, not per possession",
                  "Tyler Herro (MIA) — out, ankle", "Jaylen Brown (BOS) — questionable, hamstring",
                  "Still to be decided: Jaylen Brown (BOS, questionable)"):

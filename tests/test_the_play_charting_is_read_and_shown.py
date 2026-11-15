@@ -115,26 +115,35 @@ def test_the_reads_quote_the_charting_and_the_tracking_as_notes():
     track = {"avg_separation": 2.67, "avg_separation_rank": 44, "n_ranked": 67, "avg_cushion": 4.98,
              "avg_yac_above_expectation": 0.02}
     lines = G.charting_notes("wr", "CHI", smith, chi, track)
-    assert lines[0] == "Charted: 0 drops on 13 catchable balls this season (0%), 10% of his targets contested"
-    assert lines[1].startswith("Tracking: 2.7 yd of separation at the throw (44th of 67 WRs), 5.0 yd of cushion")
+    assert lines[0] == "Charting: 0 drops on 13 catchable balls this season (0%); 10% of his targets were contested"
+    assert lines[1].startswith("Player tracking: 2.7 yards from the nearest defender when the ball arrives "
+                               "(44th of 67 receivers), 5.0 yards of cushion at the snap")
     assert lines[2] == "CHI blitzes on 39% of dropbacks this season"
     rb = G.charting_notes("rb", "CHI", None, chi, {"rush_yards_over_expected_per_att": 0.41,
                                                     "rush_yards_over_expected_per_att_rank": 3, "n_ranked": 30,
                                                     "percent_attempts_gte_eight_defenders": 21.4})
-    assert rb[0].startswith("Tracking: +0.41 rushing yards over expected a carry (3rd of 30 RBs), sees 8+ in the box on 21%")
-    assert rb[1] == "CHI stacks the box (8+) on 22% of runs this season, light boxes (6 or fewer) on 35%"
+    assert rb[0] == ("Player tracking: 0.41 more rushing yards a carry than expected (3rd of 30 running backs); "
+                     "he faces 8 or more defenders near the line on 21% of his carries")
+    assert rb[1] == "CHI puts 8 or more defenders near the line on 22% of runs this season and 6 or fewer on 35%"
     qb = G.charting_notes("qb", "CHI", {"attempts": 62, "iw": 1, "iw_rate": 0.016, "catchable_rate": 0.694,
                                         "play_action_rate": 0.191}, chi, None)
-    assert qb[0] == "Charted: 1 interception-worthy throw on 62 attempts (2%), 69% catchable, play action on 19% of dropbacks"
+    assert qb[0] == ("Charting: 1 throw that could have been intercepted in 62 attempts (2%); 69% of his throws "
+                     "were catchable, and he used play action on 19% of dropbacks")
     assert G.charting_notes("wr", "CHI", None, None, None) == [], "nothing charted, nothing said"
     # A figure that rounds to nothing carries no sign: "-0.0 over expected"
     # read as a fault on the first full board (2026-10-19).
     flat = G.charting_notes("qb", "CHI", None, None, {"completion_percentage_above_expectation": -0.04,
                                                       "completion_percentage_above_expectation_rank": 25,
                                                       "n_ranked": 43, "avg_time_to_throw": 2.54})
-    assert flat[0] == "Tracking: completion rate 0.0 over expected (25th of 43 QBs), 2.54s to throw"
+    assert flat[0] == ("Player tracking: a completion rate right at expected (25th of 43 quarterbacks), "
+                       "2.54 seconds to throw")
     yac = G.charting_notes("wr", "CHI", None, None, dict(track, avg_yac_above_expectation=-0.03))
-    assert yac[0].endswith(", 0.0 yd after the catch over expected")
+    assert yac[0].endswith(", and right at the expected yards after the catch")
+    assert not any("-0.0" in x or "−0.0" in x for x in flat + yac)
+    low = G.charting_notes("rb", "CHI", None, None, {"rush_yards_over_expected_per_att": -0.2,
+                                                    "rush_yards_over_expected_per_att_rank": 28, "n_ranked": 30,
+                                                    "percent_attempts_gte_eight_defenders": 30})
+    assert low[0].startswith("Player tracking: 0.20 fewer rushing yards a carry than expected (28th of 30")
     # A read's notes carry them: the read function threads all three.
     src = (ROOT / "engine" / "gamescan.py").read_text(encoding="utf-8")
     assert "notes += charting_notes(group, opp, charting, charting_def, tracking)" in src

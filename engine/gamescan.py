@@ -1108,6 +1108,16 @@ def _plus(v, nd: int) -> str:
     return s[1:] if float(s) == 0 else s
 
 
+def _than_expected(v, nd: int, what: str) -> str:
+    """"0.41 more rushing yards a carry than expected", "0.2 fewer …"; a
+    figure that rounds to nothing is "right at the expected …" — never
+    "-0.0" (2026-10-19)."""
+    x = round(float(v), nd)
+    if x == 0:
+        return f"right at the expected {what}"
+    return f"{abs(x):.{nd}f} {'more' if x > 0 else 'fewer'} {what} than expected"
+
+
 def charting_notes(group: str, opp: str, charting: dict | None, charting_def: dict | None,
                    tracking: dict | None) -> list:
     """The read's charted and tracked lines, in the reader's words.
@@ -1120,37 +1130,49 @@ def charting_notes(group: str, opp: str, charting: dict | None, charting_def: di
     check, never a reason the number moved."""
     out = []
     c, d, t = charting or {}, charting_def or {}, tracking or {}
+    # IN PLAIN WORDS (Ethan, 2026-11-15: "the wording in these reports are
+    # confusing"): "+0.41 rushing yards over expected a carry, sees 8+ in
+    # the box" is said "0.41 more rushing yards a carry than expected … 8 or
+    # more defenders near the line"; a figure that rounds to nothing still
+    # carries no sign (2026-10-19) — it is "right at expected".
     if group in ("wr", "te"):
         if (c.get("catchable") or 0) >= 8:
-            out.append(f"Charted: {c.get('drops', 0)} drop{'s' if c.get('drops', 0) != 1 else ''} on "
-                       f"{c['catchable']} catchable balls this season ({_pct(c.get('drops_rate'))}), "
-                       f"{_pct(c.get('contested_rate'))} of his targets contested")
+            out.append(f"Charting: {c.get('drops', 0)} drop{'s' if c.get('drops', 0) != 1 else ''} on "
+                       f"{c['catchable']} catchable balls this season ({_pct(c.get('drops_rate'))}); "
+                       f"{_pct(c.get('contested_rate'))} of his targets were contested")
         if t.get("avg_separation") is not None and t.get("n_ranked"):
-            out.append(f"Tracking: {t['avg_separation']:.1f} yd of separation at the throw "
-                       f"({_ord(t.get('avg_separation_rank'))} of {t['n_ranked']} {group.upper()}s), "
-                       f"{t['avg_cushion']:.1f} yd of cushion, "
-                       f"{_plus(t['avg_yac_above_expectation'], 1)} yd after the catch over expected")
+            out.append(f"Player tracking: {t['avg_separation']:.1f} yards from the nearest defender when "
+                       f"the ball arrives ({_ord(t.get('avg_separation_rank'))} of {t['n_ranked']} "
+                       f"{'tight ends' if group == 'te' else 'receivers'}), {t['avg_cushion']:.1f} yards "
+                       f"of cushion at the snap, and "
+                       + _than_expected(t['avg_yac_above_expectation'], 1, "yards after the catch"))
         if d.get("blitz_rate") is not None:
             out.append(f"{opp} blitzes on {_pct(d['blitz_rate'])} of dropbacks this season")
     elif group == "rb":
         if t.get("rush_yards_over_expected_per_att") is not None and t.get("n_ranked"):
-            out.append(f"Tracking: {_plus(t['rush_yards_over_expected_per_att'], 2)} rushing yards over "
-                       f"expected a carry ({_ord(t.get('rush_yards_over_expected_per_att_rank'))} of "
-                       f"{t['n_ranked']} RBs), sees 8+ in the box on "
-                       f"{t['percent_attempts_gte_eight_defenders']:.0f}% of carries")
+            out.append("Player tracking: " + _than_expected(t['rush_yards_over_expected_per_att'], 2,
+                                                            "rushing yards a carry")
+                       + f" ({_ord(t.get('rush_yards_over_expected_per_att_rank'))} of "
+                       f"{t['n_ranked']} running backs); he faces 8 or more defenders near the line on "
+                       f"{t['percent_attempts_gte_eight_defenders']:.0f}% of his carries")
         if d.get("heavy_box_rate") is not None:
-            out.append(f"{opp} stacks the box (8+) on {_pct(d['heavy_box_rate'])} of runs this season, "
-                       f"light boxes (6 or fewer) on {_pct(d['light_box_rate'])}")
+            out.append(f"{opp} puts 8 or more defenders near the line on {_pct(d['heavy_box_rate'])} of "
+                       f"runs this season" + (f" and 6 or fewer on {_pct(d['light_box_rate'])}"
+                                              if d.get("light_box_rate") is not None else ""))
     elif group == "qb":
         if (c.get("attempts") or 0) >= 30:
-            out.append(f"Charted: {c.get('iw', 0)} interception-worthy throw{'s' if c.get('iw', 0) != 1 else ''} "
-                       f"on {c['attempts']} attempts ({_pct(c.get('iw_rate'))}), "
-                       f"{_pct(c.get('catchable_rate'))} catchable, play action on "
-                       f"{_pct(c.get('play_action_rate'))} of dropbacks")
+            iw = c.get("iw", 0)
+            out.append(f"Charting: {iw} throw{'s' if iw != 1 else ''} that could have been intercepted "
+                       f"in {c['attempts']} attempts ({_pct(c.get('iw_rate'))}); "
+                       f"{_pct(c.get('catchable_rate'))} of his throws were catchable, and he used play "
+                       f"action on {_pct(c.get('play_action_rate'))} of dropbacks")
         if t.get("completion_percentage_above_expectation") is not None and t.get("n_ranked"):
-            out.append(f"Tracking: completion rate {_plus(t['completion_percentage_above_expectation'], 1)} "
-                       f"over expected ({_ord(t.get('completion_percentage_above_expectation_rank'))} of "
-                       f"{t['n_ranked']} QBs), {t['avg_time_to_throw']:.2f}s to throw")
+            cp = round(float(t["completion_percentage_above_expectation"]), 1)
+            rate = ("a completion rate right at expected" if cp == 0 else
+                    f"a completion rate {abs(cp):.1f} points {'above' if cp > 0 else 'below'} expected")
+            out.append(f"Player tracking: {rate} "
+                       f"({_ord(t.get('completion_percentage_above_expectation_rank'))} of "
+                       f"{t['n_ranked']} quarterbacks), {t['avg_time_to_throw']:.2f} seconds to throw")
         if d.get("blitz_rate") is not None:
             out.append(f"{opp} blitzes on {_pct(d['blitz_rate'])} of dropbacks this season")
     return out
@@ -1750,7 +1772,7 @@ def _opens(inj, team: str, opp: str, ratings: dict, charts: dict, usage: dict) -
     who may yet play."""
     said = _opens_if_out(inj, team, opp, ratings, charts, usage)
     st = str(getattr(inj, "status", "") or "").upper()
-    return f"If he sits — {said}" if said and st not in OUT_STATUSES else said
+    return f"If he sits, {said}" if said and st not in OUT_STATUSES else said
 
 
 def _opens_if_out(inj, team: str, opp: str, ratings: dict, charts: dict, usage: dict) -> str:
@@ -1764,18 +1786,19 @@ def _opens_if_out(inj, team: str, opp: str, ratings: dict, charts: dict, usage: 
                 + f"; {opp}'s receivers see the next man up")
     if pos in ("T", "G", "C", "OT", "OG", "OL", "LT", "LG", "RG", "RT"):
         rush = _rank(ratings.get(opp) or {}, "def", "pressure")
-        return (f"{team}'s protection weakens" + (f" against the {_ord(rush)} pass rush" if rush else ""))
+        return (f"{team}'s pass protection loses a starter"
+                + (f" against the league's {_ord(rush)}-ranked pass rush" if rush else ""))
     if pos in ("DE", "DT", "NT", "EDGE", "OLB", "DL", "LB", "ILB", "MLB"):
         return f"{opp}'s blockers get relief"
     if pos in ("WR", "TE"):
         u = usage.get((team, _key(who))) or {}
         share, word = u.get("tgt_share"), u.get("share_of") or "targets"
-        return (f"{share:.0%} of {team}'s {word} to share out" if share else
+        return (f"his {share:.0%} of {team}'s {word} go to other players" if share else
                 f"{team}'s {word} shift")
     if pos in ("RB", "FB"):
         u = usage.get((team, _key(who))) or {}
         share = u.get("carry_share")
-        return (f"{share:.0%} of {team}'s carries to share out" if share else
+        return (f"his {share:.0%} of {team}'s carries go to other players" if share else
                 f"{team}'s carries shift")
     if pos == "QB":
         return f"{team} starts a different quarterback"

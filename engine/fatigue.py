@@ -214,11 +214,12 @@ def state_for(game, team: str) -> dict:
     }
     if band == "short week":
         out["notes"].append(
-            f"Short week: {int(rest)} days since the last game — one padded "
-            f"practice, no installation week, and Sunday's bumps unhealed")
+            f"Short week: {int(rest)} days since the last game, so one padded "
+            f"practice, no full week to put in a game plan, and no time for "
+            f"Sunday's bumps and bruises to heal")
     elif band == "off a bye":
         out["notes"].append(
-            f"Off a bye: {int(rest)} days of rest and two weeks of prep")
+            f"Off a bye: {int(rest)} days of rest and two weeks to prepare")
     if rest and opp_rest and abs(int(rest) - int(opp_rest)) >= REST_EDGE:
         ahead = int(rest) > int(opp_rest)
         out["notes"].append(
@@ -231,8 +232,8 @@ def state_for(game, team: str) -> dict:
                 f"time to prepare and to heal")
     if clock is not None and clock <= EARLY_BODY_CLOCK:
         out["notes"].append(
-            f"Body clock: kickoff is {clock_str(clock)} by the team's own "
-            f"clock — the oldest scheduling angle in the sport")
+            f"Body clock: kickoff is {clock_str(clock)} on the team's home time, an "
+            f"early start for its players")
         if clock <= 10:
             out["warnings"].append(
                 f"Early body clock: a {clock_str(clock)} start by this "
@@ -241,8 +242,8 @@ def state_for(game, team: str) -> dict:
                 f"here so our own record can say which")
     if out["neutral_site"]:
         out["notes"].append(
-            "Neutral site: an international trip — flight, time zones and a "
-            "disrupted week arrive together")
+            "Neutral site: an international trip, with a long flight, a "
+            "time-zone change and a disrupted week")
     return out
 
 

@@ -98,8 +98,8 @@ def test_this_seasons_charting_leads_and_last_seasons_shells_say_so():
     src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
     i = src.index("def sec_identity(")
     body = src[i:src.index("\ndef ", i + 10)]
-    assert body.index("This season {t} is") < body.index("Last season ({sch_season})"), "this season first"
-    assert "this season's coverage shells are not" in body
+    assert body.index('f"This season {t} "') < body.index("Last season ({sch_season})"), "this season first"
+    assert "this season's coverage numbers come out after the season" in body
     j = src.index("def sec_injuries(")
     assert 'c.scan.get("reserve")' in src[j:j + 2000]
     scan = (ROOT / "engine" / "gamescan.py").read_text(encoding="utf-8")

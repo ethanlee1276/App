@@ -114,7 +114,7 @@ STADIUMS: dict[str, Stadium] = {
                    "A mile above sea level: thin air lets a kicked ball carry farther — the one "
                    "NFL venue where altitude is a real, repeatable effect. Open air."),
     "DET": Stadium("DET", "Ford Field", "dome", "turf", 600, 65000, 2002,
-                   "Fixed dome: identical conditions every week, no weather read needed."),
+                   "Fixed dome: indoors every week, so the weather doesn't matter."),
     "GB": Stadium("GB", "Lambeau Field", "outdoors", "grass", 640, 81441, 1957,
                   "Open air in Green Bay."),
     "HOU": Stadium("HOU", "NRG Stadium", "retractable", "turf", 50, 72220, 2002,

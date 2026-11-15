@@ -249,7 +249,7 @@ def mlb_pitching(c: Ctx) -> dict | None:
     for t in (t_a, t_h):
         s = _sides(c).get(t) or {}
         if s.get("mix"):
-            items.append(f"{c.poss(t)} starter throws {s['mix']}")
+            items.append(f"{c.poss(t)} starter's pitch mix: {s['mix']}")
         vh = s.get("vs_hand") or {}
         if _f(vh.get("factor")) is not None and vh.get("hand"):
             f = float(vh["factor"]) - 1
@@ -259,7 +259,8 @@ def mlb_pitching(c: Ctx) -> dict | None:
                          f"({vh.get('hitters')} hitters measured)")
         if _f(s.get("k_rate")) is not None:
             items.append(f"{t} strikes out {_pct(s['k_rate'], 1)} of the time"
-                         + (f" (league {_pct(league['k_rate'])})" if _f(league.get("k_rate")) is not None else ""))
+                         + (f" (the league average is {_pct(league['k_rate'])})"
+                            if _f(league.get("k_rate")) is not None else ""))
     pens = []
     for t in (t_a, t_h):
         s = _sides(c).get(t) or {}
@@ -268,11 +269,11 @@ def mlb_pitching(c: Ctx) -> dict | None:
             bits.append(f"ranks {_ord(int(s['pen_rank']))}")
         fat = _f(s.get("pen_fatigue"))
         if fat is not None and fat >= PEN_TIRED:
-            bits.append(f"threw {_num(fat)} relief innings the last two days — tired")
+            bits.append(f"is tired after {_num(fat)} relief innings over the last two days")
         if bits:
             pens.append(f"{c.poss(t)} bullpen {' and '.join(bits)}")
     if pens:
-        items.append("The pens: " + "; ".join(pens))
+        items.append("The bullpens: " + "; ".join(pens))
     blocks.append(_list(items))
     starters = _reads(c, pos={"SP", "P"})
     if starters:
@@ -293,11 +294,13 @@ def mlb_park(c: Ctx) -> dict | None:
         v = _f(tp.get(k))
         if v is not None:
             d = round((v - 1) * 100)
-            fac.append(f"{'+' if d > 0 else '−' if d < 0 else '±'}{abs(d)}% {w}")
+            fac.append(f"{d}% more {w}" if d > 0 else f"{abs(d)}% fewer {w}" if d < 0 else f"the usual {w}")
     items = []
     if fac:
-        items.append(f"{tp.get('name') or park.get('name') or 'The park'} plays {', '.join(fac)} "
-                     "against an average park")
+        # "plays +4% home runs, ±0% strikeouts" (2026-11-15): said as more,
+        # fewer and the usual.
+        items.append(f"Compared with an average park, {tp.get('name') or park.get('name') or 'this park'} "
+                     f"sees {_join(fac)}")
     w = g.get("weather") or {}
     if w.get("dome") or str(g.get("roof") or "").lower() in ("dome", "closed"):
         items.append("Under a roof: no weather in play")
@@ -314,15 +317,15 @@ def mlb_park(c: Ctx) -> dict | None:
         if bits:
             items.append("Weather: " + ", ".join(bits))
     for why in ((g.get("conditions") or {}).get("why") or [])[:3]:
-        items.append(str(why))
+        items.append(_weather_said(str(why)))
     ump = _tape(c).get("umpire") or {}
     if ump.get("name"):
         bits = []
         for k, word in (("k", "strikeouts"), ("runs", "runs")):
             v = _f(ump.get(k))
             if v is not None and abs(v - 1) >= 0.02:
-                bits.append(f"{'+' if v > 1 else '−'}{round(abs(v - 1) * 100)}% {word}")
-        items.append(f"Plate umpire {ump['name']}" + (f": {', '.join(bits)} in his games" if bits else
+                bits.append(f"{round(abs(v - 1) * 100)}% {'more' if v > 1 else 'fewer'} {word}")
+        items.append(f"Plate umpire {ump['name']}" + (f": his games have {_join(bits)} than average" if bits else
                                                       ": calls an average zone"))
     blocks.append(_list(items))
     return _section("weather", "The park and the weather", blocks)
@@ -347,8 +350,8 @@ def mlb_injuries(c: Ctx) -> dict | None:
 def mlb_before(c: Ctx) -> dict | None:
     lines = []
     if c.g.get("lineups_confirmed") is not True:
-        lines.append("Lineups post two to four hours before first pitch; a hitter left out has no "
-                     "at-bats, and every read of him is moot")
+        lines.append("Lineups come out two to four hours before first pitch; a hitter who isn't in the "
+                     "lineup won't bat, so skip his read")
     lines.append("A probable starter can be scratched up to first pitch — the line moves when he is")
     w = c.g.get("weather") or {}
     if w and not w.get("dome") and (w.get("rain") or (_f(w.get("wind_mph")) or 0) >= 10):
@@ -513,8 +516,8 @@ def nhl_goalies(c: Ctx) -> dict | None:
         if _f(s.get("starter_sv")) is not None:
             bits.append(f".{round(float(s['starter_sv']) * 1000):03d} save rate")
         if _f(s.get("starter_gsax")) is not None:
-            bits.append(f"{float(s['starter_gsax']):+.1f}".replace("-", "\u2212")
-                        + " goals saved above expected lately")
+            from .nhl.scan import gsax_words
+            bits.append(gsax_words(s["starter_gsax"]))
         if _f(s.get("starter_share")) is not None:
             bits.append(f"started {_pct(s['starter_share'])} of {c.poss(t)} recent games")
         items.append(f"{s['starter']} for {t} — {'; '.join(bits)}")
@@ -540,8 +543,9 @@ def nhl_injuries(c: Ctx) -> dict | None:
     pulled = [p for p in _tape(c).get("pulled") or [] if p]
     blocks = [_list(items)]
     if pulled:
-        blocks.append(_p(f"Every book took {_join(pulled)}'s props down before puck drop — treated as "
-                         "out until the lineup or the books say otherwise"))
+        blocks.append(_p(f"Every sportsbook pulled its props on {_join(pulled)} before puck drop, so we treat "
+                         f"{'him' if len(pulled) == 1 else 'them'} as out until the lineup or the books say "
+                         "otherwise"))
     return _section("injuries", "Injuries", blocks)
 
 
@@ -647,14 +651,14 @@ def nba_facts(c: Ctx) -> dict | None:
         if s.get("rest") in REST_SHORT:
             bits.append(REST_SHORT[s["rest"]])
         if _f(s.get("miles")) and s.get("from") and s.get("from") != c.home:
-            trip = f"{int(s['miles']):,} miles from {s['from']}"
+            trip = f"traveled {int(s['miles']):,} miles from {s['from']}"
             if s.get("days_since"):
-                trip += f" ({_plural_days(s['days_since'])} ago)"
+                trip += f" {_plural_days(s['days_since'])} ago"
             bits.append(trip)
         tz = _f(s.get("tz_shift"))
         if tz:
-            bits.append(f"the clock {'moved ahead' if tz > 0 else 'moved back'} "
-                        f"{int(abs(tz))} hour{'s' if abs(tz) != 1 else ''}")
+            bits.append(f"{int(abs(tz))} time zone{'s' if abs(tz) != 1 else ''} "
+                        f"{'east' if tz > 0 else 'west'} of its last game")
         if "altitude" in (s.get("flags") or []):
             bits.append("up from near sea level to altitude")
         if bits:
@@ -703,20 +707,25 @@ def nba_defense(c: Ctx) -> dict | None:
             rank, of = r.get("rank"), r.get("of")
             if not rank or not of or _f(r.get("pg")) is None:
                 continue
+            # "gives up the most points (118.2 a game, 2nd-most; league 113)"
+            # said "the most" and "2nd" of one number (Ethan, 2026-11-15:
+            # "hard to read"): it is "the second-most points (118.2 a game;
+            # the league average is 113)".
+            avg = f"; the league average is {_num(r.get('league'))}" if _f(r.get("league")) is not None else ""
             if rank <= 5:
-                soft.append(f"{word} ({_num(r['pg'])} a game, {_ord(int(rank))}-most; league {_num(r.get('league'))})")
+                soft.append(f"the {_ord(int(rank))}-most {word} ({_num(r['pg'])} a game{avg})")
             elif rank > of - 5:
-                hard.append(f"{word} ({_num(r['pg'])} a game, {_ord(int(of - rank + 1))}-fewest; "
-                            f"league {_num(r.get('league'))})")
+                hard.append(f"the {_ord(int(of - rank + 1))}-fewest {word} ({_num(r['pg'])} a game{avg})")
         if soft:
-            items.append(f"{t}'s defence gives up the most {_join(soft)}")
+            items.append(f"{t}'s defense gives up {_join(soft)}")
         if hard:
-            items.append(f"{t}'s defence gives up the fewest {_join(hard)}")
+            items.append(f"{t}'s defense gives up {_join(hard)}")
     if not items:
         return None
-    note = ("Per game, not per possession: a fast team's defence reads a little worse than it is"
-            + ("; last season's numbers, this one is too young to rank" if c.meta.get("dvp_last") else ""))
-    return _section("defense", "Where each defence gives", [_list(items), {"type": "note", "text": _sentence(note)}])
+    note = ("Per game, not per possession: a fast team's defense looks a little worse than it is"
+            + ("; these are last season's numbers, because this season is too young to rank"
+               if c.meta.get("dvp_last") else ""))
+    return _section("defense", "Where each defense gives", [_list(items), {"type": "note", "text": _sentence(note)}])
 
 
 def nba_tape(c: Ctx) -> dict | None:

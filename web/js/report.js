@@ -97,7 +97,7 @@
           <span class="gr-parlay-pick"><b>${escapeHtml(l.pick || "")}</b>${l.price
             ? ` <span class="gr-parlay-px">${escapeHtml(l.price)}</span>` : ""}${l.chance
             ? ` <span class="gr-parlay-p">${Math.round(Number(l.chance) * 100)}%</span>` : ""}${l.research != null
-            ? ` <span class="gr-parlay-r" title="Our research case: his team’s expected points, the defence he faces, his usage and red-zone work, the matchup read and the game script">research ${escapeHtml(String(l.research))} of ${escapeHtml(String(l.research_of || 13))}</span>` : ""}</span>
+            ? ` <span class="gr-parlay-r" title="Our research score: his team’s expected points, the defense he faces, his usage and red-zone work, the matchup read and the game script">research score ${escapeHtml(String(l.research))} of ${escapeHtml(String(l.research_of || 13))}</span>` : ""}</span>
           ${(l.why || []).length ? `<ul class="gr-why">${items(l.why)}</ul>` : ""}</li>`).join("")}</ol>
         ${t.script ? `<p class="gr-parlay-script">${escapeHtml(t.script)}</p>` : ""}
         ${(t.links || []).length ? `<ul class="gr-list gr-parlay-links">${items(t.links)}</ul>` : ""}
@@ -141,7 +141,7 @@
             out.push(`• ${t.title}: ${t.price_line || ""}`);
             for (const l of t.legs || []) {
               out.push(`    – ${l.pick}${l.price ? ` (${l.price})` : ""}${l.chance ? `, ${Math.round(Number(l.chance) * 100)}%` : ""}${
-                l.research != null ? `, research ${l.research} of ${l.research_of || 13}` : ""}`);
+                l.research != null ? `, our research score ${l.research} of ${l.research_of || 13}` : ""}`);
               (l.why || []).forEach((w) => out.push(`        · ${w}`));
             }
             if (t.script) out.push(`    ${t.script}`);

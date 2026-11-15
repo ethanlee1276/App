@@ -187,7 +187,7 @@ def matchup_lines(scan: dict, home: str, away: str) -> list:
                            + (f", blitzes {sch['blitz']:.0%}" if sch.get("blitz") is not None else "") + ".")
         rush = [d for d in (scan.get("rush") or {}).get(team) or [] if isinstance(d, dict)]
         if rush and (rush[0].get("pressures") or 0) >= 8:
-            out.append(f"{team}'s rush runs through {rush[0]['name']} ({rush[0]['pressures']} pressures, "
+            out.append(f"{team}'s pass rush is led by {rush[0]['name']} ({rush[0]['pressures']} pressures, "
                        f"{rush[0].get('sacks') or 0:g} sacks).")
     return out
 

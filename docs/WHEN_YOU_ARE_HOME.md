@@ -9338,6 +9338,48 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RG. The game reports read in plain words** (step 587; 15 November).
+Nothing to run. You circled two phrases in the NE–DET report's red zone,
+"(23rd of 32, 1st the stingiest)" and "(0% below the league), both adjusted
+for opponents", and said the wording was confusing and hard to read. I
+rewrote the red zone and then went through every section of every
+league's report. The red zone now reads like this (the test game, GB at
+DET):
+- "GB scores a touchdown on 54% of its trips inside the 20 (the
+  eighth-worst rate in the league). DET's defense gives up a touchdown on
+  80% of them (the third-worst)."
+- "GB runs about 10 plays a game inside the opponent's 20 (9% more than an
+  average team); DET's defense allows about 9.8 (6% more than an average
+  team). Both are adjusted for the teams they've played."
+
+A rank is said from its near end, and a number within 5% of the league is
+"about average", never "0% below". The rest, in every league:
+- "the 1st-most" is "the most", and 2nd to 9th are words ("the
+  second-most").
+- An edge's caveat names its player: "though Matthew Golden has only 4
+  catches in his last 2 games", not "though only 4 catches in his last 2
+  games".
+- The market: "take out the book's cut and that gives DET a 60% chance to
+  win"; "On Kalshi, 70% of the moneyline money is on DET"; "We simulated
+  this game 4,000 times, drive by drive…".
+- Football jargon is written out: "8 or more defenders near the line"
+  instead of "8+ in the box"; "DET's pass rush is led by…" instead of "rush
+  runs through"; "0.53 more rushing yards a carry than expected" instead of
+  "+0.53 rushing yards over expected a carry"; "If he sits, his 19% of
+  DET's targets go to other players".
+- Coverage: "Where DET's defense is weakest, over 5 games: it gives up the
+  most receiving yards (109 a game) to tight ends."
+- The schedule: "DET comes off a bye: 14 days of rest and two weeks to
+  prepare" instead of "DET: Off a bye: …".
+- The script: "a high-scoring, close game, good for both offenses" instead
+  of "Everyone eats". The fantasy page keeps its names.
+- College's line play is in sentences. The meetings note now says college's
+  lines come from our history database, not nflverse's file.
+- Baseball's park and umpire are "4% more home runs" and "3% fewer runs",
+  not "+4%". Hockey's goalies are "has let in 3.4 more goals than expected
+  lately", not "−3.4 goals saved above expected". Basketball's defenses are
+  "the second-most points (118.2 a game; the league average is 113)".
+
 **RF. Your NFL Bet checking project, read** (step 586; 14 November). Nothing
 to run; two decisions, under 00f. I read the project's master instructions,
 its slate log (the cards and post-mortems from 1 October to 12 November) and

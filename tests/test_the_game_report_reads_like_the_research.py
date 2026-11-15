@@ -84,7 +84,7 @@ def _board():
         "spread": -3.0, "total": 52.5, "home_ml": -166, "away_ml": 140, "favorite": "DET",
         "roof": "dome", "surface": "fieldturf", "neutral_site": False,
         "stadium": {"name": "Ford Field", "roof": "dome", "surface": "turf", "altitude_ft": 600,
-                    "plays": "Fixed dome: identical conditions every week, no weather read needed."},
+                    "plays": "Fixed dome: indoors every week, so the weather doesn't matter."},
         "weather": {"dome": True, "temp_f": 70.0, "wind_mph": 0.0, "measured": True, "forecast": False},
         "conditions": {"why": ["Dome game — no weather impact on the passing game"]},
         "sim": {"trials": 4000, "p_home_win": 0.58, "cover": 0.48, "cover_push": 0.063, "over": 0.503,
@@ -125,9 +125,9 @@ def _board():
                      "GB": [{"name": "Lukas Van Ness", "pressures": 9, "sacks": 2.5}]},
             "line_out": {"GB": ["Zach Tom (RT)"], "DET": []},
             "injuries": [{"team": "GB", "player": "Zach Tom", "position": "T", "status": "OUT",
-                          "opens": "GB's protection weakens against the 5th pass rush"},
+                          "opens": "GB's pass protection loses a starter against the league's 5th-ranked pass rush"},
                          {"team": "DET", "player": "Sam LaPorta", "position": "TE", "status": "QUESTIONABLE",
-                          "opens": "If he sits — 19% of DET's targets to share out"}],
+                          "opens": "If he sits, his 19% of DET's targets go to other players"}],
             "pulled": ["Isaac TeSlaa"],
             "redzone": {"DET": {"off": 11.98, "def": 9.83, "off_rel": 0.299, "def_rel": 0.059},
                         "GB": {"off": 10.02, "def": 10.68, "off_rel": 0.087, "def_rel": 0.151}},
@@ -147,7 +147,7 @@ def _board():
               pro=["Takes 69% of the carries (18 a game)", "GB gives up the 2nd-most touchdowns to running backs (1.7 a game)",
                    "The lines expect DET to score about 28 (−3 at home, total 52.5)"],
               notes=["Usage is 55% this season, 45% last season — last season he had 55% of the carries",
-                     "Tracking: +0.53 rushing yards over expected a carry (13th of 49 RBs)"]),
+                     "Player tracking: 0.53 more rushing yards a carry than expected (13th of 49 running backs)"]),
         _read("Amon-Ra St. Brown", "DET", "WR", "neutral",
               {"tgt_share": 0.314, "targets_pg": 10.8, "snap_pct": 0.87},
               pro=["Commands 31% of the targets (10.8 a game)",
@@ -156,7 +156,7 @@ def _board():
               notes=["Brandon Cisse (RCB) has allowed a 143 passer rating on 17 targets"]),
         _read("Jared Goff", "DET", "QB", "neutral", {"snap_pct": 0.99, "carry_share": 0.06},
               pro=["The lines expect DET to score about 28 (−3 at home, total 52.5)"],
-              notes=["Charted: 2 interception-worthy throws on 191 attempts (1%)"]),
+              notes=["Charting: 2 throws that could have been intercepted in 191 attempts (1%)"]),
         _read("Christian Watson", "GB", "WR", "good", {"tgt_share": 0.213, "targets_pg": 6.9, "snap_pct": 0.75},
               pro=["DET gives up the 1st-most passing yards (320 a game)"]),
         _read("Matthew Golden", "GB", "WR", "tough", {"tgt_share": 0.196, "targets_pg": 6.6, "snap_pct": 0.7},
@@ -182,7 +182,7 @@ def _board():
         "fatigue": {"teams": {"GB": {"rest_days": 7, "rest_band": "normal week",
                                      "notes": ["Rest deficit: 7 days to the opponent's 14"]},
                               "DET": {"rest_days": 14, "rest_band": "off a bye",
-                                      "notes": ["Off a bye: 14 days of rest and two weeks of prep",
+                                      "notes": ["Off a bye: 14 days of rest and two weeks to prepare",
                                                 "Rest edge: 14 days to the opponent's 7"]}}},
         "playoff_picture": {"teams": {"GB": {"wins": 4, "losses": 2, "ties": 0, "status": "in the hunt"},
                                       "DET": {"wins": 3, "losses": 2, "ties": 0, "status": "in the hunt"}}},
@@ -234,12 +234,12 @@ def test_every_number_is_the_boards_own():
     text = R.to_text(rep)
     # The lines: −3 at 52.5 implies 27.75 and 24.75; −166/+140 is 60% with the cut out.
     assert "DET at about 27.8 points and GB at about 24.8" in text
-    assert "DET wins 60% of the time once the book's cut is taken out" in text
+    assert "take out the book's cut and that gives DET a 60% chance to win" in text
     # The opener and the move; the crowd and the money.
     assert "opened at DET \u22122.5 and has moved 0.5 points toward DET" in text
     assert "The total opened at 51 and is up 1.5" in text
-    assert "DET at 61% on Kalshi and DET at 60% on Polymarket" in text
-    assert "moneyline: 70% of the money on DET ($52,000 traded)" in text
+    assert "Prediction markets give DET a 61% chance on Kalshi and a 60% chance on Polymarket" in text
+    assert "On Kalshi, 70% of the moneyline money is on DET ($52,000 traded)" in text
     assert "Moneyline: DET \u2212166, GB +140" in text
     # The units, as the scan ranked them, and the edge column on the bar.
     tables = [b for s in rep["sections"] if s["key"] == "rankings" for b in s["blocks"] if b["type"] == "table"]
@@ -257,17 +257,18 @@ def test_every_number_is_the_boards_own():
     # The corners, the rush, the red zone, the funnels.
     assert "D.J. Reed (LCB) — 126.5 passer rating allowed on 28 targets, 11.3 yards a target, 2 touchdowns" in text
     assert "Aidan Hutchinson (15 pressures, 4 sacks)" in text and "Alim McNeill (10 pressures, 1 sack)" in text
-    assert "DET scores a touchdown on 80% of its red-zone trips this season (3rd of 32)" in text
-    assert "tight ends — the 1st-most receiving yards (109 a game)" in text
-    assert "running backs on the ground — the 3rd-fewest rushing yards (70 a game)" in text
+    assert ("DET scores a touchdown on 80% of its trips inside the 20 (the third-best rate in the league). "
+            "GB's defense gives up a touchdown on 70% of them (the 10th-worst).") in text
+    assert "Where DET's defense is weakest, over 5 games: it gives up the most receiving yards (109 a game) to tight ends" in text
+    assert "Where it's strongest: it gives up the third-fewest rushing yards (70 a game) to running backs on the ground" in text
     assert "Expected red-zone chances" not in text or "about 2.4 a game" in text
 
 
 def test_a_shared_reason_is_said_once_and_his_share_of_the_work_is_his_line():
     rep = _report()
     matchups = next(s for s in rep["sections"] if s["key"] == "matchups")
-    shared = [b["text"] for b in matchups["blocks"] if b["type"] == "p" and b["text"].startswith("Across DET")]
-    assert shared and "The lines expect DET to score about 28" in shared[0], shared
+    shared = [b["text"] for b in matchups["blocks"] if b["type"] == "p" and b["text"].startswith("For all of DET")]
+    assert shared and "For all of DET's key players: the lines expect DET to score about 28" in shared[0], shared
     det = [v for b in matchups["blocks"] if b["type"] == "verdicts" for v in b["items"] if v["team"] == "DET"]
     gibbs = next(v for v in det if v["player"] == "Jahmyr Gibbs")
     assert gibbs["label"] == "FAVORABLE — breakout candidate" and gibbs["verdict"] == "favorable"
@@ -323,7 +324,7 @@ def test_the_injury_report_is_named_when_it_was_not_read():
 
 def test_the_same_fact_is_not_said_twice():
     text = R.to_text(_report())
-    assert "Rest deficit" not in text and "DET: Rest edge: 14 days to the opponent's 7" in text
+    assert "Rest deficit" not in text and "DET has the rest edge: 14 days to GB's 7" in text
     assert text.count("Brandon Cisse (RCB) has allowed") == 0, "the corner's line says it once"
     assert "Someone else's quarterback change" not in text
 

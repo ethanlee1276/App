@@ -50,6 +50,19 @@ GSAX_EDGE = 3.0
 KEY_SKATERS = 9
 
 
+
+
+def gsax_words(gsax) -> str:
+    """A goalie's goals saved above expected without its sign (Ethan,
+    2026-11-15: "the wording in these reports are confusing"): +4.2 is
+    "has stopped 4.2 more goals than expected lately", −3.4 is "has let
+    in 3.4 more goals than expected lately"."""
+    x = round(float(gsax), 1)
+    if x == 0:
+        return "has stopped about as many goals as expected lately"
+    return (f"has stopped {x:.1f} more goals than expected lately" if x > 0
+            else f"has let in {abs(x):.1f} more goals than expected lately")
+
 def _label(pro: list, con: list, breakout: bool, fam: dict | None = None,
            featured: bool = False) -> tuple[str, str]:
     """ONE VOTE A FAMILY (engine/readlogic, 2026-11-14): the shots a
@@ -127,10 +140,9 @@ def read_skater(name: str, p: dict, team: str, opp: str, teams: dict, ctx: dict,
     gsax = them.get("gsax")
     if them.get("starter") and them.get("starter_sure") and gsax is not None:
         if gsax <= -GSAX_EDGE:
-            said(pro, f"Faces {them['starter']}, {gsax:+.1f} goals saved above expected lately — letting in more than his shots are worth",
-                 RL.GOALIE)
+            said(pro, f"Faces {them['starter']}, who {gsax_words(gsax)}", RL.GOALIE)
         elif gsax >= GSAX_EDGE:
-            said(con, f"Faces {them['starter']}, {gsax:+.1f} goals saved above expected lately", RL.GOALIE)
+            said(con, f"Faces {them['starter']}, who {gsax_words(gsax)}", RL.GOALIE)
     elif them.get("starter") and them.get("starter_sure") and sv is not None:
         if sv <= lsv - SV_EDGE:
             said(pro, f"Faces {them['starter']}, .{round(sv * 1000):03d} save rate — below the league", RL.GOALIE)
@@ -214,7 +226,7 @@ def read_goalie(name: str, team: str, opp: str, teams: dict, ctx: dict, headshot
         said(con, "Starter not settled — the back-to-back or a split crease", RL.ROLE)
     notes.append(f"Started {me.get('starter_share', 0):.0%} of {team}'s last {M.STARTER_WINDOW}")
     if me.get("gsax") is not None:
-        notes.append(f"{me['gsax']:+.1f} goals saved above expected lately")
+        notes.append(gsax_words(me["gsax"])[:1].upper() + gsax_words(me["gsax"])[1:])
     key, label = _label(pro, con, False, fam, featured=bool(me.get("starter_sure")))
     return {"player": name, "team": team, "opp": opp, "pos": "G", "read": key, "label": label,
             "pro": pro, "con": con, "notes": notes, "lean": list(GOALIE_LEANS), "headshot": headshot,
