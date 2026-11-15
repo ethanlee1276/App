@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SI. One field on the live page: the strip under the score** (step 615;
+15 November). Nothing to run. You circled the stadium photograph on a live
+football game ("The field: real data, real plays", the play drawn on it and
+the "Ball on" strip under it) and said "remove this since we have the other
+field". It's gone. The page's one field is now the strip under the score:
+where the ball is, the line to gain and the drive. The Last play card says
+the play in words, with the people in it. The page reads:
+- the score, the strip and the line score;
+- the last play, then the win chance;
+- your bets;
+- Call it, then the chat;
+- the tabs.
+
+The drawing of the play on your photograph is still in the code with its
+tests, so it can come back in one line if you ever want it. Baseball's
+ballpark photograph is unchanged.
+
 **SH. The heartbeat names each kind of pick on paper** (step 614; 15
 November). Nothing to run. Step RO puts a kind of pick on paper when its
 record says we oversell it. This morning none had been measured yet. By

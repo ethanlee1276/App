@@ -16,9 +16,10 @@ gpNowHTML):
     says the kick and the run back, the way the screenshot did;
   * NO FIELD (Ethan, 2026-11-15: "make sure to get rid of the field on the
     live page"): the card drew the last play on the clubs' end zones, under
-    the strip at the top of the page and over his photograph, which runs the
-    play on its own clock. The card is the play in words now, under that
-    photograph, above the tabs.
+    the strip at the top of the page and over his photograph, which ran the
+    play on its own clock. The card is the play in words now, above the tabs,
+    and the photograph is gone too ("remove this since we have the other
+    field"): the strip under the score is the page's one field.
 
 Run directly: `python3 tests/test_the_drive_card_says_what_happened.py`
 """
@@ -184,17 +185,19 @@ def test_a_finished_drive_gives_way_to_the_side_with_the_ball():
     assert "Timeout" in words and "TV timeout" not in words, words
 
 
-def test_the_card_follows_the_photograph_above_the_tabs_and_drops_the_repeats():
-    i = DETAIL.index("function gpNowHTML(d, league, faces, boardGame, lastPlay, GC, top)")
+def test_the_card_is_the_play_right_now_above_the_tabs_and_drops_the_repeats():
+    i = DETAIL.index("function gpNowHTML(d, league, faces, boardGame, GC, top)")
     body = DETAIL[i:DETAIL.index("\n}\n", i)]
     # 2026-11-15: the card is told when the strip under the score and our win
     # card already say its tiles, its drive line and its chip
     # (tests/test_the_live_page_says_each_thing_once).
     assert "g.driveView(d, league, faces, { top, win: !!ours })" in body
-    assert "return `${view}${card}${pbpWinChartHTML(d, league, boardGame)}${ours}`;" in body
+    assert "return `${card}${pbpWinChartHTML(d, league, boardGame)}${ours}`;" in body
     for gone in ("pbpSituationHTML", "g.driveCard", "g.lastPlay"):
         assert gone not in body, f"{gone} is said once, in the card"
-    assert "pbpParkHTML(d, league, boardGame, lastPlay, { strip: !top })" in body, "the photograph stays, first"
+    # The photograph went the same evening (Ethan: "remove this since we have
+    # the other field"): the strip under the score is the page's one field.
+    assert "pbpParkHTML" not in body and "pbpParkHeadHTML" not in body
     assert "driveView: driveViewHTML" in GC
 
 

@@ -4981,17 +4981,11 @@ async function renderPbpPage(tick) {
     ? ((state.data.games || []).find((x) => x.home === d.home && x.away === d.away) || null) : null;
   const faces = pbpFaces(league);
   const events = d.events || [];
-  // THE PLAY THE ART DRAWS. Baseball wants the newest ball actually hit;
-  // football wants simply the newest play, and reads it from `plays`
-  // rather than `events` because the football deep file has no `events`
-  // — livescore_build writes `drives` and a flattened `plays`, and the
-  // MLB builder is the only one that writes `events`. Renamed from
-  // `lastHit` when football joined: it is not a hit any more.
-  // A timeout or a quarter's end is not a play (footballWords): the
-  // photograph keeps drawing the last real snap through it.
-  const lastPlay = PBP_FOOTBALL.has(league)
-    ? ((d.plays || []).slice().reverse().find((r) => r && r.kind === "football" && footballWords(r, d).snap)
-       || (d.plays || []).slice().reverse().find((r) => r && r.kind === "football") || null)
+  // THE PLAY THE ART DRAWS: the newest ball actually hit, on the ballpark
+  // photograph (pbpParkHTML). The football page draws no photograph since
+  // 2026-11-15 (Ethan, circling it: "remove this since we have the other
+  // field" — the strip under the score), so football has none to find.
+  const lastPlay = PBP_FOOTBALL.has(league) ? null
     : (events.slice().reverse().find((r) => r.kind === "atbat" && r.hit) || null);
   const park = (boardGame || {}).park || {};
   const wx = (boardGame || {}).weather || {};
@@ -5061,7 +5055,7 @@ async function renderPbpPage(tick) {
      past game data"). The field or the ballpark draws the play in progress;
      a final has none, so its page is ESPN's: the score, the recap, the
      leaders, the scoring and the tabs. */
-  host.innerHTML = fb ? gpFootballHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event, lastPlay }) : `
+  host.innerHTML = fb ? gpFootballHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event }) : `
     ${stripHTML}
     <div class="pbp-layout gp${league === "mlb" ? "" : " pbp-has-tabs"}">
       <div class="pbp-main">
@@ -5729,19 +5723,19 @@ function gpDrivesHTML(d, league) {
    the photograph leaves out its own "Ball on" strip; and the card's win
    chip goes when our Win probability card is drawn below it. */
 /* ---------------- the play right now ----------------
-   While the game is on, under the score: Ethan's render with the play
-   running on it (pbpParkHTML), the play in words with the people in it
-   (gamecast driveView, no field of its own: the strip under the score says
-   where the ball is, `top`), and the win chance after it — the chart through
-   the game and our number. A game not being played has none of it. */
-function gpNowHTML(d, league, faces, boardGame, lastPlay, GC, top) {
+   While the game is on, under the score: the play in words with the people
+   in it (gamecast driveView, no field of its own: the strip under the score
+   says where the ball is and the drive, `top`), and the win chance after it
+   — the chart through the game and our number. A game not being played has
+   none of it. ONE FIELD (Ethan, 2026-11-15, circling the stadium photograph
+   with the play drawn on it and its "Ball on" strip: "remove this since we
+   have the other field"): the strip under the score is the page's field. */
+function gpNowHTML(d, league, faces, boardGame, GC, top) {
   if ((d.live || {}).state !== "live") return "";
   const g = GC || {};
   const ours = pbpModelWinProbHTML(d);
-  const view = `<div class="card pbp-parkcard">${pbpParkHeadHTML(league, boardGame)}${
-    pbpParkHTML(d, league, boardGame, lastPlay, { strip: !top })}</div>`;
   const card = g.driveView ? g.driveView(d, league, faces, { top, win: !!ours }) : "";
-  return `${view}${card}${pbpWinChartHTML(d, league, boardGame)}${ours}`;
+  return `${card}${pbpWinChartHTML(d, league, boardGame)}${ours}`;
 }
 
 /* ---------------- Play-By-Play ----------------
@@ -5815,7 +5809,7 @@ function gpPicksHTML(d, league, boardGame) {
 const GP_FB_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];
 let _gpFor = "";
 function gpFootballHTML(o) {
-  const { d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event, lastPlay } = o;
+  const { d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event } = o;
   // Another game opens at its top: no compact bar carried over from the last.
   if (_gpFor !== `${league}:${event}`) { _gpFor = `${league}:${event}`; _gpStuck = false; _gpTabsStuck = false; _gpOpen.clear(); }
   const field = gpFieldHTML(d, league, lv);
@@ -5825,8 +5819,8 @@ function gpFootballHTML(o) {
     : gpPicksHTML(d, league, boardGame);
   /* TOP TO BOTTOM, THE ORDER A FAN ASKS IN (Ethan, 2026-11-15: "re organize
      it so it feels good and flows nice and makes the most sense"): the score
-     and where the ball is; the play that just happened, its picture first
-     and then its words, and who that leaves winning; the reader's own bets
+     and where the ball is (the strip, the page's one field); the play that
+     just happened, in words, and who that leaves winning; the reader's own bets
      on the game; then the things to do (call the next play, the chat); and
      last the rooms behind the tabs, the game so far drive by drive among
      them. The play right now sat inside the Play-By-Play tab, under the
@@ -5840,7 +5834,7 @@ function gpFootballHTML(o) {
         ${field}
         ${gpLineHTML(d, league, lv)}
         ${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
-        ${gpNowHTML(d, league, faces, boardGame, lastPlay, GC, !!field)}
+        ${gpNowHTML(d, league, faces, boardGame, GC, !!field)}
         ${pbpMineSlotsHTML()}
         ${lv.state === "live" ? pbpCallItHTML(d, league) : ""}
         ${d.archive ? "" : `<div class="gch-entry-slot"></div>`}

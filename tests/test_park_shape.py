@@ -222,7 +222,7 @@ def test_mlb_gets_the_photograph():
     code. What still has to be true, and is what this test was ever
     about, is that BASEBALL's picture is the ballpark."""
     at = APP.index("function pbpParkHTML")
-    block = APP[at:at + 1800]
+    block = APP[at:APP.index("\n}\n", at)]          # the whole function, not a window of it
     assert 'league === "mlb" ? pbpPhotoHTML(game)' in block
     assert "const photo = league === \"mlb\" || isFootball;" in block
 
@@ -233,7 +233,7 @@ def test_the_leagues_without_a_photograph_keep_their_vector_art():
     picture are the basketball ones — and they must still get the drawn
     court rather than somebody else's sport."""
     at = APP.index("function pbpParkHTML")
-    block = APP[at:at + 1800]
+    block = APP[at:APP.index("\n}\n", at)]          # the whole function, not a window of it
     assert "court(game" in block and "stadium(game" in block
     assert 'isFootball ? pbpFieldHTML(d, league, hitRow)' in block
     # The vector court is reached only after both photo branches.

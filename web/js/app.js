@@ -28763,6 +28763,10 @@ function pbpParkHTML(d, league, boardGame, hitRow, opts) {
   // renders; "this is also for cfb as well"). Both codes, because the
   // college and pro play feeds are the same shape from the same source —
   // PBP_FOOTBALL is the one list, so neither can be wired up alone.
+  // NOT ON THE FOOTBALL PAGE since 2026-11-15 (Ethan, circling it: "remove
+  // this since we have the other field"): the live page's one field is the
+  // strip under the score (detail.js gpFieldHTML). The football drawing is
+  // kept here with its tests, one line from coming back (detail.js gpNowHTML).
   const isFootball = PBP_FOOTBALL.has(league);
   const photo = league === "mlb" || isFootball;
   const keep = window.ACTIVE_TEAMS;

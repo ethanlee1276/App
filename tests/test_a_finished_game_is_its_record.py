@@ -132,12 +132,12 @@ def _run():
                         raise AssertionError((state, page.evaluate(
                             "[...document.querySelectorAll('#pbp-body .card')].map(c => c.className)"), errs)) from None
                     page.wait_for_timeout(1200)
-                    # The bar shows once the chat's card is off screen: scrolled past
-                    # it, or on a game being played, whose play right now sits above
-                    # the card (2026-11-15), not yet scrolled down to it.
-                    page.evaluate("""(() => { window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'instant'});
-                      const c = document.querySelector('.gch-entry'), r = c && c.getBoundingClientRect();
-                      if (r && r.bottom >= 0 && r.top <= innerHeight) window.scrollTo({top: 0, behavior: 'instant'}); })()""")
+                    # The bar shows once the chat's card is off screen. The fixture's
+                    # game is short (a real one runs a whole game of drives under the
+                    # card), so the page is given room below it first and then
+                    # scrolled to the foot, past the card.
+                    page.evaluate("""(() => { document.body.style.paddingBottom = (2 * innerHeight) + 'px';
+                      window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'instant'}); })()""")
                     page.wait_for_timeout(900)
                     rows = [page.evaluate(SEE)]
                     if state == "final":
@@ -167,7 +167,10 @@ def test_in_a_browser_on_the_open_duo():
     final, slid = got["final"]
     assert not final["park"] and not final["last"] and final["leaders"], ("a final is its record", final)
     live = got["live"][0]
-    assert live["park"] and live["last"], ("a game being played keeps its field and its last play", live)
+    # A game being played keeps its last play; its one field is the strip
+    # under the score, no photograph (2026-11-15: "remove this since we have
+    # the other field").
+    assert not live["park"] and live["last"], ("a game being played: its last play, and no photograph", live)
     for row in (final, slid, live):
         fab = row["fab"]
         assert fab, ("the chat bar is up on a game the live loop keeps", row)

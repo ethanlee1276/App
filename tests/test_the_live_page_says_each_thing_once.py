@@ -30,9 +30,12 @@ drive card (the last play drawn on the clubs' end zones), between the strip
 under the score and his photograph running the same play. It is gone: the
 card is the play in words. And the page reads top to bottom in the order a
 fan asks (detail.js gpFootballHTML): the score and the strip, the line score,
-the play right now (the photograph, then the card, then the win chance:
-gpNowHTML, above the tabs, so no tab takes it away), your bets on the game,
-Call it, the chat, and then the tabs, Play-By-Play being the drives.
+the play right now (the card, then the win chance: gpNowHTML, above the
+tabs, so no tab takes it away), your bets on the game, Call it, the chat,
+and then the tabs, Play-By-Play being the drives. The same evening, circling
+the photograph with the play drawn on it and its "Ball on" strip: "remove
+this since we have the other field". The strip under the score is the
+page's one field.
 
     python3 tests/test_the_live_page_says_each_thing_once.py
     QB_BROWSER_TESTS=1 python3 tests/test_the_live_page_says_each_thing_once.py
@@ -132,20 +135,21 @@ def test_the_card_draws_no_field_of_its_own():
 
 
 def test_the_play_right_now_sits_above_the_tabs_and_each_thing_is_said_once():
-    now = _fn(DETAIL, "function gpNowHTML(d, league, faces, boardGame, lastPlay, GC, top)")
+    now = _fn(DETAIL, "function gpNowHTML(d, league, faces, boardGame, GC, top)")
     assert 'if ((d.live || {}).state !== "live") return "";' in now, "a game not being played has no play right now"
     assert "g.driveView(d, league, faces, { top, win: !!ours })" in now
-    assert "pbpParkHTML(d, league, boardGame, lastPlay, { strip: !top })" in now
-    assert "return `${view}${card}${pbpWinChartHTML(d, league, boardGame)}${ours}`;" in now, "the picture, the words, the chance"
+    assert "return `${card}${pbpWinChartHTML(d, league, boardGame)}${ours}`;" in now, "the words, then the chance"
+    # One field: the strip under the score. The photograph and its "Ball on"
+    # strip are gone (Ethan: "remove this since we have the other field").
+    assert "pbpParkHTML" not in now
     page = _fn(DETAIL, "function gpFootballHTML(o)")
-    assert "${gpNowHTML(d, league, faces, boardGame, lastPlay, GC, !!field)}" in page
+    assert "${gpNowHTML(d, league, faces, boardGame, GC, !!field)}" in page
     assert page.index("${gpNowHTML(") < page.index("${pbpTabsHTML(tab, null, tabs)}"), "no tab takes it away"
     plays = _fn(DETAIL, "function gpPlaysHTML(d, league, GC)")
     assert "const chart = (d.live || {}).state !== \"live\" && GC && GC.gameChart ? GC.gameChart(d, league) : \"\";" in plays, \
         "no drive chart while live"
     assert "return `${chart}${gpDrivesHTML(d, league)}`;" in plays, "the tab is the game so far, drive by drive"
-    park = _fn(APP, "function pbpParkHTML(d, league, boardGame, hitRow, opts)")
-    assert "${isFootball && o.strip !== false ? pbpFieldPosHTML(d, hitRow) : \"\"}" in park
+    assert "const lastPlay = PBP_FOOTBALL.has(league) ? null" in DETAIL, "football has no photograph to draw a play on"
 
 
 def test_the_rail_holds_the_picks_on_the_plays_tab_and_the_plays_elsewhere():
@@ -219,10 +223,10 @@ def test_the_live_page_in_a_browser_at_390_and_1280():
                     })()""")
                     assert got["field"] == 1, got
                     assert got["cardField"] == 0, "the card draws no field (2026-11-15)"
-                    assert got["order"] == ["score", "strip", "line", "photo", "play", "chance", "callit", "chat",
+                    assert got["order"] == ["score", "strip", "line", "play", "chance", "callit", "chat",
                                             "tabs"], got["order"]
                     assert "Last play · Q3 11:02" in got["head"] and "Current drive" not in got["head"], got
-                    assert got["tiles"] == 0 and got["strip"] == 0 and got["park"] == 1, got
+                    assert got["tiles"] == 0 and got["strip"] == 0 and got["park"] == 0, "one field: the strip"
                     assert got["ours"] == 1 and got["chip"] == 0, "our win card once, no chip beside the play"
                     assert got["down"] == "3rd & 8 · TB 24", got
                     page.click('.pbp-tab[data-pbp-tab="plays"]')

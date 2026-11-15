@@ -624,30 +624,13 @@ def test_the_trackers_in_a_browser_at_390_and_1280():
                     page.goto(f"http://127.0.0.1:{port}/index.html#pbp/nfl/e9", wait_until="load")
                     page.wait_for_selector(".gc-dv .gc-dv-said", timeout=15000)
                     page.evaluate("document.querySelectorAll('#tour-overlay, .tour-pop').forEach((n) => n.remove())")
-                    # The drive card draws no field (Ethan, 2026-11-15: "make sure to
-                    # get rid of the field on the live page"): the play in words, under
-                    # the photograph that runs it.
+                    # One field on the football page: the strip under the score (Ethan,
+                    # 2026-11-15: "make sure to get rid of the field on the live page",
+                    # then, circling the photograph, "remove this since we have the
+                    # other field"). The card is the play in words; no photograph.
                     assert not page.query_selector(".gc-dv .gc-dv-svg, .gc-dv .gc-dv-pin, .gc-dv [data-gc-dv-replay]")
-                    assert page.evaluate("""(() => { const a = document.querySelector('.pbp-main > .pbp-parkcard'),
-                        b = document.querySelector('.pbp-main > .gc-dv');
-                        return !!a && !!b && !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING); })()"""), \
-                        "the photograph, then the play in words"
-                    # The drive on the photograph sits exactly on it, at every width.
-                    page.wait_for_selector(".pbp-park [data-gc-art]", state="attached", timeout=5000)
-                    boxes = page.evaluate("""(() => { const p = document.querySelector('.pbp-park');
-                        const r = (e) => { const b = e.getBoundingClientRect(); return [b.x, b.y, b.width, b.height].map((v) => Math.round(v)); };
-                        return [r(p.querySelector('.pbp-photo')), r(p.querySelector('[data-gc-art]'))]; })()""")
-                    assert boxes[0] == boxes[1], boxes
-                    # Replay on the photograph runs its drive again. The button passes
-                    # the pointer's checks (seen, steady, on top), and the press is
-                    # read in the same task as the click: the page's own redraw,
-                    # every few seconds with nothing new to fly, landed between a
-                    # click and its read once on a loaded gate (9 November).
-                    page.locator(".pbp-park [data-gc-replay]").first.click(trial=True)
-                    flew = page.evaluate("""(() => {
-                        document.querySelector('.pbp-park [data-gc-replay]').click();
-                        return { photo: !!document.querySelector('.pbp-park .gc-art-ball animateTransform') }; })()""")
-                    assert flew["photo"], "the photograph's ball runs again"
+                    assert not page.query_selector(".pbp-parkcard, .pbp-park, [data-gc-art]"), "no photograph"
+                    assert page.query_selector(".gp-field .gp-fd"), "the strip under the score stays"
                     page.click('.pbp-tab[data-pbp-tab="plays"]')
                     # No drive chart while the game is on (Ethan, 2026-11-15: "we
                     # dont need the drive chart since we have one at the top of

@@ -1188,9 +1188,10 @@
      on the live page"). It drew one, the last play on the clubs' end zones,
      under the strip at the top of the page (detail.js gpFieldHTML, "the
      drive chart at the top of the screen", which shows where the ball is)
-     and over his photograph (Ethan's renders: "It's cool too look at"),
-     which runs the play on its own clock: a third picture of one moment.
-     The card is the play in words now.
+     and over his photograph, which ran the play on its own clock: a third
+     picture of one moment. The card is the play in words now, and the
+     photograph went the same evening ("remove this since we have the other
+     field"): the strip is the page's one field.
 
      THE ROW RULE STILL HOLDS: the site's own words from the file's numbers
      (type, yards, spots, the names matched against the box score), never
