@@ -548,7 +548,12 @@ close lines (1,537 re-read at the sportsbooks' number), and item 8's key
 - The legal items (the postal address in the Privacy Policy, a lawyer's
   read of both pages; docs/LAUNCH.md): not yet.
 
-## 00a. Any time now: the NCAA race on last season, and the title prices (steps PA, PO)
+## 00a. Done: the NCAA race on last season, and the title prices (steps PA, PO)
+
+Done by 15 November. The public race reads last season for 365 schools
+(`prior.schools`), and college's Futures page carries the title prices
+beside our chances (63 priced). Nothing left to run here. The commands
+stay below for the record.
 
 Done on 14 November, with what each showed written under its step in
 docs/WHEN_YOU_ARE_HOME.md: the six read-only checks (OT, OY, PA, PC, PJ,
