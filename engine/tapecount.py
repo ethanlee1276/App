@@ -66,8 +66,16 @@ def kept(conn, table: str, now: float | None = None) -> dict:
             rows, counted_at = int(was[0]) + added, int(was[3])
             distinct = None
             if col:
+                # NOT INDEXED: the new rows by their rowid range and nothing
+                # else. A newer SQLite (3.50, the one Ubuntu 26.04 ships, on
+                # which GitHub's runners have failed this since November)
+                # answered the count by walking the whole of the column's
+                # covering index ("SCAN n USING COVERING INDEX
+                # idx_pm_trades_wallet"), which is the walk this module is
+                # here to avoid. No index may serve `n` now, so the rowid
+                # range is its only way in; `o` still seeks the index.
                 fresh = int(conn.execute(
-                    f"SELECT COUNT(DISTINCT n.{col}) FROM {table} AS n WHERE n.rowid > ?1 "
+                    f"SELECT COUNT(DISTINCT n.{col}) FROM {table} AS n NOT INDEXED WHERE n.rowid > ?1 "
                     f"AND NOT EXISTS (SELECT 1 FROM {table} AS o "
                     f"WHERE o.{col} = n.{col} AND o.rowid <= ?1)", (since,)).fetchone()[0])
                 distinct = int(was[1]) + fresh

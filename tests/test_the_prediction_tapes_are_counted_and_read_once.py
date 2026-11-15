@@ -103,6 +103,24 @@ def test_the_build_never_walks_the_tape_for_them():
     assert any("NOT EXISTS" in s for s in reads), reads
 
 
+def test_the_new_wallets_are_read_by_their_rowid_range_on_every_sqlite():
+    """GitHub's runners (Ubuntu 26.04, a newer SQLite) planned the new
+    wallets' count as "SCAN n USING COVERING INDEX idx_pm_trades_wallet": the
+    whole index walked, the thing the test above forbids. The SQLite here
+    plans it by the rowid range either way, so the hint that makes every
+    SQLite do so is held by name: no index may serve the new rows."""
+    src = (ROOT / "engine" / "tapecount.py").read_text(encoding="utf-8")
+    assert 'FROM {table} AS n NOT INDEXED WHERE n.rowid > ?1' in src
+    conn = connect(":memory:")
+    pm.ensure_tables(conn)
+    pm.build_indexes(conn)
+    plan = " | ".join(str(r[-1]) for r in conn.execute(
+        "EXPLAIN QUERY PLAN SELECT COUNT(DISTINCT n.wallet) FROM pm_trades AS n NOT INDEXED WHERE n.rowid > ?1 "
+        "AND NOT EXISTS (SELECT 1 FROM pm_trades AS o WHERE o.wallet = n.wallet AND o.rowid <= ?1)", (30,)))
+    assert "SEARCH n USING INTEGER PRIMARY KEY (rowid>?)" in plan, plan
+    assert "SEARCH o USING COVERING INDEX idx_pm_trades_wallet (wallet=?)" in plan, plan
+
+
 def test_a_name_is_read_when_asked_for_once_and_says_what_the_table_says():
     conn = connect(":memory:")
     pm.store_trades(conn, [_trade(1, "0xking", name="TheKing"), _trade(2, "0xanon"),
