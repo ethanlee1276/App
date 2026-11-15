@@ -90,11 +90,12 @@ def test_completions_and_kicking_points_move_and_attempts_do_not():
     want = W.WIND_FORECAST[("pass_cmp", "QB")]["10-13"] * W.at_chance(0.917, 0.74)
     assert abs(qb.multipliers[PASS_CMP] - want) < 1e-9, qb.multipliers
     assert qb.multipliers.get(PASS_ATT, 1.0) == 1.0
-    assert "completions −2.3%" in qb.reasons[0] and "completions −8%" in qb.reasons[1], qb.reasons
+    # In words since 2026-11-15 ("make the game report less confusing").
+    assert "completions 2.3% lower" in qb.reasons[0] and "completions 8% lower" in qb.reasons[1], qb.reasons
     k = W.evaluate_weather(Weather(**dict(WET, wind_mph=15.0)), "K")
     assert k.multipliers[KICK_PTS] == 0.943 and k.multipliers.get(FG_MADE, 1.0) == 1.0
-    assert k.reasons[0].startswith("Wind 15 mph forecast — games forecast at 13+ mph averaged "
-                                   "kicking points −5.7%"), k.reasons
+    assert k.reasons[0].startswith("Wind 15 mph forecast — in games forecast at 13+ mph, "
+                                   "kicking points ran 5.7% lower than in calm games"), k.reasons
     assert "no clear effect measured on these markets in rain; left alone" in k.reasons[1]
     # A played game's reported wind keeps its band; under 12 mph a kicker is left alone.
     read = dict(WET, forecast=False, precip_chance=0.0, rain=False)
@@ -108,7 +109,7 @@ def test_completions_and_kicking_points_move_and_attempts_do_not():
 def test_the_games_read_names_them_and_lights_the_mark():
     from engine.pipeline import _conditions
     eff = W.evaluate_weather(Weather(**dict(WET, wind_mph=15.0)))
-    assert "completions −4.6%" in eff.reasons[0] and "kicking points −5.7%" in eff.reasons[0]
+    assert "completions 4.6% lower" in eff.reasons[0] and "kicking points 5.7% lower" in eff.reasons[0]
     game = Game(home="NYG", away="WAS", weather=Weather(**dict(WET, wind_mph=15.0, precip_chance=0.0,
                                                                rain=False)))
     kicks = [{"market": "kick_pts", "team": "NYG", "opponent": "WAS"},

@@ -216,17 +216,31 @@ const g = {away: "PHI", home: "CHI", money: {
   ml: {home: 0.08, away: 0.92, home_bets: 0.2, away_bets: 0.8, usd: 52000, n: 900},
   spread: {home: 0.19, away: 0.81, home_bets: 0.3, away_bets: 0.7, usd: 21000, n: 400, line: 3.5},
   total: {over: 0.58, under: 0.42, over_bets: 0.5, under_bets: 0.5, usd: 9000, n: 200, line: 41.5},
-  venues: ["Kalshi", "Polymarket"], at: "19:50"}};
+  venues: ["Kalshi", "Polymarket"], at: "7:50 PM ET"}};
 const html = gameMoneyHTML(g);
 const want = ["<b>92%</b> PHI", "CHI <b>8%</b>", "PHI \\u22123.5", "CHI +3.5", "<b>81%</b>",
-              "Over 41.5", "Under 41.5", "<b>58%</b>", "$52,000 on 900 trades", "Kalshi and Polymarket",
-              "not sportsbook customers", "width:92.0%"];
-const miss = want.filter((w) => !html.includes(w));
+              "Over 41.5", "Under 41.5", "<b>58%</b>", "$52,000 on 900 trades",
+              "From traders on Kalshi and Polymarket, not sportsbook customers", "the side its buyer took",
+              "updated 7:50 PM ET", "width:92.0%"];
+const miss = want.filter((w) => !html.includes(w)).concat(html.includes("taker") ? ["no 'taker'"] : []);
 console.log(miss.length ? "MISSING " + miss.join(" | ") : (gameMoneyHTML({away: "A", home: "B"}) === "" ? "OK" : "EMPTY?"));
 """
     out = subprocess.run(["node", "-e", prog], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-500:]
     assert out.stdout.strip() == "OK", out.stdout
+
+
+
+def test_the_tapes_time_is_said_in_eastern_time():
+    """2026-11-15, "make the game report less confusing": the note said
+    "updated 19:45", the box's own clock with no zone, beside a kickoff in
+    ET."""
+    import datetime as dt
+    assert M.clock_et(dt.datetime(2026, 11, 15, 0, 45, tzinfo=dt.timezone.utc)) == "7:45 PM ET"
+    assert M.clock_et(dt.datetime(2026, 7, 4, 16, 5, tzinfo=dt.timezone.utc)) == "12:05 PM ET", "summer time"
+    assert M.clock_et(dt.datetime(2026, 11, 15, 5, 0, tzinfo=dt.timezone.utc)) == "12:00 AM ET"
+    src = (ROOT / "engine" / "moneysplit.py").read_text(encoding="utf-8")
+    assert 'out["at"] = clock_et()' in src
 
 
 if __name__ == "__main__":

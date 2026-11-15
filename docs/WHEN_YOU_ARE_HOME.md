@@ -9338,6 +9338,26 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RM. The game page above the report, in plain words** (step 593; 15
+November). Nothing to run. Your NE @ DET screenshots showed four more spots
+that read like code:
+- **Where the money is going:** "the side each trade's taker bought ... ·
+  updated 19:45" now reads "From traders on Kalshi and Polymarket, not
+  sportsbook customers: each trade counts for the side its buyer took ... ·
+  updated 7:45 PM ET". The time was the box's own clock with no zone; it's
+  Eastern time now.
+- **Where the line opened:** "(first priced 2026-11-10 06:07) · since then
+  total −1.5" now reads "(first priced Tue, Nov 10) · since then the spread
+  moved 0.5 toward DET and the total is down 1.5".
+- **The weather panel:** "Tonight's weather" sat over a 9:30 AM kickoff;
+  it's "The weather at kickoff" now.
+- **Every weather line, on the game page, the pick cards and the reports:**
+  "games forecast at 0–4 mph averaged receiving yards −0.3%" now reads "in
+  games forecast at 0–4 mph, receiving yards ran 0.3% lower than in calm
+  games". Rain, snow and freezing say it the same way ("in rainy games,
+  catches ran 16% lower than in dry ones; at a 74% chance, that's 12%
+  lower"). The numbers, and how they move each pick, are unchanged.
+
 **RL. The game reports read at a glance** (step 592; 15 November). Nothing
 to run. You liked the colored names and asked for the reports to be less
 confusing. Every league's report now:

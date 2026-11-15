@@ -93,7 +93,8 @@ def test_the_prior_moves_nothing_and_says_so():
 def test_rain_applies_at_the_forecasts_own_chance():
     e = W.evaluate_weather(_wind(3.0, precip_chance=0.7, rain=True), "WR")
     assert abs(e.multipliers[REC_YDS] - (1 - 0.7 * (1 - W.RAIN[("rec_yds", "WRTE")]))) < 1e-9
-    assert "at a 70% chance that is −9% and −7%" in e.reasons[0]
+    # In words since 2026-11-15 ("make the game report less confusing").
+    assert "at a 70% chance, that's 9% and 7% lower" in e.reasons[0]
     assert W.evaluate_weather(_wind(3.0, precip_chance=0.2), "WR").multipliers[REC_YDS] == 1.0
     snow = W.evaluate_weather(_wind(3.0, temp_f=28.0, precip_chance=0.8, snow=True), "WR")
     assert snow.multipliers[RECEPTIONS] < 1.0 and snow.reasons[0].startswith("Snow 80% likely")
@@ -110,7 +111,8 @@ def test_rain_raises_a_backs_carries_and_leaves_his_yards_alone():
     e = W.evaluate_weather(_wind(4.0, precip_chance=0.8, rain=True), "RB")
     assert abs(e.multipliers[RUSH_ATT] - (1 + 0.8 * (W.RAIN[("rush_att", "RB")] - 1))) < 1e-9
     assert e.multipliers[RUSH_ATT] > 1.05 and e.multipliers[RUSH_YDS] == 1.0
-    assert "carries +7%" in e.reasons[0] and "his rushing yards are left alone" in e.reasons[1]
+    assert "carries ran 7% higher" in e.reasons[0] and "his rushing yards are left alone" in e.reasons[1]
+    assert "at an 80% chance, that's carries 6% higher, receiving yards 17% lower" in e.reasons[0]
     assert W.evaluate_weather(_wind(4.0, precip_chance=0.1), "RB").multipliers[RUSH_ATT] == 1.0
     wr = W.evaluate_weather(_wind(4.0, precip_chance=0.8, rain=True), "WR")
     assert wr.multipliers[RUSH_ATT] == 1.0 and not any("per carry" in r for r in wr.reasons)
@@ -231,7 +233,8 @@ def test_a_forecast_takes_its_ranges_measured_cut_and_a_reading_its_band():
     assert [wr[m].multipliers[REC_YDS] for m in (3.0, 9.0, 11.0, 15.0)] == [0.997, 0.967, 0.945, 0.926]
     assert wr[9.0].multipliers[RECEPTIONS] == 0.994
     assert wr[9.0].reasons[0].startswith(
-        "Wind 9 mph forecast — games forecast at 7–10 mph averaged receiving yards −3.3%, catches −0.6%")
+        "Wind 9 mph forecast — in games forecast at 7–10 mph, receiving yards ran 3.3% lower and catches "
+        "0.6% lower than in calm games")
     qb = W.evaluate_weather(Weather(wind_mph=15.0, measured=True, forecast=True), "QB")
     assert qb.multipliers[PASS_YDS] == 0.938 and qb.multipliers["pass_td"] == 0.870
     rb = W.evaluate_weather(Weather(wind_mph=15.0, measured=True, forecast=True), "RB")

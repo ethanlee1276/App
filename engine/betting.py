@@ -913,12 +913,14 @@ def evaluate_prop(prop: Prop, proj: Projection,
         # quarterback's rushing yards, which no weather moves, wore the
         # passing cut. Now the condition's own factor on this market signs
         # it (engine/weather.sign_for), and a market it left alone says so.
-        elif (r.startswith(("Wind ", "Rain ", "Snow ")) and "measured" in r
+        # In words since 2026-11-15 ("in rainy games (2016-2025), catches ran
+        # 16% lower"), so a measured line is known by its years too.
+        elif (r.startswith(("Wind ", "Rain ", "Snow ")) and ("measured" in r or "(2016-2025)" in r)
               and "left alone" not in r):
             from .weather import sign_for, label as wx_label
             s = sign_for(getattr(proj, "weather", None), prop.market, r)
             if s is None:
-                s = -1 if "−" in r else 0
+                s = -1 if ("−" in r or " lower" in r) else 0
             if s:
                 helps = (s > 0) == (side == "OVER")
                 reasons[i] = r + (" — with this side" if helps else " — against this side")

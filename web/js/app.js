@@ -7759,13 +7759,22 @@ function lineOpenHTML(g, spTxt) {
   const bits = [];
   if (sp != null) bits.push(`${escapeHtml(g.home)} ${spTxt(sp)}`);
   if (lo.total != null) bits.push(`O/U ${Number(lo.total).toFixed(1)}`);
+  /* IN WORDS (2026-11-15, Ethan's NE @ DET page: "make the game report less
+     confusing too"): "since then total −1.5" and "(first priced 2026-11-10
+     06:07)" read as codes. The move says which way, as the report does
+     (spread_move under 0 is toward the home side), and the first price
+     its day. */
   const moved = [];
-  if (lo.spread_move) moved.push(`spread ${lo.spread_move > 0 ? "+" : MINUS}${Math.abs(lo.spread_move).toFixed(1)}`);
-  if (lo.total_move) moved.push(`total ${lo.total_move > 0 ? "+" : MINUS}${Math.abs(lo.total_move).toFixed(1)}`);
-  const since = lo.since ? ` <span class="mini">(first priced ${escapeHtml(String(lo.since).replace("T", " "))})</span>` : "";
+  if (lo.spread_move) {
+    moved.push(`the spread moved ${Math.abs(lo.spread_move).toFixed(1)} toward ${
+      escapeHtml(lo.spread_move < 0 ? g.home : g.away)}`);
+  }
+  if (lo.total_move) moved.push(`the total is ${lo.total_move > 0 ? "up" : "down"} ${Math.abs(lo.total_move).toFixed(1)}`);
+  const day = lo.since ? formatGameDate(String(lo.since)) : "";
+  const since = day ? ` <span class="mini">(first priced ${escapeHtml(day)})</span>` : "";
   const rlm = lo.against_money;
   return `<p class="gc-mk-open"><b>Opened</b> ${bits.join(" · ")}${since} · ${
-    moved.length ? `since then ${moved.join(", ")}` : "unchanged"}</p>${rlm ? `<p class="gc-mk-rlm">The spread moved ${
+    moved.length ? `since then ${moved.join(" and ")}` : "unchanged"}</p>${rlm ? `<p class="gc-mk-rlm">The spread moved ${
       Math.abs(Number(rlm.delta)).toFixed(1)} toward ${escapeHtml(teamName(rlm.toward === "home" ? g.home : g.away))} while ${
       Math.round(Number(rlm.money_share) * 100)}% of the money was on ${escapeHtml(teamName(rlm.money_on === "home" ? g.home : g.away))} — the books moved against the money.</p>` : ""}`;
 }

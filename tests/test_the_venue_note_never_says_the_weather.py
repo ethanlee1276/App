@@ -51,8 +51,8 @@ def test_the_page_prints_the_models_read_under_its_own_heading():
     assert "The live weather above is the number that moves a total" not in panel
     tonight = _fn("stadiumTonightHTML")
     assert "(g.conditions || {}).why" in tonight, "the same read the props were priced with"
-    assert "Tonight’s weather, as the model used it" in tonight
-    assert "temperature is not adjusted for" in tonight
+    assert "The weather at kickoff, as the model used it" in tonight, "a 9:30 AM kickoff has no tonight"
+    assert "we don’t adjust for temperature" in tonight
 
 
 def test_the_read_for_a_mild_night_says_wind_and_nothing_about_cold():

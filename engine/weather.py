@@ -238,6 +238,27 @@ def _pct1(m: float) -> str:
     return f"{(m - 1.0) * 100:+.1f}%".replace("-", "−")
 
 
+def _moves(cuts, digits: int = 0, ran: bool = True) -> str:
+    """IN WORDS (2026-11-15, "make the game report less confusing"): each
+    market's measured move, "passing yards ran 11% lower, passing TDs 16%
+    lower and carries 9% higher", where the page said "passing yards −11%,
+    passing TDs −16%"."""
+    out = [f"{w}{' ran' if ran and i == 0 else ''} {abs(f - 1.0) * 100:.{digits}f}% "
+           f"{'higher' if f > 1.0 else 'lower'}" for i, (w, f) in enumerate(cuts)]
+    return out[0] if len(out) == 1 else ", ".join(out[:-1]) + " and " + out[-1]
+
+
+def _sizes(cuts) -> str:
+    """The same moves at a chance, short where they all go one way: "8%, 12%
+    and 6% lower"."""
+    ups = {f > 1.0 for _w, f in cuts}
+    if len(ups) > 1:
+        return _moves(cuts, ran=False)
+    nums = [f"{abs(f - 1.0) * 100:.0f}%" for _w, f in cuts]
+    said = nums[0] if len(nums) == 1 else ", ".join(nums[:-1]) + " and " + nums[-1]
+    return f"{said} {'higher' if ups == {True} else 'lower'}"
+
+
 def precip(w: Weather) -> tuple[str | None, float]:
     """(kind, chance): "rain" or "snow" and the forecast's chance of it at
     kickoff, or (None, 0.0) for a dry day. A flag without a chance (a
@@ -283,31 +304,34 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
     wind = float(w.wind_mph or 0.0)
     if getattr(w, "forecast", False):
         r = forecast_range(wind)
-        hit = []
+        cuts = []
         for m in markets:
             f = WIND_FORECAST.get((m, _group(m, position)), {}).get(r)
             if f and f < 1.0:
                 mult[m] *= f
                 by_kind["wind"][m] = f
-                hit.append(f"{_LABEL[m]} {_pct1(f)}")
-        if hit:
-            reasons.append(f"Wind {wind:.0f} mph forecast — games forecast at "
-                           f"{_band_txt(r)} mph averaged {', '.join(hit)} (measured: the "
-                           f"2016-2025 effects over the winds those forecasts turned into)")
+                cuts.append((_LABEL[m], f))
+        if cuts:
+            # IN A SENTENCE (2026-11-15): "games forecast at 0–4 mph averaged
+            # receiving yards −0.3%" read as a code. The cut is against a
+            # calm game.
+            reasons.append(f"Wind {wind:.0f} mph forecast — in games forecast at {_band_txt(r)} mph, "
+                           f"{_moves(cuts, 1)} than in calm games (measured: the 2016-2025 effects "
+                           f"over the winds those forecasts turned into)")
     else:
         b = wind_band(wind)
         if b != "calm":
-            hit = []
+            cuts = []
             for m in markets:
                 f = WIND.get((m, _group(m, position)), {}).get(b)
                 if f:
                     mult[m] *= f
                     by_kind["wind"][m] = f
-                    hit.append(f"{_LABEL[m]} {_pct(f)}")
+                    cuts.append((_LABEL[m], f))
             who = _WHO.get(_GROUP.get(str(position or "").upper(), ""), "")
-            if hit:
-                reasons.append(f"Wind {wind:.0f} mph — measured in {_band_txt(b)} mph games "
-                               f"(2016-2025): {', '.join(hit)}")
+            if cuts:
+                reasons.append(f"Wind {wind:.0f} mph — in {_band_txt(b)} mph games (2016-2025), "
+                               f"{_moves(cuts)} than in calm games")
             else:
                 reasons.append(f"Wind {wind:.0f} mph — no clear effect measured on "
                                f"{who or 'these'} markets at {_band_txt(b)} mph; left alone")
@@ -319,18 +343,19 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
     kind, p = precip(w)
     if kind:
         table = RAIN if kind == "rain" else SNOW
-        hit, now = [], []
+        cuts, now = [], []
         for m in markets:
             f = table.get((m, _group(m, position)))
             if f:
                 mult[m] *= at_chance(f, p)
                 by_kind["precip"][m] = at_chance(f, p)
-                hit.append(f"{_LABEL[m]} {_pct(f)}")
-                now.append(_pct(at_chance(f, p)))
-        if hit:
-            reasons.append(f"{kind.capitalize()} {p:.0%} likely at kickoff — measured in "
-                           f"{kind} (2016-2025): {', '.join(hit)}; at a {p:.0%} chance "
-                           f"that is {' and '.join(now) if len(now) < 3 else ', '.join(now)}")
+                cuts.append((_LABEL[m], f))
+                now.append((_LABEL[m], at_chance(f, p)))
+        if cuts:
+            art = "an" if f"{p:.0%}".startswith(("8", "11%", "18%")) else "a"
+            reasons.append(f"{kind.capitalize()} {p:.0%} likely at kickoff — in {kind}y games "
+                           f"(2016-2025), {_moves(cuts)} than in dry ones; at {art} {p:.0%} chance, "
+                           f"that's {_sizes(now)}")
             if kind == "rain" and RUSH_ATT in markets and RUSH_YDS in markets \
                     and (RUSH_ATT, _group(RUSH_ATT, position)) in table \
                     and (RUSH_YDS, _group(RUSH_YDS, position)) not in table:
@@ -341,15 +366,15 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
             reasons.append(f"{kind.capitalize()} {p:.0%} likely at kickoff — no clear "
                            f"effect measured on these markets in {kind}; left alone")
     elif w.temp_f is not None and w.temp_f <= FREEZE_F:
-        hit = []
+        cuts = []
         for m in markets:
             f = FREEZE.get((m, _group(m, position)))
             if f:
                 mult[m] *= f
                 by_kind["cold"][m] = f
-                hit.append(f"{_LABEL[m]} {_pct(f)}")
+                cuts.append((_LABEL[m], f))
         reasons.append(f"{w.temp_f:.0f}°F — " + (
-            f"measured below freezing: {', '.join(hit)}" if hit else
+            f"in games below freezing, {_moves(cuts)} than in milder ones" if cuts else
             "cold on its own measured no clear effect once wind, rain and snow "
             "are separated; left alone"))
 

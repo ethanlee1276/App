@@ -92,9 +92,9 @@ function gameMoneyHTML(g) {
   return `<div class="gp-money">
     <div class="gp-crowd-head">Where the money is going <span class="mini">% of money</span></div>
     ${rows.join("")}
-    <p class="mini gp-money-note">Traders on ${escapeHtml(venues)}: the side each trade’s taker bought,
-      over each market’s latest trades before kickoff${m.at ? ` · updated ${escapeHtml(m.at)}` : ""}.
-      Exchange traders, not sportsbook customers.</p>
+    <p class="mini gp-money-note">From traders on ${escapeHtml(venues)}, not sportsbook customers: each trade
+      counts for the side its buyer took, over each market’s latest trades before kickoff${m.at
+        ? ` · updated ${escapeHtml(m.at)}` : ""}.</p>
   </div>`;
 }
 
@@ -1023,11 +1023,12 @@ function stadiumTonightHTML(g) {
   const lines = [...why];
   if (!w.dome && w.measured !== false && w.temp_f != null
       && !why.some((x) => /°F/.test(x))) {
-    lines.push(`${Math.round(w.temp_f)}°F — temperature is not adjusted for: in ten seasons of games, `
-      + "cold on its own showed no clear effect once wind, rain and snow were separated.");
+    lines.push(`${Math.round(w.temp_f)}°F — we don’t adjust for temperature: over ten seasons of games, `
+      + "cold on its own showed no clear effect once wind, rain and snow were set apart.");
   }
   if (!lines.length) return "";
-  return `<div class="pk-tonight"><div class="pk-tonight-k">Tonight’s weather, as the model used it</div>
+  // "Tonight's" sat over a 9:30 AM kickoff (2026-11-15): the kickoff's.
+  return `<div class="pk-tonight"><div class="pk-tonight-k">The weather at kickoff, as the model used it</div>
     <ul>${lines.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>`;
 }
 

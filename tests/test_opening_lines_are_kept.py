@@ -10,6 +10,7 @@ money. Offline, on a temporary database.
 Run directly: `python3 tests/test_opening_lines_are_kept.py`
 """
 import sqlite3
+import json
 import sys
 from pathlib import Path
 
@@ -99,6 +100,38 @@ def test_the_game_page_draws_it_and_the_home_card_does_not():
     fn = fn[:fn.index("\nfunction ")]
     for bit in ("<b>Opened</b>", "since then", "unchanged", "the books moved against the money"):
         assert bit in fn, bit
+
+
+def test_the_open_reads_in_words():
+    """2026-11-15, Ethan's NE @ DET page ("make the game report less
+    confusing too"): "since then total −1.5" and "(first priced 2026-11-10
+    06:07)" read as codes. The move says which way, as the report does, and
+    the first price its day."""
+    import shutil
+    import subprocess
+    if not shutil.which("node"):
+        print("      (skipped: no Node)")
+        return
+    fn = APP[APP.index("function lineOpenHTML("):]
+    fn = fn[:fn.index("\nfunction ")]
+    fmt = APP[APP.index("function formatGameDate("):]
+    fmt = fmt[:fmt.index("\n}\n") + 2]
+    prog = ("const MINUS = '\\u2212'; const escapeHtml = (s) => String(s); const teamName = (t) => t;\n"
+            + fmt + "\n" + fn + "\n"
+            "const sp = (x) => (x > 0 ? '+' : x < 0 ? MINUS : '') + Math.abs(x);\n"
+            "process.stdout.write(JSON.stringify([\n"
+            " lineOpenHTML({home: 'DET', away: 'NE', line_open: {spread_home: -2.5, total: 51, spread_move: -0.5,"
+            " total_move: -1.5, since: '2026-11-10T06:07'}}, sp),\n"
+            " lineOpenHTML({home: 'DET', away: 'NE', line_open: {spread_home: -2.5, total: 51, spread_move: 1,"
+            " total_move: 2}}, sp),\n"
+            " lineOpenHTML({home: 'DET', away: 'NE', line_open: {spread_home: -2.5, total: 51}}, sp)]));")
+    out = subprocess.run(["node", "-e", prog], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr[-800:]
+    moved, other, still = json.loads(out.stdout)
+    assert "since then the spread moved 0.5 toward DET and the total is down 1.5" in moved, moved
+    assert "(first priced Tue, Nov 10)" in moved and "06:07" not in moved, moved
+    assert "the spread moved 1.0 toward NE and the total is up 2.0" in other, other
+    assert "unchanged" in still and "first priced" not in still, still
 
 
 if __name__ == "__main__":

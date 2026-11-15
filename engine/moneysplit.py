@@ -182,6 +182,18 @@ def _kickoff_order(g: dict) -> str:
     return f"{str(g.get('date') or '')[:10]}T{str(g.get('kickoff') or '')}"
 
 
+def clock_et(now: "_dt.datetime | None" = None) -> str:
+    """"7:45 PM ET", the time the tapes were read, as the page says a time
+    (2026-11-15: the note said "updated 19:45", the box's own clock with no
+    zone, beside a kickoff given in ET)."""
+    try:
+        from zoneinfo import ZoneInfo
+        t = (now or _dt.datetime.now(_dt.timezone.utc)).astimezone(ZoneInfo("America/New_York"))
+    except Exception:                                    # noqa: BLE001
+        return (now or _dt.datetime.now()).strftime("%H:%M")
+    return f"{(t.hour % 12) or 12}:{t.minute:02d} {'PM' if t.hour >= 12 else 'AM'} ET"
+
+
 def attach(result: dict, sport: str, kalshi_markets=None, kalshi_line_markets=None,
            poly_rows=None, kalshi_trades=None, poly_trades=None, now: float | None = None) -> dict:
     """Hang ``money`` on every upcoming game with enough exchange flow.
@@ -291,7 +303,7 @@ def attach(result: dict, sport: str, kalshi_markets=None, kalshi_line_markets=No
             g0.pop("money", None)
             continue
         out["venues"] = sorted(venues)
-        out["at"] = _dt.datetime.now().strftime("%H:%M")
+        out["at"] = clock_et()
         g0["money"] = out
         census["games"] += 1
         for m in ("ml", "spread", "total"):
