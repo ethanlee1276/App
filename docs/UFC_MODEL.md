@@ -348,7 +348,7 @@ listed honestly rather than faked).
 | §10 Below 70: no bet, no leans | ✅ | `MIN_GRADE = 70` |
 | §10 Eighth-to-quarter Kelly, never half | ✅ | `kelly_fraction` — an eighth at B+, 0.1875 at A, a quarter only at A+ |
 | §10 Caps 1.5% / 2.5% / 8% | ✅ | `apply_card_caps`, trimmed in grade order; correlated positions on one fight share the 2.5% |
-| §10 Drawdown halves stakes | ✅ | Applied **after** the cap, not before |
+| §10 Drawdown halves stakes | 🟡 | `ufc/grade.stake_fraction` halves **after** the cap, not before, when told to — but `ufc/model.py` passes `prices.get("drawdown")`, no code sets that key, and `ufc_build.py` never reads `ledger.drawdown_factor`, so it never fires. Row read ✅ until the 2026-11-15 sweep |
 | §11 CLV | ✅ | Journaled per pick into the UFC probation bucket, settled from ESPN MMA results |
 | §11 Opener logging / "why it won-lost" categories | 🟡 | **The opener half landed 2026-08-10**: with fight snapshots recording, `linemoves.opening_odds` derives the opener the same way the close is derived — from history, median across the earliest snapshot's books, rather than banked as a column (the banked-close column is the one that spent months wrong while the rebuilt number stayed right). First derivable openers arrive with the next live card. **The cause taxonomy landed 2026-08-10** (`engine/whytags.py`): early-finish, judges, weight-cut, short-notice-showed, injury-in-fight, gameplan, plus the shared tags — controlled vocabulary, free-text note beside it, settled fights only, `launch.py --why-bet` |
 | §12 Live betting | 📋 by design | The pre-game model refuses in-play prices, consistently with every other sport here |

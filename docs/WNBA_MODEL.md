@@ -205,7 +205,7 @@ listed honestly rather than faked).
 | §2 Verify recency | ✅ | Feeds are TTL'd; the payload carries `generated_at`, and the freshness chip ages the DATA off the file's `Last-Modified` |
 | §2.3 Availability conditional until confirmed | ❌ **gap** | No WNBA availability feed is wired. The consequence is priced rather than hidden: `freshness` in the §8 grade tops out below 1.0, so the grade cannot reach A+ and half-Kelly is unreachable. This is the board's single biggest available upgrade |
 | §2.5 Sanity-check yourself | ✅ | `humility_clamp` — a model/market disagreement above 12 points is treated as an input error and refused, not as a goldmine |
-| §3 EV not hit rate | ✅ | Shared spine — `engine/odds.py` devig, edge vs de-vigged fair, Kelly on the post-haircut number |
+| §3 EV not hit rate | ✅ | Shared spine — `engine/odds.py` devig feeds the clamp and the shared pages' edge (`p_final − p_market`); the approval gate and tier minimums (`nba/prob.approval_gate`) and the card's own `edge` compare against the offered price's break-even, vig included — stricter than the de-vigged fair. Kelly on the post-haircut number |
 | §3.5 The haircut defends against OUR data | ✅ | The clamp pulls toward the market and is deliberately **not** loosened for this league — see the note below |
 | §3.6 Tier minimums 3% / 4.5% / 6.5% | ✅ | `engine/hoops.py` `WNBA_TIER_MIN_EDGE`, applied by `prob.required_edge` |
 | §4 Truth hierarchy | 🟡 | Best two-way price across books, sharp books excluded from the bettable aggregate; per-book update-speed weighting 📋 |

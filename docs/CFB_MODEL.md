@@ -223,7 +223,7 @@ listed honestly rather than faked).
 | §9 Below 70: no bet, no leans | ✅ | `MIN_GRADE = 70`; `grade_label` has no Lean tier |
 | §9 Fractional Kelly | ✅ | `model.kelly_stake` — quarter default, half only for an A+ in a low-attention spot, sized on the post-haircut probability |
 | §9 Bankroll caps | ✅ | 2% per play · 5% per game · 12% per slate, trimmed in grade order so the cap costs the worst play rather than a random one (`model.apply_caps`) |
-| §9 Drawdown rule | ✅ | Halves **after** the per-play cap — halving first meant a drawdown changed nothing on any capped play |
+| §9 Drawdown rule | 🟡 | `cfb/model.kelly_stake` halves **after** the per-play cap when told to (halving first meant a drawdown changed nothing on any capped play), but nothing tells it: `cfb/pipeline.py` passes `play.get("drawdown")`, no code sets that key, and `cfb_build.py` never reads `ledger.drawdown_factor` the way the NFL/MLB/NBA builds do. Row read ✅ until the 2026-11-15 sweep |
 | §10 Line shopping & entry timing | 🟡 | Best price across books per market with the book named (`cfb_build._books_for`); opener→close movement and key-number (3/7) shopping 📋 |
 | §11 Output format | ✅ | Every card carries tier, volatility, grade, post-haircut edge vs its bar, the book, the stake, and the conditions (`conditions`, `conditions_pending`) |
 | §11 Say when nothing qualifies | ✅ | `run_cfb_slate` returns `no_qualifying` plus the three closest near-misses; the build prints that a no-play Saturday is the expected output |
