@@ -163,8 +163,10 @@ def test_drive_heads_say_how_the_drive_ended():
     assert "driveResultWord" in GC, "and so does the Play-by-play tab"
 
 
-def test_the_photograph_and_the_last_play_card_keep_the_last_real_snap():
-    assert 'r.kind === "football" && footballWords(r, d).snap' in DETAIL
+def test_the_last_play_card_keeps_the_last_real_snap():
+    # The photograph kept it too until 2026-11-15, when it left the football
+    # page (Ethan: "remove this since we have the other field").
+    assert "const lastPlay = PBP_FOOTBALL.has(league) ? null" in DETAIL
     assert "find((p) => isSnap(p, d))" in GC, "the card titles the last snap"
     assert "sinceSnap(d, p)" in GC and "gc-last-since" in GC, "and names the moments after it under it"
     assert '" · penalty"' not in GC
