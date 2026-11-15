@@ -588,12 +588,12 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh PA 2>&1 | tee /tmp/pa.txt
 
 ## 00g. Any time: grade your spring MLB and NBA research picks (step RY)
 
-Read-only, a few seconds. It grades the 39 legs your spring chats named
+Read-only, a few seconds, once this push is on the box (the heartbeat's commit at or after it). It grades the 39 legs your spring chats named
 (31 March to 21 July) against the box's own box scores. Paste back the
 whole output, or at least the last line (`SPRING_GRADES ...`):
 
 ```
-cd /srv/qellys && git pull --ff-only -q 2>/dev/null; sudo -u qellys python3 tools/grade_spring_research.py
+cd /srv/qellys && sudo -u qellys python3 tools/grade_spring_research.py
 ```
 
 ## 00f. Done: the two decisions from your NFL Bet checking project (steps RF, RI)
