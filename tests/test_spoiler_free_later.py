@@ -80,7 +80,8 @@ def test_every_card_that_draws_a_score_asks_first():
     assert '&& state.view === "game" && !spoiledG(state.sport, row))' in gp, "and no room mounted from it"
     strip = _fn(DETAIL, "pbpStripHTML")
     # (a school below Division I named by its abbreviation since 2026-11-14)
-    assert "hid = spoiledG(league, g);" in strip and "row(g.away, hid ? null : lv.away_score, g.away_abbr)" in strip
+    assert "hid = spoiledG(league, g);" in strip and "const sc = !hid && scoreShown(lv);" in strip
+    assert "row(g.away, sc ? lv.away_score : null, g.away_abbr)" in strip
 
 
 def test_the_game_page_offers_it_and_veils_a_saved_game():

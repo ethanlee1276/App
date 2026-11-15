@@ -29983,6 +29983,18 @@ function liveHoldDetailHTML(live) {
   return h ? `<div class="live-detail hold"><span class="live-dot sm paused"></span>${escapeHtml(h)}</div>` : "";
 }
 
+/* A SCORE ONLY ONCE THERE IS ONE (Ethan, 2026-11-15, circling the 1:00 PM
+   games on the live page's strip, each reading 0 and 0: "we should not be
+   showing scores here if the games have not started yet"). ESPN's
+   scoreboard fills "0" for a game not yet under way and the feed keeps it
+   (engine/sources/livescores.parse), and a zero before kickoff is not a
+   score. The game cards already asked this (gameCardHTML's `score`); the
+   strip, the boards and the second screen printed whatever the feed held. */
+function scoreShown(live) {
+  const s = (live || {}).state;
+  return s === "live" || s === "final";
+}
+
 /* The Live page's quiet line, under "No games live": the sport in view's
    next start, if the card holds one still ahead; the journaled bets
    waiting on it. Each clause is dropped when there is nothing behind it,

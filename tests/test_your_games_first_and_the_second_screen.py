@@ -113,12 +113,14 @@ def test_the_second_screen_says_the_game_big_and_your_legs():
       let tvDelay = () => 30;
       const PBP_ACT = { list: [{ legs: [{ player: "LeBron James" }] }] };
       const pbpLegLine = (l) => `<li>${l.player}</li>`;
-      """ + DET[DET.index("const PBP_BIG = {"):DET.index("async function pbpBigLock(")] + f"""
+      """ + _fn(APP, "scoreShown") + DET[DET.index("const PBP_BIG = {"):DET.index("async function pbpBigLock(")] + f"""
       PBP_BIG.d = {json.dumps(d)};
       const a = pbpBigHTML();
       tvDelay = () => 0; PBP_BIG.d = {{ home: "LAL", away: "BOS", live: {{ state: "final" }}, plays: [] }};
       PBP_ACT.list = [];
-      console.log(JSON.stringify({{ a, b: pbpBigHTML() }}));""")
+      const b = pbpBigHTML();
+      PBP_BIG.d = {{ home: "LAL", away: "BOS", live: {{ state: "scheduled", away_score: 0, home_score: 0 }}, plays: [] }};
+      console.log(JSON.stringify({{ a, b, c: pbpBigHTML() }}));""")
     if got is None:
         return
     a = got["a"]
@@ -126,6 +128,8 @@ def test_the_second_screen_says_the_game_big_and_your_legs():
                  "BOS 59% to win", "<li>LeBron James</li>", "30s behind, with your TV"):
         assert want in a, (want, a)
     assert "Final" in got["b"] and "<ul" not in got["b"] and "behind" not in got["b"], got["b"]
+    # Before the tip the feed's zeros are not a score (Ethan, 2026-11-15).
+    assert "<span>BOS</span><b>–</b>" in got["c"] and "<span>LAL</span><b>–</b>" in got["c"], got["c"]
 
 
 if __name__ == "__main__":

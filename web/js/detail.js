@@ -2990,7 +2990,8 @@ function pbpBigHTML() {
   const side = (team, score) => `<div><span>${escapeHtml(team || "")}</span><b>${escapeHtml(score == null ? "–" : score)}</b></div>`;
   return `<div class="pbp-big-in">
     <button type="button" class="pbp-big-x" data-big="off" aria-label="Close the second screen">${icon("cross", 18)}</button>
-    <div class="pbp-big-score">${side(d.away, lv.away_score)}${side(d.home, lv.home_score)}</div>
+    <div class="pbp-big-score">${side(d.away, scoreShown(lv) ? lv.away_score : null)}${
+      side(d.home, scoreShown(lv) ? lv.home_score : null)}</div>
     <p class="pbp-big-clock">${escapeHtml([lv.period, lv.clock].filter(Boolean).join(" · ") || (lv.state === "final" ? "Final" : ""))}</p>
     ${said ? `<p class="pbp-big-last">${escapeHtml(said.slice(0, 160))}</p>` : ""}
     ${wp != null ? `<p class="pbp-big-wp">${escapeHtml(wp >= 50 ? d.home || "" : d.away || "")} ${Math.round(wp >= 50 ? wp : 100 - wp)}% to win</p>` : ""}
@@ -3605,11 +3606,14 @@ function pbpStripHTML(league, games, current) {
     // "espn:<id>" key (livescores.parse, 2026-11-14); the mark keys on the code.
     const row = (abbr, score, label) => `<span class="pbp-chip-row">${teamMarkIn(league, abbr, 16)}<em>${
       escapeHtml(label || abbr || "")}</em><b>${score != null ? score : ""}</b></span>`;
+    // No score before the game has one: the feed's 0 at 1:00 PM is not a
+    // score (scoreShown, app.js).
+    const sc = !hid && scoreShown(lv);
     return `<button type="button" class="pbp-chip${on ? " active" : ""}${door || bg ? " door" : ""}"${
       door ? ` data-pbp="${escapeAttr(id)}"` : bg ? ` data-pbp-game="${escapeAttr(gameId(bg))}"
       title="Open this game’s page"` : " disabled"}>
       <div class="pbp-chip-head">${head}</div>
-      ${row(g.away, hid ? null : lv.away_score, g.away_abbr)}${row(g.home, hid ? null : lv.home_score, g.home_abbr)}
+      ${row(g.away, sc ? lv.away_score : null, g.away_abbr)}${row(g.home, sc ? lv.home_score : null, g.home_abbr)}
       <div class="pbp-chip-foot">${escapeHtml(lv.state === "live" ? (lv.period || "") : "")}</div>
     </button>`;
   };
@@ -4095,7 +4099,7 @@ function pbpBoardSVG(d, league = "mlb", boardGame = null) {
   const row = (side, abbr, runs, cy) => {
     const fresh = prev && runs != null && prev[side] != null && runs !== prev[side];
     // Two digits step down a size, so a twelve keeps clear of "ARI".
-    const r = runs != null ? String(runs) : "", rs = r.length > 1 ? 15 : 21;
+    const r = runs != null && (live || final) ? String(runs) : "", rs = r.length > 1 ? 15 : 21;
     return (batting === side ? at(3.2, cy, `<path d="M-1.4 -2.2 L1.8 0 L-1.4 2.2 Z" fill="url(#pbp-mlb-gold)"/>`) : "")
       + at(6.6, cy, `<rect x="-1.2" y="-6" width="2.4" height="12" rx=".6" fill="${pbpBoardColor(abbr)}"
           filter="url(#pbp-mlb-glow)"/>`)
@@ -4265,7 +4269,7 @@ function pbpFieldBoardSVG(d, league) {
     const [x0, y0, x1, y1] = PBP_FIELD_BOARD[side], cx = (x0 + x1) / 2;
     const fresh = prev && pts != null && prev[side] != null && pts !== prev[side];
     const ball = live && !hold && lv.possession && lv.possession === abbr;     // no one has it at the half
-    const s = pts != null ? String(pts) : "";
+    const s = pts != null && (live || final) ? String(pts) : "";
     return `<rect x="${x0}" y="${y0}" width="${f(x1 - x0)}" height="${f(y1 - y0)}" fill="${faceInk}" filter="url(#pbp-lit-soft)"/>
       <text class="pbp-lit-name" x="${f(cx)}" y="${f(y0 + 3.6)}" font-size="2.7" text-anchor="middle" letter-spacing=".3"
         fill="url(#pbp-lit-silver)" filter="url(#pbp-lit-glow)">${escapeHtml(abbr)}</text>
@@ -4448,7 +4452,9 @@ function pbpArenaSVG(d, league, opt = {}) {
   const S = (t) => ({ t, c: L.dim });
   const now = st.text ? { t: st.text, c: "url(#pbp-ar-gold)",
     a: st.start ? ` data-pbp-count="${st.start}" data-pbp-pre="${st.pre}" data-pbp-done="${st.done}"` : "" } : null;
-  const scored = lv.away_score != null && lv.home_score != null;
+  // A score once the game has one (app.js scoreShown, written out: the
+  // boards run on their own in tests); before tip it is the names alone.
+  const scored = (lv.state === "live" || lv.state === "final") && lv.away_score != null && lv.home_score != null;
   const shout = moment.word ? [{ t: moment.word, c: "url(#pbp-ar-gold)" }, ...(moment.side ? [S(" · "), T(d[`${moment.side}_abbr`] || d[moment.side])] : [])] : null;
   let out = "";
   if (!hockey) {

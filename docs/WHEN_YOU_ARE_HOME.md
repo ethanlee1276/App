@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SJ. No score before a game starts** (step 616; 15 November). Nothing to
+run. You circled the strip of games across the top of the live page, where
+the 1:00 PM games each read 0 and 0, and said "we should not be showing
+scores here if the games have not started yet." The score feed (ESPN's
+scoreboard) fills in a 0 for a game that hasn't started, and the strip printed
+it. Now a game shows a score only once it is live or over. Before that, the
+chip has the kickoff time and the two teams. A live game at 0-0 still says
+0 and 0. The same zeros were on four other things, fixed the same way:
+- the baseball and football scoreboard pictures before the first pitch or
+  kickoff;
+- the basketball and hockey arena boards before the tip or the puck drop;
+- the big second screen;
+- the game chat's header.
+
+The game cards on the board already waited for a score.
+
 **SI. One field on the live page: the strip under the score** (step 615;
 15 November). Nothing to run. You circled the stadium photograph on a live
 football game ("The field: real data, real plays", the play drawn on it and

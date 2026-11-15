@@ -116,7 +116,7 @@ def test_a_school_below_division_one_is_named_by_its_abbreviation_not_its_key():
     for side in ("away", "home"):
         assert f"escapeHtml(g.{side}_abbr || g.{side})" in card
     assert "p.team === g.home ? g.home_abbr || p.team : p.team === g.away ? g.away_abbr || p.team : p.team" in APP
-    assert "row(g.away, hid ? null : lv.away_score, g.away_abbr)" in DETAIL
+    assert "row(g.away, sc ? lv.away_score : null, g.away_abbr)" in DETAIL
     assert "const aw = d.away_abbr || away, hm = d.home_abbr || home;" in DETAIL
     assert DETAIL.count('d[`${ha}_abbr`] || d[ha] || ""') == 2
     CAST_H = (ROOT / "web" / "js" / "hoopscast.js").read_text()

@@ -989,6 +989,10 @@ function chatDrawHead() {
   const side = (abbr, score, home) => `<div class="gch-side${home ? " home" : ""}">${
     typeof teamMarkIn === "function" && abbr ? teamMarkIn(lg, abbr, 26) : ""}<b>${chEsc(abbr || "")}</b><span class="gch-score">${
     score != null ? chEsc(score) : ""}</span></div>`;
+  // A score once the game has one: "Pregame" beside 0 and 0 read as a
+  // score (Ethan, 2026-11-15; app.js scoreShown, written out here because
+  // the chat loads on its own).
+  const on = lv.state === "live" || lv.state === "final";
   const mid = lv.state === "live"
     ? `<span class="gch-live"><i></i>LIVE</span><span class="gch-clock">${chEsc(lv.detail || [lv.period, lv.clock].filter(Boolean).join(" "))}</span>`
     : lv.state === "final" ? `<span class="gch-clock">FINAL</span>`
@@ -997,7 +1001,8 @@ function chatDrawHead() {
     <div class="gch-headrow"><span class="gch-title">${chatIcon()}Game chat</span><span class="gch-here">${
       CH.here ? `<i></i>${CH.here} watching` : ""}${chatFriendsHere()}</span>
       <button type="button" class="gch-x" data-gch="close" aria-label="Close the chat">${typeof icon === "function" ? icon("cross", 16) : "×"}</button></div>
-    <div class="gch-board">${side(d.away, lv.away_score, false)}<div class="gch-mid">${mid}</div>${side(d.home, lv.home_score, true)}</div>`;
+    <div class="gch-board">${side(d.away, on ? lv.away_score : null, false)}<div class="gch-mid">${mid}</div>${
+      side(d.home, on ? lv.home_score : null, true)}</div>`;
   chatDrawPoll();
   chatDrawHeat();
   chatDrawTix();
