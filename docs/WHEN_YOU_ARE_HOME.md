@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SE. Each team's form in the basketball and hockey reports** (step 611; 15
+November). Nothing to run. Your spring NBA research was mostly spread picks,
+and a spread read leans on who is winning and where. The reports had the
+ratings, the rest and the absences, but not the record. Every NBA, college
+and WNBA report's "How the game should go" now opens with each side's form,
+and so does the NHL report's matchup, from the final scores in the history:
+- **Form:** "the Heat is 6-4 over its last ten, outscoring teams by 2.1
+  points a game; the Celtics are 8-2 over their last ten, outscoring teams
+  by 7.4 points a game". Early in a season it is "in its 4 games this
+  season". Hockey says it in goals.
+- **Where they play:** "the Celtics are 5-1 at home and the Heat is 2-3 on
+  the road this season": the home side's record at home, the visitors' on
+  the road.
+
+Only this season's finals count, never the preseason or a game still being
+played. A team with fewer than three finals this season says nothing.
+
 **SD. Each pick on the card says the main way it loses** (step 610; 15
 November). Nothing to run. Your research's final card gave each pick "the
 reasoning and the main way each one loses". The card at the top of every

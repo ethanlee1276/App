@@ -486,7 +486,8 @@ def nhl_tape(c: Ctx) -> dict | None:
                "note": f"Ranks out of {n}; 1st is the best — the most for, the fewest against. xG is "
                        "expected goals, the quality of the chances, from our own shot model; tonight's "
                        "figure is the game model's, goalies and rest included."}]
-    items = []
+    # Each side's form this season first (`team_form`, filled by nhl_build).
+    items = form_lines(c, c.g.get("form") or {})
     for t in c.teams:
         mine, them = sides.get(t) or {}, sides.get(c.opp[t]) or {}
         r_for, r_against = (mine.get("ranks") or {}).get("sog_for"), (them.get("ranks") or {}).get("sog_against")
@@ -1041,6 +1042,50 @@ def last_meeting(conn, sport: str, home: str, away: str, before: str, hist: dict
     return out
 
 
+#: Recent form: the newest finals this season a team's form reads, and the
+#: fewest that say anything.
+FORM_N, FORM_MIN = 10, 3
+
+
+def team_form(conn, sport: str, home: str, away: str, before: str) -> dict:
+    """EACH TEAM'S FORM THIS SEASON (the research's spread reads: who has won
+    eight of ten, a team that is 5-1 at home): its newest FORM_N finals before
+    ``before`` with the record and the average margin, and this season's
+    record where it plays tonight (the home side at home, the visitors on the
+    road). Finals from the history's `games`; a team with fewer than FORM_MIN
+    this season says nothing. ``{team: {"n", "w", "l", "margin", "where",
+    "venue_w", "venue_l"}}``; {} without a history."""
+    if conn is None or not home or not away or not before:
+        return {}
+    from .seasons import season_of
+    day = str(before)[:10]
+    season = season_of(sport, day)
+    out: dict = {}
+    for t, where in ((away, "road"), (home, "home")):
+        cl = _clubs(t)
+        q = ",".join("?" * len(cl))
+        rows = conn.execute(
+            f"SELECT period, home, home_score, away_score FROM games WHERE sport=? AND period < ? "
+            f"AND home_score IS NOT NULL AND away_score IS NOT NULL AND (home IN ({q}) OR away IN ({q})) "
+            f"ORDER BY period DESC LIMIT 120", (sport, day, *cl, *cl)).fetchall()
+        mine = []
+        for period, h, hs, as_ in rows:
+            if season_of(sport, str(period)[:10]) != season:
+                continue
+            at_home = str(h).upper() in cl
+            us, them = (int(hs), int(as_)) if at_home else (int(as_), int(hs))
+            mine.append((at_home, us, them))
+        if len(mine) < FORM_MIN:
+            continue
+        last = mine[:FORM_N]
+        wins = sum(1 for _at, u, o in last if u > o)
+        here = [(u, o) for at, u, o in mine if at == (where == "home")]
+        out[t] = {"n": len(last), "w": wins, "l": len(last) - wins,
+                  "margin": round(sum(u - o for _at, u, o in last) / len(last), 1), "where": where,
+                  "venue_w": sum(1 for u, o in here if u > o), "venue_l": sum(1 for u, o in here if u <= o)}
+    return out
+
+
 def basketball_research(g: dict, *, hist: dict, gone: dict | None = None, vacancy: dict | None = None,
                         prof: dict | None = None, conn=None, sport: str = "nba", day: str = "") -> dict:
     """WHAT THE RESEARCH LOOKED AT, FOR ONE GAME'S REPORT (2026-11-15; Ethan:
@@ -1056,7 +1101,9 @@ def basketball_research(g: dict, *, hist: dict, gone: dict | None = None, vacanc
       * ``script``: both teams' pace and points with their ranks and the
         league's averages, the lines' total and spread (the research's pace
         and game-environment read);
-      * ``meeting``: the last time the two met (`last_meeting`).
+      * ``meeting``: the last time the two met (`last_meeting`);
+      * ``form``: each team's last ten this season and its record where it
+        plays tonight (`team_form`).
     """
     home, away = g.get("home"), g.get("away")
     out: dict = {}
@@ -1093,6 +1140,12 @@ def basketball_research(g: dict, *, hist: dict, gone: dict | None = None, vacanc
         m = {}
     if m:
         out["meeting"] = m
+    try:
+        form = team_form(conn, sport, home, away, day or g.get("date") or "")
+    except Exception:                                    # noqa: BLE001
+        form = {}
+    if form:
+        out["form"] = form
     return out
 
 
@@ -1170,15 +1223,48 @@ def _league(c: Ctx, own: bool = False) -> str:
     return f"{word}'s" if own else word
 
 
+def form_lines(c: Ctx, form: dict) -> list:
+    """"Form: the Heat is 6-4 over its last ten, outscoring teams by 2.1 points
+    a game; ..."
+    and "Where they play: the Celtics are 5-1 at home this season, the Heat
+    2-3 on the road" (`team_form`)."""
+    a, h = c.away, c.home
+    said = []
+    for t in (a, h):
+        f = form.get(t) or {}
+        n = int(f.get("n") or 0)
+        if not n:
+            continue
+        its = team_be(c, t, "their", "its")
+        span = f"over {its} last ten" if n == FORM_N else f"in {its} {n} games this season"
+        m = _f(f.get("margin")) or 0.0
+        unit = c.score_word if abs(m) == 1 else c.score_words
+        by = (f", outscoring teams by {_num(m)} {unit} a game" if m > 0 else
+              f", outscored by {_num(-m)} {unit} a game" if m < 0 else f", even on {c.score_words}")
+        said.append(f"{team_np(c, t)} {team_be(c, t)} {int(f.get('w') or 0)}-{int(f.get('l') or 0)} {span}{by}")
+    out = [f"Form: {'; '.join(said)}"] if said else []
+    where = []
+    for t, at in ((h, "at home"), (a, "on the road")):
+        f = form.get(t) or {}
+        w, lo = int(f.get("venue_w") or 0), int(f.get("venue_l") or 0)
+        if w + lo:
+            where.append(f"{team_np(c, t)} {team_be(c, t)} {w}-{lo} {at}")
+    if where:
+        out.append(f"Where they play: {_join(where)} this season")
+    return out
+
+
 def nba_script(c: Ctx) -> dict | None:
-    """HOW THE GAME SHOULD GO (the research's pace and game environment: "fast
-    vs fast = inflated stats; slow vs slow = deflated", "high total =
-    prop-friendly environment", "close game: stars play their minutes").
+    """HOW THE GAME SHOULD GO (the research's form and game environment: who
+    is winning and where, "fast vs fast = inflated stats; slow vs slow =
+    deflated", "high total = prop-friendly environment", "close game: stars
+    play their minutes").
     Rest and the blowout are under the game facts already."""
     s = c.meta.get("script") or {}
     pace, lp = s.get("pace") or {}, _f(s.get("league_pace"))
     items = []
     a, h = c.away, c.home
+    items += form_lines(c, c.meta.get("form") or {})
     pa, ph = _f(pace.get(a)), _f(pace.get(h))
     if pa is not None and ph is not None and lp:
         rk = s.get("pace_rank") or {}

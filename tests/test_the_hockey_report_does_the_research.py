@@ -11,7 +11,10 @@ who plays with whom with a regular out, and the last meeting. Now
     out (the board's own `lines`, nhl_build.team_lines), how settled each
     is, and who they are built without;
   * The last meeting (hockey_meeting, filled by nhl_build on each game): the
-    score and who scored for each side.
+    score and who scored for each side;
+  * Each side's form (team_form, filled beside it): its last ten this season
+    in goals, and its record where it plays tonight, at the top of the
+    matchup.
 
     python3 tests/test_the_hockey_report_does_the_research.py
 """
@@ -88,6 +91,31 @@ def test_the_last_meeting_says_the_score_and_who_scored():
     assert "Oct. 12: the Maple Leafs beat the Bruins 4-2 on the road." in text, text
     assert "The Maple Leafs' goals: Auston Matthews (2), Mitch Marner and William Nylander." in text, text
     assert not L.hockey_meeting(_conn(), "TOR", "MTL", "2026-10-21"), "never met: no section"
+
+
+def test_the_form_says_each_teams_last_games_in_goals_and_where_it_plays():
+    conn = _conn()
+    conn.executemany("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
+                     "VALUES ('nhl', 2026, ?, ?, ?, ?, ?, ?, ?)",
+                     [(d, f"{a}@{h}", h, a, hs, as_, d) for d, h, a, hs, as_ in (
+                         ("2026-10-14", "TOR", "MTL", 3, 1), ("2026-10-16", "TOR", "OTT", 2, 3),
+                         ("2026-10-15", "BOS", "NYR", 4, 2), ("2026-10-18", "DET", "BOS", 1, 2))])
+    conn.commit()
+    # The fixture's game is the Bruins at the Maple Leafs.
+    form = L.team_form(conn, "nhl", "TOR", "BOS", "2026-10-21")
+    assert form["TOR"] == {"n": 3, "w": 2, "l": 1, "margin": 1.0, "where": "home", "venue_w": 1, "venue_l": 1}, form
+    assert form["BOS"] == {"n": 3, "w": 2, "l": 1, "margin": 0.3, "where": "road", "venue_w": 1, "venue_l": 0}, form
+    board = copy.deepcopy(E._nhl_board())
+    board["lines"] = copy.deepcopy(LINES)
+    board["games"][0]["form"] = form
+    L.attach(board, "nhl")
+    text = R.to_text(board["game_reports"][0])
+    # Said in goals, a goal when it is one.
+    assert ("Form: the Bruins are 2-1 in their 3 games this season, outscoring teams by 0.3 goals a game; the "
+            "Maple Leafs are 2-1 in their 3 games this season, outscoring teams by 1 goal a game.") in text, text
+    assert "Where they play: the Maple Leafs are 1-1 at home and the Bruins are 1-0 on the road this season." in text
+    src = (ROOT / "nhl_build.py").read_text(encoding="utf-8")
+    assert '_tf(conn, SPORT, _gd["home"], _gd["away"], date)' in src and '_gd["form"] = _fm' in src
 
 
 def test_the_sections_sit_in_the_researchs_order_and_the_build_fills_the_meeting():

@@ -13,7 +13,8 @@ engine/leaguereport.basketball_research (NBA, college, WNBA):
   * What the absences change: each ruled-out rotation man's minutes and
     points, and who took the biggest one's share of the points in the games
     he missed — measured, and a sample under three games says so;
-  * How the game should go: both teams' pace against the league's (per 48
+  * How the game should go: each team's form (its last ten this season, by how
+    much, and its record where it plays tonight), both teams' pace against the league's (per 48
     minutes, as the tape says it; Division I's on college), the total against
     the league's average game, a close game's full minutes;
   * The last meeting: the score, each side's leading scorers, and who each
@@ -135,6 +136,46 @@ def test_a_college_game_says_division_i_and_the_same_pace_as_its_tape():
     text = R.to_text(board["game_reports"][0])
     assert "possessions per 48 minutes" in text and "Division I averages 99.1." in text, text
     assert "over Division I's average game (225)" in text and "the league" not in text, text
+
+
+def _form_conn(extra_bos_home_wins=0):
+    from engine import db as D
+    conn = D.connect(Path(tempfile.mkdtemp()) / "history.db")
+    rows = [("2026-10-12", "BOS", "MIA", 90, 95), ("2026-10-30", "MIA", "BOS", 101, 112),
+            ("2026-11-02", "BOS", "NYK", 110, 100), ("2026-11-04", "BOS", "PHI", 105, 99),
+            ("2026-11-06", "ORL", "MIA", 100, 98), ("2026-11-08", "MIA", "ATL", 121, 111),
+            # Last season and tonight: neither is this season's form.
+            ("2026-04-01", "MIA", "BOS", 80, 120), ("2026-11-16", "BOS", "MIA", 130, 90)]
+    rows += [(f"2026-10-{d:02d}", "BOS", "CHA", 100, 90) for d in range(14, 14 + extra_bos_home_wins)]
+    conn.executemany("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
+                     "VALUES ('nba', 2026, ?, ?, ?, ?, ?, ?, ?)",
+                     [(d, f"{a}@{h}", h, a, hs, as_, d) for d, h, a, hs, as_ in rows])
+    conn.commit()
+    return conn
+
+
+def test_the_form_says_each_teams_record_margin_and_where_it_plays():
+    got = L.team_form(_form_conn(), "nba", "BOS", "MIA", "2026-11-16")
+    assert got["MIA"] == {"n": 4, "w": 2, "l": 2, "margin": 0.5, "where": "road", "venue_w": 1, "venue_l": 1}, got
+    assert got["BOS"] == {"n": 4, "w": 3, "l": 1, "margin": 5.5, "where": "home", "venue_w": 2, "venue_l": 1}, got
+    g, meta = _research()
+    meta["form"] = got
+    board = {"date": "2026-11-16", "games": [g], "scan_reads": {}}
+    L.attach(board, "nba", meta={"MIA@BOS": meta})
+    text = R.to_text(board["game_reports"][0])
+    assert ("Form: the Heat is 2-2 in its 4 games this season, outscoring teams by 0.5 points a game; the Celtics "
+            "are 3-1 in their 4 games this season, outscoring teams by 5.5 points a game.") in text, text
+    assert "Where they play: the Celtics are 2-1 at home and the Heat is 1-1 on the road this season." in text
+    # Ten finals or more: the last ten.
+    ten = L.team_form(_form_conn(extra_bos_home_wins=8), "nba", "BOS", "MIA", "2026-11-16")
+    assert ten["BOS"]["n"] == 10 and ten["BOS"]["venue_w"] == 10, ten
+    meta["form"] = ten
+    board = {"date": "2026-11-16", "games": [g], "scan_reads": {}}
+    L.attach(board, "nba", meta={"MIA@BOS": meta})
+    assert "the Celtics are 10-0 over their last ten" in R.to_text(board["game_reports"][0])
+    # Under three finals this season: nothing said; the build gathers it.
+    assert L.team_form(_conn(), "nba", "BOS", "MIA", "2026-11-16") == {}
+    assert "form" in L.basketball_research(g, hist=_hist(), conn=_form_conn(), sport="nba", day="2026-11-16")
 
 
 def test_the_last_meeting_is_the_precedent_with_who_was_missing():
