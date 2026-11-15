@@ -35,7 +35,9 @@ CSS = READ("web", "css", "styles.css")
 def test_the_iphone_alone_listens_for_a_field():
     i = BOOT.index("THE BAR AND THE PICKER")
     block = BOOT[i:BOOT.index("} catch (e) {}", i)]
-    assert 'if (!/iPhone|iPod/.test(navigator.userAgent || "")) return;' in block
+    # One block with the pinned layers' net (2026-11-15): its focus listeners
+    # are an iPhone's alone.
+    assert 'iphone = /iPhone|iPod/.test(ua)' in block and "if (iphone) {" in block
     assert 'document.addEventListener("focusin"' in block and 'document.addEventListener("focusout"' in block
     assert 'root.classList.add("field-up")' in block and 'root.classList.remove("field-up")' in block
     assert "if (field(document.activeElement)) return;" in block, "a field taking over keeps the bar away"

@@ -14,6 +14,11 @@
   -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
   color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .gch-fab[hidden], body.gch-card-in .gch-fab { display: none; }
+/* While a picker or the keyboard is up on an iPhone (boot.js sets
+   html.field-up) the bar steps aside, as the tab bar does: the keyboard
+   carries pinned layers up over the page (Ethan, 2026-11-15: "this game
+   chat bar gets stuck on the middle of the screen"). */
+html.field-up .gch-fab { display: none; }
 .gch-fab-ico { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
   background: var(--grad-brand); color: var(--brand-ink); }
 .gch-fab-main { flex: 1; min-width: 0; display: grid; gap: 1px; }

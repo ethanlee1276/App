@@ -620,6 +620,18 @@ function chatVotePath() {
   return CH.votePath || [];
 }
 
+/* A FIELD LETS GO BEFORE IT GOES (Ethan, 2026-11-15, his open Duo with the
+   chat bar circled halfway up NE @ DET's game page: "fix how this game chat
+   bar gets stuck on the middle of the screen"). A box taken out of the page
+   while it has the keyboard tells nobody, no focusout, so an iPhone's pinned
+   layers (this bar, the top bar, the tab bar) stayed where the keyboard had
+   carried them. Letting go first is the focusout that puts them back
+   (boot.js, THE PINNED LAYERS COME BACK TO THE SCREEN). */
+function chatLetGo(el) {
+  const a = document.activeElement;
+  if (el && a && a !== document.body && el.contains(a) && typeof a.blur === "function") a.blur();
+}
+
 function chatReset() {
   clearTimeout(CH.timer);
   clearTimeout(CH.wtimer);
@@ -629,6 +641,7 @@ function chatReset() {
     loaded: false, err: "", menu: 0, parties: [], party: null, pmsgs: [], pLastId: 0, invite: "",
     hype: null, wtimer: 0, wfirst: false });
   const s = document.getElementById("gch-sheet");
+  chatLetGo(s);
   if (s) s.remove();
   document.body.classList.remove("gch-on");
 }
@@ -959,6 +972,7 @@ function chatClose() {
   CH.thread = "";
   CH.menu = 0;
   const s = document.getElementById("gch-sheet");
+  chatLetGo(s);
   if (s) s.remove();
   document.body.classList.remove("gch-on");
   chatFab();
@@ -1513,6 +1527,7 @@ async function chatSend(form) {
     CH.replyTo = 0;
     CH.bet = null;
     CH.betOpen = false;
+    chatLetGo(form);
     chatDrawFoot();
     await chatPull();
     const b = chatBody();
@@ -1525,6 +1540,7 @@ async function chatSend(form) {
   if (out.status === 401 && CH.me) CH.me.signed_in = false;
   CH.err = out.error || "That did not send — try again.";
   const keep = text;
+  chatLetGo(form);
   chatDrawFoot();
   const nb = document.querySelector("#gch-sheet .gch-input");
   if (nb) nb.value = keep;

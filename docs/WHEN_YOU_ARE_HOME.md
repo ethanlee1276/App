@@ -9338,6 +9338,29 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RK. The game chat bar stays at the foot of the screen** (step 591; 15
+November). Nothing to run. Your open Duo's screenshot of NE @ DET had the
+chat bar halfway up the screen, over "Where the money is going". The
+sidebar's three dots had moved up just as far, and the top bar was gone off
+the top: everything pinned to the screen had ridden up together, and it
+stayed there until the page moved. The cause: when a typing box leaves the
+page while it has the keyboard (the game chat closing, or redrawing its box
+after you send), an iPhone never says the box lost focus, so the reset that
+puts the bars back after a keyboard (step from 5 November) never ran. What
+changed:
+- The chat lets go of its box before it closes or redraws it, so that reset
+  runs.
+- A net under every case: when the page moves, or the app comes back to the
+  front, the site checks the screen's position against the page's. If they
+  disagree with no keyboard up and no pinch zoom, it moves the page a pixel
+  and back, which puts every pinned bar back.
+- While a keyboard or a picker is up, the chat bar steps aside, as the tab
+  bar already does.
+- The site's first load grows by 276 bytes compressed; its budget goes from
+  379 to 380 KB.
+There's no iPhone here: the tests copy an iPhone's behavior in Chrome. If the
+bar ever sticks again, tell me what you did just before.
+
 **RJ. Who gets the ball, in color** (step 590; 15 November). Nothing to
 run. You circled DET's "who gets the ball thrown to him" line and asked for
 each player's name in green or red by his matchup. The game reports now

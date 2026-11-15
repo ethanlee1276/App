@@ -310,7 +310,18 @@ APP_JS_BUDGET_KB = 290
 #: named by its own abbreviation, not "espn:<id>", on the live card and in
 #: its plays. 387,072 -> 387,093 B, 21 over 378. It cannot load later: the
 #: Live tab's cards are the first page drawn there. Told to Ethan.
-BOOT_BUDGET_KB = 379
+#: 379 -> 380 on 2026-11-15, for Ethan's open Duo with the game chat bar
+#: circled halfway up NE @ DET's game page: "fix how this game chat bar gets
+#: stuck on the middle of the screen". Every pinned layer had ridden up as
+#: one, and a field taken out of the page with the keyboard up tells nobody,
+#: so nothing put them back. The screen's own viewport is now read after the
+#: page moves, and a page still marked as typing, or a screen standing away
+#: from the page, is settled (boot.js, THE PINNED LAYERS COME BACK TO THE
+#: SCREEN). 276 B gz, folded into the picker's block (its field test, its
+#: wrapper, one nudge for both): 388,037 -> 388,313 B, 217 over 379. It
+#: cannot load later: the bars it puts back are on the first page drawn, and
+#: the picker's nudge is now this one. Told to Ethan.
+BOOT_BUDGET_KB = 380
 
 
 def _gz_trimmed(rel: str) -> int:

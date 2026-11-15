@@ -107,14 +107,35 @@ try {
    the fixed tab bar rides up on what is left, over the page, and it can stay
    up there after the wheel goes, until the page next moves. A phone app
    takes its tab bar away while a picker or a keyboard is up, and so does
-   this page (html.field-up, styles.css "THE BAR AND THE PICKER"). When the
-   field lets go and none other has taken it, the page is moved a pixel and
-   back, which hands the bar back to the screen's foot. iPhone only: an
-   Android keyboard does not carry the page's fixed layers up with it. */
+   this page (html.field-up, styles.css "THE BAR AND THE PICKER"; the game
+   chat's bar too, chat.css). When the field lets go and none other has taken
+   it, the page is moved a pixel and back (QB_SETTLE), which hands the bar
+   back to the screen's foot. iPhone only: an Android keyboard does not carry
+   the page's fixed layers up with it.
+
+   THE PINNED LAYERS COME BACK TO THE SCREEN (Ethan, 2026-11-15, his open Duo
+   on NE @ DET's game page, the game chat bar circled halfway up the screen
+   over "Where the money is going": "fix how this game chat bar gets stuck on
+   the middle of the screen"). Every pinned layer had moved as one: the top
+   bar off the top, the sidebar's dots and the chat bar about 500 points up.
+   They came back once the page moved. A field taken out of the page while
+   it has the keyboard tells nobody: the game chat closed, or redrew its box
+   after a send, with the box in focus, so no focusout came and nothing put
+   them back (chat.js now lets go of its box first). The net under every
+   such case is the screen's own viewport (window.visualViewport), read 250ms
+   after the page or the screen last moves and when the app comes back to
+   the front: with no field up and no pinch zoom, a page still marked as
+   typing, or a screen standing away from the page, is settled. QB_SETTLE
+   moves the page a pixel and back a frame later, which hands every pinned
+   layer to the screen again, at most once in 600ms so it can never chase
+   itself. iPhones and iPads (an iPad says Macintosh, with a touch screen);
+   nothing anywhere else. */
+var QB_SETTLE = function () {};
 try {
   (function () {
-    if (!/iPhone|iPod/.test(navigator.userAgent || "")) return;
-    var root = document.documentElement, wait = 0;
+    var ua = navigator.userAgent || "", iphone = /iPhone|iPod/.test(ua);
+    if (!iphone && !/iPad/.test(ua) && !(/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return;
+    var root = document.documentElement, vv = window.visualViewport, wait = 0, last = 0;
     /* A field is whatever brings up the wheel or the keyboard: its type as
        the browser reads it ("select-one", "textarea", an unknown type read
        as "text"), or a block that edits like a text box. */
@@ -122,6 +143,13 @@ try {
       return !!el && (/^(text(area)?|search|email|url|tel|number|password|date(time-local)?|month|week|time|select-(one|multiple))$/.test(el.type) ||
         el.isContentEditable === true);
     }
+    QB_SETTLE = function () {
+      if (Date.now() - last < 600) return;
+      last = Date.now();
+      var y = scrollY;
+      scrollTo({ top: y ? y - 1 : 1, behavior: "instant" });
+      requestAnimationFrame(function () { scrollTo({ top: y, behavior: "instant" }); });
+    };
     function on(e) {
       if (!field(e.target)) return;
       clearTimeout(wait);
@@ -129,13 +157,29 @@ try {
       wait = setTimeout(function () {
         if (field(document.activeElement)) return;
         root.classList.remove("field-up");
-        var y = scrollY;
-        scrollTo({ top: y ? y - 1 : 1, behavior: "instant" });
-        scrollTo({ top: y, behavior: "instant" });
+        QB_SETTLE();
       }, 350);
     }
-    document.addEventListener("focusin", on, true);
-    document.addEventListener("focusout", on, true);
+    if (iphone) {
+      document.addEventListener("focusin", on, true);
+      document.addEventListener("focusout", on, true);
+    }
+    function check() {
+      clearTimeout(wait);
+      wait = setTimeout(function () {
+        if (field(document.activeElement) || Math.abs(vv.scale - 1) > 0.01) return;
+        var stale = root.classList.contains("field-up");
+        root.classList.remove("field-up");
+        if (stale || Math.abs(vv.offsetTop) >= 1) QB_SETTLE();
+      }, 250);
+    }
+    if (vv) {
+      vv.addEventListener("resize", check);
+      vv.addEventListener("scroll", check);
+      addEventListener("scroll", check, { passive: true });
+      addEventListener("pageshow", check);
+      document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+    }
   })();
 } catch (e) {}
 
