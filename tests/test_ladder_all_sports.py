@@ -66,9 +66,13 @@ def test_the_generic_gate_carries_every_rung_and_no_hardcoded_sport():
     assert 'calibrated("mlb"' not in src
     assert "is_reliable(sport, prop.market)" in src
     assert "lp_veto(sport, prop.market" in src
-    i = src.index("gate_ok = ")
+    # Since 2026-11-15 the gate is every check but the record's, then the
+    # record's (engine/paperhold: a pick the record alone refused goes on
+    # paper), so both halves are pinned.
+    i = src.index("gate_but_record = ")
     seg = src[i:i + 260]
-    assert "calibration_ok" in seg and "pattern_block is None" in seg
+    assert "calibration_ok" in seg
+    assert "gate_ok = gate_but_record and pattern_block is None" in src
 
 
 def test_the_generic_projection_consults_the_stores_by_sport():
