@@ -129,9 +129,32 @@ def why_not(x: dict) -> str:
     return "priced, under every board's bar"
 
 
+#: Rows of each contradiction kind the audit prints (2026-11-14: the counts
+#: alone named 92 college contradictions and none of the picks behind them).
+EXAMPLES = 6
+
+
+def built_utc(d: dict):
+    """When the board was built, in UTC, or None. A stamp without a zone is
+    the box's own clock (`datetime.now()` where it was written)."""
+    import datetime as _dt
+    s = str(d.get("built_at") or d.get("generated_at") or "")
+    try:
+        t = _dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return t.astimezone(_dt.timezone.utc)
+
+
 def audit(d: dict) -> dict:
-    """{"contradictions": Counter, "reads": Counter, "struggle": [...], "unposted": [...]}."""
-    found = C.scan(d)
+    """{"contradictions": Counter, "found": [...], "reads": Counter, "struggle": [...], "unposted": [...]}.
+
+    THE BOARD'S OWN CLOCK (2026-11-14). The self-check asks whether a pick's
+    game has started as of now, so Ethan's run at 7:32pm ET counted 43
+    college picks STARTED — every 7:30 kickoff since the 7:19 build. As of the
+    build, a pick on a game under way is a real fault; as of the read, it is
+    the clock."""
+    found = C.scan(d, now=built_utc(d))
     reads = C.reads(d)
     struggle = [x for x in reads if x.get("read") in STRUGGLE and is_key(x) and not x.get("own_status")]
     struggle.sort(key=lambda x: (not (x.get("scoring") or {}).get("go_to"), x.get("read") != "avoid",
@@ -139,7 +162,7 @@ def audit(d: dict) -> dict:
     posted = td_posted(d)
     unposted = [x for x in reads if (x.get("scoring") or {}).get("go_to") and x.get("player") not in posted]
     unposted.sort(key=lambda x: -float(((x.get("scoring") or {}).get("prob")) or 0))
-    return {"contradictions": Counter(f["kind"] for f in found),
+    return {"contradictions": Counter(f["kind"] for f in found), "found": found,
             "reads": Counter(str(x.get("read") or "?") for x in reads),
             "struggle": struggle, "unposted": unposted}
 
@@ -154,6 +177,14 @@ def report(sport: str, d: dict, limit: int = 40) -> list[str]:
         if sport in C.FILES:
             said += f"  (every row: python3 -m engine.contradictions --sport {sport} --all)"
         out.append(said)
+        # THE ROWS BEHIND EACH COUNT, a few of each kind, so a fix can land on
+        # the rule that made them.
+        for kind, _n in c.most_common():
+            rows = [f for f in a["found"] if f["kind"] == kind]
+            for f in rows[:EXAMPLES]:
+                out.append(f"    {kind}: {f['player']} — {f['text']}")
+            if len(rows) > EXAMPLES:
+                out.append(f"    {kind}: … {len(rows) - EXAMPLES} more")
     else:
         out.append("  Self-check: no contradictions")
     r = a["reads"]

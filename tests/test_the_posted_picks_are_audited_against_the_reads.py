@@ -92,6 +92,22 @@ def test_it_reads_the_private_copy_and_writes_nothing():
         assert w not in src, f"read-only: {w}"
 
 
+
+def test_a_started_game_is_judged_at_the_boards_build_and_the_rows_are_printed():
+    """Ethan's run, 2026-11-14 at 7:32pm ET, counted 43 college picks STARTED:
+    every 7:30 kickoff since the 7:19 build. As of the build only a pick
+    already under way is a fault; and the rows behind each count print."""
+    from engine import pickaudit as PA
+    row = {"team": "MIA", "market": "rush_yds", "side": "over", "line": 50.5, "model_prob": 0.6, "odds": -150}
+    d = {"generated_at": "2026-11-15T00:19:00+00:00", "most_likely": [
+        dict(row, player="Kicks Off Later", kickoff="2026-11-15T00:30:00Z"),
+        dict(row, player="Under Way", kickoff="2026-11-15T00:00:00Z")]}
+    a = PA.audit(d)
+    assert a["contradictions"].get("STARTED") == 1, a["contradictions"]
+    lines = PA.report("cfb", d)
+    assert any(ln.strip().startswith("STARTED: Under Way") for ln in lines), lines
+    assert PA.built_utc({"generated_at": "junk"}) is None
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0
