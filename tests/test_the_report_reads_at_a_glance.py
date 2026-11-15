@@ -119,8 +119,14 @@ def test_the_lines_that_read_worst_say_it_plainly():
     assert text.count("D.J. Reed (LCB) — 126.5 passer rating") == 1
     assert "DET's other corners: Roger McCreary (NB)" in text
     assert text.count("Brandon Cisse (RCB) — 142.8 passer rating") == 1 and "GB's corners:" not in text
-    assert ("Who gets GB's chances inside the 20: Christian Watson (about 2.4), Matthew Golden (about 2.4) — "
-            "carries and targets a game there, by our numbers.") in text
+    # 2026-11-15 ("we should be going of the actual factual numbers and not
+    # 'our numbers'"): the red zone says this game's plays from the two units'
+    # rates, and a player's counts where the play-by-play has them
+    # (tests/test_the_red_zone_says_the_counts).
+    assert ("GB runs about 10 plays a game inside the opponent's 20 (9% more than an average team); DET's defense "
+            "allows about 9.8 (6% more than an average defense). Both are adjusted for the teams they've played. "
+            "This game: about 10.6 for GB.") in text
+    assert "by our numbers" not in text
     assert "GB allows the second-most touchdowns to running backs; the touchdown matchup backs him." in text
     assert "; the matchup backs him" not in text
 

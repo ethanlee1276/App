@@ -591,6 +591,9 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
         # grade has always read.
         "rz_expected": round(rz_now, 2),
         "rz_before": round(rz.opportunities, 2),
+        # His real share of his team's carries and targets inside the 20 over
+        # the same games (nflusage.red_zone_usage), for the report's counts.
+        "rz_share": round(rz.rz_touch_share, 3) if rz.measured and rz.rz_touch_share else None,
         "rz_then_implied": rz.team_implied,
         "goal_line": rz.goal_line(),
         "goal_line_text": gl_text,
@@ -739,6 +742,7 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "rz_chances": info.get("rz_expected"),
             "rz_before": info.get("rz_before"),
             "rz_then_implied": info.get("rz_then_implied"),
+            "rz_share": info.get("rz_share"),
             "goal_line": info.get("goal_line"),
             "goal_line_text": info.get("goal_line_text") or "",
             "vig": round(vig, 4), "vig_source": vig_source,

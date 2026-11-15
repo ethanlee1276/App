@@ -1885,10 +1885,13 @@ def td_chance_lines(c: Ctx, off: str) -> list:
         odds = _f(td.get("odds"))
         bits = [f"{_pct(p)} to score" + (f", at {_odds(odds)}" + (" (past the −250 limit)" if odds < TAKE_CAP else "")
                                          if odds is not None else "")]
+        # The rule's share (likelyboard.td_rule: his expected chances this week
+        # against his team's plays inside the 20), so "backs him" and "meets
+        # our touchdown rule" say what the board decided. Not printed: the
+        # counts above these lines give his real share (rz_usage_lines).
         share = None
         if _f(td.get("rz_chances")) and team_rz:
             share = min(1.0, float(td["rz_chances"]) / team_rz)
-            bits.append(f"{_pct(share)} of {off}'s red-zone chances")
         x = allowed.get(_TD_STAT.get(pos, "")) or {}
         funnel = None
         if x.get("rank") and x.get("of"):
@@ -1900,9 +1903,9 @@ def td_chance_lines(c: Ctx, off: str) -> list:
         # his whole matchup read's colour, which can differ from what this
         # defense gives up in touchdowns to his position.
         if usage and funnel:
-            bits.append("his red-zone share and the touchdown matchup both back him")
+            bits.append("his red-zone role and the touchdown matchup both back him")
         elif usage:
-            bits.append("his red-zone share backs him")
+            bits.append("his red-zone role backs him")
         elif funnel:
             bits.append("the touchdown matchup backs him")
         meets = p >= 0.45 or (p >= 0.40 and usage)
@@ -1913,6 +1916,65 @@ def td_chance_lines(c: Ctx, off: str) -> list:
     return [t for _p, t in rows[:TD_LIST]]
 
 
+#: Players listed under "Who gets the ball inside the 20".
+RZ_LIST = 4
+#: How far a defence's red-zone plays allowed may move his chances this game
+#: (touchdowns.RZ_SCALE_CLAMP's bounds).
+RZ_FACTOR_CLAMP = (0.6, 1.4)
+
+
+def rz_factor(rel) -> float | None:
+    """A defence's red-zone plays allowed against an average one's
+    ("15% fewer" → 0.85), clamped; None when unknown."""
+    v = _f(rel)
+    if v is None:
+        return None
+    lo, hi = RZ_FACTOR_CLAMP
+    return max(lo, min(hi, 1.0 + v))
+
+
+def rz_usage_lines(c: Ctx, off: str, factor) -> list:
+    """WHO GETS THE BALL INSIDE THE 20, AS COUNTS (Ethan, 2026-11-15,
+    circling "carries and targets a game there, by our numbers": "we should
+    be going of the actual factual numbers and not 'our numbers'. The point
+    is so the user knows how many redzone touches and targets each player
+    gets and how many they should get based off the match up for the game
+    and offense and defense"). Each player's carries and targets inside the
+    20 in his last games, from the play-by-play (engine/nflusage
+    .red_zone_usage, his last RZ_WEEKS games), a game, his share of his
+    team's, and what his rate comes to against this defence: times how many
+    plays inside the 20 it allows against an average defence (``factor``).
+    NFL: the counts are the play-by-play's. Empty where none were measured."""
+    dfn = c.opp[off]
+    rows = []
+    for r in c.reads_for(off):
+        td = r.get("td") or {}
+        gl = td.get("goal_line") or {}
+        try:
+            n = int(gl.get("games") or 0)
+            car, tgt = int(gl.get("rz_car") or 0), int(gl.get("rz_tgt") or 0)
+            i5, i10 = int(gl.get("i5_car") or 0), int(gl.get("i10_tgt") or 0)
+        except (TypeError, ValueError):
+            continue
+        if n <= 0 or car + tgt <= 0 or not r.get("player"):
+            continue
+        per = (car + tgt) / n
+        bits = []
+        if car:
+            bits.append(f"{car} carr{'y' if car == 1 else 'ies'}" + (f" ({i5} inside the 5)" if i5 else ""))
+        if tgt:
+            bits.append(f"{tgt} target{'' if tgt == 1 else 's'}" + (f" ({i10} inside the 10)" if i10 else ""))
+        share = _f(td.get("rz_share"))
+        pos = str(r.get("pos") or "").upper()
+        text = (f"{r['player']}{f' ({pos})' if pos else ''}: " + " and ".join(bits)
+                + f" in his last {n} game{'' if n == 1 else 's'} — {_num(per)} a game"
+                + (f", {_pct(share)} of {off}'s" if share else "")
+                + (f". Against {dfn}: about {_num(per * factor)} this game" if factor else "") + ".")
+        rows.append((per, text))
+    rows.sort(key=lambda x: -x[0])
+    return [t for _p, t in rows[:RZ_LIST]]
+
+
 def sec_redzone(c: Ctx) -> dict | None:
     """THE RED ZONE, IN PLAIN WORDS (2026-11-14). Ethan circled two of these
     lines — "(23rd of 32, 1st the stingiest)" and "(0% below the league)" — and
@@ -1921,7 +1983,7 @@ def sec_redzone(c: Ctx) -> dict | None:
     league is "about average", and the red zone is "inside the 20"."""
     nums = c.scan.get("numbers") or {}
     rz = c.scan.get("redzone") or {}
-    lines, marks = [], {}
+    lines, marks, usage = [], {}, {}
     for off in c.teams:
         dfn = c.opp[off]
         o, d = (nums.get(off) or {}).get("rz_off") or {}, (nums.get(dfn) or {}).get("rz_def") or {}
@@ -1946,23 +2008,29 @@ def sec_redzone(c: Ctx) -> dict | None:
             rel_o, rel_d = _f(ro.get("off_rel")), _f(rd.get("def_rel"))
             vo, vd = _than_average(rel_o), _than_average(rel_d, who="defense")
             _than_marks(marks, vo, rel_o, vd, rel_d)
+            factor = rz_factor(rel_d)
             lines.append(f"{off} runs about {_num(ro['off'])} plays a game inside the opponent's 20"
                          + (f" ({vo})" if vo else "")
                          + f"; {dfn}'s defense allows about {_num(rd['def'])}" + (f" ({vd})" if vd else "")
-                         + ". Both are adjusted for the teams they've played.")
-        chances = sorted(((r.get("player"), _f((r.get("td") or {}).get("rz_chances")))
-                          for r in c.reads_for(off)), key=lambda x: -(x[1] or 0))
-        chances = [(p, v) for p, v in chances if p and v and v >= 0.3][:3]
-        if chances:
-            # NAMES FIRST (2026-11-15, "make the game report less confusing"):
-            # the measure after them, once.
-            lines.append(f"Who gets {off}'s chances inside the 20: "
-                         + ", ".join(f"{p} (about {_num(v)})" for p, v in chances)
-                         + " — carries and targets a game there, by our numbers.")
+                         + ". Both are adjusted for the teams they've played."
+                         + (f" This game: about {_num(float(ro['off']) * factor)} for {off}." if factor else ""))
+            usage[off] = rz_usage_lines(c, off, factor)
+        if not usage.get(off):
+            # College (and an NFL player with no play-by-play rows): his
+            # red-zone carries and catches a game, as his usage has them.
+            chances = sorted(((r.get("player"), _f((r.get("td") or {}).get("rz_before")))
+                              for r in c.reads_for(off)), key=lambda x: -(x[1] or 0))
+            chances = [(p, v) for p, v in chances if p and v and v >= 0.3][:3]
+            if chances:
+                lines.append(f"Who gets {off}'s chances inside the 20: "
+                             + ", ".join(f"{p} (about {_num(v)} a game)" for p, v in chances)
+                             + " — red-zone carries and catches.")
     blocks = [_list(lines)] if lines else []
     if blocks and marks:
         blocks[0]["marks"] = marks
     for off in c.teams:
+        if usage.get(off):
+            blocks += [_h(f"Who gets the ball inside the 20 for {c.name(off)}"), _list(usage[off])]
         scorers = td_chance_lines(c, off)
         if scorers:
             blocks += [_h(f"Who can score for {c.name(off)}"), _list(scorers)]

@@ -9338,6 +9338,30 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RV. The red zone says the real counts, and what to expect this game**
+(step 602; 15 November). Nothing to run. You circled "Who gets NE's
+chances inside the 20: Rhamondre Stevenson (about 2), Corey Kiner (about
+1.5), Mack Hollins (about 1.1) — carries and targets a game there, by our
+numbers" and said the report should go off the actual numbers: how many
+red-zone touches and targets each player gets, and how many he should get
+from the matchup. Every NFL game report's Red zone section now has, for
+each team, **Who gets the ball inside the 20**:
+- **The counts**, from the play-by-play: "Rhamondre Stevenson (RB): 14
+  carries (5 inside the 5) and 2 targets in his last 6 games — 2.7 a game,
+  36% of NE's." Inside the 5 and inside the 10 are said where he has them.
+  "His last 6 games" is the window the touchdown model reads (the games he
+  touched the ball, zeros included).
+- **This game**: "Against DET: about 2.3 this game." That's his rate times
+  how many plays inside the 20 the defense allows against an average one
+  (15% fewer → ×0.85, kept within ×0.6 to ×1.4). The team line above it
+  says the same for the team: "NE runs about 7.4 plays a game inside the
+  opponent's 20 …; DET's defense allows about 7.9 … This game: about 6.3
+  for NE."
+- **The touchdown lines** ("37% to score, at +120 …") no longer print an
+  estimated share of the red-zone chances, since the counts above them now
+  say the real one. College keeps its per-game red-zone carries and catches
+  (its data has no play-by-play counts), without "by our numbers".
+
 **RU. Every live play says who did what, where, and what it changed**
 (step 601; 15 November). Nothing to run. Your message: "the wording in the
 live play by play screen is confusing and doesnt make much sense and is
