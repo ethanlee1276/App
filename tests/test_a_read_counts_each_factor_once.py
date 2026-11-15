@@ -187,6 +187,23 @@ def test_hockey_and_baseball_count_their_defence_and_their_starter_once():
     assert key == "neutral", "a starter's slugging allowed and his expected ERA are one reason"
 
 
+
+def test_a_lead_back_is_never_avoid():
+    """The picks audit (QC), 2026-11-14: Jeremiyah Love, 51% of Arizona's
+    carries, and Purdue's Fame Ijeboi, 43%, read "Avoid" on two reasons
+    against: a back was featured only as a 55% workhorse. A lead back
+    (gamescan.LEAD_CARRY_SHARE) reads tough on them, never avoid; a back with
+    a small share still can."""
+    from engine import gamescan as G
+    ratings = {"MIA": {"def": {"rushing": {"rank": 5}, "stuff": {"rank": 60}}},
+               "DUKE": {"off": {"rushing": {"rank": 32}, "line": {"rank": 69}}}}
+    for share, want in ((0.51, "tough"), (0.43, "tough"), (0.25, "avoid")):
+        x = _back(points=17.0, ratings=ratings,
+                  usage={"carry_share": share, "carries_pg": 12.0, "games": 9})
+        assert len(x["con"]) >= 2, x["con"]
+        assert x["read"] == want, (share, x["read"], x["con"])
+    assert G.LEAD_CARRY_SHARE == 0.40
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0

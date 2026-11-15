@@ -892,7 +892,7 @@ READS = (("breakout", "Breakout candidate"), ("good", "Good matchup"), ("neutral
          ("tough", "Tough matchup"), ("avoid", "Avoid"))
 
 
-def _label(score: int, volume: bool) -> tuple[str, str]:
+def _label(score: int, volume: bool, lead: bool = False) -> tuple[str, str]:
     """The matchup's verdict from its count: one reason either way leans
     it, two make it strong (a breakout needs the volume to use it).
 
@@ -912,7 +912,21 @@ def _label(score: int, volume: bool) -> tuple[str, str]:
     # him on the field in a bad one — is never "avoid".
     from .readlogic import ladder
     key = ladder(score, featured=volume, breakout_ok=volume, good_at=1, breakout_at=2)
+    # A lead back (LEAD_CARRY_SHARE) is never "avoid" either.
+    if key == "avoid" and lead:
+        key = "tough"
     return key, dict(READS)[key]
+
+
+#: THE LEAD BACK IS NEVER "AVOID" (2026-11-14). Ethan's picks audit (QC)
+#: listed Jeremiyah Love, 51% of Arizona's carries, and Purdue's Fame Ijeboi,
+#: 43%, as "Avoid". readlogic's rule — a featured player is never "avoid" —
+#: reached a back only as a 55% workhorse, while a receiver is featured at 18%
+#: of the targets. A back with this share is the lead back: he can read tough,
+#: and one reason against him still leans him there (he is not a workhorse),
+#: but never avoid. The bar is the share the audit and the touchdown readings
+#: already call featured (pickaudit.KEY_CARRY_SHARE, tdscenarios' CARRY_SHARE).
+LEAD_CARRY_SHARE = 0.40
 
 
 #: A QUARTERBACK WHO RUNS (Ethan, 2026-11-12: "we should have QB rushing
@@ -1690,7 +1704,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     # ONE VOTE A FAMILY (engine/readlogic.score): the defence he faces is
     # one reason however many of its numbers say the same thing.
     score = RL.score(pro, con, fam)
-    key, label = _label(score, volume)
+    key, label = _label(score, volume,
+                        lead=group == "rb" and float(u.get("carry_share") or 0.0) >= LEAD_CARRY_SHARE)
     # His share is said with what was noticed and not counted, first.
     notes = role + notes
     # A LEAN THAT RESTS ON THE WEATHER ALONE points only at the markets the
