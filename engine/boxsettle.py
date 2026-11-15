@@ -248,6 +248,105 @@ def purge_provisional(hconn, league: str, g: dict) -> int:
     return cur.rowcount or 0
 
 
+#: THE LEAGUES THAT GRADE ON THE BOX SCORE (2026-11-14). Ethan, answering
+#: RUN_NEXT 00e — "grade college on ESPN's box score, the one the books settle
+#: on?" — "1. yes". His cleanup run (engine/cfbdedupe) found 4,406 box copies
+#: in 2026 that differed from the play file's row, some of them above it
+#: (A'Marion Peterson: 5 carries in the box, 4 in the play file), which no
+#: mid-game copy can be: the two sources count differently. So a final box
+#: score's numbers are kept (`keep_box_values`, the history file's
+#: ``box_values``), the play file's rows for the same game take them when it
+#: lands (`apply_box_values`), and again after every play-file backfill
+#: (engine/ingest.ingest_cfb_player_history), so a re-pull never puts the play
+#: file's number back and a bet graded on the box score stands. A box row the
+#: play file has no row for (another spelling of the name) leaves the play
+#: file's alone. The NFL keeps grading on nflverse's file.
+BOX_GRADES = ("cfb",)
+
+
+def keep_box_values(hconn, league: str, g: dict) -> int:
+    """Keep the box score's numbers for a box-graded league's game (BOX_GRADES)
+    off its provisional rows on file. Returns the numbers kept."""
+    if league not in BOX_GRADES or not _by_teams(league, g):
+        return 0
+    terms, targs = _season_terms(league, g)
+    gt, gargs = _college_game_terms(g)
+    rows = hconn.execute(
+        f"SELECT season, period, player, team, market, value FROM player_game_logs "
+        f"WHERE sport=?{terms}{gt} AND game_id LIKE '%{BOX_SUFFIX}' AND value IS NOT NULL",
+        (league, *targs, *gargs)).fetchall()
+    hconn.executemany(
+        "INSERT OR REPLACE INTO box_values (sport, season, period, home, away, player, team, market, value) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        [(league, int(r[0]), str(r[1]), str(g["home"]), str(g["away"]), r[2], r[3], r[4], float(r[5]))
+         for r in rows])
+    return len(rows)
+
+
+def apply_box_values(hconn, league: str, g: dict | None = None, seasons=None) -> dict:
+    """The play file's rows take the kept box-score numbers (BOX_GRADES): one
+    game's (``g``) or every kept game of ``seasons``. ``{"applied": rows
+    changed, "unmatched": box numbers with no play-file row to take them}``."""
+    out = {"applied": 0, "unmatched": 0}
+    if league not in BOX_GRADES:
+        return out
+    q = "SELECT season, period, home, away, player, team, market, value FROM box_values WHERE sport=?"
+    args: list = [league]
+    if g is not None:
+        days = _days_around(g["period"])
+        q += f" AND home=? AND away=? AND period IN ({','.join('?' * len(days))})"
+        args += [str(g["home"]), str(g["away"]), *days]
+    elif seasons:
+        q += f" AND season IN ({','.join('?' * len(list(seasons)))})"
+        args += [int(x) for x in seasons]
+    for season, period, home, away, player, team, market, value in hconn.execute(q, args).fetchall():
+        game = {"season": season, "period": period, "home": home, "away": away}
+        terms, targs = _season_terms(league, game)
+        days = _days_around(period)
+        # By the row's own key (idx_logs_lookup: sport, market, player,
+        # season, period), never a scan of the day's games.
+        where = (f"sport=? AND market=? AND player=?{terms} AND period IN ({','.join('?' * len(days))}) "
+                 f"AND team=? AND opponent IN (?,?) AND game_id NOT LIKE '%{BOX_SUFFIX}'")
+        wargs = [league, market, player, *targs, *days, team, home, away]
+        cur = hconn.execute(f"UPDATE player_game_logs SET value=? WHERE {where} AND "
+                            f"(value IS NULL OR value != ?)", (float(value), *wargs, float(value)))
+        if cur.rowcount:
+            out["applied"] += cur.rowcount
+        elif hconn.execute(f"SELECT 1 FROM player_game_logs WHERE {where} LIMIT 1", wargs).fetchone() is None:
+            out["unmatched"] += 1
+    return out
+
+
+def provisional_games(hconn, league: str, today: _dt.date | None = None) -> list:
+    """Every game inside the lookback with provisional rows still on file,
+    as games rows ({season, period, home, away}) — open props or not."""
+    today = today or _dt.date.today()
+    floor = (today - _dt.timedelta(days=LOOKBACK_DAYS)).isoformat()
+    seasons = sorted({today.year - 1, today.year, today.year + 1})
+    marks = ",".join("?" * len(seasons))
+    seen, out = set(), []
+    for r in hconn.execute(
+            f"SELECT DISTINCT season, period, team, opponent, home FROM player_game_logs "
+            f"WHERE sport=? AND season IN ({marks}) AND period >= ? AND game_id LIKE '%{BOX_SUFFIX}'",
+            (league, *seasons, floor)).fetchall():
+        home, away = (r[2], r[3]) if r[4] else (r[3], r[2])
+        k = (str(r[1]), str(home), str(away))
+        if k in seen or not home or not away:
+            continue
+        seen.add(k)
+        out.append({"season": r[0], "period": str(r[1]), "home": str(home), "away": str(away)})
+    return out
+
+
+def settle_provisional(hconn, league: str, g: dict) -> dict:
+    """A game whose official rows have landed: a box-graded league keeps its
+    box score's numbers and the official rows take them; then its provisional
+    rows go. ``{"purged", "kept", "applied", "unmatched"}``."""
+    kept = keep_box_values(hconn, league, g)
+    got = apply_box_values(hconn, league, g) if kept else {"applied": 0, "unmatched": 0}
+    return {"purged": purge_provisional(hconn, league, g), "kept": kept, **got}
+
+
 #: THE MARKETS THE SHARED PARSER DOES NOT WRITE (2026-10-13). The box
 #: parser (`nflpreseason.parse_boxscore`) was built for the offence and the
 #: preseason scan: yards, catches, carries, touchdowns, the quarterback's
@@ -475,14 +574,34 @@ def ingest_for_open(lconn, hconn, league: str, log=print,
     are not written again (`on_file`)."""
     from . import db as _db
     res: dict = {"games": 0, "rows": 0, "purged": 0, "skipped": []}
+    # EVERY RECENT GAME WITH PROVISIONAL ROWS, OPEN PROPS OR NOT (2026-11-14).
+    # The provisional rows went only from a game whose day still had an open
+    # prop. A college game's props settle the same night off the box score,
+    # and the play file lands days later, so its provisional rows stayed
+    # beside the official ones: Ethan's cleanup removed 130,078 such rows.
+    # And the box score's numbers are the ones college grades on (BOX_GRADES).
+    box = {"kept": 0, "applied": 0, "unmatched": 0}
+    if league in BOX_GRADES:
+        for g in provisional_games(hconn, league, today=today):
+            if has_official_rows(hconn, league, g):
+                got = settle_provisional(hconn, league, g)
+                res["purged"] += got["purged"]
+                for k in box:
+                    box[k] += got[k]
+        if any(box.values()):
+            res["box_values"] = box
+        hconn.commit()
+        if res["purged"] or box["applied"]:
+            from . import logcache
+            logcache.forget(league)
     games = finished_games_with_open_props(lconn, hconn, league, today=today)
     if not games:
         return res
     need_ids = []
     for g in games:
         if has_official_rows(hconn, league, g):
-            n = purge_provisional(hconn, league, g)
-            res["purged"] += n
+            got = settle_provisional(hconn, league, g)
+            res["purged"] += got["purged"]
             continue
         need_ids.append(g)
     # END THE PURGE'S TRANSACTION NOW, WHATEVER IT REMOVED (2026-11-03).

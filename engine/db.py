@@ -49,6 +49,17 @@ CREATE TABLE IF NOT EXISTS player_game_logs (
     market TEXT, value REAL,
     PRIMARY KEY (sport, season, period, game_id, player, market)
 );
+-- COLLEGE GRADES ON ESPN'S BOX SCORE (2026-11-14; Ethan, answering RUN_NEXT
+-- 00e "grade college on ESPN's box score, the one the books settle on?":
+-- "yes"). A final box score's numbers for a college game, kept past its
+-- provisional rows (engine/boxsettle): the play file's rows for the same game
+-- take them when it lands, and again after every backfill, so a re-pull never
+-- puts the play file's number back (boxsettle.apply_box_values).
+CREATE TABLE IF NOT EXISTS box_values (
+    sport TEXT, season INTEGER, period TEXT, home TEXT, away TEXT,
+    player TEXT, team TEXT, market TEXT, value REAL,
+    PRIMARY KEY (sport, period, home, away, player, market)
+);
 -- THE GAME LOGS' GENERATIONS (engine/logcache, 2026-11-09). Every row added
 -- to, taken from or changed in player_game_logs counts one more for its
 -- sport and season, here, in the same transaction, whoever writes it. The

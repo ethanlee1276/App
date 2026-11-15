@@ -948,6 +948,21 @@ def ingest_cfb_player_history(conn, seasons: list[int],
             continue
         store_cfb(conn, int(season), runs, catches, kept_games(out))
         n = db.upsert_player_logs(conn, out["rows"]) if out["rows"] else 0
+        # COLLEGE GRADES ON ESPN'S BOX SCORE (engine/boxsettle.BOX_GRADES;
+        # Ethan, 2026-11-14, RUN_NEXT 00e: "yes"): the rows just written take
+        # back every kept box-score number, so a re-pull never restores the
+        # play file's where a final box score said otherwise.
+        try:
+            from . import boxsettle
+            got = boxsettle.apply_box_values(conn, "cfb", seasons=[int(season)])
+            conn.commit()
+            if got["applied"] or got["unmatched"]:
+                result.setdefault("box_values", []).append({"season": int(season), **got})
+                if not quiet:
+                    print(f"  cfb {season}: {got['applied']} row(s) took the box score's number"
+                          + (f", {got['unmatched']} box number(s) had no play-file row" if got["unmatched"] else ""))
+        except Exception as exc:                          # noqa: BLE001
+            result["skipped"].append(f"cfb box values {season}: {exc}")
         if out["assets"]:
             result["assets"] += db.upsert_player_assets(conn, out["assets"])
         result["rows"] += n
