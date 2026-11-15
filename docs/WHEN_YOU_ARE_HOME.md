@@ -9338,6 +9338,59 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RF. Your NFL Bet checking project, read** (step 586; 14 November). Nothing
+to run; two decisions, under 00f. I read the project's master instructions,
+its slate log (the cards and post-mortems from 1 October to 12 November) and
+all 55 of its game chats (9 September to 12 November), and counted what they
+do. Nearly every one re-checks inactives before kickoff, reads red-zone roles
+and game scripts, and gives backups with a fair price and a "bet only at"
+price. Most tag each claim [Certain], [Likely] or [Guessing], say who's
+guarding whom, and hold a TD leg to the 40–45% rule. The site's report
+already carries most of that:
+- who's guarding who
+- the red zone
+- the scripts and the simulator
+- injuries and who replaces them
+- the before-kickoff checklist
+- line movement and the money
+- each player's hit rate against his line
+- parlays with backups and a take-it-at price
+
+Three things it didn't have:
+- **A total moving against the money.** Your Commanders–Giants read: 43.5 to
+  40.5 with 70% of the money on the over. It's said now (step RD).
+- **Your touchdown rule.** The instructions ask 45% for an anytime-TD leg,
+  or 40% with 6% EV. The site's touchdown pairs take scorers from 25% (NFL)
+  and 30% (college), with the research case since QW. Decision 1 under 00f.
+- **The slate log's rules from losses.** Receptions are modeled off the
+  3-game target average, never a 1–2 game trend. A reception over outside a
+  team's top two target earners needs 15% of the targets, or 5 a game over 3
+  games. QB rush-attempt unders stay off main cards. The site doesn't apply
+  them. Decision 2 under 00f: test each on our graded record before it
+  moves a pick.
+
+Your personal guardrails (no Lions unders; no Jets or Justin Fields props;
+CeeDee Lamb only when asked) are for your own bets, so the boards don't
+follow them.
+
+**RE. The picks audit says why each priced scorer is no touchdown-pair
+leg** (step 585; 14 November). One read-only command, QC's; paste it back
+with RC's. College's first night on QW's research rule read 9 pairs on 28
+games. Each league's line now says how many priced scorers carried a
+research case, and why the rest didn't: no matchup read, an "avoid" read,
+no red-zone role, or too few research points. Then we can see which bar
+holds them before moving any of them (engine/gameparlays.research_scorers):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh QC 2>&1 | tee /tmp/qc.txt
+```
+
+**RD. A total moving against the money is said** (step 584; 14 November).
+Nothing to run. The report said when the spread moved toward the side with
+the minority of the money, but not the total. It does now, with the
+spread's own bars: half a point, and 60% of the money on the other side
+(engine/lineopen.total_against_money).
+
 **RC. The picks audit prints the picks behind each count and judges a
 kickoff at the build** (step 583; 14 November). One read-only command, the
 same as QC's; paste it back after tonight's boards. Your run printed 92
