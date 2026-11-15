@@ -28195,7 +28195,8 @@ function liveCardHTML({ sport, g, bets }) {
     ${hid ? `<p class="rail-quiet lb-why">Spoiler-free: the score and the plays wait until you open the game.</p>` : ""}
     ${linesGrid}
     ${pressureLiveHTML(sport, g)}
-    ${playsHTML({ ...g, room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}` : "" })}
+    ${playsHTML({ ...g, plays: (g.plays || []).slice().reverse(),
+      room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}` : "" })}
     ${lineTrackHTML(g)}
   </div>`;
 }
@@ -29359,8 +29360,14 @@ function pbpGroups(d) {
     // ("Touchdown", "Punt" — espnplays._drive_result) and derived
     // otherwise: a drive head that said SCORE could not tell a touchdown
     // from a field goal.
+    /* THE NEWEST PLAY ON TOP (Ethan, 2026-11-15, on the live NE @ DET rail:
+       "I feel like the live right here is moving the wrong way. The most
+       recent play should be at the top"). The drives were newest first but
+       each drive's plays read forwards, so the play just run sat at the
+       bottom of the top drive, under the ones before it. Every other
+       sport's list already read newest first, inside its groups too. */
     return (d.drives || []).slice().reverse().map((dr, i) => {
-      const rows = dr.plays || [];
+      const rows = (dr.plays || []).slice().reverse();
       const n = dr.offensive_plays || rows.length;
       const tag = (i === 0 && live.state === "live" && !dr.result) ? "IN PROGRESS"
         : driveResultWord(dr) || (dr.scoring ? "SCORE" : rows.some((p) => p.turnover) ? "TURNOVER" : "");
@@ -29409,7 +29416,9 @@ function renderPbpPage(...a) { return roomCall(renderPbpPage, "renderPbpPage", "
    settled on: a public fact is ours to state, somebody else's prose is
    theirs.
 
-   Newest LAST, because that is how a play-by-play reads. */
+   Newest FIRST since 2026-11-15, as every play list on the site reads
+   (Ethan, on the live page's list: "The most recent play should be at the
+   top"); the card turns the fast file's last few over (liveCardHTML). */
 /* AN EMPTY RAIL SAYS WHY IT IS EMPTY.
 
    Ethan's standing complaint about this site is failures that read as

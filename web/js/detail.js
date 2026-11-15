@@ -5705,7 +5705,10 @@ function gpDrivesHTML(d, league) {
           <span class="gp-dr-t"><b>${escapeHtml(result || teamNameIn(league, dr.team))}</b>${words ? `<span class="gp-dr-play">${escapeHtml(words)}</span>` : ""}
             <span class="gp-dr-meta">${n} play${n === 1 ? "" : "s"}, ${Number(dr.yards || 0)} yard${Number(dr.yards) === 1 ? "" : "s"}${dr.elapsed ? `, ${escapeHtml(dr.elapsed)}` : ""}</span></span>
           ${score}</summary>
-        ${playsHTML({ plays: rows, home: d.home, away: d.away, league, room: pbpRoom(d, league) }) || `<p class="rail-quiet">No plays yet.</p>`}</details>`;
+        ${/* The newest play on top, as the rail reads (app.js pbpGroups); the
+             drive's key play and its score above are read in game order. */
+          playsHTML({ plays: rows.slice().reverse(), home: d.home, away: d.away, league, room: pbpRoom(d, league) })
+          || `<p class="rail-quiet">No plays yet.</p>`}</details>`;
   }).join("");
 }
 /* THE PLAY-BY-PLAY TAB, LIVE (Ethan, 2026-11-01, with another app's drive

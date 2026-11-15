@@ -56,7 +56,7 @@ def test_college_reads_its_halves_everywhere_a_play_is_timed():
     plays = _fn(APP, "playsHTML")
     assert 'const halves = g.league === "cbb" || String(g.room || "").startsWith("cbb_");' in plays
     assert "halves ? halfPeriod(p.period)" in plays
-    assert "playsHTML({ ...g, room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}`" in APP, \
+    assert "playsHTML({ ...g, plays: (g.plays || []).slice().reverse(),\n      room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}`" in APP, \
         "the live card's room names the league, cbb_..."
     assert DETAIL.count("away: d.away, league, room: pbpRoom(d, league) })") == 2
     assert 'sport === "cbb" ? halfPeriod(p.period)' in _fn(CHAT, "pfItemHTML")

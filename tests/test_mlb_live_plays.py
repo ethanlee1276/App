@@ -230,7 +230,9 @@ def test_the_card_draws_the_plays():
     assert "p.description" not in body, "the card is reading MLB's prose"
     # Called with the game's chat room beside it since 2026-10-25 (each
     # play's thread, js/chat.js).
-    assert "${playsHTML({ ...g, room:" in src, "it is defined and never called"
+    # The newest play on top since 2026-11-15 (test_the_newest_play_is_on_top).
+    assert "${playsHTML({ ...g, plays: (g.plays || []).slice().reverse(),\n      room:" in src, \
+        "it is defined and never called"
 
 
 def test_a_card_with_no_plays_never_draws_an_empty_strip():

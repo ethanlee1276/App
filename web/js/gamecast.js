@@ -1647,9 +1647,10 @@
      the mark, the team, "7 plays · 66 yd · 3:23 · Q1", how it ended
      ("Touchdown", "Punt" — the summary's `displayResult`, read by
      espnplays as a label and refused as a sentence) and the score it
-     left, with every play of it under the head in the order it was
-     played (a drive reads forwards; playsHTML draws the rows the rail
-     draws, so a row is the same row in both places). A drive from a file
+     left, with every play of it under the head, the newest on top (Ethan,
+     2026-11-15: "The most recent play should be at the top"; playsHTML
+     draws the rows the rail draws, so a row is the same row in both
+     places, in the same order). A drive from a file
      without `result` falls back to the rail's derived tag — Score,
      Turnover, In progress. The other sports draw their periods the way
      the rail groups them (pbpGroups), every play of each. */
@@ -1670,7 +1671,7 @@
             dr.elapsed ? `, ${esc(dr.elapsed)}` : ""}${dr.period ? ` · Q${esc(dr.period)}` : ""}</span></div>
           ${result ? `<span class="gc-tag${/turnover|interception|fumble|safety/i.test(result) ? " turnover" : /touchdown|field goal|score/i.test(result) ? "" : " quiet"}">${esc(result)}</span>` : ""}
           ${score ? `<span class="gc-dr-score">${esc(score)}</span>` : ""}</div>
-        ${playsHTML({ plays: rows, home: d.home, away: d.away, room: d.event_id && !d.archive ? `${league}_${d.event_id}` : "" }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}</div>`;
+        ${playsHTML({ plays: rows.slice().reverse(), home: d.home, away: d.away, room: d.event_id && !d.archive ? `${league}_${d.event_id}` : "" }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}</div>`;
     }).join("");
   }
   function playsTabHTML(d, league) {

@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SK. The newest play on top** (step 617; 15 November). Nothing to run.
+On the Play by play list beside the live NE @ DET game you said "the live
+right here is moving the wrong way. The most recent play should be at the
+top." The drives were newest first, but the plays inside each drive ran
+forwards. So the play just run sat at the bottom of the top drive, and the
+NE drive under it started at its 15:00 kickoff and ended at its field goal.
+Now every play reads newest first, inside each drive too, so the top line is
+the play that just happened. That applies in four places:
+- the Play by play list beside the game;
+- the Plays tab, where the drive in progress stays open on top;
+- the gamecast's drive cards;
+- the last few plays on each Live tab card, in every sport.
+
+Baseball, basketball and hockey already read newest first. Each drive's
+heading is unchanged: it still names the drive's key play and the score it
+left.
+
 **SJ. No score before a game starts** (step 616; 15 November). Nothing to
 run. You circled the strip of games across the top of the live page, where
 the 1:00 PM games each read 0 and 0, and said "we should not be showing
