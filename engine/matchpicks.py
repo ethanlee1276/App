@@ -85,7 +85,21 @@ PROP_MIN_PROB = 0.55
 #: not, no pick is made, and the card says our number disagrees. The chance
 #: is the model's, unmoved; journaled on paper with the other matchup picks
 #: (matchup_prop), so the record says how a read's own side does.
-READ_PICK_MIN = 0.50
+#:
+#: …BUT NEVER A FORCED PICK (the same night). Ethan, to "every favoriteable
+#: player gets an over": "we wanna make sure we are not forcing picks and
+#: bets and only making them have over bets or under bets based off all the
+#: data and shit backing those bets." Even money was a read with a coin flip
+#: behind it. A read's pick now needs what every matchup pick needs, our
+#: number at 55% on its side (PROP_MIN_PROB), and the books' price not
+#: arguing against it: a number MARKET_FAR above what the price implies is,
+#: as the one Most Likely board says of it, usually our error
+#: (engine/likelyboard.market_check). The one board then checks it against
+#: our record like every pick, and the tightened NFL board holds one under its
+#: 60% (Ethan: "hold them back"); the card says which (likelyboard.harmonize).
+#: A read the data does not back gets no pick, and its card says why
+#: (``read_no_pick``).
+READ_PICK_MIN = PROP_MIN_PROB
 #: The longest price a yards-or-catches pick is taken at. The box, 2026-09-26:
 #: "Terrance Ferguson UNDER 49.5 -380 ProphetX" was an exchange rung, not a
 #: market; a -380 under says nothing a reader can use.
@@ -259,7 +273,9 @@ def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list
         if r.get("market") in markets and r.get("line") is not None and r.get("hit_prob") is not None:
             by_key.setdefault((r.get("player") or "", r.get("market")), r)
     rows = []
+    unbacked: dict = {}
     for x in reads or []:
+        x.pop("read_no_pick", None)
         side = LEAN_SIDE.get(x.get("read"))
         if not side or x.get("own_status") or {x.get("team"), x.get("opp")} != {home, away}:
             continue
@@ -301,7 +317,16 @@ def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list
             if not cands:
                 continue
             prob, line, odds, book = max(cands, key=lambda c: c[0])
-            if prob < READ_PICK_MIN:
+            why = not_backed(prob, odds, side)
+            if why:
+                # The likeliest number on his side that the data does not
+                # back, kept for the card (`read_no_pick`).
+                if not x.get("pick"):
+                    held = unbacked.get(id(x))
+                    if held is None or prob > held["model_prob"]:
+                        unbacked[id(x)] = {"read": x, "why": why, "model_prob": round(prob, 4),
+                                           "market": mk, "market_label": r.get("market_label") or mk,
+                                           "side": side.upper(), "line": line, "odds": odds, "book": book}
                 continue
             rows.append({
                 "kind": "prop", "matchup_pick": True, "player": r.get("player"), "team": r.get("team"),
@@ -323,10 +348,6 @@ def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list
     for x in rows:
         if x["_needs_pick"] and not per_player.get(x["player"]):
             x["read_pick"] = True
-            if x["model_prob"] < PROP_MIN_PROB:
-                x["read_note"] = (f"Our number agrees with the read, at {x['model_prob']:.0%} — under the "
-                                  f"{PROP_MIN_PROB:.0%} the other matchup picks need, posted because the read "
-                                  f"backs it")
             picked.append(x)
             per_player[x["player"]] = 1
     # …THEN THE GAME'S OTHER MATCHUP PICKS, as before: PROP_MIN_PROB or
@@ -341,7 +362,37 @@ def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list
     for x in picked:
         x.pop("_needs_pick", None)
     picked.sort(key=lambda x: -x["model_prob"])
+    # WHY A READ GOT NO PICK, on the read, when he has none on his side
+    # (`not_backed`): never a forced bet, never a silent card.
+    have = {(p.get("player") or "", p.get("team") or "") for p in picked}
+    for u in unbacked.values():
+        x = u.pop("read")
+        if (x.get("player") or "", x.get("team") or "") not in have:
+            x["read_no_pick"] = u
     return picked
+
+
+def not_backed(prob: float, odds, side: str) -> str:
+    """"" when the data backs a read's number, else why not, in words: our
+    number under PROP_MIN_PROB on the read's side — "against" the read under
+    even — or MARKET_FAR above what the books' price implies (READ_PICK_MIN)."""
+    from .likelyboard import MARKET_FAR
+    from .odds import american_to_prob
+    word = "over" if side == "over" else "under"
+    if prob < 0.5:
+        return (f"our number disagrees with this read: his likeliest {word} is {prob:.0%}, "
+                f"so the {word} loses more often than not")
+    if prob < READ_PICK_MIN:
+        return (f"our number on his {word} is {prob:.0%}, close to a coin flip — a pick needs "
+                f"{READ_PICK_MIN:.0%}, so the read alone is not a bet")
+    try:
+        implied = american_to_prob(int(odds))
+    except (TypeError, ValueError):
+        implied = None
+    if implied is not None and prob - float(implied) >= MARKET_FAR:
+        return (f"the books' price implies {float(implied):.0%} against our {prob:.0%}; when we're that "
+                f"far from the books it is usually our error, not theirs")
+    return ""
 
 
 def positions_map(props: list, scan_reads: dict) -> dict:
@@ -397,8 +448,9 @@ def stamp_reads(reads: list, picks: list) -> int:
             continue
         p = max(mine, key=lambda r: float(r.get("model_prob") or 0))
         x["matchup_pick"] = {k: p.get(k) for k in ("player", "team", "market", "market_label", "side", "line",
-                                                   "odds", "book", "model_prob", "read_pick", "read_note")
+                                                   "odds", "book", "model_prob", "read_pick")
                              if p.get(k) is not None}
+        x.pop("read_no_pick", None)
         n += 1
     return n
 

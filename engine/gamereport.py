@@ -1872,18 +1872,32 @@ def read_pick(r: dict) -> str:
     canidates and not give them props and some for players we thinnk will do
     bad, it doesnt make sense to not take the unders"): his Most Likely pick
     on the read's side (engine/gamescan.stamp_picks), else his matchup pick
-    there (engine/matchpicks.stamp_reads — every read our number agrees with
-    has one), else the list's pick the other way, else that our number
-    disagrees. "" when none of his props is priced."""
+    there (engine/matchpicks.stamp_reads — every read the data backs has
+    one) with the one board's word on it, else the list's pick the other
+    way, else why the data does not back a bet on the read — never a forced
+    pick (Ethan: "we wanna make sure we are not forcing picks and bets").
+    "" when none of his props is priced."""
     if not isinstance(r, dict):
         return ""
     if r.get("pick"):
         return f"Most Likely pick: {_pick_words(r['pick'])}"
-    if r.get("matchup_pick"):
-        return f"Matchup pick: {_pick_words(r['matchup_pick'])}"
+    mp = r.get("matchup_pick")
+    if isinstance(mp, dict) and mp:
+        # Held back by the one board (the NFL's 60%: Ethan, "hold them
+        # back"), and said so (engine/likelyboard._read_picks_follow_the_board).
+        if mp.get("held_note"):
+            why = str(mp["held_note"])
+            why = why[len("held back:"):].strip() if why.lower().startswith("held back:") else why
+            return f"Matchup pick, held back: {_pick_words(mp)} — {why}"
+        tier = f" ({mp['tier_label']})" if mp.get("tier_label") else ""
+        return f"Matchup pick{tier}: {_pick_words(mp)}"
     if r.get("pick_other_side"):
         return (f"Our Most Likely pick on him goes the other way: {_pick_words(r['pick_other_side'])} — "
                 f"our number disagrees with this read")
+    # NO FORCED PICK (engine/matchpicks.not_backed): why the data does not
+    # back a bet on the read.
+    if (r.get("read_no_pick") or {}).get("why"):
+        return f"No pick: {r['read_no_pick']['why']}"
     best = ((r.get("no_pick") or {}).get("best")) or {}
     p = _f(best.get("model_prob"))
     if p is not None and p < 0.5:

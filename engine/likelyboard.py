@@ -1166,6 +1166,33 @@ def _cards_follow_the_list(result: dict, held: dict) -> int:
     return n
 
 
+def _read_picks_follow_the_board(result: dict, by: dict) -> int:
+    """THE READ'S OWN PICK SAYS WHAT THIS BOARD DID WITH IT (2026-11-14). A
+    read's matchup pick (engine/matchpicks.READ_PICK_MIN) is pooled here and
+    checked like every pick; the card that names it names the verdict too:
+    its tier, or that the board held it back and why. Ethan, of the NFL's
+    read picks under the tightened board's 60%: "hold them back". ``by``: the
+    board's rows and held rows by `key_of`. Returns how many cards it set."""
+    n = 0
+    for game in (result.get("scan_reads") or {}).values():
+        players = game.get("players") if isinstance(game, dict) else None
+        for x in players or []:
+            mp = x.get("matchup_pick") if isinstance(x, dict) else None
+            if not isinstance(mp, dict):
+                continue
+            for f in ("tier", "tier_label", "held_note"):
+                mp.pop(f, None)
+            b = by.get(key_of(dict(mp, player=mp.get("player") or x.get("player"), kind="prop")))
+            if b is None:
+                continue
+            if b.get("tier") == "held":
+                mp["tier"], mp["held_note"] = "held", str(b.get("held_note") or "")
+            elif b.get("tier"):
+                mp["tier"], mp["tier_label"] = b["tier"], str(b.get("tier_label") or "")
+            n += 1
+    return n
+
+
 def harmonize(result: dict) -> int:
     """ONE BET, ONE CHANCE (Ethan, 2026-10-06, "yes 2"). The contradiction
     check found nine bets the page showed with two chances — Bucky Irving
@@ -1230,6 +1257,7 @@ def harmonize(result: dict) -> int:
         w = matchup_warning(b)
         if w:
             src["matchup_warning"] = w
+    board["read_picks_carded"] = _read_picks_follow_the_board(result, by)
     return n
 
 

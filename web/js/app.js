@@ -13483,14 +13483,23 @@ function scanPickHTML(x, cls = "ms-pick") {
      agrees, on the one Most Likely board as a matchup pick, tracked on paper. */
   if (x.matchup_pick) {
     const m = x.matchup_pick;
-    const under = Number(m.model_prob) < Number((x.no_pick || {}).bar || 0.55);
-    return `<span class="${cls} good"><b>Matchup pick:</b> ${say(m)}${under
-      ? ` — our number agrees with the read; under the Most Likely list’s ${wholePct((x.no_pick || {}).bar || 0.55)}, so it rides as the read’s pick, tracked on paper`
-      : " — the read’s side, where our number agrees"}.</span>`;
+    /* HELD BACK BY THE ONE BOARD (engine/likelyboard._read_picks_follow_the_board;
+       Ethan, of the NFL's read picks under its 60%: "hold them back"). */
+    if (m.held_note) {
+      const why = String(m.held_note).replace(/^held back:\s*/i, "");
+      return `<span class="${cls} none"><b>Matchup pick, held back:</b> ${say(m)} — ${escapeHtml(why)}. Tracked on paper, not posted.</span>`;
+    }
+    return `<span class="${cls} good"><b>Matchup pick${m.tier_label ? ` · ${escapeHtml(m.tier_label)}` : ""}:</b> ${say(m)} — the read’s side, and our number backs it.</span>`;
   }
   if (x.pick_other_side) {
     return `<span class="${cls} warn"><b>Our Most Likely pick on him goes the other way:</b> ${say(x.pick_other_side)}
       — the model’s likeliest number disagrees with this read.</span>`;
+  }
+  /* NO FORCED PICK (engine/matchpicks.not_backed; Ethan: "we wanna make sure
+     we are not forcing picks and bets"): the read leans, the data does not
+     back a bet on it, and the card says which part of the data. */
+  if (x.read_no_pick && x.read_no_pick.why) {
+    return `<span class="${cls} none"><b>No pick</b> — ${escapeHtml(x.read_no_pick.why)}.</span>`;
   }
   if (x.no_pick && side) {
     const b = x.no_pick.best;
