@@ -51,13 +51,13 @@ Read across all 213 of his messages in the chats:
 | 15. Prop priority: volume floors first | Not adopted as a ranking. Our graded NFL Most Likely record has completions, attempts and carries as its weakest markets (52.5%, 49.5% and 51.2% hit) and passing yards as its best (67.7%), so the record's own market check decides | `likelyboard.record_check` |
 | 16. Hard filters: no RB receiving over without a route role; no needs-a-bomb yardage over; no unstable role | Flags `rb_route_over`, `boom_bust` (yardage overs), `role_down_over` and `role_up_under` cap a pick at Worth a look | `likelyboard.METHOD_AVOID` |
 | 16. His guardrails (no Lions unders; avoid Jets and Justin Fields; no CeeDee Lamb unless asked) | Kept for his own bets; the boards serve every member and don't follow them | — |
-| 17. Two-leg parlay builder (SAFE/BALANCED/POP) | Four three-leg parlays and three touchdown pairs a game, each with its joint chance, fair price, take-it-at price and backups | `engine/gameparlays` |
+| 17. Two-leg parlay builder (SAFE/BALANCED/POP) | Four three-leg parlays and three touchdown pairs a game, each with its joint chance, fair price, take-it-at price and backups. Built to win together, as his chats ask: no ticket needs the game to go the other way from another. A game that can't fill its tickets that way says which ticket wins in a different game | `engine/gameparlays.choose` |
 | 18. TD module: 45%, or 40% with undeniable usage | Every touchdown pick on the board is checked: 45%, or 40% with 30% of his team's red-zone chances. One that falls short tops out at Worth a look. Each touchdown pair says whether both scorers are 40% or better (decision 1 under RUN_NEXT 00f) | `likelyboard.td_rule`, `gameparlays.card` |
 | 19–20. Live market; the "I checked" list | Line moves, the opener, prediction-market money, a total moving against the money | "The market" |
 | 21. Picks output: ranked, with the maximum playable price | The board ranks by tier, then how hard the matchup backs a pick, then our chance. Every pick line says the price to take it at | the board, `read_pick` |
 | 22. Sides and totals need stricter edges | The game-bet lanes keep their own bars | `likely` game lanes |
 | 25. Post-mortem: log every leg, update one rule | Every pick is journaled and graded. The record measures each flag and moves a chance only once a flag is proven (`likelyctx`); the held book tracks what holding was worth | the Record page |
-| 26. Never force a bet | A read gets a pick only where our number backs it; otherwise the card says why there's no pick | `matchpicks.not_backed` |
+| 26. Never force a bet; "No qualifying plays at current lines" with the closest candidates | A read gets a pick only where our number backs it; otherwise the card says why there's no pick. A game with no pick says "No qualifying plays at current lines" and names the closest three with the price each would need | `matchpicks.not_backed`, `gamereport.no_play_blocks` |
 
 ## His slate log's rules from losses
 

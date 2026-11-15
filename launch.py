@@ -567,6 +567,14 @@ def _board_counts(path: str) -> dict:
     reps = b.get("game_reports")
     if isinstance(reps, list) and reps:
         out["reports"] = len(reps)
+    # THE BOARD'S RULES AT WORK (engine/likelyboard METHOD_AVOID, td_rule —
+    # Ethan's NFL Bet checking method, 2026-11-15): how many Most Likely
+    # picks a rule held at Worth a look, and how many touchdown picks meet
+    # the touchdown rule. Present only on a board that applies them.
+    rows = [r for r in ((b.get("likely_board") or {}).get("rows") or []) if isinstance(r, dict)]
+    if any("td_rule" in r or r.get("method_note") or r.get("method_fails") for r in rows):
+        out["method_capped"] = sum(1 for r in rows if r.get("method_note"))
+        out["td_rule_met"] = sum(1 for r in rows if (r.get("td_rule") or {}).get("meets"))
     return out
 
 

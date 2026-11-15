@@ -2286,8 +2286,42 @@ def sec_watch(c: Ctx) -> dict | None:
         blocks += [_h("Could struggle"), {"type": "players", "items": [item(r, "down") for r in struggle[:4]]}]
     if c.reads and not shine:
         blocks.append(_p("No one in this game reads as a breakout candidate or a good matchup"))
+    blocks += no_play_blocks(c)
     blocks += role_blocks(c)
     return _section("watch", "Players to watch", blocks)
+
+
+#: How many of the closest candidates a game with no qualifying play names.
+CLOSEST_N = 3
+
+
+def no_play_blocks(c: Ctx) -> list:
+    """NEVER FORCE A BET (Ethan's NFL Bet checking method, rule 26: "If
+    nothing clears the thresholds: No qualifying plays at current lines.
+    Then list: closest candidates, current line, required line movement").
+    A game whose reads carry no posted pick says so, then names the closest
+    — each read's likeliest number on its side — with the price it would
+    need. Nothing when a pick stands or no read was priced."""
+    posted = [r for r in c.reads if r.get("pick") or ((r.get("matchup_pick") or {}) and
+                                                     not (r.get("matchup_pick") or {}).get("held_note"))]
+    if posted or not c.reads:
+        return []
+    near = []
+    for r in c.reads:
+        best = (r.get("no_pick") or {}).get("best") or {}
+        p = _f(best.get("model_prob"))
+        if p is None or not best.get("market"):
+            continue
+        take = take_at(p)
+        near.append((p, f"{r.get('player')}: {_pick_words(best)}"
+                        + (f" — worth it at {take}" if take and p >= 0.5 else " — our number is under even")))
+    if not near:
+        return []
+    near.sort(key=lambda x: -x[0])
+    return [_h("No qualifying plays at current lines"),
+            _p("No pick in this game clears the bar at today's prices. Below are the closest, with the "
+               "price each would need"),
+            _list(t for _p, t in near[:CLOSEST_N])]
 
 
 def role_blocks(c: Ctx) -> list:

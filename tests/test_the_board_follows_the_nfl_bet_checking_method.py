@@ -143,6 +143,51 @@ def test_the_report_carries_the_four_scripts_and_who_can_score():
     assert R.script_fit("anytime_td", "YES", "GB", "DET") == ""
 
 
+def test_a_game_with_no_qualifying_play_says_so_and_names_the_closest():
+    """Rule 26: "The model should never force a bet. If nothing clears the
+    thresholds: No qualifying plays at current lines. Then list: closest
+    candidates…"."""
+    class C:
+        reads = [{"player": "A", "no_pick": {"best": {"market": "receptions", "side": "over", "line": 4.5,
+                                                      "odds": -150, "model_prob": 0.58}}},
+                 {"player": "B", "no_pick": {"best": {"market": "rush_yds", "side": "under", "line": 44.5,
+                                                      "odds": -110, "model_prob": 0.46}}}]
+    got = R.no_play_blocks(C())
+    assert got[0] == {"type": "h", "text": "No qualifying plays at current lines"}
+    assert got[1]["text"].endswith("Below are the closest, with the price each would need.")
+    assert got[2]["items"] == ["A: Over 4.5 receptions (−150, 58%) — worth it at −138 or better.",
+                               "B: Under 44.5 rush yds (−110, 46%) — our number is under even."]
+    C.reads[0]["matchup_pick"] = {"market": "receptions", "side": "OVER"}
+    assert R.no_play_blocks(C()) == [], "a game with a pick says nothing of the kind"
+
+
+def test_the_heartbeat_counts_the_rules_at_work():
+    import json
+    import os
+    import tempfile
+    sys.path.insert(0, str(ROOT))
+    import launch as L
+    rows = [{"player": "A", "method_note": "Worth a look, not higher — our rule: …"},
+            {"player": "B", "lane": "td", "td_rule": {"meets": True}},
+            {"player": "C", "lane": "td", "td_rule": {"meets": False}}, {"player": "D"}]
+    board = {"most_likely": [], "recommendations": [], "game_bets": [], "likely_board": {"rows": rows}}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(board, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+            with open(path, "w") as fh:
+                json.dump(dict(board, likely_board={"rows": [{"player": "D"}]}), fh)
+            none = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert (got["method_capped"], got["td_rule_met"]) == (1, 1), got
+    assert "method_capped" not in none, "a board the rules never touched says nothing"
+
+
 def test_the_card_shows_the_rule():
     js = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
     i = js.index("function obCardHTML(")

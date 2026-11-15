@@ -9368,7 +9368,14 @@ the site does it. What changed:
   simulated games and who it helps, and the game's picks ranked by how many
   scripts they hold in. Each team's touchdown chances, ranked, beside what
   the defense allows his position, with "usage and matchup both back him"
-  where they do. A take-it-at price on every pick, never past −250.
+  where they do. A take-it-at price on every pick, never past −250. A game
+  with no pick says "No qualifying plays at current lines" and names the
+  closest three with the price each would need.
+- **Tickets built to win together.** No ticket in a game needs the game to
+  go the other way from another ("I don't want to build them to where if
+  one parlay wins, the other parlay can't win"). A game that can only fill
+  its four tickets by breaking that says which ticket wins in a different
+  game.
 
 **RH. The UFC tab shows UFC's fights, and "This week" follows the tab**
 (step 588; 15 November). Nothing to run. You sent Record → UFC: the chip
