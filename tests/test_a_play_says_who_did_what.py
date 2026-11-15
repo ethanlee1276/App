@@ -292,6 +292,26 @@ def test_the_card_tells_each_kind_with_what_it_changed():
         assert "Before the play" not in CARD._text(html), "the down is said once, in the sentence"
 
 
+def test_goal_to_go_says_goal():
+    """The feed gives "1st & Goal at the 5" a distance of 5: the live NE @ DET
+    page read "On 1st & 5 from the NE 5"."""
+    said, _ = _said({"team": "DAL", "event": "Rushing Touchdown", "down": 1, "distance": 5, "spot": 95, "yards": 5,
+                     "scoring": True, "players": ["KaVontae Turpin"], "dir": "lg", "away_score": 3, "home_score": 20},
+                    {"possession": "TB", "detail": "", "yard_line": 65})
+    if said is None:
+        return
+    assert said == ("On 1st & Goal from the TB 5, KaVontae Turpin runs it in behind left guard from 5 yards out. "
+                    "Cowboys 20, Buccaneers 3."), said
+    rows = ROWS._node("""
+      console.log(JSON.stringify(playsHTML({home: "DAL", away: "TB", plays: [
+        {kind: "football", event: "Rush", team: "DAL", period: 2, clock: "2:06", down: 1, distance: 5, spot: 95, yards: 2,
+         players: ["KaVontae Turpin"]},
+        {kind: "football", event: "Rush", team: "TB", period: 2, clock: "1:40", down: 2, distance: 5, spot: 40, yards: 2,
+         players: ["Bucky Irving"]}]})));""")
+    assert "1st &amp; Goal" in rows or "1st & Goal" in rows, rows
+    assert "2nd &amp; 5" in rows or "2nd & 5" in rows, "five to go at the 40 is not goal to go"
+
+
 def test_a_kickoff_flies_from_the_kicking_sides_35():
     """Filed under DAL, who received it, at "35": TB kicked from its own 35
     (the 65 on the site's field), DAL brought it back 25 to its 30."""

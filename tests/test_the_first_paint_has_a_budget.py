@@ -338,7 +338,14 @@ APP_JS_BUDGET_KB = 290
 #: 389,963 -> 391,117 B, 973 over 381. It cannot load later: every play row
 #: is drawn by playsHTML, which the Live tab's play feed and the
 #: play-by-play page both use from the first page drawn. Told to Ethan.
-BOOT_BUDGET_KB = 382
+#: 382 -> 383 on 2026-11-15, for the live NE @ DET page reading "On 1st & 5
+#: from the NE 5": the feed gives goal to go its yards, so a row now says
+#: "1st & Goal" when the line to gain is the goal line, and a kick's row
+#: never calls a lone returner the kicker. The line composer was trimmed
+#: for it (one branch for both kicks, the title's own word reused, no
+#: filters the feed makes needless): 391,117 -> 391,171 B, 3 over 382.
+#: It cannot load later: the same rows, playsHTML's. Told to Ethan.
+BOOT_BUDGET_KB = 383
 
 
 def _gz_trimmed(rel: str) -> int:

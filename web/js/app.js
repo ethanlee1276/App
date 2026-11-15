@@ -29576,9 +29576,9 @@ function footballLine(p, g, html) {
   const T = (s) => (html ? escapeHtml(s) : s);
   const N = (s) => (html ? `<b>${escapeHtml(s)}</b>` : s);
   if (!w.snap) return T(w.title);
-  const e = String(p.event || ""), y = Math.round(Number(p.yards) || 0);
-  const names = (p.players || []).filter(Boolean);
-  const by = (p.by || []).filter(Boolean);
+  const e = String(p.event || ""), y = Math.round(+p.yards || 0);
+  const names = p.players || [];
+  const by = p.by || [];
   const and = (list) => list.map(N).join(T(" and "));
   const yds = (n) => `${Math.abs(n)} yd${Math.abs(n) === 1 ? "" : "s"}`;
   const gain = y > 0 ? yds(y) : y < 0 ? `a loss of ${yds(y)}` : "no gain";
@@ -29607,13 +29607,11 @@ function footballLine(p, g, html) {
       : p.fair_catch ? kicker + T(", fair catch by ") + N(b)
       : y > 0 ? kicker + T("; ") + N(b) + T(" returns it ") + T(yds(y))
       : kicker;
-  } else if (/field goal/i.test(e) && a) {
-    const how = /block/i.test(e) ? "blocked" : /good/i.test(e) && !/no good/i.test(e) ? "good" : "missed";
-    const kick = `${w.dist ? `${w.dist}-yd ` : ""}field goal`;
-    out = N(a) + T(how === "good" ? ` makes a ${kick}` : how === "blocked" ? ` has a ${kick} blocked` : ` misses a ${kick}`);
-  } else if (/extra point|^pat\b/i.test(e) && a) {
-    out = N(a) + T(/block/i.test(e) ? " has the extra point blocked"
-      : /good|made/i.test(e) && !/no good/i.test(e) ? " makes the extra point" : " misses the extra point");
+  } else if (/field goal|extra point|^pat\b/i.test(e) && a) {
+    // footballWords has already said it: "Field goal good, 33 yds", "Extra point blocked".
+    const how = /blocked|good|missed/.exec(w.title)[0];
+    const kick = /field goal/i.test(e) ? `a ${w.dist ? `${w.dist}-yd ` : ""}field goal` : "the extra point";
+    out = N(a) + T(how === "good" ? ` makes ${kick}` : how === "blocked" ? ` has ${kick} blocked` : ` misses ${kick}`);
   } else if (/interception/i.test(e) && a) {
     const x = names.length > 1 ? names[names.length - 1] : "", aim = names.length > 2 ? names[1] : "";
     out = N(a) + T(`’s pass${thrown}`) + (aim ? T(" for ") + N(aim) : "") + T(" intercepted")
@@ -29720,16 +29718,19 @@ function playsHTML(g) {
       return `<div class="lb-play lb-moment"><span class="lb-inn">${escapeHtml(when)}</span>
         <span class="lb-what">${escapeHtml(w.title)}</span></div>`;
     }
-    const dd = p.down ? ` · ${ord(p.down)} & ${p.distance == null ? "?" : (Number(p.distance) === 0 ? "Goal" : p.distance)}` : "";
+    // Goal to go when the line to gain is the goal line: the feed gives "1st &
+    // Goal at the 5" a distance of 5, which read "1st & 5" (2026-11-15).
+    // (No spot: NaN, never equal.)
+    const toGoal = Math.round(p.team === g.home ? 100 - p.spot : p.team === g.away ? p.spot : NaN);
+    const dd = p.down ? ` · ${ord(p.down)} & ${p.distance == null ? "?" : +p.distance === 0 || toGoal === +p.distance ? "Goal" : p.distance}` : "";
     const flag = w.tag ? ` <span class="lb-rbi${w.tag === "Turnover" ? " lb-to" : ""}">${escapeHtml(w.tag)}</span>` : "";
     const at = (p.away_score != null && p.home_score != null) && p.scoring
       ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
     // Who did what, in the row's own words (footballLine), names in bold. A
     // kickoff is filed under the side that receives it; its row is the
     // kicking side's ("NE Andy Borregales kicks off; Jacob Saylors returns it").
-    const ev = String(p.event || "");
-    const side = /kickoff/i.test(ev) && !/touchdown/i.test(ev)
-      ? (p.team === g.home ? g.away : p.team === g.away ? g.home : p.team) : p.team;
+    // (footballWords marks a kickoff that was not returned for a score "receiving".)
+    const side = w.role === "receiving" ? (p.team === g.home ? g.away : p.team === g.away ? g.home : p.team) : p.team;
     return `<div class="lb-play${p.scoring ? " scoring" : ""}${p.turnover ? " turnover" : ""}">
       <span class="lb-inn">${escapeHtml(when)}</span>
       <span class="lb-what">${side ? `<span class="lb-side">${escapeHtml(side)}</span> ` : ""}${

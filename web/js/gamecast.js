@@ -1360,9 +1360,14 @@
     const flagged = /penalty/i.test(e) && !/touchdown/i.test(e);
     const dn = Number(p.down), dist = Number(p.distance);
     // The down it was snapped on, and where: what "Before the play" said under it.
-    // A kickoff, a try after a touchdown, has no down.
-    const lead = !kickoff && !/extra point|two[- ]?point|conversion/i.test(e)
-      && dn >= 1 && dn <= 4 && p.spot != null && isFinite(Number(p.spot)) ? `On ${downWord(p)} from the ${spotAt(Number(p.spot))}, ` : "";
+    // A kickoff, a try after a touchdown, has no down. Goal to go when the
+    // line to gain is the goal line: the feed gives "1st & Goal at the 5" a
+    // distance of 5 ("On 1st & 5 from the NE 5", the live NE @ DET page).
+    const at = Number(p.spot), spotted = p.spot != null && isFinite(at);
+    const toGoal = !spotted ? null : p.team === d.home ? 100 - at : p.team === d.away ? at : null;
+    const goal = dist === 0 || (toGoal != null && dist > 0 && Math.round(toGoal) === dist);
+    const lead = !kickoff && !/extra point|two[- ]?point|conversion/i.test(e) && dn >= 1 && dn <= 4 && spotted
+      ? `On ${goal ? `${pbpOrd(dn)} & Goal` : downWord(p)} from the ${spotAt(at)}, ` : "";
     const who = (name) => { const t = typeof teamOf === "function" ? teamOf(d, name) : ""; return t ? `${name} (${nick(t)})` : name; };
     const foul = p.foul ? p.foul.charAt(0).toLowerCase() + p.foul.slice(1).toLowerCase() : "";
     const fouled = p.foul_by ? ` on ${who(p.foul_by)}` : p.foul_team ? ` on the ${nick(p.foul_team)}` : "";

@@ -9374,6 +9374,13 @@ it, his side, the yards, and whether it was declined or offsetting.
   game the kicker has no line in the box score yet, so the feed can resolve
   only the returner; a lone name on a kick is never called the kicker (the
   row keeps "Kickoff, returned 24 yds · Corey Kiner").
+- **Goal to go says "Goal".** The feed gives 1st & Goal at the 5 a
+  distance of 5, so the card read "On 1st & 5 from the NE 5" on the live
+  Lions touchdown. The card and the rows now say "1st & Goal" when the line
+  to gain is the goal line.
+- **The first page's size budget went 381 → 383 KB** (gzipped) for the
+  line composer every play row uses; it's on the first page drawn, so it
+  can't load later.
 
 **RT. The live page says each thing once, and its plays name who made them**
 (step 600; 15 November). Nothing to run. You said we don't need the drive
