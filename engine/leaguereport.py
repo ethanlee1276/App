@@ -525,6 +525,94 @@ def nhl_watch(c: Ctx) -> dict | None:
     return _section("watch", "Players to watch", shine_struggle(c, _reads(c, not_pos={"G"})))
 
 
+#: Which of tonight's units the report names: the top two forward lines and
+#: the top defence pair.
+NHL_LINE_UNITS = (("forwards", 0, "Top line"), ("forwards", 1, "Second line"), ("defence", 0, "Top pair"))
+NHL_OUT = ("out", "injured reserve", "ir", "ltir", "suspended")
+
+
+def nhl_lines(c: Ctx) -> dict | None:
+    """WHO PLAYS WITH WHOM TONIGHT, AND WHO IS MISSING (the research's "what
+    the absences change", hockey's way): each team's top two forward lines
+    and top defence pair, read off the shift charts of its newest games with
+    tonight's ruled-out men left out (engine/nhl/lines, nhl_build.team_lines),
+    how settled each is, and who they are built without. A shooter's line is
+    his ice time and his linemates; a top-six man out moves somebody up."""
+    lines = (c.result.get("lines") or {})
+    blocks = []
+    for t in c.teams:
+        tl = lines.get(t) or {}
+        items = []
+        for kind, i, word in NHL_LINE_UNITS:
+            grp = (tl.get(kind) or [])[i:i + 1]
+            if not grp or not grp[0].get("players"):
+                continue
+            g = grp[0]
+            tog = _f(g.get("together"))
+            items.append(f"{word}: {_join(g['players'])}"
+                         + (f" (together for {_pct(tog)} of their ice lately)" if tog else ""))
+        out = [str(i.get("player")) for i in (_goalie(c, t).get("injuries") or [])
+               if isinstance(i, dict) and i.get("player")
+               and str(i.get("status") or "").strip().lower() in NHL_OUT]
+        if out and items:
+            items.append(f"Built without {_join(out)} (out): whoever takes {'his' if len(out) == 1 else 'their'} "
+                         f"shifts gets more ice time")
+        if items:
+            blocks += [_h(c.name(t)), _list(items)]
+    if not blocks:
+        return None
+    n = max((int((lines.get(t) or {}).get("games") or 0) for t in c.teams), default=0)
+    blocks.append({"type": "note", "text": _sentence(
+        f"From the shift charts of each team's last {n} games" if n else "From the shift charts of each team's "
+        "newest games") + " The newest games count most; the morning skate can still change them."})
+    return _section("lines", "The lines", blocks)
+
+
+def hockey_meeting(conn, home: str, away: str, before: str) -> dict:
+    """The last time these two met (`last_meeting`'s score), with who scored
+    for each side that night (the history's box scores)."""
+    m = last_meeting(conn, "nhl", home, away, before, None)
+    if not m:
+        return {}
+    scorers = {}
+    for t in (m["home"], m["away"]):
+        rows = conn.execute(
+            "SELECT player, value FROM player_game_logs WHERE sport='nhl' AND period=? AND team=? "
+            "AND market='goals' AND value > 0 ORDER BY value DESC, player", (m["day"], t)).fetchall()
+        scorers[t] = [{"player": r[0], "goals": int(r[1])} for r in rows[:4]]
+    m["scorers"] = scorers
+    m.pop("leaders", None)
+    m.pop("missing", None)
+    return m
+
+
+def nhl_meeting(c: Ctx) -> dict | None:
+    """THE LAST MEETING (the research's "direct precedent"): the score and who
+    scored for each side."""
+    m = c.g.get("last_meeting") or {}
+    if not m.get("day") or not m.get("home") or not m.get("away"):
+        return None
+    from .gamereport import day_label
+    h, a = m["home"], m["away"]
+    hs, as_ = int(m.get("home_score") or 0), int(m.get("away_score") or 0)
+    won, lost = (h, a) if hs > as_ else (a, h)
+    when = day_label(m["day"], 0, 0) or m["day"]
+    try:
+        from .seasons import season_of
+        if season_of("nhl", m["day"]) < season_of("nhl", c.g.get("date") or m["day"]):
+            when += ", last season"
+    except Exception:                                    # noqa: BLE001
+        pass
+    items = [f"{when}: {team_np(c, won)} beat {team_np(c, lost)} {max(hs, as_)}-{min(hs, as_)} "
+             f"{'at home' if won == h else 'on the road'}"]
+    for t in (a, h):
+        sc = [x for x in (m.get("scorers") or {}).get(t) or [] if x.get("player")]
+        if sc:
+            items.append(cap(f"{team_owner(c, t)} goals: ")
+                         + _join(f"{x['player']}" + (f" ({x['goals']})" if x.get("goals", 1) > 1 else "") for x in sc))
+    return _section("meetings", "The last meeting", [_list(items)])
+
+
 def nhl_injuries(c: Ctx) -> dict | None:
     items = []
     for t in c.teams:
@@ -589,8 +677,11 @@ def nhl_short(c: Ctx, built: dict) -> dict | None:
     return _section("short", "The short version", [_list(items)])
 
 
-NHL = ((nhl_facts, sec_market, nhl_tape, nhl_goalies, nhl_watch, nhl_injuries, sec_parlays, nhl_before),
-       nhl_short)
+#: The hockey report, in the research's order: the facts and the line, the
+#: matchup, the goalies, who plays with whom (and who is missing), the
+#: breakout candidates and fades, the last meeting, then the rest.
+NHL = ((nhl_facts, sec_market, nhl_tape, nhl_goalies, nhl_lines, nhl_watch, nhl_meeting, nhl_injuries, sec_parlays,
+        nhl_before), nhl_short)
 
 
 def nhl_more(g: dict, result: dict) -> dict:
@@ -926,7 +1017,7 @@ def last_meeting(conn, sport: str, home: str, away: str, before: str, hist: dict
         (sport, str(before or "")[:10], *hs, *as_, *as_, *hs)).fetchone()
     if not row:
         return {}
-    day, h, a, hsc, asc = (row[0], row[1], row[2], row[3], row[4])
+    day, h, hsc, asc = row[0], row[1], row[3], row[4]
     # The board's own codes, whatever the history spelled them.
     h_code = home if str(h).upper() in hs else away
     a_code = away if h_code == home else home

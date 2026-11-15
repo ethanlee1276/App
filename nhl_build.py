@@ -922,6 +922,17 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
                      "live": _live_block(g)} for g in games]
     if not games:
         return out, None
+    # THE LAST MEETING, FOR EACH GAME'S REPORT (engine/leaguereport
+    # .hockey_meeting, 2026-11-15): the research's "direct precedent", the
+    # score and who scored, off the history. Never fatal.
+    try:
+        from engine.leaguereport import hockey_meeting as _hm
+        for _gd in out["games"]:
+            _m = _hm(conn, _gd["home"], _gd["away"], date)
+            if _m:
+                _gd["last_meeting"] = _m
+    except Exception as exc:                                # noqa: BLE001
+        print(f"  ⚠️  the reports' last meetings skipped: {exc}")
     seasons = recent_seasons(SPORT, date)
     players = M.player_games(conn, seasons=seasons)
     _pt = _clock.lap("board", "player games", _pt)

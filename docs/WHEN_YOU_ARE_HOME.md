@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SC. The hockey report does the research: the lines and the last meeting**
+(step 609; 15 November). Nothing to run. The NHL report had the tape, the
+goalies, and the breakout candidates and fades (step SA). What your
+research's game cards also carried was who plays with whom with a regular
+out, and the last meeting. Two more sections:
+- **The lines:** each team's top two forward lines and top defense pair,
+  with how settled each is ("Top line: Matthew Knies, Auston Matthews and
+  Mitch Marner (together for 72% of their ice lately)"). They come off the
+  shift charts of the team's newest games, with tonight's ruled-out
+  players left out. Each team's list ends with who it's built without
+  ("Built without Charlie McAvoy (out): whoever takes his shifts gets more
+  ice time").
+- **The last meeting:** the score and who scored ("Oct. 12: the Maple
+  Leafs beat the Bruins 4-2 on the road. The Maple Leafs' goals: Auston
+  Matthews (2), Mitch Marner and William Nylander").
+
 **SB. The basketball report does the research: the absences, how the game
 should go, the last meeting** (step 608; 15 November). Nothing to run. Your NBA
 research read who takes a ruled-out star's shots, the pace and the total,
