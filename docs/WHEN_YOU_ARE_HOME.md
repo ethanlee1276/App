@@ -9622,6 +9622,12 @@ no asking. Now:
   settle line shows "paper holds": kinds on paper and kinds back, by
   league.
 
+**Sunday 15 November:** the paper holds are not in the verdicts yet. The
+last learning pass ran at 4:48am, before this code reached the box, so the
+first pass to measure them is the one after today's first grades. Until
+then only the standing hold applies: a Most Likely pick 15 or more points
+above its price stays on paper.
+
 **Your picks audit (QC), read.** The NFL's five flagged matchup picks
 (Coleman, Kincaid and Washington unders at 50–53% with the projection over
 the line; Waller and McCaffrey overs at 50%) were each made at the matchup
@@ -10600,6 +10606,29 @@ own fit is applied, the game-line calibrations adopted, the correlations
 adopted, and the hypothesis lab's claims by standing. Counts and keys only;
 no fitted number leaves the box. The first pass that learns on this code
 fills it, tonight after the grades: https://qellysbook.com/data/heartbeat.json.
+
+**What it showed, Sunday 15 November (the pass at 4:48am, after Saturday's
+grades):**
+- **Selection haircut.** It is applied pooled, over 2,068 settled picks.
+  MLB's own fit (1,090) is applied. The NFL's (568), the NBA's (299) and
+  college football's (111) are not applied yet.
+- **Journal temperatures.** The NFL has 7 fitted, 5 owned by the deep
+  refit and 7 collecting. College football has 2, 9 and 3. MLB has 2, 4
+  and 4. The NBA has 10 owned and 4 collecting, and the WNBA 4 owned and 1
+  collecting. The NHL has 5 fitted and 4 collecting, refit from the raw
+  claims with nothing compounding, and three of its players' memories
+  adopted. UFC has 1 collecting, and the weather 1 fitted.
+- **Loss patterns.** 51,520 records were read and 1,071 slices tested. The
+  closed slices are the NFL's 7, MLB's 1 and college football's 1.
+- **Hypotheses by standing.** The NFL has 4 close and 9 with nothing.
+  College football has 6 close and 2 with nothing. MLB has 2 to watch, 4
+  close and 39 with nothing. The WNBA has 2 to watch and 4 with nothing,
+  and the weather 3 close and 4 with nothing.
+- **Game lines.** All three markets are adopted for the NFL, college
+  football and MLB. College basketball, the NBA, the NHL and the WNBA are
+  held, all three markets each, with "no game-line model of its own here"
+  (step QO).
+- **Correlations.** 7 adopted.
 
 **PP. Every board applies what its own record learned** (step 544; 14
 November). Nothing to run. The second thing the audit found, and the one
@@ -12513,6 +12542,19 @@ passing, rushing and receiving yards. One thing this run did was wrong: its
 rotation check judged the NBA season in progress and switched the rotation
 rules off. Step PM fixes the check, and tonight's run runs it again first,
 before the NBA's fit.
+
+**Sunday 15 November (read off the public heartbeat at 12:18pm):**
+Saturday night's run (12:26 to 12:34am) did the NBA's teammate-out replay
+in 7 minutes and stopped with 43 of its 50 minutes left, because the next
+piece in line needed 45. The fixed rotation and rates checks were not run
+first, as promised above. They sat last in line on their old run's date
+(step RX fixes both). The round of 11 November has done college
+basketball, the vacancy check, the yardage mixture, the touchdown scale and
+models, and college football's touchdowns. It still owes the NFL, college
+football, the NBA's spread, rotation and rates checks and its own fit, the
+NFL's book-line props and the grade ladder. MLB and the WNBA rest. The
+dials still owe the NFL's passing yards and college football's passing,
+rushing and receiving yards.
 
 **LW. The box-score pull asks for a game by its season** (step 445; 8
 November). The first pass with LS's timer on it (20:52, Saturday 7
