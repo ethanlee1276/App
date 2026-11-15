@@ -105,11 +105,52 @@ def test_the_export_carries_it():
 def test_the_card_draws_it_and_nothing_for_an_empty_week():
     i = APP.index("function weekRecapHTML(")
     fn = APP[i:APP.index("\n}\n", i)]
-    assert 'if (!books.length) return "";' in fn
+    assert "if (!books.length) {" in fn and ': "";' in fn
     for want in ("Best hit", "Toughest miss", "we said", "the price said"):
         assert want in fn, want
     r = APP[APP.index("async function renderRecord("):]
-    assert "weekRecapHTML(d.weekly_recap)" in r[:r.index("\n}\n")]
+    assert "weekRecapHTML(d.weekly_recap, scope)" in r[:r.index("\n}\n")]
+
+
+# --- each league's own week (2026-11-15) ---------------------------------
+#: Ethan, with a screenshot of Record → UFC leading with NBA rebounds and NFL
+#: tackles: "the ufc record page isn't recording bets and is showing other
+#: sports".
+def test_each_league_gets_its_own_week():
+    c = _conn()
+    _bet(c, "board", "won", "2026-10-03", odds=150, pnl=1.5)
+    _bet(c, "board", "lost", "2026-10-03", prob=0.9, pnl=-1, sport="nba")
+    _bet(c, "board", "won", "2026-10-04", odds=-120, pnl=0.8, sport="nba")
+    out = recap.recap(c, now=NOW)
+    assert sorted(out["by_sport"]) == ["nba", "nfl"]
+    nba = out["by_sport"]["nba"]["books"]
+    assert [b["book"] for b in nba] == ["The one board"]
+    assert (nba[0]["w"], nba[0]["l"], nba[0]["units"]) == (1, 1, -0.2)
+    assert nba[0]["best"]["sport"] == "nba" and nba[0]["worst"]["sport"] == "nba"
+    assert out["by_sport"]["nfl"]["books"][0]["best"]["odds"] == 150
+    assert (_book(out, "The one board")["w"], _book(out, "The one board")["l"]) == (2, 1), "the all-sports line stays"
+
+
+def test_ufcs_fight_picks_are_a_line_of_their_own():
+    c = _conn()
+    _bet(c, "ufc", "won", "2026-10-03", odds=200, pnl=0.5, sport="ufc")
+    _bet(c, "ufc", "lost", "2026-10-03", odds=150, prob=0.45, pnl=-0.25, sport="ufc")
+    _bet(c, "main", "won", "2026-10-03", pnl=0.9)
+    out = recap.recap(c, now=NOW)
+    assert [b["book"] for b in out["books"]] == ["Edge picks", "UFC fight picks"], "never pooled into the three"
+    assert _book(out, "Edge picks")["w"] == 1 and _book(out, "Edge picks")["l"] == 0
+    ufc = out["by_sport"]["ufc"]["books"]
+    assert [(b["book"], b["w"], b["l"]) for b in ufc] == [("UFC fight picks", 1, 1)]
+    assert "ufc" not in {s for b in out["books"] if b["book"] != "UFC fight picks" for s in b["by_sport"]}
+
+
+def test_the_card_draws_the_tab_in_view():
+    i = APP.index("function weekRecapHTML(")
+    fn = APP[i:APP.index("\n}\n", i)]
+    assert "(w || {}).by_sport || {})[scope]" in fn, "a league's tab draws its own week"
+    assert "picks settled this week." in fn, "and says so when nothing of it settled"
+    assert 'if (scoped && !(w || {}).by_sport) return "";' in fn, \
+        "a file from before the cut never draws another league's week on a league's tab"
 
 
 if __name__ == "__main__":

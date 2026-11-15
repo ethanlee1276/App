@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RH. The UFC tab shows UFC's fights, and "This week" follows the tab**
+(step 588; 15 November). Nothing to run. You sent Record → UFC: the chip
+said 43, the verdict said 0-0-0, and "This week" showed NBA and NFL picks.
+UFC's picks were being recorded the whole time: 41 graded (17-24, +2.76
+units on 10.18 staked) and 2 open, the last graded on 7 November. They're
+kept in a book of their own, and the UFC tab was reading the edge picks'
+book, which UFC never uses. Now:
+- The UFC tab's headline, verdict, profit calendar (and its day taps) and
+  settled list are UFC's fight picks. A line under the headline says they
+  stay out of All bets until there's a real sample.
+- "This week" follows the tab you're on. Each league shows its own week, or
+  says nothing of it settled this week. On All bets, UFC's fight picks get a
+  line of their own, never mixed into the other three.
+- Ask reads UFC's record from the same book.
+
 **RG. The game reports read in plain words** (step 587; 15 November).
 Nothing to run. You circled two phrases in the NE–DET report's red zone,
 "(23rd of 32, 1st the stingiest)" and "(0% below the league), both adjusted

@@ -8623,8 +8623,11 @@ def settled_page(conn, sport: str | None = None, kind: str | None = None,
     `kind` is "props" or "lines" (GAME_MARKETS); `result` is won,
     lost or push. `total` counts every row the filters match, so the
     page can say how many there are rather than how many it has.
+
+    A league with a book of its own (OWN_BOOK_SPORTS: UFC's fight picks)
+    pages that book on its own scope — the rows its headline counts.
     """
-    books, bargs = books_sql(POOLED_BOOKS)
+    books, bargs = books_sql(own_book(sport) or POOLED_BOOKS)
     where = ("WHERE status IN ('won','lost','push') AND stake_units > 0 "
              f"AND {books} AND date >= ?")
     args: list = [*bargs, RECORD_EPOCH]
@@ -10134,6 +10137,31 @@ LIKELY_HALF = LIKELY_BOOKS + (BOARD_CATEGORY,)
 #: pick the Most Likely book already holds counts once) is POOLED_BOOKS.
 EDGE_BOOKS = ("main", "paper")
 
+#: A LEAGUE WHOSE PICKS JOURNAL UNDER A BOOK OF THEIR OWN. UFC's fight picks
+#: are category 'ufc' (Scalpy MMA's picks, `ufc_report`), kept out of every
+#: all-sports headline until a real sample says they belong there. Its own
+#: scope read the edge book, which UFC never writes to, so the UFC tab said
+#: 0-0-0 beside 43 journaled fights — Ethan, 2026-11-15, with the screenshot:
+#: "the ufc record page isn't recording bets and is showing other sports".
+#: A league named here reads its own book on its own scope: the headline,
+#: the verdict, the calendar and its day taps, and the settled list. The
+#: all-sports figures never count it (BOOK and POOLED_BOOKS do not name it).
+OWN_BOOK_SPORTS = {"ufc": ("ufc",)}
+
+#: What that book is called on the page's lead.
+OWN_BOOK_LABELS = {"ufc": "UFC fight picks"}
+
+
+def own_book(sport) -> tuple | None:
+    """The book a league keeps of its own (OWN_BOOK_SPORTS), or None."""
+    return OWN_BOOK_SPORTS.get(str(sport or "").strip().lower())
+
+
+def edge_books_for(sport) -> tuple:
+    """The book a league's headline, calendar and settled list read: its
+    own where it keeps one, else the edge picks (EDGE_BOOKS)."""
+    return own_book(sport) or EDGE_BOOKS
+
 
 def pooled_report(conn, sport: str | None = None,
                   since: str | None = None) -> dict:
@@ -11227,6 +11255,8 @@ def sport_report(conn, sport: str,
     football model reading four points cold average to a perfect
     calibration line nobody should trust.
     """
+    if own_book(sport):
+        return _own_book_report(conn, sport, own_book(sport), since=since)
     perf = performance(conn, sport, since=since)
     # THE SPORT'S OWN all_time, so the page's "N earlier settled picks
     # are not in these numbers" note can be true on a sport scope. It
@@ -11252,6 +11282,37 @@ def sport_report(conn, sport: str,
         # Enough graded bets for the numbers above to mean anything. Stated
         # rather than implied: a 3-1 record is not a 75% win rate, and a
         # page that shows one without the other invites exactly that read.
+        "thin": perf.get("settled", 0) < MIN_GRADED_FOR_SIGNAL,
+        "min_graded": MIN_GRADED_FOR_SIGNAL,
+    }
+
+
+def _own_book_report(conn, sport: str, cats: tuple, since: str | None = None) -> dict:
+    """`sport_report`'s shape over a league's own book (OWN_BOOK_SPORTS):
+    the headline, the curve the calendar draws, what is still open, the
+    settled rows and the calibration, all of that book and that league.
+
+    No ``pooled`` block: the page seats ``pooled.edge`` over ``overall``
+    (app.js adoptPooledRecord), and the pooled books do not hold this
+    one, so the scope would read zero again. Its ``label`` names it on
+    the page's lead in place of "Edge picks"."""
+    perf = performance(conn, sport, category=cats, since=since)
+    perf["label"] = f"{OWN_BOOK_LABELS.get(sport, sport.upper() + ' picks')} · graded in public"
+    everything = performance(conn, sport, category=cats) if since else perf
+    return {
+        "sport": sport,
+        "own_book": list(cats),
+        "overall": perf,
+        "all_time": {
+            "overall": everything,
+            "hidden_settled": max(0, everything["settled"] - perf["settled"]),
+        },
+        "curve": pnl_curve(conn, sport, since=since, category=cats),
+        "edge_state": edge_state(conn, sport, since=since, category=cats),
+        "recent": recent_settled(conn, RECENT_LIMIT, category=cats, sport=sport, since=since),
+        "calibration": calibration(conn, category=cats[0], sport=sport),
+        "calibration_era": calibration(conn, category=cats[0], since=MODEL_ERAS[-1]["start"],
+                                       sport=sport),
         "thin": perf.get("settled", 0) < MIN_GRADED_FOR_SIGNAL,
         "min_graded": MIN_GRADED_FOR_SIGNAL,
     }
@@ -12091,8 +12152,12 @@ def export_json(conn, path) -> None:
         # here is a league a reader can click to — which is the whole of
         # what Ethan asked to stop: "I don't want wnba Past bet or new
         # bet on the record page."
+        # A league with a book of its own (OWN_BOOK_SPORTS) has no staked
+        # cut: the stake rule is the edge and Most Likely books', and an
+        # all-zero one would be read ahead of its record (askbot, the page).
         "by_sport": {sp: {**sport_report(conn, sp, since=since),
-                          "staked": ((_staked.get("by_sport") or {}).get(sp) or {})}
+                          "staked": ({} if own_book(sp) else
+                                     ((_staked.get("by_sport") or {}).get(sp) or {}))}
                      for sp in TRACKED_SPORTS if not is_benched(sp)},
         "tracked_sports": [sp for sp in TRACKED_SPORTS
                            if not is_benched(sp)],

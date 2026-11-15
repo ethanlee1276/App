@@ -470,6 +470,7 @@
 .wk-recap .wk-line .pos { color: var(--good); }
  .wk-recap .wk-line .neg { color: var(--bad); }
 .wk-recap .wk-pick { color: var(--text-dim); font-size: .9em; overflow-wrap:anywhere; }
+.wk-recap .wk-none { margin: 6px 0 0; color: var(--text-mute); }
 /* The record read offline (app.js renderRecord, sw.js THE RECORD, OFFLINE). */
 .rec-offline { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 12px;
   border-radius: var(--radius-sm); border: var(--hairline) solid transparent;

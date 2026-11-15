@@ -138,7 +138,12 @@ def test_the_endpoint_is_routed_validated_and_ungated():
     body = SERVER[i:SERVER.index("\n    def ", i + 10)]
     assert 'r"\\d{4}-\\d{2}-\\d{2}"' in body and "400" in body, "a bad date is refused, not queried"
     assert "L.settled_on(conn, date, sport=sport or None," in body
-    assert 'categories=L.LIKELY_HALF if book == "likely" else L.EDGE_BOOKS' in body, "each calendar names its book"
+    assert ('categories=L.LIKELY_HALF if book == "likely"\n'
+            '                                    else L.edge_books_for(sport)') in body, "each calendar names its book"
+    # The edge calendar's book is the edge picks, or a league's own (UFC's fights).
+    from engine import ledger as _L
+    assert _L.edge_books_for("") == _L.EDGE_BOOKS == _L.edge_books_for("nfl")
+    assert _L.edge_books_for("ufc") == ("ufc",)
     assert 'if book not in ("", "edge", "likely"):' in body, "an unknown book is refused, not guessed"
     assert "_entitled" not in body, "settled rows are the evidence the subscription is sold on"
     assert '"net_units"' in body and '"rows"' in body

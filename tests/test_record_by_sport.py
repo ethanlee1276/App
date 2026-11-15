@@ -246,8 +246,12 @@ def test_polymarket_has_its_own_scope_and_is_not_a_betting_pnl():
 
 def test_ufc_gets_a_scope_like_every_other_board():
     assert "ufc" in ledger.TRACKED_SPORTS
+    # Its own tab leads with its own book since 2026-11-15
+    # (test_the_ufc_tab_reads_its_own_fights); the separate section is the
+    # "All bets" tab's.
+    assert ledger.own_book("ufc") == ("ufc",)
     js = app_js()
-    assert 'scope !== "ufc"' in js, "the UFC bucket ignores the scope"
+    assert '(scoped ? "" : recUfcSection(d.ufc_record))' in js
 
 
 def test_the_running_pnl_marks_where_the_model_changed():

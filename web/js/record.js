@@ -3256,15 +3256,31 @@ function recPotdSection(rep, scope, recent, sit) {
 
 /* THE WEEK IN ONE CARD (engine/recap; Ethan, 2026-10-04: "do all of it").
    Each published book's last seven days: the record, the units, the hit
-   rate against our claim and the price, the best hit and the toughest miss. */
-function weekRecapHTML(w) {
-  const books = ((w || {}).books || []).filter((b) => b.w + b.l + b.p);
-  if (!books.length) return "";
+   rate against our claim and the price, the best hit and the toughest miss.
+
+   THE SCOPE IN VIEW (2026-11-15). It drew the all-sports week on every
+   tab, so the UFC tab led with NBA rebounds and NFL tackles — Ethan: "the
+   ufc record page isn't recording bets and is showing other sports". A
+   league's tab draws its own week (`by_sport`), and says so when nothing
+   of that league settled; a file from before the cut existed draws
+   nothing on a league's tab rather than another league's week. */
+function weekRecapHTML(w, scope) {
+  const scoped = !!scope && scope !== "all";
+  if (scoped && !(w || {}).by_sport) return "";
+  const src = scoped ? ((w || {}).by_sport || {})[scope] : w;
+  const books = ((src || {}).books || []).filter((b) => b.w + b.l + b.p);
+  const name = scoped ? ((SPORT_META[scope] || {}).name || String(scope).toUpperCase()) : "";
+  const head = (w && w.from) ? `<div class="section-title">${icon("calendar", 15)} This week${
+    scoped ? ` · ${escapeHtml(name)}` : ""} <span class="sub">— ${escapeHtml(recWinDate(w.from))} to ${escapeHtml(recWinDate(w.to))}</span></div>` : "";
+  if (!books.length) {
+    return scoped && head ? `<section class="card wk-recap" aria-label="This week">${head}
+      <p class="wk-none">No ${escapeHtml(name)} picks settled this week.</p></section>` : "";
+  }
   const pc = (v) => v == null ? "—" : `${Math.round(v * 100)}%`;
   const bet = (x) => `${escapeHtml(x.player || "")} ${escapeHtml(String(x.side || "").toLowerCase())} ${x.line ?? ""} ${
     escapeHtml(String(x.market || "").replace(/_/g, " "))} (${american(x.odds)})`;
   return `<section class="card wk-recap" aria-label="This week">
-    <div class="section-title">${icon("calendar", 15)} This week <span class="sub">— ${escapeHtml(recWinDate(w.from))} to ${escapeHtml(recWinDate(w.to))}</span></div>
+    ${head}
     ${books.map((b) => `<div class="wk-book"><b>${escapeHtml(b.book)}</b>
       <span class="wk-line">${b.w}-${b.l}${b.p ? `-${b.p}` : ""} · <span class="${b.units >= 0 ? "pos" : "neg"}">${b.units >= 0 ? "+" : trueMinus("-")}${Math.abs(b.units).toFixed(1)}u</span>
         · hit ${pc(b.hit)} (we said ${pc(b.claimed)}, the price said ${pc(b.price)})</span>
@@ -3590,7 +3606,8 @@ async function renderRecord() {
         likely_overall: winO ? null : src.likely_overall,
         edge_board: winO ? null : src.edge_board } : d;
   const ribbons = winO
-    ? recordRibbonsHTML(dAll, { ...winO, label: `${(src.overall || {}).rule ? "Our record" : "Edge picks"} · last ${winDays} days` },
+    ? recordRibbonsHTML(dAll, { ...winO, label: `${(src.overall || {}).rule ? "Our record"
+        : String((src.overall || {}).label || "Edge picks").split(" · ")[0]} · last ${winDays} days` },
         (src.recent || []).filter((r) => String((r || {}).date || "") >= from), { parts: true })
     : recordRibbonsHTML(dAll, o, src.recent, { parts: true });
   const winBar = recordWindowHTML(avail, rk, recRangesClosed(src.curve));
@@ -3599,9 +3616,16 @@ async function renderRecord() {
         from ${escapeHtml(recWinDate(from))}. Everything else here is the whole record.</p>`
     : `<p class="rec-win-note">Nothing settled in the last ${winDays} days — the
         headline is the whole record.</p>`;
+  /* A LEAGUE WITH A BOOK OF ITS OWN (ledger.OWN_BOOK_SPORTS: UFC's fight
+     picks) says once, under its headline, that "All bets" leaves it out. */
+  const ownNote = scoped && src.own_book
+    ? `<p class="rec-win-note">${escapeHtml((SPORT_META[scope] || {}).name || String(scope).toUpperCase())}’s
+        picks keep a record of their own. They aren’t counted in All bets until a real sample says they belong there.</p>`
+    : "";
   host.innerHTML = scopeBar + winBar
     + (ribbons ? `<div class="hd-stats rec-ribbons">${ribbons}</div>${zenoWhoHTML(dAll)}` : "")
-    + weekRecapHTML(d.weekly_recap)
+    + ownNote
+    + weekRecapHTML(d.weekly_recap, scope)
     + winNote
     + _recordRooms(d, src, pmv, scope, scoped, receipts)
     + `<p class="rec-stamp">Updated ${escapeHtml(formatStamp(d.generated_at))}
@@ -3692,7 +3716,11 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      + (scoped ? "" : recParlaySection(d.parlays))
      + (scoped ? "" : recStaleSection(d.stale_flags)) + (scoped ? "" : recFormSection(d.form_sampler))
      + (scoped ? "" : recLooseSection(d.loose_sampler))
-     + (scoped && scope !== "ufc" ? "" : recUfcSection(d.ufc_record))
+     /* UFC's own tab leads with its fight picks since 2026-11-15
+        (ledger.OWN_BOOK_SPORTS), so its section here is the "All bets"
+        tab's: the one place they show beside a record they are kept
+        out of. */
+     + (scoped ? "" : recUfcSection(d.ufc_record))
      // BOTH SCOPES, different book lists. A sport gets all five; "All
      // bets" gets only the two with no dedicated panel above it, so one
      // book never prints two W-Ls on one screen.

@@ -6390,8 +6390,11 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             from engine import ledger as L
             conn = L.connect()
             try:
+                # A league with a book of its own (UFC's fight picks) taps
+                # that book, the one its calendar draws (ledger.edge_books_for).
                 rows = L.settled_on(conn, date, sport=sport or None,
-                                    categories=L.LIKELY_HALF if book == "likely" else L.EDGE_BOOKS)
+                                    categories=L.LIKELY_HALF if book == "likely"
+                                    else L.edge_books_for(sport))
             finally:
                 conn.close()
         except Exception:                                    # noqa: BLE001
