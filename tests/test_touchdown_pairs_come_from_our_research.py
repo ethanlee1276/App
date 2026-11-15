@@ -153,6 +153,30 @@ def test_hockey_ranks_on_the_chance_as_before():
     assert "scorers_priced" not in g
 
 
+
+def test_the_build_says_why_each_priced_scorer_is_no_leg_and_the_audit_prints_it():
+    """College's first night on the rule read 9 pairs on 28 games; what held
+    the rest is counted (`research_census`) and the picks audit prints it."""
+    from engine import pickaudit as PA
+    reads = [SKATTEBO, LIKELY,
+             _read("Rachaad White", "WAS", "RB", "neutral", {"carry_share": 0.45}, 0.40, 1.2, implied=19.0),
+             _read("Wan'Dale Robinson", "NYG", "WR", "breakout", {"tgt_share": 0.26}, 0.31, 0.4),
+             _read("Terry McLaurin", "WAS", "WR", "avoid", {"tgt_share": 0.25}, 0.38, 1.6, implied=19.0)]
+    scorers = [_td(x["player"], x["team"], x["pos"], x["td"]["model_prob"]) for x in reads]
+    scorers.append(_td("Deebo Samuel", "WAS", "WR", 0.42))
+    b = _board(reads, scorers)
+    gp = GP.build(b, "nfl")
+    assert gp["scorers_priced"] == 6 and gp["scorers_researched"] == 2
+    assert gp["research_census"] == {"no matchup read on him": 1, "his read says avoid": 1,
+                                     "no red-zone role (under 0.9 expected red-zone chances)": 1,
+                                     f"under {GP.RESEARCH_MIN} of the {GP.RESEARCH_MAX} research points": 1}, \
+        gp["research_census"]
+    b["game_parlays"] = gp
+    lines = PA.report("nfl", b)
+    assert any("2 of 6 priced scorers carry a research case" in ln for ln in lines), lines
+    assert any(ln.strip() == "turned away: his read says avoid — 1" for ln in lines)
+    assert "research_census" not in GP.build({"games": [], "td_field": []}, "nhl")
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0

@@ -209,6 +209,16 @@ def report(sport: str, d: dict, limit: int = 40) -> list[str]:
             out.append("        for: " + " | ".join(str(t) for t in x["pro"]))
     if len(s) > limit:
         out.append(f"    … {len(s) - limit} more")
+    # THE TOUCHDOWN PAIRS' RESEARCH (engine/gameparlays.research_scorers):
+    # how many priced scorers carried a case, and why the rest did not.
+    gp = d.get("game_parlays") or {}
+    if gp.get("research_census") is not None:
+        cnt = gp.get("counts") or {}
+        out.append(f"  Touchdown pairs: {cnt.get('scorers', 0)} across {cnt.get('games', 0)} game(s); "
+                   f"{gp.get('scorers_researched', 0)} of {gp.get('scorers_priced', 0)} priced scorers carry a "
+                   f"research case")
+        for why, n in (gp.get("research_census") or {}).items():
+            out.append(f"    turned away: {why} — {n}")
     u = a["unposted"]
     out.append(f"  Go-to scorers with no touchdown pick on any board: {len(u)}")
     for x in u[:limit]:

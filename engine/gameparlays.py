@@ -416,18 +416,33 @@ def research(leg: dict, read: dict | None, game: dict | None, sport: str) -> dic
             "red_zone": pts.get("red_zone", 0)}
 
 
-def research_scorers(scorers: list[dict], board: dict, games: list, sport: str) -> tuple[list, int]:
+def research_scorers(scorers: list[dict], board: dict, games: list, sport: str,
+                     census: dict | None = None) -> tuple[list, int]:
     """The scorers our research makes a case for, each with its ``research``
     stamped and its research lines first in ``why`` — and how many priced
-    scorers it read. Hockey (no scan read) passes through unread."""
+    scorers it read. Hockey (no scan read) passes through unread.
+    ``census`` is filled with why each one turned away was (the picks audit
+    prints it: engine/pickaudit)."""
     if sport not in RESEARCH_SPORTS:
         return scorers, len(scorers)
     reads = reads_by_player(board)
     out = []
+
+    def no(why):
+        if census is not None:
+            census[why] = census.get(why, 0) + 1
     for leg in scorers:
         read = reads.get((_key(leg.get("player")), leg.get("team") or ""))
         r = research(leg, read, _game_of(leg, games), sport)
-        if not r or r["score"] < RESEARCH_MIN or not r["red_zone"]:
+        if not r:
+            no("no matchup read on him" if not read else "his read says avoid" if read.get("read") == "avoid"
+               else "a position the readings do not cover")
+            continue
+        if not r["red_zone"]:
+            no("no red-zone role (under 0.9 expected red-zone chances)")
+            continue
+        if r["score"] < RESEARCH_MIN:
+            no(f"under {RESEARCH_MIN} of the {RESEARCH_MAX} research points")
             continue
         leg["research"] = r["score"]
         leg["research_of"] = RESEARCH_MAX
@@ -971,7 +986,8 @@ def build(board: dict, sport: str, now=None) -> dict:
     priced = enrich(scorer_legs(board, sp, now), board)
     # THE RESEARCH READS EVERY PRICED SCORER (`research_scorers`): the ones it
     # makes a case for are the touchdown pairs' legs.
-    scorers, _ = research_scorers(priced, board, games, sp)
+    census: dict = {}
+    scorers, _ = research_scorers(priced, board, games, sp, census)
     by_game: dict = {}
 
     def slot(g):
@@ -998,6 +1014,10 @@ def build(board: dict, sport: str, now=None) -> dict:
             "take_edge": TAKE_EDGE, "leg_floor": LEG_FLOOR,
             "counts": {"games": len(out_games), "threes": sum(len(x["threes"]) for x in out_games),
                        "scorers": sum(len(x["scorers"]) for x in out_games)},
+            # WHY A PRICED SCORER WAS NO LEG (`research_scorers`), football only.
+            **({"research_census": dict(sorted(census.items(), key=lambda kv: -kv[1])),
+                "scorers_priced": len(priced), "scorers_researched": len(scorers)}
+               if sp in RESEARCH_SPORTS else {}),
             "note": ("Every ticket here is tracked and graded on the record, staked at nothing: same-game "
                      "parlays have lost money on our record so far, because a book's same-game price "
                      "takes more than the link between our picks has paid. Take one only at its price "
