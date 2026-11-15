@@ -375,7 +375,14 @@ def test_the_page_ticks_the_count_and_asks_again_before_the_start():
 
 
 # --- in a browser ---------------------------------------------------------------------
-def test_in_a_browser_the_field_board_lights_and_a_touchdown_goes_up():
+def test_in_a_browser_the_football_page_counts_down_the_next_game_and_draws_no_field_board():
+    """The football page drew the field's big board on its stadium photograph,
+    lit with the score, and a touchdown went up on it with fireworks. The
+    photograph left the page on 2026-11-15 (Ethan, circling it: "remove this
+    since we have the other field"), and the board and its moments with it;
+    baseball's ballpark and the arenas keep theirs. What this walk still holds
+    on the football page: the next game's chip counts down, and nothing of the
+    photograph is drawn."""
     if os.environ.get("QB_BROWSER_TESTS") != "1":
         print("      (skipped: set QB_BROWSER_TESTS=1)")
         return
@@ -389,13 +396,11 @@ def test_in_a_browser_the_field_board_lights_and_a_touchdown_goes_up():
     fb = T._fb_doc()
     fb["event_id"] = "e9"
     fb["live"].update({"home_score": 17, "away_score": 10, "clock": "4:12"})
-    box = {"doc": fb}
     # The next game on the slate starts in 23 minutes: its chip counts down.
     soon = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 23 * 60))
-    strip = lambda: {"generated_at": fb["generated_at"], "league": "nfl", "games": [
-        {"event_id": "e9", "home": "DAL", "away": "TB", "live": box["doc"]["live"], "plays_state": "ok"},
+    strip = {"generated_at": fb["generated_at"], "league": "nfl", "games": [
+        {"event_id": "e9", "home": "DAL", "away": "TB", "live": fb["live"], "plays_state": "ok"},
         {"event_id": "e10", "home": "KC", "away": "BUF", "live": {"state": "scheduled", "start_time": soon}}]}
-    body = lambda x: json.dumps(x() if callable(x) else x)
     srv, port = rendercheck._serve()
     got = {}
     try:
@@ -406,7 +411,6 @@ def test_in_a_browser_the_field_board_lights_and_a_touchdown_goes_up():
             browser = pw.chromium.launch(**kw)
             try:
                 for width in (390, 1280):
-                    box["doc"] = fb
                     ctx = browser.new_context(viewport={"width": width, "height": 900}, is_mobile=width < 600,
                                               has_touch=width < 600, service_workers="block")
                     page = ctx.new_page()
@@ -414,11 +418,11 @@ def test_in_a_browser_the_field_board_lights_and_a_touchdown_goes_up():
                     page.on("pageerror", lambda e: errors.append(str(e)))
                     page.add_init_script("try { localStorage.setItem('qb-seen-intro', '1'); localStorage.setItem('qb.tour', 'done'); } catch (e) {}")
                     page.route(lambda u: not u.startswith(f"http://127.0.0.1:{port}/"), lambda r: r.abort())
-                    page.route("**/data/pbp/nfl_e9.json*", lambda r: r.fulfill(status=200, content_type="application/json", body=body(box["doc"])))
-                    page.route("**/data/live_nfl.json*", lambda r: r.fulfill(status=200, content_type="application/json", body=body(strip)))
+                    page.route("**/data/pbp/nfl_e9.json*", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(fb)))
+                    page.route("**/data/live_nfl.json*", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(strip)))
                     page.goto(f"http://127.0.0.1:{port}/index.html#pbp/nfl/e9", wait_until="load")
-                    page.wait_for_selector(".pbp-park .pbp-board", timeout=15000)
-                    page.wait_for_timeout(800)
+                    page.wait_for_selector(".gp .pbp-hero", timeout=15000)
+                    page.wait_for_selector(".pbp-chip-time[data-pbp-count]", timeout=15000)
                     chip = "document.querySelector('.pbp-chip-time[data-pbp-count]').textContent"
                     tick = [page.evaluate(chip)]
                     # The page's own one-second timer, given room to fire. A
@@ -432,59 +436,17 @@ def test_in_a_browser_the_field_board_lights_and_a_touchdown_goes_up():
                     except Exception:                                   # noqa: BLE001
                         pass
                     tick.append(page.evaluate(chip))
-                    g = page.evaluate("""() => {
-                      const photo = document.querySelector('.pbp-park .pbp-photo').getBoundingClientRect();
-                      const rects = [...document.querySelectorAll('.pbp-board > rect')].map((r) => {
-                        const b = r.getBoundingClientRect(); return [b.x - photo.x, b.y - photo.y, b.width, b.height]; });
-                      return { photo: [photo.width, photo.height], rects,
-                               words: [...document.querySelectorAll('.pbp-board text')].map((t) => t.textContent.trim()),
-                               wide: document.scrollingElement.scrollWidth - innerWidth };
-                    }""")
-                    # ETHAN'S PHONE drew this box 1.5:1, not the picture's 1.6:1;
-                    # the face must still land on the photograph's own screen.
-                    page.add_style_tag(content=".pbp-park { aspect-ratio: 1.5 !important; }")
-                    page.wait_for_timeout(150)
-                    g["tall"] = page.evaluate("""() => {
-                      const b = (s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
-                      return { photo: b('.pbp-park .pbp-photo'), face: b('.pbp-board > rect') }; }""")
-                    # The touchdown: a new play, six more points, the page's next pass.
-                    d = json.loads(json.dumps(fb))
-                    last = [p for p in d["plays"] if p.get("kind") == "football"][-1]
-                    d["plays"].append(dict(last, id="td-1", event="Passing Touchdown", scoring=True))
-                    d["live"]["home_score"] += 6
-                    box["doc"] = d
-                    page.evaluate("renderPbpPage()")
-                    page.wait_for_selector(".pbp-park .pbp-sb-moment", state="attached", timeout=5000)
-                    g["moment"] = page.evaluate("document.querySelector('.pbp-park .pbp-sb-moment').textContent.trim()")
-                    g["bursts"] = page.evaluate("document.querySelectorAll('.pbp-park .pbp-boom .pbp-boom-b').length")
-                    g["anim"] = page.evaluate("getComputedStyle(document.querySelector('.pbp-boom-b')).animationName")
-                    g["errors"] = errors
-                    g["tick"] = tick
-                    got[width] = g
+                    got[width] = {"tick": tick, "errors": errors,
+                                  "photo": page.evaluate("document.querySelectorAll('.pbp-park, .pbp-board, .pbp-photo').length"),
+                                  "strip": page.evaluate("document.querySelectorAll('.gp-field .gp-fd').length"),
+                                  "wide": page.evaluate("document.scrollingElement.scrollWidth - innerWidth")}
                     ctx.close()
             finally:
                 browser.close()
     finally:
         srv.shutdown()
-    m = re.search(r"const PBP_FIELD_BOARD = \{\s*away: (\[.*?\]),.*?home: (\[.*?\]),", DETAIL, re.S)
-    away, home = (json.loads(s) for s in m.groups())
     for width, g in got.items():
-        pw_, ph = g["photo"]
-        # The board's own rectangles: each screen, its stripe; the line's cover.
-        for (x0, y0, x1, y1), r in zip((away, home), (g["rects"][0], g["rects"][2])):
-            want = [x0 / 240 * pw_, y0 / 150 * ph, (x1 - x0) / 240 * pw_, (y1 - y0) / 150 * ph]
-            assert all(abs(a - b) <= 1.5 for a, b in zip(r, want)), (width, r, want)
-        assert g["words"][:4] == ["TB", "10", "DAL", "17"], (width, g["words"])
-        # In the taller box, where the photograph covers and sits on the
-        # bottom, the away face is where that photograph puts its screen.
-        px, py, pw_, ph = g["tall"]["photo"]
-        assert pw_ / ph < 1.55, ("the box really is taller", pw_ / ph)
-        s = max(pw_ / 1280, ph / 800)
-        ox, oy = px + (pw_ - 1280 * s) / 2, py + ph - 800 * s
-        x0, y0, x1, y1 = away
-        want = [ox + x0 / 240 * 1280 * s, oy + y0 / 150 * 800 * s, (x1 - x0) / 240 * 1280 * s, (y1 - y0) / 150 * 800 * s]
-        assert all(abs(a - b) <= 1.5 for a, b in zip(g["tall"]["face"], want)), (width, g["tall"]["face"], want)
-        assert g["moment"] == "TOUCHDOWN" and g["bursts"] == 5 and g["anim"] == "pbp-boom", (width, g)
+        assert g["photo"] == 0 and g["strip"] == 1, ("one field, the strip; no photograph or its board", width, g)
         a, b = g["tick"]
         assert re.fullmatch(r"in 2[23]:\d\d", a) and re.fullmatch(r"in 2[23]:\d\d", b) and a != b, ("it ticks", g["tick"])
         assert g["wide"] <= 0 and not g["errors"], (width, g)

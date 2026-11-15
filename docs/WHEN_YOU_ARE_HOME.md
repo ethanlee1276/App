@@ -9353,7 +9353,11 @@ the play in words, with the people in it. The page reads:
 
 The drawing of the play on your photograph is still in the code with its
 tests, so it can come back in one line if you ever want it. Baseball's
-ballpark photograph is unchanged.
+ballpark photograph is unchanged. One thing went with the picture: the
+football touchdown flash ("TOUCHDOWN" and the fireworks) was drawn on that
+photograph's big board, so a touchdown no longer flashes on the football
+page. Baseball's home run and the arenas' moments are unchanged. If you want
+a touchdown flash back, it can go on the score at the top.
 
 **SH. The heartbeat names each kind of pick on paper** (step 614; 15
 November). Nothing to run. Step RO puts a kind of pick on paper when its
