@@ -1330,9 +1330,10 @@
      happening". The pieces are the feed's facts (espnplays: the names, where
      a pass went or the gap a run took, the defenders after it, the foul and
      who drew it); with none of them it still reads as a sentence. */
-  const DV_GAP = { "left end": "around left end", "right end": "around right end", "left tackle": "off left tackle",
-                   "right tackle": "off right tackle", "left guard": "behind left guard", "right guard": "behind right guard",
-                   "up the middle": "up the middle" };
+  //: The feed's direction codes (espnplays _FB_GAP_CODE), in the site's words.
+  const DV_DIR = { sl: "short left", sm: "short middle", sr: "short right", dl: "deep left", dm: "deep middle",
+                   dr: "deep right", le: "around left end", lt: "off left tackle", lg: "behind left guard",
+                   mid: "up the middle", rg: "behind right guard", rt: "off right tackle", re: "around right end" };
   function dvSentence(d, league, p, m, cast) {
     const e = String(p.event || ""), y = Math.round(Number(p.yards) || 0);
     const yd = (n) => `${Math.abs(n)} yard${Math.abs(n) === 1 ? "" : "s"}`;
@@ -1343,8 +1344,8 @@
     const and = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : list[0] || "");
     const L = cast.lead, W = cast.with, by = (p.by || []).filter(Boolean);
     const end = m && m.to != null ? to(m.to) : "";
-    const thrown = p.dir && /^(short|deep) /.test(p.dir) ? ` ${p.dir}` : "";
-    const gap = p.dir && DV_GAP[p.dir] ? ` ${DV_GAP[p.dir]}` : "";
+    const thrown = /^[sd][lmr]$/.test(p.dir || "") ? ` ${DV_DIR[p.dir]}` : "";
+    const gap = /^(l[etg]|r[etg]|mid)$/.test(p.dir || "") ? ` ${DV_DIR[p.dir]}` : "";
     const gain = y > 0 ? yd(y) : y < 0 ? `a loss of ${yd(y)}` : "no gain";
     const td = /touchdown/i.test(e);
     const kickoff = /kickoff/i.test(e), punt = /punt/i.test(e);

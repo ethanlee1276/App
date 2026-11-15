@@ -685,6 +685,12 @@ _FB_LEAD = re.compile(r"^\s*(?:[(\[][^)\]]*[)\]]\s*)+")
 #: and the row's wording stays the site's own (app.js footballLine).
 _FB_PASS_DIR = re.compile(r"\bpass(?:\s+incomplete)?\s+(short|deep)\s+(left|middle|right)\b", re.I)
 _FB_RUN_DIR = re.compile(r"\b(left end|left tackle|left guard|up the middle|right guard|right tackle|right end)\b", re.I)
+#: Stored as a code, never the feed's phrase (test_gamecast holds the deep
+#: file to carrying none of ESPN's writing): a pass is its depth and side,
+#: "dr" deep right, "sm" short middle; a run its gap. The page words them
+#: (app.js FB_DIR, gamecast DV_DIR).
+_FB_GAP_CODE = {"left end": "le", "left tackle": "lt", "left guard": "lg", "up the middle": "mid",
+                "right guard": "rg", "right tackle": "rt", "right end": "re"}
 _FB_SCRAMBLE = re.compile(r"\bscrambles?\b", re.I)
 _FB_TOUCHBACK = re.compile(r"\btouchback\b", re.I)
 _FB_FAIR_CATCH = re.compile(r"\bfair catch\b", re.I)
@@ -727,7 +733,8 @@ _FB_YARDS = re.compile(r"\b(\d{1,2})\s+(?:yards?|yds?)\b", re.I)
 def _football_facts(text: str, roster, event: str = "", home: str = "", away: str = "") -> dict:
     """The play's closed-list facts, each key only when it resolved.
 
-    `dir` (where a pass went, or the gap a run took), `scramble`, `by` (the
+    `dir` (where a pass went, "dr" deep right, or the gap a run took, "mid"
+    up the middle: codes, `_FB_GAP_CODE`), `scramble`, `by` (the
     defenders named in the first bracket after the play: the tackle, the
     sack, the breakup — never a returner's tackler on a kick, never the
     man who tackled an interception's return), `touchback`, `fair_catch`,
@@ -753,11 +760,11 @@ def _football_facts(text: str, roster, event: str = "", home: str = "", away: st
     if not kick and not e.startswith("penalty") and "field goal" not in e and "extra point" not in e:
         m = _FB_PASS_DIR.search(play)
         if m:
-            out["dir"] = f"{m.group(1).lower()} {m.group(2).lower()}"
+            out["dir"] = m.group(1)[0].lower() + m.group(2)[0].lower()
         elif "pass" not in e and "sack" not in e and "interception" not in e:
             m = _FB_RUN_DIR.search(play)
             if m:
-                out["dir"] = m.group(1).lower()
+                out["dir"] = _FB_GAP_CODE[m.group(1).lower()]
         if _FB_SCRAMBLE.search(play):
             out["scramble"] = True
         if "interception" not in e and not pen_in_main:

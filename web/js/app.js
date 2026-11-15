@@ -29567,9 +29567,10 @@ function footballWords(p, g) {
    returner. A play whose names cannot say who did which keeps
    footballWords' title with the names after it, as before. With `html`
    every name is bold and the rest escaped. */
-const FB_GAP = { "left end": "around left end", "right end": "around right end", "left tackle": "off left tackle",
-                 "right tackle": "off right tackle", "left guard": "behind left guard", "right guard": "behind right guard",
-                 "up the middle": "up the middle" };
+//: The feed's direction codes (espnplays _FB_GAP_CODE), in the site's words.
+const FB_DIR = { sl: "short left", sm: "short middle", sr: "short right", dl: "deep left", dm: "deep middle",
+                 dr: "deep right", le: "around left end", lt: "off left tackle", lg: "behind left guard",
+                 mid: "up the middle", rg: "behind right guard", rt: "off right tackle", re: "around right end" };
 function footballLine(p, g, html) {
   const w = footballWords(p, g);
   const T = (s) => (html ? escapeHtml(s) : s);
@@ -29581,8 +29582,8 @@ function footballLine(p, g, html) {
   const and = (list) => list.map(N).join(T(" and "));
   const yds = (n) => `${Math.abs(n)} yd${Math.abs(n) === 1 ? "" : "s"}`;
   const gain = y > 0 ? yds(y) : y < 0 ? `a loss of ${yds(y)}` : "no gain";
-  const thrown = p.dir && /^(short|deep) /.test(p.dir) ? ` ${p.dir}` : "";
-  const gap = p.dir && FB_GAP[p.dir] ? ` ${FB_GAP[p.dir]}` : "";
+  const thrown = /^[sd][lmr]$/.test(p.dir || "") ? ` ${FB_DIR[p.dir]}` : "";
+  const gap = /^(l[etg]|r[etg]|mid)$/.test(p.dir || "") ? ` ${FB_DIR[p.dir]}` : "";
   const td = /touchdown/i.test(e);
   const listed = () => (names.length ? T(" · ") + names.map(N).join(T(" · ")) : "");
   const plain = () => T(w.title) + listed();

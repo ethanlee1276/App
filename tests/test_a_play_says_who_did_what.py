@@ -65,24 +65,24 @@ def F(event, text):
 # --- the builder: the facts beside the names -----------------------------------
 def test_where_a_pass_went_and_the_gap_a_run_took():
     assert F("Passing Touchdown", "(Shotgun) J.Goff pass deep right to J.Williams for 56 yards, TOUCHDOWN.") \
-        == {"dir": "deep right"}
+        == {"dir": "dr"}
     assert F("Rush", "J.Gibbs left end to DET 38 for 8 yards (C.Gonzalez).") \
-        == {"dir": "left end", "by": ["Christian Gonzalez"]}
+        == {"dir": "le", "by": ["Christian Gonzalez"]}
     assert F("Rush", "(Shotgun) D.Maye scrambles right end to NE 40 for 12 yards (B.Branch).") \
-        == {"dir": "right end", "scramble": True, "by": ["Brian Branch"]}
+        == {"dir": "re", "scramble": True, "by": ["Brian Branch"]}
 
 
 def test_the_defenders_the_play_names_after_it():
     assert F("Sack", "(Shotgun) D.Maye sacked at NE 13 for -2 yards (sack split by K.White and C.Barmore).") \
         == {"by": ["Keion White", "Christian Barmore"]}
     assert F("Pass Incompletion", "(Shotgun) D.Maye pass incomplete deep left to H.Henry (B.Branch).") \
-        == {"dir": "deep left", "by": ["Brian Branch"]}
+        == {"dir": "dl", "by": ["Brian Branch"]}
     # A hit on the passer in square brackets is not a breakup.
     assert "by" not in F("Pass Incompletion", "(Shotgun) D.Maye pass incomplete short right to H.Henry [K.White].")
     # The man who tackled an interception's return is not the play's defender.
     pick = F("Pass Interception Return", "(Shotgun) D.Maye pass short middle intended for H.Henry INTERCEPTED by "
              "B.Branch at NE 40. B.Branch to NE 30 for 10 yards (D.Maye).")
-    assert pick == {"dir": "short middle"}, pick
+    assert pick == {"dir": "sm"}, pick
 
 
 def test_a_flag_its_foul_its_man_its_side_and_its_yards():
@@ -96,7 +96,7 @@ def test_a_flag_its_foul_its_man_its_side_and_its_yards():
     assert wiped == {"foul": "Offensive Holding", "foul_yards": 10, "foul_by": "Frank Ragnow", "foul_team": "DET"}
     stood = F("Rush", "J.Gibbs right tackle to DET 40 for 10 yards (C.Gonzalez). PENALTY on NE-B.Branch, "
               "Defensive Holding, declined.")
-    assert stood["foul_declined"] is True and stood["dir"] == "right tackle" and stood["by"] == ["Christian Gonzalez"]
+    assert stood["foul_declined"] is True and stood["dir"] == "rt" and stood["by"] == ["Christian Gonzalez"]
     # The longest name wins: never "Pass Interference" out of "Defensive Pass Interference".
     assert F("Penalty", "PENALTY on NE-B.Branch, Defensive Pass Interference, 25 yards, enforced at NE 40 - No Play.")[
         "foul"] == "Defensive Pass Interference"
@@ -135,29 +135,29 @@ def test_the_facts_ride_the_row_and_espns_words_do_not():
              "text": "(Shotgun) J.Goff pass deep right to J.Williams for 56 yards, TOUCHDOWN."}]}]}}
     flag, td = football_plays(pay, "nfl")[:2]
     assert flag["foul"] == "False Start" and flag["foul_by"] == "Kayshon Boutte" and flag["players"] == ["Kayshon Boutte"]
-    assert td["dir"] == "deep right" and td["players"] == ["Jared Goff", "Jameson Williams"]
+    assert td["dir"] == "dr" and td["players"] == ["Jared Goff", "Jameson Williams"]
     flat = " ".join(str(v) for row in (flag, td) for v in row.values())
-    for words in ("PENALTY on", "enforced at", "No Play", "pass deep right", "for 56 yards", "Shotgun"):
+    for words in ("PENALTY on", "enforced at", "No Play", "deep right", "for 56 yards", "Shotgun"):
         assert words not in flat, f"ESPN's wording is on the row ({words})"
 
 
 # --- a row: who did what, in a line ---------------------------------------------
 LINES = [
-    ({"event": "Passing Touchdown", "yards": 56, "players": ["Jared Goff", "Jameson Williams"], "dir": "deep right"},
+    ({"event": "Passing Touchdown", "yards": 56, "players": ["Jared Goff", "Jameson Williams"], "dir": "dr"},
      "<b>Jared Goff</b> throws deep right to <b>Jameson Williams</b> for a 56-yd touchdown"),
-    ({"event": "Pass Reception", "yards": 7, "players": ["Jared Goff", "Jameson Williams"], "dir": "short left"},
+    ({"event": "Pass Reception", "yards": 7, "players": ["Jared Goff", "Jameson Williams"], "dir": "sl"},
      "<b>Jared Goff</b> throws short left to <b>Jameson Williams</b> for 7 yds"),
-    ({"event": "Rush", "yards": 8, "players": ["Jahmyr Gibbs"], "dir": "up the middle", "by": ["Christian Gonzalez"]},
+    ({"event": "Rush", "yards": 8, "players": ["Jahmyr Gibbs"], "dir": "mid", "by": ["Christian Gonzalez"]},
      "<b>Jahmyr Gibbs</b> runs up the middle for 8 yds"),
-    ({"event": "Rush", "yards": -2, "players": ["Jahmyr Gibbs"], "dir": "left end"},
+    ({"event": "Rush", "yards": -2, "players": ["Jahmyr Gibbs"], "dir": "le"},
      "<b>Jahmyr Gibbs</b> runs around left end for a loss of 2 yds"),
-    ({"event": "Rushing Touchdown", "yards": 3, "players": ["Jahmyr Gibbs"], "dir": "right tackle"},
+    ({"event": "Rushing Touchdown", "yards": 3, "players": ["Jahmyr Gibbs"], "dir": "rt"},
      "<b>Jahmyr Gibbs</b> runs off right tackle for a 3-yd touchdown"),
     ({"event": "Sack", "yards": -2, "players": ["Drake Maye"], "by": ["Keion White", "Christian Barmore"]},
      "<b>Drake Maye</b> sacked by <b>Keion White</b> and <b>Christian Barmore</b> for a loss of 2 yds"),
-    ({"event": "Pass Incompletion", "players": ["Drake Maye", "Hunter Henry"], "dir": "deep left", "by": ["Brian Branch"]},
+    ({"event": "Pass Incompletion", "players": ["Drake Maye", "Hunter Henry"], "dir": "dl", "by": ["Brian Branch"]},
      "<b>Drake Maye</b>’s pass deep left to <b>Hunter Henry</b> incomplete, broken up by <b>Brian Branch</b>"),
-    ({"event": "Pass Interception Return", "players": ["Drake Maye", "Hunter Henry", "Brian Branch"], "dir": "short middle",
+    ({"event": "Pass Interception Return", "players": ["Drake Maye", "Hunter Henry", "Brian Branch"], "dir": "sm",
       "turnover": True},
      "<b>Drake Maye</b>’s pass short middle for <b>Hunter Henry</b> intercepted by <b>Brian Branch</b>"),
     ({"event": "Penalty", "yards": -5, "players": ["Kayshon Boutte"], "foul": "False Start", "foul_by": "Kayshon Boutte",
@@ -173,7 +173,7 @@ LINES = [
      "<b>Bryce Baringer</b> punts, fair catch by <b>Jacob Saylors</b>"),
     ({"event": "Field Goal Good", "yards": 33, "players": ["Andy Borregales"]},
      "<b>Andy Borregales</b> makes a 33-yd field goal"),
-    ({"event": "Rush", "yards": 10, "players": ["Jahmyr Gibbs"], "dir": "right tackle", "foul": "Defensive Holding",
+    ({"event": "Rush", "yards": 10, "players": ["Jahmyr Gibbs"], "dir": "rt", "foul": "Defensive Holding",
       "foul_by": "Brian Branch", "foul_declined": True},
      "<b>Jahmyr Gibbs</b> runs off right tackle for 10 yds · flag: defensive holding on <b>Brian Branch</b>, declined"),
     # Names that cannot say who did which keep the play's words, then the names.
@@ -210,7 +210,7 @@ def test_a_kickoff_row_carries_the_kicking_side():
         {kind: "football", event: "Kickoff", team: "DET", period: 1, clock: "9:12", yards: 26,
          players: ["Andy Borregales", "Jacob Saylors"]},
         {kind: "football", event: "Rush", team: "DET", period: 1, clock: "9:00", down: 2, distance: 10, yards: 8,
-         players: ["Jahmyr Gibbs"], dir: "left end"}]});
+         players: ["Jahmyr Gibbs"], dir: "le"}]});
       console.log(JSON.stringify(rows));""")
     if got is None:
         return
@@ -243,7 +243,7 @@ def _said(play, live=None, opts=None):
 
 def test_ethans_touchdown_reads_who_threw_it_where_to_whom_and_the_score():
     said, _ = _said({"team": "DAL", "event": "Passing Touchdown", "down": 3, "distance": 9, "spot": 44, "yards": 56,
-                     "scoring": True, "players": ["Dak Prescott", "KaVontae Turpin"], "dir": "deep right",
+                     "scoring": True, "players": ["Dak Prescott", "KaVontae Turpin"], "dir": "dr",
                      "away_score": 7, "home_score": 13},
                     {"possession": "TB", "detail": "", "yard_line": 65})
     if said is None:
@@ -255,7 +255,7 @@ def test_ethans_touchdown_reads_who_threw_it_where_to_whom_and_the_score():
 def test_the_card_tells_each_kind_with_what_it_changed():
     cases = [
         ({"team": "TB", "event": "Pass Incompletion", "down": 2, "distance": 6, "spot": 52, "yards": 0,
-          "players": ["Baker Mayfield", "Mike Evans"], "dir": "deep left", "by": ["Micah Parsons"]},
+          "players": ["Baker Mayfield", "Mike Evans"], "dir": "dl", "by": ["Micah Parsons"]},
          {"possession": "TB", "detail": "3rd & 6 at TB 48", "yard_line": 52},
          "On 2nd & 6 from the TB 48, Baker Mayfield’s pass deep left for Mike Evans falls incomplete, "
          "broken up by Micah Parsons."),
@@ -264,11 +264,11 @@ def test_the_card_tells_each_kind_with_what_it_changed():
          {"possession": "TB", "detail": "4th & 15 at TB 48", "yard_line": 52},
          "On 3rd & 8 from the DAL 45, Baker Mayfield is sacked by Micah Parsons for a loss of 7 yards."),
         ({"team": "TB", "event": "Rush", "down": 4, "distance": 2, "spot": 70, "yards": 1,
-          "players": ["Bucky Irving"], "dir": "up the middle"},
+          "players": ["Bucky Irving"], "dir": "mid"},
          {"possession": "DAL", "detail": "1st & 10 at TB 31", "yard_line": 69},
          "On 4th & 2 from the TB 30, Bucky Irving runs up the middle for 1 yard to the TB 31. Turnover on downs."),
         ({"team": "DAL", "event": "Rush", "down": 2, "distance": 3, "spot": 40, "yards": 12,
-          "players": ["KaVontae Turpin"], "dir": "left end"},
+          "players": ["KaVontae Turpin"], "dir": "le"},
          {"possession": "DAL", "detail": "1st & 10 at TB 48", "yard_line": 52},
          "On 2nd & 3 from the DAL 40, KaVontae Turpin runs around left end for 12 yards to the TB 48. First down."),
         ({"team": "DAL", "event": "Penalty", "down": 3, "distance": 8, "spot": 40, "yards": -5, "penalty": True,
