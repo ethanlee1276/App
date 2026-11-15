@@ -1252,6 +1252,9 @@ details.gp-dr > :not(summary) { padding: 0 var(--sp-3) var(--sp-2); }
 .gp-c-side.away { justify-self: end; }
 .gp-c-side.home { justify-self: start; flex-direction: row-reverse; }
 .gp-c-mid { font: 600 var(--fs-xs) / 1.2 var(--font-sans); color: var(--text-dim); text-align: center; min-width: 64px; }
+/* The down and the spot under the clock (gpCompactHTML), so the top of the
+   screen says them wherever the page is scrolled. */
+.gp-c-down { display: block; margin-top: 2px; font-weight: 700; color: var(--text); white-space: nowrap; }
 .gp-c-field { max-width: 420px; margin: 6px auto 0; }
 .gp-c-tabs { display: none; gap: 2px; margin-top: 8px; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, .1); }
 .gp-compact.tabs-on .gp-c-tabs { display: flex; }

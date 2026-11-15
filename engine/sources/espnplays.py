@@ -660,6 +660,16 @@ def _athletes(payload: dict) -> dict[str, str]:
 #: a judgement about what the words mean.
 _FB_AFTER = re.compile(r"[(\[]")
 
+#: HOW THE OFFENCE LINED UP, OR WHEN, IN BRACKETS AHEAD OF THE FIRST NAME:
+#: "(Shotgun) J.Goff pass deep right to J.Williams", "(No Huddle, Shotgun)
+#: D.Maye ...", "(9:06 - 1st) ...". Cutting at the first bracket, which is
+#: there for the tackler AFTER the play, cut these sentences before their
+#: first word, so every shotgun snap came out with nobody in it — most of an
+#: NFL game's passes. Ethan's NE @ DET page, 2026-11-15: a 56-yard touchdown
+#: read "The Lions for a 56-yard touchdown." These are taken off the front
+#: first, and only from the front.
+_FB_LEAD = re.compile(r"^\s*(?:[(\[][^)\]]*[)\]]\s*)+")
+
 
 def _football_players(text: str, roster) -> list[str]:
     """Which of THIS GAME'S players a play involved, in order, or [].
@@ -691,7 +701,7 @@ def _football_players(text: str, roster) -> list[str]:
     row carries fewer names. A missing name reads as a plainer line. A
     wrong name reads exactly like a right one.
     """
-    words = _FB_AFTER.split(str(text or ""), 1)[0]
+    words = _FB_AFTER.split(_FB_LEAD.sub("", str(text or "")), 1)[0]
     if not words.strip():
         return []
     at: dict[int, set] = {}

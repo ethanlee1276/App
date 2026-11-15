@@ -90,6 +90,26 @@ def test_they_come_back_in_the_order_the_play_ran():
                              ROSTER) == ["Jaxon Smith-Njigba", "Sam Darnold"]
 
 
+def test_a_formation_in_brackets_ahead_of_the_names_does_not_hide_them():
+    """Ethan, 2026-11-15, on the live NE @ DET page: a 56-yard touchdown
+    read "The Lions for a 56-yard touchdown." ESPN opens most NFL snaps on
+    how the offence lined up — "(Shotgun) J.Goff pass ..." — and the cut
+    meant for the tackler AFTER the play cut those sentences before their
+    first word, so every shotgun snap came out with nobody in it."""
+    roster = ("Jared Goff", "Jameson Williams", "Christian Gonzalez", "Jahmyr Gibbs")
+    td = "(Shotgun) J.Goff pass deep right to J.Williams for 56 yards, TOUCHDOWN."
+    assert _football_players(td, roster) == ["Jared Goff", "Jameson Williams"]
+    assert _football_players("(No Huddle, Shotgun) J.Goff pass short left to J.Williams to DET 44 "
+                             "for 7 yards (C.Gonzalez).", roster) == ["Jared Goff", "Jameson Williams"]
+    assert _football_players("(9:06 - 1st) (Shotgun) J.Gibbs up the middle to DET 38 for 8 yards "
+                             "(C.Gonzalez).", roster) == ["Jahmyr Gibbs"], "the tackler after it is still not the runner"
+    assert football_plays(_payload(text="(Shotgun) S.Darnold pass short right to J.Smith-Njigba "
+                                        "for 19 yards (tackle by C.Gonzalez)"), "nfl")[0]["players"] == \
+        ["Sam Darnold", "Jaxon Smith-Njigba"]
+    # Brackets only come off the front: a sentence that is all brackets names nobody.
+    assert _football_players("(Shotgun)", roster) == []
+
+
 def test_a_tackler_in_brackets_is_not_credited_with_the_carry():
     """"(tackle by C.Gonzalez)" would otherwise read as a second
     participant and the row would draw him beside the runner."""

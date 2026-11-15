@@ -1316,7 +1316,13 @@
       return `${L ? `${L} ${kick[0]}` : `${club} ${kick[1]}`}${land}${back}.`;
     }
     if (/field goal/i.test(e)) return `${L ? `${L}’s` : `${club}’`} ${m && m.label && /\d/.test(m.label) ? m.label.replace(" FG good", "-yard field goal is good").replace("-yd", "") : `field goal is ${m && m.miss ? "no good" : "good"}`}.`;
-    if (/touchdown/i.test(e) && /pass/i.test(e) && !/interception/i.test(e)) return `${L && W ? `${L} finds ${W}` : W || L || club} for a ${Math.abs(y)}-yard touchdown.`;
+    // Nobody resolved still reads as a sentence (Ethan, 2026-11-15: "The
+    // Lions for a 56-yard touchdown." was the whole of a touchdown pass).
+    if (/touchdown/i.test(e) && /pass/i.test(e) && !/interception/i.test(e)) {
+      const n = Math.abs(y);
+      return L && W ? `${L} finds ${W} for a ${n}-yard touchdown.` : W ? `${W} catches a ${n}-yard touchdown pass.`
+        : L ? `${L} throws a ${n}-yard touchdown pass.` : `A ${n}-yard touchdown pass for the ${teamNameIn(league, p.team) || p.team}.`;
+    }
     if (/touchdown/i.test(e) && !/interception|fumble|return/i.test(e)) return `${L || club} ${L ? "runs" : "run"} it in from ${Math.abs(y)} yard${Math.abs(y) === 1 ? "" : "s"} out.`;
     if (/interception/i.test(e)) return `${L ? `${L}’s pass` : "The pass"} is intercepted${W ? ` by ${W}` : ""}${/touchdown/i.test(e) ? " and taken back for a touchdown" : ""}.`;
     if (/sack/i.test(e)) return `${L || "The quarterback"} is sacked${W ? ` by ${W}` : ""}${y ? ` for a loss of ${yd(y)}` : ""}.`;
@@ -1407,13 +1413,26 @@
       + `${marks}${path}${nums}</svg>`;
   }
 
-  function driveViewHTML(d, league, faces) {
+  /* ONE PLACE FOR EACH THING (Ethan, 2026-11-15, on the live NE @ DET page:
+     "we dont need the drive chart since we have one at the top of the
+     screen. go look through the live page bc it seems likes there is alot of
+     repeated stuff"). The page draws a field under the score (detail.js
+     gpFieldHTML) with the down, the spot and the drive, and keeps a small
+     copy of it at the top of the screen when it scrolls (gpCompactHTML).
+     `top` says that field is drawn: then this card leaves out its Down and
+     Ball on tiles and its "Current drive" line, and heads itself with the
+     last play — what it adds to that field. `win` says the page draws our
+     Win probability card, which is the same number as this card's chip. */
+  function driveViewHTML(d, league, faces, opts) {
+    const o = opts || {};
     const lv = d.live || {};
     if (lv.state !== "live" || !FOOTBALL.has(league)) return "";
     const p = newestPlay(d, league);
     let dr = currentDrive(d);
     if (!p && !dr) return "";
-    _dvLast = { d, league, faces };
+    // No play yet: the field under the score already says all it would.
+    if (o.top && !p) return "";
+    _dvLast = { d, league, faces, opts: o };
     const offense = lv.possession || (dr && dr.team) || (p && p.team) || "";
     // A drive that has ended (a punt, a score, a turnover) is not the one on
     // the field: the ball is the other side's now, and their drive has not
@@ -1429,7 +1448,7 @@
     const parts = /^(.*?)\s+at\s+(.+)$/.exec(String(lv.detail || ""));
     const down = parts ? parts[1].trim() : "";
     const on = parts ? parts[2].trim() : nx ? spotWord(d, nx.los) : "";
-    const tiles = (down || on) ? `<div class="gc-dv-tiles">${down ? `<div><span>Down</span><b>${esc(down)}</b></div>` : ""}${
+    const tiles = !o.top && (down || on) ? `<div class="gc-dv-tiles">${down ? `<div><span>Down</span><b>${esc(down)}</b></div>` : ""}${
       on ? `<div><span>Ball on</span><b>${esc(on)}</b></div>` : ""}</div>` : "";
     const pin = nx && offense ? `<span class="gc-dv-pin" style="${dvAt(nx.los, DV.lane)}" aria-hidden="true">${teamMarkIn(league, offense, 22)}</span>` : "";
     // The play's words just under where it ended, on the turf above the
@@ -1439,7 +1458,11 @@
     const tagX = dvX(tagU, tagT) / DV.w;
     const tag = m && m.to != null && m.label
       ? `<span class="gc-dv-tag${m.tone ? ` ${m.tone}` : ""}${tagX < 0.2 ? " l" : tagX > 0.8 ? " r" : ""}${fly ? " late" : ""}" style="${dvAt(tagU, tagT)}">${esc(m.label)}</span>` : "";
-    const head = dr
+    const named = p ? dvName(d, p) : null;
+    const lastTeam = p && (p.team || offense);
+    const head = o.top && named
+      ? `${lastTeam ? teamMarkIn(league, lastTeam, 30) : ""}<div class="gc-dv-who"><div class="gc-k">Last play${named.when ? ` · ${esc(named.when)}` : ""}</div><b>${esc(named.kind)}</b></div>`
+      : dr
       ? `${teamMarkIn(league, dr.team, 30)}<div class="gc-dv-who"><div class="gc-k">Current drive</div><b>${esc(driveWords(dr))}</b></div>`
       : `${offense ? teamMarkIn(league, offense, 30) : ""}<div class="gc-dv-who"><div class="gc-k">On the field</div><b>${esc(teamNameIn(league, offense) || "")}</b></div>`;
     const rz = nx && dir && (dir > 0 ? nx.los >= 80 : nx.los <= 20) ? `<span class="gc-rz">Red zone</span>` : "";
@@ -1448,13 +1471,11 @@
       <div class="gc-dv-head">${head}<span class="gc-dv-end">${rz}${replay}</span></div>
       ${tiles}
       <div class="gc-dv-field">${dvFieldSVG(d, league, m, nx, fly)}${pin}${tag}</div>
-      ${p ? dvLastHTML(d, league, faces, p, m) : ""}</div>`;
+      ${p ? dvLastHTML(d, league, faces, p, m, o) : ""}</div>`;
   }
 
-  /* The last play, under its drawing: its name, our win chance, the
-     sentence, the people in it with their game so far, the down it was
-     snapped on, and any moment since (a timeout, the quarter's end). */
-  function dvLastHTML(d, league, faces, p, m) {
+  /* The last play's name and when it was snapped ("Sack", "Q1 9:43"). */
+  function dvName(d, p) {
     const e = String(p.event || "");
     const words = typeof footballWords === "function" ? footballWords(p, d) : { title: e, snap: true };
     const kind = /kickoff/i.test(e) ? "Kickoff" : /touchdown/i.test(e) ? "Touchdown" : /interception/i.test(e) ? "Interception"
@@ -1462,6 +1483,18 @@
       : /extra point/i.test(e) ? "Extra point" : /punt/i.test(e) ? "Punt"
       : words.snap ? (DV_KIND[snapKind(p)[0]] || words.title) : words.title;
     const when = `${p.period ? `Q${p.period}` : ""}${p.clock ? ` ${typeof fbClock === "function" ? fbClock(p.clock) : p.clock}` : ""}`.trim();
+    return { words, kind, when };
+  }
+
+  /* The last play, under its drawing: its name, our win chance, the
+     sentence, the people in it with their game so far, the down it was
+     snapped on, and any moment since (a timeout, the quarter's end). With
+     the field under the score drawn (`o.top`) the card's head already names
+     the play and its time, so this leaves its own line of them out; with
+     our Win probability card on the page (`o.win`), the chip. */
+  function dvLastHTML(d, league, faces, p, m, o) {
+    const opt = o || {};
+    const { words, kind, when } = dvName(d, p);
     const cast = dvCast(d, p);
     const said = words.snap ? dvSentence(d, league, p, m, cast) : `${words.title}.`;
     const groupLine = (name, group) => {
@@ -1485,9 +1518,13 @@
     const since = typeof footballWords === "function"
       ? foot.slice(foot.indexOf(p) + 1).map((r) => footballWords(r, d)).filter((w) => !w.snap && !w.quiet).map((w) => w.title)
       : [];
+    const win = opt.win ? "" : winPct(d, league);
+    const lhead = !opt.top
+      ? `<div class="gc-dv-lhead"><b class="gc-dv-kind">${esc(kind)}</b>
+        <span class="gc-dv-lside">${win}<span class="gc-dv-chip">Last play${when ? ` · ${esc(when)}` : ""}</span></span></div>`
+      : win ? `<div class="gc-dv-lhead"><span class="gc-dv-lside">${win}</span></div>` : "";
     return `<div class="gc-dv-last">
-      <div class="gc-dv-lhead"><b class="gc-dv-kind">${esc(kind)}</b>
-        <span class="gc-dv-lside">${winPct(d, league)}<span class="gc-dv-chip">Last play${when ? ` · ${esc(when)}` : ""}</span></span></div>
+      ${lhead}
       <p class="gc-dv-said">${esc(said)}</p>
       ${chips ? `<div class="gc-chips">${chips}</div>` : ""}
       ${before || since.length ? `<div class="gc-dv-before">${before ? `<span><i>Before the play</i> ${before}</span>` : ""}${
@@ -1499,7 +1536,7 @@
       const b = e.target && e.target.closest ? e.target.closest("[data-gc-dv-replay]") : null;
       if (!b || !_dvLast) return;
       _dvReplay = true;
-      swap("[data-gc-dv]", driveViewHTML(_dvLast.d, _dvLast.league, _dvLast.faces));
+      swap("[data-gc-dv]", driveViewHTML(_dvLast.d, _dvLast.league, _dvLast.faces, _dvLast.opts));
       _dvReplay = false;
     });
   }

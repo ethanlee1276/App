@@ -28745,7 +28745,8 @@ function pbpArcSVG(hit, park, opts) {
 
 /* The park (or field, or court) with the live markers the art already
    draws, in the league's own colours, and the ball in flight over it. */
-function pbpParkHTML(d, league, boardGame, hitRow) {
+function pbpParkHTML(d, league, boardGame, hitRow, opts) {
+  const o = opts || {};
   const game = {
     home: d.home, away: d.away, live: d.live || {},
     roof: (boardGame || {}).roof, surface: (boardGame || {}).surface,
@@ -28804,10 +28805,14 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
   // were the play's yards, its type, its down and the side with the ball —
   // the call-out on the photograph, the Last play card and the header
   // already say every one of them. The strip stays: where the ball is.
+  // UNLESS THE PAGE ALREADY SAYS IT (Ethan, 2026-11-15: "alot of repeated
+  // stuff"): the football page passes `strip: false` while its field under
+  // the score is drawn (detail.js gpFieldModel), which shows the same spot.
+  // A college feed with no scoreboard spot has no such field, and keeps it.
   const runners = league === "mlb" ? pbpBasesSVG(d.live) : "";
   const board = (league === "mlb" || isFootball) && typeof pbpBoardSVG === "function" ? pbpBoardSVG(d, league, boardGame) : "";
   return `<div class="pbp-park">${art}${board}${runners}${arc}${chip}</div>
-    ${isFootball ? pbpFieldPosHTML(d, hitRow) : ""}
+    ${isFootball && o.strip !== false ? pbpFieldPosHTML(d, hitRow) : ""}
     ${isFootball ? "" : pbpBattedHTML(hitRow)}
     ${pbpParkFactsHTML(park, boardGame)}`;
 }

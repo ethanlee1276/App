@@ -197,11 +197,14 @@ def test_a_finished_drive_gives_way_to_the_side_with_the_ball():
 def test_the_tab_leads_with_the_card_and_drops_the_repeats():
     i = DETAIL.index("function gpPlaysHTML(d, league, faces, boardGame, lastPlay, GC)")
     body = DETAIL[i:DETAIL.index("\n}\n", i)]
-    assert "g.driveView(d, league, faces)" in body
+    # 2026-11-15: the card is told when the field under the score and our win
+    # card already say its tiles, its drive line and its chip
+    # (tests/test_the_live_page_says_each_thing_once).
+    assert "g.driveView(d, league, faces, { top, win: !!ours })" in body
     assert "return `${card}${live ? pbpCallItHTML(d, league) : \"\"}${win}${view}${chart}${gpDrivesHTML(d, league)}`;" in body
     for gone in ("pbpSituationHTML", "g.driveCard", "g.lastPlay"):
         assert gone not in body, f"{gone} is said once, in the card"
-    assert "pbpParkHTML(d, league, boardGame, lastPlay)" in body, "the photograph stays"
+    assert "pbpParkHTML(d, league, boardGame, lastPlay, { strip: !top })" in body, "the photograph stays"
     assert "driveView: driveViewHTML" in GC
 
 

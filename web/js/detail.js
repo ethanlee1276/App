@@ -5375,9 +5375,13 @@ function gpCompactHTML(d, league, lv, tabs, tab) {
     return `<span class="gp-c-side ${ha}">${teamMarkIn(league, d[ha], 24)}<b>${s != null ? escapeHtml(String(s)) : "–"}</b></span>`;
   };
   const m = gpFieldModel(d, league, lv);
+  // The down and the spot ride under the clock, so the top of the screen
+  // says them wherever the page is scrolled (the drive card below no
+  // longer repeats them; gamecast driveViewHTML `top`).
+  const down = m && m.words ? `<span class="gp-c-down">${escapeHtml(m.words)}</span>` : "";
   return `<div class="gp-stick"><div class="gp-compact${_gpStuck ? " on" : ""}${_gpTabsStuck ? " tabs-on" : ""}"${_gpStuck ? "" : " inert"}>
       <div class="gp-c-row"><button type="button" class="gp-c-back" data-gp-back aria-label="${escapeAttr(pbpBack().label.replace(/^←\s*/, ""))}">${GP_BACK_SVG}</button>
-        ${side("away")}<span class="gp-c-mid">${escapeHtml(gpClockWord(league, lv))}</span>${side("home")}<span class="gp-c-end"></span></div>
+        ${side("away")}<span class="gp-c-mid">${escapeHtml(gpClockWord(league, lv))}${down}</span>${side("home")}<span class="gp-c-end"></span></div>
       ${m ? `<div class="gp-c-field" style="--off:var(${m.off === d.home ? "--wh" : "--wa"})">${gpFieldSVG(m, d, true)}</div>` : ""}
       <div class="gp-c-tabs" role="tablist">${tabs.map(([k, label]) => `<button type="button" role="tab" class="gp-ctab${k === tab ? " active" : ""}"
         aria-selected="${k === tab}" data-pbp-tab="${k}" data-gp-jump>${label}</button>`).join("")}</div>
@@ -5713,18 +5717,30 @@ function gpDrivesHTML(d, league) {
    people in it. It replaces the bar chart of the drive, the strip that
    said "Ball on" again, and the Last play card of its own. Ethan's
    photograph keeps its place under the win chance, running the drive on
-   his render as before. */
+   his render as before.
+   EACH THING ONCE (Ethan, 2026-11-15, on the live NE @ DET page: "we dont
+   need the drive chart since we have one at the top of the screen. go look
+   through the live page bc it seems likes there is alot of repeated
+   stuff"). While the ball is live the field under the score (gpFieldHTML,
+   and its small copy at the top of the screen, gpCompactHTML) says the
+   down, the spot and the drive. So, while the game is on: no drive chart
+   (a final keeps it, with no field above it); the card heads itself with
+   the last play and leaves out the down, the spot and the drive line;
+   the photograph leaves out its own "Ball on" strip; and the card's win
+   chip goes when our Win probability card is drawn below it. */
 function gpPlaysHTML(d, league, faces, boardGame, lastPlay, GC) {
   const lv = d.live || {};
   const live = lv.state === "live";
   const g = GC || {};
-  const card = live && g.driveView ? g.driveView(d, league, faces) : "";
+  const top = !!gpFieldModel(d, league, lv);
+  const ours = live ? pbpModelWinProbHTML(d) : "";
+  const card = live && g.driveView ? g.driveView(d, league, faces, { top, win: !!ours }) : "";
   const view = live ? `<div class="card pbp-parkcard">${pbpParkHeadHTML(league, boardGame)}${
-    pbpParkHTML(d, league, boardGame, lastPlay)}</div>` : "";
-  const chart = g.gameChart ? g.gameChart(d, league) : "";
+    pbpParkHTML(d, league, boardGame, lastPlay, { strip: !top })}</div>` : "";
+  const chart = !live && g.gameChart ? g.gameChart(d, league) : "";
   // The win chance and the room's own read of it beside the math (the chat's
   // vote line, pbpRoomLine), with the plays while the game is on.
-  const win = live ? `${pbpWinChartHTML(d, league, boardGame)}${pbpModelWinProbHTML(d)}` : "";
+  const win = live ? `${pbpWinChartHTML(d, league, boardGame)}${ours}` : "";
   return `${card}${live ? pbpCallItHTML(d, league) : ""}${win}${view}${chart}${gpDrivesHTML(d, league)}`;
 }
 
@@ -5815,10 +5831,24 @@ function gpFootballHTML(o) {
         ${pbpFootHTML()}
       </div>
       <aside class="pbp-rail">
-        <div class="card pbp-railcard">
+        ${tab === "plays" ? gpRailPicksHTML(d, league) : `<div class="card pbp-railcard">
           <div class="pbp-rail-head">Play by play <span class="mini">${(d.plays || []).length} on file</span></div>
           ${pbpRailHTML(d, league)}
-        </div>
+        </div>`}
       </aside>
     </div>`;
+}
+/* ONE PLAY LIST ON A DESKTOP TOO (Ethan, 2026-11-15, a desktop screenshot of
+   the live NE @ DET page: "alot of repeated stuff"). The rail beside the page
+   lists the plays so the other tabs keep them in view; on the Play-By-Play
+   tab the page itself is that list, drive by drive, and the two sat side by
+   side. There the rail holds our picks on the game instead, tracked live —
+   the Our picks tab's own list, so on every tab the rail shows the one thing
+   the tab does not. A phone folds the rail away (styles: .pbp-has-tabs
+   .pbp-railcard), as it always has: its tabs are one tap apart. */
+function gpRailPicksHTML(d, league) {
+  return `<div class="card pbp-railcard gp-rail-picks">
+    <div class="pbp-rail-head">Our picks on this game</div>
+    ${typeof pbpPropsHTML === "function" ? pbpPropsHTML(d, league) : ""}
+  </div>`;
 }

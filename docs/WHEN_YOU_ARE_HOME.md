@@ -9338,6 +9338,41 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RT. The live page says each thing once, and its plays name who made them**
+(step 600; 15 November). Nothing to run. You said we don't need the drive
+chart since there's one at the top of the screen, and to look through the
+live page for repeated stuff. On a render of NE @ DET's own file the page drew
+the ball's spot four times, the drive's "10 plays, 60 yards, 5:32" three
+times, our win chance twice, and on a desktop the plays twice, side by side.
+While the field under the score is drawn (and its small copy at the top of
+the screen once you scroll):
+- **No drive chart while the game is on.** A finished game keeps it: there's
+  no field at the top then.
+- **The drive card heads itself with the last play** ("Last play · Q1 9:43,
+  Sack") and drops its Down and Ball on tiles and its drive line. The bar at
+  the top of the screen now says the down and the spot under the clock
+  ("4th & Goal · DET 15"), wherever you scroll.
+- **The card's win chip is gone**, because our Win probability card comes
+  right below it with the same number.
+- **The photograph drops its own "Ball on" strip.** A college feed with no
+  scoreboard spot has no field at the top, so it keeps the strip.
+- **On a desktop's Play-By-Play tab the rail shows our picks on the game**
+  instead of a second copy of the plays. The other tabs keep the plays
+  beside them, and a phone folds the rail away as before.
+
+**Your second message, "the wording ... is confusing and is lacking
+detail"**: the 56-yard touchdown read "The Lions for a 56-yard touchdown."
+because the play had nobody in it. ESPN opens most NFL snaps on how the
+offense lined up, "(Shotgun) J.Goff pass deep right to J.Williams ...", and
+the cut meant for the tackler after the play cut those sentences before
+their first word. So every shotgun snap (most of a game's passes) lost its
+names: the completions, the incompletions, the touchdown, the penalties.
+The names come back with this deploy (engine/sources/espnplays), from the
+next poll of every live game. A touchdown pass with nobody resolved now
+reads "A 56-yard touchdown pass for the Lions." The rest of the wording
+(which foul and on whom, where a pass went, who made the sack, the down and
+the score in the sentence) is the next step.
+
 **RS. Bet it on every parlay and touchdown pair** (step 599; 15 November).
 Nothing to run. You asked for Bet it buttons that add the whole parlay to
 your sportsbook, for the touchdown pairs and the player-prop parlays. Every

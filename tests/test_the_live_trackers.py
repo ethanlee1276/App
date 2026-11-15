@@ -670,9 +670,11 @@ def test_the_trackers_in_a_browser_at_390_and_1280():
                     assert flew["photo"], "the photograph's ball runs again"
                     assert flew["card"], "and the card's last play flies again"
                     page.click('.pbp-tab[data-pbp-tab="plays"]')
-                    page.wait_for_selector(".gc-chart .gc-dc-row", state="attached", timeout=5000)
-                    assert page.evaluate("""[...document.querySelectorAll('.gc-chart .gc-fd-svg')]
-                        .find((s) => getComputedStyle(s).display !== 'none').querySelectorAll('.gc-dc-row').length""") == 4
+                    # No drive chart while the game is on (Ethan, 2026-11-15: "we
+                    # dont need the drive chart since we have one at the top of
+                    # the screen"); the drives, drive by drive, are the tab.
+                    page.wait_for_selector(".pbp-panel .gp-dr", state="attached", timeout=5000)
+                    assert not page.query_selector(".gc-chart"), "no drive chart on a live game"
                     assert page.evaluate("document.scrollingElement.scrollWidth") <= width
                     page.goto(f"http://127.0.0.1:{port}/index.html#pbp/mlb/777001", wait_until="load")
                     page.wait_for_selector(".gc-pz .gc-pz-dot", timeout=15000)
