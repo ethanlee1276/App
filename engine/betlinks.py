@@ -438,6 +438,31 @@ def link_for(row: dict, sport: str, events: dict, mkeys: dict | None = None) -> 
     return "", ""
 
 
+#: Books a game parlay's leg keeps links for (`_parlay_legs`): enough for the
+#: books that hold the whole ticket, fewer than a pick's twelve, since one
+#: leg sits in several tickets and each copy carries its own.
+PARLAY_LINKS = 8
+
+
+def _parlay_legs(payload) -> list:
+    """BET THE WHOLE TICKET (Ethan, 2026-11-15: "add bet it buttons that adds
+    the whole parlay too your sports book. Both td parlays and player prop
+    parlays"). Every leg of every posted game parlay (engine/gameparlays) —
+    the three-leg tickets and the scorer pairs — sits under the board's
+    "game_parlays" → "games", a key the walk skips for speed, so no leg was
+    ever linked. Gathered here, each gets the books that hold it, and the
+    page (js/report.js parlayBet) builds the ticket's slip from them."""
+    gp = payload.get("game_parlays") if isinstance(payload, dict) else None
+    out: list = []
+    for x in (gp or {}).get("games") or [] if isinstance(gp, dict) else []:
+        if not isinstance(x, dict):
+            continue
+        for t in (x.get("threes") or []) + (x.get("scorers") or []):
+            if isinstance(t, dict):
+                out += [l for l in t.get("legs") or [] if isinstance(l, dict) and _pick_like(l)]
+    return out
+
+
 def _pick_like(d: dict) -> bool:
     if not isinstance(d.get("book"), str) or not d.get("book") or d.get("odds") in (None, ""):
         return False
@@ -476,6 +501,9 @@ def stamp(payload, name: str = "", env=None, cache_dir: Path | None = None, now:
     # one comes back exactly as it went in, so it reads nothing.
     rows: list = []
     _walk(payload, rows)
+    legs = _parlay_legs(payload)
+    leg_ids = {id(l) for l in legs}
+    rows += legs
     if not rows:
         LAST["load_s"] = 0.0
         return 0
@@ -494,7 +522,7 @@ def stamp(payload, name: str = "", env=None, cache_dir: Path | None = None, now:
         slips, ev = links_for(row, sport, events, mkeys)
         slips = [[t, fill_state(u, st), px] for t, u, px in slips if ok(u)]
         if slips:
-            row["bet_links"] = slips[:12]
+            row["bet_links"] = slips[:PARLAY_LINKS if id(row) in leg_ids else 12]
             row["bet_link"], row["bet_link_kind"] = slips[0][1], "slip"
         if ev is not None:
             eid = eid_of.get(id(ev))

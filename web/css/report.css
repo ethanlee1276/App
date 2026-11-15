@@ -128,6 +128,8 @@
 .gr-parlays { display: grid; gap: 10px; margin: 6px 0 10px; }
 .gr-parlay { border-radius: 10px; padding: 10px 12px; background: var(--panel-2); }
 .gr-parlay-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+/* Bet the whole ticket (js/report.js parlayBet): the Bet it button at the head's end. */
+.gr-parlay-head .gr-betit { flex: none; margin-left: auto; align-self: center; }
 .gr-parlay-price { margin: 4px 0 6px; font-size: .86em; color: var(--text-mute); }
 .gr-parlay-legs { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
 .gr-parlay-legs > li { cursor: pointer; }

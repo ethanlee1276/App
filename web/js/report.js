@@ -236,6 +236,72 @@
     return `${n}${suf}`;
   }
 
+  /* ONE SLIP FOR THE WHOLE TICKET (engine/socialfeed.combine_links, the
+     feed's tail, here for the page): every leg's link at the same address,
+     each carrying its selection as `name[0]=value` keys (FanDuel's
+     `marketId[0]` / `selectionId[0]`), renumbered [0], [1], [2] and joined.
+     Any other shape — another path, an unindexed selection, keys that
+     disagree — is "" and the legs are offered one by one, never guessed. */
+  function slipCombine(urls) {
+    if (!(urls || []).length || urls.some((u) => !u)) return "";
+    if (urls.length === 1) return urls[0];
+    let base = null, plain = null;
+    const indexed = [];
+    for (let i = 0; i < urls.length; i++) {
+      let u;
+      try { u = new URL(urls[i]); } catch (e) { return ""; }
+      if (u.protocol !== "https:" || u.hash) return "";
+      const here = u.origin + u.pathname;
+      if (base === null) base = here; else if (here !== base) return "";
+      const q = [...u.searchParams.entries()];
+      const idx = q.filter(([k]) => /^\w+\[0\]$/.test(k));
+      const rest = q.filter(([k]) => !/^\w+\[\d+\]$/.test(k)).map(([k, v]) => `${k}=${v}`).sort().join("&");
+      if (!idx.length || idx.length + q.filter(([k]) => !/^\w+\[\d+\]$/.test(k)).length !== q.length) return "";
+      if (plain === null) plain = rest; else if (rest !== plain) return "";
+      idx.forEach(([k, v]) => indexed.push([`${k.slice(0, -3)}[${i}]`, v]));
+    }
+    const enc = (x) => encodeURIComponent(x).replace(/%5B/g, "[").replace(/%5D/g, "]");
+    const keep = plain ? plain.split("&").map((kv) => kv.split("=")).map(([k, v]) => `${enc(k)}=${enc(v || "")}`) : [];
+    return `${base}?${keep.concat(indexed.map(([k, v]) => `${enc(k)}=${enc(v)}`)).join("&")}`;
+  }
+  /* BET THE WHOLE TICKET (Ethan, 2026-11-15: "add bet it buttons that adds the
+     whole parlay too your sports book. Both td parlays and player prop
+     parlays"). The ticket's legs carry the books that hold each one
+     (engine/betlinks, `bet_links`); a book holding every leg in a form that
+     joins gets one tile for the whole slip, a book holding every leg in a
+     form that does not gets a tile per leg (they stack on the book's slip),
+     and the rest are front doors. The sheet is the site's own Bet it sheet
+     (app.js betSheetShow); no store app opens a sportsbook. */
+  function parlayBet(legs, what) {
+    if (typeof bookTileHTML !== "function" || typeof bookHomeTilesHTML !== "function") return "";
+    if ((typeof storeApp === "function" && storeApp()) || !(legs || []).length) return "";
+    const n = legs.length;
+    const ok = (u) => typeof u === "string" && u.toLowerCase().startsWith("https://");
+    const per = legs.map((l) => {
+      const m = new Map();
+      (l.bet_links || []).forEach((x) => { if (x && ok(x[1]) && !m.has(x[0])) m.set(x[0], [x[1], x[2]]); });
+      return m;
+    });
+    const books = [];
+    per.forEach((m) => m.forEach((_, t) => { if (!books.includes(t)) books.push(t); }));
+    const rows = books.map((t) => {
+      const cells = per.map((m) => m.get(t) || null);
+      const have = cells.filter(Boolean).length;
+      return { t, cells, have, one: have === n ? slipCombine(cells.map((c) => c[0])) : "" };
+    }).sort((a, b) => (b.have - a.have) || ((b.one ? 1 : 0) - (a.one ? 1 : 0)) || String(a.t).localeCompare(String(b.t)));
+    const whole = rows.filter((r) => r.one);
+    const each = rows.filter((r) => !r.one && r.have === n);
+    const tile1 = whole.map((r) => bookTileHTML(r.t, r.one, null, `all ${n} legs · one slip`, ""));
+    const tile2 = each.flatMap((r) => r.cells.map((c, i) => bookTileHTML(r.t, c[0], c[1], "bet slip", `Leg ${i + 1} of ${n}`)));
+    const doors = bookHomeTilesHTML(whole.concat(each).map((r) => (typeof bookKey === "function" ? bookKey(r.t) : r.t)));
+    return `<span class="betit-box gr-betit"><button type="button" class="betit" aria-haspopup="dialog">Bet it</button>
+      <template class="betit-tpl"><div class="betit-head"><b>Bet it</b><span>${escapeHtml(what || "")}</span></div>
+        ${tile1.length ? `<p class="betit-h">The whole ticket, one slip</p><div class="betit-grid">${tile1.join("")}</div>` : ""}
+        ${tile2.length ? `<p class="betit-h">${tile1.length ? "Or leg by leg" : "Leg by leg"}</p><div class="betit-grid">${tile2.join("")}</div>` : ""}
+        ${doors ? `<p class="betit-h">${tile1.length || tile2.length ? "Or key it in at" : "Key it in at"}</p><div class="betit-grid pages">${doors}</div>` : ""}
+        <p class="betit-fine">${tile2.length ? "A tile tagged by leg carries that leg only; add each one and they stack on the same slip as a parlay. " : ""}A same-game parlay is priced by the book, and pays less than the legs' own prices multiplied. Opens the book in a new tab; you place the bet there. Prices move — check before you place. 21+ · Gambling problem? 1-800-GAMBLER</p></template></span>`;
+  }
+
   function block(b) {
     if (!b || !b.type) return "";
     if (b.type === "matchbars") return matchbars(b);
@@ -306,7 +372,8 @@
     if (b.type === "parlays") {
       const items = (xs) => (xs || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
       return `<div class="gr-parlays">${(b.items || []).map((t) => `<div class="gr-parlay">
-        <div class="gr-parlay-head"><b>${escapeHtml(t.title || "")}</b></div>
+        <div class="gr-parlay-head"><b>${escapeHtml(t.title || "")}</b>${(t.bet_legs || []).length
+          ? parlayBet(t.bet_legs, `${t.title || "Parlay"} · ${(t.legs || []).map((l) => l.pick).filter(Boolean).join(" + ")}`) : ""}</div>
         ${t.price_line ? `<p class="gr-parlay-price">${escapeHtml(t.price_line)}</p>` : ""}
         <ol class="gr-parlay-legs">${(t.legs || []).map((l) => `<li${l.player
           ? ` data-open="player:${escapeAttr(slugify(l.player))}"` : ""}>
@@ -469,6 +536,14 @@
         blocks = blocks.filter((b) => b.type !== "table");
         extra = `<div class="gr-extra">${extras.scripts}</div>`;
       }
+      // Each ticket's legs, with the books that hold them, from the board's
+      // game parlays (the report's cards are in the tickets' own order).
+      const gp = extras && extras.parlays;
+      if (gp && s.key === "parlays") {
+        blocks = blocks.map((b) => b.type !== "parlays" ? b : Object.assign({}, b, {
+          items: (b.items || []).map((t, i) => Object.assign({}, t, {
+            bet_legs: ((gp[b.kind === "three" ? "threes" : "scorers"] || [])[i] || {}).legs || [] })) }));
+      }
       const inner = `${blocks.map(block).join("")}${extra}`;
       // ONE SECTION OPEN, THE REST ONE TAP AWAY (Ethan, 2026-11-15: "it still
       // feels all cluttered and hard to digest everything"). The short
@@ -530,6 +605,7 @@
         research: l.research, research_of: l.research_of })),
       backups: (t.backups || []).map((b) => `If ${b.for} is out or his number moves: ${pickWords(b.leg || {})} (${
         oddsWords((b.leg || {}).odds)}, ${pct((b.leg || {}).p)})`),
+      bet_legs: t.legs || [],
     };
   }
   function gameParlays(gp, sport) {
@@ -561,5 +637,5 @@
     return bits.length ? `Our record so far — ${bits.join(" · ")}` : "";
   }
 
-  window.QBReport = { html, block, toText, teaser, gameParlays, gameParlaysRecord };
+  window.QBReport = { html, block, toText, teaser, gameParlays, gameParlaysRecord, slipCombine };
 })();

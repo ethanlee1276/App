@@ -9338,6 +9338,27 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RS. Bet it on every parlay and touchdown pair** (step 599; 15 November).
+Nothing to run. You asked for Bet it buttons that add the whole parlay to
+your sportsbook, for the touchdown pairs and the player-prop parlays. Every
+ticket in a game report and on the Parlays page now has one:
+- **The whole ticket, one slip**, at a book whose links can carry every leg
+  at once. FanDuel's can: its tile puts all three legs (or both scorers) on
+  one slip.
+- **Leg by leg** at a book that holds every leg but whose links carry one
+  bet each (DraftKings, BetMGM and the rest, as far as anything shows):
+  a tile per leg, tagged "Leg 1 of 3". Add each one and they stack on the
+  same slip as a parlay.
+- **Or key it in** at any other book's front door.
+- Nothing is guessed: two links are only joined into one slip when the
+  same rule the feed's Tail uses can show they join. The links come from
+  the odds call we already pay for (no new credits), and the store app
+  still opens no sportsbook.
+
+Why the legs had no links before: the Bet it stamp skips everything under
+a board's "games" key for speed, and the game parlays keep their tickets
+there. It now stamps each leg (up to eight books a leg).
+
 **RR. Every game report opens on our picks, the way your research answered**
 (step 598; 15 November). Nothing to run. You said your chats' picks hit
 well (catch overs 83%, all picks 67%), that it's still easier to do your

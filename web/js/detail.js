@@ -1506,6 +1506,10 @@ function gameReportHTML(g, extras) {
   // each of them.
   const locked = !r && !_grFailed && d.locked && d.locked.game_reports;
   if (!r && !locked) return "";
+  // The game's own parlays, with the books that hold each leg, so every
+  // ticket in the report can be bet whole (js/report.js parlayBet).
+  const parlays = (((d.game_parlays || {}).games) || []).find((x) => x && x.home === g.home && x.away === g.away);
+  if (parlays) extras = Object.assign({}, extras, { parlays });
   if (window.QBReport) return window.QBReport.html(r, extras);
   const id = state.gameId;
   loadReport().then(() => { if (state.view === "game" && state.gameId === id) renderGamePage(); });
