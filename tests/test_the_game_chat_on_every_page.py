@@ -79,7 +79,7 @@ def test_every_play_row_carries_its_thread():
     rows = rows[:rows.index("\n}\n")]
     assert 'const bubble = (p) => (g.room ? chatPlayBadge(g.room, p) : "");' in rows
     assert rows.count("${at}${bubble(p)}</div>`") == 3, "football, basketball/hockey and baseball rows"
-    assert "playsHTML({ ...g, room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}` : \"\" })" in APP
+    assert "playsHTML({ ...g, plays: (g.plays || []).slice().reverse(),\n      room: (g.event_id || g.game_pk) ? `${sport}_${g.event_id || g.game_pk}` : \"\" })" in APP
     assert "room: pbpRoom(d, league)" in DETAIL and "chatPlayBadge(room, r)" in DETAIL
     assert "chatPlayBadge(`${league}_${d.event_id}`, p)" in HOOPS
     assert "chatPlayBadge(`nhl_${d.event_id}`, e)" in RINK
