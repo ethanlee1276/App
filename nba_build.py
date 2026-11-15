@@ -1975,6 +1975,24 @@ def main() -> None:
                               faces=_faces, nights=_prof.get("nights"))
             _st = _clock.lap("scan + team profiles", "scan", _st)
             out["scan_reads"] = _ns["reads"]
+            # WHAT THE RESEARCH LOOKED AT, FOR EACH GAME'S REPORT (engine/
+            # leaguereport.basketball_research, 2026-11-15; Ethan: "I want our
+            # game reports for each game to be scanning for all that type of
+            # data and matchup shit"): who took a ruled-out man's points in
+            # the games he missed (the inheritance read above), both teams'
+            # pace and points against the league's, and the last meeting.
+            # Read from what this build already holds; never fatal.
+            try:
+                from engine.leaguereport import basketball_research as _gr_research
+                for _gd in out.get("games") or []:
+                    if not _gd.get("home") or not _gd.get("away"):
+                        continue
+                    _gr_meta.setdefault(f"{_gd['away']}@{_gd['home']}", {}).update(_gr_research(
+                        _gd, hist=hist, gone=gone, vacancy=_vacancy, prof=_prof, conn=conn,
+                        sport=args.league, day=args.date))
+            except Exception as _grx2:                      # noqa: BLE001
+                print(f"  ⚠️  the reports' research facts skipped: {_grx2}")
+            _st = _clock.lap("scan + team profiles", "report research", _st)
             for _gd in out.get("games") or []:
                 _tp = _ns["tapes"].get(f"{_gd['away']}@{_gd['home']}")
                 if _tp:

@@ -829,8 +829,6 @@ def nba_short(c: Ctx, built: dict) -> dict | None:
     return _section("short", "The short version", [_list(items)])
 
 
-NBA = ((nba_facts, sec_market, nba_tape, nba_watch, nba_carry, nba_defense, nba_injuries, sec_parlays,
-        nba_before), nba_short)
 
 
 def nba_more(g: dict, meta: dict | None) -> dict:
@@ -883,6 +881,250 @@ def nba_meta(games: list, hist: dict, listed: dict, dvp: dict | None = None, dvp
     return out
 
 
+#: A teammate's gain in his share of the team's points, in the games a player
+#: missed, that the absences section names (2 points of the team's total).
+TAKER_GAIN = 0.02
+TAKERS_N, ABSENT_N = 3, 4
+#: A rotation player's minutes, for "who was missing" in the last meeting.
+MEETING_ROTATION_MPG = 20.0
+#: Pace and points past the league's average that the game's line says out loud.
+PACE_SAID, POINTS_SAID, CLOSE_SPREAD = 1.5, 6.0, 4.0
+#: One club, every spelling a feed gives it (the history's NBA finals carry the
+#: league's three-letter codes; the board may carry ESPN's).
+CLUB_ALIASES = [{"NYK", "NY"}, {"GSW", "GS"}, {"NOP", "NO"}, {"SAS", "SA"}, {"UTA", "UTAH"}, {"PHX", "PHO"},
+                {"BKN", "BRK"}, {"CHA", "CHO"}, {"WAS", "WSH"}]
+
+
+def _clubs(code) -> list:
+    c = str(code or "").upper()
+    for group in CLUB_ALIASES:
+        if c in group:
+            return sorted(group)
+    return [c]
+
+
+def _avg10(x: dict, k: str):
+    vs = [float(v) for v in ((x or {}).get(k) or [])[:10] if v is not None]
+    return round(sum(vs) / len(vs), 1) if vs else None
+
+
+def last_meeting(conn, sport: str, home: str, away: str, before: str, hist: dict | None = None) -> dict:
+    """THE LAST TIME THESE TWO MET (the research's "direct precedent": "On
+    March 28, the Pistons crushed the Timberwolves 109-87 ... Edwards,
+    McDaniels and Dosunmu were all absent"): the newest final between the
+    two clubs before ``before`` in the history (`games`), its leading
+    scorers and the rotation men each side played without, from the build's
+    own player history. {} when they have not met in what the history holds."""
+    if conn is None or not home or not away:
+        return {}
+    hs, as_ = _clubs(home), _clubs(away)
+    q = ",".join("?" * len(hs)), ",".join("?" * len(as_))
+    row = conn.execute(
+        f"SELECT period, home, away, home_score, away_score FROM games WHERE sport=? AND home_score IS NOT NULL "
+        f"AND away_score IS NOT NULL AND period < ? AND ((home IN ({q[0]}) AND away IN ({q[1]})) "
+        f"OR (home IN ({q[1]}) AND away IN ({q[0]}))) ORDER BY period DESC LIMIT 1",
+        (sport, str(before or "")[:10], *hs, *as_, *as_, *hs)).fetchone()
+    if not row:
+        return {}
+    day, h, a, hsc, asc = (row[0], row[1], row[2], row[3], row[4])
+    # The board's own codes, whatever the history spelled them.
+    h_code = home if str(h).upper() in hs else away
+    a_code = away if h_code == home else home
+    out = {"day": str(day)[:10], "home": h_code, "away": a_code,
+           "home_score": int(hsc), "away_score": int(asc), "leaders": {}, "missing": {}}
+    for t in (h_code, a_code):
+        played, missing = [], []
+        for p, x in (hist or {}).items():
+            if (x or {}).get("team") != t:
+                continue
+            wk = (x.get("by_week") or {})
+            g = wk.get(out["day"])
+            if g is not None:
+                if _f(g.get("pts")) is not None:
+                    played.append((float(g["pts"]), p))
+            elif (_avg10(x, "minutes") or 0) >= MEETING_ROTATION_MPG and wk and min(wk) < out["day"]:
+                missing.append(p)
+        played.sort(key=lambda z: (-z[0], z[1]))
+        out["leaders"][t] = [{"player": p, "pts": int(v)} for v, p in played[:2]]
+        out["missing"][t] = sorted(missing)[:3]
+    return out
+
+
+def basketball_research(g: dict, *, hist: dict, gone: dict | None = None, vacancy: dict | None = None,
+                        prof: dict | None = None, conn=None, sport: str = "nba", day: str = "") -> dict:
+    """WHAT THE RESEARCH LOOKED AT, FOR ONE GAME'S REPORT (2026-11-15; Ethan:
+    "I want our game reports for each game to be scanning for all that type
+    of data and matchup shit ... that research is already done for me").
+    The facts the build already reads and the report did not say:
+
+      * ``absences``: each team's ruled-out rotation men (nba_build.absences:
+        minutes and points a game over their last ten), and who took the
+        biggest one's share of the points in the games he missed this season
+        (engine/nba/onoff.inheritance, measured from the box scores — the
+        research's "who absorbs the vacated roles");
+      * ``script``: both teams' pace and points with their ranks and the
+        league's averages, the lines' total and spread (the research's pace
+        and game-environment read);
+      * ``meeting``: the last time the two met (`last_meeting`).
+    """
+    home, away = g.get("home"), g.get("away")
+    out: dict = {}
+    absences = {}
+    for t in (away, home):
+        gone_t = [(n, m) for n, m in (gone or {}).get(t) or []][:ABSENT_N]
+        if not gone_t:
+            continue
+        inh = ((vacancy or {}).get(t) or {}).get("inherit") or {}
+        out_names = {n for n, _m in gone_t}
+        takers = [{"player": n, "with": round(float(b["with"]), 3), "without": round(float(b["without"]), 3)}
+                  for n, b in (inh.get("beneficiaries") or {}).items()
+                  if n not in out_names and (hist.get(n) or {}).get("team") == t
+                  and float(b.get("delta") or 0) >= TAKER_GAIN][:TAKERS_N]
+        absences[t] = {"out": [{"player": n, "mpg": round(float(m), 1), "ppg": _avg10(hist.get(n), "pts")}
+                               for n, m in gone_t],
+                       "of": inh.get("player") or "", "n_out": int(inh.get("n_out") or 0),
+                       "enough": bool(inh.get("enough")), "takers": takers}
+    if absences:
+        out["absences"] = absences
+    teams = (prof or {}).get("teams") or {}
+    lg = (prof or {}).get("league") or {}
+    if teams.get(home) and teams.get(away):
+        out["script"] = {
+            "pace": {t: _f(teams[t].get("pace")) for t in (away, home)},
+            "pace_rank": {t: ((teams[t].get("ranks") or {}).get("pace")) for t in (away, home)},
+            "pts": {t: _f(teams[t].get("pts")) for t in (away, home)},
+            "league_pace": _f(lg.get("pace")), "league_pts": _f(lg.get("pts")),
+            "teams": int((prof or {}).get("n") or 0),
+            "spread": _f(g.get("spread")), "total": _f(g.get("total"))}
+    try:
+        m = last_meeting(conn, sport, home, away, day or g.get("date") or "", hist)
+    except Exception:                                    # noqa: BLE001
+        m = {}
+    if m:
+        out["meeting"] = m
+    return out
+
+
+def nba_absences(c: Ctx) -> dict | None:
+    """WHAT THE ABSENCES CHANGE (the research's "who absorbs the vacated
+    roles"): each ruled-out rotation man's minutes and points, and who took
+    the biggest one's share of the points in the games he missed — measured
+    from the box scores, never guessed; a sample too small says so."""
+    ab = c.meta.get("absences") or {}
+    blocks = []
+    for t in c.teams:
+        a = ab.get(t) or {}
+        rows = [x for x in a.get("out") or [] if isinstance(x, dict) and x.get("player")]
+        if not rows:
+            continue
+        items = []
+        for x in rows:
+            bits = [f"{_num(x.get('mpg'), 0)} minutes"] + ([f"{_num(x['ppg'])} points"] if x.get("ppg") else [])
+            items.append(f"{x['player']} is out: {' and '.join(bits)} a game over his last ten")
+        of, n = a.get("of") or "", int(a.get("n_out") or 0)
+        takers = [x for x in a.get("takers") or [] if isinstance(x, dict) and x.get("player")]
+        if of and a.get("enough") and takers:
+            items.append(f"In the {n} games {of} missed this season, " + _join(
+                f"{x['player']} took {_pct(x['without'])} of {team_owner(c, t)} points ({_pct(x['with'])} with "
+                f"him playing)" for x in takers))
+        elif of and n:
+            items.append(f"{of} has missed {n} game{'s' if n != 1 else ''} this season — too few to say who takes "
+                         f"his shots")
+        elif of:
+            items.append(f"{of} has not missed a game this season, so who takes his shots is still to be seen")
+        blocks += [_h(c.name(t)), _list(items)]
+    if not blocks:
+        return None
+    blocks.append({"type": "note", "text": _sentence(
+        "Measured from the box scores: each teammate's share of his team's points in the games the player sat, "
+        "against the games he played")})
+    return _section("absences", "What the absences change", blocks)
+
+
+def nba_meeting(c: Ctx) -> dict | None:
+    """THE LAST MEETING (the research's "direct precedent"): the score, who led
+    each side, and who each side played without that night."""
+    m = c.meta.get("meeting") or {}
+    if not m.get("day") or not m.get("home") or not m.get("away"):
+        return None
+    from .gamereport import day_label
+    h, a = m["home"], m["away"]
+    hs, as_ = int(m.get("home_score") or 0), int(m.get("away_score") or 0)
+    won, lost = (h, a) if hs > as_ else (a, h)
+    score = f"{max(hs, as_)}-{min(hs, as_)}"
+    where = "at home" if won == h else "on the road"
+    when = day_label(m["day"], 0, 0) or m["day"]
+    try:
+        from .seasons import season_of
+        if season_of(c.sport, m["day"]) < season_of(c.sport, c.g.get("date") or m["day"]):
+            when += ", last season"
+    except Exception:                                    # noqa: BLE001
+        pass
+    items = [f"{when}: {team_np(c, won)} beat {team_np(c, lost)} {score} {where}"]
+    for t in (a, h):
+        lead = [x for x in (m.get("leaders") or {}).get(t) or [] if x.get("player")]
+        if lead:
+            items.append(cap(f"{team_owner(c, t)} leading scorers: ")
+                         + _join(f"{x['player']} ({x['pts']} points)" for x in lead))
+        miss = [p for p in (m.get("missing") or {}).get(t) or [] if p]
+        if miss:
+            items.append(cap(f"{team_np(c, t)} played without {_join(miss)} that night"))
+    return _section("meetings", "The last meeting", [_list(items)])
+
+
+def nba_script(c: Ctx) -> dict | None:
+    """HOW THE GAME SHOULD GO (the research's pace and game environment: "fast
+    vs fast = inflated stats; slow vs slow = deflated", "high total =
+    prop-friendly environment", "close game: stars play their minutes").
+    Rest and the blowout are under the game facts already."""
+    s = c.meta.get("script") or {}
+    pace, lp = s.get("pace") or {}, _f(s.get("league_pace"))
+    items = []
+    a, h = c.away, c.home
+    pa, ph = _f(pace.get(a)), _f(pace.get(h))
+    if pa is not None and ph is not None and lp:
+        rk = s.get("pace_rank") or {}
+        n = int(s.get("teams") or 0)
+
+        def rank(t):
+            r = rk.get(t)
+            return f" ({_ord(int(r))}-fastest of {n})" if r and n else ""
+        fast = [t for t, p in ((a, pa), (h, ph)) if p >= lp + PACE_SAID]
+        slow = [t for t, p in ((a, pa), (h, ph)) if p <= lp - PACE_SAID]
+        pair = (f"{team_np(c, a)} {team_be(c, a, 'average', 'averages')} {_num(pa)} possessions a game{rank(a)} "
+                f"and {team_np(c, h)} {_num(ph)}{rank(h)}; the league averages {_num(lp)}")
+        if len(fast) == 2:
+            items.append(f"A fast game: {pair}. More possessions means more points, rebounds and assists to go "
+                         f"around")
+        elif len(slow) == 2:
+            items.append(f"A slow game: {pair}. Fewer possessions shrinks every counting stat")
+        elif fast and slow:
+            items.append(f"A tug of war on pace, {team_np(c, fast[0])} wanting to run and {team_np(c, slow[0])} "
+                         f"to slow it down: {pair}")
+        else:
+            items.append(f"An average pace: {pair}")
+    tot, lpts = _f(s.get("total")), _f(s.get("league_pts"))
+    if tot and lpts:
+        avg = 2 * lpts
+        gap = tot - avg
+        if gap >= POINTS_SAID:
+            items.append(f"The total, {tot:g}, is {_num(gap)} points over the league's average game ({_num(avg)}): "
+                         f"a high-scoring night by the line, friendly to overs")
+        elif gap <= -POINTS_SAID:
+            items.append(f"The total, {tot:g}, is {_num(-gap)} points under the league's average game "
+                         f"({_num(avg)}): a low-scoring night by the line")
+        else:
+            items.append(f"The total, {tot:g}, is close to the league's average game ({_num(avg)})")
+    sp = _f(s.get("spread"))
+    if sp is not None and abs(sp) <= CLOSE_SPREAD:
+        fav = h if sp < 0 else a
+        items.append(f"A close game by the line, {team_np(c, fav)} by {abs(sp):g}: the starters should play their "
+                     f"full minutes, the stars included")
+    if not items:
+        return None
+    return _section("script", "How the game should go", [_list(items)])
+
+
 def missed_last(hist: dict, teams, listed: dict | None = None) -> dict:
     """``{name key: {"team", "game", "kind"}}``: each rotation player of the
     two teams (three or more stored games) with no game on his team's newest
@@ -904,6 +1146,13 @@ def missed_last(hist: dict, teams, listed: dict | None = None) -> dict:
         if str(dates[0])[:10] < newest[t]:
             out[_key(p)] = {"team": t, "game": {"day": newest[t]}, "kind": "dnp"}
     return out
+
+
+#: The basketball report (NBA, college, WNBA), in the research's order: the facts
+#: and the line, how the game should go, the matchup, what the absences
+#: change, the breakout candidates and fades, the last meeting, then the rest.
+NBA = ((nba_facts, sec_market, nba_script, nba_tape, nba_absences, nba_watch, nba_meeting, nba_carry, nba_defense,
+        nba_injuries, sec_parlays, nba_before), nba_short)
 
 
 # ═══ THE HOOK ════════════════════════════════════════════════════════════════════════

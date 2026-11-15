@@ -9338,6 +9338,33 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SB. The basketball report does the research: the absences, how the game
+should go, the last meeting** (step 608; 15 November). Nothing to run. Your NBA
+research read who takes a ruled-out star's shots, the pace and the total,
+and the last time the two met with who was missing then ("On March 28, the
+Pistons crushed the Timberwolves 109-87 … Edwards, McDaniels and Dosunmu
+were all absent"). The NBA build already measured the first and held the
+rest, but the report said none of it. The NBA, college and WNBA reports now
+have three more sections:
+- **What the absences change:** "Tyler Herro is out: 34 minutes and 22
+  points a game over his last ten. In the 6 games Tyler Herro missed this
+  season, Bam Adebayo took 28% of the Heat's points (23% with him
+  playing)…". This is measured from the box scores (each teammate's share of
+  the team's points in the games the player sat). When there are fewer than
+  three such games, it says it's too few to tell.
+- **How the game should go:** "A fast game: the Heat averages 101.2
+  possessions a game (6th-fastest of 30) and the Celtics 101.9; the league
+  averages 99.1. More possessions means more points, rebounds and assists to
+  go around", then the total against the league's average game, and a close
+  game's full minutes. Rest and the blowout stay under the game facts.
+- **The last meeting:** "Oct. 30: the Celtics beat the Heat 112-101 on the
+  road", each side's leading scorers, and who each played without that
+  night.
+
+The sections run in your research's order: the facts and the line, how the
+game should go, the matchup, the absences, the breakout candidates and
+fades, then the last meeting.
+
 **SA. Breakout candidates and fades, the way your research wrote them, in
 every league** (step 607; 15 November). Nothing to run. You asked for each
 game's report to do the research your reports did: scan the matchups, find

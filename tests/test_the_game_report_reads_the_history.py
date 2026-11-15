@@ -188,7 +188,7 @@ def test_a_man_with_no_games_this_season_shows_last_seasons_and_says_so():
     vet = form["Old Vet"]
     assert "season" not in vet and vet["last_season"]["games"] == 3
     rep = _built(form=form)
-    item = next(i for b in _sec(rep, "watch")["blocks"] if b.get("type") == "players"
+    item = next(i for b in _sec(rep, "watch")["blocks"] if b.get("type") in ("players", "verdicts")
                 for i in b["items"] if i["player"] == "Old Vet")
     rows = dict((k, v) for k, v in item["form"])
     assert rows["Last season"] == ["3 games: 12 catches on 18 targets, 150 yds (50 a game), 3 TD — none yet this season"]
@@ -201,7 +201,7 @@ def test_a_man_with_no_games_this_season_shows_last_seasons_and_says_so():
 def test_a_key_players_form_is_on_his_matchup_card_not_said_again_under_watch():
     form = RD.player_form(_conn(), 2026, R.report_players(_board()))
     rep = _built(form=form)
-    watch = [i for b in _sec(rep, "watch")["blocks"] if b.get("type") == "players" for i in b["items"]]
+    watch = [i for b in _sec(rep, "watch")["blocks"] if b.get("type") in ("players", "verdicts") for i in b["items"]]
     gibbs = next(i for i in watch if i["player"] == "Jahmyr Gibbs")
     assert "form" not in gibbs
     williams = next(i for i in watch if i["player"] == "Mike Williams")

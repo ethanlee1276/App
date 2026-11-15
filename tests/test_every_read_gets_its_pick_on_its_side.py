@@ -195,7 +195,8 @@ def test_the_build_stamps_the_reads_and_the_report_draws_the_pick():
     assert board and reads[0].get("matchup_pick"), "matchpicks.build stamps the game's reads"
     src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
     watch = src[src.index("def sec_watch("):src.index("\ndef ", src.index("def sec_watch(") + 5)]
-    assert "pick = read_pick(r)" in watch
+    # The research's lists (engine/breakouts, 2026-11-15) take the pick from read_pick.
+    assert "pick_fn=read_pick" in watch
     js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert '${v.pick ? `<p class="gr-person-pick">' in js
     lb = (ROOT / "engine" / "likelyboard.py").read_text(encoding="utf-8")

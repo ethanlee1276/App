@@ -99,7 +99,9 @@ NBA_PARTS = {
                                            "prop tape", "line ledger")),
     "context reads": ("_ct", ("defense", "matchup ratings", "shooting", "rates",
                               "rotation + starting five")),
-    "scan + team profiles": ("_st", ("team profiles", "vacancy", "faces", "scan")),
+    # "report research" (2026-11-15): the game reports' absences, pace and
+    # last meeting (engine/leaguereport.basketball_research).
+    "scan + team profiles": ("_st", ("team profiles", "vacancy", "faces", "scan", "report research")),
     "most likely board": ("_mt", ("pick of the day lines", "likely board",
                                   "scan stamps + matchup picks", "first basket", "one board")),
 }
