@@ -64,6 +64,22 @@ def test_the_spread_moving_against_the_money_is_said():
     assert L.against_money(dict(G, money={"ml": {"home": 0.3, "away": 0.7}}), 4.5, 3.5)["money_on"] == "away"
 
 
+def test_the_total_moving_against_the_money_is_said():
+    """Ethan's Commanders–Giants research, 2026-11-12: "the total dropped from
+    43.5 to 40.5 even though about 70% of bets and money backed the over"."""
+    g = dict(G, money={"total": {"over": 0.70, "under": 0.30}})
+    got = L.total_against_money(g, 43.5, 40.5)
+    assert got == {"toward": "under", "money_on": "over", "money_share": 0.7, "delta": -3.0}, got
+    assert L.total_against_money(dict(G, money={"total": {"over": 0.30}}), 43.5, 40.5) is None, "with the money"
+    assert L.total_against_money(g, 43.5, 43.2) is None, "under half a point"
+    assert L.total_against_money(dict(G, money={"total": {"over": 0.55}}), 43.5, 40.5) is None
+    assert L.total_against_money(G, 43.5, 40.5) is None, "no money split"
+    from engine import gamereport as R
+    src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
+    assert 'ta = lo.get("total_against_money")' in src
+    assert hasattr(R, "sec_market")
+
+
 def test_the_hook_never_raises_and_the_builds_call_it_after_the_crowd():
     c = _conn()
     line = L.attach_to_board({"games": [dict(G)]}, "nfl", conn=c, now=NOW)

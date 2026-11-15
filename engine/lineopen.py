@@ -135,6 +135,28 @@ def against_money(g: dict, open_spread, now_spread) -> dict | None:
             "money_share": round(max(home_share, 1 - home_share), 3), "delta": round(delta, 1)}
 
 
+def total_against_money(g: dict, open_total, now_total) -> dict | None:
+    """The total moved toward the side holding the minority of the money
+    (2026-11-14). Ethan's Commanders–Giants research: "the total dropped from
+    43.5 to 40.5 even though about 70% of bets and money backed the over,
+    which usually means sharp money is on the under". The split's total
+    market (`money.total.over`, engine/moneysplit), the same bars as the
+    spread's (MIN_MOVE, MONEY_SIDE). Returns the note's parts, or None."""
+    t = ((g or {}).get("money") or {}).get("total") or {}
+    if not t or t.get("over") is None or open_total is None or now_total is None:
+        return None
+    delta = float(now_total) - float(open_total)
+    if abs(delta) < MIN_MOVE:
+        return None
+    toward = "under" if delta < 0 else "over"
+    over = float(t.get("over") or 0)
+    money_on = "over" if over >= MONEY_SIDE else "under" if over <= 1 - MONEY_SIDE else None
+    if money_on is None or money_on == toward:
+        return None
+    return {"toward": toward, "money_on": money_on, "money_share": round(max(over, 1 - over), 3),
+            "delta": round(delta, 1)}
+
+
 def attach(conn, sport: str, games, now: float | None = None) -> int:
     """``line_open`` on every game with a stored opener. Returns games stamped."""
     from .crowd import home_spread
@@ -162,6 +184,9 @@ def attach(conn, sport: str, games, now: float | None = None) -> int:
         rlm = against_money(g, o_sp, n_sp)
         if rlm:
             out["against_money"] = rlm
+        trlm = total_against_money(g, o_tot, n_tot)
+        if trlm:
+            out["total_against_money"] = trlm
         g["line_open"] = out
         n += 1
     return n

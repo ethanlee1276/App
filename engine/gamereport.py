@@ -1135,6 +1135,14 @@ def sec_market(c: Ctx) -> dict | None:
             on = c.home if am["money_on"] == "home" else c.away
             moves.append(f"The line moved toward {to} while {_pct(am.get('money_share'))} of the "
                          f"prediction-market money sat on {on} — a move against the money")
+        # THE TOTAL AGAINST THE MONEY (engine/lineopen.total_against_money):
+        # Ethan's Commanders–Giants read, 43.5 to 40.5 with 70% on the over.
+        ta = lo.get("total_against_money")
+        if isinstance(ta, dict) and ta.get("toward") and ta.get("money_on"):
+            moves.append(f"The total moved {_num(abs(_f(ta.get('delta')) or 0))} toward the {ta['toward']} while "
+                         f"{_pct(ta.get('money_share'))} of the prediction-market money sat on the "
+                         f"{ta['money_on']} — a move against the money, which often means the bigger bettors "
+                         f"are on the {ta['toward']}")
     out.append(_list(moves))
     cr = g.get("crowd") or {}
     crowd = []
