@@ -49,7 +49,7 @@ is now table stakes shipped by a dozen tools at $20/month.
 |---|---|
 | **Radical transparency** | Furthest along. Calibration buckets with confidence bands, Brier against the de-vigged market on our own picks, era-scoped so a re-tune is judged on its own work, a permanent sweep history in `calibhistory.py`. Completed to the study's spec on 2026-08-03 — see below. |
 | **Account longevity** | The engine exists (`account_health`, `engine/ledger.py`) and, since 2026-08-03, scores every signal this journal can honestly see — five of the study's seven — and names the rest on the page. Still buried on the Record page, and still never seen with a real journal behind it. |
-| **Exchange-native** | Two venues, two lenses since 2026-08-03: Polymarket read as informed FLOW (public wallets), Kalshi read as PRICE (a CFTC-regulated order book's mid is the market's probability, no vig to strip), with a cross-market board putting the exchange's number beside the model's. Novig and ProphetX remain absent — both got CFTC designation in June 2026, after this site's exchange work. |
+| **Exchange-native** | Two venues, two lenses since 2026-08-03: Polymarket read as informed FLOW (public wallets), Kalshi read as PRICE (a CFTC-regulated order book's mid is the market's probability, no vig to strip), with a cross-market board putting the exchange's number beside the model's. Novig and ProphetX are quoted as books through the odds feed but not read as a price lens — both got CFTC designation in June 2026. |
 
 ---
 
@@ -75,7 +75,7 @@ Status values: **HAVE** (built, file named) · **PARTIAL** (built, gap named) ·
 | Fractional Kelly staking | HAVE | `engine/betting.py` |
 | Risk of ruin / drawdown | HAVE | `engine/ledger.py` |
 | Auto-sync of the user's sportsbook accounts | WON'T | credential-sharing — see Guardrails |
-| Deep-link to a book's bet slip | MISSING | the study calls this the safe ceiling (Outlier does it). We render prices without a handoff. |
+| Deep-link to a book's bet slip | HAVE (2026-10-06) | `engine/betlinks.py` — the Odds API's outcome links (`includeLinks=true`, no extra credits), stamped on each pick row in `engine/gate.py`. The study calls this the safe ceiling (Outlier does it). |
 | Promo / free-bet expiry tracking | MISSING | we track no promos |
 
 ### Pillar 1 — Account longevity
@@ -112,7 +112,7 @@ than bankroll management.
 | Polymarket informed flow (public wallets, trade tape) | HAVE | `engine/predmarket.py`, `pm_build.py` |
 | Own stored tape, appended every build | HAVE | `engine/predmarket.py` — "a year of tape is the moat" |
 | Kalshi order book as a pricing source | HAVE (2026-08-03) | `engine/sources/kalshi.py` — keyless public API, mid-of-book as the fair (no vig to strip), snapshot tape from day one, and a cross-market board on the Prediction Markets page: Kalshi's probability beside the model's, gap in points, only where both exist. Enters as a PRICE, never as flow — `predmarket.py`'s no-trader-identity reasoning still stands and a test forbids the adapter growing wallet-shaped functions. Awaiting first live pull on Ethan's machine. |
-| Novig / ProphetX | MISSING | both received CFTC designation in June 2026, after this site's exchange work |
+| Novig / ProphetX | PARTIAL | quoted as books through the odds feed (`engine/odds.py` `EXCHANGE_BOOKS`, commission in `engine/exchangefees.py`); not read as a fair-price source the way Kalshi is. Both received CFTC designation in June 2026. |
 | Cross-market edge: exchange fair value vs traditional book | PARTIAL (2026-08-03) | exchange-vs-MODEL ships (the Kalshi board); exchange-vs-de-vigged-BOOK is the remaining leg, and the inputs (cached book odds) already exist |
 | Sporttrade | WON'T | exited sports betting entirely, May–June 2026 |
 
@@ -145,10 +145,10 @@ than bankroll management.
 | MLB plate-umpire effects wired into props | HAVE | `engine/mlb/projection.py` — a wide zone lifts strikeouts, and it is named in the reason string |
 | nflverse / Statcast open data | HAVE | `engine/sources/nflverse.py`, `engine/mlb/ml.py` |
 | NFL officiating crew tendencies | PARTIAL (2026-10-24) | `engine/nflrefs.py`, attached in `nfl_build.py` and worded in `engine/gamereport.py`. Context on the game report only: `refcheck.py` found no held-out predictive value against the closing total or spread (correlation -0.02 / -0.01 on 7,340 games), so it moves no number. Assignments are set by hand when no feed names the crew. |
-| NBA referee tendencies (FT-driven props) | MISSING | same |
+| NBA referee tendencies (FT-driven props) | PARTIAL | `engine/officials.py` stores NBA/WNBA/CBB officials per game; nothing reads them yet and no number moves — waiting on a season of stored closing totals to run the `refcheck.py` question |
 | UFC referee & judge assignments | MISSING | `PARKED` in `engine/coverage.py`: "no structured assignment feed" |
-| Travel / rest / altitude | PARTIAL | rest/travel built and rendered (`engine/fatigue.py`, wired into `pipeline.py`, `betting.py`, `losspatterns.py`); altitude is a static venue field (`engine/stadiums.py`), not a fatigue-specific adjustment |
-| Injury-report latency | PARTIAL | `engine/injuries.py` has the reports, not the latency |
+| Travel / rest / altitude | PARTIAL | rest/travel built and rendered (`engine/fatigue.py`, wired into `engine/pipeline.py`, `engine/betting.py`, `engine/losspatterns.py`); altitude is a static venue field (`engine/stadiums.py`), not a fatigue-specific adjustment |
+| Injury-report latency | PARTIAL | `engine/injuries.py` has the reports; `engine/injurylag.py` measures how far line moves land from our `first_seen` on `injury_events` (wired in `nfl_build.py`). Measured, not acted on. |
 | Published effect sizes for venue adjustments | MISSING | the study's specific ask: don't just show wind, show what wind is worth |
 
 ### Portfolio risk (Stage 3)
@@ -160,7 +160,7 @@ than bankroll management.
 | Correlation priors backtested against our own history | HAVE | task #52 |
 | Risk of ruin | HAVE | `engine/ledger.py` |
 | Drawdown-aware staking | PARTIAL | drawdown is tracked and wired into the parlay module and, via `staking.apply_drawdown`, the MLB, NBA and NFL builds' singles; not the CFB build |
-| Covariance matrix across *simultaneous* positions | MISSING | the study's sharpest quant-finance gap: no consumer tool does this |
+| Covariance matrix across *simultaneous* positions | PARTIAL (2026-10-16) | `engine/risk.py` simulates a user's open My Bets tickets together (Gaussian copula over `parlays.relate`), with per-player/per-game exposure and a best hedge. Not used for the site's own staking. The study's sharpest quant-finance gap. |
 | Per-game / per-player / per-day exposure caps, auto-enforced | PARTIAL | `correlation.apply_exposure_caps` holds singles to 5u per game and 15u per slate in the NFL, MLB, NBA and CFB pipelines; one-per-slate cap for parlays (task #49); no per-player cap |
 | Shrinkage of edge estimates | PARTIAL | the humility clamp tempers edge; it is not a formal shrinkage estimator |
 | Tax lots / reporting | MISSING | |
@@ -182,7 +182,8 @@ Decisions, not backlog. Each of these is a **WON'T** with a reason.
 
 * **No automated bet placement.** Prohibited by most sportsbook terms and
   written into some state codes (Michigan Admin Code R. 432.752 bans bot
-  play). Deep links are the ceiling, and we have not even built those.
+  play). Deep links are the ceiling for sportsbooks (built 2026-10-06,
+  `engine/betlinks.py`).
 * **No credential sharing.** The SharpSports model has users hand over
   usernames, passwords, security answers and one-time passwords. It defeats
   2FA, violates account-sharing terms, and makes us custodian of the worst
@@ -239,10 +240,12 @@ In the study's own staging, and roughly in the order the study argues for:
    `engine/nflrefs.py`, context on the game report only, no number moves,
    see the ledger row above; the NBA/WNBA half only stores officials,
    `engine/officials.py`. The ledger row, not this list, is current.)*
-7. **Covariance across simultaneous positions** (Stage 3).
+7. **Covariance across simultaneous positions** (Stage 3). *(Status
+   2026-11-15: PARTIAL — `engine/risk.py` does it for a user's open
+   tickets, not for the site's own staking; see the ledger row.)*
 8. **Loss-chasing detection and behavior-tied reality checks** (Stage 3).
 
-Deep links, promo tracking, travel/rest and tax reporting are real gaps with
+Promo tracking, travel/rest and tax reporting are real gaps with
 no pillar attached; they are commodity features and they can wait.
 
 ## Added 2026-08-03 — game-script simulation, and where AI does not go
