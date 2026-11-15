@@ -9338,6 +9338,40 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RU. Every live play says who did what, where, and what it changed**
+(step 601; 15 November). Nothing to run. Your message: "the wording in the
+live play by play screen is confusing and doesnt make much sense and is
+lacking detail of whats happening", circling "The Lions for a 56-yard
+touchdown. / Before the play 3rd & 9 at DET 44". With the names back (RT),
+the feed now also keeps what else ESPN's play text says that is a fact,
+read the way the names are: against closed lists, never kept as words.
+That's where a pass went (short or deep; left, middle or right), the gap
+a run took, the defender the play names after it (the sack, the breakup),
+a touchback or fair catch, and a flag's foul by its rulebook name, who drew
+it, his side, the yards, and whether it was declined or offsetting.
+- **The drive card's sentence** opens on the down and the spot and says
+  what the play changed: "On 3rd & 9 from the DET 44, Jared Goff throws
+  deep right to Jameson Williams for a 56-yard touchdown. Lions 7, Patriots
+  3." Others: "Drake Maye is sacked by Christian Barmore for a loss of 6
+  yards", "... falls incomplete, broken up by Brian Branch", "... runs
+  around left end for 12 yards to the NE 40. First down.", "Turnover on
+  downs.", "a flag: false start on Kayshon Boutte (Patriots), 5 yards". The
+  separate "Before the play" line is gone, because the sentence says it.
+- **Every row in the play list** reads like a caption, names in bold:
+  "Jared Goff throws deep right to Jameson Williams for a 56-yd touchdown",
+  "Jahmyr Gibbs runs up the middle for 8 yds", "False start on Kayshon
+  Boutte, 5 yds", "Jake Bates kicks off; Corey Kiner returns it 11 yds". A
+  play whose names can't say who did which keeps its old words with the
+  names after. The rail beside the page wraps its rows instead of cutting
+  them off with "…".
+- **Kickoffs were drawn backwards** on the card's field. ESPN files a
+  kickoff under the team that receives it, with its spot counted from the
+  kicking team's end, so the kick flew from the wrong 35 toward the wrong
+  end zone. It now flies from the kicking 35, and a touchback lands in the
+  end zone.
+- **A kickoff's returner** is now found on either team, so the sentence
+  names him and his chip shows his return line, not his rushing.
+
 **RT. The live page says each thing once, and its plays name who made them**
 (step 600; 15 November). Nothing to run. You said we don't need the drive
 chart since there's one at the top of the screen, and to look through the

@@ -122,11 +122,13 @@ def test_a_punt_is_the_kick_and_the_run_back():
     assert html.count('class="gc-dv-arc"') == 1 and html.count('class="gc-dv-ret"') == 1
     assert ">16-yd return<" in html
     words = _text(html)
-    assert "Riley Dixon punts to the DAL 16; KaVontae Turpin brings it back 16 yards to the DAL 32." in words, words
+    # 2026-11-15: the sentence opens on the down and the spot it was snapped
+    # from, which the "Before the play" line under it used to say.
+    assert "On 4th & 9 from the TB 20, Riley Dixon punts to the DAL 16; KaVontae Turpin brings it back 16 yards to the DAL 32." in words, words
     # The people in it, with the line from the group the play puts them in.
     assert "Riley Dixon TB" in words and "3 NO, 49.3 AVG" in words
     assert "KaVontae Turpin DAL" in words and "1 NO, 16 YDS, 0 TD" in words
-    assert "Before the play 4th & 9 at TB 20" in words
+    assert "Before the play" not in words, "said once, in the sentence"
     # Our win chance, on the side it favours.
     assert "Win % (our model)" in words and "55.2" in words
     assert "Last play · Q2 13:52" in words
@@ -139,26 +141,28 @@ def test_every_kind_of_play_draws_and_reads_its_own_way():
     cases = [
         ({"team": "TB", "event": "Pass Reception", "down": 2, "distance": 6, "spot": 52, "yards": 12,
           "players": ["Baker Mayfield", "Mike Evans"]}, after,
-         ['class="gc-dv-arc"', ">12-yd catch<"], "Baker Mayfield to Mike Evans for 12 yards to the DAL 40."),
+         ['class="gc-dv-arc"', ">12-yd catch<"],
+         "On 2nd & 6 from the TB 48, Baker Mayfield throws to Mike Evans for 12 yards to the DAL 40. First down."),
         ({"team": "TB", "event": "Rush", "down": 1, "distance": 10, "spot": 45, "yards": 5,
           "players": ["Bucky Irving", "Micah Parsons"]}, after,
-         ['class="gc-dv-run"', ">5-yd run<"], "Bucky Irving runs for 5 yards to the DAL 40."),
+         ['class="gc-dv-run"', ">5-yd run<"], "On 1st & 10 from the DAL 45, Bucky Irving runs for 5 yards to the DAL 40."),
         ({"team": "TB", "event": "Pass Incompletion", "down": 3, "distance": 4, "spot": 40, "yards": 0,
           "players": ["Baker Mayfield", "Mike Evans"]}, {**after, "detail": "4th & 4 at DAL 40"},
-         ['class="gc-dv-arc inc"', 'class="gc-dv-x"', ">Incomplete<"], "Baker Mayfield’s pass for Mike Evans falls incomplete."),
+         ['class="gc-dv-arc inc"', 'class="gc-dv-x"', ">Incomplete<"],
+         "On 3rd & 4 from the DAL 40, Baker Mayfield’s pass for Mike Evans falls incomplete."),
         ({"team": "TB", "event": "Passing Touchdown", "down": 1, "distance": 10, "spot": 28, "yards": 28,
           "scoring": True, "players": ["Baker Mayfield", "Mike Evans"]},
          {"possession": "TB", "detail": "", "yard_line": 3},
-         [">Touchdown<", "gc-dv-tag td"], "Baker Mayfield finds Mike Evans for a 28-yard touchdown."),
+         [">Touchdown<", "gc-dv-tag td"], "On 1st & 10 from the DAL 28, Baker Mayfield throws to Mike Evans for a 28-yard touchdown."),
         ({"team": "TB", "event": "Field Goal Good", "down": 4, "distance": 3, "spot": 22, "yards": 39,
           "scoring": True, "players": ["Chase McLaughlin"]}, {"possession": "DAL", "detail": "", "yard_line": 65},
-         [">39-yd FG good<", "gc-dv-tag good"], "Chase McLaughlin’s 39-yard field goal is good."),
+         [">39-yd FG good<", "gc-dv-tag good"], "On 4th & 3 from the DAL 22, Chase McLaughlin’s 39-yard field goal is good."),
         ({"team": "TB", "event": "Sack", "down": 3, "distance": 8, "spot": 45, "yards": -7,
           "players": ["Baker Mayfield", "Micah Parsons"]}, {**after, "detail": "4th & 15 at TB 48", "yard_line": 52},
-         [">Sack, −7<", "gc-dv-tag bad"], "Baker Mayfield is sacked by Micah Parsons for a loss of 7 yards."),
+         [">Sack, −7<", "gc-dv-tag bad"], "On 3rd & 8 from the DAL 45, Baker Mayfield is sacked by Micah Parsons for a loss of 7 yards."),
         ({"team": "TB", "event": "Penalty", "down": 1, "distance": 10, "spot": 45, "yards": -10, "penalty": True},
          {**after, "detail": "1st & 20 at TB 45", "yard_line": 55},
-         ['class="gc-dv-run flag"', ">Flag, −10 yds<"], "Penalty on the offense, 10 yds."),
+         ['class="gc-dv-run flag"', ">Flag, −10 yds<"], "On 1st & 10 from the DAL 45, a flag on the offense, 10 yards."),
     ]
     for play, live, marks, said in cases:
         html = _card(play, live)

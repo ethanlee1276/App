@@ -329,7 +329,16 @@ APP_JS_BUDGET_KB = 290
 #: page a link opens wears, and the search's words coming back. 1,591 B gz:
 #: 388,343 -> 389,955 B, 835 over 380. It cannot load later: the first tap
 #: on the first page drawn is the one it has to read. Told to Ethan.
-BOOT_BUDGET_KB = 381
+#: 381 -> 382 on 2026-11-15, for Ethan on the live NE @ DET page: "the
+#: wording in the live play by play screen is confusing and doesnt make much
+#: snese and is lacking detail of whats happening". THE PLAY AS ONE LINE
+#: (app.js footballLine): who did what, where the pass went or the gap the
+#: run took, who made the sack or broke up the pass, a flag's foul and who
+#: drew it, and a kickoff's row under the side that kicked it. 1,154 B gz:
+#: 389,963 -> 391,117 B, 973 over 381. It cannot load later: every play row
+#: is drawn by playsHTML, which the Live tab's play feed and the
+#: play-by-play page both use from the first page drawn. Told to Ethan.
+BOOT_BUDGET_KB = 382
 
 
 def _gz_trimmed(rel: str) -> int:

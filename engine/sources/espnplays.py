@@ -92,6 +92,7 @@ yields no plays and says so, rather than an empty strip that reads as
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 
@@ -350,6 +351,7 @@ def _football_row(p: dict, team: str, home: str = "",
     who = _football_players(p.get("text"), roster)
     if who:
         row["players"] = who
+    row.update(_football_facts(p.get("text"), roster, row["event"], home, away))
     spot = endzone_to_yard_line(start.get("yardsToEndzone"), home, away, team)
     if spot is not None:
         row["spot"] = spot
@@ -671,6 +673,127 @@ _FB_AFTER = re.compile(r"[(\[]")
 _FB_LEAD = re.compile(r"^\s*(?:[(\[][^)\]]*[)\]]\s*)+")
 
 
+#: WHAT ELSE A PLAY'S SENTENCE SAYS THAT IS A FACT, read the way the names
+#: are: against CLOSED LISTS, never kept as words. Ethan, 2026-11-15, on the
+#: live page: "the wording in the live play by play screen is confusing and
+#: doesnt make much snese and is lacking detail of whats happening." Where a
+#: pass went (six places: short or deep, left, middle or right), which gap a
+#: run took (seven), the foul a flag was for (the rulebook's names, below),
+#: and the defender the play names after it — the man who made the tackle,
+#: the sack or the breakup. Each is one value from a list written here or a
+#: name from the box score's roster; the sentence is discarded as before,
+#: and the row's wording stays the site's own (app.js footballLine).
+_FB_PASS_DIR = re.compile(r"\bpass(?:\s+incomplete)?\s+(short|deep)\s+(left|middle|right)\b", re.I)
+_FB_RUN_DIR = re.compile(r"\b(left end|left tackle|left guard|up the middle|right guard|right tackle|right end)\b", re.I)
+_FB_SCRAMBLE = re.compile(r"\bscrambles?\b", re.I)
+_FB_TOUCHBACK = re.compile(r"\btouchback\b", re.I)
+_FB_FAIR_CATCH = re.compile(r"\bfair catch\b", re.I)
+
+#: The fouls, as the rulebooks name them (NFL and NCAA), longest first when
+#: matched so "Defensive Pass Interference" is never read as "Pass
+#: Interference". The value kept is this list's spelling.
+FOULS = (
+    "False Start", "Offensive Holding", "Defensive Holding", "Holding",
+    "Defensive Pass Interference", "Offensive Pass Interference", "Pass Interference",
+    "Unnecessary Roughness", "Roughing the Passer", "Roughing the Kicker", "Running Into the Kicker",
+    "Roughing the Holder", "Roughing the Snapper", "Delay of Game", "Defensive Delay of Game",
+    "Encroachment", "Neutral Zone Infraction", "Defensive Offside", "Offensive Offside", "Offside",
+    "Illegal Formation", "Illegal Shift", "Illegal Motion", "Illegal Procedure", "Illegal Substitution",
+    "Illegal Block Above the Waist", "Illegal Block in the Back", "Illegal Blindside Block",
+    "Illegal Crackback", "Illegal Peelback", "Illegal Double-Team Block", "Illegal Wedge", "Chop Block",
+    "Clipping", "Low Block", "Illegal Use of Hands", "Face Mask", "Horse Collar Tackle",
+    "Intentional Grounding", "Illegal Contact", "Unsportsmanlike Conduct", "Taunting", "Personal Foul",
+    "Targeting", "Disqualification", "Leverage", "Leaping", "Tripping",
+    "Lowering the Head to Initiate Contact", "Too Many Men on Field", "Defensive 12 On-field",
+    "Offensive 12 On-field", "12 Men in the Huddle", "Ineligible Downfield Pass", "Ineligible Downfield Kick",
+    "Illegal Forward Pass", "Illegal Touch Pass", "Illegal Touch Kick", "Kick Catch Interference",
+    "Fair Catch Interference", "Invalid Fair Catch Signal", "Illegal Kick", "Illegal Bat", "Short Free Kick",
+    "Kickoff Out of Bounds", "Free Kick Out of Bounds", "Delay of Kickoff", "Illegal Kickoff Formation",
+    "Player Out of Bounds on Kick", "Player Out of Bounds on Punt", "Illegal Snap",
+)
+#: Other spellings the feeds use, to this list's.
+_FOUL_ALIAS = {"facemask": "Face Mask", "face mask (15 yards)": "Face Mask", "horse collar": "Horse Collar Tackle"}
+_FOUL_RE = re.compile(r"\b(%s)\b" % "|".join(
+    re.escape(f) for f in sorted(set(FOULS) | {k for k in _FOUL_ALIAS if "(" not in k}, key=len, reverse=True)), re.I)
+_FOUL_CANON = {f.lower(): f for f in FOULS}
+#: Where a flag's account starts: "PENALTY on NE-M.Onwenu, False Start, 5
+#: yards, enforced at ..." (the NFL) or "Texas Penalty, False Start (Kelvin
+#: Banks Jr.) to the TEX 20" (college).
+_FB_PEN_AT = re.compile(r"PENALTY\b|\bPenalty,")
+_FB_PEN_TEAM = re.compile(r"PENALTY on ([A-Z]{2,4})\b")
+_FB_YARDS = re.compile(r"\b(\d{1,2})\s+(?:yards?|yds?)\b", re.I)
+
+
+def _football_facts(text: str, roster, event: str = "", home: str = "", away: str = "") -> dict:
+    """The play's closed-list facts, each key only when it resolved.
+
+    `dir` (where a pass went, or the gap a run took), `scramble`, `by` (the
+    defenders named in the first bracket after the play: the tackle, the
+    sack, the breakup — never a returner's tackler on a kick, never the
+    man who tackled an interception's return), `touchback`, `fair_catch`,
+    and a flag's `foul` (FOULS' spelling), `foul_by` (a roster name),
+    `foul_team` (the side key, when the feed's abbreviation is one of this
+    game's two), `foul_yards`, `foul_declined`, `offsetting`.
+    """
+    raw = _FB_LEAD.sub("", str(text or ""))
+    if not raw.strip():
+        return {}
+    out: dict = {}
+    e = str(event or "").lower()
+    main = _FB_AFTER.split(raw, 1)[0]
+    kick = "kickoff" in e or "punt" in e
+    pen_at = _FB_PEN_AT.search(raw)
+    # A flag inside the play's own clause (a college "Iowa Penalty, Offensive
+    # Holding (Logan Jones)") ends the play's words there, and its bracket
+    # names the man flagged, not a defender.
+    pen_in_main = bool(pen_at) and pen_at.start() < len(main)
+    play = main[:pen_at.start()] if pen_in_main else main
+    # A flag that wiped the snap out ("Penalty" is the play) has no pass, run
+    # or tackle to tell: only its foul.
+    if not kick and not e.startswith("penalty") and "field goal" not in e and "extra point" not in e:
+        m = _FB_PASS_DIR.search(play)
+        if m:
+            out["dir"] = f"{m.group(1).lower()} {m.group(2).lower()}"
+        elif "pass" not in e and "sack" not in e and "interception" not in e:
+            m = _FB_RUN_DIR.search(play)
+            if m:
+                out["dir"] = m.group(1).lower()
+        if _FB_SCRAMBLE.search(play):
+            out["scramble"] = True
+        if "interception" not in e and not pen_in_main:
+            br = re.match(r"\s*\(([^)]*)\)", raw[len(main):])
+            by = _names_in(br.group(1), roster) if br else []
+            if by:
+                out["by"] = by
+    if kick:
+        if _FB_TOUCHBACK.search(raw):
+            out["touchback"] = True
+        if _FB_FAIR_CATCH.search(raw):
+            out["fair_catch"] = True
+    if pen_at:
+        seg = raw[pen_at.start():]
+        stop = re.search(r"\.\s+(?=[A-Z(])", seg)
+        seg = seg[:stop.start()] if stop else seg
+        f = _FOUL_RE.search(seg)
+        if f:
+            word = f.group(1).lower()
+            out["foul"] = _FOUL_ALIAS.get(word) or _FOUL_CANON.get(word) or f.group(1)
+            y = _FB_YARDS.search(seg[f.end():])
+            if y:
+                out["foul_yards"] = int(y.group(1))
+        who = _names_in(seg, roster)
+        if who:
+            out["foul_by"] = who[0]
+        t = _FB_PEN_TEAM.search(seg)
+        if t and t.group(1) in (home, away):
+            out["foul_team"] = t.group(1)
+        if re.search(r"\bdeclined\b", seg, re.I):
+            out["foul_declined"] = True
+        if re.search(r"\boffsetting\b", raw, re.I):
+            out["offsetting"] = True
+    return out
+
+
 def _football_players(text: str, roster) -> list[str]:
     """Which of THIS GAME'S players a play involved, in order, or [].
 
@@ -701,11 +824,16 @@ def _football_players(text: str, roster) -> list[str]:
     row carries fewer names. A missing name reads as a plainer line. A
     wrong name reads exactly like a right one.
     """
-    words = _FB_AFTER.split(_FB_LEAD.sub("", str(text or "")), 1)[0]
-    if not words.strip():
-        return []
-    at: dict[int, set] = {}
-    for full in roster or ():
+    return _names_in(_FB_AFTER.split(_FB_LEAD.sub("", str(text or "")), 1)[0], roster)
+
+
+@functools.lru_cache(maxsize=256)
+def _roster_patterns(roster: tuple) -> tuple:
+    """Each roster name with its pattern, compiled once per game's roster:
+    a play is read against it two or three times a poll (its names, the
+    defenders after it, the man a flag names), every few seconds."""
+    out = []
+    for full in roster:
         parts = str(full or "").split()
         if len(parts) < 2:
             continue
@@ -716,8 +844,25 @@ def _football_players(text: str, roster) -> list[str]:
         # "Sam Darnold", not "SamDarnold". Without `\s+` on that branch
         # only the abbreviated form ever matched, which is most of an NFL
         # feed and none of a college one.
-        pat = re.compile(r"\b(?:%s\s+|%s\.\s?)%s\b" % (
-            re.escape(first), re.escape(first[:1]), re.escape(last)))
+        # The end is "no letter follows" rather than a word boundary, so a
+        # name that ends on its own full stop ("Kelvin Banks Jr.") matches
+        # before a bracket or a comma, and "Brown" still never "Browning".
+        out.append((full, re.compile(r"\b(?:%s\s+|%s\.\s?)%s(?!\w)" % (
+            re.escape(first), re.escape(first[:1]), re.escape(last)))))
+    return tuple(out)
+
+
+def _names_in(words: str, roster) -> list[str]:
+    """Which of the roster's names `words` mentions, in the order it does,
+    a name two players could be dropped for both (`_football_players`)."""
+    if not str(words or "").strip():
+        return []
+    try:
+        pats = _roster_patterns(tuple(roster or ()))
+    except TypeError:                                  # an unhashable name: no cache
+        pats = _roster_patterns.__wrapped__(tuple(roster or ()))
+    at: dict[int, set] = {}
+    for full, pat in pats:
         m = pat.search(words)
         if m:
             at.setdefault(m.start(), set()).add(full)

@@ -1247,13 +1247,24 @@
     const base = { from, land: null, air: false, ret: false, dir, tone: "" };
     if (/kickoff|punt/i.test(e)) {
       const kickoff = /kickoff/i.test(e);
-      // The kick, then the return to where the other side snapped next.
-      if (td) return { ...base, to: dir > 0 ? 0 : 100, air: true, label: "Returned for a TD", tone: "td" };
-      if (next == null) return { ...base, to: null, air: true, label: kickoff ? "Kickoff" : "Punt" };
+      /* A KICKOFF IS FILED UNDER THE SIDE THAT RECEIVES IT, with its spot
+         counted from the kicking side's end (the NE @ DET file, 2026-11-15:
+         NE's kick from its own 35 sits in DET's drive at "35", the next one
+         from DET's 35 in NE's at "65"). So the kick flies against the row's
+         own direction, from the other 35, and the return runs with it. A punt
+         is the punting side's own row. `back` is the way a return runs. */
+      const back = kickoff ? dir : -dir;
+      const at = kickoff ? ydClamp(100 - from) : from;
+      const kb = { ...base, from: at };
+      if (td) return { ...kb, to: back > 0 ? 100 : 0, air: true, label: "Returned for a TD", tone: "td" };
+      // Into the end zone and out of play: the next snap is where the rule puts it.
+      if (p.touchback) return { ...kb, land: back > 0 ? -5 : 105, to: next, air: true, label: "Touchback" };
+      if (next == null) return { ...kb, to: null, air: true, label: kickoff ? "Kickoff" : "Punt" };
+      if (p.fair_catch) return { ...kb, land: next, to: next, air: true, label: "Fair catch" };
       const ret = Math.max(0, y);
-      const land = Math.max(-10, Math.min(110, next + dir * ret));
-      return { ...base, land, to: next, air: true, ret: ret > 0,
-               label: ret > 0 ? `${ret}-yd return` : kickoff ? "Kickoff" : `${Math.round(Math.abs(next - from))}-yd punt` };
+      const land = Math.max(-10, Math.min(110, next - back * ret));
+      return { ...kb, land, to: next, air: true, ret: ret > 0,
+               label: ret > 0 ? `${ret}-yd return` : kickoff ? "Kickoff" : `${Math.round(Math.abs(next - at))}-yd punt` };
     }
     if (/field goal/i.test(e)) {
       const good = k0 === "fg";
@@ -1288,11 +1299,19 @@
     const us = p.team, them = us === d.home ? d.away : us === d.away ? d.home : "";
     const pick = (team, groups) => names.find((n) => groups.some((g) => inGroup(d, team, g, n))) || "";
     const e = String(p.event || "");
-    if (/kickoff/i.test(e)) return { lead: pick(us, ["kicking"]) || names[0] || "", with: pick(them, ["kickReturns"]), role: ["kicking", "kickReturns"] };
+    // A kickoff is filed under the side that receives it (dvPlay), so either
+    // side's kicker and returner is looked for; the feed names the kicker first.
+    if (/kickoff/i.test(e)) {
+      const lead = pick(them, ["kicking"]) || pick(us, ["kicking"]) || names[0] || "";
+      return { lead, with: pick(us, ["kickReturns"]) || pick(them, ["kickReturns"]) || names.find((n) => n !== lead) || "",
+               role: ["kicking", "kickReturns"] };
+    }
     if (/punt/i.test(e)) return { lead: pick(us, ["punting"]) || names[0] || "", with: pick(them, ["puntReturns"]), role: ["punting", "puntReturns"] };
     if (/field goal|extra point/i.test(e)) return { lead: pick(us, ["kicking"]), with: "", role: ["kicking", ""] };
     if (/interception/i.test(e)) return { lead: pick(us, ["passing"]), with: pick(them, ["interceptions", "defensive"]), role: ["passing", "defensive"] };
-    if (/sack/i.test(e)) return { lead: pick(us, ["passing"]), with: pick(them, ["defensive"]), role: ["passing", "defensive"] };
+    // The sacker is the defender the play names after it (espnplays `by`), or
+    // a name in the sentence itself (a college feed's "sacked by ...").
+    if (/sack/i.test(e)) return { lead: pick(us, ["passing"]) || names[0] || "", with: (p.by || [])[0] || pick(them, ["defensive"]) || "", role: ["passing", "defensive"] };
     if (/pass|reception|incompl/i.test(e)) {
       // A box score a beat behind the play still has the sentence's order:
       // the thrower is named first, the man it was for after him.
@@ -1302,34 +1321,106 @@
     return { lead: pick(us, ["rushing", "receiving", "passing"]) || names[0] || "", with: "", role: ["rushing", ""] };
   }
 
-  /* The play in a sentence, the site's own: who, what, how far, to where. */
+  /* THE PLAY IN A SENTENCE, the site's own: the down it was snapped on and
+     where, who did what, where the ball went, how far, to where, and what it
+     changed — a first down, a turnover on downs, the score. Ethan,
+     2026-11-15, circling "The Lions for a 56-yard touchdown. / Before the
+     play 3rd & 9 at DET 44": "the wording in the live play by play screen is
+     confusing and doesnt make much snese and is lacking detail of whats
+     happening". The pieces are the feed's facts (espnplays: the names, where
+     a pass went or the gap a run took, the defenders after it, the foul and
+     who drew it); with none of them it still reads as a sentence. */
+  const DV_GAP = { "left end": "around left end", "right end": "around right end", "left tackle": "off left tackle",
+                   "right tackle": "off right tackle", "left guard": "behind left guard", "right guard": "behind right guard",
+                   "up the middle": "up the middle" };
   function dvSentence(d, league, p, m, cast) {
     const e = String(p.event || ""), y = Math.round(Number(p.yards) || 0);
-    const to = (v) => (v == null ? "" : ` to the ${spotWord(d, Math.max(0, Math.min(100, v)))}`);
     const yd = (n) => `${Math.abs(n)} yard${Math.abs(n) === 1 ? "" : "s"}`;
-    const L = cast.lead, W = cast.with, club = `The ${teamNameIn(league, p.team) || p.team}`;
+    const spotAt = (v) => spotWord(d, Math.max(0, Math.min(100, v)));
+    const to = (v) => (v == null ? "" : ` to the ${spotAt(v)}`);
+    const nick = (t) => teamNameIn(league, t) || t || "";
+    const other = p.team === d.home ? d.away : p.team === d.away ? d.home : "";
+    const and = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : list[0] || "");
+    const L = cast.lead, W = cast.with, by = (p.by || []).filter(Boolean);
     const end = m && m.to != null ? to(m.to) : "";
-    if (/kickoff|punt/i.test(e) && !/touchdown/i.test(e)) {
-      const kick = /kickoff/i.test(e) ? ["kicks off", "kick off"] : ["punts", "punt"];
+    const thrown = p.dir && /^(short|deep) /.test(p.dir) ? ` ${p.dir}` : "";
+    const gap = p.dir && DV_GAP[p.dir] ? ` ${DV_GAP[p.dir]}` : "";
+    const gain = y > 0 ? yd(y) : y < 0 ? `a loss of ${yd(y)}` : "no gain";
+    const td = /touchdown/i.test(e);
+    const kickoff = /kickoff/i.test(e), punt = /punt/i.test(e);
+    const flagged = /penalty/i.test(e) && !/touchdown/i.test(e);
+    const dn = Number(p.down), dist = Number(p.distance);
+    // The down it was snapped on, and where: what "Before the play" said under it.
+    // A kickoff, a try after a touchdown, has no down.
+    const lead = !kickoff && !/extra point|two[- ]?point|conversion/i.test(e)
+      && dn >= 1 && dn <= 4 && p.spot != null && isFinite(Number(p.spot)) ? `On ${downWord(p)} from the ${spotAt(Number(p.spot))}, ` : "";
+    const who = (name) => { const t = typeof teamOf === "function" ? teamOf(d, name) : ""; return t ? `${name} (${nick(t)})` : name; };
+    const foul = p.foul ? p.foul.charAt(0).toLowerCase() + p.foul.slice(1).toLowerCase() : "";
+    const fouled = p.foul_by ? ` on ${who(p.foul_by)}` : p.foul_team ? ` on the ${nick(p.foul_team)}` : "";
+    let core;
+    if ((kickoff || punt) && !td) {
+      const K = L, R = W, what = kickoff ? "kicks off" : "punts";
+      const kicker = K ? `${K} ${what}` : kickoff ? "the kickoff" : `the ${nick(p.team)} punt`;
       const land = m && m.land != null ? (m.land < 0 || m.land > 100 ? " into the end zone" : to(m.land)) : "";
-      const back = m && m.ret ? `; ${W || "the return"} ${W ? "brings it back" : "comes back"} ${yd(y)}${end}` : "";
-      return `${L ? `${L} ${kick[0]}` : `${club} ${kick[1]}`}${land}${back}.`;
-    }
-    if (/field goal/i.test(e)) return `${L ? `${L}’s` : `${club}’`} ${m && m.label && /\d/.test(m.label) ? m.label.replace(" FG good", "-yard field goal is good").replace("-yd", "") : `field goal is ${m && m.miss ? "no good" : "good"}`}.`;
-    // Nobody resolved still reads as a sentence (Ethan, 2026-11-15: "The
-    // Lions for a 56-yard touchdown." was the whole of a touchdown pass).
-    if (/touchdown/i.test(e) && /pass/i.test(e) && !/interception/i.test(e)) {
+      core = p.touchback ? `${kicker} into the end zone for a touchback`
+        : p.fair_catch ? `${kicker}${land}, fair caught${R ? ` by ${R}` : ""}`
+        : m && m.ret ? `${kicker}${land}; ${R || "the return"} ${R ? "brings it back" : "comes back"} ${yd(y)}${end}`
+        : y > 0 ? `${kicker}; ${R ? `${R} returns it` : "it comes back"} ${yd(y)}`
+        : `${kicker}${land}`;
+    } else if (kickoff || punt) {
+      core = `${W ? `${W} returns the ${kickoff ? "kickoff" : "punt"}` : `the ${kickoff ? "kickoff" : "punt"} is returned`} for a touchdown`;
+    } else if (/field goal/i.test(e)) {
+      const dist2 = m && m.label && /(\d+)/.test(m.label) ? Number(/(\d+)/.exec(m.label)[1]) : null;
+      const how = /block/i.test(e) ? "blocked" : m && m.miss ? "no good" : "good";
+      core = `${L ? `${L}’s` : `the ${nick(p.team)}’`} ${dist2 ? `${dist2}-yard ` : ""}field goal is ${how}`;
+    } else if (/interception/i.test(e)) {
+      const aim = (p.players || []).find((n) => n && n !== L && n !== W && (typeof teamOf !== "function" || teamOf(d, n) === p.team)) || "";
+      core = `${L ? `${L}’s pass` : "the pass"}${thrown}${aim ? ` for ${aim}` : ""} is intercepted${W ? ` by ${W}` : ""}${td ? " and returned for a touchdown" : ""}`;
+    } else if (td && /pass/i.test(e)) {
       const n = Math.abs(y);
-      return L && W ? `${L} finds ${W} for a ${n}-yard touchdown.` : W ? `${W} catches a ${n}-yard touchdown pass.`
-        : L ? `${L} throws a ${n}-yard touchdown pass.` : `A ${n}-yard touchdown pass for the ${teamNameIn(league, p.team) || p.team}.`;
+      core = L && W ? `${L} throws${thrown} to ${W} for a ${n}-yard touchdown` : W ? `${W} catches a ${n}-yard touchdown pass`
+        : L ? `${L} throws a ${n}-yard touchdown pass` : `the ${nick(p.team)} score on a ${n}-yard touchdown pass`;
+    } else if (td && !/fumble|return/i.test(e)) {
+      core = `${L ? `${L} ${p.scramble ? "scrambles" : "runs"} it in` : `the ${nick(p.team)} run it in`}${gap}${y > 0 ? ` from ${yd(y)} out` : ""}`;
+    } else if (/sack/i.test(e)) {
+      const sackers = by.length ? and(by) : W;
+      core = `${L || "the quarterback"} is sacked${sackers ? ` by ${sackers}` : ""}${y ? ` for a loss of ${yd(y)}` : ""}`;
+    } else if (/incompl/i.test(e)) {
+      core = `${L ? `${L}’s pass` : "the pass"}${thrown}${W ? ` for ${W}` : ""} falls incomplete${by.length ? `, broken up by ${and(by)}` : ""}`;
+    } else if (/pass|reception/i.test(e)) {
+      core = `${L && W ? `${L} throws${thrown} to ${W}` : W ? `${W} catches a pass` : L ? `${L} completes a pass` : "the pass is complete"} for ${gain}${end}`;
+    } else if (/kneel/i.test(e)) {
+      core = `${L || "the quarterback"} takes a knee`;
+    } else if (/rush|run|scramble/i.test(e)) {
+      core = `${L ? `${L} ${p.scramble ? "scrambles" : "runs"}` : `the ${nick(p.team)} run`}${gap} for ${gain}${end}`;
+    } else if (flagged) {
+      const n = p.foul_yards || Math.abs(y);
+      core = p.offsetting ? "flags on both sides offset, and the down is played again"
+        : p.foul_declined ? `a flag for ${foul || "a penalty"}${fouled} is declined`
+        : foul ? `a flag: ${foul}${fouled}${n ? `, ${yd(n)}` : ""}`
+        : `a flag on the ${y < 0 ? "offense" : y > 0 ? "defense" : "play"}${n ? `, ${yd(n)}` : ""}`;
+    } else if (/fumble/i.test(e)) {
+      core = `${L ? `${L} fumbles` : "a fumble"}${p.turnover ? `, and the ${nick(other)} recover it` : `, and the ${nick(p.team)} keep it`}`;
+    } else {
+      core = typeof footballWords === "function" ? footballWords(p, d).title : e;
     }
-    if (/touchdown/i.test(e) && !/interception|fumble|return/i.test(e)) return `${L || club} ${L ? "runs" : "run"} it in from ${Math.abs(y)} yard${Math.abs(y) === 1 ? "" : "s"} out.`;
-    if (/interception/i.test(e)) return `${L ? `${L}’s pass` : "The pass"} is intercepted${W ? ` by ${W}` : ""}${/touchdown/i.test(e) ? " and taken back for a touchdown" : ""}.`;
-    if (/sack/i.test(e)) return `${L || "The quarterback"} is sacked${W ? ` by ${W}` : ""}${y ? ` for a loss of ${yd(y)}` : ""}.`;
-    if (/incompl/i.test(e)) return `${L ? `${L}’s pass` : "The pass"}${W ? ` for ${W}` : ""} falls incomplete.`;
-    if (/pass|reception/i.test(e)) return `${L && W ? `${L} to ${W}` : W ? `${W} catches it` : "Pass complete"} for ${y ? yd(y) : "no gain"}${end}.`;
-    if (/rush|run|scramble/i.test(e)) return `${L ? `${L} runs` : "Run"} for ${y > 0 ? yd(y) : y < 0 ? `a loss of ${yd(y)}` : "no gain"}${end}.`;
-    return `${typeof footballWords === "function" ? footballWords(p, d).title : e}.`;
+    let said = lead ? `${lead}${core}.` : `${core.charAt(0).toUpperCase()}${core.slice(1)}.`;
+    // A flag on a play that stood.
+    if (p.foul && !flagged) {
+      said += p.foul_declined ? ` A flag for ${foul}${fouled} is declined.`
+        : ` Flag: ${foul}${fouled}${p.foul_yards ? `, ${yd(p.foul_yards)}` : ""}.`;
+    }
+    // What it changed.
+    const snap = /pass|reception|rush|run|scramble|sack|incompl/i.test(e) && !td && !flagged && !p.turnover && !/interception|fumble/i.test(e);
+    if (snap && !(p.foul && !p.foul_declined) && dn >= 1 && dist > 0) {
+      if (y >= dist) said += " First down.";
+      else if (dn === 4) said += " Turnover on downs.";
+    }
+    if (p.scoring && p.away_score != null && p.home_score != null) {
+      const a = Number(p.away_score), h = Number(p.home_score);
+      said += a === h ? ` Tied ${a}–${h}.` : a > h ? ` ${nick(d.away)} ${a}, ${nick(d.home)} ${h}.` : ` ${nick(d.home)} ${h}, ${nick(d.away)} ${a}.`;
+    }
+    return said;
   }
 
   /* The field, drawn: turf, the two end zones in their clubs' colours under
@@ -1511,7 +1602,9 @@
         <div class="gc-chip-t"><b>${esc(name)}</b><span class="mini">${esc(teamOf(d, name) || "")}${got.row && got.row.pos ? `, ${esc(got.row.pos)}` : ""}</span>
           ${got.line ? `<span class="gc-chip-line">${got.line}</span>` : ""}</div></div>`;
     }).join("");
-    const before = p.down ? `${esc(downWord(p))}${p.spot != null ? ` at ${esc(spotWord(d, p.spot))}` : ""}` : "";
+    // The sentence opens on the down and the spot when it has them ("On 3rd &
+    // 9 from the DET 44, ..."); the line under it says them only when it can't.
+    const before = p.down && !/^On /.test(said) ? `${esc(downWord(p))}${p.spot != null ? ` at ${esc(spotWord(d, p.spot))}` : ""}` : "";
     // The moments since it (a timeout, the quarter's end), less the ones that
     // say nothing to a reader (a TV timeout: footballWords marks it quiet).
     const foot = (d.plays || []).filter((r) => r && r.kind === "football");

@@ -29526,7 +29526,7 @@ function footballWords(p, g) {
   if (/punt/i.test(e)) return at(y > 0 ? `Punt, returned ${yds(y)}` : "Punt", { role: "punting" });
   if (/field goal/i.test(e)) {
     const how = /block/i.test(e) ? "blocked" : /good/i.test(e) && !/no good/i.test(e) ? "good" : "missed";
-    return at(`Field goal ${how}${kick}`, { role: "kicking", tag: how === "good" ? "FG" : "" });
+    return at(`Field goal ${how}${kick}`, { role: "kicking", tag: how === "good" ? "FG" : "", dist: kickDist });
   }
   if (/extra point|^pat\b/i.test(e)) {
     const ok = /good|made/i.test(e) && !/no good/i.test(e);
@@ -29551,6 +29551,92 @@ function footballWords(p, g) {
       : y > 0 ? `Penalty on the defense, ${yds(y)}` : "Penalty", { tag: "Flag" });
   }
   return at(e ? (y ? `${e}, ${yds(y)}` : e) : "Play");
+}
+/* A FOOTBALL PLAY AS ONE LINE, WHO DID WHAT (Ethan, 2026-11-15: "the
+   wording in the live play by play screen is confusing and doesnt make much
+   snese and is lacking detail of whats happening"). A row said "Pass
+   complete for 7 yds · 2nd & 16", the names after it when there were any,
+   and a flag as "Penalty on the offense, 5 yds". Now it reads like a
+   caption: "Jared Goff throws deep right to Jameson Williams for a 56-yd
+   touchdown", "Jahmyr Gibbs runs up the middle for 8 yds", "Drake Maye
+   sacked by Christian Barmore for a loss of 2 yds", "False start on Kayshon
+   Boutte, 5 yds". The names and the closed-list facts are the feed's
+   (engine/sources/espnplays: where a pass went, the gap a run took, the
+   defenders after it, the foul and who drew it), in the order the feed
+   names them: the passer before the catcher, the kicker before the
+   returner. A play whose names cannot say who did which keeps
+   footballWords' title with the names after it, as before. With `html`
+   every name is bold and the rest escaped. */
+const FB_GAP = { "left end": "around left end", "right end": "around right end", "left tackle": "off left tackle",
+                 "right tackle": "off right tackle", "left guard": "behind left guard", "right guard": "behind right guard",
+                 "up the middle": "up the middle" };
+function footballLine(p, g, html) {
+  const w = footballWords(p, g);
+  const T = (s) => (html ? escapeHtml(s) : s);
+  const N = (s) => (html ? `<b>${escapeHtml(s)}</b>` : s);
+  if (!w.snap) return T(w.title);
+  const e = String(p.event || ""), y = Math.round(Number(p.yards) || 0);
+  const names = (p.players || []).filter(Boolean);
+  const by = (p.by || []).filter(Boolean);
+  const and = (list) => list.map(N).join(T(" and "));
+  const yds = (n) => `${Math.abs(n)} yd${Math.abs(n) === 1 ? "" : "s"}`;
+  const gain = y > 0 ? yds(y) : y < 0 ? `a loss of ${yds(y)}` : "no gain";
+  const thrown = p.dir && /^(short|deep) /.test(p.dir) ? ` ${p.dir}` : "";
+  const gap = p.dir && FB_GAP[p.dir] ? ` ${FB_GAP[p.dir]}` : "";
+  const td = /touchdown/i.test(e);
+  const listed = () => (names.length ? T(" · ") + names.map(N).join(T(" · ")) : "");
+  const plain = () => T(w.title) + listed();
+  const [a, b] = names;
+  const foul = p.foul ? p.foul.charAt(0) + p.foul.slice(1).toLowerCase() : "";
+  const on = () => (p.foul_by ? T(" on ") + N(p.foul_by) : p.foul_team ? T(` on ${p.foul_team}`) : "");
+  let out;
+  if (/penalty/i.test(e) && !td) {
+    const n = p.foul_yards || Math.abs(y);
+    out = p.offsetting ? T("Offsetting penalties")
+      : foul ? T(foul) + on() + T(p.foul_declined ? ", declined" : n ? `, ${yds(n)}` : "")
+      : plain();
+  } else if (/kickoff|punt/i.test(e) && !td && !/block/i.test(e)) {
+    const kickoff = /kickoff/i.test(e);
+    const kicker = a ? N(a) + T(kickoff ? " kicks off" : " punts") : T(kickoff ? "Kickoff" : "Punt");
+    out = p.touchback ? kicker + T(", touchback")
+      : p.fair_catch ? kicker + T(", fair catch") + (b ? T(" by ") + N(b) : "")
+      : y > 0 ? kicker + T("; ") + (b ? N(b) + T(" returns it ") : T("returned ")) + T(yds(y))
+      : a ? kicker : T(w.title);
+  } else if (/field goal/i.test(e) && a) {
+    const how = /block/i.test(e) ? "blocked" : /good/i.test(e) && !/no good/i.test(e) ? "good" : "missed";
+    const kick = `${w.dist ? `${w.dist}-yd ` : ""}field goal`;
+    out = N(a) + T(how === "good" ? ` makes a ${kick}` : how === "blocked" ? ` has a ${kick} blocked` : ` misses a ${kick}`);
+  } else if (/extra point|^pat\b/i.test(e) && a) {
+    out = N(a) + T(/block/i.test(e) ? " has the extra point blocked"
+      : /good|made/i.test(e) && !/no good/i.test(e) ? " makes the extra point" : " misses the extra point");
+  } else if (/interception/i.test(e) && a) {
+    const x = names.length > 1 ? names[names.length - 1] : "", aim = names.length > 2 ? names[1] : "";
+    out = N(a) + T(`’s pass${thrown}`) + (aim ? T(" for ") + N(aim) : "") + T(" intercepted")
+      + (x ? T(" by ") + N(x) : "") + T(td ? ", returned for a touchdown" : "");
+  } else if (/sack/i.test(e) && a) {
+    const sackers = by.length ? by : b ? [b] : [];
+    out = N(a) + T(" sacked") + (sackers.length ? T(" by ") + and(sackers) : "") + T(y ? ` for a loss of ${yds(y)}` : ", no loss");
+  } else if (td && /pass/i.test(e) && a && b) {
+    out = N(a) + T(` throws${thrown} to `) + N(b) + T(` for a ${Math.abs(y) ? `${Math.abs(y)}-yd ` : ""}touchdown`);
+  } else if (td && /rush|run/i.test(e) && a && !/fumble|return/i.test(e)) {
+    out = N(a) + T(` ${p.scramble ? "scrambles" : "runs"}${gap} for a ${Math.abs(y) ? `${Math.abs(y)}-yd ` : ""}touchdown`);
+  } else if (/incomplet/i.test(e) && a) {
+    out = N(a) + T(`’s pass${thrown}`) + (b ? T(" to ") + N(b) : "") + T(" incomplete")
+      + (by.length ? T(", broken up by ") + and(by) : "");
+  } else if (/pass|reception/i.test(e) && !td && a && b) {
+    out = N(a) + T(` throws${thrown} to `) + N(b) + T(` for ${gain}`);
+  } else if (/kneel/i.test(e) && a) {
+    out = N(a) + T(" kneels");
+  } else if (/^rush|run|scramble/i.test(e) && !td && a) {
+    out = N(a) + T(` ${p.scramble ? "scrambles" : "runs"}${gap} for ${gain}`);
+  } else {
+    out = plain();
+  }
+  // A flag on a play that stood.
+  if (p.foul && !/penalty/i.test(e)) {
+    out += T(` · flag: ${p.foul.toLowerCase()}`) + on() + T(p.foul_declined ? ", declined" : p.foul_yards ? `, ${yds(p.foul_yards)}` : "");
+  }
+  return out;
 }
 //: The clock as a scoreboard writes it: "Q2 1:50", not "Q2 01:50".
 const fbClock = (c) => String(c || "").replace(/^0(\d:)/, "$1");
@@ -29633,13 +29719,16 @@ function playsHTML(g) {
     const flag = w.tag ? ` <span class="lb-rbi${w.tag === "Turnover" ? " lb-to" : ""}">${escapeHtml(w.tag)}</span>` : "";
     const at = (p.away_score != null && p.home_score != null) && p.scoring
       ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
-    const names = (p.players || []).filter(Boolean).map(escapeHtml);
-    const pass = /pass|reception/i.test(String(p.event || ""));
-    const who = names.length === 2 && pass ? names.join(" → ") : names.join(" · ");
+    // Who did what, in the row's own words (footballLine), names in bold. A
+    // kickoff is filed under the side that receives it; its row is the
+    // kicking side's ("NE Andy Borregales kicks off; Jacob Saylors returns it").
+    const ev = String(p.event || "");
+    const side = /kickoff/i.test(ev) && !/touchdown/i.test(ev)
+      ? (p.team === g.home ? g.away : p.team === g.away ? g.home : p.team) : p.team;
     return `<div class="lb-play${p.scoring ? " scoring" : ""}${p.turnover ? " turnover" : ""}">
       <span class="lb-inn">${escapeHtml(when)}</span>
-      <span class="lb-what">${p.team ? `<span class="lb-side">${escapeHtml(p.team)}</span> ` : ""}${
-        escapeHtml(w.title)}${who ? ` · <b>${who}</b>` : ""}<span class="lb-dd">${escapeHtml(dd)}</span>${flag}</span>
+      <span class="lb-what">${side ? `<span class="lb-side">${escapeHtml(side)}</span> ` : ""}${
+        footballLine(p, g, true)}<span class="lb-dd">${escapeHtml(dd)}</span>${flag}</span>
       ${at}${bubble(p)}</div>`;
   };
   /* BASKETBALL ROWS, from the `plays` list the probe read off a finished

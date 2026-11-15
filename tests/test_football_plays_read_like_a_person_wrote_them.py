@@ -44,7 +44,8 @@ def _node(js):
     src = "\n".join([
         "const escapeHtml = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');",
         "const trueMinus = (s) => s;",
-        _piece("const FB_PERIOD"), _piece("function footballWords("), _piece("const fbClock"),
+        _piece("const FB_PERIOD"), _piece("function footballWords("), _piece("const FB_GAP"),
+        _piece("function footballLine("), _piece("const fbClock"),
         _piece("const PLAYS_EMPTY"), _piece("function hockeyPeriod("), _piece("function playsHTML("),
         _piece("const DRIVE_RESULT"), _piece("function driveResultWord("),
     ])

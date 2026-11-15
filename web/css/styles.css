@@ -6939,6 +6939,10 @@ body.has-deck #rail-live { display: none; }
 @media (max-width: 720px) {
   .lb-play .lb-what { white-space: normal; overflow: visible; min-width: 0; overflow-wrap: anywhere; }
 }
+/* ON THE PLAY-BY-PLAY PAGE A PLAY WRAPS AT EVERY WIDTH (Ethan, 2026-11-15:
+   the rail beside the page cut every play to "DET Pass complete for 7 yds ·
+   2nd &…"). A row now says who did what, which is the part worth reading. */
+.pbp-layout .lb-play .lb-what { white-space: normal; overflow: visible; min-width: 0; overflow-wrap: anywhere; }
 /* A football clock ("Q4 4:26") fits its column on one line. */
 .lb-play { grid-template-columns: minmax(2.4em, max-content) 1fr auto; }
 /* A PLAY'S THREAD (js/chat.js, 2026-10-25 — Real's counter and comments on

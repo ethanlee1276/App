@@ -5694,7 +5694,7 @@ function gpDrivesHTML(d, league) {
     const result = driveResultWord(dr) || (dr.scoring ? "Score" : rows.some((p) => p.turnover) ? "Turnover" : now ? "Drive in progress" : "");
     const snaps = rows.filter((p) => p.kind === "football" && footballWords(p, d).snap);
     const key = snaps.find((p) => p.scoring) || snaps[snaps.length - 1];
-    const words = key ? footballWords(key, d).title : "";
+    const words = key ? (typeof footballLine === "function" ? footballLine(key, d) : footballWords(key, d).title) : "";
     const last = rows.slice().reverse().find((p) => p.away_score != null && p.home_score != null) || {};
     const score = last.away_score != null ? `<span class="gp-dr-score"><span>${escapeHtml(d.away_abbr || d.away || "")} <b>${last.away_score}</b></span><span>${
       escapeHtml(d.home_abbr || d.home || "")} <b>${last.home_score}</b></span></span>` : "";

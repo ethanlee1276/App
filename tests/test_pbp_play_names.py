@@ -193,32 +193,42 @@ def _row_fn():
     return APP[i:APP.index("\n  };", i)]
 
 
+def _line_fn():
+    i = APP.index("function footballLine(p, g, html)")
+    return APP[i:APP.index("\n}\n", i)]
+
+
 def test_the_play_line_prints_the_names():
-    assert "p.players" in _row_fn(), "the row still cannot name a player"
+    # 2026-11-15: the row says who did what in words (app.js footballLine,
+    # tests/test_football_plays_read_like_a_person_wrote_them holds them).
+    assert "footballLine(p, g, true)" in _row_fn()
+    assert "p.players" in _line_fn(), "the row still cannot name a player"
 
 
-def test_a_pass_gets_an_arrow_and_nothing_else_does():
-    """The arrow is the fact of a completion. On a penalty or a sack the
-    row cannot vouch for a relationship, so it does not draw one."""
-    fn = _row_fn()
-    assert 'names.length === 2 && pass ? names.join(" → ")' in fn
-    assert 'names.join(" · ")' in fn
+def test_a_pass_names_the_thrower_and_the_catcher_in_words():
+    """The thrower before the catcher is the order the feed names them. A
+    play whose names cannot say who did which (one name on a completion, a
+    fumble) keeps them listed after its words, as before."""
+    fn = _line_fn()
+    assert "N(a) + T(` throws${thrown} to `) + N(b) + T(` for ${gain}`)" in fn
+    assert 'names.map(N).join(T(" · "))' in fn
 
 
 def test_the_names_are_escaped_like_every_other_feed_string():
-    fn = _row_fn()
-    assert "map(escapeHtml)" in fn
-    assert "${p.players}" not in fn
+    fn = _line_fn()
+    assert "const N = (s) => (html ? `<b>${escapeHtml(s)}</b>` : s);" in fn
+    assert "const T = (s) => (html ? escapeHtml(s) : s);" in fn
+    assert "${p.players}" not in fn and "${p.players}" not in _row_fn()
 
 
 def test_the_old_line_survives_when_nobody_resolved():
     """Most of what this touches is a feed that resolved fine yesterday;
     a play with no names must not lose its category and its yards."""
-    fn = _row_fn()
-    # Since 2026-10-25 the play's words come from footballWords (its verb
-    # and its yards); the names follow them only when some resolved.
-    assert 'who ? ` · <b>${who}</b>` : ""' in fn
-    assert "escapeHtml(w.title)" in fn and "footballWords(p, g)" in fn
+    fn = _line_fn()
+    # The play's words come from footballWords (its verb and its yards)
+    # whenever the names cannot carry the sentence.
+    assert "const w = footballWords(p, g);" in fn
+    assert "const plain = () => T(w.title) + listed();" in fn
 
 
 def test_the_situation_and_the_flags_still_ride_the_row():
