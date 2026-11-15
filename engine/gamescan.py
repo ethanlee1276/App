@@ -1782,14 +1782,15 @@ def _opens_if_out(inj, team: str, opp: str, ratings: dict, charts: dict, usage: 
         out = type("I", (), {"team": team, "player": who, "status": "OUT"})()
         room = coverage_room(team, (charts or {}).get(team) or [], {}, None, [out])
         up = [c["name"] for c in room["corners"] if c["next_man_up"]]
-        return (f"{team}'s coverage thins" + (f" — {', '.join(up)} steps in" if up else "")
-                + f"; {opp}'s receivers see the next man up")
+        return (f"{team} loses a starter in coverage"
+                + (f": {' and '.join(up)} {'steps' if len(up) == 1 else 'step'} in" if up else "")
+                + f", and {opp}'s receivers face the backup")
     if pos in ("T", "G", "C", "OT", "OG", "OL", "LT", "LG", "RG", "RT"):
         rush = _rank(ratings.get(opp) or {}, "def", "pressure")
         return (f"{team}'s pass protection loses a starter"
                 + (f" against the league's {_ord(rush)}-ranked pass rush" if rush else ""))
     if pos in ("DE", "DT", "NT", "EDGE", "OLB", "DL", "LB", "ILB", "MLB"):
-        return f"{opp}'s blockers get relief"
+        return f"{opp}'s blockers face one fewer starter"
     if pos in ("WR", "TE"):
         u = usage.get((team, _key(who))) or {}
         share, word = u.get("tgt_share"), u.get("share_of") or "targets"

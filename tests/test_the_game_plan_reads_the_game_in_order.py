@@ -41,9 +41,9 @@ GAME = {
         "method": {"teams": 32, "opponent_adjusted": True},
         "injuries": [
             {"team": "BUF", "player": "Keon Coleman", "position": "WR", "status": "QUESTIONABLE",
-             "opens": "If he sits — 14% of BUF's targets to share out"},
+             "opens": "If he sits, his 14% of BUF's targets go to other players"},
             {"team": "LAC", "player": "Charlie Kolar", "position": "TE", "status": "OUT",
-             "opens": "5% of LAC's targets to share out"},
+             "opens": "his 5% of LAC's targets go to other players"},
         ],
     },
 }

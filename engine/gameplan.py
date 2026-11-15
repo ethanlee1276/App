@@ -10,7 +10,7 @@ The steps it goes through, every game, in the same order:
   1. THE LINE AND THE SCRIPT. Spread, total, implied points; who is
      expected to lead and run, who is expected to trail and throw.
   2. WHO IS OUT, AND WHERE THE WORK GOES. Each absence as targets or
-     carries to share out, and the men it lifts.
+     carries that go to other players, and the men it lifts.
   3. THE MATCHUP. The units that decide it, the soft spot in coverage,
      the pass rush, the scheme.
   4. PLAYS THAT FIT. Volume first — catches and touchdowns are bets on
