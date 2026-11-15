@@ -3292,6 +3292,243 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
     return sec
 
 
+# --- the card: the research's answer, first ------------------------------------------
+#: THE CARD (Ethan, 2026-11-15: "it's just so much more easier to go do my own
+#: research than go looking at our app. And the point of our app is to not
+#: have me go do the research because it's already done for me on the app").
+#: His research chats answered a game with a card: the picks ranked best to
+#: worst, each with its book and price, the modeled hit rate, the fair price
+#: and the most he would pay, how often the player cleared the number, the
+#: matchup and the role behind it — then the parlay. The report said all of
+#: that, but across ten sections, and the picks themselves sat under the
+#: report on the game page. This is the card, built from the board's own
+#: posted picks for the game and opened above everything else.
+#:
+#: The most picks a card ranks: a research card named three to six.
+CARD_MAX = 4
+#: The project's price gate: never a leg worse than this (NFL Bet checking §0).
+CARD_PRICE_GATE = -250
+#: The closest picks a card with nothing to post names, and what they need.
+CARD_CLOSEST = 2
+
+
+def _card_side(r: dict) -> str:
+    s = str(r.get("side") or "").strip().upper()
+    return "OVER" if s in ("OVER", "YES") else "UNDER" if s in ("UNDER", "NO") else s
+
+
+def _card_in_game(c: Ctx, r: dict) -> bool:
+    teams = set(c.teams)
+    if r.get("kind") == "game":
+        return {r.get("home"), r.get("away")} == teams or {r.get("team"), r.get("opponent")} == teams
+    return r.get("team") in teams and (not r.get("opponent") or r.get("opponent") in teams)
+
+
+def _card_pool(c: Ctx, key: str = "rows") -> list:
+    """The one board's rows for this game (its order is best to worst: tier,
+    then how hard the matchup backs it, then our chance), or its held-back
+    picks; the Most Likely list where a league has no one board."""
+    board = c.result.get("likely_board") or {}
+    if board.get("rows") is not None or key == "held":
+        pool = board.get(key) or []
+    else:
+        pool = sorted((x for x in c.result.get("most_likely") or [] if isinstance(x, dict)),
+                      key=lambda x: -float(x.get("model_prob") or 0))
+    return [r for r in pool if isinstance(r, dict) and _card_in_game(c, r) and r.get("model_prob") is not None
+            and (key == "held" or r.get("tier") != "held")]
+
+
+def _card_rows(c: Ctx) -> list:
+    """The card's picks: one a player, at most CARD_MAX, best first."""
+    out, seen = [], set()
+    for r in _card_pool(c):
+        who = str(r.get("player") or "")
+        if not who or who in seen:
+            continue
+        seen.add(who)
+        out.append(r)
+        if len(out) == CARD_MAX:
+            break
+    return out
+
+
+def _american(p: float) -> int | None:
+    if not 0.0 < p < 1.0:
+        return None
+    return int(round(-100.0 * p / (1.0 - p))) if p >= 0.5 else int(round(100.0 * (1.0 - p) / p))
+
+
+def _odds_word(o) -> str:
+    try:
+        o = int(float(o))
+    except (TypeError, ValueError):
+        return ""
+    return f"+{o}" if o > 0 else str(o).replace("-", "−")
+
+
+def card_numbers(r: dict) -> str:
+    """"Our chance 74% · fair −285 · play to −250": the modeled hit rate, its
+    fair price, and the most to pay for it — the fair price, or the project's
+    price gate where the fair price is past it."""
+    p = _f(r.get("model_prob"))
+    if p is None:
+        return ""
+    fair = _american(p)
+    if fair is None:
+        return f"Our chance {_pct(p)}"
+    play = max(fair, CARD_PRICE_GATE) if fair < 0 else fair
+    to = f"play to {_odds_word(play)}" + (" or better" if play > 0 else "")
+    return f"Our chance {_pct(p)} · fair {_odds_word(fair)} · {to}"
+
+
+def card_form(c: Ctx, r: dict) -> str:
+    """"Over 6.5 in 7 of 10 games this season, 4 of the last 5 (last 5: 8, 9,
+    6, 7, 11)" — his own games against this number, newest first."""
+    if r.get("kind") == "game" or r.get("line") is None:
+        return ""
+    mk, side = str(r.get("market") or ""), _card_side(r)
+    log = (c.form.get(r.get("player")) or {}).get("log") or []
+    keys = HIT_MARKETS.get(mk)
+    if keys is None:
+        keys = (mk,)
+        log = [g for g in log if mk in (g.get("s") or {})]
+    if len(log) < 3 or side not in ("OVER", "UNDER"):
+        return ""
+    try:
+        line = float(r["line"])
+    except (TypeError, ValueError):
+        return ""
+    vals = [sum(float((g.get("s") or {}).get(k) or 0.0) for k in keys) for g in log]
+    hit = [(v > line) if side == "OVER" else (v < line) for v in vals]
+    recent = hit[:HIT_RECENT]
+    what = ("Scored" if mk == "anytime_td" and side == "OVER" else
+            f"{'Over' if side == 'OVER' else 'Under'} {line:g}")
+    out = f"{what} in {sum(hit)} of {len(hit)} games this season"
+    if len(hit) > len(recent):
+        out += f", {sum(recent)} of the last {len(recent)}"
+    if mk != "anytime_td":
+        out += f" (last {len(vals[:HIT_RECENT])}: {', '.join(_num(v, 0) for v in vals[:HIT_RECENT])})"
+    return out
+
+
+def card_why(c: Ctx, r: dict, angles: dict) -> list:
+    """The matchup and the role behind the pick, as the research said them:
+    the defence's leak to him (engine/angles), his read's reasons on this
+    pick's side, his share of the work, and what capped the pick if
+    anything did."""
+    out = []
+    a = angles.get(r.get("player"))
+    if a:
+        out.append(a)
+    side = _card_side(r)
+    rd = next((x for x in c.reads if x.get("player") == r.get("player")), None)
+    if rd:
+        lean = "OVER" if rd.get("read") in ("good", "breakout") else "UNDER" if rd.get("read") in ("tough", "avoid") else ""
+        if lean and lean == side:
+            reasons = rd.get("pro") if side == "OVER" else rd.get("con")
+            out += [str(x) for x in (reasons or [])[:2] if x]
+        role = _role_line(rd)
+        if role:
+            out.append(f"His work: {role}")
+    if r.get("method_note"):
+        out.append(str(r["method_note"]))
+    seen, keep = set(), []
+    for x in out:
+        if x not in seen:
+            seen.add(x)
+            keep.append(x)
+    return keep[:4]
+
+
+def card_kind(c: Ctx, r: dict) -> str:
+    """How picks of this kind have hit: on our board (the board's record at
+    this chance, likelyboard.record_seen), and in our hand-researched picks
+    (engine/researchrecord) — side by side, so the kinds that have earned the
+    trust show it."""
+    from .researchrecord import line as research_line
+    bits = []
+    seen = r.get("record_seen") or {}
+    if seen.get("rate") is not None:
+        bits.append(f"{_pct(seen['rate'])} of {_num(seen['n'], 0)} on our board at this chance "
+                    f"(we said {_pct(seen.get('claimed'))})")
+    elif seen.get("n"):
+        bits.append(f"{_num(seen['n'], 0)} settled on our board at this chance, too few to say")
+    res = research_line(c.sport, r.get("market"), r.get("side")) if r.get("kind") != "game" else ""
+    if res:
+        bits.append(res)
+    if not bits:
+        return ""
+    label = str(r.get("market_label") or r.get("market") or "").lower()
+    side = _card_side(r)
+    kind = (f"{label} {side.lower()}s" if side in ("OVER", "UNDER") and r.get("market") != "anytime_td"
+            else "touchdown picks" if r.get("market") == "anytime_td" else label)
+    return f"{cap(kind)}: " + "; ".join(bits)
+
+
+def _card_parlay(built: dict) -> list:
+    """The game's first three-leg ticket and first scorer pair, one line each."""
+    out = []
+    for b in (built.get("parlays") or {}).get("blocks") or []:
+        if b.get("type") != "parlays" or not b.get("items"):
+            continue
+        t = b["items"][0]
+        legs = " + ".join(str(l.get("pick") or "") for l in t.get("legs") or [] if l.get("pick"))
+        parts = str(t.get("price_line") or "").split(" · ")
+        price = "; ".join(p for p in parts if p == parts[0] or p.startswith("take it at"))
+        head = "The parlay" if b.get("kind") == "three" else "The touchdown pair"
+        if legs:
+            out.append(f"{head}: {legs}" + (f" — {price}" if price else ""))
+    return out
+
+
+def sec_card(c: Ctx, built: dict) -> dict | None:
+    """OUR PICKS FOR THIS GAME — the research card (see CARD_MAX): the board's
+    posted picks for the game, best first, each with its book and price, our
+    chance, its fair price and the most to pay, how often he has cleared the
+    number, the matchup and role behind it, and how picks of its kind have
+    hit; then the game's parlay. A game with nothing that clears says so and
+    names the closest picks and what held them back. None when the board has
+    nothing on the game at all."""
+    from .gameparlays import pick_words
+    angles = {}
+    try:
+        from .angles import for_game
+        for a in for_game(c, c.angle_tables) if c.angle_tables else []:
+            if a.get("tone") == "up" and a.get("player") not in angles:
+                angles[a["player"]] = _sentence(a["text"])[:-1]
+    except Exception:                                        # noqa: BLE001
+        angles = {}
+    items = []
+    for i, r in enumerate(_card_rows(c), 1):
+        leg = dict(r, _game_leg=r.get("kind") == "game")
+        items.append({"rank": i, "player": r.get("player") if r.get("kind") != "game" else "",
+                      "team": r.get("team") or "", "tier": str(r.get("tier_label") or ""),
+                      "pick": pick_words(leg),
+                      "price": " ".join(x for x in (str(r.get("book") or ""), _odds_word(r.get("odds"))) if x),
+                      "chance": round(float(r["model_prob"]), 4), "numbers": card_numbers(r),
+                      "form": card_form(c, r), "why": card_why(c, r, angles), "kind": card_kind(c, r)})
+    blocks = []
+    if items:
+        blocks.append({"type": "picks", "items": items})
+    else:
+        held = _card_pool(c, "held")[:CARD_CLOSEST]
+        if not held:
+            return None
+        blocks.append(_p("No pick on this game clears our bars at the current lines"))
+        blocks.append(_h("Closest, and what holds each back"))
+        blocks.append(_list(f"{pick_words(dict(r, _game_leg=r.get('kind') == 'game'))} "
+                            f"({_pct(r.get('model_prob'))}): {str(r.get('held_note') or '').replace('held back: ', '')}"
+                            for r in held))
+    par = _card_parlay(built)
+    if par:
+        blocks.append(_list(par))
+    blocks.append({"type": "note", "text": (
+        "Ranked best to worst: the board's tier, then how hard the matchup backs the pick, then our chance. "
+        "Play to is the most to pay for it — its fair price at our chance, never past −250. "
+        "Every pick is graded on the record.")})
+    return _section("card", "Our picks for this game", blocks)
+
+
 def sec_angles(c: Ctx) -> dict | None:
     """THE ANGLES (engine/angles; Ethan, 2026-11-14: "it looks at the
     player's defense and offense and tries to find good matchups ... it's
@@ -3529,7 +3766,13 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
             built[s["key"]] = s
     short = short_fn(c, built)
     moved = sec_changes(c)
-    sections = plain_all([x for x in (short, moved) if x] + list(built.values()))
+    # The research's answer first (sec_card), then the short version.
+    try:
+        card = sec_card(c, built)
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the card not built for {c.away}@{c.home} ({exc})")
+        card = None
+    sections = plain_all([x for x in (card, short, moved) if x] + list(built.values()))
     words = _words(sections)
     color_names(c, sections)
     mark_statuses(sections)
@@ -3801,6 +4044,14 @@ def to_text(report: dict) -> str:
                     if v.get("pick"):
                         out.append(f"      {v['pick']}")
                     out += _form_text(v)
+            elif t == "picks":
+                for v in b["items"]:
+                    out.append(f"  {v['rank']}. {v['pick']}" + (f" — {v['price']}" if v.get("price") else "")
+                               + (f" [{v['tier']}]" if v.get("tier") else ""))
+                    out += [f"      {x}" for x in (v.get("numbers"), v.get("form")) if x]
+                    out += [f"      - {w}" for w in v.get("why") or []]
+                    if v.get("kind"):
+                        out.append(f"      {v['kind']}")
             elif t == "parlays":
                 for v in b["items"]:
                     out.append(f"  • {v['title']}: {v.get('price_line') or ''}")

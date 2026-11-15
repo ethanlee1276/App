@@ -113,6 +113,18 @@
 
 /* EACH GAME'S PARLAYS (engine/gameparlays): a card a ticket, its legs in
    order with their prices and chances, the script, backups and caveats. */
+/* Our picks for this game (js/report.js "picks"): the research's card. */
+.gr-picks { list-style: none; margin: 6px 0 10px; padding: 0; display: grid; gap: 10px; }
+.gr-pick { border-radius: 10px; padding: 10px 12px; background: var(--panel-2); cursor: pointer; }
+.gr-pick-head { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: baseline; }
+.gr-pick-n { min-width: 1.4em; height: 1.4em; border-radius: 999px; display: inline-grid; place-items: center;
+  font-size: .78em; font-weight: 700; background: color-mix(in srgb, var(--brand) 18%, transparent); }
+.gr-pick-px { font-size: .86em; color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.gr-pick-tier { font-size: .74em; font-weight: 600; padding: 1px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+.gr-pick-num { margin: 4px 0 0; font-size: .9em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.gr-pick-form { margin: 2px 0 0; font-size: .86em; color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.gr-pick-kind { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--text-mute); }
 .gr-parlays { display: grid; gap: 10px; margin: 6px 0 10px; }
 .gr-parlay { border-radius: 10px; padding: 10px 12px; background: var(--panel-2); }
 .gr-parlay-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }

@@ -9338,6 +9338,40 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RR. Every game report opens on our picks, the way your research answered**
+(step 598; 15 November). Nothing to run. You said your chats' picks hit
+well (catch overs 83%, all picks 67%), that it's still easier to do your
+own research than to look through the app, and that the app should have
+the research done for you. Every league's game report now opens on **Our
+picks for this game**, open above the short version, built like your
+chats' final card:
+- **The picks, best to worst**: the board's posted picks for that game, one
+  a player, up to four, in the board's own order (its tier, how hard the
+  matchup backs it, then our chance).
+- **For each one**: the book and price; our chance, its fair price and
+  "play to", the most to pay (the fair price, never past −250, your
+  project's gate); how often he cleared that number ("Over 3.5 in 5 of 6
+  games this season, 4 of the last 5 (last 5: 6, 5, 4, 3, 7)"); the matchup
+  and his role behind it (the defense's leak to him, his read's reasons on
+  that side, his share of the work); and what capped it if anything did.
+- **How that kind of pick has hit, two ways**: on our board at that chance
+  ("66% of 412, we said 65%"), and in your hand-researched picks ("25 of 30").
+  Your chats' record by kind is now in the code (engine/researchrecord), from
+  the 166 NFL legs I graded: catch overs 25 of 30, quarterback attempts and
+  completions 12 of 13, 1+ passing TD 7 of 8, receiving yards 11 of 15,
+  rushing yards 4 of 9, anytime TDs 39 of 71. Our board beats your chats on
+  rushing yards (61%) and touchdowns (76%); your chats beat it on catches and
+  QB volume, where they took a number under the player's usual output.
+- **Then the parlay**: the game's first three-leg ticket and its touchdown
+  pair, one line each, with the price to take it.
+- **Nothing that clears**: "No pick on this game clears our bars at the
+  current lines", then the two closest picks and what holds each back.
+
+What our record says about your chats' way of picking: our NFL Most Likely
+picks at 75% and up hit 76% and are the only band that made money (+4.6%,
+25 picks), while 60–75% returned −2.6% (1,131) and 45–60% −6.9% (736). The
+NFL board already holds props under 60% (since 31 October).
+
 **RQ. A way back on every page a link opens, and the angles said right**
 (step 597; 15 November). Nothing to run. You tapped a player's name in a
 game report, landed on his player page and had no button back, and said a

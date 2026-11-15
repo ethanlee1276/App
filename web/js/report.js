@@ -201,8 +201,10 @@
       <dd>${(lines || []).map((l) => `<span>${escapeHtml(l)}</span>`).join("")}</dd></div>`).join("")}</dl>`;
   }
 
-  /* The section that reads open; the rest fold to their titles. */
-  const OPEN_SECTION = "short";
+  /* The sections that read open — our picks for the game (the research's
+     card, engine/gamereport.sec_card) and the short version; the rest fold
+     to their titles. */
+  const OPEN_SECTIONS = ["card", "short"];
 
   /* A rank as a bar's length: 1st the longest, last the shortest. */
   function rankWidth(rank, n) {
@@ -283,6 +285,21 @@
         </div>`;
       }).join("")}</div>`;
     }
+    /* OUR PICKS FOR THIS GAME (engine/gamereport.sec_card, 2026-11-15): the
+       research's card — each pick, best first, with its price, our chance,
+       the most to pay, how often he cleared it, why, and how its kind hit. */
+    if (b.type === "picks") {
+      return `<ol class="gr-picks">${(b.items || []).map((v) => `<li class="gr-pick"${v.player
+        ? ` data-open="player:${escapeAttr(slugify(v.player))}"` : ""}>
+        <div class="gr-pick-head"><span class="gr-pick-n">${escapeHtml(String(v.rank || ""))}</span>
+          <b class="gr-pick-what">${named(v.pick || "", b.names)}</b>${v.price
+            ? ` <span class="gr-pick-px">${escapeHtml(v.price)}</span>` : ""}${v.tier
+            ? ` <span class="gr-pick-tier">${escapeHtml(v.tier)}</span>` : ""}</div>
+        ${v.numbers ? `<p class="gr-pick-num">${escapeHtml(v.numbers)}</p>` : ""}
+        ${v.form ? `<p class="gr-pick-form">${escapeHtml(v.form)}</p>` : ""}
+        ${(v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${named(w, b.names, b.marks, true)}</li>`).join("")}</ul>` : ""}
+        ${v.kind ? `<p class="gr-pick-kind">${escapeHtml(v.kind)}</p>` : ""}</li>`).join("")}</ol>`;
+    }
     /* EACH GAME'S PARLAYS (engine/gameparlays, 2026-11-14): four three-leg
        tickets and three scorer pairs, each leg with its price, our chance
        and why, the script the ticket needs, its backups and caveats. */
@@ -335,6 +352,13 @@
             (v.why || []).forEach((w) => out.push(`    – ${w}`));
             if (v.pick) out.push(`    ${v.pick}`);
             (v.form || []).forEach(([k, lines]) => out.push(`    ${k}: ${(lines || []).join(" | ")}`));
+          }
+        } else if (b.type === "picks") {
+          for (const v of b.items || []) {
+            out.push(`${v.rank}. ${v.pick}${v.price ? ` — ${v.price}` : ""}${v.tier ? ` [${v.tier}]` : ""}`);
+            [v.numbers, v.form].filter(Boolean).forEach((x) => out.push(`    ${x}`));
+            (v.why || []).forEach((w) => out.push(`    – ${w}`));
+            if (v.kind) out.push(`    ${v.kind}`);
           }
         } else if (b.type === "parlays") {
           for (const t of b.items || []) {
@@ -450,7 +474,7 @@
       // feels all cluttered and hard to digest everything"). The short
       // version reads first; every other section folds to its title, and
       // the titles are the report's contents.
-      if (s.key === OPEN_SECTION || secs.length < 3) {
+      if (OPEN_SECTIONS.includes(s.key) || secs.length < 3) {
         return `<section class="gr-sec" id="gr-${escapeAttr(s.key)}"><h3 class="gr-title">${escapeHtml(s.title)}</h3>
         ${inner}</section>`;
       }
