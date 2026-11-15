@@ -22,12 +22,12 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 from _app import app_js  # noqa: E402  (app.js and the rooms it loads on first use)
-from test_the_boards_come_alive import _node as boards_node, _fb, _mlb, _texts  # noqa: E402
-from test_the_arenas_come_alive import _node as arenas_node, _arena  # noqa: E402
 
 APP = app_js()
-CHAT = open(os.path.join(ROOT, "web", "js", "chat.js"), encoding="utf-8").read()
+JS = lambda f: open(os.path.join(ROOT, "web", "js", f), encoding="utf-8").read()  # noqa: E731
+DETAIL, CHAT = JS("detail.js"), JS("chat.js")
 FAR = "2099-11-15T18:00:00Z"            # a 1:00 PM kickoff, far enough off to say its time
+NOW = 1_800_000_000_000                 # the clock the board code reads, held still
 
 
 def _fn(name):
@@ -43,6 +43,47 @@ def _run(js):
         return None
     assert out.returncode == 0, out.stderr[-800:]
     return json.loads(out.stdout)
+
+
+def _boards(calls):
+    """The boards' own code in node (detail.js, from PBP_BOARD to the page),
+    with every league's team table and the page's helpers stubbed, as
+    test_the_boards_come_alive.py and test_the_arenas_come_alive.py run it;
+    each call's drawing comes back as its lit words."""
+    i = DETAIL.index("const PBP_BOARD = ")
+    src = DETAIL[i:DETAIL.index("async function renderPbpPage(", i)]
+    tables = "".join(JS(f) + "\n" for f in ("teams.js", "teams_mlb.js", "teams_nba.js", "teams_wnba.js", "teams_nhl.js"))
+    js = (tables + "globalThis.teamsForSport = (l) => ({ mlb: MLB_TEAMS, nba: NBA_TEAMS, wnba: WNBA_TEAMS, nhl: NHL_TEAMS,"
+          " nfl: TEAMS })[l] || {};\n"
+          + "globalThis.escapeHtml = (s) => String(s).replace(/[&<>\"']/g, (c) => `&#${c.charCodeAt(0)};`);\n"
+          + "globalThis.liveHoldWord = (lv) => (lv || {}).hold ? String(lv.hold) : '';\n"
+          + "globalThis.tzTime = () => '7:30 PM';\n"
+          + f"Date.now = () => {NOW};\n"
+          + src.replace("\nconst ", "\nvar ").replace("\nlet ", "\nvar ")
+          + f"\nprocess.stdout.write(JSON.stringify([{', '.join(calls)}]));")
+    got = _run(js)
+    if got is None:
+        return None
+    return [[html.unescape(re.sub(r"<[^>]+>", "", t)).strip()
+             for t in re.findall(r"<text[^>]*>(.*?)</text>", svg, flags=re.S)] for svg in got]
+
+
+def _fb(live):
+    d = {"away": "TB", "home": "DAL", "live": live, "plays": [{"kind": "football", "id": "p1", "event": "Rush"}]}
+    return f"pbpBoardSVG({json.dumps(d)}, 'nfl')"
+
+
+def _mlb(live):
+    return f"pbpBoardSVG({json.dumps({'away': 'TBR', 'home': 'MIL', 'live': live, 'events': []})}, 'mlb', null)"
+
+
+def _arena(league, live, away=None, home=None):
+    d = {"away": away or ("NYR" if league == "nhl" else "LAL"), "home": home or "BOS", "live": live}
+    if league == "nhl":
+        d["rink"] = {"events": [{"id": 1, "kind": "faceoff", "team": "NYR", "sc": "1551"}]}
+    else:
+        d["plays"] = [{"kind": "hoops", "id": "1", "event": "Jump Shot"}]
+    return f"pbpArenaSVG({json.dumps(d)}, {json.dumps(league)}, {{}})"
 
 
 def _strip(games):
@@ -97,14 +138,11 @@ def test_the_strip_leaves_a_game_not_started_blank():
 
 def test_the_boards_leave_the_zeros_off_before_the_first_snap_and_pitch():
     zeros = {"state": "scheduled", "start_time": FAR, "away_score": 0, "home_score": 0}
-    got = boards_node("return [" + ", ".join([
-        _fb(zeros), _mlb(zeros),
-        _fb(dict(zeros, state="live", period="Q1", clock="15:00")),
-        _mlb(dict(zeros, state="live", period="Top 1st")),
-    ]) + "];")
+    got = _boards([_fb(zeros), _mlb(zeros), _fb(dict(zeros, state="live", period="Q1", clock="15:00")),
+                   _mlb(dict(zeros, state="live", period="Top 1st"))])
     if got is None:
         return
-    fb_pre, mlb_pre, fb_live, mlb_live = (_texts(s) for s in got)
+    fb_pre, mlb_pre, fb_live, mlb_live = got
     assert not any(w.isdigit() for w in fb_pre), ("no score on the football board before kickoff", fb_pre)
     assert not any(w.isdigit() for w in mlb_pre), ("no runs on the baseball board before first pitch", mlb_pre)
     assert fb_live.count("0") == 2, ("the first snap's 0-0 is a score", fb_live)
@@ -113,12 +151,10 @@ def test_the_boards_leave_the_zeros_off_before_the_first_snap_and_pitch():
 
 def test_the_arenas_say_the_names_alone_before_the_tip_and_the_drop():
     zeros = {"state": "scheduled", "start_time": "2099-01-01T00:30:00Z", "away_score": 0, "home_score": 0}
-    got = arenas_node("return [" + ", ".join([
-        _arena("nba", zeros), _arena("cbb", zeros, away="DUKE", home="UNC"), _arena("nhl", zeros),
-    ]) + "];")
+    got = _boards([_arena("nba", zeros), _arena("cbb", zeros, away="DUKE", home="UNC"), _arena("nhl", zeros)])
     if got is None:
         return
-    nba, cbb, nhl = (_texts(s) for s in got)
+    nba, cbb, nhl = got
     assert "LAL · TIP-OFF 7:30 PM · BOS" in nba, nba
     assert not any("LAL 0" in w or "BOS 0" in w for w in nba), nba
     assert not any("DUKE 0" in w or "UNC 0" in w for w in cbb), cbb
@@ -144,8 +180,10 @@ if __name__ == "__main__":
         try:
             fn()
             print(f"  ok  {name}")
-        except AssertionError as e:
+        except Exception as exc:                                    # noqa: BLE001
+            import traceback
             fails += 1
-            print(f"  FAIL {name}: {e}")
-    print(f"{len(tests) - fails}/{len(tests)} passed")
+            print(f"FAIL  {name}: {type(exc).__name__}: {exc}")
+            traceback.print_exc(limit=4)
+    print(f"\n{len(tests) - fails} tests passed." if not fails else f"\n{fails} failed.")
     sys.exit(1 if fails else 0)
