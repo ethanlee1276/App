@@ -321,6 +321,11 @@ METHOD_MARKETS = {"blowout_over": ("receptions", "rec_yds", "pass_att", "pass_cm
 #: anytime touchdown at 45%, or at 40% with "undeniable usage" — 30% of his
 #: team's red-zone chances.
 TD_RULE_PROB, TD_RULE_FALLBACK, TD_RULE_RZ_SHARE = 0.45, 0.40, 0.30
+#: The rule's red-zone share is the play-by-play's measured one where it counted
+#: one (Ethan, 2026-11-15: "switch"), from after Sunday night's kickoff (01:20
+#: UTC on 16 November) and not before, so no Sunday pick moved mid-slate. Off,
+#: the rule reads the estimate and words it as it always has.
+TD_RULE_MEASURED = False
 
 
 def method_fails(r: dict, sport: str) -> list:
@@ -343,17 +348,21 @@ def method_fails(r: dict, sport: str) -> list:
 
 def td_rule(r: dict) -> dict:
     """{"meets": bool, "why": str} — this touchdown pick against his rule:
-    45%, or 40% with 30% of the red-zone chances (``rz_share``)."""
+    45%, or 40% with 30% of the red-zone work (``rz_share``: his measured
+    share of his team's red-zone touches where the play-by-play counted it,
+    ``rz_share_measured``; else the estimate, his expected chances against
+    his team's red-zone plays)."""
     prob = float(r.get("model_prob") or 0.0)
     share = r.get("rz_share")
-    has = f", {float(share):.0%} of his team's red-zone chances" if share is not None else ""
+    what = "red-zone touches" if r.get("rz_share_measured") else "red-zone chances"
+    has = f", {float(share):.0%} of his team's {what}" if share is not None else ""
     if prob >= TD_RULE_PROB:
         return {"meets": True, "why": f"{prob:.0%}{has} — meets our touchdown rule (45%)"}
     if prob >= TD_RULE_FALLBACK and share is not None and float(share) >= TD_RULE_RZ_SHARE:
         return {"meets": True, "why": f"{prob:.0%}{has} — meets our touchdown rule (40% with a red-zone "
                                       f"role)"}
     return {"meets": False, "why": f"{prob:.0%}{has} — our touchdown rule asks 45%, or 40% with "
-                                   f"{TD_RULE_RZ_SHARE:.0%} of the red-zone chances"}
+                                   f"{TD_RULE_RZ_SHARE:.0%} of the red-zone {'work' if TD_RULE_MEASURED else 'chances'}"}
 
 
 def _cfb_tight() -> bool:
@@ -963,11 +972,32 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
             if t not in r["case_lines"]:
                 r["case_lines"].append(t)
 
-    # HIS SHARE OF THE RED-ZONE CHANCES (the touchdown rule): his carries and
-    # targets inside the 20 a game against his team's plays there.
+    # HIS SHARE OF THE RED-ZONE WORK (the touchdown rule). MEASURED FIRST
+    # (Ethan, 2026-11-15, choosing between the estimate and the play-by-play's
+    # own share: "switch"): his share of his team's red-zone touches over his
+    # last games, counted from the play-by-play (engine/nflusage
+    # .red_zone_usage), riding his read's touchdown row (gamescan
+    # .stamp_touchdowns). Only where none was counted, the estimate: his
+    # expected red-zone chances this week against his team's plays there.
+    # Read only once the switch is on (TD_RULE_MEASURED).
+    measured = {}
+    for g in reads.values() if TD_RULE_MEASURED else ():
+        for x in (g or {}).get("players") or []:
+            got = ((x or {}).get("td") or {}).get("rz_share")
+            if got is not None and x.get("player"):
+                try:
+                    measured[(x["player"], x.get("team"))] = float(got)
+                except (TypeError, ValueError):
+                    pass
     for k in order:
         r = pool[k]
-        if lane_of(r) != "td" or r.get("rz_share") is not None or not r.get("rz_chances"):
+        if lane_of(r) != "td":
+            continue
+        m = measured.get((r.get("player"), r.get("team")))
+        if m is not None:
+            r["rz_share"], r["rz_share_measured"] = round(min(1.0, m), 3), True
+            continue
+        if r.get("rz_share") is not None or not r.get("rz_chances"):
             continue
         ro = (((by_game.get(r.get("game")) or {}).get("scan") or {}).get("redzone") or {}).get(r.get("team")) or {}
         try:

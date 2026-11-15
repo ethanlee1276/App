@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SG. The touchdown rule reads his measured share of the red-zone work**
+(step 613; 15 November, on from Sunday night's kickoff). Nothing to
+run. You answered the touchdown rule's red-zone share with "switch". The
+rule is unchanged: 45%, or 40% when he has 30% of his team's red-zone work.
+What changed is the 30%. It was an estimate: his expected red-zone chances
+this week against his team's red-zone plays a game. From Monday night's
+game it is the play-by-play's own count, his share of his team's carries and targets
+inside the 20 over his last games, the same count the report's red-zone
+list says (step RZ). The estimate is kept only for a player with no count.
+His Most Likely touchdown pick says which it read: "41%, 34% of his team's
+red-zone touches — meets our touchdown rule (40% with a red-zone role)",
+or "red-zone chances" where it is still the estimate. It is in the code
+now and switched off; it switches on right after Sunday night's kickoff
+(one line, likelyboard.TD_RULE_MEASURED), so no Sunday pick changes
+mid-slate. Monday night's game is the first one it reads.
+
 **SF. The live game page without the field, in the order you'd read it**
 (step 612; 15 November). Nothing to run. You asked to make sure the field
 was gone from the live page, then to reorganize the page so it flows. The
