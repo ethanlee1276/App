@@ -29596,13 +29596,17 @@ function footballLine(p, g, html) {
     out = p.offsetting ? T("Offsetting penalties")
       : foul ? T(foul) + on() + T(p.foul_declined ? ", declined" : n ? `, ${yds(n)}` : "")
       : plain();
-  } else if (/kickoff|punt/i.test(e) && !td && !/block/i.test(e)) {
+  } else if (/kickoff|punt/i.test(e) && !td && !/block/i.test(e) && (b || p.touchback)) {
+    // The kicker before the returner, as the feed names them. One name alone
+    // is the kicker only on a touchback, where nobody returns it: early in a
+    // game a kicker with no line in the box yet is not on the roster the
+    // names are read against, and the one name is the returner's.
     const kickoff = /kickoff/i.test(e);
     const kicker = a ? N(a) + T(kickoff ? " kicks off" : " punts") : T(kickoff ? "Kickoff" : "Punt");
     out = p.touchback ? kicker + T(", touchback")
-      : p.fair_catch ? kicker + T(", fair catch") + (b ? T(" by ") + N(b) : "")
-      : y > 0 ? kicker + T("; ") + (b ? N(b) + T(" returns it ") : T("returned ")) + T(yds(y))
-      : a ? kicker : T(w.title);
+      : p.fair_catch ? kicker + T(", fair catch by ") + N(b)
+      : y > 0 ? kicker + T("; ") + N(b) + T(" returns it ") + T(yds(y))
+      : kicker;
   } else if (/field goal/i.test(e) && a) {
     const how = /block/i.test(e) ? "blocked" : /good/i.test(e) && !/no good/i.test(e) ? "good" : "missed";
     const kick = `${w.dist ? `${w.dist}-yd ` : ""}field goal`;

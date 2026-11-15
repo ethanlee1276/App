@@ -1301,12 +1301,20 @@
     const e = String(p.event || "");
     // A kickoff is filed under the side that receives it (dvPlay), so either
     // side's kicker and returner is looked for; the feed names the kicker first.
+    // One name alone, in no group that says which, is the kicker only on a
+    // touchback: early in a game the kicker has no line in the box yet, and
+    // the one name the feed resolved is the returner's.
+    const lone = (n) => (names.length > 1 || p.touchback ? n : "");
     if (/kickoff/i.test(e)) {
-      const lead = pick(them, ["kicking"]) || pick(us, ["kicking"]) || names[0] || "";
-      return { lead, with: pick(us, ["kickReturns"]) || pick(them, ["kickReturns"]) || names.find((n) => n !== lead) || "",
-               role: ["kicking", "kickReturns"] };
+      const back = pick(us, ["kickReturns"]) || pick(them, ["kickReturns"]);
+      const lead = pick(them, ["kicking"]) || pick(us, ["kicking"]) || lone(names.find((n) => n !== back) || "");
+      return { lead, with: back || names.find((n) => n !== lead) || "", role: ["kicking", "kickReturns"] };
     }
-    if (/punt/i.test(e)) return { lead: pick(us, ["punting"]) || names[0] || "", with: pick(them, ["puntReturns"]), role: ["punting", "puntReturns"] };
+    if (/punt/i.test(e)) {
+      const back = pick(them, ["puntReturns"]) || pick(us, ["puntReturns"]);
+      const lead = pick(us, ["punting"]) || lone(names.find((n) => n !== back) || "");
+      return { lead, with: back || names.find((n) => n !== lead) || "", role: ["punting", "puntReturns"] };
+    }
     if (/field goal|extra point/i.test(e)) return { lead: pick(us, ["kicking"]), with: "", role: ["kicking", ""] };
     if (/interception/i.test(e)) return { lead: pick(us, ["passing"]), with: pick(them, ["interceptions", "defensive"]), role: ["passing", "defensive"] };
     // The sacker is the defender the play names after it (espnplays `by`), or

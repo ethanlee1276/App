@@ -9370,7 +9370,10 @@ it, his side, the yards, and whether it was declined or offsetting.
   end zone. It now flies from the kicking 35, and a touchback lands in the
   end zone.
 - **A kickoff's returner** is now found on either team, so the sentence
-  names him and his chip shows his return line, not his rushing.
+  names him and his chip shows his return line, not his rushing. Early in a
+  game the kicker has no line in the box score yet, so the feed can resolve
+  only the returner; a lone name on a kick is never called the kicker (the
+  row keeps "Kickoff, returned 24 yds · Corey Kiner").
 
 **RT. The live page says each thing once, and its plays name who made them**
 (step 600; 15 November). Nothing to run. You said we don't need the drive

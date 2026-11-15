@@ -176,6 +176,9 @@ LINES = [
     ({"event": "Rush", "yards": 10, "players": ["Jahmyr Gibbs"], "dir": "rt", "foul": "Defensive Holding",
       "foul_by": "Brian Branch", "foul_declined": True},
      "<b>Jahmyr Gibbs</b> runs off right tackle for 10 yds · flag: defensive holding on <b>Brian Branch</b>, declined"),
+    # A lone name on a return is the returner's (the kicker has no box line yet).
+    ({"event": "Kickoff", "yards": 24, "players": ["Corey Kiner"]}, "Kickoff, returned 24 yds · <b>Corey Kiner</b>"),
+    ({"event": "Punt", "yards": 9, "players": ["Jacob Saylors"]}, "Punt, returned 9 yds · <b>Jacob Saylors</b>"),
     # Names that cannot say who did which keep the play's words, then the names.
     ({"event": "Pass Reception", "yards": 7, "players": ["Jared Goff"]}, "Pass complete for 7 yds · <b>Jared Goff</b>"),
     ({"event": "Pass Reception", "yards": 7}, "Pass complete for 7 yds"),
@@ -303,6 +306,16 @@ def test_a_kickoff_flies_from_the_kicking_sides_35():
     arc = re.search(r'<path class="gc-dv-arc" d="M([\d.]+) ', html)
     mid = re.search(r'<text class="gc-dv-num" x="([\d.]+)"[^>]*>50<', html)
     assert arc and mid and float(arc.group(1)) > float(mid.group(1)), (arc and arc.group(1), mid and mid.group(1))
+
+
+def test_a_kickoff_with_only_the_returner_named_never_makes_him_the_kicker():
+    """The opening kickoff: the kicker has no line in the box yet, so the
+    only name the feed resolves is the returner's."""
+    said, html = _said({"team": "DAL", "event": "Kickoff", "spot": 35, "yards": 25, "players": ["KaVontae Turpin"]},
+                       {"possession": "DAL", "detail": "1st & 10 at DAL 30", "yard_line": 30})
+    if said is None:
+        return
+    assert said == "The kickoff to the DAL 5; KaVontae Turpin brings it back 25 yards to the DAL 30.", said
 
 
 def test_a_touchback_lands_in_the_end_zone():
