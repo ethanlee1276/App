@@ -9359,6 +9359,17 @@ Why the legs had no links before: the Bet it stamp skips everything under
 a board's "games" key for speed, and the game parlays keep their tickets
 there. It now stamps each leg (up to eight books a leg).
 
+**In the same screenshot**: DeMario Douglas's "why" read "The record shows a
+blind spot here: nfl receptions, OVER — said 63%, hit 57% over 732 bets — ran
+hot; this slice closed itself". That's the Edge board's refusal of its own
+pick of that bet: our record closed catch overs on the Edge board for running
+6 points hot. The Most Likely pick of the same bet copied the Edge card's
+reasons, refusal included, and the parlay copied them from there. The Most
+Likely board judges a bet on its own bars and its own record, so a gate's
+refusal is no longer shown as a reason on a Most Likely card or a parlay leg
+(engine/refusals). "Usage bridge: 5.2 targets/gm × 0.67 per target …", the
+projection's arithmetic, is off the parlay legs too.
+
 **RR. Every game report opens on our picks, the way your research answered**
 (step 598; 15 November). Nothing to run. You said your chats' picks hit
 well (catch overs 83%, all picks 67%), that it's still easier to do your

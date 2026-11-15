@@ -470,7 +470,10 @@ def _by_research(t: dict) -> tuple:
 #: The touchdown model's footnotes about its own mechanics — true, and
 #: nothing a reader weighs a leg on (engine/touchdowns.td_probability).
 _FOOTNOTES = ("Running back:", "Team total:", "Quarterback:", "Depth receiver:", "Share of team TDs from",
-              "Scout: ", "Usage is ")
+              "Scout: ", "Usage is ",
+              # The projection's arithmetic (engine/projection), not a reason
+              # a reader weighs (Ethan's screenshot, 2026-11-15).
+              "Usage bridge:")
 #: The reasons a leg shows.
 WHY_N = 3
 
@@ -513,8 +516,10 @@ def why_lines(leg: dict, row: dict | None, read: dict | None, n: int = WHY_N) ->
     he's a good red zone usage"); for any other leg, the matchup read's
     reasons on the leg's side, then the model's own."""
     up = not str(leg.get("side") or "").strip().upper().startswith(("U", "NO"))
+    from .refusals import is_refusal
+    # A gate's refusal of the Edge pick is no reason for the leg (engine/refusals).
     reasons = [str(x) for x in (row or {}).get("reasons") or [] if x
-               and not any(str(x).startswith(f) for f in _FOOTNOTES)]
+               and not any(str(x).startswith(f) for f in _FOOTNOTES) and not is_refusal(x)]
     said: list = []
     scorer = leg.get("market") in ("anytime_td", "anytime_goal", "goals")
     if scorer:

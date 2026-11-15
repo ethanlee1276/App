@@ -75,6 +75,8 @@ Standard library only.
 
 from __future__ import annotations
 
+from .refusals import reasons_only as _reasons_only
+
 from .yardagefit import display_prob
 
 #: Markets this board will rank, and whether the model has been shown to
@@ -1941,7 +1943,9 @@ def _row_from(row: dict, market: str, sport: str, bettable, prob,
         "rank_auc": rank_auc(sport, market),
         # The Edge card's "Scout: ..." reasons are for ITS side; this row reads
         # its own (likelyboard, engine/nba/scout) and draws them under "Why?".
-        "reasons": [x for x in (row.get("reasons") or []) if not str(x).startswith("Scout: ")],
+        # …and not a gate's refusal of the Edge pick (engine/refusals): this
+        # board judges the bet on its own bars and says its own record.
+        "reasons": [x for x in _reasons_only(row.get("reasons")) if not str(x).startswith("Scout: ")],
         # What the defence gives up to his position (engine/defensevs).
         "matchup_card": row.get("matchup_card"),
         "qb_card": row.get("qb_card"),
@@ -2009,7 +2013,7 @@ def from_watch(row: dict, sport: str = "nfl") -> dict:
         "ev_per_unit": row.get("ev_per_unit"),
         "bettable": True,
         "rank_auc": rank_auc(sport, "anytime_td"),
-        "reasons": row.get("reasons") or [],
+        "reasons": _reasons_only(row.get("reasons")),
         "matchup_card": row.get("matchup_card"),
         "qb_card": row.get("qb_card"),
         "mate_card": row.get("mate_card"),
