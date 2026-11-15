@@ -24,6 +24,39 @@
 
   const TONE = { favorable: "up", unfavorable: "down", up: "up", down: "down" };
 
+  /* WHO GETS THE BALL, IN COLOUR (Ethan, 2026-11-15, circling DET's "who
+     gets the ball" line: "we can make the letters of there name green or
+     red depending on in they are a breakout or favorite candidate or a
+     unfavorable matchup"). A block's `names` (engine/gamereport.name_tones)
+     says each named player's matchup read: his name is green for a
+     breakout candidate or a favorable matchup, red for an unfavorable one,
+     plain for a neutral one, and every one opens the player's page. */
+  const isWordChar = (ch) => !!ch && /[\p{L}\p{N}]/u.test(ch);
+  function nameTag(name, v, inner) {
+    const tone = TONE[(v || {}).tone] || "";
+    const label = String((v || {}).label || "");
+    return `<span class="gr-name${tone ? ` ${tone}` : ""}" data-open="player:${escapeAttr(slugify(name))}"${
+      label ? ` title="${escapeAttr(label)}"` : ""}>${inner}${tone && label
+      ? `<span class="gr-sr"> (${escapeHtml(label.toLowerCase())})</span>` : ""}</span>`;
+  }
+  /* A line with its named players marked: one pass, longest names first,
+     so a name inside a longer one is left alone, and only where it stands
+     as a whole name. */
+  function named(text, names) {
+    const out = escapeHtml(text);
+    const keys = Object.keys(names || {}).filter(Boolean).sort((a, b) => b.length - a.length);
+    if (!keys.length) return out;
+    const by = new Map(keys.map((k) => [escapeHtml(k), k]));
+    const re = new RegExp([...by.keys()].map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "g");
+    return out.replace(re, (m, at, s) => (isWordChar(s[at - 1]) || isWordChar(s[at + m.length]))
+      ? m : nameTag(by.get(m), names[by.get(m)], m));
+  }
+  /* The key, under the title of a section that colours a name. */
+  const NAME_KEY = `<p class="gr-note gr-name-key"><span class="gr-name up">Green</span>: a breakout candidate or a
+    favorable matchup · <span class="gr-name down">Red</span>: an unfavorable matchup · tap a name to open the player’s page</p>`;
+  const colours = (blocks) => (blocks || []).some((b) =>
+    Object.values((b && b.names) || {}).some((v) => TONE[(v || {}).tone]));
+
   /* What a league's report holds, for the reader without the paid key
      (engine/gamereport, engine/leaguereport). */
   const HOOPS = "the line and what it means, rest and travel, who carries each team, where each " +
@@ -54,7 +87,7 @@
     if (b.type === "h") return `<h4 class="gr-h">${escapeHtml(b.text)}</h4>`;
     if (b.type === "note") return `<p class="gr-note">${escapeHtml(b.text)}</p>`;
     if (b.type === "list") {
-      return `<ul class="gr-list">${(b.items || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>`;
+      return `<ul class="gr-list">${(b.items || []).map((t) => `<li>${named(t, b.names)}</li>`).join("")}</ul>`;
     }
     if (b.type === "table") {
       const head = b.head || [];
@@ -70,9 +103,15 @@
         const tone = TONE[v.verdict || v.tone] || "";
         const door = v.player ? ` data-open="player:${escapeAttr(slugify(v.player))}"` : "";
         const who = [v.team ? teamName(v.team) : "", v.pos, v.role].filter(Boolean).join(" · ");
+        // His name in his read's colour where the block says it (the
+        // basketball report's "Who carries each team"); the card opens him.
+        const nt = b.type === "players" ? ((b.names || {})[v.player] || {}) : {};
+        const ntone = TONE[nt.tone] || "";
         return `<div class="gr-person ${tone}"${door}>
           <div class="gr-person-head">${playerAvatar(v.player, v.team, { size: 36, headshot: v.headshot })}
-            <span class="gr-person-who"><b>${escapeHtml(b.type === "verdicts" ? v.title : v.player)}</b>
+            <span class="gr-person-who"><b${ntone ? ` class="gr-name ${ntone}" title="${escapeAttr(nt.label || "")}"` : ""}>${
+              escapeHtml(b.type === "verdicts" ? v.title : v.player)}${ntone && nt.label
+              ? `<span class="gr-sr"> (${escapeHtml(String(nt.label).toLowerCase())})</span>` : ""}</b>
               <span>${escapeHtml(who)}</span></span>
             ${v.label ? `<span class="ms-read-tag ${tone}">${escapeHtml(v.label)}</span>` : ""}
             ${v.status ? `<span class="ms-read-tag gr-status">${escapeHtml(v.status)}</span>` : ""}</div>
@@ -238,7 +277,7 @@
         extra = `<div class="gr-extra">${extras.scripts}</div>`;
       }
       return `<section class="gr-sec" id="gr-${escapeAttr(s.key)}"><h3 class="gr-title">${escapeHtml(s.title)}</h3>
-        ${blocks.map(block).join("")}${extra}</section>`;
+        ${colours(blocks) ? NAME_KEY : ""}${blocks.map(block).join("")}${extra}</section>`;
     }).join("");
     const url = (extras && extras.url) || "";
     shown.set(r.game, { r, url });

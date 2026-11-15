@@ -9338,6 +9338,26 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RJ. Who gets the ball, in color** (step 590; 15 November). Nothing to
+run. You circled DET's "who gets the ball thrown to him" line and asked for
+each player's name in green or red by his matchup. The game reports now
+color the names wherever they say who gets the ball:
+- **Football (NFL and college).** "Who gets the targets" (college's "Who
+  catches it"), "Who carries it" and "Who gets the chances inside the 20":
+  green for a breakout candidate or a favorable matchup, red for an
+  unfavorable one (tough, or avoid), plain for a neutral one.
+- **Basketball (NBA, WNBA, college).** The "Who carries each team" cards,
+  the same way.
+- A player ruled out or doubtful is already left off these lines, so he is
+  never colored.
+- A one-line key sits under the section's title, and a tap on a name opens
+  the player's page. The copied report stays words only.
+- The touchdown-scorer lists stay plain: each line already says in words
+  whether his usage or the matchup backs him, and a second signal there
+  could disagree with it.
+Your screenshot showed the wording from before last night's plain-words
+update; the line now reads "Who gets the targets".
+
 **RI. Your NFL Bet checking method, built into the board and the reports**
 (step 589; 15 November). Nothing to run. I read the export again end to end:
 the master instructions, both slate logs and all 213 of your messages in

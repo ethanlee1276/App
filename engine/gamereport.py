@@ -107,6 +107,16 @@ KEY_CARRY_SHARE, KEY_TARGET_SHARE = 0.25, 0.12
 #: backs with this share of the carries or more.
 TREE_SHARE, BACKFIELD_SHARE = 0.10, 0.10
 
+#: WHO GETS THE BALL, IN COLOUR (Ethan, 2026-11-15, circling DET's "who gets
+#: the ball thrown to him" line: "when we talk about player that get the
+#: ball, we can make the letters of there name green or red depending on in
+#: they are a breakout or favorite candidate or a unfavorable matchup"). A
+#: named player's tone and words, from his matchup read in this game
+#: (engine/gamescan.READS); js/report.js colours the name and opens his page.
+NAME_TONE = {"breakout": ("up", "Breakout candidate"), "good": ("up", "Favorable matchup"),
+             "neutral": ("", "Neutral matchup"), "tough": ("down", "Unfavorable matchup"),
+             "avoid": ("down", "Unfavorable matchup — avoid")}
+
 #: Where a defense leaks or holds against a position: a rank this close
 #: to either end of the league (rank 1 gives up the most).
 FUNNEL_RANKS = 6
@@ -800,9 +810,34 @@ def _p(text):
     return {"type": "p", "text": text} if text else None
 
 
-def _list(items):
+def _list(items, names: dict | None = None):
+    """A list block. ``names`` ({name: name_tones' entry}) rides along for
+    the names its lines say, so the page can colour them."""
     items = [_sentence(i) for i in items if i]
-    return {"type": "list", "items": items} if items else None
+    if not items:
+        return None
+    b = {"type": "list", "items": items}
+    said = {n: v for n, v in (names or {}).items() if any(n in i for i in items)}
+    if said:
+        b["names"] = said
+    return b
+
+
+def name_tones(c: "Ctx", team: str, players) -> dict:
+    """{name: {"tone": "up" | "down" | "", "label": words}} for each of
+    ``players`` (names, or rows with a "player") who has a read for
+    ``team`` in this game (NAME_TONE). A player ruled out or doubtful has
+    no read on the page (engine/availability), so his name stays plain."""
+    from .availability import _key
+    reads = {_key(r.get("player")): r for r in c.reads_for(team) if r.get("player")}
+    out = {}
+    for p in players or []:
+        name = str((p.get("player") if isinstance(p, dict) else p) or "")
+        r = reads.get(_key(name)) if name else None
+        tone, label = NAME_TONE.get(str((r or {}).get("read") or ""), ("", ""))
+        if label:
+            out[name] = {"tone": tone, "label": label}
+    return out
 
 
 def _h(text):
@@ -1352,6 +1387,7 @@ def sec_identity(c: Ctx) -> dict | None:
             lines.append(f"On offense {t} {_join(style)}" +
                          (f" (charted, weeks 1–{weeks} of {season_ch})" if season_ch and weeks and o else ""))
         mine = c.reads_for(t)
+        tones = {}
         tree = sorted((r for r in mine if str(r.get("pos") or "").upper() in ("WR", "TE", "RB")
                        and (_usage(r).get("tgt_share") or 0) >= TREE_SHARE),
                       key=lambda r: -(_usage(r).get("tgt_share") or 0))
@@ -1362,6 +1398,7 @@ def sec_identity(c: Ctx) -> dict | None:
                                      f"{word}" + (f", {_num(_caught(_usage(r))[1])} a game"
                                                   if _f(_caught(_usage(r))[1]) is not None else "")
                                      for r in tree[:5]))
+            tones.update(name_tones(c, t, tree[:5]))
         backs = sorted((r for r in mine if str(r.get("pos") or "").upper() in ("RB", "FB", "QB")
                         and (_usage(r).get("carry_share") or 0) >= BACKFIELD_SHARE),
                        key=lambda r: -(_usage(r).get("carry_share") or 0))
@@ -1370,6 +1407,7 @@ def sec_identity(c: Ctx) -> dict | None:
                 f"{r['player']} ({r.get('pos')}) {_pct(_usage(r)['carry_share'])} of the carries"
                 + (f", {_num(_usage(r).get('carries_pg'))} a game" if _f(_usage(r).get("carries_pg")) is not None
                    else "") for r in backs[:3]))
+            tones.update(name_tones(c, t, backs[:3]))
         d = scheme.get(t) or {}
         cov = []
         if _f(d.get("zone")) is not None and _f(d.get("man")) is not None:
@@ -1415,7 +1453,7 @@ def sec_identity(c: Ctx) -> dict | None:
                          if old else
                          f"On defense {t} {_join(cov)}" + (f" ({sch_season} charting)" if sch_season else ""))
         if lines:
-            blocks += [_h(c.name(t)), _list(lines)]
+            blocks += [_h(c.name(t)), _list(lines, tones)]
     return _section("identity", "How each team plays", blocks)
 
 
@@ -1841,7 +1879,7 @@ def sec_redzone(c: Ctx) -> dict | None:
     league is "about average", and the red zone is "inside the 20"."""
     nums = c.scan.get("numbers") or {}
     rz = c.scan.get("redzone") or {}
-    lines = []
+    lines, tones = [], {}
     for off in c.teams:
         dfn = c.opp[off]
         o, d = (nums.get(off) or {}).get("rz_off") or {}, (nums.get(dfn) or {}).get("rz_def") or {}
@@ -1874,7 +1912,8 @@ def sec_redzone(c: Ctx) -> dict | None:
         if chances:
             lines.append(f"Who gets {off}'s chances inside the 20 (carries and targets a game, by our "
                          f"numbers): " + ", ".join(f"{p} about {_num(v)}" for p, v in chances) + ".")
-    blocks = [_list(lines)] if lines else []
+            tones.update(name_tones(c, off, [p for p, _v in chances]))
+    blocks = [_list(lines, tones)] if lines else []
     for off in c.teams:
         scorers = td_chance_lines(c, off)
         if scorers:
@@ -3297,7 +3336,7 @@ def _words(sections) -> int:
             n += len(x.split())
         elif isinstance(x, dict):
             for k, v in x.items():
-                if k not in ("type", "headshot", "verdict", "tone", "key"):
+                if k not in ("type", "headshot", "verdict", "tone", "key", "names"):
                     count(v)
         elif isinstance(x, list):
             for v in x:
@@ -3323,7 +3362,8 @@ def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
 #: The keys whose strings are names, codes or flags — never a sentence, so
 #: `plain` leaves them as they are.
 PLAIN_SKIP = frozenset(("type", "kind", "key", "player", "team", "headshot", "pos", "verdict", "tone",
-                        "status", "href", "url", "id", "logo", "color", "side", "market", "game", "slug"))
+                        "status", "href", "url", "id", "logo", "color", "side", "market", "game", "slug",
+                        "names"))
 
 
 def plain(text: str) -> str:

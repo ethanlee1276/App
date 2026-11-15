@@ -47,8 +47,9 @@ from __future__ import annotations
 
 from .gamereport import (KEY, Ctx, _f, _h, _join, _list, _num, _ord, _p, _pct, _section,
                          _sentence, a_pct, absent_sentence, cap, finish, kickoff_words, line_words,
-                         log_changes, market_sentence, ml_chances, named, parlay_sentence, player_clause,
-                         sec_market, sec_parlays, shine_lines, summary, team_be, team_np, team_owner)
+                         log_changes, market_sentence, ml_chances, name_tones, named, parlay_sentence,
+                         player_clause, sec_market, sec_parlays, shine_lines, summary, team_be, team_np,
+                         team_owner)
 
 #: The leagues this module writes.
 SPORTS = ("mlb", "nhl", "nba", "wnba", "cbb")
@@ -690,7 +691,10 @@ def nba_carry(c: Ctx) -> dict | None:
                           "label": "Starter" if r.get("starter") else "", "tone": "",
                           "text": (f"{', '.join(bits)} a game over his last {r.get('games')}"
                                    if bits else "")})
-        blocks += [_h(f"{c.name(t)}"), {"type": "players", "items": items}]
+        # His name in his matchup read's colour (gamereport.NAME_TONE), as
+        # the football report's "who gets the ball" lines.
+        tones = name_tones(c, t, items)
+        blocks += [_h(f"{c.name(t)}"), {"type": "players", "items": items, **({"names": tones} if tones else {})}]
     if not blocks:
         return None
     return _section("carry", "Who carries each team", blocks)
