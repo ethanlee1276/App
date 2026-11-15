@@ -194,6 +194,29 @@ def test_the_page_draws_the_card_open_above_the_folds():
     assert "border:" not in rule and "outline" not in rule, "the site draws no hard lines"
 
 
+def test_the_heartbeat_counts_the_reports_that_open_on_picks():
+    """The reports are a paid key, stripped from the public copy: the
+    heartbeat is where a live check sees the cards (launch._board_counts)."""
+    import tempfile
+    import launch as L
+    with_picks, none = _report(), _report(rows=[], held=[dict(_row(
+        "Tucker Kraft", "GB", "DET", "receptions", "Receptions", "OVER", 3.5, 0.53, "look"),
+        tier="held", held_note="held back: under the bar")])
+    board = {"most_likely": [], "recommendations": [], "game_bets": [],
+             "game_reports": [with_picks, none, _report(rows=[], held=[])]}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(board, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert (got["reports"], got["cards"], got["cards_none"]) == (3, 1, 1), got
+
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0

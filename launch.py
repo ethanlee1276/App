@@ -567,6 +567,12 @@ def _board_counts(path: str) -> dict:
     reps = b.get("game_reports")
     if isinstance(reps, list) and reps:
         out["reports"] = len(reps)
+        # Reports that open on our picks for the game (engine/gamereport
+        # sec_card, 2026-11-15), and the ones whose card says nothing clears.
+        cards = [((r.get("sections") or [{}])[0]) for r in reps if isinstance(r, dict)]
+        cards = [s for s in cards if isinstance(s, dict) and s.get("key") == "card"]
+        out["cards"] = sum(1 for s in cards if any(b.get("type") == "picks" for b in s.get("blocks") or []))
+        out["cards_none"] = len(cards) - out["cards"]
     # THE BOARD'S RULES AT WORK (engine/likelyboard METHOD_AVOID, td_rule —
     # Ethan's NFL Bet checking method, 2026-11-15): how many Most Likely
     # picks a rule held at Worth a look, and how many touchdown picks meet
