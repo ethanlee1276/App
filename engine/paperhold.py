@@ -379,10 +379,20 @@ def stamp(rows: list, sport: str, result: dict | None = None, path=None) -> int:
     return n
 
 
+#: What the heartbeat says of each kind on paper.
+KIND_FIELDS = ("sport", "market", "band", "said", "hit", "n")
+
+
 def verdict(out: dict) -> dict:
-    """The settle pass's line for the heartbeat: kinds on paper and back, by league."""
+    """The settle pass's line for the heartbeat: kinds on paper and back, by
+    league, and each kind on paper (`kinds`: league, market, band, the chance
+    we said, the hit rate, the count; 2026-11-15) — the Sunday check names
+    them, and their detail is otherwise only in the box's own state file."""
     from collections import Counter
-    on = Counter(str(h.get("sport") or "?") for h in (out or {}).get("holds") or [])
+    holds = (out or {}).get("holds") or []
+    on = Counter(str(h.get("sport") or "?") for h in holds)
     back = Counter(str(h.get("sport") or "?") for h in (out or {}).get("released") or [])
+    kinds = [{k: h.get(k) for k in KIND_FIELDS if h.get(k) is not None} for h in holds]
     return {"records": (out or {}).get("records"), "tested": (out or {}).get("tested"),
-            "on_paper": dict(sorted(on.items())), "back": dict(sorted(back.items()))}
+            "on_paper": dict(sorted(on.items())), "back": dict(sorted(back.items())),
+            "kinds": sorted(kinds, key=lambda k: (str(k.get("sport")), str(k.get("market")), str(k.get("band"))))}

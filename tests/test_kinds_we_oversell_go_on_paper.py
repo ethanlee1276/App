@@ -211,9 +211,14 @@ def test_the_edge_gates_mark_the_record_hold_only_when_it_was_the_one_gate():
 def test_the_settle_pass_measures_it_and_says_so():
     src = Path(ROOT, "engine/maintenance.py").read_text(encoding="utf-8")
     assert "ph = paperhold.refresh(lconn)" in src and 'verdicts["paper holds"] = paperhold.verdict(ph)' in src
-    v = P.verdict({"records": 9, "tested": 3, "holds": [{"sport": "nba"}, {"sport": "*"}],
-                   "released": [{"sport": "nfl"}]})
-    assert v == {"records": 9, "tested": 3, "on_paper": {"*": 1, "nba": 1}, "back": {"nfl": 1}}
+    v = P.verdict({"records": 9, "tested": 3, "holds": [
+        {"sport": "nba", "market": "pts", "band": "5-15", "said": 0.71, "hit": 0.52, "n": 64, "z": 3.1, "key": "x"},
+        {"sport": "*", "market": "*", "band": "15+", "said": 0.76, "hit": 0.36, "source": "standing"}],
+        "released": [{"sport": "nfl"}]})
+    # Each kind on paper by name, so the check names it off the heartbeat.
+    assert v == {"records": 9, "tested": 3, "on_paper": {"*": 1, "nba": 1}, "back": {"nfl": 1},
+                 "kinds": [{"sport": "*", "market": "*", "band": "15+", "said": 0.76, "hit": 0.36},
+                           {"sport": "nba", "market": "pts", "band": "5-15", "said": 0.71, "hit": 0.52, "n": 64}]}, v
 
 
 if __name__ == "__main__":

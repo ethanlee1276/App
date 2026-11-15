@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SH. The heartbeat names each kind of pick on paper** (step 614; 15
+November). Nothing to run. Step RO puts a kind of pick on paper when its
+record says we oversell it. This morning none had been measured yet. By
+this evening the first measured pass had put seven kinds on paper: four in
+college football, two in the NFL and one in hockey, besides the standing
+hold on picks 15+ points above the price. Nothing came back yet, and no
+board's truth check flagged anything. The heartbeat only counted them by
+league; which kinds they are (market, band, the chance we said, the hit
+rate, how many picks) was only in the box's own state file. The settle
+pass's "paper holds" line now lists each kind, from its next run, so the
+Sunday check names them without you running anything.
+
 **SG. The touchdown rule reads his measured share of the red-zone work**
 (step 613; 15 November, on from Sunday night's kickoff). Nothing to
 run. You answered the touchdown rule's red-zone share with "switch". The
