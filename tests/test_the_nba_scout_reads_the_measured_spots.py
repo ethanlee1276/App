@@ -118,7 +118,8 @@ def test_the_edge_card_carries_them_and_most_likely_rereads_them():
     assert 'if sport in ("nba", "cbb"):' in board[i:i + 1600] and "_nsc.annotate(" in board[i:i + 1600]
     assert [x for x in r["reasons"] if x.startswith("Scout: ")] == [f"Scout: {t}" for t in r["scout_notes"]], \
         "the Edge card draws them as reasons"
-    assert '"reasons": [x for x in (row.get("reasons") or []) if not str(x).startswith("Scout: ")]' in likely, \
+    # …and, since 2026-11-15, a gate's refusal of the Edge pick (engine/refusals).
+    assert '"reasons": [x for x in _reasons_only(row.get("reasons")) if not str(x).startswith("Scout: ")]' in likely, \
         "a Most Likely row drops the Edge side's scout lines and reads its own"
     build = (ROOT / "nba_build.py").read_text()
     assert '"scout_ctx": (scout_context(' in build and 'if args.league in _scout_leagues else None' in build, \
