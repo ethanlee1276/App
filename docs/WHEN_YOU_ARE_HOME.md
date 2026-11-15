@@ -9359,11 +9359,12 @@ refit's line (engine/deepfit):
   Now the run goes on with the next piece in line that fits. The skipped
   piece is never started, so it keeps its place and starts the next run.
 
-Tonight's run (about 12:30am Eastern) should do the rotation check (about
-30 minutes) and the rates check (11). Monday morning's heartbeat shows
-`rotation` → `verdict`, which should read `ready` if the finished seasons
-still hold. The NBA's own calibration still waits for the spread's check,
-which needs most of a run to itself.
+Tonight's run (about 12:30am Eastern) should do the rotation and rates
+checks first. Friday night's run did both of them, plus five other pieces,
+in 31 minutes, so the rest of tonight's time goes to whatever else fits.
+Monday morning's heartbeat shows `rotation` → `verdict`, which should read
+`ready` if the finished seasons still hold. The NBA's own calibration still
+waits for the spread's check, which needs most of a run to itself.
 
 **RW. The likeliest scorer is said in our data and the matchup** (step 603;
 15 November). Nothing to run. You circled "Lions's likeliest scorer by our
