@@ -167,7 +167,9 @@ def test_the_report_names_the_scorer_and_keeps_him_off_the_hard_day_list():
     i = src.index("def shine_lines(")
     assert "and not _go_to(r)" in src[i:i + 1500], "the short version's hard-day list skips him"
     j = src.index("def sec_watch(")
-    assert "and not _go_to(r)" in src[j:j + 600], "and so does Could struggle"
+    # The fades list (engine/breakouts, 2026-11-15: the research's "Breakout
+    # candidates" and "Fades", once "Could shine" and "Could struggle").
+    assert "and not _go_to(r)" in src[j:j + 1500], "and so do the fades"
     assert '"TOUGH FOR YARDS — STILL THE GO-TO SCORER"' in src and "UNFAVORABLE FOR YARDS" not in src
     assert "scorers = scorer_sentence(c)" in src
 

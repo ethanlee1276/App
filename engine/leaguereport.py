@@ -48,7 +48,7 @@ from __future__ import annotations
 from .gamereport import (KEY, Ctx, _f, _h, _join, _list, _num, _ord, _p, _pct, _section,
                          _sentence, a_pct, absent_sentence, cap, finish, kickoff_words, line_words,
                          log_changes, market_sentence, ml_chances, named, parlay_sentence, player_clause,
-                         sec_market, sec_parlays, shine_lines, summary, team_be, team_np, team_owner)
+                         read_pick, sec_market, sec_parlays, shine_lines, summary, team_be, team_np, team_owner)
 
 #: The leagues this module writes.
 SPORTS = ("mlb", "nhl", "nba", "wnba", "cbb")
@@ -130,20 +130,11 @@ def _verdict(r: dict, tone: str | None = None, both: bool = False) -> dict:
 
 
 def shine_struggle(c: Ctx, reads: list) -> list:
-    """Could shine (breakout first) and could struggle, as player cards."""
-    shine = sorted((r for r in reads if r.get("read") in ("breakout", "good")),
-                   key=lambda r: (r.get("read") != "breakout", -len(r.get("pro") or [])))
-    struggle = sorted((r for r in reads if r.get("read") in ("tough", "avoid")),
-                      key=lambda r: (r.get("read") != "avoid", -len(r.get("con") or [])))
-    blocks = []
-    if shine:
-        blocks += [_h("Could shine"), {"type": "verdicts", "items": [_verdict(r, "up") for r in shine[:SHINE_N]]}]
-    if struggle:
-        blocks += [_h("Could struggle"),
-                   {"type": "verdicts", "items": [_verdict(r, "down") for r in struggle[:STRUGGLE_N]]}]
-    if reads and not shine:
-        blocks.append(_p("No one in this game reads as a breakout candidate or a good matchup"))
-    return blocks
+    """THE RESEARCH'S BREAKOUT CANDIDATES AND FADES (engine/breakouts,
+    2026-11-15): each player's case in its measured reasons, his notes, his
+    pick on the read's side and the main way it loses, strongest first."""
+    from .breakouts import blocks
+    return blocks(reads, pick_fn=read_pick, head_fn=_h)
 
 
 def _names(rows, n) -> str:
@@ -767,23 +758,9 @@ def nba_tape(c: Ctx) -> dict | None:
 
 
 def nba_watch(c: Ctx) -> dict | None:
-    """The breakout watch, then who could shine and who could struggle."""
-    reads = c.reads
-    brk = sorted((r for r in reads if r.get("read") == "breakout"), key=lambda r: -len(r.get("pro") or []))
-    good = sorted((r for r in reads if r.get("read") == "good"), key=lambda r: -len(r.get("pro") or []))
-    bad = sorted((r for r in reads if r.get("read") in ("tough", "avoid")),
-                 key=lambda r: (r.get("read") != "avoid", -len(r.get("con") or [])))
-    blocks = []
-    if brk:
-        blocks += [_h("Breakout watch"), {"type": "verdicts", "items": [_verdict(r, "up") for r in brk[:SHINE_N]]}]
-    if good:
-        blocks += [_h("Could shine"), {"type": "verdicts", "items": [_verdict(r, "up") for r in good[:SHINE_N]]}]
-    if bad:
-        blocks += [_h("Could struggle"),
-                   {"type": "verdicts", "items": [_verdict(r, "down") for r in bad[:STRUGGLE_N]]}]
-    if reads and not brk and not good:
-        blocks.append(_p("No one in this game reads as a breakout spot or a good matchup"))
-    return _section("watch", "Players to watch", blocks)
+    """The research's breakout candidates (a breakout spot first) and fades
+    (`shine_struggle`, engine/breakouts)."""
+    return _section("watch", "Players to watch", shine_struggle(c, c.reads))
 
 
 def nba_injuries(c: Ctx) -> dict | None:

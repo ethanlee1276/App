@@ -25,10 +25,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "tools"))
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
-import grade_spring_research as G                                   # noqa: E402
+
+class _Tool:
+    """tools/grade_spring_research.py, loaded when a test first needs it (a
+    box tool, not an engine module: test_doctor reads a module-scope import
+    of it as a third-party one)."""
+    def __getattr__(self, attr):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("grade_spring_research",
+                                                      ROOT / "tools" / "grade_spring_research.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return getattr(mod, attr)
+
+
+G = _Tool()
 
 
 def _db():

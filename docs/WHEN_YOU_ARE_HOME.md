@@ -9338,6 +9338,34 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SA. Breakout candidates and fades, the way your research wrote them, in
+every league** (step 607; 15 November). Nothing to run. You asked for each
+game's report to do the research your reports did: scan the matchups, find
+the breakouts, and have it done for every game in every sport. Your research
+gave a game a **Breakout candidates** list (32 of your reports had one) and
+**Fades** beside it. Each player came with the case in numbers, the pick and
+the main way it loses. Every league's report now writes those two lists:
+NFL, college football, NBA, college basketball, WNBA, NHL and MLB. They
+come from the matchup scan, which already measures the same things as a
+read's reasons for and against:
+- **The strongest case first:** a breakout spot (a role moving toward him)
+  ahead of a good matchup, then more reasons for than against, then his
+  work (target or carry share, usage, minutes).
+- **The case in numbers:** up to four measured reasons, such as "Takes 69%
+  of the carries (18 a game)", "GB gives up the second-most touchdowns to
+  running backs (1.7 a game)" or "Minutes up 20% over his last five". Then
+  the scan's notes: his form, and his games against this opponent.
+- **His pick on the read's side,** where the board has one ("Most Likely
+  pick: Over 69.5 rushing yards (−115, 62%) — take it at …"). There is never
+  a forced one.
+- **The main way it loses:** his strongest reason against ("The main way it
+  loses: GB holds backs to 3.9 yards a carry"). On a fade, it is what could
+  still go right.
+
+"Could shine", "Could struggle" and basketball's "Breakout watch" are gone
+from the reports. Football's fades stay as before: featured roles only,
+never a team's go-to scorer.
+
 **RZ. The red zone says his season beside his last six games** (step 606;
 15 November). Nothing to run. You answered the counts' window with "add
 season total beside". Each player's carries and targets inside the 20 were

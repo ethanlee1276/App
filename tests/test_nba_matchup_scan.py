@@ -326,7 +326,8 @@ def test_the_nba_report_carries_the_tape_the_key_matchups_and_the_breakouts():
     assert table["rows"][0][2].endswith("(1st)"), table["rows"][0]
     text = R.to_text(rep)
     for want in ("KEY MATCHUPS", "Edge BOS: BOS's offense (1st in points per 100) against MIA's defense (",
-                 "Breakout watch", "Jay Star", "Could struggle", "Heat Man",
+                 # The research's two lists (engine/breakouts, 2026-11-15).
+                 "Breakout candidates", "Jay Star", "Fades", "Heat Man",
                  "On breakout watch: Jay Star of the Celtics — the Heat allows the most points a game",
                  "Who could have a hard day: Heat Man of the Heat — the Celtics allow the fewest threes",
                  "The key matchup: the Celtics' offense (1st in points per 100) against the Heat's defense ("):

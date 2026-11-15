@@ -2443,40 +2443,20 @@ def read_pick(r: dict) -> str:
 
 
 def sec_watch(c: Ctx) -> dict | None:
-    shine = sorted((r for r in c.reads if r.get("read") in ("breakout", "good")),
-                   key=lambda r: (r.get("read") != "breakout", -_volume(r)))
-    struggle = sorted((r for r in c.reads if r.get("read") in ("tough", "avoid") and _is_key(r)
-                       and not _go_to(r)),
-                      key=lambda r: (r.get("read") != "avoid", -_volume(r)))
-
-    def item(r, tone):
-        why = [str(x) for x in (r.get("pro") if tone == "up" else r.get("con")) or [] if x][:2]
-        out = {"player": r.get("player"), "team": r.get("team"), "pos": r.get("pos"),
-               "headshot": r.get("headshot") or "", "tone": tone,
-               "label": r.get("label") or "", "role": _role_line(r),
-               "text": " ".join(_sentence(w) for w in why)}
-        # HIS PICK ON THE READ'S SIDE (`read_pick`).
-        pick = read_pick(r)
-        if pick:
-            out["pick"] = pick
-        # MAY SIT (engine/availability): the mark beside his read, and why,
-        # before anything the read says.
-        if r.get("availability"):
-            from .availability import LABELS
-            out["status"] = LABELS.get(r["availability"], "")
-            out["text"] = (_sentence(r.get("availability_note") or "") + " " + out["text"]).strip()
-        # A key player's season is on his card under "Who's guarding
-        # who" already; the rest carry theirs here.
-        if not _is_key(r):
-            out["form"] = form_lines(c, r)
-        return out
-    blocks = []
-    if shine:
-        blocks += [_h("Could shine"), {"type": "players", "items": [item(r, "up") for r in shine[:6]]}]
-    if struggle:
-        blocks += [_h("Could struggle"), {"type": "players", "items": [item(r, "down") for r in struggle[:4]]}]
-    if c.reads and not shine:
-        blocks.append(_p("No one in this game reads as a breakout candidate or a good matchup"))
+    """THE RESEARCH'S BREAKOUT CANDIDATES AND FADES (engine/breakouts;
+    Ethan, 2026-11-15: "finding breakout ... that research is already done
+    for me for each game, for every sport"). Each player's case as his
+    research reports wrote it: every measured reason (his role, the
+    defense's leak to him, the game), his work, his form, his pick on the
+    read's side and the main way it loses, the strongest case first. A fade
+    is a featured role who is not his team's go-to scorer (a go-to scorer's
+    touchdowns go through him whatever the yards say: readlogic rule 3)."""
+    from .breakouts import blocks as _lists
+    blocks = _lists(c.reads, pick_fn=read_pick, role_fn=_role_line,
+                    # A key player's season is on his card under "Who's
+                    # guarding who" already; the rest carry theirs here.
+                    form_fn=lambda r: None if _is_key(r) else form_lines(c, r),
+                    fade_ok=lambda r: _is_key(r) and not _go_to(r), vol=_volume, head_fn=_h)
     blocks += no_play_blocks(c)
     blocks += role_blocks(c)
     return _section("watch", "Players to watch", blocks)
