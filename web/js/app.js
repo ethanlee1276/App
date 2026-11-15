@@ -24110,41 +24110,21 @@ if (typeof window !== "undefined" && window.addEventListener) {
     window.addEventListener(ev, () => { _touchedAt = Date.now(); }, { passive: true }));
 }
 
-/* THE WAY BACK, ON EVERY PAGE A LINK OPENS. Ethan, 2026-11-15, on a
-   player's page opened from a name in a game report: "There's no button
-   to take me back to the previous page I was on … there's a lot of pages
-   that we lead to, but there's never a back button to go back to where
-   you were previously."
-
-   The game, pick and play-by-play pages have their own Back (detailBack,
-   pbpBack). Every other page a link opens — a player, a team, the
-   injuries or the standings from a card — had none: the phone's
-   back-swipe worked, and there was nothing on the page to press. Now:
-
-     * A DOOR is a tap inside a page — a name, a team, a card's link. A
-       TAB is a tap on the site's own navigation: the top bar, the
-       sidebar, the tab bar, the menu, the league row, the footer, or a
-       Back button itself. The tap is read in the capture phase on the
-       window, before any handler has moved the page, so `_lastTap.from`
-       is the page being left: its address, its scroll, a name for it.
-     * A door that changes the page writes a new history entry carrying
-       `from`. A player to another player, a team to another team, the
-       search to a player, is a new page too — the same view at a new
-       address; an opponent chip on the same team is still a filter
-       (wayKey drops it).
-     * The page wears one bar, "← Back to the game". It is
-       `history.back()`, the phone's back-swipe exactly: the router
-       reopens the page from its address, and the scroll comes back from
-       the entry itself (`here`, stamped as the door left it). An entry
-       an earlier load of the page pushed opens the address instead.
-     * A tab tap draws no bar: the navigation is the way around, and a
-       Back on every page chosen from the menu would be clutter.
-     * The pages with their own Back keep it, and coming BACK to one no
-       longer rewrites where its Back goes (`_boardReturn`). */
+/* THE WAY BACK, ON EVERY PAGE A LINK OPENS (Ethan, 2026-11-15: "There's no
+   button to take me back to the previous page I was on"). A DOOR — a tap
+   inside a page, read in the capture phase before any handler moves the
+   page — opens its page as a history entry carrying `from` (address,
+   scroll, a name); a TAB (the site's own navigation, WAY_NAV) does not. The
+   page wears one bar, "← Back to the game", which is history.back(): the
+   router reopens the page and the scroll comes back from the entry
+   (`here`). A player to a teammate is a new page; an opponent chip is a
+   filter (wayKey). The game, pick and play-by-play pages keep their own
+   Back. tests/test_every_page_a_link_opens_has_a_way_back.py. */
 var _lastTap = { at: 0, nav: false, from: null };
 var _hashSeenAt = 0;
+// The detail pages' own Backs need no entry here: each marks a back (markBackNav).
 const WAY_NAV = ".topbar, .sidebar, .tabbar, .more-sheet, .more-scrim, .sportbar, .footer, "
-  + ".way-back, .gp-back, [data-gp-back], #wall-back";
+  + ".way-back, #wall-back";
 const WAY_SESSION = Math.random().toString(36).slice(2, 10);
 // No bar: the pages with their own Back, the chat room and a message
 // thread (screens with bars of their own), and the wall's screens.
@@ -24180,7 +24160,6 @@ function wayHere() {
            q: state.view === "players" && !state.playerSlug ? (state.search || "") : "" };
 }
 if (typeof window !== "undefined" && window.addEventListener) {
-  window.addEventListener("hashchange", () => { _hashSeenAt = Date.now(); }, true);
   window.addEventListener("click", (e) => {
     const t = e.target;
     const nav = !!(t && t.closest && t.closest(WAY_NAV));
@@ -24389,15 +24368,15 @@ function _switchViewNow(name, push, dir) {
   const booting = document.documentElement.classList.contains("booting");
   const leaving = state.view;
   if (leaving && !booting) _scrollMemo[leaving] = window.scrollY;
-  // THE WAY BACK: a tap inside a page — not the site's navigation, not
-  // the router's own step — opens a page that knows where it came from.
-  // A tap AFTER the router's last step is a door however soon it came: a
-  // back-swipe and then a name is two places, not one.
-  const door = !booting && !!_lastTap.from && !_lastTap.nav && Date.now() - _lastTap.at < 1500
-    && _lastTap.at > _routerNavAt;
-  const fromHash = location.hash;
   // Coming BACK to a detail page keeps where its own Back goes.
   const backing = Date.now() - _backNavAt < 2000;
+  // THE WAY BACK: a tap inside a page — not the site's navigation, not a
+  // Back, not the router's own step — opens a page that knows where it came
+  // from. A tap AFTER the router's last step is a door however soon it
+  // came: a back-swipe and then a name is two places, not one.
+  const door = !booting && !backing && !!_lastTap.from && !_lastTap.nav && Date.now() - _lastTap.at < 1500
+    && _lastTap.at > _routerNavAt;
+  const fromHash = location.hash;
   if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving) && !backing)
     _boardReturn = { view: leaving, y: booting ? 0 : window.scrollY };
   /* A DETAIL PAGE OPENED BY A TAP IS A NEW HISTORY ENTRY, so the phone's
@@ -26958,6 +26937,7 @@ function bind() {
      screen — and then the URL you copied pointed at something you were not
      looking at. */
   window.addEventListener("hashchange", () => {
+    _hashSeenAt = Date.now();             // the way back's bar asks (wayBack)
     _routerNavAt = Date.now();
     const h = (location.hash || "").replace("#", "");
     if (entityRoute(h)) return;

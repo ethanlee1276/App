@@ -39,19 +39,22 @@ CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").rea
 
 
 def test_a_tap_is_read_before_any_handler_moves_the_page():
-    i = APP.index('window.addEventListener("click", (e) => {\n    const t = e.target;\n    const nav')
-    assert APP[i:i + 400].rstrip().endswith("}, true);\n}") or "}, true);" in APP[i:i + 400], \
-        "the capture phase, on the window: before the page's own handlers"
+    tap = block(APP, 'window.addEventListener("click", (e) => {\n    const t = e.target;\n    const nav', "(")
+    assert tap.endswith("}, true)"), "the capture phase, on the window: before the page's own handlers"
+    assert "_lastTap = { at: Date.now(), nav, from };" in tap
     nav = APP[APP.index("const WAY_NAV = "):APP.index("const WAY_SESSION")]
     for chrome in (".topbar", ".sidebar", ".tabbar", ".more-sheet", ".sportbar", ".footer",
-                   ".way-back", ".gp-back", "[data-gp-back]", "#wall-back"):
+                   ".way-back", "#wall-back"):
         assert chrome in nav, chrome
+    # The detail pages' own Backs mark a back, which no door can be.
+    assert "markBackNav(); switchView(detailBackView());" in APP
+    assert "{ markBackNav(); switchView(way.view); }" in APP
     assert ".rail" not in nav, "the rail's games and picks are doors"
 
 
 def test_a_door_writes_an_entry_that_knows_where_it_came_from():
     body = block(APP, "function _switchViewNow(")
-    assert ("const door = !booting && !!_lastTap.from && !_lastTap.nav && Date.now() - _lastTap.at < 1500\n"
+    assert ("const door = !booting && !backing && !!_lastTap.from && !_lastTap.nav && Date.now() - _lastTap.at < 1500\n"
             "    && _lastTap.at > _routerNavAt;") in body
     assert "const fresh = openedByTap || (door && wayKey(url) !== wayKey(fromHash));" in body
     assert "if (door) { wayStampLeaving(); history.pushState(wayPushState({ view: name }), \"\", `#${name}`); }" in body
@@ -75,8 +78,10 @@ def test_the_bar_is_the_browsers_back_and_never_a_dead_button():
     fn = block(APP, "function wayBack(")
     assert "history.back();" in fn and "location.hash = f.hash;" in fn
     assert "if ((history.state || {}).w === WAY_SESSION) {" in fn
-    # A step between two paths fires no hashchange: the bar tells the router.
+    # A step between two paths fires no hashchange: the bar tells the router,
+    # which stamps every hash it hears.
     assert 'if (_hashSeenAt < t0) window.dispatchEvent(new HashChangeEvent("hashchange"));' in fn
+    assert 'window.addEventListener("hashchange", () => {\n    _hashSeenAt = Date.now();' in APP
     land = block(APP, "function _landScroll(")
     assert "} else if (back && wayLanded() != null) {\n    y = wayLanded();" in land
 
@@ -112,7 +117,7 @@ console.log(JSON.stringify(out));
 
 
 def test_back_to_the_search_brings_its_words_back():
-    router = APP[APP.index('window.addEventListener("hashchange", () => {\n    _routerNavAt'):]
+    router = APP[APP.index('window.addEventListener("hashchange", () => {\n    _hashSeenAt'):]
     router = router[:router.index("// An IN-PAGE ANCHOR")]
     assert 'if (h === "players" && state.playerSlug) waySearchBack();' in router
     fn = block(APP, "function waySearchBack(")

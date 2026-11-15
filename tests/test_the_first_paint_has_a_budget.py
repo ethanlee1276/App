@@ -321,7 +321,15 @@ APP_JS_BUDGET_KB = 290
 #: wrapper, one nudge for both): 388,037 -> 388,313 B, 217 over 379. It
 #: cannot load later: the bars it puts back are on the first page drawn, and
 #: the picker's nudge is now this one. Told to Ethan.
-BOOT_BUDGET_KB = 380
+#: 380 -> 381 on 2026-11-15, for Ethan on a player's page opened from a name
+#: in a game report: "There's no button to take me back to the previous page
+#: I was on … there's a lot of pages that we lead to, but there's never a
+#: back button". THE WAY BACK (app.js): the tap read before any handler moves
+#: the page, the entry that carries where it came from, the one bar every
+#: page a link opens wears, and the search's words coming back. 1,591 B gz:
+#: 388,343 -> 389,955 B, 835 over 380. It cannot load later: the first tap
+#: on the first page drawn is the one it has to read. Told to Ethan.
+BOOT_BUDGET_KB = 381
 
 
 def _gz_trimmed(rel: str) -> int:
