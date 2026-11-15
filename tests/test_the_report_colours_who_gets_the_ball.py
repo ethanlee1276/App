@@ -73,8 +73,12 @@ def test_the_lines_that_say_who_gets_the_ball_carry_their_players_reads():
         "he is in both the targets and the carries lines"
     assert det["names"]["Amon-Ra St. Brown"] == {"tone": "", "label": "Neutral matchup"}
     assert "Brock Wright" not in det["names"], "6% of the targets is under the tree's floor: not in the line"
-    rz = _sec(rep, "redzone")["blocks"][0]
-    assert (rz["names"]["Matthew Golden"]["tone"], rz["names"]["Jahmyr Gibbs"]["tone"]) == ("down", "up")
+    # 2026-11-15: the red zone names its players in its own lists, the counts
+    # (who gets the ball inside the 20) and the scorers, each with its colours;
+    # its first list is the two teams' rates and names nobody.
+    rz_lists = [b for b in _sec(rep, "redzone")["blocks"] if b["type"] == "list"]
+    tones = {n: v["tone"] for b in rz_lists for n, v in (b.get("names") or {}).items()}
+    assert (tones["Matthew Golden"], tones["Jahmyr Gibbs"]) == ("down", "up")
     # The scorer lists too, since the colours run the whole report: each
     # line says "the touchdown matchup" for what the defense gives up in
     # touchdowns, so it never reads against his colour.
