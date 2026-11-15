@@ -171,7 +171,9 @@ def test_switched_off_the_build_says_so():
     was = os.environ.get(LB.PRICE_TRUST_ENV)
     os.environ[LB.PRICE_TRUST_ENV] = "off"
     try:
-        board = LB.build(_result([_row(prob=0.80)]), sport="nfl", calibration={}, band_verdict=None)
+        # 0.78 against the field's 0.65: above it, short of the fifteen
+        # points that go on paper whatever the switch (engine/paperhold).
+        board = LB.build(_result([_row(prob=0.78)]), sport="nfl", calibration={}, band_verdict=None)
     finally:
         if was is None:
             os.environ.pop(LB.PRICE_TRUST_ENV, None)
@@ -179,7 +181,7 @@ def test_switched_off_the_build_says_so():
             os.environ[LB.PRICE_TRUST_ENV] = was
     assert board["price_trust"] == {"on": False, "rows": 0, "no_quotes": 0, "thin": 0, "fielded": 0, "above": 0,
                                     "moved": 0, "posted": 0, "bigger_unmarked": 0}
-    assert board["rows"][0]["model_prob"] == 0.80
+    assert board["rows"][0]["model_prob"] == 0.78
 
 
 def test_the_board_checks_tiers_and_ranks_on_the_price_number():
@@ -188,8 +190,10 @@ def test_the_board_checks_tiers_and_ranks_on_the_price_number():
     (row,) = board["rows"]
     assert abs(row["model_prob"] - round(_field_over(), 4)) < 1e-9
     assert "books' de-vigged price says" in row["check_notes"]["model"]
-    mlb = LB.build(_result([_row(prob=0.80)]), sport="mlb", calibration={}, band_verdict=None)
-    assert mlb["rows"][0]["model_prob"] == 0.80, "MLB's board is not on the rule"
+    # 0.78: above the field's 0.65 and short of the fifteen points that go
+    # on paper in every league (engine/paperhold).
+    mlb = LB.build(_result([_row(prob=0.78)]), sport="mlb", calibration={}, band_verdict=None)
+    assert mlb["rows"][0]["model_prob"] == 0.78, "MLB's board is not on the rule"
 
 
 def test_under_even_at_the_price_it_is_held_unless_the_matchup_backs_it():

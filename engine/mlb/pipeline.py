@@ -438,6 +438,7 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         # The field's fair at pick time, beside the book we shopped
         # to. Evidence only; nothing prices from it yet.
         "fair_consensus": rec.fair_consensus,
+        "record_hold": getattr(rec, "record_hold", None),
         "consensus_books": rec.consensus_books,
         "edge": rec.edge, "ev_per_unit": rec.ev_per_unit,
         "net_edge": rec.net_edge, "stake_basis": rec.stake_basis,

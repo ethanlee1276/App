@@ -135,6 +135,14 @@ class Recommendation:
     #: along as context. See `sharp_anchor_for`.
     sharp_anchored: bool = False
     sharp_fair: float | None = None
+    #: ON PAPER, NOT POSTED (engine/paperhold; Ethan, 2026-11-15: "we should
+    #: only be recording paper bets and not posting the bets so we can still
+    #: learn"). The record's own refusal (losspatterns.veto: a slice the
+    #: journal convicted, a stopped shelf, a confirmed hypothesis) when it is
+    #: the ONLY gate the pick failed — the bet we would otherwise have posted.
+    #: It is journaled on paper (ledger.log_recommendations, category
+    #: ``edge_held``) and graded, so the slice keeps a record to come back on.
+    record_hold: str | None = None
 
 
 #: THE TWO REASONS THAT REFUSE THE BET, named rather than inlined.
@@ -830,11 +838,13 @@ def evaluate_prop(prop: Prop, proj: Projection,
     # broken price, not a bet.
     from .gamebets import SHARP_SUSPECT_EV, _SUSPECT_NOTE
     suspect = anchored and sharp_ev > SHARP_SUSPECT_EV
-    gate_ok = (credible and has_market and prices_line
-               and calibration_ok and pattern_block is None
-               and not suspect
-               and edge >= min_edge
-               and net > favourite_surcharge(best.odds))
+    gate_but_record = (credible and has_market and prices_line
+                       and calibration_ok
+                       and not suspect
+                       and edge >= min_edge
+                       and net > favourite_surcharge(best.odds))
+    gate_ok = gate_but_record and pattern_block is None
+    record_hold = pattern_block if gate_but_record and pattern_block else None
     grade = quality_letter(quality) if gate_ok else "Pass"
     fraction = 0.5 if (grade == "A+" and tier == 1) else 0.25
     if grade == "Pass":
@@ -971,4 +981,5 @@ def evaluate_prop(prop: Prop, proj: Projection,
         volatility=market_volatility(prop.market),
         sharp_anchored=anchored,
         sharp_fair=(round(hit, 4) if anchored else None),
+        record_hold=record_hold,
     )

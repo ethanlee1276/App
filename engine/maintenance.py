@@ -1444,6 +1444,20 @@ def settle_open(log=print, state_path: Path | None = None,
                         "self-closed — see the Record page")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  loss-pattern mining skipped: {exc}")
+            # ON PAPER, NOT POSTED (engine/paperhold; Ethan, 2026-11-15: "that
+            # should be automated and not asking me"): the Most Likely kinds
+            # the board's own record says we oversell come off the board,
+            # recorded and graded, and come back once their paper picks run
+            # honest. Measured here, on fresh grades; the builds read it.
+            try:
+                from . import paperhold
+                ph = paperhold.refresh(lconn)
+                verdicts["paper holds"] = paperhold.verdict(ph)
+                if ph["holds"]:
+                    log(f"  paper holds: {len(ph['holds'])} kind(s) on paper, "
+                        f"{len(ph['released'])} back")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  paper holds skipped: {exc}")
             # The journal fitters: temperature + player memory for every
             # sport with no deep-history harness (hoops, college, UFC).
             # A sport crosses its 200-bet floor the night it happens.

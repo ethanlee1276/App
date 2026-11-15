@@ -9338,6 +9338,44 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RO. Kinds of pick we oversell go on paper, on their own** (step 595; 15
+November). Nothing to run, nothing to decide. You said yes: where we say
+76% and they hit 36%, record the picks on paper and don't post them, with
+no asking. Now:
+- **Your 76%/36% picks are on paper from today.** That's every league's
+  Most Likely picks 15 or more points above the books' price (BK's
+  finding). They come off the board, the Most Likely list, the matchup
+  picks and the touchdown scenarios. Each is still recorded (the "held"
+  book) and graded.
+- **Any other kind goes on paper when its record says so.** After every
+  settle, the record measures each league's Most Likely picks by market and
+  by how far above the price they sat (15+ points, 5 to 15, within 5,
+  below). A kind with 40 or more graded picks in the last 90 days goes on
+  paper when it ran 10 or more points hot (or a quarter of what it
+  claimed) by more than luck explains. A kind that merely loses a little
+  stays; that's the record's corrections' job.
+- **It comes back on its own.** Once 30 of a kind's paper picks have run
+  within 5 points of what we said, it's posted again.
+- **The Edge boards learn from what they refuse now.** A pick the record
+  alone turned down (a slice it convicted, a stopped market, a confirmed
+  hypothesis) used to vanish, so the slice could never come back. It's
+  recorded on paper now (the "edge_held" book, no dollars) with
+  everything the record slices on.
+- A pick already posted keeps its seat until its game. The heartbeat's
+  settle line shows "paper holds": kinds on paper and kinds back, by
+  league.
+
+**Your picks audit (QC), read.** The NFL's five flagged matchup picks
+(Coleman, Kincaid and Washington unders at 50–53% with the projection over
+the line; Waller and McCaffrey overs at 50%) were each made at the matchup
+picks' 55% bar. Then the board's record correction lowered that bet's
+chance, the lower number was written onto the matchup pick, and the pick
+stayed posted under its own bar. Now a matchup pick under its bar after
+the correction, or one the board held back, comes off, and the player's
+card says why. The rest of the paste was as designed: the struggling
+players carry no picks against them, and the five go-to scorers without a
+touchdown pick were priced under every board's bar.
+
 **RN. The game report's numbers in green and red** (step 594; 15
 November). Nothing to run. You circled "(3rd in the league)" and "(28th)"
 in the short version and asked for the numbers to be green when they're

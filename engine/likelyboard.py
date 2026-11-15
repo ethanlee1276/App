@@ -177,9 +177,17 @@ def held_reason(r: dict, checks: dict) -> str | None:
     not judged on it.
 
     A pick already posted (``locked``) is never taken off; it keeps its
-    seat until its game, as every posted pick does."""
+    seat until its game, as every posted pick does.
+
+    ON PAPER (engine/paperhold, 2026-11-15): a kind the record says we
+    oversell by ten points or more comes off whatever else says, recorded
+    and graded here until its paper picks run honest — Ethan: "if any bets
+    is like that we should switch them to paper and stop posting them till
+    we learn and get them better"."""
     if r.get("locked"):
         return None
+    if r.get("paper_hold"):
+        return r["paper_hold"]
     if r.get("idea_hold"):
         return r["idea_hold"]
     proven = r.get("ctx_note") or r.get("cal_note")
@@ -1039,6 +1047,20 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         trust_price([pool[k] for k in order], result, sport, stats=trust_stats)
     except Exception as exc:                                 # noqa: BLE001
         trust_stats["error"] = f"{type(exc).__name__}: {exc}"
+    # ON PAPER, NOT POSTED (engine/paperhold; Ethan, 2026-11-15: "if any bets
+    # is like that we should switch them to paper and stop posting them till
+    # we learn and get them better"). A kind of pick the board's own record
+    # says it oversells — and every league's picks 15+ points above the
+    # market, the kind that said 76% and hit 36% — comes off the board as a
+    # held-back pick does (`held_reason`), journaled and graded, until its
+    # paper picks run honest. Read after the price, on the number the page
+    # would show.
+    paper_held, paper_error = 0, None
+    try:
+        from . import paperhold as _paper
+        paper_held = _paper.stamp([pool[k] for k in order], sport, result)
+    except Exception as exc:                                 # noqa: BLE001
+        paper_error = f"{type(exc).__name__}: {exc}"
     rows, tiers, lanes, held = [], {t: 0 for t, _ in TIERS}, {}, []
     for k in order:
         r = pool[k]
@@ -1136,8 +1158,11 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         lanes[lane] = lanes.get(lane, 0) + 1
     rank = {t: i for i, (t, _) in enumerate(TIERS)}
     rows.sort(key=lambda r: (rank[r["tier"]], -r["matchup_strength"], -float(r["model_prob"])))
-    return {"rows": rows, "tiers": tiers, "lanes": lanes, "matchup_source": source,
-            "capped": capped, "held": held, "price_trust": trust_stats}
+    out = {"rows": rows, "tiers": tiers, "lanes": lanes, "matchup_source": source,
+           "capped": capped, "held": held, "price_trust": trust_stats, "paper_held": paper_held}
+    if paper_error:
+        out["paper_error"] = paper_error
+    return out
 
 
 def _past(odds, cap: int) -> bool:
@@ -1172,9 +1197,11 @@ def attach(result: dict, sport: str, conn=None) -> str:
         harmonize(result)
         t = board["tiers"]
         held_unders = sum(1 for r in board.get("held") or [] if r.get("tight_hold"))
+        on_paper = sum(1 for r in board.get("held") or [] if r.get("paper_hold"))
         return (f"Most Likely board: {len(board['rows'])} pick(s) — {t.get('top', 0)} top, "
                 f"{t.get('strong', 0)} strong, {t.get('look', 0)} worth a look"
-                + (f"; {held_unders} held by the record's under rules" if held_unders else ""))
+                + (f"; {held_unders} held by the record's under rules" if held_unders else "")
+                + (f"; {on_paper} on paper, not posted (engine/paperhold)" if on_paper else ""))
     except Exception as exc:                                 # noqa: BLE001
         # WHERE, not only what (the box, 2026-10-06: NHL's board was
         # skipped every build with "unhashable type: 'dict'" and nothing
@@ -1266,7 +1293,7 @@ def _cards_follow_the_list(result: dict, held: dict) -> int:
     return n
 
 
-def _read_picks_follow_the_board(result: dict, by: dict) -> int:
+def _read_picks_follow_the_board(result: dict, by: dict, dropped: dict | None = None) -> int:
     """THE READ'S OWN PICK SAYS WHAT THIS BOARD DID WITH IT (2026-11-14). A
     read's matchup pick (engine/matchpicks.READ_PICK_MIN) is pooled here and
     checked like every pick; the card that names it names the verdict too:
@@ -1282,7 +1309,13 @@ def _read_picks_follow_the_board(result: dict, by: dict) -> int:
                 continue
             for f in ("tier", "tier_label", "held_note"):
                 mp.pop(f, None)
-            b = by.get(key_of(dict(mp, player=mp.get("player") or x.get("player"), kind="prop")))
+            k = key_of(dict(mp, player=mp.get("player") or x.get("player"), kind="prop"))
+            b = by.get(k)
+            if k in (dropped or {}) and not (b is not None and b.get("tier") == "held"):
+                # Off the matchup picks under its own bar (the board kept it).
+                mp["tier"], mp["held_note"] = "held", dropped[k]
+                n += 1
+                continue
             if b is None:
                 continue
             if b.get("tier") == "held":
@@ -1311,7 +1344,11 @@ def harmonize(result: dict) -> int:
     # (`tightened_reason`) is not posted on the list either, so the list's
     # staked book cannot take what the board refused — the list journals
     # `most_likely` on its own, after this.
-    tight_rows = {key_of(r): r for r in board.get("held") or [] if isinstance(r, dict) and r.get("tight_hold")}
+    # ON PAPER (engine/paperhold) the same way: a kind the record says we
+    # oversell is not posted on the list, the matchup picks or the touchdown
+    # scenarios either — it is journaled once, as the board's held pick.
+    tight_rows = {key_of(r): r for r in board.get("held") or []
+                  if isinstance(r, dict) and (r.get("tight_hold") or r.get("paper_hold"))}
     tight = set(tight_rows)
     if tight and isinstance(result.get("most_likely"), list):
         keep = [r for r in result["most_likely"]
@@ -1319,6 +1356,24 @@ def harmonize(result: dict) -> int:
         board["tightened_off_list"] = len(result["most_likely"]) - len(keep)
         result["most_likely"] = keep
         board["cards_unpicked"] = _cards_follow_the_list(result, tight_rows)
+    paper = {k for k, r in tight_rows.items() if r.get("paper_hold")}
+    if paper:
+        gone = 0
+        for g in result.get("matchup_picks") or []:
+            if not isinstance(g, dict):
+                continue
+            for lane in ("td", "props"):
+                if isinstance(g.get(lane), list):
+                    was = len(g[lane])
+                    g[lane] = [r for r in g[lane]
+                               if not (isinstance(r, dict) and not r.get("locked") and key_of(r) in paper)]
+                    gone += was - len(g[lane])
+        if isinstance(result.get("td_scenarios"), list):
+            was = len(result["td_scenarios"])
+            result["td_scenarios"] = [r for r in result["td_scenarios"]
+                                      if not (isinstance(r, dict) and not r.get("locked") and key_of(r) in paper)]
+            gone += was - len(result["td_scenarios"])
+        board["paper_off_lists"] = gone
     n = 0
     for r in rows:
         w = matchup_warning(r)
@@ -1357,8 +1412,54 @@ def harmonize(result: dict) -> int:
         w = matchup_warning(b)
         if w:
             src["matchup_warning"] = w
-    board["read_picks_carded"] = _read_picks_follow_the_board(result, by)
+    dropped = _matchup_picks_follow_the_board(result, by)
+    board["matchup_picks_off"] = len(dropped)
+    board["read_picks_carded"] = _read_picks_follow_the_board(result, by, dropped)
     return n
+
+
+def _matchup_picks_follow_the_board(result: dict, by: dict) -> dict:
+    """THE MATCHUP PICKS FOLLOW THE BOARD (2026-11-15; Ethan's QC paste: five
+    NFL matchup picks the board's own check flagged — unders at 53% with the
+    projection over the line, overs at 50%). A matchup pick is made at its
+    own bar on the model's number (engine/matchpicks: 55% for yards and
+    catches, TD_MIN_PROB for a scorer); the board then corrects that bet's
+    chance on the graded record and the loop above writes it back onto the
+    pick — and the pick stayed posted under its own bar. Now one taken under
+    it, or held back by the board, comes off the matchup picks: one bet, one
+    verdict. A posted pick keeps its seat until its game. Returns the picks
+    taken off by `key_of`, each with its reason."""
+    from .matchpicks import READ_PICK_MIN, TD_MIN_PROB
+    dropped: dict = {}
+    for g in result.get("matchup_picks") or []:
+        if not isinstance(g, dict):
+            continue
+        for lane in ("td", "props"):
+            rows = g.get(lane)
+            if not isinstance(rows, list):
+                continue
+            keep = []
+            for r in rows:
+                if not isinstance(r, dict) or r.get("locked"):
+                    keep.append(r)
+                    continue
+                k = key_of(r)
+                b = by.get(k)
+                bar = TD_MIN_PROB if lane == "td" else READ_PICK_MIN
+                try:
+                    p = float(r.get("model_prob"))
+                except (TypeError, ValueError):
+                    p = None
+                if b is not None and b.get("tier") == "held":
+                    dropped[k] = str(b.get("held_note") or "held back by the board")
+                    continue
+                if p is not None and p < bar:
+                    dropped[k] = (f"held back: the record's correction puts our chance at {p:.0%}, under "
+                                  f"the {bar:.0%} a matchup pick needs")
+                    continue
+                keep.append(r)
+            g[lane] = keep
+    return dropped
 
 
 def warn_avoids(result: dict) -> int:

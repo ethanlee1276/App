@@ -306,10 +306,12 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
                             **_env)
     tier = mlb_tier(prop.market)
     min_edge = mlb_tier_min_edge(prop.market)
-    gate_ok = (credible and prices_line and calibration_ok
-               and pattern_block is None
-               and has_market and edge >= min_edge
-               and net > favourite_surcharge(best.odds))
+    gate_but_record = (credible and prices_line and calibration_ok
+                       and has_market and edge >= min_edge
+                       and net > favourite_surcharge(best.odds))
+    gate_ok = gate_but_record and pattern_block is None
+    # The record's refusal alone: journaled on paper (engine/paperhold).
+    record_hold = pattern_block if gate_but_record and pattern_block else None
     grade = mlb_letter(quality) if gate_ok else "Pass"
     fraction = 0.5 if (grade == "A+" and tier == 1) else 0.25
     if grade == "Pass":
@@ -388,4 +390,5 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         reasons=reasons, trend=proj.form.trend,
         has_market=has_market,
         quality=quality, tier=tier, volatility=mlb_volatility(prop.market),
+        record_hold=record_hold,
     )

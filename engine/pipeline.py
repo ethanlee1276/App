@@ -93,6 +93,9 @@ def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
         # to. Evidence only; nothing prices from it yet.
         "fair_consensus": rec.fair_consensus,
         "consensus_books": rec.consensus_books,
+        # The record's refusal, when it was the only gate this pick failed:
+        # journaled on paper, never posted (betting.Recommendation).
+        "record_hold": getattr(rec, "record_hold", None),
         # Priced from the sharp book's pair at this line — see
         # `betting.sharp_anchor_for`. `sharp_quoted` says whether the
         # sharp book quoted the prop at all, which is the droplet's

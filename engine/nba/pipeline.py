@@ -431,7 +431,10 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
         fails = fails + [f"grade {score} below the {tune.min_grade} bar — "
                          f"no bet, no leans"]
     if fails:
-        return {"kind": "near_miss", **card, "fails": fails}
+        # The record's refusal ALONE (losspatterns.veto, the only gate this
+        # prop failed): journaled on paper, never posted — engine/paperhold.
+        hold = _block if _block and fails == [_block] else None
+        return {"kind": "near_miss", **card, "fails": fails, "record_hold": hold}
     if tune.grade_weights:
         frac = kelly_stake(p_final, odds, score, tier, tune)
     else:
@@ -843,6 +846,7 @@ def shared_recommendations(props: list[dict],
             "recent_values": vals[:12],
             "trend": trend, "trend_delta": delta,
             "recommended": pick, "warnings": warnings,
+            "record_hold": r.get("record_hold"),
             "headline": f"{r['player']} {r['side']} {r['line']:g} {r['market_label']}",
             "summary": (f"Model {r['p_final']:.0%} vs market {r['p_market']:.0%} "
                         f"after the humility clamp — needs {r['break_even']:.0%} "

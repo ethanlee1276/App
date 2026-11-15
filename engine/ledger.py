@@ -1202,7 +1202,10 @@ def journal_skip_reason(r: dict, only_recommended: bool = True,
     of a guess, and lets the loop below use the same function, so the
     explanation cannot drift from the behaviour.
     """
-    if only_recommended and not r.get("recommended"):
+    # A pick the record alone refused goes on paper (engine/paperhold): it
+    # is journaled, at the measurement stake, so these two do not strand it.
+    held = record_held(r)
+    if only_recommended and not r.get("recommended") and not held:
         return f"not recommended (grade {r.get('grade', '?')})"
     if r.get("has_market") is False:
         return ("no real book price — the edge is against a proxy line, and "
@@ -1210,7 +1213,7 @@ def journal_skip_reason(r: dict, only_recommended: bool = True,
     if r.get("market") in LONGSHOT_MARKETS:
         return f"{r.get('market')} is a long shot — journaled to its own bucket"
     stake = float(r.get("stake_units", 0) or 0)
-    if stake <= 0:
+    if stake <= 0 and not held:
         return ("stake is 0.00u — Kelly says this price is not beatable at "
                 "our probability, so there is no bet to record")
     return in_play_reason(r, kick, now)
@@ -1400,6 +1403,27 @@ def _edge_book(conn, sport, category: str) -> str:
     return category
 
 
+#: THE EDGE PICKS THE RECORD REFUSED, on paper (engine/paperhold): the bets
+#: the board would have posted but for a slice the journal convicted, a
+#: stopped shelf or a confirmed hypothesis. A measurement, like the Most
+#: Likely board's held-back picks: the flat measurement stake, never a
+#: dollar, never in the headline record (not in BOOK).
+EDGE_HELD_CATEGORY = "edge_held"
+EDGE_HELD_STAKE = 0.1
+
+
+def record_held(r: dict) -> bool:
+    """A pick the record alone refused (``record_hold``), so it goes on paper."""
+    return bool(r.get("record_hold")) and not r.get("recommended")
+
+
+def journaled_already(conn, r: dict, sport: str, date: str) -> bool:
+    """Is this pick in the journal already, in any book? One pick, one row."""
+    return conn.execute("SELECT 1 FROM bets WHERE sport=? AND date=? AND player=? AND market=? AND side=? LIMIT 1",
+                        (sport, date, r.get("player"), r.get("market"),
+                         str(r.get("side") or "OVER").upper())).fetchone() is not None
+
+
 def log_recommendations(conn, result: dict, only_recommended: bool = True) -> int:
     """Insert open bets from a pipeline result dict. Stake dollars are sized
     from the current bankroll: stake_units × unit_pct% × bankroll."""
@@ -1435,14 +1459,21 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         # excluded; see the function.
         if journal_skip_reason(r, only_recommended, kick):
             continue
-        stake_units = float(r.get("stake_units", 0) or 0)
+        # ON PAPER (engine/paperhold): a pick the record alone refused is
+        # journaled at the measurement stake, no dollars, in its own book,
+        # with every feature the miner slices on — so the slice keeps a
+        # record to come back on. Ethan, 2026-11-15: "so we can still learn".
+        held = record_held(r)
+        if held and journaled_already(conn, r, sport, date):
+            continue
+        stake_units = EDGE_HELD_STAKE if held else float(r.get("stake_units", 0) or 0)
         # Read the correction HERE, in the same process that just priced
         # the pick, so what lands in the row is what was actually applied
         # rather than whatever the store holds by the time it settles.
         temp, bias = cal_correction(sport, r["market"])
         # MLB edge overs go on paper (PAPER_PROP_SIDES), still sized.
-        row_book = edge_price_book(prop_book(category, sport, r.get("side", "OVER")),
-                                   r.get("odds", -110))
+        row_book = EDGE_HELD_CATEGORY if held else \
+            edge_price_book(prop_book(category, sport, r.get("side", "OVER")), r.get("odds", -110))
         cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, "
             "market, side, line, "
@@ -1467,7 +1498,7 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # Zero dollars in paper mode, and it must be zero rather than
              # small: `performance` sums this column for the dollar P&L,
              # and a paper book that moves the dollar line is not paper.
-             0.0 if (paper or benched or row_book == "paper")
+             0.0 if (paper or benched or row_book in ("paper", EDGE_HELD_CATEGORY))
              else round(stake_units * unit_dollars, 2),
              row_book,
              # Which doubleheader leg this bet belongs to — the settler
@@ -1990,8 +2021,8 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, "
             "side, line, book, odds, projection, hit_prob, edge, confidence, "
             "grade, stake_units, stake_dollars, lead_min, status, category, "
-            "evidence, raw_prob, trust_from) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?)",
+            "evidence, raw_prob, trust_from, fair_consensus, consensus_books) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?)",
             # THE CALENDAR DAY, STAMPED HERE TOO — see `game_day_for`.
             # Eleven inserts write this table and only three filled this
             # column. `date` is the SETTLE KEY and for football it is a
@@ -2040,11 +2071,31 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
              # market shrink, so the next fit reads the raw claim and never
              # compounds its own correction.
              r.get("board_raw_prob"),
-             r.get("trust_from")))
+             r.get("trust_from"),
+             # THE MARKET'S CHANCE, where three or more books quote both
+             # sides (likelyboard.trust_price's ``market_prob``, or the
+             # field engine/paperhold read), and how many books: the gap a
+             # paper hold bands this pick on, kept for the measurement that
+             # decides whether its kind comes back. Written FOR THE OVER, as
+             # the edge book writes this column (`_bet_clv_matched`).
+             _over_fair(r.get("market_prob", r.get("field_prob")), side),
+             r.get("market_books") or r.get("field_books")))
         _stamp_team(conn, cur, r)
         n += cur.rowcount or 0
     conn.commit()
     return n
+
+
+def _over_fair(side_chance, side):
+    """The over's de-vigged chance from this side's, rounded, or None —
+    `fair_consensus` is the over's on every row that carries it."""
+    try:
+        v = float(side_chance)
+    except (TypeError, ValueError):
+        return None
+    if not 0.0 < v < 1.0:
+        return None
+    return round(1.0 - v if str(side or "").upper() in ("UNDER", "NO") else v, 4)
 
 
 #: The Pick of the Day's own book. Kept apart from every other category

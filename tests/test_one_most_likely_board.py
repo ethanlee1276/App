@@ -68,10 +68,18 @@ def test_the_four_checks_and_the_tiers():
     assert r["tier"] == "top" and r["tier_label"] == "Top pick"
     assert r["matchup_score"] >= B.TD_CASE, "a Most Likely scorer is scored off his game's scan"
     far = _td(player="Far Off", prob=0.70, implied_prob=0.50)
-    rows = {x["player"]: x for x in B.build(_result(most_likely=[far]))["rows"]}
-    assert rows["Far Off"]["checks"]["market"] is False
-    assert "far above every book" in rows["Far Off"]["check_notes"]["market"]
-    assert rows["Far Off"]["tier"] != "top"
+    b = B.build(_result(most_likely=[far]))
+    # Fifteen points or more above every book goes on paper, recorded and
+    # never posted, since 2026-11-15 (engine/paperhold: picks like it said
+    # 76% and hit 36%) — the market check still says why.
+    held = {x["player"]: x for x in b["held"]}
+    assert "Far Off" in held and not b["rows"]
+    assert held["Far Off"]["checks"]["market"] is False
+    assert "far above every book" in held["Far Off"]["check_notes"]["market"]
+    assert held["Far Off"]["held_note"].startswith("on paper, not posted")
+    near = _td(player="Near Off", prob=0.62, implied_prob=0.50)          # 12 points: the market check, no hold
+    rows = {x["player"]: x for x in B.build(_result(most_likely=[near]))["rows"]}
+    assert rows["Near Off"]["tier"] != "top"
 
 
 def test_a_prop_is_checked_against_the_matchup_read():

@@ -199,7 +199,9 @@ def test_the_build_stamps_the_reads_and_the_report_draws_the_pick():
     js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert '${v.pick ? `<p class="gr-person-pick">' in js
     lb = (ROOT / "engine" / "likelyboard.py").read_text(encoding="utf-8")
-    assert 'board["read_picks_carded"] = _read_picks_follow_the_board(result, by)' in lb
+    # Since 2026-11-15 with the matchup picks the board took off under their
+    # bar (test_matchup_picks_follow_the_board).
+    assert 'board["read_picks_carded"] = _read_picks_follow_the_board(result, by, dropped)' in lb
 
 
 def test_the_no_pick_card_names_the_lists_own_bar():
