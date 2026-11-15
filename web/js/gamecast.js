@@ -581,8 +581,8 @@
 
      IT IS THE CAMERA THAT MOVES. The players are pixels and stand where
      they stand, so every snap is drawn from their line: the painted
-     numbers are not the field position (the strip under the photograph
-     and the card's field are), but a play's length is real — it is
+     numbers are not the field position (the strip under the score is,
+     detail.js gpFieldHTML), but a play's length is real — it is
      measured against lines that really are that far apart.
 
      Where across the field a play went is not in the file, so the ball
@@ -1166,7 +1166,7 @@
   //: Which side the team on the card was, for the play it is named on.
   const ROLE_WORD = { receiving: "receiving", punting: "punting", kicking: "kicking" };
 
-  /* ---------------- the drive, its field and the last play: one card ----------------
+  /* ---------------- the drive and the last play: one card ----------------
      Ethan, 2026-11-01, with a screenshot of another app's live drive card:
      "I also want our live play by play shit too look just like this. It's
      cool too look at (ours) but it's still hard to understand exactly what's
@@ -1181,16 +1181,16 @@
 
        * who has the ball and how the drive is going (plays, yards, time);
        * the down, and where the ball is;
-       * the field: each end zone in its club's colour under its name, the
-         ball as the offence's mark on the line of scrimmage, the line to
-         gain in gold, and the LAST PLAY ONLY, drawn the way it happened — a
-         kick or a pass through the air as an arc, a run or a return along
-         the ground as an arrow — with what it came to in words at its end;
        * that play in a sentence, our win chance, the people in it with
          their game so far, and the down it was snapped on.
 
-     The photograph stays under it (Ethan's renders: "It's cool too look
-     at"), running the drive on its own clock as before.
+     NO FIELD IN IT (Ethan, 2026-11-15: "make sure to get rid of the field
+     on the live page"). It drew one, the last play on the clubs' end zones,
+     under the strip at the top of the page (detail.js gpFieldHTML, "the
+     drive chart at the top of the screen", which shows where the ball is)
+     and over his photograph (Ethan's renders: "It's cool too look at"),
+     which runs the play on its own clock: a third picture of one moment.
+     The card is the play in words now.
 
      THE ROW RULE STILL HOLDS: the site's own words from the file's numbers
      (type, yards, spots, the names matched against the box score), never
@@ -1199,32 +1199,12 @@
      zone, a field goal at the posts. A punt's or a kickoff's `yards` are
      its RETURN (footballWords), so the kick came down that far beyond the
      next snap. A play without a spot draws no path, never a guessed one. */
-  //: The field in the drawing's own units: the far edge narrower than the
-  //: near one, which is all the perspective a reader needs to see a field.
-  const DV = { w: 360, h: 164, top: 30, bot: 124, half0: 140, half1: 171, cx: 180, lane: 0.6 };
-  //: An end zone's painted name (dvFieldSVG's `ez`): its size in the
-  //: drawing's units (gamecast.css's .gc-dv-ezt says the same), the width of
-  //: a capital with its spacing in ems, the room kept clear at each sideline,
-  //: the narrowest a long name is squeezed to before it is set smaller, and
-  //: the smallest it is set.
-  const EZ = { fs: 17, em: 0.78, pad: 7, squeeze: 0.8, minFs: 9 };
-  const dvX = (u, t) => DV.cx + ((u + 10) / 120 - 0.5) * 2 * (DV.half0 + (DV.half1 - DV.half0) * t);
-  const dvY = (t) => DV.top + (DV.bot - DV.top) * t;
-  const dvP = (u, t) => `${f1(dvX(u, t))} ${f1(dvY(t))}`;
-  const dvBand = (u0, u1) => `M${dvP(u0, 0)}L${dvP(u1, 0)}L${dvP(u1, 1)}L${dvP(u0, 1)}Z`;
-  //: Where something laid over the drawing sits, in the box's percentages.
-  const dvAt = (u, t) => `left:${f1(dvX(u, t) / DV.w * 100)}%;top:${f1(dvY(t) / DV.h * 100)}%`;
-  //: The play's name, by how the field draws it.
+  //: The play's name, by the kind of snap it was.
   const DV_KIND = { fg: "Field goal", kick: "Punt", to: "Turnover", loss: "Sack", inc: "Incomplete pass",
                     flag: "Penalty", pass: "Pass", run: "Run" };
-  //: The play last drawn (its ball flies once, when it is new), and what
-  //: the replay button redraws.
-  let _dvDrawn = "";
-  let _dvReplay = false;
-  let _dvLast = null;
 
-  /* The play as the field draws it: where it was snapped (`from`), where a
-     kick came down (`land`), where it ended (`to`), how (`air`, `ret`), and
+  /* The play as the sentence reads it: where it was snapped (`from`), where
+     a kick came down (`land`), where it ended (`to`), how (`air`, `ret`), and
      its words. Null when the file holds no spot for it. */
   function dvPlay(d, p, newest) {
     if (!p || p.kind !== "football" || p.spot == null || !isFinite(Number(p.spot))) return null;
@@ -1437,96 +1417,15 @@
     return said;
   }
 
-  /* The field, drawn: turf, the two end zones in their clubs' colours under
-     their names, the yard lines and numbers, the goalposts, the line of
-     scrimmage and the line to gain, and the last play's path. */
-  function dvFieldSVG(d, league, m, nx, fly) {
-    const cols = fieldColours(d, league);
-    const T = DV.lane, y0 = dvY(T);
-    let lines = "", nums = "";
-    for (let u = 5; u < 100; u += 5) lines += `<path class="gc-dv-yl${u % 10 ? "" : " ten"}" d="M${dvP(u, 0)}L${dvP(u, 1)}"/>`;
-    for (let u = 10; u < 100; u += 10) nums += `<text class="gc-dv-num" x="${f1(dvX(u, 1))}" y="${f1(DV.bot + 15)}">${u > 50 ? 100 - u : u}</text>`;
-    nums += `<text class="gc-dv-num team" x="${f1(dvX(0, 1))}" y="${f1(DV.bot + 15)}">${esc(d.home)}</text>`
-      + `<text class="gc-dv-num team" x="${f1(dvX(100, 1))}" y="${f1(DV.bot + 15)}">${esc(d.away)}</text>`;
-    /* EACH CLUB'S NAME IS PAINTED IN ITS END ZONE (Ethan, 2026-11-03,
-       circling both on his phone: "fix the wording and make it look like
-       it's apart of the in zones"). The zone leans with the field — its
-       goal line is a yard line, drawn on the slant — and the name stood
-       bolt upright on the zone's middle, so its first letters hung off the
-       colour at one sideline and its last ones at the other. Now the
-       letters lie on the turf: the line they sit on runs up the zone's
-       middle on the same slant, their height runs across the zone the way
-       the field's own lines do, their tops toward the end line as a real
-       end zone's are, and the name is sized to stay inside the zone with
-       room at both sidelines (smaller, then narrower, for a long one). */
-    const ez = (side, u0) => {
-      const name = String(teamNameIn(league, d[side]) || d[side] || "").toUpperCase();
-      const home = side === "home", uc = u0 + 5;
-      const top = [dvX(uc, 0), dvY(0)], bot = [dvX(uc, 1), dvY(1)];
-      const [dx, dy] = home ? [top[0] - bot[0], top[1] - bot[1]] : [bot[0] - top[0], bot[1] - top[1]];
-      const len = Math.hypot(dx, dy), room = len - 2 * EZ.pad;
-      const wide = (fs) => name.length * EZ.em * fs;
-      const fs = wide(EZ.fs) * EZ.squeeze > room ? Math.max(EZ.minFs, room / (name.length * EZ.em * EZ.squeeze)) : EZ.fs;
-      const m = [dx / len, dy / len, home ? 1 : -1, 0, dvX(uc, 0.5), dvY(0.5)].map((v) => +v.toFixed(3));
-      return `<g class="gc-dv-ezg"${cols[side] ? ` style="--tm:${cols[side]}"` : ""}><path class="gc-dv-ez" d="${dvBand(u0, u0 + 10)}"/>`
-        + `<text class="gc-dv-ezt" transform="matrix(${m.join(" ")})"${fs !== EZ.fs ? ` style="font-size:${f1(fs)}px"` : ""}`
-        + ` textLength="${f1(Math.min(room, wide(fs)))}" lengthAdjust="spacingAndGlyphs">${esc(name)}</text></g>`;
-    };
-    const post = (u) => {
-      const x = dvX(u, 0.42), yb = dvY(0.42);
-      return `M${f1(x)} ${f1(yb)}V${f1(yb - 13)}M${f1(x - 5)} ${f1(yb - 13)}H${f1(x + 5)}M${f1(x - 5)} ${f1(yb - 13)}V${f1(yb - 26)}M${f1(x + 5)} ${f1(yb - 13)}V${f1(yb - 26)}`;
-    };
-    let marks = "";
-    if (nx) {
-      marks += `<path class="gc-dv-los" d="M${dvP(nx.los, 0)}L${dvP(nx.los, 1)}"/>`;
-      if (nx.gain != null && !nx.goal) marks += `<path class="gc-dv-gain" d="M${dvP(nx.gain, 0)}L${dvP(nx.gain, 1)}"/>`;
-    }
-    let path = "", route = "";
-    if (m && m.to != null) {
-      const a = { x: dvX(m.from, T), y: y0 };
-      const arc = (u, lift) => {
-        const b = { x: dvX(u, T), y: y0 };
-        const h = Math.min(44, 9 + Math.abs(b.x - a.x) * 0.3) * (lift || 1);
-        return { b, q: `Q${f1((a.x + b.x) / 2)} ${f1(a.y - h * 2)} ${f1(b.x)} ${f1(b.y)}` };
-      };
-      const start = `M${f1(a.x)} ${f1(a.y)}`;
-      if (m.air && m.land != null) {
-        const k = arc(m.land), c = { x: dvX(m.to, T), y: y0 };
-        path = `<path class="gc-dv-arc" d="${start}${k.q}"/>`
-          + (m.ret ? `<path class="gc-dv-ret" d="M${f1(k.b.x)} ${f1(k.b.y)}L${f1(c.x)} ${f1(c.y)}" marker-end="url(#gc-dv-head)"/>` : "");
-        route = `${start}${k.q}${m.ret ? `L${f1(c.x)} ${f1(c.y)}` : ""}`;
-      } else if (m.air) {
-        const k = arc(m.to, m.inc ? 0.6 : 1);
-        path = `<path class="gc-dv-arc${m.inc ? " inc" : ""}" d="${start}${k.q}"${m.inc ? "" : ` marker-end="url(#gc-dv-head)"`}/>`
-          + (m.inc ? `<path class="gc-dv-x" d="M${f1(k.b.x - 4)} ${f1(k.b.y - 4)}l8 8m0 -8l-8 8"/>` : "");
-        route = `${start}${k.q}`;
-      } else if (m.to !== m.from) {
-        const b = { x: dvX(m.to, T), y: y0 };
-        path = `<path class="gc-dv-run${m.flag ? " flag" : ""}" d="${start}L${f1(b.x)} ${f1(b.y)}" marker-end="url(#gc-dv-head)"/>`;
-        route = `${start}L${f1(b.x)} ${f1(b.y)}`;
-      }
-      path += `<circle class="gc-dv-snap" cx="${f1(a.x)}" cy="${f1(a.y)}" r="2.6"/>`;
-      // The ball flies the play once, when it is new (or on Replay).
-      if (route && fly) path += `<g class="gc-dv-ball"><ellipse rx="4.4" ry="2.9"/><animateMotion dur="1.4s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".3 .1 .3 1" path="${route}"/></g>`;
-    }
-    const aria = `${d.away} at ${d.home}${nx ? `, ball on the ${spotWord(d, nx.los)}` : ""}${m ? `; last play: ${m.label}` : ""}`;
-    return `<svg class="gc-dv-svg" viewBox="0 0 ${DV.w} ${DV.h}" role="img" aria-label="${escapeAttr(aria)}">`
-      + `<defs><marker id="gc-dv-head" viewBox="0 0 8 8" refX="5" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse">`
-      + `<path d="M0 0L8 4L0 8Z" class="gc-dv-headfill"/></marker></defs>`
-      + `<path class="gc-dv-turf" d="${dvBand(0, 100)}"/>${ez("home", -10)}${ez("away", 100)}${lines}`
-      + `<path class="gc-dv-goal" d="M${dvP(0, 0)}L${dvP(0, 1)}M${dvP(100, 0)}L${dvP(100, 1)}"/><path class="gc-dv-post" d="${post(-10)}${post(110)}"/>`
-      + `${marks}${path}${nums}</svg>`;
-  }
-
   /* ONE PLACE FOR EACH THING (Ethan, 2026-11-15, on the live NE @ DET page:
      "we dont need the drive chart since we have one at the top of the
      screen. go look through the live page bc it seems likes there is alot of
-     repeated stuff"). The page draws a field under the score (detail.js
+     repeated stuff"). The page draws a strip under the score (detail.js
      gpFieldHTML) with the down, the spot and the drive, and keeps a small
      copy of it at the top of the screen when it scrolls (gpCompactHTML).
-     `top` says that field is drawn: then this card leaves out its Down and
+     `top` says that strip is drawn: then this card leaves out its Down and
      Ball on tiles and its "Current drive" line, and heads itself with the
-     last play — what it adds to that field. `win` says the page draws our
+     last play — what it adds to that strip. `win` says the page draws our
      Win probability card, which is the same number as this card's chip. */
   function driveViewHTML(d, league, faces, opts) {
     const o = opts || {};
@@ -1535,9 +1434,8 @@
     const p = newestPlay(d, league);
     let dr = currentDrive(d);
     if (!p && !dr) return "";
-    // No play yet: the field under the score already says all it would.
+    // No play yet: the strip under the score already says all it would.
     if (o.top && !p) return "";
-    _dvLast = { d, league, faces, opts: o };
     const offense = lv.possession || (dr && dr.team) || (p && p.team) || "";
     // A drive that has ended (a punt, a score, a turnover) is not the one on
     // the field: the ball is the other side's now, and their drive has not
@@ -1546,23 +1444,12 @@
     const dir = offense === d.home ? 1 : offense === d.away ? -1 : 0;
     const nx = nextSnap(d, dir);
     const m = p ? dvPlay(d, p, true) : null;
-    const id = p ? String(p.id || `${p.period}|${p.clock}|${p.event}`) : "";
-    const fly = _dvReplay || (!!id && id !== _dvDrawn);
-    if (id) _dvDrawn = id;
     // Down and ball on: the scoreboard's own words for the next snap.
     const parts = /^(.*?)\s+at\s+(.+)$/.exec(String(lv.detail || ""));
     const down = parts ? parts[1].trim() : "";
     const on = parts ? parts[2].trim() : nx ? spotWord(d, nx.los) : "";
     const tiles = !o.top && (down || on) ? `<div class="gc-dv-tiles">${down ? `<div><span>Down</span><b>${esc(down)}</b></div>` : ""}${
       on ? `<div><span>Ball on</span><b>${esc(on)}</b></div>` : ""}</div>` : "";
-    const pin = nx && offense ? `<span class="gc-dv-pin" style="${dvAt(nx.los, DV.lane)}" aria-hidden="true">${teamMarkIn(league, offense, 22)}</span>` : "";
-    // The play's words just under where it ended, on the turf above the
-    // yard numbers, kept inside the card at either touchline.
-    const tagT = DV.lane + 0.14;
-    const tagU = m && m.to != null ? Math.max(-6, Math.min(106, m.to)) : 0;
-    const tagX = dvX(tagU, tagT) / DV.w;
-    const tag = m && m.to != null && m.label
-      ? `<span class="gc-dv-tag${m.tone ? ` ${m.tone}` : ""}${tagX < 0.2 ? " l" : tagX > 0.8 ? " r" : ""}${fly ? " late" : ""}" style="${dvAt(tagU, tagT)}">${esc(m.label)}</span>` : "";
     const named = p ? dvName(d, p) : null;
     const lastTeam = p && (p.team || offense);
     const head = o.top && named
@@ -1571,11 +1458,9 @@
       ? `${teamMarkIn(league, dr.team, 30)}<div class="gc-dv-who"><div class="gc-k">Current drive</div><b>${esc(driveWords(dr))}</b></div>`
       : `${offense ? teamMarkIn(league, offense, 30) : ""}<div class="gc-dv-who"><div class="gc-k">On the field</div><b>${esc(teamNameIn(league, offense) || "")}</b></div>`;
     const rz = nx && dir && (dir > 0 ? nx.los >= 80 : nx.los <= 20) ? `<span class="gc-rz">Red zone</span>` : "";
-    const replay = m && m.to != null ? `<button type="button" class="gc-replay" data-gc-dv-replay aria-label="Replay the last play">${REPLAY}</button>` : "";
     return `<div class="card gc-dv" data-gc-dv>
-      <div class="gc-dv-head">${head}<span class="gc-dv-end">${rz}${replay}</span></div>
+      <div class="gc-dv-head">${head}<span class="gc-dv-end">${rz}</span></div>
       ${tiles}
-      <div class="gc-dv-field">${dvFieldSVG(d, league, m, nx, fly)}${pin}${tag}</div>
       ${p ? dvLastHTML(d, league, faces, p, m, o) : ""}</div>`;
   }
 
@@ -1591,12 +1476,12 @@
     return { words, kind, when };
   }
 
-  /* The last play, under its drawing: its name, our win chance, the
-     sentence, the people in it with their game so far, the down it was
-     snapped on, and any moment since (a timeout, the quarter's end). With
-     the field under the score drawn (`o.top`) the card's head already names
-     the play and its time, so this leaves its own line of them out; with
-     our Win probability card on the page (`o.win`), the chip. */
+  /* The last play: its name, our win chance, the sentence, the people in it
+     with their game so far, the down it was snapped on, and any moment since
+     (a timeout, the quarter's end). With the strip under the score drawn
+     (`o.top`) the card's head already names the play and its time, so this
+     leaves its own line of them out; with our Win probability card on the
+     page (`o.win`), the chip. */
   function dvLastHTML(d, league, faces, p, m, o) {
     const opt = o || {};
     const { words, kind, when } = dvName(d, p);
@@ -1636,16 +1521,6 @@
       ${chips ? `<div class="gc-chips">${chips}</div>` : ""}
       ${before || since.length ? `<div class="gc-dv-before">${before ? `<span><i>Before the play</i> ${before}</span>` : ""}${
         since.map((w) => `<span>${esc(w)}</span>`).join("")}</div>` : ""}</div>`;
-  }
-  // Replay: the same card again with the ball flying (the module's click; no inline handler).
-  if (typeof document !== "undefined" && document.addEventListener) {
-    document.addEventListener("click", (e) => {
-      const b = e.target && e.target.closest ? e.target.closest("[data-gc-dv-replay]") : null;
-      if (!b || !_dvLast) return;
-      _dvReplay = true;
-      swap("[data-gc-dv]", driveViewHTML(_dvLast.d, _dvLast.league, _dvLast.faces, _dvLast.opts));
-      _dvReplay = false;
-    });
   }
 
   /* ---------------- the game leaders ----------------

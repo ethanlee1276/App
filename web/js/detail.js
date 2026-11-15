@@ -5728,20 +5728,29 @@ function gpDrivesHTML(d, league) {
    the last play and leaves out the down, the spot and the drive line;
    the photograph leaves out its own "Ball on" strip; and the card's win
    chip goes when our Win probability card is drawn below it. */
-function gpPlaysHTML(d, league, faces, boardGame, lastPlay, GC) {
-  const lv = d.live || {};
-  const live = lv.state === "live";
+/* ---------------- the play right now ----------------
+   While the game is on, under the score: Ethan's render with the play
+   running on it (pbpParkHTML), the play in words with the people in it
+   (gamecast driveView, no field of its own: the strip under the score says
+   where the ball is, `top`), and the win chance after it — the chart through
+   the game and our number. A game not being played has none of it. */
+function gpNowHTML(d, league, faces, boardGame, lastPlay, GC, top) {
+  if ((d.live || {}).state !== "live") return "";
   const g = GC || {};
-  const top = !!gpFieldModel(d, league, lv);
-  const ours = live ? pbpModelWinProbHTML(d) : "";
-  const card = live && g.driveView ? g.driveView(d, league, faces, { top, win: !!ours }) : "";
-  const view = live ? `<div class="card pbp-parkcard">${pbpParkHeadHTML(league, boardGame)}${
-    pbpParkHTML(d, league, boardGame, lastPlay, { strip: !top })}</div>` : "";
-  const chart = !live && g.gameChart ? g.gameChart(d, league) : "";
-  // The win chance and the room's own read of it beside the math (the chat's
-  // vote line, pbpRoomLine), with the plays while the game is on.
-  const win = live ? `${pbpWinChartHTML(d, league, boardGame)}${ours}` : "";
-  return `${card}${live ? pbpCallItHTML(d, league) : ""}${win}${view}${chart}${gpDrivesHTML(d, league)}`;
+  const ours = pbpModelWinProbHTML(d);
+  const view = `<div class="card pbp-parkcard">${pbpParkHeadHTML(league, boardGame)}${
+    pbpParkHTML(d, league, boardGame, lastPlay, { strip: !top })}</div>`;
+  const card = g.driveView ? g.driveView(d, league, faces, { top, win: !!ours }) : "";
+  return `${view}${card}${pbpWinChartHTML(d, league, boardGame)}${ours}`;
+}
+
+/* ---------------- Play-By-Play ----------------
+   The game so far, drive by drive, newest first (gpDrivesHTML); a final
+   opens on its drive chart (Ethan, 2026-10-30: "the espn page with the past
+   game data"). The play in progress is above the tabs (gpNowHTML). */
+function gpPlaysHTML(d, league, GC) {
+  const chart = (d.live || {}).state !== "live" && GC && GC.gameChart ? GC.gameChart(d, league) : "";
+  return `${chart}${gpDrivesHTML(d, league)}`;
 }
 
 /* ---------------- Standings ----------------
@@ -5811,9 +5820,17 @@ function gpFootballHTML(o) {
   if (_gpFor !== `${league}:${event}`) { _gpFor = `${league}:${event}`; _gpStuck = false; _gpTabsStuck = false; _gpOpen.clear(); }
   const field = gpFieldHTML(d, league, lv);
   const panel = tab === "stats" ? gpStatsHTML(d, league, boardGame, faces, GC)
-    : tab === "plays" ? gpPlaysHTML(d, league, faces, boardGame, lastPlay, GC)
+    : tab === "plays" ? gpPlaysHTML(d, league, GC)
     : tab === "standings" ? gpStandingsHTML(d, league)
     : gpPicksHTML(d, league, boardGame);
+  /* TOP TO BOTTOM, THE ORDER A FAN ASKS IN (Ethan, 2026-11-15: "re organize
+     it so it feels good and flows nice and makes the most sense"): the score
+     and where the ball is; the play that just happened, its picture first
+     and then its words, and who that leaves winning; the reader's own bets
+     on the game; then the things to do (call the next play, the chat); and
+     last the rooms behind the tabs, the game so far drive by drive among
+     them. The play right now sat inside the Play-By-Play tab, under the
+     chat, and went away on every other tab. */
   return `
     ${stripHTML}
     <div class="pbp-layout pbp-has-tabs gp">
@@ -5823,8 +5840,10 @@ function gpFootballHTML(o) {
         ${field}
         ${gpLineHTML(d, league, lv)}
         ${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
-        ${d.archive ? "" : `<div class="gch-entry-slot"></div>`}
+        ${gpNowHTML(d, league, faces, boardGame, lastPlay, GC, !!field)}
         ${pbpMineSlotsHTML()}
+        ${lv.state === "live" ? pbpCallItHTML(d, league) : ""}
+        ${d.archive ? "" : `<div class="gch-entry-slot"></div>`}
         ${pbpTabsHTML(tab, null, tabs)}
         <div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>
         ${back}

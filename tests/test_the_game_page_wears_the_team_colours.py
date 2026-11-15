@@ -276,10 +276,13 @@ def test_four_tabs_and_a_live_game_opens_on_the_plays():
     assert ': tabs === GP_FB_TABS && lv.state === "live" ? "plays" : tabs[0][0];' in page
     assert "host.innerHTML = fb ? gpFootballHTML({" in page and "if (fb) gpWire(host);" in page
     fb = _fn(GP, "gpFootballHTML")
+    # 2026-11-15 (Ethan: "re organize it so it feels good and flows nice"):
+    # the play right now and your bets before the things to do, then the tabs.
     order = ["${gpCompactHTML(", "${pbpBoardHTML(d, league, lv, {", "${field}", "${gpLineHTML(d, league, lv)}",
-             '<div class="gch-entry-slot"></div>', "${pbpMineSlotsHTML()}", "${pbpTabsHTML(tab, null, tabs)}", "${back}"]
+             "${gpNowHTML(", "${pbpMineSlotsHTML()}", '${lv.state === "live" ? pbpCallItHTML(d, league) : ""}',
+             '<div class="gch-entry-slot"></div>', "${pbpTabsHTML(tab, null, tabs)}", "${back}"]
     at = [fb.index(x) for x in order]
-    assert at == sorted(at), "the score, the field, the line, the room's card, your action, the tabs"
+    assert at == sorted(at), "the score, the strip, the line, the play now, your action, call it, the chat, the tabs"
 
 
 def test_the_odds_card_reads_the_live_quote_the_pregame_line_and_the_open():

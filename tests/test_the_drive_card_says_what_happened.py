@@ -6,21 +6,19 @@ look at (ours) but it's still hard to understand exactly what's happening in
 the game so we need to fix that and make it less confusing".
 
 What these hold (web/js/gamecast.js driveViewHTML, web/js/detail.js
-gpPlaysHTML):
+gpNowHTML):
 
-  * one card leads the tab: the drive (plays, yards, time), the down and the
-    ball's spot, the field with each end zone under its club's name, the
-    offence's pin on the line of scrimmage, the line to gain, and the LAST
-    PLAY ONLY drawn on it — a kick or a pass as an arc, a run or a return as
-    an arrow, its result in words at its end;
-  * under the drawing, that play: its name, our win chance, a sentence in the
+  * one card says the play: the drive (plays, yards, time), the down and the
+    ball's spot, then that play — its name, our win chance, a sentence in the
     site's own words (who, what, how far, to where), the people in it with
     their game so far, and the down it was snapped on;
-  * a punt lands its return's length beyond the next snap, so the field
-    shows the kick and the run back, the way the screenshot did;
-  * the bar chart of the drive, the second "Ball on" strip and the separate
-    Last play card are gone from the tab; the photograph stays, under the
-    win chance.
+  * a punt lands its return's length beyond the next snap, so the sentence
+    says the kick and the run back, the way the screenshot did;
+  * NO FIELD (Ethan, 2026-11-15: "make sure to get rid of the field on the
+    live page"): the card drew the last play on the clubs' end zones, under
+    the strip at the top of the page and over his photograph, which runs the
+    play on its own clock. The card is the play in words now, under that
+    photograph, above the tabs.
 
 Run directly: `python3 tests/test_the_drive_card_says_what_happened.py`
 """
@@ -106,21 +104,14 @@ def test_the_card_leads_with_the_drive_the_down_and_the_ball():
     words = _text(html)
     assert 'data-gc-dv' in html and "Current drive" in words and "0 plays, 0 yards, 0:00" in words
     assert "Down 1st & 10" in words and "Ball on DAL 32" in words
-    # Each end zone under its own club's name: home at the 0 end, away at the 100.
-    assert "COWBOYS" in html and "BUCCANEERS" in html
-    assert 'class="gc-dv-los"' in html and 'class="gc-dv-gain"' in html, "the line of scrimmage and the line to gain"
-    # The offence's pin sits on the line: DAL's own 32 is 32 from the home goal line.
-    pin = re.search(r'class="gc-dv-pin" style="left:([\d.]+)%;top:([\d.]+)%"', html)
-    assert pin and 'class="mark">DAL<' in html[pin.end():pin.end() + 80], html[:400]
+    # No field of its own (2026-11-15): no drawing, no pin, no end zones.
+    assert "gc-dv-svg" not in html and "gc-dv-pin" not in html and "COWBOYS" not in html, html[:400]
 
 
 def test_a_punt_is_the_kick_and_the_run_back():
     html = _card(PUNT)
     if html is None:
         return
-    # The kick through the air, then the return along the ground, with its length in words.
-    assert html.count('class="gc-dv-arc"') == 1 and html.count('class="gc-dv-ret"') == 1
-    assert ">16-yd return<" in html
     words = _text(html)
     # 2026-11-15: the sentence opens on the down and the spot it was snapped
     # from, which the "Before the play" line under it used to say.
@@ -134,50 +125,45 @@ def test_a_punt_is_the_kick_and_the_run_back():
     assert "Last play · Q2 13:52" in words
 
 
-def test_every_kind_of_play_draws_and_reads_its_own_way():
+def test_every_kind_of_play_reads_its_own_way():
     if G._node("return 1;") is None:
         return
     after = {"possession": "TB", "detail": "1st & 10 at DAL 40", "yard_line": 40}
     cases = [
         ({"team": "TB", "event": "Pass Reception", "down": 2, "distance": 6, "spot": 52, "yards": 12,
           "players": ["Baker Mayfield", "Mike Evans"]}, after,
-         ['class="gc-dv-arc"', ">12-yd catch<"],
          "On 2nd & 6 from the TB 48, Baker Mayfield throws to Mike Evans for 12 yards to the DAL 40. First down."),
         ({"team": "TB", "event": "Rush", "down": 1, "distance": 10, "spot": 45, "yards": 5,
           "players": ["Bucky Irving", "Micah Parsons"]}, after,
-         ['class="gc-dv-run"', ">5-yd run<"], "On 1st & 10 from the DAL 45, Bucky Irving runs for 5 yards to the DAL 40."),
+         "On 1st & 10 from the DAL 45, Bucky Irving runs for 5 yards to the DAL 40."),
         ({"team": "TB", "event": "Pass Incompletion", "down": 3, "distance": 4, "spot": 40, "yards": 0,
           "players": ["Baker Mayfield", "Mike Evans"]}, {**after, "detail": "4th & 4 at DAL 40"},
-         ['class="gc-dv-arc inc"', 'class="gc-dv-x"', ">Incomplete<"],
          "On 3rd & 4 from the DAL 40, Baker Mayfield’s pass for Mike Evans falls incomplete."),
         ({"team": "TB", "event": "Passing Touchdown", "down": 1, "distance": 10, "spot": 28, "yards": 28,
           "scoring": True, "players": ["Baker Mayfield", "Mike Evans"]},
          {"possession": "TB", "detail": "", "yard_line": 3},
-         [">Touchdown<", "gc-dv-tag td"], "On 1st & 10 from the DAL 28, Baker Mayfield throws to Mike Evans for a 28-yard touchdown."),
+         "On 1st & 10 from the DAL 28, Baker Mayfield throws to Mike Evans for a 28-yard touchdown."),
         ({"team": "TB", "event": "Field Goal Good", "down": 4, "distance": 3, "spot": 22, "yards": 39,
           "scoring": True, "players": ["Chase McLaughlin"]}, {"possession": "DAL", "detail": "", "yard_line": 65},
-         [">39-yd FG good<", "gc-dv-tag good"], "On 4th & 3 from the DAL 22, Chase McLaughlin’s 39-yard field goal is good."),
+         "On 4th & 3 from the DAL 22, Chase McLaughlin’s 39-yard field goal is good."),
         ({"team": "TB", "event": "Sack", "down": 3, "distance": 8, "spot": 45, "yards": -7,
           "players": ["Baker Mayfield", "Micah Parsons"]}, {**after, "detail": "4th & 15 at TB 48", "yard_line": 52},
-         [">Sack, −7<", "gc-dv-tag bad"], "On 3rd & 8 from the DAL 45, Baker Mayfield is sacked by Micah Parsons for a loss of 7 yards."),
+         "On 3rd & 8 from the DAL 45, Baker Mayfield is sacked by Micah Parsons for a loss of 7 yards."),
         ({"team": "TB", "event": "Penalty", "down": 1, "distance": 10, "spot": 45, "yards": -10, "penalty": True},
          {**after, "detail": "1st & 20 at TB 45", "yard_line": 55},
-         ['class="gc-dv-run flag"', ">Flag, −10 yds<"], "On 1st & 10 from the DAL 45, a flag on the offense, 10 yards."),
+         "On 1st & 10 from the DAL 45, a flag on the offense, 10 yards."),
     ]
-    for play, live, marks, said in cases:
+    for play, live, said in cases:
         html = _card(play, live)
-        for mark in marks:
-            assert mark in html, (play["event"], mark)
         assert said in _text(html), (play["event"], _text(html))
+        assert "gc-dv-svg" not in html and "gc-dv-field" not in html, (play["event"], "the card draws no field")
 
 
-def test_a_play_with_no_spot_draws_no_path_and_a_quiet_moment_is_not_the_play():
+def test_a_play_with_no_spot_is_said_without_one_and_a_quiet_moment_is_not_the_play():
     html = _card({"team": "TB", "event": "Rush", "down": 1, "distance": 10, "yards": 4, "players": ["Bucky Irving"]})
     if html is None:
         return
-    assert "gc-dv-arc" not in html and "gc-dv-run" not in html and "gc-dv-tag" not in html, "no spot, no guessed path"
-    assert "Bucky Irving runs for 4 yards." in _text(html)
-    assert "data-gc-dv-replay" not in html, "nothing drawn, nothing to replay"
+    assert "Bucky Irving runs for 4 yards." in _text(html), "no spot, no guessed one"
 
 
 def test_a_finished_drive_gives_way_to_the_side_with_the_ball():
@@ -198,76 +184,29 @@ def test_a_finished_drive_gives_way_to_the_side_with_the_ball():
     assert "Timeout" in words and "TV timeout" not in words, words
 
 
-def test_the_tab_leads_with_the_card_and_drops_the_repeats():
-    i = DETAIL.index("function gpPlaysHTML(d, league, faces, boardGame, lastPlay, GC)")
+def test_the_card_follows_the_photograph_above_the_tabs_and_drops_the_repeats():
+    i = DETAIL.index("function gpNowHTML(d, league, faces, boardGame, lastPlay, GC, top)")
     body = DETAIL[i:DETAIL.index("\n}\n", i)]
-    # 2026-11-15: the card is told when the field under the score and our win
+    # 2026-11-15: the card is told when the strip under the score and our win
     # card already say its tiles, its drive line and its chip
     # (tests/test_the_live_page_says_each_thing_once).
     assert "g.driveView(d, league, faces, { top, win: !!ours })" in body
-    assert "return `${card}${live ? pbpCallItHTML(d, league) : \"\"}${win}${view}${chart}${gpDrivesHTML(d, league)}`;" in body
+    assert "return `${view}${card}${pbpWinChartHTML(d, league, boardGame)}${ours}`;" in body
     for gone in ("pbpSituationHTML", "g.driveCard", "g.lastPlay"):
         assert gone not in body, f"{gone} is said once, in the card"
-    assert "pbpParkHTML(d, league, boardGame, lastPlay, { strip: !top })" in body, "the photograph stays"
+    assert "pbpParkHTML(d, league, boardGame, lastPlay, { strip: !top })" in body, "the photograph stays, first"
     assert "driveView: driveViewHTML" in GC
 
 
-def _inside(quad, x, y):
-    """Is (x, y) inside a convex quadrilateral given corner by corner?"""
-    sign = 0
-    for (ax, ay), (bx, by) in zip(quad, quad[1:] + quad[:1]):
-        cross = (bx - ax) * (y - ay) - (by - ay) * (x - ax)
-        if cross:
-            if sign and (cross > 0) != (sign > 0):
-                return False
-            sign = cross
-    return True
-
-
-def test_each_name_is_painted_on_its_end_zone_and_stays_inside_it():
-    """Ethan, 2026-11-03, circling both end zones on his phone: "fix the
-    wording and make it look like it's apart of the in zones". The zone
-    leans with the field and the name stood bolt upright on its middle, so
-    its ends hung off the colour. Now the letters lie on the zone: the line
-    they sit on runs up its middle on the same slant, their height runs
-    across it the way the field's lines do (tops toward the end line), and
-    the name fits with room at both sidelines — a long one smaller first."""
-    html = _card(PUNT)
-    if html is None:
-        return
-    zones = re.findall(r'<g class="gc-dv-ezg"[^>]*><path class="gc-dv-ez" d="([^"]+)"/>'
-                       r'<text class="gc-dv-ezt" transform="matrix\(([^)]+)\)"( style="font-size:([\d.]+)px")?'
-                       r' textLength="([\d.]+)" lengthAdjust="spacingAndGlyphs">([^<]+)</text></g>', html)
-    assert [z[5] for z in zones] == ["COWBOYS", "BUCCANEERS"], zones
-    for (path, mat, _s, size, length, name), side in zip(zones, ("home", "away")):
-        pts = [tuple(map(float, p.split())) for p in re.findall(r"[ML]([\d.\-]+ [\d.\-]+)", path)]
-        assert len(pts) == 4, path
-        top = ((pts[0][0] + pts[1][0]) / 2, pts[0][1])
-        bot = ((pts[2][0] + pts[3][0]) / 2, pts[2][1])
-        a, b, c, d, e, f = map(float, mat.split())
-        run = (top[0] - bot[0], top[1] - bot[1]) if side == "home" else (bot[0] - top[0], bot[1] - top[1])
-        norm = (run[0] ** 2 + run[1] ** 2) ** 0.5
-        assert abs(a - run[0] / norm) < 0.01 and abs(b - run[1] / norm) < 0.01, ("on the zone's slant", name, mat)
-        assert (c, d) == ((1.0, 0.0) if side == "home" else (-1.0, 0.0)), ("tops toward the end line", name, mat)
-        assert abs(e - (top[0] + bot[0]) / 2) < 0.2 and abs(f - (top[1] + bot[1]) / 2) < 0.2, ("in the middle", name)
-        half, h = float(length) / 2, float(size or 17) * 0.4
-        for sgn in (-1, 1):
-            # Both ends of the name, and its letters' height either side of them.
-            x, y = e + sgn * half * a, f + sgn * half * b
-            for dx in (-h, h):
-                assert _inside(pts, x + dx, y), (name, "spills out of its end zone", (x + dx, y))
-        assert float(length) <= norm - 13.9, (name, "no room left at the sidelines")
-    assert zones[1][3] and float(zones[1][3]) < 17, "a long name is set smaller before it is squeezed"
-    assert "rotate(" not in "".join(re.findall(r'<text class="gc-dv-ezt"[^>]*>', html)), "never bolt upright"
-
-
-def test_the_card_is_styled_from_the_sheets_tokens_and_moves_only_when_asked():
-    for cls in (".gc-dv {", ".gc-dv-tiles", ".gc-dv-ez {", ".gc-dv-ezt", ".gc-dv-pin {", ".gc-dv-tag {",
-                ".gc-dv-arc", ".gc-dv-run {", ".gc-dv-last {", ".gc-dv-said"):
+def test_the_card_is_styled_from_the_sheets_tokens_and_draws_no_field():
+    for cls in (".gc-dv {", ".gc-dv-tiles", ".gc-dv-last {", ".gc-dv-said"):
         assert cls in CSS, cls
-    assert "@media (prefers-reduced-motion: reduce) { .gc-dv-tag.late { animation: none; } .gc-dv-ball { display: none; } }" in CSS
-    # The ball flies a play once, when it is new or on Replay, not on every poll's redraw.
-    assert "const fly = _dvReplay || (!!id && id !== _dvDrawn);" in GC
+    # The field, its pin, the play's label on it and its replay went with it
+    # (Ethan, 2026-11-15: "make sure to get rid of the field on the live page").
+    for gone in (".gc-dv-ez {", ".gc-dv-pin {", ".gc-dv-tag {", ".gc-dv-arc", ".gc-dv-svg"):
+        assert gone not in CSS, gone
+    for gone in ("function dvFieldSVG", "data-gc-dv-replay", "_dvReplay", "gc-dv-field"):
+        assert gone not in GC, gone
 
 
 if __name__ == "__main__":

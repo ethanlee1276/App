@@ -23,7 +23,9 @@ offense, 5 yds", a kickoff drawn flying backwards. Now:
     Prescott throws deep right to KaVontae Turpin for a 56-yard touchdown.
     Cowboys 13, Buccaneers 7.";
   * a kickoff, filed under the side that receives it with its spot counted
-    from the kicking side's end, is drawn from the kicking 35 (gamecast dvPlay).
+    from the kicking side's end, is read from the kicking 35 (gamecast dvPlay).
+    (The card drew it too until 2026-11-15, when its field came out: Ethan,
+    "make sure to get rid of the field on the live page".)
 
     python3 tests/test_a_play_says_who_did_what.py
 """
@@ -312,20 +314,16 @@ def test_goal_to_go_says_goal():
     assert "2nd &amp; 5" in rows or "2nd & 5" in rows, "five to go at the 40 is not goal to go"
 
 
-def test_a_kickoff_flies_from_the_kicking_sides_35():
-    """Filed under DAL, who received it, at "35": TB kicked from its own 35
-    (the 65 on the site's field), DAL brought it back 25 to its 30."""
+def test_a_kickoff_is_kicked_from_the_kicking_sides_35():
+    """Filed under DAL, who received it, at "35": TB kicked from its own 35,
+    so it came down at the DAL 5, and DAL brought it back 25 to its 30."""
     said, html = _said({"team": "DAL", "event": "Kickoff", "spot": 35, "yards": 25,
                         "players": ["Chase McLaughlin", "KaVontae Turpin"]},
                        {"possession": "DAL", "detail": "1st & 10 at DAL 30", "yard_line": 30})
     if said is None:
         return
     assert said == "Chase McLaughlin kicks off to the DAL 5; KaVontae Turpin brings it back 25 yards to the DAL 30.", said
-    assert ">25-yd return<" in html and 'class="gc-dv-arc"' in html and 'class="gc-dv-ret"' in html
-    # The arc starts at the TB 35 end of the field (right of midfield, where TB's end zone is drawn).
-    arc = re.search(r'<path class="gc-dv-arc" d="M([\d.]+) ', html)
-    mid = re.search(r'<text class="gc-dv-num" x="([\d.]+)"[^>]*>50<', html)
-    assert arc and mid and float(arc.group(1)) > float(mid.group(1)), (arc and arc.group(1), mid and mid.group(1))
+    assert "gc-dv-svg" not in html and "gc-dv-field" not in html, "the card draws no field (2026-11-15)"
 
 
 def test_a_kickoff_with_only_the_returner_named_never_makes_him_the_kicker():
@@ -338,14 +336,13 @@ def test_a_kickoff_with_only_the_returner_named_never_makes_him_the_kicker():
     assert said == "The kickoff to the DAL 5; KaVontae Turpin brings it back 25 yards to the DAL 30.", said
 
 
-def test_a_touchback_lands_in_the_end_zone():
+def test_a_touchback_is_said_as_one():
     said, html = _said({"team": "DAL", "event": "Kickoff", "spot": 35, "yards": 0, "touchback": True,
                         "players": ["Chase McLaughlin"]},
                        {"possession": "DAL", "detail": "1st & 10 at DAL 35", "yard_line": 35})
     if said is None:
         return
     assert said == "Chase McLaughlin kicks off into the end zone for a touchback.", said
-    assert ">Touchback<" in html
 
 
 if __name__ == "__main__":

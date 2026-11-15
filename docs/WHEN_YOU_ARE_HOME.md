@@ -9338,6 +9338,32 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SF. The live game page without the field, in the order you'd read it**
+(step 612; 15 November). Nothing to run. You asked to make sure the field
+was gone from the live page, then to reorganize the page so it flows. The
+field left on it was the one in the Last play card: the last play drawn on
+the two clubs' end zones, between the strip under the score and your
+photograph, which runs the same play. It's gone. The card now says the play
+in words: what happened, who was in it with their game so far, and the down
+it came on.
+
+The live page now reads top to bottom:
+- **The score:** the strip under it (the down, where the ball is, the
+  drive), then the line score.
+- **The play right now:** your photograph with the play running on it, the
+  Last play card under it, then the win chance. It used to sit inside the
+  Play-By-Play tab, under the chat. Now it's above the tabs, so it stays
+  when you open Stats or Our picks.
+- **Your bets on the game,** when you have any.
+- **Call it, then the game chat.**
+- **The tabs:** Play-By-Play is the game so far, drive by drive. Stats,
+  Standings and Our picks are as before.
+
+A finished game is unchanged: the score, the line score, the recap and the
+tabs. The strip under the score stays, because you called it the drive chart
+at the top of the screen. If you meant that one, or the photograph, say
+which and it goes.
+
 **SE. Each team's form in the basketball and hockey reports** (step 611; 15
 November). Nothing to run. Your spring NBA research was mostly spread picks,
 and a spread read leans on who is winning and where. The reports had the
