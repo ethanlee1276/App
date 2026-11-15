@@ -150,19 +150,29 @@ class RedZoneUsage:
     #: above named `targets_inside_10` has always held RED-ZONE targets
     #: (inside the 20); this is the receiver's goal-line work.
     targets_goal_line: float = 0.0
+    #: His whole season's counts, the same four, over every game he touched
+    #: the ball this season (engine/nflusage.red_zone_usage): {"games",
+    #: "rz_car", "i5_car", "rz_tgt", "i10_tgt"}. None when not read.
+    season_counts: dict | None = None
 
     def goal_line(self) -> dict | None:
         """His goal-line work as COUNTS over the games measured — how the
         other model says it ("11 red-zone carries, 5 inside the 5"; Ethan,
-        2026-09-27). None when nothing was measured."""
+        2026-09-27). None when nothing was measured. ``season``: the same
+        counts over his whole season, when it is longer than the games
+        measured (Ethan, 2026-11-15: "add season total beside")."""
         if not self.measured or not self.games:
             return None
         n = int(self.games)
-        return {"games": n,
-                "rz_car": int(round(self.carries_inside_10 * n)),
-                "i5_car": int(round(self.carries_inside_5 * n)),
-                "rz_tgt": int(round(self.targets_inside_10 * n)),
-                "i10_tgt": int(round(self.targets_goal_line * n))}
+        out = {"games": n,
+               "rz_car": int(round(self.carries_inside_10 * n)),
+               "i5_car": int(round(self.carries_inside_5 * n)),
+               "rz_tgt": int(round(self.targets_inside_10 * n)),
+               "i10_tgt": int(round(self.targets_goal_line * n))}
+        sc = self.season_counts or {}
+        if int(sc.get("games") or 0) > n:
+            out["season"] = {k: int(sc.get(k) or 0) for k in ("games", "rz_car", "i5_car", "rz_tgt", "i10_tgt")}
+        return out
 
     def goal_line_text(self) -> str:
         """"11 red-zone carries (5 inside the 5), 6 red-zone targets (3 inside
@@ -177,9 +187,19 @@ class RedZoneUsage:
         if g["rz_tgt"]:
             bits.append(f"{g['rz_tgt']} red-zone target{'' if g['rz_tgt'] == 1 else 's'}"
                         + (f" ({g['i10_tgt']} inside the 10)" if g["i10_tgt"] else ""))
+        last = f" in his last {g['games']} game{'' if g['games'] == 1 else 's'}"
+        s = g.get("season") or {}
+        sbits = []
+        if s.get("rz_car"):
+            sbits.append(f"{s['rz_car']} carr{'y' if s['rz_car'] == 1 else 'ies'}"
+                         + (f" ({s['i5_car']} inside the 5)" if s.get("i5_car") else ""))
+        if s.get("rz_tgt"):
+            sbits.append(f"{s['rz_tgt']} target{'' if s['rz_tgt'] == 1 else 's'}"
+                         + (f" ({s['i10_tgt']} inside the 10)" if s.get("i10_tgt") else ""))
+        season = (f"; {' and '.join(sbits)} in his {s['games']} games this season" if sbits else "")
         if not bits:
-            return f"No red-zone touches in his last {g['games']} game{'' if g['games'] == 1 else 's'}"
-        return f"{', '.join(bits)} in his last {g['games']} game{'' if g['games'] == 1 else 's'}"
+            return f"No red-zone touches{last}" + season
+        return f"{', '.join(bits)}{last}" + season
 
     @property
     def opportunities(self) -> float:

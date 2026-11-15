@@ -9338,6 +9338,25 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RZ. The red zone says his season beside his last six games** (step 606;
+15 November). Nothing to run. You answered the counts' window with "add
+season total beside". Each player's carries and targets inside the 20 were
+his last six games. Now his whole season's counts sit beside them, wherever
+the counts are said:
+- **The red-zone list:** "Jahmyr Gibbs (RB): 14 carries (5 inside the 5)
+  and 2 targets (1 inside the 10) in his last 6 games — 2.7 a game, 36% of
+  DET's; 21 carries (8 inside the 5) and 3 targets (1 inside the 10) in his
+  9 games this season. Against GB: about 3.1 this game."
+- **The likeliest scorer:** "… inside the 20 in his last 6 games (21
+  carries and 3 targets in his 9 games this season), 36% of the Lions'
+  red-zone work".
+- **The pick's own red-zone line,** on the player's card.
+
+The season counts are the same four (carries and targets inside the 20,
+carries inside the 5, targets inside the 10), over every game he touched
+the ball for his team this season. They show only when his season is
+longer than the six.
+
 **RY. Your spring MLB and NBA research picks, graded on the box** (step 605;
 15 November). One read-only command, under 00g in docs/RUN_NEXT.md; paste
 back what it prints. You said yes to grading the spring chats. The NFL

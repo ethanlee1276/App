@@ -137,7 +137,19 @@ def red_zone_usage(conn, season: int | None = None) -> dict:
         team_touches = sum(team_avg) / n if n else 0.0
         share = (tgt + car) / team_touches if team_touches > 0 else 0.0
         then = [implied_by[(team, w)] for w in recent if (team, w) in implied_by]
+        # HIS SEASON BESIDE HIS LAST GAMES (Ethan, 2026-11-15, on the red
+        # zone's counts: "add season total beside"): every game this season
+        # he touched the ball for this team, the same four counts.
+        every = list(weeks)
+        season_counts = {
+            "games": len(every),
+            "rz_car": int(round(sum(max(weeks[w].get("rz_car", 0.0), weeks[w].get("i5_car", 0.0))
+                                    for w in every))),
+            "i5_car": int(round(sum(weeks[w].get("i5_car", 0.0) for w in every))),
+            "rz_tgt": int(round(sum(weeks[w].get("rz_tgt", 0.0) for w in every))),
+            "i10_tgt": int(round(sum(weeks[w].get("i10_tgt", 0.0) for w in every)))}
         out[_short_key(player, team)] = RedZoneUsage(
+            season_counts=season_counts,
             carries_inside_5=round(i5, 2),
             carries_inside_10=round(car, 2),
             targets_inside_10=round(tgt, 2),

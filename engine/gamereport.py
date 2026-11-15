@@ -1955,6 +1955,30 @@ def _rz_counts(td: dict) -> tuple:
     return " and ".join(bits), n, (car + tgt) / n
 
 
+def _rz_season(td: dict, detail: bool = True) -> str:
+    """His whole season's red-zone counts, said beside his last games (Ethan,
+    2026-11-15: "add season total beside"): "21 carries (8 inside the 5) and
+    3 targets in his 9 games this season"; without the inside-the-5 and
+    inside-the-10 counts when ``detail`` is off (a line already inside
+    brackets). "" when the season is no longer than the games counted, or
+    was not read."""
+    s = ((td or {}).get("goal_line") or {}).get("season") or {}
+    try:
+        n = int(s.get("games") or 0)
+        car, tgt = int(s.get("rz_car") or 0), int(s.get("rz_tgt") or 0)
+        i5, i10 = int(s.get("i5_car") or 0), int(s.get("i10_tgt") or 0)
+    except (TypeError, ValueError):
+        return ""
+    if n <= 0 or car + tgt <= 0:
+        return ""
+    bits = []
+    if car:
+        bits.append(f"{car} carr{'y' if car == 1 else 'ies'}" + (f" ({i5} inside the 5)" if i5 and detail else ""))
+    if tgt:
+        bits.append(f"{tgt} target{'' if tgt == 1 else 's'}" + (f" ({i10} inside the 10)" if i10 and detail else ""))
+    return f"{' and '.join(bits)} in his {n} games this season"
+
+
 def rz_usage_lines(c: Ctx, off: str, factor) -> list:
     """WHO GETS THE BALL INSIDE THE 20, AS COUNTS (Ethan, 2026-11-15,
     circling "carries and targets a game there, by our numbers": "we should
@@ -1976,9 +2000,11 @@ def rz_usage_lines(c: Ctx, off: str, factor) -> list:
             continue
         share = _f(td.get("rz_share"))
         pos = str(r.get("pos") or "").upper()
+        season = _rz_season(td)
         text = (f"{r['player']}{f' ({pos})' if pos else ''}: {words}"
                 + f" in his last {n} game{'' if n == 1 else 's'} — {_num(per)} a game"
                 + (f", {_pct(share)} of {off}'s" if share else "")
+                + (f"; {season}" if season else "")
                 + (f". Against {dfn}: about {_num(per * factor)} this game" if factor else "") + ".")
         rows.append((per, text))
     rows.sort(key=lambda x: -x[0])
@@ -3079,7 +3105,9 @@ def scorer_words(c: Ctx, r: dict, lead: bool = False) -> str:
     words, games, _per = _rz_counts(td)
     if words:
         share = _f(td.get("rz_share"))
+        season = _rz_season(td, detail=False)
         parts.append(f"{words} inside the 20 in his last {_count(games, 'game')}"
+                     + (f" ({season})" if season else "")
                      + (f", {_pct(share)} of {team_owner(c, t)} red-zone work" if share else ""))
     pos = str(r.get("pos") or "").upper()
     x = ((getattr(c, "allowed", None) or {}).get(dfn) or {}).get(_TD_STAT.get(pos, "")) or {}
