@@ -112,7 +112,8 @@ def test_the_chart_draws_each_rank_as_a_bar_in_its_thirds():
     sec = got[got.index('id="gr-rankings"'):]
     assert '<details class="gr-fold-tbl"><summary>Every number: Packers offense vs Lions defense</summary>' in sec
     css = open(REPORT_CSS, encoding="utf-8").read()
-    for rule in (".gr-fold > summary.gr-title::after", ".gr-bar-fill { position: absolute; inset: 0 auto 0 0; width: var(--w, 0%);",
+    assert '<span class="row-fold-chev" aria-hidden="true"></span></summary>' in got, "the site's own fold chevron"
+    for rule in (".gr-fold[open] > summary .row-fold-chev", ".gr-bar-fill { position: absolute; inset: 0 auto 0 0; width: var(--w, 0%);",
                  ".gr-bar.up .gr-bar-fill { background: var(--good);", ".gr-bar.down .gr-bar-fill { background: var(--bad);"):
         assert rule in css, rule
     assert ".gr-toc" not in css

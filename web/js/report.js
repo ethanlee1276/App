@@ -455,7 +455,8 @@
         ${inner}</section>`;
       }
       return `<details class="gr-sec gr-fold" id="gr-${escapeAttr(s.key)}"><summary class="gr-title">${
-        escapeHtml(s.title)}</summary><div class="gr-fold-body">${inner}</div></details>`;
+        escapeHtml(s.title)}<span class="row-fold-chev" aria-hidden="true"></span></summary><div class="gr-fold-body">${
+        inner}</div></details>`;
     }).join("");
     const url = (extras && extras.url) || "";
     shown.set(r.game, { r, url });
