@@ -486,9 +486,11 @@ def effect(team: str, rating: dict, position: str, market: str, sport: str = "nf
                       + (f"{_ord(r['rank'])}-most" if soft else f"{_ord(r['of'] - r['rank'] + 1)}-fewest")
                       + f" {words} ({num(r['pg'])} a game) (×{factor:.2f}); no game yet this season")
         elif now_soft == soft:
-            reason = (f"Soft matchup — {name} allow the {_ord(r['rank'])}-most {words} "
+            # "DET allows", one club (Ethan's screenshot read "DET allow the
+            # most passing yards", 2026-11-15).
+            reason = (f"Soft matchup — {name} allows the {_ord(r['rank'])}-most {words} "
                       f"({num(r['pg'])} a game) (×{factor:.2f})" if soft else
-                      f"Tough matchup — {name} allow the {_ord(r['of'] - r['rank'] + 1)}-fewest "
+                      f"Tough matchup — {name} allows the {_ord(r['of'] - r['rank'] + 1)}-fewest "
                       f"{words} ({num(r['pg'])} a game) (×{factor:.2f})")
         else:
             last = round(100 * (1 - n / (n + SHRINK_GAMES))) if n else 100

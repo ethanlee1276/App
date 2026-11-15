@@ -102,7 +102,7 @@ def _rating(**factors):
 def test_the_card_names_the_school_and_a_qb_run_reads_the_run_defence():
     r = _rating(qb_pass_yds=(1.2, 3, 290.0), rb_rush_yds=(0.8, 125, 90.0))
     f, why, card = D.effect("espn:333", r, "QB", "pass_yds", sport="cfb", label="Alabama")
-    assert abs(f - (1 + 0.82 * 0.2)) < 1e-9 and why.startswith("Soft matchup — Alabama allow the 3rd-most")
+    assert abs(f - (1 + 0.82 * 0.2)) < 1e-9 and why.startswith("Soft matchup — Alabama allows the 3rd-most")
     assert card["opponent"] == "Alabama" and card["of"] == 130
     f, why, card = D.effect("espn:333", r, "QB", "rush_yds", sport="cfb", label="Alabama")
     # Since 2026-10-08 the card shows what the defence gives up to

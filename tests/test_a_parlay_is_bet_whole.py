@@ -114,6 +114,25 @@ def test_every_leg_of_every_posted_ticket_is_linked():
     assert "games" in B.SKIP_KEYS
 
 
+def test_the_heartbeat_counts_the_linked_legs():
+    """The tickets are a paid key: the heartbeat is where a live check sees
+    their legs were linked (launch._board_counts)."""
+    import launch as L
+    payload, _ = _stamped()
+    payload["game_parlays"]["counts"] = {"games": 1, "threes": 1, "scorers": 1}
+    payload["game_parlays"]["games"][0]["scorers"][0]["legs"][1].pop("bet_links")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(dict(payload, most_likely=[], game_bets=[]), fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert (got["parlay_legs"], got["parlay_legs_linked"]) == (5, 4), got
+
 def _fd_urls(legs):
     return [next(u for t, u, px in l["bet_links"] if t == "FanDuel") for l in legs]
 

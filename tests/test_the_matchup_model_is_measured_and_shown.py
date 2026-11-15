@@ -114,7 +114,7 @@ def test_the_effect_its_card_and_its_words():
                      rb_td=(0.9, 30, 0.4), rb_rush_yds=(0.8, 32, 70.0))
     f, why, card = D.effect("DET", rating, "WR", "rec_yds")
     assert abs(f - (1 + 0.57 * 0.09)) < 1e-9
-    assert why.startswith("Soft matchup — DET allow the 2nd-most passing yards (329 a game)")
+    assert why.startswith("Soft matchup — DET allows the 2nd-most passing yards (329 a game)")
     assert card["text"] == ("DET allow 218.5 receiving yards to WRs a game, the 1st-most (league 10), over 2 games; "
                             "1.0 TDs to WRs a game (14th-most)"), "the card is his own position's, with TDs beside it"
     assert {k: card["model"][k] for k in ("reads", "applied")} == {"reads": "passing yards", "applied": round(f, 3)}
@@ -123,7 +123,7 @@ def test_the_effect_its_card_and_its_words():
     assert (f, why) == (1.0, "") and card["model"]["reads"] is None and "leaves it out" in card["model"]["note"]
     assert card["stat"] == "TDs to WRs" and card["also"]["stat"] == "receiving yards to WRs"
     f, why, _card = D.effect("DET", rating, "RB", "rush_yds")
-    assert abs(f - (1 + 0.72 * -0.2)) < 1e-9 and why.startswith("Tough matchup — DET allow the 1st-fewest rushing")
+    assert abs(f - (1 + 0.72 * -0.2)) < 1e-9 and why.startswith("Tough matchup — DET allows the 1st-fewest rushing")
     assert abs(D.effect("DET", rating, "RB", "anytime_td")[0] - (1 + 0.45 * -0.1)) < 1e-9
     assert D.effect("DET", _rating(qb_pass_yds=(3.0, 1, 999.0)), "QB", "pass_yds")[0] == 1.25, "clamped"
     assert D.effect("DET", {}, "WR", "rec_yds") == (1.0, "", None)

@@ -562,6 +562,13 @@ def _board_counts(path: str) -> dict:
         out["parlay_games"] = int(c.get("games") or len(gp["games"]))
         out["sgp_threes"] = int(c.get("threes") or 0)
         out["td_pairs"] = int(c.get("scorers") or 0)
+        # Bet it on a whole ticket (engine/betlinks._parlay_legs, 2026-11-15):
+        # the tickets' legs, and how many carry the books that hold them.
+        legs = [l for x in gp["games"] if isinstance(x, dict)
+                for t in (x.get("threes") or []) + (x.get("scorers") or []) if isinstance(t, dict)
+                for l in t.get("legs") or [] if isinstance(l, dict)]
+        out["parlay_legs"] = len(legs)
+        out["parlay_legs_linked"] = sum(1 for l in legs if l.get("bet_links"))
         if not gp["games"] and "did not build" in str(gp.get("note") or ""):
             out["parlay_error"] = str(gp["note"])[:200]
     reps = b.get("game_reports")
