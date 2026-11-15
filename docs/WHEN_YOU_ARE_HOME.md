@@ -9377,10 +9377,15 @@ have three more sections:
   the team's points in the games the player sat). When there are fewer than
   three such games, it says it's too few to tell.
 - **How the game should go:** "A fast game: the Heat averages 101.2
-  possessions a game (6th-fastest of 30) and the Celtics 101.9; the league
-  averages 99.1. More possessions means more points, rebounds and assists to
-  go around", then the total against the league's average game, and a close
-  game's full minutes. Rest and the blowout stay under the game facts.
+  possessions per 48 minutes (6th-fastest of 30) and the Celtics 101.9; the
+  league averages 99.1. More possessions means more points, rebounds and
+  assists to go around", then the total against the league's average game,
+  and a close game's full minutes. Rest and the blowout stay under the game
+  facts. (Corrected the same evening: it first said "possessions a game".
+  Pace is counted per 48 minutes, the way the tape's pace row on the same
+  page says it, so on a 40-minute college game that read about 14 more
+  possessions than a college team has. College's averages now say
+  "Division I", not "the league".)
 - **The last meeting:** "Oct. 30: the Celtics beat the Heat 112-101 on the
   road", each side's leading scorers, and who each played without that
   night.

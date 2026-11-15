@@ -1163,6 +1163,13 @@ def nba_meeting(c: Ctx) -> dict | None:
     return _section("meetings", "The last meeting", [_list(items)])
 
 
+def _league(c: Ctx, own: bool = False) -> str:
+    """"the league" ("the league's"), or college's "Division I"
+    ("Division I's"): college's averages are its 360-odd teams'."""
+    word = "Division I" if c.sport == "cbb" else "the league"
+    return f"{word}'s" if own else word
+
+
 def nba_script(c: Ctx) -> dict | None:
     """HOW THE GAME SHOULD GO (the research's pace and game environment: "fast
     vs fast = inflated stats; slow vs slow = deflated", "high total =
@@ -1182,8 +1189,12 @@ def nba_script(c: Ctx) -> dict | None:
             return f" ({_ord(int(r))}-fastest of {n})" if r and n else ""
         fast = [t for t, p in ((a, pa), (h, ph)) if p >= lp + PACE_SAID]
         slow = [t for t, p in ((a, pa), (h, ph)) if p <= lp - PACE_SAID]
-        pair = (f"{team_np(c, a)} {team_be(c, a, 'average', 'averages')} {_num(pa)} possessions a game{rank(a)} "
-                f"and {team_np(c, h)} {_num(ph)}{rank(h)}; the league averages {_num(lp)}")
+        # Per 48 minutes in every league, as the tape's pace row on the same
+        # page says it (engine/nba/teams: pace is 48 x possessions / game
+        # minutes); college's own 40-minute game would be the other number
+        # for the same team, two lines apart.
+        pair = (f"{team_np(c, a)} {team_be(c, a, 'average', 'averages')} {_num(pa)} possessions per 48 minutes"
+                f"{rank(a)} and {team_np(c, h)} {_num(ph)}{rank(h)}; {_league(c)} averages {_num(lp)}")
         if len(fast) == 2:
             items.append(f"A fast game: {pair}. More possessions means more points, rebounds and assists to go "
                          f"around")
@@ -1199,13 +1210,13 @@ def nba_script(c: Ctx) -> dict | None:
         avg = 2 * lpts
         gap = tot - avg
         if gap >= POINTS_SAID:
-            items.append(f"The total, {tot:g}, is {_num(gap)} points over the league's average game ({_num(avg)}): "
-                         f"a high-scoring night by the line, friendly to overs")
+            items.append(f"The total, {tot:g}, is {_num(gap)} points over {_league(c, True)} average game "
+                         f"({_num(avg)}): a high-scoring night by the line, friendly to overs")
         elif gap <= -POINTS_SAID:
-            items.append(f"The total, {tot:g}, is {_num(-gap)} points under the league's average game "
+            items.append(f"The total, {tot:g}, is {_num(-gap)} points under {_league(c, True)} average game "
                          f"({_num(avg)}): a low-scoring night by the line")
         else:
-            items.append(f"The total, {tot:g}, is close to the league's average game ({_num(avg)})")
+            items.append(f"The total, {tot:g}, is close to {_league(c, True)} average game ({_num(avg)})")
     sp = _f(s.get("spread"))
     if sp is not None and abs(sp) <= CLOSE_SPREAD:
         fav = h if sp < 0 else a

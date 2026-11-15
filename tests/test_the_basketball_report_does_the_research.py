@@ -13,8 +13,9 @@ engine/leaguereport.basketball_research (NBA, college, WNBA):
   * What the absences change: each ruled-out rotation man's minutes and
     points, and who took the biggest one's share of the points in the games
     he missed — measured, and a sample under three games says so;
-  * How the game should go: both teams' pace against the league's, the
-    total against the league's average game, a close game's full minutes;
+  * How the game should go: both teams' pace against the league's (per 48
+    minutes, as the tape says it; Division I's on college), the total against
+    the league's average game, a close game's full minutes;
   * The last meeting: the score, each side's leading scorers, and who each
     played without that night.
 
@@ -114,12 +115,26 @@ def test_how_the_game_should_go_reads_the_pace_the_total_and_a_close_game():
     text = R.to_text(_report())
     assert "HOW THE GAME SHOULD GO" in text, text
     # "The Heat" is one team, as the report says it elsewhere ("The Heat is on the second night ...").
-    assert ("A fast game: the Heat averages 101.2 possessions a game (6th-fastest of 30) and the Celtics 101.9 "
-            "(3rd-fastest of 30); the league averages 99.1.") in text, text
+    # Per 48 minutes, as the tape's pace row on the same page says it.
+    assert ("A fast game: the Heat averages 101.2 possessions per 48 minutes (6th-fastest of 30) and the Celtics "
+            "101.9 (3rd-fastest of 30); the league averages 99.1.") in text, text
     assert "The total, 232.5, is 7.5 points over the league's average game (225): a high-scoring night" in text, text
     assert "A close game by the line, the Celtics by 3.5: the starters should play their full minutes" in text, text
     slow = R.to_text(_report(spread=-12.5, total=214.5))
     assert "under the league's average game" in slow and "A close game" not in slow
+
+
+def test_a_college_game_says_division_i_and_the_same_pace_as_its_tape():
+    """College's pace is per 48 minutes like the tape's row, not its own 40-minute
+    game (that would be a second number for the same team, two lines apart),
+    and its averages are Division I's, not "the league's"."""
+    g, meta = _research()
+    board = {"date": "2026-11-16", "games": [g], "scan_reads": {}, "board_games": ["MIA@BOS"],
+             "teams": {"MIA": {"loc": "Miami"}, "BOS": {"loc": "Boston College"}}}
+    L.attach(board, "cbb", meta={"MIA@BOS": meta})
+    text = R.to_text(board["game_reports"][0])
+    assert "possessions per 48 minutes" in text and "Division I averages 99.1." in text, text
+    assert "over Division I's average game (225)" in text and "the league" not in text, text
 
 
 def test_the_last_meeting_is_the_precedent_with_who_was_missing():
