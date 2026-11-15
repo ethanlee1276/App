@@ -832,13 +832,39 @@ def _late_checks(st: dict, start: str) -> bool:
     return True
 
 
+def _first_on_new_code(piece: str, pieces: dict) -> bool:
+    """A check owed again because its measuring code changed, and not yet
+    tried on that code (`attempted_v`, written as a run starts it)."""
+    if not _check_stale(piece, pieces):
+        return False
+    try:
+        tried = int((pieces.get(piece) or {}).get("attempted_v") or 0)
+    except (TypeError, ValueError):
+        tried = 0
+    return tried < NBA_CHECK_VERSION[piece]
+
+
 def _stalest_first(left: list[str], state: dict) -> list[str]:
+    """The round's pieces, the one whose last turn is oldest first.
+
+    A FIXED CHECK GOES FIRST (2026-11-15). Step PM told Ethan that the night
+    after the rotation and rates checks were fixed (NBA_CHECK_VERSION 2),
+    the refit would run them first. The run of 15 November ran the
+    teammate-out replay instead, then stopped with 43 of its 50 minutes left,
+    and the rotation stayed `not yet`. Their done date, 14 November, was the
+    OLD code's run, and stalest first read it as the freshest in the round,
+    so they sorted last, behind three pieces of 45 minutes each. A check not
+    yet tried on its current code has no date that counts, so it goes to the
+    front. Once tried on that code it takes its place by its dates, like any
+    piece, so a check that fails on the new code does not take the first
+    place every night and stop the rest of the round."""
     pieces = state.get("pieces") or {}
 
     def key(p):
         e = pieces.get(p) or {}
-        return (max(str(e.get("done") or ""), str(e.get("attempted") or "")),
-                PIECE_ORDER.index(p) if p in PIECE_ORDER else len(PIECE_ORDER))
+        when = "" if _first_on_new_code(p, pieces) else max(str(e.get("done") or ""),
+                                                          str(e.get("attempted") or ""))
+        return (when, PIECE_ORDER.index(p) if p in PIECE_ORDER else len(PIECE_ORDER))
     return sorted(left, key=key)
 
 
@@ -1026,6 +1052,15 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
                           clean_before=not (mine and fd.get("failed")),
                           last=cut.get("fitter") if cut.get("round") == start else None,
                           round_of=start)
+    def need_of(p):
+        # ITS OWN TIME (2026-11-06): its last full run, its guess before it
+        # has one, and never less than it has already been seen to run
+        # without finishing (``min_s``).
+        e0 = pieces.get(p) or {}
+        took = max(float(e0.get("seconds") or 0) or float(NBA_CHECK_GUESS_S.get(p, 0)),
+                   float(e0.get("min_s") or 0))
+        return min(budget_s * 0.9, max(MIN_PIECE_LEFT_S, 1.2 * took))
+
     while left:
         # Chosen afresh after every piece: one that waited on another
         # (PREREQS) may run as soon as that one is done.
@@ -1033,19 +1068,23 @@ def run_round(db: str = "data/history.db", state_path=None, today: _dt.date | No
                     if not any(q in left for q in PREREQS.get(p, ()))]
         if not runnable:
             break
-        p = runnable[0]
-        e0 = pieces.get(p) or {}
-        # ITS OWN TIME (2026-11-06): its last full run, its guess before it
-        # has one, and never less than it has already been seen to run
-        # without finishing (``min_s``).
-        took = max(float(e0.get("seconds") or 0) or float(NBA_CHECK_GUESS_S.get(p, 0)),
-                   float(e0.get("min_s") or 0))
-        need = min(budget_s * 0.9, max(MIN_PIECE_LEFT_S, 1.2 * took))
-        if started and deadline - clock() < need:
+        # THE TIME LEFT GOES TO A PIECE THAT FITS IT (2026-11-15). A run's
+        # first piece starts whatever it needs. After that, the run used to
+        # stop at the first piece that needed more than the time left: on 15
+        # November that was 43 of 50 minutes, with a 13-minute check owed
+        # behind it. Now the first piece in line that fits runs. The one that
+        # did not fit is never started, so it keeps its place and starts the
+        # next run.
+        p = runnable[0] if not started else next(
+            (q for q in runnable if deadline - clock() >= need_of(q)), None)
+        if p is None:
             break
         started += 1
         entry = pieces.setdefault(p, {})
         entry["attempted"] = today.isoformat()
+        if p in NBA_CHECK_VERSION:
+            # Tried on this code: from here its dates place it (_stalest_first).
+            entry["attempted_v"] = NBA_CHECK_VERSION[p]
         _write_state(path, st)
         emit(f"deep refit: {p} — starting ({len(left)} left in this round)")
         t0 = clock()

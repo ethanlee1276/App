@@ -9338,6 +9338,33 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RX. The night's refit runs a fixed check first, and uses the time it has
+left** (step 604; 15 November). Nothing to run. Step PM said that the night
+after the NBA's rotation and rates checks were fixed, the refit would run
+them first and the rotation rules would come back on. They did not: the
+public heartbeat this morning read `round of 2026-11-11: nba_vacancy done
+this run; left for the next: nfl, cfb, nba_spread, nba_rules, nba_rates,
+nba, nfl_props, ladder`, a run of 7 of its 50 minutes, and `nba_switches` →
+`rotation` → `verdict` still `not yet`. There were two causes, both in the
+refit's line (engine/deepfit):
+- **The fixed checks sorted last.** The line runs the piece whose last turn
+  is oldest first, and the two checks' last date was 14 November: the old
+  code's run. That put them behind three pieces of about 45 minutes each. A
+  check not yet tried on its current code now goes to the front. Once it
+  has been tried, its dates place it like any piece, so a check that fails
+  on the new code can't take the first place every night.
+- **A run stopped at the first piece that didn't fit.** After the
+  teammate-out replay, the next piece in line needed 45 minutes and 43 were
+  left, so the run ended there with the 11-minute rates check behind it.
+  Now the run goes on with the next piece in line that fits. The skipped
+  piece is never started, so it keeps its place and starts the next run.
+
+Tonight's run (about 12:30am Eastern) should do the rotation check (about
+30 minutes) and the rates check (11). Monday morning's heartbeat shows
+`rotation` → `verdict`, which should read `ready` if the finished seasons
+still hold. The NBA's own calibration still waits for the spread's check,
+which needs most of a run to itself.
+
 **RW. The likeliest scorer is said in our data and the matchup** (step 603;
 15 November). Nothing to run. You circled "Lions's likeliest scorer by our
 touchdown numbers (64%), with Lions expected to score about 26" and asked
@@ -10659,6 +10686,11 @@ then fits the NBA's calibration on the board they leave. If the finished
 seasons still hold, the rotation rules come back on tonight; the heartbeat
 shows it under `nba_switches` → `rotation` → `verdict` (`ready`).
 
+**Update, 15 November (read off the public heartbeat):** they did not run
+that night. Saturday night's refit ran the teammate-out replay first, then
+stopped with 43 of its 50 minutes left, so `rotation` still reads `not yet`.
+Why, and the fix, are in step RX.
+
 **PL. Why college's board has no player props** (step 540; 14 November).
 One read-only command; paste it back. College's board priced no player
 props on its first two days (`props_analyzed` 0 at 4:55pm Eastern on the
@@ -10712,6 +10744,16 @@ read last season too (`prior.schools` 365). The board's odds line also said
 "54 event(s) DROPPED", which was the night's other games, the ones the
 pull does not buy, not a broken name join (step QE). The 6pm pull is the
 real test: Friday's found player props on all five games it bought.
+
+**Update, 15 November (the public board at 12:15pm):** the books post
+college props now, and the board prices them. The 12:06pm pull carried
+player props on all five games it bought: nine books each, two to four
+player markets, and three to five ladders. 48 props got a real price
+(`gate_census`). Two were weighed and missed the edge bar. The other 46 were
+held as "role unproven", which is the NBA's own rule: a player's role needs
+four of his games this season, and these players have three (their recent
+minutes are three-game averages). Nothing is dropping them. The gate opens
+for each team as it plays its fourth game, about Tuesday to Thursday.
 
 **PK. The Lab draws** (step 539; 14 November). Nothing to run. You, with a
 screenshot of the Lab: "the lab shows this every time u click on the page.
