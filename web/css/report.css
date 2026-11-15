@@ -4,7 +4,6 @@
    size with room between lines, each section under a rule, tables that
    scroll inside themselves on a phone, and the players in the scan's own
    card shape. */
-.gr-toc { margin: 0 0 12px; }
 /* Copy the report, share the game: two quiet buttons over the contents. */
 .gr-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
 .gr-card { padding: 18px 20px; }
@@ -13,6 +12,40 @@
   scroll-margin-top: calc(var(--topbar-h) + 64px); }
 .gr-sec:first-child { border-top: 0; padding-top: 2px; }
 .gr-title { margin: 0 0 8px; font-size: var(--fs-lg); font-weight: 800; color: var(--text); }
+/* ONE SECTION OPEN, THE REST ONE TAP AWAY (2026-11-15; Ethan: "it still
+   feels all cluttered and hard to digest everything"). The short version
+   reads open; every other section folds to its title, a row you tap. */
+.gr-fold { padding: 0; }
+.gr-fold > summary.gr-title { margin: 0; padding: 14px 0; cursor: pointer; list-style: none; display: flex;
+  align-items: center; justify-content: space-between; gap: 12px; }
+.gr-fold > summary.gr-title::-webkit-details-marker { display: none; }
+.gr-fold > summary.gr-title::after { content: ""; flex: 0 0 auto; width: 9px; height: 9px; margin-right: 4px;
+  border-right: 2px solid var(--text-mute); border-bottom: 2px solid var(--text-mute); transform: rotate(45deg);
+  transition: transform .15s ease; }
+.gr-fold[open] > summary.gr-title::after { transform: rotate(-135deg); }
+.gr-fold > summary.gr-title:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+.gr-fold-body { padding: 0 0 16px; }
+/* THE UNITS AS RANK BARS (2026-11-15): a bar's length is the rank, 1st
+   the longest; its colour, the league's thirds. */
+.gr-chart { margin: 10px 0 14px; display: grid; gap: 14px; max-width: var(--measure-wide); }
+.gr-chart-head { font-size: var(--fs-sm); font-weight: 800; color: var(--text); margin: 0 0 6px; }
+.gr-chart-head span { font-weight: 600; color: var(--text-dim); }
+.gr-match-side { display: grid; gap: 8px; }
+.gr-match-row { display: grid; gap: 3px; }
+.gr-match-label { font-size: var(--fs-xs); font-weight: 700; color: var(--text-dim); letter-spacing: .02em; }
+.gr-edge { margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 800;
+  color: var(--text); background: var(--panel-2); border: var(--hairline) solid var(--border); }
+.gr-bar { position: relative; height: 22px; border-radius: 6px; background: var(--panel-2); overflow: hidden; }
+.gr-bar-fill { position: absolute; inset: 0 auto 0 0; width: var(--w, 0%); background: var(--text-mute); opacity: .35; }
+.gr-bar.up .gr-bar-fill { background: var(--good); opacity: .45; }
+.gr-bar.down .gr-bar-fill { background: var(--bad); opacity: .45; }
+.gr-bar-txt { position: relative; z-index: 1; display: block; padding: 0 8px; line-height: 22px; font-size: var(--fs-xs);
+  color: var(--text); white-space: nowrap; }
+.gr-bar.up .gr-bar-txt b { color: var(--good); }
+.gr-bar.down .gr-bar-txt b { color: var(--bad); }
+/* Every number, one tap under the chart that draws its ranks. */
+.gr-fold-tbl { margin: 6px 0 12px; }
+.gr-fold-tbl > summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 700; color: var(--text-dim); padding: 6px 0; }
 .gr-h { margin: 16px 0 6px; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; color: var(--text-dim); }
 .gr-p { margin: 8px 0; font-size: var(--fs-lg); line-height: var(--lh-body); color: var(--text);

@@ -1288,9 +1288,43 @@ def _table_for(c: Ctx, off: str, dfn: str) -> dict | None:
             "head": ["", f"{off} off", f"{dfn} def", "Edge"], "rows": rows, "rank_of": c.n_teams}
 
 
+#: THE UNITS AT A GLANCE (2026-11-15; Ethan: "it still feels all cluttered
+#: and hard to digest everything. maybe we can do charts too"): the rows the
+#: edge is read on, as bars, before the tables that hold every number.
+CHART_UNITS = ("passing", "rushing", "pressure", "redzone")
+
+
+def _edge_chart(c: Ctx) -> dict | None:
+    """Each offense against the defense it faces, unit by unit, as ranks a
+    chart draws (js/report.js "matchbars"): longer is better, 1st longest."""
+    labels = {u: label for u, label, _ in UNIT_ROWS}
+    sides = []
+    for off, dfn in ((c.away, c.home), (c.home, c.away)):
+        rows = []
+        for unit in CHART_UNITS:
+            o, d = c.rank(off, "off", unit), c.rank(dfn, "def", unit)
+            if o is None or d is None:
+                continue
+            gap = int(d) - int(o)
+            edge = off if gap >= c.gap_bar else dfn if -gap >= c.gap_bar else ""
+            rows.append({"label": labels.get(unit, unit), "off": int(o), "def": int(d), "edge": edge})
+        if rows:
+            sides.append({"off": off, "def": dfn, "rows": rows})
+    if not sides:
+        return None
+    return {"type": "matchbars", "rank_of": c.n_teams, "sides": sides,
+            "note": "Each bar is a rank: the longer it is, the better the unit, 1st the longest."}
+
+
 def sec_rankings(c: Ctx) -> dict | None:
     # The season's own numbers stand without the unit ranks.
     blocks = [_table_for(c, c.away, c.home), _table_for(c, c.home, c.away)] if c.units else []
+    for b in blocks:
+        if b:
+            b["fold"] = True               # every number, one tap under the chart
+    chart = _edge_chart(c) if c.units else None
+    if chart:
+        blocks.insert(0, chart)
     if any(blocks):
         blocks.append({"type": "note", "text": CFB_UNIT_NOTE if c.sport == "cfb" else UNIT_NOTE})
     nums = c.scan.get("numbers") or {}

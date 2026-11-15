@@ -201,13 +201,52 @@
       <dd>${(lines || []).map((l) => `<span>${escapeHtml(l)}</span>`).join("")}</dd></div>`).join("")}</dl>`;
   }
 
+  /* The section that reads open; the rest fold to their titles. */
+  const OPEN_SECTION = "short";
+
+  /* A rank as a bar's length: 1st the longest, last the shortest. */
+  function rankWidth(rank, n) {
+    const r = Number(rank), of = Number(n);
+    if (!(r > 0) || !(of > 0)) return 0;
+    return Math.max(4, Math.round(((of - r + 1) / of) * 100));
+  }
+  /* EACH OFFENSE AGAINST THE DEFENSE IT FACES, unit by unit (engine/
+     gamereport._edge_chart): two bars a row, the longer the better, in
+     the rank's own colour — and the edge, where the ranks sit far apart. */
+  function matchbars(b) {
+    const n = Number(b.rank_of) || RANK_OF;
+    const bar = (rank, who) => {
+      const tone = rankTone(Number(rank), n);
+      return `<div class="gr-bar${tone ? ` ${tone}` : ""}"><span class="gr-bar-fill" style="--w:${rankWidth(rank, n)}%"></span>
+        <span class="gr-bar-txt">${escapeHtml(who)} <b>${escapeHtml(ordinal(rank))}</b></span></div>`;
+    };
+    return `<div class="gr-chart gr-match">${(b.sides || []).map((sd) => `<div class="gr-match-side">
+      <div class="gr-chart-head">${escapeHtml(teamName(sd.off))} offense <span>vs ${escapeHtml(teamName(sd.def))} defense</span></div>
+      ${(sd.rows || []).map((row) => `<div class="gr-match-row">
+        <div class="gr-match-label">${escapeHtml(row.label)}${row.edge
+          ? ` <span class="gr-edge">edge ${escapeHtml(row.edge)}</span>` : ""}</div>
+        ${bar(row.off, sd.off)}${bar(row.def, sd.def)}</div>`).join("")}</div>`).join("")}
+      ${b.note ? `<p class="gr-note">${escapeHtml(b.note)}</p>` : ""}</div>`;
+  }
+  function ordinal(n) {
+    const k = Math.abs(Number(n)) % 100;
+    const suf = k >= 11 && k <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[k % 10] || "th");
+    return `${n}${suf}`;
+  }
+
   function block(b) {
     if (!b || !b.type) return "";
+    if (b.type === "matchbars") return matchbars(b);
     if (b.type === "p") return `<p class="gr-p">${named(b.text, b.names, b.marks, true)}</p>`;
     if (b.type === "h") return `<h4 class="gr-h">${escapeHtml(b.text)}</h4>`;
     if (b.type === "note") return `<p class="gr-note">${named(b.text, b.names, b.marks)}</p>`;
     if (b.type === "list") {
       return `<ul class="gr-list">${(b.items || []).map((t) => `<li>${named(t, b.names, b.marks, true)}</li>`).join("")}</ul>`;
+    }
+    if (b.type === "table" && b.fold) {
+      // EVERY NUMBER, ONE TAP UNDER THE CHART that draws its ranks.
+      return `<details class="gr-fold-tbl"><summary>Every number: ${escapeHtml(b.title || "the table")}</summary>${
+        block(Object.assign({}, b, { fold: false }))}</details>`;
     }
     if (b.type === "table") {
       const head = b.head || [];
@@ -362,6 +401,17 @@
   const shown = new Map();
   if (typeof document !== "undefined") {
     document.addEventListener("click", (e) => {
+      const all = e.target.closest && e.target.closest("[data-gr-all]");
+      if (all && all.dataset && all.dataset.grAll) {
+        // EVERY SECTION AT ONCE: open them all, or fold them back.
+        const box = typeof all.closest === "function" ? all.closest(".gr") : null;
+        const card = box && box.querySelector(".gr-card");
+        const folds = card ? [...card.querySelectorAll("details.gr-fold")] : [];
+        const open = folds.some((d) => !d.open);
+        folds.forEach((d) => { d.open = open; });
+        all.textContent = open ? "Fold the sections" : "Open every section";
+        return;
+      }
       const b = e.target.closest && e.target.closest("[data-gr-copy], [data-gr-share]");
       if (!b) return;
       const hit = shown.get(b.dataset.grCopy || b.dataset.grShare);
@@ -385,9 +435,6 @@
     }
     RANK_OF = Number(r.rank_of) || 0;
     const secs = (r.sections || []).filter((s) => s && (s.blocks || []).length);
-    const toc = secs.length > 2 ? `<nav class="std-chips gr-toc" aria-label="Sections of the report">${
-      secs.map((s) => `<button type="button" class="chip" data-jump="gr-${escapeAttr(s.key)}">${
-        escapeHtml(s.title)}</button>`).join("")}</nav>` : "";
     const body = secs.map((s) => {
       let blocks = s.blocks || [];
       let extra = "";
@@ -398,15 +445,26 @@
         blocks = blocks.filter((b) => b.type !== "table");
         extra = `<div class="gr-extra">${extras.scripts}</div>`;
       }
-      return `<section class="gr-sec" id="gr-${escapeAttr(s.key)}"><h3 class="gr-title">${escapeHtml(s.title)}</h3>
-        ${blocks.map(block).join("")}${extra}</section>`;
+      const inner = `${blocks.map(block).join("")}${extra}`;
+      // ONE SECTION OPEN, THE REST ONE TAP AWAY (Ethan, 2026-11-15: "it still
+      // feels all cluttered and hard to digest everything"). The short
+      // version reads first; every other section folds to its title, and
+      // the titles are the report's contents.
+      if (s.key === OPEN_SECTION || secs.length < 3) {
+        return `<section class="gr-sec" id="gr-${escapeAttr(s.key)}"><h3 class="gr-title">${escapeHtml(s.title)}</h3>
+        ${inner}</section>`;
+      }
+      return `<details class="gr-sec gr-fold" id="gr-${escapeAttr(s.key)}"><summary class="gr-title">${
+        escapeHtml(s.title)}</summary><div class="gr-fold-body">${inner}</div></details>`;
     }).join("");
     const url = (extras && extras.url) || "";
     shown.set(r.game, { r, url });
+    const folded = secs.length >= 3;
     const tools = `<div class="gr-tools">
       <button type="button" class="btn ghost" data-gr-copy="${escapeAttr(r.game)}">Copy the report</button>
-      <button type="button" class="btn ghost" data-gr-share="${escapeAttr(r.game)}">Share this game</button></div>`;
-    return `<div id="gp-sec-report" class="gr">${head}${tools}${toc}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
+      <button type="button" class="btn ghost" data-gr-share="${escapeAttr(r.game)}">Share this game</button>${
+        folded ? `<button type="button" class="btn ghost" data-gr-all="1">Open every section</button>` : ""}</div>`;
+    return `<div id="gp-sec-report" class="gr">${head}${tools}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
   }
 
   /* EACH GAME'S PARLAYS ON THE PARLAYS PAGE (app.js fillGameParlays): the

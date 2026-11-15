@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RP. The game report, folded, with the units as a chart** (step 596; 15
+November). Nothing to run. You said the colors helped but the report still
+felt cluttered and hard to digest, and asked about charts. Every league's
+report now:
+- **Opens on the short version only.** Every other section folds to its
+  title (game facts, the market, the units, who's guarding who, the red
+  zone and so on), one tap away. The titles are the report's contents, so
+  the row of jump chips is gone. "Open every section" opens them all, and
+  tapping it again folds them back.
+- **Draws "How the units rank" as a chart.** Each offense faces the
+  defense across from it on passing, rushing, pressure and the red zone:
+  two bars a row, the longer the better, 1st the longest. They're colored
+  like the ranks in the text (green the league's top third, red its
+  bottom third), with the edge named where the two sit far apart. The two
+  tables with every number fold underneath ("Every number: …").
+
+"Copy the report" still copies the whole report, every table included.
+
 **RO. Kinds of pick we oversell go on paper, on their own** (step 595; 15
 November). Nothing to run, nothing to decide. You said yes: where we say
 76% and they hit 36%, record the picks on paper and don't post them, with

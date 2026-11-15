@@ -140,8 +140,11 @@ def _node(script):
 
 
 def _section_html(full, key):
+    """One section's html: the short version is a <section>, the rest fold
+    (<details>) since 2026-11-15 — test_the_report_reads_without_the_clutter."""
     i = full.index(f'id="gr-{key}"')
-    return full[i:full.index("</section>", i)]
+    ends = [j for j in (full.find("</section>", i), full.find("</details>", i)) if j >= 0]
+    return full[i:min(ends)]
 
 
 def test_the_page_colours_each_name_opens_his_page_and_keys_the_colours():

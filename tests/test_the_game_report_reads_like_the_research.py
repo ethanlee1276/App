@@ -460,11 +460,15 @@ def test_the_module_draws_a_real_report():
     full = got["full"]
     for sec in rep["sections"]:
         assert f'id="gr-{sec["key"]}"' in full, sec["key"]
-        assert f'data-jump="gr-{sec["key"]}"' in full, sec["key"]
+        # Since 2026-11-15 the folded titles are the contents (no jump row):
+        # the short version open, every other section one tap away.
+        if sec["key"] != "short":
+            assert f'<details class="gr-sec gr-fold" id="gr-{sec["key"]}"><summary class="gr-title">' in full, sec["key"]
+    assert '<section class="gr-sec" id="gr-short">' in full and "data-gr-all" in full
     assert full.count("<table") >= 2 and 'data-open="player:' in full
     # The simulation card takes the place of the scripts table.
     scripts = full[full.index('id="gr-scripts"'):]
-    scripts = scripts[:scripts.index("</section>")]
+    scripts = scripts[:scripts.index("</details>")]
     assert "id=simcard" in scripts and "<table" not in scripts
     for bad in ("undefined", "[object", "NaN"):
         assert bad not in full, bad
