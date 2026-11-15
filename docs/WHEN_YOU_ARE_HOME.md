@@ -9338,6 +9338,59 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RC. The picks audit prints the picks behind each count and judges a
+kickoff at the build** (step 583; 14 November). One read-only command, the
+same as QC's; paste it back after tonight's boards. Your run printed 92
+college contradictions, 43 of them STARTED, and named none of the picks. The
+43 were the clock: the board was built at 7:19pm and read at 7:32pm, after
+the 7:30 kickoffs. The audit now asks whether a pick's game had started when
+its board was built, which is a real fault, and prints up to six picks of
+each kind, so each fix can land on the rule that made them
+(engine/pickaudit):
+
+```
+cd /srv/qellys && nice -n 19 bash tools/catchup.sh QC 2>&1 | tee /tmp/qc.txt
+```
+
+**RB. College grades on ESPN's box score** (step 582; 14 November). Nothing
+to run. You answered 00e "yes". A final box score's numbers are now kept
+(a new `box_values` table in the history file). When the play file lands for
+that game, its rows take the box score's numbers, and every play-file
+backfill applies them again, so a re-pull never puts the play file's number
+back. A bet graded on the box score the same night stands. If the play file
+has no row for a box number (the name is spelled another way), the play
+file's own row is left alone. Also fixed: a game's box copy now goes the
+moment its official rows are on file, whether or not a prop is still open
+that day. Before, it stayed beside the official rows once the night's props
+had settled, and that's how your cleanup found 130,078 duplicate rows
+(engine/boxsettle.provisional_games). The NFL still grades on nflverse's
+file.
+
+**RA. A lead back is never "avoid"** (step 581; 14 November). Nothing to run.
+Your audit listed Jeremiyah Love (51% of Arizona's carries) and Purdue's Fame
+Ijeboi (43%) as "Avoid". The rule that a featured player is never "avoid"
+only reached a back with 55% of the carries, while a receiver counts as
+featured at 18% of the targets. A back with 40% or more is the lead back now
+(engine/gamescan.LEAD_CARRY_SHARE, the share the audit already calls key).
+He can still read tough, and one reason against him still leans him there,
+since he isn't a workhorse, but he never reads "avoid".
+
+**QZ. A read's pick needs the data behind it, never just the read** (step
+580; 14 November). Nothing to run. You wrote: "we wanna make sure we are not
+forcing picks and bets and only making them have over bets or under bets
+based off all the data and shit backing those bets", and of the NFL's read
+picks under 60%: "hold them back". QX's 50% bar was a read with a coin flip
+behind it. A read's pick now needs what every matchup pick needs: our number
+at 55% or better on its side, and a book price that doesn't argue against
+it. If our number is 15 points or more above what the price implies, the one
+Most Likely board calls that usually our error, so it's not a pick
+(engine/matchpicks.not_backed). The one board then checks it against our
+record like every pick. The NFL holds back any read pick under its 60%, and
+the card says so: "Matchup pick, held back: … — the NFL board asks 60%".
+Every other pick shows its tier. A read the data doesn't back gets no pick,
+and its card and the report's player card say why: a coin flip, our number
+against the read, or a number too far from the books.
+
 **QY. The box-score copies were not all read mid-game: 00e's decision is
 back** (step 579; 14 November). Nothing to run; one decision, under 00e.
 QQ said a final box score and the play file agree, so the copies that
@@ -9369,7 +9422,9 @@ our number disagrees. The chance is the model's, unchanged. These picks are
 tracked on paper as matchup picks, so the record will show how a read's own
 side does. On the one Most Likely board an NFL read pick under 60% shows as
 held back, which keeps your bar. A no-pick card now names the bar the list
-actually used, 60% for NFL props, instead of always saying 55%.
+actually used, 60% for NFL props, instead of always saying 55%. (QZ raised the bar the same night: a read's
+pick needs our number at 55% and a price that doesn't argue, never a coin
+flip.)
 
 **QW. Each game's touchdown pairs are chosen on our research** (step 577;
 14 November). Nothing to run. You wrote: "make sure we are making the TD

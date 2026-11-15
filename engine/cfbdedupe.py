@@ -33,8 +33,11 @@ summary on a failed read (engine/boxsettle, step QQ). Most of the rest are
 not: Ethan's run, 2026-11-14, found 4,406 in 2026, some of them above the
 play file's number (A'Marion Peterson: 5 carries in the box, 4 in the play
 file), which no mid-game copy can be. The two sources count differently, and
-which one college grades on is the decision under RUN_NEXT 00e (step QY).
-The play file's row is kept here, as college grades today. Games: one pair's rows a day or
+which one college grades on was the decision under RUN_NEXT 00e: the box
+score, Ethan answered (step RB, engine/boxsettle.BOX_GRADES), from the copies
+filed after 2026-11-14 on. The play file's row is kept here: the copies this
+removes were filed before a box score had to be final to be filed, and some
+were read mid-game. Games: one pair's rows a day or
 less apart with the same final score are one game. The away@home row on the
 earlier day is kept, it takes any line or note only the others carried,
 and the rest go.
