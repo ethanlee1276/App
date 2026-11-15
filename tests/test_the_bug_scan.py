@@ -116,8 +116,14 @@ def test_a_builds_warnings_and_its_traceback_are_read_off_its_log():
 
 def test_the_scan_says_every_section_and_counts_what_needs_a_person():
     d = tempfile.mkdtemp()
-    real = (B.CLIENT_LOG, B.LOG_DIR, B.ROOT)
+    # SERVER_LOG too: it is joined onto LOG_DIR when the module loads, so
+    # setting LOG_DIR alone left the scan reading the checkout's own
+    # data/logs/server_errors.jsonl. A "database is locked" another test's
+    # request wrote there mid-run (gate 315, 15 November) counted as a third
+    # broken thing.
+    real = (B.CLIENT_LOG, B.LOG_DIR, B.ROOT, B.SERVER_LOG)
     B.CLIENT_LOG, B.LOG_DIR, B.ROOT = os.path.join(d, "c.jsonl"), d, d
+    B.SERVER_LOG = os.path.join(d, "server_errors.jsonl")
     try:
         os.makedirs(os.path.join(d, "web", "data"))
         os.makedirs(os.path.join(d, "data"))
@@ -145,7 +151,7 @@ def test_the_scan_says_every_section_and_counts_what_needs_a_person():
         finally:
             B.scan, alert.send_text = real_scan, real_send
     finally:
-        B.CLIENT_LOG, B.LOG_DIR, B.ROOT = real
+        B.CLIENT_LOG, B.LOG_DIR, B.ROOT, B.SERVER_LOG = real
 
 
 def test_the_owner_mail_goes_by_the_alert_address():
