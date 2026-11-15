@@ -208,6 +208,9 @@ def mlb_facts(c: Ctx) -> dict | None:
         items.append("Lineups: not out yet")
     if g.get("plate_umpire"):
         items.append(f"Plate umpire: {g['plate_umpire']}")
+    # Each club's form (the board's `team_recent`: its newest ten finals this
+    # season, engine/teamlogs), said the way the other leagues' reports say it.
+    items += form_lines(c, form_from_recent(c.result.get("team_recent"), c.teams))
     return _section("facts", "Game facts", [_list(items)])
 
 
@@ -1221,6 +1224,22 @@ def _league(c: Ctx, own: bool = False) -> str:
     ("Division I's"): college's averages are its 360-odd teams'."""
     word = "Division I" if c.sport == "cbb" else "the league"
     return f"{word}'s" if own else word
+
+
+def form_from_recent(recent: dict | None, teams) -> dict:
+    """`team_form`'s record and margin from a board's `team_recent` (engine/
+    teamlogs.recent_games: each club's newest ten finals this season, newest
+    first), for a board that already carries it (MLB). No record where it
+    plays tonight: the ten are all the board holds."""
+    out: dict = {}
+    for t in teams:
+        games = [x for x in (recent or {}).get(t) or [] if isinstance(x, dict)][:FORM_N]
+        if len(games) < FORM_MIN:
+            continue
+        w = sum(1 for x in games if x.get("won"))
+        out[t] = {"n": len(games), "w": w, "l": len(games) - w,
+                  "margin": round(sum(float(x.get("margin") or 0) for x in games) / len(games), 1)}
+    return out
 
 
 def form_lines(c: Ctx, form: dict) -> list:

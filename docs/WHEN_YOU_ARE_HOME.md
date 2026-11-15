@@ -9380,6 +9380,9 @@ and so does the NHL report's matchup, from the final scores in the history:
 
 Only this season's finals count, never the preseason or a game still being
 played. A team with fewer than three finals this season says nothing.
+Baseball's report says the same Form line in its game facts, in runs, from
+opening day: its board already holds each club's last ten finals (for the
+game bets' charts), so it has no home-or-road line.
 
 **SD. Each pick on the card says the main way it loses** (step 610; 15
 November). Nothing to run. Your research's final card gave each pick "the
