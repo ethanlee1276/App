@@ -9338,6 +9338,30 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RQ. A way back on every page a link opens, and the angles said right**
+(step 597; 15 November). Nothing to run. You tapped a player's name in a
+game report, landed on his player page and had no button back, and said a
+lot of pages are like that. Now:
+- **Every page a link opens has a Back at its top**, naming where it goes:
+  "← Back to the game", "← Back to Most Likely", "← Back to the Lions",
+  "← Back to the search". It's the phone's back-swipe: you land where you
+  were, scrolled to the same spot, and back to the player search brings
+  back the words you'd typed. A player to a teammate, or a team to its
+  opponent's page, is a page of its own, so Back steps through each.
+- **Pages you open from the menu or the tab bar don't get one.** The menu
+  is the way around, and a Back on every page would be clutter. The game,
+  pick and play-by-play pages keep their own Back, and coming back to a
+  game page from a player its report named keeps that Back pointed where
+  you opened the game from.
+- **The angles read right.** "Lions gives up", "Lions's coverage", "Lions
+  blitzes", "against Lions in its last 3 games" and "Patriots runs on 55% of
+  its red-zone plays" now read "the Lions give up", "the Lions' coverage",
+  "the Lions blitz", "against the Lions in their last 3 games" and "The
+  Patriots run on 55% of their red-zone plays", and a school stays singular
+  ("Indiana gives up … its"). The red-zone lines name the player in full
+  ("Rhamondre Stevenson", not "R.Stevenson"), and one on the injury report
+  is skipped for the next man.
+
 **RP. The game report, folded, with the units as a chart** (step 596; 15
 November). Nothing to run. You said the colors helped but the report still
 felt cluttered and hard to digest, and asked about charts. Every league's

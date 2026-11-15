@@ -37,7 +37,10 @@ def test_no_back_button_hard_codes_home():
 
 def test_the_return_point_is_the_page_left_for_the_detail():
     # The boot's own switch reads no geometry: its page is at the top (2026-11-01).
-    assert "if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving))\n    _boardReturn = { view: leaving, y: booting ? 0 : window.scrollY };" in APP
+    # Coming BACK to a detail page (from a player its report named, say)
+    # keeps where its own Back goes (2026-11-15, the way back).
+    assert "if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving) && !backing)\n    _boardReturn = { view: leaving, y: booting ? 0 : window.scrollY };" in APP
+    assert "const backing = Date.now() - _backNavAt < 2000;" in APP
 
 
 def test_back_names_and_goes_to_the_page():

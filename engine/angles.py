@@ -163,10 +163,18 @@ def nfl_tables(conn, season: int, before_week: int | None = None) -> dict:
                 out["qb_rush"][d] = {"games": n, "yds": round(sum(q[1] for _k, q in qb) / n, 1),
                                      "log": [{"week": k[1], "team": k[0], "player": q[0], "yds": int(q[1])}
                                              for k, q in qb][-3:]}
+    full = _full_names(cells)
     for t, z in rz.items():
         tot = z["car"] + z["tgt"]
         if tot <= 0:
             continue
+        # One man under one name: the short form's numbers join the full one's.
+        merged: dict = defaultdict(lambda: [0.0, 0.0, 0.0])
+        for p, v in z["players"].items():
+            m = merged[full.get((t, p), p)]
+            for i in range(3):
+                m[i] += v[i]
+        z["players"] = merged
         top = sorted(((p, v) for p, v in z["players"].items() if v[0] + v[1] > 0),
                      key=lambda pv: -(pv[1][0] + pv[1][1]))[:3]
         out["rz"][t] = {"plays": int(tot), "run_share": round(z["car"] / tot, 3),
@@ -191,6 +199,68 @@ def _same_man(full: str, short: str) -> bool:
     return bool(a and b) and a[-1].lower() == b[-1].lower() and a[0][:1].lower() == b[0][:1].lower()
 
 
+class _Club:
+    """A club said the way the rest of the report says it (gamereport's
+    team_np, team_owner and _many): "the Lions give up" and "the Lions'
+    coverage" for a plural nickname, "Indiana gives up" for a school, the
+    code where no name is known. Ethan's screenshot (2026-11-15) read
+    "Lions gives up", "Lions's coverage", "Patriots runs on 55% of its
+    red-zone plays": the nickname was dropped into a sentence written for
+    a code."""
+
+    def __init__(self, c, t: str):
+        try:
+            from .gamereport import _many, team_np, team_owner
+            self.np, self.own, self.many = team_np(c, t), team_owner(c, t), bool(_many(c, t))
+        except Exception:                                    # noqa: BLE001  (a context without the report's helpers)
+            n = c.name(t)
+            self.np, self.own, self.many = n, f"{n}'s", False
+        self.its, self.it = ("their", "they") if self.many else ("its", "it")
+
+    def v(self, one: str, more: str) -> str:
+        """The verb for the club: "gives" or "give"."""
+        return more if self.many else one
+
+    @property
+    def Np(self) -> str:
+        """The club opening a sentence: "The Patriots"."""
+        return self.np[:1].upper() + self.np[1:]
+
+
+def _full_names(cells: dict) -> dict:
+    """{(team, "R.Stevenson"): "Rhamondre Stevenson"}: the play-by-play's
+    short names (the red-zone carries and targets) said as the box score
+    says the same man on the same team — only where exactly one of that
+    team's names matches, so two Stevensons never trade numbers."""
+    names: dict = defaultdict(set)
+    for (p, t, _w) in cells:
+        if p and " " in p.strip() and "." not in p.split()[0]:
+            names[t].add(p)
+    out = {}
+    for (p, t, _w) in cells:
+        if not p or (t, p) in out or p in names[t]:
+            continue
+        hits = [n for n in names[t] if _same_man(n, p)]
+        if len(hits) == 1:
+            out[(t, p)] = hits[0]
+    return out
+
+
+def _sits(c, player: str) -> bool:
+    """Whether the report has him out, doubtful or questionable, or marked
+    as maybe sitting (engine/availability): by his name or the play-by-play's
+    short form of it."""
+    try:
+        from .availability import statuses
+        hurt = list(statuses(c))
+    except Exception:                                        # noqa: BLE001
+        hurt = []
+    marked = [r.get("player") for r in getattr(c, "reads", []) or [] if r.get("availability")]
+    me = " ".join(str(player or "").lower().replace(".", " ").split())
+    return any(" ".join(str(h or "").lower().replace(".", " ").split()) == me or _same_man(h, player)
+               for h in hurt + marked)
+
+
 def _share(r: dict) -> float:
     u = r.get("usage") or {}
     return float(u.get("tgt_share") or 0.0)
@@ -211,7 +281,7 @@ def for_game(c, tables: dict) -> list[dict]:
         for off in c.teams:
             d = c.opp[off]
             mine = [r for r in reads if r.get("team") == off]
-            dn, on = c.name(d), c.name(off)
+            D, O = _Club(c, d), _Club(c, off)
             # 1. The top receiver against what the defence gives the top receiver.
             wrs = sorted((r for r in mine if str(r.get("pos") or "").upper() == "WR"), key=lambda r: -_share(r))
             w = (tables.get("wr1") or {}).get(d)
@@ -221,15 +291,17 @@ def for_game(c, tables: dict) -> list[dict]:
                 if w["rank"] <= EDGE_RANKS:
                     out.append({"team": off, "player": r["player"], "pos": "WR", "tone": "up",
                                 "points_to": "catches and yards",
-                                "text": (f"{r['player']} against {dn}'s coverage of No. 1 receivers: {dn} gives up "
-                                         f"{w['yds']:.0f} yards and {w['rec']:.1f} catches a game to the top receiver it "
-                                         f"faces ({_most(w['rank'], n)} in the league), and {w['big']} of {w['games']} "
+                                "text": (f"{r['player']} against {D.own} coverage of No. 1 receivers: {D.np} "
+                                         f"{D.v('gives', 'give')} up {w['yds']:.0f} yards and {w['rec']:.1f} catches a "
+                                         f"game to the top receiver {D.it} {D.v('faces', 'face')} "
+                                         f"({_most(w['rank'], n)} in the league), and {w['big']} of {w['games']} "
                                          f"topped {WR1_BIG}")})
                 elif w["rank"] > n - EDGE_RANKS:
                     out.append({"team": off, "player": r["player"], "pos": "WR", "tone": "down",
                                 "points_to": "yards",
-                                "text": (f"{r['player']} against {dn}: it holds the top receiver it faces to "
-                                         f"{w['yds']:.0f} yards a game ({_most(w['rank'], n)}) — a tough draw for his yards")})
+                                "text": (f"{r['player']} against {D.np}: {D.it} {D.v('holds', 'hold')} the top "
+                                         f"receiver {D.it} {D.v('faces', 'face')} to {w['yds']:.0f} yards a game "
+                                         f"({_most(w['rank'], n)}) — a tough draw for his yards")})
             # 2. The tight end against the tight-end funnel.
             tes = sorted((r for r in mine if str(r.get("pos") or "").upper() == "TE"), key=lambda r: -_share(r))
             t = (tables.get("te") or {}).get(d)
@@ -239,14 +311,15 @@ def for_game(c, tables: dict) -> list[dict]:
                 if t["rank"] <= EDGE_RANKS:
                     out.append({"team": off, "player": r["player"], "pos": "TE", "tone": "up",
                                 "points_to": "catches, yards and a touchdown",
-                                "text": (f"{r['player']} against {dn}'s tight-end coverage: {dn} gives up {t['yds']:.0f} "
-                                         f"yards and {t['rec']:.1f} catches a game to tight ends ({_most(t['rank'], n)}), "
-                                         f"and {t['td']} touchdowns to them in {t['games']} games")})
+                                "text": (f"{r['player']} against {D.own} tight-end coverage: {D.np} "
+                                         f"{D.v('gives', 'give')} up {t['yds']:.0f} yards and {t['rec']:.1f} catches a "
+                                         f"game to tight ends ({_most(t['rank'], n)}), and {t['td']} touchdowns to them "
+                                         f"in {t['games']} games")})
                 elif t["rank"] > n - EDGE_RANKS:
                     out.append({"team": off, "player": r["player"], "pos": "TE", "tone": "down",
                                 "points_to": "yards",
-                                "text": (f"{r['player']} against {dn}: it holds tight ends to {t['yds']:.0f} yards a "
-                                         f"game ({_most(t['rank'], n)})")})
+                                "text": (f"{r['player']} against {D.np}: {D.it} {D.v('holds', 'hold')} tight ends "
+                                         f"to {t['yds']:.0f} yards a game ({_most(t['rank'], n)})")})
             # 3. The quarterback's legs against the blitz and the quarterbacks who ran on it.
             qbs = [r for r in mine if str(r.get("pos") or "").upper() == "QB"]
             if qbs:
@@ -264,13 +337,13 @@ def for_game(c, tables: dict) -> list[dict]:
                     if rate is not None:
                         recent = weeks[-RECENT_WEEKS:]
                         db, bl = sum(x["dropbacks"] for x in recent), sum(x["blitz"] for x in recent)
-                        said = f"{dn} blitzes on {float(rate):.0%} of dropbacks this season"
+                        said = f"{D.np} {D.v('blitzes', 'blitz')} on {float(rate):.0%} of dropbacks this season"
                         if db >= 60 and abs(bl / db - float(rate)) >= 0.04:
-                            said += f" ({bl / db:.0%} over its last {len(recent)} games)"
+                            said += f" ({bl / db:.0%} over {D.its} last {len(recent)} games)"
                         met = next((x for x in reversed(weeks) if x.get("opp") == off and x.get("dropbacks")), None)
                         if met:
-                            said += (f", and {met['blitz'] / met['dropbacks']:.0%} of {on}'s dropbacks when they met "
-                                     f"in week {met['week']}")
+                            said += (f", and {met['blitz'] / met['dropbacks']:.0%} of {O.own} dropbacks when they "
+                                     f"met in week {met['week']}")
                         bits.append(said)
                     if scr and scr.get("scrambles"):
                         per = float(scr["yds"]) / max(1, int(scr["scrambles"]))
@@ -281,7 +354,7 @@ def for_game(c, tables: dict) -> list[dict]:
                     if qr and qr.get("log"):
                         runs = [f"{x['yds']} ({x['player']})" for x in reversed(qr["log"])]
                         ran = ", ".join(runs[:-1]) + (" and " if len(runs) > 1 else "") + runs[-1]
-                        bits.append(f"quarterbacks have run for {ran} yards against {dn} in its last "
+                        bits.append(f"quarterbacks have run for {ran} yards against {D.np} in {D.its} last "
                                     f"{len(qr['log'])} games ({_most(qr['rank'], tables.get('n_qb_rush') or 32)} "
                                     f"quarterback rushing yards allowed)")
                     heavy = rate is not None and float(rate) >= BLITZ_HEAVY
@@ -292,17 +365,20 @@ def for_game(c, tables: dict) -> list[dict]:
                                     "text": f"{q['player']}'s legs: " + "; ".join(bits)})
             # 4. The red zone: who gets the ball inside the 20 and how the offence uses it.
             z = (tables.get("rz") or {}).get(off)
-            if z and z.get("top") and z.get("plays", 0) >= 10:
-                top = z["top"][0]
-                who = next((r for r in mine if _last(r.get("player")) == _last(top["player"])), None)
+            # Its red-zone man who plays: one the injury report names, or a
+            # read marked as maybe sitting, is not where to look (INJ1).
+            top = next((x for x in (z or {}).get("top") or [] if not _sits(c, x["player"])), None)
+            if z and top and z.get("plays", 0) >= 10:
+                who = next((r for r in mine if _same_man(r.get("player"), top["player"])), None)
                 name = who["player"] if who else top["player"]
-                bits = [f"{on} runs on {z['run_share']:.0%} of its red-zone plays"]
+                bits = [f"{O.Np} {O.v('runs', 'run')} on {z['run_share']:.0%} of {O.its} red-zone plays"]
                 use = []
                 if top["car"]:
-                    use.append(f"{top['car']} of its red-zone carries" + (f" ({top['i5']} inside the 5)" if top["i5"] else ""))
+                    use.append(f"{top['car']} of {O.its} red-zone carries"
+                               + (f" ({top['i5']} inside the 5)" if top["i5"] else ""))
                 if top["tgt"]:
                     use.append(f"{top['tgt']} red-zone targets")
-                bits.append(f"{name} has {' and '.join(use)} — {top['share']:.0%} of its red-zone touches")
+                bits.append(f"{name} has {' and '.join(use)} — {top['share']:.0%} of {O.its} red-zone touches")
                 out.append({"team": off, "player": name, "pos": (who or {}).get("pos") or "", "tone": "up",
                             "points_to": "a touchdown", "text": "; ".join(bits)})
     except Exception as exc:                                 # noqa: BLE001

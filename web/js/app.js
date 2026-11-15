@@ -24110,6 +24110,173 @@ if (typeof window !== "undefined" && window.addEventListener) {
     window.addEventListener(ev, () => { _touchedAt = Date.now(); }, { passive: true }));
 }
 
+/* THE WAY BACK, ON EVERY PAGE A LINK OPENS. Ethan, 2026-11-15, on a
+   player's page opened from a name in a game report: "There's no button
+   to take me back to the previous page I was on … there's a lot of pages
+   that we lead to, but there's never a back button to go back to where
+   you were previously."
+
+   The game, pick and play-by-play pages have their own Back (detailBack,
+   pbpBack). Every other page a link opens — a player, a team, the
+   injuries or the standings from a card — had none: the phone's
+   back-swipe worked, and there was nothing on the page to press. Now:
+
+     * A DOOR is a tap inside a page — a name, a team, a card's link. A
+       TAB is a tap on the site's own navigation: the top bar, the
+       sidebar, the tab bar, the menu, the league row, the footer, or a
+       Back button itself. The tap is read in the capture phase on the
+       window, before any handler has moved the page, so `_lastTap.from`
+       is the page being left: its address, its scroll, a name for it.
+     * A door that changes the page writes a new history entry carrying
+       `from`. A player to another player, a team to another team, the
+       search to a player, is a new page too — the same view at a new
+       address; an opponent chip on the same team is still a filter
+       (wayKey drops it).
+     * The page wears one bar, "← Back to the game". It is
+       `history.back()`, the phone's back-swipe exactly: the router
+       reopens the page from its address, and the scroll comes back from
+       the entry itself (`here`, stamped as the door left it). An entry
+       an earlier load of the page pushed opens the address instead.
+     * A tab tap draws no bar: the navigation is the way around, and a
+       Back on every page chosen from the menu would be clutter.
+     * The pages with their own Back keep it, and coming BACK to one no
+       longer rewrites where its Back goes (`_boardReturn`). */
+var _lastTap = { at: 0, nav: false, from: null };
+var _hashSeenAt = 0;
+const WAY_NAV = ".topbar, .sidebar, .tabbar, .more-sheet, .more-scrim, .sportbar, .footer, "
+  + ".way-back, .gp-back, [data-gp-back], #wall-back";
+const WAY_SESSION = Math.random().toString(36).slice(2, 10);
+// No bar: the pages with their own Back, the chat room and a message
+// thread (screens with bars of their own), and the wall's screens.
+const WAY_SKIPS = ["prop", "game", "pbp", "ask", "messages", "paywall", "checkout", "signup", "reset"];
+const WAY_NAMES = { recommended: "the board", potd: "the Pick of the Day", tonight: "Tonight",
+  record: "the Record", mybets: "My Bets", account: "your account", standings: "the rankings",
+  injuries: "the injuries", weather: "the weather", rosters: "the rosters", live: "Live" };
+function wayKey(h) {
+  const s = String(h || "").replace(/^#/, "");
+  // A team's opponent is a filter on its page, not a page of its own.
+  const t = s.match(/^(team\/[^/]+\/[^/]+)/);
+  return t ? t[1] : s;
+}
+function wayName(view) {
+  if (view === "team" && _teamState && _teamState.team) {
+    return `the ${teamNameIn(_teamState.sport, _teamState.team)}`;
+  }
+  if (view === "players") {
+    if (!state.playerSlug) return "the search";
+    const shown = _profRows && _profRows.size === 1 ? [..._profRows.keys()][0] : "";
+    return shown || deslug(state.playerSlug).replace(/\b[a-z]/g, (c) => c.toUpperCase());
+  }
+  if (view === "game" || view === "pbp") return "the game";
+  if (view === "prop") return "the pick";
+  if (WAY_NAMES[view]) return WAY_NAMES[view];
+  const b = document.querySelector(`.sidebar .nav-btn[data-view="${view}"]`);
+  const t = b ? b.textContent.replace(/\s+/g, " ").trim() : "";
+  return t || "the last page";
+}
+function wayHere() {
+  return { hash: location.hash || `#${state.view}`, view: state.view, name: wayName(state.view),
+           y: Math.round(window.scrollY || 0),
+           q: state.view === "players" && !state.playerSlug ? (state.search || "") : "" };
+}
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("hashchange", () => { _hashSeenAt = Date.now(); }, true);
+  window.addEventListener("click", (e) => {
+    const t = e.target;
+    const nav = !!(t && t.closest && t.closest(WAY_NAV));
+    let from = null;
+    if (!nav && state.view) { try { from = wayHere(); } catch (err) { from = null; } }
+    _lastTap = { at: Date.now(), nav, from };
+  }, true);
+}
+/* What a door's new entry carries, and what a replace keeps: a replace
+   rewrites the SAME entry, so where it came from still holds. */
+function wayPushState(st) {
+  return Object.assign({}, st, { w: WAY_SESSION, from: _lastTap.from });
+}
+function wayKeepState(st) {
+  return Object.assign({}, history.state || {}, st || {});
+}
+/* Before a door leaves an entry, the entry is told how it looked — its
+   scroll and, on the search, the words in the box — so any back (the
+   bar, the browser's, the phone's swipe) lands on it as it was. */
+function wayStampLeaving() {
+  if (!_lastTap.from) return;
+  try { history.replaceState(Object.assign({}, history.state || {}, { here: _lastTap.from }), ""); } catch (e) { /* file:// */ }
+}
+function wayFrom() {
+  const st = history.state;
+  const f = st && st.from;
+  if (!f || !f.hash || wayKey(f.hash) === wayKey(location.hash)) return null;
+  return f;
+}
+// The offset this entry was left at, when a back lands on it.
+function wayLanded() {
+  const h = history.state && history.state.here;
+  return h && h.y != null && wayKey(h.hash) === wayKey(location.hash) ? h.y : null;
+}
+function paintWayBack() {
+  const v = state.view;
+  const f = WAY_SKIPS.includes(v) ? null : wayFrom();
+  const sec = f && document.getElementById(`view-${v}`);
+  document.querySelectorAll(".way-back").forEach((el) => {
+    if (!sec || el.parentElement !== sec) el.remove();
+  });
+  if (!sec) return;
+  let bar = sec.querySelector(":scope > .way-back");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.className = "way-back";
+    const band = sec.querySelector(":scope > .venue-band");
+    if (band) band.after(bar); else sec.prepend(bar);
+  }
+  const label = `← Back to ${f.name || "the last page"}`;
+  if (bar.textContent !== label) {
+    bar.innerHTML = `<button type="button" class="btn-quiet way-back-btn" data-way-back>${escapeHtml(label)}</button>`;
+  }
+}
+function wayBack() {
+  const f = wayFrom();
+  if (!f) return;
+  markBackNav();
+  if ((history.state || {}).w === WAY_SESSION) {
+    const was = location.hash, t0 = Date.now();
+    history.back();
+    setTimeout(() => {
+      // A back that went nowhere opens the address itself: never a dead button.
+      if (location.hash === was) { markBackNav(); location.hash = f.hash; return; }
+      // A step between two paths (`/index.html#a` to `/#b`, the <base>
+      // resolving the hash) fires popstate and no hashchange, so the
+      // router never heard it: tell it.
+      if (_hashSeenAt < t0) window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }, 700);
+    return;
+  }
+  // An entry an earlier load pushed: open its address, no traversal.
+  location.hash = f.hash;
+}
+/* Back from a player's page to the search it was opened from: the same
+   view, so the router has no page to switch — the search comes back with
+   its words and its place. */
+function waySearchBack() {
+  const here = (history.state && history.state.here) || {};
+  state.playerSlug = "";
+  state.search = here.q || "";
+  const inp = document.getElementById("player-search");
+  if (inp) inp.value = state.search;
+  renderPlayers();
+  paintWayBack();
+  _landScroll("players", "players");
+}
+if (typeof document !== "undefined" && document.addEventListener) {
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-way-back]");
+    if (!b) return;
+    e.preventDefault();
+    wayBack();
+  });
+}
+
 function _landScroll(name, leaving) {
   if (_holdScroll) { _holdScroll = false; return; }
   let y = 0;
@@ -24119,6 +24286,8 @@ function _landScroll(name, leaving) {
       && DETAIL_VIEWS.includes(leaving)) {
     y = _boardReturn.y;
     _boardReturn = null;
+  } else if (back && wayLanded() != null) {
+    y = wayLanded();
   } else if (back && _scrollMemo[name] != null) {
     y = _scrollMemo[name];
   }
@@ -24220,15 +24389,30 @@ function _switchViewNow(name, push, dir) {
   const booting = document.documentElement.classList.contains("booting");
   const leaving = state.view;
   if (leaving && !booting) _scrollMemo[leaving] = window.scrollY;
-  if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving))
+  // THE WAY BACK: a tap inside a page — not the site's navigation, not
+  // the router's own step — opens a page that knows where it came from.
+  // A tap AFTER the router's last step is a door however soon it came: a
+  // back-swipe and then a name is two places, not one.
+  const door = !booting && !!_lastTap.from && !_lastTap.nav && Date.now() - _lastTap.at < 1500
+    && _lastTap.at > _routerNavAt;
+  const fromHash = location.hash;
+  // Coming BACK to a detail page keeps where its own Back goes.
+  const backing = Date.now() - _backNavAt < 2000;
+  if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving) && !backing)
     _boardReturn = { view: leaving, y: booting ? 0 : window.scrollY };
   /* A DETAIL PAGE OPENED BY A TAP IS A NEW HISTORY ENTRY, so the phone's
      back-swipe returns to the page it was opened from. They replaced the
      entry before, which made the swipe skip the page you came from. The
      router's own switches (a pasted link, a history step) still replace. */
   const openedByTap = name !== leaving && Date.now() - _routerNavAt > 1500;
-  const writeDetail = (url, st) => (openedByTap ? history.pushState(st || { view: name }, "", url)
-                                                : history.replaceState(st || null, "", url));
+  // A door to another page of the same view (a player's teammate, another
+  // team, the search's player) is a new entry too.
+  const writeDetail = (url, st) => {
+    const fresh = openedByTap || (door && wayKey(url) !== wayKey(fromHash));
+    if (fresh && door) wayStampLeaving();
+    return fresh ? history.pushState(door ? wayPushState(st || { view: name }) : (st || { view: name }), "", url)
+                 : history.replaceState(wayKeepState(st || { view: name }), "", url);
+  };
   state.view = name;
   if (typeof ridingTraySync === "function") ridingTraySync();
   if (name !== leaving || !_anLanded) {
@@ -24303,6 +24487,7 @@ function _switchViewNow(name, push, dir) {
     if (_teamState.team) {
       writeDetail(teamHref(_teamState.sport, _teamState.team, _teamState.vs), { view: "team" });
     }
+    paintWayBack();
     if (!booting) moveIndicator();
     _landScroll(name, leaving);
     return;
@@ -24426,9 +24611,13 @@ function _switchViewNow(name, push, dir) {
     // off a hidden tab) replace instead — they are not places you chose to
     // be, and stacking them would make Back walk backwards through moves
     // you never made.
-    if (push) history.pushState({ view: name }, "", `#${name}`);
-    else history.replaceState({ view: name }, "", `#${name}`);
+    // A door is a place you chose too (THE WAY BACK), whichever caller
+    // switched for it.
+    if (door) { wayStampLeaving(); history.pushState(wayPushState({ view: name }), "", `#${name}`); }
+    else if (push) history.pushState({ view: name }, "", `#${name}`);
+    else history.replaceState(wayKeepState({ view: name }), "", `#${name}`);
   }
+  paintWayBack();
   // Called HERE rather than at each tap, because switchView is the single
   // place the highlight changes. Wiring it to the click handlers only
   // covered taps: coming back with the phone's back-swipe re-rendered the
@@ -26795,7 +26984,10 @@ function bind() {
       switchView("recommended");
       return;
     }
-    if (h === state.view) return;
+    if (h === state.view) {
+      if (h === "players" && state.playerSlug) waySearchBack();
+      return;
+    }
     // An IN-PAGE ANCHOR, not a view: `#team-form` and anything like
     // it. The target may sit inside a sub-tab panel that is display:none,
     // where the browser's own jump lands nowhere — so open the room, then
@@ -26869,8 +27061,10 @@ function bind() {
     // Typing is a search, not a player page: the address goes back to
     // #players so it cannot claim to be a link to whoever was open.
     state.playerSlug = "";
-    if ((location.hash || "").startsWith("#player/"))
-      history.replaceState(null, "", "#players");
+    if ((location.hash || "").startsWith("#player/")) {
+      history.replaceState(wayKeepState({ view: "players" }), "", "#players");
+      paintWayBack();
+    }
     state.search = e.target.value; renderPlayers();
     // Recorded on a PAUSE, not per keystroke — otherwise "mahomes" logs
     // seven rows, six of which are prefixes nobody searched for.

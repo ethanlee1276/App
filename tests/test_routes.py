@@ -387,7 +387,9 @@ def test_a_player_page_keeps_his_name_in_the_address():
     i = APP.index('document.getElementById("player-search").addEventListener("input"')
     body = APP[i:i + 600]
     assert 'state.playerSlug = ""' in body
-    assert 'history.replaceState(null, "", "#players")' in body
+    # The entry is still the one a link opened, so where it came from
+    # stays on it (the way back, 2026-11-15).
+    assert 'history.replaceState(wayKeepState({ view: "players" }), "", "#players")' in body
 
 
 def test_the_players_render_cannot_be_overwritten_by_its_own_slow_lookup():

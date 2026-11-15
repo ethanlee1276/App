@@ -3179,6 +3179,11 @@ select.calc-in { width: auto; font-weight: 600; }
   text-decoration-thickness: var(--hairline);
   font: inherit; font-size: var(--fs-sm); font-weight: 600; }
 .btn-quiet:hover { color: var(--text); text-decoration-color: var(--brand); }
+/* THE WAY BACK (2026-11-15): the one bar a page opened by a link wears at
+   its top, "← Back to the game" — the detail pages' quiet Back, on every
+   other page (app.js paintWayBack). */
+.way-back { display: flex; align-items: center; margin: 0 0 4px; }
+.way-back .way-back-btn { padding-left: 0; }
 /* The explainer, under the action strip: a reading of the card in
    plain words, drawn only after the tap (2026-09-05). */
 .pp-explain { margin-top: 12px; padding: 12px 14px;
