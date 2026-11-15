@@ -239,8 +239,12 @@ def test_in_a_browser_the_chat_opens_reacts_and_sends():
             assert {"play", "vote", "send"} <= set(posted), posted
             p.click("#gch-sheet [data-gch=close]")
             assert p.is_visible(".gch-entry"), "the card is the way back in"
-            # Scrolled past the card, the bar at the bottom takes its place.
-            p.evaluate("window.scrollTo(0, document.scrollingElement.scrollHeight)")
+            # Off the screen, the card's place is the bar at the bottom: scrolled
+            # past it, or on a game being played, whose play right now sits above
+            # the card (2026-11-15), not yet scrolled down to it.
+            p.evaluate("""(() => { window.scrollTo(0, document.scrollingElement.scrollHeight);
+              const r = document.querySelector('.gch-entry').getBoundingClientRect();
+              if (r.bottom >= 0 && r.top <= innerHeight) window.scrollTo(0, 0); })()""")
             p.wait_for_timeout(400)
             assert p.evaluate("(() => { const r = document.querySelector('.gch-entry').getBoundingClientRect();"
                               " return r.bottom < 0 || r.top > innerHeight; })()"), "the card scrolled away"

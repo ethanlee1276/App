@@ -132,8 +132,12 @@ def _run():
                         raise AssertionError((state, page.evaluate(
                             "[...document.querySelectorAll('#pbp-body .card')].map(c => c.className)"), errs)) from None
                     page.wait_for_timeout(1200)
-                    # The bar shows once the chat's card under the scoreboard is off screen.
-                    page.evaluate("window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'instant'})")
+                    # The bar shows once the chat's card is off screen: scrolled past
+                    # it, or on a game being played, whose play right now sits above
+                    # the card (2026-11-15), not yet scrolled down to it.
+                    page.evaluate("""(() => { window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'instant'});
+                      const c = document.querySelector('.gch-entry'), r = c && c.getBoundingClientRect();
+                      if (r && r.bottom >= 0 && r.top <= innerHeight) window.scrollTo({top: 0, behavior: 'instant'}); })()""")
                     page.wait_for_timeout(900)
                     rows = [page.evaluate(SEE)]
                     if state == "final":

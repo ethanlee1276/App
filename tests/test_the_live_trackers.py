@@ -622,53 +622,32 @@ def test_the_trackers_in_a_browser_at_390_and_1280():
                     page.route("**/data/pbp/mlb_777001.json*", serve(mlb))
                     page.route("**/data/live_mlb.json*", serve(mlb_strip))
                     page.goto(f"http://127.0.0.1:{port}/index.html#pbp/nfl/e9", wait_until="load")
-                    page.wait_for_selector(".gc-dv [data-gc-dv-replay]", timeout=15000)
+                    page.wait_for_selector(".gc-dv .gc-dv-said", timeout=15000)
                     page.evaluate("document.querySelectorAll('#tour-overlay, .tour-pop').forEach((n) => n.remove())")
-                    # The drive card (2026-11-02): one field, the last play drawn on
-                    # it, and the offence's pin on the line, at every width.
-                    field = page.evaluate("""(() => { const s = document.querySelector('.gc-dv .gc-dv-svg').getBoundingClientRect();
-                        const pin = document.querySelector('.gc-dv .gc-dv-pin').getBoundingClientRect();
-                        return { h: s.height, w: s.width, pinIn: pin.left >= s.left - 2 && pin.right <= s.right + 2,
-                                 paths: document.querySelectorAll('.gc-dv .gc-dv-arc, .gc-dv .gc-dv-run, .gc-dv .gc-dv-ret').length }; })()""")
-                    assert field["h"] > 100 and field["pinIn"] and field["paths"] >= 1, field
-                    # Each club's name is painted inside its end zone, every
-                    # letter's box in the zone's colour (Ethan, 2026-11-03,
-                    # circling both: "make it look like it's apart of the in zones").
-                    zones = page.evaluate("""[...document.querySelectorAll('.gc-dv .gc-dv-ezg')].map((g) => {
-                        const zone = g.querySelector('.gc-dv-ez'), t = g.querySelector('.gc-dv-ezt');
-                        const m = t.transform.baseVal.consolidate().matrix, svg = t.ownerSVGElement;
-                        let out = 0;
-                        for (let i = 0; i < t.getNumberOfChars(); i++) {
-                          const r = t.getExtentOfChar(i);
-                          for (const [x, y] of [[r.x, r.y], [r.x + r.width, r.y], [r.x, r.y + r.height], [r.x + r.width, r.y + r.height]]) {
-                            const p = svg.createSVGPoint(); p.x = x; p.y = y;
-                            if (!zone.isPointInFill(p.matrixTransform(m))) out++;
-                          }
-                        }
-                        return { name: t.textContent, chars: t.getNumberOfChars(), out };
-                    })""")
-                    assert [z["name"] for z in zones] == ["COWBOYS", "BUCCANEERS"] and not any(z["out"] for z in zones), zones
+                    # The drive card draws no field (Ethan, 2026-11-15: "make sure to
+                    # get rid of the field on the live page"): the play in words, under
+                    # the photograph that runs it.
+                    assert not page.query_selector(".gc-dv .gc-dv-svg, .gc-dv .gc-dv-pin, .gc-dv [data-gc-dv-replay]")
+                    assert page.evaluate("""(() => { const a = document.querySelector('.pbp-main > .pbp-parkcard'),
+                        b = document.querySelector('.pbp-main > .gc-dv');
+                        return !!a && !!b && !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING); })()"""), \
+                        "the photograph, then the play in words"
                     # The drive on the photograph sits exactly on it, at every width.
                     page.wait_for_selector(".pbp-park [data-gc-art]", state="attached", timeout=5000)
                     boxes = page.evaluate("""(() => { const p = document.querySelector('.pbp-park');
                         const r = (e) => { const b = e.getBoundingClientRect(); return [b.x, b.y, b.width, b.height].map((v) => Math.round(v)); };
                         return [r(p.querySelector('.pbp-photo')), r(p.querySelector('[data-gc-art]'))]; })()""")
                     assert boxes[0] == boxes[1], boxes
-                    # Replay on the photograph runs its drive again; the card's own
-                    # Replay flies its last play again. Each button passes the
-                    # pointer's checks (seen, steady, on top), and each press is
+                    # Replay on the photograph runs its drive again. The button passes
+                    # the pointer's checks (seen, steady, on top), and the press is
                     # read in the same task as the click: the page's own redraw,
                     # every few seconds with nothing new to fly, landed between a
                     # click and its read once on a loaded gate (9 November).
-                    for sel in (".pbp-park [data-gc-replay]", ".gc-dv [data-gc-dv-replay]"):
-                        page.locator(sel).first.click(trial=True)
+                    page.locator(".pbp-park [data-gc-replay]").first.click(trial=True)
                     flew = page.evaluate("""(() => {
                         document.querySelector('.pbp-park [data-gc-replay]').click();
-                        const photo = !!document.querySelector('.pbp-park .gc-art-ball animateTransform');
-                        document.querySelector('.gc-dv [data-gc-dv-replay]').click();
-                        return { photo, card: !!document.querySelector('.gc-dv .gc-dv-ball animateMotion') }; })()""")
+                        return { photo: !!document.querySelector('.pbp-park .gc-art-ball animateTransform') }; })()""")
                     assert flew["photo"], "the photograph's ball runs again"
-                    assert flew["card"], "and the card's last play flies again"
                     page.click('.pbp-tab[data-pbp-tab="plays"]')
                     # No drive chart while the game is on (Ethan, 2026-11-15: "we
                     # dont need the drive chart since we have one at the top of
