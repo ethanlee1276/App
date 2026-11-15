@@ -96,6 +96,25 @@ def test_a_pair_says_whether_its_scorers_meet_the_touchdown_rule():
     assert "rule_note" not in card(t, 1, "three", "nfl") and "rule_note" not in card(t, 1, "td", "nba")
 
 
+def test_the_tickets_a_game_posts_are_built_to_win_together():
+    """Ethan's chats, 2026-10-25 and 11-08: "I don't want to build them to
+    where if one parlay wins, the other parlay can't win"."""
+    from engine import gameparlays as GP
+
+    def t(name, joint, margin, points=0):
+        return {"legs": [{"player": name, "market": "receptions", "side": "OVER", "line": 4.5}],
+                "joint": joint, "need_margin": margin, "need_points": points}
+    a, b, c = t("A", 0.5, 1), t("B", 0.45, -1), t("C", 0.4, 1)
+    got = GP.choose([a, b, c], 2)
+    assert [x["legs"][0]["player"] for x in got] == ["A", "C"], "B needs the other side ahead"
+    assert GP.choose([a, t("D", 0.45, 0, -1), t("E", 0.4, 0, 1)], 2)[1]["legs"][0]["player"] == "D", \
+        "no lean against a lean is fine"
+    # A game that cannot fill its tickets otherwise keeps the count, and the
+    # ticket that pulls apart says so.
+    got = GP.choose([a, b], 2)
+    assert len(got) == 2 and GP.APART_NOTE in got[1]["caveats"] and GP.APART_NOTE not in (a.get("caveats") or [])
+
+
 def test_every_pick_line_carries_the_price_it_is_worth():
     assert R.take_at(0.62) == "−163 or better"
     assert R.take_at(0.85) == "−250 or better", "never past the −250 limit"

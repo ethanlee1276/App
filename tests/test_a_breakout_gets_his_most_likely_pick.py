@@ -230,7 +230,9 @@ def test_every_read_says_what_the_board_did_with_it():
     out = subprocess.run(["node", path, json.dumps(xs)], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-400:]
     got = [" ".join(t.split()) for t in json.loads(out.stdout)]
-    assert got[0] == "Most Likely pick: Over 3.5 Receptions · -180 · 68%", got[0]
+    # With the price it is worth taking at, never past −250 (Ethan's NFL Bet
+    # checking method, rule 21: the maximum playable price).
+    assert got[0] == "Most Likely pick: Over 3.5 Receptions · -180 · 68% — take it at -213 or better", got[0]
     assert "goes the other way: Under 6.5" in got[1] and "disagrees with this read" in got[1]
     assert "his likeliest over at −250 or better is Over 5.5 Receptions" in got[2]
     assert "under the 55% the board needs" in got[2]

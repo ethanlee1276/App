@@ -796,6 +796,10 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
     take = fair * (1.0 + TAKE_EDGE)
     needs = [script_need(l, game) for l in legs]
     said, chance = script_words(needs, game, sport)
+    # Which way the whole ticket needs the game to go (`choose`: the tickets
+    # a game posts are built to win together).
+    lean_m = sum(n["margin"] for n in needs)
+    lean_p = sum(n["points"] for n in needs)
     for l in legs:
         st = str(l.get("injury_status") or l.get("own_status") or "").upper()
         if st in ("QUESTIONABLE", "GTD", "DAY-TO-DAY"):
@@ -821,6 +825,7 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
             "naive_dec": round(naive, 4) if naive else None, "take_dec": round(take, 4),
             "ev_at_naive": round(joint * naive - 1.0, 4) if naive else None,
             "script": said, "script_chance": chance, "links": whys, "caveats": caveats,
+            "need_margin": (lean_m > 0) - (lean_m < 0), "need_points": (lean_p > 0) - (lean_p < 0),
             "playable": playable, "staked": False, "stake_units": 0.0}
 
 
@@ -840,30 +845,69 @@ def slim(leg: dict) -> dict:
     return {k: leg.get(k) for k in LEG_KEYS if leg.get(k) not in (None, "", [])}
 
 
+def pulls_apart(t: dict, chosen: list) -> bool:
+    """Whether ``t`` needs the game to go the other way from a ticket
+    already chosen — one side ahead against the other, or points against a
+    low score (`script_need`, summed over its legs)."""
+    m, p = t.get("need_margin") or 0, t.get("need_points") or 0
+    for c in chosen:
+        cm, cp = c.get("need_margin") or 0, c.get("need_points") or 0
+        if (m and cm and m != cm) or (p and cp and p != cp):
+            return True
+    return False
+
+
+#: Said on a ticket the game could only fill by letting it pull against the
+#: others.
+APART_NOTE = ("This ticket needs the game to go a different way from the other tickets here, so it wins "
+              "in a different game from them")
+
+
 def choose(tickets: list[dict], n: int, rank=None) -> list[dict]:
     """The likeliest first (or by ``rank``, a sort key — the scorer pairs'
     research, `_by_research`); each next one shares at most MAX_SHARED legs
     with every ticket already chosen, and no leg rides on more than
     MAX_USES of them. A second pass, when the first leaves fewer than
-    ``n``, lets a ticket share all but one leg."""
+    ``n``, lets a ticket share all but one leg.
+
+    BUILT TO WIN TOGETHER (Ethan's NFL Bet checking chats, 2026-10-25: "can
+    both of these tickets hit in both situations? … We want to make sure both
+    tickets win"; 2026-11-08: "I don't want to build them to where if one
+    parlay wins, the other parlay can't win"). No ticket that pulls the game
+    the other way from one already chosen (`pulls_apart`) — until the game
+    has no other way to fill its tickets, and then the ticket says so."""
     ranked = sorted(tickets, key=rank or (lambda t: (-t["joint"], -(t.get("ev_at_naive") or -9))))
+
+    def pick(together: bool) -> list:
+        out: list = []
+        uses: dict = {}
+        for shared in (MAX_SHARED, None):
+            for t in ranked:
+                if len(out) >= n:
+                    return out
+                if t in out:
+                    continue
+                ids = {_leg_id(l) for l in t["legs"]}
+                limit = shared if shared is not None else len(ids) - 1
+                if any(len(ids & {_leg_id(l) for l in c["legs"]}) > limit for c in out):
+                    continue
+                if any(uses.get(i, 0) >= MAX_USES for i in ids):
+                    continue
+                if together and pulls_apart(t, out):
+                    continue
+                out.append(t)
+                for i in ids:
+                    uses[i] = uses.get(i, 0) + 1
+        return out
+    together = pick(True)
+    loose = pick(False) if len(together) < n else together
+    if len(together) >= len(loose):
+        return together
+    # The game cannot fill its tickets so they all win together: the old
+    # choice, and each ticket that pulls against an earlier one says so.
     out: list = []
-    uses: dict = {}
-    for shared in (MAX_SHARED, None):
-        for t in ranked:
-            if len(out) >= n:
-                return out
-            if t in out:
-                continue
-            ids = {_leg_id(l) for l in t["legs"]}
-            limit = shared if shared is not None else len(ids) - 1
-            if any(len(ids & {_leg_id(l) for l in c["legs"]}) > limit for c in out):
-                continue
-            if any(uses.get(i, 0) >= MAX_USES for i in ids):
-                continue
-            out.append(t)
-            for i in ids:
-                uses[i] = uses.get(i, 0) + 1
+    for t in loose:
+        out.append(dict(t, caveats=list(t.get("caveats") or []) + [APART_NOTE]) if pulls_apart(t, out) else t)
     return out
 
 
