@@ -31,11 +31,21 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from engine import gamereport as R                                   # noqa: E402
-import test_the_game_report_reads_like_the_research as T             # noqa: E402
-import test_every_league_gets_a_game_report as LT                    # noqa: E402
 
 REPORT_JS = ROOT / "web" / "js" / "report.js"
 REPORT_CSS = ROOT / "web" / "css" / "report.css"
+
+
+def _research():
+    """The NFL report's fixture (GB at DET), imported where it is used:
+    a sibling test file is not a module-scope import (tests/test_doctor)."""
+    import test_the_game_report_reads_like_the_research as T
+    return T
+
+
+def _leagues():
+    import test_every_league_gets_a_game_report as LT
+    return LT
 
 
 def _sec(rep, key):
@@ -49,7 +59,7 @@ def test_the_colour_follows_the_read():
 
 
 def test_the_lines_that_say_who_gets_the_ball_carry_their_players_reads():
-    rep = T._report()
+    rep = _research()._report()
     gb, det = [b for b in _sec(rep, "identity")["blocks"] if b["type"] == "list"]
     assert "Who gets the targets: Christian Watson (WR) 21% of the targets" in gb["items"][1]
     assert gb["names"] == {"Christian Watson": {"tone": "up", "label": "Favorable matchup"},
@@ -69,6 +79,7 @@ def test_the_lines_that_say_who_gets_the_ball_carry_their_players_reads():
 
 
 def test_a_player_who_will_not_play_is_never_coloured():
+    T = _research()
     board = T._board()
     board["games"][0]["scan"]["injuries"].append(
         {"team": "GB", "player": "Matthew Golden", "position": "WR", "status": "OUT"})
@@ -83,6 +94,7 @@ def test_a_player_who_will_not_play_is_never_coloured():
 
 
 def _nba(sport):
+    LT = _leagues()
     board, meta = LT._nba_board()
     board["scan_reads"] = {"MIA@BOS": {"players": [
         LT._read("Bam Adebayo", "MIA", "BOS", "C", "breakout", "Breakout spot"),
@@ -125,7 +137,7 @@ def _section_html(full, key):
 
 
 def test_the_page_colours_each_name_opens_his_page_and_keys_the_colours():
-    rep = T._report()
+    rep = _research()._report()
     got = _node(f"const rep = {json.dumps(rep, ensure_ascii=False)};"
                 "process.stdout.write(JSON.stringify({full: R.html(rep, {}), text: R.toText(rep, '')}));")
     if got is None:
