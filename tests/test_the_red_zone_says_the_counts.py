@@ -126,6 +126,28 @@ def test_the_counts_and_the_share_ride_the_touchdown_row_to_the_read():
     assert td.get("goal_line") == GIBBS and td.get("rz_share") == 0.36, td
 
 
+def test_the_heartbeat_counts_the_reports_that_say_the_counts():
+    """The reports are a paid key: the heartbeat is where a live check sees
+    their red zones say the counts (launch._board_counts)."""
+    import json
+    import os
+    import tempfile
+    import launch as L
+    board = _board()
+    rep = R.build(board["games"][0], board, allowed=GR.ALLOWED, names=GR.NAMES)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump({"game_reports": [rep, GR._report()], "most_likely": [], "game_bets": []}, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert (got["reports"], got["rz_count_lists"], got["rz_count_players"]) == (2, 1, 2), got
+
+
 if __name__ == "__main__":
     import inspect
     fails = ran = 0

@@ -580,6 +580,16 @@ def _board_counts(path: str) -> dict:
         cards = [s for s in cards if isinstance(s, dict) and s.get("key") == "card"]
         out["cards"] = sum(1 for s in cards if any(b.get("type") == "picks" for b in s.get("blocks") or []))
         out["cards_none"] = len(cards) - out["cards"]
+        # Reports whose red zone says each player's real counts inside the 20
+        # (engine/gamereport.rz_usage_lines, 2026-11-15), and how many players.
+        rz_lists = [blocks[i + 1] for r in reps if isinstance(r, dict)
+                    for s in r.get("sections") or [] if isinstance(s, dict) and s.get("key") == "redzone"
+                    for blocks in [s.get("blocks") or []]
+                    for i, b in enumerate(blocks[:-1])
+                    if isinstance(b, dict) and b.get("type") == "h"
+                    and str(b.get("text") or "").startswith("Who gets the ball inside the 20")]
+        out["rz_count_lists"] = len(rz_lists)
+        out["rz_count_players"] = sum(len(x.get("items") or []) for x in rz_lists if isinstance(x, dict))
     # THE BOARD'S RULES AT WORK (engine/likelyboard METHOD_AVOID, td_rule —
     # Ethan's NFL Bet checking method, 2026-11-15): how many Most Likely
     # picks a rule held at Worth a look, and how many touchdown picks meet
