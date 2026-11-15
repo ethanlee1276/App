@@ -156,8 +156,9 @@ def test_the_headline_reads_the_window_from_the_scopes_own_curve():
     assert "const avail = recRangesFor(src.curve);" in body, "the scope in view's curve, not the pooled one"
     assert "const rk = recRangeKey(avail);" in body and "const from = recRangeFrom(avail, rk);" in body
     assert "const winO = from ? recRangeTotals(src.curve, from) : null;" in body
-    assert ('recordRibbonsHTML(dAll, { ...winO, label: `${(src.overall || {}).rule ? "Our record" : '
-            '"Edge picks"} · last ${winDays} days` },') in body
+    assert ('recordRibbonsHTML(dAll, { ...winO, label: `${(src.overall || {}).rule ? "Our record"\n'
+            '        : String((src.overall || {}).label || "Edge picks").split(" · ")[0]} · last ${winDays} days` },') in body, \
+        "a window names the book in view — the edge picks, or a league's own (UFC's fights)"
     assert '(src.recent || []).filter((r) => String((r || {}).date || "") >= from), { parts: true })' in body, \
         "the form dots are the window's own"
     assert ": recordRibbonsHTML(dAll, o, src.recent, { parts: true });" in body, "no window, or an empty one: the whole record"

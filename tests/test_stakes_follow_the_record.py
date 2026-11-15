@@ -248,7 +248,8 @@ def test_the_export_ships_the_staked_record_and_stores_the_plan():
     assert "_staked = _stakeplan.staked_reports(" in src
     assert "set_cfg(conn, STAKE_PLAN_KEY, json.dumps(_staked.get(\"plan\") or {}, sort_keys=True))" in src
     assert '"staked": {k: _staked[k] for k in ("overall", "curve", "recent", "plan")' in src
-    assert '"staked": ((_staked.get("by_sport") or {}).get(sp) or {})}' in src
+    assert '"staked": ({} if own_book(sp) else' in src, "a league's own book has no staked cut (UFC)"
+    assert '((_staked.get("by_sport") or {}).get(sp) or {}))}' in src
 
 
 # --- the page ---------------------------------------------------------------------
