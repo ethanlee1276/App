@@ -9338,6 +9338,34 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**RY. Your spring MLB and NBA research picks, graded on the box** (step 605;
+15 November). One read-only command, under 00g in docs/RUN_NEXT.md; paste
+back what it prints. You said yes to grading the spring chats. The NFL
+chats' 166 legs were graded here, against nflverse's box scores. The spring's
+MLB and NBA box scores are only on the box, so the box grades them. Every
+leg the spring cards named, from 31 March to 21 July, is in
+`docs/research/spring_2026_picks.json`:
+- **MLB, 25 legs:** strikeouts (Hunter Brown, Ohtani, Crochet, Skenes under,
+  McCullers), hits (Soto, Jung, Aranda), total bases (Merrill, Alvarez),
+  runs driven in (Vladdy, Alvarez twice, Harper), home runs (Schwarber,
+  Alvarez twice, Judge, Cruz, José Ramírez, Ohtani, Wood, Olson) and two
+  no-run first innings (Mariners–Rangers, Braves–Angels).
+- **NBA, 14 legs:** the April spreads (Pistons −3.5, Lakers +9.5, 76ers
+  −2.5, Bulls +15.5, Raptors −13, Celtics −17), the card's alternatives
+  (Jazz +17.5, Magic −6.5, Celtics–Bucks over 217.5), your two alternate
+  spreads the chat backed (Portland −2.5, Cleveland −4.5), and Game 3 in
+  Los Angeles (Smart over 2.5 assists, Holmgren over 17.5 points, the over
+  211.5).
+
+The 12 May grand-slam chat is left out, because it called its names a fun
+long shot rather than a pick. The command reads the plate appearances, the
+finals and the box scores, and changes nothing. A pick the history has no
+game for is said as not found, never as a loss. It prints each pick with
+its number and result, the record by kind, and one `SPRING_GRADES` line.
+That line goes into engine/researchrecord as the MLB and NBA tables, beside
+the NFL's, so each MLB and NBA pick card can say how its kind did in your
+research.
+
 **RX. The night's refit runs a fixed check first, and uses the time it has
 left** (step 604; 15 November). Nothing to run. Step PM said that the night
 after the NBA's rotation and rates checks were fixed, the refit would run
