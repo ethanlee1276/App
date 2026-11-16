@@ -12314,6 +12314,14 @@ def main() -> None:
             _WARMING = False
             print(f"  Boards built — the site is fully current "
                   f"({time.time() - _BOOT_AT:.0f}s after start).")
+        # Every league's player-page ranks, built in the background once the
+        # boards are (engine/playerpage.warm), so no player's page waits
+        # seconds on a cold table (measured live: MLB 4.3 s, college 4.8 s).
+        try:
+            from engine import playerpage
+            playerpage.warm(delay=0)
+        except Exception as exc:                          # noqa: BLE001
+            print(f"  ⚠️  player page ranks not warmed ({exc}): each league's builds on its first page")
         # The chores, on their lanes (see `_LANES`): the daily pass, and a
         # FORCED settle — settle_open re-exports record.json itself when it
         # grades anything, and this runs strictly AFTER the initial

@@ -272,6 +272,12 @@ def test_the_server_builds_the_ranks_before_anyone_asks_and_a_stale_table_still_
     assert PP._RANKS[key][1]["yds"]["Josh Allen"] == 2, "and its new one replaces it"
     srv = (ROOT / "server.py").read_text(encoding="utf-8")
     assert "    if live:\n        # Every league's player-page ranks" in srv and "        playerpage.warm()\n" in srv
+    # The box runs launch.py, not server.py's main: warmed there once the startup build is done.
+    launch = (ROOT / "launch.py").read_text(encoding="utf-8")
+    i = launch.index("    def _startup_chores() -> None:")
+    chores = launch[i:launch.index("_kick_chores(force_settle=True)", i)]
+    assert chores.index('print(f"  Boards built') < chores.index("            playerpage.warm(delay=0)"), \
+        "after the boards, so the two never compete"
 
 def test_a_name_only_a_roster_knows_still_has_a_page():
     path, rosters = _fresh()
