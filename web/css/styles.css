@@ -8123,7 +8123,7 @@ button.rc-day b { font-size: var(--fs-sm); }
    page until the next build lands; the stale bar says why. */
 body.picks-withheld :is(#potd-zone, #best-bets, #top-picks, #cards, #likely-top,
   #tonight-body, #edge-board, #props-body, #longshots-board, #likely-board, #scanner-body,
-  #gamebets, #parlays-body, #gp-sec-likely) { display: none; }
+  #gamebets, #gp-sec-likely) { display: none; }
 
 /* ── Links the design system never claimed ─────────────────────────────
    Found 2026-08-19 by looking at rendercheck's own screenshots: 28 links
