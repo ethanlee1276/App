@@ -518,6 +518,12 @@
      colours, through the bar and out of it"). */
   --team-ground: color-mix(in oklab, var(--team-1) 12%, transparent);
   --grad-team-ground: linear-gradient(var(--team-ground), var(--team-ground));
+  /* The site's own light under every page ("THE SITE'S OWN LIGHT", the end of the sheet). */
+  --amb-1: var(--gold);
+  --amb-2: #E9862A;
+  --amb-top: radial-gradient(120% 95% at 50% 0%, color-mix(in oklab, var(--amb-1) 20%, transparent) 0%, color-mix(in oklab, var(--amb-1) 9%, transparent) 34%, color-mix(in oklab, var(--amb-1) 3%, transparent) 66%, transparent 92%);
+  --amb-low: radial-gradient(80% 65% at 104% 106%, color-mix(in oklab, var(--amb-2) 15%, transparent) 0%, color-mix(in oklab, var(--amb-2) 5%, transparent) 45%, transparent 75%);
+  --amb-side: radial-gradient(60% 50% at -8% 56%, color-mix(in oklab, var(--amb-1) 9%, transparent) 0%, transparent 72%);
   /* Liquid Glass on the Duo (the section near the end of the sheet). */
 
   --glass-tint: color-mix(in oklab, var(--panel) 74%, transparent);
@@ -4799,6 +4805,9 @@ body.pk-open { overflow: hidden; }
    ============================================================ */
 /* (The palette that stood here is in the one :root at the top of the sheet.) */
 :root[data-theme="light"] {
+  /* The site's own light on paper ("THE SITE'S OWN LIGHT"). */
+  --amb-top: radial-gradient(120% 95% at 50% 0%, color-mix(in oklab, var(--amb-1) 18%, transparent) 0%, color-mix(in oklab, var(--amb-1) 8%, transparent) 34%, color-mix(in oklab, var(--amb-1) 3%, transparent) 66%, transparent 92%);
+  --amb-low: radial-gradient(80% 65% at 104% 106%, color-mix(in oklab, var(--amb-2) 12%, transparent) 0%, color-mix(in oklab, var(--amb-2) 4%, transparent) 45%, transparent 75%);
   color-scheme: light;
   /* Paper never had the dark theme's fault: measured, --text-mute here is
      already Lc 52-64 and --text-dim Lc 76-87, both above their targets.
@@ -11156,27 +11165,17 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
    the game and live pages' wash does with both clubs'; that wash covers it.
    Static on purpose: no animation, no blur, nothing repainted on a scroll.
    ========================================================================== */
-:root {
-  --amb-1: var(--gold);
-  --amb-2: #E9862A;
-  --amb-top: radial-gradient(120% 95% at 50% 0%, color-mix(in oklab, var(--amb-1) 20%, transparent) 0%, color-mix(in oklab, var(--amb-1) 9%, transparent) 34%, color-mix(in oklab, var(--amb-1) 3%, transparent) 66%, transparent 92%);
-  --amb-low: radial-gradient(80% 65% at 104% 106%, color-mix(in oklab, var(--amb-2) 15%, transparent) 0%, color-mix(in oklab, var(--amb-2) 5%, transparent) 45%, transparent 75%);
-  --amb-side: radial-gradient(60% 50% at -8% 56%, color-mix(in oklab, var(--amb-1) 9%, transparent) 0%, transparent 72%);
-}
-:root[data-theme="light"] {
-  --amb-top: radial-gradient(120% 95% at 50% 0%, color-mix(in oklab, var(--amb-1) 18%, transparent) 0%, color-mix(in oklab, var(--amb-1) 8%, transparent) 34%, color-mix(in oklab, var(--amb-1) 3%, transparent) 66%, transparent 92%);
-  --amb-low: radial-gradient(80% 65% at 104% 106%, color-mix(in oklab, var(--amb-2) 12%, transparent) 0%, color-mix(in oklab, var(--amb-2) 4%, transparent) 45%, transparent 75%);
-}
 .ambient, .amb-club { position: fixed; inset: 0; z-index: -1; pointer-events: none; contain: strict; }
 .ambient { background: var(--amb-top), var(--amb-low), var(--amb-side); }
 /* The club's light covers the gold: it lays the page's own ground under itself. Its
    gradients are defined here, on the layer, because --amb-c is set on the layer: a
    gradient defined on :root would be worked out there, before any club is known. */
 .amb-club {
-  --amb-club-top: radial-gradient(125% 95% at 50% 0%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 34%, transparent) 0%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 14%, transparent) 36%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 4%, transparent) 68%, transparent 94%);
-  --amb-club-low: radial-gradient(80% 65% at 104% 106%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 14%, transparent) 0%, transparent 72%);
+  --amb-c: var(--amb-1);
+  --amb-club-top: radial-gradient(125% 95% at 50% 0%, color-mix(in oklab, var(--amb-c) 34%, transparent) 0%, color-mix(in oklab, var(--amb-c) 14%, transparent) 36%, color-mix(in oklab, var(--amb-c) 4%, transparent) 68%, transparent 94%);
+  --amb-club-low: radial-gradient(80% 65% at 104% 106%, color-mix(in oklab, var(--amb-c) 14%, transparent) 0%, transparent 72%);
   background: var(--amb-club-top), var(--amb-club-low), var(--bg); }
 :root[data-theme="light"] .amb-club {
-  --amb-club-top: radial-gradient(125% 95% at 50% 0%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 24%, transparent) 0%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 10%, transparent) 36%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 3%, transparent) 68%, transparent 94%); }
+  --amb-club-top: radial-gradient(125% 95% at 50% 0%, color-mix(in oklab, var(--amb-c) 24%, transparent) 0%, color-mix(in oklab, var(--amb-c) 10%, transparent) 36%, color-mix(in oklab, var(--amb-c) 3%, transparent) 68%, transparent 94%); }
 body.gp-on .ambient { display: none; }
 @media print { .ambient, .amb-club { display: none; } }

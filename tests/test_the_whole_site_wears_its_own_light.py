@@ -46,17 +46,18 @@ def test_one_layer_sits_under_every_page():
 
 
 def test_the_light_is_the_brand_s_gold_in_both_themes_and_never_moves():
-    dark = STYLES[STYLES.index("THE SITE'S OWN LIGHT (SITEBG1"):]
+    dark = STYLES[STYLES.index("\n:root {"):STYLES.index(':root[data-theme="light"] {')]
     assert "--amb-1: var(--gold);" in dark, "the site's own gold, which the light theme deepens"
-    light = dark[dark.index(':root[data-theme="light"] {'):]
-    light = light[:light.index("}")]
-    assert "--amb-top:" in light, "paper takes its own strength"
-    assert ':root[data-theme="light"] .amb-club {\n  --amb-club-top:' in dark, "and a club's light on paper too"
-    section = dark[:dark.index("@media print")]
+    light = STYLES[STYLES.index(':root[data-theme="light"] {'):]
+    light = light[:light.index("\n}")]
+    assert "--amb-top:" in light and "--amb-low:" in light, "paper takes its own strength"
+    section = STYLES[STYLES.index("THE SITE'S OWN LIGHT (SITEBG1"):]
+    assert ':root[data-theme="light"] .amb-club {\n  --amb-club-top:' in section, "and a club's light on paper too"
+    rules = section.split("========================================================================== */", 1)[1]
     for no in ("animation", "transition", "backdrop-filter", "filter: blur"):
-        assert no not in section.split("==========================================================================")[-1], no
-    # Each glow faint: the gold's strongest stop is a sixth of the colour on night, a fifth on paper.
-    tops = [int(x) for x in re.findall(r"--amb-1\) (\d+)%", dark[:dark.index(".ambient, .amb-club")])]
+        assert no not in rules, no
+    # Each glow faint: the gold's strongest stop a fifth of the colour, at most.
+    tops = [int(x) for x in re.findall(r"--amb-1\) (\d+)%", dark + light)]
     assert tops and max(tops) <= 20, tops
 
 
@@ -65,9 +66,9 @@ def test_a_club_s_page_lays_its_colour_over_the_gold():
     assert "var(--amb-club-top), var(--amb-club-low), var(--bg)" in club, "the club's light covers the gold under it"
     # Defined ON the layer: a gradient defined on :root is worked out there, where no club's colour is
     # set, and every club page wore the gold (the first cut did).
-    assert "--amb-club-top: radial-gradient(" in club and "var(--amb-c, var(--amb-1))" in club
-    root = STYLES[STYLES.index("THE SITE'S OWN LIGHT (SITEBG1"):STYLES.index(".ambient, .amb-club {")]
-    assert "--amb-c" not in root.split("========================================================================== */")[-1]
+    assert "--amb-club-top: radial-gradient(" in club and "color-mix(in oklab, var(--amb-c) 34%, transparent)" in club
+    root = STYLES[STYLES.index("\n:root {"):STYLES.index(':root[data-theme="light"] {')]
+    assert "--amb-c" not in root and "--amb-c: var(--amb-1);" in club, "its own default, on the layer"
     pp = (ROOT / "web" / "js" / "playerpage.js").read_text(encoding="utf-8")
     hero = pp[pp.index("function plrHeroHTML("):pp.index("function plrTabsHTML(")]
     assert '<div class="amb-club" style="--amb-c:${escapeAttr(club.color)}" aria-hidden="true"></div>' in hero, \
