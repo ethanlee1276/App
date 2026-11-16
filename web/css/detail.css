@@ -1310,12 +1310,11 @@ details.gp-dr > :not(summary) { padding: 0 var(--sp-3) var(--sp-2); }
 .gpr-info { --tone: var(--text-mute); }
 .gpr-wait { --tone: var(--text-faint); }
 .gpr-verdict { display: flex; align-items: center; gap: 12px; margin: 12px 0 2px; padding: 10px 12px;
-  border-radius: 12px; background: color-mix(in oklab, var(--tone) 13%, transparent);
-  box-shadow: inset 3px 0 0 var(--tone); }
+  border-radius: var(--radius); background: color-mix(in oklab, var(--tone) 14%, transparent); }
 .gpr-badge { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 999px;
   color: var(--tone); background: color-mix(in oklab, var(--tone) 22%, transparent); }
 .gpr-say { display: grid; gap: 2px; min-width: 0; }
-.gpr-say b { color: var(--tone); font-size: var(--fs-md); line-height: 1.25; }
+.gpr-say b { color: var(--tone); font-size: var(--fs-md); line-height: var(--lh-snug); }
 .gpr-sub { color: var(--text-mute); font-size: var(--fs-xs); }
 .gpr-rows { list-style: none; margin: 10px 0 0; padding: 0; display: grid; }
 .gpr-row { display: grid; grid-template-columns: 18px minmax(112px, 30%) minmax(0, 1fr); gap: 4px 8px;
@@ -1328,24 +1327,23 @@ details.gp-dr > :not(summary) { padding: 0 var(--sp-3) var(--sp-2); }
 .gpr-v .gpr-won { color: var(--good); }
 .gpr-v .gpr-lost { color: var(--bad); }
 .gpr-mute { color: var(--text-mute); font-weight: 400; }
-.gpr-chips, .gpr-more { grid-column: 3; display: flex; flex-wrap: wrap; gap: 4px; }
+.gpr-chips { grid-column: 3; display: flex; flex-wrap: wrap; gap: 4px; }
+.gpr-more { grid-column: 3; }
 .gpr-chip { --tone: var(--text-mute); padding: 1px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 600;
   color: var(--tone); background: color-mix(in oklab, var(--tone) 14%, transparent); }
 .gpr-chip.gpr-good { --tone: var(--good); } .gpr-chip.gpr-bad { --tone: var(--bad); }
 .gpr-chip.gpr-warn { --tone: var(--warn); }
-.gpr-more { display: block; }
 .gpr-more summary { cursor: pointer; width: max-content; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 600; }
 .gpr-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: var(--fs-xs); }
 .gpr-list li { display: flex; gap: 6px; align-items: baseline; color: var(--text-dim); }
 .gpr-list li > .gpr-mark { color: var(--tone); }
-.gpr-list li.gpr-ticket { display: block; padding: 6px 8px; border-radius: 8px;
+.gpr-list li.gpr-ticket { display: block; padding: 6px 8px; border-radius: var(--radius-sm);
   background: color-mix(in oklab, var(--tone) 8%, transparent); }
 .gpr-ticket-h { display: flex; align-items: center; gap: 6px; color: var(--tone); font-weight: 700; }
 .gpr-ticket-h .gpr-mark { color: var(--tone); }
 .gpr-legs { margin-top: 4px; }
 .gpr-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 12px; }
-.gpr-col { padding: 10px 12px; border-radius: 10px; background: color-mix(in oklab, var(--tone) 8%, transparent);
-  box-shadow: inset 3px 0 0 var(--tone); }
+.gpr-col { padding: 10px 12px; border-radius: var(--radius); background: color-mix(in oklab, var(--tone) 9%, transparent); }
 .gpr-col-h { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; color: var(--tone); font-size: var(--fs-xs);
   font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .gpr-col ul { margin: 0; padding-left: 16px; display: grid; gap: 5px; font-size: var(--fs-sm); color: var(--text-body); }

@@ -1574,10 +1574,10 @@ function gprCard(g, rep, rows, gp, opts) {
        <span class="gpr-at">at</span>
        <span class="gpr-team${fin.home > fin.away ? " win" : ""}">${escapeHtml(teamName(g.home))} ${fin.home}</span>`
     : `<span class="gpr-team">The final score is not in yet</span>`;
-  const verdict = v ? `<div class="gpr-verdict gpr-${v.tone}" role="status">
+  const verdict = v ? `<div class="gpr-verdict ${gprCls(v.tone)}" role="status">
       <span class="gpr-badge" aria-hidden="true">${gprIcon(v.tone)}</span>
       <span class="gpr-say"><b>${v.words}</b>${v.sub ? `<span class="gpr-sub">${escapeHtml(v.sub)}</span>` : ""}</span>
-    </div>` : graded.status === "pending" ? `<div class="gpr-verdict gpr-wait" role="status">
+    </div>` : graded.status === "pending" ? `<div class="gpr-verdict ${gprCls("wait")}" role="status">
       <span class="gpr-badge" aria-hidden="true">${gprIcon("wait")}</span>
       <span class="gpr-say"><b>The report is graded once the box score is in</b></span></div>` : "";
   const cols = gprRightWrong(graded);
@@ -1596,6 +1596,9 @@ function gprCard(g, rep, rows, gp, opts) {
   </div>`;
 }
 const GPR_ICON = { good: "check", bad: "cross", warn: "dash", info: "info", wait: "clock" };
+//: Each tone's class, written whole (detail.css owns them: tests/test_a_rooms_styles_are_its_own).
+const GPR_TONE = { good: "gpr-good", bad: "gpr-bad", warn: "gpr-warn", info: "gpr-info", wait: "gpr-wait" };
+const gprCls = (tone) => GPR_TONE[tone] || GPR_TONE.wait;
 function gprIcon(tone) {
   return typeof icon === "function" ? icon(GPR_ICON[tone] || "dot", 14) : "";
 }
@@ -1606,7 +1609,7 @@ function gprTone(right, of) {
   return r >= 0.6 ? "good" : r <= 0.4 ? "bad" : "warn";
 }
 function gprRow(tone, k, v, more) {
-  return `<li class="gpr-row gpr-${tone}"><span class="gpr-mark" aria-hidden="true">${gprIcon(tone)}</span>
+  return `<li class="gpr-row ${gprCls(tone)}"><span class="gpr-mark" aria-hidden="true">${gprIcon(tone)}</span>
     <span class="gpr-k">${k}</span><span class="gpr-v">${v}</span>${more || ""}</li>`;
 }
 //: Our pick to win against the final: {right, words}, or null with no pick or a tie.
@@ -1655,7 +1658,7 @@ function gprReadsRow(graded) {
   if (!n) return "";
   const r = Number(graded.right) || 0;
   const chips = (graded.groups || []).filter((x) => x && Number(x.graded)).map((x) =>
-    `<span class="gpr-chip gpr-${gprTone(Number(x.right) || 0, Number(x.graded))}">${escapeHtml(x.what || x.key)}
+    `<span class="gpr-chip ${gprCls(gprTone(Number(x.right) || 0, Number(x.graded)))}">${escapeHtml(x.what || x.key)}
       ${Number(x.right) || 0}/${Number(x.graded)}</span>`).join("");
   const sat = (graded.groups || []).reduce((s, x) => s + (Number((x || {}).dnp) || 0), 0);
   return gprRow(gprTone(r, n), "The report’s reads", `<b>${r} of ${n} right</b>${sat
@@ -1707,7 +1710,7 @@ function gprTicketsRow(t, label) {
   const say = `<b>${won} of ${t.list.length} hit</b>${
     open ? ` <span class="gpr-mute">· ${open} waiting on the box score</span>` : ""}`;
   const more = t.legs && t.legs.length ? `<details class="gpr-more"><summary>See each ticket</summary><ul class="gpr-list">${
-    t.legs.map((x, i) => `<li class="gpr-ticket gpr-${gprSt(x.status)}"><div class="gpr-ticket-h"><span class="gpr-mark"
+    t.legs.map((x, i) => `<li class="gpr-ticket ${gprCls(gprSt(x.status))}"><div class="gpr-ticket-h"><span class="gpr-mark"
       aria-hidden="true">${gprIcon(gprSt(x.status))}</span>Ticket ${i + 1}: ${gprStWord(x.status)}</div>
       <ul class="gpr-list gpr-legs">${(x.legs || []).map((l) => gprPickLI(l)).join("")}</ul></li>`).join("")}</ul></details>`
     : "";
@@ -1750,7 +1753,7 @@ function gprPickLI(p) {
   const did = p.actual == null || !Number.isFinite(a) ? (st === "void" ? "didn’t play" : st === "push" ? "push" : "")
     : GPR_SCORE[m] ? (a > 0 ? `scored${a > 1 ? ` ${a}` : ""}` : "didn’t score")
     : RES_GAME_MARKETS.has(m) ? "" : `had ${Number.isInteger(a) ? a : a.toFixed(1)}`;
-  return `<li class="gpr-${tone}"><span class="gpr-mark" aria-hidden="true">${gprIcon(tone)}</span><span>${
+  return `<li class="${gprCls(tone)}"><span class="gpr-mark" aria-hidden="true">${gprIcon(tone)}</span><span>${
     gprPickWords(p)}${did ? ` <span class="gpr-mute">— ${did}</span>` : ""}${
     st === "pending" || st === "open" ? ` <span class="gpr-mute">— waiting</span>` : ""}</span></li>`;
 }
@@ -1795,7 +1798,7 @@ function gprRightWrong(graded) {
   const bad = (graded.worst_rows || graded.worst || []).map(item);
   for (const m of ((graded.injuries || {}).missed || [])) bad.push(item(m));
   if (!good.length && !bad.length) return "";
-  const col = (tone, head, xs) => xs.length ? `<div class="gpr-col gpr-${tone}"><div class="gpr-col-h">${
+  const col = (tone, head, xs) => xs.length ? `<div class="gpr-col ${gprCls(tone)}"><div class="gpr-col-h">${
     gprIcon(tone)} ${head}</div><ul>${xs.join("")}</ul></div>` : "";
   return `<div class="gpr-cols">${col("good", "What it got right", good)}${col("bad", "What it got wrong", bad)}</div>`;
 }

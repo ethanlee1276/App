@@ -151,8 +151,10 @@ def test_the_card_is_one_function_both_pages_draw():
     for cls in (".gpr-good { --tone: var(--good); }", ".gpr-bad { --tone: var(--bad); }",
                 ".gpr-warn { --tone: var(--warn); }", ".gpr-verdict", ".gpr-row", ".gpr-chip", ".gpr-cols"):
         assert cls in css, cls
-    for lit in ('"gpr-won"', "gpr-${tone}", "gpr-${v.tone}"):
+    for lit in ('"gpr-won"', 'GPR_TONE = { good: "gpr-good", bad: "gpr-bad", warn: "gpr-warn", info: "gpr-info", '
+                'wait: "gpr-wait" }', "${gprCls(tone)}", "${gprCls(v.tone)}"):
         assert lit in detail, lit
+    assert "gpr-${" not in detail, "every tone's class written whole, so detail.css can claim it"
     assert "gp-res-list" not in detail and "gp-res-list" not in css, "the old list is gone with its words"
 
 

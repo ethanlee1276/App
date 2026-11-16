@@ -98,6 +98,8 @@ FITS = (
     ("engine.rankfit", "board", ("engine.likely",), "the AUC that orders Most Likely and sets its floors"),
     ("engine.yardagefit", "board", ("engine.likely",), "the yardage markets' honest width"),
     ("engine.scanfit", "board", ("engine.likely",), "the scan's reasons: notes until MEASURED says a reason holds"),
+    ("engine.legfit", "board", ("engine.gameparlays",),
+     "each league's share a game parlay leg's chance is pulled toward the book's (LEGFIT1)"),
     ("engine.tdmatchfit", "board", ("engine.tdscenarios",),
      "a bad defence adds nothing beyond the game total, so a scenario is a selection rule, the chance unmoved"),
     ("scanblendfit", "board", ("engine.teamchange",), "how much of a team's rating is this season"),

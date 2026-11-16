@@ -107,11 +107,12 @@ def test_the_board_hook_hangs_no_two_leg_tickets_since_they_retired():
     assert "function renderParlayPage(" not in _read("web", "js", "app.js")
 
 
-def test_the_record_page_orders_college_with_the_parlay_leagues():
+def test_the_two_leg_table_that_ordered_college_left_the_record_page():
+    """The two-leg record (and its table of leagues, college among them) left the Record page on
+    2026-11-16 (Ethan: "retire the 2 leg parlays record and shit"); college's game parlays are drawn
+    with every league's under "The Game Report Picks and Parlays"."""
     rec = _read("web", "js", "record.js")
-    assert 'const TL_SPORT_ORDER = ["all", "nfl", "cfb", "nba", "cbb", "mlb"];' in rec, \
-        "a college row sorts beside the others, never above the all-leagues row"
-    assert '"All leagues"' in rec and '"All four"' not in rec, "five leagues now, and a word that keeps"
+    assert "TL_SPORT_ORDER" not in rec and '"All four"' not in rec
 
 
 def test_a_college_card_badges_its_school_by_espns_id():
