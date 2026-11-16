@@ -9362,8 +9362,8 @@ asked why football's stated chances run 10 to 30 points too high. They did on th
   every settle pass re-grades the tickets already graded the old way. The newest 144 graded legs had no such case, so
   this did not make the gap, but it could have.
 
-The next boards built are the first built this way, and the legs already graded stay on the record as they were. If
-football's new legs still run high once about 100 are graded, a correction learned from each league's record, the way
+The next boards built are the first built this way. The legs already graded stay on the record, changed only where a
+leg had taken another line's result. If football's new legs still run high once about 100 are graded, a correction learned from each league's record, the way
 the basketball and hockey boards learned theirs (step PP), is the next step, and yours to say yes to.
 
 **TQ. The Parlays page is gone from every league** (step 649; 16 November). Nothing to run. You circled Parlays in
