@@ -48,9 +48,11 @@ def test_one_layer_sits_under_every_page():
 def test_the_light_is_the_brand_s_gold_in_both_themes_and_never_moves():
     dark = STYLES[STYLES.index("\n:root {"):STYLES.index(':root[data-theme="light"] {')]
     assert "--amb-1: var(--gold);" in dark, "the site's own gold, which the light theme deepens"
-    light = STYLES[STYLES.index(':root[data-theme="light"] {'):]
-    light = light[:light.index("\n}")]
-    assert "--amb-top:" in light and "--amb-low:" in light, "paper takes its own strength"
+    light = STYLES[STYLES.index(':root[data-theme="light"] .ambient {'):]
+    light = light[:light.index("}")]
+    assert "--amb-top:" in light and "--amb-low:" in light, "paper takes its own strength, on the layer"
+    theme = STYLES[STYLES.index(':root[data-theme="light"] {'):]
+    assert "--amb-" not in theme[:theme.index("\n}")], "none in the theme's tokens, which the game page resets"
     section = STYLES[STYLES.index("THE SITE'S OWN LIGHT (SITEBG1"):]
     assert ':root[data-theme="light"] .amb-club {\n  --amb-club-top:' in section, "and a club's light on paper too"
     rules = section.split("========================================================================== */", 1)[1]

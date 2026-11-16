@@ -4805,9 +4805,6 @@ body.pk-open { overflow: hidden; }
    ============================================================ */
 /* (The palette that stood here is in the one :root at the top of the sheet.) */
 :root[data-theme="light"] {
-  /* The site's own light on paper ("THE SITE'S OWN LIGHT"). */
-  --amb-top: radial-gradient(120% 95% at 50% 0%, color-mix(in oklab, var(--amb-1) 18%, transparent) 0%, color-mix(in oklab, var(--amb-1) 8%, transparent) 34%, color-mix(in oklab, var(--amb-1) 3%, transparent) 66%, transparent 92%);
-  --amb-low: radial-gradient(80% 65% at 104% 106%, color-mix(in oklab, var(--amb-2) 12%, transparent) 0%, color-mix(in oklab, var(--amb-2) 4%, transparent) 45%, transparent 75%);
   color-scheme: light;
   /* Paper never had the dark theme's fault: measured, --text-mute here is
      already Lc 52-64 and --text-dim Lc 76-87, both above their targets.
@@ -11167,6 +11164,12 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
    ========================================================================== */
 .ambient, .amb-club { position: fixed; inset: 0; z-index: -1; pointer-events: none; contain: strict; }
 .ambient { background: var(--amb-top), var(--amb-low), var(--amb-side); }
+/* On paper, set on the layer rather than in the light theme's tokens: the game
+   page's wash resets every one of those to night (detail.css), and has no light of
+   ours to reset. */
+:root[data-theme="light"] .ambient {
+  --amb-top: radial-gradient(120% 95% at 50% 0%, color-mix(in oklab, var(--amb-1) 18%, transparent) 0%, color-mix(in oklab, var(--amb-1) 8%, transparent) 34%, color-mix(in oklab, var(--amb-1) 3%, transparent) 66%, transparent 92%);
+  --amb-low: radial-gradient(80% 65% at 104% 106%, color-mix(in oklab, var(--amb-2) 12%, transparent) 0%, color-mix(in oklab, var(--amb-2) 4%, transparent) 45%, transparent 75%); }
 /* The club's light covers the gold: it lays the page's own ground under itself. Its
    gradients are defined here, on the layer, because --amb-c is set on the layer: a
    gradient defined on :root would be worked out there, before any club is known. */
