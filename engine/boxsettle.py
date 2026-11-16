@@ -264,6 +264,11 @@ def purge_provisional(hconn, league: str, g: dict) -> int:
 BOX_GRADES = ("cfb",)
 
 
+#: The day each box-graded league's kept numbers were last re-applied in full
+#: (`ingest_for_open`).
+_REAPPLIED: dict = {}
+
+
 def keep_box_values(hconn, league: str, g: dict) -> int:
     """Keep the box score's numbers for a box-graded league's game (BOX_GRADES)
     off its provisional rows on file. Returns the numbers kept."""
@@ -313,8 +318,43 @@ def apply_box_values(hconn, league: str, g: dict | None = None, seasons=None) ->
         if cur.rowcount:
             out["applied"] += cur.rowcount
         elif hconn.execute(f"SELECT 1 FROM player_game_logs WHERE {where} LIMIT 1", wargs).fetchone() is None:
-            out["unmatched"] += 1
+            placed = _place_box_value(hconn, league, terms, targs, days, home, away, player, team, market, value)
+            if placed:
+                out["applied"] += placed
+            else:
+                out["unmatched"] += 1
     return out
+
+
+def _place_box_value(hconn, league: str, terms: str, targs: list, days: list, home, away,
+                     player, team, market, value) -> int:
+    """A box-score number with no play-file row on its player's side.
+
+    WHAT THE BOX SAID IS NOT DROPPED (2026-11-16). The provisional rows are
+    purged once a game's official ones land, and the box's numbers survive
+    only through the play file's rows they are written onto: one for the
+    same player ON THE SAME SIDE. Jeremiah Smith's line against NU on the
+    14th (11 catches, 117 yards, a touchdown) had none: the play file holds
+    him for that game under NU, with nothing caught. While Ohio State's
+    play-file rows sat under ESPN's number the purge never ran; once they
+    were re-keyed to OSU (step TT) it did, and the box line went with the
+    copies, from his log and his season's totals.
+
+    Now his row filed under the other side of the same game, his name and
+    the market, takes the box's number and the box's side: a college game is
+    graded on the box score (RUN_NEXT 00e). Where the play file has no row of
+    his name in the game at all, nothing is written, as before: that is
+    likelier another spelling of a name it holds than a missing player, and
+    a row under each would be two players. Returns the rows changed."""
+    other = str(away) if str(team) == str(home) else str(home)
+    is_home = 1 if str(team) == str(home) else 0
+    marks = ",".join("?" * len(days))
+    cur = hconn.execute(
+        f"UPDATE player_game_logs SET value=?, team=?, opponent=?, home=? "
+        f"WHERE sport=? AND market=? AND player=?{terms} AND period IN ({marks}) "
+        f"AND team=? AND opponent=? AND game_id NOT LIKE '%{BOX_SUFFIX}'",
+        (float(value), str(team), other, is_home, league, market, player, *targs, *days, other, str(team)))
+    return cur.rowcount or 0
 
 
 def provisional_games(hconn, league: str, today: _dt.date | None = None) -> list:
@@ -588,6 +628,16 @@ def ingest_for_open(lconn, hconn, league: str, log=print,
                 res["purged"] += got["purged"]
                 for k in box:
                     box[k] += got[k]
+        # EVERY KEPT BOX NUMBER AGAIN, ONCE A DAY (2026-11-16). Until now only a
+        # play-file backfill re-applied them, weekly in season, so a box line
+        # lost between two backfills (Jeremiah Smith's 14 November, step TT)
+        # stayed lost for a week. Idempotent: a number already in place
+        # changes nothing. `apply_box_values` counts its own unmatched lines;
+        # only what moved is said here.
+        day = (today or _dt.date.today()).isoformat()
+        if _REAPPLIED.get(league) != day:
+            _REAPPLIED[league] = day
+            box["applied"] += apply_box_values(hconn, league)["applied"]
         if any(box.values()):
             res["box_values"] = box
         hconn.commit()

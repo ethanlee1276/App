@@ -9356,6 +9356,18 @@ fetches the Buckeyes' roster. Any other shared abbreviation in the feed is settl
 read-only counts are still worth running: they will now say how many college copies remain once Ohio State's are
 under one name.
 
+What the re-key set off, checked live within the hour: with Ohio State's play-file rows under OSU at last, the
+same-night box settle found its recent games' official rows and purged their box-score copies, as it does for every
+school. Each box number lands on the play file's row for the same player on the same side, and Jeremiah Smith's line
+against NU on the 14th (11 catches, 117 yards, a touchdown) had none: the play file holds him for that game under NU,
+with nothing caught. The line left his log and his season (80 catches became 69). The box numbers themselves were
+kept (they always are), so nothing is gone for good:
+- a box number now also lands on the same player's row filed under the other side of the same game, and takes the
+  box's side (college grades on the box score, 00e); a name the play file does not hold in the game is still left
+  alone, as likelier another spelling than a missing player;
+- the settle re-applies every kept box number once a day, where only the weekly play-file backfill did, so Smith's
+  line returns on the first settle pass after this lands, and any other line lost the same way with it.
+
 **TS. The player search reads a player off the index, and waits for nothing** (step 651; 16 November). Nothing to
 run. Checked live after the deploys at 19:25 and 19:56 UTC: every search answered the right player alone ("jacoby
 brissett" and "brissett" both Jacoby Brissett, no near names beside the answer), the WNBA and the NFL in 0.3 to 0.5

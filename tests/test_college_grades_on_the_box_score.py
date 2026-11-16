@@ -134,6 +134,53 @@ def test_a_bet_graded_on_the_box_score_stands_when_the_play_file_lands():
     assert (b["status"], b["actual"]) == ("won", 51.0), dict(b)
 
 
+def test_a_box_line_whose_play_file_row_sits_on_the_other_side_is_kept():
+    """Live, 16 Nov: once Ohio State's play-file rows were re-keyed from ESPN's
+    number to OSU (step TT), its 14 November game's box copies were purged,
+    and Jeremiah Smith's box line (11 catches, 117 yards, a touchdown) had no
+    play-file row on his side to land on: the play file holds him for that
+    game under NU, with nothing caught. The line left his log and his season."""
+    L, H = _world()
+    db.upsert_player_logs(H, [
+        _row("401752848-box", "Jeremiah Smith", "OSU", "NU", "receptions", 11),
+        _row("401752848-box", "Jeremiah Smith", "OSU", "NU", "rec_yds", 117),
+        _row("401752848-box", "Jeremiah Smith", "OSU", "NU", "rec_td", 1),
+        _row("401752848-box", "Carnell Tate", "OSU", "NU", "rec_yds", 64)])
+    H.commit()
+
+    def play_file():
+        db.upsert_player_logs(H, [
+            _row("401752848", "Jeremiah Smith", "NU", "OSU", "receptions", 0, home=0),
+            _row("401752848", "Jeremiah Smith", "NU", "OSU", "rec_yds", 0, home=0),
+            _row("401752848", "Jeremiah Smith", "NU", "OSU", "rec_td", 0, home=0),
+            _row("401752848", "Carnell Tate", "OSU", "NU", "rec_yds", 60)])
+        H.commit()
+    play_file()
+    res = B.ingest_for_open(L, H, "cfb", log=lambda *a: None, fetch_rows=lambda lg: [],
+                            fetch_summary=lambda lg, eid: {})
+    assert res["box_values"] == {"kept": 4, "applied": 4, "unmatched": 0}, res
+
+    def smith():
+        return sorted((r[0], r[1], r[2], r[3]) for r in H.execute(
+            "SELECT market, team, opponent, value FROM player_game_logs WHERE player='Jeremiah Smith'"))
+    want = [("rec_td", "OSU", "NU", 1.0), ("rec_yds", "OSU", "NU", 117.0), ("receptions", "OSU", "NU", 11.0)]
+    assert smith() == want, smith()
+    assert _logs(H, "Carnell Tate", "rec_yds") == [("401752848", 64.0)]
+    play_file()                                     # the re-pull files him under NU with nothing again
+    B.apply_box_values(H, "cfb", seasons=[TODAY.year])
+    assert smith() == want, "every backfill puts the box line back on his side"
+    # A line lost before this (the live file tonight) comes back on the next
+    # settle pass, which re-applies every kept number once a day.
+    play_file()
+    B._REAPPLIED.clear()
+    again = B.ingest_for_open(L, H, "cfb", log=lambda *a: None, fetch_rows=lambda lg: [],
+                              fetch_summary=lambda lg, eid: {})
+    assert smith() == want and again["box_values"]["applied"] == 4, again    # his three and Tate's 64
+    once = B.ingest_for_open(L, H, "cfb", log=lambda *a: None, fetch_rows=lambda lg: [],
+                             fetch_summary=lambda lg, eid: {})
+    assert "box_values" not in once, "once a day, not every pass"
+
+
 def test_the_nfl_keeps_grading_on_its_official_file():
     L, H = _world()
     db.upsert_player_logs(H, [_row("DET-002-box", "Jahmyr Gibbs", "DET", "KC", "rush_yds", 94, sport="nfl",
