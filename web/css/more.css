@@ -846,6 +846,12 @@
    nickname, record and standing), a strip of underlined tabs, and
    one section per tab. */
 .tm-head { display: flex; align-items: center; gap: 16px; padding: 8px 0 14px; }
+/* In the club's colours (SITEBG1): the player page's band (playerpage.css .plr-hero), its words the night's. */
+.tm-head.tm-band {
+  --tm-band: linear-gradient(118deg, color-mix(in oklab, var(--tm-c) 78%, var(--night-3)) 0%, color-mix(in oklab, var(--tm-c) 46%, var(--night-3)) 100%);
+  margin-bottom: 12px; padding: 18px; border-radius: var(--radius-lg); background: var(--tm-band); color: var(--night-text); }
+.tm-band .tm-nick { color: var(--night-text); }
+.tm-band .tm-city, .tm-band .tm-rec { color: color-mix(in oklab, var(--night-text) 80%, transparent); }
 .tm-crest { flex: none; display: inline-flex; }
 .tm-id { min-width: 0; flex: 1; }
 .tm-city { font-size: var(--fs-md); color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; }

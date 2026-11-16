@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TX. The whole site wears its own light** (step 656; 16 November). Nothing to run. Your ask: the team colours behind
+the player and live pages, "for the whole site ... a subtle gold gradient ... to match the site". Every page now sits
+on one soft layer behind it: the site's gold rising from the top of the screen, a faint amber glow low in the far
+corner and a touch of gold on the near side, all fading into the page's own dark (or, in the light theme, a warm paper).
+The cards stay as they were, so the words read the same; the light shows around and between them. A player's page
+and a team's page lay their club's colour over the gold the same way (Jahmyr Gibbs's page glows Lions blue), and a
+team's page header is now the player page's band in the club's colours. The game and live pages keep their two-club
+wash. Nothing moves or animates, so it costs nothing on a phone, and printing leaves it out.
+
 **TW. Each league's parlay legs learn their own correction** (step 655; 16 November). Nothing to run. Your "yes":
 counted once a bet, the NFL's parlay legs hit 13 points under the chance we gave them and college's 6 (step TR). Now
 each league learns, from its own graded legs, how far to pull each leg's chance toward the book's chance for it:

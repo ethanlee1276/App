@@ -100,7 +100,10 @@ function plrAge(bio) {
 }
 function plrClub(sport, team) {
   const t = (typeof teamsIn === "function" ? teamsIn(sport) : {})[team] || {};
-  return { name: t.name || teamNameIn(sport, team) || team || "", nick: t.nick || "", color: t.primary || "" };
+  // A colour as CSS reads it: a feed that writes "0c2340" gets its hash (college's teams may).
+  const raw = String(t.primary || "").trim();
+  const color = /^#?[0-9a-f]{6}$/i.test(raw) ? (raw[0] === "#" ? raw : `#${raw}`) : "";
+  return { name: t.name || teamNameIn(sport, team) || team || "", nick: t.nick || "", color };
 }
 function plrNorm(s) {
   return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -119,7 +122,10 @@ function plrHeroHTML(player, sport, team, pos, face, bio) {
   const line = [club.name, num, (bio && bio.position) || pos].filter(Boolean).map(escapeHtml).join(" · ");
   const age = bio ? plrAge(bio) : "";
   const body = bio ? [bio.height, bio.weight, age !== "" ? `Age ${age}` : ""].filter(Boolean).map(escapeHtml).join(" · ") : "";
+  // THE CLUB'S LIGHT BEHIND THE WHOLE PAGE (styles.css .amb-club, SITEBG1),
+  // inside the header so a redrawn header brings its own and leaves none.
   return `<header class="plr-hero"${club.color ? ` style="--plr-c:${escapeAttr(club.color)}"` : ""}>
+      ${club.color ? `<div class="amb-club" style="--amb-c:${escapeAttr(club.color)}" aria-hidden="true"></div>` : ""}
       ${team ? `<span class="plr-mark" aria-hidden="true">${teamMarkIn(sport, team, 168)}</span>` : ""}
       <div class="plr-face">${playerAvatar(player, team, { size: 92, headshot: face, map: teamsIn(sport) })}</div>
       <div class="plr-who">

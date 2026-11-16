@@ -11141,3 +11141,42 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
   .graph-tip { background-image: none; }
 }
 
+/* ==========================================================================
+   THE SITE'S OWN LIGHT (SITEBG1, 2026-11-16; Ethan: "how i had you do with
+   the player page and live page with the team colors in the backround to
+   make the page look nicer. we should do that for the whole site. we can add
+   a subtle gold gradient or something like that in the backround to match
+   the site"). One fixed layer under every page (index.html .ambient): the
+   brand's gold rising soft from the top of the screen, a faint amber ember
+   low in the far corner and a breath of gold on the near side, each fading
+   into the page's own ground, so the cards sit on light instead of a flat
+   black (or a flat paper, in the light theme). A page about one club, a
+   player's or a team's, lays that club's colour over it the same way
+   (.amb-club, drawn inside the page, so it leaves when the page does), as
+   the game and live pages' wash does with both clubs'; that wash covers it.
+   Static on purpose: no animation, no blur, nothing repainted on a scroll.
+   ========================================================================== */
+:root {
+  --amb-1: var(--gold);
+  --amb-2: #E9862A;
+  --amb-top: radial-gradient(120% 95% at 50% 0%, color-mix(in oklab, var(--amb-1) 20%, transparent) 0%, color-mix(in oklab, var(--amb-1) 9%, transparent) 34%, color-mix(in oklab, var(--amb-1) 3%, transparent) 66%, transparent 92%);
+  --amb-low: radial-gradient(80% 65% at 104% 106%, color-mix(in oklab, var(--amb-2) 15%, transparent) 0%, color-mix(in oklab, var(--amb-2) 5%, transparent) 45%, transparent 75%);
+  --amb-side: radial-gradient(60% 50% at -8% 56%, color-mix(in oklab, var(--amb-1) 9%, transparent) 0%, transparent 72%);
+}
+:root[data-theme="light"] {
+  --amb-top: radial-gradient(120% 95% at 50% 0%, color-mix(in oklab, var(--amb-1) 18%, transparent) 0%, color-mix(in oklab, var(--amb-1) 8%, transparent) 34%, color-mix(in oklab, var(--amb-1) 3%, transparent) 66%, transparent 92%);
+  --amb-low: radial-gradient(80% 65% at 104% 106%, color-mix(in oklab, var(--amb-2) 12%, transparent) 0%, color-mix(in oklab, var(--amb-2) 4%, transparent) 45%, transparent 75%);
+}
+.ambient, .amb-club { position: fixed; inset: 0; z-index: -1; pointer-events: none; contain: strict; }
+.ambient { background: var(--amb-top), var(--amb-low), var(--amb-side); }
+/* The club's light covers the gold: it lays the page's own ground under itself. Its
+   gradients are defined here, on the layer, because --amb-c is set on the layer: a
+   gradient defined on :root would be worked out there, before any club is known. */
+.amb-club {
+  --amb-club-top: radial-gradient(125% 95% at 50% 0%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 34%, transparent) 0%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 14%, transparent) 36%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 4%, transparent) 68%, transparent 94%);
+  --amb-club-low: radial-gradient(80% 65% at 104% 106%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 14%, transparent) 0%, transparent 72%);
+  background: var(--amb-club-top), var(--amb-club-low), var(--bg); }
+:root[data-theme="light"] .amb-club {
+  --amb-club-top: radial-gradient(125% 95% at 50% 0%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 24%, transparent) 0%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 10%, transparent) 36%, color-mix(in oklab, var(--amb-c, var(--amb-1)) 3%, transparent) 68%, transparent 94%); }
+body.gp-on .ambient { display: none; }
+@media print { .ambient, .amb-club { display: none; } }

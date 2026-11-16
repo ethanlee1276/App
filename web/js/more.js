@@ -2881,7 +2881,12 @@ function teamHeaderHTML(d, p) {
   const std = teamStanding(d.sport, p.team);
   const record = (std && std.row.record) || (season && season.record) || "";
   const where = std && std.row.rank && std.group ? `${ordinal(std.row.rank)} in ${std.group}` : "";
-  return `<header class="tm-head">
+  // IN THE CLUB'S COLOURS, AS A PLAYER'S PAGE IS (SITEBG1): the header a band
+  // of its colour toward night, and its light behind the whole page.
+  const raw = String(meta.primary || "").trim();
+  const c = /^#?[0-9a-f]{6}$/i.test(raw) ? (raw[0] === "#" ? raw : `#${raw}`) : "";
+  return `<header class="tm-head${c ? " tm-band" : ""}"${c ? ` style="--tm-c:${escapeAttr(c)}"` : ""}>
+    ${c ? `<div class="amb-club" style="--amb-c:${escapeAttr(c)}" aria-hidden="true"></div>` : ""}
     <span class="tm-crest">${teamMarkIn(d.sport, p.team, 64)}</span>
     <div class="tm-id">
       ${city ? `<div class="tm-city">${escapeHtml(city)}</div>` : ""}
