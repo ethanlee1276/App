@@ -249,6 +249,30 @@ def test_a_goalie_and_a_pitcher_lead_with_their_own_numbers():
     assert p["last"]["tiles"][0]["label"] == "IP" and p["last"]["tiles"][0]["value"] == "6.0"
 
 
+def test_the_server_builds_the_ranks_before_anyone_asks_and_a_stale_table_still_answers():
+    """Built cold, a league's ranks are seconds of reading (measured live: MLB 5.7 s,
+    college basketball 7.5 s). The server builds every league's at start, in the
+    background; a table past its six hours answers while its new one is built."""
+    import time as _time
+    path, rosters = _fresh()
+    PP.warm(db_path=path, delay=0).join(timeout=60)
+    for key in (("nfl", 2026, "passing"), ("nba", 2026, "box"), ("nhl", 2026, "goalie"), ("mlb", 2026, "pitching")):
+        assert key in PP._RANKS, key
+    assert PP._RANKS[("nfl", 2026, "passing")][1]["yds"]["Joe Burrow"] == 1
+    key = ("nfl", 2026, "passing")
+    PP._RANKS[key] = (_time.time() - PP.RANK_TTL - 1, {"yds": {"Josh Allen": 99}})
+    conn = _db.connect(path)
+    stale = PP.rank_table(conn, "nfl", 2026, "passing", db_path=path)
+    conn.close()
+    assert stale["yds"]["Josh Allen"] == 99, "the old table answers at once"
+    for _ in range(300):
+        if key not in PP._REFRESHING and PP._RANKS[key][1]["yds"].get("Josh Allen") != 99:
+            break
+        _time.sleep(0.02)
+    assert PP._RANKS[key][1]["yds"]["Josh Allen"] == 2, "and its new one replaces it"
+    srv = (ROOT / "server.py").read_text(encoding="utf-8")
+    assert "    if live:\n        # Every league's player-page ranks" in srv and "        playerpage.warm()\n" in srv
+
 def test_a_name_only_a_roster_knows_still_has_a_page():
     path, rosters = _fresh()
     r = PP.page("nfl", "Rookie Nobody", db_path=path, data_dir=rosters)

@@ -9393,7 +9393,9 @@ basketball, NHL and MLB.
   least half the games of a regular (the 90th percentile of games played, so one name several college players
   share, whose games the file adds up together, can't raise the bar for everyone); a rate (passer rating, FG%, yards a carry, save
   percentage) and a count where fewer is better (interceptions, goals against) among players with at least
-  40% of the leader's volume. Ties share a place, and "fewest" marks the fewer-is-better ones.
+  40% of the leader's volume. Ties share a place, and "fewest" marks the fewer-is-better ones. The server
+  builds every league's rank tables in the background a minute after it starts and rebuilds them every six
+  hours, so no page waits on them (built cold, MLB's took 5.7 seconds and college basketball's 7.5).
 - **What isn't there, and why:** ESPN's QBR isn't in our files, so the quarterback strip uses the passer
   rating. Draft details, longest plays and sacks aren't in our box scores. College and baseball rosters list
   no height, weight or age, so those headers show what the rosters do have. News is headlines and links only,

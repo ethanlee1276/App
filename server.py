@@ -7471,6 +7471,11 @@ def main() -> None:
             shown = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
             print(f"  {sport.upper()}: {shown} ({state})")
     print("Press Ctrl+C to stop.")
+    if live:
+        # Every league's player-page ranks, built in the background a minute
+        # in, so no player's page waits seconds on a cold table.
+        from engine import playerpage
+        playerpage.warm()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

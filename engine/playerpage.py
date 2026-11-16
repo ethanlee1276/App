@@ -36,6 +36,7 @@ from __future__ import annotations
 import bisect
 import json
 import os
+import threading
 import time
 
 from . import db as _db
@@ -49,7 +50,17 @@ RATE_SHARE = 0.4
 #: A basketball average is ranked among players with this share of a regular's games
 #: (the 90th percentile of games played, so one name shared by several players cannot lift it).
 GAMES_SHARE = 0.5
-RANK_TTL = 1800
+#: A rank table is rebuilt in the background once this old (a season's totals
+#: move once a night); a stale one answers meanwhile. Built cold, a table is
+#: seconds of reading a large file (measured live 2026-11-16: MLB 5.7 s,
+#: college basketball 7.5 s), so the server builds every league's at start
+#: (`warm`) and no page waits on one.
+RANK_TTL = 6 * 3600
+#: The kinds of player each league's pages rank.
+KINDS = {"nfl": ("passing", "rushing", "receiving"), "cfb": ("passing", "rushing", "receiving"),
+         "nba": ("box",), "wnba": ("box",), "cbb": ("box",), "nhl": ("skater", "goalie"),
+         "mlb": ("batting", "pitching")}
+_REFRESHING: set = set()
 #: Leagues whose games table does not hold every game, so a club's record
 #: counted off it is wrong: MLB's is filled game by game as slates are read
 #: (seen live 2026-11-16, the Dodgers "29-19-1" in mid-October). No record is
@@ -252,13 +263,73 @@ def _league_once_a_week(conn, sport: str, season: int, markets) -> dict:
     return out
 
 
-def rank_table(conn, sport: str, season: int, kind: str) -> dict:
-    """{headline key: {player: place}} for one season and one kind of player,
-    kept RANK_TTL seconds (a season's totals move once a night)."""
+def rank_table(conn, sport: str, season: int, kind: str, db_path=None) -> dict:
+    """{headline key: {player: place}} for one season and one kind of player.
+    Kept, and rebuilt in the background once RANK_TTL old while the old one
+    answers; built here only the first time (`warm` builds them at start)."""
     key = (sport, int(season), kind)
     hit = _RANKS.get(key)
-    if hit and time.time() - hit[0] < RANK_TTL:
+    if hit:
+        if time.time() - hit[0] >= RANK_TTL:
+            _refresh_later(key, db_path)
         return hit[1]
+    table = _build_table(conn, sport, int(season), kind)
+    _RANKS[key] = (time.time(), table)
+    return table
+
+
+def _refresh_later(key: tuple, db_path=None) -> threading.Thread | None:
+    if key in _REFRESHING:
+        return None
+    _REFRESHING.add(key)
+
+    def run():
+        try:
+            conn = _db.connect(str(db_path or _db.DEFAULT_DB))
+            try:
+                _RANKS[key] = (time.time(), _build_table(conn, *key))
+            finally:
+                conn.close()
+        except Exception:                                 # noqa: BLE001 — the old table keeps answering
+            pass
+        finally:
+            _REFRESHING.discard(key)
+    t = threading.Thread(target=run, name="playerpage-rank", daemon=True)
+    t.start()
+    return t
+
+
+def warm(db_path=None, delay: float = 60.0) -> threading.Thread:
+    """Every league's rank tables for its newest season, built in the
+    background (after ``delay`` seconds, so the server's own start comes
+    first), so no player's page waits on one. Returns the thread."""
+    def run():
+        time.sleep(delay)
+        path = str(db_path or _db.DEFAULT_DB)
+        if not os.path.exists(path):
+            return
+        conn = _db.connect(path)
+        try:
+            for sport, kinds in KINDS.items():
+                row = conn.execute("SELECT MAX(season) FROM games WHERE sport=?", (sport,)).fetchone()
+                if not row or row[0] is None:
+                    continue
+                for kind in kinds:
+                    key = (sport, int(row[0]), kind)
+                    if key in _RANKS:
+                        continue
+                    try:
+                        _RANKS[key] = (time.time(), _build_table(conn, *key))
+                    except Exception:                     # noqa: BLE001 — that table is built on first ask
+                        continue
+        finally:
+            conn.close()
+    t = threading.Thread(target=run, name="playerpage-warm", daemon=True)
+    t.start()
+    return t
+
+
+def _build_table(conn, sport: str, season: int, kind: str) -> dict:
     specs = HEAD.get(kind) or ()
     need = ROLE_NEED.get(kind, ())
     markets = {m for sp in specs for m in _markets(sp[3])} | {sp[6] for sp in specs if sp[6]} | set(need)
@@ -295,7 +366,6 @@ def rank_table(conn, sport: str, season: int, kind: str) -> dict:
         asc = sorted(x[0] for x in vals.values())
         table[sp[0]] = {p: 1 + (bisect.bisect_left(asc, x[0]) if low else len(asc) - bisect.bisect_right(asc, x[0]))
                         for p, x in vals.items()}
-    _RANKS[key] = (time.time(), table)
     return table
 
 
@@ -519,7 +589,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
         per_game = sport in HOOPS
 
         # The headline, with the league's places.
-        places = rank_table(conn, sport, season, kind) if kind and conn is not None else {}
+        places = rank_table(conn, sport, season, kind, db_path=path) if kind and conn is not None else {}
         out["headline"] = [{"key": sp[0], "label": sp[1], "title": sp[2],
                             "value": head_value(sport, sp, summed, gp),
                             "rank": (places.get(sp[0]) or {}).get(player) if sp[7] else None,
