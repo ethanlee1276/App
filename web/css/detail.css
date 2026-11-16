@@ -1291,6 +1291,30 @@ details.gp-dr > :not(summary) { padding: 0 var(--sp-3) var(--sp-2); }
 .gp-c-side { display: inline-flex; align-items: center; gap: 8px; font: 700 var(--fs-xl) / 1 var(--font-display);
   font-variant-numeric: tabular-nums; }
 .gp-c-side.away { justify-self: end; }
+/* A touchdown, flashed (detail.js gpTouchdownSeen): the scoring side's
+   number pulses gold and TOUCHDOWN covers its name block for 4.5 seconds,
+   inside its own half so it never covers the clock; in the bar that stays
+   when you scroll it hangs under the side. A redraw mid-flash carries on
+   from --td-t rather than starting it again. The word is placed with
+   `translate` and animated with `scale`, so the animation never moves it. */
+.gp .gp-td .pbp-sb-team, .gp-c-side.gp-td { position: relative; }
+.gp .gp-td .pbp-sb-pts, .gp-c-side.gp-td > b { animation: gp-td-pulse 1.5s ease-out 3 both;
+  animation-delay: var(--td-t, 0ms); }
+.gp-td-word { position: absolute; left: 50%; top: 50%; translate: -50% -50%; z-index: 2; padding: 3px 8px;
+  border-radius: 999px; background: var(--gp-gain); color: #111; font: 800 var(--fs-xs) / 1.2 var(--font-sans);
+  letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; pointer-events: none;
+  animation: gp-td-word 4.5s ease-out both; animation-delay: var(--td-t, 0ms); }
+.gp-c-side .gp-td-word { top: calc(100% + 6px); translate: -50% 0; }
+@keyframes gp-td-pulse { 0% { transform: scale(1); } 18% { transform: scale(1.22); color: var(--gp-gain); }
+  100% { transform: scale(1); } }
+@keyframes gp-td-word { 0% { opacity: 0; scale: .85; } 10% { opacity: 1; scale: 1; } 85% { opacity: 1; scale: 1; }
+  100% { opacity: 0; scale: 1; } }
+@keyframes gp-td-tint { 0%, 80% { color: var(--gp-gain); } 100% { color: inherit; } }
+@keyframes gp-td-fade { 0% { opacity: 0; } 10%, 85% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .gp .gp-td .pbp-sb-pts, .gp-c-side.gp-td > b { animation: gp-td-tint 4.5s linear both; animation-delay: var(--td-t, 0ms); }
+  .gp-td-word { animation-name: gp-td-fade; }
+}
 .gp-c-side.home { justify-self: start; flex-direction: row-reverse; }
 .gp-c-crest { position: relative; display: inline-grid; }
 .gp-c-tos { position: absolute; left: 50%; top: calc(100% + 2px); transform: translateX(-50%); display: flex; gap: 2px;

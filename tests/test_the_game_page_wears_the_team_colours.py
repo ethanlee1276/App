@@ -59,6 +59,10 @@ GP = DETAIL[DETAIL.rindex("/*", 0, DETAIL.index("   THE GAME PAGE IN THE CLUBS' 
 # score block, above this section).
 GP += "\n" + "".join(DETAIL[DETAIL.index(f"function {n}("):DETAIL.index("\n}\n", DETAIL.index(f"function {n}(")) + 3]
                      for n in ("gpTimeouts", "gpTimeoutsHTML"))
+# A touchdown's flash, which the bar and the page draw too (detail.js
+# gpTouchdownSeen, gpTdFor, gpTdWordHTML; with the score block as well).
+GP += "\n" + DETAIL[DETAIL.index("const GP_TD_MS = "):
+                    DETAIL.index("\n}\n", DETAIL.index("function gpTdWordHTML(")) + 3]
 GP_CSS = CSS[CSS.rindex("/*", 0, CSS.index("   THE GAME PAGE IN THE CLUBS' COLOURS")):]
 COLOUR_MATH = DETAIL[DETAIL.index("const PBP_READS"):DETAIL.index("function pbpSideColours(")]
 

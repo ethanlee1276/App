@@ -4777,6 +4777,60 @@ function gpTimeoutsHTML(n, total, cls) {
   return `<span class="${cls}" role="img" aria-label="${n} timeout${n === 1 ? "" : "s"} left">${
     Array.from({ length: total }, (_, i) => `<i${i < n ? ' class="on"' : ""}></i>`).join("")}</span>`;
 }
+/* A TOUCHDOWN, FLASHED (Ethan, 2026-11-16: "Yes" to a touchdown flash on
+   the score at the top). When a touchdown lands while the game's page is
+   open, the scoring side's score at the top, and in the bar that stays
+   when you scroll, lights up with TOUCHDOWN over it for a few seconds.
+   Only a new one, seen happen: never on opening the page or coming back
+   to it (the page's "While you were away" says what was missed), never a
+   score that came in while the tab was hidden, and never on a game saved
+   for later, whose veil draws no score at all. It reads the copy on the
+   screen, so a reader on a TV delay sees it when the TV does. Six points
+   for one side between two draws is the touchdown (two field goals cannot
+   both happen inside one), and where the plays are on file a touchdown
+   not yet seen among them has to be there too, so a stalled feed catching
+   up on two field goals does not flash. Kept per page visit only. */
+const GP_TD_MS = 4500;                                   // how long it shows
+const GP_TD_FRESH_MS = 120000;                           // a draw older than this: a return, not a moment
+const GP_TD = { key: "", away: null, home: null, at: 0, live: false, seen: new Set(), flash: null };
+function gpTdPlays(d) {
+  return ((d || {}).plays || []).filter((p) => p && p.scoring && /touchdown/i.test(String(p.event || "")));
+}
+function gpTouchdownSeen(league, d, lv, now) {
+  if (!PBP_FOOTBALL.has(league) || !d) return null;
+  const t = now == null ? Date.now() : now;
+  const key = `${league}:${d.event_id || ""}`;
+  const num = (v) => (v == null || v === "" || !isFinite(Number(v)) ? null : Number(v));
+  const a = num(lv.away_score), h = num(lv.home_score);
+  const hidden = typeof document !== "undefined" && !!document.hidden;
+  const tds = gpTdPlays(d);
+  if (GP_TD.key !== key) {
+    GP_TD.key = key; GP_TD.flash = null; GP_TD.seen = new Set(tds.map((p) => String(p.id)));
+  } else if (GP_TD.live && !hidden && t - GP_TD.at < GP_TD_FRESH_MS && a != null && h != null
+             && GP_TD.away != null && GP_TD.home != null) {
+    const da = a - GP_TD.away, dh = h - GP_TD.home;
+    const rose = da >= 6 && da >= dh ? "away" : dh >= 6 ? "home" : null;
+    const unseen = tds.filter((p) => !GP_TD.seen.has(String(p.id)));
+    if (rose && (!(d.plays || []).length || unseen.length)) {
+      GP_TD.flash = { key, side: rose, start: t };
+      unseen.forEach((p) => GP_TD.seen.add(String(p.id)));
+    }
+  }
+  GP_TD.away = a; GP_TD.home = h; GP_TD.at = t; GP_TD.live = lv.state === "live";
+  return GP_TD.flash;
+}
+/* How long this side's flash has run (ms), or null: the score's markup
+   starts its animation that far in, so a redraw mid-flash carries on
+   rather than starting it again. */
+function gpTdFor(d, league, ha, now) {
+  const f = GP_TD.flash, t = now == null ? Date.now() : now;
+  if (!f || f.side !== ha || f.key !== `${league}:${(d || {}).event_id || ""}`) return null;
+  return t - f.start < GP_TD_MS ? Math.max(0, t - f.start) : null;
+}
+function gpTdWordHTML(league, d, ha, say) {
+  const name = teamNameIn(league, d[ha]) || d[ha] || "";
+  return `<span class="gp-td-word"${say ? ` role="status" aria-label="${escapeAttr(`Touchdown, ${name}`)}"` : ' aria-hidden="true"'}>Touchdown</span>`;
+}
 function pbpBoardHTML(d, league, lv, opts) {
   const o = opts || {};
   const table = teamsIn(league) || {};
@@ -4796,11 +4850,14 @@ function pbpBoardHTML(d, league, lv, opts) {
     // A final dims the side that lost, as the score's own page does (GP1).
     const other = ha === "home" ? lv.away_score : lv.home_score;
     const lost = lv.state === "final" && score != null && other != null && Number(score) < Number(other);
-    return `<div class="pbp-sb-side ${ha}${lost ? " lost" : ""}">
+    // A touchdown just seen (gpTouchdownSeen), on the football page only.
+    const td = gpTdFor(d, league, ha);
+    return `<div class="pbp-sb-side ${ha}${lost ? " lost" : ""}${td != null ? " gp-td" : ""}"${
+      td != null ? ` style="--td-t:-${Math.round(td)}ms"` : ""}>
         <span class="pbp-sb-crest">${teamMarkIn(league, abbr, 56)}</span>
         <div class="pbp-sb-team">${small ? `<span class="pbp-sb-loc">${escapeHtml(small)}</span>` : ""}
           <b class="pbp-sb-nick">${escapeHtml(big)}</b>${rec ? `<span class="pbp-sb-rec">${escapeHtml(rec)}</span>` : ""}${
-          tos ? gpTimeoutsHTML(tos[ha], tos.total, "pbp-sb-tos") : ""}</div>
+          tos ? gpTimeoutsHTML(tos[ha], tos.total, "pbp-sb-tos") : ""}${td != null ? gpTdWordHTML(league, d, ha, true) : ""}</div>
         <b class="pbp-sb-pts">${has}${score != null ? escapeHtml(String(score)) : "–"}</b></div>`;
   };
   // Live, the Watch button names the carrier; the pill is for before and after.
@@ -5560,8 +5617,10 @@ function gpCompactHTML(d, league, lv, tabs, tab) {
   const side = (ha) => {
     const s = ha === "home" ? lv.home_score : lv.away_score;
     const mark = teamMarkIn(league, d[ha], 24);
-    return `<span class="gp-c-side ${ha}">${tos ? `<span class="gp-c-crest">${mark}${gpTimeoutsHTML(tos[ha], tos.total, "gp-c-tos")}</span>` : mark}<b>${
-      s != null ? escapeHtml(String(s)) : "–"}</b></span>`;
+    const td = gpTdFor(d, league, ha);
+    return `<span class="gp-c-side ${ha}${td != null ? " gp-td" : ""}"${td != null ? ` style="--td-t:-${Math.round(td)}ms"` : ""}>${
+      tos ? `<span class="gp-c-crest">${mark}${gpTimeoutsHTML(tos[ha], tos.total, "gp-c-tos")}</span>` : mark}<b>${
+      s != null ? escapeHtml(String(s)) : "–"}</b>${td != null ? gpTdWordHTML(league, d, ha, false) : ""}</span>`;
   };
   const m = gpFieldModel(d, league, lv);
   // The down and the spot ride under the clock, so the top of the screen
@@ -6010,6 +6069,7 @@ function gpFootballHTML(o) {
   const { d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event } = o;
   // Another game opens at its top: no compact bar carried over from the last.
   if (_gpFor !== `${league}:${event}`) { _gpFor = `${league}:${event}`; _gpStuck = false; _gpTabsStuck = false; _gpOpen.clear(); }
+  gpTouchdownSeen(league, d, lv);
   const field = gpFieldHTML(d, league, lv);
   const panel = tab === "stats" ? gpStatsHTML(d, league, boardGame, faces, GC)
     : tab === "plays" ? gpPlaysHTML(d, league, GC)
