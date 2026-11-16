@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TW. Each league's parlay legs learn their own correction** (step 655; 16 November). Nothing to run. Your "yes":
+counted once a bet, the NFL's parlay legs hit 13 points under the chance we gave them and college's 6 (step TR). Now
+each league learns, from its own graded legs, how far to pull each leg's chance toward the book's chance for it:
+0% keeps our number, 100% takes the book's. The share it uses is the one that would have scored its graded legs best,
+and only when it also scores the newest 30% better (they are held out of the fit); until a league has 60 graded legs,
+or when the newest do not get better, its legs stay as they are. The 3-leg tickets' legs and the touchdown or scorer
+pairs' learn apart. A leg is corrected before it is held to the 60% floor, so a leg that only cleared it on an
+overstated number is no longer a leg. Legs journaled before today kept no book's chance, so their own price stands in.
+The fit runs after each settle pass that grades a ticket, beside the one-club bar; the settle log says
+"parlays: nfl:three legs now pulled N% toward the books' chances (…)" when a league's share moves, and each board's
+game parlays carry the share in force (`counts.leg_fit`). The journal now keeps our own chance beside the posted one
+(`p_raw`), so the correction is always learned on our number and never on top of itself.
+
 **TV. The two-leg parlays' record is retired** (step 654; 16 November). Nothing to run. Your answer, "retire the 2
 leg parlays record and shit": the Record page's "Two-leg parlays — retired" section is gone (the Edge and Most Likely
 parlay tiles, the staked parlays, the table of what pairing our past picks would have done, and the ticket list), and

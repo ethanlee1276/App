@@ -138,6 +138,10 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # way, and a failure sets ``error``, which the settle pass puts on its
         # phases as export_parts_error beside the empty answer.
         "_run",
+        # THE PARLAY LEGS' LEARNED CORRECTION ON FILE (engine/legfit.fits,
+        # 2026-11-16): {} is also the quiet day before the first fit, so a
+        # file it cannot read is printed once and kept in legfit.ERROR.
+        "fits",
         # prints "Pick of the Day lock not applied (<error>)" and returns
         # the card unchanged — the build's own choice, not a blank card
         # (the sweep caught it when its lookup grew a loop, 2026-09-29)

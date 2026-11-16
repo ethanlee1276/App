@@ -148,8 +148,11 @@ def ensure_schema(conn) -> None:
     # how far our number sat from the market's. NULL on a leg journaled
     # before: that is "before we kept it", which is what it is. The same
     # race-tolerant ALTER as `source` above.
+    # …and OUR OWN CHANCE BEFORE THE LEARNED CORRECTION (`p_raw`, engine/legfit,
+    # 2026-11-16), so the correction is always learned on our number and
+    # never on top of itself; NULL where none applied (`p_final` is ours).
     legcols = {r[1] for r in conn.execute("PRAGMA table_info(parlay_legs)")}
-    for col, kind in (("pool", "TEXT"), ("fair", "REAL")):
+    for col, kind in (("pool", "TEXT"), ("fair", "REAL"), ("p_raw", "REAL")):
         if col not in legcols:
             try:
                 conn.execute(f"ALTER TABLE parlay_legs ADD COLUMN {col} {kind}")
@@ -420,11 +423,11 @@ def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
                 for i, l in enumerate(legs, start=1):
                     conn.execute(
                         "INSERT INTO parlay_legs (parlay_id, leg_no, player, team, market, side, line, odds, book,"
-                        " p_final, status, pool, fair) VALUES (?,?,?,?,?,?,?,?,?,?,'open',?,?)",
+                        " p_final, status, pool, fair, p_raw) VALUES (?,?,?,?,?,?,?,?,?,?,'open',?,?,?)",
                         (cur.lastrowid, i, l.get("player"), l.get("team"), l.get("market"),
                          str(l.get("side") or "").upper() or None,
                          l.get("line") if l.get("line") is not None else 0.5, l.get("odds"), l.get("book"),
-                         l.get("p"), l.get("pool") or None, l.get("fair")))
+                         l.get("p"), l.get("pool") or None, l.get("fair"), l.get("p_raw")))
                 wrote += 1
     if wrote:
         conn.commit()

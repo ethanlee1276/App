@@ -1854,6 +1854,20 @@ def settle_open(log=print, state_path: Path | None = None,
                         f"research points ({(sb.get('three') or {}).get('why', '')})")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  parlay one-club bar not fitted: {exc}")
+        # THE LEGS' LEARNED CORRECTION (engine/legfit; Ethan, 2026-11-16:
+        # "yes"): each league's share toward the books' chances, refitted the
+        # same way; said when a league's share moves.
+        try:
+            import os as _os
+            from . import legfit, modelstate
+            if parlays_moved or not _os.path.exists(modelstate.path(legfit.FILE)):
+                was = {k: (v.get("w"), v.get("fitted")) for k, v in legfit.fits().items()}
+                lf = legfit.fit(lconn)
+                for k, v in sorted((lf.get("fits") or {}).items()):
+                    if was.get(k) != (v.get("w"), v.get("fitted")) and v.get("fitted"):
+                        log(f"  parlays: {k} legs now pulled {v['w']:.0%} toward the books' chances ({v['why']})")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  parlay legs' correction not fitted: {exc}")
         lap("parlays")
         phases["graded"] = settled
         if settled or fixed:

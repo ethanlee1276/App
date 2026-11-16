@@ -318,14 +318,22 @@ def legs_for(board: dict, sport: str, now=None) -> list[dict]:
     at a named book whose number the Edge path stands behind (`priced_legs`,
     `credible_row`), one copy of a pick kept, the most trusted source's
     (`SOURCE_RANK`) — at LEG_FLOOR or better."""
+    from . import legfit
     from . import twoleg as T
     got: dict = {}
+    # THE LEAGUE'S LEARNED CORRECTION (engine/legfit, 2026-11-16; Ethan:
+    # "yes"): each leg's chance pulled toward the book's by the share its
+    # league's record supports, before the floor, so a leg that only cleared
+    # it on an overstated number is no leg. 0 until the record has spoken.
+    w = legfit.w_for(sport, "three")
     for get in (T.likely_legs, T.edge_legs, pool_legs, priced_legs):
         try:
             rows = get(board, sport, now)
         except Exception:                                    # noqa: BLE001
             rows = []
         for leg in rows:
+            if leg and w:
+                leg = legfit.apply(leg, sport, "three", w)
             # Player props only: a game line's leg journals and grades on
             # another path, and his reports' tickets are props.
             if not leg or leg.get("_game_leg") or float(leg.get("p") or 0) < LEG_FLOOR:
@@ -346,6 +354,8 @@ def scorer_legs(board: dict, sport: str, now=None) -> list[dict]:
     if not markets:
         return []
     floor = SCORER_FLOOR.get(sport, 0.25)
+    from . import legfit
+    w = legfit.w_for(sport, "scorers")         # the learned correction, as legs_for's
     seen, out = set(), []
     rows = list(board.get("td_field") or []) + list(board.get("longshot_watch") or []) \
         + [r for r in board.get("most_likely") or [] if r.get("market") in markets] \
@@ -358,6 +368,8 @@ def scorer_legs(board: dict, sport: str, now=None) -> list[dict]:
         p = r.get("model_prob") if r.get("model_prob") is not None else r.get("hit_prob")
         leg = T._leg(dict(r, side=r.get("side") or "Over", line=r.get("line") if r.get("line") is not None else 0.5),
                      p, "scorer")
+        if leg and w:
+            leg = legfit.apply(leg, sport, "scorers", w)
         if not leg or leg["p"] < floor:
             continue
         leg = _norm_side(leg)
@@ -940,7 +952,11 @@ LEG_KEYS = ("player", "team", "opponent", "home", "away", "position", "market", 
             # Where the leg came from (SOURCE_RANK) and the book's chance for it:
             # the journal keeps both (parlayledger.log_game_parlays) so the
             # record can say which source's legs hit what they said.
-            "pool", "fair")
+            "pool", "fair",
+            # Our own chance before the league's learned correction and the
+            # share it was pulled by (engine/legfit), journaled so the
+            # correction is learned on our number, never on itself.
+            "p_raw", "fit_w")
 
 
 def slim(leg: dict) -> dict:
@@ -1064,6 +1080,14 @@ _SIDE_BAR: dict = {}
 #: Why the fit on file could not be read, in this process; None when it was
 #: read or there is none yet. The build log says it beside the bar (`summary`).
 SIDE_BAR_ERROR: str | None = None
+
+
+def _leg_fit_census(sport: str) -> dict:
+    try:
+        from . import legfit
+        return legfit.census(sport)
+    except Exception as exc:                                 # noqa: BLE001
+        return {"error": f"{type(exc).__name__}: {exc}"}
 
 
 def side_bar() -> tuple:
@@ -1346,7 +1370,9 @@ def build(board: dict, sport: str, now=None) -> dict:
                        "one_club_scorers": sum(one_club(t) for x in out_games for t in x["scorers"]),
                        # The one-club bar in force (`side_bar`): the record's, or the defaults.
                        "side_bar": dict(zip(("edge", "research", "fitted"), side_bar()),
-                                         **({"error": SIDE_BAR_ERROR} if SIDE_BAR_ERROR else {}))},
+                                         **({"error": SIDE_BAR_ERROR} if SIDE_BAR_ERROR else {})),
+                       # The legs' learned correction in force (engine/legfit), each kind.
+                       "leg_fit": _leg_fit_census(sp)},
             # WHY A PRICED SCORER WAS NO LEG (`research_scorers`), football only.
             **({"research_census": dict(sorted(census.items(), key=lambda kv: -kv[1])),
                 "scorers_priced": len(priced), "scorers_researched": len(scorers)}
