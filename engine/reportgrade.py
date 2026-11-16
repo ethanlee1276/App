@@ -41,8 +41,10 @@ from __future__ import annotations
 LAST_N, MIN_N = 10, 2
 #: A team's last games, for its own average.
 TEAM_LAST_N = 10
-#: Bumped when the grading changes, so a stored grade is redone (engine/reportkeep).
-GRADE_VERSION = 1
+#: Bumped when the grading or its words change, so a final graded and archived
+#: before is graded again once (gamereport._graded_from_archive). 2: the call
+#: said "right — Celtics, our call, won", 2026-11-16.
+GRADE_VERSION = 2
 
 #: The stat a read is graded on when it names none: by league, then position
 #: ("" is anyone else).

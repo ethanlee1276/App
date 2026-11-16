@@ -339,6 +339,19 @@ def test_a_graded_final_is_kept_for_good_and_read_back():
     assert calls == [] and "; 1 finished report graded" in line3, (calls, line3)
     assert third["game_reports"][0]["sections"][0]["key"] == "graded"
     assert [b["player"] for b in third.get("report_bets") or []] == ["Jayson Tatum"], "its bets still reach the board"
+    # A new grading version grades an archived final again, once.
+    RG.GRADE_VERSION += 1
+    calls.clear()
+    RG._grade = lambda *a, **k: calls.append(1) or real(*a, **k)
+    D.connect = lambda *a, **k: orig(path)
+    try:
+        fourth, meta5 = _board(rows=False, state="final")
+        L.attach(fourth, "nba", meta=meta5, out=out, at="2026-10-23T01:45:00")
+    finally:
+        RG._grade = real
+        RG.GRADE_VERSION -= 1
+        D.connect = orig
+    assert calls == [1], calls
     where = gate._full_dir_for(out)
     f = A.path_for(where, "nba", "2026-10-22", "MIA", "BOS")
     assert f.exists() and str(f).startswith(os.path.join(d, "data", "built")), f
