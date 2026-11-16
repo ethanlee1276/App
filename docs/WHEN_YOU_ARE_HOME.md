@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TJ. Report Picks has its own record, in three tabs** (step 642; 16 November). Nothing to run. You asked
+for a record on the Report Picks page, showing whether the parlays and the single picks from the game reports
+won, and for the page to be easier to read and go through. It now opens in three tabs:
+- **Today's picks:** a line on what the day carries (games, picks, parlays, pairs), and once games finish,
+  how they went ("Finished so far: picks 5-2 · 3 of 9 tickets hit"). Then a chip for each game, then the
+  games grouped as On now, Still to play and Finished. Each game is a card folded to one line: the teams,
+  when it is (or its final score), what it carries, and once it's final, how its picks and tickets went.
+  The next game to play opens by itself. Inside are its picks, then its parlays and pairs, then a button to
+  its report. A game you saved for later doesn't show its score or results.
+- **Record:** the same "The Game Report Picks and Parlays" as the Record page (step TI), for this league:
+  picks by kind, the newest picks won or lost, and every parlay and pair with each leg marked. It loads the
+  first time you open the tab, and it's free like the Record page.
+- **How our reports did:** the fact check of every finished game's report, as before. A finished game's
+  "How every finished game's report did" link opens this tab.
+
 **TI. The Record page's "The Game Report Picks and Parlays"** (step 641; 16 November). Nothing to run.
 You asked for one section with that name, recording the game reports' bets and picks, touchdown picks and
 player props, for every sport. It replaces both "Report bets" (which sat in a folded part of the page) and

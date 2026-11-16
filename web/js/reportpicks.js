@@ -13,7 +13,8 @@
    report draws them (js/report.js gameTickets, graded once the game is
    over). A pick opens the page it opens everywhere (app.js likelyOpen); the
    game's name opens the game and its report. Every pick and ticket is graded
-   on the Record page's "The Game Report Picks and Parlays" (record.js recReportBook). */
+   on the Record page's "The Game Report Picks and Parlays" (record.js
+   recReportBook), which this page's own Record tab draws too. */
 
 // Where the report shows a pick (engine/reportbets.SOURCE_WORDS).
 const RP_SOURCE = { card: "Our picks", read: "Matchup read", breakout: "Breakout candidate", fade: "Fade" };
@@ -41,26 +42,106 @@ function rpRecordLine(rec, sport) {
   return bits.length ? `On the record so far: ${bits.join(" · ")}.` : "";
 }
 
-//: One game's section: its name and when, its picks, then a slot for its tickets.
-function rpGameHTML(d, key, bets, tix) {
+//: Where a game stands: "live", "final", or "next" (not started yet).
+function rpPhase(g) {
+  const s = ((g || {}).live || {}).state;
+  return s === "live" ? "live" : s === "final" ? "final" : "next";
+}
+//: How a finished game's picks and tickets went (app.js reportResults): {w, l, hit, tickets}, or null before its final.
+function rpTally(g, bets, tix) {
+  const R = g ? reportResults(g) : null;
+  if (!R) return null;
+  const st = (bets || []).map((b) => (R.grade(b) || {}).status);
+  const tk = [...((tix || {}).threes || []), ...((tix || {}).scorers || [])]
+    .map((t) => (R.ticket((t || {}).legs || []) || {}).status);
+  return { w: st.filter((s) => s === "won").length, l: st.filter((s) => s === "lost").length,
+           hit: tk.filter((s) => s === "won").length, tickets: tk.filter((s) => s === "won" || s === "lost").length };
+}
+function rpTallyWords(t) {
+  if (!t) return "";
+  return [t.w + t.l ? `picks ${t.w}-${t.l}` : "",
+          t.tickets ? `${t.hit} of ${plural(t.tickets, "ticket")} hit` : ""].filter(Boolean).join(" · ");
+}
+
+/* ONE GAME, FOLDED TO ONE LINE (2026-11-16). Ethan: "organize the page better
+   to make it easier to read and go through." The line says the game, when it
+   is (or that it is on, or its final), what it carries, and once it is final
+   how its picks and tickets went; the fold holds its picks, then its parlays
+   and pairs, then the door to its report. A game saved for later (app.js
+   spoiledG) says neither its score nor how it went. */
+function rpGameHTML(d, key, bets, tix, open) {
   const g = rpGame(d, key);
   const [away, home] = key.split("@");
-  const when = g ? whenLabel(g.date, g.kickoff) : "";
+  const hidden = !!(g && typeof spoiledG === "function" && spoiledG(state.sport, g));
+  const phase = rpPhase(g);
+  const fin = phase === "final" && !hidden ? resFinal(g) : null;
+  const when = !g ? "" : phase === "live" ? "On now"
+    : phase === "final" ? (fin && fin.away != null
+      ? `Final: ${teamName(away)} ${fin.away}, ${teamName(home)} ${fin.home}` : "Final")
+    : whenLabel(g.date, g.kickoff);
   const pair = ["nfl", "cfb"].includes(state.sport) ? "touchdown" : state.sport === "nhl" ? "goal-scorer" : "scorer";
   const counts = [bets.length ? plural(bets.length, "pick") : "",
                   tix && (tix.threes || []).length ? plural(tix.threes.length, "parlay") : "",
                   tix && (tix.scorers || []).length ? plural(tix.scorers.length, `${pair} pair`) : ""].filter(Boolean);
+  const tally = fin ? rpTallyWords(rpTally(g, bets, tix)) : "";
   const rows = bets.map((r) => deckPickRow(r, { door: likelyOpen(r),
     note: (r.sources || []).map((s) => RP_SOURCE[s] || s).join(" · ") })).join("");
-  return `<section class="rpk-game" id="rpk-${escapeAttr(away)}-${escapeAttr(home)}">
-    <div class="rpk-head">
-      <div class="rpk-title"><b>${escapeHtml(teamName(away))} at ${escapeHtml(teamName(home))}</b>
-        <span>${escapeHtml([when, counts.join(" · ")].filter(Boolean).join(" · "))}</span></div>
+  return `<details class="rpk-game" id="rpk-${escapeAttr(away)}-${escapeAttr(home)}"${open ? " open" : ""}>
+    <summary class="rpk-head">
+      <span class="rpk-title"><b>${escapeHtml(teamName(away))} at ${escapeHtml(teamName(home))}</b>
+        <span>${escapeHtml([when, counts.join(" · ")].filter(Boolean).join(" · "))}</span>${
+        tally ? `<span class="rpk-tally">${escapeHtml(tally)}</span>` : ""}</span>
+      <span class="row-fold-chev" aria-hidden="true"></span>
+    </summary>
+    <div class="rpk-body">
+      <h4 class="rpk-sub">Picks</h4>
+      ${rows ? `<div class="hd-card tn-rows">${rows}</div>` : `<p class="set-note">No single pick on this game clears our bars.</p>`}
+      ${tix ? `<h4 class="rpk-sub">Parlays and pairs</h4><div class="rpk-tix" data-rpk-tix="${escapeAttr(key)}"></div>` : ""}
       ${g ? `<button type="button" class="btn ghost rpk-open" data-gid="${escapeAttr(gameId(g))}">Open the report</button>` : ""}
     </div>
-    ${rows ? `<div class="hd-card tn-rows">${rows}</div>` : `<p class="set-note">No single pick on this game clears our bars.</p>`}
-    ${tix ? `<div class="rpk-tix" data-rpk-tix="${escapeAttr(key)}"></div>` : ""}
-  </section>`;
+  </details>`;
+}
+
+/* TODAY'S PICKS, the first tab: what the day carries and how its finished
+   games went, a chip a game, then the games by where they stand (on now,
+   still to play, finished), each folded to its line, the next one open. */
+const RP_PHASES = [["live", "On now"], ["next", "Still to play"], ["final", "Finished"]];
+function rpTodayHTML(d, byGame, keys) {
+  const pair = ["nfl", "cfb"].includes(state.sport) ? "touchdown" : state.sport === "nhl" ? "goal-scorer" : "scorer";
+  let picks = 0, threes = 0, pairs = 0;
+  const done = { w: 0, l: 0, hit: 0, tickets: 0 };
+  keys.forEach((k) => {
+    const x = byGame.get(k);
+    picks += x.bets.length;
+    threes += ((x.tix || {}).threes || []).length;
+    pairs += ((x.tix || {}).scorers || []).length;
+    const g = rpGame(d, k);
+    if (rpPhase(g) !== "final" || (typeof spoiledG === "function" && spoiledG(state.sport, g))) return;
+    const t = rpTally(g, x.bets, x.tix);
+    if (t) Object.keys(done).forEach((f) => { done[f] += t[f]; });
+  });
+  const carries = [plural(keys.length, "game"), picks ? plural(picks, "pick") : "", threes ? plural(threes, "parlay") : "",
+                   pairs ? plural(pairs, `${pair} pair`) : ""].filter(Boolean).join(" · ");
+  const sofar = rpTallyWords(done);
+  const jump = keys.length > 1 ? `<div class="std-chips likely-jump rpk-jump">${keys.map((k) => {
+    const [away, home] = k.split("@");
+    return `<button class="al-cat" type="button" data-rpk-jump="rpk-${escapeAttr(away)}-${escapeAttr(home)}">${
+      escapeHtml(away)} @ ${escapeHtml(home)}</button>`;
+  }).join("")}</div>` : "";
+  let opened = false;
+  const groups = RP_PHASES.map(([ph, title]) => {
+    const ks = keys.filter((k) => rpPhase(rpGame(d, k)) === ph);
+    if (!ks.length) return "";
+    return `<h3 class="rpk-group">${escapeHtml(title)} <span>${ks.length}</span></h3>${ks.map((k) => {
+      const open = !opened && ph !== "final";
+      if (open) opened = true;
+      return rpGameHTML(d, k, byGame.get(k).bets, byGame.get(k).tix, open);
+    }).join("")}`;
+  }).join("");
+  return `<div class="rpk-summary"><b>${escapeHtml(carries)}</b>${
+      sofar ? `<span>Finished so far: ${escapeHtml(sofar)}</span>` : ""}
+      <button type="button" class="rpk-rec" data-rpk-rec="1" data-rpk-tab="record"></button></div>
+    ${jump}${groups}`;
 }
 
 /* HOW OUR REPORTS DID (engine/reportrecord, 2026-11-16). Ethan: "think about
@@ -227,19 +308,35 @@ function rpFactsHTML(league) {
   </section>`;
 }
 
+/* THE PAGE IN THREE TABS (2026-11-16). Ethan: "On the report picks page, we
+   should have a record page on there too to see if the parlays won and if the
+   individual picks won from the game reports. Also organize the page better to
+   make it easier to read and go through." Today's picks (rpTodayHTML); the
+   Record, the same "The Game Report Picks and Parlays" the Record page draws,
+   for this league (record.js recReportBookInto), read the first time its tab
+   opens; and How our reports did (rpFactsHTML), the same. The record and the
+   checks are free, as the Record page is; today's picks are a member's. */
+//: A tab's content drawn the first time the tab shows, by a tap or the arrow keys.
+function rpOnShow(host, id, fill) {
+  const panel = host.querySelector(`.subgroup[data-subgroup="${id}"]`);
+  if (!panel) return;
+  const go = () => {
+    if (panel.hidden || panel.dataset.rpkDrawn) return;
+    panel.dataset.rpkDrawn = "1";
+    fill(panel);
+  };
+  host.querySelectorAll(".subnav-btn").forEach((b) => ["click", "keydown"].forEach((ev) =>
+    b.addEventListener(ev, () => setTimeout(go, 0))));
+  go();
+}
 async function renderReportPicks() {
   const host = document.getElementById("reportpicks-body");
   if (!host) return;
   const d = state.data;
   if (!d) return;
-  if (d.locked && (d.locked.report_bets || d.locked.game_parlays)) {
-    host.innerHTML = memberLockHTML("Report Picks",
-      "Every bet and parlay our game reports posted, game by game, with the price and our chance, each graded on the Record page.")
-      + rpFactsHTML();
-    rpFactsFill(host);
-    rpFactsScroll(host);
-    return;
-  }
+  // Opened from a finished game's Final card (js/detail.js): straight to how the reports did.
+  if (window._rpWantFacts) _subtab.reportpicks = "facts";
+  const locked = !!(d.locked && (d.locked.report_bets || d.locked.game_parlays));
   const byGame = new Map();
   const add = (key) => byGame.get(key) || byGame.set(key, { bets: [], tix: null }).get(key);
   (d.report_bets || []).forEach((r) => { if (r && r.game) add(r.game).bets.push(r); });
@@ -249,38 +346,40 @@ async function renderReportPicks() {
   // The board's order (kickoff), then any game it no longer lists.
   const order = ((d.games || []).map((g) => `${g.away}@${g.home}`)).filter((k) => byGame.has(k));
   const keys = [...order, ...[...byGame.keys()].filter((k) => !order.includes(k))];
-  if (!keys.length) {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("book", 30)}</div>
+  const today = locked
+    ? memberLockHTML("Report Picks", "Every bet and parlay our game reports posted, game by game, with the price and "
+      + "our chance. How they have done is free, in the Record tab.")
+    : !keys.length ? `<div class="empty-slate"><div class="es-icon">${icon("book", 30)}</div>
       <div class="es-title">No game reports on this board yet</div>
       <div class="es-sub">The reports are written with the board, one for every game on it, and their picks and
-        parlays land here as they are.</div></div>${rpFactsHTML()}`;
-    rpFactsFill(host);
-    rpFactsScroll(host);
-    return;
-  }
-  const jump = keys.length > 1 ? `<div class="std-chips likely-jump rpk-jump">${keys.map((k) => {
-    const [away, home] = k.split("@");
-    return `<button class="al-cat" type="button" data-rpk-jump="rpk-${escapeAttr(away)}-${escapeAttr(home)}">${
-      escapeHtml(away)} @ ${escapeHtml(home)}</button>`;
-  }).join("")}</div>` : "";
-  host.innerHTML = `<p class="set-note rpk-lead">Every pick our game reports posted (each report’s picks card, its
-      matchup reads’ picks, its breakout candidates and fades), then the game’s parlays and pairs. Each one is graded on
-      the <a href="#record">Record page</a> under Report bets, and how each finished game’s report did is
-      <a href="#reportpicks" data-rpk-jump="rpk-facts">below</a>.</p>
-    <p class="mini rpk-rec" data-rpk-rec="1"></p>
-    ${jump}
-    ${keys.map((k) => rpGameHTML(d, k, byGame.get(k).bets, byGame.get(k).tix)).join("")}
-    ${rpFactsHTML()}`;
+        parlays land here as they are.</div></div>`
+    : rpTodayHTML(d, byGame, keys);
+  host.innerHTML = `<p class="set-note rpk-lead">Every pick and parlay our game reports post, game by game, and how
+      they have done.</p>${subtabbedHTML("reportpicks", [
+      ["today", "Today’s picks", "Every game’s picks, then its parlays and pairs", today],
+      ["record", "Record", "Every report pick and parlay, won or lost", `<div class="rpk-book" data-rpk-book="1"></div>`],
+      ["facts", "How our reports did", "Every finished game’s report, fact-checked", rpFactsHTML()]])}`;
+  bindSubtabs(host);
   revealChildren(host);
-  rpFactsFill(host);
+  rpOnShow(host, "record", (p) => recReportBookInto(p.querySelector("[data-rpk-book]"), state.sport));
+  rpOnShow(host, "facts", () => rpFactsFill(host));
   rpFactsScroll(host);
   host.querySelectorAll("[data-rpk-jump]").forEach((b) => b.addEventListener("click", (e) => {
     const el = document.getElementById(b.dataset.rpkJump);
-    if (el) { e.preventDefault(); el.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    if (!el) return;
+    e.preventDefault();
+    if (el.tagName === "DETAILS") el.open = true;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
   }));
+  host.querySelectorAll("[data-rpk-tab]").forEach((b) => b.addEventListener("click", () => {
+    const tab = host.querySelector(`.subnav-btn[data-subtab="${b.dataset.rpkTab}"]`);
+    if (tab) tab.click();
+  }));
+  if (locked || !keys.length) return;
   loadRecordOnce().then((rec) => {
     const el = host.querySelector("[data-rpk-rec]");
-    if (el) el.textContent = rpRecordLine(rec, state.sport);
+    const line = rpRecordLine(rec, state.sport);
+    if (el && line) el.textContent = `${line} See the record ›`;
   });
   loadReport().then((R) => {
     if (!R || !R.gameTickets) return;

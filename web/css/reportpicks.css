@@ -2,18 +2,37 @@
    game reports posted, one game after another, each game's picks in the
    Tonight tab's rows and its tickets as the report draws them. */
 .rpk-lead { margin: 0 0 6px; max-width: var(--measure-wide); }
-.rpk-rec { margin: 0 0 10px; color: var(--text-mute); }
-.rpk-rec:empty { display: none; }
-.rpk-jump { margin-bottom: 14px; }
-.rpk-game { margin: 0 0 22px; scroll-margin-top: 72px; }
-.rpk-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
-  margin: 0 0 8px; }
+/* In three tabs (2026-11-16): today's picks, the record, how our reports did.
+   Today opens on what the day carries and how its finished games went, a chip
+   a game, then the games by where they stand, each a card folded to its line. */
+.rpk-summary { display: grid; gap: 3px; margin: 2px 0 12px; }
+.rpk-summary b { font-size: var(--fs-md); color: var(--text); }
+.rpk-summary span { color: var(--text-mute); font-size: var(--fs-sm); }
+button.rpk-rec { justify-self: start; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
+  font: inherit; font-size: var(--fs-sm); color: var(--brand); }
+button.rpk-rec:empty { display: none; }
+.rpk-jump { margin-bottom: 6px; }
+.rpk-group { margin: 18px 0 8px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-mute); }
+.rpk-group span { margin-left: 4px; color: var(--text-dim); }
+.rpk-game { margin: 0 0 10px; border-radius: var(--radius); background: var(--panel); scroll-margin-top: 72px; }
+.rpk-game > summary { list-style: none; cursor: pointer; display: flex; align-items: center;
+  justify-content: space-between; gap: 10px; padding: 12px 14px; }
+.rpk-game > summary::-webkit-details-marker { display: none; }
+.rpk-game > summary .row-fold-chev { flex: 0 0 auto; color: var(--text-mute); }
+.rpk-game[open] > summary .row-fold-chev { transform: rotate(135deg) translateY(2px); }
 .rpk-title { min-width: 0; }
 .rpk-title b { display: block; font-size: var(--fs-lg); color: var(--text); }
 .rpk-title span { display: block; margin-top: 2px; color: var(--text-mute); font-size: var(--fs-sm); }
-.rpk-open { font-size: var(--fs-sm); }
-.rpk-tix { margin-top: 10px; }
+.rpk-title .rpk-tally { margin-top: 3px; color: var(--text); font-weight: 600; }
+.rpk-body { padding: 0 14px 14px; }
+.rpk-sub { margin: 10px 0 6px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-mute); }
+.rpk-open { margin-top: 12px; font-size: var(--fs-sm); }
 .rpk-tix:empty { display: none; }
+/* The Record tab: the Record page's own section (record.js recReportBook), its styles with it. */
+.rpk-book { min-height: 40px; }
+.subgroup > .rpk-facts { margin-top: 4px; }
 /* How our reports did (js/reportpicks.js rpFactsHTML, engine/reportrecord):
    the totals as tiles, each kind of read's share, then every finished game
    with its checks as tinted chips (green right, red wrong, plain the rest)

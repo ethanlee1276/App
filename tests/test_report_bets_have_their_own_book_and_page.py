@@ -220,41 +220,102 @@ def test_report_picks_has_a_door_everywhere_a_page_does():
 
 
 def test_the_page_lays_each_game_out_with_its_picks_then_its_tickets():
+    """Ethan, 2026-11-16: "organize the page better to make it easier to read and
+    go through." Each game is a card folded to one line (when, what it carries,
+    and once final how its picks and tickets went); today's tab groups the games
+    by where they stand, the next one open."""
     rows = [dict(r, game="IND@BOS", home="BOS", away="IND")
             for r in RB.bets_of(_sections(), RB.pool([ROW, GAME_ROW], [READ]))]
-    d = {"games": [{"away": "NYK", "home": "PHI", "date": "2026-11-16"}, {"away": "IND", "home": "BOS",
-                                                                          "date": "2026-11-16", "kickoff": "19:30"}],
-         "report_bets": rows,
+    knicks = [{"player": "Jalen Brunson", "market": "points", "side": "Over", "line": 24.5, "game": "NYK@PHI"},
+              {"player": "Josh Hart", "market": "rebounds", "side": "Over", "line": 8.5, "game": "NYK@PHI"}]
+    d = {"games": [{"away": "NYK", "home": "PHI", "date": "2026-11-16",
+                    "live": {"state": "final", "away_score": 100, "home_score": 108}},
+                   {"away": "IND", "home": "BOS", "date": "2026-11-16", "kickoff": "19:30"},
+                   {"away": "LAL", "home": "GSW", "date": "2026-11-16", "live": {"state": "live"}}],
+         "report_bets": rows + knicks,
          "game_parlays": {"games": [{"away": "IND", "home": "BOS", "threes": [{}, {}], "scorers": [{}]},
-                                    {"away": "NYK", "home": "PHI", "threes": [{}], "scorers": []}]}}
+                                    {"away": "NYK", "home": "PHI", "threes": [{"legs": [{}, {}]}, {"legs": [{}]}],
+                                     "scorers": []},
+                                    {"away": "LAL", "home": "GSW", "threes": [{"legs": [{}]}], "scorers": []}]}}
     rec = {"report_by_sport": {"nba": {"settled": 5, "wins": 3, "losses": 2, "net_units": -0.1}},
            "two_leg": {"game": {"three": {"by_sport": {"nba": {"graded": 6, "wins": 1}}}, "scorers": {}}}}
     got = _node(STUBS + """
       const state = { sport: 'nba' };
-      const teamName = (t) => ({ BOS: 'Celtics', IND: 'Pacers', NYK: 'Knicks', PHI: '76ers' })[t] || t;
+      const teamName = (t) => ({ BOS: 'Celtics', IND: 'Pacers', NYK: 'Knicks', PHI: '76ers', LAL: 'Lakers', GSW: 'Warriors' })[t] || t;
       const whenLabel = (dt, k) => k ? 'Tonight 7:30 PM' : '';
       const gameId = (g) => `${g.date}_${g.away}@${g.home}`;
       const likelyOpen = (r) => ` data-open="likely:${r.player}"`;
       const deckPickRow = (r, o) => `<row ${o.door}>${r.player}|${o.note}</row>`;
+      const resFinal = (g) => (g.live || {}).state === 'final' ? { away: g.live.away_score, home: g.live.home_score } : null;
+      const reportResults = (g) => resFinal(g) ? { grade: (b) => ({ status: b.player === 'Jalen Brunson' ? 'won' : 'lost' }),
+                                                   ticket: (legs) => ({ status: legs.length > 1 ? 'won' : 'lost' }) } : null;
+      let SPOILED = false; const spoiledG = () => SPOILED;
       """ + PAGE + f"""
       const d = {json.dumps(d)};
-      const bos = rpGameHTML(d, 'IND@BOS', d.report_bets, d.game_parlays.games[0]);
-      const phi = rpGameHTML(d, 'NYK@PHI', [], d.game_parlays.games[1]);
-      process.stdout.write(JSON.stringify([bos, phi, rpRecordLine({json.dumps(rec)}, 'nba'), rpRecordLine({{}}, 'nba')]));""")
+      const bos = rpGameHTML(d, 'IND@BOS', d.report_bets.filter((r) => r.game === 'IND@BOS'), d.game_parlays.games[0], true);
+      const phi = rpGameHTML(d, 'NYK@PHI', d.report_bets.filter((r) => r.game === 'NYK@PHI'), d.game_parlays.games[1], false);
+      const empty = rpGameHTML(d, 'LAL@GSW', [], d.game_parlays.games[2], false);
+      const byGame = new Map([['NYK@PHI', {{ bets: d.report_bets.filter((r) => r.game === 'NYK@PHI'), tix: d.game_parlays.games[1] }}],
+                              ['IND@BOS', {{ bets: d.report_bets.filter((r) => r.game === 'IND@BOS'), tix: d.game_parlays.games[0] }}],
+                              ['LAL@GSW', {{ bets: [], tix: d.game_parlays.games[2] }}]]);
+      const today = rpTodayHTML(d, byGame, ['NYK@PHI', 'IND@BOS', 'LAL@GSW']);
+      SPOILED = true;
+      const hidden = rpGameHTML(d, 'NYK@PHI', d.report_bets.filter((r) => r.game === 'NYK@PHI'), d.game_parlays.games[1], false);
+      process.stdout.write(JSON.stringify([bos, phi, empty, today, hidden, rpRecordLine({json.dumps(rec)}, 'nba'),
+                                           rpRecordLine({{}}, 'nba')]));""")
     if got is None:
         return
-    bos, phi, line, empty = got
-    assert '<section class="rpk-game" id="rpk-IND-BOS">' in bos and "<b>Pacers at Celtics</b>" in bos
+    bos, phi, empty, today, hidden, line, none = got
+    assert '<details class="rpk-game" id="rpk-IND-BOS" open>' in bos and "<b>Pacers at Celtics</b>" in bos
     assert "Tonight 7:30 PM · 4 picks · 2 parlays · 1 scorer pair" in bos
     assert 'data-gid="2026-11-16_IND@BOS">Open the report</button>' in bos, "the game opens with its report"
     assert '<row  data-open="likely:Jaylen Brown">Jaylen Brown|Our picks · Matchup read</row>' in bos
     assert "Pascal Siakam|Breakout candidate</row>" in bos and "|Fade</row>" in bos
+    assert bos.index(">Picks</h4>") < bos.index(">Parlays and pairs</h4>") < bos.index('data-rpk-tix="IND@BOS"')
     assert '<div class="rpk-tix" data-rpk-tix="IND@BOS"></div>' in bos, "its tickets, filled by the report's own renderer"
-    assert "No single pick on this game clears our bars." in phi and 'data-rpk-tix="NYK@PHI"' in phi
+    assert "Final: Knicks 100, 76ers 108 · 2 picks · 2 parlays" in phi and ' open>' not in phi
+    assert '<span class="rpk-tally">picks 1-1 · 1 of 2 tickets hit</span>' in phi, "a finished game says how it went"
+    assert "No single pick on this game clears our bars." in empty and "On now" in empty
+    assert "Final" in hidden and "100" not in hidden and "rpk-tally" not in hidden, "a game saved for later says nothing"
+    assert "<b>3 games · 6 picks · 5 parlays · 1 scorer pair</b>" in today
+    assert "Finished so far: picks 1-1 · 1 of 2 tickets hit" in today
+    assert today.index(">On now <span>1</span>") < today.index(">Still to play <span>1</span>") \
+        < today.index(">Finished <span>1</span>"), "by where each game stands"
+    assert '<details class="rpk-game" id="rpk-LAL-GSW" open>' in today, "the first game still to go is open"
+    assert '<details class="rpk-game" id="rpk-IND-BOS">' in today and '<details class="rpk-game" id="rpk-NYK-PHI">' in today
+    assert 'data-rpk-jump="rpk-IND-BOS"' in today and 'data-rpk-tab="record"' in today
     assert line == "On the record so far: picks 3-2 (−0.10u) · three-leg parlays 1 of 6 hit."
-    assert empty == ""
+    assert none == ""
     assert "R.gameTickets(x.tix, state.sport, { results: () => reportResults(rpGame(d, el.dataset.rpkTix)) })" in PAGE
-    assert 'host.innerHTML = memberLockHTML("Report Picks",' in PAGE, "the reports' picks are a member's"
+    assert 'memberLockHTML("Report Picks", "Every bet and parlay our game reports posted' in PAGE, \
+        "today's picks are a member's"
+
+
+def test_the_page_has_its_own_record_tab():
+    """Ethan, 2026-11-16: "On the report picks page, we should have a record page
+    on there too to see if the parlays won and if the individual picks won from
+    the game reports." Three tabs; the Record tab draws the Record page's own
+    section for the league (record.js recReportBookInto, through its room), the
+    first time it opens, from the whole record."""
+    i = PAGE.index('subtabbedHTML("reportpicks", [')
+    tabs = PAGE[i:PAGE.index("]])}`;", i)]
+    assert tabs.index('["today", "Today’s picks",') < tabs.index('["record", "Record",') \
+        < tabs.index('["facts", "How our reports did",')
+    assert 'rpOnShow(host, "record", (p) => recReportBookInto(p.querySelector("[data-rpk-book]"), state.sport));' in PAGE
+    assert 'rpOnShow(host, "facts", () => rpFactsFill(host));' in PAGE, "the checks too, when their tab opens"
+    assert 'if (window._rpWantFacts) _subtab.reportpicks = "facts";' in PAGE, "a finished game's link opens the checks"
+    assert "bindSubtabs(host);" in PAGE
+    assert ('function recReportBookInto(...a) { return roomCall(recReportBookInto, "recReportBookInto", '
+            '"js/record.js", "css/record.css", a); }') in APP
+    i = RECORD.index("async function recReportBookInto(slot, league) {")
+    body = RECORD[i:RECORD.index("\n}\n", i)]
+    assert 'boardFetch("data/record.json", { cache: "no-cache" })' in body, "the whole record, not the slim copy"
+    assert "recReportBook({ rep: (d.report_by_sport || {})[league], bySport: d.report_by_sport," in body
+    assert "parlays: d.game_parlay_record }, league)" in body
+    css = (ROOT / "web" / "css" / "reportpicks.css").read_text(encoding="utf-8")
+    for sel in (".rpk-game > summary {", ".rpk-game[open] > summary .row-fold-chev", ".rpk-title .rpk-tally",
+                ".rpk-group {", ".rpk-summary {", "button.rpk-rec {", ".rpk-sub {"):
+        assert sel in css, sel
 
 
 def test_one_game_s_tickets_draw_the_way_the_parlays_page_draws_them():

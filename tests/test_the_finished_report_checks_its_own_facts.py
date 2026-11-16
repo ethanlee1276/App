@@ -457,7 +457,8 @@ def test_the_record_is_served_free_and_every_page_draws_the_checks():
                  "async function rpArchiveOpen(body, btn)", "fetch(`/api/report_record?league=${encodeURIComponent(sport)}`",
                  "fetch(`/api/report_archive?${q}`", 'How our reports did <span class="sub">— every finished game, fact-checked</span>'):
         assert want in rp, want
-    assert rp.count("+ rpFactsHTML();") == 1 and rp.count("${rpFactsHTML()}") == 2, "drawn locked, empty and full"
+    assert rp.count("rpFactsHTML()") == 1 and '["facts", "How our reports did",' in rp, \
+        "one tab draws it, whatever the board holds"
     css = (ROOT / "web" / "css" / "reportpicks.css").read_text(encoding="utf-8")
     for cls in (".rpk-fact-tile", ".rpk-fact-chip.won", ".rpk-fact-chip.lost", ".rpk-fact-row"):
         assert cls in css, cls

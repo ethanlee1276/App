@@ -3447,6 +3447,30 @@ function recFactsMount(host) {
   });
 }
 
+/* THE SAME RECORD ON THE REPORT PICKS PAGE (js/reportpicks.js, its Record tab,
+   2026-11-16). Ethan: "On the report picks page, we should have a record page
+   on there too to see if the parlays won and if the individual picks won from
+   the game reports." "The Game Report Picks and Parlays" for that page's
+   league, drawn into its tab. The parlays' record is the Record page's own
+   (ledger.RECORD_PAGE_ONLY), so this reads the whole data/record.json itself,
+   as renderRecord does, never the slim copy the other pages share. */
+async function recReportBookInto(slot, league) {
+  if (!slot || !league) return;
+  slot.innerHTML = `<p class="loading">Loading the record…</p>`;
+  let d = null;
+  try {
+    const res = await boardFetch("data/record.json", { cache: "no-cache" });
+    d = res.ok ? await res.json() : null;
+  } catch (e) { d = null; }
+  if (!slot.isConnected) return;
+  if (d && d.market_words) _marketWords = d.market_words;
+  const html = d ? recReportBook({ rep: (d.report_by_sport || {})[league], bySport: d.report_by_sport,
+                                   recent: d.report_recent, parlays: d.game_parlay_record }, league) : "";
+  slot.innerHTML = html || `<p class="set-note">${d ? "Nothing from this league’s game reports has been graded yet. "
+    + "Every pick and parlay is counted here once its game is final." : "The record could not load. Open the tab again."}</p>`;
+  revealChildren(slot);
+}
+
 /* OUR NUMBER AGAINST THE LINE (ledger.number_vs_line, 2026-11-16; Ethan: "see
    if the data we were giving them were correct or not"). Every finished player
    pick, each once: was our projection nearer what he did than the book's line?

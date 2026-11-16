@@ -23456,6 +23456,8 @@ function renderPotdPage(...a) { return roomCall(renderPotdPage, "renderPotdPage"
 function renderReportPicks(...a) { return roomCall(renderReportPicks, "renderReportPicks", "js/reportpicks.js", "css/reportpicks.css", a); }
 // …and how our reports did, the same section, on the Record page (js/reportpicks.js rpFactsInto).
 function rpFactsInto(...a) { return roomCall(rpFactsInto, "rpFactsInto", "js/reportpicks.js", "css/reportpicks.css", a); }
+// The reports' picks and parlays record, drawn on the Report Picks page's Record tab (record.js).
+function recReportBookInto(...a) { return roomCall(recReportBookInto, "recReportBookInto", "js/record.js", "css/record.css", a); }
 // The owner's desk (js/owner.js, engine/ownerdesk), Who's on now its first
 // card (engine/whoson): the owners' listed accounts alone (engine/siteowners).
 function renderOwner(...a) { return roomCall(renderOwner, "renderOwner", "js/owner.js", "css/owner.css", a); }

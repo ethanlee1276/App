@@ -801,7 +801,9 @@ def test_the_sections_left_out_are_read_only_on_the_record_page():
     whole record.json themselves."""
     sys.path.insert(0, str(ROOT))
     from engine.ledger import RECORD_PAGE_ONLY
-    record_page = {"renderRecord", "_recordRooms", "recBookSections"}
+    # recReportBookInto draws the Record page's report section on the Report
+    # Picks page, and fetches the whole record.json itself, as renderRecord does.
+    record_page = {"renderRecord", "_recordRooms", "recBookSections", "recReportBookInto"}
     for js in sorted((ROOT / "web" / "js").glob("*.js")):
         src = js.read_text(encoding="utf-8")
         code = re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), src, flags=re.S)
