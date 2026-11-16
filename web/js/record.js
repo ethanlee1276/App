@@ -1015,6 +1015,132 @@ const TL_SPORT_ORDER = ["all", "nfl", "cfb", "nba", "cbb", "mlb"];
 const tlAmerican = (dec) => (dec > 2 ? Math.round((dec - 1) * 100) : -Math.round(100 / (dec - 1)));
 const tlUnits = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x || 0).toFixed(2)}u`);
 
+/* PARLAYS FOR THIS GAME, LEAGUE BY LEAGUE (parlayledger.game_parlay_record,
+   2026-11-16). Ethan: "you did not put the 'parlays for this game' on the record
+   page. We wanna see if the legs and the parlays we recommend are hitting so each
+   sport needs to have a record of that on the record page." Each game report's
+   three-leg parlays and its touchdown, goal-scorer or scorer pairs, each kind
+   apart: the tickets that hit and the units at one unit a ticket against the
+   chance we gave them, the legs that hit against theirs, by market, the tickets
+   that lost by one leg, and the newest tickets with every leg marked. On "All",
+   one table of every league. */
+const GP_KIND = { three: "Three-leg parlays" };
+function gpKindWord(kind, sport) {
+  if (kind === "three") return GP_KIND.three;
+  return ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
+}
+function gpDay(d) {
+  const w = /^\d{4}-W(\d+)$/.exec(String(d || ""));
+  return w ? `Week ${Number(w[1])}` : (typeof formatGameDate === "function" && formatGameDate(d)) || String(d || "");
+}
+function gpShare(a, n) {
+  return n ? `${a} of ${n}<span class="rec-gp-pct">${Math.round((100 * a) / n)}%</span>` : "—";
+}
+/* A scorer leg as the report's card says it (engine/gameparlays.pick_words):
+   "to score a touchdown", not "over 0.5", and what he did in the same words. */
+const GP_SCORE = { anytime_td: "to score a touchdown", anytime_goal: "to score a goal", goals: "to score a goal" };
+function gpLegsHTML(legs) {
+  return (legs || []).map((l) => {
+    const st = l.status === "won" ? "won" : l.status === "lost" ? "lost" : "push";
+    const m = String(l.market || "");
+    const scorer = !!GP_SCORE[m];
+    const n = Number(l.actual);
+    const num = l.actual != null && Number.isFinite(n) ? (Number.isInteger(n) ? String(n) : n.toFixed(1)) : "";
+    const did = !num ? "" : scorer ? (n > 0 ? `scored ${num}` : "didn’t score") : `had ${num}`;
+    const words = scorer ? `${l.player || ""} ${GP_SCORE[m]}`
+      : `${l.player || ""} ${String(l.side || "").toLowerCase()} ${l.line ?? ""}`.trim();
+    const tail = scorer ? (did ? `· ${did}` : "") : [marketWord(m), did].filter(Boolean).join(" · ");
+    return `<span class="pl-leg ${st}"><span class="pl-mark">${
+      st === "won" ? icon("check") : st === "lost" ? icon("cross") : icon("dash")}</span>${escapeHtml(words)}${
+      tail ? ` <span class="rr-mute">${escapeHtml(tail)}</span>` : ""}</span>`;
+  }).join("");
+}
+/* A ticket's legs that hit, of its legs graded: green when it hit, amber when
+   it lost by one leg, red when it lost by more. */
+function gpTicketLegs(t) {
+  const legs = (t.legs || []).filter((l) => l.status === "won" || l.status === "lost");
+  if (!legs.length) return { text: "", tone: "none" };
+  const won = legs.filter((l) => l.status === "won").length;
+  const lost = legs.length - won;
+  return { text: `${won} of ${legs.length} legs`, tone: !lost ? "good" : lost === 1 ? "warn" : "bad" };
+}
+function gpBlockHTML(b, kind, sport) {
+  const legs = b.legs || {};
+  const lostN = b.losses || 0;
+  const chance = b.chance != null ? ` · we gave them ${Math.round(b.chance * 100)}% on average` : "";
+  const tiles = recTile("Tickets that hit", b.graded ? `${b.wins} of ${b.graded}` : "none yet",
+      b.graded ? `${tlUnits(b.net_units)} at one unit a ticket${chance}${b.open ? ` · ${b.open} open` : ""}`
+        : (b.open ? `${b.open} open, graded once their games are final` : ""),
+      { tone: b.graded >= PARLAY_RATE_FLOOR ? toneOf(b.net_units) : "" })
+    + recTile("Legs that hit", legs.graded ? `${legs.won} of ${legs.graded}` : "none yet",
+      legs.graded ? `${Math.round((100 * legs.won) / legs.graded)}%${
+        legs.chance != null ? ` · we gave the legs ${Math.round(legs.chance * 100)}% on average` : ""}` : "");
+  // The near misses, said once under the tiles: a third tile wraps alone on a phone.
+  const close = lostN ? `<p class="rec-gp-close">${b.one_away || 0} of the ${lostN} ${
+    lostN === 1 ? "ticket that lost" : "tickets that lost"} missed by a single leg.</p>` : "";
+  const markets = (b.markets || []).map((m) => `<div class="rec-row flush tight">
+      <span class="rr-what">${escapeHtml(marketWord(m.market))}</span>
+      <span><b>${m.won} of ${m.graded}</b> legs hit · ${Math.round((100 * m.won) / m.graded)}%${
+        m.chance != null ? ` <span class="rr-mute">(we gave ${Math.round(m.chance * 100)}%)</span>` : ""}</span></div>`).join("");
+  const recent = (b.recent || []).map((t) => {
+    const won = t.status === "won";
+    const pnl = t.pnl_units || 0;
+    const game = String(t.game || "").replace("@", " at ");
+    const hit = gpTicketLegs(t);
+    return `<div class="rl-row has-legs ${won ? "won" : "lost"}">
+      <span class="rl-icon">${won ? icon("check") : icon("cross")}</span>
+      <span class="rl-date">${escapeHtml(gpDay(t.date))}</span>
+      <span class="rl-main"><strong>${escapeHtml(game || gpKindWord(kind, sport))}</strong>
+        <span class="rl-bet">${won ? "Hit" : "Missed"}${t.chance != null ? ` · we gave it ${Math.round(t.chance * 100)}%` : ""}</span></span>
+      <span class="rl-proc ${hit.tone}">${escapeHtml(hit.text)}</span>
+      <span class="rl-odds">${t.price_dec > 1 ? american(tlAmerican(t.price_dec)) : "—"}</span>
+      <span class="rl-pnl ${toneOf(pnl)}">${tlUnits(pnl)}</span>
+      <span class="pl-legs">${gpLegsHTML(t.legs)}</span>
+    </div>`;
+  }).join("");
+  return `<div class="card rec-report rec-gp">
+      <div class="rr-head">${escapeHtml(gpKindWord(kind, sport))}${b.since ? ` <span class="rr-mute">· since ${escapeHtml(gpDay(b.since))}</span>` : ""}</div>
+      <div class="stats rec-kpis">${tiles}</div>${close}
+      ${markets ? `<div class="rr-head">Legs by market</div>${markets}` : ""}
+      ${recent ? `<div class="rr-head">Newest tickets</div><div class="rec-gp-recent">${recent}</div>` : ""}
+    </div>`;
+}
+function recGameParlaySection(rec, scope) {
+  if (!rec || typeof rec !== "object" || rec.error) return "";
+  const head = (sub) => `<div class="section-title"><span class="st-ico">${icon("ticket", 15)}</span>Parlays for this game
+      <span class="sub">— ${sub}</span></div>`;
+  const note = `<p class="rec-gp-note">Every ticket a game report posted, tracked at one unit and graded at the least price its
+      card said to take, once all its legs are final. A leg is graded off the same result as the single pick; a void or
+      a push is neither a hit nor a miss. None of it is staked or added into the books above.</p>`;
+  if (scope && scope !== "all") {
+    const mine = rec[scope] || {};
+    const kinds = ["three", "scorers"].filter((k) => mine[k] && (mine[k].graded || mine[k].open));
+    if (!kinds.length) return "";
+    return head(`every three-leg parlay and ${gpKindWord("scorers", scope).toLowerCase().replace(/s$/, "")} our game reports
+        posted, graded ticket by ticket and leg by leg`) + kinds.map((k) => gpBlockHTML(mine[k], k, scope)).join("") + note;
+  }
+  const rows = [];
+  // The site's own league order (SPORT_META), any league it does not list last.
+  const order = Object.keys(typeof SPORT_META === "object" ? SPORT_META : {});
+  const rank = (sp) => (order.includes(sp) ? order.indexOf(sp) : order.length);
+  Object.keys(rec).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b)).forEach((sp) => ["three", "scorers"].forEach((k) => {
+    const b = (rec[sp] || {})[k];
+    if (!b || !b.graded) return;
+    const legs = b.legs || {};
+    // The league and its kind in one cell, so four columns fit a phone.
+    rows.push(`<tr><td><b>${escapeHtml(typeof lgCode === "function" ? lgCode(sp) : sp.toUpperCase())}</b>
+      <span class="rec-gp-kind">${escapeHtml(gpKindWord(k, sp))}</span></td>
+      <td class="num">${gpShare(b.wins, b.graded)}</td>
+      <td class="num ${toneOf(b.net_units)}">${tlUnits(b.net_units)}</td>
+      <td class="num">${gpShare(legs.won || 0, legs.graded || 0)}</td></tr>`);
+  }));
+  if (!rows.length) return "";
+  return head("every game report’s parlays and pairs, league by league; pick a league above for its legs and tickets")
+    + `<div class="ev-scroll"><table class="agate rec-gp-table"><thead><tr><th>League</th>
+      <th class="num">Tickets hit</th><th class="num">Units</th><th class="num">Legs hit</th></tr></thead>
+      <tbody>${rows.join("")}</tbody></table></div>` + note;
+}
+
 function recTwoLegSection(tl) {
   if (!tl || typeof tl !== "object") return "";
   const pools = [["edge", "Edge parlays"], ["likely", "Most Likely parlays"]];
@@ -3595,6 +3721,11 @@ async function renderRecord() {
   const foldClose = underFloor ? "</details>" : "";
   const monthCard = underFloor ? recMonthCard(src, scopeName) : "";
   const receipts = calendar
+    /* THE GAME REPORTS' OWN RECORDS, ABOVE THE FOLDS (2026-11-16): each has its
+       own sample, so neither waits on the main book's floor. Ethan: "we wanna
+       see if the legs and the parlays we recommend are hitting". */
+    + recGameParlaySection(d.game_parlay_record, scope)
+    + (scoped ? recFactsSlot(scope) : "")
     /* ZENO'S RECORD — a person's real tickets, beside the model's picks
        and never inside them. Its own store, its own block, its own card:
        two provenances that shared a number would make both worthless.
@@ -3610,8 +3741,6 @@ async function renderRecord() {
     // Every pick and parlay the game reports posted, on its own (engine/reportbets).
     + recReportSection(scoped ? (d.report_by_sport || {})[scope] : d.report, scoped ? scope : "",
                        d.report_recent || [], (d.two_leg || {}).game)
-    // How our reports did, fact-checked game by game (engine/reportrecord), one league at a time.
-    + (scoped ? recFactsSlot(scope) : "")
     + foldClose
     + verdict + ridingNote + unstaked + small + monthCard
     + foldOpen("By book, the running P&amp;L and the splits")

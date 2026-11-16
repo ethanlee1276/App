@@ -494,3 +494,15 @@
 .rec-report .rr-date { width: 64px; flex-shrink: 0; color: var(--text-mute); }
 .rec-report .rr-rows { margin-top: 8px; }
 .rec-report .rr-note { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--text-mute); }
+/* Parlays for this game, league by league (record.js recGameParlaySection,
+   engine/parlayledger.game_parlay_record): a card a kind, the tickets inside
+   the card's own edge, told apart by their won or lost wash, not by a rule. */
+.rec-gp + .rec-gp { margin-top: 12px; }
+.rec-gp .rec-kpis { margin: 4px 0 2px; }
+.rec-gp-recent { display: grid; gap: 4px; }
+.rec-gp-recent .rl-row { padding-left: 0; padding-right: 0; border-bottom: none; border-radius: var(--radius-sm); }
+.rec-gp-close { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
+.rec-gp-note { margin: 8px 2px 0; font-size: var(--fs-xs); color: var(--text-mute); }
+/* All leagues in one table: the kind under its league, the share under its count. */
+.rec-gp-table td:first-child b { font-weight: 700; }
+.rec-gp-kind, .rec-gp-pct { display: block; font-size: var(--fs-xs); color: var(--text-mute); font-weight: 400; }

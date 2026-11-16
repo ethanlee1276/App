@@ -11471,6 +11471,16 @@ TWO_LEG_BACKTEST_TTL_S = 3600
 TWO_LEG_LAST: dict = {}
 
 
+def _game_parlay_record(conn) -> dict:
+    """Each league's record of its game parlays and their legs
+    (parlayledger.game_parlay_record); never breaks the export."""
+    try:
+        from . import parlayledger
+        return parlayledger.game_parlay_record(conn)
+    except Exception as exc:                                  # noqa: BLE001
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
 def _two_leg_record(conn) -> dict:
     """The two-leg parlays: each pool's record (parlayledger.report_twoleg)
     and the backtest (twoleg.backtest). Never breaks the export."""
@@ -11999,6 +12009,8 @@ RECORD_PAGE_ONLY = (
     "clv_leadtime", "market_words", "likely_calendar",
     # Our number against the line, on the Record page's Calibration room only.
     "number_vs_line", "number_vs_line_by_sport",
+    # Each league's game parlays and their legs, on the Record page only.
+    "game_parlay_record",
 )
 
 
@@ -12189,6 +12201,9 @@ def export_json(conn, path) -> None:
             if rep.get("settled") or rep.get("open")},
         "report_recent": recent_settled(conn, REPORT_RECENT_LIMIT, category=REPORT_CATEGORY,
                                         since=since),
+        # THE GAME REPORTS' PARLAYS, LEAGUE BY LEAGUE: tickets, legs, markets and
+        # the newest tickets with every leg (parlayledger.game_parlay_record).
+        "game_parlay_record": _game_parlay_record(conn),
         # OUR NUMBER AGAINST THE LINE, pooled and per league (`number_vs_line`).
         "number_vs_line": number_vs_line(conn, since=since),
         "number_vs_line_by_sport": {

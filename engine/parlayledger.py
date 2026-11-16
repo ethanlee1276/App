@@ -487,6 +487,95 @@ def report_twoleg(conn, recent: int = 12, sources: dict | None = None) -> dict:
     return out
 
 
+#: The newest tickets a league's record lists, each kind.
+GAME_RECORD_RECENT = 8
+
+
+def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
+    """THE GAME REPORTS' PARLAYS, LEAGUE BY LEAGUE (2026-11-16). Ethan: "you did
+    not put the 'parlays for this game' on the record page. We wanna see if the
+    legs and the parlays we recommend are hitting so each sport needs to have a
+    record of that on the record page."
+
+    ``{league: {kind: block}}`` for each game's three-leg parlays ("three") and
+    scorer pairs ("scorers") (engine/gameparlays.SOURCES), each block:
+
+      * the tickets: graded, won, lost, units at one unit a ticket and ROI, open,
+        our average chance on them (`modeled_joint`) and the tickets that lost
+        by one leg (`one_away`);
+      * the legs: graded, won, lost and our average chance on them (`p_final`),
+        in all and by market (most legs first);
+      * the newest graded tickets, each with its game and every leg's result.
+
+    A leg is graded when it won or lost (a void or a push is neither). Every
+    league in the journal, less the bench, as every figure on the page is."""
+    ensure_schema(conn)
+    from .gameparlays import SOURCES
+    try:
+        from .ledger import is_benched
+    except Exception:                                        # noqa: BLE001
+        def is_benched(_sp):
+            return False
+    out: dict = {}
+    for kind, source in SOURCES.items():
+        tickets = conn.execute("SELECT * FROM parlays WHERE source=? ORDER BY date, id", (source,)).fetchall()
+        by_sport: dict = {}
+        for t in tickets:
+            sp = str(t["sport"] or "").lower()
+            if sp and not is_benched(sp):
+                by_sport.setdefault(sp, []).append(t)
+        for sp, rows in by_sport.items():
+            graded = [t for t in rows if t["status"] in ("won", "lost")]
+            ids = [t["id"] for t in graded]
+            legs = []
+            for i in range(0, len(ids), 500):
+                chunk = ids[i:i + 500]
+                legs += conn.execute(
+                    f"SELECT parlay_id, leg_no, player, market, side, line, odds, p_final, status, actual "
+                    f"FROM parlay_legs WHERE parlay_id IN ({','.join('?' * len(chunk))}) ORDER BY parlay_id, leg_no",
+                    chunk).fetchall()
+            done = [l for l in legs if l["status"] in ("won", "lost")]
+            net = sum(float(t["pnl_units"] or 0.0) for t in graded)
+            joint = [float(t["modeled_joint"]) for t in graded if t["modeled_joint"] is not None]
+            leg_p = [float(l["p_final"]) for l in done if l["p_final"] is not None]
+            markets: dict = {}
+            for l in done:
+                m = markets.setdefault(str(l["market"] or ""), {"market": str(l["market"] or ""), "won": 0,
+                                                                 "graded": 0, "_p": []})
+                m["graded"] += 1
+                m["won"] += l["status"] == "won"
+                if l["p_final"] is not None:
+                    m["_p"].append(float(l["p_final"]))
+            mk = []
+            for m in sorted(markets.values(), key=lambda m: (-m["graded"], m["market"])):
+                ps = m.pop("_p")
+                mk.append(dict(m, chance=round(sum(ps) / len(ps), 3) if ps else None))
+            legs_of: dict = {}
+            for l in legs:
+                legs_of.setdefault(l["parlay_id"], []).append(
+                    {"player": l["player"], "market": l["market"], "side": l["side"], "line": l["line"],
+                     "odds": l["odds"], "status": l["status"],
+                     **({"actual": l["actual"]} if l["actual"] is not None else {})})
+            news = []
+            for t in sorted(graded, key=lambda t: (t["date"], t["id"]), reverse=True)[:recent]:
+                news.append({"date": t["date"], "game": t["grade"] or "", "status": t["status"],
+                             "price_dec": t["assumed_dec"], "pnl_units": t["pnl_units"],
+                             "chance": t["modeled_joint"], "legs": legs_of.get(t["id"], [])})
+            wins = sum(1 for t in graded if t["status"] == "won")
+            out.setdefault(sp, {})[kind] = {
+                "graded": len(graded), "wins": wins, "losses": len(graded) - wins,
+                "net_units": round(net, 2), "roi": round(net / len(graded), 4) if graded else None,
+                "open": sum(1 for t in rows if t["status"] == "open"),
+                "since": str(rows[0]["date"] or "") if rows else "",
+                "chance": round(sum(joint) / len(joint), 3) if joint else None,
+                "one_away": sum(1 for t in graded if t["status"] == "lost" and int(t["legs_lost"] or 0) == 1),
+                "legs": {"graded": len(done), "won": sum(1 for l in done if l["status"] == "won"),
+                         "lost": sum(1 for l in done if l["status"] == "lost"),
+                         "chance": round(sum(leg_p) / len(leg_p), 3) if leg_p else None},
+                "markets": mk, "recent": news}
+    return out
+
+
 # --- settling ---------------------------------------------------------------
 def settle(conn) -> dict:
     """Grade every open ticket whose legs have all settled as singles.

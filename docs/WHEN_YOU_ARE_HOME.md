@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TG. Each league's Record page keeps its game parlays' record, leg by leg** (step 639; 16 November).
+Nothing to run. You asked for "parlays for this game" on the Record page, to see whether the parlays and the
+legs we recommend are hitting, sport by sport:
+- **Pick a league on the Record page** and "Parlays for this game" is near the top, above the folded
+  sections. There is one card for its three-leg parlays and one for its touchdown pairs (goal-scorer pairs
+  in hockey). Each card shows:
+  - the tickets that hit and their units at one unit a ticket, beside the chance we gave them;
+  - the legs that hit, beside the chance we gave the legs;
+  - how many losing tickets missed by a single leg;
+  - the legs by market;
+  - the newest tickets, with every leg marked and what the player did ("had 6", "scored 1").
+  A ticket's legs read green when it hit, amber when it lost by one leg and red when it lost by more.
+- **On "All"** it is one table: each league and kind, with tickets hit, units and legs hit.
+- **"How our reports did"** moved up beside it, so both of the reports' own records sit above the folds.
+- **A void or a push** is neither a hit nor a miss. Nothing here is staked or added into the other books.
+
 **TF. Every read says how its kind has done, the record goes public, and our numbers face the line** (step
 638; 16 November). Nothing to run. You said OK to putting "How our reports did" where anyone can see it:
 - **The free Record page** now shows it under each league, after Report bets: the totals, the "how sure we
