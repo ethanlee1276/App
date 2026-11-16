@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TO. The player search answers in well under a second, once you stop typing** (step 647; 16 November).
+Nothing to run. Checking your "players are not showing up" message, I timed the live league search: college
+football took 8 to 16 seconds a search ("arch manning" 15.6 s), the NBA up to 5.9 s, the NFL 1 to 4 s. Every letter
+typed paid two costs. The logs were searched with a pattern no index can serve, so each letter read every row the
+league has (millions for college). And every rostered player (41,888 in college football) went through the spelling
+matcher to pad the list. On top of that the page sent one search per letter, so the box worked through a dozen slow
+searches before it reached the name you typed. Now:
+- each league's names are kept in memory: built at start (one index lookup per name, about 5 MB for college
+  football) and rebuilt when that league's logs change;
+- a name someone holds is found without the spelling matcher, and the closest spellings show only when nobody has
+  the name as typed ("jacoby brissett" no longer brings eleven near spellings with it);
+- the page asks the league once you pause typing (0.28 s) and shows "Searching NFL players" while it waits.
+At college football's scale on my machine: a real name in 2 to 5 ms, a misspelling in about 0.3 s (it was 1.1 s here
+and about 15 s on the box). If a rebuild ever fails, the service log says "the <league> name list was not rebuilt",
+and the search keeps the list it has.
+
 **TN. A name typed on the Players page finds that player, not a near name priced tonight** (step 646;
 16 November). Nothing to run. You searched "jacoby brissett" on the NFL Players page and got Jacob Rodriguez under
 "Closest match on tonight's board". The page asked the whole league only when tonight's board had nobody close to

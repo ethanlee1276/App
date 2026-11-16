@@ -169,6 +169,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # ranks, so the first failure in a process prints "player page ranks
         # not rebuilt ..." to the service's log, which no quiet night does.
         "_rebuild_ranks",
+        # THE SEARCH'S NAME LISTS, REBUILT BEHIND THE ANSWER
+        # (engine/statlogs._rebuild_names, 2026-11-16). A failure leaves the
+        # old list answering, which reads like a quiet day's names, so the
+        # first one in a process prints "the <league> name list was not
+        # rebuilt (<error>)" to the service's log; a quiet day prints nothing.
+        "_rebuild_names",
         # THE LOGS' COUNTS (engine/logcache.generations, 2026-11-09), caught
         # by this sweep when it learned to check its triggers. Its failure is
         # None, which sends the caller to the row count: a slower key, never a

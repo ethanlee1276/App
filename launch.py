@@ -12290,6 +12290,15 @@ def main() -> None:
     # arrive here is the morning after a slate, wanting last night graded.
     def _startup_chores() -> None:
         global _WARMING
+        # The league search's name lists (engine/statlogs.warm_search), built
+        # in their own thread before the boards are: a search right after a
+        # restart is the likeliest one (a deploy is checked by searching a
+        # name), and college football's list is about a second on the box.
+        try:
+            from engine import statlogs
+            statlogs.warm_search()
+        except Exception as exc:                          # noqa: BLE001
+            print(f"  ⚠️  search lists not built ahead ({exc}): each league's builds on its first search")
         try:
             with _BUILD_LOCK:
                 # The updater holds a restart while this runs (_note_sweep).

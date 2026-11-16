@@ -278,7 +278,9 @@ def test_the_search_reaches_the_league_not_just_the_board():
     body = _fn(js, "async function renderPlayers(")
     # The roster is asked with the typed name since 2026-09-05 — the
     # four-tier match normalises it itself (tests/test_search_forgiving.py).
-    assert body.index("leagueSearch(q)") < body.index("rosterMatches(state.search)")
+    # The league is asked after a pause in the typing since 2026-11-16
+    # (leagueSearchAfterPause); still first, still before the roster.
+    assert body.index("leagueSearchAfterPause(q, seq, host)") < body.index("rosterMatches(state.search)")
     assert body.count("!== q) return") >= 2, "the stale-keystroke guard"
     j = js.index("function profileHTML(")
     assert "rows.filter((r) => r.market_label)" in js[j:j + 700]

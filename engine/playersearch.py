@@ -30,6 +30,8 @@ from __future__ import annotations
 import difflib
 import re
 import unicodedata
+from array import array
+from bisect import bisect_right
 
 #: Every source this box covers, in the order a tie is broken. The log
 #: leagues come from statlogs; ufc is its own reader.
@@ -93,7 +95,12 @@ def _close_enough(n, toks, ql, qt) -> bool:
     """A typo, rather than a different person."""
     if len(ql) < FUZZ_MIN:
         return False
-    if difflib.SequenceMatcher(None, ql, n).ratio() >= FUZZ_WHOLE:
+    # The two cheap bounds before the ratio, as difflib's own
+    # get_close_matches checks them: each is at least the ratio, so a name
+    # they rule out could never have passed, and most names are ruled out.
+    s = difflib.SequenceMatcher(None, ql, n)
+    if (s.real_quick_ratio() >= FUZZ_WHOLE and s.quick_ratio() >= FUZZ_WHOLE
+            and s.ratio() >= FUZZ_WHOLE):
         return True
     for w in qt:
         if len(w) >= FUZZ_MIN and difflib.get_close_matches(
@@ -109,7 +116,7 @@ RANKS = {0: "starts with", 1: "contains", 2: "words, any order",
          3: "closest spelling"}
 
 
-def rank(name: str, q: str):
+def rank(name: str, q: str, fuzzy: bool = True):
     """How well ``name`` answers ``q`` — 0 best, 3 worst, None for no.
 
     FOUR TIERS BECAUSE THERE ARE FOUR DIFFERENT MISSES. Exact-prefix and
@@ -120,7 +127,17 @@ def rank(name: str, q: str):
     a person types a name they half remember, and each used to come back
     with nothing at all.
     """
-    n, ql = norm(name), norm(q)
+    return rank_normed(norm(name), norm(q), fuzzy)
+
+
+def rank_normed(n: str, ql: str, fuzzy: bool = True):
+    """`rank` for a name and a query already through `norm`.
+
+    The league search keeps every name it holds normed once (`NameIndex`),
+    so a keystroke pays for the comparisons and not for eighty thousand
+    accent strips. ``fuzzy=False`` stops at tier 2: the closest-spelling
+    tier is for a search that found nobody by the name typed.
+    """
     if not n or not ql:
         return None
     toks, qt = n.split(), ql.split()
@@ -137,9 +154,169 @@ def rank(name: str, q: str):
         return 1
     if _tokens_prefix(toks, qt):
         return 2
-    if _close_enough(n, toks, ql, qt):
+    if fuzzy and _close_enough(n, toks, ql, qt):
         return 3
     return None
+
+
+def no_guess_beside_an_answer(hits: list) -> list:
+    """A GUESS IS NOT AN ANSWER. Ethan, 2026-11-16, with "jacoby brissett"
+    typed: Jacoby Brissett came back, and eleven rostered players spelled
+    nearly like him came back with him ("Jacob Rodriguez", "Coby Bryant").
+    The closest spellings (tier 3) are for a search that found nobody by
+    the name typed; beside someone who has it, they are only noise to
+    scroll past."""
+    if any(h.get("rank", 3) < 3 for h in hits):
+        return [h for h in hits if h.get("rank", 3) < 3]
+    return hits
+
+
+def closeness(ql: str, n: str) -> float:
+    """How near a whole name (through `norm`) is to what was typed, 0 to 1:
+    the order a list of guessed spellings is shown in, nearest first."""
+    return difflib.SequenceMatcher(None, ql, n).ratio()
+
+
+def fuzzy_hits(norms, ql: str) -> list[int]:
+    """The positions in ``norms`` (names through `norm`) that `_close_enough`
+    takes for a misspelling of ``ql``: the same answers, at a price a league
+    of eighty thousand names can pay when a search finds nobody.
+
+    Two savings, neither of which changes an answer. The whole-name bounds
+    are taken with the query held still, so its letters are counted once
+    rather than once a name (both bounds are the same whichever side is
+    held), and only a name inside them pays for the ratio, in the order
+    `_close_enough` computes it. And a word of a name is judged once per
+    search however many names share it, the way get_close_matches judges
+    it: the word as the first sequence, the typed word as the second, the
+    same three checks in the same order.
+    """
+    if len(ql) < FUZZ_MIN:
+        return []
+    whole = difflib.SequenceMatcher(None)
+    whole.set_seq2(ql)
+    words = []
+    for w in ql.split():
+        if len(w) >= FUZZ_MIN:
+            m = difflib.SequenceMatcher(None)
+            m.set_seq2(w)
+            words.append(m)
+    near: dict = {}
+    out = []
+    for k, n in enumerate(norms):
+        if not n:
+            continue
+        whole.set_seq1(n)
+        if (whole.real_quick_ratio() >= FUZZ_WHOLE and whole.quick_ratio() >= FUZZ_WHOLE
+                and difflib.SequenceMatcher(None, ql, n).ratio() >= FUZZ_WHOLE):
+            out.append(k)
+            continue
+        for t in n.split():
+            hit = near.get(t)
+            if hit is None:
+                hit = False
+                for m in words:
+                    m.set_seq1(t)
+                    if (m.real_quick_ratio() >= FUZZ_TOKEN and m.quick_ratio() >= FUZZ_TOKEN
+                            and m.ratio() >= FUZZ_TOKEN):
+                        hit = True
+                        break
+                near[t] = hit
+            if hit:
+                out.append(k)
+                break
+    return out
+
+
+class NameIndex:
+    """Every name one source holds, normed once and searched in C.
+
+    Ethan, 2026-11-16: "players are not showing up on the search page for
+    players." On the box a college football search took 8 to 16 seconds:
+    every keystroke scanned millions of log rows with `LIKE '%q%'` (no
+    index can serve a leading wildcard), then put all 41,888 rostered
+    college players through the spelling matcher one at a time. This keeps
+    a source's names as two strings, the normed names and the same with
+    their spaces taken out, so the words typed are found by `str.find`
+    running over a megabyte, and only the names it lands in are ranked.
+
+    ``rows`` are ``(name, latest season)``; the season orders names that
+    match equally well, the current player before a namesake from 2021.
+    Memory is about a hundred bytes a name.
+    """
+
+    __slots__ = ("names", "last", "src", "at", "sig", "_n", "_n_at", "_sq", "_sq_at")
+
+    def __init__(self, rows, at: float = 0.0, sig=None):
+        # ``src`` is where each kept name sat in ``rows``: a name that norms
+        # to nothing is left out, and the caller's own list still lines up.
+        names, last, src, ns, sqs = [], array("H"), array("i"), [], []
+        for i, (name, season) in enumerate(rows):
+            n = norm(name)
+            if not n:
+                continue
+            names.append(name)
+            src.append(i)
+            try:
+                last.append(max(0, min(int(season or 0), 65535)))
+            except (TypeError, ValueError):
+                last.append(0)
+            ns.append(n)
+            sqs.append(n.replace(" ", ""))
+        self.names, self.last, self.src, self.at, self.sig = names, last, src, at, sig
+        self._n, self._n_at = self._join(ns)
+        self._sq, self._sq_at = self._join(sqs)
+
+    @staticmethod
+    def _join(parts):
+        """One string, a newline after each part, and where each part starts
+        (and, last, where the string ends)."""
+        at, pos = array("i"), 0
+        for s in parts:
+            at.append(pos)
+            pos += len(s) + 1
+        at.append(pos)
+        return "".join(s + "\n" for s in parts), at
+
+    def __len__(self) -> int:
+        return len(self.names)
+
+    def norm_of(self, k: int) -> str:
+        return self._n[self._n_at[k]:self._n_at[k + 1] - 1]
+
+    def norms(self) -> list[str]:
+        return self._n.split("\n")[:-1]
+
+    def matching(self, ql: str) -> list[int]:
+        """The names whose spaceless form holds every word typed: everything
+        tiers 0 to 2 can take (each needs every word somewhere in the name)
+        and a few more, found by `str.find`. The longest word is the one
+        searched for, the rest checked on the names it lands in."""
+        qt = ql.split()
+        if not qt:
+            return []
+        w = max(qt, key=len)
+        blob, at, out = self._sq, self._sq_at, []
+        i = blob.find(w)
+        while i != -1:
+            k = bisect_right(at, i) - 1
+            s = blob[at[k]:at[k + 1] - 1]
+            if all(x in s for x in qt):
+                out.append(k)
+            i = blob.find(w, at[k + 1])
+        return out
+
+    def ranked(self, ql: str, fuzzy: bool = True) -> dict:
+        """``{position: tier}`` for a query through `norm`: tiers 0 to 2 where
+        any name has one, else (when ``fuzzy``) the closest spellings, tier 3."""
+        out = {}
+        for k in self.matching(ql):
+            got = rank_normed(self.norm_of(k), ql, fuzzy=False)
+            if got is not None:
+                out[k] = got
+        if out or not fuzzy:
+            return out
+        return {k: 3 for k in fuzzy_hits(self.norms(), ql)}
 
 
 def merge(per_source: dict, q: str, limit: int, order,
@@ -211,4 +388,4 @@ def search(q: str, limit: int = 12, prefer: str = "",
         q, limit, [s for s in order if s != "ufc"], db_path))
     # A store that is missing is not an error — see fighters.load.
     per["ufc"] = fighters.search(q, limit=limit, path=ufc_path)
-    return merge(per, q, limit, order, prefer=prefer)
+    return no_guess_beside_an_answer(merge(per, q, limit, order, prefer=prefer))

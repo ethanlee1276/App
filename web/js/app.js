@@ -13992,11 +13992,12 @@ async function renderPlayers() {
      and a name it holds as typed (or a name that starts that way) wins. */
   let toLeague = !players.length;
   if (!toLeague && boardGuess) {
-    const better = (await leagueSearch(q)).some((m) => {
+    const asked = await leagueSearchAfterPause(q, seq, host);
+    if (asked === null || seq !== _playersSeq || state.search.trim().toLowerCase() !== q) return;
+    const better = asked.some((m) => {
       const k = m.rank != null ? m.rank : searchRank(m.player, q);
       return k != null && k < 3;
     });
-    if (seq !== _playersSeq || state.search.trim().toLowerCase() !== q) return;
     toLeague = better;
   }
   if (toLeague) {
@@ -14010,8 +14011,8 @@ async function renderPlayers() {
        exact profile card a priced star gets. The roster directory stays
        as the offline fallback: a static host has no /api. */
     if (q) {
-      const hits = await leagueSearch(q);
-      if (seq !== _playersSeq) return;                     // the board landed
+      const hits = await leagueSearchAfterPause(q, seq, host);
+      if (hits === null || seq !== _playersSeq) return;    // a newer letter, or the board landed
       if (state.search.trim().toLowerCase() !== q) return;  // stale keystroke
       if (hits.length) {
         const full = hits.slice(0, 4);
@@ -14346,6 +14347,25 @@ async function leagueSearch(q) {
   } catch (e) {}
   _leagueCache.set(key, { players, ok, at: Date.now() });
   return players;
+}
+
+/* A LEAGUE SEARCH WAITS FOR A PAUSE. Ethan, 2026-11-16: "players are not
+   showing up on the search page for players." Every letter typed asked the
+   server for the league's names, so "arch manning" sent a dozen searches to
+   a one-core box, each of them seconds long, and the answer to the name
+   typed came back last. The board's own matches still draw on every letter;
+   the league is asked once the typing stops for a moment (a word already
+   asked is in _leagueCache and costs nothing). Null when a newer letter
+   took over while it waited. */
+const LEAGUE_PAUSE_MS = 280;
+async function leagueSearchAfterPause(q, seq, host) {
+  if (!_leagueCache.has(`${state.sport}|${q}`)) {
+    if (host) host.innerHTML = `<div class="section-title minor">Searching ${escapeHtml(lgCode(state.sport))} players
+      <span class="sub">— “${escapeHtml(state.search.trim())}”</span></div>`;
+    await new Promise((r) => setTimeout(r, LEAGUE_PAUSE_MS));
+    if (seq !== _playersSeq) return null;
+  }
+  return leagueSearch(q);
 }
 
 /* A hit's logs come from the hit's OWN league. Reading state.sport here

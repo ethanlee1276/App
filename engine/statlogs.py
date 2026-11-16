@@ -32,6 +32,9 @@ every other DB-backed extra (player faces, team form, venue weather).
 from __future__ import annotations
 
 import os
+import sqlite3
+import threading
+import time
 
 from . import db as _db
 
@@ -203,70 +206,176 @@ def search(sport: str, q: str, limit: int = 12, db_path=None,
         conn.close()
 
 
-#: How long a league's name list stays good. Built only when a search
-#: MISSES, so on a healthy query it is never built at all; a name that
-#: first appears within the next quarter of an hour is one keystroke late,
-#: which is a trade any search box makes.
+#: How long a league's name list stays good where the file keeps no counts
+#: of its changes (`logcache.generations`); where it does, the list is good
+#: until the league's logs change, and that is what is checked.
 NAME_INDEX_TTL = 900
+#: A league with fewer names than this is rebuilt in line when its logs
+#: change (a blink); a bigger one keeps answering from the list it has
+#: while the new one is built behind it, at most once a minute.
+NAME_INDEX_INLINE = 20000
+NAME_INDEX_GAP = 60
 _NAME_INDEX: dict = {}
+_NAMES_BUSY: set = set()
+_NAMES_LOCK = threading.Lock()
+_NAMES_FAIL_SAID = [False]
+
+#: Every name a league has logged, with the latest season it played: ONE
+#: INDEX SEEK A NAME. `idx_logs_player` is ordered (sport, player, season),
+#: so the next name after the last one and a name's latest season are each
+#: a seek, where `SELECT DISTINCT player` reads every row the league has
+#: (millions for college football). Measured on a million-row table of
+#: twenty thousand names: 0.044 s against 0.12 s for the GROUP BY, and the
+#: gap grows with the rows a name has.
+_NAMES_SQL = """
+WITH RECURSIVE names(p) AS (
+  SELECT (SELECT MIN(player) FROM player_game_logs INDEXED BY idx_logs_player WHERE sport = ?1)
+  UNION ALL
+  SELECT (SELECT MIN(player) FROM player_game_logs INDEXED BY idx_logs_player
+          WHERE sport = ?1 AND player > names.p)
+  FROM names WHERE names.p IS NOT NULL)
+SELECT p, (SELECT MAX(season) FROM player_game_logs INDEXED BY idx_logs_player
+           WHERE sport = ?1 AND player = names.p)
+FROM names WHERE p IS NOT NULL"""
 
 
-def _name_index(conn, sport: str) -> list[str]:
-    """Every name this league has ever logged.
+def _read_names(conn, sport: str) -> list:
+    """``(name, latest season)`` for every name the league has logged."""
+    try:
+        return conn.execute(_NAMES_SQL, (sport,)).fetchall()
+    except sqlite3.OperationalError:
+        # A file older than idx_logs_player: the same answer, row by row.
+        return conn.execute("SELECT player, MAX(season) FROM player_game_logs "
+                            "WHERE sport=? GROUP BY player", (sport,)).fetchall()
 
-    Only reached on a miss. The `LIKE` in `_ranked_names` is what the
-    database can answer with an index and it answers the ordinary case;
-    this is for the ones it cannot see at all — an accent in the stored
-    spelling, the words typed in the other order, a letter wrong — where
-    the reader is already looking at an empty page and a slower answer
-    beats no answer.
+
+def _log_sig(conn, sport: str):
+    """The league's change counts, or None where the file keeps none."""
+    from . import logcache
+    return logcache.generations(conn, sport, None)
+
+
+def _build_names(conn, sport: str, sig):
+    from .playersearch import NameIndex
+    return NameIndex(((r[0], r[1]) for r in _read_names(conn, sport) if r[0]),
+                     at=time.time(), sig=sig)
+
+
+def _name_index(conn, sport: str):
+    """Every name this league has ever logged (`playersearch.NameIndex`).
+
+    EVERY SEARCH READS IT, where it once served only a search that missed.
+    Ethan, 2026-11-16: "players are not showing up on the search page for
+    players." The ordinary query was a `LIKE '%q%'` over the league's logs,
+    which no index can serve (the wildcard leads), so every keystroke read
+    the whole league: millions of rows for college football, where a
+    search took 8 to 16 seconds on the box. The list is built once, with a
+    seek a name (`_NAMES_SQL`), and kept until the league's logs change;
+    `warm_search` builds every league's before anyone types.
     """
-    import time
-    hit = _NAME_INDEX.get(sport)
-    now = time.time()
-    if hit and now - hit[0] < NAME_INDEX_TTL:
-        return hit[1]
-    names = [r[0] for r in conn.execute(
-        "SELECT DISTINCT player FROM player_game_logs WHERE sport=?",
-        (sport,)) if r[0]]
-    _NAME_INDEX[sport] = (now, names)
-    return names
+    from . import logcache
+    path = logcache.db_file(conn)
+    key = (sport, path)
+    sig = _log_sig(conn, sport)
+    hit = _NAME_INDEX.get(key)
+    if hit is not None:
+        if (hit.sig == sig) if sig is not None else (time.time() - hit.at < NAME_INDEX_TTL):
+            return hit
+        if path and len(hit) >= NAME_INDEX_INLINE:
+            _rebuild_names_later(sport, path)
+            return hit
+    built = _build_names(conn, sport, sig)
+    _NAME_INDEX[key] = built
+    return built
 
 
-def _ranked_names(conn, sport: str, q: str, limit: int) -> dict:
-    """{name: rank} — the substring the index can find, then the rest.
+def _rebuild_names_later(sport: str, path: str) -> None:
+    key = (sport, path)
+    with _NAMES_LOCK:
+        hit = _NAME_INDEX.get(key)
+        if key in _NAMES_BUSY or (hit is not None and time.time() - hit.at < NAME_INDEX_GAP):
+            return
+        _NAMES_BUSY.add(key)
+    threading.Thread(target=_rebuild_names, args=(sport, path), daemon=True,
+                     name=f"names-{sport}").start()
+
+
+def _rebuild_names(sport: str, path: str) -> None:
+    """The league's new name list, built on its own connection while the
+    search answers from the old one. A failure keeps the old list, which
+    reads like a quiet day's, so the first one in a process says so in the
+    service's log; the next try waits a minute."""
+    key = (sport, path)
+    try:
+        conn = _db.connect(path)
+        try:
+            _NAME_INDEX[key] = _build_names(conn, sport, _log_sig(conn, sport))
+        finally:
+            conn.close()
+    except Exception as exc:                                 # noqa: BLE001
+        hit = _NAME_INDEX.get(key)
+        if hit is not None:
+            hit.at = time.time()
+        if not _NAMES_FAIL_SAID[0]:
+            _NAMES_FAIL_SAID[0] = True
+            print(f"[search] the {sport} name list was not rebuilt "
+                  f"({type(exc).__name__}: {exc}); the search keeps the one it has", flush=True)
+    finally:
+        with _NAMES_LOCK:
+            _NAMES_BUSY.discard(key)
+
+
+def warm_search(db_path=None, data_dir=None, delay: float = 0.0):
+    """Every league's name list and roster list, built before anyone types.
+
+    The first search after a restart would otherwise build its league's
+    (about a second for college football on the box). A thread, so the
+    server answers while it runs; the thread is returned for the tests."""
+    t = threading.Thread(target=_warm_all, args=(db_path, data_dir, delay),
+                         daemon=True, name="search-warm")
+    t.start()
+    return t
+
+
+def _warm_all(db_path, data_dir, delay: float) -> None:
+    if delay:
+        time.sleep(delay)
+    path = str(db_path or _db.DEFAULT_DB)
+    for sport in SPORT_MARKETS:
+        try:
+            _roster_index(sport, data_dir)
+            if os.path.exists(path):
+                conn = _db.connect(path)
+                try:
+                    _name_index(conn, sport)
+                finally:
+                    conn.close()
+        except Exception as exc:                             # noqa: BLE001
+            print(f"[search] the {sport} search lists were not built ahead "
+                  f"({type(exc).__name__}: {exc}); the first search builds them", flush=True)
+
+
+def _ranked_names(conn, sport: str, q: str, limit: int, fuzzy: bool = True) -> dict:
+    """{name: rank}, best first: the tier, then (for a guessed spelling) the
+    closest whole name, then the latest season, then the name.
 
     Ethan, 2026-08-23: "if you dont type the players name in exactly, they
-    dont come up at all which makes it feel broken." It was: the query was
-    one `LIKE '%q%'`, so a circumflex in the stored name, a hyphen, the
-    first and last name typed the other way round, or a single wrong
-    letter each returned nothing whatsoever — and nothing on the page
-    could tell that apart from "we have never heard of him".
+    dont come up at all which makes it feel broken." The tiers forgive an
+    accent, punctuation, the words in either order and (when nobody has the
+    name as typed) a wrong letter. Read off the kept list (`_name_index`),
+    never the logs: a keystroke costs a search of a megabyte of names.
     """
-    from .playersearch import rank
-    out: dict = {}
-    for r in conn.execute(
-            "SELECT DISTINCT player FROM player_game_logs "
-            "WHERE sport=? AND player LIKE ? LIMIT ?",
-            (sport, f"%{q}%", int(limit) * 4)):
-        got = rank(r[0], q)
-        if got is not None:
-            out[r[0]] = got
-    # ANY hit at all ends it, not `limit` of them. Most real searches
-    # return one or two names, so a "did we fill the page" test would
-    # have built the full-scan index on almost every successful query —
-    # the expensive path running constantly to serve the case it was not
-    # for. Ethan's complaint is the empty result, and that is exactly
-    # when this falls through.
-    if out:
-        return out
-    for name in _name_index(conn, sport):
-        if name in out:
-            continue
-        got = rank(name, q)
-        if got is not None:
-            out[name] = got
-    return out
+    from .playersearch import closeness, norm
+    ql = norm(q)
+    if not ql:
+        return {}
+    ix = _name_index(conn, sport)
+    got = ix.ranked(ql, fuzzy=fuzzy)
+
+    def order(k):
+        t = got[k]
+        return (t, -closeness(ql, ix.norm_of(k)) if t == 3 else 0.0, -ix.last[k], ix.names[k])
+    return {ix.names[k]: got[k] for k in sorted(got, key=order)}
 
 
 def _search_conn(conn, sport: str, q: str, limit: int,
@@ -277,18 +386,26 @@ def _search_conn(conn, sport: str, q: str, limit: int,
     once per sport — five connections to answer one keystroke, on a box
     with one core, is a cost the page pays on every letter typed.
     """
-    ranked = _ranked_names(conn, sport, q, limit)
+    ranked = _ranked_names(conn, sport, q, limit, fuzzy=False)
     if not ranked:
         # NOTHING HAS PLAYED UNDER THAT NAME — which is not the same as
         # nobody having it. The roster answers for the men the logs
-        # cannot; see `_roster_players`.
-        return _roster_hits(sport, q, limit, set(), data_dir)
+        # cannot; see `_roster_players`. Its names as typed come before
+        # anyone's closest spellings: a freshman typed exactly is found
+        # without the spelling pass over every name the league has logged.
+        named = _roster_hits(sport, q, limit, set(), data_dir, fuzzy=False)
+        if named:
+            return named
+        ranked = _ranked_names(conn, sport, q, limit)
+        if not ranked:
+            return _roster_hits(sport, q, limit, set(), data_dir)
     # HOW WELL IT MATCHES FIRST, how recently he played second. Recency is
     # the right tiebreak between two men who match equally well — a
     # current starter over a 2021 namesake — and the wrong first key
     # entirely: it would put a guessed spelling from last night above the
-    # exact name from last week.
-    names = sorted(ranked, key=lambda n: (ranked[n], n))[:int(limit) * 3]
+    # exact name from last week. `_ranked_names` comes best first already
+    # (and a guess, closest spelling first), so the page's worth is its head.
+    names = list(ranked)[:int(limit) * 3]
     marks = ", ".join("?" for _ in names)
     rows = conn.execute(
         f"SELECT player, COUNT(DISTINCT game_id) AS games, "
@@ -296,7 +413,9 @@ def _search_conn(conn, sport: str, q: str, limit: int,
         f"FROM player_game_logs WHERE sport=? AND player IN ({marks}) "
         f"GROUP BY player ORDER BY last DESC, games DESC",
         (sport, *names)).fetchall()
-    rows = sorted(rows, key=lambda r: ranked[r["player"]])[:int(limit)]
+    place = {n: i for i, n in enumerate(names)}
+    rows = sorted(rows, key=lambda r: (ranked[r["player"]],
+                                       place[r["player"]] if ranked[r["player"]] == 3 else 0))[:int(limit)]
     out = []
     for r in rows:
         # The team he was LAST seen with — the GROUP BY above would
@@ -350,10 +469,12 @@ def _search_conn(conn, sport: str, q: str, limit: int,
     # without, always — so the roster only ever fills the space the
     # logs left empty, and a thin log store degrades into a roster
     # search instead of into a blank page.
+    found = any(r < 3 for r in ranked.values())
     if len(out) < int(limit):
         out += _roster_hits(sport, q, int(limit) - len(out),
-                            {r["player"] for r in out}, data_dir)
-    return out
+                            {r["player"] for r in out}, data_dir, fuzzy=not found)
+    from .playersearch import no_guess_beside_an_answer
+    return no_guess_beside_an_answer(out)
 
 
 #: Where the published roster payloads live, and how long one stays
@@ -390,6 +511,17 @@ def _roster_players(sport: str, data_dir=None) -> list[dict]:
         return hit[1]
     out: list[dict] = []
     path = os.path.join(str(data_dir or ROSTER_DIR), f"rosters_{sport}.json")
+    # THE SAME FILE IS THE SAME ROSTER. Rereading 5.6 MB of college rosters
+    # every quarter hour on a search, to find what the nightly build wrote
+    # last night, was a second's wait for nothing; the file's stamp says
+    # whether there is anything new to read.
+    try:
+        stamp = os.stat(path).st_mtime_ns
+    except OSError:
+        stamp = None
+    if hit and stamp is not None and len(hit) > 2 and hit[2] == stamp:
+        _ROSTER[key] = (now, hit[1], stamp)
+        return hit[1]
     try:
         with open(path, encoding="utf-8") as fh:
             doc = json.load(fh)
@@ -413,8 +545,25 @@ def _roster_players(sport: str, data_dir=None) -> list[dict]:
                                 "number": "" if num in (None, "") else str(num)})
     except Exception:                                    # noqa: BLE001
         out = []      # no roster published for this league: logs only
-    _ROSTER[key] = (now, out)
+    _ROSTER[key] = (now, out, stamp)
     return out
+
+
+_ROSTER_INDEX: dict = {}
+
+
+def _roster_index(sport: str, data_dir=None):
+    """``(players, NameIndex of their names)``: the roster `_roster_players`
+    keeps, its names normed once, rebuilt when the roster is."""
+    from .playersearch import NameIndex
+    players = _roster_players(sport, data_dir)
+    key = (sport, str(data_dir or ROSTER_DIR))
+    hit = _ROSTER_INDEX.get(key)
+    if hit is not None and hit[0] is players:
+        return players, hit[1]
+    ix = NameIndex(((p["player"], 0) for p in players), at=time.time())
+    _ROSTER_INDEX[key] = (players, ix)
+    return players, ix
 
 
 def roster_meta(sport: str, player: str, team: str = "", data_dir=None) -> dict:
@@ -438,26 +587,34 @@ def roster_meta(sport: str, player: str, team: str = "", data_dir=None) -> dict:
 
 
 def _roster_hits(sport: str, q: str, want: int, seen: set,
-                 data_dir=None) -> list[dict]:
+                 data_dir=None, fuzzy: bool = True) -> list[dict]:
     """Roster names matching `q` that the logs did not already answer.
 
     ``games: 0`` is the honest part — the page must not promise a chart
     for a man with no logged game, and "we know who he is, he has not
     played" is a different fact from "we have never heard of him".
     """
-    from .playersearch import rank
+    from .playersearch import closeness, norm
+    ql = norm(q)
+    if not ql:
+        return []
+    players, ix = _roster_index(sport, data_dir)
     out = []
-    for pl in _roster_players(sport, data_dir):
+    # ``fuzzy`` is False once the logs have found someone by the name typed:
+    # a roster's closest spellings are then noise (`no_guess_beside_an_answer`),
+    # and the costly part of a roster of forty thousand.
+    for k, got in ix.ranked(ql, fuzzy=fuzzy).items():
+        pl = players[ix.src[k]]
         if pl["player"] in seen:
-            continue
-        got = rank(pl["player"], q)
-        if got is None:
             continue
         out.append({"player": pl["player"], "games": 0, "sport": sport,
                     "rank": got, "team": pl["team"],
                     "position": pl["position"],
-                    "headshot": pl["headshot"]})
-    out.sort(key=lambda r: (r["rank"], r["player"]))
+                    "headshot": pl["headshot"],
+                    "_near": -closeness(ql, ix.norm_of(k)) if got == 3 else 0.0})
+    out.sort(key=lambda r: (r["rank"], r["_near"], r["player"]))
+    for r in out:
+        del r["_near"]
     return out[:max(0, want)]
 
 

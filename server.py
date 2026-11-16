@@ -7473,9 +7473,11 @@ def main() -> None:
     print("Press Ctrl+C to stop.")
     if live:
         # Every league's player-page ranks, built in the background a minute
-        # in, so no player's page waits seconds on a cold table.
-        from engine import playerpage
+        # in, so no player's page waits seconds on a cold table; and the
+        # league search's name lists, so no search builds its league's.
+        from engine import playerpage, statlogs
         playerpage.warm()
+        statlogs.warm_search()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -182,26 +182,62 @@ def test_every_hit_carries_the_rank_that_found_it():
 
 # --- the cost -------------------------------------------------------------
 
-def test_an_ordinary_query_never_builds_the_name_index():
-    """The index is a scan of every name a league has ever logged. It is
-    for the miss — where the reader is already looking at an empty page
-    and a slower answer beats none — and must not be on the path of a
-    query the database can answer with its own index."""
+def test_a_keystroke_reads_the_kept_name_list_not_the_logs():
+    """Ethan, 2026-11-16: "players are not showing up on the search page for
+    players." A college search took 8 to 16 seconds on the box: every
+    keystroke ran `LIKE '%q%'` over the league's logs, which no index can
+    serve (the wildcard leads). The names are kept now. The list is built
+    once, a seek a name, and after that a search runs no LIKE at all."""
     p = _logs()
-    statlogs._NAME_INDEX.clear()
-    statlogs.search("mlb", "judge", db_path=p)
-    assert not statlogs._NAME_INDEX, "an exact hit paid for the full scan"
-    statlogs.search("mlb", "jugde", db_path=p)
-    assert "mlb" in statlogs._NAME_INDEX, "the miss never reached the index"
+    seen = []
+    real = statlogs._db.connect
+
+    def traced(path, *a, **kw):
+        conn = real(path, *a, **kw)
+        conn.set_trace_callback(seen.append)
+        return conn
+    statlogs._db.connect = traced
+    try:
+        statlogs.search("mlb", "judge", db_path=p)
+        assert any("WITH RECURSIVE names" in s for s in seen), "the list was not built a seek a name"
+        seen.clear()
+        hits = statlogs.search("mlb", "ramirez", db_path=p)
+    finally:
+        statlogs._db.connect = real
+    assert hits and hits[0]["player"] == "José Ramírez", hits
+    assert not [s for s in seen if "LIKE" in s.upper()], seen
+    assert not [s for s in seen if "RECURSIVE" in s], "the list was rebuilt for the next keystroke"
 
 
-def test_the_index_is_cached_rather_than_rebuilt_per_keystroke():
+def test_the_list_is_built_off_the_player_index():
+    """One seek a name only holds while the planner uses idx_logs_player."""
     p = _logs()
-    statlogs._NAME_INDEX.clear()
+    conn = db.connect(p)
+    try:
+        plan = " ".join(str(tuple(r)) for r in conn.execute("EXPLAIN QUERY PLAN " + statlogs._NAMES_SQL, ("mlb",)))
+    finally:
+        conn.close()
+    assert "COVERING INDEX idx_logs_player (sport=? AND player>?)" in plan, plan
+
+
+def test_the_list_is_kept_until_the_league_changes():
+    """Kept between keystrokes, and new the moment the league's logs change
+    (their counts, `logcache.generations`): a player whose first box score
+    lands is found by the next search, not a quarter of an hour later."""
+    p = _logs()
     statlogs.search("mlb", "jugde", db_path=p)
-    stamp = statlogs._NAME_INDEX["mlb"][0]
+    key = ("mlb", os.path.realpath(p))
+    first = statlogs._NAME_INDEX[key]
     statlogs.search("mlb", "jugdee", db_path=p)
-    assert statlogs._NAME_INDEX["mlb"][0] == stamp, "rebuilt on every letter"
+    assert statlogs._NAME_INDEX[key] is first, "rebuilt on every letter"
+    conn = db.connect(p)
+    db.upsert_player_logs(conn, [{"sport": "mlb", "season": 2026, "period": "2026-08-20", "game_id": "cal1",
+                                  "player": "Cal Raleigh", "team": "SEA", "opponent": "OPP", "position": "C",
+                                  "home": 1, "market": "hits", "value": 2.0}])
+    conn.close()
+    hits = statlogs.search("mlb", "raleigh", db_path=p)
+    assert hits and hits[0]["player"] == "Cal Raleigh", hits
+    assert statlogs._NAME_INDEX[key] is not first
     assert statlogs.NAME_INDEX_TTL >= 300
 
 

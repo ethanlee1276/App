@@ -312,9 +312,7 @@ def test_the_server_serves_it_free_and_the_players_page_becomes_it():
         "a board search too: the name asked for, even beside a near name"
     assert "if (who && who !== player) el.remove();" in PAGE, "a near name's card is not on the page"
     assert ("  let toLeague = !players.length;\n  if (!toLeague && boardGuess) {\n"
-            "    const better = (await leagueSearch(q)).some((m) => {\n"
-            "      const k = m.rank != null ? m.rank : searchRank(m.player, q);\n"
-            "      return k != null && k < 3;") in APP, \
+            "    const asked = await leagueSearchAfterPause(q, seq, host);\n") in APP, \
         "a guess on tonight's board does not stop the league being asked"
     assert '"js/playerpage.js", "css/playerpage.css",' in (ROOT / "engine" / "shrink.py").read_text(encoding="utf-8")
     assert '"/js/playerpage.js", "/css/playerpage.css",' in (ROOT / "web" / "sw.js").read_text(encoding="utf-8")
