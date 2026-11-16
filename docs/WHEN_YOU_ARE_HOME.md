@@ -9371,6 +9371,8 @@ basketball, NHL and MLB.
   no height, weight or age, so those headers show what the rosters do have. News is headlines and links only,
   like the rest of the site's news; when no headline names the player, the club's show, and the league's when
   nothing names either.
+- **Players with no game on file yet** (a freshman or a backup the roster lists) get the page too: the header
+  and Bio from the roster, News, and a line saying no games are on file yet, where the numbers go.
 - **A game whose box score isn't in yet** (a player's row filed the night of the game, before the week's box
   scores land) now says "Box score not in yet" in the game log and "The box score isn't in yet" on the page,
   and isn't counted in games played, totals or averages until its line arrives. The game log shipped earlier

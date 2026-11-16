@@ -339,7 +339,9 @@ function plrFill(page, d) {
     return;
   }
   const set = (sel, html) => { const el = at(sel); if (el) el.innerHTML = html; };
-  set(".plr-season", plrSeasonHTML(d));
+  // On the roster, no game logged yet (a freshman, a backup): the page says so, and the rest is the roster's.
+  set(".plr-season", (d.seasons || []).length ? plrSeasonHTML(d)
+    : `<p class="plr-quiet">No games on file for this player yet. A game is added once its box score is in.</p>`);
   set(".plr-prev", plrPrevHTML(d));
   set(".plr-splitlet", plrSplitletHTML(d));
   set("[data-plr-panel=\"stats\"]", plrStatsHTML(d));
@@ -408,8 +410,13 @@ function renderPlayerPage(host, player, sport) {
   const team = r0.team || "", key = `${sport}|${player}`;
   const kept = document.createDocumentFragment();
   while (host.firstChild) kept.appendChild(host.firstChild);
-  // His address named him: a near name the search drew beside him is another player's card, not his page's.
+  // The address named this player: a near name the search drew beside them is another player's card, not
+  // this page's; and a roster row's "Profile" door to the player whose page this already is goes nowhere.
   [...kept.children].forEach((el) => { const who = plrCardOf(el); if (who && who !== player) el.remove(); });
+  kept.querySelectorAll(".roster-hit").forEach((row) => {
+    const b = row.querySelector("[data-lookup]");
+    if (b && b.dataset.lookup === player) row.remove();
+  });
   const same = _plrLive && _plrLive.key === key ? _plrLive.page : null;
   if (same) {
     plrMarkets(same, kept);

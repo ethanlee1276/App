@@ -14070,7 +14070,8 @@ async function renderPlayers() {
             if (inp) inp.value = b.dataset.lookup;
             renderPlayers();
           }));
-        const own = drawn.find((m) => searchNorm(m.player) === searchNorm(state.search)) || (drawn.length === 1 && drawn[0]);
+        const own = drawn.find((m) => searchNorm(m.player) === searchNorm(state.search)) || (drawn.length === 1 && drawn[0])
+          || rest.find((m) => searchNorm(m.player) === searchNorm(state.search));
         if (own && own.sport !== "ufc") renderPlayerPage(host, own.player, own.sport);
         return;
       }

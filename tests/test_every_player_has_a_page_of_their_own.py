@@ -234,8 +234,9 @@ def test_the_server_serves_it_free_and_the_players_page_becomes_it():
     assert ('function renderPlayerPage(...a) { return roomCall(renderPlayerPage, "renderPlayerPage", '
             '"js/playerpage.js", "css/playerpage.css", a); }') in APP
     assert ('        const own = drawn.find((m) => searchNorm(m.player) === searchNorm(state.search)) || '
-            '(drawn.length === 1 && drawn[0]);\n        if (own && own.sport !== "ufc") renderPlayerPage(host, own.player, '
-            'own.sport);\n        return;') in APP, "a league search that finds the player asked for, or just one"
+            '(drawn.length === 1 && drawn[0])\n          || rest.find((m) => searchNorm(m.player) === searchNorm(state.search));'
+            '\n        if (own && own.sport !== "ufc") renderPlayerPage(host, own.player, own.sport);\n        return;') in APP, \
+        "a league search that finds the player asked for (on a roster, no game yet, too), or just one"
     assert ("  revealChildren(host);\n  const own = q && (shown.find((p) => searchNorm(p) === searchNorm(state.search)) "
             "|| (shown.length === 1 && shown[0]));\n  if (own) renderPlayerPage(host, own, state.sport);\n}") in APP, \
         "a board search too: the name asked for, even beside a near name"
@@ -443,6 +444,53 @@ def test_in_a_browser_the_players_page_becomes_the_players_own():
     assert got["redraw"] == [True, "log", True, True], ("the redraw rebuilt the page", got["redraw"])
     assert not got["errors"], got["errors"]
 
+
+def test_in_a_browser_a_player_on_a_roster_with_no_game_yet_has_a_page_too():
+    """"All players": a freshman or a backup the roster lists and no box score has
+    yet comes back from the search with no logs. The page still opens: the
+    header and Bio from the roster, News, and a plain line where the numbers go."""
+    path, rosters = _fresh()
+    body = {"page": PP.page("nfl", "Rookie Nobody", db_path=path, data_dir=rosters),
+            "hits": {"players": [{"player": "Rookie Nobody", "sport": "nfl", "team": "BUF", "position": "WR",
+                                  "games": 0, "rank": 0, "headshot": ""}]},
+            "logs": {"player": "Rookie Nobody", "stats": {}}, "log": {}, "news": {"sports": {}},
+            "board": {"sport": "nfl", "recommendations": [], "player_stats": {}}}
+
+    def run(browser, port):
+        ctx = browser.new_context(viewport={"width": 412, "height": 823}, is_mobile=True, has_touch=True,
+                                  device_scale_factor=1, service_workers="block")
+        page = ctx.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        local = f"http://127.0.0.1:{port}/"
+        page.route(lambda u: not u.startswith(local), lambda r: r.abort())
+
+        def answer(key):
+            return lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(body[key]))
+        for pattern, key in (("**/api/players/search*", "hits"), ("**/api/players/logs*", "logs"),
+                             ("**/api/players/page*", "page"), ("**/api/players/gamelog*", "log"),
+                             ("**/data/news.json*", "news"), ("**/api/recommendations*", "board"),
+                             ("**/data/recommendations*", "board")):
+            page.route(pattern, answer(key))
+        page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');}"
+                             "catch(e){}")
+        page.goto(f"{local}index.html?sport=nfl#player/rookie-nobody", wait_until="load")
+        page.wait_for_selector(".plr .plr-season .plr-quiet", timeout=30000)
+        out = {"hero": page.inner_text(".plr-hero"), "season": page.inner_text(".plr-season"),
+               "own_row": page.evaluate("!!document.querySelector('.plr .roster-hit [data-lookup=\"Rookie Nobody\"]')")}
+        page.click('.plr-tab[data-plr-tab="bio"]')
+        out["bio"] = page.inner_text('[data-plr-panel="bio"]')
+        out["errors"] = errors
+        ctx.close()
+        return out
+    got = _browser(run)
+    if got is None:
+        return
+    assert "Rookie" in got["hero"] and "Nobody" in got["hero"] and "#88" in got["hero"], got["hero"]
+    assert "No games on file for this player yet." in got["season"], got["season"]
+    assert got["own_row"] is False, "no Profile door to the page already open"
+    assert "Rookie" in got["bio"] and "#88" in got["bio"], got["bio"]
+    assert not got["errors"], got["errors"]
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
