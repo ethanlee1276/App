@@ -203,6 +203,32 @@ def test_every_card_that_draws_a_pick_wears_its_result():
     assert ".pr-won { color: var(--good);" in css and ".pr-lost { color: var(--bad);" in css
 
 
+def test_the_deck_s_rows_and_the_pick_of_the_day_wear_it_too():
+    """The Tonight list and the Pick of the Day draw picks as rows (app.js
+    deckPickRow); a finished game's row says how it went. The Pick of the
+    Day's row draws a cut-down copy of the pick, so it is graded on the
+    whole pick: the copy has no market to find its grade by."""
+    body = APP[APP.index("function deckPickRow(r, opts) {"):APP.index("function potdHeroHTML(d) {")]
+    assert 'const res = o.result === false ? "" : pickResultHTML(o.result || r, "span");' in body
+    assert "${note}${res}</div>" in body
+    hero = APP[APP.index("function potdHeroHTML(d) {"):APP.index("function sameTally(a, b) {")]
+    assert "model_prob: pick.model_prob }, { result: pick })" in hero
+    css = (ROOT / "web" / "css" / "styles.css").read_text(encoding="utf-8")
+    assert ".hd-what span.pr-res { display: inline-flex;" in css, "a deck row's spans are plain lines otherwise"
+    assert ".hd-what .pr-won { color: var(--good); }" in css and ".hd-what .pr-lost { color: var(--bad); }" in css
+    got = _node(GAME + """
+      CARD_GAME = G;
+      const pick = { player: 'Jaylen Brown', market: 'assists', market_label: 'Assists', side: 'Over', line: 2.5,
+                     team: 'PHI', opponent: 'IND' };
+      const copy = { player: pick.player, side: pick.side, line: pick.line, market_label: pick.market_label,
+                     team: pick.team, opponent: pick.opponent };
+      return [pickResultHTML(pick, 'span'), pickResultHTML(copy, 'span')];""")
+    if got is None:
+        return
+    assert got[0] == '<span class="pr-res pr-lost">Lost · 2 assists</span>'
+    assert "waiting on the box score" in got[1], "the copy alone would wait forever"
+
+
 def _report(script):
     node = shutil.which("node") or "/opt/node22/bin/node"
     if not Path(node).exists():

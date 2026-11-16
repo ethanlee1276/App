@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SV. The Tonight tab and the Pick of the Day say how a finished game's
+picks did** (step 628; 16 November). Nothing to run. The results from step ST
+now also show outside the game page. Once a pick's game is final, its row on
+the Tonight tab (the top picks, the strong ones, most likely to hit, the edge
+bets and the bets you're riding) and the Pick of the Day card at the top of
+each board wear the same result: "Won · 7 receptions", "Lost · didn't score",
+"Void — didn't play". The Pick of the Day is graded on the whole pick, not
+the shortened copy its card draws.
+
 **SU. A finished UFC fight shows how it ended and how our bet did** (step
 627; 16 November). Nothing to run. You asked for the finished-game results
 "for all sports". UFC has no game page, since each fight's card on the UFC tab

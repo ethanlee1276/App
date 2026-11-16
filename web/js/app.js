@@ -31059,8 +31059,11 @@ function deckPickRow(r, opts) {
      team's logo for a side, the league's for a game total. */
   const mark = o.mark === false ? "" : `<span class="hd-mark">${betMark(r, 36)}</span>`;
   const note = o.note ? `<span class="hd-note">${escapeHtml(o.note)}</span>` : "";
+  // On a finished game, how it went (pickResultHTML); `opts.result` is the
+  // pick to grade when the row draws a cut-down copy of it.
+  const res = o.result === false ? "" : pickResultHTML(o.result || r, "span");
   return `<${tag} class="hd-row${door ? " openable" : ""}"${door ? ` type="button"${door}` : ""}>
-    ${mark}<div class="hd-what"><b>${escapeHtml(label)}</b><span>${sub}</span>${note}</div>${nums}</${tag}>`;
+    ${mark}<div class="hd-what"><b>${escapeHtml(label)}</b><span>${sub}</span>${note}${res}</div>${nums}</${tag}>`;
 }
 
 /* The Pick of the Day as a hero card — only on a day the desk said BET.
@@ -31074,7 +31077,7 @@ function potdHeroHTML(d) {
   return `<div class="hd-card hd-potd"><span class="hd-eyebrow">Pick of the day</span>${
     deckPickRow({ player: pick.player, side: pick.side, line: pick.line,
                   market_label: pick.market_label || pick.market, headshot: pick.headshot,
-                  team: pick.team, opponent: pick.opponent, model_prob: pick.model_prob })}${
+                  team: pick.team, opponent: pick.opponent, model_prob: pick.model_prob }, { result: pick })}${
     betItHTML(pick, "btn primary hd-betit")}</div>`;
 }
 
