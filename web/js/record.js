@@ -3720,10 +3720,11 @@ async function renderRecord() {
       to read (${o.settled || 0} of the ${recNeed} settled bets the record needs)</summary>`;
   const foldClose = underFloor ? "</details>" : "";
   const monthCard = underFloor ? recMonthCard(src, scopeName) : "";
+  /* THE GAME REPORTS' OWN RECORDS COME FIRST, ABOVE THE FOLDS (2026-11-16): the
+     game parlays and the reports' fact check each have their own sample, so
+     neither waits on the main book's floor. Ethan: "we wanna see if the legs
+     and the parlays we recommend are hitting". */
   const receipts = calendar
-    /* THE GAME REPORTS' OWN RECORDS, ABOVE THE FOLDS (2026-11-16): each has its
-       own sample, so neither waits on the main book's floor. Ethan: "we wanna
-       see if the legs and the parlays we recommend are hitting". */
     + recGameParlaySection(d.game_parlay_record, scope)
     + (scoped ? recFactsSlot(scope) : "")
     /* ZENO'S RECORD — a person's real tickets, beside the model's picks
