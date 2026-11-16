@@ -3243,7 +3243,7 @@ function recReportSection(rep, scope, recent, game) {
             escapeHtml(String(r.status || "").toUpperCase())}</span></div>`).join("")}</div>` : ""}
       ${tickets ? `<div class="rr-head">Parlays and pairs</div>${tickets}` : ""}
       <p class="rr-note">The picks are flat 0.1 unit each; a parlay or pair counts one unit at the least price its
-        card said to take. These are the same picks the books above hold (a report's card pick is a Most Likely pick
+        card said to take. These are the same picks the books above hold (a report’s card pick is a Most Likely pick
         too), so none of it is added into their totals.</p>
     </div>`;
 }

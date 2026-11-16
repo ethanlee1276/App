@@ -751,7 +751,7 @@ const HIDDEN_WHY = {
          weather: "played indoors" },
   ufc: { parlays: "§9.1 caps a card at two legs in one fight, and we price "
                   + "fight winners only — there is no pair to screen",
-         reportpicks: "each fight's written report sits under its card on the UFC tab",
+         reportpicks: "each fight’s written report sits under its card on the UFC tab",
          futures: "a fight card has no season-long market",
          injuries: "no commission publishes an MMA injury report",
          weather: "fights are indoors", race: RACE_WHY },
