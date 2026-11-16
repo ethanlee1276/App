@@ -635,6 +635,9 @@
     // written fight report), drawn inside its card on the UFC tab: several
     // on one page, so no page-wide ids, and no game page to share.
     const fight = !!(extras && extras.fight);
+    // AN OLD GAME'S REPORT (engine/reportarchive), drawn on its play-by-play
+    // page beside whatever else is open: no page-wide ids, nothing to share.
+    const solo = fight || !!(extras && extras.embedded);
     const head = fight ? `<div class="section-title">The fight report
       <span class="sub">— ${r ? `about ${r.minutes} min to read · ` : ""}the fight written out from the card’s
       own numbers</span></div>` : `<div class="section-title">The game report
@@ -674,10 +677,10 @@
       // version reads first; every other section folds to its title, and
       // the titles are the report's contents.
       if (OPEN_SECTIONS.includes(s.key) || secs.length < 3) {
-        return `<section class="gr-sec"${fight ? "" : ` id="gr-${escapeAttr(s.key)}"`}><h3 class="gr-title">${escapeHtml(s.title)}</h3>
+        return `<section class="gr-sec"${solo ? "" : ` id="gr-${escapeAttr(s.key)}"`}><h3 class="gr-title">${escapeHtml(s.title)}</h3>
         ${inner}</section>`;
       }
-      return `<details class="gr-sec gr-fold"${fight ? "" : ` id="gr-${escapeAttr(s.key)}"`}><summary class="gr-title">${
+      return `<details class="gr-sec gr-fold"${solo ? "" : ` id="gr-${escapeAttr(s.key)}"`}><summary class="gr-title">${
         escapeHtml(s.title)}<span class="row-fold-chev" aria-hidden="true"></span></summary><div class="gr-fold-body">${
         inner}</div></details>`;
     }).join("");
@@ -686,9 +689,9 @@
     const folded = secs.length >= 3;
     const tools = `<div class="gr-tools">
       <button type="button" class="btn ghost" data-gr-copy="${escapeAttr(r.game)}">Copy the report</button>${
-        fight ? "" : `<button type="button" class="btn ghost" data-gr-share="${escapeAttr(r.game)}">Share this game</button>`}${
+        solo ? "" : `<button type="button" class="btn ghost" data-gr-share="${escapeAttr(r.game)}">Share this game</button>`}${
         folded ? `<button type="button" class="btn ghost" data-gr-all="1">Open every section</button>` : ""}</div>`;
-    return `<div${fight ? "" : ' id="gp-sec-report"'} class="gr">${head}${tools}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
+    return `<div${solo ? "" : ' id="gp-sec-report"'} class="gr">${head}${tools}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
   }
 
   /* EACH GAME'S PARLAYS ON THE PARLAYS PAGE (app.js fillGameParlays): the

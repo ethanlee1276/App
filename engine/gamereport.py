@@ -4521,8 +4521,14 @@ def keep_started(result: dict, reports: list, sport: str, out, at: str | None, c
         reports, n = _keep.hold(result, reports, _keep.path_for(sport, _full_dir_for(out)), at)
     except Exception as exc:                                 # noqa: BLE001
         return reports, f"; ⚠️ reports before the start not kept ({type(exc).__name__}: {exc})"
+    graded = _grade_finals(result, reports, sport, conn)
+    # KEPT FOR GOOD (engine/reportarchive): each graded final, for its page
+    # after the board has moved on.
+    from . import reportarchive
+    n_arch = reportarchive.save(result, reports, sport, out)
     return reports, ((f"; {n} started game{'' if n == 1 else 's'} kept as written before the start"
-                      if n else "") + _grade_finals(result, reports, sport, conn))
+                      if n else "") + graded
+                     + (f"; {n_arch} finished report{'' if n_arch == 1 else 's'} archived" if n_arch else ""))
 
 
 def _grade_finals(result: dict, reports: list, sport: str, conn) -> str:

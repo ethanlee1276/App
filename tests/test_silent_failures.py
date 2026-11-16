@@ -328,6 +328,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # (<error>)" in the build's log; a quiet slate prints nothing. A file
         # that cannot be kept must never cost the build its reports.
         "hold",
+        # THE GRADED FINALS, KEPT FOR GOOD (engine/reportarchive.save,
+        # 2026-11-16), caught by this sweep the hour it was written. Its 0 is
+        # also a build with no graded final or nothing changed, so a failure
+        # prints "finished reports not archived (<error>)" in the build's log;
+        # a quiet build prints nothing. An archive that cannot be written
+        # must never cost the build its board.
+        "save",
     }
 
     def broad(h):

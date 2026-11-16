@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TC. Go back to any finished game and see if we were right** (step 635; 16 November). Nothing to run.
+You asked that "people should be able to go back and still look at this data and see if we were right or not".
+A game only stays on its board until the board moves to the next slate: the next day for most leagues, the next
+week for the NFL. Now every finished game's graded report is saved for good once its box score is in, with
+everything else:
+- every read marked right or wrong, and "How this report did" on top;
+- the game's parlays and picks;
+- the record's result for each pick.
+
+Open any past game from a team's schedule. Under the score, members see "Our report on this game", graded,
+with every pick and parlay leg marked won or lost. Anyone else sees that it's part of the subscription. The
+saved reports stay private, next to the boards' paid copies. Each one is a few dozen kilobytes, compressed.
+
 **TB. A finished game keeps its parlays and picks, and its report says what it got right** (step 634;
 16 November). Nothing to run. You showed me a finished Pacers at 76ers page and a live NFL report with no
 Parlays or picks section, and asked that people be able to go back after a game and see whether the parlays

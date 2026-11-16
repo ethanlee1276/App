@@ -1358,6 +1358,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._team(parse_qs(parsed.query))
         if parsed.path in ("/api/game", "/api/game/"):
             return self._game(parse_qs(parsed.query))
+        if parsed.path in ("/api/report_archive", "/api/report_archive/"):
+            return self._report_archive(parse_qs(parsed.query))
         if parsed.path in ("/api/explain", "/api/explain/"):
             return self._explain(parse_qs(parsed.query))
         if parsed.path.startswith("/unsubscribe/") and len(parsed.path) > 13:
@@ -6358,6 +6360,36 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             return self._send(503, b'{"error":"the game\'s feed did not answer"}', ".json")
         if not doc:
             return self._send(404, b'{"error":"no such game on the feed"}', ".json")
+        return self._send(200, json.dumps(doc).encode(), ".json")
+
+    def _report_archive(self, q):
+        """A finished game's report, graded on its box score, with its
+        tickets, its picks and the record's verdict on each (engine/
+        reportarchive), for an old game's page. Ethan, 2026-11-16: "people
+        should be able to go back and still look at this data and see if we
+        were right or not."
+
+        GATED, unlike /api/game beside it: the report names every pick with
+        its price and our chance, which is the paid product. A reader
+        without the subscription is told so (402) and the page says what it
+        holds; no game archived is a 404 the page passes over quietly."""
+        from engine import gate, reportarchive
+        if self._rate_limited(RATE_GAME_PER_MIN, "report_archive"):
+            return
+        arg = lambda k, n: (q.get(k) or [""])[0][:n]          # noqa: E731
+        if gate.enabled():
+            A = _acct()
+            conn = A.connect()
+            try:
+                ok = self._entitled(conn, self._account(conn))
+            finally:
+                conn.close()
+            if not ok:
+                return self._send(402, b'{"error":"the graded report is part of the subscription","locked":true}',
+                                  ".json")
+        doc = reportarchive.load(arg("league", 5), arg("date", 10), arg("away", 48), arg("home", 48))
+        if not doc:
+            return self._send(404, b'{"error":"no report archived for this game"}', ".json")
         return self._send(200, json.dumps(doc).encode(), ".json")
 
     def _record_day(self, q):

@@ -10149,11 +10149,12 @@ function ticketResult(legs, g, map) {
   return { status: played.length ? "won" : "push", legs: rs };
 }
 //: What the report needs to grade itself on a finished game (js/report.js RESULTS), or null before it.
-function reportResults(g) {
+//: ``map`` is an old game's own verdicts (engine/reportarchive); the board's `pick_results` when none.
+function reportResults(g, map) {
   const fin = resFinal(g);
   if (!g || !fin) return null;
-  return { final: fin, home: g.home, away: g.away, grade: (bet) => pickResult(bet, g), words: pickResultWords,
-           ticket: (bets) => ticketResult(bets, g) };
+  return { final: fin, home: g.home, away: g.away, grade: (bet) => pickResult(bet, g, map), words: pickResultWords,
+           ticket: (bets) => ticketResult(bets, g, map) };
 }
 //: The weather lines a game page's header panel already says.
 const WEATHER_DETAIL = /^(wind \d|\d+\s*°f|rain\b|snow\b|precipitation)/i;
@@ -11338,8 +11339,12 @@ function likelyShelf(sh) {
    look) and the four checks that set it — our number, the matchup, the
    market, our record — each with the sentence behind it. */
 function oneBoardOn() {
-  const b = (state.data || {}).likely_board;
-  return !!(b && (b.rows || []).length);
+  const d = state.data || {};
+  const b = d.likely_board;
+  // A board whose games have all started still drew the one board: its rows
+  // are kept for each game's page (detail.js keptPicksFor, engine/reportkeep).
+  return !!(b && (b.rows || []).length)
+    || Object.values(d.kept_picks || {}).some((x) => ((x && x.likely) || []).length);
 }
 function oneBoardAllRows() {
   return (((state.data || {}).likely_board || {}).rows || [])

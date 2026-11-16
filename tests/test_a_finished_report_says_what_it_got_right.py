@@ -292,6 +292,73 @@ def test_a_finished_game_is_graded_in_the_build_with_the_history_file():
     assert rep["sections"][0]["key"] == "graded" and rep["graded"]["status"] == "graded", rep.get("graded")
 
 
+def test_a_graded_final_is_kept_for_good_and_read_back():
+    """Ethan: "people should be able to go back and still look at this data and
+    see if we were right or not" (engine/reportarchive)."""
+    from engine import db as D
+    from engine import leaguereport as L
+    from engine import reportarchive as A
+    path = Path(tempfile.mkdtemp()) / "history.db"
+    conn = D.connect(path)
+    conn.executemany(LOG, _nba_rows())
+    conn.commit()
+    conn.close()
+    orig = D.connect
+    D.connect = lambda *a, **k: orig(path)
+    try:
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, "web", "data"))
+        out = os.path.join(d, "web", "data", "nba.json")
+        board, meta = _board()
+        L.attach(board, "nba", meta=meta, out=out, at="2026-10-22T10:00:00")
+        over, meta2 = _board(rows=False, state="final")
+        line = L.attach(over, "nba", meta=meta2, out=out, at="2026-10-23T01:30:00")
+        again, meta3 = _board(rows=False, state="final")
+        line2 = L.attach(again, "nba", meta=meta3, out=out, at="2026-10-23T01:35:00")
+    finally:
+        D.connect = orig
+    assert "; 1 finished report archived" in line, line
+    assert "archived" not in line2, "nothing changed: not written again"
+    where = gate._full_dir_for(out)
+    f = A.path_for(where, "nba", "2026-10-22", "MIA", "BOS")
+    assert f.exists() and str(f).startswith(os.path.join(d, "data", "built")), f
+    assert not str(f).startswith(os.path.join(d, "web")), "the graded report is paid: never the public tree"
+    doc = A.load("nba", "2026-10-22", "MIA", "BOS", where=where)
+    assert doc["report"]["sections"][0]["key"] == "graded" and doc["final"] == {"away": 99, "home": 112}
+    assert doc["parlays"]["threes"][0]["legs"][0]["player"] == "Jayson Tatum"
+    assert doc["picks"]["likely"][0]["player"] == "Jayson Tatum"
+    assert "_bets" not in doc["report"]
+
+
+def test_the_archive_keeps_this_games_verdicts_and_refuses_a_name_that_is_not_one():
+    from engine import reportarchive as A
+    rep = {"away": "MIA", "home": "BOS", "sections": [{"key": "card", "blocks": [{"type": "picks", "items": [
+        {"player": "Jayson Tatum", "bet": {"player": "Jayson Tatum", "market": "pts"}}]}]}]}
+    doc = A.doc_for(rep, FINAL, "nba", "2026-10-22", None, {"edge": [{"player": "Bam Adebayo", "market": "reb"}]},
+                    {"jaysontatum|pts": {"a": 31}, "bamadebayo|reb": {"a": 12}, "someoneelse|pts": {"a": 9}})
+    assert doc["results"] == {"jaysontatum|pts": {"a": 31}, "bamadebayo|reb": {"a": 12}}, doc["results"]
+    for bad in (("nba", "2026-10-22", "../x", "BOS"), ("nba", "22-10-2026", "MIA", "BOS"), ("NBA!", "2026-10-22", "A", "B")):
+        assert A.path_for("/tmp", *bad) is None, bad
+    assert A.path_for("/tmp", "cbb", "2026-11-16", "espn:2390", "DUKE").name == "espn-2390@DUKE.json.gz"
+    assert A.load("nba", "2026-10-22", "..", "BOS", where="/tmp") is None
+
+
+def test_an_old_games_page_draws_it_for_a_member():
+    srv = (ROOT / "server.py").read_text(encoding="utf-8")
+    assert 'if parsed.path in ("/api/report_archive", "/api/report_archive/"):' in srv
+    body = srv[srv.index("def _report_archive(self, q):"):srv.index("def _record_day(self, q):")]
+    assert "self._entitled(conn, self._account(conn))" in body and "402" in body, "the graded report is paid"
+    assert "reportarchive.load(" in body
+    detail = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
+    assert "async function pbpOurReportFill(league, d)" in detail
+    assert 'hero.insertAdjacentHTML("afterend", `<div id="pbp-our-report"></div>`)' in detail
+    assert "results: reportResults(g, doc.results || {})" in detail and "embedded: true" in detail
+    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    assert "function reportResults(g, map)" in app and "pickResult(bet, g, map)" in app
+    js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
+    assert "const solo = fight || !!(extras && extras.embedded);" in js
+
+
 def test_the_page_draws_the_grades_the_kept_picks_and_how_the_report_did():
     js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert "function gradeLine(gr)" in js and "${gradeLine(v.grade)}" in js

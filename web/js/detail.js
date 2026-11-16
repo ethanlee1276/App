@@ -133,23 +133,27 @@ function crowdStripHTML(g) {
 function keptPicksFor(g) {
   return (((state.data || {}).kept_picks) || {})[`${g.away}@${g.home}`] || null;
 }
-//: The one board's rows on this game: the board's own, else the ones kept from before its start.
-function obRowsFor(g) {
-  const k = `${g.away}@${g.home}`;
-  const rows = oneBoardAllRows().filter((r) => r.game === k);
-  if (rows.length) return rows;
+//: The one board's rows kept from before this game's start (keptPicksFor).
+function obKeptRows(g) {
   const kept = keptPicksFor(g);
   return ((kept && kept.likely) || []).filter(showableLikelyRow);
 }
+//: The one board's rows on this game: the board's own, else the ones kept from before its start.
+function obRowsFor(g) {
+  const own = oneBoardAllRows().filter((r) => r.game === `${g.away}@${g.home}`);
+  return own.length ? own : obKeptRows(g);
+}
 function obGameHTML(g) {
-  const rows = obRowsFor(g);
+  const k = `${g.away}@${g.home}`;
+  const own = oneBoardAllRows().filter((r) => r.game === k);
+  const rows = own.length ? own : obKeptRows(g);
   if (!rows.length) return "";
   return `<div id="gp-sec-matchup" class="matchup-picks one-board"><div class="section-title">Most likely · this game
       <span class="sub">— every pick in this game, with the four checks behind its tier</span></div>
     ${obTierSections(rows, { sort: false })}</div>`;
 }
 function gpMatchupHTML(g) {
-  if (oneBoardOn() || obRowsFor(g).length) return obGameHTML(g);
+  if (oneBoardOn()) return obGameHTML(g);
   const m = ((state.data || {}).matchup_picks || []).find((x) => x && x.away === g.away && x.home === g.home);
   if (!m || !((m.td || []).length || (m.props || []).length)) return "";
   return `<div id="gp-sec-matchup" class="matchup-picks"><div class="section-title">Matchup picks
@@ -158,7 +162,10 @@ function gpMatchupHTML(g) {
     ${matchupGameHTML(m, { head: false })}</div>`;
 }
 function matchupPickCount(g) {
-  if (oneBoardOn() || obRowsFor(g).length) return obRowsFor(g).length;
+  if (oneBoardOn()) {
+    const own = oneBoardAllRows().filter((r) => r.game === `${g.away}@${g.home}`);
+    return own.length || obKeptRows(g).length;
+  }
   const m = ((state.data || {}).matchup_picks || []).find((x) => x && x.away === g.away && x.home === g.home);
   return m ? (m.td || []).length + (m.props || []).length : 0;
 }
@@ -2159,7 +2166,7 @@ function renderGamePage() {
       !report && ((g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape || g.nba_tape) ? ["gp-sec-scan", "Matchup scan"] : null,
       simCard && !report ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
-      matchupPickCount(g) ? ["gp-sec-matchup", `${oneBoardOn() || obRowsFor(g).length ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`] : null,
+      matchupPickCount(g) ? ["gp-sec-matchup", `${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`] : null,
       // ONE "Most likely" CHIP (Ethan, 2026-10-01: "Most likely · 15" beside
       // "Most likely · 0"). With the one board on, the board's section is the
       // chip; this section only holds the pulled/dropped folds, so it is
@@ -4981,6 +4988,45 @@ async function pbpArchived(league, event) {
   return doc && doc.event_id ? doc : null;
 }
 
+/* OUR REPORT ON AN OLD GAME (engine/reportarchive, 2026-11-16; Ethan:
+   "people should be able to go back and still look at this data and see if
+   we were right or not"). A finished game's report, graded on its box score
+   (every read right or wrong, "How this report did" first), with its tickets
+   and the record's verdict on each pick, kept for good; a member reads it
+   under the score of the game's page long after the board has moved on. */
+const PBP_REPORTS = new Map();
+async function pbpOurReportFill(league, d) {
+  const slot = document.getElementById("pbp-our-report");
+  if (!slot || !d || !d.archive || (d.live || {}).state !== "final") return;
+  const day = String(d.date || "").slice(0, 10);
+  const key = `${league}|${day}|${d.away}|${d.home}`;
+  let doc = PBP_REPORTS.get(key);
+  if (doc === undefined) {
+    try {
+      const q = new URLSearchParams({ league, date: day, away: d.away || "", home: d.home || "" });
+      const r = await fetch(`/api/report_archive?${q}`, { credentials: "same-origin" });
+      doc = r.ok ? await r.json() : r.status === 402 ? { locked: true } : null;
+    } catch (e) { doc = null; }
+    PBP_REPORTS.set(key, doc);
+  }
+  if (!doc || !slot.isConnected) return;
+  if (doc.locked) {
+    slot.innerHTML = `<div class="card ms-locked"><b>Our report on this game</b> — written before it and graded after
+      it: every read right or wrong, every pick and parlay won or lost — is part of the subscription.</div>`;
+    return;
+  }
+  const R = await loadReport();
+  if (!R || !R.html || !slot.isConnected || !doc.report) return;
+  const fin = doc.final || {};
+  const g = { home: doc.home, away: doc.away, date: doc.date, kickoff: doc.kickoff,
+              live: { state: "final", home_score: fin.home, away_score: fin.away } };
+  slot.innerHTML = `<div class="section-title">Our report on this game
+      <span class="sub">— written before it, graded after it</span></div>
+    ${R.html(doc.report, { embedded: true, sport: doc.sport, parlays: doc.parlays || null,
+                           results: reportResults(g, doc.results || {}) })}`;
+  revealChildren(slot);
+}
+
 async function renderPbpPage(tick) {
   const host = document.getElementById("pbp-body");
   if (!host) return;
@@ -5256,6 +5302,12 @@ async function renderPbpPage(tick) {
     </div>`;
   wire();
   if (fb) gpWire(host);
+  // An old game's final: our report on it, graded, under the score (pbpOurReportFill).
+  if (d.archive && lv.state === "final") {
+    const hero = host.querySelector(".pbp-hero");
+    if (hero) hero.insertAdjacentHTML("afterend", `<div id="pbp-our-report"></div>`);
+    pbpOurReportFill(league, d);
+  }
   if (host.querySelector("[data-pbp-count]")) pbpCountStart();
   if (lv.state === "live" || pbpStartsSoon(lv)) again();
 }
