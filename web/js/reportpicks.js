@@ -95,8 +95,27 @@ function rpTotalsHTML(t) {
       ${tile("Our simulation", t.sim)}${tile("The injury report", t.injuries,
         t.injuries && t.injuries[1] ? `${t.injuries[0]} of ${t.injuries[1]} right${missed}` : "")}${td}</div>
     ${kinds ? `<ul class="rpk-fact-kinds">${kinds}</ul>` : ""}
+    ${rpCalibHTML(t.calibration)}
     <p class="mini rpk-fact-span">${escapeHtml(plural(t.games, "finished game"))}${t.since ? escapeHtml(`, ${formatGameDate(t.since)}`
       + (t.through && t.through !== t.since ? ` to ${formatGameDate(t.through)}` : "")) : ""}.</p>`;
+}
+/* HOW SURE WE WERE, AND HOW OFTEN IT HELD (engine/reportrecord.BANDS): each
+   tenth of a chance, how often the side we gave it won — the call's chance and
+   our ratings' own. A side given 70% should win about seven in ten. */
+function rpCalibHTML(c) {
+  const call = (c || {}).call || {}, rat = (c || {}).ratings || {};
+  const n = (x) => (x || [0, 0])[1];
+  const bands = ["50", "60", "70", "80", "90"].filter((b) => n(call[b]) || n(rat[b]));
+  if (!bands.length) return "";
+  const cell = (x) => (n(x) ? `${x[0]} of ${x[1]} (${Math.round((100 * x[0]) / x[1])}%)` : "—");
+  const withRat = bands.some((b) => n(rat[b]));
+  return `<div class="rpk-fact-calib"><h4 class="rpk-fact-h">How sure we were, and how often it held</h4>
+    <table class="agate rpk-fact-table"><thead><tr><th>We gave it</th><th class="num">Who we think wins</th>${
+      withRat ? `<th class="num">Our ratings alone</th>` : ""}</tr></thead>
+    <tbody>${bands.map((b) => `<tr><td>${b}–${Number(b) + 10}%</td><td class="num">${cell(call[b])}</td>${
+      withRat ? `<td class="num">${cell(rat[b])}</td>` : ""}</tr>`).join("")}</tbody></table>
+    <p class="mini rpk-fact-span">A side we gave 70% should win about seven times in ten. Each row is the games
+      where the side we picked had that chance, and how many of them it won.</p></div>`;
 }
 //: One finished game: the final, then its checks as chips, then a door to its report.
 function rpFactRowHTML(r) {

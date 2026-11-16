@@ -26,7 +26,8 @@ engine/reportgrade reads):
   * THE INJURY REPORT: each man it listed, whether he played (a basketball
     box's minutes, a hockey box's time on ice; a football box keeps only the
     men with a stat, so a man without one is said as that); and, in basketball
-    and hockey, the regulars who sat and were never on it.
+    and hockey, the regulars who sat and were never on it (never a hockey
+    goalie, who sits for the other one).
   * TOUCHDOWN CHANCES: whether each man we gave one scored, against how many
     our chances added up to.
   * WHY A READ MISSED: his minutes (time on ice; a back's carries, a
@@ -528,14 +529,17 @@ def missed(sport: str, report: dict, bx, conn, g: dict, label: str, listed: set)
     clubs = [t for t in (g.get("home"), g.get("away")) if t and bx.has(t)]
     if not clubs:
         return []
-    q = (f"SELECT player, team, season, period, value FROM player_game_logs WHERE {clause} AND market=? "
+    q = (f"SELECT player, team, position, season, period, value FROM player_game_logs WHERE {clause} AND market=? "
          f"AND team IN ({','.join('?' * len(clubs))})")
     nights: dict = {}
     per: dict = {}
-    for player, team, season, period, value in conn.execute(q, (*args, stat, *clubs)).fetchall():
+    goalies: set = set()
+    for player, team, position, season, period, value in conn.execute(q, (*args, stat, *clubs)).fetchall():
         key = (season, str(period))
         nights.setdefault(team, set()).add(key)
         per.setdefault((team, player), {})[key] = _f(value)
+        if sport == "nhl" and str(position or "").upper() == "G":
+            goalies.add(player)
     text = _listed_text(report)
     out = []
     for team in clubs:
@@ -543,7 +547,9 @@ def missed(sport: str, report: dict, bx, conn, g: dict, label: str, listed: set)
         if len(last) < REGULAR_OF:
             continue
         for (t, player), games in per.items():
-            if t != team:
+            # A hockey goalie who did not start sat for the other one, not
+            # for an injury: the report's goalies section says who starts.
+            if t != team or player in goalies:
                 continue
             apps = [games[k] for k in last if (games.get(k) or 0) > 0]
             if len(apps) < REGULAR_IN or sum(apps) / len(apps) < REGULAR_VOLUME[stat]:

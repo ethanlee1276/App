@@ -42,4 +42,7 @@
 .rpk-fact-chip.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 14%, transparent); }
 .rpk-fact-open { justify-self: start; font-size: var(--fs-sm); }
 .rpk-fact-report:empty { display: none; }
+/* How sure we were, and how often it held (reportpicks.js rpCalibHTML). */
+.rpk-fact-calib { margin-top: 6px; }
+.rpk-fact-table { width: 100%; max-width: 560px; font-size: var(--fs-sm); }
 

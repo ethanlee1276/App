@@ -256,6 +256,32 @@ def test_the_injury_report_is_checked_and_a_regular_it_missed_is_named():
     assert F._says("Out (season)") == "sits" and F._says("Probable") == "plays" and F._says("Day-To-Day") == "maybe"
 
 
+def test_a_hockey_goalie_who_did_not_start_is_never_missing_from_the_injury_report():
+    """A regular skater who sat is named; a goalie who sat for the other one is
+    not (he sits for a teammate, not an injury), nor is a skater who played."""
+    rows = []
+
+    def add(day, player, team, pos, **st):
+        rows.extend(("nhl", 2026, day, f"x-{day}", player, team, "BOS" if team == "NYR" else "NYR", pos,
+                     int(team == "NYR"), m, v) for m, v in st.items())
+    for day in NIGHTS:
+        add(day, "Artemi Panarin", "NYR", "L", toi=19.5, points=1)
+        add(day, "Adam Fox", "NYR", "D", toi=23.0, points=1)
+        add(day, "Jonathan Quick", "NYR", "G", toi=60.0, saves=28)
+        add(day, "David Pastrnak", "BOS", "R", toi=20.0, points=1)
+    add(TONIGHT, "Artemi Panarin", "NYR", "L", toi=20.1, points=2)
+    add(TONIGHT, "Igor Shesterkin", "NYR", "G", toi=60.0, saves=31)
+    add(TONIGHT, "David Pastrnak", "BOS", "R", toi=21.0, points=0)
+    fin = {"home": "NYR", "away": "BOS", "date": TONIGHT, "live": {"state": "final", "away_score": 2, "home_score": 3}}
+    conn = _conn(rows)
+    bx = G.box(conn, "nhl", fin, TONIGHT, ("toi", "points", "saves"))
+    got = F.missed("nhl", {"sections": []}, bx, conn, fin, TONIGHT, set())
+    assert [m["player"] for m in got] == ["Adam Fox"], got
+    assert F.missed_words(got[0], "nhl", {"NYR": "Rangers"}) == (
+        "Not on our injury report: Adam Fox (Rangers) didn’t play — 23 minutes on the ice a game in 4 of Rangers’ "
+        "last 4.")
+
+
 def test_touchdown_chances_say_who_scored_against_what_we_said():
     rows = [("nfl", 2026, "010", "DET-010", "Jahmyr Gibbs", "DET", "GB", "RB", 1, "anytime_td", 2.0),
             ("nfl", 2026, "010", "DET-010", "Jahmyr Gibbs", "DET", "GB", "RB", 1, "rush_att", 22.0),
@@ -370,7 +396,8 @@ def test_every_graded_final_is_counted_on_the_reports_record():
     rec = RR.record(where, "nba", today="2026-10-25")
     row = rec["games"][0]
     assert (row["date"], row["game"]) == ("2026-10-22", "MIA@BOS"), row
-    assert row["call"] == {"team": "BOS", "right": True} and row["ratings"] == "wrong", row
+    assert row["call"] == {"team": "BOS", "right": True, "chance": 0.7} and row["ratings"] == "wrong", row
+    assert row["ratings_chance"] == 0.55, row
     assert row["reads"] == [4, 7] and row["groups"]["script"] == [2, 4], row
     assert row["lines"] == {"cover": "BOS", "side": "under"} and row["injuries"] == [1, 3] and row["missed"] == 1, row
     assert row["names"] == {"MIA": "Heat", "BOS": "Celtics"}
@@ -398,6 +425,24 @@ def test_every_graded_final_is_counted_on_the_reports_record():
     assert "reportrecord.refresh(where, sport)" in asrc
     with gzip.open(A.path_for(where, "nba", "2026-10-22", "MIA", "BOS")) as fh:
         assert json.load(fh)["report"]["graded"]["version"] == 3
+
+
+def test_how_sure_we_were_and_how_often_it_held():
+    """Each tenth of a chance, how often the side we gave it won: the call's
+    chance and our ratings' own (a side given 70% should win about seven in ten)."""
+    from engine import reportrecord as RR
+    assert [RR.band_of(x) for x in (0.5, 0.64, 0.7, 0.999, 1.0, 0.49, None)] == [50, 60, 70, 90, 90, None, None]
+    rows = [{"call": {"team": "BOS", "right": True, "chance": 0.72}, "ratings": "wrong", "ratings_chance": 0.55},
+            {"call": {"team": "NYK", "right": False, "chance": 0.75}},
+            {"call": {"team": "LAL", "right": True, "chance": 0.58}, "ratings": "right", "ratings_chance": 0.61},
+            {"call": {"team": "DEN", "right": True}}]
+    t = RR.totals(rows)
+    assert t["calibration"] == {"call": {"70": [1, 2], "50": [1, 1]}, "ratings": {"50": [0, 1], "60": [1, 1]}}, t
+    assert t["call"] == [3, 4], "a call with no chance still counts as a call"
+    assert RR.ROW_VERSION == 2, "every row read again once, with its chances"
+    rp = (ROOT / "web" / "js" / "reportpicks.js").read_text(encoding="utf-8")
+    assert "function rpCalibHTML(c)" in rp and "${rpCalibHTML(t.calibration)}" in rp
+    assert "How sure we were, and how often it held" in rp
 
 
 def test_the_record_is_served_free_and_every_page_draws_the_checks():

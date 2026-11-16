@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TE. How sure we were, and how often it held** (step 637; 16 November). Nothing to run. A
+percentage is data too. "How our reports did" on the Report Picks page now shows a small table. Each row is a
+band of how sure the call on who wins was (50–60%, 60–70%, and so on), with how many of those games the
+called side actually won. Our team ratings' own pick has its own column. A side we give 70% should win about
+seven times in ten, so if a row runs well under its band, our numbers were too sure. It fills up as finished
+games are graded.
+
 **TD. Every finished game's report checks its own facts** (step 636; 16 November). Nothing to run.
 You asked me to think about what people want to see once a game is over: whether the data we gave them and
 the reads we made were right. The report already graded its reads. Now, once the box score is in, it also

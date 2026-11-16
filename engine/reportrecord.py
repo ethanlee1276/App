@@ -39,8 +39,11 @@ import json
 from pathlib import Path
 
 INDEX = "index.json"
-#: Bumped when a row's shape changes, so every row is read again once.
-ROW_VERSION = 1
+#: Bumped when a row's shape changes, so every row is read again once. 2: the
+#: call's chance and our ratings' own, for how sure we were (`calibration`).
+ROW_VERSION = 2
+#: How sure we were, in tenths: a pick at 0.64 sits in the 60s.
+BANDS = (50, 60, 70, 80, 90)
 #: The rows the record sends: the newest this many.
 CARD_ROWS = 400
 #: The recent window the record totals beside the whole archive.
@@ -71,9 +74,11 @@ def row_of(doc: dict) -> dict | None:
     if not away or not home:
         return None
     names = {away: away, home: home}
+    win: dict = {}
     for s in rep.get("sections") or []:
         for b in s.get("blocks") or [] if s.get("key") == "verdict" else []:
             if isinstance(b, dict) and b.get("type") == "winner":
+                win = b
                 if b.get("team") and b.get("name"):
                     names[b["team"]] = b["name"]
                 if b.get("other") and b.get("other_name"):
@@ -88,10 +93,16 @@ def row_of(doc: dict) -> dict | None:
     call = gr.get("call")
     if isinstance(call, dict) and call.get("team"):
         row["call"] = {"team": call["team"], "right": bool(call.get("right"))}
+        p = _f(win.get("chance")) if win.get("team") == call["team"] else None
+        if p is not None:
+            row["call"]["chance"] = round(p, 3)
     for k in ("ratings", "sim"):
         x = gr.get(k)
         if isinstance(x, dict) and x.get("status") in ("right", "wrong"):
             row[k] = x["status"]
+    r = win.get("ratings") if isinstance(win.get("ratings"), dict) else {}
+    if row.get("ratings") and _f(r.get("chance")) is not None:
+        row["ratings_chance"] = round(_f(r["chance"]), 3)
     if isinstance(gr.get("sim"), dict) and gr["sim"].get("script"):
         row["script"] = gr["sim"]["script"]
     sc = gr.get("score")
@@ -110,7 +121,8 @@ def row_of(doc: dict) -> dict | None:
 def totals(rows: list) -> dict:
     """The totals over ``rows``."""
     out = {"games": 0, "call": [0, 0], "reads": [0, 0], "groups": {}, "ratings": [0, 0], "sim": [0, 0],
-           "injuries": [0, 0], "missed": 0, "tds": [0, 0, 0.0], "since": "", "through": ""}
+           "injuries": [0, 0], "missed": 0, "tds": [0, 0, 0.0], "since": "", "through": "",
+           "calibration": {"call": {}, "ratings": {}}}
     for r in rows or []:
         if not isinstance(r, dict):
             continue
@@ -122,6 +134,9 @@ def totals(rows: list) -> dict:
         if r.get("call"):
             out["call"][0] += bool(r["call"].get("right"))
             out["call"][1] += 1
+            _band(out["calibration"]["call"], r["call"].get("chance"), bool(r["call"].get("right")))
+        if r.get("ratings") in ("right", "wrong"):
+            _band(out["calibration"]["ratings"], r.get("ratings_chance"), r["ratings"] == "right")
         for k in ("ratings", "sim"):
             if r.get(k) in ("right", "wrong"):
                 out[k][0] += r[k] == "right"
@@ -139,6 +154,25 @@ def totals(rows: list) -> dict:
             out["tds"][1] += int(r["tds"][1])
             out["tds"][2] = round(out["tds"][2] + float(r["tds"][2]), 2)
     return out
+
+
+def band_of(chance) -> int | None:
+    """The tenth a pick's chance sits in (BANDS): 0.64 is 60, 0.5 is 50, 1.0 is 90."""
+    p = _f(chance)
+    if p is None or p < 0.5 or p > 1.0:
+        return None
+    return min(90, int(p * 100) // 10 * 10)
+
+
+def _band(table: dict, chance, right: bool) -> None:
+    """HOW SURE WE WERE, AND HOW OFTEN IT HELD: a pick counted in its band,
+    {band: [won, picks]}."""
+    b = band_of(chance)
+    if b is None:
+        return
+    cell = table.setdefault(str(b), [0, 0])
+    cell[0] += int(right)
+    cell[1] += 1
 
 
 # --- the index beside the archive ------------------------------------------------------------
