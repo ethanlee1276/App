@@ -362,7 +362,16 @@ APP_JS_BUDGET_KB = 290
 #: the views' lists (app.js), with the Tonight tab's rows and the Pick of
 #: the Day wearing a finished game's result (deckPickRow) that went in the
 #: same night. 256 B gz: 393,038 -> 393,294 B, 78 over 384. Told to Ethan.
-BOOT_BUDGET_KB = 385
+#: 385 -> 386 on 2026-11-16, for Ethan: "when you click on a menu then leave
+#: the app and come back, it closes the menu and doesn't save ur spot on the
+#: page so fix that." YOUR PLACE OUTLASTS LEAVING THE APP (app.js foldsApply,
+#: placeKeep, placeRestore): every fold the reader opens is remembered and put
+#: back on every redraw with the scroll it took, and the place is written down
+#: when the app is put away and gone back to after a reload. 1,322 B gz:
+#: 393,466 -> 394,788 B, 548 over 385. It cannot load later: a reload's place
+#: is put back on the first page drawn, and every redraw on every page reopens
+#: its folds. Told to Ethan.
+BOOT_BUDGET_KB = 386
 
 
 def _gz_trimmed(rel: str) -> int:
