@@ -46,7 +46,7 @@ Standard library only. Never raises out of ``attach``.
 from __future__ import annotations
 
 from .gamereport import (KEY, Ctx, _f, _h, _join, _lift_bets, _list, _num, _ord, _p, _pct, _section,
-                         _sentence, a_pct, absent_sentence, cap, finish, kickoff_words, line_words,
+                         _sentence, a_pct, absent_sentence, cap, finish, keep_started, kickoff_words, line_words,
                          log_changes, market_sentence, ml_chances, named, parlay_sentence, player_clause,
                          read_pick, sec_market, sec_parlays, shine_lines, summary, team_be, team_np, team_owner)
 
@@ -1421,11 +1421,14 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
                       changes=logged.get(f"{g['away']}@{g['home']}|{str(g.get('date') or '')[:10]}"))
             if r:
                 reports.append(r)
+        # A game under way keeps the report it had before it started, college's
+        # too once the board prices none of the night (engine/reportkeep).
+        reports, kept = keep_started(result, reports, sport, out, at)
         result[KEY] = reports
         n_bets = _lift_bets(result)
         if not reports:
             return "Game reports: no games on the board"
-        return summary(reports, logged, out) + n_bets
+        return summary(reports, logged, out) + kept + n_bets
     except Exception as exc:                                 # noqa: BLE001
         result.pop(KEY, None)
         return f"⚠️  Game reports skipped ({type(exc).__name__}: {exc})"

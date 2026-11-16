@@ -9338,6 +9338,25 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TA. A finished game keeps its report's picks** (step 633; 16 November).
+Nothing to run. While checking that Report Picks fills in for every league, I
+found that once a game starts, the boards take that game's picks down (they
+always have, so nobody is pointed at a game already under way), and the
+report was being written again on every build without them. So a finished
+game's report could lose its "Our picks for this game" card and its reads'
+picks, leaving nothing of ours to grade, and Report Picks lost the game. The
+reads were also being rewritten from box scores that already held the game
+itself. College basketball lost its finished games' reports entirely, because
+it only writes the games it is pricing and a board after the last final
+prices none.
+
+Now each build keeps every game's report until the game starts, picks
+included. From the start on, the game shows the report it had right before
+it, with "as written before the game started, last updated Sun 6:58 PM ET"
+at the top, and its picks are graded on it once it's over. A game that had
+already started when this went live shows what it showed before; it works
+from the next games on.
+
 **SZ. First-scorer long shots show how they did too** (step 632; 16 November).
 Nothing to run. While checking the new Report Picks page with a finished game
 I found that a pick carrying the name of its game was being read as a game bet

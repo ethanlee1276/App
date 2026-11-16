@@ -625,8 +625,10 @@
     const head = fight ? `<div class="section-title">The fight report
       <span class="sub">— ${r ? `about ${r.minutes} min to read · ` : ""}the fight written out from the card’s
       own numbers</span></div>` : `<div class="section-title">The game report
-      <span class="sub">— ${r ? `about ${r.minutes} min to read · ` : ""}the whole game written out from
-      tonight’s board; no prop picks in it</span></div>`;
+      <span class="sub">— ${r ? `about ${r.minutes} min to read · ` : ""}${r && r.kept
+        // A started game's report is the one it had before the start (engine/reportkeep).
+        ? `as written before the game started, last updated ${escapeHtml(r.kept)}`
+        : "the whole game written out from tonight’s board"}</span></div>`;
     if (!r) {
       const holds = HOLDS[(extras && extras.sport) || ""] || HOLDS.nfl;
       return `<div id="gp-sec-report" class="gr">${head}<div class="card ms-locked"><b>The game report</b> —

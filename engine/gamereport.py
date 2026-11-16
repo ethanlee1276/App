@@ -4432,11 +4432,12 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             if r:
                 reports.append(r)
         _t = _clock.lap("game reports", "reports", _t)
+        reports, kept = keep_started(result, reports, sport, out, at)
         result[KEY] = reports
         n_bets = _lift_bets(result)
         if not reports:
             return "Game reports: no games on the board"
-        return summary(reports, logged, out) + f"; form for {len(form)} player(s)" + n_bets
+        return summary(reports, logged, out) + f"; form for {len(form)} player(s)" + kept + n_bets
     except Exception as exc:                                 # noqa: BLE001
         result.pop(KEY, None)
         return f"⚠️  Game reports skipped ({type(exc).__name__}: {exc})"
@@ -4464,6 +4465,26 @@ def log_changes(result: dict, prepared: list, sport: str, out, at: str | None) -
         return _log.update(_log.path_for(sport, _full_dir_for(out)), snaps, at or _log.now_et())
     except Exception:                                        # noqa: BLE001
         return {}
+
+
+def keep_started(result: dict, reports: list, sport: str, out, at: str | None) -> tuple[list, str]:
+    """A STARTED GAME'S REPORT IS THE ONE IT HAD BEFORE IT STARTED
+    (engine/reportkeep): the board takes a game's picks down at its start,
+    so a report written again after it would have none to grade. The kept
+    file sits beside the private board, as what changed does. → (the
+    reports, the build log's tail: "; 3 started games kept as written
+    before the start"). With no ``out`` nothing is kept and the reports are
+    as built; never raises."""
+    if not out:
+        return reports, ""
+    try:
+        from . import reportkeep as _keep
+        from .gate import _full_dir_for
+        reports, n = _keep.hold(result, reports, _keep.path_for(sport, _full_dir_for(out)), at)
+    except Exception as exc:                                 # noqa: BLE001
+        return reports, f"; ⚠️ reports before the start not kept ({type(exc).__name__}: {exc})"
+    return reports, (f"; {n} started game{'' if n == 1 else 's'} kept as written before the start"
+                     if n else "")
 
 
 def summary(reports: list, logged: dict, out) -> str:
