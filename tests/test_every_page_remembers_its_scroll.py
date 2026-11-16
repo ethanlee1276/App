@@ -56,7 +56,9 @@ def test_a_detail_opened_by_a_tap_is_a_history_entry():
                 "writeDetail(`#pbp/", "writeDetail(`#player/"):
         assert url in body, url
     # the router's own switches never stack entries
-    assert "_routerNavAt = Date.now();\n    const h = (location.hash" in APP
+    # Both routers read the hash through movedView since 2026-11-16 (a retired
+    # page's link lands where its content went); the stamp still comes first.
+    assert "_routerNavAt = Date.now();\n    const h = movedView((location.hash" in APP
     assert "function initialView() {\n  _routerNavAt = Date.now();" in APP
 
 

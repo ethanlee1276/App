@@ -753,7 +753,7 @@ sudo find /tmp -maxdepth 1 -name 'tmp.*' -type f -size +100M -ls
 sudo tail -8 /var/log/qellys-backup.log
 SH
 run JD "Parlays: two legs from our picks, and the past paired" 300 <<'SH'
-curl -s https://qellysbook.com/js/app.js | grep -c 'function renderParlayPage('
+curl -s https://qellysbook.com/js/app.js | grep -c 'const MOVED_VIEWS = { parlays: "reportpicks" };'
 cd /srv/qellys && sudo -u qellys python3 tools/parlay_study.py
 SH
 run JB "Receiving-yards unders held; college's price switch" 30 <<'SH'

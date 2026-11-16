@@ -16051,10 +16051,11 @@ record, and the live parlays so far (about 20 seconds):
 cd /srv/qellys && sudo -u qellys python3 tools/parlay_study.py
 ```
 
-After the box picks this up, the page is live:
+After the box picks this up, the page is live. (It left every league on 16
+November, step TQ, and this check now finds where its old links land.)
 
 ```
-curl -s https://qellysbook.com/js/app.js | grep -c 'function renderParlayPage('
+curl -s https://qellysbook.com/js/app.js | grep -c 'const MOVED_VIEWS = { parlays: "reportpicks" };'
 ```
 
 The check in one go:

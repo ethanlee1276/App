@@ -9,9 +9,10 @@ and their homes are named so the claim is checkable:
     the daily chores, rendered on the Scanner page.
   * The sim lab — the prop page redraws the model's own distribution,
     2,000 animated draws converging on the published hit probability.
-  * (already live) Correlation finder = the Parlays page (Parlay Mode
-    until 2026-10-31): two-leg tickets from our own picks, a same-game
-    pair only where the legs correlate the right way.
+  * (already live) Correlation finder = each game's parlays on its report
+    and the Report Picks page (engine/gameparlays; the Parlays page that
+    held it until 2026-11-16 left every league): three-leg tickets from our
+    own picks, legs paired only where they correlate the right way.
   * (already live) Stale-line sniper = the Scanner's stale table, plus
     the feed's stale_line events (tests/test_feed.py).
 
@@ -156,11 +157,11 @@ def test_the_sim_lab_draws_from_the_models_own_curve():
 
 def test_the_already_live_halves_still_have_their_homes():
     """The claim in this file's header, checkable: the correlation finder
-    is the Parlays page (Parlay Mode until 2026-10-31, when it became a
-    page of two-leg tickets that pair correlated picks, engine/twoleg), and
-    the Scanner + feed are the sniper."""
-    assert "function renderParlayPage" in APP
-    assert "def relate(" in _read("engine", "parlays.py") and "P.relate(" in _read("engine", "twoleg.py")
+    is each game's parlays (the Parlays page held it until 2026-11-16, when
+    the game report parlays replaced it), drawn on Report Picks, and the
+    Scanner + feed are the sniper."""
+    assert "R.gameTickets(x.tix, state.sport" in _read("web", "js", "reportpicks.js")
+    assert "def relate(" in _read("engine", "parlays.py") and "P.relate(sport, a, b)" in _read("engine", "gameparlays.py")
     assert 'out["stale"] = stale_quotes(results)' in _read(
         "engine", "pipeline.py")
     assert "def stale_diff" in _read("engine", "feed.py")
