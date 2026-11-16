@@ -9338,6 +9338,25 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SM. Each team's timeouts left** (step 619; 16 November). Nothing to run.
+You circled the score on the live Panthers @ Saints page, and the bar at the
+top of the screen, and said "Add so we can see how many timeouts each team
+has". On a live football game, each team now has three bars, lit for each
+timeout it has left, the way a TV scorebug shows them:
+- at the top of the page, under the team's name and record;
+- in the bar that stays at the top when you scroll, under its logo.
+
+In overtime there are two bars in the NFL and one in college. The count
+comes from ESPN's live scoreboard, the same place as the down and the spot.
+When the scoreboard doesn't have it, the game summary's count is used
+instead.
+
+One thing isn't proven yet: ESPN is blocked from where I build, so I
+couldn't read a real scoreboard. The names of the two numbers are ESPN's
+published ones, and if a game's feed doesn't carry them, no bars show at
+all (it never shows wrong ones). Tonight's Sunday night game is the first
+real check.
+
 **SL. The field under the score, in 3D** (step 618; 16 November). Nothing
 to run. You sent FanDuel's tracker and said "I like fanduels render and how
 it looks 3d. I want ours too look like that". The night before, on the drawn

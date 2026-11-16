@@ -196,6 +196,17 @@ def hold_for(stype: dict) -> str:
 _SPOT_RE = re.compile(r"\b([A-Z]{2,5})\s+(\d{1,2})\s*$")
 
 
+def _count(v):
+    """A small count the feed gives as a number or a numeric string (a
+    side's timeouts left); None for anything else, a bool included."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v if 0 <= v <= 9 else None
+    t = str(v if v is not None else "").strip()
+    return int(t) if t.isdigit() and int(t) <= 9 else None
+
+
 def spot_to_yard_line(text: str, home: str, away: str):
     """Absolute field position from a spot string, or None.
 
@@ -398,6 +409,15 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
             possession=(by_id.get(str(sit.get("possession", "")), "")
                         if state == "live" else ""),
         )
+        # EACH SIDE'S TIMEOUTS LEFT (Ethan, 2026-11-16, circling the score:
+        # "Add so we can see how many timeouts each team has"). Football's
+        # situation block names them `homeTimeouts` and `awayTimeouts`. Kept
+        # only for a game in progress and only when both read as a count, so
+        # a block without them draws no bars rather than empty ones.
+        if state == "live":
+            tos = {ha: _count(sit.get(f"{ha}Timeouts")) for ha in ("home", "away")}
+            if all(v is not None for v in tos.values()):
+                live.timeouts = tos
         # Where to watch it: only when the feed named a carrier, so a
         # scoreboard without the block leaves None, not [].
         nat, loc = espn_carriers(comp)

@@ -334,6 +334,11 @@ class LiveStatus:
     # a different fact from an empty list.
     tv: Optional[list] = None
     tv_local: Optional[list] = None
+    # EACH SIDE'S TIMEOUTS LEFT (Ethan, 2026-11-16: "Add so we can see how
+    # many timeouts each team has"): {"home": n, "away": n}, football only,
+    # from the scoreboard's situation block while the game is on. None when
+    # the feed did not give both, which the page draws as nothing at all.
+    timeouts: Optional[dict] = None
 
 
 def live_to_dict(live) -> Optional[dict]:

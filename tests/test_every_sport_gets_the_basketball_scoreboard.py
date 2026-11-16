@@ -38,6 +38,7 @@ BLOCK = DETAIL[DETAIL.index("const PBP_READS"):DETAIL.index("async function rend
 
 STUBS = r"""
 const escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const PBP_FOOTBALL = new Set(["nfl", "cfb"]);
 const icon = (n) => `<i data-icon="${n}"></i>`;
 const miniDiamond = (b) => `<svg class="lb-diamond" data-bases="${(b || []).join(",")}"></svg>`;
 const liveHoldWord = (lv) => ((lv || {}).hold ? String(lv.hold) : "");

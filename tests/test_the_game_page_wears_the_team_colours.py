@@ -55,6 +55,10 @@ DETAIL = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
 APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
 CSS = (ROOT / "web" / "css" / "detail.css").read_text(encoding="utf-8")
 GP = DETAIL[DETAIL.rindex("/*", 0, DETAIL.index("   THE GAME PAGE IN THE CLUBS' COLOURS")):]
+# Each side's timeouts left, which the compact bar draws (they sit with the
+# score block, above this section).
+GP += "\n" + "".join(DETAIL[DETAIL.index(f"function {n}("):DETAIL.index("\n}\n", DETAIL.index(f"function {n}(")) + 3]
+                     for n in ("gpTimeouts", "gpTimeoutsHTML"))
 GP_CSS = CSS[CSS.rindex("/*", 0, CSS.index("   THE GAME PAGE IN THE CLUBS' COLOURS")):]
 COLOUR_MATH = DETAIL[DETAIL.index("const PBP_READS"):DETAIL.index("function pbpSideColours(")]
 

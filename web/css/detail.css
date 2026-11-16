@@ -1088,6 +1088,12 @@ body.gp-on .sportbar { background: transparent; }
 .gp .pbp-sb-side.away .pbp-sb-pts { flex-direction: row-reverse; }
 .gp .pbp-sb-side.home .pbp-sb-pts { flex-direction: row; }
 .gp .pbp-sb-mid { align-self: center; min-width: 84px; gap: 1px; }
+/* Each side's timeouts left (detail.js gpTimeouts): three bars under the
+   club's name and record, lit for each one left, the way a broadcast's
+   scorebug draws them. */
+.pbp-sb-tos { display: flex; justify-content: center; gap: 4px; margin-top: 6px; }
+.pbp-sb-tos > i { width: 13px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .2); }
+.pbp-sb-tos > i.on { background: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, .35); }
 .gp .pbp-sb-per { font: 600 var(--fs-xs) / 1.2 var(--font-sans); letter-spacing: .02em; text-transform: none; color: var(--text-dim); }
 .gp .pbp-sb-clock { font: 700 var(--fs-xl) / 1.1 var(--font-display); }
 .gp .pbp-sb-sit { color: var(--text-dim); }
@@ -1286,6 +1292,11 @@ details.gp-dr > :not(summary) { padding: 0 var(--sp-3) var(--sp-2); }
   font-variant-numeric: tabular-nums; }
 .gp-c-side.away { justify-self: end; }
 .gp-c-side.home { justify-self: start; flex-direction: row-reverse; }
+.gp-c-crest { position: relative; display: inline-grid; }
+.gp-c-tos { position: absolute; left: 50%; top: calc(100% + 2px); transform: translateX(-50%); display: flex; gap: 2px;
+  pointer-events: none; }
+.gp-c-tos > i { width: 6px; height: 2.5px; border-radius: 2px; background: rgba(255, 255, 255, .25); }
+.gp-c-tos > i.on { background: #fff; }
 .gp-c-mid { font: 600 var(--fs-xs) / 1.2 var(--font-sans); color: var(--text-dim); text-align: center; min-width: 64px; }
 /* The down and the spot under the clock (gpCompactHTML), so the top of the
    screen says them wherever the page is scrolled. */

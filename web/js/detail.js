@@ -4754,6 +4754,29 @@ if (typeof document !== "undefined" && !window._lockGameBound) {
     }
   });
 }
+/* EACH SIDE'S TIMEOUTS LEFT (Ethan, 2026-11-16, circling the score on a
+   live Panthers @ Saints page, and the bar at the top of the screen: "Add so
+   we can see how many timeouts each team has"). Three bars for each side,
+   as a broadcast's scorebug draws them, one lit for each timeout left:
+   under the club's name and record at the top of the page, under its crest
+   in the bar (under the score itself they ran into the clock's lines on a
+   phone). The scoreboard's count (livescores `timeouts`), else the game
+   summary's (espnplays.hoops_situation). Two in an NFL overtime period, one
+   in a college one. Football only, while the game is on; a count the feeds
+   did not give draws nothing. */
+function gpTimeouts(d, league, lv) {
+  if (!PBP_FOOTBALL.has(league) || lv.state !== "live") return null;
+  const t = lv.timeouts || ((d || {}).situation || {}).timeouts;
+  const n = (v) => (v == null || !isFinite(Number(v)) ? null : Math.max(0, Math.round(Number(v))));
+  if (!t || n(t.home) == null || n(t.away) == null) return null;
+  const q = /^Q(\d+)$/.exec(String(lv.period || "")), ot = !!q && Number(q[1]) > 4;
+  const total = Math.max(ot ? (league === "cfb" ? 1 : 2) : 3, n(t.home), n(t.away));
+  return { home: n(t.home), away: n(t.away), total };
+}
+function gpTimeoutsHTML(n, total, cls) {
+  return `<span class="${cls}" role="img" aria-label="${n} timeout${n === 1 ? "" : "s"} left">${
+    Array.from({ length: total }, (_, i) => `<i${i < n ? ' class="on"' : ""}></i>`).join("")}</span>`;
+}
 function pbpBoardHTML(d, league, lv, opts) {
   const o = opts || {};
   const table = teamsIn(league) || {};
@@ -4761,6 +4784,7 @@ function pbpBoardHTML(d, league, lv, opts) {
   const ball = pbpBallSide(d, league, lv);
   if (league === "cfb") pbpCfbTeamsWarm();
   if (league === "cbb") pbpCbbTeamsWarm();
+  const tos = gpTimeouts(d, league, lv);
   const side = (ha) => {
     const abbr = d[ha], t = table[abbr] || {};
     const full = (ha === "home" ? d.home_name : d.away_name) || teamNameIn(league, abbr) || abbr || "";
@@ -4775,7 +4799,8 @@ function pbpBoardHTML(d, league, lv, opts) {
     return `<div class="pbp-sb-side ${ha}${lost ? " lost" : ""}">
         <span class="pbp-sb-crest">${teamMarkIn(league, abbr, 56)}</span>
         <div class="pbp-sb-team">${small ? `<span class="pbp-sb-loc">${escapeHtml(small)}</span>` : ""}
-          <b class="pbp-sb-nick">${escapeHtml(big)}</b>${rec ? `<span class="pbp-sb-rec">${escapeHtml(rec)}</span>` : ""}</div>
+          <b class="pbp-sb-nick">${escapeHtml(big)}</b>${rec ? `<span class="pbp-sb-rec">${escapeHtml(rec)}</span>` : ""}${
+          tos ? gpTimeoutsHTML(tos[ha], tos.total, "pbp-sb-tos") : ""}</div>
         <b class="pbp-sb-pts">${has}${score != null ? escapeHtml(String(score)) : "–"}</b></div>`;
   };
   // Live, the Watch button names the carrier; the pill is for before and after.
@@ -5531,9 +5556,12 @@ function gpClockWord(league, lv) {
   return [lv.period, lv.clock].filter(Boolean).join(" ");
 }
 function gpCompactHTML(d, league, lv, tabs, tab) {
+  const tos = gpTimeouts(d, league, lv);
   const side = (ha) => {
     const s = ha === "home" ? lv.home_score : lv.away_score;
-    return `<span class="gp-c-side ${ha}">${teamMarkIn(league, d[ha], 24)}<b>${s != null ? escapeHtml(String(s)) : "–"}</b></span>`;
+    const mark = teamMarkIn(league, d[ha], 24);
+    return `<span class="gp-c-side ${ha}">${tos ? `<span class="gp-c-crest">${mark}${gpTimeoutsHTML(tos[ha], tos.total, "gp-c-tos")}</span>` : mark}<b>${
+      s != null ? escapeHtml(String(s)) : "–"}</b></span>`;
   };
   const m = gpFieldModel(d, league, lv);
   // The down and the spot ride under the clock, so the top of the screen

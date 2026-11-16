@@ -205,6 +205,9 @@ def _row(r: dict, league: str = "") -> dict:
         live["yard_line"] = st.yard_line
     if st.possession:
         live["possession"] = st.possession
+    # Each side's timeouts left, football's, only when the feed gave both.
+    if getattr(st, "timeouts", None):
+        live["timeouts"] = dict(st.timeouts)
     # WIN PROBABILITY, and only when the clock could actually be read.
     # Written as a nested block rather than loose keys so a card can tell
     # "this game has no reading" from "this field happened to be zero" —
@@ -669,11 +672,13 @@ def pbp_doc(league: str, g: dict, payload: dict,
     # the quarter line under the score and the building under Game
     # Information; the summary's header and game info have both for
     # football and hockey too, read by the same two parsers). The scorer's
-    # table — timeouts, team fouls, the bonus, the ball — stays basketball's.
+    # table — timeouts, team fouls, the bonus, the ball — is basketball's
+    # and, for each side's timeouts left, football's too (2026-11-16: the
+    # summary's situation stands in when the scoreboard's has none).
     # Each guarded on its own, each absent rather than empty.
     header = [("linescores", lambda: espnplays.hoops_linescores(payload, league)),
               ("venue", lambda: espnplays.hoops_venue(payload))]
-    if league in espnplays.HOOPS:
+    if league in espnplays.HOOPS or league in espnplays.FOOTBALL:
         header.append(("situation", lambda: espnplays.hoops_situation(payload, league)))
     for key, read in header:
         try:
