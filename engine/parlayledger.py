@@ -1279,6 +1279,14 @@ def journal_built_boards(conn, root) -> dict:
                 wrote += log_game_parlays(conn, gp, sport, board.get("date") or gp.get("date") or "")
             except sqlite3.Error as exc:
                 skipped.append(f"{sport}/game_parlays: {exc}")
+        # EVERY BET THE GAME REPORTS POST (engine/reportbets, 2026-11-16), in
+        # the record's report book, from the same private copy.
+        from . import reportbets
+        if board.get(reportbets.KEY):
+            try:
+                reportbets.journal(conn, board, sport)
+            except sqlite3.Error as exc:
+                skipped.append(f"{sport}/{reportbets.KEY}: {exc}")
     return {"journaled": wrote, "skipped": skipped}
 
 

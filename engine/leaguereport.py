@@ -45,7 +45,7 @@ Standard library only. Never raises out of ``attach``.
 """
 from __future__ import annotations
 
-from .gamereport import (KEY, Ctx, _f, _h, _join, _list, _num, _ord, _p, _pct, _section,
+from .gamereport import (KEY, Ctx, _f, _h, _join, _lift_bets, _list, _num, _ord, _p, _pct, _section,
                          _sentence, a_pct, absent_sentence, cap, finish, kickoff_words, line_words,
                          log_changes, market_sentence, ml_chances, named, parlay_sentence, player_clause,
                          read_pick, sec_market, sec_parlays, shine_lines, summary, team_be, team_np, team_owner)
@@ -1422,9 +1422,10 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
             if r:
                 reports.append(r)
         result[KEY] = reports
+        n_bets = _lift_bets(result)
         if not reports:
             return "Game reports: no games on the board"
-        return summary(reports, logged, out)
+        return summary(reports, logged, out) + n_bets
     except Exception as exc:                                 # noqa: BLE001
         result.pop(KEY, None)
         return f"⚠️  Game reports skipped ({type(exc).__name__}: {exc})"

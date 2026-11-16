@@ -2121,6 +2121,17 @@ POTD_LEAGUES = ("nfl", "cfb", "mlb", "nba", "wnba", "nhl", "ufc", "cbb")
 #: enough to read the run, short of a wall of names.
 POTD_RECENT_LIMIT = 40
 
+#: THE GAME REPORTS' OWN BOOK (engine/reportbets.CATEGORY, 2026-11-16; Ethan:
+#: "all bets and parlays made from the game reports should be categorized as
+#: 'report' bets under each sport on the record page"). Every pick a report
+#: posts, journaled the Most Likely way under its own name. A lens on picks
+#: the other books hold (a card pick is a Most Likely pick too), so it is in
+#: no headline, no chip count (`RECOMMENDED_CATEGORIES`) and no other book's
+#: total; the Record page draws it on its own, with the reports' parlays
+#: (`two_leg.game`) beside it.
+REPORT_CATEGORY = "report"
+REPORT_RECENT_LIMIT = 40
+
 #: A FLAT UNIT, AND NO DOLLARS. The unit is 1.0 rather than the 0.1 the
 #: measurement books use, because this book has exactly one row a day
 #: per sport and its record is meant to read as a record — "11-5, +2.4u"
@@ -12104,6 +12115,17 @@ def export_json(conn, path) -> None:
         # don't want wnba Past bet or new bet on the record page." The
         # picks are still made and still graded; the page just does not
         # carry them. See `off_record_sql`.
+        # THE GAME REPORTS' BOOK (`REPORT_CATEGORY`), pooled and per sport, with
+        # its receipts, less the bench like the books beside it. Every league
+        # with a row in it; the page draws a league's own on its scope.
+        "report": performance(conn, category=REPORT_CATEGORY, since=since),
+        "report_by_sport": {
+            sp: rep for sp, rep in
+            ((sp, performance(conn, sp, REPORT_CATEGORY, since=since))
+             for sp in TRACKED_SPORTS if not is_benched(sp))
+            if rep.get("settled") or rep.get("open")},
+        "report_recent": recent_settled(conn, REPORT_RECENT_LIMIT, category=REPORT_CATEGORY,
+                                        since=since),
         "potd": performance(conn, category=POTD_CATEGORY, since=since),
         # EVERY LEAGUE THAT NAMES ONE, an empty book included (`POTD_LEAGUES`).
         "potd_by_sport": {

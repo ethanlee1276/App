@@ -489,9 +489,9 @@ const HIDDEN_VIEWS = {
   // No commission publishes an MMA injury report and ESPN carries no
   // /injuries endpoint for it — what exists is camp rumor, which is
   // exactly what this site does not publish.
-  ufc: ["parlays", "futures", "injuries", "weather", "race"],
-  polymarket: ["parlays", "futures", "weather", "race"],
-  fantasy: ["parlays", "futures", "weather", "race"],
+  ufc: ["parlays", "reportpicks", "futures", "injuries", "weather", "race"],
+  polymarket: ["parlays", "reportpicks", "futures", "weather", "race"],
+  fantasy: ["parlays", "reportpicks", "futures", "weather", "race"],
   // Players and Rosters OPENED 2026-08-24: the "no free player-level
   // feed" claim was stale — ESPN's keyless box scores (the same API
   // family the CFB scoreboard reads) now feed player_game_logs, so both
@@ -3278,7 +3278,7 @@ addEventListener("online", refreshStaleBar);
    THAT DRAW THE BOARD: the plans page, the Record, My Bets and the
    reference pages show none of its games, and a demo warning over
    the plans page was noise (seen in the first render). */
-const BOARD_VIEWS = ["recommended", "tonight", "likely", "props", "edge", "longshots", "parlays", "live",
+const BOARD_VIEWS = ["recommended", "tonight", "likely", "props", "edge", "longshots", "parlays", "reportpicks", "live",
   "scanner", "game", "prop", "pbp", "trending", "players", "futures"];
 function boardViewNow() { return BOARD_VIEWS.includes(state.view); }
 function slateNotice(d) {
@@ -4417,6 +4417,7 @@ const OFFSCREEN_PAGES = [
   ["scanner-body", () => renderScanner(), true],
   ["longshots-board", () => renderLongShots()],
   ["parlays-body", () => renderParlayPage(), true],
+  ["reportpicks-body", () => renderReportPicks(), true],
   ["likely-board", () => renderLikely(), true],
   ["trending-board", () => renderTrending()],
   ["players-board", () => renderPlayers()],
@@ -23433,6 +23434,8 @@ function whyCalcParlay() {
 function renderRace(...a) { return roomCall(renderRace, "renderRace", "js/race.js", "css/race.css", a); }
 // …and every league's Pick of the Day, free (js/potd.js; Ethan, 2026-10-30).
 function renderPotdPage(...a) { return roomCall(renderPotdPage, "renderPotdPage", "js/potd.js", "css/potd.css", a); }
+// …and every bet and parlay the game reports posted (js/reportpicks.js; Ethan, 2026-11-16).
+function renderReportPicks(...a) { return roomCall(renderReportPicks, "renderReportPicks", "js/reportpicks.js", "css/reportpicks.css", a); }
 // The owner's desk (js/owner.js, engine/ownerdesk), Who's on now its first
 // card (engine/whoson): the owners' listed accounts alone (engine/siteowners).
 function renderOwner(...a) { return roomCall(renderOwner, "renderOwner", "js/owner.js", "css/owner.css", a); }
@@ -23975,7 +23978,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "parlays", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "owner", "discord", "feed", "signup", "reset", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "parlays", "reportpicks", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "owner", "discord", "feed", "signup", "reset", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -24616,6 +24619,7 @@ function _switchViewNow(name, push, dir) {
   // The Parlays page (2026-10-31) is one of the pages OFFSCREEN_PAGES marks
   // as drawn on every visit, so this line is what draws it from the menu.
   if (name === "parlays") renderParlayPage();
+  if (name === "reportpicks") renderReportPicks();
   if (name === "rosters") renderRosters();
   if (name === "injuries") renderInjuries();
   if (name === "standings") renderStandings();
@@ -30548,7 +30552,7 @@ function tourOpen(step) {
 const SWIPE_MIN_X = 70, SWIPE_MAX_Y = 40, PTR_MIN = 72;
 //: The views that follow the sport chips. A detail page, the chat, the
 //: account page and the standalone modes are not boards.
-const SWIPE_VIEWS = ["recommended", "tonight", "live", "likely", "longshots", "parlays", "edge", "scanner",
+const SWIPE_VIEWS = ["recommended", "tonight", "live", "likely", "longshots", "parlays", "reportpicks", "edge", "scanner",
                      "futures", "injuries", "weather", "trending", "rosters", "players", "standings"];
 const BUZZ = { tap: [12], win: [30, 40, 30], loss: [70] };
 
@@ -30683,7 +30687,7 @@ document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle");
 const MORE_GROUPS = [
   // Parlays (2026-10-31, Ethan: "make the parlay feature an actual button"):
   // after Long Shots, as in the sidebar.
-  ["Picks", ["view:likely", "view:longshots", "view:parlays", "view:zeno", "view:feed"]],
+  ["Picks", ["view:likely", "view:longshots", "view:parlays", "view:reportpicks", "view:zeno", "view:feed"]],
   ["Odds", ["view:props", "view:edge", "subtab:gamebets", "view:scanner", "view:futures", "view:race"]],
   ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",

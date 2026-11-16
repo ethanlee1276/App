@@ -482,3 +482,15 @@
    first baskets beside the home runs and anytime touchdowns before them. */
 .rec-ls-markets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .rec-ls-markets b { font-weight: 700; margin-left: 4px; }
+/* The game reports' own book (record.js recReportSection, engine/reportbets). */
+.rec-report .rr-head { margin: 10px 0 4px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; }
+.rec-report .rr-head:first-child { margin-top: 0; }
+.rec-report .rr-big { font-size: var(--fs-lg); }
+.rec-report .rr-pos { color: var(--good); font-weight: 700; }
+.rec-report .rr-neg { color: var(--bad); font-weight: 700; }
+.rec-report .rr-mute { color: var(--text-mute); }
+.rec-report .rr-what { flex: 1; min-width: 0; }
+.rec-report .rr-date { width: 64px; flex-shrink: 0; color: var(--text-mute); }
+.rec-report .rr-rows { margin-top: 8px; }
+.rec-report .rr-note { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--text-mute); }

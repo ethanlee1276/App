@@ -409,6 +409,11 @@
         <button class="nav-btn sb-item" data-view="parlays" id="parlays-tab" data-hint="two-leg parlays from our picks">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 2v4H4v-4a2 2 0 0 0 0-2z"/><path d="M14 7v10" stroke-dasharray="2 2"/></svg>
           Parlays</button>
+        <!-- REPORT PICKS (Ethan, 2026-11-16): every bet and parlay the game reports
+             posted, game by game (js/reportpicks.js). -->
+        <button class="nav-btn sb-item" data-view="reportpicks" id="reportpicks-tab" data-hint="every bet and parlay from the game reports">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 10h6M9 14h6M9 18h4"/></svg>
+          Report Picks</button>
         <button class="nav-btn sb-item" data-view="edge" data-hint="where our number beats the price — the picks we stake">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
           Edge Picks</button>
@@ -1320,6 +1325,14 @@
         <span class="sub">— two legs, from our picks</span>
       </div>
       <div id="parlays-body"></div>
+    </section>
+
+    <!-- Report Picks: each game report's bets and parlays (renderReportPicks). -->
+    <section class="view" id="view-reportpicks">
+      <div class="section-title">Report Picks
+        <span class="sub" id="reportpicks-sub">— every bet and parlay from our game reports</span>
+      </div>
+      <div id="reportpicks-body"></div>
     </section>
 
     <!-- Futures. The one page here that is about months rather than tonight,

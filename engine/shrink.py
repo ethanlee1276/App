@@ -57,6 +57,8 @@ FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          "js/race.js", "css/race.css",
          # Every league's Pick of the Day, free (2026-10-30).
          "js/potd.js", "css/potd.css",
+         # Every bet and parlay the game reports posted (2026-11-16).
+         "js/reportpicks.js", "css/reportpicks.css",
          "css/record.css", "css/detail.css", "css/account.css", "css/more.css",
          # The game chat (2026-10-25), a room like the others.
          "js/chat.js", "css/chat.css",

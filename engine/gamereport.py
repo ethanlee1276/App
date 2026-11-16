@@ -4225,8 +4225,18 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
     words = _words(sections)
     color_names(c, sections)
     mark_statuses(sections)
+    # EVERY BET THE REPORT SHOWS (engine/reportbets), matched to the board
+    # row it came from, for the board's Report Picks list and the record's
+    # report book; lifted off the report by the attach step.
+    try:
+        from . import reportbets
+        bets = reportbets.bets_of(sections, reportbets.pool(_card_rows(c), c.reads))
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the report's bets not listed for {c.away}@{c.home} ({exc})")
+        bets = []
     g = c.g
     return {"game": f"{c.away}@{c.home}", "away": c.away, "home": c.home, "sport": c.sport,
+            **({"_bets": bets} if bets else {}),
             "date": g.get("date") or "", "kickoff": g.get("kickoff") or "",
             "title": f"{c.name(c.away)} at {c.name(c.home)}",
             # What Share says beside the link: the kickoff and the line —
@@ -4285,6 +4295,21 @@ def college_names(result: dict) -> dict:
         if isinstance(meta, dict):
             out[abbr] = meta.get("nick") or meta.get("name") or abbr
     return out
+
+
+def _lift_bets(result: dict) -> str:
+    """Every report's bets onto the board (engine/reportbets.attach), as the
+    tail of the build log's line: "; 41 report bets". Never raises: a board
+    without the list still has its reports."""
+    try:
+        from . import reportbets
+        n = reportbets.attach(result)
+    except Exception as exc:                                 # noqa: BLE001
+        for r in result.get(KEY) or []:
+            if isinstance(r, dict):
+                r.pop("_bets", None)
+        return f"; ⚠️ report bets not listed ({type(exc).__name__}: {exc})"
+    return f"; {n} report bet{'' if n == 1 else 's'}" if n else ""
 
 
 def attach(result: dict, *, allowed: dict | None = None, season: int | None = None,
@@ -4408,9 +4433,10 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
                 reports.append(r)
         _t = _clock.lap("game reports", "reports", _t)
         result[KEY] = reports
+        n_bets = _lift_bets(result)
         if not reports:
             return "Game reports: no games on the board"
-        return summary(reports, logged, out) + f"; form for {len(form)} player(s)"
+        return summary(reports, logged, out) + f"; form for {len(form)} player(s)" + n_bets
     except Exception as exc:                                 # noqa: BLE001
         result.pop(KEY, None)
         return f"⚠️  Game reports skipped ({type(exc).__name__}: {exc})"

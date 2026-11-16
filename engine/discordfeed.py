@@ -281,7 +281,10 @@ def recent_longshots(conn, since: str) -> list[dict]:
     try:
         rows = conn.execute(
             "SELECT id, sport, player, market, side, line, odds, hit_prob, category FROM bets WHERE status='won' "
-            "AND odds >= ? AND COALESCE(game_day, date) >= ? AND category NOT LIKE 'parlay%' ORDER BY id",
+            # Not the report book either (engine/reportbets): its rows are
+            # picks another book already holds, so a win there is posted once.
+            "AND odds >= ? AND COALESCE(game_day, date) >= ? AND category NOT LIKE 'parlay%' "
+            "AND category != 'report' ORDER BY id",
             (LONGSHOT_ODDS, since)).fetchall()
     except sqlite3.Error:
         return []

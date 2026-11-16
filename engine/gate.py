@@ -191,6 +191,10 @@ PAID_KEYS = (
     # WHAT HAPPENED TO EACH PICK (engine/gameresults, 2026-11-16): the
     # journal's verdict on every graded pick, which names the picks.
     "pick_results",
+    # EVERY BET THE GAME REPORTS POST (engine/reportbets, 2026-11-16): the
+    # reports' picks in one list, with prices and our chance, for the Report
+    # Picks page — the picks under another name, so a paid key.
+    "report_bets",
     # EVERY UFC FIGHT, WRITTEN OUT (engine/ufc/report, 2026-11-16): the
     # card's picks, chances and grades in words, so as paid as `picks`.
     "fight_reports",

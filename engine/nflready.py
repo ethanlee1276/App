@@ -171,12 +171,16 @@ def calib_state(sport: str, market: str) -> dict:
 
 def settled_record(conn, sport: str, market: str) -> dict:
     """Won/lost rows and flat-stake ROI, straight from the ledger."""
+    # Not the report book's rows (engine/reportbets): they are other books'
+    # picks again. A journal from before buckets has no column to ask.
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(bets)")}
+    not_report = " AND COALESCE(category, '') != 'report'" if "category" in cols else ""
     row = conn.execute(
         "SELECT COUNT(*) n, "
         "SUM(CASE WHEN status='won' THEN 1 ELSE 0 END) w, "
         "SUM(COALESCE(pnl_units, 0)) pnl, "
         "SUM(COALESCE(stake_units, 0)) staked "
-        "FROM bets WHERE sport=? AND market=? AND status IN ('won','lost')",
+        "FROM bets WHERE sport=? AND market=? AND status IN ('won','lost')" + not_report,
         (sport, market)).fetchone()
     n = int((row[0] if row else 0) or 0)
     # OPEN ROWS COUNT AS EVIDENCE OF LIFE, not of performance. "0
@@ -185,7 +189,8 @@ def settled_record(conn, sport: str, market: str) -> dict:
     # first cut of this report printed both as a bare zero.
     still_open = int(conn.execute(
         "SELECT COUNT(*) FROM bets WHERE sport=? AND market=? "
-        "AND status NOT IN ('won','lost')", (sport, market)).fetchone()[0] or 0)
+        "AND status NOT IN ('won','lost')" + not_report,
+        (sport, market)).fetchone()[0] or 0)
     if not n:
         return {"n": 0, "open": still_open}
     # ROI PER UNIT STAKED, not per bet: the board sizes its stakes, so

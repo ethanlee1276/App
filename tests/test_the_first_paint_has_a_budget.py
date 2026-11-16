@@ -354,7 +354,15 @@ APP_JS_BUDGET_KB = 290
 #: 391,318 -> 393,038 B, 846 over 383. It cannot load later: the board's
 #: cards for a game that has finished are on the first page drawn. Told to
 #: Ethan.
-BOOT_BUDGET_KB = 384
+#: 384 -> 385 on 2026-11-16, for Ethan: "we should have a page like the most
+#: likely bets page but all game report parlays and bets". REPORT PICKS: its
+#: page lives in a room (js/reportpicks.js, css/reportpicks.css, loaded when
+#: opened), and what boots is only its door: the sidebar button and the
+#: phone menu's copy of it, its empty section, the room stub and the page in
+#: the views' lists (app.js), with the Tonight tab's rows and the Pick of
+#: the Day wearing a finished game's result (deckPickRow) that went in the
+#: same night. 256 B gz: 393,038 -> 393,294 B, 78 over 384. Told to Ethan.
+BOOT_BUDGET_KB = 385
 
 
 def _gz_trimmed(rel: str) -> int:

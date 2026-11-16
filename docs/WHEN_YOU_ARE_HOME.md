@@ -9338,6 +9338,33 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SY. Report bets on the Record page, and a Report Picks page** (step 631;
+16 November). Nothing to run. You asked that "all bets and parlays made from
+the game reports should be categorized as 'report' bets under each sport on
+the record page", and for "a page like the most likely bets page but all game
+report parlays and bets".
+- **Report Picks** is a new page in the sidebar, after Parlays, and in the
+  phone's menu under Picks. It shows every game on the board in kickoff
+  order, with a chip to jump to each. For each game you get its report's
+  picks, each saying where the report shows it (Our picks, Matchup read,
+  Breakout candidate or Fade), with the price and our chance. Then come that
+  game's three-leg parlays and pairs. Tap a pick to open it, or "Open the
+  report" for the game. A finished game's picks and tickets say how they
+  went. It's for members, like the picks.
+- **The Record page** has a Report bets section for each sport, and for all
+  sports together. It shows the report picks' record (won-lost, units, hit
+  rate and the latest results), then the reports' three-leg parlays and
+  pairs, each counted on its own.
+
+How it's counted: every pick a report shows is recorded in its own report
+book, the way Most Likely picks are. That's a flat 0.1 unit each, at the
+chance the page showed, only before the game starts and only at a real price.
+Recording starts with this build, so earlier reports' picks aren't in it. The
+parlays and pairs have been graded since 14 November, and their record now
+shows per sport here too. The same picks also sit in the Most Likely or Edge
+book, so the report book is shown on its own and never added into those
+totals or the headline.
+
 **SX. The NFL's finished games get their results too** (step 630; 16
 November). Nothing to run. After step ST went live, the NFL board was the one
 board without results. Its file is the original board (recommendations.json)

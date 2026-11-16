@@ -717,15 +717,22 @@
       bet_legs: t.legs || [],
     };
   }
+  //: One game's tickets, its three-leg parlays then its scorer pairs, each
+  //: graded once the game is over (opts.results: game → the grader, app.js);
+  //: the Report Picks page draws them under the game's bets (js/reportpicks.js).
+  function gameTickets(g, sport, opts) {
+    const was = RESULTS;
+    RESULTS = (opts && typeof opts.results === "function" && opts.results(g)) || null;
+    try {
+      return `${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
+        : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}
+        ${(g.scorers || []).length ? block({ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) })
+          : (g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : "")}`;
+    } finally { RESULTS = was; }
+  }
   function gameParlays(gp, sport, opts) {
     const games = (gp && gp.games) || [];
     if (!games.length) return "";
-    // Each game's tickets graded once it is over (opts.results: game → the grader, app.js).
-    const graded = (g, html) => {
-      const was = RESULTS;
-      RESULTS = (opts && typeof opts.results === "function" && opts.results(g)) || null;
-      try { return html(); } finally { RESULTS = was; }
-    };
     const pair = ["nfl", "cfb"].includes(sport) ? "touchdown" : sport === "nhl" ? "goal-scorer" : "scorer";
     return `<div class="section-title">Each game’s parlays <span class="sub">— four three-leg tickets and three ${pair}
         pairs a game, from our own picks; every one tracked on the Record page, none staked</span></div>
@@ -734,10 +741,7 @@
       ${games.map((g) => `<details class="gs-game gr-parlay-game"><summary><span class="gs-game-k">${
         escapeHtml(teamName(g.away))} @ ${escapeHtml(teamName(g.home))}</span>
         <span class="gs-game-n">${(g.threes || []).length} three-leg · ${(g.scorers || []).length} pairs</span></summary>
-        ${graded(g, () => (g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
-          : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`)}
-        ${graded(g, () => (g.scorers || []).length ? block({ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) })
-          : (g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : ""))}
+        ${gameTickets(g, sport, opts)}
       </details>`).join("")}`;
   }
   /* Their record so far (record.json two_leg.game, engine/parlayledger
@@ -752,5 +756,5 @@
     return bits.length ? `Our record so far — ${bits.join(" · ")}` : "";
   }
 
-  window.QBReport = { html, block, toText, teaser, gameParlays, gameParlaysRecord, slipCombine };
+  window.QBReport = { html, block, toText, teaser, gameParlays, gameTickets, gameParlaysRecord, slipCombine };
 })();
