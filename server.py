@@ -4936,7 +4936,10 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the player page could not be read"}', ".json")
         if len(_PLAYER_PAGES) >= PLAYER_PAGE_KEEP:
-            _PLAYER_PAGES.pop(next(iter(_PLAYER_PAGES)))
+            try:                          # the oldest out; another thread may be writing beside this one
+                _PLAYER_PAGES.pop(next(iter(_PLAYER_PAGES)), None)
+            except (StopIteration, RuntimeError):
+                pass
         _PLAYER_PAGES[key] = (time.time(), body)
         return self._send(200, body, ".json")
 

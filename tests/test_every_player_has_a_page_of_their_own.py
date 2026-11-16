@@ -172,7 +172,7 @@ def test_a_newest_game_whose_box_score_is_not_in_yet_says_so():
     assert rows["season"]["gp"] == 3 and rows["season"]["values"]["passing.yds"] == 267.7, "not a game of zeros"
     assert d["career"]["rows"][0]["gp"] == 3 and d["career"]["total"]["gp"] == 4 and d["bio"]["games"] == 4
     assert {x["key"]: x["value"] for x in d["headline"]}["yds"] == 803
-    assert 'g.pending ? `<p class="pp-dnp">The box score isn’t in yet.</p>`' in PAGE
+    assert 'g.pending ? `<p class="plr-dnp">The box score isn’t in yet.</p>`' in PAGE
     assert "if (!g.dnp && !g.pending) rows.push(" in PAGE
 
 def test_a_basketball_page_averages_a_game_and_ranks_the_regulars():
@@ -243,20 +243,20 @@ def test_the_server_serves_it_free_and_the_players_page_becomes_it():
     assert '"js/playerpage.js", "css/playerpage.css",' in (ROOT / "engine" / "shrink.py").read_text(encoding="utf-8")
     assert '"/js/playerpage.js", "/css/playerpage.css",' in (ROOT / "web" / "sw.js").read_text(encoding="utf-8")
     assert "/js/playerpage.js /css/playerpage.css" in (ROOT / "deploy" / "Caddyfile").read_text(encoding="utf-8")
-    assert 'const PP_TABS = [["overview", "Overview"], ["news", "News"], ["stats", "Stats"], ["bio", "Bio"],\n' \
+    assert 'const PLR_TABS = [["overview", "Overview"], ["news", "News"], ["stats", "Stats"], ["bio", "Bio"],\n' \
            '  ["splits", "Splits"], ["log", "Game Log"]];' in PAGE, "ESPN's six menus"
     i = PAGE.index("function renderPlayerPage(host, player, sport) {")
     mount = PAGE[i:PAGE.index("\n}\n", i)]
     assert "while (host.firstChild) kept.appendChild(host.firstChild);" in mount
     assert "tonight.replaceChildren(kept);" in PAGE, "the market cards this page always drew are kept, in Overview"
-    assert ("  if (same) {\n    ppMarkets(same, kept);\n    host.replaceChildren(same);\n    return;\n  }") in mount, \
+    assert ("  if (same) {\n    plrMarkets(same, kept);\n    host.replaceChildren(same);\n    return;\n  }") in mount, \
         "the 30-second redraw puts the same page back, only its market cards fresh"
-    assert "if (cached) ppFill(page, cached);" in mount, "a first visit draws at once from the visit's copy"
-    assert ('  const b = e.target.closest && e.target.closest(".pp .gl-open");' in PAGE
-            and "  e.stopPropagation();\n  ppShow(page, \"log\");\n  ppToTabs(page);\n}, true);" in PAGE), \
+    assert "if (cached) plrFill(page, cached);" in mount, "a first visit draws at once from the visit's copy"
+    assert ('  const b = e.target.closest && e.target.closest(".plr .gl-open");' in PAGE
+            and "  e.stopPropagation();\n  plrShow(page, \"log\");\n  plrToTabs(page);\n}, true);" in PAGE), \
         "on the page, the card's Game log opens the Game Log menu, not a sheet over it"
-    for sel in (".pp-hero", ".pp-mark", ".pp-tabs", ".pp-tab.on", ".pp-panel[hidden]", ".pp-nums", ".pp-score",
-                ".pp-tiles", ".pp-break td", ".pp-heads", ".pp-bio", "@media (max-width: 640px)"):
+    for sel in (".plr-hero", ".plr-mark", ".plr-tabs", ".plr-tab.on", ".plr-panel[hidden]", ".plr-nums", ".plr-score",
+                ".plr-tiles", ".plr-break td", ".plr-heads", ".plr-bio", "@media (max-width: 640px)"):
         assert sel in CSS, sel
     assert "color: var(--night-text);" in CSS, "the band is night in either theme, its words the night tokens'"
 
@@ -288,34 +288,35 @@ def test_the_page_draws_every_menu():
              "const teamMarkIn = (s, a, n) => `<i data-mark=\"${a}\"></i>`; const lgCode = (s) => s.toUpperCase();"
              "const playerAvatar = (n) => `<i data-face=\"${n}\"></i>`; const injTag = () => '';"
              "const surname = (n) => n.split(' ').pop();"
+             "const safeHref = (u) => /^https?:\\/\\//i.test(String(u || '')) ? esc(u) : '#';"
              "const document = { addEventListener() {} };\n")
     js = stubs + PAGE + f"""
 const qb = {json.dumps(qb)}, nba = {json.dumps(nba)}, news = {json.dumps(news)};
 process.stdout.write(JSON.stringify({{
-  hero: ppHeroHTML(qb.player, qb.sport, qb.team, qb.position, '', qb.bio),
-  season: ppSeasonHTML(qb), prev: ppPrevHTML(qb), splitlet: ppSplitletHTML(qb), stats: ppStatsHTML(qb),
-  bio: ppBioHTML(qb), splits: ppSplitsHTML(nba), nbaPrev: ppPrevHTML(nba), nbaSeason: ppSeasonHTML(nba),
-  nbaStats: ppStatsHTML(nba), news: ppNewsHTML(qb, news),
-  latest: ppLatestHTML(qb, news), tabs: ppTabsHTML('news'), panels: ppPanelsHTML('news'),
+  hero: plrHeroHTML(qb.player, qb.sport, qb.team, qb.position, '', qb.bio),
+  season: plrSeasonHTML(qb), prev: plrPrevHTML(qb), splitlet: plrSplitletHTML(qb), stats: plrStatsHTML(qb),
+  bio: plrBioHTML(qb), splits: plrSplitsHTML(nba), nbaPrev: plrPrevHTML(nba), nbaSeason: plrSeasonHTML(nba),
+  nbaStats: plrStatsHTML(nba), news: plrNewsHTML(qb, news),
+  latest: plrLatestHTML(qb, news), tabs: plrTabsHTML('news'), panels: plrPanelsHTML('news'),
 }}));"""
     out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-1500:]
     got = json.loads(out.stdout)
     hero = got["hero"]
     assert '<span>Josh</span> <b>Allen</b>' in hero and "Buffalo Bills · #17 · QB" in hero
-    assert "6&#39;5&#34; · 237 lb · Age " in hero and 'style="--pp-c:#00338d"' in hero
+    assert "6&#39;5&#34; · 237 lb · Age " in hero and 'style="--plr-c:#00338d"' in hero
     s = got["season"]
-    assert "2026 season" in s and "<b>803</b>" in s and '<span class="pp-rank">2nd</span>' in s
-    assert '<span class="pp-rank">1st fewest</span>' in s and "<b>119.4</b>" in s
+    assert "2026 season" in s and "<b>803</b>" in s and '<span class="plr-rank">2nd</span>' in s
+    assert '<span class="plr-rank">1st fewest</span>' in s and "<b>119.4</b>" in s
     p = got["prev"]
     assert "Previous game <span>Week 11 · " in p and " · away</span>" in p and '<span class="gl-w">Won</span> · Final' in p
-    assert "<small>2-1</small>" in p and "<small>0-1</small>" in p and '<span class="pp-pts pp-won">31</span>' in p
-    assert '<span class="pp-k">RTG</span><b>125.9</b>' in p and '<span class="pp-k">CMP%</span><b>75.0</b>' in p
+    assert "<small>2-1</small>" in p and "<small>0-1</small>" in p and '<span class="plr-pts plr-won">31</span>' in p
+    assert '<span class="plr-k">RTG</span><b>125.9</b>' in p and '<span class="plr-k">CMP%</span><b>75.0</b>' in p
     sl = got["splitlet"]
     for label in ("This game", "November", "vs NYJ", "Away", "Season"):
         assert f'<td class="gl-fix">{label}</td>' in sl, label
     assert sl.index("This game") < sl.index("November") < sl.index("vs NYJ") < sl.index("Away") < sl.index(">Season<")
-    assert 'data-pp-go="splits">Every split</button>' in sl
+    assert 'data-plr-go="splits">Every split</button>' in sl
     st = got["stats"]
     assert '<td class="gl-fix">2026 · BUF</td>' in st and '<tr class="gl-sum"><td class="gl-fix">Career</td>' in st
     assert "Passing <span>Totals</span>" in st and '<td class="num">1,095</td>' in st
@@ -323,9 +324,9 @@ process.stdout.write(JSON.stringify({{
     assert "<dt>College</dt><dd>Wyoming</dd>" in bio and "<dt>Experience</dt><dd>9th season</dd>" in bio
     assert "<dt>Number</dt><dd>#17</dd>" in bio and "1996 (age " in bio and "2025 to 2026 · 4 games" in bio
     sp = got["splits"]
-    assert '<tr class="pp-break"><td class="gl-fix" colspan="' in sp and ">By month</td>" in sp and ">By opponent</td>" in sp
+    assert '<tr class="plr-break"><td class="gl-fix" colspan="' in sp and ">By month</td>" in sp and ">By opponent</td>" in sp
     assert '<td class="num">10.0-20.0</td>' in sp and "A game’s average" in sp
-    assert '<p class="pp-dnp">Did not play.</p>' in got["nbaPrev"]
+    assert '<p class="plr-dnp">Did not play.</p>' in got["nbaPrev"]
     assert "2026–27 season" in got["nbaSeason"] and '<td class="gl-fix">2026–27 · NYK</td>' in got["nbaStats"], \
         "a basketball season is said across its two years"
     assert "<b>27.0</b>" in got["nbaSeason"] and "<span>A game’s average</span>" in got["nbaStats"], \
@@ -339,10 +340,10 @@ process.stdout.write(JSON.stringify({{
     assert "Keenan Allen" not in n, "another Allen, another club"
     assert "Bills sign a kicker" in n[n.index("Bills headlines"):] and "Chiefs hold off" not in n
     assert 'target="_blank" rel="noopener noreferrer"' in n and "The reporting lives at the source." in n
-    assert got["latest"].count("<li>") == 3 and 'data-pp-go="news">All news</button>' in got["latest"]
-    assert '<button type="button" role="tab" class="pp-tab on" data-pp-tab="news" aria-selected="true">News</button>' \
+    assert got["latest"].count("<li>") == 3 and 'data-plr-go="news">All news</button>' in got["latest"]
+    assert '<button type="button" role="tab" class="plr-tab on" data-plr-tab="news" aria-selected="true">News</button>' \
         in got["tabs"]
-    assert '<div class="pp-panel" data-pp-panel="overview" role="tabpanel" hidden>' in got["panels"]
+    assert '<div class="plr-panel" data-plr-panel="overview" role="tabpanel" hidden>' in got["panels"]
 
 
 def _browser(run):
@@ -407,25 +408,25 @@ def test_in_a_browser_the_players_page_becomes_the_players_own():
         page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');}"
                              "catch(e){}")
         page.goto(f"{local}index.html?sport=nfl#player/josh-allen", wait_until="load")
-        page.wait_for_selector(".pp .pp-nums .pp-num", timeout=30000)
+        page.wait_for_selector(".plr .plr-nums .plr-num", timeout=30000)
         page.wait_for_timeout(800)
-        out = {"hero": page.inner_text(".pp-hero"),
-               "tabs": page.eval_on_selector_all(".pp-tab", "els => els.map((e) => e.textContent)"),
-               "nums": page.eval_on_selector_all(".pp-num", "els => els.map((e) => e.innerText.replace(/\\s+/g, ' '))"),
-               "card": page.evaluate("!!document.querySelector('.pp-tonight .profile')"),
-               "splitlet": page.eval_on_selector_all(".pp-splitlet td.gl-fix", "els => els.map((e) => e.textContent)")}
-        page.click('.pp-tab[data-pp-tab="splits"]')
-        out["splits"] = page.evaluate("""[document.querySelector('[data-pp-panel="splits"]').hidden,
-            document.querySelector('[data-pp-panel="overview"]').hidden,
-            document.querySelectorAll('[data-pp-panel="splits"] tbody tr').length]""")
-        page.click('.pp-tab[data-pp-tab="log"]')
-        page.wait_for_selector('[data-pp-panel="log"] .gl-table', timeout=20000)
-        out["redraw"] = page.evaluate("""async () => { const before = document.querySelector('.pp');
+        out = {"hero": page.inner_text(".plr-hero"),
+               "tabs": page.eval_on_selector_all(".plr-tab", "els => els.map((e) => e.textContent)"),
+               "nums": page.eval_on_selector_all(".plr-num", "els => els.map((e) => e.innerText.replace(/\\s+/g, ' '))"),
+               "card": page.evaluate("!!document.querySelector('.plr-tonight .profile')"),
+               "splitlet": page.eval_on_selector_all(".plr-splitlet td.gl-fix", "els => els.map((e) => e.textContent)")}
+        page.click('.plr-tab[data-plr-tab="splits"]')
+        out["splits"] = page.evaluate("""[document.querySelector('[data-plr-panel="splits"]').hidden,
+            document.querySelector('[data-plr-panel="overview"]').hidden,
+            document.querySelectorAll('[data-plr-panel="splits"] tbody tr').length]""")
+        page.click('.plr-tab[data-plr-tab="log"]')
+        page.wait_for_selector('[data-plr-panel="log"] .gl-table', timeout=20000)
+        out["redraw"] = page.evaluate("""async () => { const before = document.querySelector('.plr');
             await renderPlayers();
-            const after = document.querySelector('.pp');
-            return [before === after, document.querySelector('.pp-tab.on').dataset.ppTab,
-                    !!after.querySelector('[data-pp-panel="log"] .gl-table'),
-                    !!after.querySelector('.pp-tonight .profile')]; }""")
+            const after = document.querySelector('.plr');
+            return [before === after, document.querySelector('.plr-tab.on').dataset.plrTab,
+                    !!after.querySelector('[data-plr-panel="log"] .gl-table'),
+                    !!after.querySelector('.plr-tonight .profile')]; }""")
         out["errors"] = errors
         ctx.close()
         return out
