@@ -119,6 +119,55 @@ def test_a_game_whose_box_score_is_not_in_yet_is_no_game_played():
     assert GL.has_line("nfl", {"pass_att": 0}) and not GL.has_line("nfl", {"anytime_td": 1, "fp_ppr": 4.2})
     assert 'g.pending ? `<td class="gl-dnp" colspan="${cols.length}">Box score not in yet</td>`' in PAGE
 
+def _college_copies(path):
+    """Arch Manning's season as the live file held it on 2026-11-16: one game
+    filed twice on the day (the box score's line beside the play file's, whose
+    completions went to nobody), one a day off, one keyed by ESPN's numbers."""
+    conn = _db.connect(path)
+    conn.executemany("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
+                     "VALUES (?,?,?,?,?,?,?,?,?)",
+                     [("cfb", 2026, "2026-10-10", "401", "OU", "TEX", 27, 24, "2026-10-10"),
+                      ("cfb", 2026, "2026-09-19", "402", "TEX", "UTSA", 30, 6, "2026-09-19"),
+                      ("cfb", 2026, "2026-09-12", "403", "TEX", "UTEP", 24, 23, "2026-09-12")])
+    rows = []
+
+    def log(period, gid, team, opp, stats):
+        for m, v in stats.items():
+            rows.append(("cfb", 2026, period, gid, "Arch Manning", team, opp, "QB", 1, m, v))
+    log("2026-10-10", "401", "TEX", "OU", {"pass_cmp": 19, "pass_att": 31, "pass_yds": 260, "pass_int": 2})
+    log("2026-10-10", "TEX@OU-box", "TEX", "OU", {"pass_cmp": 0, "pass_att": 9, "pass_yds": 0, "pass_td": 0,
+                                                  "pass_int": 2, "carries": 5, "rush_yds": 30})
+    for day, gid in (("2026-09-19", "402"), ("2026-09-20", "402-box")):
+        log(day, gid, "TEX", "UTSA", {"pass_cmp": 17, "pass_att": 34, "pass_yds": 164, "pass_td": 2, "pass_int": 0,
+                                      "carries": 8, "rush_yds": 53})
+    log("2026-09-12", "403", "espn:251", "espn:2638", {"pass_yds": 195})
+    log("2026-09-12", "403-play", "TEX", "UTEP", {"pass_cmp": 0, "pass_att": 4, "pass_yds": 0, "pass_int": 1,
+                                                  "carries": 6, "rush_yds": 40})
+    conn.executemany("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, position, "
+                     "home, market, value) VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows)
+    conn.commit()
+    conn.close()
+
+
+def test_a_college_game_filed_more_than_once_is_one_game():
+    path = _history()
+    _college_copies(path)
+    d = GL.season_log("cfb", "Arch Manning", db_path=path)
+    assert [g["date"] for g in d["games"]] == ["2026-10-10", "2026-09-19", "2026-09-12"], "seven rows, three games"
+    at_ou, utsa, utep = d["games"]
+    v = at_ou["values"]
+    assert (v["passing.cmp"], v["passing.att"], v["passing.yds"], v["passing.int"]) == (19, 31, 260, 2), \
+        "the box score's line, not the play file's 0 of 9"
+    assert (v["rushing.car"], v["rushing.yds"], at_ou["result"], at_ou["score"]) == (5, 30, "L", "24-27"), \
+        "and the play file's carries, which the box copy lacked"
+    assert utsa["values"]["passing.yds"] == 164 and utsa["result"] == "W", "a copy a day off is the same game"
+    assert (utep["team"], utep["opponent"], utep["values"]["passing.yds"], utep["values"]["rushing.car"]) == \
+        ("TEX", "UTEP", 195, 6), "a copy keyed by ESPN's numbers takes the names"
+    assert d["played"] == 3 and d["totals"]["passing.yds"] == 619 and d["totals"]["passing.att"] == 65
+    nfl = GL.collapse("nfl", [{"period": "010", "game_id": "a", "team": "CIN", "opponent": "PIT", "stats": {}},
+                              {"period": "010", "game_id": "b", "team": "CIN", "opponent": "PIT", "stats": {}}])
+    assert len(nfl) == 2, "only where a league plays once a week and its file is known to hold copies"
+
 def test_each_player_shows_his_own_groups_and_columns():
     path = _history()
     wr = GL.season_log("nfl", "Ja'Marr Chase", db_path=path)

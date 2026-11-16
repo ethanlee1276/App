@@ -18,6 +18,7 @@ footing as the logs behind the player page, and drawn by js/gamelog.js.
 """
 from __future__ import annotations
 
+import datetime as _dt
 import os
 import re
 
@@ -154,6 +155,71 @@ def _played(sport: str, s: dict) -> bool:
     return not (sport in ("nba", "wnba", "cbb") and s.get("min") is not None and float(s["min"]) <= 0)
 
 
+#: Leagues where one player's rows a day or less apart are one game. Football is
+#: played once a week, and college's history holds copies of one game from more
+#: than one writer (seen live 2026-11-16, after engine/cfbdedupe's pass of the
+#: 14th): the play file's row, whose completions went to nobody when its passer
+#: split missed (Arch Manning, 0 of 9 for 0 yards at Oklahoma), beside the box
+#: score's (19 of 31 for 260); a copy a day off; a copy keyed by ESPN's team
+#: number ("espn:194" for Ohio State). Read as one game, each box-score group
+#: from whichever copy carries the fuller line.
+ONE_A_WEEK = ("cfb",)
+
+
+def _group_markets(sport: str) -> list:
+    out = []
+    for _, _, marks, cols in LAYOUTS.get(sport, ()):
+        ms = set(marks)
+        for c in cols:
+            if c[3][0] in ("sum", "pct", "avg", "made", "toi", "ip"):
+                ms.update(c[3][1:])
+            elif c[3][0] == "rating":
+                ms.update(("pass_att", "pass_cmp", "pass_yds", "pass_td", "pass_int"))
+        out.append(ms)
+    return out
+
+
+def _day(period) -> "_dt.date | None":
+    try:
+        return _dt.date.fromisoformat(str(period)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def collapse(sport: str, games: list) -> list:
+    """One player's game dicts (period, game_id, team, opponent, stats), copies
+    of one game merged where the league plays once a week (ONE_A_WEEK); each
+    merged game says how many rows it was made of (``copies``)."""
+    if sport not in ONE_A_WEEK or len(games) < 2:
+        return games
+    groups = _group_markets(sport)
+    grouped = set().union(*groups) if groups else set()
+    out: list = []
+    for g in sorted(games, key=lambda g: str(g["period"])):
+        d = _day(g["period"])
+        head = out[-1] if out else None
+        if head is not None and d and head["_day"] and (d - head["_day"]).days <= 1:
+            for key in ("team", "opponent"):
+                if str(head.get(key) or "").startswith("espn:") and g.get(key) and not str(g[key]).startswith("espn:"):
+                    head[key] = g[key]
+            mine, theirs = head["stats"], g["stats"]
+            for ms in groups:
+                if sum(theirs.get(m) or 0 for m in ms) > sum(mine.get(m) or 0 for m in ms):
+                    for m in ms:
+                        mine.pop(m, None)
+                        if theirs.get(m) is not None:
+                            mine[m] = theirs[m]
+            for m, v in theirs.items():
+                if m not in grouped and v is not None and (mine.get(m) is None or v > mine[m]):
+                    mine[m] = v
+            head["copies"] += 1
+            continue
+        out.append(dict(g, stats=dict(g["stats"]), copies=1, _day=d))
+    for g in out:
+        g.pop("_day", None)
+    return out
+
+
 def has_line(sport: str, s: dict) -> bool:
     """Does a game's row carry a box-score line in the league's layout? Seen on
     the live file 2026-11-16: Joe Burrow's Sunday game had a row the night of
@@ -212,6 +278,7 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None)
                                                        "opponent": opp, "position": pos, "home": home, "stats": {}})
         if val is not None:
             g["stats"][market] = float(val)
+    games = {(g["period"], g["game_id"]): g for g in collapse(sport, list(games.values()))}
     # The groups this player has a number in, and the columns the file keeps.
     groups = []
     for key, title, marks, cols in layout:

@@ -187,6 +187,8 @@ def _league(conn, sport: str, season: int, markets) -> dict:
         if lo and hi:
             bound = " AND period BETWEEN ? AND ?"
             args += [str(lo), str(hi) + "~"]
+    if sport in GL.ONE_A_WEEK:
+        return _league_once_a_week(conn, sport, season, markets)
     out: dict = {}
     for player, market, total, n, pos in conn.execute(
             "SELECT player, market, SUM(value), COUNT(*), SUM(CASE WHEN value > 0 THEN 1 ELSE 0 END) "
@@ -198,6 +200,42 @@ def _league(conn, sport: str, season: int, markets) -> dict:
         # A basketball game counts where he played minutes; elsewhere a row is a game.
         played = int(pos or 0) if (sport in HOOPS and market == "min") else (0 if sport in HOOPS else int(n or 0))
         out[player] = (s, max(gp, played))
+    return out
+
+
+def _league_once_a_week(conn, sport: str, season: int, markets) -> dict:
+    """`_league` where a game can sit in the file more than once (gamelog.ONE_A_WEEK):
+    each player's rows a day or less apart are one game, its number the
+    largest of the copies (a copy read short, or a play file's zero beside the
+    box score's count, never adds to the season)."""
+    marks = ",".join("?" * len(markets))
+    seen: dict = {}
+    for player, market, period, val in conn.execute(
+            f"SELECT player, market, period, value FROM player_game_logs WHERE sport=? AND season=? "
+            f"AND market IN ({marks})", [sport, season, *markets]):
+        if val is not None:
+            seen.setdefault(player, {}).setdefault(market, []).append((str(period), float(val)))
+    out: dict = {}
+    for player, by_market in seen.items():
+        s, gp = {}, 0
+        for market, rows in by_market.items():
+            total, games, last = 0.0, 0, None
+            best = None
+            for period, val in sorted(rows):
+                d = GL._day(period)
+                if last is not None and d and (d - last).days <= 1:
+                    best = max(best, val)
+                    continue
+                if best is not None:
+                    total += best
+                    games += 1
+                best, last = val, d
+            if best is not None:
+                total += best
+                games += 1
+            s[market] = total
+            gp = max(gp, games)
+        out[player] = (s, gp)
     return out
 
 
@@ -428,6 +466,8 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                                                         "stats": {}})
             if val is not None:
                 g["stats"][market] = float(val)
+        by_season = {yr: {(g["period"], g["game_id"]): g for g in GL.collapse(sport, list(gs.values()))}
+                     for yr, gs in by_season.items()}
         newest = max((g for gs in by_season.values() for g in gs.values()), key=lambda g: g["period"], default=None)
         my_team = team or ((newest or {}).get("team") or "")
         row = roster_row(sport, player, my_team, data_dir)

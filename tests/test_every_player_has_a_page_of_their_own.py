@@ -175,6 +175,25 @@ def test_a_newest_game_whose_box_score_is_not_in_yet_says_so():
     assert 'g.pending ? `<p class="plr-dnp">The box score isn’t in yet.</p>`' in PAGE
     assert "if (!g.dnp && !g.pending) rows.push(" in PAGE
 
+def test_a_college_game_filed_more_than_once_counts_once_on_the_page_and_in_the_ranks():
+    path, rosters = _fresh()
+    import test_every_player_has_a_game_log as GLT
+    GLT._college_copies(path)
+    conn = _db.connect(path)
+    for day, gid, yds in (("2026-09-12", "501", 210), ("2026-09-19", "502", 220), ("2026-10-10", "503", 230)):
+        for m, v in (("pass_att", 30), ("pass_cmp", 20), ("pass_yds", yds), ("pass_td", 1), ("pass_int", 0)):
+            conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, "
+                         "position, home, market, value) VALUES ('cfb', 2026, ?, ?, 'Other Passer', 'UGA', 'XYZ', "
+                         "'QB', 1, ?, ?)", (day, gid, m, v))
+    conn.commit()
+    conn.close()
+    d = PP.page("cfb", "Arch Manning", db_path=path, data_dir=rosters)
+    h = {x["key"]: x for x in d["headline"]}
+    assert (h["yds"]["value"], h["yds"]["rank"]) == (619, 2), "his 619 against the other's 660, no copy counted twice"
+    assert d["splits"]["rows"][0]["gp"] == 3 and d["career"]["rows"][0]["gp"] == 3
+    table = PP.rank_table(_db.connect(path), "cfb", 2026, "passing")
+    assert table["yds"]["Other Passer"] == 1 and table["yds"]["Arch Manning"] == 2
+
 def test_a_basketball_page_averages_a_game_and_ranks_the_regulars():
     path, rosters = _fresh()
     d = PP.page("nba", "Jalen Brunson", db_path=path, data_dir=rosters)

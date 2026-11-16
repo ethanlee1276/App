@@ -9338,6 +9338,33 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TM. College football shows each game once on the player pages, and a count for you** (step 645; 16
+November). Two read-only commands. Checking the new player pages against the live file, I found college player
+rows filed more than once for the same game again, after the cleanup on the 14th (step QJ):
+- **Arch Manning:** 13 rows for 10 games. Texas at Oklahoma is there twice: the box score's 19 of 31 for 260
+  yards beside the play file's 0 of 9 for 0 yards (the play file credited his completions to nobody). The UTSA
+  game is on both the 19th and the 20th, and the opener is keyed by ESPN's team numbers.
+- **Jeremiah Smith:** 18 rows with 7 same-day copies, 9 of them filed under "espn:194" (Ohio State's ESPN
+  number) instead of OSU. Julian Sayin and Carson Beck have the same.
+The game log, the player page and the page's league ranks now read a player's college rows a day or less apart
+as one game, since a team plays once a week. Each part of the box score (passing, rushing, receiving) comes from
+whichever copy has the fuller line, and a league rank counts each game once. That fixes what the pages show.
+The stored copies are still there, though, and grading and the board read them. Please run these two (neither
+writes anything) and paste back what they print. The first counts the copies:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -m engine.cfbdedupe --season 2026
+```
+
+The second says whether the college team map knows Ohio State's and Texas's ESPN numbers (a copy keyed
+"espn:194" means it did not when that row was filed):
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "from engine import cfbteams; m = cfbteams.load_ids(); print(len(m), m.get('194'), m.get('251'))"
+```
+
+From those I'll know whether `--apply` clears them again or a writer needs fixing first.
+
 **TL. A full page for every player, with ESPN's menus** (step 644; 16 November). Nothing to run. You sent
 ESPN's page for Josh Allen and asked for every player in every sport to have a page that looks like it, with
 each menu. Open any player (search a name, or tap a player anywhere on the site) and the Players page now
