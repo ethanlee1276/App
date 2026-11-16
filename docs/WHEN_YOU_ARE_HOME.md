@@ -9355,7 +9355,12 @@ asked why football's stated chances run 10 to 30 points too high. They did on th
   Likely chance speaks for it first, then an Edge pick's, then any other priced prop's. Each leg keeps where it came
   from and the book's chance;
 - the Record page's leg line counts each bet once (a leg on three tickets counted three times) and gives the books'
-  chance beside ours.
+  chance beside ours;
+- each leg is graded on its own line. The journal keeps one row for a player's market and side, at the first line
+  written (a football week shares one date), and a leg at another line took that row's result: an over 3.5 could grade
+  won off an over 1.5's row. A leg at another line is now graded on its own line from the player's real number, and
+  every settle pass re-grades the tickets already graded the old way. The newest 144 graded legs had no such case, so
+  this did not make the gap, but it could have.
 
 The next boards built are the first built this way, and the legs already graded stay on the record as they were. If
 football's new legs still run high once about 100 are graded, a correction learned from each league's record, the way

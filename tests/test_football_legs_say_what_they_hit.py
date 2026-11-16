@@ -19,7 +19,10 @@ Now a priced leg passes the Edge path's own test (gameparlays.credible_row),
 the most trusted copy of a bet speaks for it (SOURCE_RANK: the Most Likely
 board, then the Edge picks, then any other priced prop), and every leg keeps
 its source and the book's chance in the journal, so the record can say which
-legs hit what they said, each bet counted once.
+legs hit what they said, each bet counted once. And each leg is graded on its
+own line (parlayledger._own_verdict): the singles journal keeps one row a
+player's market and side, and a leg at another line used to take that row's
+result.
 
 Run directly: `python3 tests/test_football_legs_say_what_they_hit.py`
 """
@@ -156,6 +159,63 @@ def test_an_older_journal_gains_the_columns_and_its_legs_read_as_before():
                                       [{"parlay_id": 1, "player": "A", "market": "receptions", "side": "OVER",
                                         "line": 2.5, "p_final": 0.7, "status": "won", "pool": None, "fair": None}])
     assert once == {"graded": 1, "won": 1, "chance": 0.7, "fair": None} and list(by) == ["before"]
+
+
+def test_a_leg_takes_its_own_lines_verdict():
+    """The singles journal keeps one row a player's market and side (the
+    first line journaled), so a leg at another line is graded on its own
+    line from the number that row settled on, never on the row's verdict."""
+    row = {"side": "OVER", "line": 1.5, "status": "won", "actual": 2.0, "odds": -230, "closing_line": 1.5}
+    V = parlayledger._own_verdict
+    assert V({"side": "OVER", "line": 1.5, "odds": -230}, row)["status"] == "won", "its own bet: the row's verdict"
+    got = V({"side": "OVER", "line": 3.5, "odds": 120}, row)
+    assert got["status"] == "lost" and got["actual"] == 2.0 and got["line"] == 3.5, got
+    assert got["odds"] == 120 and got["closing_line"] is None, "never the other line's price or close"
+    assert V({"side": "UNDER", "line": 4.5, "odds": -138}, row)["status"] == "won"
+    assert V({"side": "OVER", "line": 2.0, "odds": -110}, row)["status"] == "void", "a push on its own line"
+    assert V({"side": "OVER", "line": 3.5, "odds": 120}, {**row, "status": "void", "actual": None})["status"] == "void"
+    assert V({"side": "OVER", "line": 3.5, "odds": 120}, {**row, "actual": None})["status"] == "void", \
+        "no number to grade it on: void, not another bet's verdict"
+    # The oldest tickets and singles carry no side or line: the row is theirs.
+    assert V({"side": None, "line": None, "odds": -110}, row)["status"] == "won"
+    assert V({"side": "OVER", "line": 3.5, "odds": -110}, {**row, "side": None, "line": None})["status"] == "won"
+
+
+def test_a_ticket_at_another_line_grades_on_its_own_and_the_record_heals():
+    from engine import ledger
+    conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "t.db"))
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+
+    def leg(player, market, side, line, odds):
+        return {"player": player, "team": "NYG", "opponent": "WAS", "home": "NYG", "away": "WAS", "market": market,
+                "side": side, "line": line, "odds": odds, "book": "DraftKings", "p": 0.66, "position": "WR",
+                "game_date": "2099-11-12"}
+    easy, hard = leg("Theo Johnson", "receptions", "Over", 1.5, -230), leg("Theo Johnson", "receptions", "Over", 3.5, 120)
+    rest = [leg("Darius Slayton", "rec_yds", "Over", 40.5, -150), leg("Cam Skattebo", "rush_yds", "Over", 30.5, -160)]
+    gp = {"games": [{"game": "WAS@NYG", "home": "NYG", "away": "WAS", "scorers": [], "threes": [
+        {"joint": 0.33, "independent": 0.3, "take_dec": 3.2, "legs": [easy] + rest},
+        {"joint": 0.2, "independent": 0.18, "take_dec": 5.5, "legs": [hard] + rest}]}]}
+    parlayledger.journal_game_parlay_legs(conn, {"date": "2099-W10", "games": [GAME], "game_parlays": gp}, "nfl")
+    assert parlayledger.log_game_parlays(conn, gp, "nfl", "2099-W10") == 2
+    held = conn.execute("SELECT line FROM bets WHERE player='Theo Johnson'").fetchall()
+    assert [r[0] for r in held] == [1.5], "the journal keeps the first line of a player's market and side"
+    conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=2 WHERE player='Theo Johnson'")
+    conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=60 WHERE player<>'Theo Johnson'")
+    conn.commit()
+    assert parlayledger.settle(conn)["settled"] == 2
+    st = sorted(r[0] for r in conn.execute("SELECT status FROM parlays"))
+    assert st == ["lost", "won"], st
+    l = conn.execute("SELECT status, actual FROM parlay_legs WHERE player='Theo Johnson' AND line=3.5").fetchone()
+    assert (l[0], l[1]) == ("lost", 2.0), "two catches: the over 3.5 lost, whatever the over 1.5 did"
+    # A ticket graded the old way (off the over 1.5's row) is put right by
+    # the re-audit every settle pass runs.
+    bad = conn.execute("SELECT parlay_id FROM parlay_legs WHERE player='Theo Johnson' AND line=3.5").fetchone()[0]
+    conn.execute("UPDATE parlay_legs SET status='won' WHERE parlay_id=?", (bad,))
+    conn.execute("UPDATE parlays SET status='won', legs_lost=0 WHERE id=?", (bad,))
+    conn.commit()
+    fixed = parlayledger.resettle(conn)["fixed"]
+    assert [(f["id"], f["was"], f["status"]) for f in fixed] == [(bad, "won", "lost")], fixed
+    assert parlayledger.resettle(conn) == {"fixed": [], "reopened": 0}, "and it holds"
 
 
 def test_the_record_page_counts_each_leg_once_and_names_the_books_chance():

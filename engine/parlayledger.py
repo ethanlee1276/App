@@ -651,7 +651,7 @@ def settle(conn) -> dict:
             if b is None or b["status"] == "open":
                 pending = True
                 break
-            resolved.append((leg, b))
+            resolved.append((leg, _own_verdict(leg, b)))
         if pending:
             waiting += 1
             continue
@@ -700,7 +700,7 @@ def resettle(conn) -> dict:
             if b is None or b["status"] == "open":
                 back_open = True
                 break
-            resolved.append((leg, b))
+            resolved.append((leg, _own_verdict(leg, b)))
         if back_open:
             # A leg was reopened (repair-premature). The ticket's verdict
             # rests on a bet that no longer has one — reopen it too and let
@@ -765,6 +765,62 @@ def _matching_bet(conn, p, leg):
     exact = conn.execute(base + " AND UPPER(COALESCE(side,''))=? AND ABS(COALESCE(line,0)-?)<1e-6 "
                          "ORDER BY id", args + [str(leg["side"] or "").upper(), float(leg["line"] or 0)]).fetchone()
     return exact or conn.execute(base + " ORDER BY id", args).fetchone()
+
+
+#: Which way each side wants the number: up for an over (and a scorer's
+#: "yes", line 0.5), down for an under.
+_UP_SIDES, _DOWN_SIDES = ("OVER", "YES"), ("UNDER", "NO")
+
+
+def _own_verdict(leg, b) -> dict:
+    """THE LEG'S OWN VERDICT, on its own side and line (2026-11-16).
+
+    The singles journal keys a pick without its line (ledger.PICK_KEY_SQL:
+    the first price journaled is the claim), so one player's "catches over
+    1.5" on one ticket and "over 3.5" on a rebuild's are one row there, the
+    first; and `_matching_bet` falls back to the first row of the player's
+    market when no row has the leg's side and line. Until today that row's
+    verdict was the leg's, whatever line it was taken at: an over 3.5 on a
+    night of two catches graded won off the over 1.5's row.
+
+    Now: the row's own verdict when it is this leg's bet (same side, same
+    line); otherwise the leg is graded on its own line from the number the
+    row settled on (`actual`, the player's real line in the box), a push
+    reading void; a void row (he did not play) voids the leg; and a leg
+    with no number to grade it on is voided, not given another bet's
+    verdict. Never the other row's close or price: those are its line's."""
+    row = {k: b[k] for k in b.keys()} if hasattr(b, "keys") else dict(b)
+
+    def _num(v):
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+    # A side or line either record left blank (the oldest tickets and
+    # singles carry none) is the other's: those legs were always the row's.
+    row_side, row_line = str(row.get("side") or "").upper(), _num(row.get("line"))
+    side = str(leg["side"] or "").upper() or row_side
+    line = _num(leg["line"])
+    line = row_line if line is None else line
+    same = ((not row_side or row_side == side)
+            and (row_line is None or (line is not None and abs(row_line - line) < 1e-6)))
+    if same:
+        return row
+    own = {**row, "side": side or row.get("side"), "line": line, "odds": leg["odds"] or row.get("odds"),
+           "closing_line": None}
+    status, actual = row.get("status"), row.get("actual")
+    if status not in ("won", "lost", "push"):
+        return {**own, "status": "void"}
+    if actual is None or line is None or side not in _UP_SIDES + _DOWN_SIDES:
+        return {**own, "status": "void", "actual": actual}
+    a = float(actual)
+    if abs(a - line) < 1e-9:
+        verdict = "void"
+    elif side in _UP_SIDES:
+        verdict = "won" if a > line else "lost"
+    else:
+        verdict = "won" if a < line else "lost"
+    return {**own, "status": verdict}
 
 
 def _grade_ticket(conn, p, resolved: list) -> dict:
