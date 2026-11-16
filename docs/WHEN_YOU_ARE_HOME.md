@@ -9338,6 +9338,39 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SN. Parlays and touchdown pairs take both sides** (step 620; 16 November).
+Nothing to run. You said "a lot of these parlays we are making are very one
+sided ... for both td and player props ... I understand if all the data
+points too one side so that's fine but we just need to make sure", about
+the 49ers game.
+
+Why it happened: each game's four three-leg parlays were picked by chance
+alone. A game's likeliest legs are usually one team's busiest players, and
+the rule that the tickets should win together kept the next tickets on that
+same team's script. So a team whose legs were a point or two likelier
+filled the game. The touchdown pairs had the same lean through their
+research ranking.
+
+The rule now:
+- A ticket whose legs are all one team's is posted only when it's clearly
+  the stronger read than the best ticket with both teams that could take
+  its place: 4 points likelier for a three-leg parlay, 3 research points
+  stronger for a touchdown pair.
+- At most one of a game's tickets can be one team's while a two-team ticket
+  is available.
+- If the other team has nothing good enough, the game posts what it has.
+
+Every one-team ticket says on its card which of those it was, so you can
+check it. The build log counts them for each league ("one club's alone").
+
+On a test game shaped like the 49ers one, the old way posted two
+49ers-only tickets that were only 2 to 3 points likelier than the best mixed
+one. Now all four tickets take both sides, and the top one gives up about
+3 points of chance for it.
+
+**Decision for you:** the 4 points (and 3 research points) is my call. Say
+if you want it stricter or looser.
+
 **SM. Each team's timeouts left** (step 619; 16 November). Nothing to run.
 You circled the score on the live Panthers @ Saints page, and the bar at the
 top of the screen, and said "Add so we can see how many timeouts each team

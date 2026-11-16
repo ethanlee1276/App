@@ -53,6 +53,13 @@ better").
 FOUR A GAME, FOUR IDEAS. The likeliest first; each next one shares at most
 MAX_SHARED leg with every ticket before it.
 
+BOTH SIDES OF THE GAME (2026-11-16). A ticket whose legs are all one club's
+is taken only when it is clearly the stronger read than the best two-club
+ticket that could take its place, and no more than ONE_SIDED_MAX of a
+game's tickets are one club's while a two-club ticket is there. A game whose
+other club has nothing good enough posts what it has, and every one-club
+ticket says why it is one club's (`choose`).
+
 BACKUPS AND CAVEATS. Each leg names the next-best leg that fits the other
 two ("if Skattebo sits, Likely 4+ catches"); a ticket says what script it
 needs and how likely the lines make it, and flags a leg listed
@@ -101,6 +108,23 @@ TAKE_EDGE = 0.05
 MAX_SHARED = 1
 #: No leg rides on more than this many of a game's tickets.
 MAX_USES = 2
+#: BOTH SIDES OF THE GAME (Ethan, 2026-11-16, of the 49ers' game: "a lot of
+#: these parlays we are making are very one sided as in a lot of picks for
+#: both td and player props are for one team only and we need too fix that.
+#: I understand if all the data points too one side so that's fine but we
+#: just need to make sure"). Ranked on the chance alone, a game's likeliest
+#: legs are usually one club's busiest players, and "built to win together"
+#: (`choose`) keeps the next tickets on the same script, so a game's four
+#: tickets could all be one club's when the other's were a point or two
+#: behind. A one-club ticket is now taken only when it is SIDE_EDGE likelier
+#: than the best two-club ticket that fits in its place (a scorer pair ranked
+#: on its research: SIDE_RESEARCH more research points), and at most
+#: ONE_SIDED_MAX of a game's tickets are one club's while a two-club ticket
+#: fits. When none fits, the other club has nothing good enough here, and
+#: the game posts what it has; each one-club ticket says which it was.
+SIDE_EDGE = 0.04
+SIDE_RESEARCH = 3
+ONE_SIDED_MAX = 1
 #: TWO TEAMMATES ON ONE TICKET, priced at the same-game floor for catches
 #: and at none for touchdowns. The doctrine's possession-pie number
 #: (parlays.MEASURED, −0.56) is a PARTIAL correlation: two receivers with
@@ -868,7 +892,36 @@ APART_NOTE = ("This ticket needs the game to go a different way from the other t
               "in a different game from them")
 
 
-def choose(tickets: list[dict], n: int, rank=None) -> list[dict]:
+def _clubs(t: dict) -> set:
+    """The clubs a ticket's legs belong to."""
+    return {l.get("team") for l in t.get("legs") or [] if l.get("team")}
+
+
+def one_club(t: dict) -> bool:
+    """Whether every leg of a ticket is one club's."""
+    return len(_clubs(t)) == 1 and len(t.get("legs") or []) >= 2
+
+
+def _research_of(t: dict) -> int:
+    return sum(int(l.get("research") or 0) for l in t.get("legs") or [])
+
+
+def side_reason(t: dict, alt: dict | None, researched: bool = False) -> str:
+    """Why a one-club ticket is posted (`choose`): the other club had no
+    ticket that fitted, or this one is clearly the stronger read."""
+    club = next(iter(_clubs(t)), "")
+    every = "Both legs" if len(t.get("legs") or []) == 2 else "Every leg"
+    if alt is None:
+        return (f"{every} here is {club}'s: no ticket with the other side's picks fits this game "
+                f"(none clears {LEG_FLOOR:.0%} and the rules with these)")
+    if researched:
+        return (f"{every} here is {club}'s: its research case is {_research_of(t) - _research_of(alt)} points "
+                f"stronger than the best pair with a scorer from each side")
+    return (f"{every} here is {club}'s: {(float(t['joint']) - float(alt['joint'])) * 100:.0f} points likelier "
+            f"than the best ticket with both sides")
+
+
+def choose(tickets: list[dict], n: int, rank=None, researched: bool = False) -> list[dict]:
     """The likeliest first (or by ``rank``, a sort key — the scorer pairs'
     research, `_by_research`); each next one shares at most MAX_SHARED legs
     with every ticket already chosen, and no leg rides on more than
@@ -880,39 +933,61 @@ def choose(tickets: list[dict], n: int, rank=None) -> list[dict]:
     tickets win"; 2026-11-08: "I don't want to build them to where if one
     parlay wins, the other parlay can't win"). No ticket that pulls the game
     the other way from one already chosen (`pulls_apart`) — until the game
-    has no other way to fill its tickets, and then the ticket says so."""
+    has no other way to fill its tickets, and then the ticket says so.
+
+    BOTH SIDES (SIDE_EDGE): a ticket all of one club's is taken only when no
+    two-club ticket fits in its place, or it is clearly the stronger read
+    than the best one that does and fewer than ONE_SIDED_MAX one-club
+    tickets are chosen; it says which (`side_reason`). ``researched``: the
+    tickets are scorer pairs ranked on their research, and the stronger read
+    is SIDE_RESEARCH more research points."""
     ranked = sorted(tickets, key=rank or (lambda t: (-t["joint"], -(t.get("ev_at_naive") or -9))))
 
-    def pick(together: bool) -> list:
+    def clearly(t: dict, alt: dict) -> bool:
+        if researched:
+            return _research_of(t) - _research_of(alt) >= SIDE_RESEARCH
+        return float(t["joint"]) - float(alt["joint"]) >= SIDE_EDGE - 1e-9
+
+    def pick(together: bool) -> tuple:
         out: list = []
         uses: dict = {}
+        why: dict = {}
+
+        def fits(t: dict, limit) -> bool:
+            ids = {_leg_id(l) for l in t["legs"]}
+            lim = limit if limit is not None else len(ids) - 1
+            if any(len(ids & {_leg_id(l) for l in c["legs"]}) > lim for c in out):
+                return False
+            if any(uses.get(i, 0) >= MAX_USES for i in ids):
+                return False
+            return not (together and pulls_apart(t, out))
         for shared in (MAX_SHARED, None):
             for t in ranked:
                 if len(out) >= n:
-                    return out
-                if t in out:
+                    return out, why
+                if t in out or not fits(t, shared):
                     continue
-                ids = {_leg_id(l) for l in t["legs"]}
-                limit = shared if shared is not None else len(ids) - 1
-                if any(len(ids & {_leg_id(l) for l in c["legs"]}) > limit for c in out):
-                    continue
-                if any(uses.get(i, 0) >= MAX_USES for i in ids):
-                    continue
-                if together and pulls_apart(t, out):
-                    continue
+                if one_club(t):
+                    alt = next((m for m in ranked if m not in out and not one_club(m) and fits(m, shared)), None)
+                    if alt is not None and (sum(map(one_club, out)) >= ONE_SIDED_MAX or not clearly(t, alt)):
+                        continue
+                    why[id(t)] = side_reason(t, alt, researched)
                 out.append(t)
-                for i in ids:
+                for i in {_leg_id(l) for l in t["legs"]}:
                     uses[i] = uses.get(i, 0) + 1
-        return out
-    together = pick(True)
-    loose = pick(False) if len(together) < n else together
+        return out, why
+    together, why_t = pick(True)
+    loose, why_l = pick(False) if len(together) < n else (together, why_t)
+    side = lambda t, why: (dict(t, caveats=list(t.get("caveats") or []) + [why[id(t)]], one_club=True)  # noqa: E731
+                           if id(t) in why else t)
     if len(together) >= len(loose):
-        return together
+        return [side(t, why_t) for t in together]
     # The game cannot fill its tickets so they all win together: the old
     # choice, and each ticket that pulls against an earlier one says so.
     out: list = []
     for t in loose:
-        out.append(dict(t, caveats=list(t.get("caveats") or []) + [APART_NOTE]) if pulls_apart(t, out) else t)
+        c = side(t, why_l)
+        out.append(dict(c, caveats=list(c.get("caveats") or []) + [APART_NOTE]) if pulls_apart(t, out) else c)
     return out
 
 
@@ -1017,7 +1092,8 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
         if researched:
             for t in pairs:
                 t["research"] = sum(int(l.get("research") or 0) for l in t["legs"])
-        out["scorers"] = choose(pairs, SCORER_PER_GAME, rank=_by_research if researched else None)
+        out["scorers"] = choose(pairs, SCORER_PER_GAME, rank=_by_research if researched else None,
+                                researched=researched)
         for t in out["scorers"]:
             t["legs"] = [slim(l) for l in t["legs"]]
         out["scorers_read"] = len(sc)
@@ -1079,7 +1155,10 @@ def build(board: dict, sport: str, now=None) -> dict:
     return {"sport": sp, "date": board.get("date") or "", "games": out_games,
             "take_edge": TAKE_EDGE, "leg_floor": LEG_FLOOR,
             "counts": {"games": len(out_games), "threes": sum(len(x["threes"]) for x in out_games),
-                       "scorers": sum(len(x["scorers"]) for x in out_games)},
+                       "scorers": sum(len(x["scorers"]) for x in out_games),
+                       # One-club tickets (`choose`), each saying why it is one.
+                       "one_club_threes": sum(one_club(t) for x in out_games for t in x["threes"]),
+                       "one_club_scorers": sum(one_club(t) for x in out_games for t in x["scorers"])},
             # WHY A PRICED SCORER WAS NO LEG (`research_scorers`), football only.
             **({"research_census": dict(sorted(census.items(), key=lambda kv: -kv[1])),
                 "scorers_priced": len(priced), "scorers_researched": len(scorers)}
@@ -1125,7 +1204,8 @@ def summary(gp: dict) -> str:
     """The build log's line."""
     c = (gp or {}).get("counts") or {}
     return (f"  Game parlays: {c.get('threes', 0)} three-leg and {c.get('scorers', 0)} scorer pair(s) "
-            f"across {c.get('games', 0)} game(s)")
+            f"across {c.get('games', 0)} game(s); one club's alone: {c.get('one_club_threes', 0)} three-leg, "
+            f"{c.get('one_club_scorers', 0)} pair(s)")
 
 
 def journal_rows(gp: dict) -> list[dict]:
