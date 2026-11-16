@@ -9338,6 +9338,26 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TK. A game log for every player** (step 643; 16 November). Nothing to run. You sent ESPN's game log for Joe
+Burrow and asked for game logs for every player you can look up. Every player's page (search a player, or
+open one from any pick) now has a "Game log" button beside "His charts", in every league we keep box
+scores for: NFL, college football, NBA, WNBA, college basketball, NHL and MLB. It opens his season, one line
+a game, newest first:
+- **Each line:** the week and the day (football) or the day, the opponent with vs or @, and the result and
+  score in green or red.
+- **The columns, grouped like a box score:**
+  - Football: passing (CMP, ATT, YDS, CMP%, AVG, TD, INT and passer rating), rushing (CAR, YDS, AVG, TD) and
+    receiving (REC, TGT, YDS, AVG, TD), each shown only if the player has numbers in it.
+  - Basketball: MIN, PTS, REB, AST, STL, BLK, TO, FG, FG%, 3PT, FT and OREB. A game he sat says "Did not
+    play".
+  - Hockey: a skater's G, A, PTS, SOG, BLK, HIT, PPG and TOI, or a goalie's SA, SV, GA, SV% and TOI.
+  - Baseball: a hitter's PA, H, TB and HR, or a pitcher's IP and K.
+- **Under the games:** the season's totals and per-game averages, then what each column means. A season
+  picker appears where we have more than one season of his games.
+The passer rating is the NFL's own formula (college uses its passer efficiency): Burrow's 25 of 35, 254 yards,
+1 TD, 1 INT game rates 89.5, as on ESPN. It reads the box scores the site already keeps and is free, like
+his other logs. A few columns ESPN prints aren't in our files (longest play, sacks, QBR), so they aren't shown.
+
 **TJ. Report Picks has its own record, in three tabs** (step 642; 16 November). Nothing to run. You asked
 for a record on the Report Picks page, showing whether the parlays and the single picks from the game reports
 won, and for the page to be easier to read and go through. It now opens in three tabs:

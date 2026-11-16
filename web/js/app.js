@@ -14577,8 +14577,16 @@ function profileHTML(player, opts) {
    door carries the face this page is showing, so the chart has one even
    where its own lookup finds none. */
 function chartDoor(player, lg, r) {
-  return /^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/.test(lg) ? `<div class="prof-vs prof-charts">${ccDoor(player, lg, "auto", "His charts", r.headshot, r)}</div>` : "";
+  return /^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/.test(lg) ? `<div class="prof-vs prof-charts">${ccDoor(player, lg, "auto", "His charts", r.headshot, r)}<button class="btn gl-open" type="button" data-gl="${escapeAttr(player)}" data-lg="${lg}">Game log</button></div>` : "";
 }
+/* HIS GAME LOG (js/gamelog.js; Ethan, 2026-11-16: "we should have game logs for
+   every player too that you can look up and see for each player"): his season
+   a line a game, in a sheet like his charts', loaded on the first tap. */
+function glOpen(...a) { return roomCall(glOpen, "glOpen", "js/gamelog.js", "css/gamelog.css", a); }
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest(".gl-open");
+  if (b) glOpen(b.dataset.gl, b.dataset.lg);
+});
 //: One door to his charts, wherever a player or a fighter is drawn; a
 //: row hands over the bet, his position and tonight's opponent.
 const ccDoor = (player, lg, kind, label, face, r) => `<button class="btn cc-open" type="button" data-carry="${escapeAttr(player)}" data-lg="${lg}" data-kind="${kind}"${face ? ` data-face="${escapeAttr(face)}"` : ""}${r ? ` data-mkt="${escapeAttr(r.market || "")}" data-pos="${escapeAttr(r.position || "")}" data-opp="${escapeAttr(r.opponent || "")}"` : ""}>${label}</button>`;

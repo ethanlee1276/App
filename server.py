@@ -1233,6 +1233,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._players_search(parse_qs(parsed.query))
         if parsed.path in ("/api/players/logs", "/api/players/logs/"):
             return self._players_logs(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/gamelog", "/api/players/gamelog/"):
+            return self._players_gamelog(parse_qs(parsed.query))
         if parsed.path in ("/api/players/fantasy", "/api/players/fantasy/"):
             return self._players_fantasy(parse_qs(parsed.query))
         if parsed.path in ("/api/hoops/whatif", "/api/hoops/whatif/"):
@@ -4883,6 +4885,24 @@ class Handler(BaseHTTPRequestHandler):
         stats = statlogs.for_player(sport, player)
         return self._send(200, json.dumps(
             {"player": player, "stats": stats}).encode(), ".json")
+
+    def _players_gamelog(self, q):
+        """One player's season, a line a game (engine/gamelog): the day, the
+        opponent, the result and the score, the league's own columns, the
+        season's totals and averages. Ethan, 2026-11-16: "we should have game
+        logs for every player too that you can look up and see for each
+        player." UNGATED like the other log endpoints: a box score is a fact."""
+        from engine import gamelog
+        sport = (q.get("sport") or [""])[0].lower()
+        player = (q.get("player") or [""])[0][:60]
+        season = (q.get("season") or [""])[0][:4]
+        if sport not in gamelog.LAYOUTS:
+            return self._send(400, b'{"error":"no game log for this sport"}', ".json")
+        try:
+            out = gamelog.season_log(sport, player, int(season) if season.isdigit() else None)
+        except Exception:                                # noqa: BLE001
+            return self._send(503, b'{"error":"the game log could not be read"}', ".json")
+        return self._send(200, json.dumps(out or {}).encode(), ".json")
 
     def _parlay_check(self, body: dict):
         """The engine's parlay rules for a ticket the reader is building.
