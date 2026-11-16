@@ -10117,6 +10117,14 @@ Monday morning's heartbeat shows `rotation` → `verdict`, which should read
 `ready` if the finished seasons still hold. The NBA's own calibration still
 waits for the spread's check, which needs most of a run to itself.
 
+**Monday 16 November: it held.** Sunday night's run (12:18 to 1:09am Eastern,
+51 minutes, not cut off) did `nba_rules` and `nba_rates` first, then the
+ladder, and got part of the way through college football (its recency dial
+and player memory done, its temperatures cut off after a minute).
+`nba_switches` reads `rotation` → `verdict` `ready` (since 16 November), with
+`rates` and `starters` also `ready`. Left for the next runs: the NFL, the rest
+of college football, the NBA's spread, the NBA and the NFL props.
+
 **RW. The likeliest scorer is said in our data and the matchup** (step 603;
 15 November). Nothing to run. You circled "Lions's likeliest scorer by our
 touchdown numbers (64%), with Lions expected to score about 26" and asked
@@ -10379,6 +10387,24 @@ last learning pass ran at 4:48am, before this code reached the box, so the
 first pass to measure them is the one after today's first grades. Until
 then only the standing hold applies: a Most Likely pick 15 or more points
 above its price stays on paper.
+
+**Monday 16 November: the holds are measured.** After Sunday's grades the
+learning pass read 10,999 records and tested 120 kinds. None has come back
+yet. On paper, besides the standing hold (every league, 15+ points above the
+price):
+- **NFL:** 15+ (we said 81%, they hit 50%, 145 picks), 5–15 (said 67%, hit
+  57%, 326), and receiving yards at 5–15 (said 69%, hit 52%, 85).
+- **College football:** 15+ (said 78%, hit 58%, 193), and in that band
+  receiving yards (78%, 50%, 62), receptions (77%, 59%, 46) and rushing yards
+  (80%, 61%, 46).
+- **NHL:** assists at 5–15 (said 69%, hit 57%, 105).
+
+The NFL's two bands hold every Most Likely pick 5 or more points above its
+price, which is likely most of the NFL board. The held count is in the
+board's paid half, so it can't be read from outside. The kinds holding it
+are the two above, with what we said against what hit. That is the same
+overconfidence step TF found in football's numbers, which is the open
+decision there.
 
 **Your picks audit (QC), read.** The NFL's five flagged matchup picks
 (Coleman, Kincaid and Washington unders at 50–53% with the projection over
@@ -11535,6 +11561,14 @@ held as "role unproven", which is the NBA's own rule: a player's role needs
 four of his games this season, and these players have three (their recent
 minutes are three-game averages). Nothing is dropping them. The gate opens
 for each team as it plays its fourth game, about Tuesday to Thursday.
+
+**Monday 16 November (the public board):** the census can't show "role
+unproven" today. A prop is stopped at the first gate it fails, and all 1,000
+built props wait on a real price (`no_real_price`, with `no_history` zero). At
+the 12:06 UTC pull the books had posted no college player markets for
+tonight's five games (eight books each, none with player markets). They post
+nearer tip-off, as Saturday's did, and the next read after that shows how
+many props get past the role gate.
 
 **PK. The Lab draws** (step 539; 14 November). Nothing to run. You, with a
 screenshot of the Lab: "the lab shows this every time u click on the page.
