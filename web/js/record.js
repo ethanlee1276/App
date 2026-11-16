@@ -1150,7 +1150,7 @@ function gpParlaysHTML(rec, scope) {
    added into them, and the section says so. */
 const RP_SCORER_MARKETS = ["anytime_td", "first_td", "anytime_goal", "goals"];
 const RP_GAME_MARKETS = ["moneyline", "spread", "total", "team_total"];
-const RP_KINDS = ["props", "scorer", "game"];
+const REC_RP_KINDS = ["props", "scorer", "game"];
 function rpKindOf(m) {
   return RP_SCORER_MARKETS.includes(m) ? "scorer" : RP_GAME_MARKETS.includes(m) ? "game" : "props";
 }
@@ -1189,7 +1189,7 @@ function rpPicksHTML(rep, scope, recent) {
       { tone: graded >= PARLAY_RATE_FLOOR ? toneOf(rep.net_units) : "" })
     + (open ? recTile("Still riding", String(open), "graded once their games are final") : "");
   const kinds = rpKinds(rep);
-  const byKind = RP_KINDS.filter((k) => kinds[k] && kinds[k].w + kinds[k].l).map((k) => {
+  const byKind = REC_RP_KINDS.filter((k) => kinds[k] && kinds[k].w + kinds[k].l).map((k) => {
     const x = kinds[k];
     const g = x.w + x.l;
     return `<div class="rec-row flush tight"><span class="rr-what">${escapeHtml(rpKindWord(k, scope))}</span>
@@ -1218,7 +1218,7 @@ function rpLeaguePicksHTML(bySport) {
     const rep = bySport[sp] || {};
     const code = escapeHtml(typeof lgCode === "function" ? lgCode(sp) : sp.toUpperCase());
     const kinds = rpKinds(rep);
-    const graded = RP_KINDS.filter((k) => kinds[k] && kinds[k].w + kinds[k].l);
+    const graded = REC_RP_KINDS.filter((k) => kinds[k] && kinds[k].w + kinds[k].l);
     graded.forEach((k) => {
       const x = kinds[k];
       rows.push(`<tr><td><b>${code}</b><span class="rec-gp-kind">${escapeHtml(rpKindWord(k, sp))}</span></td>
