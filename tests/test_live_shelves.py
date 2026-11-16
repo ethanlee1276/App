@@ -90,10 +90,13 @@ def test_live_polls_revalidate_instead_of_redownloading_the_boards():
     # a 304, not 1.5 MB again). Five later that day: loadRecordOnce reads
     # the slim record_head.json first and falls back to the full file
     # with the same revalidating read (an old export has no slim copy).
+    # Six on 2026-11-16: Report Picks' Record tab draws the Record page's
+    # report book (record.js recReportBookInto), whose parlays are
+    # RECORD_PAGE_ONLY, so it reads the full file the same revalidating way.
     assert src.count('boardFetch("/data/record.json", { cache: "no-cache" })'
                      ) + src.count(
                      'boardFetch("data/record.json", { cache: "no-cache" })'
-                     ) == 5
+                     ) == 6
     assert 'boardFetch("data/record_head.json", { cache: "no-cache" })' in src
     assert 'boardFetch("data/record.json?t=" + Date.now())' not in src
 
