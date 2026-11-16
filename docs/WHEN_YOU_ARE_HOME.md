@@ -9353,7 +9353,15 @@ the same search straight after under a second:
 - a search that comes in while the start's warm-up is building its league's list waits for that build instead of
   building a second one beside it;
 - the search listed Jeremiah Smith at "espn:194", his newest log row being the copy of a game filed under ESPN's
-  number for Ohio State (step TM). It lists a college player at the newest season's real abbreviation now (OSU).
+  number for Ohio State (step TM), and once that was fixed, at "NU": the 14th's game against them is also held with
+  the two sides swapped. The search now takes the club of a player's newest game in the newest season, a real
+  abbreviation before ESPN's number, and on a tie the club with the most of the player's lines (OSU). A player traded
+  mid-season still shows at the new club;
+- his page wore "LT · LB" in its header: the college roster published tonight is missing 268 schools that would not
+  load, Ohio State among them (the roster page's own note says so), and the one "Jeremiah Smith" left on it is Louisiana
+  Tech's linebacker. A page now takes a lone roster row of the name from another club only in the position the
+  player's games say they play (a trade or a transfer keeps the position; a namesake rarely does), so the receiver's
+  page shows Ohio State and WR, with no bio until the roster loads again.
 
 **TR. A parlay leg's chance is one our own pick rules stand behind** (step 650; 16 November). Nothing to run. You
 asked why football's stated chances run 10 to 30 points too high. They did on the game parlays' legs, and only there:

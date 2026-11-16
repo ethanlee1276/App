@@ -293,6 +293,20 @@ def test_a_name_only_a_roster_knows_still_has_a_page():
         "two men of one name are neither, without the club"
 
 
+def test_a_namesake_on_another_club_is_not_his_header():
+    """Live, 16 Nov: Ohio State's roster did not load, and Jeremiah Smith's
+    page (the Buckeyes' receiver) wore Louisiana Tech's linebacker: "LT · LB"."""
+    import json as _json
+    import tempfile as _tf
+    d = _tf.mkdtemp()
+    with open(os.path.join(d, "rosters_cfb.json"), "w", encoding="utf-8") as fh:
+        _json.dump({"teams": {"LT": {"players": [{"player": "Jeremiah Smith", "position": "LB", "number": "28"}]}}}, fh)
+    assert PP.roster_row("cfb", "Jeremiah Smith", "OSU", d, position="WR") == {}, "a linebacker is not the receiver"
+    moved = PP.roster_row("cfb", "Jeremiah Smith", "OSU", d, position="LB")
+    assert moved["team"] == "LT", "a transfer in his own position is still him"
+    assert PP.roster_row("cfb", "Jeremiah Smith", "", d)["team"] == "LT", "with no club known, the one row of the name"
+
+
 def test_the_server_serves_it_free_and_the_players_page_becomes_it():
     srv = (ROOT / "server.py").read_text(encoding="utf-8")
     assert 'if parsed.path in ("/api/players/page", "/api/players/page/"):' in srv

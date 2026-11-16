@@ -398,9 +398,17 @@ def _roster_doc(sport: str, data_dir=None) -> dict:
     return doc
 
 
-def roster_row(sport: str, player: str, team: str = "", data_dir=None) -> dict:
+def roster_row(sport: str, player: str, team: str = "", data_dir=None, position: str = "") -> dict:
     """His row on the published roster: on his club's where the club is known;
-    else the one row of that name (two men of one name are neither)."""
+    else the one row of that name (two men of one name are neither).
+
+    THE ONE ROW ON ANOTHER CLUB IS HIM ONLY IN HIS POSITION (2026-11-16). The
+    live college roster lost 268 schools' pages one night, Ohio State's among
+    them, and Jeremiah Smith's page (the Buckeyes' receiver, every game in his
+    log) took the one "Jeremiah Smith" left, Louisiana Tech's linebacker, for
+    its header: "LT · LB". A trade or a transfer moves a man to another club
+    in his position; a namesake on another club in another one is not him.
+    `position` is what his logs say he plays."""
     from .playersearch import norm
     want = norm(player)
     if not want:
@@ -415,7 +423,13 @@ def roster_row(sport: str, player: str, team: str = "", data_dir=None) -> dict:
         mine = [r for r in hits if r.get("team") == team]
         if mine:
             return mine[0]
-    return hits[0] if len(hits) == 1 else {}
+    if len(hits) != 1:
+        return {}
+    one = hits[0]
+    theirs = str(one.get("position") or "").strip().upper()
+    if team and position and theirs and theirs != str(position).strip().upper():
+        return {}
+    return one
 
 
 def _birthplace(sport: str, row: dict, player: str, position: str) -> str:
@@ -568,7 +582,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                      for yr, gs in by_season.items()}
         newest = max((g for gs in by_season.values() for g in gs.values()), key=lambda g: g["period"], default=None)
         my_team = team or ((newest or {}).get("team") or "")
-        row = roster_row(sport, player, my_team, data_dir)
+        row = roster_row(sport, player, my_team, data_dir, position=(newest or {}).get("position") or "")
         position = str(row.get("position") or (newest or {}).get("position") or "")
         out = {"sport": sport, "player": player, "team": row.get("team") or my_team, "position": position,
                "bio": bio(sport, player, row, position), "notes": notes(sport, player, row, data_dir),

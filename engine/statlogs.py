@@ -463,11 +463,16 @@ def _search_conn(conn, sport: str, q: str, limit: int,
         # one game), and the newest row can be that copy, so the search
         # listed Jeremiah Smith at "espn:194" (Ohio State). The newest
         # season's real abbreviation first, the number only when it is
-        # all the season has.
+        # all the season has. Club by club, not row by row: the newest
+        # game can also be held in a copy with the two sides swapped (he
+        # read "NU", the side Ohio State beat on the 14th), so the club of
+        # the newest game wins, and on a tie the club with the most of his
+        # lines that season. The position is the newest row's (SQLite's
+        # bare column beside a single max()).
         t = conn.execute(
-            "SELECT team, position FROM player_game_logs "
-            "WHERE sport=? AND player=? "
-            "ORDER BY season DESC, (substr(team, 1, 5) = 'espn:') ASC, period DESC LIMIT 1",
+            "SELECT team, position, MAX(period) AS last, COUNT(*) AS n FROM player_game_logs "
+            "WHERE sport=? AND player=? GROUP BY season, team "
+            "ORDER BY season DESC, (substr(team, 1, 5) = 'espn:') ASC, last DESC, n DESC LIMIT 1",
             (sport, r["player"])).fetchone()
         # The face rides along when the ingest has stored one —
         # player_assets is in the same DB, and a search result

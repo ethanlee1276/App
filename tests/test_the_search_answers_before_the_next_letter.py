@@ -181,10 +181,13 @@ def test_a_guess_is_not_shown_beside_the_name_typed():
 def test_a_college_player_is_listed_at_his_school_not_espns_number():
     """Live, 16 Nov: "jeremiah smith" answered him alone, at "espn:194", the
     newest of his rows being a copy keyed by ESPN's number for Ohio State."""
-    rows = [{"sport": "cfb", "period": "2026-11-08", "game_id": "g10", "player": "Jeremiah Smith", "team": "OSU",
-             "position": "WR", "market": "rec_yds", "value": 90.0},
-            {"sport": "cfb", "period": "2026-11-09", "game_id": "401", "player": "Jeremiah Smith",
-             "team": "espn:194", "position": "", "market": "rec_yds", "value": 90.0},
+    rows = [{"sport": "cfb", "period": f"2026-11-{d:02d}", "game_id": f"g{d}", "player": "Jeremiah Smith", "team": "OSU",
+             "position": "WR", "market": m, "value": 90.0} for d in (7, 14) for m in ("rec_yds", "receptions")]
+    rows += [{"sport": "cfb", "period": "2026-11-15", "game_id": "401", "player": "Jeremiah Smith",
+              "team": "espn:194", "position": "", "market": "rec_yds", "value": 90.0},
+             # The 14th's game held once more with the sides swapped: live, the search read "NU".
+             {"sport": "cfb", "period": "2026-11-14", "game_id": "g14x", "player": "Jeremiah Smith", "team": "NU",
+              "opponent": "OSU", "position": "WR", "market": "rec_yds", "value": 90.0},
             {"sport": "cfb", "period": "2025-11-29", "game_id": "g0", "player": "Old Walkon", "team": "espn:2000",
              "market": "rec_yds", "value": 5.0}]
     path = _db_with(rows)
@@ -193,6 +196,16 @@ def test_a_college_player_is_listed_at_his_school_not_espns_number():
     assert [(h["player"], h["team"], h["position"]) for h in hits] == [("Jeremiah Smith", "OSU", "WR")], hits
     hits = statlogs.search("cfb", "old walkon", db_path=path, data_dir=d)
     assert [h["team"] for h in hits] == ["espn:2000"], "the number, when it is all a season has"
+
+
+def test_a_traded_player_is_listed_at_his_new_club():
+    """The club of his newest game, though the old one holds more of his lines."""
+    rows = [{"sport": "nfl", "period": f"{w:03d}", "game_id": f"j{w}", "player": "Traded Man", "team": "JAX",
+             "position": "WR", "market": m, "value": 50.0} for w in range(1, 10) for m in ("rec_yds", "receptions")]
+    rows += [{"sport": "nfl", "period": "010", "game_id": "b10", "player": "Traded Man", "team": "BUF",
+              "position": "WR", "market": "rec_yds", "value": 40.0}]
+    hits = statlogs.search("nfl", "traded man", db_path=_db_with(rows), data_dir=_roster_dir([], "nfl"))
+    assert [(h["player"], h["team"]) for h in hits] == [("Traded Man", "BUF")], hits
 
 
 def test_the_play_files_short_names_are_not_a_second_player():
