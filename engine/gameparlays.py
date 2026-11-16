@@ -1145,7 +1145,10 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
              f"fair {t.get('fair_words')} · take it at {t.get('take_words')} or better")
     if t.get("naive_words"):
         price += f" · the legs' own prices multiplied pay {t['naive_words']}, and a book's same-game price pays less"
+    from .gameresults import bet_of
     legs = [{"pick": pick_words(l), "player": l.get("player"), "team": l.get("team"),
+             # The leg itself, graded on a finished game's page (engine/gameresults).
+             **({"bet": bet_of(l)} if bet_of(l) else {}),
              "price": " ".join(x for x in (_odds_words(l.get("odds")), l.get("book") or "") if x),
              "chance": round(float(l.get("p") or 0), 4), "why": list(l.get("why") or []),
              # A scorer's research case, out of RESEARCH_MAX (`research_scorers`).

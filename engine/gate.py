@@ -188,6 +188,9 @@ PAID_KEYS = (
     # name. No prop picks are in it; the reads are the paid half all the
     # same. Remembered in the edit that made it, the only time it is cheap.
     "game_reports",
+    # WHAT HAPPENED TO EACH PICK (engine/gameresults, 2026-11-16): the
+    # journal's verdict on every graded pick, which names the picks.
+    "pick_results",
     # EVERY UFC FIGHT, WRITTEN OUT (engine/ufc/report, 2026-11-16): the
     # card's picks, chances and grades in words, so as paid as `picks`.
     "fight_reports",
@@ -975,6 +978,15 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     _links = took.pop("bet links", 0.0)
     took["bet link files"] = min(_links, float(betlinks.LAST.get("load_s") or 0.0))
     took["bet link rows"] = _links - took["bet link files"]
+    # WHAT HAPPENED TO EACH PICK (engine/gameresults, 2026-11-16): the
+    # journal's verdicts for this board's finished games, so a finished
+    # game's page can mark every pick, leg and read. Never costs a publish.
+    try:
+        from . import gameresults
+        gameresults.stamp(payload, label)
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ pick results not stamped on {label}: {type(exc).__name__}: {exc}")
+    _step("pick results")
     built = _full_dir_for(public)
     built.mkdir(parents=True, exist_ok=True)
     full = built / label

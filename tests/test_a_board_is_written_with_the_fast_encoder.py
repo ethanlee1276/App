@@ -219,7 +219,8 @@ def test_a_publish_names_its_steps_only_inside_a_build():
         lines = said.getvalue().splitlines()
         parts = stageclock.parse_parts(lines)
         assert list(parts) == ["publish nfl.json"], parts
-        assert list(parts["publish nfl.json"]) == ["prepare", "bet link files", "bet link rows", "downgrade check",
+        assert list(parts["publish nfl.json"]) == ["prepare", "bet link files", "bet link rows", "pick results",
+                                               "downgrade check",
                                                    "served copy", "private copy", "sidecar", "public copy"], parts
         assert all(v >= 0 for v in parts["publish nfl.json"].values())
         assert stageclock.parse(lines) == {}, "a part is never counted as a stage"

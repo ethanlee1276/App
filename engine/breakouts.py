@@ -90,6 +90,11 @@ def card(r: dict, tone: str, *, pick: str = "", role: str = "", form=None) -> di
         out["role"] = role
     if pick:
         out["pick"] = pick
+        # The pick itself, graded on a finished game's page (engine/gameresults).
+        from .gameresults import read_bet
+        bet = read_bet(r)
+        if bet:
+            out["bet"] = bet
     if form:
         out["form"] = form
     # MAY SIT (engine/availability, 2026-11-14): the mark, and why, first; the

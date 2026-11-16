@@ -2002,6 +2002,16 @@ main { view-transition-name: page; }
   box-shadow: none;
   background-color: color-mix(in oklab, var(--warn) 14%, var(--bg)); }
 .live-ribbon .live-dot { background: #fff; }
+/* A pick's result on a finished game (app.js pickResultHTML): won in green,
+   lost in red, a push, a void or a wait plain; a tint, never an outline. */
+.pr-res { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 8px; padding: 3px 10px;
+  width: max-content; max-width: 100%; align-self: flex-start; justify-self: start;
+  border-radius: 999px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .02em;
+  background: var(--fill-subtle); color: var(--text-mute); }
+.pr-won { color: var(--good); background: color-mix(in oklab, var(--good) 16%, transparent); }
+.pr-lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 16%, transparent); }
+.pr-push, .pr-void, .pr-pending { color: var(--text-mute); }
+span.pr-res { margin: 6px 0 2px; }
 
 @media (prefers-reduced-motion: reduce) { .live-dot, .live-dot::after { animation: none; } .live-dot::after { display: none; } }
 

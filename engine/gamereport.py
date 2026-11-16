@@ -1712,8 +1712,10 @@ def sec_matchups(c: Ctx) -> dict | None:
                           "why": ([_sentence(cap(scorer))] if scorer else [])
                           + [_sentence(w) for w in why if w not in common][:4],
                           "form": form_lines(c, r),
-                          # His pick on the read's side (`read_pick`).
-                          **({"pick": read_pick(r)} if read_pick(r) else {})})
+                          # His pick on the read's side (`read_pick`), and the
+                          # pick itself, graded on a finished game's page.
+                          **({"pick": read_pick(r)} if read_pick(r) else {}),
+                          **({"bet": _read_bet(r)} if read_pick(r) and _read_bet(r) else {})})
         if items:
             sub.append({"type": "verdicts", "items": items})
         room = cov.get(dfn) or {}
@@ -3613,6 +3615,16 @@ def _card_parlay(built: dict) -> list:
     return out
 
 
+def _bet_of(r):
+    from .gameresults import bet_of
+    return bet_of(r)
+
+
+def _read_bet(r):
+    from .gameresults import read_bet
+    return read_bet(r)
+
+
 def sec_card(c: Ctx, built: dict) -> dict | None:
     """OUR PICKS FOR THIS GAME — the research card (see CARD_MAX): the board's
     posted picks for the game, best first, each with its book and price, our
@@ -3638,7 +3650,9 @@ def sec_card(c: Ctx, built: dict) -> dict | None:
                       "pick": pick_words(leg),
                       "price": " ".join(x for x in (str(r.get("book") or ""), _odds_word(r.get("odds"))) if x),
                       "chance": round(float(r["model_prob"]), 4), "numbers": card_numbers(r),
-                      "form": card_form(c, r), "why": card_why(c, r, angles), "kind": card_kind(c, r)})
+                      "form": card_form(c, r), "why": card_why(c, r, angles), "kind": card_kind(c, r),
+                      # Graded on the page once the game is over (engine/gameresults).
+                      **({"bet": _bet_of(r)} if _bet_of(r) else {})})
     blocks = []
     if items:
         blocks.append({"type": "picks", "items": items})

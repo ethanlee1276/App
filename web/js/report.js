@@ -51,6 +51,47 @@
   /* The league's size for the report being drawn (engine/gamereport
      "rank_of"): a rank in a sentence is judged against it. */
   let RANK_OF = 0;
+  /* A FINISHED GAME'S RESULTS (app.js pickResult, engine/gameresults;
+     Ethan, 2026-11-16: "show ... if these props won or lost and if the
+     parlays won or lost and what legs won and lost and if our game report
+     and reads was correct"): the game page hands the report its grader
+     once the game is over ({final, home, away, grade, words, ticket}), and
+     every pick, read pick, parlay leg and ticket, and the call, says how it
+     went. Null before the final, and on a page that grades nothing. */
+  let RESULTS = null;
+  const RES_TAG = { won: "gr-res won", lost: "gr-res lost", push: "gr-res even", void: "gr-res even",
+                    pending: "gr-res even" };
+  function resTag(bet) {
+    if (!RESULTS || !bet || typeof RESULTS.grade !== "function") return "";
+    const x = RESULTS.grade(bet);
+    if (!x) return "";
+    const words = typeof RESULTS.words === "function" ? RESULTS.words(x, bet) : x.status;
+    return ` <span class="${RES_TAG[x.status] || RES_TAG.pending}">${escapeHtml(words)}</span>`;
+  }
+  //: A ticket's verdict from its legs (app.js ticketResult): every leg that played won, or one lost.
+  function ticketTag(legs) {
+    if (!RESULTS || typeof RESULTS.ticket !== "function") return "";
+    const bets = (legs || []).map((l) => l.bet || l);
+    const x = bets.length && bets.every(Boolean) ? RESULTS.ticket(bets) : null;
+    if (!x) return "";
+    const won = (x.legs || []).filter((y) => y.status === "won").length;
+    const words = { won: "Ticket won", lost: `Ticket lost · ${won} of ${bets.length} legs hit`, push: "Ticket void",
+                    pending: "Final — waiting on the box score" }[x.status] || "";
+    return words ? ` <span class="${RES_TAG[x.status] || RES_TAG.pending}">${escapeHtml(words)}</span>` : "";
+  }
+  //: Under the call on a finished game: right or wrong, with the score, and our ratings' own.
+  function winnerResultHTML(b) {
+    const f = RESULTS && RESULTS.final;
+    if (!f || f.home == null || f.away == null) return "";
+    const score = `${teamName(RESULTS.away)} ${f.away}, ${teamName(RESULTS.home)} ${f.home}`;
+    if (f.home === f.away) return `<div class="gr-res-call even">Final: ${escapeHtml(score)} — a tie</div>`;
+    const won = f.home > f.away ? RESULTS.home : RESULTS.away;
+    const right = won === b.team;
+    const r = b.ratings;
+    const ratings = r && !r.even ? ` · our ratings alone: ${r.team === won ? "right" : "wrong"}` : "";
+    return `<div class="${right ? "gr-res-call won" : "gr-res-call lost"}">${right ? "Right" : "Wrong"}: ${
+      escapeHtml(teamName(won))} won — ${escapeHtml(score)}${escapeHtml(ratings)}</div>`;
+  }
   /* Green in the top third of a league of n, red in the bottom third. */
   function rankTone(r, n) {
     if (!(r > 0) || !(n > 0)) return "";
@@ -327,6 +368,7 @@
         <div class="gr-winner-bar" role="img" aria-label="${escapeAttr(`${us} ${pct(p)}, ${them} ${pct(1 - p)}`)}"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
         <div class="gr-winner-legend"><span>${escapeHtml(us)} ${pct(p)}</span><span>${escapeHtml(them)} ${pct(1 - p)}</span></div>
         ${winnerRatingsHTML(b.ratings, pct)}
+        ${winnerResultHTML(b)}
       </div>`;
     }
     if (b.type === "p") return `<p class="gr-p">${named(b.text, b.names, b.marks, true)}</p>`;
@@ -370,7 +412,7 @@
           ${b.type === "verdicts"
             ? ((v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${named(w, b.names, null, true)}</li>`).join("")}</ul>` : "")
             : v.text ? `<p class="gr-person-text">${named(v.text, b.names)}</p>` : ""}
-          ${v.pick ? `<p class="gr-person-pick">${named(v.pick, b.names)}</p>` : ""}
+          ${v.pick ? `<p class="gr-person-pick">${named(v.pick, b.names)}${v.bet ? resTag(v.bet) : ""}</p>` : ""}
           ${form(v.form)}
         </div>`;
       }).join("")}</div>`;
@@ -384,7 +426,7 @@
         <div class="gr-pick-head"><span class="gr-pick-n">${escapeHtml(String(v.rank || ""))}</span>
           <b class="gr-pick-what">${named(v.pick || "", b.names)}</b>${v.price
             ? ` <span class="gr-pick-px">${escapeHtml(v.price)}</span>` : ""}${v.tier
-            ? ` <span class="gr-pick-tier">${escapeHtml(v.tier)}</span>` : ""}</div>
+            ? ` <span class="gr-pick-tier">${escapeHtml(v.tier)}</span>` : ""}${v.bet ? resTag(v.bet) : ""}</div>
         ${v.numbers ? `<p class="gr-pick-num">${escapeHtml(v.numbers)}</p>` : ""}
         ${v.form ? `<p class="gr-pick-form">${escapeHtml(v.form)}</p>` : ""}
         ${(v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${named(w, b.names, b.marks, true)}</li>`).join("")}</ul>` : ""}
@@ -396,7 +438,7 @@
     if (b.type === "parlays") {
       const items = (xs) => (xs || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
       return `<div class="gr-parlays">${(b.items || []).map((t) => `<div class="gr-parlay">
-        <div class="gr-parlay-head"><b>${escapeHtml(t.title || "")}</b>${(t.bet_legs || []).length
+        <div class="gr-parlay-head"><b>${escapeHtml(t.title || "")}</b>${ticketTag(t.legs)}${(t.bet_legs || []).length
           ? parlayBet(t.bet_legs, `${t.title || "Parlay"} · ${(t.legs || []).map((l) => l.pick).filter(Boolean).join(" + ")}`) : ""}</div>
         ${t.price_line ? `<p class="gr-parlay-price">${escapeHtml(t.price_line)}</p>` : ""}
         <ol class="gr-parlay-legs">${(t.legs || []).map((l) => `<li${l.player
@@ -404,7 +446,8 @@
           <span class="gr-parlay-pick"><b>${named(l.pick || "", b.names)}</b>${l.price
             ? ` <span class="gr-parlay-px">${escapeHtml(l.price)}</span>` : ""}${l.chance
             ? ` <span class="gr-parlay-p">${Math.round(Number(l.chance) * 100)}%</span>` : ""}${l.research != null
-            ? ` <span class="gr-parlay-r" title="Our research score: his team’s expected points, the defense he faces, his usage and red-zone work, the matchup read and the game script">research score ${escapeHtml(String(l.research))} of ${escapeHtml(String(l.research_of || 13))}</span>` : ""}</span>
+            ? ` <span class="gr-parlay-r" title="Our research score: his team’s expected points, the defense he faces, his usage and red-zone work, the matchup read and the game script">research score ${escapeHtml(String(l.research))} of ${escapeHtml(String(l.research_of || 13))}</span>` : ""}${
+            l.bet ? resTag(l.bet) : ""}</span>
           ${(l.why || []).length ? `<ul class="gr-why">${items(l.why)}</ul>` : ""}</li>`).join("")}</ol>
         ${t.script ? `<p class="gr-parlay-script">${escapeHtml(t.script)}</p>` : ""}
         ${t.rule_note ? `<p class="gr-parlay-rule${t.td_rule ? " ok" : ""}">${escapeHtml(t.rule_note)}</p>` : ""}
@@ -560,6 +603,7 @@
         this game written out top to bottom: ${holds} — is part of the subscription.</div></div>`;
     }
     RANK_OF = Number(r.rank_of) || 0;
+    RESULTS = (extras && extras.results) || null;
     const secs = (r.sections || []).filter((s) => s && (s.blocks || []).length);
     const body = secs.map((s) => {
       let blocks = s.blocks || [];
@@ -637,15 +681,21 @@
       title, price_line: price, script, links: t.links || [], caveats: t.caveats || [], ...rule,
       legs: (t.legs || []).map((l) => ({ pick: pickWords(l), player: l.player,
         price: [oddsWords(l.odds), l.book || ""].filter(Boolean).join(" "), chance: l.p, why: l.why || [],
-        research: l.research, research_of: l.research_of })),
+        research: l.research, research_of: l.research_of, bet: l })),
       backups: (t.backups || []).map((b) => `If ${b.for} is out or his number moves: ${pickWords(b.leg || {})} (${
         oddsWords((b.leg || {}).odds)}, ${pct((b.leg || {}).p)})`),
       bet_legs: t.legs || [],
     };
   }
-  function gameParlays(gp, sport) {
+  function gameParlays(gp, sport, opts) {
     const games = (gp && gp.games) || [];
     if (!games.length) return "";
+    // Each game's tickets graded once it is over (opts.results: game → the grader, app.js).
+    const graded = (g, html) => {
+      const was = RESULTS;
+      RESULTS = (opts && typeof opts.results === "function" && opts.results(g)) || null;
+      try { return html(); } finally { RESULTS = was; }
+    };
     const pair = ["nfl", "cfb"].includes(sport) ? "touchdown" : sport === "nhl" ? "goal-scorer" : "scorer";
     return `<div class="section-title">Each game’s parlays <span class="sub">— four three-leg tickets and three ${pair}
         pairs a game, from our own picks; every one tracked on the Record page, none staked</span></div>
@@ -654,10 +704,10 @@
       ${games.map((g) => `<details class="gs-game gr-parlay-game"><summary><span class="gs-game-k">${
         escapeHtml(teamName(g.away))} @ ${escapeHtml(teamName(g.home))}</span>
         <span class="gs-game-n">${(g.threes || []).length} three-leg · ${(g.scorers || []).length} pairs</span></summary>
-        ${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
-          : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}
-        ${(g.scorers || []).length ? block({ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) })
-          : (g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : "")}
+        ${graded(g, () => (g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
+          : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`)}
+        ${graded(g, () => (g.scorers || []).length ? block({ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) })
+          : (g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : ""))}
       </details>`).join("")}`;
   }
   /* Their record so far (record.json two_leg.game, engine/parlayledger

@@ -7012,7 +7012,7 @@ function gameBetCard(r) {
     <article class="card gamebet ${r._ok ? "" : "faded"} ${
         gameBetOpenable(r) ? "openable" : ""}"${gameBetAttrs(r)}
         style="--grade-color:${gradeColor(r.grade)}">
-      ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
+      ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}${pickResultHTML(Object.assign({ kind: "game" }, r))}
       <div class="card-head">
         <div class="card-id">${mark}
           <div>
@@ -9637,7 +9637,7 @@ function cardHTML(r) {
   return `
     <article class="card ${propOpenable(r) ? "openable" : ""} ${r._ok ? "" : "faded"}"${propAttrs(r)}
       style="--grade-color:${gradeColor(r.grade)}">
-      ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
+      ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}${pickResultHTML(r)}
       <div class="card-head">
         <div class="card-id">${playerAvatar(r.player, r.team, { headshot: r.headshot })}
           <div>
@@ -10031,6 +10031,124 @@ function cardInGame(r) {
     : typeof propInGame === "function" && propInGame(r, g);
   return same ? g : null;
 }
+/* WHAT HAPPENED, ON A FINISHED GAME (engine/gameresults, 2026-11-16; Ethan,
+   with a finished Pacers at 76ers page: "when a game is already over ... show
+   ... if these props won or lost and if the parlays won or lost and what legs
+   won and lost and if our game report and reads was correct ... for all
+   sports"). The board carries the journal's actual number for every graded
+   pick (`pick_results`). Each pick is graded here at its own line and side the
+   journal's way (ledger._grade_side_aware: level is a push, an over wins above
+   the line), a game bet off the final score; until the journal has the box
+   score, the pick says it is waiting on it. Nothing shows before the final. */
+const RES_GAME_MARKETS = new Set(["moneyline", "total", "spread", "team_total"]);
+const RES_SCORE_MARKETS = new Set(["anytime_td", "anytime_goal", "goals", "first_td"]);
+const RES_CLASS = { won: "pr-res pr-won", lost: "pr-res pr-lost", push: "pr-res pr-push",
+                    void: "pr-res pr-void", pending: "pr-res pr-pending" };
+const RES_WORD = { won: "Won", lost: "Lost", push: "Push", void: "Void — didn’t play",
+                   pending: "Final — waiting on the box score" };
+function resNorm(s) {
+  return String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+//: The game a pick belongs to: the page's own, else the board's game by its key or clubs.
+function resGameOf(r) {
+  const own = cardInGame(r);
+  if (own) return own;
+  const games = (state.data || {}).games || [];
+  const key = String((r && r.game) || "");
+  if (key.includes("@")) {
+    const [a, h] = key.split("@");
+    const g = games.find((x) => x.away === a && x.home === h);
+    if (g) return g;
+  }
+  if (r && r.home && r.away) {
+    const g = games.find((x) => x.home === r.home && x.away === r.away);
+    if (g) return g;
+  }
+  const t = r && r.team;
+  return t ? games.find((x) => x.home === t || x.away === t) || null : null;
+}
+//: {away, home} once the game is final (null scores when the feed has none), else null.
+function resFinal(g) {
+  const lv = (g && g.live) || {};
+  if (lv.state !== "final") return null;
+  const a = Number(lv.away_score), h = Number(lv.home_score);
+  return lv.away_score != null && lv.home_score != null && isFinite(a) && isFinite(h)
+    ? { away: a, home: h } : { away: null, home: null };
+}
+//: One pick's verdict on a finished game, {status, actual?, said?}; null before the final.
+function pickResult(bet, g, map) {
+  if (!bet || !g) return null;
+  const fin = resFinal(g);
+  if (!fin) return null;
+  const m = String(bet.market || "").toLowerCase();
+  const side = String(bet.side || "").toLowerCase();
+  // No line is no line (Number(null) is 0): an anytime scorer's is one.
+  const line = bet.line == null || bet.line === "" ? NaN : Number(bet.line);
+  const over = side !== "under" && side !== "no";
+  const judge = (actual, ln, up) => (actual === ln ? "push" : (actual > ln) === up ? "won" : "lost");
+  if (bet.game || bet._game_leg || bet.kind === "game" || RES_GAME_MARKETS.has(m)) {
+    if (fin.away == null) return { status: "pending" };
+    if (m === "total") {
+      const t = fin.away + fin.home;
+      return isFinite(line) ? { status: judge(t, line, over), said: `${t} scored` } : null;
+    }
+    const team = bet.team || "";
+    const mine = team === g.home ? fin.home : team === g.away ? fin.away : null;
+    const theirs = team === g.home ? fin.away : team === g.away ? fin.home : null;
+    if (mine == null) return null;
+    const said = `${teamName(team)} ${mine}–${theirs}`;
+    if (m === "moneyline") return { status: mine === theirs ? "push" : mine > theirs ? "won" : "lost", said };
+    if (m === "spread") return isFinite(line) ? { status: judge(mine - theirs + line, 0, true), said } : null;
+    if (m === "team_total") return isFinite(line) ? { status: judge(mine, line, over), said: `${mine} scored` } : null;
+    return null;
+  }
+  const res = map || (state.data || {}).pick_results || {};
+  const leg = Number(bet.leg) > 1 ? `|${Number(bet.leg)}` : "";
+  const hit = res[`${resNorm(bet.player)}|${m}${leg}`];
+  if (!hit) return { status: "pending" };
+  if (hit.v) return { status: "void" };
+  const a = Number(hit.a);
+  if (!isFinite(a)) return { status: "pending" };
+  // An anytime scorer has no line: one is enough.
+  return { status: judge(a, isFinite(line) ? line : 0.5, over), actual: a };
+}
+//: The verdict in words: "Won · 7 assists", "Lost · didn't score", "Won · 76ers 131–124".
+function pickResultWords(res, bet) {
+  if (!res) return "";
+  const head = RES_WORD[res.status] || "";
+  if (res.said) return `${head} · ${res.said}`;
+  if (res.actual == null) return head;
+  const m = String((bet && bet.market) || "");
+  if (RES_SCORE_MARKETS.has(m)) {
+    return `${head} · ${res.actual >= 1 ? `scored${res.actual > 1 ? ` ${res.actual}` : ""}` : "didn’t score"}`;
+  }
+  const label = String((bet && bet.market_label) || m.replace(/_/g, " ")).toLowerCase();
+  const n = Number.isInteger(res.actual) ? String(res.actual) : res.actual.toFixed(1);
+  return `${head} · ${n} ${label}`;
+}
+//: The ribbon a pick's card wears on a finished game ("" before the final).
+function pickResultHTML(r, tag) {
+  const res = pickResult(r, resGameOf(r));
+  if (!res) return "";
+  const t = tag === "span" ? "span" : "div";
+  return `<${t} class="${RES_CLASS[res.status] || RES_CLASS.pending}">${escapeHtml(pickResultWords(res, r))}</${t}>`;
+}
+//: A ticket's verdict from its legs: lost on any lost leg, won when every leg that played won.
+function ticketResult(legs, g, map) {
+  const rs = (legs || []).map((l) => pickResult(l.bet || l, g, map));
+  if (!rs.length || rs.some((x) => !x)) return null;
+  if (rs.some((x) => x.status === "lost")) return { status: "lost", legs: rs };
+  if (rs.some((x) => x.status === "pending")) return { status: "pending", legs: rs };
+  const played = rs.filter((x) => x.status !== "void" && x.status !== "push");
+  return { status: played.length ? "won" : "push", legs: rs };
+}
+//: What the report needs to grade itself on a finished game (js/report.js RESULTS), or null before it.
+function reportResults(g) {
+  const fin = resFinal(g);
+  if (!g || !fin) return null;
+  return { final: fin, home: g.home, away: g.away, grade: (bet) => pickResult(bet, g), words: pickResultWords,
+           ticket: (bets) => ticketResult(bets, g) };
+}
 //: The weather lines a game page's header panel already says.
 const WEATHER_DETAIL = /^(wind \d|\d+\s*°f|rain\b|snow\b|precipitation)/i;
 
@@ -10124,7 +10242,7 @@ function likelyCard(r) {
   const who = game ? (r.pick_label || r.player) : r.player;
   const sub = game ? escapeHtml(r.matchup || "")
     : `${teamName(r.team)}${r.opponent ? ` vs ${teamName(r.opponent)}` : ""}`;
-  return `<article class="card longshot ${likelyTier(r)}"${likelyDoor(r)}>
+  return `<article class="card longshot ${likelyTier(r)}"${likelyDoor(r)}>${pickResultHTML(r)}
     <div class="card-head">
       <div class="card-id">${mark}
         <div>
@@ -11457,7 +11575,7 @@ function obCardHTML(r, rank, opts = {}) {
       <span class="ob-what"><b>${escapeHtml(name || "")}</b>
         <span class="ob-bet">${escapeHtml(obBetLine(r))}${r.book ? ` <span class="ob-book">· ${escapeHtml(r.book)}</span>` : ""}${
           likelyNowHTML(r, true) ? ` <span class="ob-book">${escapeHtml(likelyNowHTML(r, true))}</span>` : ""}</span>
-        ${r.kind === "game" ? "" : hitChipsHTML(r)}${td}${band}${method}${obWhyLine(r)}${pickWarnHTML(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
+        ${pickResultHTML(r, "span")}${r.kind === "game" ? "" : hitChipsHTML(r)}${td}${band}${method}${obWhyLine(r)}${pickWarnHTML(r)}${tags}${obScalpyHTML(r)}${obStoryHTML(r)}</span></button>
     <div class="ob-checkcol">${obChecksHTML(r)}${opts.why === false ? "" : obWhyHTML(r)}</div>
     <span class="ob-odds"><b>${r.odds != null ? american(r.odds) : "—"}</b>${obPriceHTML(r)}${betItHTML(r, "mini")}</span>
     <span class="ob-ringcol">${obRingHTML(r)}<span class="ob-tierword tier-${escapeAttr(r.tier || "look")}">${
@@ -11940,7 +12058,9 @@ function fillGameParlays(host, d) {
   if (!el) return;
   loadReport().then((R) => {
     if (!R || !R.gameParlays) return;
-    el.innerHTML = R.gameParlays(d.game_parlays, state.sport);
+    // Each finished game's tickets say how they went (app.js reportResults).
+    el.innerHTML = R.gameParlays(d.game_parlays, state.sport, { results: (x) => reportResults(
+      ((d.games || []).find((gm) => gm.home === x.home && gm.away === x.away)) || null) });
     revealChildren(el);
     loadRecordOnce().then((rec) => {
       const line = el.querySelector("[data-gp-rec]");
@@ -12167,7 +12287,7 @@ function longShotCard(r) {
   return `
     <article class="card longshot ${propOpenable(r) ? "openable" : ""}"${propAttrs(r)}
       style="--grade-color:${gradeColor(r.grade)}">
-      ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}
+      ${r.live ? `<div class="live-ribbon"><span class="live-dot"></span>LIVE · in-play</div>` : ""}${pickResultHTML(r)}
       <div class="card-head">
         <div class="card-id">${playerAvatar(r.player, r.team, { map: nflMap(), headshot: r.headshot })}
           <div>

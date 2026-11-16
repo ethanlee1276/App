@@ -94,6 +94,16 @@
 .gr-winner-alt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 12px;
   color: var(--text-mute); font-size: var(--fs-sm); }
 .gr-winner-alt b { color: var(--text); }
+/* A finished game's results in the report (report.js resTag, ticketTag,
+   winnerResultHTML): green won, red lost, plain the rest, all tints. */
+.gr-res { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-xs);
+  font-weight: 700; white-space: nowrap; background: var(--fill-subtle); color: var(--text-mute); }
+.gr-res.won { color: var(--good); background: color-mix(in oklab, var(--good) 16%, transparent); }
+.gr-res.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 16%, transparent); }
+.gr-res-call { margin-top: 10px; padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm);
+  font-weight: 700; background: var(--fill-subtle); color: var(--text-mute); }
+.gr-res-call.won { color: var(--good); background: color-mix(in oklab, var(--good) 14%, transparent); }
+.gr-res-call.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 14%, transparent); }
 .gr-winner-tag { padding: 2px 8px; border-radius: 999px; background: var(--fill-subtle); font-size: var(--fs-xs);
   font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
 .gr-people { display: grid; gap: 10px; margin: 10px 0; grid-template-columns: 1fr; }

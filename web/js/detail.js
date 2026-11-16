@@ -1498,6 +1498,56 @@ function gameReportFor(g) {
   if (_grFailed) return null;
   return (d.game_reports || []).find((r) => r && r.away === g.away && r.home === g.home) || null;
 }
+/* HOW WE DID, ON A FINISHED GAME (2026-11-16; Ethan: "when a game is already
+   over and someone goes and clicks on this game page ... show ... what the
+   outcome was of the game and if these props won or lost and if the parlays
+   won or lost ... and if our game report and reads was correct"). The page
+   opens on the final, every pick it carries counted the journal's way (app.js
+   pickResult, engine/gameresults), the game's parlays and scorer pairs, and
+   whether the report's call was right; each card below says its own. */
+function gpResultsHTML(g, rows) {
+  const fin = resFinal(g);
+  if (!fin) return "";
+  const n = { won: 0, lost: 0, push: 0, void: 0, pending: 0 };
+  const seen = new Set();
+  for (const r of rows || []) {
+    if (!r) continue;
+    const k = [resNorm(r.player || r.team), r.market, String(r.side || "").toLowerCase(), r.line].join("|");
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const x = pickResult(r, g);
+    if (x) n[x.status] += 1;
+  }
+  const gp = (((state.data || {}).game_parlays || {}).games || []).find((x) => x && x.home === g.home && x.away === g.away) || {};
+  const tickets = (kind) => (gp[kind] || []).map((t) => ticketResult(t.legs, g)).filter(Boolean);
+  const said = (xs, what) => {
+    if (!xs.length) return "";
+    const won = xs.filter((x) => x.status === "won").length, open = xs.filter((x) => x.status === "pending").length;
+    return `<li><b>${what}:</b> ${won} of ${xs.length} won${open ? `, ${open} waiting on the box score` : ""}</li>`;
+  };
+  const pair = ["nfl", "cfb"].includes(state.sport) ? "Touchdown pairs" : state.sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
+  const picks = [n.won && `${n.won} won`, n.lost && `${n.lost} lost`, n.push && `${n.push} pushed`,
+    n.void && `${n.void} void (didn’t play)`, n.pending && `${n.pending} waiting on the box score`].filter(Boolean);
+  const rep = gameReportFor(g);
+  const sec = rep && (rep.sections || []).find((s) => s && s.key === "verdict");
+  const call = sec && (sec.blocks || [])[0];
+  let callLine = "";
+  if (call && call.type === "winner" && fin.home != null && fin.away != null && fin.home !== fin.away) {
+    const won = fin.home > fin.away ? g.home : g.away;
+    callLine = `<li><b>Who we think wins:</b> ${call.team === won ? "right" : "wrong"} — we called ${
+      escapeHtml(teamName(call.team))} (${Math.round(Number(call.chance || 0) * 100)}%)</li>`;
+  }
+  const score = fin.home != null && fin.away != null
+    ? `${escapeHtml(teamName(g.away))} ${fin.away}, ${escapeHtml(teamName(g.home))} ${fin.home}` : "the final score is not in yet";
+  const lines = [picks.length ? `<li><b>Our picks:</b> ${picks.join(", ")}</li>` : "",
+    said(tickets("threes"), "Three-leg parlays"), said(tickets("scorers"), pair), callLine].filter(Boolean);
+  return `<div class="card gp-res" id="gp-sec-results">
+    <div class="gp-res-head"><span class="gp-res-k">Final</span> <b>${score}</b></div>
+    ${lines.length ? `<ul class="gp-res-list">${lines.join("")}</ul>` : `<p class="gp-res-note">No pick of ours rode on this game.</p>`}
+    ${lines.length ? `<p class="gp-res-note">Every pick below says how it went: the number he finished with, won or lost at its
+      own line. The parlays and the report mark each leg and the call the same way.</p>` : ""}
+  </div>`;
+}
 function gameReportHTML(g, extras) {
   const d = state.data || {};
   const r = gameReportFor(g);
@@ -1510,6 +1560,9 @@ function gameReportHTML(g, extras) {
   // ticket in the report can be bet whole (js/report.js parlayBet).
   const parlays = (((d.game_parlays || {}).games) || []).find((x) => x && x.home === g.home && x.away === g.away);
   if (parlays) extras = Object.assign({}, extras, { parlays });
+  // A finished game: the report grades its picks, reads, tickets and call (app.js reportResults).
+  const results = reportResults(g);
+  if (results) extras = Object.assign({}, extras, { results });
   if (window.QBReport) return window.QBReport.html(r, extras);
   const id = state.gameId;
   loadReport().then(() => { if (state.view === "game" && state.gameId === id) renderGamePage(); });
@@ -2071,6 +2124,8 @@ function renderGamePage() {
       </div>
     </div>
 
+    ${gpResultsHTML(g, [...likelies, ...shown, ...betsShown, ...shots,
+      ...(oneBoardOn() ? oneBoardAllRows().filter((r) => r.game === `${g.away}@${g.home}`) : [])])}
     ${gpJumpHTML([
       linesCard || notesCard ? ["gp-sec-lines", "Lines & insights"] : null,
       reportHTML ? ["gp-sec-report", "Game report"] : null,
@@ -2190,7 +2245,7 @@ function renderGamePage() {
      — whose data never reached this page for them (engine/gate) — give way
      to one card that says what is behind it. */
   if (isWalled()) {
-    host.querySelectorAll(".gp-jump, #gp-sec-report, #gp-sec-plan, #gp-sec-scan, #gp-sec-replay, #gp-sec-matchup, "
+    host.querySelectorAll(".gp-jump, #gp-sec-results, #gp-sec-report, #gp-sec-plan, #gp-sec-scan, #gp-sec-replay, #gp-sec-matchup, "
       + "#gp-sec-likely, #gp-sec-scripts, #gp-sec-bets, #gp-sec-props, #gp-sec-shots, #gp-lab").forEach((el) => el.remove());
     host.querySelectorAll(".list-note").forEach((el) => el.remove());
     const hero = host.querySelector(".gp-hero");

@@ -1291,6 +1291,14 @@ details.gp-dr > :not(summary) { padding: 0 var(--sp-3) var(--sp-2); }
 .gp-c-side { display: inline-flex; align-items: center; gap: 8px; font: 700 var(--fs-xl) / 1 var(--font-display);
   font-variant-numeric: tabular-nums; }
 .gp-c-side.away { justify-self: end; }
+/* How we did on a finished game (detail.js gpResultsHTML): the final, then
+   our picks, the parlays and the call, at the top of the page. */
+.gp-res { margin: 14px 0; padding: 14px 16px; }
+.gp-res-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: var(--fs-lg); }
+.gp-res-k { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; }
+.gp-res-list { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--fs-sm); }
+.gp-res-note { margin: 10px 0 0; color: var(--text-mute); font-size: var(--fs-xs); }
 /* A touchdown, flashed (detail.js gpTouchdownSeen): the scoring side's
    number pulses gold and TOUCHDOWN covers its name block for 4.5 seconds,
    inside its own half so it never covers the clock; in the bar that stays

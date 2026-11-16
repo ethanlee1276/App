@@ -9338,6 +9338,36 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ST. A finished game shows how every pick, parlay and read turned out**
+(step 626; 16 November). Nothing to run. You sent the finished Pacers at
+76ers page and said: "when a game is already over and someone goes and
+clicks on this game page ... show ... what the outcome was of the game and
+if these props won or lost and if the parlays won or lost and what legs won
+and lost and if our game report and reads was correct ... for all sports."
+
+Once a game is final:
+- **The top of its page** shows the final score and how we did: our picks
+  (won, lost, pushed, void), the three-leg parlays and scorer pairs that
+  won, and whether "Who we think wins" was right.
+- **Every pick card** wears its result with the real number: "Won · 4
+  rebounds", "Lost · 2 assists", "Lost · didn't score", "Void — didn't
+  play". That goes for the Most Likely cards, edge picks, game bets and long
+  shots, on the game page and on the board.
+- **The game report** marks each of our picks, each breakout and fade pick,
+  every parlay leg and each ticket ("Ticket lost · 1 of 2 legs hit"). Under
+  the call it says "Right: 76ers won — Pacers 124, 76ers 131", and whether
+  our ratings alone were right.
+- **The Parlays page** marks each finished game's tickets and legs the same
+  way.
+
+Where the results come from: the record already grades every pick against
+the box score. Each board now carries those results, and every pick is
+judged at its own line the way the record judges it. A game bet is judged
+off the final score. Until the box score is graded (usually within an hour of
+the final), a pick says "Final — waiting on the box score". It works for every
+league with a board: NFL, college football, MLB, NBA, college basketball,
+WNBA and NHL. The results are for members, like the picks.
+
 **SS. A written report for every UFC fight** (step 625; 16 November).
 Nothing to run. You said "Yes" to a written UFC fight report. Every fight
 card on the UFC tab now has "The fight report" folded under it, in the same

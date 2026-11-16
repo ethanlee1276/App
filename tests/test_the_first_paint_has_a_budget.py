@@ -345,7 +345,16 @@ APP_JS_BUDGET_KB = 290
 #: for it (one branch for both kicks, the title's own word reused, no
 #: filters the feed makes needless): 391,117 -> 391,171 B, 3 over 382.
 #: It cannot load later: the same rows, playsHTML's. Told to Ethan.
-BOOT_BUDGET_KB = 383
+#: 383 -> 384 on 2026-11-16, for Ethan on a finished Pacers at 76ers page:
+#: "when a game is already over ... show ... if these props won or lost and
+#: if the parlays won or lost and what legs won and lost". WHAT HAPPENED,
+#: ON A FINISHED GAME (app.js pickResult and its ribbon, styles.css
+#: .pr-res): every card that draws a pick wears its result once its game is
+#: final, graded off the journal's numbers (engine/gameresults). 1,720 B gz:
+#: 391,318 -> 393,038 B, 846 over 383. It cannot load later: the board's
+#: cards for a game that has finished are on the first page drawn. Told to
+#: Ethan.
+BOOT_BUDGET_KB = 384
 
 
 def _gz_trimmed(rel: str) -> int:

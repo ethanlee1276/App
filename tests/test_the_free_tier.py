@@ -170,7 +170,7 @@ def test_a_games_page_keeps_its_facts_and_drops_every_paid_section():
     the team shapes and the pressure pair (standings facts) stay."""
     i = DETAIL.index("if (isWalled()) {\n    host.querySelectorAll(")
     block = DETAIL[i:DETAIL.index("const back = ", i)]
-    for sec in ("report", "plan", "scan", "replay", "matchup", "likely", "scripts",
+    for sec in ("results", "report", "plan", "scan", "replay", "matchup", "likely", "scripts",
                 "bets", "props", "shots"):
         assert f"#gp-sec-{sec}" in block, f"the {sec} section stays on a free game page"
     assert "#gp-lab" in block, "the member-only ideas panel is asked for and refused on a free page"
@@ -181,7 +181,7 @@ def test_a_games_page_keeps_its_facts_and_drops_every_paid_section():
     # Every section the page can draw is either removed above or named as a
     # fact here, so a new section has to choose.
     drawn = set(re.findall(r'id="(gp-sec-[a-z]+)"', DETAIL))
-    known = {f"gp-sec-{s}" for s in ("report", "plan", "scan", "replay", "matchup", "likely",
+    known = {f"gp-sec-{s}" for s in ("results", "report", "plan", "scan", "replay", "matchup", "likely",
                                      "scripts", "bets", "props", "shots", "lines", "shapes")}
     assert drawn <= known, f"a new game-page section is unclassified: {sorted(drawn - known)}"
 
