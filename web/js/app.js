@@ -4586,6 +4586,8 @@ function renderAll() {
   // assignment to `state.data` (tests/test_board_identity.py).
   const _meta = SPORT_META[state.sport];
   if (_meta && _boardFor && _boardFor !== _meta.api) return;
+  // Where the reader is, so drawing the page again keeps it (placeKeep, FOLDKEEP1).
+  const _place = placeHold();
   // CFB identities arrive WITH the slate, so they have to be picked up
   // here — applySport runs before the fetch and would leave every college
   // helmet drawing in the fallback brand colour.
@@ -4630,6 +4632,7 @@ function renderAll() {
   if (state.view === "injuries") renderInjuries();
   if (state.view === "standings") renderStandings();
   if (state.view === "futures") renderFutures();
+  placeKeep(_place);
 }
 
 /* ============================================================
@@ -23889,7 +23892,7 @@ function enhanceNotes(root) {
    the scope and the moment moved. Records the pass writes itself (a
    wrapped table, a "more" button) are discarded with takeRecords(), so
    it cannot chase its own tail. */
-const _settle = { roots: new Set(), queued: false, obs: null };
+const _settle = { roots: new Set(), queued: false, obs: null, y: null, yAt: 0 };
 
 /* THE WIDE-TABLE FADE, measured after layout. `.rank-more` carries the
    "more to the right" mask only while there is more to the right; the
@@ -23937,6 +23940,10 @@ function domSettled(records) {
     const t = r.target;
     if (t && t.nodeType === 1) _settle.roots.add(t.parentElement || t);
   }
+  // Where the reader was before this drawing, by the last scroll they made
+  // (FOLDKEEP1): a fold drawn shut can pull the page up before the pass
+  // opens it again, and the scroll event saying so comes a frame later.
+  if (_settle.y == null) { _settle.y = _readerY; _settle.yAt = Date.now(); }
   if (_settle.queued || !_settle.roots.size) return;
   _settle.queued = true;
   if (typeof requestAnimationFrame === "function") requestAnimationFrame(settleNow);
@@ -23945,6 +23952,8 @@ function domSettled(records) {
 
 function settleNow() {
   _settle.queued = false;
+  const keepY = _settle.y, keepAt = _settle.yAt;
+  _settle.y = null;
   const all = [..._settle.roots];
   _settle.roots.clear();
   const roots = all.filter((el) => el.isConnected
@@ -23963,6 +23972,14 @@ function settleNow() {
   // The page's name is decided per VIEW — the first real title in it —
   // so the view that changed is re-read whole, however small the change.
   views.forEach((v) => markPageTitles(v));
+  // The folds the reader left open, on whatever was drawn (FOLDKEEP1): one
+  // look a pass, and none on a page where nothing was remembered. Where it
+  // opened some, the scroll the drawing took goes back too, unless the
+  // reader touched the page, a page was just opened (_landScroll owns that
+  // moment) or a load is still going back to its place.
+  if (roots.some((r) => r.querySelector && r.querySelector("details")) && foldsApply(document)
+      && keepY != null && !_placePending && _touchedAt < keepAt && Date.now() - _viewSwitchAt > 2500
+      && Math.abs((window.scrollY || 0) - keepY) > 2) window.scrollTo({ top: keepY, behavior: "instant" });
   if (_settle.obs) _settle.obs.takeRecords();
 }
 
@@ -24426,6 +24443,154 @@ function _landScroll(name, leaving) {
   }
 }
 
+/* YOUR PLACE ON A PAGE OUTLASTS LEAVING THE APP (FOLDKEEP1, 2026-11-16).
+   Ethan, with a game report's "Parlays for this game" open: "when you click
+   on a menu then leave the app and come back, it closes the menu and doesn't
+   save ur spot on the page so fix that." Three things did it, each answered
+   once here for every page:
+
+     * COMING BACK DRAWS THE PAGE AGAIN. refreshOnReturn loads what changed
+       while the app was away and renderAll draws the page again, and a
+       <details> is drawn shut. So every fold the reader opens or shuts is
+       remembered for the page it is on (_foldMemo, by league and address)
+       and put back wherever a page is drawn: in renderAll itself, before
+       the scroll is put back (placeHold, placeKeep), and in the settle
+       pass every other drawing already goes through (settleNow).
+     * A NEW VERSION RELOADS THE PAGE (register-sw.js reloads a stale page
+       when it is put away or brought back), and a phone can drop a page it
+       put away and load it again. A load opens at the top
+       (scrollRestoration is manual) with every fold shut. So the place —
+       league and address, scroll, folds — is written down whenever the page
+       is put away or settles, and a page that loads at the same address
+       within PLACE_TTL_MS opens its folds and goes back to it, until the
+       reader touches the screen (placeRestore).
+     * Nothing else moves: a tab tap still lands at the top and a Back still
+       returns where it left (_landScroll). `var`, as the scroll memory's
+       globals are: a drawing before these lines must not find them unmade. */
+var PLACE_KEY = "qb_place";
+var PLACE_TTL_MS = 2 * 60 * 60 * 1000;
+var _foldMemo = {};
+var _foldTapAt = 0;
+var _placeTimer = 0;
+var _placePending = null;       // a place this load is still going back to
+var _readerY = 0;               // the scroll as the reader last left it (scroll events)
+var _viewSwitchAt = 0;          // when a page was last opened (_switchViewNow)
+function placeAddr() {
+  return `${state.sport || ""}|${location.pathname || ""}${location.hash || `#${state.view || ""}`}`;
+}
+// A fold's name: its id, else its title's words (numbers change as a page
+// updates, the words do not) under the nearest element with an id.
+function foldName(d) {
+  if (d.id) return `#${d.id}`;
+  const s = d.querySelector("summary");
+  const words = (s ? s.textContent : "").replace(/[\d.,:%+\u2212-]+/g, "#").replace(/\s+/g, " ").trim().slice(0, 80);
+  const a = d.parentElement && d.parentElement.closest("[id]");
+  return `${a ? a.id : ""}>${words}`;
+}
+// Every fold on the page with its key: the name, and which of that name it is.
+function foldKeys() {
+  const seen = {};
+  const out = new Map();
+  document.querySelectorAll("details").forEach((d) => {
+    const name = foldName(d);
+    seen[name] = (seen[name] || 0) + 1;
+    out.set(d, `${name}|${seen[name]}`);
+  });
+  return out;
+}
+function foldsApply(root) {
+  const memo = _foldMemo[placeAddr()];
+  if (!memo || !root || !root.querySelector) return 0;
+  if (!(root.tagName === "DETAILS" || root.querySelector("details"))) return 0;
+  let moved = 0;
+  foldKeys().forEach((key, d) => {
+    const want = memo[key];
+    if (typeof want === "boolean" && d.open !== want && (root === document || root.contains(d))) {
+      d.open = want;
+      moved += 1;
+    }
+  });
+  return moved;
+}
+function placeSave() {
+  clearTimeout(_placeTimer);
+  const addr = placeAddr();
+  // A load still going back to a place keeps that place, not the top it
+  // opened at: put away again before it got there, it goes back next time.
+  const back = _placePending && _placePending.a === addr ? _placePending.y : null;
+  try {
+    localStorage.setItem(PLACE_KEY, JSON.stringify({ a: addr, y: back != null ? back : Math.round(window.scrollY || 0),
+                                                    f: _foldMemo[addr] || {}, at: Date.now() }));
+  } catch (e) { /* private mode: the place is kept for this visit only */ }
+}
+function placeSaveSoon() {
+  clearTimeout(_placeTimer);
+  _placeTimer = setTimeout(placeSave, 500);
+}
+// Before a page is drawn again: where it is. After: its folds as they were
+// and the scroll where it was, if a fold shutting while it drew moved it.
+function placeHold() {
+  return { view: state.view, addr: placeAddr(), y: window.scrollY || 0 };
+}
+function placeKeep(h) {
+  if (!h || h.view !== state.view || h.addr !== placeAddr()) return;
+  foldsApply(document);
+  if (Math.abs((window.scrollY || 0) - h.y) > 2) window.scrollTo({ top: h.y, behavior: "instant" });
+}
+// A load at the address the reader put away: its folds as they were left
+// (opened as the page draws them) and its scroll, once the page is tall
+// enough, held while the page settles. A touch ends it.
+function placeRestore() {
+  let p = null;
+  try { p = JSON.parse(localStorage.getItem(PLACE_KEY) || "null"); } catch (e) { p = null; }
+  if (!p || !p.a || !(Date.now() - (p.at || 0) < PLACE_TTL_MS)) return;
+  if (p.f && typeof p.f === "object") _foldMemo[p.a] = Object.assign({}, p.f, _foldMemo[p.a] || {});
+  const y = Math.max(0, Number(p.y) || 0);
+  if (!y) return;
+  _placePending = { a: p.a, y };
+  let began = Date.now();
+  let held = 0;
+  const done = () => { _placePending = null; };
+  const tick = () => {
+    // A page loaded while the app is away (a new version reloads it hidden)
+    // starts its ten seconds when it is looked at.
+    if (document.visibilityState === "hidden") { began = Date.now(); setTimeout(tick, 400); return; }
+    if (_touchedAt > began || _foldTapAt > began || Date.now() - began > 10000) return done();
+    if (placeAddr() === p.a) {
+      // The folds first: a page drawn before the settle pass was watching
+      // opens them here, and they are part of how far down it reaches.
+      foldsApply(document);
+      const room = document.documentElement.scrollHeight - window.innerHeight;
+      if (room >= y - 2) {
+        if (Math.abs((window.scrollY || 0) - y) > 2) window.scrollTo({ top: y, behavior: "instant" });
+        if (++held >= 8) return done();
+      }
+    }
+    setTimeout(tick, 150);
+  };
+  setTimeout(tick, 150);
+}
+if (typeof window !== "undefined" && window.addEventListener) {
+  // Only a fold the reader moves is remembered: a toggle within a moment
+  // of a tap or a key (a summary, or a button that opens every section).
+  ["click", "keydown"].forEach((ev) =>
+    document.addEventListener(ev, () => { _foldTapAt = Date.now(); }, true));
+  document.addEventListener("toggle", (e) => {
+    const d = e.target;
+    if (!d || d.tagName !== "DETAILS" || Date.now() - _foldTapAt > 1000) return;
+    const key = foldKeys().get(d);
+    if (!key) return;
+    const addr = placeAddr();
+    _foldMemo[addr] = Object.assign(_foldMemo[addr] || {}, { [key]: d.open });
+    placeSaveSoon();
+  }, true);
+  window.addEventListener("scroll", () => { _readerY = window.scrollY || 0; placeSaveSoon(); }, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") placeSave();
+  });
+  window.addEventListener("pagehide", placeSave);
+}
+
 function switchView(name, push = false) {
   if (name === "recommended" && isWalled()) name = "potd";   // a free Home (_switchViewNow)
   _wallFrom = wallBlocked(name) ? name : "";
@@ -24507,6 +24672,7 @@ function _switchViewNow(name, push, dir) {
   // manual) and the boot measures the underline on its first frame.
   const booting = document.documentElement.classList.contains("booting");
   const leaving = state.view;
+  _viewSwitchAt = Date.now();     // the settle pass leaves the landing to _landScroll (FOLDKEEP1)
   if (leaving && !booting) _scrollMemo[leaving] = window.scrollY;
   // Coming BACK to a detail page keeps where its own Back goes.
   const backing = Date.now() - _backNavAt < 2000;
@@ -27264,6 +27430,8 @@ applySport();
 updateUnitNote();
 initialView();
 watchSectionSubs();
+// Back where the reader was if this load replaced the page they put away (FOLDKEEP1).
+placeRestore();
 leagueCrests();
 initMobileMenu();
 initSidebarGrip();

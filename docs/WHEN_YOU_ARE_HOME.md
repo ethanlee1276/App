@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TH. An open section and your place on the page outlast leaving the app** (step 640; 16 November).
+Nothing to run. You said that when you open a section, leave the app and come back, the section is closed
+and your place on the page is gone. Three things did it:
+- **Coming back redraws the page** with whatever changed while you were away, and a redrawn section
+  starts closed.
+- **A new version of the site reloads the page** when you put the app away or bring it back, and a reload
+  opens at the top.
+- **A phone can close a page it put away** and load it again when you come back.
+
+Now every section you open or close is remembered for the page you're on, on every page. A redraw keeps
+it open and keeps your scroll where it was. When you put the app away, it writes down the page, your
+scroll and your open sections. If the page loads again within two hours, it opens the sections and goes
+back to your spot, and stops the moment you touch the screen. Tapping a tab still opens that page at the
+top, and Back still returns to where you were.
+
 **TG. Each league's Record page keeps its game parlays' record, leg by leg** (step 639; 16 November).
 Nothing to run. You asked for "parlays for this game" on the Record page, to see whether the parlays and the
 legs we recommend are hitting, sport by sport:
