@@ -227,6 +227,8 @@ def test_a_goalie_and_a_pitcher_lead_with_their_own_numbers():
         "the long man's eighteen a nine is three outs of it"
     assert h["k"]["rank"] == 1, "a hitter's twenty strikeouts are none of a pitcher's"
     assert [r["key"] for r in p["splits"]["rows"]][:3] == ["season", "home", "away"]
+    assert p["last"]["result"] == "W" and "record" not in p["last"], \
+        "MLB's games table is filled slate by slate: no club record rather than a wrong one"
     assert p["last"]["tiles"][0]["label"] == "IP" and p["last"]["tiles"][0]["value"] == "6.0"
 
 
@@ -237,6 +239,8 @@ def test_a_name_only_a_roster_knows_still_has_a_page():
     assert r["notes"]["moves"] == [{"from": "JAX", "to": "BUF", "date": "2026-11-10"}]
     assert PP.page("nfl", "Nobody At All", db_path=path, data_dir=rosters) == {}
     assert PP.page("ufc", "Josh Allen", db_path=path, data_dir=rosters) == {}
+    src = (ROOT / "engine" / "playerpage.py").read_text(encoding="utf-8")
+    assert "INDEXED BY idx_logs_period" in src, "the league read takes only the markets it needs (6.2 s for MLB without)"
     jax = PP.roster_row("nfl", "Josh Allen", "JAX", rosters)
     assert jax["position"] == "LB" and PP.roster_row("nfl", "Josh Allen", "", rosters) == {}, \
         "two men of one name are neither, without the club"

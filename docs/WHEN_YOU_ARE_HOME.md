@@ -9397,7 +9397,8 @@ basketball, NHL and MLB.
   rating. Draft details, longest plays and sacks aren't in our box scores. College and baseball rosters list
   no height, weight or age, so those headers show what the rosters do have. News is headlines and links only,
   like the rest of the site's news; when no headline names the player, the club's show, and the league's when
-  nothing names either.
+  nothing names either. Baseball's previous game shows no club records: MLB's games table is filled as slates
+  are read, so a record counted from it would be wrong (it gave the Dodgers 29-19-1 in October).
 - **Players with no game on file yet** (a freshman or a backup the roster lists) get the page too: the header
   and Bio from the roster, News, and a line saying no games are on file yet, where the numbers go.
 - **A game whose box score isn't in yet** (a player's row filed the night of the game, before the week's box

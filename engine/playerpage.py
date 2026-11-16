@@ -49,6 +49,11 @@ RATE_SHARE = 0.4
 #: A basketball average is ranked among players with this share of the most games played.
 GAMES_SHARE = 0.5
 RANK_TTL = 1800
+#: Leagues whose games table does not hold every game, so a club's record
+#: counted off it is wrong: MLB's is filled game by game as slates are read
+#: (seen live 2026-11-16, the Dodgers "29-19-1" in mid-October). No record is
+#: printed there rather than a wrong one.
+NO_RECORDS = ("mlb",)
 
 # A headline number: (key, label, title, how, per_game, low_is_better, volume, ranked).
 #   how      gamelog's rule (sum/pct/avg/rating/ip), or "gaa" / "k9" / "gp" below;
@@ -190,10 +195,17 @@ def _league(conn, sport: str, season: int, markets) -> dict:
     if sport in GL.ONE_A_WEEK:
         return _league_once_a_week(conn, sport, season, markets)
     out: dict = {}
-    for player, market, total, n, pos in conn.execute(
-            "SELECT player, market, SUM(value), COUNT(*), SUM(CASE WHEN value > 0 THEN 1 ELSE 0 END) "
-            f"FROM player_game_logs WHERE sport=? AND season=? AND market IN ({marks}){bound} "
-            "GROUP BY player, market", args):
+    # With the days bound, the plain read walks the table's own key over every
+    # market of the season (measured live 2026-11-16: 6.2 s for MLB's first
+    # page); the market-and-day index reads the four markets wanted.
+    sql = ("SELECT player, market, SUM(value), COUNT(*), SUM(CASE WHEN value > 0 THEN 1 ELSE 0 END) "
+           f"FROM player_game_logs{' INDEXED BY idx_logs_period' if bound else ''} WHERE sport=? AND season=? "
+           f"AND market IN ({marks}){bound} GROUP BY player, market")
+    try:
+        found = conn.execute(sql, args).fetchall()
+    except Exception:                                     # noqa: BLE001 — a file without that index
+        found = conn.execute(sql.replace(" INDEXED BY idx_logs_period", ""), args).fetchall()
+    for player, market, total, n, pos in found:
         s, gp = out.get(player, ({}, 0))
         if total is not None:
             s[market] = float(total)
@@ -524,8 +536,9 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                     pass
             if g.get("result"):
                 last["result"], last["score"] = g["result"], g["score"]
-                last["record"] = _record(by_id, g["team"], g["period"])
-                last["opp_record"] = _record(by_id, g["opponent"], g["period"])
+                if sport not in NO_RECORDS:
+                    last["record"] = _record(by_id, g["team"], g["period"])
+                    last["opp_record"] = _record(by_id, g["opponent"], g["period"])
             out["last"] = last
 
         # The season's splits, a game's average at a time.
