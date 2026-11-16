@@ -412,11 +412,18 @@ function renderPlayerPage(host, player, sport) {
   while (host.firstChild) kept.appendChild(host.firstChild);
   // The address named this player: a near name the search drew beside them is another player's card, not
   // this page's; and a roster row's "Profile" door to the player whose page this already is goes nowhere.
+  // Asked for by name, the page is that player's alone: the near names the search listed go with it.
   [...kept.children].forEach((el) => { const who = plrCardOf(el); if (who && who !== player) el.remove(); });
+  const asked = typeof searchNorm === "function" && searchNorm(player) === searchNorm(state.search || "");
   kept.querySelectorAll(".roster-hit").forEach((row) => {
     const b = row.querySelector("[data-lookup]");
-    if (b && b.dataset.lookup === player) row.remove();
+    if (asked || (b && b.dataset.lookup === player)) row.remove();
   });
+  if (asked) {
+    [...kept.querySelectorAll(".section-title")].forEach((t) => {
+      if (t.textContent.trim() === "Also matching") t.remove();
+    });
+  }
   const same = _plrLive && _plrLive.key === key ? _plrLive.page : null;
   if (same) {
     plrMarkets(same, kept);

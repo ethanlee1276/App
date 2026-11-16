@@ -13984,7 +13984,22 @@ async function renderPlayers() {
   });
   const players = [..._profRows.keys()];
   const host = document.getElementById("players-board");
-  if (!players.length) {
+  /* A GUESS ON TONIGHT'S BOARD IS NOT AN ANSWER. Ethan, 2026-11-16, with
+     "jacoby brissett" typed and Jacob Rodriguez drawn: "players are not
+     showing up on the search page for players". The league search was asked
+     only when the board had nothing, so any near name priced tonight hid the
+     player typed. When all the board has is a guess, the league is asked too,
+     and a name it holds as typed (or a name that starts that way) wins. */
+  let toLeague = !players.length;
+  if (!toLeague && boardGuess) {
+    const better = (await leagueSearch(q)).some((m) => {
+      const k = m.rank != null ? m.rank : searchRank(m.player, q);
+      return k != null && k < 3;
+    });
+    if (seq !== _playersSeq || state.search.trim().toLowerCase() !== q) return;
+    toLeague = better;
+  }
+  if (toLeague) {
     /* THE LEAGUE, NOT THE BOARD. Ethan, 2026-08-18: "The search page for
        players isn't working still. You should be able too look up any
        player in the league too that specific sport." The board only

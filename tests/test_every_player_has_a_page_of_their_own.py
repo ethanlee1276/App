@@ -311,6 +311,11 @@ def test_the_server_serves_it_free_and_the_players_page_becomes_it():
             "|| (shown.length === 1 && shown[0]));\n  if (own) renderPlayerPage(host, own, state.sport);\n}") in APP, \
         "a board search too: the name asked for, even beside a near name"
     assert "if (who && who !== player) el.remove();" in PAGE, "a near name's card is not on the page"
+    assert ("  let toLeague = !players.length;\n  if (!toLeague && boardGuess) {\n"
+            "    const better = (await leagueSearch(q)).some((m) => {\n"
+            "      const k = m.rank != null ? m.rank : searchRank(m.player, q);\n"
+            "      return k != null && k < 3;") in APP, \
+        "a guess on tonight's board does not stop the league being asked"
     assert '"js/playerpage.js", "css/playerpage.css",' in (ROOT / "engine" / "shrink.py").read_text(encoding="utf-8")
     assert '"/js/playerpage.js", "/css/playerpage.css",' in (ROOT / "web" / "sw.js").read_text(encoding="utf-8")
     assert "/js/playerpage.js /css/playerpage.css" in (ROOT / "deploy" / "Caddyfile").read_text(encoding="utf-8")
@@ -560,6 +565,71 @@ def test_in_a_browser_a_player_on_a_roster_with_no_game_yet_has_a_page_too():
     assert "No games on file for this player yet." in got["season"], got["season"]
     assert got["own_row"] is False, "no Profile door to the page already open"
     assert "Rookie" in got["bio"] and "#88" in got["bio"], got["bio"]
+    assert not got["errors"], got["errors"]
+
+def test_in_a_browser_a_name_typed_wins_over_a_near_name_on_tonights_board():
+    """Ethan, 2026-11-16, with "jacoby brissett" typed and Jacob Rodriguez drawn:
+    "players are not showing up on the search page for players". The league
+    search was asked only when the board had nothing, so a near name priced
+    tonight hid the player typed. Here the board prices only Jacob Rodriguez,
+    the league holds Jacoby Brissett, and the name typed is his."""
+    body = {"board": {"sport": "nfl", "player_stats": {}, "recommendations": [
+                {"player": "Jacob Rodriguez", "team": "MIA", "opponent": "BUF", "market": "tackles_assists",
+                 "market_label": "Tackles + Assists", "side": "OVER", "line": 6.5, "hit_prob": 0.58,
+                 "recommended": True, "sport": "nfl"}]},
+            "hits": {"players": [{"player": "Jacoby Brissett", "sport": "nfl", "team": "ARI", "position": "QB",
+                                  "games": 56, "rank": 0, "headshot": ""}]},
+            "logs": {"player": "Jacoby Brissett", "stats": {"Passing Yards": [
+                {"value": 250, "week": 10, "opponent": "SEA", "home": False}]}},
+            "page": {"sport": "nfl", "player": "Jacoby Brissett", "team": "ARI", "position": "QB",
+                     "seasons": [2026], "season": 2026, "bio": {"team": "ARI", "number": "7", "position": "QB"},
+                     "notes": {}, "headline": [], "splits": {"rows": [], "groups": []},
+                     "career": {"rows": [], "groups": [], "total": {}}},
+            "log": {}, "news": {"sports": {}}}
+
+    def run(browser, port):
+        ctx = browser.new_context(viewport={"width": 412, "height": 823}, is_mobile=True, has_touch=True,
+                                  device_scale_factor=1, service_workers="block")
+        page = ctx.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        local = f"http://127.0.0.1:{port}/"
+        page.route(lambda u: not u.startswith(local), lambda r: r.abort())
+
+        def answer(key):
+            return lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(body[key]))
+
+        def own_page(route):
+            # The page of whoever was asked for, so the header says who the page mounted for.
+            from urllib.parse import parse_qs, urlsplit
+            asked = parse_qs(urlsplit(route.request.url).query).get("player", [""])[0]
+            route.fulfill(status=200, content_type="application/json", body=json.dumps(dict(body["page"], player=asked)))
+        for pattern, key in (("**/api/players/search*", "hits"), ("**/api/players/logs*", "logs"),
+                             ("**/api/players/gamelog*", "log"), ("**/data/news.json*", "news"),
+                             ("**/api/recommendations*", "board"), ("**/data/recommendations*", "board")):
+            page.route(pattern, answer(key))
+        page.route("**/api/players/page*", own_page)
+        page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');localStorage.setItem('qb.tour','done');}"
+                             "catch(e){}")
+        page.goto(f"{local}index.html?sport=nfl#players", wait_until="load")
+        page.wait_for_function("() => typeof state !== 'undefined' && state.data && "
+                               "(state.data.recommendations || []).length > 0", timeout=30000)
+        out = {"guess": page.evaluate(
+            "searchPick(state.data.recommendations, 'jacoby brissett', (r) => r.player).guessed")}
+        page.fill("#player-search", "jacoby brissett")
+        page.wait_for_selector(".plr .plr-hero", timeout=30000)
+        page.wait_for_timeout(600)
+        out["hero"] = page.inner_text(".plr-hero")
+        out["near"] = page.evaluate("document.getElementById('players-board').innerText.includes('Rodriguez')")
+        out["errors"] = errors
+        ctx.close()
+        return out
+    got = _browser(run)
+    if got is None:
+        return
+    assert got["guess"] is True, ("the board can only guess at the name typed, as in Ethan's screenshot", got)
+    assert "Jacoby" in got["hero"] and "Brissett" in got["hero"], got["hero"]
+    assert got["near"] is False, "the near name priced tonight is not on the page of the player asked for"
     assert not got["errors"], got["errors"]
 
 if __name__ == "__main__":

@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TN. A name typed on the Players page finds that player, not a near name priced tonight** (step 646;
+16 November). Nothing to run. You searched "jacoby brissett" on the NFL Players page and got Jacob Rodriguez under
+"Closest match on tonight's board". The page asked the whole league only when tonight's board had nobody close to
+the name, and the board's search forgives a misspelling, so a near name priced tonight was enough to stop it there
+(and with one card left, the player page opened for that near name). Now, when all the board has is a spelling
+guess, the page asks the league too, and a player the league holds by the name typed (or a name that starts that
+way) wins: that player's page opens, and the near name is not on it. A real misspelling still works as before:
+"jamar chase" finds Ja'Marr Chase, because the league can only guess at that name too. To check after the push:
+search "jacoby brissett" on the NFL tab, and Jacoby Brissett's page opens.
+
 **TM. College football shows each game once on the player pages, and a count for you** (step 645; 16
 November). Two read-only commands. Checking the new player pages against the live file, I found college player
 rows filed more than once for the same game again, after the cleanup on the 14th (step QJ):
