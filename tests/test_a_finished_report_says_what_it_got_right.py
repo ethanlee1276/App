@@ -357,6 +357,11 @@ def test_an_old_games_page_draws_it_for_a_member():
     assert "function reportResults(g, map)" in app and "pickResult(bet, g, map)" in app
     js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert "const solo = fight || !!(extras && extras.embedded);" in js
+    # A started game's tickets say how they went, and offer nothing to bet.
+    assert "(t.bet_legs || []).length && !CLOSED" in js and "CLOSED = !!(r.kept || RESULTS);" in js
+    assert "CLOSED = !!((g && g.kept) || RESULTS);" in js
+    from engine import gameparlays as GP
+    assert GP.journal_rows({"games": [{"kept": "Thu 7:02 PM ET", "threes": [{"legs": [{"player": "A", "market": "pts"}]}]}]}) == []
 
 
 def test_the_page_draws_the_grades_the_kept_picks_and_how_the_report_did():

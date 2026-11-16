@@ -1355,6 +1355,10 @@ def journal_rows(gp: dict) -> list[dict]:
     grade from (engine/parlayledger, `parlay_leg`)."""
     seen, out = set(), []
     for x in (gp or {}).get("games") or []:
+        # A started game's tickets, kept after its start (engine/reportkeep):
+        # their legs were journaled before it, or not at all.
+        if isinstance(x, dict) and x.get("kept"):
+            continue
         for t in (x.get("threes") or []) + (x.get("scorers") or []):
             for l in t.get("legs") or []:
                 k = _leg_id(l)

@@ -59,6 +59,10 @@
      every pick, read pick, parlay leg and ticket, and the call, says how it
      went. Null before the final, and on a page that grades nothing. */
   let RESULTS = null;
+  /* A GAME UNDER WAY OR OVER (engine/reportkeep: its report and tickets kept
+     from before the start, `kept`): its tickets are still drawn, each saying
+     how it went, but there is nothing left to bet, so no "Bet it". */
+  let CLOSED = false;
   const RES_TAG = { won: "gr-res won", lost: "gr-res lost", push: "gr-res even", void: "gr-res even",
                     pending: "gr-res even" };
   function resTag(bet) {
@@ -481,7 +485,7 @@
     if (b.type === "parlays") {
       const items = (xs) => (xs || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
       return `<div class="gr-parlays">${(b.items || []).map((t) => `<div class="gr-parlay">
-        <div class="gr-parlay-head"><b>${escapeHtml(t.title || "")}</b>${ticketTag(t.legs)}${(t.bet_legs || []).length
+        <div class="gr-parlay-head"><b>${escapeHtml(t.title || "")}</b>${ticketTag(t.legs)}${(t.bet_legs || []).length && !CLOSED
           ? parlayBet(t.bet_legs, `${t.title || "Parlay"} · ${(t.legs || []).map((l) => l.pick).filter(Boolean).join(" + ")}`) : ""}</div>
         ${t.price_line ? `<p class="gr-parlay-price">${escapeHtml(t.price_line)}</p>` : ""}
         <ol class="gr-parlay-legs">${(t.legs || []).map((l) => `<li${l.player
@@ -652,6 +656,7 @@
     }
     RANK_OF = Number(r.rank_of) || 0;
     RESULTS = (extras && extras.results) || null;
+    CLOSED = !!(r.kept || RESULTS);
     const secs = (r.sections || []).filter((s) => s && (s.blocks || []).length);
     const body = secs.map((s) => {
       let blocks = s.blocks || [];
@@ -739,14 +744,15 @@
   //: graded once the game is over (opts.results: game → the grader, app.js);
   //: the Report Picks page draws them under the game's bets (js/reportpicks.js).
   function gameTickets(g, sport, opts) {
-    const was = RESULTS;
+    const was = RESULTS, shut = CLOSED;
     RESULTS = (opts && typeof opts.results === "function" && opts.results(g)) || null;
+    CLOSED = !!((g && g.kept) || RESULTS);
     try {
       return `${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
         : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}
         ${(g.scorers || []).length ? block({ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) })
           : (g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : "")}`;
-    } finally { RESULTS = was; }
+    } finally { RESULTS = was; CLOSED = shut; }
   }
   function gameParlays(gp, sport, opts) {
     const games = (gp && gp.games) || [];
