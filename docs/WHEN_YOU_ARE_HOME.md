@@ -9367,9 +9367,10 @@ and the search keeps the list it has.
 the name, and the board's search forgives a misspelling, so a near name priced tonight was enough to stop it there
 (and with one card left, the player page opened for that near name). Now, when all the board has is a spelling
 guess, the page asks the league too, and a player the league holds by the name typed (or a name that starts that
-way) wins: that player's page opens, and the near name is not on it. A real misspelling still works as before:
-"jamar chase" finds Ja'Marr Chase, because the league can only guess at that name too. To check after the push:
-search "jacoby brissett" on the NFL tab, and Jacoby Brissett's page opens.
+way) wins: that player's page opens, and the near name is not on it. When both only guess (a misspelling), the
+nearer spelling wins wherever it is: "jacoby brisett" is one letter from Jacoby Brissett in the league and nine from
+Jacob Rodriguez on the board, so it opens Jacoby Brissett's page, and "jamar chase" still finds Ja'Marr Chase. To
+check after the push: search "jacoby brissett" on the NFL tab, and Jacoby Brissett's page opens.
 
 **TM. College football shows each game once on the player pages, and a count for you** (step 645; 16
 November). Two read-only commands. Checking the new player pages against the live file, I found college player

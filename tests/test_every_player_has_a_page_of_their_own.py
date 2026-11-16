@@ -565,18 +565,14 @@ def test_in_a_browser_a_player_on_a_roster_with_no_game_yet_has_a_page_too():
     assert "Rookie" in got["bio"] and "#88" in got["bio"], got["bio"]
     assert not got["errors"], got["errors"]
 
-def test_in_a_browser_a_name_typed_wins_over_a_near_name_on_tonights_board():
-    """Ethan, 2026-11-16, with "jacoby brissett" typed and Jacob Rodriguez drawn:
-    "players are not showing up on the search page for players". The league
-    search was asked only when the board had nothing, so a near name priced
-    tonight hid the player typed. Here the board prices only Jacob Rodriguez,
-    the league holds Jacoby Brissett, and the name typed is his."""
+def _near_name_page(typed, hits):
+    """The Players page with only Jacob Rodriguez priced tonight, ``typed`` in
+    the box and the league answering ``hits``: what the page mounted."""
     body = {"board": {"sport": "nfl", "player_stats": {}, "recommendations": [
                 {"player": "Jacob Rodriguez", "team": "MIA", "opponent": "BUF", "market": "tackles_assists",
                  "market_label": "Tackles + Assists", "side": "OVER", "line": 6.5, "hit_prob": 0.58,
                  "recommended": True, "sport": "nfl"}]},
-            "hits": {"players": [{"player": "Jacoby Brissett", "sport": "nfl", "team": "ARI", "position": "QB",
-                                  "games": 56, "rank": 0, "headshot": ""}]},
+            "hits": {"players": hits},
             "logs": {"player": "Jacoby Brissett", "stats": {"Passing Yards": [
                 {"value": 250, "week": 10, "opponent": "SEA", "home": False}]}},
             "page": {"sport": "nfl", "player": "Jacoby Brissett", "team": "ARI", "position": "QB",
@@ -613,8 +609,8 @@ def test_in_a_browser_a_name_typed_wins_over_a_near_name_on_tonights_board():
         page.wait_for_function("() => typeof state !== 'undefined' && state.data && "
                                "(state.data.recommendations || []).length > 0", timeout=30000)
         out = {"guess": page.evaluate(
-            "searchPick(state.data.recommendations, 'jacoby brissett', (r) => r.player).guessed")}
-        page.fill("#player-search", "jacoby brissett")
+            "(q) => searchPick(state.data.recommendations, q, (r) => r.player).guessed", typed)}
+        page.fill("#player-search", typed)
         page.wait_for_selector(".plr .plr-hero", timeout=30000)
         page.wait_for_timeout(600)
         out["hero"] = page.inner_text(".plr-hero")
@@ -622,12 +618,35 @@ def test_in_a_browser_a_name_typed_wins_over_a_near_name_on_tonights_board():
         out["errors"] = errors
         ctx.close()
         return out
-    got = _browser(run)
+    return _browser(run)
+
+
+def test_in_a_browser_a_name_typed_wins_over_a_near_name_on_tonights_board():
+    """Ethan, 2026-11-16, with "jacoby brissett" typed and Jacob Rodriguez drawn:
+    "players are not showing up on the search page for players". The league
+    search was asked only when the board had nothing, so a near name priced
+    tonight hid the player typed. Here the board prices only Jacob Rodriguez,
+    the league holds Jacoby Brissett, and the name typed is his."""
+    got = _near_name_page("jacoby brissett", [{"player": "Jacoby Brissett", "sport": "nfl", "team": "ARI",
+                                                "position": "QB", "games": 56, "rank": 0, "headshot": ""}])
     if got is None:
         return
     assert got["guess"] is True, ("the board can only guess at the name typed, as in Ethan's screenshot", got)
     assert "Jacoby" in got["hero"] and "Brissett" in got["hero"], got["hero"]
     assert got["near"] is False, "the near name priced tonight is not on the page of the player asked for"
+    assert not got["errors"], got["errors"]
+
+
+def test_in_a_browser_a_misspelling_finds_the_nearer_name_wherever_it_is():
+    """Both only guessing ("jacoby brisett", one letter short): the league's
+    Jacoby Brissett is one letter from it, tonight's Jacob Rodriguez nine, so
+    the league's guess is the page."""
+    got = _near_name_page("jacoby brisett", [{"player": "Jacoby Brissett", "sport": "nfl", "team": "ARI",
+                                               "position": "QB", "games": 56, "rank": 3, "headshot": ""}])
+    if got is None:
+        return
+    assert got["guess"] is True, got
+    assert "Jacoby" in got["hero"] and "Brissett" in got["hero"], got["hero"]
     assert not got["errors"], got["errors"]
 
 if __name__ == "__main__":

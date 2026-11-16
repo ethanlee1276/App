@@ -13994,10 +13994,13 @@ async function renderPlayers() {
   if (!toLeague && boardGuess) {
     const asked = await leagueSearchAfterPause(q, seq, host);
     if (asked === null || seq !== _playersSeq || state.search.trim().toLowerCase() !== q) return;
+    // Better is the league holding the name as typed, or (both only guessing,
+    // "jacoby brisett") a spelling nearer to it than the board's nearest.
+    const near = (n) => searchDist(searchNorm(q), searchNorm(n), 8);
     const better = asked.some((m) => {
       const k = m.rank != null ? m.rank : searchRank(m.player, q);
       return k != null && k < 3;
-    });
+    }) || (asked.length > 0 && Math.min(...asked.map((m) => near(m.player))) < Math.min(...players.map(near)));
     toLeague = better;
   }
   if (toLeague) {
