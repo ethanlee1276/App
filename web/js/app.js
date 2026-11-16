@@ -10090,7 +10090,9 @@ function pickResult(bet, g, map) {
   const line = bet.line == null || bet.line === "" ? NaN : Number(bet.line);
   const over = side !== "under" && side !== "no";
   const judge = (actual, ln, up) => (actual === ln ? "push" : (actual > ln) === up ? "won" : "lost");
-  if (bet.game || bet._game_leg || bet.kind === "game" || RES_GAME_MARKETS.has(m)) {
+  // `game` is true on a game bet (engine/gameresults.bet_of); a row's own
+  // "AWAY@HOME" (a first scorer's, a report pick's) names its game, not its kind.
+  if (bet.game === true || bet._game_leg || bet.kind === "game" || RES_GAME_MARKETS.has(m)) {
     if (fin.away == null) return { status: "pending" };
     if (m === "total") {
       const t = fin.away + fin.home;

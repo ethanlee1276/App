@@ -156,6 +156,7 @@ def test_each_pick_is_graded_at_its_own_line_and_side_the_journal_s_way():
         spread_push: P({ kind: 'game', market: 'spread', team: 'PHI', side: '', line: -7 }),
         total: P({ kind: 'game', market: 'total', side: 'over', line: 249.5 }),
         team_total: P({ kind: 'game', market: 'team_total', team: 'IND', side: 'under', line: 120.5 }),
+        keyed: P({ player: 'Jaylen Brown', market: 'assists', side: 'Over', line: 2.5, game: 'IND@PHI' }),
         before: pickResult({ player: 'Jaylen Brown', market: 'assists', side: 'Over', line: 2.5 },
                            { home: 'PHI', away: 'IND', live: { state: 'live' } }),
       };""")
@@ -171,6 +172,8 @@ def test_each_pick_is_graded_at_its_own_line_and_side_the_journal_s_way():
     assert got["total"] == {"status": "won", "said": "255 scored"}
     assert got["team_total"]["status"] == "lost", "124 is over 120.5"
     assert got["before"] is None, "nothing shows before the final"
+    assert got["keyed"] == {"status": "lost", "actual": 2}, \
+        "a row naming its game (a first scorer's, a report pick's) is still a player's pick"
 
 
 def test_the_words_the_tickets_and_the_ribbon():

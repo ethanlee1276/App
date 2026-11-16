@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SZ. First-scorer long shots show how they did too** (step 632; 16 November).
+Nothing to run. While checking the new Report Picks page with a finished game
+I found that a pick carrying the name of its game was being read as a game bet
+(a moneyline, a spread, a total), so it showed no result. That hid the result
+on every first touchdown and first basket long shot, as well as on the report
+picks. Only a real game bet is read as one now, so those picks show "Won" or
+"Lost" with the number like every other.
+
 **SY. Report bets on the Record page, and a Report Picks page** (step 631;
 16 November). One optional command, below. You asked that "all bets and parlays made from
 the game reports should be categorized as 'report' bets under each sport on
