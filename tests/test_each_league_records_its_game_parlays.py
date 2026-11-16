@@ -10,8 +10,9 @@ parlays and scorer pairs out of the journal, league by league and kind by kind:
 the tickets that hit and their units at one unit a ticket, the legs that hit,
 leg by market, the tickets that lost by one leg, and the newest tickets with
 every leg's result. record.json carries it for the Record page alone
-(ledger.RECORD_PAGE_ONLY), and js/record.js recGameParlaySection draws it above
-the folds: a league's own cards in its scope, one table of every league on All.
+(ledger.RECORD_PAGE_ONLY), and js/record.js draws it above the folds in "The Game
+Report Picks and Parlays" (recReportBook, gpParlaysHTML): a league's own cards in
+its scope, one table of every league on All.
 
 Run directly: `python3 tests/test_each_league_records_its_game_parlays.py`
 """
@@ -119,9 +120,10 @@ def test_the_record_ships_it_for_the_record_page_alone():
 
 
 def test_it_sits_above_the_folds_with_the_reports_own_record():
+    assert "parlays: d.game_parlay_record }, scoped ? scope : \"\");\n  const receipts = calendar" in RECORD
     i = RECORD.index("const receipts = calendar")
     block = RECORD[i:RECORD.index("+ foldClose", i)]
-    gp = block.index("    + recGameParlaySection(d.game_parlay_record, scope)\n")
+    gp = block.index("    + reportBook\n")
     facts = block.index("    + (scoped ? recFactsSlot(scope) : \"\")\n")
     fold = block.index('+ foldOpen("Most Likely, Pick of the Day and Zeno")')
     assert gp < facts < fold, "neither waits on the main book's floor"
@@ -141,6 +143,7 @@ def _node(body):
           "const toneOf = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');"
           "const trueMinus = (s) => String(s); const american = (o) => (o > 0 ? `+${o}` : `${o}`);"
           "const formatGameDate = (d) => `day ${d}`; const lgCode = (s) => s.toUpperCase();"
+          "const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;"
           "const SPORT_META = { nfl: {}, mlb: {}, nba: {}, cbb: {}, cfb: {}, nhl: {} };"
           "function recTile(k, v, sub, o) { return `<tile k=\"${k}\" v=\"${v}\" tone=\"${(o || {}).tone || ''}\">${sub || ''}</tile>`; }\n"
           + code + f"\nprocess.stdout.write(JSON.stringify((() => {{ {body} }})()));")
@@ -151,13 +154,12 @@ def _node(body):
 
 def test_a_league_sees_its_tickets_legs_and_markets():
     rec = parlayledger.game_parlay_record(_journal())
-    got = _node(f"const R = {json.dumps(rec)}; return [recGameParlaySection(R, 'nfl'), recGameParlaySection(R, 'nhl'),"
-                " recGameParlaySection(R, 'mlb'), recGameParlaySection({ error: 'x' }, 'nfl'),"
-                " recGameParlaySection(null, 'all')];")
+    got = _node(f"const R = {json.dumps(rec)}; const B = (p, s) => recReportBook({{ parlays: p }}, s);"
+                " return [B(R, 'nfl'), B(R, 'nhl'), B(R, 'mlb'), B({ error: 'x' }, 'nfl'), recReportBook(null, '')];")
     if got is None:
         return
     nfl, nhl, mlb, broken, none = got
-    assert "Parlays for this game" in nfl and "[ticket]" in nfl
+    assert "The Game Report Picks and Parlays" in nfl and "[ticket]" in nfl
     assert "Three-leg parlays" in nfl and "Touchdown pairs" in nfl, "each kind on its own card"
     assert 'k="Tickets that hit" v="1 of 3"' in nfl and "+0.20u at one unit a ticket" in nfl
     assert "we gave them 28% on average" in nfl and "1 open" in nfl
@@ -171,14 +173,14 @@ def test_a_league_sees_its_tickets_legs_and_markets():
     assert "Jahmyr Gibbs to score a touchdown <span class=\"rr-mute\">· scored 1</span>" in nfl
     assert "over 0.5" not in nfl, "a scorer leg as the card says it"
     assert "Jared Goff over 249.5 <span class=\"rr-mute\">pass_yds · had 201</span>" in nfl
-    assert "every three-leg parlay and touchdown pair our game reports" in nfl
+    assert "every pick and parlay our NFL game reports posted" in nfl
     assert "Goal-scorer" not in nhl and "Three-leg parlays" in nhl and "Shots on goal · had 5" in nhl
     assert mlb == "" and broken == "" and none == "", "nothing to show draws nothing"
 
 
 def test_all_leagues_get_one_table_in_the_sites_order():
     rec = parlayledger.game_parlay_record(_journal())
-    got = _node(f"return recGameParlaySection({json.dumps(rec)}, 'all');")
+    got = _node(f"return recReportBook({{ parlays: {json.dumps(rec)} }}, '');")
     if got is None:
         return
     assert "<table class=\"agate rec-gp-table\">" in got and "pick a league above" in got
@@ -193,7 +195,7 @@ def test_all_leagues_get_one_table_in_the_sites_order():
 def test_the_styles_are_written_for_it():
     css = (ROOT / "web" / "css" / "record.css").read_text(encoding="utf-8")
     for sel in (".rec-gp + .rec-gp", ".rec-gp-recent .rl-row", ".rec-gp-note", ".rec-gp-close",
-                ".rec-gp-kind, .rec-gp-pct"):
+                ".rec-gp-kind, .rec-gp-pct", ".rec-rp-head"):
         assert sel in css, sel
     for cls in ('"card rec-report rec-gp"', '"rec-gp-recent"', '"rec-gp-note"', '"rec-gp-close"', '"rec-gp-kind"',
                 '"rec-gp-pct"', '"agate rec-gp-table"'):

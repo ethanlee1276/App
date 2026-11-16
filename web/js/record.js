@@ -1105,19 +1105,13 @@ function gpBlockHTML(b, kind, sport) {
       ${recent ? `<div class="rr-head">Newest tickets</div><div class="rec-gp-recent">${recent}</div>` : ""}
     </div>`;
 }
-function recGameParlaySection(rec, scope) {
+// The parlays half: a league's cards (gpBlockHTML), or on All one table of every league.
+function gpParlaysHTML(rec, scope) {
   if (!rec || typeof rec !== "object" || rec.error) return "";
-  const head = (sub) => `<div class="section-title"><span class="st-ico">${icon("ticket", 15)}</span>Parlays for this game
-      <span class="sub">— ${sub}</span></div>`;
-  const note = `<p class="rec-gp-note">Every ticket a game report posted, tracked at one unit and graded at the least price its
-      card said to take, once all its legs are final. A leg is graded off the same result as the single pick; a void or
-      a push is neither a hit nor a miss. None of it is staked or added into the books above.</p>`;
-  if (scope && scope !== "all") {
+  if (scope) {
     const mine = rec[scope] || {};
-    const kinds = ["three", "scorers"].filter((k) => mine[k] && (mine[k].graded || mine[k].open));
-    if (!kinds.length) return "";
-    return head(`every three-leg parlay and ${gpKindWord("scorers", scope).toLowerCase().replace(/s$/, "")} our game reports
-        posted, graded ticket by ticket and leg by leg`) + kinds.map((k) => gpBlockHTML(mine[k], k, scope)).join("") + note;
+    return ["three", "scorers"].filter((k) => mine[k] && (mine[k].graded || mine[k].open))
+      .map((k) => gpBlockHTML(mine[k], k, scope)).join("");
   }
   const rows = [];
   // The site's own league order (SPORT_META), any league it does not list last.
@@ -1135,10 +1129,129 @@ function recGameParlaySection(rec, scope) {
       <td class="num">${gpShare(legs.won || 0, legs.graded || 0)}</td></tr>`);
   }));
   if (!rows.length) return "";
-  return head("every game report’s parlays and pairs, league by league; pick a league above for its legs and tickets")
-    + `<div class="ev-scroll"><table class="agate rec-gp-table"><thead><tr><th>League</th>
+  return `<div class="rr-head rec-rp-head">Parlays and pairs, league by league</div>
+    <div class="ev-scroll"><table class="agate rec-gp-table"><thead><tr><th>League</th>
       <th class="num">Tickets hit</th><th class="num">Units</th><th class="num">Legs hit</th></tr></thead>
-      <tbody>${rows.join("")}</tbody></table></div>` + note;
+      <tbody>${rows.join("")}</tbody></table></div>`;
+}
+
+/* THE GAME REPORT PICKS AND PARLAYS (2026-11-16). Ethan: "on the record page I
+   want it to be labeled 'The Game Report Picks and Parlays' and it will record
+   the game report bets and picks both td and player props from all sports." One
+   section above the folds, where the Report bets fold and "Parlays for this
+   game" were: every single pick a game report posts (its picks card, its
+   matchup reads, its breakout candidates and fades: engine/reportbets, the
+   ledger's report book) split into player props, touchdown or goal-scorer
+   picks and game bets off the book's own market split (performance.by_market),
+   the newest picks, then each game's three-leg parlays and pairs with every
+   leg (parlayledger.game_parlay_record). A league's own on its scope; on All,
+   every league's picks by kind and parlays in two tables. The picks sit in the
+   other books too (a card pick is a Most Likely pick), so nothing here is
+   added into them, and the section says so. */
+const RP_SCORER_MARKETS = ["anytime_td", "first_td", "anytime_goal", "goals"];
+const RP_GAME_MARKETS = ["moneyline", "spread", "total", "team_total"];
+const RP_KINDS = ["props", "scorer", "game"];
+function rpKindOf(m) {
+  return RP_SCORER_MARKETS.includes(m) ? "scorer" : RP_GAME_MARKETS.includes(m) ? "game" : "props";
+}
+function rpKindWord(kind, sport) {
+  if (kind === "props") return "Player props";
+  if (kind === "game") return "Game bets";
+  return ["nfl", "cfb"].includes(sport) ? "Touchdown picks" : sport === "nhl" ? "Goal-scorer picks"
+    : sport ? "Scorer picks" : "Touchdown and goal-scorer picks";
+}
+// The book's market split summed by kind: {props|scorer|game: {w, l, net}}.
+function rpKinds(rep) {
+  const out = {};
+  Object.entries((rep && rep.by_market) || {}).forEach(([m, v]) => {
+    const k = rpKindOf(m);
+    const o = out[k] || (out[k] = { w: 0, l: 0, net: 0 });
+    o.w += Number((v || {}).w || 0);
+    o.l += Number((v || {}).l || 0);
+    o.net += Number((v || {}).net_u || 0);
+  });
+  return out;
+}
+function rpPickWords(r) {
+  const m = String(r.market || "");
+  if (GP_SCORE[m]) return `${r.player || ""} ${GP_SCORE[m]}`;
+  return `${r.player || ""} ${String(r.side || "").toLowerCase()} ${r.line ?? ""} ${marketWord(m)}`
+    .replace(/\s+/g, " ").trim();
+}
+function rpPicksHTML(rep, scope, recent) {
+  const n = (rep && rep.settled) || 0;
+  const open = (rep && rep.open) || 0;
+  if (!n && !open) return "";
+  const graded = (rep.wins || 0) + (rep.losses || 0);
+  const tiles = recTile("Picks that hit", graded ? `${rep.wins} of ${graded}` : "none yet",
+      graded ? `${Math.round((100 * rep.wins) / graded)}% · ${tlUnits(rep.net_units)} at 0.1 unit a pick${
+        rep.pushes ? ` · ${plural(rep.pushes, "push", "pushes")}` : ""}` : "graded once their games are final",
+      { tone: graded >= PARLAY_RATE_FLOOR ? toneOf(rep.net_units) : "" })
+    + (open ? recTile("Still riding", String(open), "graded once their games are final") : "");
+  const kinds = rpKinds(rep);
+  const byKind = RP_KINDS.filter((k) => kinds[k] && kinds[k].w + kinds[k].l).map((k) => {
+    const x = kinds[k];
+    const g = x.w + x.l;
+    return `<div class="rec-row flush tight"><span class="rr-what">${escapeHtml(rpKindWord(k, scope))}</span>
+      <span><b>${x.w} of ${g}</b> hit · ${Math.round((100 * x.w) / g)}% · <span class="${
+        x.net >= 0 ? "rr-pos" : "rr-neg"}">${tlUnits(x.net)}</span></span></div>`;
+  }).join("");
+  const rows = (recent || []).filter((r) => !scope || r.sport === scope).slice(0, 10).map((r) => `<div class="rec-row flush tight">
+      <span class="rr-date">${escapeHtml(String(r.date || "").slice(5))}</span>
+      <span class="rr-what">${scope ? "" : `<b>${escapeHtml(typeof lgCode === "function" ? lgCode(r.sport) : String(r.sport || "").toUpperCase())}</b> `}${
+        escapeHtml(rpPickWords(r))} <span class="rr-mute">· ${american(r.odds)}</span></span>
+      <span class="${r.status === "won" ? "rr-pos" : r.status === "lost" ? "rr-neg" : "rr-mute"}">${
+        escapeHtml(String(r.status || "").toUpperCase())}</span></div>`).join("");
+  return `<div class="card rec-report rec-gp">
+      <div class="rr-head">Picks${scope ? "" : " · every league"}</div>
+      <div class="stats rec-kpis">${tiles}</div>
+      ${byKind ? `<div class="rr-head">By kind</div>${byKind}` : ""}
+      ${rows ? `<div class="rr-head">Newest picks</div><div class="rr-rows">${rows}</div>` : ""}
+    </div>`;
+}
+// On All: every league's picks, kind by kind (a league with none graded says how many ride).
+function rpLeaguePicksHTML(bySport) {
+  const order = Object.keys(typeof SPORT_META === "object" ? SPORT_META : {});
+  const rank = (sp) => (order.includes(sp) ? order.indexOf(sp) : order.length);
+  const rows = [];
+  Object.keys(bySport || {}).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b)).forEach((sp) => {
+    const rep = bySport[sp] || {};
+    const code = escapeHtml(typeof lgCode === "function" ? lgCode(sp) : sp.toUpperCase());
+    const kinds = rpKinds(rep);
+    const graded = RP_KINDS.filter((k) => kinds[k] && kinds[k].w + kinds[k].l);
+    graded.forEach((k) => {
+      const x = kinds[k];
+      rows.push(`<tr><td><b>${code}</b><span class="rec-gp-kind">${escapeHtml(rpKindWord(k, sp))}</span></td>
+        <td class="num">${gpShare(x.w, x.w + x.l)}</td>
+        <td class="num ${toneOf(x.net)}">${tlUnits(x.net)}</td></tr>`);
+    });
+    if (!graded.length && rep.open) {
+      rows.push(`<tr><td><b>${code}</b><span class="rec-gp-kind">Picks</span></td>
+        <td class="num">${rep.open} riding</td><td class="num">—</td></tr>`);
+    }
+  });
+  if (!rows.length) return "";
+  return `<div class="rr-head rec-rp-head">Picks, league by league</div>
+    <div class="ev-scroll"><table class="agate rec-gp-table"><thead><tr><th>League</th>
+      <th class="num">Picks hit</th><th class="num">Units</th></tr></thead>
+      <tbody>${rows.join("")}</tbody></table></div>`;
+}
+// x: { rep (the league's book, or every league's), bySport, recent, parlays }.
+function recReportBook(x, scope) {
+  const o = x || {};
+  const picks = rpPicksHTML(o.rep, scope, o.recent || []);
+  const leagues = scope ? "" : rpLeaguePicksHTML(o.bySport);
+  const parlays = gpParlaysHTML(o.parlays, scope);
+  if (!picks && !parlays) return "";
+  const name = scope ? escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase()) : "";
+  return `<div class="section-title"><span class="st-ico">${icon("ticket", 15)}</span>The Game Report Picks and Parlays
+      <span class="sub">— ${scope ? `every pick and parlay our ${name} game reports posted, graded pick by pick, ticket by
+        ticket and leg by leg` : "every pick and parlay our game reports posted, in every league; pick a league above for its own"}</span></div>
+    ${picks}${leagues}${parlays}
+    <p class="rec-gp-note">Every pick a game report posts (its picks card, its matchup reads, its breakout candidates and
+      fades) counts a flat 0.1 unit; every parlay and pair counts one unit at the least price its card said to take, once
+      all its legs are final. A leg is graded off the same result as the single pick; a void or a push is neither a hit
+      nor a miss. A report’s card pick is a Most Likely pick too, so none of it is staked or added into the books’ totals.</p>`;
 }
 
 function recTwoLegSection(tl) {
@@ -3319,61 +3432,6 @@ function recPotdClaims(days, scope) {
   </details>`;
 }
 
-/* THE GAME REPORTS' OWN BOOK (ledger.REPORT_CATEGORY, engine/reportbets;
-   Ethan, 2026-11-16: "all bets and parlays made from the game reports should
-   be categorized as 'report' bets under each sport on the record page"). Each
-   pick a game report posts (its picks card, its matchup reads' picks, its
-   breakout candidates and fades), graded on its own at a flat 0.1u, then the
-   reports' parlays and pairs (two_leg.game, parlayledger.report_game_parlays).
-   The same picks sit in the books above too (a card pick is a Most Likely
-   pick), so none of this is added into them, and the section says so. */
-function recReportSection(rep, scope, recent, game) {
-  const g = game || {};
-  const pairWord = ["nfl", "cfb"].includes(scope) ? "Touchdown pairs" : scope === "nhl" ? "Goal-scorer pairs"
-    : scope ? "Scorer pairs" : "Touchdown and scorer pairs";
-  const tickets = [["three", "Three-leg parlays"], ["scorers", pairWord]].map(([k, w]) => {
-    const x = g[k] || {};
-    const t = scope ? ((x.by_sport || {})[scope] || {}) : x;
-    if (!t.graded) {
-      return !scope && x.open ? `<div class="rec-row flush tight"><span class="rr-what">${w}</span>
-        <span class="rr-mute">${x.open} open, none graded yet</span></div>` : "";
-    }
-    const u = Number(t.net_units || 0);
-    return `<div class="rec-row flush tight"><span class="rr-what">${w}</span>
-      <span><b>${t.wins} of ${t.graded}</b> hit · <span class="${u >= 0 ? "rr-pos" : "rr-neg"}">${
-        u >= 0 ? "+" : MINUS}${Math.abs(u).toFixed(2)}u</span> at the take-it price</span></div>`;
-  }).join("");
-  const n = (rep && rep.settled) || 0;
-  if (!n && !(rep && rep.open) && !tickets) return "";
-  const units = Number((rep && rep.net_units) || 0);
-  const line = n
-    ? `<b class="rr-big">${rep.wins}-${rep.losses}${rep.pushes ? `-${rep.pushes}` : ""}</b>
-       <span class="${units >= 0 ? "rr-pos" : "rr-neg"}">${units >= 0 ? "+" : MINUS}${Math.abs(units).toFixed(2)}u</span>
-       <span class="rr-mute">· ${Math.round((rep.win_rate || 0) * 100)}% hit rate · ${n} settled${
-         rep.open ? `, ${rep.open} riding` : ""}</span>`
-    : `<span class="rr-mute">No pick settled yet${rep && rep.open ? ` — ${plural(rep.open, "pick")} riding` : ""}.</span>`;
-  const rows = (recent || []).filter((r) => !scope || r.sport === scope).slice(0, 10);
-  return `
-    <div class="section-title"><span class="st-ico">${icon("book", 15)}</span>Report bets
-      <span class="sub">— every pick and parlay our game reports posted${scope
-        ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase())}` : ""}, graded on its own</span></div>
-    <div class="card rec-report">
-      <div class="rr-head">Picks</div>
-      <div>${line}</div>
-      ${rows.length ? `<div class="rr-rows">${rows.map((r) => `<div class="rec-row flush tight">
-          <span class="rr-date">${escapeHtml(String(r.date || "").slice(5))}</span>
-          <span class="rr-what">${escapeHtml(r.player || "")}
-            <span class="rr-mute">${escapeHtml(marketWord(r.market))}${r.line != null ? ` ${escapeHtml(String(r.line))}` : ""}
-              · ${american(r.odds)}</span></span>
-          <span class="${r.status === "won" ? "rr-pos" : r.status === "lost" ? "rr-neg" : "rr-mute"}">${
-            escapeHtml(String(r.status || "").toUpperCase())}</span></div>`).join("")}</div>` : ""}
-      ${tickets ? `<div class="rr-head">Parlays and pairs</div>${tickets}` : ""}
-      <p class="rr-note">The picks are flat 0.1 unit each; a parlay or pair counts one unit at the least price its
-        card said to take. These are the same picks the books above hold (a report’s card pick is a Most Likely pick
-        too), so none of it is added into their totals.</p>
-    </div>`;
-}
-
 /* HOW OUR REPORTS DID, ON THE RECORD (2026-11-16; Ethan said yes to putting it
    where anyone can see it). Every finished game's report fact-checked against
    what happened (engine/reportfacts, engine/reportrecord): the call, the reads,
@@ -3720,12 +3778,15 @@ async function renderRecord() {
       to read (${o.settled || 0} of the ${recNeed} settled bets the record needs)</summary>`;
   const foldClose = underFloor ? "</details>" : "";
   const monthCard = underFloor ? recMonthCard(src, scopeName) : "";
-  /* THE GAME REPORTS' OWN RECORDS COME FIRST, ABOVE THE FOLDS (2026-11-16): the
-     game parlays and the reports' fact check each have their own sample, so
-     neither waits on the main book's floor. Ethan: "we wanna see if the legs
-     and the parlays we recommend are hitting". */
+  /* THE GAME REPORTS' OWN RECORDS COME FIRST, ABOVE THE FOLDS (2026-11-16): "The
+     Game Report Picks and Parlays" (recReportBook) and the reports' fact check
+     each have their own sample, so neither waits on the main book's floor.
+     Ethan: "we wanna see if the legs and the parlays we recommend are hitting". */
+  const reportBook = recReportBook({ rep: scoped ? (d.report_by_sport || {})[scope] : d.report,
+                                     bySport: d.report_by_sport, recent: d.report_recent,
+                                     parlays: d.game_parlay_record }, scoped ? scope : "");
   const receipts = calendar
-    + recGameParlaySection(d.game_parlay_record, scope)
+    + reportBook
     + (scoped ? recFactsSlot(scope) : "")
     /* ZENO'S RECORD — a person's real tickets, beside the model's picks
        and never inside them. Its own store, its own block, its own card:
@@ -3739,9 +3800,6 @@ async function renderRecord() {
     + recBoardSection(scoped ? (d.board_by_sport || {})[scope] : d.board, scope)
     + recLikelySection(scoped ? (d.likely_by_sport || {})[scope] : d.likely,
                        scope)
-    // Every pick and parlay the game reports posted, on its own (engine/reportbets).
-    + recReportSection(scoped ? (d.report_by_sport || {})[scope] : d.report, scoped ? scope : "",
-                       d.report_recent || [], (d.two_leg || {}).game)
     + foldClose
     + verdict + ridingNote + unstaked + small + monthCard
     + foldOpen("By book, the running P&amp;L and the splits")

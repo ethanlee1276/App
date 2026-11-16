@@ -13,7 +13,7 @@
    report draws them (js/report.js gameTickets, graded once the game is
    over). A pick opens the page it opens everywhere (app.js likelyOpen); the
    game's name opens the game and its report. Every pick and ticket is graded
-   on the Record page's Report section (record.js recReportSection). */
+   on the Record page's "The Game Report Picks and Parlays" (record.js recReportBook). */
 
 // Where the report shows a pick (engine/reportbets.SOURCE_WORDS).
 const RP_SOURCE = { card: "Our picks", read: "Matchup read", breakout: "Breakout candidate", fade: "Fade" };

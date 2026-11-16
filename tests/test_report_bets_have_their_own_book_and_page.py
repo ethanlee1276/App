@@ -12,8 +12,8 @@ to the board row it came from and tagged with where the report shows it; the
 board carries them as `report_bets` (paid); the pass that journals every
 board's parlays writes them to the record under `report`, the Most Likely way.
 The record export carries the book pooled and per sport with its receipts, and
-the Record page draws it beside the reports' parlays (record.js
-recReportSection), in no other book's total. The Report Picks page lists them
+the Record page draws it with the reports' parlays as "The Game Report Picks
+and Parlays" (record.js recReportBook), in no other book's total. The Report Picks page lists them
 game by game with each game's tickets (js/reportpicks.js).
 """
 import json
@@ -135,41 +135,72 @@ def _node(js):
 
 STUBS = ("const esc = (s) => String(s == null ? '' : s).replace(/[&<>\"']/g, (c) => '&#' + c.charCodeAt(0) + ';');"
          "const escapeHtml = esc, escapeAttr = esc; const MINUS = '−';"
-         "const icon = (n) => `<i data-ic=\"${n}\"></i>`;"
-         "const plural = (n, one) => `${n} ${n === 1 ? one : one + 's'}`;"
-         "const american = (o) => (o > 0 ? '+' : '') + o; const marketWord = (m) => ({ assists: 'Assists' })[m] || m;"
-         "const SPORT_META = { nba: { name: 'NBA' } };\n")
+         "const icon = (n) => `<i data-ic=\"${n}\"></i>`; const PARLAY_RATE_FLOOR = 10;"
+         "const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;"
+         "const trueMinus = (s) => String(s); const toneOf = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');"
+         "const american = (o) => (o > 0 ? '+' : '') + o; const lgCode = (s) => String(s).toUpperCase();"
+         "const marketWord = (m) => ({ assists: 'Assists', receptions: 'Receptions', reb: 'Rebounds' })[m] || m;"
+         "const formatGameDate = (d) => d;"
+         "function recTile(k, v, sub) { return `<tile k=\"${k}\" v=\"${v}\">${sub || ''}</tile>`; }"
+         "const SPORT_META = { nfl: { name: 'NFL' }, nba: { name: 'NBA' }, cfb: { name: 'College Football' } };\n")
 
 
-def test_the_record_page_draws_the_book_and_the_reports_parlays():
-    i = RECORD.index("function recReportSection(rep, scope, recent, game) {")
-    fn = RECORD[i:RECORD.index("\n}\n", i) + 3]
-    rep = {"settled": 12, "open": 3, "wins": 8, "losses": 4, "pushes": 0, "net_units": 0.42, "win_rate": 0.667}
-    game = {"three": {"graded": 9, "wins": 2, "net_units": -1.5, "by_sport": {"nba": {"graded": 4, "wins": 1,
-                                                                                         "net_units": 0.8}}},
-            "scorers": {"graded": 0, "open": 6, "by_sport": {}}}
-    recent = [{"date": "2026-11-15", "sport": "nba", "player": "Jaylen Brown", "market": "assists", "line": 2.5,
-               "odds": -150, "status": "won"},
-              {"date": "2026-11-15", "sport": "nhl", "player": "A Skater", "market": "shots", "line": 2.5,
-               "odds": -120, "status": "lost"}]
-    got = _node(STUBS + fn + f"""
-      process.stdout.write(JSON.stringify([recReportSection({json.dumps(rep)}, 'nba', {json.dumps(recent)},
-        {json.dumps(game)}), recReportSection({json.dumps(rep)}, '', {json.dumps(recent)}, {json.dumps(game)}),
-        recReportSection(null, 'nhl', [], {{}})]));""")
+def test_the_record_page_draws_the_reports_picks_and_parlays_in_one_section():
+    """Ethan, 2026-11-16: "on the record page I want it to be labeled 'The Game
+    Report Picks and Parlays' and it will record the game report bets and picks
+    both td and player props from all sports." One section above the folds
+    (record.js recReportBook): the picks by kind off the book's market split,
+    the newest picks, the parlays and pairs; a league's own, or every league."""
+    i = RECORD.index("const TL_SPORT_ORDER = ")
+    code = RECORD[i:RECORD.index("function recTwoLegSection(tl) {")]
+    nfl = {"settled": 9, "open": 3, "wins": 6, "losses": 3, "pushes": 1, "net_units": 0.21,
+           "by_market": {"receptions": {"w": 4, "l": 1, "net_u": 0.25}, "anytime_td": {"w": 1, "l": 2, "net_u": -0.13},
+                         "spread": {"w": 1, "l": 0, "net_u": 0.09}}}
+    nba = {"settled": 39, "open": 0, "wins": 28, "losses": 11, "pushes": 0, "net_units": 0.34,
+           "by_market": {"reb": {"w": 14, "l": 4, "net_u": 0.3}, "assists": {"w": 14, "l": 7, "net_u": 0.04}}}
+    pooled = {"settled": 48, "open": 16, "wins": 34, "losses": 14, "pushes": 1, "net_units": 0.55,
+              "by_market": {**nfl["by_market"], **nba["by_market"]}}
+    by_sport = {"nba": nba, "cfb": {"settled": 0, "open": 13, "wins": 0, "losses": 0, "by_market": {}}, "nfl": nfl}
+    recent = [{"date": "2026-W11", "sport": "nfl", "player": "Jahmyr Gibbs", "market": "anytime_td", "side": "OVER",
+               "line": 0.5, "odds": -150, "status": "won"},
+              {"date": "2026-W11", "sport": "nfl", "player": "Amon-Ra St. Brown", "market": "receptions",
+               "side": "OVER", "line": 6.5, "odds": -140, "status": "lost"},
+              {"date": "2026-11-15", "sport": "nba", "player": "Jaylen Brown", "market": "assists", "side": "OVER",
+               "line": 2.5, "odds": -150, "status": "won"}]
+    block = {"graded": 4, "wins": 1, "losses": 3, "net_units": -0.8, "open": 2, "since": "2026-W10", "chance": 0.3,
+             "one_away": 2, "legs": {"graded": 12, "won": 8, "lost": 4, "chance": 0.66}, "markets": [], "recent": []}
+    parlays = {"nfl": {"three": block, "scorers": dict(block, graded=2, wins=1, net_units=3.5)}, "nba": {"three": block}}
+    x = lambda rep: json.dumps({"rep": rep, "bySport": by_sport, "recent": recent, "parlays": parlays})
+    got = _node(STUBS + code + f"""
+      process.stdout.write(JSON.stringify([recReportBook({x(nfl)}, 'nfl'), recReportBook({x(pooled)}, ''),
+        recReportBook({{ rep: null, bySport: {{}}, recent: [], parlays: null }}, 'nhl')]));""")
     if got is None:
         return
-    nba, pooled, none = got
-    assert ">Report bets" in nba and "posted for NBA, graded on its own" in nba
-    assert '<b class="rr-big">8-4</b>' in nba and '<span class="rr-pos">+0.42u</span>' in nba
-    assert "Jaylen Brown" in nba and "A Skater" not in nba, "the league's own receipts"
-    assert "<b>1 of 4</b> hit" in nba and "Three-leg parlays" in nba
-    assert "Scorer pairs" not in nba, "a pool with nothing graded in the league draws nothing there"
-    assert "<b>2 of 9</b> hit" in pooled and "6 open, none graded yet" in pooled and "A Skater" in pooled
-    assert "none of it is added into their totals" in nba
+    nfl_html, pooled_html, none = got
+    assert "The Game Report Picks and Parlays" in nfl_html and "every pick and parlay our NFL game reports" in nfl_html
+    assert 'k="Picks that hit" v="6 of 9"' in nfl_html and "67% · +0.21u at 0.1 unit a pick · 1 push" in nfl_html
+    assert 'k="Still riding" v="3"' in nfl_html
+    for kind, line in (("Player props", "<b>4 of 5</b> hit · 80%"), ("Touchdown picks", "<b>1 of 3</b> hit · 33%"),
+                       ("Game bets", "<b>1 of 1</b> hit · 100%")):
+        assert kind in nfl_html and line in nfl_html, kind
+    assert nfl_html.index("Player props") < nfl_html.index("Touchdown picks") < nfl_html.index("Game bets")
+    assert "Jahmyr Gibbs to score a touchdown" in nfl_html and "Amon-Ra St. Brown over 6.5 Receptions" in nfl_html
+    assert "Jaylen Brown" not in nfl_html, "the league's own picks"
+    assert "Three-leg parlays" in nfl_html and "Touchdown pairs" in nfl_html, "and its parlays and pairs"
+    assert "none of it is staked or added into the books’ totals" in nfl_html
+    assert "Picks · every league" in pooled_html and "Touchdown and goal-scorer picks" in pooled_html
+    assert "Picks, league by league" in pooled_html and "Parlays and pairs, league by league" in pooled_html
+    league_rows = pooled_html[pooled_html.index("Picks, league by league"):pooled_html.index("Parlays and pairs")]
+    assert league_rows.index("<b>NFL</b>") < league_rows.index("<b>NBA</b>") < league_rows.index("<b>CFB</b>"), \
+        "the site's league order"
+    assert "13 riding" in league_rows, "a league with nothing graded yet says how many ride"
+    assert "<b>NFL</b> Jahmyr Gibbs" in pooled_html and "<b>NBA</b> Jaylen Brown" in pooled_html
     assert none == ""
-    assert "+ recReportSection(scoped ? (d.report_by_sport || {})[scope] : d.report, scoped ? scope : \"\"," in RECORD
+    assert "const reportBook = recReportBook({ rep: scoped ? (d.report_by_sport || {})[scope] : d.report," in RECORD
+    assert "    + reportBook\n" in RECORD
+    assert "recReportSection" not in RECORD, "drawn once, above the folds, not again inside one"
     css = (ROOT / "web" / "css" / "record.css").read_text(encoding="utf-8")
-    assert ".rec-report .rr-pos { color: var(--good);" in css
+    assert ".rec-report .rr-pos { color: var(--good);" in css and ".rec-rp-head {" in css
 
 
 def test_report_picks_has_a_door_everywhere_a_page_does():

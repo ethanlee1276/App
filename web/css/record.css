@@ -502,6 +502,10 @@
 .rec-gp-recent { display: grid; gap: 4px; }
 .rec-gp-recent .rl-row { padding-left: 0; padding-right: 0; border-bottom: none; border-radius: var(--radius-sm); }
 .rec-gp-close { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--text-dim); }
+/* The Game Report Picks and Parlays (record.js recReportBook): on All, each
+   league table under a heading of its own, the cards' heading type outside them. */
+.rec-rp-head { margin: 14px 2px 6px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; }
 .rec-gp-note { margin: 8px 2px 0; font-size: var(--fs-xs); color: var(--text-mute); }
 /* All leagues in one table: the kind under its league, the share under its count. */
 .rec-gp-table td:first-child b { font-weight: 700; }

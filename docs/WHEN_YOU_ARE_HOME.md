@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TI. The Record page's "The Game Report Picks and Parlays"** (step 641; 16 November). Nothing to run.
+You asked for one section with that name, recording the game reports' bets and picks, touchdown picks and
+player props, for every sport. It replaces both "Report bets" (which sat in a folded part of the page) and
+"Parlays for this game" (step TG), and sits near the top of the Record page:
+- **Picks:** every pick a game report posts (its picks card, matchup reads, breakout candidates and fades).
+  It shows how many hit and the units at 0.1 unit a pick, and how many are still riding. Picks are split by
+  kind: player props, touchdown picks (goal-scorer picks in hockey) and game bets. The newest picks are
+  listed with the result.
+- **Parlays and pairs:** the three-leg parlays and touchdown or scorer pairs. These show tickets and legs
+  that hit, legs by market, near misses and the newest tickets leg by leg, as in step TG.
+- **A league** shows its own. **"All"** shows every league's picks together, then two tables: picks by
+  league and kind, and parlays by league. A league with nothing graded yet says how many picks are riding.
+
+The first numbers are small because the report picks' record started today. So far NBA is 28 of 39 (+0.34u),
+and the NFL, college football and NHL picks are still riding.
+
 **TH. An open section and your place on the page outlast leaving the app** (step 640; 16 November).
 Nothing to run. You said that when you open a section, leave the app and come back, the section is closed
 and your place on the page is gone. Three things did it:
