@@ -3528,6 +3528,137 @@ function liveBoutHTML(b, stale) {
   </div>`;
 }
 
+/* EVERY FINISHED FIGHT, GRADED (2026-11-16; Ethan: when it's over, show
+   "if these props won or lost ... and if our game report and reads was
+   correct ... for all sports"). The live card (data/ufc_live.json) says
+   each bout's end: who won, how (KO/TKO, SUB, DEC) and when. Each card on
+   the UFC tab carries a slot (ufcResultSlot) the live poll fills as its
+   bout ends: the result, and the bet the card shows graded the way the
+   fight-slip checker settles a leg (engine/slipfight.result) for every
+   market the card bets (engine/ufc/markets, engine/ufc/rounds). A draw or
+   a no contest voids, as the record does (engine/ledger.settle_ufc). A bout
+   two of the card's fights could be, or one the feed hasn't said enough
+   about, is left ungraded rather than guessed. */
+let UFC_LIVE = null;
+const UFC_RES_CLASS = { won: "ufc-res-v won", lost: "ufc-res-v lost", void: "ufc-res-v" };
+const UFC_RES_WORD = { won: "Our bet won", lost: "Our bet lost", void: "Our bet is void" };
+const UFC_METHOD = { "KO/TKO": "KO/TKO", SUB: "submission", DEC: "decision" };
+const UFC_FEED_METHOD = { "KO/TKO": "ko", SUB: "sub", DEC: "dec" };
+function ufcResultSlot(m) {
+  return m && m.fight ? `<div class="ufc-res" data-ufc-result="${escapeAttr(m.fight)}"></div>` : "";
+}
+//: "A vs B" as the card names its corners (the odds feed's names), or [].
+function ufcCorners(fight) {
+  const [a, b] = String(fight || "").split(" vs ").map((s) => s.trim());
+  return a && b ? [a, b] : [];
+}
+//: The one name of `names` that `name` is: the same name (accents, case and
+//: punctuation aside), the same words in another order ("Zhang Weili"), or
+//: the one with his surname and first initial, a "Jr." aside
+//: (engine/slipfight.which's rule). null for none or two.
+function ufcWhich(names, name) {
+  const words = (s) => String(s || "").split(/\s+/).map(resNorm)
+    .filter((w) => w && !/^(jr|sr|ii|iii|iv)$/.test(w));
+  const one = (hits) => (hits.length === 1 ? hits[0] : null);
+  const want = words(name);
+  if (!want.length) return null;
+  const idx = names.map((_, i) => i);
+  const full = one(idx.filter((i) => words(names[i]).join("") === want.join("")));
+  if (full != null) return full;
+  const sorted = (w) => [...w].sort().join(" ");
+  const swap = one(idx.filter((i) => sorted(words(names[i])) === sorted(want)));
+  if (swap != null) return swap;
+  const last = (w) => w[w.length - 1];
+  return one(idx.filter((i) => {
+    const w = words(names[i]);
+    return w.length && last(w) === last(want) && w[0][0] === want[0][0];
+  }));
+}
+//: The live card's bout for a card's "A vs B", with which of its fighters
+//: is the card's A: {bout, a}. null when no bout, or two, fit.
+function ufcBoutFor(fight) {
+  const corners = ufcCorners(fight);
+  if (!corners.length) return null;
+  const fits = [];
+  ((UFC_LIVE || {}).bouts || []).forEach((bout) => {
+    const names = (bout.fighters || []).slice(0, 2).map((f) => (f && f.name) || "");
+    if (names.length !== 2) return;
+    const a = ufcWhich(names, corners[0]), b = ufcWhich(names, corners[1]);
+    if (a != null && b != null && a !== b) fits.push({ bout, a });
+  });
+  return fits.length === 1 ? fits[0] : null;
+}
+//: Once a bout is over: {winner (the card's name for him, "" for none),
+//: corner (0 for the card's A, 1 for B, null for none), method, round,
+//: clock}. null before it ends.
+function ufcOutcome(fit, fight) {
+  const bout = fit && fit.bout;
+  const st = (bout && bout.status) || {};
+  if (st.state !== "post") return null;
+  const won = (bout.fighters || []).slice(0, 2).map((f, i) => (f && f.winner ? i : -1)).filter((i) => i >= 0);
+  const corner = won.length === 1 ? (won[0] === fit.a ? 0 : 1) : null;
+  const names = ufcCorners(fight);
+  return { winner: corner == null ? "" : names[corner], corner,
+           method: st.method || "", round: Number(st.round) || 0, clock: String(st.clock || "") };
+}
+//: The card's bet on a finished fight: "won", "lost", "void" (no winner:
+//: a draw or a no contest), or null where the feed hasn't said enough.
+function ufcGrade(p, out) {
+  if (!out) return null;
+  if (out.corner == null) return "void";
+  const sel = String(p.selection || p.pick || "");
+  const m = String(p.market || "moneyline");
+  // The corner the bet is on: its selection opens on his name (engine/ufc/model's rule).
+  const names = ufcCorners(p.fight);
+  const on = names.map((n, i) => (sel.startsWith(n) ? i : -1)).filter((i) => i >= 0);
+  const mine = on.length === 1 ? on[0] : on.length === 2 ? (names[0].length > names[1].length ? 0 : 1) : null;
+  const meth = UFC_FEED_METHOD[out.method] || null;
+  if (m === "moneyline") return mine == null ? null : mine === out.corner ? "won" : "lost";
+  if (m === "method" || m === "fighter_finish") {
+    if (mine == null) return null;
+    if (mine !== out.corner) return "lost";
+    if (!meth) return null;
+    const by = m === "fighter_finish" ? ["ko", "sub"]
+      : [/KO\/TKO/i.test(sel) ? "ko" : /submission/i.test(sel) ? "sub" : /decision/i.test(sel) ? "dec" : ""];
+    return by.includes(meth) ? "won" : "lost";
+  }
+  if (!meth) return null;
+  if (m === "distance") return (meth === "dec") === !/doesn/i.test(sel) ? "won" : "lost";
+  if (m !== "round" && m !== "exact_round") return null;
+  const over = /^over/i.test(sel);
+  if (meth === "dec") return m === "round" && over ? "won" : "lost";
+  const r = out.round;
+  if (r < 1) return null;
+  if (m === "exact_round") return r === Number((sel.match(/round\s*(\d+)/i) || [])[1]) ? "won" : "lost";
+  const line = Number((sel.match(/([\d.]+)\s*rounds?/i) || [])[1]);
+  const [mm, ss] = out.clock.split(":");
+  if (!isFinite(line) || !/^\d+$/.test(mm || "") || !/^\d+$/.test(ss || "")) return null;
+  const at = (r - 1) + Math.min(Number(mm) * 60 + Number(ss), 300) / 300;
+  return (over ? at > line : at < line) ? "won" : "lost";
+}
+//: The result in words: "Alex Pereira won by KO/TKO at 3:10 of round 2".
+function ufcOutcomeWords(out) {
+  if (!out.winner) return "No winner: a draw or a no contest";
+  const how = UFC_METHOD[out.method] ? ` by ${UFC_METHOD[out.method]}` : "";
+  const finish = out.method && out.method !== "DEC" && out.round;
+  const when = finish ? (/^\d+:\d{2}$/.test(out.clock) ? ` at ${out.clock} of round ${out.round}` : ` in round ${out.round}`) : "";
+  return `${out.winner} won${how}${when}`;
+}
+//: Fills every finished fight's slot on the tab.
+function ufcPaintResults() {
+  if (typeof document === "undefined") return;
+  document.querySelectorAll("[data-ufc-result]").forEach((el) => {
+    const fight = el.dataset.ufcResult;
+    const out = ufcOutcome(ufcBoutFor(fight), fight);
+    if (!out) return;
+    const p = (UFC_TAB_ROWS || []).find((x) => x.fight === fight) || {};
+    const v = p.kind === "pick" ? ufcGrade(p, out) : null;
+    const bet = v ? ` <span class="${UFC_RES_CLASS[v]}">${UFC_RES_WORD[v]}</span>` : "";
+    el.innerHTML = `<span class="ufc-res-k">Final</span> ${escapeHtml(ufcOutcomeWords(out))}${bet}`;
+  });
+}
+//: The card's rows, one a fight (engine/ufc/model), for the slots above (set as the tab draws).
+let UFC_TAB_ROWS = [];
 async function renderLiveFights(host) {
   if (!host) return false;
   let d = null;
@@ -3536,6 +3667,9 @@ async function renderLiveFights(host) {
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d || !(d.bouts || []).length) { host.innerHTML = ""; return false; }
+  // Each finished bout's result on its card below (ufcPaintResults).
+  UFC_LIVE = d;
+  ufcPaintResults();
 
   const live = (d.bouts || []).filter((b) => b.status && b.status.live);
   if (!live.length) { host.innerHTML = ""; return false; }
@@ -3586,7 +3720,9 @@ if (typeof window !== "undefined" && !window._ufcReportBound) {
     el.dataset.drawn = "1";
     body.innerHTML = '<p class="mini">Loading the report…</p>';
     loadReport().then((R) => {
-      body.innerHTML = R ? R.html(r, { fight: true }) : '<p class="mini">The report could not load. Open it again in a moment.</p>';
+      const out = ufcOutcome(ufcBoutFor(r.fight), r.fight);
+      const results = out ? { ufc: true, winner: out.winner, how: ufcOutcomeWords(out) } : null;
+      body.innerHTML = R ? R.html(r, { fight: true, results }) : '<p class="mini">The report could not load. Open it again in a moment.</p>';
       if (!R) delete el.dataset.drawn;
     });
   }, true);
@@ -3663,6 +3799,7 @@ async function renderUFC() {
   setStandaloneSource("The Odds API MMA events + our fighter dossiers",
                       `UFC · ${escapeHtml(d.event_date || d.status || "")}`);
   const pctv = pctOr;
+  UFC_TAB_ROWS = [...(d.picks || []), ...(d.pass_list || [])];
   // Each fight's written report (engine/ufc/report), by fight, for the cards below.
   UFC_REPORTS.clear();
   (d.fight_reports || []).forEach((r) => { if (r && r.fight) UFC_REPORTS.set(r.fight, r); });
@@ -3778,6 +3915,7 @@ async function renderUFC() {
       ${shopList(p)}
       ${weighInHTML(p.weigh_in)}
       ${ufcLineHTML(p.line_note)}
+      ${ufcResultSlot(p)}
       ${fightReportHTML(p)}
       <div class="warning" style="margin-top:8px">KILL IF: ${escapeHtml(p.kill_if)}</div>
     </article>`;
@@ -3819,6 +3957,7 @@ async function renderUFC() {
         <span style="color:${color};font-weight:700">Passed:</span> ${escapeHtml(m.why || "")}</div>
       ${shopList(m)}
       ${ufcLineHTML(m.line_note)}
+      ${ufcResultSlot(m)}
       ${fightReportHTML(m)}
     </article>`;
   };
@@ -4026,6 +4165,8 @@ async function renderUFC() {
       off a dossier of measured records, and each one is reviewed before a card — a red flag on
       a fighter blocks a bet until it is resolved. The model refuses any fight missing a
       dossier rather than guessing at it. Updated ${escapeHtml(formatStamp(d.generated_at))}.</p>`;
+  // A finished bout's result on its card, if the live card came in first.
+  ufcPaintResults();
   // Each fight's path (js/extras.js), under the card it reads.
   loadExtras().then((X) => { const el = document.getElementById("ufc-paths"); if (X && el) el.innerHTML = X.pathsHTML(d); });
 }

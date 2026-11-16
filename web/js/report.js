@@ -79,8 +79,27 @@
                     pending: "Final — waiting on the box score" }[x.status] || "";
     return words ? ` <span class="${RES_TAG[x.status] || RES_TAG.pending}">${escapeHtml(words)}</span>` : "";
   }
+  const resNormR = (s) => String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  //: The same fighter, as two feeds spell him: accents, case, a "Jr." and
+  //: the order of his names aside, else the same surname and initial.
+  function sameFighter(x, y) {
+    const w = (s) => String(s || "").split(/\s+/).map(resNormR).filter((t) => t && !/^(jr|sr|ii|iii|iv)$/.test(t));
+    const a = w(x), b = w(y);
+    if (!a.length || !b.length) return false;
+    if (a.join("") === b.join("") || [...a].sort().join(" ") === [...b].sort().join(" ")) return true;
+    return a[a.length - 1] === b[b.length - 1] && a[0][0] === b[0][0];
+  }
   //: Under the call on a finished game: right or wrong, with the score, and our ratings' own.
   function winnerResultHTML(b) {
+    // A UFC fight (more.js ufcOutcome): right or wrong by who won, or no
+    // winner; nothing when the winner is neither name the call says.
+    if (RESULTS && RESULTS.ufc) {
+      if (!RESULTS.winner) return `<div class="gr-res-call">${escapeHtml(RESULTS.how || "No winner")}</div>`;
+      const mine = sameFighter(RESULTS.winner, b.team), theirs = sameFighter(RESULTS.winner, b.other);
+      if (mine === theirs) return "";
+      return `<div class="${mine ? "gr-res-call won" : "gr-res-call lost"}">${mine ? "Right" : "Wrong"}: ${
+        escapeHtml(RESULTS.how || `${RESULTS.winner} won`)}</div>`;
+    }
     const f = RESULTS && RESULTS.final;
     if (!f || f.home == null || f.away == null) return "";
     const score = `${teamName(RESULTS.away)} ${f.away}, ${teamName(RESULTS.home)} ${f.home}`;

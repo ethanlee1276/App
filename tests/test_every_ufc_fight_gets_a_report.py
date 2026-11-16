@@ -156,7 +156,8 @@ def test_the_build_attaches_one_for_every_fight_and_the_gate_keeps_them_paid():
 def test_the_tab_folds_each_report_into_its_fights_card():
     assert MORE_JS.count("${fightReportHTML(p)}") == 1 and MORE_JS.count("${fightReportHTML(m)}") == 1
     assert '<details class="ufc-report" data-ufc-report="${escapeAttr(m.fight)}"><summary>The fight report' in MORE_JS
-    assert "R.html(r, { fight: true })" in MORE_JS and 'document.addEventListener("toggle", (e) => {' in MORE_JS
+    # With the finished bout's result for its call (test_a_finished_fight_says_how_our_bet_went).
+    assert "R.html(r, { fight: true, results })" in MORE_JS and 'document.addEventListener("toggle", (e) => {' in MORE_JS
     assert ".ufc-report { margin-top: 12px; }" in MORE_CSS
 
 

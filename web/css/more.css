@@ -149,6 +149,16 @@
 .ufc-report { margin-top: 12px; }
 .ufc-report > summary { cursor: pointer; color: var(--text-dim); font-size: var(--fs-sm); font-weight: 600; }
 .ufc-report-body { margin-top: 8px; }
+/* A finished fight's result and our bet (more.js ufcPaintResults); empty until the bout ends. */
+.ufc-res:empty { display: none; }
+.ufc-res { margin-top: 10px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--fill-subtle);
+  font-size: var(--fs-sm); font-weight: 600; }
+.ufc-res-k { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; margin-right: 6px; }
+.ufc-res-v { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-xs);
+  font-weight: 700; background: var(--fill-subtle); color: var(--text-mute); }
+.ufc-res-v.won { color: var(--good); background: color-mix(in oklab, var(--good) 16%, transparent); }
+.ufc-res-v.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 16%, transparent); }
 .ufc-shop-row { display: grid; grid-template-columns: 74px 1fr auto 62px; gap: 8px;
   align-items: center; padding: 5px 0; font-size: var(--fs-sm); border-bottom: var(--hairline) solid var(--border-soft); }
 .ufc-shop-row:last-child { border-bottom: 0; }

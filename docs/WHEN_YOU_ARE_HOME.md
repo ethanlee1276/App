@@ -9338,6 +9338,34 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SU. A finished UFC fight shows how it ended and how our bet did** (step
+627; 16 November). Nothing to run. You asked for the finished-game results
+"for all sports". UFC has no game page, since each fight's card on the UFC tab
+is its page, so the results go on the cards:
+- **Every fight card**, once its bout is over, says how it ended: "Final ·
+  Alex Pereira won by KO/TKO at 3:10 of round 2", "Tim Elliott won by
+  decision", or "No winner: a draw or a no contest".
+- **Our bet** on that card says Our bet won or Our bet lost, graded on the bet
+  the card shows: the moneyline, the method, a finish, the distance, the
+  rounds or the exact round. After a draw or a no contest it says the bet is
+  void, the way the record settles it.
+- **The fight report's call** says Right or Wrong under "Who we think wins".
+
+The results come from the live fight card the UFC tab already reads. It
+refreshes every 10 seconds while you're on the tab, and it's the same feed the
+bet-slip checker settles fight legs from. The grading follows the checker's
+rules exactly, and a test holds the two together on every market and every
+way a bout can end. If the feed hasn't said how a fight ended yet, the card
+shows who won and leaves a method, distance or round bet ungraded until it
+does. A bout the card can't tell apart from another one is left alone rather
+than guessed.
+
+The card and the Record page always agree. The record journals each UFC pick
+as the moneyline on our fighter at the moneyline's price. That's the only bet
+a card can make today, because no method or round prices reach the model. A
+test now fails if one ever does before the record learns to journal that bet,
+so a card can never say "Our bet lost" while the record counts a win.
+
 **ST. A finished game shows how every pick, parlay and read turned out**
 (step 626; 16 November). Nothing to run. You sent the finished Pacers at
 76ers page and said: "when a game is already over and someone goes and
