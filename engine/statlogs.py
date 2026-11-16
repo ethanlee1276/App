@@ -211,15 +211,28 @@ def search(sport: str, q: str, limit: int = 12, db_path=None,
 #: of its changes (`logcache.generations`); where it does, the list is good
 #: until the league's logs change, and that is what is checked.
 NAME_INDEX_TTL = 900
-#: A league with fewer names than this is rebuilt in line when its logs
-#: change (a blink); a bigger one keeps answering from the list it has
-#: while the new one is built behind it, at most once a minute.
-NAME_INDEX_INLINE = 20000
+#: EVERY LEAGUE KEEPS ANSWERING FROM THE LIST IT HAS while the new one is
+#: built behind it, at most once a minute (2026-11-16). Until then a league
+#: under 20,000 names was rebuilt in line when its logs changed, "a blink":
+#: on the box, minutes after a restart, with every league's logs moving and
+#: the boards building beside it, the blink was 17 to 25 seconds ("mcdavid",
+#: "buzelis", "judge"), paid by the first search after every change, and
+#: tonight's live games change a league's logs every few minutes. A name
+#: logged a moment ago is found once the new list is in, a minute at most.
 NAME_INDEX_GAP = 60
 _NAME_INDEX: dict = {}
 _NAMES_BUSY: set = set()
 _NAMES_LOCK = threading.Lock()
 _NAMES_FAIL_SAID = [False]
+#: One first build a list at a time: a search that comes in while the
+#: start's warm-up builds its league waits for that build instead of
+#: starting a second over the same rows, on the box's busiest minutes.
+_FIRST_BUILD: dict = {}
+
+
+def _first_build_lock(key) -> threading.Lock:
+    with _NAMES_LOCK:
+        return _FIRST_BUILD.setdefault(key, threading.Lock())
 
 #: Every name a league has logged, with the latest season it played: ONE
 #: INDEX SEEK A NAME. `idx_logs_player` is ordered (sport, player, season),
@@ -297,12 +310,18 @@ def _name_index(conn, sport: str):
     if hit is not None:
         if (hit.sig == sig) if sig is not None else (time.time() - hit.at < NAME_INDEX_TTL):
             return hit
-        if path and len(hit) >= NAME_INDEX_INLINE:
+        if path:
             _rebuild_names_later(sport, path)
             return hit
-    built = _build_names(conn, sport, sig)
-    _NAME_INDEX[key] = built
-    return built
+    with _first_build_lock(key):
+        hit = _NAME_INDEX.get(key)
+        if hit is not None and path:      # built while this search waited
+            if sig is None or hit.sig != sig:
+                _rebuild_names_later(sport, path)
+            return hit
+        built = _build_names(conn, sport, sig)
+        _NAME_INDEX[key] = built
+        return built
 
 
 def _rebuild_names_later(sport: str, path: str) -> None:
@@ -437,10 +456,18 @@ def _search_conn(conn, sport: str, q: str, limit: int,
         # The team he was LAST seen with — the GROUP BY above would
         # hand back an arbitrary row's team, and a deadline trade is
         # exactly when someone gets looked up.
+        #
+        # SAID AS A CLUB, NOT AS ESPN'S NUMBER (2026-11-16): college's
+        # history keeps copies of a game keyed by ESPN's team number
+        # (ingest.ESPN_KEY_PREFIX; engine/gamelog.collapse reads them as
+        # one game), and the newest row can be that copy, so the search
+        # listed Jeremiah Smith at "espn:194" (Ohio State). The newest
+        # season's real abbreviation first, the number only when it is
+        # all the season has.
         t = conn.execute(
             "SELECT team, position FROM player_game_logs "
             "WHERE sport=? AND player=? "
-            "ORDER BY season DESC, period DESC LIMIT 1",
+            "ORDER BY season DESC, (substr(team, 1, 5) = 'espn:') ASC, period DESC LIMIT 1",
             (sport, r["player"])).fetchone()
         # The face rides along when the ingest has stored one —
         # player_assets is in the same DB, and a search result
@@ -517,7 +544,6 @@ def _roster_players(sport: str, data_dir=None) -> list[dict]:
     The rosters were already on disk and already published. Nothing
     here fetches.
     """
-    import json
     import os
     import time
     key = (sport, str(data_dir or ROSTER_DIR))
@@ -525,7 +551,6 @@ def _roster_players(sport: str, data_dir=None) -> list[dict]:
     now = time.time()
     if hit and now - hit[0] < ROSTER_TTL:
         return hit[1]
-    out: list[dict] = []
     path = os.path.join(str(data_dir or ROSTER_DIR), f"rosters_{sport}.json")
     # THE SAME FILE IS THE SAME ROSTER. Rereading 5.6 MB of college rosters
     # every quarter hour on a search, to find what the nightly build wrote
@@ -538,31 +563,86 @@ def _roster_players(sport: str, data_dir=None) -> list[dict]:
     if hit and stamp is not None and len(hit) > 2 and hit[2] == stamp:
         _ROSTER[key] = (now, hit[1], stamp)
         return hit[1]
-    try:
-        with open(path, encoding="utf-8") as fh:
-            doc = json.load(fh)
-        for team, entry in (doc.get("teams") or {}).items():
-            # `{team: {"players": [...]}}`, which is what `rosters.build`
-            # publishes — the roster page reads the same shape. A bare
-            # list is accepted too so an older payload on disk does not
-            # silently read as an empty league.
-            players = (entry.get("players") if isinstance(entry, dict)
-                       else entry) or []
-            for pl in players:
-                name = str((pl or {}).get("player") or "").strip()
-                if name:
-                    # A jersey is a string to print: 0 is a number a man
-                    # wears, not a missing one.
-                    num = pl.get("number")
-                    num = pl.get("jersey") if num in (None, "") else num
-                    out.append({"player": name, "team": team,
-                                "position": str(pl.get("position") or ""),
-                                "headshot": str(pl.get("headshot") or ""),
-                                "number": "" if num in (None, "") else str(num)})
-    except Exception:                                    # noqa: BLE001
-        out = []      # no roster published for this league: logs only
-    _ROSTER[key] = (now, out, stamp)
+    # A NEW FILE IS READ BEHIND THE SEARCH (2026-11-16), the way a league's
+    # new name list is (`_rebuild_names_later`): the roster in hand answers
+    # while the new one and its name list are built. Read in line, college's
+    # 41,888 names cost the search that met the new file 8 seconds on the box
+    # the evening of a deploy. Only a league with no roster yet waits for it.
+    if hit:
+        _reread_roster_later(sport, key, path)
+        return hit[1]
+    with _first_build_lock(("roster",) + key):
+        hit = _ROSTER.get(key)
+        if hit:
+            return hit[1]                 # read while this search waited
+        try:
+            out = _read_roster(path)
+        except Exception:                                # noqa: BLE001
+            out = []      # no roster published for this league: logs only
+        _ROSTER[key] = (now, out, stamp)
+        return out
+
+
+def _read_roster(path: str) -> list[dict]:
+    """Every player on a published roster file, as the search keeps them."""
+    import json
+    out: list[dict] = []
+    with open(path, encoding="utf-8") as fh:
+        doc = json.load(fh)
+    for team, entry in (doc.get("teams") or {}).items():
+        # `{team: {"players": [...]}}`, which is what `rosters.build`
+        # publishes — the roster page reads the same shape. A bare
+        # list is accepted too so an older payload on disk does not
+        # silently read as an empty league.
+        players = (entry.get("players") if isinstance(entry, dict)
+                   else entry) or []
+        for pl in players:
+            name = str((pl or {}).get("player") or "").strip()
+            if name:
+                # A jersey is a string to print: 0 is a number a man
+                # wears, not a missing one.
+                num = pl.get("number")
+                num = pl.get("jersey") if num in (None, "") else num
+                out.append({"player": name, "team": team,
+                            "position": str(pl.get("position") or ""),
+                            "headshot": str(pl.get("headshot") or ""),
+                            "number": "" if num in (None, "") else str(num)})
     return out
+
+
+_ROSTER_BUSY: set = set()
+
+
+def _reread_roster_later(sport: str, key, path: str) -> None:
+    with _NAMES_LOCK:
+        if key in _ROSTER_BUSY:
+            return
+        _ROSTER_BUSY.add(key)
+    threading.Thread(target=_reread_roster, args=(sport, key, path), daemon=True,
+                     name=f"roster-{sport}").start()
+
+
+def _reread_roster(sport: str, key, path: str) -> None:
+    """The new roster and its name list, built before either is handed to a
+    search (the list first, so a search that sees the new roster finds its
+    list ready). A file that cannot be read keeps the roster in hand, which
+    a half-written file would otherwise have emptied for a quarter hour."""
+    import os
+    from .playersearch import NameIndex
+    try:
+        try:
+            stamp = os.stat(path).st_mtime_ns
+            out = _read_roster(path)
+        except Exception:                                # noqa: BLE001
+            hit = _ROSTER.get(key)
+            if hit:
+                _ROSTER[key] = (time.time(),) + tuple(hit[1:])
+            return
+        _ROSTER_INDEX[key] = (out, NameIndex(((p["player"], 0) for p in out), at=time.time()))
+        _ROSTER[key] = (time.time(), out, stamp)
+    finally:
+        with _NAMES_LOCK:
+            _ROSTER_BUSY.discard(key)
 
 
 _ROSTER_INDEX: dict = {}

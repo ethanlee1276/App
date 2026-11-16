@@ -178,6 +178,23 @@ def test_a_guess_is_not_shown_beside_the_name_typed():
     assert hits and hits[0]["player"] == "Jacoby Brissett" and hits[0]["rank"] == 3, hits
 
 
+def test_a_college_player_is_listed_at_his_school_not_espns_number():
+    """Live, 16 Nov: "jeremiah smith" answered him alone, at "espn:194", the
+    newest of his rows being a copy keyed by ESPN's number for Ohio State."""
+    rows = [{"sport": "cfb", "period": "2026-11-08", "game_id": "g10", "player": "Jeremiah Smith", "team": "OSU",
+             "position": "WR", "market": "rec_yds", "value": 90.0},
+            {"sport": "cfb", "period": "2026-11-09", "game_id": "401", "player": "Jeremiah Smith",
+             "team": "espn:194", "position": "", "market": "rec_yds", "value": 90.0},
+            {"sport": "cfb", "period": "2025-11-29", "game_id": "g0", "player": "Old Walkon", "team": "espn:2000",
+             "market": "rec_yds", "value": 5.0}]
+    path = _db_with(rows)
+    d = _roster_dir([], "cfb")
+    hits = statlogs.search("cfb", "jeremiah smith", db_path=path, data_dir=d)
+    assert [(h["player"], h["team"], h["position"]) for h in hits] == [("Jeremiah Smith", "OSU", "WR")], hits
+    hits = statlogs.search("cfb", "old walkon", db_path=path, data_dir=d)
+    assert [h["team"] for h in hits] == ["espn:2000"], "the number, when it is all a season has"
+
+
 def test_the_play_files_short_names_are_not_a_second_player():
     """The NFL's red-zone and expected-points rows carry the play file's own
     spelling ("J.Brissett"), which the fantasy layer joins to the real name.
@@ -226,13 +243,16 @@ def _row(player, game="g1"):
 
 def _join_rebuilds():
     for t in threading.enumerate():
-        if t.name.startswith("names-"):
+        if t.name.startswith(("names-", "roster-")):
             t.join(30)
 
 
-def test_a_big_league_answers_from_its_list_while_the_new_one_builds():
-    """A league too big to rebuild in a blink keeps answering from the list
-    it has; the new list is built behind it and the next search reads it.
+def test_every_league_answers_from_its_list_while_the_new_one_builds():
+    """Every league keeps answering from the list it has; the new list is
+    built behind it and the next search reads it. Live, the evening of 16
+    Nov, minutes after a deploy: a league under 20,000 names was rebuilt in
+    line, and "mcdavid", "buzelis" and "judge" each took 17 to 25 seconds the
+    first time after their logs moved, under a second straight after.
 
     The rebuild is held until the first answer is in: left to run, it can
     finish between the two reads one search makes (the gate's 8-at-a-time
@@ -241,14 +261,14 @@ def test_a_big_league_answers_from_its_list_while_the_new_one_builds():
     import time
     d = _roster_dir([], "mlb")
     path = _db_with([_row("Aaron Judge")])
-    inline, gap, build = statlogs.NAME_INDEX_INLINE, statlogs.NAME_INDEX_GAP, statlogs._build_names
+    gap, build = statlogs.NAME_INDEX_GAP, statlogs._build_names
     held = threading.Event()
 
     def held_build(conn, sport, sig):
         if threading.current_thread().name.startswith("names-"):
             held.wait(30)
         return build(conn, sport, sig)
-    statlogs.NAME_INDEX_INLINE, statlogs.NAME_INDEX_GAP = 1, 0
+    statlogs.NAME_INDEX_GAP = 0
     try:
         statlogs.search("mlb", "judge", db_path=path, data_dir=d)
         conn = db.connect(path)
@@ -263,7 +283,7 @@ def test_a_big_league_answers_from_its_list_while_the_new_one_builds():
         second = statlogs.search("mlb", "raleigh", db_path=path, data_dir=d)
     finally:
         held.set()
-        statlogs.NAME_INDEX_INLINE, statlogs.NAME_INDEX_GAP, statlogs._build_names = inline, gap, build
+        statlogs.NAME_INDEX_GAP, statlogs._build_names = gap, build
     assert not [h for h in first if h["player"] == "Cal Raleigh"], "the stale list was waited on"
     assert took < 10, took
     assert second and second[0]["player"] == "Cal Raleigh", second
@@ -304,10 +324,53 @@ def test_the_roster_is_reread_only_when_its_file_changes():
         json.dump({"teams": {"TEX": {"players": [{"player": "Arch Manning"}, {"player": "Ryan Wingo"}]}}}, fh)
     os.utime(path, ns=(1, 1))
     statlogs._ROSTER[key] = (0.0,) + statlogs._ROSTER[key][1:]
+    assert statlogs._roster_players("cfb", d) is first, "the search waited for the new file to be read"
+    _join_rebuilds()
     again = statlogs._roster_players("cfb", d)
     assert again is not first and [p["player"] for p in again] == ["Arch Manning", "Ryan Wingo"], again
+    assert statlogs._ROSTER_INDEX[key][0] is again, "the new roster's names were listed before it was handed out"
     _, ix = statlogs._roster_index("cfb", d)
     assert ix.names == ["Arch Manning", "Ryan Wingo"]
+    # A file caught half-written keeps the roster in hand, not an empty one.
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write('{"teams": {"TEX": {"players": [{"player": "Arch')
+    os.utime(path, ns=(2, 2))
+    statlogs._ROSTER[key] = (0.0,) + statlogs._ROSTER[key][1:]
+    statlogs._roster_players("cfb", d)
+    _join_rebuilds()
+    assert statlogs._roster_players("cfb", d) is again
+
+
+def test_a_search_in_the_first_build_waits_for_it_instead_of_building_twice():
+    """After a restart the warm-up builds every league's list; a search that
+    comes in meanwhile used to build its league again beside it."""
+    path = _db_with([_row("Aaron Judge")])
+    d = _roster_dir([], "mlb")
+    build, made, started, held = statlogs._build_names, [], threading.Event(), threading.Event()
+
+    def slow_build(conn, sport, sig):
+        if sport == "mlb":                # the warm-up is building this league's list
+            made.append(threading.current_thread().name)
+            started.set()
+            held.wait(30)
+        return build(conn, sport, sig)
+    statlogs._build_names = slow_build
+    try:
+        warm = statlogs.warm_search(db_path=path, data_dir=d)
+        assert started.wait(30)
+        out = []
+        t = threading.Thread(target=lambda: out.append(statlogs.search("mlb", "judge", db_path=path, data_dir=d)))
+        t.start()
+        t.join(0.5)
+        assert t.is_alive(), "the search did not wait for the build in progress"
+        held.set()
+        t.join(30)
+        warm.join(60)
+    finally:
+        held.set()
+        statlogs._build_names = build
+    assert out and out[0] and out[0][0]["player"] == "Aaron Judge", out
+    assert made == ["search-warm"], f"the league's list was built {len(made)} times: {made}"
 
 
 def test_every_league_is_built_before_anyone_types():

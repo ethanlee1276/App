@@ -221,9 +221,12 @@ def test_the_list_is_built_off_the_player_index():
 
 
 def test_the_list_is_kept_until_the_league_changes():
-    """Kept between keystrokes, and new the moment the league's logs change
-    (their counts, `logcache.generations`): a player whose first box score
-    lands is found by the next search, not a quarter of an hour later."""
+    """Kept between keystrokes, and rebuilt behind the search once the
+    league's logs change (their counts, `logcache.generations`): a player
+    whose first box score lands is found once the new list is in, within the
+    minute (NAME_INDEX_GAP), not a quarter of an hour later, and no search
+    waits for the rebuild (16 Nov: 17 to 25 seconds on the box when one did)."""
+    import threading
     p = _logs()
     statlogs.search("mlb", "jugde", db_path=p)
     key = ("mlb", os.path.realpath(p))
@@ -235,10 +238,18 @@ def test_the_list_is_kept_until_the_league_changes():
                                   "player": "Cal Raleigh", "team": "SEA", "opponent": "OPP", "position": "C",
                                   "home": 1, "market": "hits", "value": 2.0}])
     conn.close()
-    hits = statlogs.search("mlb", "raleigh", db_path=p)
+    gap, statlogs.NAME_INDEX_GAP = statlogs.NAME_INDEX_GAP, 0
+    try:
+        statlogs.search("mlb", "raleigh", db_path=p)          # answered from the list in hand
+        for t in threading.enumerate():
+            if t.name.startswith("names-"):
+                t.join(30)
+        hits = statlogs.search("mlb", "raleigh", db_path=p)
+    finally:
+        statlogs.NAME_INDEX_GAP = gap
     assert hits and hits[0]["player"] == "Cal Raleigh", hits
     assert statlogs._NAME_INDEX[key] is not first
-    assert statlogs.NAME_INDEX_TTL >= 300
+    assert statlogs.NAME_INDEX_TTL >= 300 and statlogs.NAME_INDEX_GAP <= 60
 
 
 # --- what the page says about it ------------------------------------------

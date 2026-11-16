@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TS. No search waits for a league's new name list** (step 651; 16 November). Nothing to run. Checked live after
+the deploy at 19:25 UTC: every search answered the right player alone ("jacoby brissett" and "brissett" both Jacoby
+Brissett, no near names beside him), college football, the NBA and the NFL in 0.3 to 0.7 seconds. But the first NHL,
+MLB and college basketball search after their logs moved took 17 to 25 seconds ("mcdavid", "judge", "buzelis"), and
+the same search straight after under a second:
+- a league under 20,000 names rebuilt its name list in line when its logs changed, which on a quiet box is a blink
+  and on the box minutes after a restart, boards building beside it, was 20 seconds. Every league now answers from the
+  list it has while the new one is built behind it, at most once a minute, so a player's first box score reaches the
+  search within the minute and no search waits for it;
+- a roster file the nightly build rewrote was read in line by the next search (college's 41,888 names: 8 seconds
+  once). It is read behind the search now too, and a file caught half-written keeps the roster in hand instead of
+  emptying it for a quarter hour;
+- a search that comes in while the start's warm-up is building its league's list waits for that build instead of
+  building a second one beside it;
+- the search listed Jeremiah Smith at "espn:194", his newest log row being the copy of a game filed under ESPN's
+  number for Ohio State (step TM). It lists a college player at the newest season's real abbreviation now (OSU).
+
 **TR. A parlay leg's chance is one our own pick rules stand behind** (step 650; 16 November). Nothing to run. You
 asked why football's stated chances run 10 to 30 points too high. They did on the game parlays' legs, and only there:
 - the record that morning: the NFL's legs hit 49.9% against the 68.4% we gave them (catches 34% against 71%), college's
