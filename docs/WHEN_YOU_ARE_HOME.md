@@ -9338,6 +9338,47 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SO. Who we think wins, in every game report** (step 621; 16 November).
+Nothing to run. You said "I also wanna add in the game report section who
+we think will win based off the data and match up and our game report and
+offense and defense and all that". Every league's game report now has a
+"Who we think wins" section, right under our picks:
+- The call: the team, its chance to win and how sure we are. That's "A
+  clear favorite" at 75% or more, "Favored" at 62%, "A lean" at 55% and
+  otherwise "A coin flip". A bar shows both teams' chances.
+- The numbers behind it: where the chance comes from, our simulation's
+  chance, the prediction markets' and the score the lines expect.
+- "Why" the favorite and "The case for" the other team, from the report's
+  own data, for both sides:
+  - each offense against the other defense where the ranks are far apart;
+  - the records, the last five games, and the home and road records;
+  - who is out (in football a quarterback first; in basketball a player who
+    plays 20 minutes or more);
+  - the starting pitchers' expected ERAs and the goalies' goals saved above
+    expected.
+- When more of the report points to the underdog, it says so: "the case for
+  an upset, against the price".
+
+Where the chance comes from: the books' moneyline with their cut taken
+out. Without one it's the spread, on the league's own win curve, and without
+that our simulation. It's never our team ratings alone. Where our NFL
+ratings disagree with the closing line, the disagreement has carried nothing
+(docs/NFL_MONEYLINE_ARITHMETIC.md). Bets on our baseball ratings alone
+against the price lost 12.4%. Picking the winner off them would be a guess
+said with confidence. So the call follows the price, and the matchup data is
+the why and the upset flag. Each report's note says this in one line.
+
+On the Packers at Lions test game it reads "A lean: Lions — 60% to win":
+- why the Lions: Green Bay's pass protection (22nd) against Detroit's pass
+  rush (5th), and the Packers are without Zach Tom;
+- the case for the Packers: their passing game (4th) against Detroit's pass
+  defense (22nd).
+
+The report's Copy button carries the call too.
+
+**Decision for you:** if you want our own ratings' pick shown beside the
+call anyway, say so. I'd label it unproven, because it is.
+
 **SN. Parlays and touchdown pairs take both sides** (step 620; 16 November).
 Nothing to run. You said "a lot of these parlays we are making are very one
 sided ... for both td and player props ... I understand if all the data

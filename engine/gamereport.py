@@ -3884,6 +3884,232 @@ def mark_statuses(sections: list) -> list:
     return sections
 
 
+# --- who we think wins -----------------------------------------------------------------------
+#: WHO WE THINK WINS (Ethan, 2026-11-16: "I also wanna add in the game report
+#: section who we think will win based off the data and match up and our game
+#: report and offense and defense and all that"). The call and its chance come
+#: from the sharpest number the board holds: the books' moneyline with their
+#: cut taken out (`ml_chances`), else the spread on the sport's own win curve
+#: (gamebets.spread_win_prob), else our drive-by-drive simulation of the game.
+#: Not our team ratings alone: every way the database allows, their
+#: disagreements with the NFL close were measured to carry nothing (the
+#: rating's moneyline slope against the close is −0.06 ± 0.14, engine/pipeline
+#: NFL_MODEL_GAME_RECOMMENDATIONS, docs/NFL_MONEYLINE_ARITHMETIC.md), and
+#: baseball's model-alone moneylines measured −12.4%. So a call that followed
+#: them against the price would be noise said with confidence. What the
+#: report's own data gives is the WHY: each offense against the other defense
+#: (the matchup scan's edges), the records, the last few games, the record at
+#: home and on the road, who is out. It is said for both sides, and when more
+#: of it points at the underdog than the favorite, the report says so: the case
+#: for an upset. Every league's report (`finish`).
+VERDICT_WORDS = ((0.75, "A clear favorite"), (0.62, "Favored"), (0.55, "A lean"), (0.0, "A coin flip"))
+#: The last games read for each side's form, and the fewest that say anything.
+VERDICT_FORM_N, VERDICT_FORM_MIN = 5, 3
+#: Two records this far apart in winning share count as a point for the better one.
+VERDICT_RECORD_GAP = 0.15
+#: The most reasons said for the pick, and for the other side.
+VERDICT_WHY, VERDICT_CASE = 4, 3
+#: A gap between two starters' expected ERAs, two goalies' goals saved above
+#: expected, worth saying; a basketball absence that counts (minutes a game).
+VERDICT_XERA_GAP, VERDICT_GSAX_GAP, VERDICT_ROTATION_MPG = 0.75, 4.0, 20.0
+
+
+def win_chances(c: Ctx) -> tuple:
+    """({team: chance to win}, where it came from: "market", "spread" or "sim"),
+    or ({}, "") when the board holds no number for the game."""
+    ml = ml_chances(c)
+    if ml:
+        return ml, "market"
+    sp = _f(c.g.get("spread"))
+    if sp is not None and c.sport not in FIXED_LINES:
+        try:
+            from .gamebets import spread_win_prob
+            ph = spread_win_prob(c.sport, sp)
+        except Exception:                                    # noqa: BLE001
+            ph = None
+        if ph is not None:
+            return {c.home: ph, c.away: 1.0 - ph}, "spread"
+    sim = c.g.get("sim") or {}
+    if _f(sim.get("p_home_win")) is not None:
+        ph = float(sim["p_home_win"])
+        return {c.home: ph, c.away: 1.0 - ph}, "sim"
+    return {}, ""
+
+
+def _recent_form(c: Ctx) -> dict:
+    """{team: {"n", "w", "l", "margin"}} over each side's last VERDICT_FORM_N
+    games: the league report's form where it has one (basketball's, hockey's),
+    else the board's recent results (football's and baseball's)."""
+    f = c.meta.get("form") or c.g.get("form")
+    if isinstance(f, dict) and any(isinstance(f.get(t), dict) for t in c.teams):
+        return {t: f[t] for t in c.teams if isinstance(f.get(t), dict) and f[t].get("n")}
+    out = {}
+    for t in c.teams:
+        games = [x for x in (c.result.get("team_recent") or {}).get(t) or []
+                 if isinstance(x, dict) and _f(x.get("scored")) is not None and _f(x.get("allowed")) is not None]
+        games = games[:VERDICT_FORM_N]
+        if len(games) >= VERDICT_FORM_MIN:
+            w = sum(1 for x in games if float(x["scored"]) > float(x["allowed"]))
+            l = sum(1 for x in games if float(x["scored"]) < float(x["allowed"]))
+            out[t] = {"n": len(games), "w": w, "l": l,
+                      "margin": sum(float(x["scored"]) - float(x["allowed"]) for x in games) / len(games)}
+    return out
+
+
+def verdict_evidence(c: Ctx) -> dict:
+    """{team: [sentence]}: what in this report points to each side winning,
+    the strongest first."""
+    out = {t: [] for t in c.teams}
+    # Each offense against the other defense: the scan's edges, the widest first.
+    for e in sorted(_edges(c), key=lambda e: -abs(float(e.get("gap") or 0))):
+        gap = float(e.get("gap") or 0)
+        who = e.get("off") if gap > 0 else e.get("def")
+        if gap and who in out:
+            out[who].append(edge_words(c, e).rsplit(" — edge ", 1)[0])
+    # The records (football's table).
+    rec = ((c.result.get("playoff_picture") or {}).get("teams") or {})
+
+    def share(t):
+        r = rec.get(t) or {}
+        w, l, d = r.get("wins"), r.get("losses"), r.get("ties") or 0
+        if w is None or l is None or not (w + l + d):
+            return None, ""
+        return (w + d / 2) / (w + l + d), f"{int(w)}-{int(l)}" + (f"-{int(d)}" if d else "")
+    (sa, ra), (sh, rh) = share(c.away), share(c.home)
+    if sa is not None and sh is not None and abs(sa - sh) >= VERDICT_RECORD_GAP:
+        best = c.away if sa > sh else c.home
+        out[best].append(f"{cap(team_np(c, best))} {team_be(c, best)} {ra if best == c.away else rh}, "
+                         f"{team_np(c, c.opp[best])} {rh if best == c.away else ra}")
+    # The last few games.
+    form = _recent_form(c)
+    if len(form) == 2:
+        a, h = form[c.away], form[c.home]
+        ma, mh = _f(a.get("margin")) or 0.0, _f(h.get("margin")) or 0.0
+        if abs(ma - mh) >= 3.0 * (0.25 if c.sport in ("mlb", "nhl") else 1.0):
+            best = c.away if ma > mh else c.home
+            fb, fo = form[best], form[c.opp[best]]
+            mb = _f(fb.get("margin")) or 0.0
+            out[best].append(f"{cap(team_np(c, best))} {team_be(c, best, 'have', 'has')} won {int(fb['w'])} of "
+                             f"{'their' if _many(c, best) else 'its'} last {int(fb['n'])} "
+                             f"({'outscoring' if mb >= 0 else 'outscored by'} teams by {_num(abs(mb))} "
+                             f"{c.score_words} a game); {team_np(c, c.opp[best])} {int(fo['w'])} of {int(fo['n'])}")
+    # Home and road (the league report's form, where it carries them).
+    for t in c.teams:
+        f = form.get(t) or {}
+        vw, vl = f.get("venue_w"), f.get("venue_l")
+        if vw is None or vl is None or (vw + vl) < VERDICT_FORM_MIN:
+            continue
+        where = "at home" if t == c.home else "on the road"
+        if vw / (vw + vl) >= 0.65:
+            out[t].append(f"{cap(team_np(c, t))} {team_be(c, t)} {int(vw)}-{int(vl)} {where} this season")
+        elif vw / (vw + vl) <= 0.35:
+            out[c.opp[t]].append(f"{cap(team_np(c, t))} {team_be(c, t)} {int(vw)}-{int(vl)} {where} this season")
+    # THE OTHER LEAGUES' OWN FACTS (engine/leaguereport): baseball's starting
+    # pitchers, hockey's goalies, basketball's absences.
+    try:
+        from . import leaguereport as LR
+    except Exception:                                        # noqa: BLE001
+        LR = None
+    if LR is not None and c.sport == "mlb":
+        sp = {t: LR._starter(c, t) for t in c.teams}
+        xs = {t: _f(sp[t].get("xera")) for t in c.teams}
+        if all(xs[t] is not None for t in c.teams) and abs(xs[c.away] - xs[c.home]) >= VERDICT_XERA_GAP:
+            best = min(c.teams, key=lambda t: xs[t])
+            other = c.opp[best]
+            out[best].append(f"The starters: {sp[best]['name']} ({best}, expected ERA {xs[best]:.2f}) against "
+                             f"{sp[other]['name']} ({other}, {xs[other]:.2f})")
+    if LR is not None and c.sport == "nhl":
+        gs = {t: LR._goalie(c, t) for t in c.teams}
+        ga = {t: _f(gs[t].get("starter_gsax")) for t in c.teams}
+        if all(gs[t].get("starter") and ga[t] is not None for t in c.teams) and \
+                abs(ga[c.away] - ga[c.home]) >= VERDICT_GSAX_GAP:
+            best = max(c.teams, key=lambda t: ga[t])
+            other = c.opp[best]
+            def saved(x):
+                return (f"saved {_num(x)} goals more than expected" if x >= 0 else
+                        f"allowed {_num(abs(x))} goals more than expected")
+            out[best].append(f"In net: {gs[best]['starter']} ({best}) has {saved(ga[best])}; "
+                             f"{gs[other]['starter']} ({other}) has {saved(ga[other])}")
+    for t in c.teams:
+        gone = [x for x in ((c.meta.get("absences") or {}).get(t) or {}).get("out") or []
+                if isinstance(x, dict) and x.get("player") and (_f(x.get("mpg")) or 0) >= VERDICT_ROTATION_MPG]
+        if gone:
+            out[c.opp[t]].append(f"{cap(team_np(c, t))} {team_be(c, t)} without " + _join(
+                f"{x['player']} ({_num(x['mpg'], 0)} minutes" + (f", {_num(x['ppg'])} points" if x.get("ppg") else "")
+                + " a game)" for x in gone[:3]))
+    # Who is out: a starter or featured player ruled out or doubtful counts
+    # for the other side, a quarterback first.
+    rows = [r for r in c.scan.get("injuries") or [] if isinstance(r, dict) and r.get("team") in out
+            and str(r.get("status") or "").upper() in ("OUT", "DOUBTFUL")]
+    for t in c.teams:
+        mine = sorted((r for r in rows if r.get("team") == t), key=lambda r: str(r.get("position") or "") != "QB")
+        if mine:
+            said = [f"{r.get('player')}" + (f" ({r['position']})" if r.get("position") else "")
+                    + f", {str(r.get('status')).lower()}" for r in mine[:3]]
+            out[c.opp[t]].append(f"{cap(team_np(c, t))} {team_be(c, t)} without {_join(said)}")
+    return out
+
+
+def sec_verdict(c: Ctx) -> dict | None:
+    """Who we think wins (see VERDICT_WORDS): the call, the numbers behind it,
+    and the report's case for each side."""
+    ch, src = win_chances(c)
+    if not ch:
+        return None
+    fav = max(ch, key=ch.get)
+    dog, p = c.opp[fav], float(ch[fav])
+    word = next(w for bar, w in VERDICT_WORDS if p >= bar)
+    blocks: list = [{"type": "winner", "team": fav, "other": dog, "name": c.name(fav), "other_name": c.name(dog),
+                     "chance": round(p, 3), "word": word, "source": src}]
+    nums = []
+    where = {"market": "the books' moneyline with their cut taken out — the sharpest number on the board",
+             "spread": "the spread, on the league's own win curve (no moneyline was posted)",
+             "sim": "our simulation of the game (no price was posted)"}[src]
+    nums.append(f"{cap(team_np(c, fav))} to win, {a_pct(p)} chance by {where}")
+    sim = c.g.get("sim") or {}
+    if src != "sim" and _f(sim.get("p_home_win")) is not None:
+        ps = float(sim["p_home_win"]) if fav == c.home else 1.0 - float(sim["p_home_win"])
+        times = f" {int(sim['trials']):,} times" if sim.get("trials") else ""
+        nums.append(f"Our simulation of the game, drive by drive{',' if times else ''}{times}: "
+                    f"{team_np(c, fav)} {_pct(ps)}")
+    cr = c.g.get("crowd") or {}
+    venues = [(v, cr.get(k)) for v, k in (("Kalshi", "kalshi"), ("Polymarket", "polymarket")) if _f(cr.get(k)) is not None]
+    if venues:
+        nums.append("Prediction markets: " + _join(
+            f"{v} {_pct(float(x) if fav == c.home else 1.0 - float(x))}" for v, x in venues))
+    pts = implied_points(c)
+    if pts:
+        nums.append(f"The lines expect about {c.name(fav)} {_num(pts[fav])}, {c.name(dog)} {_num(pts[dog])}")
+    blocks.append(_list(nums))
+    ev = verdict_evidence(c)
+    why, case = ev[fav][:VERDICT_WHY], ev[dog][:VERDICT_CASE]
+    if why:
+        blocks += [_h(f"Why {team_np(c, fav)}"), _list(why)]
+    if case:
+        blocks += [_h(f"The case for {team_np(c, dog)}"), _list(case)]
+    if len(ev[dog]) > len(ev[fav]):
+        blocks.append(_p(f"More of this report points to {team_np(c, dog)} than to {team_np(c, fav)} "
+                         f"({len(ev[dog])} reasons to {len(ev[fav])}): the case for an upset, against the price"))
+    elif not why and not case:
+        blocks.append(_p("Nothing in the matchup, the records or the injury report tilts this one past the price"))
+    note = VERDICT_NOTE.get(c.sport, VERDICT_NOTE[""])
+    blocks.append({"type": "note", "text": note if (why or case) else note.split(". The reasons above")[0]})
+    return _section("verdict", "Who we think wins", blocks)
+
+
+#: Why the chance is the price's, said only as far as it is measured.
+VERDICT_NOTE = {
+    "nfl": ("The chance is the price's, not our team ratings': where our NFL ratings disagree with the closing "
+            "line, the disagreement has carried nothing (measured on every season we hold), so the call follows "
+            "the price. The reasons above are the report's own data, for each side"),
+    "mlb": ("The chance is the price's, not our team ratings': bets on our baseball ratings alone against the "
+            "price lost 12.4%, so the call follows the price. The reasons above are the report's own data, for "
+            "each side"),
+    "": ("The chance is the price's: it is the sharpest number on the board for who wins. The reasons above are "
+         "the report's own data, for each side"),
+}
+
+
 def finish(c: Ctx, sections_fns, short_fn) -> dict:
     """The report: every section that has something to say, the short
     version written last from what they found and put first, what changed
@@ -3901,7 +4127,14 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ the card not built for {c.away}@{c.home} ({exc})")
         card = None
-    sections = plain_all([x for x in (card, short, moved) if x] + list(built.values()))
+    # WHO WE THINK WINS, right under our picks (which lead, the research's
+    # answer first), in every league's report (`sec_verdict`).
+    try:
+        verdict = sec_verdict(c)
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ who wins not built for {c.away}@{c.home} ({exc})")
+        verdict = None
+    sections = plain_all([x for x in (card, verdict, short, moved) if x] + list(built.values()))
     words = _words(sections)
     color_names(c, sections)
     mark_statuses(sections)
@@ -4154,6 +4387,9 @@ def to_text(report: dict) -> str:
                     out.append("  " + "  ".join(str(x).ljust(w) for x, w in zip(r, widths)))
                 if b.get("note"):
                     out.append(f"  ({b['note']})")
+            elif t == "winner":
+                out.append(f"  {b.get('word')}: {b.get('name') or b.get('team')} — "
+                           f"{round(float(b.get('chance') or 0) * 100)}% to win")
             elif t == "verdicts":
                 for v in b["items"]:
                     out.append(f"  • {v['title']} = {v['label']}"

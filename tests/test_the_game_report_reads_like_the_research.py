@@ -211,7 +211,7 @@ def _text(report) -> str:
 def test_the_report_comes_in_the_research_reports_order():
     rep = _report()
     keys = [s["key"] for s in rep["sections"]]
-    assert keys == ["short", "facts", "market", "rankings", "identity", "injuries", "matchups",
+    assert keys == ["verdict", "short", "facts", "market", "rankings", "identity", "injuries", "matchups",
                     "trenches", "redzone", "context", "scripts", "watch", "weather", "before"], keys
     assert rep["title"] == "Packers at Lions" and rep["game"] == "GB@DET"
     assert rep["words"] > 400 and rep["minutes"] >= 2

@@ -151,7 +151,8 @@ def test_the_mlb_report_reads_the_pitching_matchup_the_park_and_the_reads():
     assert line.startswith("Game reports: 1 game(s)"), line
     assert rep["sport"] == "mlb" and rep["title"] == "Phillies at Cubs", rep["title"]
     keys = [s["key"] for s in rep["sections"]]
-    assert keys == ["short", "facts", "market", "pitching", "watch", "weather", "injuries", "before"], keys
+    # Who we think wins leads where there are no picks (gamereport.sec_verdict, 2026-11-16).
+    assert keys == ["verdict", "short", "facts", "market", "pitching", "watch", "weather", "injuries", "before"], keys
     text = R.to_text(rep)
     # The short version, said in sentences (Ethan, 2026-10-22: "It's very blunt").
     for want in ("The Phillies are the moneyline favorites, with a 60% chance to win once the book's cut is "
@@ -206,7 +207,7 @@ def test_the_mlb_report_reads_the_pitching_matchup_the_park_and_the_reads():
 def test_the_nhl_report_reads_the_tape_the_goalies_and_the_injuries():
     rep, _line = _attach(_nhl_board(), "nhl")
     keys = [s["key"] for s in rep["sections"]]
-    assert keys == ["short", "facts", "market", "tape", "goalies", "watch", "injuries", "before"], keys
+    assert keys == ["verdict", "short", "facts", "market", "tape", "goalies", "watch", "injuries", "before"], keys
     assert rep["title"] == "Bruins at Maple Leafs", rep["title"]
     text = R.to_text(rep)
     for want in ("The Maple Leafs are the moneyline favorites, with a 61% chance to win once the book's cut "
@@ -241,7 +242,7 @@ def test_the_nba_report_reads_rest_who_carries_each_team_and_the_defences():
     board, meta = _nba_board()
     rep, _line = _attach(board, "nba", meta=meta)
     keys = [s["key"] for s in rep["sections"]]
-    assert keys == ["short", "facts", "market", "carry", "defense", "injuries", "before"], keys
+    assert keys == ["verdict", "short", "facts", "market", "carry", "defense", "injuries", "before"], keys
     assert rep["title"] == "Heat at Celtics"
     text = R.to_text(rep)
     for want in ("The Celtics are 11.5-point favorites at home, and the total is 214.5, which works out to "

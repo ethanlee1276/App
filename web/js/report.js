@@ -305,6 +305,18 @@
   function block(b) {
     if (!b || !b.type) return "";
     if (b.type === "matchbars") return matchbars(b);
+    /* WHO WE THINK WINS (engine/gamereport.sec_verdict, Ethan 2026-11-16): the
+       call, and its chance as a bar split between the two clubs. */
+    if (b.type === "winner") {
+      const p = Math.max(0, Math.min(1, Number(b.chance) || 0)), pct = (x) => `${Math.round(x * 100)}%`;
+      const us = b.name || teamName(b.team), them = b.other_name || teamName(b.other);
+      return `<div class="gr-winner">
+        <div class="gr-winner-head"><span class="gr-winner-k">${escapeHtml(b.word || "Our call")}</span>
+          <b class="gr-winner-team">${escapeHtml(us)}</b><span class="gr-winner-p">${pct(p)} to win</span></div>
+        <div class="gr-winner-bar" role="img" aria-label="${escapeAttr(`${us} ${pct(p)}, ${them} ${pct(1 - p)}`)}"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
+        <div class="gr-winner-legend"><span>${escapeHtml(us)} ${pct(p)}</span><span>${escapeHtml(them)} ${pct(1 - p)}</span></div>
+      </div>`;
+    }
     if (b.type === "p") return `<p class="gr-p">${named(b.text, b.names, b.marks, true)}</p>`;
     if (b.type === "h") return `<h4 class="gr-h">${escapeHtml(b.text)}</h4>`;
     if (b.type === "note") return `<p class="gr-note">${named(b.text, b.names, b.marks)}</p>`;
@@ -404,6 +416,7 @@
       for (const b of s.blocks || []) {
         if (!b || !b.type) continue;
         if (b.type === "p" || b.type === "note") out.push(b.text);
+        else if (b.type === "winner") out.push(`${b.word || "Our call"}: ${b.name || b.team} — ${Math.round(Number(b.chance || 0) * 100)}% to win`);
         else if (b.type === "h") out.push("", b.text);
         else if (b.type === "list") (b.items || []).forEach((t) => out.push(`• ${t}`));
         else if (b.type === "table") {

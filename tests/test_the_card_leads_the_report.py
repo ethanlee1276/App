@@ -83,7 +83,8 @@ def _card(rep):
 def test_the_card_comes_first_and_ranks_the_games_posted_picks():
     rep = _report()
     keys = [s["key"] for s in rep["sections"]]
-    assert keys[:2] == ["card", "short"], keys
+    # Our picks first, then who we think wins (gamereport.sec_verdict, 2026-11-16), then the short version.
+    assert keys[:3] == ["card", "verdict", "short"], keys
     sec = _card(rep)
     assert sec["title"] == "Our picks for this game"
     items = sec["blocks"][0]["items"]
@@ -139,7 +140,7 @@ def test_a_game_with_nothing_posted_names_the_closest_and_what_holds_them():
     assert "picks" not in [b["type"] for b in sec["blocks"]], text
     # Nothing on the game at all: no card, the short version leads.
     rep = _report(rows=[], held=[])
-    assert _card(rep) is None and rep["sections"][0]["key"] == "short"
+    assert _card(rep) is None and [s["key"] for s in rep["sections"]][:2] == ["verdict", "short"]
 
 
 def test_the_copied_report_carries_the_card():

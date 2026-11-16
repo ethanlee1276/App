@@ -98,7 +98,7 @@ def test_a_move_is_written_under_its_time_right_under_the_short_version():
                                        "status": "OUT"}], "pulled": ["Amon-Ra St. Brown"]})
     line = _attach(later, out, "2026-10-23T18:40:00")
     keys, sec = _changes(later)
-    assert keys[:2] == ["short", "changes"], keys
+    assert keys[:3] == ["verdict", "short", "changes"], keys
     assert sec["title"] == "What changed"
     assert sec["blocks"][0] == {"type": "p", "text": "What has moved since we first wrote this report "
                                                      "(Tue 9:05 AM ET), newest first."}

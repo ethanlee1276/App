@@ -77,6 +77,19 @@
 .gr-table th, .gr-table td { padding: 8px 10px; }
 @media (max-width: 600px) { .gr-table th, .gr-table td { padding: 7px 5px; } }
 .gr-note { margin: 4px 0 0; color: var(--text-mute); font-size: var(--fs-xs); }
+/* WHO WE THINK WINS (engine/gamereport.sec_verdict): the call, and its chance
+   as a bar split between the two clubs. */
+.gr-winner { padding: 12px 14px; border-radius: var(--radius); background: var(--panel); margin: 2px 0 10px; }
+.gr-winner-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.gr-winner-k { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; }
+.gr-winner-team { font-size: var(--fs-lg); }
+.gr-winner-p { color: var(--good); font-weight: 700; }
+.gr-winner-bar { position: relative; height: 8px; margin: 10px 0 6px; border-radius: 999px; overflow: hidden;
+  background: color-mix(in oklab, var(--text-mute) 30%, transparent); }
+.gr-winner-bar > i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--good); }
+.gr-winner-legend { display: flex; justify-content: space-between; gap: 10px; color: var(--text-mute);
+  font-size: var(--fs-xs); }
 .gr-people { display: grid; gap: 10px; margin: 10px 0; grid-template-columns: 1fr; }
 @media (min-width: 861px) { .gr-people { grid-template-columns: 1fr 1fr; } }
 .gr-person { padding: 12px 14px; border: var(--hairline) solid transparent; border-radius: var(--radius);
