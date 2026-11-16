@@ -320,17 +320,22 @@ def test_the_go_to_scorer_s_read_says_whether_he_scored():
     assert "Volume up.</li>" in one and "Volume up. <span" not in one, "on his scorer line only"
 
 
-def test_the_parlays_page_marks_each_finished_game_s_tickets():
-    gp = {"games": [{"home": "PHI", "away": "IND", "threes": [{"joint": 0.31, "independent": 0.29, "legs": [
+def test_report_picks_marks_each_finished_game_s_tickets():
+    """Each game's tickets say how they went once it is final, drawn by the
+    report's own gameTickets on the Report Picks page (the Parlays page that
+    drew them too left every league 2026-11-16)."""
+    g = {"home": "PHI", "away": "IND", "threes": [{"joint": 0.31, "independent": 0.29, "legs": [
         {"player": "Kentavious Caldwell-Pope", "team": "PHI", "market": "rebounds", "side": "Over", "line": 1.5}]}],
-        "scorers": []}]}
-    got = _report(f"const gp = {json.dumps(gp)}; process.stdout.write(JSON.stringify("
-                  "[R.gameParlays(gp, 'nba', { results: (x) => x.home === 'PHI' ? RES : null }), R.gameParlays(gp, 'nba')]));")
+        "scorers": []}
+    got = _report(f"const g = {json.dumps(g)}; process.stdout.write(JSON.stringify("
+                  "[R.gameTickets(g, 'nba', { results: (x) => x.home === 'PHI' ? RES : null }), R.gameTickets(g, 'nba')]));")
     if got is None:
         return
     assert '<span class="gr-res won">Ticket won</span>' in got[0] and '<span class="gr-res won">Won · 4 rebounds</span>' in got[0]
     assert "gr-res" not in got[1]
-    assert "R.gameParlays(d.game_parlays, state.sport, { results: (x) => reportResults(" in APP
+    rp = open(os.path.join(ROOT, "web", "js", "reportpicks.js"), encoding="utf-8").read()
+    assert ("R.gameTickets(x.tix, state.sport, { results: () => reportResults(rpGame(d, el.dataset.rpkTix)) })"
+            in rp), "Report Picks hands each game's grader to its tickets"
 
 
 def test_a_finished_game_s_page_opens_on_the_final_and_how_we_did():

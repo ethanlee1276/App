@@ -399,15 +399,18 @@ def test_the_fallback_publishes_the_shapes_the_page_expects():
 def test_the_panel_does_not_trust_the_payload_shape_either():
     """The producer was fixed, and this is the half that cannot be fixed
     anywhere else: a renderer that trusts a payload's shape will meet a
-    payload that lies about it again. Since 2026-10-31 the panel is the
-    Parlays page (engine/twoleg's `two_leg`, renderParlayPage)."""
-    i = APP.index("function renderParlayPage(")
-    body = APP[i:APP.index("\n}", i)]
-    assert 'typeof z !== "object"' in body and "!z.edge" in body, \
-        "an empty array is truthy, and this guard is what catches it: [] has no pools"
-    # And an empty pool never prints a hole.
-    assert 'x.note || "No pair on tonight’s board makes sense yet."' in body, \
-        "a pool with no tickets and no note would print 'undefined'"
+    payload that lies about it again. The Parlays page was the panel from
+    2026-10-31 until it left every league on 2026-11-16; each game's parlays
+    are drawn by Report Picks now (js/reportpicks.js), which reads only a
+    game it can name and a ticket list it can count."""
+    rp = open(os.path.join(ROOT, "web", "js", "reportpicks.js"), encoding="utf-8").read()
+    i = rp.index("async function renderReportPicks() {")
+    body = rp[i:rp.index("\n}", i)]
+    assert "((d.game_parlays || {}).games || []).forEach((x) => {" in body, \
+        "an empty or missing block is an empty list, never a crash"
+    assert "if (x && x.away && x.home && ((x.threes || []).length || (x.scorers || []).length))" in body, \
+        "a game with no name or no tickets prints nothing, never 'undefined @ undefined'"
+    assert "function renderParlayPage(" not in APP
 
 
 # --- what the board's own cards open onto -----------------------------------

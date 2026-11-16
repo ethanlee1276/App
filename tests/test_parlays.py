@@ -855,71 +855,34 @@ def _fn_src(name: str) -> str:
     return " ".join(APP[i:j if j > 0 else len(APP)].split())
 
 
-def test_the_parlays_page_is_a_real_button_again():
-    """RE-SHAPED TWICE. 2026-08-11 (Ethan: "ditch the parlay zone screen but
-    keep the same rules"): the page became PARLAY MODE, a sidebar switch that
-    showed the screened tickets on Home. 2026-10-31 (Ethan: "get rid of the
-    parlay button and the parlay feature ... make the parlay feature an
-    actual button and correlate it for each sport"): the switch, the card
-    buttons and the do-it-yourself slip are gone, and Parlays is a page of
-    its own again, two-leg tickets from our own picks (engine/twoleg). An
-    old #parlays bookmark lands on the page itself."""
-    assert 'data-view="parlays" id="parlays-tab"' in HTML, "the button"
-    assert 'id="view-parlays"' in HTML and 'id="parlays-body"' in HTML
-    i = HTML.index('id="view-parlays"')
-    assert i < HTML.index('id="parlays-body"'), "the tickets live on their own page"
+def test_the_parlays_page_left_every_league():
+    """RE-SHAPED THREE TIMES. 2026-08-11 (Ethan: "ditch the parlay zone screen
+    but keep the same rules"): the page became PARLAY MODE, a sidebar switch.
+    2026-10-31 (Ethan: "make the parlay feature an actual button"): Parlays
+    was a page of its own again, two-leg tickets from our own picks
+    (engine/twoleg). 2026-11-16, Ethan circling it in the menu: "get rid of
+    these parlays and the parlay page for all sports since we have replaced
+    it with the game report picks and parlays". No button, no page, no
+    renderer; an old #parlays bookmark opens Report Picks."""
+    assert 'data-view="parlays"' not in HTML and 'id="parlays-tab"' not in HTML, "the button is back"
+    assert 'id="view-parlays"' not in HTML and 'id="parlays-body"' not in HTML, "the page is back"
     assert 'id="parlay-mode"' not in HTML and 'id="pz-toggle"' not in HTML, "Parlay Mode is back"
     assert 'id="qb-slip"' not in HTML, "the do-it-yourself slip is back"
-    assert "function renderParlayPage(" in APP
-    assert '["parlays-body", () => renderParlayPage(), true]' in APP, "the renderer is never called"
+    for gone in ("function renderParlayPage(", "function tlTicketHTML(", "const TL_POOLS", "function fillGameParlays("):
+        assert gone not in APP, gone
     assert "syncParlayMode" not in APP and 'getItem("qb_pz")' not in APP and "PZ_KEY" not in APP, \
         "Parlay Mode's plumbing outlived it"
-    assert '"parlays"' in APP[APP.index("const VIEW_ORDER = ["):APP.index("];", APP.index("const VIEW_ORDER = ["))], \
-        "#parlays routes to the page"
+    order = APP[APP.index("const VIEW_ORDER = ["):APP.index("];", APP.index("const VIEW_ORDER = ["))]
+    assert '"parlays"' not in order and '"reportpicks"' in order
+    assert 'const MOVED_VIEWS = { parlays: "reportpicks" };' in APP, "#parlays lands on Report Picks"
 
 
-def test_the_sports_with_no_screen_hide_the_tab_rather_than_faking_one():
-    """§9.1's UFC ruling, and the two standalone boards that carry no props
-    at all. A tab that can only ever say "nothing here" is worse than no
-    tab — that is the same call already made for CFB's roster pages."""
+def test_no_league_lists_a_parlays_tab_to_hide():
+    """§9.1's UFC ruling hid the tab from the fight card and the standalone
+    boards. With the page gone from every league there is no tab to hide."""
     block = APP[APP.index("const HIDDEN_VIEWS = {"):]
     block = block[:block.index("};")]
-    for sport in ("ufc", "polymarket", "fantasy"):
-        # Membership, not an exact list. These sports hide OTHER tabs too —
-        # ufc and friends also have no season to project — and an equality
-        # check here fails every time an unrelated tab is added, which reads
-        # as this rule breaking when nothing about it has changed.
-        line = [l for l in block.splitlines() if l.strip().startswith(f"{sport}:")]
-        assert line and '"parlays"' in line[0], sport
-
-
-def test_the_page_says_staked_or_tracked_on_every_ticket():
-    """A two-leg parlay does what its legs do, about twice. So it carries
-    money only when it is a two-game pair and both legs are picks we stake
-    (engine/twoleg.staked), and every card says which it is. A ticket shown without that line is an
-    invitation to bet one the record only tracks."""
-    card = _fn_src("tlTicketHTML")
-    assert "Staked ${t.stake_units}u" in card and "Tracked · no stake" in card
-    page = _fn_src("renderParlayPage")
-    assert "money rides only on a two-game parlay whose legs are both picks we stake" in page
-
-
-def test_the_page_never_prints_a_price_without_saying_how_it_was_made():
-    """No feed we ingest quotes a parlay, so the price on a card is the one
-    the record grades the ticket at, and the card says how it was made: the
-    two prices multiplied, or a same-game cut under that."""
-    card = _fn_src("tlTicketHTML")
-    assert "pays ${oddsTxt(t.price)}" in card
-    assert "escapeHtml(t.price_basis" in card, "the price shows without its basis"
-    assert "${pct(t.joint)} both hit" in card, "the chance both legs hit is the headline"
-
-
-def test_every_ticket_says_why_its_legs_belong_together():
-    """The reason Ethan asked for parlays that "make sense": two legs that
-    correlate, one pick on each team, or two games. A card with no reason
-    under it answers nothing."""
-    card = _fn_src("tlTicketHTML")
-    assert "escapeHtml(t.why" in card
+    assert '"parlays"' not in block, block
 
 
 def test_the_record_page_carries_the_singles_alternative():
@@ -1236,13 +1199,13 @@ def test_the_drawdown_state_is_measured_rather_than_assumed():
     """§10.2: "parlays are suspended entirely during any active drawdown
     circuit-breaker. When stakes are halved, parlays go to zero — not half."
     The screen has always handled the drawdown state correctly; what was
-    missing is that nothing ever asked for it. attach() reads it from the
-    journal now, so a caller that does not know the rule exists cannot leave
-    it permanently at "normal"."""
+    missing is that nothing ever asked for it. The screen's own drawdown is
+    still measured (`bankroll_state`). attach() asks for none since
+    2026-11-16: it builds only each game's parlays, which are tracked and
+    never staked, so there is no stake for a drawdown to take to zero."""
     import inspect
     src = inspect.getsource(P.attach)
-    assert "bankroll_state(sport)" in src, (
-        "attach() no longer measures the drawdown state")
+    assert "gameparlays.attach(slate, sport)" in src and "twoleg" not in src.split('"""')[-1], src
     assert P.bankroll_state("mlb") in ("normal", "drawdown")
 
     # and the suspension itself still bites

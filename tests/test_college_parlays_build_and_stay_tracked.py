@@ -16,6 +16,12 @@ on this board yet: they build with the board". It builds for college now:
     (an Edge book with no record reads as staked), so the board's own flag
     decides, for any league on probation, and the page says why.
 
+THE PAGE AND THE BOARD HOOK RETIRED 2026-11-16 (Ethan, circling Parlays in
+the menu: "get rid of these parlays and the parlay page for all sports since
+we have replaced it with the game report picks and parlays"). engine/twoleg
+still builds college's tickets when asked, and the record still reads the
+ones it made; no board asks any more.
+
 Run directly: `python3 tests/test_college_parlays_build_and_stay_tracked.py`
 """
 import os
@@ -53,10 +59,10 @@ def _read(*parts):
     return open(os.path.join(ROOT, *parts), encoding="utf-8").read()
 
 
-def test_college_is_one_of_the_parlay_leagues_and_its_tab_is_real():
+def test_college_is_one_of_the_parlay_leagues_and_its_journal_reads_its_board():
     assert "cbb" in T.SPORTS and not {"nhl", "wnba", "ufc"} & set(T.SPORTS)
     app = _read("web", "js", "app.js")
-    assert 'cbb: ["longshots", "weather"],' in app, "college's Parlays tab shows"
+    assert 'cbb: ["longshots", "weather"],' in app, "college's tabs (Report Picks among them) show"
     assert parlayledger.BOARD_FILES["cbb"] == "web/data/cbb.json", "the journal reads college's board"
 
 
@@ -88,14 +94,17 @@ def test_a_board_on_probation_tracks_every_parlay_and_says_why():
     assert "note" not in off and off["probation"] is False
 
 
-def test_the_board_hook_hangs_colleges_tickets_and_the_page_says_why():
+def test_the_board_hook_hangs_no_two_leg_tickets_since_they_retired():
+    """The builder still answers when asked (the tests above); the board's
+    hook no longer asks, so no board carries `two_leg` and the page that
+    drew them is gone."""
     from engine import parlays as P
     board = _board()
     P.attach(board, "cbb", state="normal")
-    assert board["two_leg"]["sport"] == "cbb" and board["two_leg"]["edge"]["tickets"]
-    app = _read("web", "js", "app.js")
-    assert '${(z.drawdown || z.probation) && z.note ? `<p class="set-note tl-rule">${escapeHtml(z.note)}</p>` : ""}' \
-        in app, "the page draws the probation note as it draws the drawdown's"
+    assert "two_leg" not in board, board.get("two_leg")
+    built = T.attach(_board(), "cbb", plan={})
+    assert built["two_leg"]["sport"] == "cbb" and built["two_leg"]["edge"]["tickets"]
+    assert "function renderParlayPage(" not in _read("web", "js", "app.js")
 
 
 def test_the_record_page_orders_college_with_the_parlay_leagues():

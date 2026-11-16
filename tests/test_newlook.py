@@ -107,13 +107,17 @@ def test_every_destination_survived_the_redesign():
     for sport in ("record", "lab", "mybets", "why", "about"):
         assert f'data-sport="{sport}"' in sb, f"{sport} fell out of the sidebar"
     # "parlays" left this list 2026-08-11 (the page became Parlay Mode, a
-    # sidebar toggle) and came back 2026-10-31, a page of its own again
-    # (Ethan: "make the parlay feature an actual button").
-    for view in ("recommended", "live", "edge", "longshots", "parlays",
+    # sidebar toggle), came back 2026-10-31, a page of its own again (Ethan:
+    # "make the parlay feature an actual button"), and left for good
+    # 2026-11-16 (Ethan: "get rid of these parlays and the parlay page for
+    # all sports since we have replaced it with the game report picks and
+    # parlays"); Report Picks holds each game's parlays.
+    for view in ("recommended", "live", "edge", "longshots", "reportpicks",
                  "futures", "standings", "trending", "players", "rosters",
                  "injuries", "scanner"):
         assert f'data-view="{view}"' in sb, f"{view} fell out of the sidebar"
-    assert 'id="pz-toggle"' not in sb, "Parlay Mode's switch is back beside the Parlays page"
+    assert 'data-view="parlays"' not in sb, "the Parlays page is back in the sidebar"
+    assert 'id="pz-toggle"' not in sb, "Parlay Mode's switch is back"
 
 
 def test_the_drawer_has_one_door_per_page():

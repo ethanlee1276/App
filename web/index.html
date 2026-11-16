@@ -403,14 +403,11 @@
         <button class="nav-btn sb-item" data-view="longshots" id="longshots-tab" data-hint="plus-money darts, sized like lottery tickets">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2l1.8 4.2L18 8l-4.2 1.8L12 14l-1.8-4.2L6 8l4.2-1.8z"/><path d="M18 14l.9 2.1L21 17l-2.1.9L18 20l-.9-2.1L15 17l2.1-.9z"/></svg>
           Long Shots</button>
-        <!-- PARLAYS, A PAGE AGAIN (Ethan, 2026-10-31: "make the parlay feature
-             an actual button"): two-leg tickets from our Edge and Most Likely
-             picks, same-game and two-game (engine/twoleg). -->
-        <button class="nav-btn sb-item" data-view="parlays" id="parlays-tab" data-hint="two-leg parlays from our picks">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 2v4H4v-4a2 2 0 0 0 0-2z"/><path d="M14 7v10" stroke-dasharray="2 2"/></svg>
-          Parlays</button>
         <!-- REPORT PICKS (Ethan, 2026-11-16): every bet and parlay the game reports
-             posted, game by game (js/reportpicks.js). -->
+             posted, game by game (js/reportpicks.js). It took the Parlays page's
+             place the same day (Ethan: "get rid of these parlays and the parlay
+             page for all sports since we have replaced it with the game report
+             picks and parlays"); an old #parlays link opens it. -->
         <button class="nav-btn sb-item" data-view="reportpicks" id="reportpicks-tab" data-hint="every bet and parlay from the game reports">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 10h6M9 14h6M9 18h4"/></svg>
           Report Picks</button>
@@ -1316,15 +1313,6 @@
       </div>
       <div class="longshot-note" id="longshots-note"></div>
       <div class="cards" id="longshots-board"></div>
-    </section>
-
-    <!-- Parlays: two legs from our own picks, an Edge section and a Most
-         Likely section, each same-game then two-game (renderParlayPage). -->
-    <section class="view" id="view-parlays">
-      <div class="section-title" id="parlays-title">Parlays
-        <span class="sub">— two legs, from our picks</span>
-      </div>
-      <div id="parlays-body"></div>
     </section>
 
     <!-- Report Picks: each game report's bets and parlays (renderReportPicks). -->

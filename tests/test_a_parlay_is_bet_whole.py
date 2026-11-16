@@ -170,11 +170,13 @@ APP_STUBS = ("ctx.bookTileHTML = (t, u, px, sub, tag) => `<a class=\"bk-tile\" h
              "ctx.bookKey = (t) => String(t).toLowerCase(); ctx.storeApp = () => '';")
 
 
-def test_the_parlays_page_gives_every_ticket_the_button():
+def test_every_game_s_tickets_get_the_button():
+    """Each game's tickets as Report Picks draws them (gameTickets; the
+    Parlays page that drew them too left every league 2026-11-16)."""
     payload, _ = _stamped()
     gp = payload["game_parlays"]
     got = _node(APP_STUBS + f"const gp = {json.dumps(gp)};"
-                "process.stdout.write(JSON.stringify({html: R.gameParlays(gp, 'nfl')}));")
+                "process.stdout.write(JSON.stringify({html: gp.games.map((g) => R.gameTickets(g, 'nfl')).join('')}));")
     if got is None:
         print("      (skipped: no Node)")
         return
@@ -266,9 +268,12 @@ def test_in_a_browser_the_button_opens_the_sheet_with_the_whole_slip():
                 page.route(lambda u: not u.startswith(f"http://127.0.0.1:{port}/"), lambda r: r.abort())
                 for pat in ("**/api/recommendations*", "**/data/recommendations*.json*"):
                     page.route(pat, lambda r: r.fulfill(status=200, content_type="application/json", body=body))
+                # The old #parlays link (the page left every league 2026-11-16)
+                # opens Report Picks, where each game's tickets carry the button.
                 page.goto(f"http://127.0.0.1:{port}/#parlays", wait_until="load")
                 page.wait_for_function("document.querySelectorAll('.gr-betit .betit').length >= 2", timeout=20000)
-                page.evaluate("document.querySelector('.gr-parlay-game').open = true")
+                assert page.evaluate("location.hash") == "#reportpicks", page.evaluate("location.hash")
+                page.evaluate("document.querySelector('.rpk-game').open = true")
                 page.click(".gr-parlay .gr-betit .betit")
                 page.wait_for_function("document.body.classList.contains('betit-open')", timeout=5000)
                 tiles = page.evaluate("""[...document.querySelectorAll('#betit-sheet .bk-tile')].map((a) => ({

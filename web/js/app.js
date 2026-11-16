@@ -475,9 +475,6 @@ const HIDDEN_VIEWS = {
   // The WNBA has no futures board: engine/futures.py has a shape for it but
   // futures_build.py does not run it, because there is no outrights key for
   // the league and its season is nearly over by the time this ships.
-  // Parlays OPENED 2026-11-14 for every league with props: each game's
-  // three-leg tickets (engine/gameparlays; Ethan: "for each game, when it
-  // comes to every sport, I want you to make 4 3-leg parlays").
   wnba: ["longshots", "futures", "weather", "race"],
   // §9.1 caps UFC at two legs in ONE fight, and every construction §9.3
   // permits pairs a winner with a method, distance or round-group market.
@@ -489,9 +486,12 @@ const HIDDEN_VIEWS = {
   // No commission publishes an MMA injury report and ESPN carries no
   // /injuries endpoint for it — what exists is camp rumor, which is
   // exactly what this site does not publish.
-  ufc: ["parlays", "reportpicks", "futures", "injuries", "weather", "race"],
-  polymarket: ["parlays", "reportpicks", "futures", "weather", "race"],
-  fantasy: ["parlays", "reportpicks", "futures", "weather", "race"],
+  // The Parlays page left every league 2026-11-16 (Ethan: "get rid of these
+  // parlays and the parlay page for all sports since we have replaced it with
+  // the game report picks and parlays"), so no league lists it here.
+  ufc: ["reportpicks", "futures", "injuries", "weather", "race"],
+  polymarket: ["reportpicks", "futures", "weather", "race"],
+  fantasy: ["reportpicks", "futures", "weather", "race"],
   // Players and Rosters OPENED 2026-08-24: the "no free player-level
   // feed" claim was stale — ESPN's keyless box scores (the same API
   // family the CFB scoreboard reads) now feed player_game_logs, so both
@@ -509,12 +509,9 @@ const HIDDEN_VIEWS = {
   // difference for it to branch on.
   // Hockey has no long-shot board (the anytime scorer rides the props and
   // Most Likely) and no futures pull yet; every rink is indoors.
-  // Parlays OPENED 2026-11-14: each game's three-leg tickets and its
-  // goal-scorer pairs (engine/gameparlays).
   nhl: ["longshots", "futures", "weather", "race"],
   // College basketball (2026-11-13): no first-basket market is bought for
-  // it, no title futures are built, and every gym is indoors. Parlays stay:
-  // the two-leg builder pairs its Edge and Most Likely picks (engine/parlays).
+  // it, no title futures are built, and every gym is indoors.
   // The race OPENED 2026-11-14: the NCAA tournament (engine/ncaarace).
   // Futures OPENED the same day: the race's own title chances beside the
   // books' (engine/ncaarace.futures_payload).
@@ -749,17 +746,14 @@ const HIDDEN_WHY = {
          weather: "played indoors", race: RACE_WHY },
   cbb: { longshots: "no first-basket market is bought for college games",
          weather: "played indoors" },
-  ufc: { parlays: "§9.1 caps a card at two legs in one fight, and we price "
-                  + "fight winners only — there is no pair to screen",
-         reportpicks: "each fight’s written report sits under its card on the UFC tab",
+  ufc: { reportpicks: "each fight’s written report sits under its card on the UFC tab",
          futures: "a fight card has no season-long market",
          injuries: "no commission publishes an MMA injury report",
          weather: "fights are indoors", race: RACE_WHY },
-  polymarket: { parlays: "prediction-market contracts are not screened as a "
-                         + "parlay", futures: "not a season-long market",
+  polymarket: { futures: "not a season-long market",
                 reportpicks: "a contract has no game report",
                 weather: "not a sporting venue", race: RACE_WHY },
-  fantasy: { parlays: "not a betting market", futures: "not a betting market",
+  fantasy: { futures: "not a betting market",
              reportpicks: "not a betting market",
              weather: "no single venue to report", race: RACE_WHY },
   // Long Shots LEFT this list 2026-08-25: "full-game markets only" went
@@ -3281,7 +3275,7 @@ addEventListener("online", refreshStaleBar);
    THAT DRAW THE BOARD: the plans page, the Record, My Bets and the
    reference pages show none of its games, and a demo warning over
    the plans page was noise (seen in the first render). */
-const BOARD_VIEWS = ["recommended", "tonight", "likely", "props", "edge", "longshots", "parlays", "reportpicks", "live",
+const BOARD_VIEWS = ["recommended", "tonight", "likely", "props", "edge", "longshots", "reportpicks", "live",
   "scanner", "game", "prop", "pbp", "trending", "players", "futures"];
 function boardViewNow() { return BOARD_VIEWS.includes(state.view); }
 function slateNotice(d) {
@@ -4419,7 +4413,6 @@ const OFFSCREEN_PAGES = [
   // opened, never in the background, so no visit fetches the room unasked.
   ["scanner-body", () => renderScanner(), true],
   ["longshots-board", () => renderLongShots()],
-  ["parlays-body", () => renderParlayPage(), true],
   ["reportpicks-body", () => renderReportPicks(), true],
   ["likely-board", () => renderLikely(), true],
   ["trending-board", () => renderTrending()],
@@ -12023,111 +12016,12 @@ function renderLongShots() {
   revealChildren(host);
 }
 
-/* ============================================================
-   THE PARLAYS PAGE — two legs, from our own picks (engine/twoleg)
-   ============================================================
-   Ethan, 2026-10-31: "make the parlay feature an actual button ... two-leg
-   parlays ... picked from the most likely bet and the edge bets ... a
-   section for the edge bet parlays and most likely bet parlays ... one pick
-   on one team, one pick on the other ... two picks from different games ...
-   record that data." Each pool draws its same-game tickets, then its
-   two-game ones: the two legs, the chance both hit, the price the record
-   grades it at, why the legs belong together, staked or tracked. Over each
-   pool, its record and what pairing our past picks this way would have
-   done (record.json `two_leg`, in the slim copy Home already loads). */
-const TL_POOLS = [["edge", "Edge parlays", "two of tonight’s Edge picks, ranked by what they return at the price"],
-  ["likely", "Most Likely parlays", "two of tonight’s likeliest picks, ranked by the chance both hit"]];
-
-function tlLegHTML(l) {
-  const bet = [l.side, l.line, l.market_label || marketWord(l.market)].filter((x) => x != null && x !== "").join(" ");
-  return `<div class="tl-leg">${playerAvatar(l.player, l.team, { size: 28 })}
-    <span class="tl-what"><b>${escapeHtml(l.player)}</b>
-      <span>${escapeHtml(bet)} · ${oddsTxt(l.odds)} · ${pct(l.p)} by our numbers</span></span></div>`;
-}
-
-function tlTicketHTML(t) {
-  return `<div class="card tl-card">
-    <div class="tl-head"><span class="chip">${escapeHtml(t.kind_label || "")}</span>
-      <span class="mini">${escapeHtml(whenLabel(t.game_date, t.kickoff))}</span>
-      <span class="chip stake">${t.staked ? `Staked ${t.stake_units}u` : "Tracked · no stake"}</span></div>
-    ${(t.legs || []).map(tlLegHTML).join("")}
-    <div class="tl-foot"><b>${pct(t.joint)} both hit</b> · pays ${oddsTxt(t.price)}
-      <span class="mini">(${escapeHtml(t.price_basis || "")})</span></div>
-    <div class="mini tl-why">${escapeHtml(t.why || "")}</div></div>`;
-}
-
-function tlRecordLine(rec, pool) {
-  const tl = (rec || {}).two_leg || {};
-  const r = tl[pool] || {};
-  const bt = ((tl.backtest || {}).rows || []).find((x) => x.sport === state.sport && x.pool === pool && x.kind === "all");
-  const graded = r.graded
-    ? `Graded ${r.wins}–${r.losses}, ${r.net_units >= 0 ? "+" : ""}${r.net_units}u at one unit a ticket`
-    : "None graded yet";
-  return graded + (bt ? ` · our past picks paired this way: ${bt.parlays} parlays, ${pct(bt.win_rate)} hit, `
-    + `${signedPct(bt.roi)} (the same picks as singles ${signedPct(bt.singles_roi)})` : "") + ".";
-}
-
-/* EACH GAME'S PARLAYS (engine/gameparlays; Ethan, 2026-11-14: "for each
-   game, when it comes to every sport, I want you to make 4 3-leg parlays
-   ... and 3 2-leg touchdown parlays"): drawn by js/report.js, loaded on
-   first use (loadReport), as the game report's own cards, with their
-   record so far. */
-function fillGameParlays(host, d) {
-  const el = host.querySelector("[data-gp-host]");
-  if (!el) return;
-  loadReport().then((R) => {
-    if (!R || !R.gameParlays) return;
-    // Each finished game's tickets say how they went (app.js reportResults).
-    el.innerHTML = R.gameParlays(d.game_parlays, state.sport, { results: (x) => reportResults(
-      ((d.games || []).find((gm) => gm.home === x.home && gm.away === x.away)) || null) });
-    revealChildren(el);
-    loadRecordOnce().then((rec) => {
-      const line = el.querySelector("[data-gp-rec]");
-      if (line && R.gameParlaysRecord) line.textContent = R.gameParlaysRecord(rec);
-    });
-  });
-}
-
-function renderParlayPage() {
-  const host = document.getElementById("parlays-body");
-  if (!host) return;
-  const d = state.data || {};
-  const z = d.two_leg;
-  const games = d.locked && d.locked.game_parlays
-    ? memberLockHTML("Each game’s parlays", "Four three-leg parlays and three touchdown pairs for every game, built from our own picks.")
-    : (((d.game_parlays || {}).games || []).length ? `<div data-gp-host></div>` : "");
-  if (!z || typeof z !== "object" || !z.edge) {
-    host.innerHTML = games || (d.locked && d.locked.two_leg
-      ? memberLockHTML("Two-leg parlays from our picks",
-          "Tonight’s same-game and two-game parlays, built from the Edge picks and the Most Likely list, each graded on the Record page.")
-      : `<div class="card"><p class="set-note">No parlays on this board yet: they build with the board, two legs from our picks.</p></div>`);
-    if (games) {
-      revealChildren(host);
-      fillGameParlays(host, d);
-    }
-    return;
-  }
-  host.innerHTML = `${games}<p class="set-note tl-rule">A two-leg parlay does what its legs do, about twice: where the
-      picks beat their price it wins about twice as fast, and where they pay the juice it loses about twice as
-      fast. So money rides only on a two-game parlay whose legs are both picks we stake. Same-game pairs are
-      tracked: pairing our past picks, they lost while two-game pairs made money. Every one is graded on the
-      <a href="#record">Record page</a>.</p>
-    ${(z.drawdown || z.probation) && z.note ? `<p class="set-note tl-rule">${escapeHtml(z.note)}</p>` : ""}
-    ${TL_POOLS.map(([pool, title, sub]) => {
-      const x = z[pool] || {};
-      const ts = x.tickets || [];
-      return `<div class="section-title">${title} <span class="sub">— ${sub}</span></div>
-        <div class="mini tl-rec" data-tl-rec="${pool}"></div>
-        ${ts.length ? ["same_game", "two_game"].map((k) => ts.filter((t) => t.kind === k).map(tlTicketHTML).join("")).join("")
-          : `<div class="card"><p class="set-note">${escapeHtml(x.note || "No pair on tonight’s board makes sense yet.")}</p></div>`}`;
-    }).join("")}`;
-  revealChildren(host);
-  loadRecordOnce().then((rec) => TL_POOLS.forEach(([pool]) => {
-    const el = host.querySelector(`[data-tl-rec="${pool}"]`);
-    if (el) el.textContent = tlRecordLine(rec, pool);
-  }));
-  fillGameParlays(host, d);
-}
+/* THE PARLAYS PAGE LEFT every league 2026-11-16 (Ethan, circling it in the
+   menu: "get rid of these parlays and the parlay page for all sports since we
+   have replaced it with the game report picks and parlays"). Its two halves
+   live on elsewhere: each game's parlays on the game reports and the Report
+   Picks page, and the Edge and Most Likely two-leg tickets are no longer built
+   (engine/parlays.attach); their record stays on the Record page. */
 
 function longshotEmptyReason(mlb) {
   const dg = state.data.longshot_diag;
@@ -23873,7 +23767,7 @@ function enhanceSectionSubs(root, settling) {
    with no weather yet, a quiet alerts page — is still a dead end for a
    reader, and the doors are the same three pages. Added once per empty
    state (data-doors), never twice, never to a page off this list. */
-const EMPTY_DOOR_VIEWS = new Set(["tonight", "live", "edge", "likely", "longshots", "parlays", "futures", "scanner",
+const EMPTY_DOOR_VIEWS = new Set(["tonight", "live", "edge", "likely", "longshots", "futures", "scanner",
   "injuries", "weather", "standings", "trending", "players", "rosters", "alerts", "streak", "record",
   "zeno", "mybets", "bankroll", "lab", "intel", "fantasy", "ufc"]);
 function enhanceEmpties(root) {
@@ -24068,7 +23962,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "parlays", "reportpicks", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "owner", "discord", "feed", "signup", "reset", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "props", "edge", "ask", "scanner", "likely", "longshots", "reportpicks", "futures", "race", "potd", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "tools", "account", "record", "zeno", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "features", "methodology", "status", "verify", "owner", "discord", "feed", "signup", "reset", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -24855,9 +24749,6 @@ function _switchViewNow(name, push, dir) {
   // exists to catch.
   if (name === "likely") renderLikely();
   if (name === "tonight") renderTonight();
-  // The Parlays page (2026-10-31) is one of the pages OFFSCREEN_PAGES marks
-  // as drawn on every visit, so this line is what draws it from the menu.
-  if (name === "parlays") renderParlayPage();
   if (name === "reportpicks") renderReportPicks();
   if (name === "rosters") renderRosters();
   if (name === "injuries") renderInjuries();
@@ -26189,9 +26080,22 @@ function urlBackToView() {
   }
 }
 
+/* A RETIRED PAGE'S LINKS LAND WHERE ITS CONTENT WENT. The Parlays page left
+   every league 2026-11-16 (Ethan: "we have replaced it with the game report
+   picks and parlays"): a bookmark or a shared #parlays opens Report Picks,
+   which carries each game's parlays, and the address says so. Both routers
+   ask, so a cold load and a click agree (the #parlays lesson upstairs). */
+const MOVED_VIEWS = { parlays: "reportpicks" };
+function movedView(h) {
+  const to = MOVED_VIEWS[h];
+  if (!to) return h;
+  try { history.replaceState(history.state, "", `#${to}`); } catch (e) { /* the address stays; the page still moves */ }
+  return to;
+}
+
 function initialView() {
   _routerNavAt = Date.now();
-  const h = (location.hash || "").replace("#", "");
+  const h = movedView((location.hash || "").replace("#", ""));
   if (entityRoute(h)) return;
   if (feedRoute(h)) return;
   if (ownerRoute(h)) return;
@@ -26227,8 +26131,8 @@ function initialView() {
 
 /* THE PARLAY SLIP RETIRED (Ethan, 2026-10-31: "get rid of the parlay
    button and the parlay feature ... make the parlay feature an actual
-   button"). The + Parlay chips, the tray and its sharing are gone; the
-   Parlays page (renderParlayPage) is our own two-leg tickets. What the
+   button"). The + Parlay chips, the tray and its sharing are gone; our own
+   tickets are each game's parlays on its report (Report Picks). What the
    slip's block also held and other pages read stays: a game bet's label,
    the game-market words a shared leg is read with, and the board's
    copy-the-picks text. */
@@ -27302,7 +27206,7 @@ function bind() {
   window.addEventListener("hashchange", () => {
     _hashSeenAt = Date.now();             // the way back's bar asks (wayBack)
     _routerNavAt = Date.now();
-    const h = (location.hash || "").replace("#", "");
+    const h = movedView((location.hash || "").replace("#", ""));
     if (entityRoute(h)) return;
     if (feedRoute(h)) return;
     if (ownerRoute(h)) return;
@@ -30793,7 +30697,7 @@ function tourOpen(step) {
 const SWIPE_MIN_X = 70, SWIPE_MAX_Y = 40, PTR_MIN = 72;
 //: The views that follow the sport chips. A detail page, the chat, the
 //: account page and the standalone modes are not boards.
-const SWIPE_VIEWS = ["recommended", "tonight", "live", "likely", "longshots", "parlays", "reportpicks", "edge", "scanner",
+const SWIPE_VIEWS = ["recommended", "tonight", "live", "likely", "longshots", "reportpicks", "edge", "scanner",
                      "futures", "injuries", "weather", "trending", "rosters", "players", "standings"];
 const BUZZ = { tap: [12], win: [30, 40, 30], loss: [70] };
 
@@ -30926,9 +30830,9 @@ document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle");
    Picks · Odds · Research · My Book, then Proof. Every destination
    the sheet carried before is still here, regrouped. */
 const MORE_GROUPS = [
-  // Parlays (2026-10-31, Ethan: "make the parlay feature an actual button"):
-  // after Long Shots, as in the sidebar.
-  ["Picks", ["view:likely", "view:longshots", "view:parlays", "view:reportpicks", "view:zeno", "view:feed"]],
+  // Report Picks after Long Shots, as in the sidebar; the Parlays page that
+  // sat between them left 2026-11-16 (the game report parlays replaced it).
+  ["Picks", ["view:likely", "view:longshots", "view:reportpicks", "view:zeno", "view:feed"]],
   ["Odds", ["view:props", "view:edge", "subtab:gamebets", "view:scanner", "view:futures", "view:race"]],
   ["Research", ["view:injuries", "view:players", "view:rosters", "view:standings",
                 "view:weather", "view:trending", "sport:fantasy", "sport:intel",

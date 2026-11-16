@@ -1992,36 +1992,31 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal",
 
 def attach(slate: dict, sport: str, state: str | None = None,
            joints: dict | None = None) -> dict:
-    """Hang tonight's two-leg parlays on the board (engine/twoleg).
+    """Hang each game's parlays on the board (engine/gameparlays).
 
-    THE SCREEN RETIRED FROM THE BOARDS (Ethan, 2026-10-31: "get rid of the
-    parlay button and the parlay feature ... they will be two-leg parlays
-    and they will be picked from the most likely bet and the edge bets").
-    Every builder still calls this one hook, so the Parlays page's tickets
-    replace the Parlay Zone's on every league at once; `screen` and the
-    taxonomy below stay, and the two-leg builder pairs legs with them
-    (`relate`, `joint_two`). `joints` is kept for the callers.
+    EACH GAME'S PARLAYS (Ethan, 2026-11-14: "for each game, when it comes to
+    every sport, I want you to make 4 3-leg parlays ... and 3 2-leg
+    touchdown parlays"), for every league with props: the game reports' own
+    tickets, shown on each report and on the Report Picks page.
 
-    §10.2 carries over: the drawdown state is measured here (or passed as
-    `state`), and in a drawdown every two-leg parlay is tracked, none staked.
+    THE TWO-LEG PARLAYS RETIRED (Ethan, 2026-11-16, circling the Parlays page:
+    "get rid of these parlays and the parlay page for all sports since we
+    have replaced it with the game report picks and parlays"). The Edge and
+    Most Likely pairs (engine/twoleg) are no longer built, so no board
+    carries `two_leg` and nothing new is journaled; the record keeps every
+    ticket they made (record.json `two_leg`). engine/twoleg stays: the game
+    parlays price with its helpers, and its record reads its old tickets.
+    Every builder still calls this one hook; `state` and `joints` are kept
+    for the callers.
     """
-    from . import twoleg
-    # EACH GAME'S PARLAYS (engine/gameparlays; Ethan, 2026-11-14: "for each
-    # game, when it comes to every sport, I want you to make 4 3-leg
-    # parlays ... and 3 2-leg touchdown parlays"), for every league with
-    # props, before the two-leg page's own leagues are asked for.
+    # Whatever goes wrong here costs the board its parlays, never the
+    # board: the reports and the picks publish all the same.
     try:
         from . import gameparlays
         gameparlays.attach(slate, sport)
     except Exception:                                         # pragma: no cover - guard
         pass
-    if str(sport or "").lower() not in twoleg.SPORTS:
-        return slate
-    st = state if state is not None else bankroll_state(sport)
-    try:
-        return twoleg.attach(slate, sport, drawdown=(st == "drawdown"))
-    except Exception:                                         # pragma: no cover - guard
-        return slate
+    return slate
 
 
 def _screen_attach(slate: dict, sport: str, state: str | None = None,

@@ -157,15 +157,17 @@ def test_a_drawdown_tracks_every_parlay():
     assert "drawdown" in b["note"] and "drawdown" in T.report(b)
 
 
-def test_the_board_hook_measures_the_drawdown_and_passes_it_on():
+def test_the_board_hook_builds_no_two_leg_tickets_since_they_retired():
+    """Ethan, 2026-11-16, circling Parlays in the menu: "get rid of these
+    parlays and the parlay page for all sports since we have replaced it
+    with the game report picks and parlays". The builder still answers when
+    asked (`T.attach`, below), and the record reads the tickets it made;
+    the board's hook no longer asks, in any league or any drawdown state."""
     from engine import parlays as P
-    board = _board()
-    P.attach(board, "nfl", state="drawdown")
-    assert board["two_leg"]["drawdown"] is True
-    assert not any(t["staked"] for p in ("edge", "likely") for t in board["two_leg"][p]["tickets"])
-    other = {"recommendations": [], "most_likely": []}
-    assert "two_leg" not in P.attach(other, "nhl", state="normal"), \
-        "the five leagues only (college basketball joined 2026-11-14)"
+    for sport, state in (("nfl", "drawdown"), ("nfl", "normal"), ("nba", "normal"), ("cbb", "normal")):
+        board = _board()
+        P.attach(board, sport, state=state)
+        assert "two_leg" not in board, (sport, state)
 
 
 def test_attach_runs_for_the_four_leagues_and_never_raises():

@@ -731,9 +731,10 @@
     return `<div${solo ? "" : ' id="gp-sec-report"'} class="gr">${head}${tools}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
   }
 
-  /* EACH GAME'S PARLAYS ON THE PARLAYS PAGE (app.js fillGameParlays): the
-     board's tickets (engine/gameparlays) as the report's own cards — the
-     words engine/gameparlays.card writes for the report, here in the page. */
+  /* EACH GAME'S PARLAYS, AS THE REPORT'S OWN CARDS (gameTickets, drawn on the
+     Report Picks page): the board's tickets (engine/gameparlays) in the words
+     engine/gameparlays.card writes for the report. The Parlays page that drew
+     every game's at once left 2026-11-16, and its renderer with it. */
   const SCORE = { anytime_td: "to score a touchdown", anytime_goal: "to score a goal", goals: "to score a goal" };
   function pickWords(l) {
     const m = String(l.market || "");
@@ -786,31 +787,5 @@
           : (g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : "")}`;
     } finally { RESULTS = was; CLOSED = shut; }
   }
-  function gameParlays(gp, sport, opts) {
-    const games = (gp && gp.games) || [];
-    if (!games.length) return "";
-    const pair = ["nfl", "cfb"].includes(sport) ? "touchdown" : sport === "nhl" ? "goal-scorer" : "scorer";
-    return `<div class="section-title">Each game’s parlays <span class="sub">— four three-leg tickets and three ${pair}
-        pairs a game, from our own picks; every one tracked on the Record page, none staked</span></div>
-      <div class="mini tl-rec" data-gp-rec="1"></div>
-      ${gp.note ? `<p class="set-note tl-rule">${escapeHtml(gp.note)}</p>` : ""}
-      ${games.map((g) => `<details class="gs-game gr-parlay-game"><summary><span class="gs-game-k">${
-        escapeHtml(teamName(g.away))} @ ${escapeHtml(teamName(g.home))}</span>
-        <span class="gs-game-n">${(g.threes || []).length} three-leg · ${(g.scorers || []).length} pairs</span></summary>
-        ${gameTickets(g, sport, opts)}
-      </details>`).join("")}`;
-  }
-  /* Their record so far (record.json two_leg.game, engine/parlayledger
-     .report_game_parlays). */
-  function gameParlaysRecord(rec) {
-    const g = ((rec || {}).two_leg || {}).game || {};
-    const bits = [["three", "three-leg"], ["scorers", "pairs"]].map(([k, w]) => {
-      const x = g[k] || {};
-      if (!x.graded) return x.open ? `${w}: ${x.open} open, none graded yet` : "";
-      return `${w}: ${x.wins} of ${x.graded} hit, ${x.net_units >= 0 ? "+" : ""}${x.net_units} units at the take-it price`;
-    }).filter(Boolean);
-    return bits.length ? `Our record so far — ${bits.join(" · ")}` : "";
-  }
-
-  window.QBReport = { html, block, toText, teaser, gameParlays, gameTickets, gameParlaysRecord, slipCombine };
+  window.QBReport = { html, block, toText, teaser, gameTickets, slipCombine };
 })();

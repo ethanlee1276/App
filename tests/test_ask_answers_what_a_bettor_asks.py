@@ -99,15 +99,19 @@ NFL = {
     "long_shots": [{"player": "Sam LaPorta", "team": "DET", "market": "anytime_td", "odds": 320, "edge": 0.03}],
     "game_bets": [{"matchup": "DET @ NYJ", "pick_label": "Lions -6.5", "market": "spread", "odds": -110,
                    "win_prob": 0.58, "home": "NYJ", "away": "DET", "team": "DET"}],
-    # The Parlays page's tickets (engine/twoleg), which replaced the old
-    # screen's `parlays` on 2026-10-31.
-    "two_leg": {"edge": {"tickets": [{"kind": "same_game", "kind_label": "Same game", "price": 264, "joint": 0.29,
-                                      "why": "Same game, same team — they rise together", "staked": True,
-                                      "legs": [{"player": "Jahmyr Gibbs", "side": "OVER", "line": 80.5,
-                                                "market_label": "Rushing Yards", "odds": -112},
-                                               {"player": "Amon-Ra St. Brown", "side": "OVER", "line": 4.5,
-                                                "market_label": "Receptions", "odds": -190}]}]},
-                "likely": {"tickets": []}},
+    # Each game's parlays (engine/gameparlays): the game reports' tickets,
+    # which Ask reads since the Parlays page and its two-leg tickets retired
+    # (2026-11-16). A retired `two_leg` block left on a board is not read.
+    "game_parlays": {"games": [{"game": "DET @ NYJ", "home": "NYJ", "away": "DET",
+        "threes": [{"joint": 0.29, "staked": False, "fair_words": "+245", "take_words": "+280",
+                    "legs": [{"player": "Jahmyr Gibbs", "side": "OVER", "line": 80.5,
+                              "market_label": "Rushing Yards", "odds": -112},
+                             {"player": "Amon-Ra St. Brown", "side": "OVER", "line": 4.5,
+                              "market_label": "Receptions", "odds": -190}]}],
+        "scorers": [{"joint": 0.21, "staked": False,
+                     "legs": [{"player": "Sam LaPorta", "side": "YES", "market_label": "Anytime TD", "odds": 180}]}]}]},
+    "two_leg": {"edge": {"tickets": [{"kind": "same_game", "kind_label": "Same game", "price": 264, "joint": 0.9,
+                                      "legs": [{"player": "Old Ticket", "side": "OVER", "line": 1.5}]}]}},
     "pick_of_the_day": {"player": "Jahmyr Gibbs", "market": "rush_yds", "side": "OVER", "line": 80.5,
                         "odds": -112, "hit_prob": 0.57},
 }
@@ -190,11 +194,12 @@ def test_our_picks_by_kind_on_one_board_or_all():
     assert [r["player"] for r in likely["rows"]] == ["Amon-Ra St. Brown", "Garrett Wilson"]
     assert _run("our_picks", kind="long_shots")["rows"][0]["player"] == "Sam LaPorta"
     assert _run("our_picks", kind="game_lines")["rows"][0]["pick_label"] == "Lions -6.5"
-    ticket = _run("our_picks", kind="parlays")["rows"][0]
-    assert ticket == {"league": "nfl", "pool": "edge", "kind": "Same game", "price": 264, "model_chance": 0.29,
-                      "why": "Same game, same team — they rise together", "staked": True,
-                      "legs": ["Jahmyr Gibbs OVER 80.5 Rushing Yards (-112)",
-                               "Amon-Ra St. Brown OVER 4.5 Receptions (-190)"]}
+    tickets = _run("our_picks", kind="parlays")["rows"]
+    assert tickets[0] == {"league": "nfl", "pool": "three-leg", "model_chance": 0.29, "staked": False,
+                          "game": "DET @ NYJ", "fair_price": "+245", "take_it_at": "+280",
+                          "legs": ["Jahmyr Gibbs OVER 80.5 Rushing Yards (-112)",
+                                   "Amon-Ra St. Brown OVER 4.5 Receptions (-190)"]}, tickets[0]
+    assert [t["pool"] for t in tickets] == ["three-leg", "scorer pair"], "likeliest first, the old two-leg block unread"
     assert _run("our_picks", kind="pick_of_the_day")["rows"][0]["player"] == "Jahmyr Gibbs"
     ufc = _run("our_picks", kind="best_bets", sport="ufc")
     assert ufc["rows"][0]["pick"] == "Alex Pereira" and ufc["rows"][0]["odds"] == 110

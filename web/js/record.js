@@ -1263,7 +1263,7 @@ function recTwoLegSection(tl) {
     const r = tl[p] || {};
     if (!r.graded) {
       return recTile(name, "none graded",
-        r.open ? `${r.open} open, graded the morning after` : "they journal with each night’s board");
+        r.open ? `${r.open} open, graded the morning after` : "none were built before they retired");
     }
     const rate = r.graded >= PARLAY_RATE_FLOOR ? ` · ${fmtRoi(r.roi)}` : " · too few for a rate";
     return recTile(name, `${r.wins}-${r.losses}`,
@@ -1318,9 +1318,10 @@ function recTwoLegSection(tl) {
     </div>`;
   }).join("");
   return `
-    <div class="section-title">Two-leg parlays — tracked apart
-      <span class="sub">— two of our Edge picks, or two of our Most Likely picks. Never mixed
-      into the record above.</span></div>
+    <div class="section-title">Two-leg parlays — retired
+      <span class="sub">— two of our Edge picks, or two of our Most Likely picks, from 31 October
+      until 16 November, when each game’s report parlays took their place. Their record stays here,
+      never mixed into the record above.</span></div>
     ${recDisclosure("How these are paired, priced and staked", `Each night the board pairs its
       own picks: two from one game that make sense together (one pick on each team, or two
       that rise together, like a quarterback and his own receiver), and two from different

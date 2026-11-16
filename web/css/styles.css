@@ -1598,17 +1598,6 @@ svg[data-scrub] { touch-action: pan-y; }
 .prof-vs .vs-out td.num { font-weight: 600; white-space: normal; }
 
 
-/* ---------------- Parlays (app.js renderParlayPage) ----------------
-   Two legs from our own picks: the kind and staked-or-tracked over the
-   legs, the chance both hit and the price under them, then why. */
-.tl-card { padding: 12px 14px; margin: 0 0 12px; }
-.tl-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
-.tl-leg { display: flex; gap: 10px; align-items: center; padding: 6px 0; }
-.tl-what { display: flex; flex-direction: column; min-width: 0; }
-.tl-what span { color: var(--text-mute); font-size: var(--fs-sm); }
-.tl-foot { margin-top: 6px; }
-.tl-why, .tl-rec { margin: 4px 0 10px; color: var(--text-mute); }
-
 .empty { color: var(--text-dim); text-align: center; padding: 50px; grid-column: 1 / -1; }
 
 /* ---------------- Footer ---------------- */

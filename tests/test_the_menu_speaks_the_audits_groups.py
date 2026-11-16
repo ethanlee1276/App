@@ -60,10 +60,12 @@ def test_the_phone_sheet_uses_the_same_groups():
     block = APP[i:APP.index("];", i)]
     titles = re.findall(r'^\s*\["([A-Za-z ]+)",', block, re.M)
     assert titles == ["Picks", "Odds", "Research", "My Book", "Proof"], titles
-    for ref in ("view:likely", "view:longshots", "view:parlays", "view:zeno", "view:edge", "subtab:gamebets", "view:scanner",
-                "view:futures", "sport:mybets", "view:alerts", "view:streak", "view:bankroll", "sport:fantasy",
-                "sport:intel", "sport:memes", "sport:lab"):
+    for ref in ("view:likely", "view:longshots", "view:reportpicks", "view:zeno", "view:edge", "subtab:gamebets",
+                "view:scanner", "view:futures", "sport:mybets", "view:alerts", "view:streak", "view:bankroll",
+                "sport:fantasy", "sport:intel", "sport:memes", "sport:lab"):
         assert f'"{ref}"' in block, f"{ref} fell out of the sheet"
+    # The Parlays page left every league 2026-11-16 (the game report parlays replaced it).
+    assert '"view:parlays"' not in block, "the Parlays page is back in the sheet"
 
 
 if __name__ == "__main__":

@@ -213,8 +213,8 @@ def test_report_picks_has_a_door_everywhere_a_page_does():
     for lst in ('const VIEW_ORDER = [', 'const BOARD_VIEWS = [', 'const SWIPE_VIEWS = ['):
         i = APP.index(lst)
         assert '"reportpicks"' in APP[i:APP.index("];", i)], lst
-    assert '"view:parlays", "view:reportpicks"' in APP, "the phone's menu"
-    assert 'ufc: ["parlays", "reportpicks",' in APP, "a fight card has no game reports"
+    assert '"view:longshots", "view:reportpicks"' in APP, "the phone's menu, where the Parlays page sat"
+    assert 'ufc: ["reportpicks",' in APP, "a fight card has no game reports"
     assert '"js/reportpicks.js", "css/reportpicks.css",' in (ROOT / "engine" / "shrink.py").read_text(encoding="utf-8")
     assert '"/js/reportpicks.js", "/css/reportpicks.css",' in (ROOT / "web" / "sw.js").read_text(encoding="utf-8")
 
@@ -318,7 +318,7 @@ def test_the_page_has_its_own_record_tab():
         assert sel in css, sel
 
 
-def test_one_game_s_tickets_draw_the_way_the_parlays_page_draws_them():
+def test_one_game_s_tickets_draw_as_the_report_draws_them():
     node = shutil.which("node") or "/opt/node22/bin/node"
     if not Path(node).exists():
         return
@@ -332,12 +332,15 @@ def test_one_game_s_tickets_draw_the_way_the_parlays_page_draws_them():
           " playerAvatar: () => '' }; vm.createContext(ctx);"
           f"vm.runInContext(fs.readFileSync({json.dumps(str(REPORT_JS))}, 'utf8'), ctx);"
           f"const g = {json.dumps(g)}; const R = ctx.window.QBReport;"
-          "process.stdout.write(JSON.stringify([R.gameTickets(g, 'nba'), R.gameParlays({ games: [g] }, 'nba')]));")
+          "process.stdout.write(JSON.stringify([R.gameTickets(g, 'nba'), typeof R.gameParlays]));")
     out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-1500:]
-    one, page = json.loads(out.stdout)
+    one, gone = json.loads(out.stdout)
     assert "Pascal Siakam" in one and "No pair clears the bar." in one
-    assert one.strip() in page, "the Parlays page draws each game through the same function"
+    assert '<div class="gr-block gr-parlays">' in one or "gr-parlay" in one, one[:400]
+    # The Parlays page drew every game's at once through gameParlays; it left
+    # every league 2026-11-16, and the renderer with it.
+    assert gone == "undefined", gone
 
 
 if __name__ == "__main__":

@@ -200,13 +200,16 @@ def test_every_view_still_exists():
     restyle would be silent — nothing links to `game` from the nav at all.
     "parlays" left this list 2026-08-11 ON PURPOSE (Ethan: "ditch the
     parlay zone screen but keep the same rules") — the tickets moved to
-    Parlay Mode on Home, and test_parlays.py owns that contract; the
-    assert below keeps the CONTENT alive rather than the dead page."""
+    Parlay Mode on Home, and test_parlays.py owns that contract. The page
+    came back 2026-10-31 and left every league 2026-11-16 (Ethan: "we have
+    replaced it with the game report picks and parlays"): each game's
+    parlays live on Report Picks now, so the assert below keeps THAT
+    container alive."""
     for v in VIEWS:
         assert f'"{v}"' in APP, f"{v} dropped out of VIEW_ORDER"
         assert f'id="view-{v}"' in HTML, f"#view-{v} dropped out of the shell"
     assert 'id="view-game"' in HTML, "the per-game board lost its container"
-    assert 'id="parlays-body"' in HTML, "the parlay tickets lost their container"
+    assert 'id="reportpicks-body"' in HTML, "each game's parlays lost their container"
 
 
 def test_every_routable_view_is_in_VIEW_ORDER():
@@ -312,13 +315,13 @@ def test_the_per_league_nav_configuration_is_intact():
     # has not.
     wnba = [l for l in block.splitlines() if l.strip().startswith("wnba:")]
     assert wnba and '"longshots"' in wnba[0], "WNBA's Long Shots exclusion is gone"
-    # §9.1 caps UFC at two legs in one fight and every permitted construction
-    # needs a method/distance market we do not price. A tab that can only ever
-    # say so is worse than no tab.
+    # A fight card, a contract and a draft have no game reports, so no
+    # Report Picks tab. (They hid the Parlays tab too, for §9.1's reasons,
+    # until that page left every league on 2026-11-16.)
     for sport in ("ufc", "polymarket", "fantasy"):
         line = [l for l in block.splitlines() if l.strip().startswith(f"{sport}:")]
-        assert line and '"parlays"' in line[0], (
-            f"{sport}'s Parlay Zone exclusion is gone")
+        assert line and '"reportpicks"' in line[0] and '"parlays"' not in line[0], (
+            f"{sport}'s exclusions moved")
     # "players" and "rosters" LEFT on 2026-08-24, "longshots" on
     # 2026-08-25, "trending" on 2026-09-03 — each deliberately, with an
     # engine behind it: box scores → player_game_logs; engine/cfb/tds

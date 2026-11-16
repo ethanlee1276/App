@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TQ. The Parlays page is gone from every league** (step 649; 16 November). Nothing to run. You circled Parlays in
+the menu: "get rid of these parlays and the parlay page for all sports since we have replaced it with the game report
+picks and parlays". Done:
+- the Parlays button is gone from the sidebar and the phone's More sheet, and the page with it, in every league; an
+  old #parlays link opens Report Picks;
+- each game's three-leg parlays and scorer pairs stay, on each game's report and on Report Picks, graded under "The
+  Game Report Picks and Parlays" on the Record page;
+- the Edge and Most Likely two-leg parlays are no longer built or journaled. Their record (Edge 33-100 on the page you
+  sent) stays on the Record page under "Two-leg parlays — retired", because every ticket we posted stays on the record.
+  Say if you want that section off the Record page too;
+- Ask Qellys answers "what parlays do you have" from each game's report parlays.
+
 **TP. The NFL search no longer lists the play file's short names as players** (step 648; 16 November).
 Nothing to run. The NFL's red-zone and expected-points rows are filed under the play-by-play file's own spelling
 ("J.Brissett", "P.Mahomes"), which the fantasy numbers join to the real name. The search listed each one as a second

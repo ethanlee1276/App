@@ -553,7 +553,8 @@ TOOLS = [
            "stake": {"type": "number", "description": "Optional: the stake (default 100)."}}, "odds"),
     _tool("our_picks",
           "Our model's picks tonight, by kind: best_bets (staked edges), most_likely (likeliest to hit), "
-          "long_shots, game_lines (spreads, totals, moneylines), parlays (our tickets), pick_of_the_day (each "
+          "long_shots, game_lines (spreads, totals, moneylines), parlays (each game's three-leg parlays and scorer "
+          "pairs from its report), pick_of_the_day (each "
           "league's) or top_pick_today (the one best pick across every league, with the ones it beat) — on "
           "one league's board or all of them, best first.",
           {"kind": {"type": "string", "enum": list(PICK_KINDS)}, "sport": _ANY_SPORT,
@@ -2124,6 +2125,17 @@ def _ticket(t: dict, league: str, pool: str) -> dict:
     return out
 
 
+def _game_ticket(t: dict, league: str, pool: str, g: dict) -> dict:
+    """One game parlay (engine/gameparlays) as Ask reads it: the game, the
+    legs, the chance all of them hit, the fair price and the price to take."""
+    out = _ticket(t, league, pool)
+    out["game"] = g.get("game") or f"{g.get('away') or ''} @ {g.get('home') or ''}".strip(" @")
+    for k, name in (("fair_words", "fair_price"), ("take_words", "take_it_at"), ("script", "needs")):
+        if t.get(k):
+            out[name] = t[k]
+    return out
+
+
 def our_picks(boards: dict, kind: str = "best_bets", sport: str = "", limit=None, data_dir=None,
               prefer: str = "") -> dict:
     """What our model has tonight, by kind, on one league's board or all of them."""
@@ -2155,12 +2167,18 @@ def our_picks(boards: dict, kind: str = "best_bets", sport: str = "", limit=None
     for s in _board_leagues(boards, sport, prefer):
         b = boards[s]
         if kind == "parlays":
-            tl = b.get("two_leg") if isinstance(b.get("two_leg"), dict) else {}
-            for pool in ("edge", "likely"):
-                block = tl.get(pool) or {}
-                for t in (block.get("tickets") if isinstance(block, dict) else None) or []:
-                    if isinstance(t, dict):
-                        rows.append((0, _ticket(t, s, pool)))
+            # EACH GAME'S PARLAYS (engine/gameparlays): the game reports' own
+            # tickets, likeliest first. The Edge and Most Likely two-leg
+            # tickets retired with the Parlays page (Ethan, 2026-11-16: "we
+            # have replaced it with the game report picks and parlays").
+            gp = b.get("game_parlays") if isinstance(b.get("game_parlays"), dict) else {}
+            for g in gp.get("games") or []:
+                if not isinstance(g, dict):
+                    continue
+                for key, pool in (("threes", "three-leg"), ("scorers", "scorer pair")):
+                    for t in g.get(key) or []:
+                        if isinstance(t, dict):
+                            rows.append((-float(t.get("joint") or 0), _game_ticket(t, s, pool, g)))
             continue
         if kind == "pick_of_the_day":
             p = b.get("pick_of_the_day")
