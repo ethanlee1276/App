@@ -1066,15 +1066,23 @@ function gpTicketLegs(t) {
 }
 function gpBlockHTML(b, kind, sport) {
   const legs = b.legs || {};
+  const one = legs.once && legs.once.graded ? legs.once : null;
+  const L = one || legs;
   const lostN = b.losses || 0;
   const chance = b.chance != null ? ` · we gave them ${Math.round(b.chance * 100)}% on average` : "";
   const tiles = recTile("Tickets that hit", b.graded ? `${b.wins} of ${b.graded}` : "none yet",
       b.graded ? `${tlUnits(b.net_units)} at one unit a ticket${chance}${b.open ? ` · ${b.open} open` : ""}`
         : (b.open ? `${b.open} open, graded once their games are final` : ""),
       { tone: b.graded >= PARLAY_RATE_FLOOR ? toneOf(b.net_units) : "" })
-    + recTile("Legs that hit", legs.graded ? `${legs.won} of ${legs.graded}` : "none yet",
-      legs.graded ? `${Math.round((100 * legs.won) / legs.graded)}%${
-        legs.chance != null ? ` · we gave the legs ${Math.round(legs.chance * 100)}% on average` : ""}` : "");
+    // EACH LEG COUNTED ONCE (legs.once, engine/parlayledger.legs_once): a game's
+    // tickets share their legs, so a tally per ticket weighs the surest bets
+    // up to a dozen times. Whether our chances hold is asked of each bet once,
+    // with the books' own chance for them beside ours where the journal kept it.
+    + recTile("Legs that hit", L.graded ? `${L.won} of ${L.graded}` : "none yet",
+      L.graded ? `${Math.round((100 * L.won) / L.graded)}%${
+        L.chance != null ? ` · we gave the legs ${Math.round(L.chance * 100)}% on average` : ""}${
+        L.fair != null ? `, the books ${Math.round(L.fair * 100)}%` : ""}${
+        one && one.graded < (legs.graded || 0) ? ` · each leg once (${legs.graded} across the tickets)` : ""}` : "");
   // The near misses, said once under the tiles: a third tile wraps alone on a phone.
   const close = lostN ? `<p class="rec-gp-close">${b.one_away || 0} of the ${lostN} ${
     lostN === 1 ? "ticket that lost" : "tickets that lost"} missed by a single leg.</p>` : "";

@@ -9338,6 +9338,29 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TR. A parlay leg's chance is one our own pick rules stand behind** (step 650; 16 November). Nothing to run. You
+asked why football's stated chances run 10 to 30 points too high. They did on the game parlays' legs, and only there:
+- the record that morning: the NFL's legs hit 49.9% against the 68.4% we gave them (catches 34% against 71%), college's
+  56.2% against 71.2% (passing yards 31% against 76%). The scorer pairs' legs hit what we said (NFL 44.9% against
+  42.2%), and the NFL's Most Likely picks in the same 60-75% band did too (65.9% against 65.7%, 1,259 picks); college's
+  ran 4 points high (61.9% against 65.6%), not the 15 its legs did;
+- the cause: since 14 November (step QS) a game's parlays could take any prop the board prices, at the chance the Edge
+  picks show. That chance is pulled halfway to the book's, so a main line near even money shows 60% only when our raw
+  number sits 16 points or more above the book's, past the 10 points where the Edge picks refuse a number as a data
+  error. The board kept those props for its other lists and the parlays took them. Our number beat the line on only 47%
+  of the NFL's catch props and 42% of college's passing-yard props, so a gap that wide was noise. And when two lists
+  priced the same bet, the parlay kept the higher chance;
+- now, in every league (the builder is shared; football is where it showed): a priced prop joins a parlay only when the
+  Edge picks would stand behind its number (no refusal, within 10 points of the book's chance). The same bet's Most
+  Likely chance speaks for it first, then an Edge pick's, then any other priced prop's. Each leg keeps where it came
+  from and the book's chance;
+- the Record page's leg line counts each bet once (a leg on three tickets counted three times) and gives the books'
+  chance beside ours.
+
+The next boards built are the first built this way, and the legs already graded stay on the record as they were. If
+football's new legs still run high once about 100 are graded, a correction learned from each league's record, the way
+the basketball and hockey boards learned theirs (step PP), is the next step, and yours to say yes to.
+
 **TQ. The Parlays page is gone from every league** (step 649; 16 November). Nothing to run. You circled Parlays in
 the menu: "get rid of these parlays and the parlay page for all sports since we have replaced it with the game report
 picks and parlays". Done:

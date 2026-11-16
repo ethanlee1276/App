@@ -226,10 +226,63 @@ def priced_legs(board: dict, sport: str, now=None) -> list[dict]:
             continue
         if priced_out("edge", r.get("odds")):
             continue                                    # the Edge book's long-price limit, as edge_legs
+        if not credible_row(r):
+            continue                                    # the Edge path's own refusal (`credible_row`)
         leg = T._leg(r, r.get("hit_prob"), "priced")
         if leg and not T._started(leg, now):
             out.append(leg)
     return out
+
+
+def credible_row(r: dict) -> bool:
+    """Would the Edge path stand behind this priced row's number?
+
+    WHY FOOTBALL'S LEGS SAID 68% AND HIT 50% (Ethan, 2026-11-16: "go look
+    into why footballs stated chances run 10 to 30 points too high"). On the
+    record, 16 Nov: NFL legs hit 49.9% of the time against the 68.4% we
+    stated (receptions 34% against 71%), college's 56.2% against 71.2%
+    (passing yards 31% against 76%). Yet the Most Likely picks those legs are
+    meant to be, in the same 60-75% band, hit what they said (NFL 65.7%
+    stated, 65.9% hit, 1,259 picks).
+
+    The difference was this source. Every priced prop joined the leg pool on
+    14 November, at its tempered chance, `hit_prob`, which the Edge path pulls
+    halfway to the book's fair price (betting.temper_edge). For a main line
+    near even money to show 60%, the raw model must say 70% or more against a
+    book at about 52%: twenty points apart, where the Edge path's own rule
+    (MAX_CREDIBLE_EDGE, ten points) calls the number "a data error, not
+    alpha" and refuses the pick. The board kept the row, at its 60-75%, and
+    the parlays took it as a leg. Our number beat the line on fewer than half
+    of football's props (receptions 47%, college passing yards 42%), so a
+    leg twenty points off the market was our error nearly every time.
+
+    The same test the Edge path applies, on the row it applied it to: no
+    refusal among its reasons (betting.REFUSAL_REASONS), and the raw read
+    within MAX_CREDIBLE_EDGE of the fair price where the row carries both."""
+    from .betting import MAX_CREDIBLE_EDGE, REFUSAL_REASONS
+    for reason in r.get("reasons") or []:
+        if any(str(reason).startswith(x[:40]) for x in REFUSAL_REASONS):
+            return False
+    raw, fair = r.get("raw_prob"), r.get("fair_prob")
+    if raw in (None, "", 0, 0.0) or fair in (None, ""):
+        return True
+    try:
+        return abs(float(raw) - float(fair)) <= MAX_CREDIBLE_EDGE
+    except (TypeError, ValueError):
+        return False
+
+
+#: WHICH COPY OF A LEG SPEAKS for it when two sources price the same bet:
+#: the Most Likely board's (its 60-75% claims hit what they said on the
+#: record), then the Edge picks', then any other priced prop's. The higher
+#: number used to win, and the higher of two estimates of one bet is the
+#: one more likely to be wrong upward.
+SOURCE_RANK = {"likely": 0, "edge": 1, "priced": 2}
+
+
+def _speaks_first(leg: dict, held: dict) -> bool:
+    a, b = SOURCE_RANK.get(leg.get("pool"), 9), SOURCE_RANK.get(held.get("pool"), 9)
+    return a < b or (a == b and float(leg["p"]) > float(held["p"]))
 
 
 def pool_legs(board: dict, sport: str, now=None) -> list[dict]:
@@ -262,8 +315,9 @@ def pool_legs(board: dict, sport: str, now=None) -> list[dict]:
 def legs_for(board: dict, sport: str, now=None) -> list[dict]:
     """The board's priced picks as legs — Most Likely, Edge, the Most Likely
     rows its seat caps dropped (`pool_legs`) and every other prop it priced
-    at a named book (`priced_legs`), the more likely copy of a pick kept —
-    at LEG_FLOOR or better."""
+    at a named book whose number the Edge path stands behind (`priced_legs`,
+    `credible_row`), one copy of a pick kept, the most trusted source's
+    (`SOURCE_RANK`) — at LEG_FLOOR or better."""
     from . import twoleg as T
     got: dict = {}
     for get in (T.likely_legs, T.edge_legs, pool_legs, priced_legs):
@@ -278,7 +332,7 @@ def legs_for(board: dict, sport: str, now=None) -> list[dict]:
                 continue
             leg = _norm_side(leg)
             k = (leg.get("player"), leg.get("market"), str(leg.get("side") or "").upper(), leg.get("line"))
-            if k not in got or leg["p"] > got[k]["p"]:
+            if k not in got or _speaks_first(leg, got[k]):
                 got[k] = leg
     return list(got.values())
 
@@ -882,7 +936,11 @@ def _leg_id(l: dict) -> tuple:
 #: scorer's research (`research`).
 LEG_KEYS = ("player", "team", "opponent", "home", "away", "position", "market", "market_label", "side",
             "line", "odds", "book", "p", "why", "injury_status", "game_date", "research", "research_of",
-            "research_points")
+            "research_points",
+            # Where the leg came from (SOURCE_RANK) and the book's chance for it:
+            # the journal keeps both (parlayledger.log_game_parlays) so the
+            # record can say which source's legs hit what they said.
+            "pool", "fair")
 
 
 def slim(leg: dict) -> dict:

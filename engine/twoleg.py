@@ -182,6 +182,17 @@ def likely_legs(board: dict, sport: str, now=None) -> list[dict]:
     return [l for l in out if l and not _started(l, now)]
 
 
+def _fair_of(r: dict):
+    for k in ("fair_prob", "implied_prob"):
+        try:
+            v = float(r.get(k))
+        except (TypeError, ValueError):
+            continue
+        if 0.0 < v < 1.0:
+            return round(v, 4)
+    return None
+
+
 def _leg(r: dict, p, pool: str) -> dict | None:
     from .parlays import parlay_market
     # No tackle, sack or kicking leg on any ticket (parlays.NO_PARLAY_MARKETS;
@@ -201,6 +212,11 @@ def _leg(r: dict, p, pool: str) -> dict | None:
             "market": r.get("market"), "market_label": r.get("market_label") or _market_word(r.get("market")),
             "side": r.get("side") or "", "line": r.get("line"), "odds": int(float(r.get("odds"))),
             "book": r.get("book") or "", "p": round(p, 4), "pool": pool,
+            # The book's own chance for this bet, de-vigged (the priced row's
+            # `fair_prob`, a Most Likely row's `implied_prob`): the parlay
+            # journal keeps it beside ours, so the record can say how far our
+            # legs sat from the market and whether that distance paid.
+            "fair": _fair_of(r),
             "game_date": r.get("game_date") or r.get("date") or "", "kickoff": r.get("kickoff") or "",
             "headline": r.get("headline") or "", "position": r.get("position") or "",
             "_game_leg": bool(r.get("_game_leg"))}

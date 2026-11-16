@@ -142,6 +142,19 @@ def ensure_schema(conn) -> None:
         except sqlite3.OperationalError as exc:
             column_exists_or_raise(exc)
         conn.execute("UPDATE parlays SET source='edge' WHERE source IS NULL")
+    # EACH LEG'S SOURCE AND THE BOOK'S CHANCE FOR IT (2026-11-16), so the
+    # record can say which source a leg came from (the Most Likely board, the
+    # Edge picks or another priced prop: engine/gameparlays.SOURCE_RANK) and
+    # how far our number sat from the market's. NULL on a leg journaled
+    # before: that is "before we kept it", which is what it is. The same
+    # race-tolerant ALTER as `source` above.
+    legcols = {r[1] for r in conn.execute("PRAGMA table_info(parlay_legs)")}
+    for col, kind in (("pool", "TEXT"), ("fair", "REAL")):
+        if col not in legcols:
+            try:
+                conn.execute(f"ALTER TABLE parlay_legs ADD COLUMN {col} {kind}")
+            except sqlite3.OperationalError as exc:
+                column_exists_or_raise(exc)
     conn.commit()
 
 
@@ -407,11 +420,11 @@ def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
                 for i, l in enumerate(legs, start=1):
                     conn.execute(
                         "INSERT INTO parlay_legs (parlay_id, leg_no, player, team, market, side, line, odds, book,"
-                        " p_final, status) VALUES (?,?,?,?,?,?,?,?,?,?,'open')",
+                        " p_final, status, pool, fair) VALUES (?,?,?,?,?,?,?,?,?,?,'open',?,?)",
                         (cur.lastrowid, i, l.get("player"), l.get("team"), l.get("market"),
                          str(l.get("side") or "").upper() or None,
                          l.get("line") if l.get("line") is not None else 0.5, l.get("odds"), l.get("book"),
-                         l.get("p")))
+                         l.get("p"), l.get("pool") or None, l.get("fair")))
                 wrote += 1
     if wrote:
         conn.commit()
@@ -491,6 +504,42 @@ def report_twoleg(conn, recent: int = 12, sources: dict | None = None) -> dict:
 GAME_RECORD_RECENT = 8
 
 
+def _leg_tally(legs: list) -> dict:
+    ps = [float(l["p_final"]) for l in legs if l["p_final"] is not None]
+    fs = [float(l["fair"]) for l in legs if l["fair"] is not None]
+    return {"graded": len(legs), "won": sum(1 for l in legs if l["status"] == "won"),
+            "chance": round(sum(ps) / len(ps), 3) if ps else None,
+            "fair": round(sum(fs) / len(fs), 3) if fs else None}
+
+
+def legs_once(tickets: list, legs: list) -> tuple[dict, dict]:
+    """EACH LEG COUNTED ONCE, in all and by source (2026-11-16).
+
+    A game's four tickets share their legs, and every rebuild before the
+    start can journal another ticket over the same ones, so a tally of legs
+    per ticket counts one player's one bet up to a dozen times: the bets we
+    were surest of (they ride the most tickets) weigh the most. Asking
+    whether our chances hold is asking it of each bet once: its game's day,
+    the game, the player, the market, the side and the line, the first copy
+    journaled.
+
+    ``by_pool`` splits them by the source the leg came from
+    (engine/gameparlays.SOURCE_RANK: the Most Likely board, the Edge picks,
+    any other priced prop); a leg journaled before the source was kept is
+    "before". Each with the chance we gave and, where kept, the book's."""
+    meta = {t["id"]: (str(t["date"] or ""), str(t["grade"] or "")) for t in tickets}
+    first: dict = {}
+    for l in legs:
+        k = (*meta.get(l["parlay_id"], ("", "")), str(l["player"] or "").strip().lower(),
+             str(l["market"] or ""), str(l["side"] or "").upper(), l["line"])
+        first.setdefault(k, l)
+    uniq = list(first.values())
+    pools: dict = {}
+    for l in uniq:
+        pools.setdefault(l["pool"] or "before", []).append(l)
+    return _leg_tally(uniq), {k: _leg_tally(v) for k, v in sorted(pools.items())}
+
+
 def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
     """THE GAME REPORTS' PARLAYS, LEAGUE BY LEAGUE (2026-11-16). Ethan: "you did
     not put the 'parlays for this game' on the record page. We wanna see if the
@@ -531,7 +580,7 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
             for i in range(0, len(ids), 500):
                 chunk = ids[i:i + 500]
                 legs += conn.execute(
-                    f"SELECT parlay_id, leg_no, player, market, side, line, odds, p_final, status, actual "
+                    f"SELECT parlay_id, leg_no, player, market, side, line, odds, p_final, status, actual, pool, fair "
                     f"FROM parlay_legs WHERE parlay_id IN ({','.join('?' * len(chunk))}) ORDER BY parlay_id, leg_no",
                     chunk).fetchall()
             done = [l for l in legs if l["status"] in ("won", "lost")]
@@ -562,6 +611,7 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                              "price_dec": t["assumed_dec"], "pnl_units": t["pnl_units"],
                              "chance": t["modeled_joint"], "legs": legs_of.get(t["id"], [])})
             wins = sum(1 for t in graded if t["status"] == "won")
+            once, by_pool = legs_once(graded, done)
             out.setdefault(sp, {})[kind] = {
                 "graded": len(graded), "wins": wins, "losses": len(graded) - wins,
                 "net_units": round(net, 2), "roi": round(net / len(graded), 4) if graded else None,
@@ -571,7 +621,8 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                 "one_away": sum(1 for t in graded if t["status"] == "lost" and int(t["legs_lost"] or 0) == 1),
                 "legs": {"graded": len(done), "won": sum(1 for l in done if l["status"] == "won"),
                          "lost": sum(1 for l in done if l["status"] == "lost"),
-                         "chance": round(sum(leg_p) / len(leg_p), 3) if leg_p else None},
+                         "chance": round(sum(leg_p) / len(leg_p), 3) if leg_p else None,
+                         "once": once, "by_pool": by_pool},
                 "markets": mk, "recent": news}
     return out
 
