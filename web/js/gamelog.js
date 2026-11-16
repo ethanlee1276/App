@@ -28,42 +28,46 @@ async function glFetch(sport, player, season) {
   return body;
 }
 
-//: A cell as the column says it: counts whole, rates to a tenth, time on ice as m:ss.
+//: The rate columns, always to a tenth (7.0, not 7).
+const GL_RATES = ["CMP%", "AVG", "RTG", "FG%", "SV%"];
+//: A cell as the column says it: counts whole, rates to a tenth, time on ice as m:ss, a true minus.
 function glCell(v, label) {
   if (v == null || v === "") return "—";
   if (typeof v === "string") return v;
+  let out;
   if (label === "TOI") {
     const m = Math.floor(v), s = Math.round((v - m) * 60);
-    return `${m}:${String(s === 60 ? 0 : s).padStart(2, "0")}`;
-  }
-  if (label === "MIN") return String(Math.round(v));
-  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+    out = `${m}:${String(s === 60 ? 0 : s).padStart(2, "0")}`;
+  } else if (label === "MIN") out = String(Math.round(v));
+  else out = GL_RATES.includes(label) ? v.toFixed(1) : Number.isInteger(v) ? String(v) : v.toFixed(1);
+  return typeof trueMinus === "function" ? trueMinus(out) : out;
 }
-//: "Wk 10" (and its day under it) in football; the day elsewhere.
-function glDay(g) {
+//: The game, held at the left while the stats scroll: the week (football) or the day,
+//: and under it the opponent and where, with the day in football.
+function glGame(g) {
   const d = g.date ? new Date(`${g.date}T12:00:00`) : null;
   const day = d && !isNaN(d) ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
-  return g.week ? `<b>Wk ${g.week}</b>${day ? `<span>${escapeHtml(day)}</span>` : ""}` : `<b>${escapeHtml(day || g.date || "")}</b>`;
+  const opp = `${g.home ? "vs" : "@"} ${g.opponent || ""}`;
+  return g.week ? `<b>Wk ${g.week}</b><span>${escapeHtml([opp, day].filter(Boolean).join(" · "))}</span>`
+    : `<b>${escapeHtml(day || g.date || "")}</b><span>${escapeHtml(opp)}</span>`;
 }
 
 function glTableHTML(d) {
   const groups = d.groups || [];
   const cols = groups.flatMap((g) => g.cols.map((c) => ({ ...c, id: `${g.key}.${c.key}` })));
   const titled = groups.some((g) => g.title);
-  const head = `<thead>${titled ? `<tr class="gl-groups"><th class="gl-fix" colspan="3"></th>${groups.map((g) =>
+  const head = `<thead>${titled ? `<tr class="gl-groups"><th class="gl-fix"></th><th></th>${groups.map((g) =>
       `<th colspan="${g.cols.length}">${escapeHtml(g.title)}</th>`).join("")}</tr>` : ""}
-    <tr><th class="gl-fix gl-day">Date</th><th class="gl-fix">Opp</th><th class="gl-fix">Result</th>${cols.map((c) =>
+    <tr><th class="gl-fix gl-day">Game</th><th>Result</th>${cols.map((c) =>
       `<th class="num" title="${escapeAttr(c.title)}">${escapeHtml(c.label)}</th>`).join("")}</tr></thead>`;
   const rows = (d.games || []).map((g) => {
     const res = g.result ? `<span class="${g.result === "W" ? "gl-w" : g.result === "L" ? "gl-l" : "gl-t"}">${
       escapeHtml(g.result)}</span> ${escapeHtml(g.score || "")}` : "";
     const cells = g.dnp ? `<td class="gl-dnp" colspan="${cols.length}">Did not play</td>`
       : cols.map((c) => `<td class="num">${escapeHtml(glCell((g.values || {})[c.id], c.label))}</td>`).join("");
-    return `<tr><td class="gl-fix gl-day">${glDay(g)}</td>
-      <td class="gl-fix gl-opp">${g.home ? "vs" : "@"} ${escapeHtml(g.opponent || "")}</td>
-      <td class="gl-fix gl-res">${res}</td>${cells}</tr>`;
+    return `<tr><td class="gl-fix gl-day">${glGame(g)}</td><td class="gl-res">${res}</td>${cells}</tr>`;
   }).join("");
-  const sumRow = (label, vals) => `<tr class="gl-sum"><td class="gl-fix" colspan="3">${escapeHtml(label)}</td>${cols.map((c) =>
+  const sumRow = (label, vals) => `<tr class="gl-sum"><td class="gl-fix gl-day">${escapeHtml(label)}</td><td></td>${cols.map((c) =>
     `<td class="num">${escapeHtml(glCell((vals || {})[c.id], c.label))}</td>`).join("")}</tr>`;
   const foot = d.played ? `<tfoot>${sumRow(`Season · ${plural(d.played, "game")}`, d.totals)}${
     sumRow("Per game", d.per_game)}</tfoot>` : "";

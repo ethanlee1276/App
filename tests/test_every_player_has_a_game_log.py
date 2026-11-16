@@ -150,7 +150,8 @@ def test_the_sheet_draws_the_log_like_a_box_score():
     goalie = GL.season_log("nhl", "Joseph Woll", db_path=path)
     js = ("const esc = (s) => String(s == null ? '' : s).replace(/[&<>\"']/g, (c) => '&#' + c.charCodeAt(0) + ';');"
           "const escapeHtml = esc, escapeAttr = esc;"
-          "const plural = (n, one) => `${n} ${n === 1 ? one : one + 's'}`;\n" + PAGE
+          "const plural = (n, one) => `${n} ${n === 1 ? one : one + 's'}`;"
+          "const trueMinus = (x) => String(x).replace(/(^|[^\\w])-(?=\\d)/g, '$1\\u2212');\n" + PAGE
           + f"\nprocess.stdout.write(JSON.stringify([glBodyHTML({json.dumps(qb)}, 'nfl'), "
             f"glBodyHTML({json.dumps(nba)}, 'nba'), glBodyHTML({json.dumps(goalie)}, 'nhl'), glBodyHTML({{}}, 'nfl')]));")
     out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=60)
@@ -159,13 +160,16 @@ def test_the_sheet_draws_the_log_like_a_box_score():
     assert "Joe Burrow <span>Game log</span>" in qb_html and "CIN · QB · NFL · 2026" in qb_html
     assert '<th colspan="8">Passing</th><th colspan="4">Rushing</th>' in qb_html, "the groups over their columns"
     assert qb_html.index("<b>Wk 11</b>") < qb_html.index("<b>Wk 10</b>"), "the newest game first"
-    assert '@ PIT</td>' in qb_html and '<span class="gl-w">W</span> 33-27' in qb_html
-    assert '<span class="gl-l">L</span> 20-23' in qb_html and "vs TB</td>" in qb_html
+    assert "<b>Wk 10</b><span>@ PIT · " in qb_html and '<span class="gl-w">W</span> 33-27' in qb_html
+    assert '<span class="gl-l">L</span> 20-23' in qb_html and "<b>Wk 11</b><span>vs TB · " in qb_html
+    assert '<td class="num">7.0</td>' in qb_html and '<td class="num">\u22121</td>' in qb_html, \
+        "a rate to a tenth, a true minus"
     assert '<td class="num">89.5</td>' in qb_html and '<td class="num">105.2</td>' in qb_html
     assert "Season · 2 games" in qb_html and "Per game" in qb_html and '<td class="num">96.8</td>' in qb_html
     assert '<option value="2025">2025</option>' in qb_html, "a season picker where he has more than one"
     assert "<b>CMP%</b> Completion percentage" in qb_html and "What the columns mean" in qb_html
     assert "Did not play</td>" in nba_html and '<td class="num">11-20</td>' in nba_html
+    assert "<span>vs IND</span>" in nba_html and "<span>@ PHI</span>" in nba_html
     assert '<tr class="gl-groups">' not in nba_html, "a basketball box needs no group row"
     assert '<td class="num">60:00</td>' in goalie_html and '<td class="num">93.3</td>' in goalie_html
     assert "No games are on file for this player yet." in empty
