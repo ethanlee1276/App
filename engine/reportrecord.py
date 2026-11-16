@@ -250,3 +250,98 @@ def record(where, sport: str, today: str | None = None) -> dict:
     recent = [r for r in every if str(r.get("date") or "") >= since]
     return {"sport": sport, "totals": totals(every), "recent": totals(recent), "recent_days": RECENT_DAYS,
             "games": every[:CARD_ROWS], "more": max(0, len(every) - CARD_ROWS)}
+
+
+# --- how each kind of read has done, said on the next report -------------------------------------
+#: The sections whose reads are graded, and the kinds of read each makes
+#: (engine/reportgrade.GROUPS).
+SECTION_KINDS = {"matchups": ("matchups",), "watch": ("candidates", "fades"), "angles": ("angles",),
+                 "trenches": ("units",), "defense": ("units",), "tape": ("units",),
+                 "scripts": ("script",), "script": ("script",), "pitching": ("starters",), "goalies": ("starters",)}
+#: How a kind of read is said in a sentence.
+KIND_WORDS = {"matchups": "matchup reads", "angles": "angles", "units": "offense-against-defense reads",
+              "script": "reads on how the game would go", "starters": "starter reads"}
+#: A kind's record is said once this many of its reads are graded; the call's
+#: and the injury report's once this many games and listings are.
+TRACK_MIN, TRACK_MIN_GAMES = 10, 5
+LEAGUE_WORDS = {"nfl": "NFL", "cfb": "college football", "nba": "NBA", "wnba": "WNBA", "cbb": "college basketball",
+                "nhl": "NHL", "mlb": "MLB"}
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _day(d: str) -> str:
+    try:
+        x = _dt.date.fromisoformat(str(d)[:10])
+    except ValueError:
+        return ""
+    return f"{_MONTHS[x.month - 1]} {x.day}"
+
+
+def _pct(a: int, n: int) -> str:
+    return f"{round(100 * a / n)}%"
+
+
+def track_lines(t: dict, sport: str) -> dict:
+    """{section key: one sentence on how its kind of read has done so far},
+    for every kind with enough graded (TRACK_MIN) — the next report says, beside
+    each read, how often reads like it have been right."""
+    games = int((t or {}).get("games") or 0)
+    if not games:
+        return {}
+    since = _day(t.get("since") or "")
+    tail = (f", on {games} finished {LEAGUE_WORDS.get(sport, sport.upper())} game{'s' if games != 1 else ''}"
+            + (f" since {since}" if since else ""))
+    groups = t.get("groups") or {}
+
+    def got(k):
+        a, n = (groups.get(k) or (0, 0))[:2]
+        return (int(a), int(n)) if int(n) >= TRACK_MIN else None
+    out: dict = {}
+    for key, kinds in SECTION_KINDS.items():
+        if kinds == ("candidates", "fades"):
+            c, f = got("candidates"), got("fades")
+            parts = ([f"breakout candidates beat their average {c[0]} of {c[1]} times ({_pct(*c)})"] if c else []) \
+                + ([f"fades fell short of it {f[0]} of {f[1]} times ({_pct(*f)})"] if f else [])
+            if parts:
+                out[key] = f"Our record so far: {' and '.join(parts)}{tail}."
+            continue
+        x = got(kinds[0])
+        if x:
+            out[key] = f"Our {KIND_WORDS[kinds[0]]} so far: {x[0]} of {x[1]} right ({_pct(*x)}){tail}."
+    call, rat = t.get("call") or (0, 0), t.get("ratings") or (0, 0)
+    if int(call[1]) >= TRACK_MIN_GAMES:
+        out["verdict"] = (f"Who we think wins has been right in {call[0]} of {call[1]} ({_pct(*call)})"
+                          + (f", our ratings alone in {rat[0]} of {rat[1]} ({_pct(*rat)})"
+                             if int(rat[1]) >= TRACK_MIN_GAMES else "") + f"{tail}.")
+    inj = t.get("injuries") or (0, 0)
+    if int(inj[1]) >= TRACK_MIN:
+        missed = int(t.get("missed") or 0)
+        out["injuries"] = (f"Our injury report so far: {inj[0]} of {inj[1]} right ({_pct(*inj)})"
+                           + (f", with {missed} regular{'s' if missed != 1 else ''} who sat and were not on it"
+                              if missed else "") + f"{tail}.")
+    td = t.get("tds") or (0, 0, 0.0)
+    if int(td[1]) >= TRACK_MIN:
+        out["redzone"] = (f"Our touchdown chances so far: {td[0]} of the {td[1]} players we gave one scored, "
+                          f"where our chances added up to {float(td[2]):.1f}{tail}.")
+    return out
+
+
+def stamp_track(reports: list, where, sport: str) -> int:
+    """HOW THESE READS HAVE DONE (2026-11-16): each graded section of each
+    report opens with its kind of read's record so far (`track_lines`), a
+    `track` block, replaced, never doubled. Returns sections stamped; never
+    raises."""
+    try:
+        lines = track_lines(totals(rows(where, sport, write=False)), sport) if where else {}
+        n = 0
+        for r in reports or []:
+            for s in (r or {}).get("sections") or []:
+                blocks = [b for b in s.get("blocks") or [] if not (isinstance(b, dict) and b.get("type") == "track")]
+                text = lines.get(s.get("key"))
+                s["blocks"] = ([{"type": "track", "text": text}] if text else []) + blocks
+                n += bool(text)
+        return n
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the reads' record not said on the reports ({type(exc).__name__}: {exc})")
+        return 0
+

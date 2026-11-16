@@ -453,7 +453,7 @@ def test_the_record_is_served_free_and_every_page_draws_the_checks():
     assert "reportrecord.record(gate.FULL_DIR, league)" in body and "_entitled" not in body, "free, as the Record is"
     assert 'self._rate_limited(RATE_GAME_PER_MIN, "report_record")' in body
     rp = (ROOT / "web" / "js" / "reportpicks.js").read_text(encoding="utf-8")
-    for want in ("function rpFactsHTML()", "async function rpFactsFill(host)", "function rpFactRowHTML(r)",
+    for want in ("function rpFactsHTML(league)", "async function rpFactsFill(host, league)", "function rpFactRowHTML(r)",
                  "async function rpArchiveOpen(body, btn)", "fetch(`/api/report_record?league=${encodeURIComponent(sport)}`",
                  "fetch(`/api/report_archive?${q}`", 'How our reports did <span class="sub">— every finished game, fact-checked</span>'):
         assert want in rp, want

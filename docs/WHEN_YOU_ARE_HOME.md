@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TF. Every read says how its kind has done, the record goes public, and our numbers face the line** (step
+638; 16 November). Nothing to run. You said OK to putting "How our reports did" where anyone can see it:
+- **The free Record page** now shows it under each league, after Report bets: the totals, the "how sure we
+  were" table, and every finished game. Opening a game's graded report is still for members.
+- **Each graded section of a game report** now opens with one line on how that kind of read has done so far,
+  for example "Our matchup reads so far: 43 of 73 right (59%), on 13 finished NFL games since Nov 12." A line
+  shows once ten reads of its kind have been graded (five games for who wins), so it never boasts about two
+  games. It covers matchups, breakout candidates and fades, offense against defense, how the game would go,
+  starters, who wins and our ratings, the injury report, and touchdown chances.
+- **A finished prop pick says our number beside his**: "Won · 31 points (our number 26.4)", the report's own
+  picks included.
+- **Our number against the line**, on the Record page's Calibration tab. It checks every finished player pick,
+  each counted once, and asks whether our projection or the book's line was nearer what he did. It shows a
+  share for every league, and each market on its own once it has twenty finished picks. Over half means our
+  numbers have been better than the market's.
+
 **TE. How sure we were, and how often it held** (step 637; 16 November). Nothing to run. A
 percentage is data too. "How our reports did" on the Report Picks page now shows a small table. Each row is a
 band of how sure the call on who wins was (50–60%, 60–70%, and so on), with how many of those games the

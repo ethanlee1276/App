@@ -7916,6 +7916,67 @@ def bench_existing(conn) -> dict:
     return moved
 
 
+#: The markets "our number against the line" leaves out: a yes-or-no market's
+#: number is a chance, not a count, and a home run's line sits at half of one.
+NUMBER_SKIP_MARKETS = frozenset(LONGSHOT_MARKETS) | {"anytime_goal", "first_goal", "first_basket", "first_td"}
+#: A market is listed on its own once this many of its picks have finished.
+NUMBER_MARKET_MIN = 20
+
+
+def number_vs_line(conn, sport: str | None = None, since: str | None = None) -> dict:
+    """OUR NUMBER AGAINST THE LINE (2026-11-16; Ethan: "see if the data we were
+    giving them were correct or not"). Over every finished player pick with
+    our projection, its line and what he did — each pick once, whichever books
+    hold it — how often our number was nearer what happened than the book's
+    line, how often the line was, and how often they were level:
+    {"picks", "closer", "farther", "level", "by_market": {market: [closer, picks]}}
+    (a market listed once NUMBER_MARKET_MIN of its picks have finished). Less
+    the bench, as every figure on the page is."""
+    q = ("SELECT sport, date, player, market, UPPER(COALESCE(side, '')), line, COALESCE(leg, 1), projection, actual "
+         "FROM bets WHERE status IN ('won', 'lost', 'push') AND projection IS NOT NULL AND line IS NOT NULL "
+         "AND actual IS NOT NULL AND player IS NOT NULL AND player != '' "
+         f"AND market NOT IN ({','.join('?' * len(GAME_MARKETS))}) "
+         f"AND COALESCE(category, 'main') NOT IN ({','.join('?' * len(GRADED_ELSEWHERE))})")
+    args: list = [*GAME_MARKETS, *GRADED_ELSEWHERE]
+    if sport:
+        q += " AND LOWER(sport) = ?"
+        args.append(str(sport).lower())
+    else:
+        tail, extra = off_record_sql()
+        q += tail
+        args += list(extra)
+    if since:
+        q += " AND date >= ?"
+        args.append(since)
+    seen: set = set()
+    out = {"picks": 0, "closer": 0, "farther": 0, "level": 0, "by_market": {}}
+    markets: dict = {}
+    for sp, day, player, market, side, line, leg, proj, actual in conn.execute(q, args).fetchall():
+        if str(market or "") in NUMBER_SKIP_MARKETS:
+            continue
+        k = (str(sp).lower(), day, player, market, side, line, leg)
+        if k in seen:
+            continue
+        seen.add(k)
+        try:
+            ours, theirs = abs(float(actual) - float(proj)), abs(float(actual) - float(line))
+        except (TypeError, ValueError):
+            continue
+        out["picks"] += 1
+        m = markets.setdefault(str(market), [0, 0])
+        m[1] += 1
+        if ours < theirs:
+            out["closer"] += 1
+            m[0] += 1
+        elif ours > theirs:
+            out["farther"] += 1
+        else:
+            out["level"] += 1
+    out["by_market"] = {k: v for k, v in sorted(markets.items(), key=lambda kv: -kv[1][1])
+                        if v[1] >= NUMBER_MARKET_MIN}
+    return out
+
+
 def off_record_sql(column: str = "sport") -> tuple[str, tuple]:
     """The SQL tail that keeps a benched league out of a pooled figure.
 
@@ -11936,6 +11997,8 @@ RECORD_PAGE_ONLY = (
     "edge_now", "edge_trend", "self_tuning", "board_learning", "regrades",
     "prereg", "audit_log", "forecast_heads", "likely_by_sport",
     "clv_leadtime", "market_words", "likely_calendar",
+    # Our number against the line, on the Record page's Calibration room only.
+    "number_vs_line", "number_vs_line_by_sport",
 )
 
 
@@ -12126,6 +12189,11 @@ def export_json(conn, path) -> None:
             if rep.get("settled") or rep.get("open")},
         "report_recent": recent_settled(conn, REPORT_RECENT_LIMIT, category=REPORT_CATEGORY,
                                         since=since),
+        # OUR NUMBER AGAINST THE LINE, pooled and per league (`number_vs_line`).
+        "number_vs_line": number_vs_line(conn, since=since),
+        "number_vs_line_by_sport": {
+            sp: x for sp, x in ((sp, number_vs_line(conn, sp, since=since))
+                                for sp in TRACKED_SPORTS if not is_benched(sp)) if x["picks"]},
         "potd": performance(conn, category=POTD_CATEGORY, since=since),
         # EVERY LEAGUE THAT NAMES ONE, an empty book included (`POTD_LEAGUES`).
         "potd_by_sport": {

@@ -142,10 +142,10 @@ function rpFactRowHTML(r) {
     <div class="rpk-fact-report" data-rpk-arch-slot="${escapeAttr(key)}"></div>
   </div>`;
 }
-async function rpFactsFill(host) {
+async function rpFactsFill(host, league) {
   const slot = host.querySelector("[data-rpk-facts]");
   if (!slot) return;
-  const sport = state.sport;
+  const sport = league || state.sport;
   let rec = RP_FACTS.get(sport);
   if (!rec || Date.now() - rec.at > 5 * 60 * 1000) {
     try {
@@ -154,7 +154,7 @@ async function rpFactsFill(host) {
     } catch (e) { rec = { at: Date.now(), body: null }; }
     RP_FACTS.set(sport, rec);
   }
-  if (!slot.isConnected || state.sport !== sport) return;
+  if (!slot.isConnected || (!league && state.sport !== sport)) return;
   const b = rec.body;
   if (!b || !(b.games || []).length) {
     slot.querySelector("[data-rpk-facts-body]").innerHTML = `<p class="set-note">No finished game of this league has been
@@ -187,10 +187,13 @@ async function rpArchiveOpen(body, btn) {
   if (!slot) return;
   if (slot.innerHTML.trim()) { slot.innerHTML = ""; btn.textContent = "Read the report"; return; }
   const [date, away, home] = key.split("|");
+  // The league the section draws (the Record page's scope, else the board's).
+  const sec = btn.closest("[data-rpk-facts]");
+  const league = (sec && sec.dataset.rpkSport) || state.sport;
   slot.innerHTML = `<p class="loading">Loading the report…</p>`;
   let doc = null;
   try {
-    const q = new URLSearchParams({ league: state.sport, date, away, home });
+    const q = new URLSearchParams({ league, date, away, home });
     const r = await fetch(`/api/report_archive?${q}`, { credentials: "same-origin" });
     doc = r.ok ? await r.json() : r.status === 402 ? { locked: true } : null;
   } catch (e) { doc = null; }
@@ -211,9 +214,11 @@ async function rpArchiveOpen(body, btn) {
   btn.textContent = "Close the report";
   revealChildren(slot);
 }
-//: The section's frame, drawn with the page and filled once the record is read.
-function rpFactsHTML() {
-  return `<section class="rpk-facts" id="rpk-facts" data-rpk-facts="1">
+//: The section's frame, drawn with the page and filled once the record is read; ``league``
+//: names the league it draws when that is not the board's (the Record page's scope).
+function rpFactsHTML(league) {
+  return `<section class="rpk-facts"${league ? "" : ` id="rpk-facts"`} data-rpk-facts="1"${
+    league ? ` data-rpk-sport="${escapeAttr(league)}"` : ""}>
     <div class="section-title">How our reports did <span class="sub">— every finished game, fact-checked</span></div>
     <p class="set-note rpk-lead">After each game we check our own report against what happened: whether the call on who
       wins was right, every read against the box score, our ratings’ and the simulation’s picks, the lines, and the injury
@@ -295,3 +300,13 @@ function rpFactsScroll(host) {
   const el = host.querySelector("#rpk-facts");
   if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "start" }));
 }
+/* THE SAME RECORD ON THE RECORD PAGE (js/record.js recFactsMount, 2026-11-16;
+   Ethan said yes to putting it where anyone can see it): drawn into the slot
+   the page leaves for it, for the league in its scope. The counts are free;
+   a game's own report still opens for members only. */
+async function rpFactsInto(slot, league) {
+  if (!slot || !league) return;
+  slot.innerHTML = rpFactsHTML(league);
+  await rpFactsFill(slot, league);
+}
+

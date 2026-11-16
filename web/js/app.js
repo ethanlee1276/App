@@ -10130,7 +10130,12 @@ function pickResultWords(res, bet) {
   }
   const label = String((bet && bet.market_label) || m.replace(/_/g, " ")).toLowerCase();
   const n = Number.isInteger(res.actual) ? String(res.actual) : res.actual.toFixed(1);
-  return `${head} · ${n} ${label}`;
+  // OUR NUMBER BESIDE HIS (2026-11-16; Ethan: "see if the data we were giving
+  // them were correct or not"): the projection the pick was made on.
+  const proj = Number(bet && bet.projection);
+  const ours = bet && bet.projection != null && Number.isFinite(proj) && proj > 0
+    ? ` (our number ${Number.isInteger(proj) ? proj : proj.toFixed(1)})` : "";
+  return `${head} · ${n} ${label}${ours}`;
 }
 //: The ribbon a pick's card wears on a finished game ("" before the final).
 function pickResultHTML(r, tag) {
@@ -23446,6 +23451,8 @@ function renderRace(...a) { return roomCall(renderRace, "renderRace", "js/race.j
 function renderPotdPage(...a) { return roomCall(renderPotdPage, "renderPotdPage", "js/potd.js", "css/potd.css", a); }
 // …and every bet and parlay the game reports posted (js/reportpicks.js; Ethan, 2026-11-16).
 function renderReportPicks(...a) { return roomCall(renderReportPicks, "renderReportPicks", "js/reportpicks.js", "css/reportpicks.css", a); }
+// …and how our reports did, the same section, on the Record page (js/reportpicks.js rpFactsInto).
+function rpFactsInto(...a) { return roomCall(rpFactsInto, "rpFactsInto", "js/reportpicks.js", "css/reportpicks.css", a); }
 // The owner's desk (js/owner.js, engine/ownerdesk), Who's on now its first
 // card (engine/whoson): the owners' listed accounts alone (engine/siteowners).
 function renderOwner(...a) { return roomCall(renderOwner, "renderOwner", "js/owner.js", "css/owner.css", a); }

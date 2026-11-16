@@ -43,7 +43,9 @@ PRIVATE = "_bets"
 #: What a row keeps: what the page shows and what the record journals.
 FIELDS = ("player", "pick_label", "team", "opponent", "market", "market_label", "bet_type", "side",
           "line", "odds", "book", "model_prob", "kind", "matchup", "home", "away", "game_date", "position",
-          "headshot", "tier_label", "lane")
+          "headshot", "tier_label", "lane",
+          # Our number, which a finished pick says beside his (js/app.js pickResultWords).
+          "projection")
 
 
 def key(b: dict) -> tuple:

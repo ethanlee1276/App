@@ -335,6 +335,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # a quiet build prints nothing. An archive that cannot be written
         # must never cost the build its board.
         "save",
+        # HOW EACH KIND OF READ HAS DONE, SAID ON THE NEXT REPORT
+        # (engine/reportrecord.stamp_track, 2026-11-16), caught by this sweep
+        # the hour it was written. Its 0 is also a league with too few graded
+        # reads to say, so a failure prints "the reads' record not said on the
+        # reports (<error>)" in the build's log; a quiet league prints nothing.
+        # A record that cannot be read must never cost the build its reports.
+        "stamp_track",
     }
 
     def broad(h):

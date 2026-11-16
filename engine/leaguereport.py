@@ -47,7 +47,7 @@ from __future__ import annotations
 
 from .gamereport import (KEY, Ctx, _claimed_list, _f, _h, _join, _lift_bets, _list, _num, _ord, _p, _pct, _section,
                          _sentence, a_pct, absent_sentence, cap, finish, injury_claim, keep_started, kickoff_words,
-                         line_words,
+                         line_words, stamp_track,
                          log_changes, market_sentence, ml_chances, named, parlay_sentence, player_clause,
                          read_pick, sec_market, sec_parlays, shine_lines, summary, team_be, team_np, team_owner)
 
@@ -1465,6 +1465,9 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
                 reports.append(r)
         # A game under way keeps the report it had before it started, college's
         # too once the board prices none of the night (engine/reportkeep).
+        # HOW THESE READS HAVE DONE (engine/reportrecord): each graded section opens
+        # with its kind of read's record so far, before a started game's is kept.
+        stamp_track(reports, sport, out)
         reports, kept = keep_started(result, reports, sport, out, at, conn)
         result[KEY] = reports
         n_bets = _lift_bets(result)

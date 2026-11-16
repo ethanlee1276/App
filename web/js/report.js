@@ -445,6 +445,9 @@
       </div>`;
     }
     if (b.type === "p") return `<p class="gr-p">${named(b.text, b.names, b.marks, true)}${gradeLine(b.grade)}</p>`;
+    /* HOW THESE READS HAVE DONE (engine/reportrecord.track_lines): a graded
+       section's kind of read, its record on finished games so far. */
+    if (b.type === "track") return `<p class="gr-track">${escapeHtml(b.text)}</p>`;
     if (b.type === "h") return `<h4 class="gr-h">${escapeHtml(b.text)}</h4>`;
     if (b.type === "note") return `<p class="gr-note">${named(b.text, b.names, b.marks)}</p>`;
     if (b.type === "list") {
@@ -546,7 +549,7 @@
       out.push("", String(s.title || "").toUpperCase());
       for (const b of s.blocks || []) {
         if (!b || !b.type) continue;
-        if (b.type === "p" || b.type === "note") out.push(b.text);
+        if (b.type === "p" || b.type === "note" || b.type === "track") out.push(b.text);
         else if (b.type === "winner") {
           out.push(`${b.word || "Our call"}: ${b.name || b.team} — ${Math.round(Number(b.chance || 0) * 100)}% to win`);
           const r = b.ratings;

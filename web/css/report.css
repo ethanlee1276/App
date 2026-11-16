@@ -107,6 +107,10 @@
 /* The lines against the final, under the call (report.js winnerLinesHTML):
    facts, not a verdict, so plain. */
 .gr-res-lines { margin-top: 6px; padding: 4px 10px; font-size: var(--fs-sm); color: var(--text-mute); }
+/* A graded section's record so far (report.js, engine/reportrecord): one quiet
+   line at its top, tinted like the grades it sums. */
+.gr-track { margin: 0 0 10px; padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--fs-xs);
+  color: var(--text-mute); background: var(--fill-subtle); }
 /* A finished game's read, graded (report.js gradeLine, engine/reportgrade): a
    line of its own under the read, green right, red wrong, plain the rest. */
 .gr-graded { display: block; margin-top: 6px; padding: 4px 10px; border-radius: var(--radius-sm);

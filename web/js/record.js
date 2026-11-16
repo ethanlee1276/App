@@ -3248,6 +3248,47 @@ function recReportSection(rep, scope, recent, game) {
     </div>`;
 }
 
+/* HOW OUR REPORTS DID, ON THE RECORD (2026-11-16; Ethan said yes to putting it
+   where anyone can see it). Every finished game's report fact-checked against
+   what happened (engine/reportfacts, engine/reportrecord): the call, the reads,
+   our ratings and the simulation, the injury report, how sure we were and how
+   often it held. Drawn by Report Picks' own section (js/reportpicks.js
+   rpFactsInto) into this slot, for the league in scope; free, as this page is. */
+function recFactsSlot(scope) {
+  return `<div class="rec-facts" data-rec-facts="${escapeAttr(scope)}"></div>`;
+}
+function recFactsMount(host) {
+  host.querySelectorAll("[data-rec-facts]").forEach((el) => {
+    if (typeof rpFactsInto === "function") rpFactsInto(el, el.dataset.recFacts);
+  });
+}
+
+/* OUR NUMBER AGAINST THE LINE (ledger.number_vs_line, 2026-11-16; Ethan: "see
+   if the data we were giving them were correct or not"). Every finished player
+   pick, each once: was our projection nearer what he did than the book's line?
+   The line is the market's best guess, so beating it more often than not is
+   the claim worth checking; each market with enough picks on its own. */
+function recNumberSection(x, scope) {
+  if (!x || !x.picks) return "";
+  const pct = (a, n) => (n ? `${Math.round((100 * a) / n)}%` : "—");
+  const rows = Object.entries(x.by_market || {}).map(([m, v]) => `<div class="rec-row flush tight">
+      <span class="rr-what">${escapeHtml(marketWord(m))}</span>
+      <span><b>${v[0]} of ${v[1]}</b> nearer · ${pct(v[0], v[1])}</span></div>`).join("");
+  const lead = x.closer >= x.farther ? "rr-pos" : "rr-neg";
+  return `<div class="section-title"><span class="st-ico">${icon("scale", 15)}</span>Our number against the line
+      <span class="sub">— on every finished pick${scope ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase())}`
+        : ""}, was our projection nearer what happened than the book’s line?</span></div>
+    <div class="card rec-report">
+      <div><b class="rr-big ${lead}">${pct(x.closer, x.picks)}</b>
+        <span class="rr-mute">· ours nearer on ${x.closer} of ${x.picks} finished picks, the line on ${x.farther}${
+          x.level ? `, level on ${x.level}` : ""}</span></div>
+      ${rows ? `<div class="rr-head">By market</div>${rows}` : ""}
+      <p class="rr-note">Each pick counts once, whichever books hold it. A pick is made where our number and the line
+        disagree, so this asks which of the two the result came out nearer. Over half means our numbers have been
+        better than the market’s; under half means they haven’t.</p>
+    </div>`;
+}
+
 function recPotdSection(rep, scope, recent, sit) {
   /* EVERY LEAGUE THAT NAMES ONE GETS ITS SECTION, an empty one included
      (Ethan, 2026-10-14: "we only show the pick of the day record for nfl
@@ -3569,6 +3610,8 @@ async function renderRecord() {
     // Every pick and parlay the game reports posted, on its own (engine/reportbets).
     + recReportSection(scoped ? (d.report_by_sport || {})[scope] : d.report, scoped ? scope : "",
                        d.report_recent || [], (d.two_leg || {}).game)
+    // How our reports did, fact-checked game by game (engine/reportrecord), one league at a time.
+    + (scoped ? recFactsSlot(scope) : "")
     + foldClose
     + verdict + ridingNote + unstaked + small + monthCard
     + foldOpen("By book, the running P&amp;L and the splits")
@@ -3690,6 +3733,7 @@ async function renderRecord() {
       · settles automatically as results are ingested each day.</p>`;
   bindRecordScopes(host);
   bindSubtabs(host);
+  recFactsMount(host);
   /* The calibration chart in a room that opens already showing. This
      mount sat after `_recordRooms`'s return, where it never ran (the site
      audit, 2026-09-24); a hidden room is still upgraded on its tab tap. */
@@ -3793,6 +3837,8 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      (scoped ? "" : recLeadtimeSection(d.clv_leadtime))
      + (scoped ? "" : recEraSection(d.model_eras))
      + recCalibrationSection(src.calibration, src.calibration_era)
+     // Our number against the line, over every finished pick (ledger.number_vs_line).
+     + recNumberSection(scoped ? (d.number_vs_line_by_sport || {})[scope] : d.number_vs_line, scoped ? scope : "")
      + recReplaySection(d.replay, scoped ? scope : null)
      + recSelectionHaircut(d.selection_haircut, scoped ? scope : null)
      + (scoped ? "" : recCalibrationSplits(d.calibration_splits))

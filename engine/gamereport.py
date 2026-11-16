@@ -4521,6 +4521,9 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             if r:
                 reports.append(r)
         _t = _clock.lap("game reports", "reports", _t)
+        # HOW THESE READS HAVE DONE (engine/reportrecord): each graded section opens
+        # with its kind of read's record so far, before a started game's is kept.
+        stamp_track(reports, sport, out)
         reports, kept = keep_started(result, reports, sport, out, at, conn)
         result[KEY] = reports
         n_bets = _lift_bets(result)
@@ -4554,6 +4557,17 @@ def log_changes(result: dict, prepared: list, sport: str, out, at: str | None) -
         return _log.update(_log.path_for(sport, _full_dir_for(out)), snaps, at or _log.now_et())
     except Exception:                                        # noqa: BLE001
         return {}
+
+
+def stamp_track(reports: list, sport: str, out) -> int:
+    """Each graded section of each report, opening with how its kind of read
+    has done on finished games so far (engine/reportrecord.stamp_track); only
+    with ``out`` (a build), whose archive the record is read from."""
+    if not out:
+        return 0
+    from . import reportrecord
+    from .gate import _full_dir_for
+    return reportrecord.stamp_track(reports, _full_dir_for(out), sport)
 
 
 def keep_started(result: dict, reports: list, sport: str, out, at: str | None, conn=None) -> tuple[list, str]:
@@ -4658,6 +4672,8 @@ def to_text(report: dict) -> str:
             t = b.get("type")
             if t in ("p", "note"):
                 out.append(b["text"])
+            elif t == "track":
+                out.append(f"[{b['text']}]")
             elif t == "h":
                 out.append(f"— {b['text']} —")
             elif t == "list":
