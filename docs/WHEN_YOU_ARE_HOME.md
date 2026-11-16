@@ -9338,6 +9338,60 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SR. The record sets the one-team bar on each game's parlays** (step 624;
+16 November). Nothing to run. You said "idk whatever is best" about the bar
+a parlay with all one team's players has to clear (4 points likelier than
+the best ticket with both teams, or 3 research points for a touchdown
+pair). What's best is what our record shows, so the record now sets it.
+
+How it works:
+- After each grading pass that settles a parlay, the box splits every
+  graded game parlay into one-team and two-team tickets and compares how
+  often each hit against the chance it was posted at.
+- If one-team tickets hit short of their chance more than two-team ones do,
+  the bar goes up. If they beat their chance, it comes down.
+- It waits for 30 graded tickets of each kind before moving anything, and
+  even then it moves only part of the way while the sample is small.
+- It stays between 2 and 10 points, and between 2 and 6 research points.
+- At most one of a game's tickets can be one team's, as before.
+
+The build log says the bar in force on every board ("one-club bar 4 points,
+3 research points (the defaults until 30 of each settle)"), and the box's
+log says when the record moves it.
+
+**SQ. A touchdown flashes on the live score** (step 623; 16 November).
+Nothing to run. You said "Yes" to a touchdown flash on the score at the top.
+When a touchdown happens while you have a live NFL or college football game
+open:
+- the scoring team's score pulses gold;
+- a gold TOUCHDOWN tag covers its name for about four and a half seconds;
+- the same happens in the bar that stays at the top when you scroll.
+
+It's only for a touchdown you see happen. It doesn't flash:
+- when you open the game, or come back to it after a couple of minutes
+  away (the "While you were away" card covers what you missed);
+- for a field goal, or for a score that came in while the tab was hidden;
+- on a game you saved for later (its score stays hidden).
+
+If you watch on a TV delay, it flashes when your TV shows the score. With
+your phone's "reduce motion" setting on, the score changes colour and the
+tag fades in and out without moving.
+
+**SP. Our own ratings' pick, beside the call** (step 622; 16 November).
+Nothing to run. You said "Yes" to showing our own team ratings' pick next
+to "Who we think wins". Every report's call now has a line under its bar:
+"Our ratings alone: Packers 53%", with an UNPROVEN tag, and "the other side"
+when our ratings pick the other team. Right under the price's line, the
+report says why it's unproven, as far as we've measured:
+- NFL: where our ratings have disagreed with the closing line, the
+  disagreement has carried nothing;
+- MLB: bets on them alone against the price lost 12.4%;
+- the other leagues: what the box has measured, or that they haven't been
+  measured against the price yet.
+
+The call itself still follows the price. The ratings are the same ones the
+parlay checker uses (in baseball, with that night's starting pitchers).
+
 **SO. Who we think wins, in every game report** (step 621; 16 November).
 Nothing to run. You said "I also wanna add in the game report section who
 we think will win based off the data and match up and our game report and
