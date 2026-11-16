@@ -145,6 +145,10 @@
    edge; the ones our feed didn't price still show a fair number to shop. */
 .ufc-shop { margin-top: 10px; border-top: var(--hairline) solid var(--border-soft); padding-top: 8px; }
 .ufc-shop summary { cursor: pointer; color: var(--text-dim); font-size: var(--fs-sm); font-weight: 600; }
+/* Each fight's written report (more.js fightReportHTML), folded until opened. */
+.ufc-report { margin-top: 12px; }
+.ufc-report > summary { cursor: pointer; color: var(--text-dim); font-size: var(--fs-sm); font-weight: 600; }
+.ufc-report-body { margin-top: 8px; }
 .ufc-shop-row { display: grid; grid-template-columns: 74px 1fr auto 62px; gap: 8px;
   align-items: center; padding: 5px 0; font-size: var(--fs-sm); border-bottom: var(--hairline) solid var(--border-soft); }
 .ufc-shop-row:last-child { border-bottom: 0; }

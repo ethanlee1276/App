@@ -9338,6 +9338,31 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SS. A written report for every UFC fight** (step 625; 16 November).
+Nothing to run. You said "Yes" to a written UFC fight report. Every fight
+card on the UFC tab now has "The fight report" folded under it, in the same
+layout as the game reports:
+- **Who we think wins:** the call follows the price, the same as every game
+  report. Under it is our fight model's own chance (it says when the model
+  picks the other fighter) and the chance our bet is priced at. Then the
+  case for each fighter from the card's measured numbers: the style matchup
+  the model reads, striking (strikes landed against strikes absorbed),
+  takedowns against a leaky takedown defense, submission attempts, age past
+  the sport's peak years, red flags and short notice. If more of it points
+  to the underdog, it says that's the case for an upset.
+- **The fighters:** both fighters side by side: record, age, style, strikes
+  landed and absorbed a minute, takedowns, takedown defense, submission
+  attempts and how many UFC fights we have on file.
+- **How it ends:** each fighter by knockout, submission and decision, how
+  often it goes the distance, and about how many minutes we expect.
+- **Weigh-ins and the venue:** who made weight, and what the venue changes.
+- **Our bet:** the pick with its price, edge and grade, or why there's none.
+- **What kills the bet:** the card's void rule and each fighter's red flags.
+
+A fight the model couldn't read (no stats, no price yet) still gets what
+it has and the reason. The reports are part of the subscription, like the
+picks.
+
 **SR. The record sets the one-team bar on each game's parlays** (step 624;
 16 November). Nothing to run. You said "idk whatever is best" about the bar
 a parlay with all one team's players has to clear (4 points likelier than

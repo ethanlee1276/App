@@ -3564,6 +3564,34 @@ async function renderLiveFights(host) {
   return true;
 }
 
+/* EVERY FIGHT, WRITTEN OUT (engine/ufc/report, 2026-11-16; Ethan: "Yes" to a
+   written UFC fight report). Each card folds its fight's report under "The
+   fight report"; it is drawn by js/report.js, loaded the first time one is
+   opened (app.js loadReport), as every game report is. */
+const UFC_REPORTS = new Map();
+function fightReportHTML(m) {
+  const r = m && UFC_REPORTS.get(m.fight);
+  if (!r) return "";
+  return `<details class="ufc-report" data-ufc-report="${escapeAttr(m.fight)}"><summary>The fight report: who we think wins,
+    the fighters, how it ends</summary><div class="ufc-report-body"></div></details>`;
+}
+if (typeof window !== "undefined" && !window._ufcReportBound) {
+  window._ufcReportBound = true;
+  // `toggle` does not bubble: caught on the way down instead.
+  document.addEventListener("toggle", (e) => {
+    const el = e.target;
+    if (!el || !el.matches || !el.matches("details.ufc-report") || !el.open || el.dataset.drawn) return;
+    const r = UFC_REPORTS.get(el.dataset.ufcReport), body = el.querySelector(".ufc-report-body");
+    if (!r || !body) return;
+    el.dataset.drawn = "1";
+    body.innerHTML = '<p class="mini">Loading the report…</p>';
+    loadReport().then((R) => {
+      body.innerHTML = R ? R.html(r, { fight: true }) : '<p class="mini">The report could not load. Open it again in a moment.</p>';
+      if (!R) delete el.dataset.drawn;
+    });
+  }, true);
+}
+
 /* The UFC pick's "Why it's likely" (Ethan, 2026-09-24: "Every single bet
    we offer needs too have a why it's likely section"). The card's numbers
    (p_model, p_market, p_final) in plain words: the blended chance, where
@@ -3696,6 +3724,9 @@ async function renderUFC() {
         ${b.map(shopRow).join("")}</details>` : "";
   };
 
+  // Each fight's written report (engine/ufc/report), by fight, for the cards below.
+  UFC_REPORTS.clear();
+  (d.fight_reports || []).forEach((r) => { if (r && r.fight) UFC_REPORTS.set(r.fight, r); });
   const pickCard = (p) => {
     const best = p.best_market || {};
     const shown = best.odds != null ? best.odds : p.odds;
@@ -3747,6 +3778,7 @@ async function renderUFC() {
       ${shopList(p)}
       ${weighInHTML(p.weigh_in)}
       ${ufcLineHTML(p.line_note)}
+      ${fightReportHTML(p)}
       <div class="warning" style="margin-top:8px">KILL IF: ${escapeHtml(p.kill_if)}</div>
     </article>`;
   };
@@ -3787,6 +3819,7 @@ async function renderUFC() {
         <span style="color:${color};font-weight:700">Passed:</span> ${escapeHtml(m.why || "")}</div>
       ${shopList(m)}
       ${ufcLineHTML(m.line_note)}
+      ${fightReportHTML(m)}
     </article>`;
   };
 

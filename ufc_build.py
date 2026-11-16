@@ -368,6 +368,10 @@ def main() -> None:
         except Exception as exc:                            # noqa: BLE001
             print(f"⚠️  line moves skipped: {exc}")
         _clock.lap("the card", "line moves", _ct)
+        # EVERY FIGHT, WRITTEN OUT (engine/ufc/report, 2026-11-16; Ethan: "Yes"
+        # to a written UFC fight report), once every row above is complete.
+        from engine.ufc import report as _ufr
+        print(_ufr.attach(out))
     _clock.mark("the card")
 
     # THE PICK OF THE DAY (engine/potd; Ethan, 2026-10-14, "do 1-11", to
