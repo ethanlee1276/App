@@ -9374,7 +9374,8 @@ and every offense against defense call.
 
 What isn't graded, and why: the pass rush against the pass protection (sacks aren't in our box scores), and
 neutral reads (they make no call). A player with fewer than two games before this one shows his number with no
-verdict. Games that finished before this went live aren't graded; it starts with tonight's.
+verdict. Last night's games are graded too, but on their reports as rebuilt after the start, so without the picks
+card and with fewer reads to grade. From tonight on, every game is graded on the report it had before it started.
 
 **TA. A finished game keeps its report's picks** (step 633; 16 November).
 Nothing to run. While checking that Report Picks fills in for every league, I
