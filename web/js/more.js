@@ -3663,6 +3663,9 @@ async function renderUFC() {
   setStandaloneSource("The Odds API MMA events + our fighter dossiers",
                       `UFC · ${escapeHtml(d.event_date || d.status || "")}`);
   const pctv = pctOr;
+  // Each fight's written report (engine/ufc/report), by fight, for the cards below.
+  UFC_REPORTS.clear();
+  (d.fight_reports || []).forEach((r) => { if (r && r.fight) UFC_REPORTS.set(r.fight, r); });
 
   if (d.status !== "card") {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("glove", 30)}</div>
@@ -3724,9 +3727,6 @@ async function renderUFC() {
         ${b.map(shopRow).join("")}</details>` : "";
   };
 
-  // Each fight's written report (engine/ufc/report), by fight, for the cards below.
-  UFC_REPORTS.clear();
-  (d.fight_reports || []).forEach((r) => { if (r && r.fight) UFC_REPORTS.set(r.fight, r); });
   const pickCard = (p) => {
     const best = p.best_market || {};
     const shown = best.odds != null ? best.odds : p.odds;

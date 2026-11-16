@@ -161,7 +161,7 @@ def reasons(row: dict) -> dict:
 def sec_call(row: dict) -> dict | None:
     """Who we think wins: the price's call, our model's chance beside it, and
     the case for each corner."""
-    a, b, na, nb = _corners(row)
+    _a, _b, na, nb = _corners(row)
     side, pm, pmod, pf = row.get("pick"), _f(row.get("p_market")), _f(row.get("p_model")), _f(row.get("p_final"))
     if side not in (na, nb) or pm is None:
         return None
@@ -287,11 +287,10 @@ def sec_bet(row: dict) -> dict | None:
 
 def sec_kill(row: dict) -> dict | None:
     """What kills the bet: the card's own rule and each corner's red flags."""
-    _a, _b, na, nb = _corners(row)
+    a, b, na, nb = _corners(row)
     items = []
     if row.get("kill_if"):
         items.append(f"Voids it: {row['kill_if']}")
-    a, b, _, _ = _corners(row)
     for br, n in ((a, na), (b, nb)):
         flags = [str(x) for x in br.get("red_flags") or [] if x]
         if flags:
