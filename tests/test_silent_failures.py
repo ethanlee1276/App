@@ -192,6 +192,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # the close it already had, and the run prints "same-book close
         # skipped, older close kept: <error>" once.
         "_same_book_close",
+        # THE ONE-CLUB BAR IN FORCE (engine/gameparlays.side_bar, 2026-11-16),
+        # caught by this sweep the hour it was written. Its failure is the
+        # defaults, which a quiet day before the first fit also gives, so a
+        # missing file alone is quiet and any other failure prints "the
+        # one-club bar's fit could not be read (<error>)" once a process and
+        # sets SIDE_BAR_ERROR, which the build log's line says beside the bar.
+        "side_bar",
         # network/IO wrappers whose empty return IS the documented answer
         "_post", "_get_json", "settle_open",
         # THE STAKING BREAKER, added 2026-09-19 and caught by this sweep

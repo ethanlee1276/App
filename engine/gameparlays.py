@@ -125,6 +125,22 @@ MAX_USES = 2
 SIDE_EDGE = 0.04
 SIDE_RESEARCH = 3
 ONE_SIDED_MAX = 1
+#: THE BAR, SET BY THE RECORD (Ethan, 2026-11-16, asked whether 4 points and 3
+#: research points was the right bar: "idk whatever is best"). What is best is
+#: what the record shows, so the record sets it: `fit_side_bar`, after each
+#: settle pass (engine/maintenance), splits every settled game parlay into
+#: one-club and two-club tickets by its legs' teams and compares how each hit
+#: against the chance it was posted at. One-club tickets hitting below their
+#: posted chance more than two-club ones do need a bigger edge to be taken;
+#: hitting above it, a smaller one. The comparison is shrunk toward "no
+#: difference" by SIDE_PRIOR_N tickets, it waits for SIDE_MIN_N of each kind
+#: to settle (until then the bar is SIDE_EDGE and SIDE_RESEARCH), and the bar
+#: never leaves SIDE_EDGE_RANGE / SIDE_RESEARCH_RANGE. ONE_SIDED_MAX stays.
+SIDE_MIN_N = 30
+SIDE_PRIOR_N = 60
+SIDE_EDGE_RANGE = (0.02, 0.10)
+SIDE_RESEARCH_RANGE = (2, 6)
+SIDE_BAR_FILE = "side_bar.json"
 #: TWO TEAMMATES ON ONE TICKET, priced at the same-game floor for catches
 #: and at none for touchdowns. The doctrine's possession-pie number
 #: (parlays.MEASURED, −0.56) is a PARTIAL correlation: two receivers with
@@ -921,6 +937,113 @@ def side_reason(t: dict, alt: dict | None, researched: bool = False) -> str:
             f"than the best ticket with both sides")
 
 
+def side_record(conn) -> dict:
+    """{kind: {"one"|"two": {"n", "won", "expected"}}} over every settled game
+    parlay (engine/parlayledger: sources game_three and game_td, won or lost),
+    a ticket one-club when its legs carry one team. ``expected`` is the sum
+    of the chances the tickets were posted at."""
+    rows = conn.execute(
+        "SELECT p.id, p.source, p.status, p.modeled_joint, l.team FROM parlays p "
+        "JOIN parlay_legs l ON l.parlay_id = p.id WHERE p.source IN (?, ?) AND p.status IN ('won', 'lost')",
+        (SOURCES["three"], SOURCES["scorers"])).fetchall()
+    tickets: dict = {}
+    for pid, src, status, joint, team in rows:
+        t = tickets.setdefault(pid, {"src": src, "won": status == "won", "joint": joint, "teams": set()})
+        if team:
+            t["teams"].add(str(team))
+    out: dict = {}
+    for t in tickets.values():
+        if t["joint"] is None or not t["teams"]:
+            continue
+        kind = "three" if t["src"] == SOURCES["three"] else "scorers"
+        g = out.setdefault(kind, {}).setdefault("one" if len(t["teams"]) == 1 else "two",
+                                                 {"n": 0, "won": 0, "expected": 0.0})
+        g["n"] += 1
+        g["won"] += int(t["won"])
+        g["expected"] = round(g["expected"] + float(t["joint"]), 4)
+    return out
+
+
+def fit_side_bar(conn, write: bool = True) -> dict:
+    """The one-club bar the record supports (see SIDE_MIN_N): {"three":
+    {"bar", "fitted", "why", ...}, "scorers": {...}, "record": side_record}.
+    Written to the models directory (SIDE_BAR_FILE) for `side_bar`."""
+    import datetime as _dt
+    rec = side_record(conn)
+    out: dict = {"fitted_at": _dt.datetime.now().isoformat(timespec="seconds"), "record": rec}
+    for kind, base, (lo, hi) in (("three", SIDE_EDGE, SIDE_EDGE_RANGE), ("scorers", SIDE_RESEARCH, SIDE_RESEARCH_RANGE)):
+        one, two = (rec.get(kind) or {}).get("one") or {}, (rec.get(kind) or {}).get("two") or {}
+        n1, n2 = int(one.get("n") or 0), int(two.get("n") or 0)
+        e1, e2 = float(one.get("expected") or 0), float(two.get("expected") or 0)
+        if n1 < SIDE_MIN_N or n2 < SIDE_MIN_N or e1 <= 0 or e2 <= 0 or not two.get("won"):
+            out[kind] = {"bar": base, "fitted": False,
+                         "why": f"waiting on the record: {n1} one-club and {n2} two-club ticket(s) settled, "
+                                f"{SIDE_MIN_N} of each needed"}
+            continue
+        q = (one["won"] / e1) / (two["won"] / e2)
+        qs = 1.0 + (q - 1.0) * n1 / (n1 + SIDE_PRIOR_N)
+        if kind == "three":
+            bar = round(min(max(SIDE_EDGE + (e1 / n1) * (1.0 - qs), lo), hi), 3)
+        else:
+            bar = int(min(max(SIDE_RESEARCH + round((1.0 - qs) * 10), lo), hi))
+        out[kind] = {"bar": bar, "fitted": True, "q": round(q, 3), "q_shrunk": round(qs, 3),
+                     "why": f"one-club tickets hit {one['won'] / e1:.0%} of their posted chance over {n1}, "
+                            f"two-club {two['won'] / e2:.0%} over {n2}"}
+    if write:
+        import json as _json
+        import os as _os
+        from . import modelstate
+        p = modelstate.path(SIDE_BAR_FILE)
+        _os.makedirs(_os.path.dirname(p) or ".", exist_ok=True)
+        tmp = p + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(out, f, indent=1, sort_keys=True)
+        _os.replace(tmp, p)
+    return out
+
+
+_SIDE_BAR: dict = {}
+#: Why the fit on file could not be read, in this process; None when it was
+#: read or there is none yet. The build log says it beside the bar (`summary`).
+SIDE_BAR_ERROR: str | None = None
+
+
+def side_bar() -> tuple:
+    """(edge, research points, fitted) in force: the record's fit
+    (`fit_side_bar`) where one is on file, else SIDE_EDGE and SIDE_RESEARCH;
+    always inside the ranges. Read once per change of the file. No file is
+    the ordinary state before the first fit, and quiet; a file that cannot be
+    read gives the defaults too, so it is SAID: printed once a process and
+    kept in SIDE_BAR_ERROR, which the build log shows."""
+    global SIDE_BAR_ERROR
+    try:
+        import json as _json
+        import os as _os
+        from . import modelstate
+        p = modelstate.path(SIDE_BAR_FILE)
+        try:
+            key = (p, _os.stat(p).st_mtime_ns)
+        except FileNotFoundError:
+            SIDE_BAR_ERROR = None
+            return SIDE_EDGE, SIDE_RESEARCH, False
+        if _SIDE_BAR.get("key") != key:
+            with open(p, encoding="utf-8") as f:
+                _SIDE_BAR.update(key=key, data=_json.load(f))
+        d = _SIDE_BAR["data"]
+        three, pairs = d.get("three") or {}, d.get("scorers") or {}
+        e = min(max(float(three["bar"]), SIDE_EDGE_RANGE[0]), SIDE_EDGE_RANGE[1]) if three.get("fitted") else SIDE_EDGE
+        r = (int(min(max(int(pairs["bar"]), SIDE_RESEARCH_RANGE[0]), SIDE_RESEARCH_RANGE[1]))
+             if pairs.get("fitted") else SIDE_RESEARCH)
+        SIDE_BAR_ERROR = None
+        return e, r, bool(three.get("fitted") or pairs.get("fitted"))
+    except Exception as exc:                                 # noqa: BLE001
+        why = f"{type(exc).__name__}: {exc}"
+        if SIDE_BAR_ERROR != why:
+            print(f"  ⚠️ the one-club bar's fit could not be read ({why}); the defaults are in force")
+        SIDE_BAR_ERROR = why
+        return SIDE_EDGE, SIDE_RESEARCH, False
+
+
 def choose(tickets: list[dict], n: int, rank=None, researched: bool = False) -> list[dict]:
     """The likeliest first (or by ``rank``, a sort key — the scorer pairs'
     research, `_by_research`); each next one shares at most MAX_SHARED legs
@@ -942,11 +1065,12 @@ def choose(tickets: list[dict], n: int, rank=None, researched: bool = False) -> 
     tickets are scorer pairs ranked on their research, and the stronger read
     is SIDE_RESEARCH more research points."""
     ranked = sorted(tickets, key=rank or (lambda t: (-t["joint"], -(t.get("ev_at_naive") or -9))))
+    edge, rbar, _fitted = side_bar()
 
     def clearly(t: dict, alt: dict) -> bool:
         if researched:
-            return _research_of(t) - _research_of(alt) >= SIDE_RESEARCH
-        return float(t["joint"]) - float(alt["joint"]) >= SIDE_EDGE - 1e-9
+            return _research_of(t) - _research_of(alt) >= rbar
+        return float(t["joint"]) - float(alt["joint"]) >= edge - 1e-9
 
     def pick(together: bool) -> tuple:
         out: list = []
@@ -1158,7 +1282,10 @@ def build(board: dict, sport: str, now=None) -> dict:
                        "scorers": sum(len(x["scorers"]) for x in out_games),
                        # One-club tickets (`choose`), each saying why it is one.
                        "one_club_threes": sum(one_club(t) for x in out_games for t in x["threes"]),
-                       "one_club_scorers": sum(one_club(t) for x in out_games for t in x["scorers"])},
+                       "one_club_scorers": sum(one_club(t) for x in out_games for t in x["scorers"]),
+                       # The one-club bar in force (`side_bar`): the record's, or the defaults.
+                       "side_bar": dict(zip(("edge", "research", "fitted"), side_bar()),
+                                         **({"error": SIDE_BAR_ERROR} if SIDE_BAR_ERROR else {}))},
             # WHY A PRICED SCORER WAS NO LEG (`research_scorers`), football only.
             **({"research_census": dict(sorted(census.items(), key=lambda kv: -kv[1])),
                 "scorers_priced": len(priced), "scorers_researched": len(scorers)}
@@ -1205,7 +1332,19 @@ def summary(gp: dict) -> str:
     c = (gp or {}).get("counts") or {}
     return (f"  Game parlays: {c.get('threes', 0)} three-leg and {c.get('scorers', 0)} scorer pair(s) "
             f"across {c.get('games', 0)} game(s); one club's alone: {c.get('one_club_threes', 0)} three-leg, "
-            f"{c.get('one_club_scorers', 0)} pair(s)")
+            f"{c.get('one_club_scorers', 0)} pair(s)" + _bar_words(c.get("side_bar")))
+
+
+def _bar_words(sb) -> str:
+    """The one-club bar in force, for the build log (`side_bar`)."""
+    if not isinstance(sb, dict) or sb.get("edge") is None:
+        return ""
+    if sb.get("error"):
+        why = f"the defaults: its fit could not be read ({sb['error']})"
+    else:
+        why = "set by the record" if sb.get("fitted") else f"the defaults until {SIDE_MIN_N} of each settle"
+    return (f"; one-club bar {float(sb['edge']) * 100:.0f} points, {int(sb.get('research') or 0)} research "
+            f"points ({why})")
 
 
 def journal_rows(gp: dict) -> list[dict]:

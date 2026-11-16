@@ -1839,6 +1839,21 @@ def settle_open(log=print, state_path: Path | None = None,
                     f" {rp['reopened']} reopened with their legs")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  parlay settle skipped: {exc}")
+        # THE ONE-CLUB BAR, SET BY THE RECORD (engine/gameparlays.fit_side_bar;
+        # Ethan, 2026-11-16: "idk whatever is best"): refitted whenever a
+        # ticket settled, or when no fit is on file yet; said when it moves.
+        try:
+            import os as _os
+            from . import gameparlays, modelstate
+            if parlays_moved or not _os.path.exists(modelstate.path(gameparlays.SIDE_BAR_FILE)):
+                was = gameparlays.side_bar()
+                sb = gameparlays.fit_side_bar(lconn)
+                now_bar = gameparlays.side_bar()
+                if now_bar[:2] != was[:2]:
+                    log(f"  parlays: the one-club bar is now {now_bar[0] * 100:.0f} points and {now_bar[1]} "
+                        f"research points ({(sb.get('three') or {}).get('why', '')})")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  parlay one-club bar not fitted: {exc}")
         lap("parlays")
         phases["graded"] = settled
         if settled or fixed:
