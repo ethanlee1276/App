@@ -32,6 +32,7 @@ FIELD = DETAIL[DETAIL.index("const GP3_W = "):DETAIL.index("function gpDriveWord
 STUBS = r"""
 const escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const escapeAttr = escapeHtml;
+const safeHref = (u) => (/^https?:\/\//.test(String(u)) ? escapeAttr(u) : "#");
 const NICK = { DET: "Lions", MIN: "Vikings", ND: "Fighting Irish" };
 const teamNameIn = (lg, a) => NICK[a] || a;
 const logoUrl = (a, lg, n) => `https://logo.test/${lg}/${a}.png`;
@@ -120,9 +121,9 @@ def test_the_paint_reads_the_way_a_fields_does():
     assert letters == "LIONSVIKINGS", letters
     # A letter's top is minus its matrix's second column: toward each zone's end line.
     for (a, b, c, d, e, f), t in got["ez"][:5]:
-        assert -c < 0 and abs(c) > abs(d), ("home's letters' tops toward its end line, on the left", t, c, d)
+        assert c > 0.5 and abs(d) < 1e-6, ("home's letters' tops toward its end line, on the left", t, c, d)
     for (a, b, c, d, e, f), t in got["ez"][5:]:
-        assert -c > 0 and abs(c) > abs(d), ("away's toward its end line, on the right", t, c, d)
+        assert c < -0.5 and abs(d) < 1e-6, ("away's toward its end line, on the right", t, c, d)
     # Home's name reads up the field from the near sideline, away's down it.
     ys = [m[5] for m, _ in got["ez"]]
     assert ys[:5] == sorted(ys[:5], reverse=True) and ys[5:] == sorted(ys[5:]), ys

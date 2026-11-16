@@ -5374,7 +5374,7 @@ function gpField3dSVG(m, d, league) {
   let mark = "";
   if (logo) {
     const [a, b, c, dd, e, g] = gp3J(50, mid), s = 9;
-    mark = `<image class="gp3-logo" href="${escapeAttr(logo)}" x="-0.5" y="-0.5" width="1" height="1" preserveAspectRatio="xMidYMid meet"`
+    mark = `<image class="gp3-logo" href="${safeHref(logo)}" x="-0.5" y="-0.5" width="1" height="1" preserveAspectRatio="xMidYMid meet"`
       + ` transform="matrix(${[a * s, b * s, -c * s, -dd * s, e, g].map((v) => +v.toFixed(3)).join(" ")})"/>`;
   }
   // The drive, a ribbon in the offence's colour down the middle of the field
@@ -5387,9 +5387,9 @@ function gpField3dSVG(m, d, league) {
       + `<stop class="gp3-fade" offset="0" stop-opacity=".18"/><stop class="gp3-fade" offset="1" stop-opacity=".9"/></linearGradient>`
       + `<path class="gp3-drive" fill="url(#gp3-fade)" d="${quad(Math.min(m.start, m.los), Math.max(m.start, m.los), mid - 2.6, mid + 2.6)}"/>`
       + `<path class="gp3-drive-start" d="${quad(m.start - 0.3, m.start + 0.3, mid - 2.6, mid + 2.6)}"/>` : "";
-  const bar = (x, cls) => `<path class="${cls}-glow" d="${quad(x - 0.9, x + 0.9, 0, W)}"/><path class="${cls}" d="${quad(x - 0.3, x + 0.3, 0, W)}"/>`;
-  const gain = m.gain != null && !m.goal ? bar(m.gain, "gp3-gain") : "";
-  const los = bar(m.los, "gp3-los");
+  const bar = (x, cls, glow) => `<path class="${glow}" d="${quad(x - 0.9, x + 0.9, 0, W)}"/><path class="${cls}" d="${quad(x - 0.3, x + 0.3, 0, W)}"/>`;
+  const gain = m.gain != null && !m.goal ? bar(m.gain, "gp3-gain", "gp3-gain-glow") : "";
+  const los = bar(m.los, "gp3-los", "gp3-los-glow");
   // The ball sits on the line, lifted off the grass over its own shadow, in
   // a ring of light on the turf so the eye finds it at a glance.
   const J = gp3J(m.los, mid), s = Math.hypot(J[0], J[1]), [bx, by] = gp3(m.los, mid, 1.2);
@@ -5407,7 +5407,7 @@ function gpField3dSVG(m, d, league) {
     const [px, py] = gp3(xb, mid, 0), [, ty] = gp3(xb, mid, GP3_POST.pad), pw = Math.hypot(...gp3J(xb, mid).slice(0, 2)) * 1.1;
     return `<ellipse class="gp3-shadow" cx="${f(px)}" cy="${f(py)}" rx="${f(pw * 1.6)}" ry="${f(pw * 0.5)}"/>`
       + `<path class="gp3-post-back" d="${neck}${frame}"/><path class="gp3-post" d="${neck}${frame}"/>`
-      + `<rect class="gp3-pad" x="${f(px - pw / 2)}" y="${f(ty)}" width="${f(pw)}" height="${f(py - ty)}" rx="${f(pw / 2)}"/>`;
+      + `<rect class="gp3-pad" fill="url(#gp3-padfill)" x="${f(px - pw / 2)}" y="${f(ty)}" width="${f(pw)}" height="${f(py - ty)}" rx="${f(pw / 2)}"/>`;
   };
   const B = GP3_BOX;
   const [, nearY] = gp3(50, -4), [, farY] = gp3(50, W + 4);

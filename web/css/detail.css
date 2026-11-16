@@ -1158,7 +1158,6 @@ svg text.gp3-num.far, .gp3-arrow.far { fill-opacity: .45; }
 .gp3-ball path { stroke: #fff; stroke-width: 1.4; fill: none; stroke-linecap: round; }
 .gp3-post-back { fill: none; stroke: #6f540d; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
 .gp3-post { fill: none; stroke: #f7cf4f; stroke-width: 4.6; stroke-linecap: round; stroke-linejoin: round; }
-.gp3-pad { fill: url(#gp3-padfill); }
 .gp3-rim { stroke: rgba(255, 255, 255, .16); stroke-width: 1.5; fill: none; }
 .gp3-depth { pointer-events: none; }
 
