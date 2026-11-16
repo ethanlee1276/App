@@ -41,9 +41,9 @@ SOURCE_WORDS = {"card": "Our picks", "read": "Matchup read", "breakout": "Breako
 #: The key a finished report carries its bets under until `attach` lifts them.
 PRIVATE = "_bets"
 #: What a row keeps: what the page shows and what the record journals.
-FIELDS = ("player", "team", "opponent", "market", "market_label", "bet_type", "side", "line", "odds",
-          "book", "model_prob", "kind", "matchup", "home", "away", "game_date", "position", "headshot",
-          "tier_label", "lane")
+FIELDS = ("player", "pick_label", "team", "opponent", "market", "market_label", "bet_type", "side",
+          "line", "odds", "book", "model_prob", "kind", "matchup", "home", "away", "game_date", "position",
+          "headshot", "tier_label", "lane")
 
 
 def key(b: dict) -> tuple:

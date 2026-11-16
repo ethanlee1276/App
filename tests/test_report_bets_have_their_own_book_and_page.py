@@ -40,7 +40,8 @@ ROW = {"kind": "prop", "player": "Jaylen Brown", "team": "BOS", "opponent": "IND
 READ = {"player": "Pascal Siakam", "team": "IND", "pos": "F", "headshot": "https://x/ps.png", "read": "breakout",
         "matchup_pick": {"market": "points", "market_label": "Points", "side": "over", "line": 20.5, "odds": -115,
                          "book": "FanDuel", "model_prob": 0.58}}
-GAME_ROW = {"kind": "game", "player": "BOS ML", "team": "BOS", "market": "moneyline", "bet_type": "moneyline",
+GAME_ROW = {"kind": "game", "player": "BOS ML", "pick_label": "Celtics ML", "team": "BOS", "market": "moneyline",
+            "bet_type": "moneyline",
             "side": "", "line": None, "odds": -140, "book": "BetMGM", "model_prob": 0.6, "matchup": "IND @ BOS"}
 
 
@@ -71,6 +72,7 @@ def test_each_bet_the_report_shows_once_with_its_price_and_where_it_shows():
     assert by[("Jaylen Brown", "assists", "under")]["sources"] == ["fade"], "a fade's pick is its own bet"
     ml = by[("BOS ML", "moneyline", "")]
     assert ml["kind"] == "game" and ml["odds"] == -140 and ml["matchup"] == "IND @ BOS"
+    assert ml["pick_label"] == "Celtics ML", "the row's own words for a game bet (app.js deckPickRow reads them)"
     assert RB.bets_of([{"key": "card", "blocks": [{"type": "picks", "items": [{"bet": {"market": "assists",
              "side": "over", "line": 1.5, "player": "No Row"}}]}]}])[0] == {
         "player": "No Row", "market": "assists", "side": "over", "line": 1.5, "sources": ["card"]}, \
