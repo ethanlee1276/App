@@ -36,6 +36,7 @@ from __future__ import annotations
 import bisect
 import json
 import os
+import sys
 import threading
 import time
 
@@ -61,6 +62,7 @@ KINDS = {"nfl": ("passing", "rushing", "receiving"), "cfb": ("passing", "rushing
          "nba": ("box",), "wnba": ("box",), "cbb": ("box",), "nhl": ("skater", "goalie"),
          "mlb": ("batting", "pitching")}
 _REFRESHING: set = set()
+_RANK_FAIL_SAID = False
 #: Leagues whose games table does not hold every game, so a club's record
 #: counted off it is wrong: MLB's is filled game by game as slates are read
 #: (seen live 2026-11-16, the Dodgers "29-19-1" in mid-October). No record is
@@ -282,21 +284,29 @@ def _refresh_later(key: tuple, db_path=None) -> threading.Thread | None:
     if key in _REFRESHING:
         return None
     _REFRESHING.add(key)
-
-    def run():
-        try:
-            conn = _db.connect(str(db_path or _db.DEFAULT_DB))
-            try:
-                _RANKS[key] = (time.time(), _build_table(conn, *key))
-            finally:
-                conn.close()
-        except Exception:                                 # noqa: BLE001 — the old table keeps answering
-            pass
-        finally:
-            _REFRESHING.discard(key)
-    t = threading.Thread(target=run, name="playerpage-rank", daemon=True)
+    t = threading.Thread(target=_rebuild_ranks, args=(key, db_path), name="playerpage-rank", daemon=True)
     t.start()
     return t
+
+
+def _rebuild_ranks(key: tuple, db_path=None) -> None:
+    """One table rebuilt in the background. A failure leaves the old table
+    answering, which looks like a quiet night's ranks; so the first failure in
+    a process says so, once, in the service's log."""
+    global _RANK_FAIL_SAID
+    try:
+        conn = _db.connect(str(db_path or _db.DEFAULT_DB))
+        try:
+            _RANKS[key] = (time.time(), _build_table(conn, *key))
+        finally:
+            conn.close()
+    except Exception as exc:                              # noqa: BLE001 — the old table keeps answering
+        if not _RANK_FAIL_SAID:
+            _RANK_FAIL_SAID = True
+            print(f"⚠️  player page ranks not rebuilt for {key} ({type(exc).__name__}: {exc}): "
+                  "the pages show the table built before", file=sys.stderr)
+    finally:
+        _REFRESHING.discard(key)
 
 
 def warm(db_path=None, delay: float = 60.0) -> threading.Thread:

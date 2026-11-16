@@ -163,6 +163,12 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # first failure in a process prints "kept game-log read not noted
         # (<error>)" into the build's log, which no quiet build does.
         "_note",
+        # THE PLAYER PAGES' RANK REBUILD (engine/playerpage._rebuild_ranks,
+        # 2026-11-16), caught by this sweep the hour it was written: a failure
+        # leaves the old table answering, which reads like a quiet night's
+        # ranks, so the first failure in a process prints "player page ranks
+        # not rebuilt ..." to the service's log, which no quiet night does.
+        "_rebuild_ranks",
         # THE LOGS' COUNTS (engine/logcache.generations, 2026-11-09), caught
         # by this sweep when it learned to check its triggers. Its failure is
         # None, which sends the caller to the row count: a slower key, never a
