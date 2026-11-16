@@ -9371,6 +9371,11 @@ basketball, NHL and MLB.
   no height, weight or age, so those headers show what the rosters do have. News is headlines and links only,
   like the rest of the site's news; when no headline names the player, the club's show, and the league's when
   nothing names either.
+- **A game whose box score isn't in yet** (a player's row filed the night of the game, before the week's box
+  scores land) now says "Box score not in yet" in the game log and "The box score isn't in yet" on the page,
+  and isn't counted in games played, totals or averages until its line arrives. The game log shipped earlier
+  today counted it as a game of zeros: on the live file Joe Burrow's Sunday game did exactly that, which put
+  his average at 2,386 yards over 9 games (265 a game) instead of over 8 (298).
 It reads the box scores and rosters the site already keeps, is free like the game log, and the server keeps
 each player's page five minutes.
 

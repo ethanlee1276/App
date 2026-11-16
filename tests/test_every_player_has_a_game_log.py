@@ -96,6 +96,29 @@ def test_a_quarterbacks_season_reads_like_espns():
     assert GL.season_log("nfl", "Joe Burrow", 1999, db_path=path)["season"] == 2026, "an unknown season is the latest"
 
 
+def test_a_game_whose_box_score_is_not_in_yet_is_no_game_played():
+    """Seen on the live file 2026-11-16: Joe Burrow's Sunday game had a row the
+    night of the game (a touchdown flag) and no passing line until the week's
+    box scores land. It drew a line of dashes and counted as a game played, so
+    his averages fell by a ninth. Now it says the box score is not in yet and
+    stays out of the games played, the totals and the averages."""
+    path = _history()
+    conn = _db.connect(path)
+    conn.execute("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
+                 "VALUES ('nfl', 2026, '012', 'BAL@CIN', 'CIN', 'BAL', 30, 20, '2026-11-23')")
+    conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, position, home, "
+                 "market, value) VALUES ('nfl', 2026, '012', 'CIN-012', 'Joe Burrow', 'CIN', 'BAL', 'QB', 1, "
+                 "'anytime_td', 0)")
+    conn.commit()
+    conn.close()
+    d = GL.season_log("nfl", "Joe Burrow", db_path=path)
+    newest = d["games"][0]
+    assert (newest["week"], newest.get("pending"), newest["result"], newest["score"]) == (12, True, "W", "30-20")
+    assert d["played"] == 2 and d["per_game"]["passing.yds"] == 230.5 and d["totals"]["passing.yds"] == 461, \
+        "the game still to come is no game of zeros"
+    assert GL.has_line("nfl", {"pass_att": 0}) and not GL.has_line("nfl", {"anytime_td": 1, "fp_ppr": 4.2})
+    assert 'g.pending ? `<td class="gl-dnp" colspan="${cols.length}">Box score not in yet</td>`' in PAGE
+
 def test_each_player_shows_his_own_groups_and_columns():
     path = _history()
     wr = GL.season_log("nfl", "Ja'Marr Chase", db_path=path)

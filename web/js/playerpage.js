@@ -163,7 +163,8 @@ function ppPrevHTML(d) {
     pts != null && pts !== "" ? `<span class="pp-pts${won ? " pp-won" : ""}">${escapeHtml(pts)}</span>` : ""}</div>`;
   const res = g.result ? `<span class="${g.result === "W" ? "gl-w" : g.result === "L" ? "gl-l" : "gl-t"}">${
     escapeHtml(g.result === "W" ? "Won" : g.result === "L" ? "Lost" : "Tied")}</span> · Final` : "";
-  const tiles = g.dnp ? `<p class="pp-dnp">Did not play.</p>` : (g.tiles || []).length ? `<div class="pp-tiles">${g.tiles.map((t) =>
+  const tiles = g.dnp ? `<p class="pp-dnp">Did not play.</p>` : g.pending ? `<p class="pp-dnp">The box score isn’t in yet.</p>`
+    : (g.tiles || []).length ? `<div class="pp-tiles">${g.tiles.map((t) =>
     `<div class="pp-tile" title="${escapeAttr(t.title)}"><span class="pp-k">${escapeHtml(t.label)}</span><b>${
       escapeHtml(ppNum(t.value, t.label))}</b></div>`).join("")}</div>` : "";
   return `<section class="pp-card"><h3>Previous game <span>${escapeHtml(when)}${g.home ? " · home" : " · away"}</span></h3>
@@ -193,7 +194,7 @@ function ppSplitletHTML(d) {
   const cols = ppCols(sp.groups, group);
   if (!cols.length) return "";
   const rows = [];
-  if (!g.dnp) rows.push({ label: "This game", gp: 1, values: g.values, avg: false });
+  if (!g.dnp && !g.pending) rows.push({ label: "This game", gp: 1, values: g.values, avg: false });
   const month = g.date ? by.get(`m:${g.date.slice(0, 7)}`) : null;
   if (month) rows.push(month);
   const vs = by.get(`vs:${g.opponent}`);

@@ -443,8 +443,10 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
         games = []
         for g in by_season.get(season, {}).values():
             res = by_id.get(g["game_id"]) or by_pair.get((g["period"], frozenset((g["team"], g["opponent"]))))
+            sat = not GL._played(sport, g["stats"])
             g = dict(g, home=(res["home"] == g["team"]) if res else bool(g["home"]), res=res,
-                     date=_date_of(sport, g, res), played=GL._played(sport, g["stats"]))
+                     date=_date_of(sport, g, res), played=not sat and GL.has_line(sport, g["stats"]),
+                     pending=not sat and not GL.has_line(sport, g["stats"]))
             if res and res["hs"] is not None and res["as"] is not None:
                 mine, theirs = (res["hs"], res["as"]) if g["home"] else (res["as"], res["hs"])
                 g["result"] = "W" if mine > theirs else "L" if mine < theirs else "T"
@@ -472,7 +474,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
             vals = {f"{k}.{c[0]}": GL.value(sport, c[3], g["stats"]) for k, _, cols in groups for c in cols}
             labels = {f"{k}.{c[0]}": (c[1], c[2]) for k, _, cols in groups for c in cols}
             last = {"date": g["date"], "opponent": g["opponent"] or "", "home": g["home"], "team": g["team"] or "",
-                    "values": vals, "dnp": not g["played"],
+                    "values": vals, "dnp": not g["played"] and not g["pending"], "pending": g["pending"],
                     "tiles": [{"id": t, "label": labels[t][0], "title": labels[t][1], "value": vals.get(t)}
                               for t in TILES.get(kind, ()) if t in labels and vals.get(t) is not None]}
             if sport in GL.WEEKLY and not GL._ISO.match(g["period"]):
@@ -515,11 +517,12 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
         out["splits"] = {"season": season, "groups": _shape(groups), "rows": split_rows}
 
         # Season by season.
-        every = [g for gs in by_season.values() for g in gs.values() if GL._played(sport, g["stats"])]
+        counts = lambda g: GL._played(sport, g["stats"]) and GL.has_line(sport, g["stats"])   # noqa: E731
+        every = [g for gs in by_season.values() for g in gs.values() if counts(g)]
         cgroups = _groups(sport, every)
         career_rows = []
         for yr in sorted(by_season, reverse=True):
-            mine = [g for g in by_season[yr].values() if GL._played(sport, g["stats"])]
+            mine = [g for g in by_season[yr].values() if counts(g)]
             if not mine:
                 continue
             clubs: dict = {}

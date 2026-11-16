@@ -154,6 +154,15 @@ def _played(sport: str, s: dict) -> bool:
     return not (sport in ("nba", "wnba", "cbb") and s.get("min") is not None and float(s["min"]) <= 0)
 
 
+def has_line(sport: str, s: dict) -> bool:
+    """Does a game's row carry a box-score line in the league's layout? Seen on
+    the live file 2026-11-16: Joe Burrow's Sunday game had a row the night of
+    the game (a touchdown flag) and no passing line until the week's box
+    scores land, and it was counted as a game played, so his averages fell by
+    a ninth. A row with no line is a game whose numbers are still to come."""
+    return any(_first(s, marks) is not None for _, _, marks, _ in LAYOUTS.get(sport, ()))
+
+
 def _results(conn, sport: str, season: int) -> tuple[dict, dict]:
     """The season's games, by game id and by (period, the two clubs)."""
     by_id, by_pair = {}, {}
@@ -233,6 +242,8 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None)
             line["score"] = f"{int(mine)}-{int(theirs)}"
         if not _played(sport, s):
             line["dnp"] = True
+        elif not has_line(sport, s):
+            line["pending"] = True             # out of the games played until its line lands
         else:
             played += 1
             for m, v in s.items():

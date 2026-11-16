@@ -154,6 +154,27 @@ def test_a_quarterbacks_page_reads_like_espns():
     assert old["season"] == 2025 and old["last"]["result"] == "W" and old["last"]["opp_record"] == "0-1"
 
 
+def test_a_newest_game_whose_box_score_is_not_in_yet_says_so():
+    path, rosters = _fresh()
+    conn = _db.connect(path)
+    conn.execute("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
+                 "VALUES ('nfl', 2026, '012', 'HOU@BUF', 'BUF', 'HOU', 27, 17, '2026-11-23')")
+    conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, position, home, "
+                 "market, value) VALUES ('nfl', 2026, '012', 'BUF-012', 'Josh Allen', 'BUF', 'HOU', 'QB', 1, "
+                 "'anytime_td', 1)")
+    conn.commit()
+    conn.close()
+    d = PP.page("nfl", "Josh Allen", db_path=path, data_dir=rosters)
+    last = d["last"]
+    assert (last["week"], last["pending"], last["dnp"], last["result"], last["record"]) == (12, True, False, "W", "3-1")
+    assert last["tiles"] == [], "no numbers to show until the line lands"
+    rows = {r["key"]: r for r in d["splits"]["rows"]}
+    assert rows["season"]["gp"] == 3 and rows["season"]["values"]["passing.yds"] == 267.7, "not a game of zeros"
+    assert d["career"]["rows"][0]["gp"] == 3 and d["career"]["total"]["gp"] == 4 and d["bio"]["games"] == 4
+    assert {x["key"]: x["value"] for x in d["headline"]}["yds"] == 803
+    assert 'g.pending ? `<p class="pp-dnp">The box score isn’t in yet.</p>`' in PAGE
+    assert "if (!g.dnp && !g.pending) rows.push(" in PAGE
+
 def test_a_basketball_page_averages_a_game_and_ranks_the_regulars():
     path, rosters = _fresh()
     d = PP.page("nba", "Jalen Brunson", db_path=path, data_dir=rosters)

@@ -64,6 +64,7 @@ function glTableHTML(d) {
     const res = g.result ? `<span class="${g.result === "W" ? "gl-w" : g.result === "L" ? "gl-l" : "gl-t"}">${
       escapeHtml(g.result)}</span> ${escapeHtml(g.score || "")}` : "";
     const cells = g.dnp ? `<td class="gl-dnp" colspan="${cols.length}">Did not play</td>`
+      : g.pending ? `<td class="gl-dnp" colspan="${cols.length}">Box score not in yet</td>`
       : cols.map((c) => `<td class="num">${escapeHtml(glCell((g.values || {})[c.id], c.label))}</td>`).join("");
     return `<tr><td class="gl-fix gl-day">${glGame(g)}</td><td class="gl-res">${res}</td>${cells}</tr>`;
   }).join("");
