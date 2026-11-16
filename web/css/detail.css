@@ -1301,7 +1301,7 @@ details.gp-dr > :not(summary) { padding: 0 var(--sp-3) var(--sp-2); }
 .gp .gp-td .pbp-sb-pts, .gp-c-side.gp-td > b { animation: gp-td-pulse 1.5s ease-out 3 both;
   animation-delay: var(--td-t, 0ms); }
 .gp-td-word { position: absolute; left: 50%; top: 50%; translate: -50% -50%; z-index: 2; padding: 3px 8px;
-  border-radius: 999px; background: var(--gp-gain); color: #111; font: 800 var(--fs-xs) / 1.2 var(--font-sans);
+  border-radius: 999px; background: var(--gold); color: #111; font: 800 var(--fs-xs) / 1.2 var(--font-sans);
   letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; pointer-events: none;
   animation: gp-td-word 4.5s ease-out both; animation-delay: var(--td-t, 0ms); }
 .gp-c-side .gp-td-word { top: calc(100% + 6px); translate: -50% 0; }
