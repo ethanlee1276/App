@@ -1093,7 +1093,7 @@ body.gp-on .sportbar { background: transparent; }
    scorebug draws them. */
 .pbp-sb-tos { display: flex; justify-content: center; gap: 4px; margin-top: 6px; }
 .pbp-sb-tos > i { width: 13px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .2); }
-.pbp-sb-tos > i.on { background: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, .35); }
+.pbp-sb-tos > i.on { background: #fff; }
 .gp .pbp-sb-per { font: 600 var(--fs-xs) / 1.2 var(--font-sans); letter-spacing: .02em; text-transform: none; color: var(--text-dim); }
 .gp .pbp-sb-clock { font: 700 var(--fs-xl) / 1.1 var(--font-display); }
 .gp .pbp-sb-sit { color: var(--text-dim); }
