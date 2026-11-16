@@ -29,6 +29,9 @@ KEY = "pick_results"
 #: The journal's game markets (engine/ledger.GAME_MARKETS), graded off the score on the page.
 GAME_MARKETS = ("moneyline", "total", "spread", "team_total")
 SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "cbb", "nhl")
+#: The two original boards name no sport in their payload: the file says it
+#: (engine/gate's board list). The NFL's went out without its results for it.
+LABEL_SPORT = {"recommendations.json": "nfl", "mlb_recommendations.json": "mlb"}
 
 
 def norm(name) -> str:
@@ -124,7 +127,8 @@ def stamp(payload: dict, label: str = "", path=None) -> int:
     number stamped. A board of another kind, or no journal, is left alone."""
     if not isinstance(payload, dict):
         return 0
-    sport = str(payload.get("sport") or "").lower()
+    from pathlib import Path
+    sport = str(payload.get("sport") or LABEL_SPORT.get(Path(str(label or "")).name, "")).lower()
     if sport not in SPORTS or not isinstance(payload.get("games"), list):
         return 0
     got = read(sport, str(payload.get("date") or ""), path)

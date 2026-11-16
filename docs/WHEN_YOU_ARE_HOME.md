@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SX. The NFL's finished games get their results too** (step 630; 16
+November). Nothing to run. After step ST went live, the NFL board was the one
+board without results. Its file is the original board (recommendations.json)
+and never says which sport it is, so the step that adds the results skipped
+it. The step now takes the sport from the file's name, for the NFL's board and
+MLB's original one, so Week 10's finished games show how every pick did from
+the NFL board's next rebuild.
+
 **SW. The go-to scorer read says whether he scored** (step 629; 16
 November). Nothing to run. On a football report, each team's go-to scorer's
 card opens on why he's the likeliest to score ("the Lions' likeliest scorer —

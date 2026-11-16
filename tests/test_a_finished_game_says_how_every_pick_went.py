@@ -59,7 +59,8 @@ ROWS = [("nba", "2026-11-15", "Jaylen Brown", "assists", "OVER", 2.5, "lost", 2,
         ("nba", "2026-11-15", "Pascal Siakam", "assists", "OVER", 1.5, "open", None, "most_likely", None),
         ("nba", "2026-11-15", "PHI ML", "moneyline", "", 0.0, "won", 1, "game", None),
         ("nba", "2026-11-14", "Jaylen Brown", "assists", "OVER", 2.5, "won", 9, "most_likely", None),
-        ("mlb", "2026-11-15", "Aaron Judge", "hits", "OVER", 0.5, "won", 2, "main", 2)]
+        ("mlb", "2026-11-15", "Aaron Judge", "hits", "OVER", 0.5, "won", 2, "main", 2),
+        ("nfl", "2026-W10", "Jahmyr Gibbs", "anytime_td", "OVER", 0.5, "won", 2, "parlay_leg", None)]
 
 
 def test_the_journal_s_verdicts_are_read_for_one_board_and_never_written():
@@ -81,6 +82,11 @@ def test_the_publish_stamps_every_league_s_board_and_keeps_it_paid():
     assert GR.stamp(stale, "nba.json", p) == 0 and GR.KEY not in stale, "nothing graded, nothing left behind"
     other = {"sport": "nba", "chances": {}}
     assert GR.stamp(other, "nba_cup.json", p) == 0 and GR.KEY not in other, "only a sports board"
+    # The NFL's and MLB's original boards name no sport: the file does.
+    nfl = {"date": "2026-W10", "games": []}
+    assert GR.stamp(nfl, "recommendations.json", p) == 1 and nfl[GR.KEY] == {"jahmyrgibbs|anytime_td": {"a": 2.0}}
+    assert GR.stamp({"date": "2026-W10", "games": []}, "/srv/web/data/recommendations.json", p) == 1
+    assert GR.stamp({"date": "2026-W10", "games": []}, "elsewhere.json", p) == 0, "no sport, no guess"
     from engine import gate
     assert GR.KEY in gate.PAID_KEYS
     public = gate.redact(dict(board), "nba.json")
