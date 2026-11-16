@@ -1367,13 +1367,13 @@ BUILDERS = {"mlb": MLB, "nhl": NHL, "nba": NBA, "wnba": NBA, "cbb": NBA}
 
 
 def build(g: dict, result: dict, *, sport: str, names: dict | None = None, meta: dict | None = None,
-          changes: dict | None = None) -> dict | None:
+          changes: dict | None = None, conn=None) -> dict | None:
     """One game's report, or None for a row with no teams or a league this
     module does not write."""
     if not isinstance(g, dict) or not g.get("away") or not g.get("home") or sport not in BUILDERS:
         return None
     c = Ctx(g, result, names=names if names is not None else team_names(sport), sport=sport,
-            meta=meta, changes=changes)
+            meta=meta, changes=changes, conn=conn)
     fns, short = BUILDERS[sport]
     return finish(c, fns, short)
 
@@ -1383,8 +1383,16 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
     board. ``meta`` is {"AWAY@HOME": what the build knows of a game and the
     board leaves off} (basketball's: nba_meta). ``out`` is the board's
     public path; what changed is kept beside its private copy, stamped
-    ``at``. One line for the build log; never raises."""
+    ``at``. One line for the build log; never raises. The history database
+    is opened for what only it knows (our team ratings' own chance on the
+    call, gamereport.ratings_chance); a report is written without it."""
+    conn = None
     try:
+        try:
+            from .db import connect
+            conn = connect()
+        except Exception:                                    # noqa: BLE001
+            conn = None
         names = team_names(sport)
         if sport == "cbb":
             # College's names are the night's own (the board's teams table):
@@ -1409,7 +1417,7 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
         logged = log_changes(result, [(g, {}, more) for g, _m, more in prepared], sport, out, at)
         reports = []
         for g, m, _more in prepared:
-            r = build(g, result, sport=sport, names=names, meta=m,
+            r = build(g, result, sport=sport, names=names, meta=m, conn=conn,
                       changes=logged.get(f"{g['away']}@{g['home']}|{str(g.get('date') or '')[:10]}"))
             if r:
                 reports.append(r)
@@ -1420,3 +1428,9 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
     except Exception as exc:                                 # noqa: BLE001
         result.pop(KEY, None)
         return f"⚠️  Game reports skipped ({type(exc).__name__}: {exc})"
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:                                # noqa: BLE001
+                pass

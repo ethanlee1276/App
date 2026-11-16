@@ -374,8 +374,11 @@ class Ctx:
                  sched=None, staff: dict | None = None, names: dict | None = None,
                  form: dict | None = None, meetings: list | None = None, ideas: dict | None = None,
                  sport: str = "nfl", meta: dict | None = None, changes: dict | None = None,
-                 grades: dict | None = None, angles: dict | None = None):
+                 grades: dict | None = None, angles: dict | None = None, conn=None):
         self.g = g
+        # The build's history connection, for what only the database knows
+        # (our team ratings' own chance, `ratings_chance`); None in a test.
+        self.conn = conn
         # This season's leak tables (engine/angles.nfl_tables), the NFL's.
         self.angle_tables = angles or {}
         # Our grades (engine/grades), the NFL's: {kind: {(team, name): grade}}.
@@ -3763,13 +3766,13 @@ def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
           staff: dict | None = None, names: dict | None = None, form: dict | None = None,
           meetings: list | None = None, ideas: dict | None = None, sport: str = "nfl",
           meta: dict | None = None, changes: dict | None = None,
-          grades: dict | None = None, angles: dict | None = None) -> dict | None:
+          grades: dict | None = None, angles: dict | None = None, conn=None) -> dict | None:
     """One game's report, or None for a row with no teams."""
     if not isinstance(g, dict) or not g.get("away") or not g.get("home"):
         return None
     c = Ctx(g, result, allowed=allowed, sched=sched, staff=staff, names=names,
             form=form, meetings=meetings, ideas=ideas, sport=sport, meta=meta, changes=changes,
-            grades=grades, angles=angles)
+            grades=grades, angles=angles, conn=conn)
     return finish(c, SECTIONS, sec_short)
 
 
@@ -4050,6 +4053,61 @@ def verdict_evidence(c: Ctx) -> dict:
     return out
 
 
+#: OUR TEAM RATINGS' OWN CHANCE, BESIDE THE CALL (Ethan, 2026-11-16, asked
+#: whether to show our own ratings' pick next to the call anyway: "Yes"). It
+#: is shown, never followed, and always says why it is unproven, as far as
+#: that is measured: the NFL's from docs/NFL_MONEYLINE_ARITHMETIC.md (the
+#: ratings' slope against the close, -0.06 +/- 0.14 over 1,181 games),
+#: baseball's from its ratings-alone moneylines; every other league says
+#: what engine/gamecal has measured of it, or that nothing has been.
+VERDICT_RATINGS_WHY = {
+    "nfl": "where they've disagreed with the closing line, the disagreement has carried nothing",
+    "mlb": "bets on them alone against the price lost 12.4%",
+}
+#: The note under a call that shows the ratings beside it: why the call is
+#: the price's is said on the ratings' own line, so the note does not repeat it.
+VERDICT_NOTE_RATED = ("The call follows the price, the sharpest number on the board for who wins. "
+                      "The reasons above are the report's own data, for each side")
+
+
+def ratings_why(sport: str) -> str:
+    """Why our ratings' own chance is unproven in this league, in words."""
+    if sport in VERDICT_RATINGS_WHY:
+        return VERDICT_RATINGS_WHY[sport]
+    try:
+        from .gamecal import measured
+        e = measured(sport, "moneyline")
+        shrink, n = float(e["shrink"]), int(e["n"])
+    except Exception:                                        # noqa: BLE001
+        return "they haven't been measured against the price yet"
+    if shrink <= 0.02:
+        return f"over {n:,} graded games, their disagreements with the closing line carried nothing"
+    return f"{shrink:.0%} of a disagreement with the closing line has held up, over {n:,} graded games"
+
+
+def ratings_chance(c: Ctx) -> float | None:
+    """The home side's chance by our team ratings alone, or None where they
+    cannot be read: the slip checker's model (engine/slipgame.model), each
+    league's ratings, baseball's with tonight's starters and hockey's
+    expected goals. A build that already knows it puts it in the game's
+    meta ({"ratings": {"p_home": ...}}); else the build's connection reads it."""
+    known = c.meta.get("ratings")
+    p = _f(known.get("p_home")) if isinstance(known, dict) else None
+    if p is None and getattr(c, "conn", None) is not None:
+        try:
+            from . import slipgame
+            g = {"neutral": bool(c.g.get("neutral") or c.meta.get("neutral"))}
+            if c.sport == "mlb":
+                from . import leaguereport as LR
+                g["pitchers"] = {("home" if t == c.home else "away"): LR._starter(c, t) for t in c.teams}
+            m = slipgame.model(c.conn, c.sport, c.home, c.away, g,
+                               today=str(c.g.get("date") or "")[:10] or None)
+            p = _f(m.get("p_home")) if isinstance(m, dict) else None
+        except Exception:                                    # noqa: BLE001
+            p = None
+    return p if p is not None and 0.0 < p < 1.0 else None
+
+
 def sec_verdict(c: Ctx) -> dict | None:
     """Who we think wins (see VERDICT_WORDS): the call, the numbers behind it,
     and the report's case for each side."""
@@ -4066,6 +4124,16 @@ def sec_verdict(c: Ctx) -> dict | None:
              "spread": "the spread, on the league's own win curve (no moneyline was posted)",
              "sim": "our simulation of the game (no price was posted)"}[src]
     nums.append(f"{cap(team_np(c, fav))} to win, {a_pct(p)} chance by {where}")
+    rp_home = ratings_chance(c)
+    if rp_home is not None:
+        rfav = c.home if rp_home >= 0.5 else c.away
+        rp = rp_home if rfav == c.home else 1.0 - rp_home
+        even = round(rp, 2) <= 0.5
+        blocks[0]["ratings"] = {"team": rfav, "name": c.name(rfav), "chance": round(rp, 3),
+                                "same": even or rfav == fav, "even": even}
+        said = ("an even game" if even else f"{team_np(c, rfav)} {_pct(rp)}"
+                + ("" if rfav == fav else ", the other side from the price"))
+        nums.append(f"Our team ratings alone: {said}. Unproven: {ratings_why(c.sport)}")
     sim = c.g.get("sim") or {}
     if src != "sim" and _f(sim.get("p_home_win")) is not None:
         ps = float(sim["p_home_win"]) if fav == c.home else 1.0 - float(sim["p_home_win"])
@@ -4092,7 +4160,7 @@ def sec_verdict(c: Ctx) -> dict | None:
                          f"({len(ev[dog])} reasons to {len(ev[fav])}): the case for an upset, against the price"))
     elif not why and not case:
         blocks.append(_p("Nothing in the matchup, the records or the injury report tilts this one past the price"))
-    note = VERDICT_NOTE.get(c.sport, VERDICT_NOTE[""])
+    note = VERDICT_NOTE_RATED if "ratings" in blocks[0] else VERDICT_NOTE.get(c.sport, VERDICT_NOTE[""])
     blocks.append({"type": "note", "text": note if (why or case) else note.split(". The reasons above")[0]})
     return _section("verdict", "Who we think wins", blocks)
 
@@ -4316,7 +4384,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
                       form=form, meetings=met, ideas=extra, sport=sport,
                       meta=(meta or {}).get(f"{away}@{home}"),
                       changes=logged.get(f"{away}@{home}|{str(g.get('date') or '')[:10]}"),
-                      grades=grades, angles=angle_tables)
+                      grades=grades, angles=angle_tables, conn=conn)
             if r:
                 reports.append(r)
         _t = _clock.lap("game reports", "reports", _t)
@@ -4390,6 +4458,10 @@ def to_text(report: dict) -> str:
             elif t == "winner":
                 out.append(f"  {b.get('word')}: {b.get('name') or b.get('team')} — "
                            f"{round(float(b.get('chance') or 0) * 100)}% to win")
+                r = b.get("ratings")
+                if isinstance(r, dict) and r.get("chance") is not None:
+                    out.append("  Our ratings alone (unproven): " + ("an even game" if r.get("even") else
+                               f"{r.get('name') or r.get('team')} {round(float(r['chance']) * 100)}%"))
             elif t == "verdicts":
                 for v in b["items"]:
                     out.append(f"  • {v['title']} = {v['label']}"

@@ -143,7 +143,8 @@ def test_the_other_leagues_say_their_own_facts():
 
 def test_the_page_draws_the_call_and_copies_it():
     assert 'if (b.type === "winner") {' in REPORT_JS and 'class="gr-winner-bar" role="img"' in REPORT_JS
-    assert 'else if (b.type === "winner") out.push(`${b.word || "Our call"}: ${b.name || b.team} — ' in REPORT_JS
+    assert 'else if (b.type === "winner") {' in REPORT_JS
+    assert 'out.push(`${b.word || "Our call"}: ${b.name || b.team} — ' in REPORT_JS
     assert ".gr-winner-bar > i {" in REPORT_CSS and ".gr-winner-p { color: var(--good);" in REPORT_CSS
     assert 'elif t == "winner":' in (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
 

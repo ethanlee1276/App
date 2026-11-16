@@ -141,6 +141,17 @@
   }
   /* A rank in a table ("+0.19 · 4th", "3.60 (3rd)") in its colour: the
      top third of the league green, the bottom third red (`rankTone`). */
+  /* OUR RATINGS ALONE, ON THE CALL (Ethan, 2026-11-16, asked whether to show
+     our own ratings' pick beside the call anyway: "Yes"). Shown, never
+     followed: tagged unproven, and the call's own list says why
+     (engine/gamereport.ratings_why). */
+  function winnerRatingsHTML(r, pct) {
+    if (!r || r.chance == null) return "";
+    const p = Math.max(0, Math.min(1, Number(r.chance) || 0));
+    const what = r.even ? "an even game" : `<b>${escapeHtml(r.name || teamName(r.team))}</b> ${pct(p)}`;
+    return `<div class="gr-winner-alt"><span>Our ratings alone: ${what}${r.same === false ? ", the other side" : ""}</span>`
+      + `<span class="gr-winner-tag">Unproven</span></div>`;
+  }
   function rankCell(cell, of) {
     const t = String(cell == null ? "" : cell);
     const m = /^(.*?)( · |\s\()(\d+)(st|nd|rd|th)(\)?)$/.exec(t);
@@ -315,6 +326,7 @@
           <b class="gr-winner-team">${escapeHtml(us)}</b><span class="gr-winner-p">${pct(p)} to win</span></div>
         <div class="gr-winner-bar" role="img" aria-label="${escapeAttr(`${us} ${pct(p)}, ${them} ${pct(1 - p)}`)}"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
         <div class="gr-winner-legend"><span>${escapeHtml(us)} ${pct(p)}</span><span>${escapeHtml(them)} ${pct(1 - p)}</span></div>
+        ${winnerRatingsHTML(b.ratings, pct)}
       </div>`;
     }
     if (b.type === "p") return `<p class="gr-p">${named(b.text, b.names, b.marks, true)}</p>`;
@@ -416,7 +428,11 @@
       for (const b of s.blocks || []) {
         if (!b || !b.type) continue;
         if (b.type === "p" || b.type === "note") out.push(b.text);
-        else if (b.type === "winner") out.push(`${b.word || "Our call"}: ${b.name || b.team} — ${Math.round(Number(b.chance || 0) * 100)}% to win`);
+        else if (b.type === "winner") {
+          out.push(`${b.word || "Our call"}: ${b.name || b.team} — ${Math.round(Number(b.chance || 0) * 100)}% to win`);
+          const r = b.ratings;
+          if (r && r.chance != null) out.push(`Our ratings alone (unproven): ${r.even ? "an even game" : `${r.name || r.team} ${Math.round(Number(r.chance) * 100)}%`}`);
+        }
         else if (b.type === "h") out.push("", b.text);
         else if (b.type === "list") (b.items || []).forEach((t) => out.push(`• ${t}`));
         else if (b.type === "table") {
