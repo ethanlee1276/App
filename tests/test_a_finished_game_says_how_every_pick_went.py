@@ -280,6 +280,37 @@ def test_the_report_marks_its_picks_reads_tickets_and_call():
     assert "gr-res" not in plain, "before the final the report is as it was"
 
 
+def test_the_go_to_scorer_s_read_says_whether_he_scored():
+    """A football read's go-to scorer line ("the Lions' likeliest scorer —
+    64% to score by our numbers") is a read too: on a finished game it says
+    whether he scored, once the record has graded a touchdown on him, and
+    nothing until then or when it has none."""
+    gr = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
+    assert '**({"scorer_bet": _bet_of({"player": r.get("player"), "team": off,' in gr
+    assert '"market": "anytime_td", "side": "yes", "line": None})}' in gr
+    bet = GR.bet_of({"player": "Jahmyr Gibbs", "team": "DET", "market": "anytime_td", "side": "yes", "line": None})
+    assert bet == {"market": "anytime_td", "side": "yes", "line": None, "player": "Jahmyr Gibbs", "team": "DET"}
+    card = {"player": "Jahmyr Gibbs", "team": "DET", "pos": "RB", "verdict": "favorable", "label": "FAVORABLE",
+            "title": "Jahmyr Gibbs vs NE's run defense", "role": "", "form": [],
+            "why": ["The Lions' likeliest scorer — 64% to score by our numbers.", "Volume up."], "scorer_bet": bet}
+    rep = {"game": "NE@DET", "minutes": 1, "sections": [{"key": "matchups", "title": "Matchups", "blocks": [
+        {"type": "verdicts", "items": [card]}]}]}
+    got = _report(f"""const rep = {json.dumps(rep)};
+      const as = (status, actual) => R.html(rep, {{ results: Object.assign({{}}, RES, {{ grade: () => ({{ status, actual }}) }}) }});
+      process.stdout.write(JSON.stringify([as('won', 1), as('won', 2), as('lost', 0), as('void'), as('pending'),
+                                           R.html(rep, {{}})]));""")
+    if got is None:
+        return
+    one, two, none, void, waiting, before = got
+    assert ('64% to score by our numbers. <span class="gr-res won">Scored</span></li>') in one, one[:600]
+    assert '<span class="gr-res won">Scored 2</span>' in two
+    assert '<span class="gr-res lost">Didn’t score</span>' in none
+    assert '<span class="gr-res even">Didn’t play</span>' in void
+    assert "gr-res" not in waiting, "no grade yet: no tag, never a wait that may not end"
+    assert "gr-res" not in before
+    assert "Volume up.</li>" in one and "Volume up. <span" not in one, "on his scorer line only"
+
+
 def test_the_parlays_page_marks_each_finished_game_s_tickets():
     gp = {"games": [{"home": "PHI", "away": "IND", "threes": [{"joint": 0.31, "independent": 0.29, "legs": [
         {"player": "Kentavious Caldwell-Pope", "team": "PHI", "market": "rebounds", "side": "Over", "line": 1.5}]}],

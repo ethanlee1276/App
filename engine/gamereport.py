@@ -1715,7 +1715,12 @@ def sec_matchups(c: Ctx) -> dict | None:
                           # His pick on the read's side (`read_pick`), and the
                           # pick itself, graded on a finished game's page.
                           **({"pick": read_pick(r)} if read_pick(r) else {}),
-                          **({"bet": _read_bet(r)} if read_pick(r) and _read_bet(r) else {})})
+                          **({"bet": _read_bet(r)} if read_pick(r) and _read_bet(r) else {}),
+                          # The go-to scorer's touchdown, so a finished game's
+                          # card says whether the read was right.
+                          **({"scorer_bet": _bet_of({"player": r.get("player"), "team": off,
+                                                     "market": "anytime_td", "side": "yes", "line": None})}
+                             if scorer else {})})
         if items:
             sub.append({"type": "verdicts", "items": items})
         room = cov.get(dfn) or {}

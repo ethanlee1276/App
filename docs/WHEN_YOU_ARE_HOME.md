@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SW. The go-to scorer read says whether he scored** (step 629; 16
+November). Nothing to run. On a football report, each team's go-to scorer's
+card opens on why he's the likeliest to score ("the Lions' likeliest scorer —
+64% to score by our numbers ..."). That's a read with or without a bet on
+it, so once the game is final the line now ends with how it went: "Scored",
+"Scored 2", "Didn't score", or "Didn't play". It reads the record's own
+touchdown grade for him, so it shows once the box score is graded, and only
+when the record graded a touchdown bet on him: a Most Likely touchdown pick
+or a leg of one of the game's touchdown pairs (every leg of every ticket is
+graded on its own). It never says it's waiting.
+
 **SV. The Tonight tab and the Pick of the Day say how a finished game's
 picks did** (step 628; 16 November). Nothing to run. The results from step ST
 now also show outside the game page. Once a pick's game is final, its row on

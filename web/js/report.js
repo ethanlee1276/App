@@ -68,6 +68,16 @@
     const words = typeof RESULTS.words === "function" ? RESULTS.words(x, bet) : x.status;
     return ` <span class="${RES_TAG[x.status] || RES_TAG.pending}">${escapeHtml(words)}</span>`;
   }
+  //: A go-to scorer's touchdown on a finished game, once the record has graded
+  //: one on him ("Scored", "Didn't score"); nothing before, and nothing when
+  //: the record has none.
+  function scorerTag(bet) {
+    const x = RESULTS && bet && typeof RESULTS.grade === "function" ? RESULTS.grade(bet) : null;
+    if (!x || !["won", "lost", "void"].includes(x.status)) return "";
+    const words = x.status === "void" ? "Didn’t play" : x.status === "won"
+      ? `Scored${Number(x.actual) > 1 ? ` ${Number(x.actual)}` : ""}` : "Didn’t score";
+    return ` <span class="${RES_TAG[x.status]}">${escapeHtml(words)}</span>`;
+  }
   //: A ticket's verdict from its legs (app.js ticketResult): every leg that played won, or one lost.
   function ticketTag(legs) {
     if (!RESULTS || typeof RESULTS.ticket !== "function") return "";
@@ -429,7 +439,8 @@
             ${v.label ? `<span class="ms-read-tag ${tone}">${escapeHtml(v.label)}</span>` : ""}
             ${v.status ? `<span class="ms-read-tag gr-status">${escapeHtml(v.status)}</span>` : ""}</div>
           ${b.type === "verdicts"
-            ? ((v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${named(w, b.names, null, true)}</li>`).join("")}</ul>` : "")
+            ? ((v.why || []).length ? `<ul class="gr-why">${v.why.map((w, i) => `<li>${named(w, b.names, null, true)}${
+                i === 0 && v.scorer_bet ? scorerTag(v.scorer_bet) : ""}</li>`).join("")}</ul>` : "")
             : v.text ? `<p class="gr-person-text">${named(v.text, b.names)}</p>` : ""}
           ${v.pick ? `<p class="gr-person-pick">${named(v.pick, b.names)}${v.bet ? resTag(v.bet) : ""}</p>` : ""}
           ${form(v.form)}
