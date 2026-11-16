@@ -5269,6 +5269,167 @@ function gpFieldSVG(m, d, mini) {
     + `<rect class="gp-fd-turf" x="0" y="0" width="${GP_FD_W}" height="${H}"/>${ez("home", 0)}${ez("away", GP_FD_W - GP_FD_EZ)}`
     + `<path class="gp-fd-yl" d="${lines}"/><path class="gp-fd-fifty" d="M${gpF(X(50))} ${top}V${foot}"/>${nums}${band}${gain}${los}${ball}</svg>`;
 }
+/* ---------------- the field, in 3D ----------------
+   THE FIELD AS A CAMERA SEES IT (Ethan, 2026-11-16, with FanDuel's tracker
+   beside ours: "I like fanduels render and how it looks 3d. I want ours too
+   look like that"; the night before, on the drawn field the Last play card
+   had then: "the goal posts are off compared too the field"). That field
+   leaned its yard lines to fake depth and stood its posts upright on top,
+   so nothing tied the two together.
+
+   Here every mark is a point on a real field, in yards: X from the home end
+   line (-10) to the away end line (110), as the strip's spots run (0 is the
+   home goal line); Y from the near sideline (0) to the far one (53⅓); Z up.
+   All of it goes through one pinhole camera standing behind the near
+   sideline at midfield, 87 yards back and 48 up, held level with the
+   picture shifted down onto the field, the way an architect's camera keeps
+   a building's walls straight. So the far sideline is narrower than the
+   near one, the yard lines run to one vanishing point, the posts stand
+   straight up, and they stand where a field's do: their bases two yards
+   behind each end line and the crossbar ten feet up over it, because they
+   are drawn by the same camera as the grass under them. Paint
+   on the grass (the numbers, the names in the end zones, the logo at
+   midfield) is set letter by letter on the camera's local slope there, so
+   the far letters shrink as the field does. */
+const GP3_W = 160 / 3;                                    // 53⅓ yards, sideline to sideline
+//: Where the camera stands: midfield, behind the near sideline, and how high.
+const GP3_CAM = { x: 50, back: 87, up: 48 };
+function gp3(x, y, z = 0) {
+  const depth = y + GP3_CAM.back;
+  return [1000 * (x - GP3_CAM.x) / depth, 1000 * (GP3_CAM.up - z) / depth];
+}
+//: The camera's slope at a point on the grass: screen units per yard along X and along Y.
+function gp3J(x, y) {
+  const p = gp3(x, y), a = gp3(x + 0.01, y), b = gp3(x, y + 0.01);
+  return [(a[0] - p[0]) / 0.01, (a[1] - p[1]) / 0.01, (b[0] - p[0]) / 0.01, (b[1] - p[1]) / 0.01, p[0], p[1]];
+}
+//: The post: its base two yards behind the end line, the crossbar ten feet up over
+//: the end line, 18½ feet wide, the uprights 35 feet above it (NFL rule 1, section 2).
+const GP3_POST = { back: 2, bar: 10 / 3, half: 18.5 / 6, up: 35 / 3, pad: 2.2 };
+const GP3_BOX = (() => {
+  const pts = [[-14, -4, -2.5], [114, -4, -2.5], [-14, GP3_W + 4, 0], [114, GP3_W + 4, 0],
+               [-10 - GP3_POST.back, GP3_W / 2 - GP3_POST.half, GP3_POST.bar + GP3_POST.up],
+               [110 + GP3_POST.back, GP3_W / 2 + GP3_POST.half, GP3_POST.bar + GP3_POST.up]].map(([x, y, z]) => gp3(x, y, z));
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const x0 = Math.min(...xs) - 8, y0 = Math.min(...ys) - 8;
+  return { x0, y0, w: Math.max(...xs) + 8 - x0, h: Math.max(...ys) + 14 - y0 };
+})();
+function gpField3dSVG(m, d, league) {
+  const f = (v) => v.toFixed(1);
+  const P = (x, y, z = 0) => gp3(x, y, z).map(f).join(" ");
+  const quad = (x0, x1, y0, y1, z = 0) => `M${P(x0, y0, z)}L${P(x1, y0, z)}L${P(x1, y1, z)}L${P(x0, y1, z)}Z`;
+  const W = GP3_W, mid = W / 2;
+  // Paint on the grass: `k` yards to the font's em, turned `turn` quarter-turns
+  // from reading along +X with its top toward the far sideline.
+  const paint = (x, y, k, turn, txt, cls, extra = "") => {
+    const [a, b, c, dd, e, g] = gp3J(x, y);
+    const R = [[1, 0, 0, -1], [0, 1, 1, 0], [-1, 0, 0, 1], [0, -1, -1, 0]][turn];
+    const ux = R[0] * k, uy = R[1] * k, vx = R[2] * k, vy = R[3] * k;   // text's right and down, in yards
+    const mtx = [a * ux + c * uy, b * ux + dd * uy, a * vx + c * vy, b * vx + dd * vy, e, g].map((v) => +v.toFixed(3));
+    return `<text class="${cls}" transform="matrix(${mtx.join(" ")})"${extra}>${txt}</text>`;
+  };
+  // The turf: five-yard bands mown light and dark, the end zones in the clubs' colours.
+  let turf = "";
+  for (let x = 0; x < 100; x += 5) turf += `<path class="gp3-mow${(x / 5) % 2 ? " b" : ""}" d="${quad(x, x + 5, 0, W)}"/>`;
+  const zone = (side, x0) => {
+    const name = String(teamNameIn(league, d[side]) || d[side] || "").toUpperCase();
+    const cx = x0 + 5, n = name.length, step = Math.min(3.9, (W - 8) / Math.max(1, n));
+    const k = Math.min(5.2, step * 1.25);
+    let letters = "";
+    // Along the end zone, tops toward its end line: home's read up the field, away's down it.
+    [...name].forEach((ch, i) => {
+      const t = (i - (n - 1) / 2) * step;
+      letters += side === "home" ? paint(cx + k * 0.36, mid + t, k, 1, escapeHtml(ch), "gp3-ezt")
+        : paint(cx - k * 0.36, mid - t, k, 3, escapeHtml(ch), "gp3-ezt");
+    });
+    return `<path class="gp3-ez ${side}" d="${quad(x0, x0 + 10, 0, W)}"/>${letters}`;
+  };
+  // The white paint: the yard lines narrowing with the field, the goal lines wider.
+  let lines = "";
+  for (let x = 5; x < 100; x += 5) lines += quad(x - 0.13, x + 0.13, 0, W);
+  const goals = quad(-0.22, 0.22, 0, W) + quad(99.78, 100.22, 0, W);
+  const border = quad(-10, 110, -0.3, 0) + quad(-10, 110, W, W + 0.3) + quad(-10.3, -10, -0.3, W + 0.3) + quad(110, 110.3, -0.3, W + 0.3);
+  let ticks = "";
+  for (let x = 1; x < 100; x++) {
+    if (x % 5 === 0) continue;
+    for (const [y0, y1] of [[0.4, 1.1], [23.25, 23.92], [29.41, 30.08], [W - 1.1, W - 0.4]]) ticks += quad(x - 0.07, x + 0.07, y0, y1);
+  }
+  // The numbers, 2 yards tall, their tops 9 yards in from each sideline; the
+  // arrows point to the nearer goal. The far side's read from the far sideline.
+  let nums = "";
+  for (let x = 10; x <= 90; x += 10) {
+    const v = String(x > 50 ? 100 - x : x);
+    for (const [y, turn] of [[8, 0], [W - 8, 2]]) {
+      const s = turn ? -1 : 1;
+      const cls = turn ? "gp3-num far" : "gp3-num";
+      nums += paint(x - 1.05 * s, y - 0.85 * s, 2.7, turn, v[0], cls) + paint(x + 1.05 * s, y - 0.85 * s, 2.7, turn, v[1], cls);
+      if (x !== 50) {
+        const ax = x < 50 ? x - 2.35 : x + 2.35, dir = x < 50 ? -1 : 1;
+        nums += `<path class="gp3-arrow${turn ? " far" : ""}" d="M${P(ax + dir * 0.75, y)}L${P(ax - dir * 0.15, y - 0.45)}L${P(ax - dir * 0.15, y + 0.45)}Z"/>`;
+      }
+    }
+  }
+  // The home club's mark at midfield, painted on the grass.
+  const logo = typeof logoUrl === "function" ? logoUrl(d.home, league, 64) : "";
+  let mark = "";
+  if (logo) {
+    const [a, b, c, dd, e, g] = gp3J(50, mid), s = 9;
+    mark = `<image class="gp3-logo" href="${escapeAttr(logo)}" x="-0.5" y="-0.5" width="1" height="1" preserveAspectRatio="xMidYMid meet"`
+      + ` transform="matrix(${[a * s, b * s, -c * s, -dd * s, e, g].map((v) => +v.toFixed(3)).join(" ")})"/>`;
+  }
+  // The drive, a ribbon in the offence's colour down the middle of the field
+  // from where it started to the ball; the line of scrimmage, the line to
+  // gain and the ball.
+  // It fades in from the start, so it reads the way the offence is going.
+  const [fx0] = m.start != null ? gp3(m.start, mid) : [0], [fx1] = gp3(m.los, mid);
+  const band = m.start != null && Math.abs(m.start - m.los) >= 1
+    ? `<linearGradient id="gp3-fade" gradientUnits="userSpaceOnUse" x1="${f(fx0)}" y1="0" x2="${f(fx1)}" y2="0">`
+      + `<stop class="gp3-fade" offset="0" stop-opacity=".18"/><stop class="gp3-fade" offset="1" stop-opacity=".9"/></linearGradient>`
+      + `<path class="gp3-drive" fill="url(#gp3-fade)" d="${quad(Math.min(m.start, m.los), Math.max(m.start, m.los), mid - 2.6, mid + 2.6)}"/>`
+      + `<path class="gp3-drive-start" d="${quad(m.start - 0.3, m.start + 0.3, mid - 2.6, mid + 2.6)}"/>` : "";
+  const bar = (x, cls) => `<path class="${cls}-glow" d="${quad(x - 0.9, x + 0.9, 0, W)}"/><path class="${cls}" d="${quad(x - 0.3, x + 0.3, 0, W)}"/>`;
+  const gain = m.gain != null && !m.goal ? bar(m.gain, "gp3-gain") : "";
+  const los = bar(m.los, "gp3-los");
+  // The ball sits on the line, lifted off the grass over its own shadow, in
+  // a ring of light on the turf so the eye finds it at a glance.
+  const J = gp3J(m.los, mid), s = Math.hypot(J[0], J[1]), [bx, by] = gp3(m.los, mid, 1.2);
+  const ring = (r, cls) => `<ellipse class="${cls}" cx="${f(J[4])}" cy="${f(J[5])}" rx="${f(s * r)}" ry="${f(Math.abs(J[3]) * r)}"/>`;
+  const ball = ring(5.5, "gp3-halo") + ring(2.1, "gp3-shadow")
+    + `<g class="gp3-ball" transform="translate(${f(bx)} ${f(by)}) scale(${f(s / 7)})">`
+    + `<ellipse rx="15" ry="9.5"/><path class="gp3-ball-hi" d="M-9 -4.5Q0 -8.6 9 -4.5"/>`
+    + `<path d="M-6 0H6M-3 -3.4v6.8M0 -3.4v6.8M3 -3.4v6.8"/></g>`;
+  // The posts: a padded base behind the end line, the gooseneck forward to it,
+  // the crossbar over it and the uprights.
+  const post = (xEnd, out) => {
+    const xb = xEnd + out * GP3_POST.back, zb = GP3_POST.bar, zt = zb + GP3_POST.up, h = GP3_POST.half;
+    const neck = `M${P(xb, mid, 0)}L${P(xb, mid, zb - 0.7)}Q${P(xb, mid, zb)} ${P(xEnd + out * 1.2, mid, zb)}L${P(xEnd, mid, zb)}`;
+    const frame = `M${P(xEnd, mid - h, zt)}L${P(xEnd, mid - h, zb)}L${P(xEnd, mid + h, zb)}L${P(xEnd, mid + h, zt)}`;
+    const [px, py] = gp3(xb, mid, 0), [, ty] = gp3(xb, mid, GP3_POST.pad), pw = Math.hypot(...gp3J(xb, mid).slice(0, 2)) * 1.1;
+    return `<ellipse class="gp3-shadow" cx="${f(px)}" cy="${f(py)}" rx="${f(pw * 1.6)}" ry="${f(pw * 0.5)}"/>`
+      + `<path class="gp3-post-back" d="${neck}${frame}"/><path class="gp3-post" d="${neck}${frame}"/>`
+      + `<rect class="gp3-pad" x="${f(px - pw / 2)}" y="${f(ty)}" width="${f(pw)}" height="${f(py - ty)}" rx="${f(pw / 2)}"/>`;
+  };
+  const B = GP3_BOX;
+  const [, nearY] = gp3(50, -4), [, farY] = gp3(50, W + 4);
+  const label = `${m.words || "Ball"} — ${m.off} has the ball${m.gain != null && !m.goal ? ", the line to gain in yellow" : ""}`;
+  return `<svg class="gp-fd gp3" viewBox="${f(B.x0)} ${f(B.y0)} ${f(B.w)} ${f(B.h)}" role="img" aria-label="${escapeAttr(label)}">`
+    + `<defs><linearGradient id="gp3-depth" gradientUnits="userSpaceOnUse" x1="0" y1="${f(farY)}" x2="0" y2="${f(nearY)}">`
+    + `<stop offset="0" stop-color="#000" stop-opacity=".34"/><stop offset=".55" stop-color="#000" stop-opacity=".08"/>`
+    + `<stop offset="1" stop-color="#fff" stop-opacity=".05"/></linearGradient>`
+    + `<linearGradient id="gp3-padfill" x1="0" x2="1"><stop offset="0" stop-color="#1c2a44"/><stop offset=".45" stop-color="#3f5a8c"/>`
+    + `<stop offset="1" stop-color="#16213a"/></linearGradient>`
+    + `<filter id="gp3-soft" x="-20%" y="-200%" width="140%" height="500%"><feGaussianBlur stdDeviation="9"/></filter></defs>`
+    + `<ellipse class="gp3-under" cx="0" cy="${f(nearY + 6)}" rx="${f(B.w * 0.46)}" ry="16" filter="url(#gp3-soft)"/>`
+    + `<path class="gp3-edge" d="M${P(-14, -4, 0)}L${P(114, -4, 0)}L${P(114, -4, -2.5)}L${P(-14, -4, -2.5)}Z"/>`
+    + `<path class="gp3-apron" d="${quad(-14, 114, -4, W + 4)}"/>`
+    + `<path class="gp3-turf" d="${quad(-10, 110, 0, W)}"/>${turf}${zone("home", -10)}${zone("away", 100)}`
+    + `<path class="gp3-depth" d="${quad(-14, 114, -4, W + 4)}" fill="url(#gp3-depth)"/>`
+    + mark + band
+    + `<path class="gp3-paint" d="${lines}${goals}${border}"/><path class="gp3-tick" d="${ticks}"/>${nums}`
+    + `${gain}${los}${ball}${post(-10, -1)}${post(110, 1)}`
+    + `<path class="gp3-rim" d="M${P(-14, -4, 0)}L${P(114, -4, 0)}"/></svg>`;
+}
+
 function gpDriveWords(dr) {
   const n = Number(dr.plays || dr.offensive_plays || 0), y = Number(dr.yards || 0);
   return [`${n} play${n === 1 ? "" : "s"}`, `${y} yard${y === 1 ? "" : "s"}`, dr.elapsed || ""].filter(Boolean).join(", ");
@@ -5279,7 +5440,7 @@ function gpFieldHTML(d, league, lv) {
   const drive = m.dr ? `<div class="gp-fd-foot">${escapeHtml(teamNameIn(league, m.off))} drive · ${escapeHtml(gpDriveWords(m.dr))}</div>` : "";
   return `<div class="gp-field" style="--off:var(${m.off === d.home ? "--wh" : "--wa"})">
       ${m.words ? `<div class="gp-fd-words">${escapeHtml(m.words)}</div>` : ""}
-      ${gpFieldSVG(m, d, false)}${drive}</div>`;
+      ${gpField3dSVG(m, d, league)}${drive}</div>`;
 }
 
 /* ---------------- the line score ----------------

@@ -1125,6 +1125,42 @@ svg text.gp-fd-num { fill: rgba(255, 255, 255, .62); font-size: 21px; font-weigh
 .gp-fd-ball ellipse { fill: var(--gp-ball); stroke: #fff; stroke-width: 2.5; }
 .gp-fd-ball path { stroke: #fff; stroke-width: 2.5; fill: none; stroke-linecap: round; }
 svg.gp-fd.mini .gp-fd-los, svg.gp-fd.mini .gp-fd-gain { stroke-width: 4; }
+/* The field in 3D (detail.js gpField3dSVG): turf mown in five-yard bands, the
+   clubs' end zones, white paint, the two lines and the ball, the posts gold
+   on padded bases, on a slab that throws a soft shadow. Paint on the grass
+   is sized by its own transform, so its font-size is one unit. */
+svg.gp-fd.gp3 { border-radius: 0; overflow: visible; }
+.gp3-under { fill: #000; opacity: .55; }
+.gp3-edge { fill: #0b0f14; }
+.gp3-apron { fill: #1b4824; }
+.gp3-turf { fill: #2d7835; }
+.gp3-mow { fill: #34873d; }
+.gp3-mow.b { fill: #2b7133; }
+.gp3-ez.home { fill: var(--wh); }
+.gp3-ez.away { fill: var(--wa); }
+svg text.gp3-ezt { fill: #fff; fill-opacity: .92; font-size: 1px; font-weight: 900; text-anchor: middle; }
+.gp3-paint { fill: #f4f6f1; fill-opacity: .9; }
+.gp3-tick { fill: #f4f6f1; fill-opacity: .55; }
+svg text.gp3-num { fill: #f4f6f1; fill-opacity: .84; font-size: 1px; font-weight: 800; text-anchor: middle; }
+.gp3-arrow { fill: #f4f6f1; fill-opacity: .72; }
+svg text.gp3-num.far, .gp3-arrow.far { fill-opacity: .45; }
+.gp3-logo { opacity: .3; }
+.gp3-fade { stop-color: color-mix(in oklab, var(--off), white 22%); }
+.gp3-drive-start { fill: #fff; opacity: .85; }
+.gp3-los { fill: var(--gp-los); }
+.gp3-gain { fill: var(--gp-gain); }
+.gp3-los-glow { fill: var(--gp-los); opacity: .3; }
+.gp3-gain-glow { fill: var(--gp-gain); opacity: .3; }
+.gp3-shadow { fill: #000; opacity: .4; }
+.gp3-halo { fill: #fff; opacity: .14; }
+.gp3-ball ellipse { fill: var(--gp-ball); stroke: #fff; stroke-width: 1.4; }
+.gp3-ball .gp3-ball-hi { stroke: rgba(255, 255, 255, .45); stroke-width: 1.6; }
+.gp3-ball path { stroke: #fff; stroke-width: 1.4; fill: none; stroke-linecap: round; }
+.gp3-post-back { fill: none; stroke: #6f540d; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+.gp3-post { fill: none; stroke: #f7cf4f; stroke-width: 4.6; stroke-linecap: round; stroke-linejoin: round; }
+.gp3-pad { fill: url(#gp3-padfill); }
+.gp3-rim { stroke: rgba(255, 255, 255, .16); stroke-width: 1.5; fill: none; }
+.gp3-depth { pointer-events: none; }
 
 /* ---------------- the line score ---------------- */
 .gp-line { box-sizing: border-box; width: 100%; max-width: 720px; margin: 0 auto var(--sp-3); padding: var(--sp-2) var(--sp-3); }

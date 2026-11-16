@@ -9338,6 +9338,32 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**SL. The field under the score, in 3D** (step 618; 16 November). Nothing
+to run. You sent FanDuel's tracker and said "I like fanduels render and how
+it looks 3d. I want ours too look like that". The night before, on the drawn
+field we had then, you said "the goal posts are off compared too the field".
+
+The flat strip under the score is now a field drawn in 3D: our own design,
+with no FanDuel logo on it. It has:
+- mown turf;
+- each club's end zone in its colour, with its name painted in it;
+- the yard lines, numbers and hash marks;
+- the home club's logo at midfield;
+- the blue line of scrimmage and the yellow line to gain (none on a goal-to-go
+  snap, where the goal line is the line to gain);
+- the drive, as a ribbon in the offence's colour from where it started to the
+  ball;
+- the ball, sitting on the line.
+
+The old posts looked off because they were drawn upright on top of a field
+that only leaned its lines to fake depth. Now every mark is a point on a real
+field in yards, seen through one camera, and the posts are drawn by the same
+camera as the grass. They stand straight up, their bases two yards behind
+each end line, with the crossbar ten feet up over it: the NFL's measurements.
+The words above it (the down and the spot) and the drive line under it are
+unchanged. The small copy of the field in the bar at the top of the screen,
+when you scroll, stays the flat strip.
+
 **SK. The newest play on top** (step 617; 15 November). Nothing to run.
 On the Play by play list beside the live NE @ DET game you said "the live
 right here is moving the wrong way. The most recent play should be at the

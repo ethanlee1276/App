@@ -247,7 +247,7 @@ def test_the_field_reads_as_the_pages_other_fields_and_draws_the_two_lines():
                     gpFieldModel(d, "nfl", { ...lv, yard_line: null }), gpFieldModel(d, "nba", lv)];
       return { m, goal, homeBall, none, html: gpFieldHTML(d, "nfl", lv),
                x: [gpFieldX(100), gpFieldX(0), gpFieldX(50)], ez: GP_FD_EZ, w: GP_FD_W,
-               homeFirst: gpFieldHTML(d, "nfl", lv).indexOf('gp-fd-ez home') < gpFieldHTML(d, "nfl", lv).indexOf('gp-fd-ez away') };
+               homeFirst: gpFieldHTML(d, "nfl", lv).indexOf('gp3-ez home') < gpFieldHTML(d, "nfl", lv).indexOf('gp3-ez away') };
     """)
     if got is None:
         return
@@ -261,9 +261,13 @@ def test_the_field_reads_as_the_pages_other_fields_and_draws_the_two_lines():
         "home's goal line on the left, away's on the right, as the drive card and the picture draw it"
     html = got["html"]
     assert '<div class="gp-fd-words">4th &amp; 5 · DET 25</div>' in html
-    for part in ('class="gp-fd-ez away"', 'class="gp-fd-ez home"', 'class="gp-fd-los"', 'class="gp-fd-gain"',
-                 'class="gp-fd-drive"', 'class="gp-fd-ball"', ">MIN</text>", ">DET</text>"):
+    # The field in 3D since 2026-11-16 (test_the_field_stands_in_3d.py): the
+    # clubs' end zones with their names painted a letter at a time, the drive,
+    # the two lines and the ball.
+    for part in ('class="gp3-ez away"', 'class="gp3-ez home"', 'class="gp3-los"', 'class="gp3-gain"',
+                 'class="gp3-drive"', 'class="gp3-ball"'):
         assert part in html, part
+    assert "".join(re.findall(r'class="gp3-ezt"[^>]*>([^<]*)</text>', html)) == "LIONSVIKINGS", "home's zone, then away's"
     assert "Vikings drive · 10 plays, 49 yards, 4:52" in html
     assert got["homeFirst"], "home's end zone drawn first, at the left"
     assert "--off:var(--wa)" in html, "the drive in the offence's colour"
