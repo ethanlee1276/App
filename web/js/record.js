@@ -3274,18 +3274,18 @@ function recNumberSection(x, scope) {
   const rows = Object.entries(x.by_market || {}).map(([m, v]) => `<div class="rec-row flush tight">
       <span class="rr-what">${escapeHtml(marketWord(m))}</span>
       <span><b>${v[0]} of ${v[1]}</b> nearer · ${pct(v[0], v[1])}</span></div>`).join("");
-  const lead = x.closer >= x.farther ? "rr-pos" : "rr-neg";
   return `<div class="section-title"><span class="st-ico">${icon("scale", 15)}</span>Our number against the line
       <span class="sub">— on every finished pick${scope ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase())}`
         : ""}, was our projection nearer what happened than the book’s line?</span></div>
     <div class="card rec-report">
-      <div><b class="rr-big ${lead}">${pct(x.closer, x.picks)}</b>
+      <div><b class="rr-big">${pct(x.closer, x.picks)}</b>
         <span class="rr-mute">· ours nearer on ${x.closer} of ${x.picks} finished picks, the line on ${x.farther}${
           x.level ? `, level on ${x.level}` : ""}</span></div>
       ${rows ? `<div class="rr-head">By market</div>${rows}` : ""}
       <p class="rr-note">Each pick counts once, whichever books hold it. A pick is made where our number and the line
-        disagree, so this asks which of the two the result came out nearer. Over half means our numbers have been
-        better than the market’s; under half means they haven’t.</p>
+        disagree, so this asks which of the two the result came out nearer. Our number is his average; the line sits
+        where half his games land. In yards markets a few big games pull an average up, so the line comes out nearer
+        more often there even when the average is right. Read it beside the units the same picks won or lost.</p>
     </div>`;
 }
 

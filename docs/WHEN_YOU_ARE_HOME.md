@@ -9351,8 +9351,13 @@ the boards keep sweeping`.
   picks included.
 - **Our number against the line**, on the Record page's Calibration tab. It checks every finished player pick,
   each counted once, and asks whether our projection or the book's line was nearer what he did. It shows a
-  share for every league, and each market on its own once it has twenty finished picks. Over half means our
-  numbers have been better than the market's.
+  share for every league, and each market on its own once it has twenty finished picks. Our number is the
+  player's average, and the line sits where half his games land. In yards markets a few big games pull an
+  average up, so the line comes out nearer more often there even when the average is right. The page says so
+  and points to the units the same picks won or lost.
+  The first live read (13,923 picks): ours nearer 61% in the NHL, 56% in MLB and 53% in the NBA, but only 47%
+  in the NFL and 45% in college football. Football's Most Likely picks agree: they win 62% (NFL) and 60%
+  (college) but are down 16.5 and 6.9 units at their prices, while the NBA's win 65% and are up 16.7.
 
 **TE. How sure we were, and how often it held** (step 637; 16 November). Nothing to run. A
 percentage is data too. "How our reports did" on the Report Picks page now shows a small table. Each row is a
