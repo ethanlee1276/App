@@ -210,6 +210,23 @@ def test_a_basketball_page_averages_a_game_and_ranks_the_regulars():
     assert c["per_game"] is True and c["rows"][0]["values"]["box.pts"] == 27.0, "basketball reads a game's average"
     role = PP.page("nba", "Role Guy", db_path=path, data_dir=rosters)
     assert {x["key"]: x["rank"] for x in role["headline"]}["pts"] == 2
+    # A name shared by several players (one table row, all their games) does not lift the bar for everyone.
+    conn = _db.connect(path)
+    for i in range(40):
+        conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, position, "
+                     "home, market, value) VALUES ('nba', 2026, '2026-11-12', ?, 'Common Name', ?, 'X', 'G', 1, 'min', 20)",
+                     (f"cn{i}", f"T{i}"))
+    for i in range(3):
+        for who in ("Bench A", "Bench B", "Bench C", "Bench D", "Bench E", "Bench F", "Bench G", "Bench H"):
+            for market, val in (("min", 10), ("pts", 2)):
+                conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, "
+                             "position, home, market, value) VALUES ('nba', 2026, '2026-11-12', ?, ?, 'NYK', 'X', "
+                             "'G', 1, ?, ?)", (f"{who}{i}", who, market, val))
+    conn.commit()
+    conn.close()
+    PP._RANKS.clear()
+    again = PP.page("nba", "Jalen Brunson", db_path=path, data_dir=rosters)
+    assert {x["key"]: x["rank"] for x in again["headline"]}["pts"] == 1, "forty games under one name set no bar"
 
 
 def test_a_goalie_and_a_pitcher_lead_with_their_own_numbers():

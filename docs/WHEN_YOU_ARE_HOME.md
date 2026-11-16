@@ -9390,7 +9390,8 @@ basketball, NHL and MLB.
     losses, each month and each opponent, with a season picker.
   - **Game Log:** the full game log from step TK, inside the page.
 - **How the ranks work:** a total ranks among everyone with one; a basketball average among players with at
-  least half as many games as the most anyone has played; a rate (passer rating, FG%, yards a carry, save
+  least half the games of a regular (the 90th percentile of games played, so one name several college players
+  share, whose games the file adds up together, can't raise the bar for everyone); a rate (passer rating, FG%, yards a carry, save
   percentage) and a count where fewer is better (interceptions, goals against) among players with at least
   40% of the leader's volume. Ties share a place, and "fewest" marks the fewer-is-better ones.
 - **What isn't there, and why:** ESPN's QBR isn't in our files, so the quarterback strip uses the passer

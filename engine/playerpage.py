@@ -26,8 +26,8 @@ The game log itself is engine/gamelog's, drawn in its own tab. Facts, not
 picks: served free (server.py /api/players/page), drawn by js/playerpage.js.
 
 A RANK is among the players who qualify: a count among everyone with one; a
-basketball average among those who have played half as many games as the
-most anyone has; a rate (a rating, a percentage, yards a carry) and a count
+basketball average among those who have played half a regular's games (the
+90th percentile of games played); a rate (a rating, a percentage, yards a carry) and a count
 where fewer is better (interceptions) among those with at least
 RATE_SHARE of the leader's volume behind it. Ties share a place.
 """
@@ -46,7 +46,8 @@ HOOPS = ("nba", "wnba", "cbb")
 ROSTER_DIR = "web/data"
 #: A rate is ranked among players with this share of the leader's volume.
 RATE_SHARE = 0.4
-#: A basketball average is ranked among players with this share of the most games played.
+#: A basketball average is ranked among players with this share of a regular's games
+#: (the 90th percentile of games played, so one name shared by several players cannot lift it).
 GAMES_SHARE = 0.5
 RANK_TTL = 1800
 #: Leagues whose games table does not hold every game, so a club's record
@@ -266,7 +267,12 @@ def rank_table(conn, sport: str, season: int, kind: str) -> dict:
     league = _league(conn, sport, int(season), sorted(markets)) if markets else {}
     if need:
         league = {p: x for p, x in league.items() if any((x[0].get(m) or 0) > 0 for m in need)}
-    most_games = max((gp for _, gp in league.values()), default=0)
+    # The bar for a basketball average: half the games of a regular, read at the
+    # 90th percentile, not the single most. The table is keyed by name, and a
+    # name several college players share counts all their games as one man's
+    # (seen live 2026-11-16: no college player with 6 games could be placed).
+    gps = sorted(gp for _, gp in league.values())
+    most_games = gps[int(0.9 * (len(gps) - 1))] if gps else 0
     table: dict = {}
     for sp in specs:
         if not sp[7]:
