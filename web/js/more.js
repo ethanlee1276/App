@@ -3636,7 +3636,7 @@ function ufcGrade(p, out) {
   const at = (r - 1) + Math.min(Number(mm) * 60 + Number(ss), 300) / 300;
   return (over ? at > line : at < line) ? "won" : "lost";
 }
-//: The result in words: "Alex Pereira won by KO/TKO at 3:10 of round 2".
+//: The result in words: "Jon Jones won by KO/TKO at 3:10 of round 2".
 function ufcOutcomeWords(out) {
   if (!out.winner) return "No winner: a draw or a no contest";
   const how = UFC_METHOD[out.method] ? ` by ${UFC_METHOD[out.method]}` : "";
