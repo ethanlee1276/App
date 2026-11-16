@@ -14070,6 +14070,8 @@ async function renderPlayers() {
             if (inp) inp.value = b.dataset.lookup;
             renderPlayers();
           }));
+        const own = drawn.find((m) => searchNorm(m.player) === searchNorm(state.search)) || (drawn.length === 1 && drawn[0]);
+        if (own && own.sport !== "ufc") renderPlayerPage(host, own.player, own.sport);
         return;
       }
     }
@@ -14158,6 +14160,8 @@ async function renderPlayers() {
   keep(host);
   fillMeters(host);
   revealChildren(host);
+  const own = q && (shown.find((p) => searchNorm(p) === searchNorm(state.search)) || (shown.length === 1 && shown[0]));
+  if (own) renderPlayerPage(host, own, state.sport);
 }
 
 /* The UFC hero's "view upcoming fights".
@@ -14583,6 +14587,9 @@ function chartDoor(player, lg, r) {
    every player too that you can look up and see for each player"): his season
    a line a game, in a sheet like his charts', loaded on the first tap. */
 function glOpen(...a) { return roomCall(glOpen, "glOpen", "js/gamelog.js", "css/gamelog.css", a); }
+/* HIS PAGE (js/playerpage.js; Ethan, 2026-11-16, with ESPN's page for Josh Allen: "The page should look just
+   like this and have each menu for all players in all sports"): one player on this page becomes his page. */
+function renderPlayerPage(...a) { return roomCall(renderPlayerPage, "renderPlayerPage", "js/playerpage.js", "css/playerpage.css", a); }
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest(".gl-open");
   if (b) glOpen(b.dataset.gl, b.dataset.lg);

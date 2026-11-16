@@ -9338,6 +9338,42 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TL. A full page for every player, with ESPN's menus** (step 644; 16 November). Nothing to run. You sent
+ESPN's page for Josh Allen and asked for every player in every sport to have a page that looks like it, with
+each menu. Open any player (search a name, or tap a player anywhere on the site) and the Players page now
+becomes that player's page, in every league we keep box scores for: NFL, college football, NBA, WNBA, college
+basketball, NHL and MLB.
+- **The header:** the club's colours with its logo large and faint behind, the headshot, the name, then
+  "Buffalo Bills · #17 · QB" and "6'5" · 237 lb · Age 30", with any injury tag under them.
+- **Six menus under it:** Overview, News, Stats, Bio, Splits and Game Log.
+  - **Overview:** the season's four numbers, each with where it ranks in the league this season (a
+    quarterback's YDS, TD, INT and passer rating; a runner's CAR, YDS, TD and yards a carry; a receiver's REC,
+    YDS, TD and yards a catch; a basketball player's points, rebounds and assists a game and FG%; a skater's G,
+    A, PTS and SOG; a goalie's SV%, GAA, saves and starts; a hitter's H, HR, TB and PA; a pitcher's K, IP, K/9
+    and games). Then the previous game (both clubs, the score, both records through that game, and four of
+    the player's numbers from it), a splits table (that game, its month, that opponent, home or away, and the
+    season), the last five games and the latest news, then tonight's markets (the card this page always showed).
+  - **News:** the roster's latest injury note and any move between clubs, then the headlines that name the
+    player or the club, each linking to its source.
+  - **Stats:** season by season and the career line (totals; basketball shows a game's average, as its box
+    score is read).
+  - **Bio:** team, position, number, height, weight, birthday and age, birthplace, college, years in the
+    league, shooting hand (hockey), status, and the seasons and games we have on file.
+  - **Splits:** the season a game's average at a time: all of it, the last five, home and away, wins and
+    losses, each month and each opponent, with a season picker.
+  - **Game Log:** the full game log from step TK, inside the page.
+- **How the ranks work:** a total ranks among everyone with one; a basketball average among players with at
+  least half as many games as the most anyone has played; a rate (passer rating, FG%, yards a carry, save
+  percentage) and a count where fewer is better (interceptions, goals against) among players with at least
+  40% of the leader's volume. Ties share a place, and "fewest" marks the fewer-is-better ones.
+- **What isn't there, and why:** ESPN's QBR isn't in our files, so the quarterback strip uses the passer
+  rating. Draft details, longest plays and sacks aren't in our box scores. College and baseball rosters list
+  no height, weight or age, so those headers show what the rosters do have. News is headlines and links only,
+  like the rest of the site's news; when no headline names the player, the club's show, and the league's when
+  nothing names either.
+It reads the box scores and rosters the site already keeps, is free like the game log, and the server keeps
+each player's page five minutes.
+
 **TK. A game log for every player** (step 643; 16 November). Nothing to run. You sent ESPN's game log for Joe
 Burrow and asked for game logs for every player you can look up. Every player's page (search a player, or
 open one from any pick) now has a "Game log" button beside "His charts", in every league we keep box

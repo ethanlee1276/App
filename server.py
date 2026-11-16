@@ -1133,6 +1133,11 @@ _LAB_CACHE: dict = {}
 #: stranger's first page asks for it, and it reads every league's board.
 _FIRSTLOOK: dict = {}
 FIRSTLOOK_TTL_S = 60
+#: Player pages (Handler._players_page), five minutes a player, the oldest
+#: dropped once PLAYER_PAGE_KEEP are kept.
+_PLAYER_PAGES: dict = {}
+PLAYER_PAGE_TTL = 300
+PLAYER_PAGE_KEEP = 400
 
 class Handler(BaseHTTPRequestHandler):
     #: Seconds a socket may sit idle mid-request before the thread gives up
@@ -1235,6 +1240,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._players_logs(parse_qs(parsed.query))
         if parsed.path in ("/api/players/gamelog", "/api/players/gamelog/"):
             return self._players_gamelog(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/page", "/api/players/page/"):
+            return self._players_page(parse_qs(parsed.query))
         if parsed.path in ("/api/players/fantasy", "/api/players/fantasy/"):
             return self._players_fantasy(parse_qs(parsed.query))
         if parsed.path in ("/api/hoops/whatif", "/api/hoops/whatif/"):
@@ -4903,6 +4910,35 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the game log could not be read"}', ".json")
         return self._send(200, json.dumps(out or {}).encode(), ".json")
+
+    def _players_page(self, q):
+        """One player's page (engine/playerpage): the roster's facts, his
+        latest note, his season's four numbers with their league ranks, the
+        newest game, the season's splits and his seasons one by one. Ethan,
+        2026-11-16, with ESPN's page for Josh Allen: "The page should look
+        just like this and have each menu for all players in all sports."
+        UNGATED like the game log: these are facts, not picks. Kept five
+        minutes a player, since the history file moves once a night."""
+        from engine import playerpage
+        sport = (q.get("sport") or [""])[0].lower()
+        player = (q.get("player") or [""])[0][:60]
+        team = (q.get("team") or [""])[0][:8].upper()
+        season = (q.get("season") or [""])[0][:4]
+        if sport not in playerpage.SPORTS:
+            return self._send(400, b'{"error":"no player page for this sport"}', ".json")
+        key = (sport, player.lower(), team, season)
+        hit = _PLAYER_PAGES.get(key)
+        if hit and time.time() - hit[0] < PLAYER_PAGE_TTL:
+            return self._send(200, hit[1], ".json")
+        try:
+            body = json.dumps(playerpage.page(sport, player, team=team,
+                                              season=int(season) if season.isdigit() else None) or {}).encode()
+        except Exception:                                # noqa: BLE001
+            return self._send(503, b'{"error":"the player page could not be read"}', ".json")
+        if len(_PLAYER_PAGES) >= PLAYER_PAGE_KEEP:
+            _PLAYER_PAGES.pop(next(iter(_PLAYER_PAGES)))
+        _PLAYER_PAGES[key] = (time.time(), body)
+        return self._send(200, body, ".json")
 
     def _parlay_check(self, body: dict):
         """The engine's parlay rules for a ticket the reader is building.

@@ -61,6 +61,8 @@ FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          "js/reportpicks.js", "css/reportpicks.css",
          # Every player's game log (2026-11-16).
          "js/gamelog.js", "css/gamelog.css",
+         # Every player's own page (2026-11-16).
+         "js/playerpage.js", "css/playerpage.css",
          "css/record.css", "css/detail.css", "css/account.css", "css/more.css",
          # The game chat (2026-10-25), a room like the others.
          "js/chat.js", "css/chat.css",

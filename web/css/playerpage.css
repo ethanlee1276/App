@@ -1,0 +1,105 @@
+/* Player pages (js/playerpage.js), loaded with it: his header in his club's
+   colours, then six menus. The header is a band of the club's colour darkened
+   toward night in either theme, so its words are the night tokens' (as the
+   arenas' banners are), and the club's mark sits large and faint behind him. */
+/* The Players board is a grid of cards (.player-grid); the page is the whole of it. */
+.pp { display: block; grid-column: 1 / -1; min-width: 0; }
+/* The band is defined on its own property, as every gradient here is (test_newlook). */
+.pp-hero {
+  --pp-band: linear-gradient(118deg, color-mix(in oklab, var(--pp-c, var(--night-2)) 78%, var(--night-3)) 0%, color-mix(in oklab, var(--pp-c, var(--night-2)) 46%, var(--night-3)) 100%);
+  position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px;
+  padding: 20px 18px; border-radius: var(--radius-lg); color: var(--night-text); background: var(--pp-band); }
+.pp-mark { position: absolute; right: -18px; top: 50%; transform: translateY(-50%); opacity: .16; pointer-events: none; }
+.pp-face { position: relative; flex: none; }
+.pp-who { position: relative; min-width: 0; }
+.pp-name { margin: 0; font-size: var(--fs-3xl); line-height: 1.08; font-weight: 500; letter-spacing: -.01em; }
+.pp-name span { display: block; font-size: var(--fs-xl); font-weight: 500; opacity: .86; }
+.pp-name b { font-weight: 800; }
+.pp-club { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: var(--fs-md); font-weight: 600; }
+.pp-body { margin: 4px 0 0; font-size: var(--fs-sm); opacity: .86; }
+.pp-flag:empty { display: none; }
+.pp-flag { margin-top: 6px; }
+
+/* The menus: one row that scrolls sideways on a phone, the open one underlined in the brand's colour. */
+.pp-tabs { display: flex; gap: 4px; margin: 10px 0 14px; overflow-x: auto; scrollbar-width: none;
+  scroll-margin-top: 72px; }
+.pp-tabs::-webkit-scrollbar { display: none; }
+.pp-tab { flex: none; padding: 10px 12px; border: 0; border-radius: var(--radius-sm); background: none;
+  color: var(--text-mute); font: inherit; font-size: var(--fs-md); font-weight: 600; cursor: pointer; }
+.pp-tab:hover { color: var(--text); }
+.pp-tab.on { color: var(--text); background: var(--panel-2); text-decoration: underline;
+  text-decoration-color: var(--brand); text-decoration-thickness: 2px; text-underline-offset: 7px; }
+.pp-panel { display: block; }
+.pp-panel[hidden] { display: none; }
+
+.pp-card { margin: 0 0 14px; padding: 16px; border-radius: var(--radius-lg); background: var(--panel); }
+.pp-card h3, .pp-h { margin: 0 0 12px; font-size: var(--fs-lg); font-weight: 700; }
+/* What sits between the cards lines up with the words inside them. */
+.pp-h, .pp-pick, .pp-panel > .pp-fine, .pp-panel > .pp-quiet, .pp-panel > .pp-wait { padding: 0 16px; }
+.pp-card h3 span { margin-left: 6px; color: var(--text-mute); font-size: var(--fs-sm); font-weight: 500; }
+.pp-wait, .pp-quiet { color: var(--text-mute); margin: 12px 0; }
+.pp-fine { color: var(--text-mute); font-size: var(--fs-xs); margin: 10px 0 0; }
+.pp-go { margin-top: 12px; }
+
+/* His season's four numbers, each with its place in the league. */
+.pp-nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.pp-num { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pp-k { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.pp-num b { font-size: var(--fs-2xl); font-weight: 800; font-variant-numeric: tabular-nums; }
+.pp-rank { color: var(--text-dim); font-size: var(--fs-sm); }
+
+/* The previous game: his club, the result, the other club, then four of his numbers. */
+.pp-score { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; }
+.pp-side { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pp-side:last-child { flex-direction: row-reverse; text-align: right; }
+.pp-side div { display: flex; flex-direction: column; min-width: 0; }
+.pp-side b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-side small { color: var(--text-mute); font-size: var(--fs-xs); }
+.pp-pts { margin-left: auto; font-size: var(--fs-2xl); font-weight: 600; color: var(--text-mute);
+  font-variant-numeric: tabular-nums; }
+.pp-side:last-child .pp-pts { margin: 0 auto 0 0; }
+.pp-pts.pp-won { color: var(--text); font-weight: 800; }
+.pp-mid { color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600; text-align: center; white-space: nowrap; }
+.pp-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.pp-tile { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius); background: var(--panel-2); }
+.pp-tile b { font-size: var(--fs-xl); font-weight: 800; font-variant-numeric: tabular-nums; }
+.pp-dnp { color: var(--text-mute); font-style: italic; margin: 12px 0 0; }
+
+/* Tables: the split (or the season) held at the left, as the game log holds the game. */
+.pp-card .gl-scroll { margin: 0 -16px; padding: 0 16px; }
+.pp-table .gl-fix { font-weight: 600; }
+.pp-break td { padding-top: 14px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; }
+.pp-pick:empty { display: none; }
+.pp-pick { margin: 0 0 12px; }
+
+/* News: his note first, then the headlines that name him or his club. */
+.pp-note { padding: 10px 12px; margin: 0 0 10px; border-radius: var(--radius); background: var(--panel-2); }
+.pp-note b { display: block; }
+.pp-note p { margin: 4px 0 0; color: var(--text-dim); }
+.pp-note span { display: block; margin-top: 4px; color: var(--text-mute); font-size: var(--fs-xs); }
+.pp-heads { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.pp-heads a { color: var(--text); font-weight: 600; text-decoration: none; }
+.pp-heads a:hover { text-decoration: underline; }
+.pp-heads span { display: block; margin-top: 2px; color: var(--text-mute); font-size: var(--fs-xs); }
+
+/* Bio: a fact a line, the label in the quiet colour. */
+.pp-bio { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px 18px; margin: 0; }
+.pp-bio div { min-width: 0; }
+.pp-bio dt { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.pp-bio dd { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-weight: 600; }
+
+/* The market cards this page always drew, now his Overview's market section. */
+.pp-tonight:empty { display: none; }
+.pp-tonight { margin: 0 0 14px; }
+
+@media (max-width: 640px) {
+  .pp-hero { padding: 16px 14px; gap: 12px; }
+  .pp-name { font-size: var(--fs-2xl); }
+  .pp-name span { font-size: var(--fs-lg); }
+  .pp-nums, .pp-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pp-h, .pp-pick, .pp-panel > .pp-fine, .pp-panel > .pp-quiet, .pp-panel > .pp-wait { padding: 0 14px; }
+  .pp-card { padding: 14px; }
+  .pp-card .gl-scroll { margin: 0 -14px; padding: 0 14px; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { .pp-mark { opacity: .08; } }
