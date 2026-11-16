@@ -43,8 +43,13 @@ LAST_N, MIN_N = 10, 2
 TEAM_LAST_N = 10
 #: Bumped when the grading or its words change, so a final graded and archived
 #: before is graded again once (gamereport._graded_from_archive). 2: the call
-#: said "right — Celtics, our call, won", 2026-11-16.
-GRADE_VERSION = 2
+#: said "right — Celtics, our call, won", 2026-11-16. 3: the report's numbers,
+#: its injury report and its touchdown chances checked too, a basketball
+#: player who sat never graded on a zero, his minutes beside a grade, the best
+#: calls and the biggest misses (engine/reportfacts), 2026-11-16.
+GRADE_VERSION = 3
+#: The basketball leagues, whose box files a man who sat with zero minutes.
+HOOPS = ("nba", "wnba", "cbb")
 
 #: The stat a read is graded on when it names none: by league, then position
 #: ("" is anyone else).
@@ -88,7 +93,8 @@ UNIT_WORDS = {
 }
 #: The groups the summary counts, in the order it says them.
 GROUPS = (("matchups", "Matchup reads"), ("candidates", "Breakout candidates"), ("fades", "Fades"),
-          ("starters", "Starters"), ("angles", "The angles"), ("units", "Offense against defense"))
+          ("starters", "Starters"), ("angles", "The angles"), ("units", "Offense against defense"),
+          ("script", "How the game would go"))
 #: How each group's right answer is said.
 RIGHT_WORDS = {"candidates": "beat their average", "fades": "fell short of it"}
 
@@ -214,7 +220,8 @@ def history(conn, sport: str, g: dict, label: str, players: dict) -> dict:
     if where is None or not players or conn is None:
         return {}
     clause, args = where
-    mk = sorted({m for sts in players.values() for st in sts for m in _parts(st)})
+    mk = sorted({m for sts in players.values() for st in sts for m in _parts(st)}
+                | ({"min"} if sport in HOOPS else set()))
     names = sorted(players)
     q = (f"SELECT player, market, season, period, value FROM player_game_logs WHERE {clause} "
          f"AND player IN ({','.join('?' * len(names))}) AND market IN ({','.join('?' * len(mk))})")
@@ -227,6 +234,9 @@ def history(conn, sport: str, g: dict, label: str, players: dict) -> dict:
     out: dict = {}
     for player, by_game in games.items():
         order = sorted(by_game, reverse=True)
+        if sport in HOOPS:
+            # A night he sat (the box files him with zero minutes) is no game of his.
+            order = [k for k in order if by_game[k].get("min") != 0.0]
         for st in players.get(player) or ():
             vals = [_value(by_game[k], st) for k in order]
             out[(player, st)] = [v for v in vals if v is not None][:LAST_N]
@@ -297,6 +307,9 @@ def player_grade(sport: str, item: dict, bx: Box | None, hist: dict, way: str | 
         if team and not bx.has(team):
             return {"stat": stat, "status": "pending", "words": "Waiting on the box score."}
         return {"stat": stat, "status": "dnp", "words": "Didn’t play."}
+    if sport in HOOPS and _f(mine["stats"].get("min")) == 0.0:
+        # The NBA's box files a man who sat with zero minutes and zeros.
+        return {"stat": stat, "status": "dnp", "words": "Didn’t play."}
     actual = _value(mine["stats"], stat)
     if actual is None:
         return {"stat": stat, "status": "dnp", "words": f"No {STAT_WORDS.get(stat, (stat, stat))[1]} in his box score."}
@@ -305,7 +318,7 @@ def player_grade(sport: str, item: dict, bx: Box | None, hist: dict, way: str | 
     if len(past) < MIN_N:
         out.update(status="new", words=f"{_words(stat, actual)}; too few games before this one to say what his "
                                         f"average is.")
-        return out
+        return _with_volume(sport, item, mine, hist, stat, out)
     avg = round(sum(past) / len(past), 1)
     st = verdict_of(way, actual, avg)
     where = ("his average exactly" if st == "even" else
@@ -313,6 +326,21 @@ def player_grade(sport: str, item: dict, bx: Box | None, hist: dict, way: str | 
     head = {"right": "Right", "wrong": "Wrong", "even": "Even"}[st]
     out.update(avg=avg, n=len(past), status=st,
                words=f"{head}: {_words(stat, actual)}, {where} over his last {len(past)} games.")
+    return _with_volume(sport, item, mine, hist, stat, out)
+
+
+def _with_volume(sport: str, item: dict, mine: dict, hist: dict, stat: str, out: dict) -> dict:
+    """WHY A READ MISSED, OR HIT (engine/reportfacts.volume_note): his
+    minutes, time on ice, carries, catches or throws beside his grade when
+    they were far off his own."""
+    from . import reportfacts as F
+    vs = F.volume_stat(sport, item)
+    if not vs or vs[0] in _parts(stat):
+        return out
+    note = F.volume_note(sport, item, mine, hist.get((mine["player"], vs[0])) or [])
+    if note:
+        out["vol"] = note
+        out["words"] = f"{out['words']} {note['words']}"
     return out
 
 
@@ -457,23 +485,48 @@ def grade(report: dict, g: dict, conn, sport: str, label: str = "") -> dict | No
         return None
 
 
+def _claim_paras(report: dict):
+    """(section key, block) for every paragraph that carries a claim."""
+    for s in (report or {}).get("sections") or []:
+        for b in s.get("blocks") or []:
+            if isinstance(b, dict) and b.get("type") == "p" and isinstance(b.get("claim"), dict):
+                yield s.get("key"), b
+
+
+#: The box-score stats that say a man played, and how much, by league.
+PRESENCE = {"nba": ("min", "pts"), "wnba": ("min", "pts"), "cbb": ("min", "pts"),
+            "nhl": ("toi", "points", "saves")}
+
+
 def _grade(report: dict, g: dict, conn, sport: str, label: str) -> dict | None:
     if not isinstance(report, dict) or str(((g or {}).get("live") or {}).get("state") or "") != "final":
         return None
+    from . import reportfacts as F
     sport = str(sport or report.get("sport") or "").lower()
     cards = list(_cards(report))
     for _k, it in cards:
         it.pop("grade", None)
     lists = list(_claim_lists(report))
+    paras = list(_claim_paras(report))
     stats = {stat_for(sport, it) for _k, it in cards}
-    for _k, b in lists:
-        for cl in b.get("claims") or []:
-            if isinstance(cl, dict):
-                stats.add(cl.get("stat") or "")
-                stats.update(ch.get("stat") or "" for ch in cl.get("checks") or [])
-                if cl.get("kind") == "unit":
-                    from .nba import teams as T
-                    stats.update(T.BOX)
+    kinds = set()
+    for cl in [cl for _k, b in lists for cl in b.get("claims") or []] + [b["claim"] for _k, b in paras]:
+        if isinstance(cl, dict):
+            kinds.add(cl.get("kind"))
+            stats.add(cl.get("stat") or "")
+            stats.update(ch.get("stat") or "" for ch in cl.get("checks") or [])
+            if cl.get("kind") in ("unit", "pace"):
+                from .nba import teams as T
+                stats.update(T.BOX)
+    if "td" in kinds:
+        stats.add("anytime_td")
+    # What says a man played, and how much (his minutes beside a grade, the
+    # injury report, the regulars who sat).
+    stats.update(PRESENCE.get(sport) or (F.FOOT_LINES if sport in ("nfl", "cfb") else ()))
+    for _k, it in cards:
+        vs = F.volume_stat(sport, it)
+        if vs:
+            stats.add(vs[0])
     stats.discard("")
     bx = box(conn, sport, g, label, stats)
     # His history, one read for the whole report: every graded player's stats.
@@ -482,9 +535,14 @@ def _grade(report: dict, g: dict, conn, sport: str, label: str) -> dict | None:
         for _k, it in cards:
             mine = bx.players.get(_norm(it.get("player")))
             if mine and favors(it.get("verdict")):
-                want.setdefault(mine["player"], set()).add(stat_for(sport, it))
+                sts = want.setdefault(mine["player"], set())
+                sts.add(stat_for(sport, it))
+                vs = F.volume_stat(sport, it)
+                if vs:
+                    sts.add(vs[0])
     hist = history(conn, sport, g, label, want) if want else {}
     counts = {k: {"right": 0, "wrong": 0, "even": 0, "graded": 0, "dnp": 0, "pending": 0} for k, _w in GROUPS}
+    marks: list = []
 
     def count(group, gr):
         if not group or not gr:
@@ -504,28 +562,56 @@ def _grade(report: dict, g: dict, conn, sport: str, label: str) -> dict | None:
         gr = player_grade(sport, it, bx, hist)
         if gr:
             it["grade"] = gr
-            count(_group(key, it), gr)
+            grp = _group(key, it)
+            count(grp, gr)
+            marks.append(F.standout(grp, it, gr, favors(it.get("verdict"))))
+    tds, injuries, listed = [], [], set()
     for key, b in lists:
         grades = []
         for cl in b.get("claims") or []:
             gr = None
             if isinstance(cl, dict):
-                if cl.get("kind") == "player":
+                kind = cl.get("kind")
+                if kind == "player":
                     pk = {"player": cl.get("player"), "team": cl.get("team"), "pos": cl.get("pos"),
                           "stat": cl.get("stat"), "lean": cl.get("lean")}
                     mine = bx.players.get(_norm(cl.get("player"))) if bx is not None else None
-                    extra = history(conn, sport, g, label, {mine["player"]: {cl.get("stat") or stat_for(sport, pk)}}) \
-                        if mine else {}
+                    sts = {cl.get("stat") or stat_for(sport, pk)}
+                    vs = F.volume_stat(sport, pk)
+                    if vs:
+                        sts.add(vs[0])
+                    extra = history(conn, sport, g, label, {mine["player"]: sts}) if mine else {}
                     gr = player_grade(sport, pk, bx, extra, way=cl.get("favors"))
-                    count("angles" if key == "angles" else "units", gr)
-                else:
+                    grp = "angles" if key == "angles" else "units"
+                    count(grp, gr)
+                    marks.append(F.standout(grp, pk, gr, cl.get("favors")))
+                elif kind in ("team", "allowed", "unit"):
                     gr = team_grade(sport, cl, bx, conn, g, label)
                     count("units", gr)
+                    marks.append(F.standout("units", None, gr, cl.get("favors")))
+                elif kind in F.GAME_KINDS:
+                    gr = F.claim_grade(sport, cl, bx, g, report)
+                    count("script", gr)
+                elif kind == "td":
+                    gr = F.claim_grade(sport, cl, bx, g, report)
+                    if gr:
+                        tds.append(gr)
+                elif kind == "injury":
+                    listed.add(_norm(cl.get("player")))
+                    gr = F.claim_grade(sport, cl, bx, g, report)
+                    if gr:
+                        injuries.append(gr)
             grades.append(gr)
         if any(grades):
             b["grades"] = grades
         else:
             b.pop("grades", None)
+    for _key, b in paras:
+        b.pop("grade", None)
+        gr = F.claim_grade(sport, b["claim"], bx, g, report)
+        if gr:
+            b["grade"] = gr
+            count("script", gr)
     call = call_line(report, g)
     pending = bx is None or not bx.teams
     summary = {"version": GRADE_VERSION, "status": "pending" if pending else "graded",
@@ -536,9 +622,91 @@ def _grade(report: dict, g: dict, conn, sport: str, label: str) -> dict | None:
             summary["groups"].append({"key": key, "what": what, **c})
             summary["right"] += c["right"]
             summary["graded"] += c["graded"]
+    # THE NUMBERS BEFORE THE GAME, THE INJURY REPORT AND THE TOUCHDOWN CHANCES
+    # (engine/reportfacts), each beside the reads, none counted among them.
+    for name, fn in (("ratings", F.ratings_check), ("sim", F.sim_check)):
+        x = fn(report, g)
+        if x:
+            summary[name] = x
+    score = F.score_check(report, g, sport)
+    if score:
+        summary["score"] = score
+    miss = F.missed(sport, report, bx, conn, g, label, listed) if not pending else []
+    inj = _injury_summary(injuries, miss, sport, F.names_of(report, g))
+    if inj and injury_words(inj):
+        inj["words"] = injury_words(inj)
+        summary["injuries"] = inj
+    shot = [t for t in tds if t.get("status") in ("hit", "miss")]
+    if shot:
+        td = {"n": len(shot), "scored": sum(t["status"] == "hit" for t in shot),
+              "expected": round(sum(_f(t.get("p")) or 0.0 for t in shot), 2)}
+        td["words"] = (f"{td['scored']} of the {td['n']} players we gave one scored; our chances added up to "
+                       f"{td['expected']:.1f}")
+        summary["tds"] = td
+    best, worst = F.standouts(marks)
+    if best:
+        summary["best"] = best
+    if worst:
+        summary["worst"] = worst
     report["graded"] = summary
     _summary_section(report, summary)
     return summary
+
+
+def _injury_summary(rows: list, miss: list, sport: str, names: dict) -> dict | None:
+    """The injury report's check in counts, and the regulars who sat off it."""
+    from . import reportfacts as F
+    done = [r for r in rows if r and r.get("status") != "pending"]
+    if not done and not miss:
+        return None
+    out = {"sits": 0, "sat": 0, "plays": 0, "played": 0, "maybe_played": 0, "maybe_sat": 0, "nostats": 0,
+           "right": 0, "wrong": 0}
+    for r in done:
+        says, st = r.get("says"), r.get("status")
+        if says == "sits" and st in ("right", "wrong"):
+            out["sits"] += 1
+            out["sat"] += st == "right"
+        elif says == "plays" and st in ("right", "wrong"):
+            out["plays"] += 1
+            out["played"] += st == "right"
+        elif st == "played":
+            out["maybe_played"] += 1
+        elif st == "sat":
+            out["maybe_sat"] += 1
+        elif r.get("played") is None:
+            out["nostats"] += 1
+        if st in ("right", "wrong"):
+            out[st] += 1
+    out["missed"] = [F.missed_words(m, sport, names) for m in miss]
+    out["missed_names"] = [m["player"] for m in miss]
+    out["wrong"] += len(miss)
+    out["checks_missed"] = sport in F.VOLUME
+    return out
+
+
+def injury_words(inj: dict) -> str:
+    """The injury report's check in one sentence's parts."""
+    parts = []
+    if inj.get("sits"):
+        parts.append(f"{inj['sat']} of the {inj['sits']} listed out or doubtful sat" if inj["sits"] > 1 else
+                     ("the one listed out or doubtful sat" if inj["sat"] else "the one listed out or doubtful played"))
+    if inj.get("plays") == 1:
+        parts.append(f"the one listed probable {'played' if inj['played'] else 'sat'}")
+    elif inj.get("plays"):
+        parts.append(f"{inj['played']} of the {inj['plays']} listed probable played")
+    q = int(inj.get("maybe_played") or 0) + int(inj.get("maybe_sat") or 0)
+    if q == 1:
+        parts.append(f"the one listed questionable or day-to-day {'played' if inj['maybe_played'] else 'sat'}")
+    elif q:
+        parts.append(f"of the {q} listed questionable or day-to-day, {inj['maybe_played']} played and "
+                     f"{inj['maybe_sat']} sat")
+    names = inj.get("missed_names") or []
+    if names:
+        parts.append(f"{len(names)} regular{'s' if len(names) > 1 else ''} sat without being on it "
+                     f"({', '.join(names)})")
+    elif inj.get("checks_missed"):
+        parts.append("no regular sat without being on it")
+    return "; ".join(parts)
 
 
 def summary_lines(summary: dict) -> list:
@@ -547,6 +715,12 @@ def summary_lines(summary: dict) -> list:
     call = summary.get("call")
     if call:
         out.append(f"Who we think wins: {call['words']}")
+    if summary.get("ratings"):
+        out.append(f"Our team ratings alone (unproven): {summary['ratings']['words']}")
+    if summary.get("sim"):
+        out.append(f"Our simulation: {summary['sim']['words']}")
+    if summary.get("score"):
+        out.append(f"The score: {summary['score']['words']}")
     for grp in summary.get("groups") or []:
         n, r = int(grp.get("graded") or 0), int(grp.get("right") or 0)
         if not n:
@@ -556,6 +730,12 @@ def summary_lines(summary: dict) -> list:
         ok = RIGHT_WORDS.get(grp["key"], "right")
         tail = f"; {grp['dnp']} didn’t play" if grp.get("dnp") else ""
         out.append(f"{grp['what']}: {r} of {n} {ok}{tail}")
+    inj = summary.get("injuries")
+    if inj and inj.get("words"):
+        out.append(f"The injury report: {inj['words']}")
+    td = summary.get("tds")
+    if td and td.get("words"):
+        out.append(f"Touchdown chances: {td['words']}")
     return out
 
 
@@ -570,10 +750,19 @@ def _summary_section(report: dict, summary: dict) -> None:
         blocks.append({"type": "list", "items": [l if l.endswith(".") else l + "." for l in lines]})
     if summary.get("graded"):
         blocks.append({"type": "p", "text": f"In all, {summary['right']} of the report’s {summary['graded']} graded "
-                                            f"reads were right."})
+                                            f"reads {'was' if summary['right'] == 1 else 'were'} right."})
+    if summary.get("best"):
+        blocks += [{"type": "h", "text": "What we got most right"}, {"type": "list", "items": list(summary["best"])}]
+    if summary.get("worst"):
+        blocks += [{"type": "h", "text": "What we got most wrong"}, {"type": "list", "items": list(summary["worst"])}]
+    if (summary.get("injuries") or {}).get("missed"):
+        blocks += [{"type": "h", "text": "Missing from our injury report"},
+                   {"type": "list", "items": list(summary["injuries"]["missed"])}]
     blocks.append({"type": "note", "text": (
         "Each player’s read is graded on the stat it leans on, against his own average over his last games before "
         "this one: a favorable read or a breakout candidate is right when he beat it, an unfavorable read or a fade "
-        "when he fell short. An offense against a defense is graded on the night’s numbers against the team’s own. "
-        "Our picks and parlays are graded at their own lines, on their cards.")})
+        "when he fell short. An offense against a defense is graded on the night’s numbers against the team’s own, "
+        "and how the game would go on its final score. The lines, our team ratings, the simulation, the injury "
+        "report and the touchdown chances are checked on their own lines, never counted among the reads. Our picks "
+        "and parlays are graded at their own lines, on their cards.")})
     report["sections"] = [{"key": "graded", "title": "How this report did", "blocks": blocks}] + secs

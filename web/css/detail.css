@@ -1299,6 +1299,8 @@ details.gp-dr > :not(summary) { padding: 0 var(--sp-3) var(--sp-2); }
   text-transform: uppercase; }
 .gp-res-list { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: var(--fs-sm); }
 .gp-res-note { margin: 10px 0 0; color: var(--text-mute); font-size: var(--fs-xs); }
+/* The way to every finished game's fact check (js/reportpicks.js). */
+.gp-res-more { display: inline-block; margin-top: 10px; font-size: var(--fs-sm); font-weight: 600; }
 /* A touchdown, flashed (detail.js gpTouchdownSeen): the scoring side's
    number pulses gold and TOUCHDOWN covers its name block for 4.5 seconds,
    inside its own half so it never covers the clock; in the bar that stays

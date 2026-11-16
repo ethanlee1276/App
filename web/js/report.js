@@ -89,8 +89,34 @@
      team's against its own; right in green, wrong in red, the rest plain. */
   function gradeLine(gr) {
     if (!gr || !gr.words) return "";
-    const cls = gr.status === "right" ? "gr-graded won" : gr.status === "wrong" ? "gr-graded lost" : "gr-graded";
+    // A touchdown chance that scored reads as a hit (engine/reportfacts): a
+    // chance is never right or wrong, but a reader wants the hit in green.
+    const cls = gr.status === "right" || gr.status === "hit" ? "gr-graded won"
+      : gr.status === "wrong" ? "gr-graded lost" : "gr-graded";
     return `<span class="${cls}">${escapeHtml(gr.words)}</span>`;
+  }
+  /* THE LINES AGAINST THE FINAL (engine/reportfacts.score_check, 2026-11-16;
+     Ethan: "see if the data we were giving them were correct or not"): what
+     the spread and the total said, what happened, who covered, which side of
+     the total. Off the call's own `expect`, read before the game. */
+  function winnerLinesHTML(b) {
+    const f = RESULTS && RESULTS.final, e = b && b.expect;
+    if (!f || f.home == null || f.away == null || !e) return "";
+    const sp = Number(e.spread), tot = Number(e.total), home = RESULTS.home, away = RESULTS.away;
+    const h = Number(f.home), a = Number(f.away), bits = [], after = [];
+    if (e.spread != null && Number.isFinite(sp) && sp !== 0) {
+      const fav = sp < 0 ? home : away, dog = fav === home ? away : home, line = Math.abs(sp);
+      const fm = fav === home ? h - a : a - h;
+      bits.push(`${teamName(fav)} ${e.fixed ? `−${line}` : `by ${line}`}`);
+      after.push(fm > line ? `${teamName(fav)} covered` : fm === line ? "a push on the spread"
+        : `${teamName(dog)} covered${fm < 0 ? " and won outright" : ""}`);
+    }
+    if (e.total != null && Number.isFinite(tot)) {
+      bits.push(`total ${tot}`);
+      after.push(h + a > tot ? "it went over" : h + a < tot ? "it went under" : "a push on the total");
+    }
+    if (!bits.length) return "";
+    return `<div class="gr-res-lines">The lines: ${escapeHtml(bits.join(", "))} — ${escapeHtml(after.join("; "))}</div>`;
   }
   //: A ticket's verdict from its legs (app.js ticketResult): every leg that played won, or one lost.
   function ticketTag(legs) {
@@ -405,17 +431,20 @@
        call, and its chance as a bar split between the two clubs. */
     if (b.type === "winner") {
       const p = Math.max(0, Math.min(1, Number(b.chance) || 0)), pct = (x) => `${Math.round(x * 100)}%`;
+      // The other side's share is what the call's leaves, so the two say 100 (70% and 30%, never 31%).
+      const rest = `${100 - Math.round(p * 100)}%`;
       const us = b.name || teamName(b.team), them = b.other_name || teamName(b.other);
       return `<div class="gr-winner">
         <div class="gr-winner-head"><span class="gr-winner-k">${escapeHtml(b.word || "Our call")}</span>
           <b class="gr-winner-team">${escapeHtml(us)}</b><span class="gr-winner-p">${pct(p)} to win</span></div>
-        <div class="gr-winner-bar" role="img" aria-label="${escapeAttr(`${us} ${pct(p)}, ${them} ${pct(1 - p)}`)}"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
-        <div class="gr-winner-legend"><span>${escapeHtml(us)} ${pct(p)}</span><span>${escapeHtml(them)} ${pct(1 - p)}</span></div>
+        <div class="gr-winner-bar" role="img" aria-label="${escapeAttr(`${us} ${pct(p)}, ${them} ${rest}`)}"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
+        <div class="gr-winner-legend"><span>${escapeHtml(us)} ${pct(p)}</span><span>${escapeHtml(them)} ${rest}</span></div>
         ${winnerRatingsHTML(b.ratings, pct)}
         ${winnerResultHTML(b)}
+        ${winnerLinesHTML(b)}
       </div>`;
     }
-    if (b.type === "p") return `<p class="gr-p">${named(b.text, b.names, b.marks, true)}</p>`;
+    if (b.type === "p") return `<p class="gr-p">${named(b.text, b.names, b.marks, true)}${gradeLine(b.grade)}</p>`;
     if (b.type === "h") return `<h4 class="gr-h">${escapeHtml(b.text)}</h4>`;
     if (b.type === "note") return `<p class="gr-note">${named(b.text, b.names, b.marks)}</p>`;
     if (b.type === "list") {

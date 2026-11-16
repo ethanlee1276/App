@@ -1497,6 +1497,15 @@ def sec_identity(c: Ctx) -> dict | None:
     return _section("identity", "How each team plays", blocks)
 
 
+def injury_claim(player, team, status, pos=None) -> dict | None:
+    """What a finished game checks an injury line by (engine/reportfacts):
+    whether the man listed played."""
+    if not player or not team or not str(status or "").strip():
+        return None
+    return {"kind": "injury", "player": str(player), "team": str(team), "status": str(status).strip().lower(),
+            **({"pos": str(pos)} if pos else {})}
+
+
 def sec_injuries(c: Ctx) -> dict | None:
     blocks = []
     rows = [r for r in c.scan.get("injuries") or [] if isinstance(r, dict)]
@@ -1504,9 +1513,10 @@ def sec_injuries(c: Ctx) -> dict | None:
     for t in c.teams:
         mine = [r for r in rows if r.get("team") == t]
         if mine:
-            blocks += [_h(c.name(t)), _list(
-                f"{r.get('player')} ({r.get('position') or '—'}) — {str(r.get('status') or '').lower()}"
-                + (f". {r['opens'][0].upper()}{r['opens'][1:]}" if r.get("opens") else "")
+            blocks += [_h(c.name(t)), _claimed_list(
+                (f"{r.get('player')} ({r.get('position') or '—'}) — {str(r.get('status') or '').lower()}"
+                 + (f". {r['opens'][0].upper()}{r['opens'][1:]}" if r.get("opens") else ""),
+                 injury_claim(r.get("player"), t, r.get("status"), r.get("position")))
                 for r in mine)]
     # ON A RESERVE LIST (the roster's own status, engine/gamescan
     # .reserve_rows): the men the weekly report never lists, with what they
@@ -1906,6 +1916,12 @@ def td_chance_lines(c: Ctx, off: str) -> list:
     past the −250 limit), his share of the red-zone chances, what the defense
     gives up to his position, whether usage and matchup both back him, and
     the touchdown rule (likelyboard.td_rule)."""
+    return [t for t, _cl in td_chance_pairs(c, off)]
+
+
+def td_chance_pairs(c: Ctx, off: str) -> list:
+    """`td_chance_lines`, each line with what a finished game checks it by
+    (engine/reportfacts): whether he scored, against the chance we gave."""
     dfn = c.opp[off]
     ro = (c.scan.get("redzone") or {}).get(off) or {}
     team_rz = _f(ro.get("off"))
@@ -1946,9 +1962,10 @@ def td_chance_lines(c: Ctx, off: str) -> list:
         meets = p >= 0.45 or (p >= 0.40 and usage)
         if meets:
             bits.append("meets our touchdown rule")
-        rows.append((p, f"{r.get('player')} ({pos or '—'}): " + "; ".join(bits)))
+        rows.append((p, f"{r.get('player')} ({pos or '—'}): " + "; ".join(bits),
+                     {"kind": "td", "player": r.get("player"), "team": off, "pos": pos, "p": round(p, 3)}))
     rows.sort(key=lambda x: -x[0])
-    return [t for _p, t in rows[:TD_LIST]]
+    return [(t, cl) for _p, t, cl in rows[:TD_LIST]]
 
 
 #: Players listed under "Who gets the ball inside the 20".
@@ -2102,9 +2119,9 @@ def sec_redzone(c: Ctx) -> dict | None:
     for off in c.teams:
         if usage.get(off):
             blocks += [_h(f"Who gets the ball inside the 20 for {c.name(off)}"), _list(usage[off])]
-        scorers = td_chance_lines(c, off)
+        scorers = td_chance_pairs(c, off)
         if scorers:
-            blocks += [_h(f"Who can score for {c.name(off)}"), _list(scorers)]
+            blocks += [_h(f"Who can score for {c.name(off)}"), _claimed_list(scorers)]
     if not blocks:
         return None
     return _section("redzone", "Red zone", blocks)
@@ -2389,13 +2406,30 @@ def script_blocks(c: Ctx) -> list:
     return blocks
 
 
+def script_claim(sc: dict) -> dict | None:
+    """What a finished game checks the lines' script by (engine/reportfacts):
+    the two halves of its name, high- or low-scoring and close or a clear
+    favorite, at engine/gamescript's own cuts."""
+    from .gamescript import ARCHETYPES, BIG_SPREAD, HIGH_TOTAL
+    name = str((sc or {}).get("archetype") or "").strip().lower()
+    key = next((k for k, (n, _r) in ARCHETYPES.items() if n.lower() == name), None)
+    if not key:
+        return None
+    return {"kind": "script", "scoring": key[0], "shape": key[1], "cut": HIGH_TOTAL, "big": BIG_SPREAD,
+            "fav": str(sc.get("favorite") or "")}
+
+
 def sec_scripts(c: Ctx) -> dict | None:
     blocks = []
     sc = (c.plan.get("script") or {})
     step = next((s for s in c.plan.get("steps") or [] if isinstance(s, dict) and s.get("key") == "line"), {})
     if sc.get("archetype"):
-        blocks.append(_p(f"How the lines say this game is likeliest to go: {script_words(sc['archetype'])}"
-                         + confidence_words(sc.get("confidence"))))
+        para = _p(f"How the lines say this game is likeliest to go: {script_words(sc['archetype'])}"
+                  + confidence_words(sc.get("confidence")))
+        claim = script_claim(sc)
+        if para and claim:
+            para["claim"] = claim
+        blocks.append(para)
     plan_lines = [script_lean_words(str(x)) for x in step.get("lines") or [] if x][1:]
     if plan_lines:
         blocks.append(_list(plan_lines))
@@ -3836,8 +3870,9 @@ def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
 PLAIN_SKIP = frozenset(("type", "kind", "key", "player", "team", "headshot", "pos", "verdict", "tone",
                         "status", "href", "url", "id", "logo", "color", "side", "market", "game", "slug",
                         "names", "marks", "rank_of", "rank_skip",
-                        # What a finished game is graded by and on (engine/reportgrade).
-                        "lean", "claims", "grade", "grades", "graded", "kept"))
+                        # What a finished game is graded by and on (engine/reportgrade,
+                        # engine/reportfacts).
+                        "lean", "claims", "claim", "grade", "grades", "graded", "kept", "expect", "sim"))
 
 
 def plain(text: str) -> str:
@@ -3877,7 +3912,8 @@ def plain_all(x, key: str = ""):
 #: sees with a name in them.
 _NOT_TEXT = frozenset(("type", "kind", "key", "headshot", "verdict", "tone", "status", "names", "marks",
                        "href", "url", "id", "logo", "color", "side", "market", "game", "slug", "rank_of",
-                       "rank_skip", "lean", "claims", "grade", "grades", "graded", "kept"))
+                       "rank_skip", "lean", "claims", "claim", "grade", "grades", "graded", "kept", "expect",
+                       "sim"))
 
 
 def _texts(x, key: str = "") -> list:
@@ -4176,6 +4212,13 @@ def sec_verdict(c: Ctx) -> dict | None:
     word = next(w for bar, w in VERDICT_WORDS if p >= bar)
     blocks: list = [{"type": "winner", "team": fav, "other": dog, "name": c.name(fav), "other_name": c.name(dog),
                      "chance": round(p, 3), "word": word, "source": src}]
+    # WHAT A FINISHED GAME CHECKS THE NUMBERS BY (engine/reportfacts): the
+    # lines as the report read them, and the simulation's own call.
+    sp_now, tot_now = _f(c.g.get("spread")), _f(c.g.get("total"))
+    if sp_now is not None or tot_now is not None:
+        blocks[0]["expect"] = {k: v for k, v in (
+            ("spread", sp_now), ("total", tot_now),
+            ("fixed", 1 if c.sport in FIXED_LINES else None)) if v is not None}
     nums = []
     where = {"market": "the books' moneyline with their cut taken out — the sharpest number on the board",
              "spread": "the spread, on the league's own win curve (no moneyline was posted)",
@@ -4192,6 +4235,14 @@ def sec_verdict(c: Ctx) -> dict | None:
                 + ("" if rfav == fav else ", the other side from the price"))
         nums.append(f"Our team ratings alone: {said}. Unproven: {ratings_why(c.sport)}")
     sim = c.g.get("sim") or {}
+    if _f(sim.get("p_home_win")) is not None:
+        ph_sim = float(sim["p_home_win"])
+        sim_fav = c.home if ph_sim >= 0.5 else c.away
+        blocks[0]["sim"] = {k: v for k, v in (
+            ("team", sim_fav), ("chance", round(ph_sim if sim_fav == c.home else 1.0 - ph_sim, 3)),
+            ("hist", [round(float(x), 4) for x in sim.get("margin_hist") or []
+                      if _f(x) is not None] if len(sim.get("margin_hist") or []) == len(SIM_BUCKETS) else None))
+            if v is not None}
     if src != "sim" and _f(sim.get("p_home_win")) is not None:
         ps = float(sim["p_home_win"]) if fav == c.home else 1.0 - float(sim["p_home_win"])
         times = f" {int(sim['trials']):,} times" if sim.get("trials") else ""

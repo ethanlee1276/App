@@ -46,7 +46,8 @@ Standard library only. Never raises out of ``attach``.
 from __future__ import annotations
 
 from .gamereport import (KEY, Ctx, _claimed_list, _f, _h, _join, _lift_bets, _list, _num, _ord, _p, _pct, _section,
-                         _sentence, a_pct, absent_sentence, cap, finish, keep_started, kickoff_words, line_words,
+                         _sentence, a_pct, absent_sentence, cap, finish, injury_claim, keep_started, kickoff_words,
+                         line_words,
                          log_changes, market_sentence, ml_chances, named, parlay_sentence, player_clause,
                          read_pick, sec_market, sec_parlays, shine_lines, summary, team_be, team_np, team_owner)
 
@@ -629,10 +630,11 @@ def nhl_injuries(c: Ctx) -> dict | None:
     for t in c.teams:
         for i in (_goalie(c, t).get("injuries") or []):
             if isinstance(i, dict) and i.get("player"):
-                items.append(f"{i['player']} ({t}) — {str(i.get('status') or '').lower()}"
-                             + (f", {str(i['injury']).lower()}" if i.get("injury") else ""))
+                items.append((f"{i['player']} ({t}) — {str(i.get('status') or '').lower()}"
+                              + (f", {str(i['injury']).lower()}" if i.get("injury") else ""),
+                              injury_claim(i["player"], t, i.get("status"))))
     pulled = [p for p in _tape(c).get("pulled") or [] if p]
-    blocks = [_list(items)]
+    blocks = [_claimed_list(items)]
     if pulled:
         blocks.append(_p(f"Every sportsbook pulled its props on {_join(pulled)} before puck drop, so we treat "
                          f"{'him' if len(pulled) == 1 else 'them'} as out until the lineup or the books say "
@@ -766,10 +768,13 @@ def nba_facts(c: Ctx) -> dict | None:
             bits.append("up from near sea level to altitude")
         if bits:
             items.append(f"{c.name(t)}: {'; '.join(bits)}")
+    claims = [None] * len(items)
     if any("blowout" in (_spot(c, t).get("flags") or []) for t in c.teams):
         items.append("Blowout watch: a spread of 10 or more — starters' minutes are the first thing a "
                      "coach takes back in a lopsided game")
-    block = _list(items)
+        # What a finished game checks it by (engine/reportfacts): the margin.
+        claims.append({"kind": "blowout"})
+    block = _claimed_list(list(zip(items, claims)))
     if block and marks:
         block["marks"] = marks
     return _section("facts", "Game facts", [block])
@@ -892,9 +897,10 @@ def nba_injuries(c: Ctx) -> dict | None:
            and i.get("team") in c.teams]
     if not inj:
         return None
-    items = [f"{i['player']} ({i['team']}) — {str(i.get('status') or '').lower()}"
-             + (f", {str(i['injury']).lower()}" if i.get("injury") else "") for i in inj]
-    return _section("injuries", "Injuries", [_list(items)])
+    items = [(f"{i['player']} ({i['team']}) — {str(i.get('status') or '').lower()}"
+              + (f", {str(i['injury']).lower()}" if i.get("injury") else ""),
+              injury_claim(i["player"], i["team"], i.get("status"))) for i in inj]
+    return _section("injuries", "Injuries", [_claimed_list(items)])
 
 
 def nba_before(c: Ctx) -> dict | None:
@@ -1310,9 +1316,11 @@ def nba_script(c: Ctx) -> dict | None:
     Rest and the blowout are under the game facts already."""
     s = c.meta.get("script") or {}
     pace, lp = s.get("pace") or {}, _f(s.get("league_pace"))
+    # Each line with what a finished game checks it by (engine/reportfacts):
+    # the night's pace, its points and its margin.
     items = []
     a, h = c.away, c.home
-    items += form_lines(c, c.meta.get("form") or {})
+    items += [(t, None) for t in form_lines(c, c.meta.get("form") or {})]
     pa, ph = _f(pace.get(a)), _f(pace.get(h))
     if pa is not None and ph is not None and lp:
         rk = s.get("pace_rank") or {}
@@ -1329,36 +1337,41 @@ def nba_script(c: Ctx) -> dict | None:
         # for the same team, two lines apart.
         pair = (f"{team_np(c, a)} {team_be(c, a, 'average', 'averages')} {_num(pa)} possessions per 48 minutes"
                 f"{rank(a)} and {team_np(c, h)} {_num(ph)}{rank(h)}; {_league(c)} averages {_num(lp)}")
+        claim = {"kind": "pace", "league": lp, "pace": [[a, pa], [h, ph]]}
         if len(fast) == 2:
-            items.append(f"A fast game: {pair}. More possessions means more points, rebounds and assists to go "
-                         f"around")
+            items.append((f"A fast game: {pair}. More possessions means more points, rebounds and assists to go "
+                          f"around", dict(claim, read="fast")))
         elif len(slow) == 2:
-            items.append(f"A slow game: {pair}. Fewer possessions shrinks every counting stat")
+            items.append((f"A slow game: {pair}. Fewer possessions shrinks every counting stat",
+                          dict(claim, read="slow")))
         elif fast and slow:
-            items.append(f"A tug of war on pace, {team_np(c, fast[0])} wanting to run and {team_np(c, slow[0])} "
-                         f"to slow it down: {pair}")
+            items.append((f"A tug of war on pace, {team_np(c, fast[0])} wanting to run and {team_np(c, slow[0])} "
+                          f"to slow it down: {pair}", dict(claim, read="split", fast=fast[0], slow=slow[0])))
         else:
-            items.append(f"An average pace: {pair}")
+            items.append((f"An average pace: {pair}", dict(claim, read="average")))
     tot, lpts = _f(s.get("total")), _f(s.get("league_pts"))
     if tot and lpts:
         avg = 2 * lpts
         gap = tot - avg
+        claim = {"kind": "scoring", "avg": round(avg, 1), "total": tot}
         if gap >= POINTS_SAID:
-            items.append(f"The total, {tot:g}, is {_num(gap)} points over {_league(c, True)} average game "
-                         f"({_num(avg)}): a high-scoring night by the line, friendly to overs")
+            items.append((f"The total, {tot:g}, is {_num(gap)} points over {_league(c, True)} average game "
+                          f"({_num(avg)}): a high-scoring night by the line, friendly to overs",
+                          dict(claim, read="high")))
         elif gap <= -POINTS_SAID:
-            items.append(f"The total, {tot:g}, is {_num(-gap)} points under {_league(c, True)} average game "
-                         f"({_num(avg)}): a low-scoring night by the line")
+            items.append((f"The total, {tot:g}, is {_num(-gap)} points under {_league(c, True)} average game "
+                          f"({_num(avg)}): a low-scoring night by the line", dict(claim, read="low")))
         else:
-            items.append(f"The total, {tot:g}, is close to {_league(c, True)} average game ({_num(avg)})")
+            items.append((f"The total, {tot:g}, is close to {_league(c, True)} average game ({_num(avg)})",
+                          dict(claim, read="average")))
     sp = _f(s.get("spread"))
     if sp is not None and abs(sp) <= CLOSE_SPREAD:
         fav = h if sp < 0 else a
-        items.append(f"A close game by the line, {team_np(c, fav)} by {abs(sp):g}: the starters should play their "
-                     f"full minutes, the stars included")
+        items.append((f"A close game by the line, {team_np(c, fav)} by {abs(sp):g}: the starters should play their "
+                      f"full minutes, the stars included", {"kind": "close", "fav": fav, "spread": abs(sp)}))
     if not items:
         return None
-    return _section("script", "How the game should go", [_list(items)])
+    return _section("script", "How the game should go", [_claimed_list(items)])
 
 
 def missed_last(hist: dict, teams, listed: dict | None = None) -> dict:

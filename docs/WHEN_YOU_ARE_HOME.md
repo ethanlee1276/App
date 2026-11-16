@@ -9338,6 +9338,35 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TD. Every finished game's report checks its own facts** (step 636; 16 November). Nothing to run.
+You asked me to think about what people want to see once a game is over: whether the data we gave them and
+the reads we made were right. The report already graded its reads. Now, once the box score is in, it also
+checks the rest of what it said before the game, under "How this report did" and on the game's Final card:
+- **The lines against the final**: what the spread and total said, the real margin and total, who covered,
+  over or under.
+- **Our team ratings' own pick and the simulation's pick**, right or wrong. In football, which of the four
+  scripts the game turned out to be, and how many of the simulated games did.
+- **How the game would go**: football's "high-scoring, close game" read is checked on both halves.
+  Basketball's pace, scoring night, close game and blowout watch are checked on the night's numbers.
+- **The injury report**: whether each listed player played. In basketball and hockey it also names any regular
+  who sat and wasn't on our report. Football's box score only lists players with a stat, so a missing one is
+  "no stats", never "sat".
+- **Touchdown chances**: who scored, against how many our chances added up to.
+- **Why a read missed**: a player's minutes (time on ice, carries, catches, throws) beside his grade when
+  they were far off his own.
+- **The best calls and the biggest misses**, each listed.
+
+One fix along the way: the NBA's box score lists a player who sat with zero minutes. He used to be graded as
+if he'd scored zero, and those nights counted toward his average. Now he "didn't play", and those nights don't
+count.
+
+And a way back to all of it: the Report Picks page now ends with "How our reports did". It shows the totals
+(the call, the reads by kind, our ratings, the simulation, the injury report, touchdown chances), all-time and
+for the last 30 days. Then every finished game, newest first, with its checks, and a button that opens its
+graded report right there. The totals are free, like the Record, and contain no read's words, pick or price.
+The reports themselves stay for members. A finished game's Final card links to the page. Last night's
+finals were graded before this, so they'll be checked once more, on the new checks.
+
 **TC. Go back to any finished game and see if we were right** (step 635; 16 November). Nothing to run.
 You asked that "people should be able to go back and still look at this data and see if we were right or not".
 A game only stays on its board until the board moves to the next slate: the next day for most leagues, the next

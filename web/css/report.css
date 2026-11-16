@@ -104,6 +104,9 @@
   font-weight: 700; background: var(--fill-subtle); color: var(--text-mute); }
 .gr-res-call.won { color: var(--good); background: color-mix(in oklab, var(--good) 14%, transparent); }
 .gr-res-call.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 14%, transparent); }
+/* The lines against the final, under the call (report.js winnerLinesHTML):
+   facts, not a verdict, so plain. */
+.gr-res-lines { margin-top: 6px; padding: 4px 10px; font-size: var(--fs-sm); color: var(--text-mute); }
 /* A finished game's read, graded (report.js gradeLine, engine/reportgrade): a
    line of its own under the read, green right, red wrong, plain the rest. */
 .gr-graded { display: block; margin-top: 6px; padding: 4px 10px; border-radius: var(--radius-sm);

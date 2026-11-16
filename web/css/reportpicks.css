@@ -14,3 +14,32 @@
 .rpk-open { font-size: var(--fs-sm); }
 .rpk-tix { margin-top: 10px; }
 .rpk-tix:empty { display: none; }
+/* How our reports did (js/reportpicks.js rpFactsHTML, engine/reportrecord):
+   the totals as tiles, each kind of read's share, then every finished game
+   with its checks as tinted chips (green right, red wrong, plain the rest)
+   and its own graded report a tap under it. */
+.rpk-facts { margin: 28px 0 10px; scroll-margin-top: 72px; }
+.rpk-fact-span-chips { margin: 8px 0 12px; }
+.rpk-fact-tiles { display: grid; gap: 10px; margin-top: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.rpk-fact-tile { display: grid; gap: 2px; padding: 12px 14px; border-radius: var(--radius-sm);
+  background: var(--fill-subtle); }
+.rpk-fact-k { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; }
+.rpk-fact-v { font: 700 var(--fs-xl) / 1.1 var(--font-display); font-variant-numeric: tabular-nums; color: var(--text); }
+.rpk-fact-sub { color: var(--text-mute); font-size: var(--fs-xs); }
+.rpk-fact-kinds { margin: 12px 0 0; padding-left: 18px; display: grid; gap: 3px; font-size: var(--fs-sm); }
+.rpk-fact-span { margin: 8px 0 0; color: var(--text-mute); font-size: var(--fs-sm); }
+.rpk-fact-h { margin: 20px 0 8px; font-size: var(--fs-md); }
+.rpk-fact-list { display: grid; gap: 14px; }
+.rpk-fact-row { display: grid; gap: 6px; }
+.rpk-fact-game b { display: block; color: var(--text); }
+.rpk-fact-game span { display: block; margin-top: 2px; color: var(--text-mute); font-size: var(--fs-xs); }
+.rpk-fact-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rpk-fact-chip { padding: 2px 9px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 600;
+  background: var(--fill-subtle); color: var(--text-mute); }
+.rpk-fact-chip.won { color: var(--good); background: color-mix(in oklab, var(--good) 14%, transparent); }
+.rpk-fact-chip.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 14%, transparent); }
+.rpk-fact-open { justify-self: start; font-size: var(--fs-sm); }
+.rpk-fact-report:empty { display: none; }
+

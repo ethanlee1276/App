@@ -63,6 +63,146 @@ function rpGameHTML(d, key, bets, tix) {
   </section>`;
 }
 
+/* HOW OUR REPORTS DID (engine/reportrecord, 2026-11-16). Ethan: "think about
+   what users would want to see after the game's over ... if the data we were
+   giving them were correct or not, and the read we had was correct or not ...
+   we need to fact check ourselves after the game's over and see if we were
+   correct or not." Every finished game's report is graded on its box score and
+   kept; /api/report_record sends the counts (free, as the Record is): the totals
+   first, then every finished game, newest first, each opening its own graded
+   report (/api/report_archive, members). */
+const RP_FACTS = new Map();
+//: "34 of 52 (65%)" — a count of right with its share.
+function rpShare(pair) {
+  const [a, n] = pair || [0, 0];
+  return n ? `${a} of ${n} (${Math.round((100 * a) / n)}%)` : "";
+}
+//: How each kind of read is said, in the order the reports' summary says them (engine/reportgrade.GROUPS).
+const RP_KINDS = [["matchups", "Matchup reads"], ["candidates", "Breakout candidates"], ["fades", "Fades"],
+  ["starters", "Starters"], ["angles", "The angles"], ["units", "Offense against defense"],
+  ["script", "How the game would go"]];
+function rpTotalsHTML(t) {
+  if (!t || !t.games) return `<p class="set-note">No finished game graded in this stretch.</p>`;
+  const tile = (k, pair, sub) => pair && pair[1] ? `<div class="rpk-fact-tile"><span class="rpk-fact-k">${escapeHtml(k)}</span>
+      <b class="rpk-fact-v">${Math.round((100 * pair[0]) / pair[1])}%</b><span class="rpk-fact-sub">${escapeHtml(sub || `${pair[0]} of ${pair[1]}`)}</span></div>` : "";
+  const td = t.tds && t.tds[1] ? `<div class="rpk-fact-tile"><span class="rpk-fact-k">Touchdown chances</span>
+      <b class="rpk-fact-v">${t.tds[0]} scored</b><span class="rpk-fact-sub">${escapeHtml(`of ${t.tds[1]}; our chances said ${Number(t.tds[2]).toFixed(1)}`)}</span></div>` : "";
+  const kinds = RP_KINDS.map(([k, w]) => (t.groups || {})[k] && t.groups[k][1]
+    ? `<li><b>${escapeHtml(w)}:</b> ${escapeHtml(rpShare(t.groups[k]))} right</li>` : "").join("");
+  const missed = t.missed ? `; ${plural(t.missed, "regular")} sat without being on it` : "";
+  return `<div class="rpk-fact-tiles">
+      ${tile("Who we think wins", t.call)}${tile("The reads", t.reads)}${tile("Our ratings alone", t.ratings)}
+      ${tile("Our simulation", t.sim)}${tile("The injury report", t.injuries,
+        t.injuries && t.injuries[1] ? `${t.injuries[0]} of ${t.injuries[1]} right${missed}` : "")}${td}</div>
+    ${kinds ? `<ul class="rpk-fact-kinds">${kinds}</ul>` : ""}
+    <p class="mini rpk-fact-span">${escapeHtml(plural(t.games, "finished game"))}${t.since ? escapeHtml(`, ${formatGameDate(t.since)}`
+      + (t.through && t.through !== t.since ? ` to ${formatGameDate(t.through)}` : "")) : ""}.</p>`;
+}
+//: One finished game: the final, then its checks as chips, then a door to its report.
+function rpFactRowHTML(r) {
+  const nm = (t) => (r.names || {})[t] || teamName(t);
+  const f = r.final || {};
+  const score = f.home != null && f.away != null ? `${nm(r.away)} ${f.away} at ${nm(r.home)} ${f.home}` : `${nm(r.away)} at ${nm(r.home)}`;
+  const chip = (ok, words) => `<span class="${ok === true ? "rpk-fact-chip won" : ok === false ? "rpk-fact-chip lost" : "rpk-fact-chip"}">${escapeHtml(words)}</span>`;
+  const chips = [];
+  if (r.call) chips.push(chip(!!r.call.right, `Call ${r.call.right ? "right" : "wrong"}: ${nm(r.call.team)}`));
+  if (r.reads && r.reads[1]) chips.push(chip(r.reads[0] * 2 >= r.reads[1], `Reads ${r.reads[0]} of ${r.reads[1]}`));
+  if (r.ratings) chips.push(chip(r.ratings === "right", `Ratings ${r.ratings}`));
+  if (r.sim) chips.push(chip(r.sim === "right", `Simulation ${r.sim}${r.script ? ` · Script ${r.script}` : ""}`));
+  if (r.injuries && r.injuries[1]) chips.push(chip(r.injuries[0] === r.injuries[1], `Injury report ${r.injuries[0]} of ${r.injuries[1]}`));
+  if (r.tds && r.tds[1]) chips.push(chip(null, `TD chances ${r.tds[0]} of ${r.tds[1]} scored`));
+  const ln = r.lines || {};
+  const lines = [ln.cover ? `${nm(ln.cover)} covered` : ln.cover === "" ? "spread pushed" : "",
+    ln.side ? (ln.side === "push" ? "total pushed" : `${ln.side} the total`) : ""].filter(Boolean).join(", ");
+  if (lines) chips.push(chip(null, lines));
+  const key = [r.date, r.away, r.home].join("|");
+  return `<div class="rpk-fact-row">
+    <div class="rpk-fact-game"><b>${escapeHtml(score)}</b><span>${escapeHtml(formatGameDate(r.date))}</span></div>
+    <div class="rpk-fact-chips">${chips.join("")}</div>
+    <button type="button" class="btn ghost rpk-fact-open" data-rpk-arch="${escapeAttr(key)}">Read the report</button>
+    <div class="rpk-fact-report" data-rpk-arch-slot="${escapeAttr(key)}"></div>
+  </div>`;
+}
+async function rpFactsFill(host) {
+  const slot = host.querySelector("[data-rpk-facts]");
+  if (!slot) return;
+  const sport = state.sport;
+  let rec = RP_FACTS.get(sport);
+  if (!rec || Date.now() - rec.at > 5 * 60 * 1000) {
+    try {
+      const r = await fetch(`/api/report_record?league=${encodeURIComponent(sport)}`, { credentials: "same-origin" });
+      rec = { at: Date.now(), body: r.ok ? await r.json() : null };
+    } catch (e) { rec = { at: Date.now(), body: null }; }
+    RP_FACTS.set(sport, rec);
+  }
+  if (!slot.isConnected || state.sport !== sport) return;
+  const b = rec.body;
+  if (!b || !(b.games || []).length) {
+    slot.querySelector("[data-rpk-facts-body]").innerHTML = `<p class="set-note">No finished game of this league has been
+      graded yet. Each one is checked here once its box score is in: the call, every read, the lines, the injury
+      report.</p>`;
+    return;
+  }
+  const body = slot.querySelector("[data-rpk-facts-body]");
+  const recentN = (b.recent || {}).games || 0;
+  // Every game and the last month, as two chips, once the archive runs past a month.
+  const split = recentN && recentN < (b.totals || {}).games;
+  body.innerHTML = `${split ? `<div class="std-chips rpk-fact-span-chips">
+      <button class="al-cat on" type="button" data-rpk-span="all">Every game</button>
+      <button class="al-cat" type="button" data-rpk-span="recent">Last ${b.recent_days} days</button></div>` : ""}
+    <div data-rpk-totals>${rpTotalsHTML(b.totals)}</div>
+    <h4 class="rpk-fact-h">Every finished game</h4>
+    <div class="rpk-fact-list">${(b.games || []).map(rpFactRowHTML).join("")}</div>
+    ${b.more ? `<p class="mini">${escapeHtml(plural(b.more, "older game"))} not shown.</p>` : ""}`;
+  body.querySelectorAll("[data-rpk-span]").forEach((btn) => btn.addEventListener("click", () => {
+    body.querySelectorAll("[data-rpk-span]").forEach((x) => x.classList.toggle("on", x === btn));
+    body.querySelector("[data-rpk-totals]").innerHTML = rpTotalsHTML(btn.dataset.rpkSpan === "recent" ? b.recent : b.totals);
+  }));
+  body.querySelectorAll("[data-rpk-arch]").forEach((btn) => btn.addEventListener("click", () => rpArchiveOpen(body, btn)));
+  revealChildren(slot);
+}
+//: A finished game's own report, graded, under its row (a member's; the rest are told what it holds).
+async function rpArchiveOpen(body, btn) {
+  const key = btn.dataset.rpkArch;
+  const slot = [...body.querySelectorAll("[data-rpk-arch-slot]")].find((x) => x.dataset.rpkArchSlot === key);
+  if (!slot) return;
+  if (slot.innerHTML.trim()) { slot.innerHTML = ""; btn.textContent = "Read the report"; return; }
+  const [date, away, home] = key.split("|");
+  slot.innerHTML = `<p class="loading">Loading the report…</p>`;
+  let doc = null;
+  try {
+    const q = new URLSearchParams({ league: state.sport, date, away, home });
+    const r = await fetch(`/api/report_archive?${q}`, { credentials: "same-origin" });
+    doc = r.ok ? await r.json() : r.status === 402 ? { locked: true } : null;
+  } catch (e) { doc = null; }
+  if (!doc || doc.locked) {
+    slot.innerHTML = doc && doc.locked
+      ? `<div class="card ms-locked"><b>Our report on this game</b> — written before it and graded after it: every read
+          right or wrong, every pick and parlay won or lost — is part of the subscription.</div>`
+      : `<p class="set-note">This game’s report could not be found.</p>`;
+    return;
+  }
+  const R = await loadReport();
+  if (!R || !R.html || !doc.report) { slot.innerHTML = ""; return; }
+  const fin = doc.final || {};
+  const g = { home: doc.home, away: doc.away, date: doc.date, kickoff: doc.kickoff,
+              live: { state: "final", home_score: fin.home, away_score: fin.away } };
+  slot.innerHTML = R.html(doc.report, { embedded: true, sport: doc.sport, parlays: doc.parlays || null,
+                                        results: reportResults(g, doc.results || {}) });
+  btn.textContent = "Close the report";
+  revealChildren(slot);
+}
+//: The section's frame, drawn with the page and filled once the record is read.
+function rpFactsHTML() {
+  return `<section class="rpk-facts" id="rpk-facts" data-rpk-facts="1">
+    <div class="section-title">How our reports did <span class="sub">— every finished game, fact-checked</span></div>
+    <p class="set-note rpk-lead">After each game we check our own report against what happened: whether the call on who
+      wins was right, every read against the box score, our ratings’ and the simulation’s picks, the lines, and the injury
+      report. Every game is counted, the misses with the hits.</p>
+    <div data-rpk-facts-body><p class="loading">Loading how our reports did…</p></div>
+  </section>`;
+}
+
 async function renderReportPicks() {
   const host = document.getElementById("reportpicks-body");
   if (!host) return;
@@ -70,7 +210,10 @@ async function renderReportPicks() {
   if (!d) return;
   if (d.locked && (d.locked.report_bets || d.locked.game_parlays)) {
     host.innerHTML = memberLockHTML("Report Picks",
-      "Every bet and parlay our game reports posted, game by game, with the price and our chance, each graded on the Record page.");
+      "Every bet and parlay our game reports posted, game by game, with the price and our chance, each graded on the Record page.")
+      + rpFactsHTML();
+    rpFactsFill(host);
+    rpFactsScroll(host);
     return;
   }
   const byGame = new Map();
@@ -86,7 +229,9 @@ async function renderReportPicks() {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("book", 30)}</div>
       <div class="es-title">No game reports on this board yet</div>
       <div class="es-sub">The reports are written with the board, one for every game on it, and their picks and
-        parlays land here as they are.</div></div>`;
+        parlays land here as they are.</div></div>${rpFactsHTML()}`;
+    rpFactsFill(host);
+    rpFactsScroll(host);
     return;
   }
   const jump = keys.length > 1 ? `<div class="std-chips likely-jump rpk-jump">${keys.map((k) => {
@@ -96,14 +241,18 @@ async function renderReportPicks() {
   }).join("")}</div>` : "";
   host.innerHTML = `<p class="set-note rpk-lead">Every pick our game reports posted (each report’s picks card, its
       matchup reads’ picks, its breakout candidates and fades), then the game’s parlays and pairs. Each one is graded on
-      the <a href="#record">Record page</a> under Report bets.</p>
+      the <a href="#record">Record page</a> under Report bets, and how each finished game’s report did is
+      <a href="#reportpicks" data-rpk-jump="rpk-facts">below</a>.</p>
     <p class="mini rpk-rec" data-rpk-rec="1"></p>
     ${jump}
-    ${keys.map((k) => rpGameHTML(d, k, byGame.get(k).bets, byGame.get(k).tix)).join("")}`;
+    ${keys.map((k) => rpGameHTML(d, k, byGame.get(k).bets, byGame.get(k).tix)).join("")}
+    ${rpFactsHTML()}`;
   revealChildren(host);
-  host.querySelectorAll("[data-rpk-jump]").forEach((b) => b.addEventListener("click", () => {
+  rpFactsFill(host);
+  rpFactsScroll(host);
+  host.querySelectorAll("[data-rpk-jump]").forEach((b) => b.addEventListener("click", (e) => {
     const el = document.getElementById(b.dataset.rpkJump);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (el) { e.preventDefault(); el.scrollIntoView({ behavior: "smooth", block: "start" }); }
   }));
   loadRecordOnce().then((rec) => {
     const el = host.querySelector("[data-rpk-rec]");
@@ -119,4 +268,11 @@ async function renderReportPicks() {
     });
     revealChildren(host);
   });
+}
+//: Opened from a finished game's Final card (js/detail.js): straight to how the reports did.
+function rpFactsScroll(host) {
+  if (!window._rpWantFacts) return;
+  window._rpWantFacts = false;
+  const el = host.querySelector("#rpk-facts");
+  if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "start" }));
 }

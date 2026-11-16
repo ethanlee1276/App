@@ -1360,6 +1360,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._game(parse_qs(parsed.query))
         if parsed.path in ("/api/report_archive", "/api/report_archive/"):
             return self._report_archive(parse_qs(parsed.query))
+        if parsed.path in ("/api/report_record", "/api/report_record/"):
+            return self._report_record(parse_qs(parsed.query))
         if parsed.path in ("/api/explain", "/api/explain/"):
             return self._explain(parse_qs(parsed.query))
         if parsed.path.startswith("/unsubscribe/") and len(parsed.path) > 13:
@@ -6391,6 +6393,30 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         if not doc:
             return self._send(404, b'{"error":"no report archived for this game"}', ".json")
         return self._send(200, json.dumps(doc).encode(), ".json")
+
+    def _report_record(self, q):
+        """The league's record on its own game reports (engine/reportrecord):
+        every finished game's fact check as counts — the call, the reads right
+        of graded, our ratings' and the simulation's picks, the lines, the
+        injury report, the touchdown chances — and the totals over them.
+        Ethan, 2026-11-16: "we need to fact check ourselves after the game's
+        over and see if we were correct or not."
+
+        FREE, as the Record is: counts and names only, never a read's words, a
+        pick or a price (those stay in /api/report_archive, gated). Read from
+        the index the build keeps beside the archive; never written here."""
+        from engine import gate, reportrecord
+        if self._rate_limited(RATE_GAME_PER_MIN, "report_record"):
+            return
+        league = (q.get("league") or [""])[0][:5].lower()
+        if not league.isalpha():
+            return self._send(400, b'{"error":"which league?"}', ".json")
+        try:
+            body = reportrecord.record(gate.FULL_DIR, league)
+        except Exception as exc:                                 # noqa: BLE001
+            print(f"  ⚠️ the reports' record not read ({type(exc).__name__}: {exc})")
+            return self._send(503, b'{"error":"the record could not be read"}', ".json")
+        return self._send(200, json.dumps(body).encode(), ".json")
 
     def _record_day(self, q):
         """One slate day's settled picks — the profit calendar's tap.

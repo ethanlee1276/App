@@ -1567,14 +1567,34 @@ function gpResultsHTML(g, rows) {
   const readsLine = graded && graded.graded
     ? `<li><b>The report’s reads:</b> ${graded.right} of ${graded.graded} right — each is graded in the report below</li>`
     : graded && graded.status === "pending" ? "<li><b>The report’s reads:</b> graded once the box score is in</li>" : "";
+  // THE FACT CHECK, UP TOP (engine/reportfacts, 2026-11-16; Ethan: "see if
+  // the data we were giving them were correct or not, and the read we had was
+  // correct or not"): the lines against the final, the injury report, the
+  // report's best call and its biggest miss — each said in full in the report.
+  const fact = (k, words) => words ? `<li><b>${k}:</b> ${escapeHtml(String(words).replace(/\.$/, ""))}</li>` : "";
+  const g2 = graded || {};
   const lines = [picks.length ? `<li><b>Our picks:</b> ${picks.join(", ")}</li>` : "",
-    said(tickets("threes"), "Three-leg parlays"), said(tickets("scorers"), pair), callLine, readsLine].filter(Boolean);
+    said(tickets("threes"), "Three-leg parlays"), said(tickets("scorers"), pair), callLine,
+    fact("The lines", g2.score && g2.score.words && g2.score.words.replace(/^the lines had /, "")),
+    readsLine, fact("The injury report", g2.injuries && g2.injuries.words),
+    fact("Touchdown chances", g2.tds && g2.tds.words),
+    fact("Best call", (g2.best || [])[0]), fact("Biggest miss", (g2.worst || [])[0])].filter(Boolean);
   return `<div class="card gp-res" id="gp-sec-results">
     <div class="gp-res-head"><span class="gp-res-k">Final</span> <b>${score}</b></div>
     ${lines.length ? `<ul class="gp-res-list">${lines.join("")}</ul>` : `<p class="gp-res-note">No pick of ours rode on this game.</p>`}
     ${lines.length ? `<p class="gp-res-note">Every pick below says how it went: the number he finished with, won or lost at its
       own line. The parlays and the report mark each leg and the call the same way.</p>` : ""}
+    <a class="gp-res-more" href="#reportpicks" data-rpk-facts-go="1">How every finished game’s report did</a>
   </div>`;
+}
+/* THE WAY BACK TO EVERY FINISHED GAME (js/reportpicks.js rpFactsHTML): the
+   Final card's link opens Report Picks at "How our reports did". */
+if (typeof window !== "undefined" && !window._rpkFactsBound) {
+  window._rpkFactsBound = true;
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("[data-rpk-facts-go]");
+    if (a) window._rpWantFacts = true;
+  });
 }
 function gameReportHTML(g, extras) {
   const d = state.data || {};

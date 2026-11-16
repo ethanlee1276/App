@@ -139,6 +139,11 @@ def save(result: dict, reports: list, sport: str, out, results: dict | None = No
                 or picks_for(result, g)
             if write(path, doc_for(r, g, sport, label, parlays_for(result, g), picks, results)):
                 n += 1
+        # THE REPORTS' OWN RECORD (engine/reportrecord): its index, brought up
+        # to date with what was written (and built once where there is none).
+        from . import reportrecord
+        if n or not (Path(where) / DIR / sport / reportrecord.INDEX).exists():
+            reportrecord.refresh(where, sport)
         return n
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ finished reports not archived ({type(exc).__name__}: {exc})")
