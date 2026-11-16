@@ -232,27 +232,46 @@ def _join_rebuilds():
 
 def test_a_big_league_answers_from_its_list_while_the_new_one_builds():
     """A league too big to rebuild in a blink keeps answering from the list
-    it has; the new list is built behind it and the next search reads it."""
+    it has; the new list is built behind it and the next search reads it.
+
+    The rebuild is held until the first answer is in: left to run, it can
+    finish between the two reads one search makes (the gate's 8-at-a-time
+    load did, 16 Nov), and the answer is then the fresh one, which is right
+    and not what this checks. What this checks is that nobody waits for it."""
+    import time
+    d = _roster_dir([], "mlb")
     path = _db_with([_row("Aaron Judge")])
-    inline, gap = statlogs.NAME_INDEX_INLINE, statlogs.NAME_INDEX_GAP
+    inline, gap, build = statlogs.NAME_INDEX_INLINE, statlogs.NAME_INDEX_GAP, statlogs._build_names
+    held = threading.Event()
+
+    def held_build(conn, sport, sig):
+        if threading.current_thread().name.startswith("names-"):
+            held.wait(30)
+        return build(conn, sport, sig)
     statlogs.NAME_INDEX_INLINE, statlogs.NAME_INDEX_GAP = 1, 0
     try:
-        statlogs.search("mlb", "judge", db_path=path)
+        statlogs.search("mlb", "judge", db_path=path, data_dir=d)
         conn = db.connect(path)
         db.upsert_player_logs(conn, [_row("Cal Raleigh", "g2")])
         conn.close()
-        first = statlogs.search("mlb", "raleigh", db_path=path)
+        statlogs._build_names = held_build
+        t0 = time.time()
+        first = statlogs.search("mlb", "raleigh", db_path=path, data_dir=d)
+        took = time.time() - t0
+        held.set()
         _join_rebuilds()
-        second = statlogs.search("mlb", "raleigh", db_path=path)
+        second = statlogs.search("mlb", "raleigh", db_path=path, data_dir=d)
     finally:
-        statlogs.NAME_INDEX_INLINE, statlogs.NAME_INDEX_GAP = inline, gap
+        held.set()
+        statlogs.NAME_INDEX_INLINE, statlogs.NAME_INDEX_GAP, statlogs._build_names = inline, gap, build
     assert not [h for h in first if h["player"] == "Cal Raleigh"], "the stale list was waited on"
+    assert took < 10, took
     assert second and second[0]["player"] == "Cal Raleigh", second
 
 
 def test_a_failed_rebuild_keeps_the_list_and_says_so_once():
     path = _db_with([_row("Aaron Judge")])
-    statlogs.search("mlb", "judge", db_path=path)
+    statlogs.search("mlb", "judge", db_path=path, data_dir=_roster_dir([], "mlb"))
     key = ("mlb", os.path.realpath(path))
     old = statlogs._NAME_INDEX[key]
     old.at = 0.0
