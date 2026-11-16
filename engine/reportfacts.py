@@ -41,6 +41,7 @@ engine/reportgrade.grade.
 """
 from __future__ import annotations
 
+import math
 import re
 
 HOOPS = ("nba", "wnba", "cbb")
@@ -172,7 +173,12 @@ def expect_of(report: dict) -> dict | None:
 def score_check(report: dict, g: dict, sport: str = "") -> dict | None:
     """The final against the lines the report read: the margin and the total,
     who covered, which side of the total; information, never right or wrong
-    (the lines are the market's, not our call)."""
+    (the lines are the market's, not our call).
+
+    IN THE BETTOR'S OWN WORDS (GRADE_VERSION 4, 2026-11-16; Ethan, of the
+    finished game's card: "its wording is weird and can be better"): "Lions
+    −3.5, won by 25 (covered); total 47.5, 45 scored (under)", with the
+    favorite, its line and the total kept as fields for the page."""
     fin = final(g)
     e = expect_of(report)
     if not fin or not e:
@@ -183,45 +189,51 @@ def score_check(report: dict, g: dict, sport: str = "") -> dict | None:
     sp, tot = _f(e.get("spread")), _f(e.get("total"))
     margin, total = h - a, h + a
     out: dict = {"status": "info", "final": {"away": a, "home": h}}
-    said, after = [], []
+    said = []
     if sp is not None:
         if sp == 0:
-            said.append("a pick’em")
+            out["fav"] = ""
+            if margin:
+                won = home if margin > 0 else away
+                said.append(f"a pick’em, {nm.get(won, won)} won by {_num(abs(margin))}")
+            else:
+                said.append("a pick’em, and a tie")
         else:
             fav, dog = (home, away) if sp < 0 else (away, home)
             line = abs(sp)
             fm = margin if fav == home else -margin
             word = "" if not e.get("fixed") else (" on the puck line" if sport == "nhl" else " on the run line")
-            said.append(f"{nm.get(fav, fav)} by {_num(line)}" if not e.get("fixed")
-                        else f"{nm.get(fav, fav)} −{_num(line)}{word}")
+            fn, dn = nm.get(fav, fav), nm.get(dog, dog)
+            out.update(fav=fav, line=line)
+            head = f"{fn} −{_num(line)}{word}"
             if fm > line:
                 out["cover"] = fav
-                after.append(f"{nm.get(fav, fav)} covered")
+                said.append(f"{head}, won by {_num(fm)} (covered)")
             elif fm == line:
                 out["cover"] = ""
-                after.append("a push on the spread")
+                said.append(f"{head}, won by {_num(fm)} (a push)")
+            elif fm > 0:
+                out["cover"] = dog
+                said.append(f"{head}, won by only {_num(fm)} ({dn} covered)")
+            elif fm == 0:
+                out["cover"] = dog
+                said.append(f"{head}, a tie ({dn} covered)")
             else:
                 out["cover"] = dog
-                after.append(f"{nm.get(dog, dog)} covered" + (", and won outright" if fm < 0 else ""))
+                said.append(f"{head}, {dn} won outright by {_num(-fm)}")
             if not e.get("fixed"):
                 out["margin_miss"] = round(abs(margin + sp), 1)
                 if tot is not None:
                     out["expected"] = {"home": round((tot - sp) / 2.0, 1), "away": round((tot + sp) / 2.0, 1)}
     if tot is not None:
-        said.append(f"{_num(tot)} points" if sport not in ("mlb", "nhl") else
-                    f"{_num(tot)} {'goals' if sport == 'nhl' else 'runs'}")
+        out["total_line"] = tot
         out["total_miss"] = round(abs(total - tot), 1)
         out["side"] = "over" if total > tot else "under" if total < tot else "push"
-        after.append({"over": "it went over", "under": "it went under", "push": "a push on the total"}[out["side"]])
+        said.append(f"total {_num(tot)}, {_num(total)} scored "
+                    f"({ {'over': 'over', 'under': 'under', 'push': 'a push'}[out['side']] })")
     if not said:
         return None
-    unit = "goals" if sport == "nhl" else "runs" if sport == "mlb" else "points"
-    if margin == 0:
-        was = f"a tie, {_num(total)} {unit}"
-    else:
-        won = home if margin > 0 else away
-        was = f"{nm.get(won, won)} by {_num(abs(margin))}, {_num(total)} {unit}"
-    out["words"] = f"the lines had {' and '.join(said)}; it was {was}" + (f" — {' and '.join(after)}" if after else "")
+    out["words"] = "; ".join(said)
     return out
 
 
@@ -594,8 +606,8 @@ def volume_stat(sport: str, item: dict) -> tuple | None:
 
 def volume_note(sport: str, item: dict, mine: dict, past: list) -> dict | None:
     """His night's volume against his own, when it was far off it: {"stat",
-    "actual", "avg", "words"} — "In 19 minutes (he averages 31).", "On 6
-    carries (he averages 15)."."""
+    "actual", "avg", "words"} — "In 19 minutes (usually 31).", "On 6 carries
+    (usually 15)."."""
     vs = volume_stat(sport, item)
     if not vs or not mine:
         return None
@@ -609,7 +621,7 @@ def volume_note(sport: str, item: dict, mine: dict, past: list) -> dict | None:
         return None
     shown = round(v) if stat in ("min", "toi") else v
     return {"stat": stat, "actual": round(v, 1), "avg": round(avg, 1),
-            "words": f"{how} {_num(shown)} {one if shown == 1 else many} (he averages {round(avg)})."}
+            "words": f"{how} {_num(shown)} {one if shown == 1 else many} (usually {round(avg)})."}
 
 
 #: How each group's read is said beside a name, by the card's verdict.
@@ -621,31 +633,64 @@ LABEL = {"matchups": {"favorable": "a favorable matchup", "unfavorable": "a toug
 STANDOUTS = 3
 
 
+#: A stat that is a share, not a count (said by its name).
+_SHARE_WORDS = ("pct", "rate", "share", "per")
+
+
 def standout(group: str, item: dict | None, gr: dict, way: str | None) -> tuple | None:
-    """(how far it went the read's way, its words) for a graded read with a
-    number and an average, else None."""
+    """(how far it went the read's way, its words, its row) for a graded read
+    with a number and an average, else None. The row is what the game's page
+    draws (js/detail.js): {"player", "team", "label", "words", "group",
+    "status"}."""
     if not gr or gr.get("status") not in ("right", "wrong") or way not in ("more", "less"):
         return None
     actual, avg = _f(gr.get("actual")), _f(gr.get("avg"))
     if actual is None or avg is None:
         return None
-    # How far, as a share of his own number (a rate's own scale; a count near
-    # nothing as much as one), so a 38-point night against 24 and a 61% night
-    # against 52% weigh alike; capped, so one freak night is not the list.
-    rate = abs(avg) < 1 and abs(actual) < 1.5
-    rel = (actual - avg) / (max(abs(avg), 0.05) if rate else max(abs(avg), 1.0))
+    # How far, as a share of the player's own number (a rate's own scale), so
+    # a 38-point night against 24 and a 61% night against 52% weigh alike;
+    # capped, so one freak night is not the list.
+    #
+    # A COUNT NEAR NOTHING ON ITS OWN SPREAD (GRADE_VERSION 4, 2026-11-16).
+    # As a share, one touchdown against a 0.2 average was a 400% night and
+    # topped every list, and no touchdown against 0.4 was a 100% miss, as
+    # big as a miss can be — on a night that was the likeliest one. A count
+    # that small varies by about its square root (Poisson), floored at a
+    # quarter: the touchdown weighs 1.6, the blank 0.6.
+    stat = str(gr.get("stat") or "").lower()
+    share = any(w in stat for w in _SHARE_WORDS) or not float(actual).is_integer()
+    if abs(avg) < 1 and abs(actual) < 1.5:
+        rel = ((actual - avg) / max(abs(avg), 0.05) if share
+               else (actual - avg) / math.sqrt(max(avg, 0.25)))
+    else:
+        rel = (actual - avg) / max(abs(avg), 1.0)
     rel = max(-3.0, min(3.0, rel)) * (1 if way == "more" else -1)
-    words = str(gr.get("words") or "")
-    words = re.sub(r"^(Right|Wrong|Even): ", "", words)
+    said = re.sub(r"^(Right|Wrong|Even): ", "", str(gr.get("words") or ""))
+    said = f"{said[:1].upper()}{said[1:]}"
+    row = {"player": "", "label": "", "words": said, "group": group, "status": gr.get("status")}
+    words = said
     if item and item.get("player"):
         lab = LABEL.get(group) or {}
         label = lab.get(str(item.get("verdict") or "").lower()) or lab.get("") or ""
-        words = f"{item['player']}{', ' + label if label else ''}: {words[:1].lower()}{words[1:]}"
-    return rel, words
+        row.update(player=item["player"], label=label)
+        if item.get("team"):
+            row["team"] = item["team"]
+        words = f"{item['player']}{', ' + label if label else ''}: {said[:1].lower()}{said[1:]}"
+    return rel, words, row
+
+
+def _ranked(rows: list, good: bool) -> list:
+    if good:
+        return sorted((r for r in rows if r and r[0] > 0), key=lambda r: -r[0])[:STANDOUTS]
+    return sorted((r for r in rows if r and r[0] < 0), key=lambda r: r[0])[:STANDOUTS]
 
 
 def standouts(rows: list) -> tuple:
     """(the best calls, the biggest misses): each a list of words."""
-    good = sorted((r for r in rows if r and r[0] > 0), key=lambda r: -r[0])
-    bad = sorted((r for r in rows if r and r[0] < 0), key=lambda r: r[0])
-    return [w for _r, w in good[:STANDOUTS]], [w for _r, w in bad[:STANDOUTS]]
+    return [r[1] for r in _ranked(rows, True)], [r[1] for r in _ranked(rows, False)]
+
+
+def standout_rows(rows: list, good: bool) -> list:
+    """The best calls (``good``) or the biggest misses as the page draws them:
+    the same ones `standouts` says, in its order."""
+    return [dict(r[2]) for r in _ranked(rows, good) if len(r) > 2 and isinstance(r[2], dict)]

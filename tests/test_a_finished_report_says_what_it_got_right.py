@@ -102,10 +102,10 @@ def test_each_player_read_is_graded_on_its_stat_against_his_own_average():
     tatum, brown, herro = _items(rep, "watch")
     assert tatum["grade"]["status"] == "right" and tatum["grade"]["stat"] == "pts", tatum["grade"]
     assert (tatum["grade"]["actual"], tatum["grade"]["avg"], tatum["grade"]["n"]) == (31.0, 26.0, 2)
-    assert tatum["grade"]["words"] == "Right: 31 points, above his 26 average over his last 2 games."
+    assert tatum["grade"]["words"] == "Right: 31 points; the last 2 games averaged 26."
     assert brown["grade"] == {"stat": "pts", "status": "dnp", "words": "Didn’t play."}, "his club's box, not his"
     assert herro["grade"]["status"] == "wrong", "a fade who beat his average was a wrong read"
-    assert herro["grade"]["words"] == "Wrong: 24 points, above his 21 average over his last 2 games."
+    assert herro["grade"]["words"] == "Wrong: 24 points; the last 2 games averaged 21."
     groups = {x["key"]: x for x in summary["groups"]}
     assert (groups["candidates"]["right"], groups["candidates"]["graded"], groups["candidates"]["dnp"]) == (1, 1, 1)
     assert (groups["fades"]["right"], groups["fades"]["graded"]) == (0, 1)
@@ -135,9 +135,9 @@ def test_the_report_opens_on_how_it_did_and_the_call():
     first = rep["sections"][0]
     assert first["key"] == "graded" and first["title"] == "How this report did"
     lines = first["blocks"][0]["items"]
-    assert lines[0] == "Who we think wins: right — Celtics, our call, won 121-104.", lines
+    assert lines[0] == "Our pick to win: right — Celtics won 121-104.", lines
     lost = G.call_line(_nba_report(), dict(FINAL, live={"state": "final", "away_score": 110, "home_score": 99}))
-    assert lost["words"] == "wrong — our call was Celtics; MIA won 110-99", lost
+    assert lost["words"] == "wrong — we picked Celtics; MIA won 110-99", lost
     assert "Breakout candidates: 1 of 1 beat their average; 1 didn’t play." in lines, lines
     assert "Fades: 0 of 1 fell short of it." in lines and "Offense against defense: 2 of 2 right." in lines
     assert first["blocks"][1]["text"] == "In all, 3 of the report’s 4 graded reads were right."
@@ -181,7 +181,7 @@ def test_football_reads_the_week_the_run_game_and_the_angles():
     g = {"away": "IND", "home": "PHI", "date": "2026-11-15", "live": {"state": "final", "away_score": 17, "home_score": 27}}
     summary = G.grade(rep, g, _conn(rows), "nfl", "2026-W10")
     brown, pittman = _items(rep, "matchups")
-    assert brown["grade"]["words"] == "Right: 98 receiving yards, above his 65 average over his last 2 games."
+    assert brown["grade"]["words"] == "Right: 98 receiving yards; the last 2 games averaged 65."
     assert "grade" not in pittman, "a neutral read claims nothing"
     tr = next(b for s in rep["sections"] if s["key"] == "trenches" for b in s["blocks"])
     assert tr["grades"][0] is None, "no sacks are stored: the pass rush's edge is not graded"
@@ -408,7 +408,7 @@ def test_the_page_draws_the_grades_the_kept_picks_and_how_the_report_did():
     assert "function keptPicksFor(g)" in detail and "function obRowsFor(g)" in detail
     for want in ("(kept.edge || [])", "(kept.bets || [])", "(kept.shots || []).slice()", "(kept.shelf || [])"):
         assert want in detail, want
-    assert "<b>The report’s reads:</b>" in detail, "the Final card says how the report did"
+    assert 'gprRow(gprTone(r, n), "The report’s reads"' in detail, "the Final card says how the report did"
 
 
 if __name__ == "__main__":

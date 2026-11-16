@@ -354,15 +354,65 @@ def test_a_finished_game_s_page_opens_on_the_final_and_how_we_did():
                     { player: 'Aaron Nesmith', market: 'threes', side: 'Over', line: 0.5 }];
       return [gpResultsHTML(G, rows), gpResultsHTML({ home: 'PHI', away: 'IND', live: { state: 'live' } }, rows)];""",
                 prelude="function gameReportFor(g) { return { sections: [{ key: 'verdict', blocks: [{ type: 'winner', "
-                        "team: 'IND', chance: 0.55 }] }] }; }\n" + fn)
+                        "team: 'IND', chance: 0.55 }] }] }; }\nconst icon = (n) => `<i class=\"ic-${n}\"></i>`;"
+                        "const marketWord = (k) => k;\n" + fn)
     if got is None:
         return
     final, live = got
-    assert "<b>Pacers 124, 76ers 131</b>" in final
-    assert "<li><b>Our picks:</b> 1 won, 1 lost, 1 void (didn’t play)</li>" in final, final
-    assert "<li><b>Three-leg parlays:</b> 1 of 2 won</li>" in final
-    assert "<li><b>Who we think wins:</b> wrong — we called Pacers (55%)</li>" in final
+    assert '<span class="gpr-team">Pacers 124</span>' in final and '<span class="gpr-team win">76ers 131</span>' in final
+    # Each row in its color (GAMEFINAL1): even picks amber, half the tickets amber, a missed call red.
+    assert ('<li class="gpr-row gpr-warn"><span class="gpr-mark" aria-hidden="true"><i class="ic-dash"></i></span>\n'
+            '    <span class="gpr-k">Our picks</span><span class="gpr-v"><b class="gpr-won">1 won</b> · '
+            '<b class="gpr-lost">1 lost</b> · 1 void (didn’t play)</span></li>') in final, final
+    assert '<span class="gpr-k">3-leg parlays</span><span class="gpr-v"><b>1 of 2 hit</b></span>' in final, final
+    assert ('<li class="gpr-row gpr-bad">' in final and '<span class="gpr-k">Our pick to win</span><span class="gpr-v">'
+            '<b>Pacers (55%)</b> — 76ers won 131–124</span>' in final), final
+    # The report's one verdict: its pick to win was wrong and it graded no read.
+    assert '<div class="gpr-verdict gpr-bad" role="status">' in final and "The report got this game wrong" in final
+    assert "he finished" not in final and " his " not in final, "player-neutral copy"
     assert live == "", "nothing before the final"
+
+
+def test_a_finished_game_s_picks_and_parlays_come_off_the_record_when_the_page_has_none():
+    """A game that started before its report was kept (engine/reportkeep) shows no pick and no ticket of its own;
+    the record's (engine/reportoutcome, the report's `outcome`) are counted and listed instead (GAMEFINAL1)."""
+    fn = DETAIL[DETAIL.index("function gpResultsHTML(g, rows) {"):DETAIL.index("function gameReportHTML(g, extras) {")]
+    rep = {"sections": [{"key": "verdict", "blocks": [{"type": "winner", "team": "PHI", "chance": 0.62}]}],
+           "graded": {"status": "graded", "right": 5, "graded": 7, "groups": [
+               {"key": "matchups", "what": "Matchup reads", "right": 4, "graded": 5, "dnp": 0},
+               {"key": "fades", "what": "Fades", "right": 1, "graded": 2, "dnp": 1}],
+               "score": {"words": "76ers −3.5, won by 7 (covered); total 224.5, 255 scored (over)"},
+               "best_rows": [{"player": "Tyrese Maxey", "label": "a favorable matchup", "words": "31 points; the last 5 games averaged 24."}],
+               "worst": ["Pascal Siakam, a fade: 28 points; the last 5 games averaged 21."],
+               "injuries": {"words": "the one listed out or doubtful sat", "right": 1, "wrong": 0,
+                            "missed": ["Not on our injury report: Andrew Nembhard (Pacers) didn’t play."]}},
+           "outcome": {"picks": [{"player": "Tyrese Maxey", "market": "points", "side": "OVER", "line": 22.5,
+                                  "status": "won", "actual": 31},
+                                 {"player": "PHI", "team": "PHI", "market": "spread", "side": "OVER", "line": 3.5,
+                                  "status": "won", "game": True},
+                                 {"player": "Pascal Siakam", "market": "points", "side": "UNDER", "line": 20.5,
+                                  "status": "lost", "actual": 28}],
+                       "tickets": {"threes": [{"status": "won", "legs": [
+                           {"player": "Tyrese Maxey", "market": "points", "side": "OVER", "line": 22.5, "status": "won", "actual": 31},
+                           {"player": "Joel Embiid", "market": "rebounds", "side": "OVER", "line": 8.5, "status": "won", "actual": 11}]}]}}}
+    got = _node(GAME + f"state.sport = 'nba'; return gpResultsHTML(G, []);",
+                prelude=f"const REP = {json.dumps(rep)}; function gameReportFor(g) {{ return REP; }}\n"
+                        "const icon = (n) => `<i class=\"ic-${n}\"></i>`; const marketWord = (k) => k;\n" + fn)
+    if got is None:
+        return
+    assert '<div class="gpr-verdict gpr-good" role="status">' in got and "The report got this game mostly right" in got
+    assert "Picked the winner · 5 of 7 reads right" in got, got
+    assert '<b class="gpr-won">2 won</b> · <b class="gpr-lost">1 lost</b>' in got, got
+    assert "Tyrese Maxey over 22.5 points <span class=\"gpr-mute\">— had 31</span>" in got, got
+    assert "76ers −3.5" in got, "the journal's negated spread is said the bettor's way"
+    assert "Pascal Siakam under 20.5 points" in got
+    assert '<span class="gpr-k">3-leg parlays</span><span class="gpr-v"><b>1 of 1 hit</b></span>' in got
+    assert 'gpr-chip gpr-good">Matchup reads\n      4/5' in got and "· 1 didn’t play" in got
+    assert "<b>Tyrese Maxey</b> <span class=\"gpr-mute\">(a favorable matchup)</span> — 31 points" in got
+    assert "Pascal Siakam, a fade: 28 points" in got, "a grade archived before the rows still lists its misses"
+    assert "Not on our injury report: Andrew Nembhard" in got
+    assert '<li class="gpr-row gpr-info">' in got and "76ers −3.5, won by 7 (covered)" in got, "the lines, plain"
+    assert "The picks and parlays are from our record" in got
 
 
 if __name__ == "__main__":

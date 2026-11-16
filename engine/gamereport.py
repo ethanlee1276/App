@@ -4587,6 +4587,11 @@ def keep_started(result: dict, reports: list, sport: str, out, at: str | None, c
     except Exception as exc:                                 # noqa: BLE001
         return reports, f"; ⚠️ reports before the start not kept ({type(exc).__name__}: {exc})"
     graded = _grade_finals(result, reports, sport, conn, out)
+    # HOW ITS PICKS AND PARLAYS DID (engine/reportoutcome, 2026-11-16): each
+    # final's picks and tickets off the record, read again every build, so a
+    # game whose page no longer holds them still says how they went.
+    from . import reportoutcome
+    reportoutcome.attach(result, reports, sport)
     # KEPT FOR GOOD (engine/reportarchive): each graded final, for its page
     # after the board has moved on.
     from . import reportarchive

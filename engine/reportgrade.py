@@ -46,8 +46,12 @@ TEAM_LAST_N = 10
 #: said "right — Celtics, our call, won", 2026-11-16. 3: the report's numbers,
 #: its injury report and its touchdown chances checked too, a basketball
 #: player who sat never graded on a zero, his minutes beside a grade, the best
-#: calls and the biggest misses (engine/reportfacts), 2026-11-16.
-GRADE_VERSION = 3
+#: calls and the biggest misses (engine/reportfacts), 2026-11-16. 4: in plain,
+#: player-neutral words ("31 points; the last 2 games averaged 26"), the lines
+#: said as the favorite and the total, our pick to win in the past tense, the
+#: standouts weighed fairly on a count near nothing and kept as rows for the
+#: game's page (`best_rows`, `worst_rows`), 2026-11-16.
+GRADE_VERSION = 4
 #: The basketball leagues, whose box files a man who sat with zero minutes.
 HOOPS = ("nba", "wnba", "cbb")
 
@@ -312,20 +316,19 @@ def player_grade(sport: str, item: dict, bx: Box | None, hist: dict, way: str | 
         return {"stat": stat, "status": "dnp", "words": "Didn’t play."}
     actual = _value(mine["stats"], stat)
     if actual is None:
-        return {"stat": stat, "status": "dnp", "words": f"No {STAT_WORDS.get(stat, (stat, stat))[1]} in his box score."}
+        return {"stat": stat, "status": "dnp", "words": f"No {STAT_WORDS.get(stat, (stat, stat))[1]} in the box score."}
     past = hist.get((mine["player"], stat)) or []
     out = {"stat": stat, "actual": actual}
     if len(past) < MIN_N:
-        out.update(status="new", words=f"{_words(stat, actual)}; too few games before this one to say what his "
-                                        f"average is.")
+        out.update(status="new", words=f"{_words(stat, actual)}; too few games before this one for an average.")
         return _with_volume(sport, item, mine, hist, stat, out)
     avg = round(sum(past) / len(past), 1)
     st = verdict_of(way, actual, avg)
-    where = ("his average exactly" if st == "even" else
-             f"{'above' if actual > avg else 'under'} his {_num(avg)} average")
     head = {"right": "Right", "wrong": "Wrong", "even": "Even"}[st]
+    # PLAIN AND PLAYER-NEUTRAL (GRADE_VERSION 4): the night, then the games
+    # before it — "Right: 31 points; the last 2 games averaged 26."
     out.update(avg=avg, n=len(past), status=st,
-               words=f"{head}: {_words(stat, actual)}, {where} over his last {len(past)} games.")
+               words=f"{head}: {_words(stat, actual)}; the last {len(past)} games averaged {_num(avg)}.")
     return _with_volume(sport, item, mine, hist, stat, out)
 
 
@@ -469,8 +472,8 @@ def call_line(report: dict, g: dict) -> dict | None:
                     us = b.get("name") or b["team"]
                     score = f"{_num(max(a, h))}-{_num(min(a, h))}"
                     return {"right": right, "team": b["team"], "won": won,
-                            "words": (f"right — {us}, our call, won {score}" if right else
-                                      f"wrong — our call was {us}; {b.get('other_name') or won} won {score}")}
+                            "words": (f"right — {us} won {score}" if right else
+                                      f"wrong — we picked {us}; {b.get('other_name') or won} won {score}")}
     return None
 
 
@@ -646,8 +649,10 @@ def _grade(report: dict, g: dict, conn, sport: str, label: str) -> dict | None:
     best, worst = F.standouts(marks)
     if best:
         summary["best"] = best
+        summary["best_rows"] = F.standout_rows(marks, good=True)
     if worst:
         summary["worst"] = worst
+        summary["worst_rows"] = F.standout_rows(marks, good=False)
     report["graded"] = summary
     _summary_section(report, summary)
     return summary
@@ -714,13 +719,13 @@ def summary_lines(summary: dict) -> list:
     out = []
     call = summary.get("call")
     if call:
-        out.append(f"Who we think wins: {call['words']}")
+        out.append(f"Our pick to win: {call['words']}")
     if summary.get("ratings"):
         out.append(f"Our team ratings alone (unproven): {summary['ratings']['words']}")
     if summary.get("sim"):
         out.append(f"Our simulation: {summary['sim']['words']}")
     if summary.get("score"):
-        out.append(f"The score: {summary['score']['words']}")
+        out.append(f"The lines: {summary['score']['words']}")
     for grp in summary.get("groups") or []:
         n, r = int(grp.get("graded") or 0), int(grp.get("right") or 0)
         if not n:
@@ -759,9 +764,9 @@ def _summary_section(report: dict, summary: dict) -> None:
         blocks += [{"type": "h", "text": "Missing from our injury report"},
                    {"type": "list", "items": list(summary["injuries"]["missed"])}]
     blocks.append({"type": "note", "text": (
-        "Each player’s read is graded on the stat it leans on, against his own average over his last games before "
-        "this one: a favorable read or a breakout candidate is right when he beat it, an unfavorable read or a fade "
-        "when he fell short. An offense against a defense is graded on the night’s numbers against the team’s own, "
+        "Each player’s read is graded on the stat it leans on, against the player’s own average over the games "
+        "before this one: a favorable read or a breakout candidate is right when the night beat it, an unfavorable "
+        "read or a fade when it fell short. An offense against a defense is graded on the night’s numbers against the team’s own, "
         "and how the game would go on its final score. The lines, our team ratings, the simulation, the injury "
         "report and the touchdown chances are checked on their own lines, never counted among the reads. Our picks "
         "and parlays are graded at their own lines, on their cards.")})

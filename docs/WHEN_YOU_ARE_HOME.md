@@ -9338,6 +9338,30 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TU. A finished game says if its report was right** (step 653; 16 November). Nothing to run. Your circled card on
+the finished Patriots at Lions page now reads, top to bottom:
+- the final, the winner in bold;
+- one verdict on the report in its color: "The report got this game mostly right" (green), "half right" (amber) or
+  "mostly wrong" (red), from its pick to win (counted twice, it is the headline) and its reads, with the reason under
+  it ("Picked the winner · 9 of 14 reads right");
+- a row for each thing it said and each kind of bet, each with a green check, a red cross or an amber dash: our pick to
+  win and its chance, the reads by kind as colored chips (matchup reads 5/7, fades 1/2), our picks won and lost, the
+  3-leg parlays and the touchdown pairs that hit, the injury report, the touchdown chances against what they said, our
+  ratings' and the simulation's own picks, and the lines, said plainly ("Lions −3.5, won by 25 (covered); total 47.5,
+  45 scored (under)") and kept grey because they are the market's, not ours;
+- "What it got right" and "What it got wrong", by name, with anyone the injury report missed.
+
+The Sunday games started before a report kept its picks (step TA), so their pages showed no pick and no parlay. The
+picks and tickets now come off the record when the page has none, each one listed under "See each pick" and "See each
+ticket" with how it went. The record is read again on every build, so a pick graded later is counted on the next one.
+An old game's page (from a team's schedule) shows the same card above its report.
+
+The words changed with it, in the report too: a read says "Right: 31 points; the last 2 games averaged 26." and "On 6
+carries (usually 18).", with no he or his; the call says "right — Lions won 35-10". The best calls and biggest misses
+stopped ranking a single touchdown against a 0.2 average as a 400% night: a count that small is now weighed on its own
+spread, so a blank against 0.4 is no longer the biggest miss of the game. Every final still on a board is graded again
+once, on the next build of its league (the grade's version is now 4).
+
 **TT. Ohio State is Ohio State again** (step 652; 16 November). Nothing to run. Found while checking Jeremiah Smith's
 page: the college board's team map, built from ESPN's teams feed, had "OSU" as Ohio State Newark Titans (ESPN id 3161,
 black, no logo of its own). The feed carries every division, 761 schools, and two of them use "OSU"; keyed by the

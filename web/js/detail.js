@@ -1524,13 +1524,145 @@ function gameReportFor(g) {
 /* HOW WE DID, ON A FINISHED GAME (2026-11-16; Ethan: "when a game is already
    over and someone goes and clicks on this game page ... show ... what the
    outcome was of the game and if these props won or lost and if the parlays
-   won or lost ... and if our game report and reads was correct"). The page
-   opens on the final, every pick it carries counted the journal's way (app.js
-   pickResult, engine/gameresults), the game's parlays and scorer pairs, and
-   whether the report's call was right; each card below says its own. */
+   won or lost ... and if our game report and reads was correct").
+
+   SAID PLAINLY, IN COLOR (GAMEFINAL1, 2026-11-16; Ethan, of this card on the
+   finished Patriots at Lions page: "this page as well should have if the game
+   report was correct or not and go over all that was right and wrong with the
+   game report along if the parlays and picks did good. Also where I circled,
+   its wording is weird and can be better and also we should color code shit
+   like the other stuff"). The final; one verdict on the report (right, half
+   right or wrong, on its pick to win and its reads); a row for each thing it
+   said and each kind of bet — green where it held, red where it missed, amber
+   in between, plain where it was the market's or is still waiting; then what
+   it got right and what it got wrong, by name. The picks and parlays are the
+   page's own when it still holds them (graded at their own lines, app.js
+   pickResult), else the record's (engine/reportoutcome), each one listed. */
 function gpResultsHTML(g, rows) {
+  const gp = (((state.data || {}).game_parlays || {}).games || []).find((x) => x && x.home === g.home && x.away === g.away) || {};
+  return gprCard(g, gameReportFor(g), rows, gp, { sport: state.sport });
+}
+//: The card for a finished game: its report (graded), the picks the page draws and its tickets;
+//: ``opts.map`` is an old game's own verdicts (engine/reportarchive), ``opts.sport`` its league
+//: and ``opts.id`` the card's id. "" before the final.
+function gprCard(g, rep, rows, gp, opts) {
   const fin = resFinal(g);
   if (!fin) return "";
+  const o = opts || {}, map = o.map || null, sport = o.sport || state.sport;
+  const graded = (rep && rep.graded) || {};
+  const out = (rep && rep.outcome) || {};
+  const call = gprCall(g, rep, fin);
+  const picks = gprPicks(g, rows, out, map);
+  const threes = gprTickets(g, gp, out, "threes", map), pairs = gprTickets(g, gp, out, "scorers", map);
+  const pairWord = ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs"
+    : "Scorer pairs";
+  const v = gprVerdict(call, graded);
+  const rowsHTML = [
+    call && gprRow(call.right ? "good" : "bad", "Our pick to win", call.words),
+    gprReadsRow(graded),
+    gprPicksRow(picks),
+    gprTicketsRow(threes, "3-leg parlays"),
+    gprTicketsRow(pairs, pairWord),
+    gprInjuryRow(graded.injuries),
+    gprTdRow(graded.tds),
+    gprModelRow(graded.ratings, "Our ratings alone (unproven)"),
+    gprModelRow(graded.sim, "Our simulation"),
+    gprLinesRow(graded.score),
+  ].filter(Boolean);
+  const score = fin.home != null && fin.away != null
+    ? `<span class="gpr-team${fin.away > fin.home ? " win" : ""}">${escapeHtml(teamName(g.away))} ${fin.away}</span>
+       <span class="gpr-at">at</span>
+       <span class="gpr-team${fin.home > fin.away ? " win" : ""}">${escapeHtml(teamName(g.home))} ${fin.home}</span>`
+    : `<span class="gpr-team">The final score is not in yet</span>`;
+  const verdict = v ? `<div class="gpr-verdict gpr-${v.tone}" role="status">
+      <span class="gpr-badge" aria-hidden="true">${gprIcon(v.tone)}</span>
+      <span class="gpr-say"><b>${v.words}</b>${v.sub ? `<span class="gpr-sub">${escapeHtml(v.sub)}</span>` : ""}</span>
+    </div>` : graded.status === "pending" ? `<div class="gpr-verdict gpr-wait" role="status">
+      <span class="gpr-badge" aria-hidden="true">${gprIcon("wait")}</span>
+      <span class="gpr-say"><b>The report is graded once the box score is in</b></span></div>` : "";
+  const cols = gprRightWrong(graded);
+  const fromRecord = picks.from === "record" || threes.from === "record" || pairs.from === "record";
+  const note = !rowsHTML.length ? `<p class="gp-res-note">No pick of ours rode on this game.</p>`
+    : `<p class="gp-res-note">${fromRecord ? "The picks and parlays are from our record, graded on the box score. "
+      : "Each pick and parlay below says how it went at its own line. "}Every read in the report is marked right or
+      wrong.</p>`;
+  return `<div class="card gp-res" id="${escapeAttr(o.id || "gp-sec-results")}">
+    <div class="gp-res-head"><span class="gp-res-k">Final</span>${score}</div>
+    ${verdict}
+    ${rowsHTML.length ? `<ul class="gpr-rows">${rowsHTML.join("")}</ul>` : ""}
+    ${cols}
+    ${note}
+    <a class="gp-res-more" href="#reportpicks" data-rpk-facts-go="1">How every finished game’s report did</a>
+  </div>`;
+}
+const GPR_ICON = { good: "check", bad: "cross", warn: "dash", info: "info", wait: "clock" };
+function gprIcon(tone) {
+  return typeof icon === "function" ? icon(GPR_ICON[tone] || "dot", 14) : "";
+}
+//: A share's tone: green at 60% or better, red at 40% or worse, amber between; plain with none.
+function gprTone(right, of) {
+  if (!of) return "wait";
+  const r = right / of;
+  return r >= 0.6 ? "good" : r <= 0.4 ? "bad" : "warn";
+}
+function gprRow(tone, k, v, more) {
+  return `<li class="gpr-row gpr-${tone}"><span class="gpr-mark" aria-hidden="true">${gprIcon(tone)}</span>
+    <span class="gpr-k">${k}</span><span class="gpr-v">${v}</span>${more || ""}</li>`;
+}
+//: Our pick to win against the final: {right, words}, or null with no pick or a tie.
+function gprCall(g, rep, fin) {
+  if (fin.home == null || fin.away == null || fin.home === fin.away) return null;
+  const sec = rep && (rep.sections || []).find((s) => s && s.key === "verdict");
+  const b = sec && (sec.blocks || []).find((x) => x && x.type === "winner" && x.team);
+  if (!b) return null;
+  const won = fin.home > fin.away ? g.home : g.away;
+  const hi = Math.max(fin.home, fin.away), lo = Math.min(fin.home, fin.away);
+  const chance = Number(b.chance);
+  const us = `${escapeHtml(teamName(b.team))}${Number.isFinite(chance) && chance > 0 ? ` (${Math.round(chance * 100)}%)` : ""}`;
+  const right = b.team === won;
+  return { right, words: right ? `<b>${us}</b> — won ${hi}–${lo}`
+    : `<b>${us}</b> — ${escapeHtml(teamName(won))} won ${hi}–${lo}` };
+}
+//: The report's verdict: its pick to win counts twice (it is the headline), each read once.
+function gprVerdict(call, graded) {
+  let right = 0, of = 0;
+  const bits = [];
+  if (call) {
+    of += 2;
+    right += call.right ? 2 : 0;
+    bits.push(call.right ? "picked the winner" : "missed the winner");
+  }
+  const n = Number(graded.graded) || 0, r = Number(graded.right) || 0;
+  if (n) {
+    of += n;
+    right += r;
+    bits.push(`${r} of ${n} reads right`);
+  }
+  if (!of) return null;
+  const share = right / of;
+  const tone = gprTone(right, of);
+  const words = share === 1 ? "The report got this game right"
+    : share === 0 ? "The report got this game wrong"
+    : tone === "good" ? "The report got this game mostly right"
+    : tone === "bad" ? "The report got this game mostly wrong" : "The report was half right on this game";
+  const sub = bits.join(" · ");
+  return { tone, words, sub: sub ? sub[0].toUpperCase() + sub.slice(1) : "" };
+}
+//: The reads, in all and by kind: "9 of 14 right" and a chip for each kind it graded.
+function gprReadsRow(graded) {
+  if (graded.status === "pending") return gprRow("wait", "The report’s reads", "Graded once the box score is in");
+  const n = Number(graded.graded) || 0;
+  if (!n) return "";
+  const r = Number(graded.right) || 0;
+  const chips = (graded.groups || []).filter((x) => x && Number(x.graded)).map((x) =>
+    `<span class="gpr-chip gpr-${gprTone(Number(x.right) || 0, Number(x.graded))}">${escapeHtml(x.what || x.key)}
+      ${Number(x.right) || 0}/${Number(x.graded)}</span>`).join("");
+  const sat = (graded.groups || []).reduce((s, x) => s + (Number((x || {}).dnp) || 0), 0);
+  return gprRow(gprTone(r, n), "The report’s reads", `<b>${r} of ${n} right</b>${sat
+    ? ` <span class="gpr-mute">· ${sat} didn’t play</span>` : ""}`, chips ? `<span class="gpr-chips">${chips}</span>` : "");
+}
+//: The game's picks: the page's own, graded at their own lines; else the record's (engine/reportoutcome).
+function gprPicks(g, rows, out, map) {
   const n = { won: 0, lost: 0, push: 0, void: 0, pending: 0 };
   const seen = new Set();
   for (const r of rows || []) {
@@ -1538,54 +1670,134 @@ function gpResultsHTML(g, rows) {
     const k = [resNorm(r.player || r.team), r.market, String(r.side || "").toLowerCase(), r.line].join("|");
     if (seen.has(k)) continue;
     seen.add(k);
-    const x = pickResult(r, g);
+    const x = pickResult(r, g, map || undefined);
     if (x) n[x.status] += 1;
   }
-  const gp = (((state.data || {}).game_parlays || {}).games || []).find((x) => x && x.home === g.home && x.away === g.away) || {};
-  const tickets = (kind) => (gp[kind] || []).map((t) => ticketResult(t.legs, g)).filter(Boolean);
-  const said = (xs, what) => {
-    if (!xs.length) return "";
-    const won = xs.filter((x) => x.status === "won").length, open = xs.filter((x) => x.status === "pending").length;
-    return `<li><b>${what}:</b> ${won} of ${xs.length} won${open ? `, ${open} waiting on the box score` : ""}</li>`;
-  };
-  const pair = ["nfl", "cfb"].includes(state.sport) ? "Touchdown pairs" : state.sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
-  const picks = [n.won && `${n.won} won`, n.lost && `${n.lost} lost`, n.push && `${n.push} pushed`,
-    n.void && `${n.void} void (didn’t play)`, n.pending && `${n.pending} waiting on the box score`].filter(Boolean);
-  const rep = gameReportFor(g);
-  const sec = rep && (rep.sections || []).find((s) => s && s.key === "verdict");
-  const call = sec && (sec.blocks || [])[0];
-  let callLine = "";
-  if (call && call.type === "winner" && fin.home != null && fin.away != null && fin.home !== fin.away) {
-    const won = fin.home > fin.away ? g.home : g.away;
-    callLine = `<li><b>Who we think wins:</b> ${call.team === won ? "right" : "wrong"} — we called ${
-      escapeHtml(teamName(call.team))} (${Math.round(Number(call.chance || 0) * 100)}%)</li>`;
+  if (seen.size || !(out.picks || []).length) return { n, list: [], from: "page" };
+  const list = out.picks.filter((p) => p && p.market);
+  for (const p of list) n[n[p.status] != null ? p.status : "pending"] += 1;
+  return { n, list, from: "record" };
+}
+function gprCounts(n) {
+  return [n.won && `<b class="gpr-won">${n.won} won</b>`, n.lost && `<b class="gpr-lost">${n.lost} lost</b>`,
+    n.push && `${n.push} pushed`, n.void && `${n.void} void (didn’t play)`,
+    n.pending && `<span class="gpr-mute">${n.pending} waiting on the box score</span>`].filter(Boolean).join(" · ");
+}
+function gprPicksRow(p) {
+  const n = p.n;
+  if (!n.won && !n.lost && !n.push && !n.void && !n.pending) return "";
+  const tone = n.won + n.lost ? (n.won > n.lost ? "good" : n.won < n.lost ? "bad" : "warn") : "wait";
+  const more = p.list.length ? `<details class="gpr-more"><summary>See each pick</summary><ul class="gpr-list">${
+    p.list.map((x) => gprPickLI(x)).join("")}</ul></details>` : "";
+  return gprRow(tone, "Our picks", gprCounts(n), more);
+}
+//: The game's tickets of one kind: the page's own, graded leg by leg; else the record's.
+function gprTickets(g, gp, out, kind, map) {
+  const page = ((gp || {})[kind] || []).map((t) => ticketResult(t.legs, g, map || undefined)).filter(Boolean);
+  if (page.length) return { list: page, from: "page", legs: null };
+  const rec = ((out.tickets || {})[kind] || []).filter((t) => t && (t.legs || []).length);
+  return { list: rec, from: rec.length ? "record" : "page", legs: rec };
+}
+function gprTicketsRow(t, label) {
+  if (!t.list.length) return "";
+  const won = t.list.filter((x) => x.status === "won").length;
+  const lost = t.list.filter((x) => x.status === "lost").length;
+  const open = t.list.filter((x) => x.status === "pending" || x.status === "open").length;
+  const tone = won + lost ? gprTone(won, won + lost) : "wait";
+  const say = `<b>${won} of ${t.list.length} hit</b>${
+    open ? ` <span class="gpr-mute">· ${open} waiting on the box score</span>` : ""}`;
+  const more = t.legs && t.legs.length ? `<details class="gpr-more"><summary>See each ticket</summary><ul class="gpr-list">${
+    t.legs.map((x, i) => `<li class="gpr-ticket gpr-${gprSt(x.status)}"><div class="gpr-ticket-h"><span class="gpr-mark"
+      aria-hidden="true">${gprIcon(gprSt(x.status))}</span>Ticket ${i + 1}: ${gprStWord(x.status)}</div>
+      <ul class="gpr-list gpr-legs">${(x.legs || []).map((l) => gprPickLI(l)).join("")}</ul></li>`).join("")}</ul></details>`
+    : "";
+  return gprRow(tone, label, say, more);
+}
+function gprSt(s) {
+  return s === "won" ? "good" : s === "lost" ? "bad" : s === "push" || s === "void" ? "info" : "wait";
+}
+function gprStWord(s) {
+  return s === "won" ? "won" : s === "lost" ? "lost" : s === "void" ? "void" : s === "push" ? "push" : "waiting";
+}
+//: One pick off the record in plain words, with how it went: "Jahmyr Gibbs over 74.5 rushing yards — 142".
+const GPR_SCORE = { anytime_td: "to score a touchdown", anytime_goal: "to score a goal", goals: "to score a goal",
+                    first_td: "to score the first touchdown" };
+function gprPickWords(p) {
+  const m = String(p.market || "");
+  const side = String(p.side || "").toUpperCase();
+  const down = side === "UNDER" || side === "NO";
+  const num = (x) => { const v = Number(x); return Number.isInteger(v) ? String(v) : v.toFixed(1); };
+  const club = escapeHtml(teamName(p.team || p.player || ""));
+  if (p.game || RES_GAME_MARKETS.has(m)) {
+    if (m === "moneyline") return `${club} to win`;
+    if (m === "spread") {
+      const ln = -Number(p.line);
+      return Number.isFinite(ln) ? `${club} ${ln > 0 ? "+" : ln < 0 ? "−" : ""}${num(Math.abs(ln))}` : `${club} spread`;
+    }
+    if (m === "total") return `${down ? "Under" : "Over"} ${num(p.line)} total`;
+    if (m === "team_total") return `${club} ${down ? "under" : "over"} ${num(p.line)}`;
   }
-  const score = fin.home != null && fin.away != null
-    ? `${escapeHtml(teamName(g.away))} ${fin.away}, ${escapeHtml(teamName(g.home))} ${fin.home}` : "the final score is not in yet";
-  // The report's reads, graded on the box score (engine/reportgrade): its first section says each.
-  const graded = rep && rep.graded;
-  const readsLine = graded && graded.graded
-    ? `<li><b>The report’s reads:</b> ${graded.right} of ${graded.graded} right — each is graded in the report below</li>`
-    : graded && graded.status === "pending" ? "<li><b>The report’s reads:</b> graded once the box score is in</li>" : "";
-  // THE FACT CHECK, UP TOP (engine/reportfacts, 2026-11-16; Ethan: "see if
-  // the data we were giving them were correct or not, and the read we had was
-  // correct or not"): the lines against the final, the injury report, the
-  // report's best call and its biggest miss — each said in full in the report.
-  const fact = (k, words) => words ? `<li><b>${k}:</b> ${escapeHtml(String(words).replace(/\.$/, ""))}</li>` : "";
-  const g2 = graded || {};
-  const lines = [picks.length ? `<li><b>Our picks:</b> ${picks.join(", ")}</li>` : "",
-    said(tickets("threes"), "Three-leg parlays"), said(tickets("scorers"), pair), callLine,
-    fact("The lines", g2.score && g2.score.words && g2.score.words.replace(/^the lines had /, "")),
-    readsLine, fact("The injury report", g2.injuries && g2.injuries.words),
-    fact("Touchdown chances", g2.tds && g2.tds.words),
-    fact("Best call", (g2.best || [])[0]), fact("Biggest miss", (g2.worst || [])[0])].filter(Boolean);
-  return `<div class="card gp-res" id="gp-sec-results">
-    <div class="gp-res-head"><span class="gp-res-k">Final</span> <b>${score}</b></div>
-    ${lines.length ? `<ul class="gp-res-list">${lines.join("")}</ul>` : `<p class="gp-res-note">No pick of ours rode on this game.</p>`}
-    ${lines.length ? `<p class="gp-res-note">Every pick below says how it went: the number he finished with, won or lost at its
-      own line. The parlays and the report mark each leg and the call the same way.</p>` : ""}
-    <a class="gp-res-more" href="#reportpicks" data-rpk-facts-go="1">How every finished game’s report did</a>
-  </div>`;
+  const who = escapeHtml(p.player || "");
+  if (GPR_SCORE[m]) return `${who} ${down ? "not " : ""}${GPR_SCORE[m]}`;
+  const line = p.line == null ? "" : ` ${num(p.line)}`;
+  return `${who} ${down ? "under" : "over"}${line} ${escapeHtml(marketWord(m).toLowerCase())}`;
+}
+function gprPickLI(p) {
+  const st = String(p.status || "");
+  const tone = gprSt(st);
+  const m = String(p.market || "");
+  const a = Number(p.actual);
+  const did = p.actual == null || !Number.isFinite(a) ? (st === "void" ? "didn’t play" : st === "push" ? "push" : "")
+    : GPR_SCORE[m] ? (a > 0 ? `scored${a > 1 ? ` ${a}` : ""}` : "didn’t score")
+    : RES_GAME_MARKETS.has(m) ? "" : `had ${Number.isInteger(a) ? a : a.toFixed(1)}`;
+  return `<li class="gpr-${tone}"><span class="gpr-mark" aria-hidden="true">${gprIcon(tone)}</span><span>${
+    gprPickWords(p)}${did ? ` <span class="gpr-mute">— ${did}</span>` : ""}${
+    st === "pending" || st === "open" ? ` <span class="gpr-mute">— waiting</span>` : ""}</span></li>`;
+}
+//: The injury report: green when everyone it listed did as it said and no regular sat off it.
+function gprInjuryRow(inj) {
+  if (!inj || !inj.words) return "";
+  const right = Number(inj.right) || 0, wrong = Number(inj.wrong) || 0;
+  const tone = right + wrong ? (!wrong ? "good" : right > wrong ? "warn" : "bad") : "info";
+  const w = String(inj.words);
+  return gprRow(tone, "The injury report", escapeHtml(w[0].toUpperCase() + w.slice(1)));
+}
+//: Touchdown chances: how many scored against how many our chances said would.
+function gprTdRow(td) {
+  if (!td || !Number(td.n)) return "";
+  const n = Number(td.n), got = Number(td.scored) || 0, want = Number(td.expected) || 0;
+  const tone = Math.abs(got - want) <= Math.max(1, 0.25 * n) ? "good" : "warn";
+  return gprRow(tone, "Touchdown chances", `<b>${got} of ${n} scored</b> <span class="gpr-mute">· our chances said about ${
+    want.toFixed(1)}</span>`);
+}
+//: Our ratings' and the simulation's own picks to win (shown beside the call, never counted in it).
+function gprModelRow(x, label) {
+  if (!x || !x.words || (x.status !== "right" && x.status !== "wrong")) return "";
+  const w = String(x.words).replace(/^(right|wrong) — (they |it )?/, "");
+  return gprRow(x.status === "right" ? "good" : "bad", label, `<b>${x.status === "right" ? "Right" : "Wrong"}</b> — ${
+    escapeHtml(w)}`);
+}
+//: The lines against the final: the market's, never ours to be right or wrong about.
+function gprLinesRow(sc) {
+  if (!sc || !sc.words) return "";
+  return gprRow("info", "The lines", escapeHtml(String(sc.words).replace(/^the lines had /, "")));
+}
+//: What the report got right and wrong, by name: its best calls and biggest misses, and anyone it missed.
+function gprRightWrong(graded) {
+  const item = (x) => {
+    if (x && typeof x === "object") {
+      const who = x.player ? `<b>${escapeHtml(x.player)}</b>${x.label ? ` <span class="gpr-mute">(${escapeHtml(x.label)})</span>` : ""} — ` : "";
+      return `<li>${who}${escapeHtml(x.words || "")}</li>`;
+    }
+    return `<li>${escapeHtml(String(x || ""))}</li>`;
+  };
+  const good = (graded.best_rows || graded.best || []).map(item);
+  const bad = (graded.worst_rows || graded.worst || []).map(item);
+  for (const m of ((graded.injuries || {}).missed || [])) bad.push(item(m));
+  if (!good.length && !bad.length) return "";
+  const col = (tone, head, xs) => xs.length ? `<div class="gpr-col gpr-${tone}"><div class="gpr-col-h">${
+    gprIcon(tone)} ${head}</div><ul>${xs.join("")}</ul></div>` : "";
+  return `<div class="gpr-cols">${col("good", "What it got right", good)}${col("bad", "What it got wrong", bad)}</div>`;
 }
 /* THE WAY BACK TO EVERY FINISHED GAME (js/reportpicks.js rpFactsHTML): the
    Final card's link opens Report Picks at "How our reports did". */
@@ -5040,8 +5252,12 @@ async function pbpOurReportFill(league, d) {
   const fin = doc.final || {};
   const g = { home: doc.home, away: doc.away, date: doc.date, kickoff: doc.kickoff,
               live: { state: "final", home_score: fin.home, away_score: fin.away } };
+  // THE SAME VERDICT AS THE GAME'S OWN PAGE (gprCard, GAMEFINAL1): right or
+  // wrong, what it got right and wrong, and how the picks and parlays did.
+  const rows = Object.values(doc.picks || {}).flat();
   slot.innerHTML = `<div class="section-title">Our report on this game
       <span class="sub">— written before it, graded after it</span></div>
+    ${gprCard(g, doc.report, rows, doc.parlays || {}, { map: doc.results || {}, sport: doc.sport, id: "pbp-our-verdict" })}
     ${R.html(doc.report, { embedded: true, sport: doc.sport, parlays: doc.parlays || null,
                            results: reportResults(g, doc.results || {}) })}`;
   revealChildren(slot);

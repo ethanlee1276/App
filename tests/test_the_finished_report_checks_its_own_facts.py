@@ -139,23 +139,24 @@ def test_the_lines_are_checked_against_the_final():
     rep, summary = _grade()
     sc = summary["score"]
     assert sc["status"] == "info" and (sc["cover"], sc["side"]) == ("BOS", "under"), sc
-    assert sc["words"] == ("the lines had Celtics by 6.5 and 227.5 points; it was Celtics by 25, 217 points — "
-                           "Celtics covered and it went under"), sc["words"]
+    # In the bettor's own words (GRADE_VERSION 4; Ethan: "its wording is weird and can be better").
+    assert sc["words"] == "Celtics −6.5, won by 25 (covered); total 227.5, 217 scored (under)", sc["words"]
+    assert (sc["fav"], sc["line"], sc["total_line"]) == ("BOS", 6.5, 227.5), sc
     assert (sc["margin_miss"], sc["total_miss"]) == (18.5, 10.5) and sc["expected"] == {"home": 117.0, "away": 110.5}
     # A report's own numbers first: the call's `expect`, else its `line` words.
     rep2 = _nba_report()
     rep2["sections"][0]["blocks"][0]["expect"] = {"spread": 2.5, "total": 210.5}
     sc2 = F.score_check(rep2, FINAL, "nba")
-    assert sc2["cover"] == "BOS" and sc2["side"] == "over" and "Heat by 2.5" in sc2["words"], sc2
-    assert sc2["words"].endswith("Celtics covered, and won outright and it went over"), sc2["words"]
+    assert sc2["cover"] == "BOS" and sc2["side"] == "over", sc2
+    assert sc2["words"].startswith("Heat −2.5, Celtics won outright by 25; total 210.5, "), sc2["words"]
     assert F.parse_line("NYR −1.5 on the puck line, total 6.5", "NYR", "BOS") == {"spread": -1.5, "fixed": 1, "total": 6.5}
     assert F.parse_line("a pick’em, total 41.5", "DET", "GB") == {"spread": 0.0, "total": 41.5}
     assert F.parse_line("DET by 3 at home", "DET", "GB") == {"spread": -3.0}
     assert F.parse_line("XYZ by 3", "DET", "GB") is None, "a club not in the game is no line"
     hockey = {"away": "BOS", "home": "NYR", "live": {"state": "final", "away_score": 2, "home_score": 3}}
     pl = F.score_check({"home": "NYR", "away": "BOS", "line": "NYR −1.5 on the puck line, total 6.5"}, hockey, "nhl")
-    assert pl["cover"] == "BOS" and pl["words"] == ("the lines had NYR −1.5 on the puck line and 6.5 goals; it was "
-                                                    "NYR by 1, 5 goals — BOS covered and it went under"), pl
+    assert pl["cover"] == "BOS" and pl["words"] == ("NYR −1.5 on the puck line, won by only 1 (BOS covered); "
+                                                    "total 6.5, 5 scored (under)"), pl
     assert F.score_check(_nba_report(), {"live": {"state": "live"}}, "nba") is None, "not before the final"
 
 
@@ -308,41 +309,53 @@ def test_a_player_who_sat_is_never_graded_on_a_zero_and_his_minutes_are_said():
     assert _card(rep, "Jaylen Brown")["grade"] == {"stat": "pts", "status": "dnp", "words": "Didn’t play."}, \
         "zero minutes in the NBA's box is a night he sat, not a zero"
     herro = _card(rep, "Tyler Herro")["grade"]
-    assert herro["words"] == ("Wrong: 9 points, under his 20 average over his last 5 games. In 21 minutes (he averages "
-                              "34)."), herro
-    assert herro["vol"] == {"stat": "min", "actual": 21.0, "avg": 34.0, "words": "In 21 minutes (he averages 34)."}
+    assert herro["words"] == "Wrong: 9 points; the last 5 games averaged 20. In 21 minutes (usually 34).", herro
+    assert herro["vol"] == {"stat": "min", "actual": 21.0, "avg": 34.0, "words": "In 21 minutes (usually 34)."}
     white = _card(rep, "Derrick White")["grade"]
     assert (white["avg"], white["n"]) == (15.0, 4), "the night he sat is no game of his"
     tatum = _card(rep, "Jayson Tatum")["grade"]
     assert "vol" not in tatum, "40 minutes against his 36 is not far off his own"
     assert F.volume_note("nfl", {"pos": "RB"}, {"stats": {"rush_att": 6.0}}, [18.0, 17.0, 19.0])["words"] == \
-        "On 6 carries (he averages 18)."
+        "On 6 carries (usually 18)."
     assert F.volume_note("nfl", {"pos": "K"}, {"stats": {}}, []) is None
 
 
 def test_the_best_calls_and_biggest_misses_lead_the_summary():
     rep, summary = _grade()
     # 22 against 15 (47% over) ahead of 38 against 27 (41% over): as a share of his own number.
-    assert summary["best"] == ["Derrick White, a breakout candidate: 22 points, above his 15 average over his last 4 "
-                               "games.", "Jayson Tatum, a breakout candidate: 38 points, above his 27 average over his "
-                               "last 5 games."], summary["best"]
-    assert summary["worst"][0] == ("Tyler Herro, a breakout candidate: 9 points, under his 20 average over his last 5 "
-                                   "games. In 21 minutes (he averages 34)."), summary["worst"]
+    assert summary["best"] == ["Derrick White, a breakout candidate: 22 points; the last 4 games averaged 15.",
+                               "Jayson Tatum, a breakout candidate: 38 points; the last 5 games averaged 27."], \
+        summary["best"]
+    assert summary["worst"][0] == ("Tyler Herro, a breakout candidate: 9 points; the last 5 games averaged 20. In 21 "
+                                   "minutes (usually 34)."), summary["worst"]
+    # The same standouts as rows, for the game's page (js/detail.js gprRightWrong).
+    assert summary["best_rows"][0] == {"player": "Derrick White", "label": "a breakout candidate", "team": "BOS",
+                                       "words": "22 points; the last 4 games averaged 15.", "group": "candidates",
+                                       "status": "right"}, summary["best_rows"]
+    assert [r["player"] for r in summary["worst_rows"]][:1] == ["Tyler Herro"], summary["worst_rows"]
     first = _sec(rep, "graded")
     heads = [b.get("text") for b in first["blocks"] if b.get("type") == "h"]
     assert heads[:2] == ["What we got most right", "What we got most wrong"], heads
     lines = first["blocks"][0]["items"]
-    assert lines[:3] == ["Who we think wins: right — Celtics, our call, won 121-96.",
+    assert lines[:3] == ["Our pick to win: right — Celtics won 121-96.",
                          "Our team ratings alone (unproven): wrong — they had Heat (55%), the other side from the price.",
-                         "The score: the lines had Celtics by 6.5 and 227.5 points; it was Celtics by 25, 217 points — "
-                         "Celtics covered and it went under."], lines
+                         "The lines: Celtics −6.5, won by 25 (covered); total 227.5, 217 scored (under)."], lines
     total = next(b["text"] for b in first["blocks"] if b.get("type") == "p")
     assert total == "In all, 4 of the report’s 7 graded reads were right.", total
     one = F.standouts([(0.4, "a"), (2.0, "b"), (-1.0, "c"), (-0.2, "d"), None])
     assert one == (["b", "a"], ["c", "d"])
     assert F.standout("units", None, {"status": "right", "actual": 0.58, "avg": 0.52, "words": "Right: BOS shot."},
                       "more")[0] > 0.1, "a rate weighs as a share of its own number"
-    assert G.GRADE_VERSION == 3, "every final archived before is checked again, once"
+    # A count near nothing weighs on its own spread (GRADE_VERSION 4): one touchdown against a 0.2 average is
+    # no 400% night, and no touchdown against 0.4 no miss as big as a miss can be.
+    td = F.standout("matchups", {"player": "A"}, {"status": "right", "stat": "anytime_td", "actual": 1, "avg": 0.2,
+                                                  "words": "Right."}, "more")[0]
+    blank = F.standout("matchups", {"player": "A"}, {"status": "wrong", "stat": "anytime_td", "actual": 0, "avg": 0.4,
+                                                     "words": "Wrong."}, "more")[0]
+    yards = F.standout("matchups", {"player": "B"}, {"status": "right", "stat": "rush_yds", "actual": 142, "avg": 88,
+                                                     "words": "Right."}, "more")[0]
+    assert round(td, 2) == 1.6 and round(blank, 2) == -0.63 and 0.6 < yards < 0.62, (td, blank, yards)
+    assert G.GRADE_VERSION == 4, "every final archived before is checked again, once"
 
 
 # --- the reports write what a finished game checks ------------------------------------------------
@@ -424,7 +437,7 @@ def test_every_graded_final_is_counted_on_the_reports_record():
     asrc = (ROOT / "engine" / "reportarchive.py").read_text(encoding="utf-8")
     assert "reportrecord.refresh(where, sport)" in asrc
     with gzip.open(A.path_for(where, "nba", "2026-10-22", "MIA", "BOS")) as fh:
-        assert json.load(fh)["report"]["graded"]["version"] == 3
+        assert json.load(fh)["report"]["graded"]["version"] == G.GRADE_VERSION
 
 
 def test_how_sure_we_were_and_how_often_it_held():
@@ -465,11 +478,10 @@ def test_the_record_is_served_free_and_every_page_draws_the_checks():
     for lit in ('"rpk-fact-chip won"', '"rpk-fact-chip lost"', '"rpk-fact-chip"'):
         assert lit in rp, f"the class written whole: {lit}"
     detail = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
-    for want in ('fact("The lines", g2.score && g2.score.words', 'fact("The injury report", g2.injuries && g2.injuries.words)',
-                 'fact("Best call", (g2.best || [])[0])', 'fact("Biggest miss", (g2.worst || [])[0])',
+    for want in ("gprLinesRow(graded.score)", "gprInjuryRow(graded.injuries)", "gprTdRow(graded.tds)",
+                 "(graded.best_rows || graded.best || [])", "(graded.worst_rows || graded.worst || [])",
                  'data-rpk-facts-go="1">How every finished game’s report did</a>', "window._rpWantFacts = true"):
         assert want in detail, want
-    assert "<b>The report’s reads:</b>" in detail
     js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert "${gradeLine(b.grade)}</p>`" in js, "a paragraph's own check under it"
     assert "function winnerLinesHTML(b)" in js and "${winnerLinesHTML(b)}" in js
