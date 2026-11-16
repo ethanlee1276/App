@@ -288,11 +288,22 @@ def test_no_prop_pick_reaches_any_league_report():
     board["scan_reads"]["PHI@CHC"]["microscope"] = [{"player": "Kyle Schwarber", "market": "total_bases",
                                                      "line": 1.5, "odds": -118, "prob": 0.6123}]
     rep, _ = _attach(board, "mlb")
-    text = json.dumps(rep, ensure_ascii=False)
+    text = json.dumps(_no_grading_keys(rep), ensure_ascii=False)
     for mark in ("-118", "0.6123", "61%", "total_bases", "home_runs", "-130"):
         assert mark not in text, mark
     nrep, _ = _attach(_nhl_board(), "nhl")
-    assert "sog" not in json.dumps(nrep) and "anytime" not in json.dumps(nrep)
+    assert "sog" not in json.dumps(_no_grading_keys(nrep)) and "anytime" not in json.dumps(_no_grading_keys(nrep))
+
+
+def _no_grading_keys(x):
+    """The report less what a finished game is graded by (engine/reportgrade,
+    2026-11-16): a read's `lean` and a line's `claims` name the stat it is
+    graded on — a market's code, never a pick (no line, no price, no chance)."""
+    if isinstance(x, dict):
+        return {k: _no_grading_keys(v) for k, v in x.items() if k not in ("lean", "claims")}
+    if isinstance(x, list):
+        return [_no_grading_keys(v) for v in x]
+    return x
 
 
 def test_what_changed_sees_a_scratched_starter_a_confirmed_goalie_and_the_lineups():

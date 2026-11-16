@@ -104,6 +104,12 @@
   font-weight: 700; background: var(--fill-subtle); color: var(--text-mute); }
 .gr-res-call.won { color: var(--good); background: color-mix(in oklab, var(--good) 14%, transparent); }
 .gr-res-call.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 14%, transparent); }
+/* A finished game's read, graded (report.js gradeLine, engine/reportgrade): a
+   line of its own under the read, green right, red wrong, plain the rest. */
+.gr-graded { display: block; margin-top: 6px; padding: 4px 10px; border-radius: var(--radius-sm);
+  font-size: var(--fs-sm); font-weight: 600; background: var(--fill-subtle); color: var(--text-mute); }
+.gr-graded.won { color: var(--good); background: color-mix(in oklab, var(--good) 14%, transparent); }
+.gr-graded.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 14%, transparent); }
 .gr-winner-tag { padding: 2px 8px; border-radius: 999px; background: var(--fill-subtle); font-size: var(--fs-xs);
   font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
 .gr-people { display: grid; gap: 10px; margin: 10px 0; grid-template-columns: 1fr; }

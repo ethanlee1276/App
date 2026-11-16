@@ -376,6 +376,10 @@ def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
     from .gameparlays import SOURCES
     wrote = 0
     for x in gp.get("games") or []:
+        # A started game's tickets, kept on the board after the start
+        # (engine/reportkeep): journaled before it, or not at all.
+        if isinstance(x, dict) and x.get("kept"):
+            continue
         for kind, source in SOURCES.items():
             key_name = "threes" if kind == "three" else "scorers"
             for t in x.get(key_name) or []:

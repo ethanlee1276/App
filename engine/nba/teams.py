@@ -113,10 +113,14 @@ def _ratio(a: float, b: float):
     return a / b if b else None
 
 
-def season_profiles(games: dict, before: str | None = None) -> dict:
+def season_profiles(games: dict, before: str | None = None, min_games: int | None = None) -> dict:
     """``{team: profile}`` for one season's team-nights (only nights before
     ``before`` when given). Sums first, ratios after — a team's shooting is
-    its makes over its tries, never the average of nightly percentages."""
+    its makes over its tries, never the average of nightly percentages.
+    ``min_games`` (MIN_GAMES when none) is 1 for ONE NIGHT read the same way:
+    a finished game's report is graded on the night's own numbers by this
+    very arithmetic (engine/reportgrade), never a second copy of it."""
+    floor = MIN_GAMES if min_games is None else max(1, int(min_games))
     pairs: dict = {}
     for (team, day), g in games.items():
         if before and day >= before:
@@ -128,7 +132,7 @@ def season_profiles(games: dict, before: str | None = None) -> dict:
     out: dict = {}
     for team, nights in pairs.items():
         n = len(nights)
-        if n < MIN_GAMES:
+        if n < floor:
             out[team] = {"games": n}          # counted, too few to rate
             continue
         prof: dict = {"games": n}
@@ -137,7 +141,7 @@ def season_profiles(games: dict, before: str | None = None) -> dict:
             prof["opp_" + k] = sum(b.get(k) or 0.0 for _a, b in nights) / n
         prof["margin"] = prof["pts"] - prof["opp_pts"]
         full = [(a, b) for a, b in nights if possessions(a) is not None and possessions(b) is not None]
-        if len(full) >= MIN_GAMES and len(full) >= PER100_COVER * n:
+        if len(full) >= floor and len(full) >= PER100_COVER * n:
             poss = sum((possessions(a) + possessions(b)) / 2 for a, b in full)
             mins = sum((a.get("min") or TEAM_MINUTES) for a, _b in full)
             s = {k: sum(a.get(k) or 0.0 for a, _b in full) for k in BOX}

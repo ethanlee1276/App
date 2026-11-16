@@ -88,6 +88,9 @@ def card(r: dict, tone: str, *, pick: str = "", role: str = "", form=None) -> di
            "headshot": r.get("headshot") or "", "why": why}
     if role:
         out["role"] = role
+    # The stats the read leans on: what a finished game grades it by (engine/reportgrade).
+    if r.get("lean"):
+        out["lean"] = list(r["lean"])
     if pick:
         out["pick"] = pick
         # The pick itself, graded on a finished game's page (engine/gameresults).

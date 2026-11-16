@@ -818,6 +818,20 @@ def _list(items):
     return {"type": "list", "items": items} if items else None
 
 
+def _claimed_list(pairs):
+    """A list whose lines carry what a finished game grades them by
+    (engine/reportgrade): ``pairs`` is [(line, claim or None)], and the block
+    keeps `claims`, one a line, beside its items — a line and its claim are
+    dropped together, so the two never fall out of step."""
+    kept = [(_sentence(t), cl) for t, cl in pairs or [] if t]
+    if not kept:
+        return None
+    out = {"type": "list", "items": [t for t, _cl in kept]}
+    if any(cl for _t, cl in kept):
+        out["claims"] = [cl for _t, cl in kept]
+    return out
+
+
 def name_tones(c: "Ctx", team: str, players) -> dict:
     """{name: {"tone": "up" | "down" | "", "label": words}} for each of
     ``players`` (names, or rows with a "player") who has a read for
@@ -1708,6 +1722,9 @@ def sec_matchups(c: Ctx) -> dict | None:
                        "FB": f"{dfn}'s run defense"}.get(pos, f"{dfn}'s coverage")
             items.append({"player": r.get("player"), "team": off, "pos": pos,
                           "headshot": r.get("headshot") or "", "verdict": tone, "label": label,
+                          # The stats the read leans on: what a finished game
+                          # grades it by (engine/reportgrade).
+                          **({"lean": list(r.get("lean") or [])} if r.get("lean") else {}),
                           "title": f"{r.get('player')} vs {against}", "role": _role_line(r),
                           "why": ([_sentence(cap(scorer))] if scorer else [])
                           + [_sentence(w) for w in why if w not in common][:4],
@@ -1763,25 +1780,28 @@ def sec_trenches(c: Ctx) -> dict | None:
     lines_out = c.scan.get("line_out") or {}
     for off in c.teams:
         dfn = c.opp[off]
-        lines = []
+        # Each line beside what a finished game grades it by (`_claimed_list`):
+        # the run game's edge is the box score's to answer; the pass rush's is
+        # not (no sacks are stored), so it claims nothing.
+        lines: list = []
         po, pd = c.rank(off, "off", "pressure"), c.rank(dfn, "def", "pressure")
         if po is not None and pd is not None:
             gap = int(pd) - int(po)
             who = off if gap >= c.gap_bar else dfn if -gap >= c.gap_bar else None
-            lines.append(f"{off}'s pass protection ranks {_ord(po)} against {dfn}'s pass rush "
-                         f"({_ord(pd)})" + (f" — edge {who}" if who else " — close to even"))
+            lines.append((f"{off}'s pass protection ranks {_ord(po)} against {dfn}'s pass rush "
+                          f"({_ord(pd)})" + (f" — edge {who}" if who else " — close to even"), None))
         rushers = [x for x in rush.get(dfn) or [] if isinstance(x, dict) and x.get("name")]
         if rushers:
-            lines.append(f"{dfn}'s pass rush is led by " + _join(
+            lines.append((f"{dfn}'s pass rush is led by " + _join(
                 f"{x['name']} ({_plural(x.get('pressures') or 0, 'pressure')}, "
                 f"{_plural(x.get('sacks') or 0, 'sack')}{', ' + str(x['status']).lower() if x.get('status') else ''})"
-                for x in rushers))
+                for x in rushers), None))
         sk = (nums.get(dfn) or {}).get("sacks") or {}
         if _f(sk.get("value")) is not None:
-            lines.append(f"{dfn} averages {_num(sk['value'])} sacks a game"
-                         + (f" ({_ord(sk['rank'])})" if sk.get("rank") else ""))
+            lines.append((f"{dfn} averages {_num(sk['value'])} sacks a game"
+                          + (f" ({_ord(sk['rank'])})" if sk.get("rank") else ""), None))
         if lines_out.get(off):
-            lines.append(f"{off} is without {_join(lines_out[off])} up front")
+            lines.append((f"{off} is without {_join(lines_out[off])} up front", None))
         ro, rd = c.unit(off, "off", "rushing"), c.unit(dfn, "def", "rushing")
         if ro.get("rank") is not None and rd.get("rank") is not None:
             ypc_o, ypc_d = c.unit(off, "off", "ypc"), c.unit(dfn, "def", "ypc")
@@ -1794,10 +1814,15 @@ def sec_trenches(c: Ctx) -> dict | None:
             s += ")"
             gap = int(rd["rank"]) - int(ro["rank"])
             who = off if gap >= c.gap_bar else dfn if -gap >= c.gap_bar else None
-            lines.append(s + (f" — edge {who}" if who else ""))
-        lines += _college_front(c, off, dfn)
+            # The edge's side, read on the night: the offense's rushing yards
+            # against its own average — over it for the offense's edge, under
+            # it for the defense's.
+            lines.append((s + (f" — edge {who}" if who else ""),
+                          {"kind": "team", "team": off, "opp": dfn, "stat": "rush_yds",
+                           "favors": "more" if who == off else "less"} if who else None))
+        lines += [(x, None) for x in _college_front(c, off, dfn)]
         if lines:
-            blocks += [_h(f"{c.name(off)} up front"), _list(lines)]
+            blocks += [_h(f"{c.name(off)} up front"), _claimed_list(lines)]
     return _section("trenches", "In the trenches", blocks)
 
 
@@ -3694,11 +3719,22 @@ def sec_angles(c: Ctx) -> dict | None:
         return None
     up = [r for r in rows if r.get("tone") == "up"]
     down = [r for r in rows if r.get("tone") == "down"]
+
+    def claim(r):
+        """The stat the angle points to, graded on a finished game: the
+        player's number against his own average (engine/reportgrade)."""
+        to = str(r.get("points_to") or "").lower()
+        stat = ("anytime_td" if to == "a touchdown" else "rush_yds" if "rushing" in to else
+                "pass_yds" if str(r.get("pos") or "").upper() == "QB" and "passing" in to else "rec_yds")
+        return {"kind": "player", "player": r.get("player"), "team": r.get("team"), "pos": r.get("pos") or "",
+                "stat": stat, "favors": "more" if r.get("tone") == "up" else "less"}
     blocks = []
     if up:
-        blocks += [_h("Where to look"), _list(f"{_sentence(r['text'])[:-1]} → {r['points_to']}" for r in up)]
+        blocks += [_h("Where to look"), _claimed_list((f"{_sentence(r['text'])[:-1]} → {r['points_to']}", claim(r))
+                                                      for r in up)]
     if down:
-        blocks += [_h("Where to be careful"), _list(f"{_sentence(r['text'])[:-1]} → {r['points_to']}" for r in down)]
+        blocks += [_h("Where to be careful"),
+                   _claimed_list((f"{_sentence(r['text'])[:-1]} → {r['points_to']}", claim(r)) for r in down)]
     blocks.append({"type": "note", "text": ("This season's games, from the box scores and the charting. Shown, not "
                                             "counted: the board's numbers price each defence against each position "
                                             "on their own measured scale.")})
@@ -3799,7 +3835,9 @@ def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
 #: `plain` leaves them as they are.
 PLAIN_SKIP = frozenset(("type", "kind", "key", "player", "team", "headshot", "pos", "verdict", "tone",
                         "status", "href", "url", "id", "logo", "color", "side", "market", "game", "slug",
-                        "names", "marks", "rank_of", "rank_skip"))
+                        "names", "marks", "rank_of", "rank_skip",
+                        # What a finished game is graded by and on (engine/reportgrade).
+                        "lean", "claims", "grade", "grades", "graded", "kept"))
 
 
 def plain(text: str) -> str:
@@ -3839,7 +3877,7 @@ def plain_all(x, key: str = ""):
 #: sees with a name in them.
 _NOT_TEXT = frozenset(("type", "kind", "key", "headshot", "verdict", "tone", "status", "names", "marks",
                        "href", "url", "id", "logo", "color", "side", "market", "game", "slug", "rank_of",
-                       "rank_skip"))
+                       "rank_skip", "lean", "claims", "grade", "grades", "graded", "kept"))
 
 
 def _texts(x, key: str = "") -> list:
@@ -4432,7 +4470,7 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             if r:
                 reports.append(r)
         _t = _clock.lap("game reports", "reports", _t)
-        reports, kept = keep_started(result, reports, sport, out, at)
+        reports, kept = keep_started(result, reports, sport, out, at, conn)
         result[KEY] = reports
         n_bets = _lift_bets(result)
         if not reports:
@@ -4467,7 +4505,7 @@ def log_changes(result: dict, prepared: list, sport: str, out, at: str | None) -
         return {}
 
 
-def keep_started(result: dict, reports: list, sport: str, out, at: str | None) -> tuple[list, str]:
+def keep_started(result: dict, reports: list, sport: str, out, at: str | None, conn=None) -> tuple[list, str]:
     """A STARTED GAME'S REPORT IS THE ONE IT HAD BEFORE IT STARTED
     (engine/reportkeep): the board takes a game's picks down at its start,
     so a report written again after it would have none to grade. The kept
@@ -4476,15 +4514,35 @@ def keep_started(result: dict, reports: list, sport: str, out, at: str | None) -
     before the start"). With no ``out`` nothing is kept and the reports are
     as built; never raises."""
     if not out:
-        return reports, ""
+        return reports, _grade_finals(result, reports, sport, conn)
     try:
         from . import reportkeep as _keep
         from .gate import _full_dir_for
         reports, n = _keep.hold(result, reports, _keep.path_for(sport, _full_dir_for(out)), at)
     except Exception as exc:                                 # noqa: BLE001
         return reports, f"; ⚠️ reports before the start not kept ({type(exc).__name__}: {exc})"
-    return reports, (f"; {n} started game{'' if n == 1 else 's'} kept as written before the start"
-                     if n else "")
+    return reports, ((f"; {n} started game{'' if n == 1 else 's'} kept as written before the start"
+                      if n else "") + _grade_finals(result, reports, sport, conn))
+
+
+def _grade_finals(result: dict, reports: list, sport: str, conn) -> str:
+    """WAS THE REPORT RIGHT (engine/reportgrade): every finished game's report
+    read against its box score, in place. The build log's tail: "; 4
+    finished reports graded". Never raises."""
+    if conn is None:
+        return ""
+    try:
+        from . import reportgrade
+        games = {f"{g.get('away')}@{g.get('home')}|{str(g.get('date') or '')[:10]}": g
+                 for g in (result or {}).get("games") or [] if isinstance(g, dict)}
+        n = 0
+        for r in reports or []:
+            g = games.get(f"{r.get('away')}@{r.get('home')}|{str(r.get('date') or '')[:10]}")
+            if g and reportgrade.grade(r, g, conn, sport, str((result or {}).get("date") or "")):
+                n += 1
+    except Exception as exc:                                 # noqa: BLE001
+        return f"; ⚠️ finished reports not graded ({type(exc).__name__}: {exc})"
+    return f"; {n} finished report{'' if n == 1 else 's'} graded" if n else ""
 
 
 def summary(reports: list, logged: dict, out) -> str:

@@ -27,6 +27,18 @@ picks down on) its report is the one kept, marked `kept` with when it was last
 written ("Sun 6:58 PM ET"); a started game with none kept (the first build
 after a deploy, or a game first seen under way) is written as before.
 
+THE GAME'S PARLAYS AND PICKS GO WITH IT (Ethan, 2026-11-16, with a finished
+game's page: "I want the parlay tab to still be there after the game, and
+people can go back and see if the parlays for the game we recommended hit or
+not, and if the picks hit or not"). The board builds each game's parlays only
+for a game still to play (engine/gameparlays) and takes its picks down at the
+start, so beside each report the file keeps the game's tickets (its
+`game_parlays` entry) and the picks the game's page drew (PICK_LISTS). A
+started game's tickets go back into the board's `game_parlays`, marked
+`kept` (the parlay journal never writes a kept ticket: it was journaled, or
+not, before the start), and its picks under KEPT_PICKS, a paid key the game's
+page reads once the board's own lists have none for the game.
+
 A game leaves the file once it is off the board and KEEP_DAYS past its date.
 Standard library only; never raises out of `hold`.
 """
@@ -42,6 +54,11 @@ KEEP_DAYS = 1
 
 #: The live states that say a game has begun (the boards' `live.state`).
 STARTED = ("live", "final")
+#: The board key a started game's picks come back under (engine/gate.PAID_KEYS).
+KEPT_PICKS = "kept_picks"
+#: The picks the game's page draws, by the list it draws them from.
+PICK_LISTS = {"likely": "the one board's rows", "shelf": "the Most Likely list, where a league has no one board",
+              "edge": "the Edge picks recommended", "bets": "the game bets", "shots": "the long shots"}
 
 
 def path_for(sport: str, where) -> Path:
@@ -93,6 +110,57 @@ def _key_of_report(r: dict) -> str:
     return f"{r.get('away')}@{r.get('home')}|{str(r.get('date') or '')[:10]}"
 
 
+def _in_game(r: dict, g: dict) -> bool:
+    """A board row on this game: by its "AWAY@HOME", its two clubs, or its club
+    and opponent (gamereport._card_in_game's way)."""
+    teams = {g.get("home"), g.get("away")}
+    key = r.get("game")
+    if isinstance(key, str) and "@" in key:
+        return key == f"{g.get('away')}@{g.get('home')}"
+    if r.get("home") and r.get("away"):
+        return {r.get("home"), r.get("away")} == teams
+    return r.get("team") in teams and (not r.get("opponent") or r.get("opponent") in teams)
+
+
+def picks_for(result: dict, g: dict) -> dict:
+    """The picks the game's page draws for ``g`` (PICK_LISTS), each list only
+    when it has any."""
+    lb = (result or {}).get("likely_board") or {}
+    rows = {
+        "likely": [r for r in lb.get("rows") or [] if isinstance(r, dict) and _in_game(r, g)],
+        "shelf": ([] if lb.get("rows") else
+                  [r for r in (result or {}).get("most_likely") or [] if isinstance(r, dict) and _in_game(r, g)]),
+        "edge": [r for r in (result or {}).get("recommendations") or []
+                 if isinstance(r, dict) and r.get("recommended") and _in_game(r, g)],
+        "bets": [b for b in (result or {}).get("game_bets") or []
+                 if isinstance(b, dict) and b.get("home") == g.get("home") and b.get("away") == g.get("away")],
+        "shots": [r for r in (result or {}).get("long_shots") or [] if isinstance(r, dict) and _in_game(r, g)],
+    }
+    return {k: copy.deepcopy(v) for k, v in rows.items() if v}
+
+
+def parlays_for(result: dict, g: dict) -> dict | None:
+    """The game's own entry in the board's `game_parlays`, or None."""
+    for x in ((result or {}).get("game_parlays") or {}).get("games") or []:
+        if isinstance(x, dict) and x.get("home") == g.get("home") and x.get("away") == g.get("away"):
+            return copy.deepcopy(x)
+    return None
+
+
+def _restore(result: dict, g: dict, rec: dict, words: str) -> None:
+    """A started game's tickets back into the board's `game_parlays` (marked
+    `kept`), when the board has none for it, and its picks under KEPT_PICKS."""
+    gp = rec.get("parlays")
+    if isinstance(gp, dict) and gp and parlays_for(result, g) is None:
+        board = result.get("game_parlays")
+        if not isinstance(board, dict):
+            board = result["game_parlays"] = {"games": []}
+        board.setdefault("games", []).append(dict(gp, kept=words))
+    picks = rec.get("picks")
+    if isinstance(picks, dict) and picks:
+        result.setdefault(KEPT_PICKS, {})[f"{g.get('away')}@{g.get('home')}"] = picks
+
+
 def hold(result: dict, reports: list, path, at: str | None = None) -> tuple[list, int]:
     """This build's reports, each started game's the one kept before it
     started, in the board's order; and how many were the kept ones. Every
@@ -126,14 +194,17 @@ def hold(result: dict, reports: list, path, at: str | None = None) -> tuple[list
             if started(g, utc):
                 rec = games.get(k)
                 if isinstance(rec, dict) and isinstance(rec.get("report"), dict):
-                    out.append(dict(copy.deepcopy(rec["report"]),
-                                    kept=f"{when_words(str(rec.get('at') or ''))} ET"))
+                    words = f"{when_words(str(rec.get('at') or ''))} ET"
+                    out.append(dict(copy.deepcopy(rec["report"]), kept=words))
+                    _restore(result, g, rec, words)
                     n += 1
                 elif r is not None:
                     out.append(r)
                 continue
             if r is not None:
-                games[k] = {"at": et, "report": copy.deepcopy(r)}
+                games[k] = {"at": et, "report": copy.deepcopy(r),
+                            **({"parlays": gp} if (gp := parlays_for(result, g)) else {}),
+                            **({"picks": pk} if (pk := picks_for(result, g)) else {})}
                 out.append(r)
         # A report whose game the board's list does not name stays, after the rest.
         out += [r for rest in fresh.values() for r in rest]

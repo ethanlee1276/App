@@ -124,16 +124,32 @@ function crowdStripHTML(g) {
       escapeHtml(teamName(g[side]))}</th>${cells.map(([k]) => `<td>${pct(f(c[k]))}</td>`).join("")}</tr>`).join("")}</tbody>
     </table>${gap}${lines}</div>`;
 }
-function obGameHTML(g) {
+/* A STARTED GAME'S PICKS (engine/reportkeep, 2026-11-16; Ethan: "I want the
+   parlay tab to still be there after the game, and people can go back and see
+   ... if the picks hit or not"). The board takes a game's picks down at its
+   start; the build keeps the ones this page drew (`kept_picks`), and where the
+   board's own lists have none for the game, the page draws those, each saying
+   how it went. */
+function keptPicksFor(g) {
+  return (((state.data || {}).kept_picks) || {})[`${g.away}@${g.home}`] || null;
+}
+//: The one board's rows on this game: the board's own, else the ones kept from before its start.
+function obRowsFor(g) {
   const k = `${g.away}@${g.home}`;
   const rows = oneBoardAllRows().filter((r) => r.game === k);
+  if (rows.length) return rows;
+  const kept = keptPicksFor(g);
+  return ((kept && kept.likely) || []).filter(showableLikelyRow);
+}
+function obGameHTML(g) {
+  const rows = obRowsFor(g);
   if (!rows.length) return "";
   return `<div id="gp-sec-matchup" class="matchup-picks one-board"><div class="section-title">Most likely · this game
       <span class="sub">— every pick in this game, with the four checks behind its tier</span></div>
     ${obTierSections(rows, { sort: false })}</div>`;
 }
 function gpMatchupHTML(g) {
-  if (oneBoardOn()) return obGameHTML(g);
+  if (oneBoardOn() || obRowsFor(g).length) return obGameHTML(g);
   const m = ((state.data || {}).matchup_picks || []).find((x) => x && x.away === g.away && x.home === g.home);
   if (!m || !((m.td || []).length || (m.props || []).length)) return "";
   return `<div id="gp-sec-matchup" class="matchup-picks"><div class="section-title">Matchup picks
@@ -142,7 +158,7 @@ function gpMatchupHTML(g) {
     ${matchupGameHTML(m, { head: false })}</div>`;
 }
 function matchupPickCount(g) {
-  if (oneBoardOn()) return oneBoardAllRows().filter((r) => r.game === `${g.away}@${g.home}`).length;
+  if (oneBoardOn() || obRowsFor(g).length) return obRowsFor(g).length;
   const m = ((state.data || {}).matchup_picks || []).find((x) => x && x.away === g.away && x.home === g.home);
   return m ? (m.td || []).length + (m.props || []).length : 0;
 }
@@ -1539,8 +1555,13 @@ function gpResultsHTML(g, rows) {
   }
   const score = fin.home != null && fin.away != null
     ? `${escapeHtml(teamName(g.away))} ${fin.away}, ${escapeHtml(teamName(g.home))} ${fin.home}` : "the final score is not in yet";
+  // The report's reads, graded on the box score (engine/reportgrade): its first section says each.
+  const graded = rep && rep.graded;
+  const readsLine = graded && graded.graded
+    ? `<li><b>The report’s reads:</b> ${graded.right} of ${graded.graded} right — each is graded in the report below</li>`
+    : graded && graded.status === "pending" ? "<li><b>The report’s reads:</b> graded once the box score is in</li>" : "";
   const lines = [picks.length ? `<li><b>Our picks:</b> ${picks.join(", ")}</li>` : "",
-    said(tickets("threes"), "Three-leg parlays"), said(tickets("scorers"), pair), callLine].filter(Boolean);
+    said(tickets("threes"), "Three-leg parlays"), said(tickets("scorers"), pair), callLine, readsLine].filter(Boolean);
   return `<div class="card gp-res" id="gp-sec-results">
     <div class="gp-res-head"><span class="gp-res-k">Final</span> <b>${score}</b></div>
     ${lines.length ? `<ul class="gp-res-list">${lines.join("")}</ul>` : `<p class="gp-res-note">No pick of ours rode on this game.</p>`}
@@ -1814,15 +1835,20 @@ function renderGamePage() {
   const isLive = live.state === "live";
   const isFinal = live.state === "final";
 
-  const props = (state.data.recommendations || [])
+  // The picks kept from before the start (keptPicksFor), where the board's are gone.
+  const kept = keptPicksFor(g) || {};
+  const liveProps = (state.data.recommendations || [])
     .map((r) => ({ ...r, _ok: passesFilters(r) }))
     .filter((r) => propInGame(r, g));
+  const props = liveProps.length ? liveProps : (kept.edge || []).map((r) => ({ ...r, _ok: true }));
   const shown = props.filter((r) => (state.gameShowAll ? true : r._ok));
-  const bets = (state.data.game_bets || [])
+  const liveBets = (state.data.game_bets || [])
     .map((b) => ({ ...b, _ok: passesGameBet(b) }))
     .filter((b) => b.home === g.home && b.away === g.away);
+  const bets = liveBets.length ? liveBets : (kept.bets || []).map((b) => ({ ...b, _ok: passesGameBet(b) }));
   const betsShown = bets.filter((b) => (state.gameShowAll ? true : b._ok));
-  const shots = (state.data.long_shots || []).filter((r) => propInGame(r, g));
+  const liveShots = (state.data.long_shots || []).filter((r) => propInGame(r, g));
+  const shots = liveShots.length ? liveShots : (kept.shots || []).slice();
   /* THE OTHER BOARD, WHICH THIS PAGE HAS NEVER DRAWN. Ethan, 2026-09-09,
      looking at the Week 1 opener: "when you click on a game on the
      reccomended page and u scroll down to the reccomended props, is that
@@ -1845,9 +1871,10 @@ function renderGamePage() {
      `showableLikelyRow` is the gate the Most Likely page itself applies,
      so a row refused there is refused here rather than surfacing on a
      page nobody thought to re-check. */
-  const gameLikely = (state.data.most_likely || [])
+  const liveLikely = (state.data.most_likely || [])
     .filter(showableLikelyRow)
     .filter((r) => propInGame(r, g));
+  const gameLikely = liveLikely.length ? liveLikely : (kept.shelf || []).filter(showableLikelyRow);
   const likelies = oneBoardOn() ? [] : gameLikely.filter((r) => !likelyDropped(r));
   // …the ones whose chance has fallen under the bar since (likelyDropped)…
   const droppedHere = gameLikely.filter(likelyDropped);
@@ -2124,8 +2151,7 @@ function renderGamePage() {
       </div>
     </div>
 
-    ${gpResultsHTML(g, [...likelies, ...shown, ...betsShown, ...shots,
-      ...(oneBoardOn() ? oneBoardAllRows().filter((r) => r.game === `${g.away}@${g.home}`) : [])])}
+    ${gpResultsHTML(g, [...likelies, ...shown, ...betsShown, ...shots, ...obRowsFor(g)])}
     ${gpJumpHTML([
       linesCard || notesCard ? ["gp-sec-lines", "Lines & insights"] : null,
       reportHTML ? ["gp-sec-report", "Game report"] : null,
@@ -2133,7 +2159,7 @@ function renderGamePage() {
       !report && ((g.scan && g.scan.units) || g.mlb_tape || g.nhl_tape || g.nba_tape) ? ["gp-sec-scan", "Matchup scan"] : null,
       simCard && !report ? ["gp-sec-replay", "Replay"] : null,
       shapeCard ? ["gp-sec-shapes", "Team shapes"] : null,
-      matchupPickCount(g) ? ["gp-sec-matchup", `${oneBoardOn() ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`] : null,
+      matchupPickCount(g) ? ["gp-sec-matchup", `${oneBoardOn() || obRowsFor(g).length ? "Most likely" : "Matchup picks"} · ${matchupPickCount(g)}`] : null,
       // ONE "Most likely" CHIP (Ethan, 2026-10-01: "Most likely · 15" beside
       // "Most likely · 0"). With the one board on, the board's section is the
       // chip; this section only holds the pulled/dropped folds, so it is

@@ -45,7 +45,7 @@ Standard library only. Never raises out of ``attach``.
 """
 from __future__ import annotations
 
-from .gamereport import (KEY, Ctx, _f, _h, _join, _lift_bets, _list, _num, _ord, _p, _pct, _section,
+from .gamereport import (KEY, Ctx, _claimed_list, _f, _h, _join, _lift_bets, _list, _num, _ord, _p, _pct, _section,
                          _sentence, a_pct, absent_sentence, cap, finish, keep_started, kickoff_words, line_words,
                          log_changes, market_sentence, ml_chances, named, parlay_sentence, player_clause,
                          read_pick, sec_market, sec_parlays, shine_lines, summary, team_be, team_np, team_owner)
@@ -119,6 +119,9 @@ def _verdict(r: dict, tone: str | None = None, both: bool = False) -> dict:
     out = {"title": r.get("player"), "player": r.get("player"), "team": r.get("team"),
            "pos": r.get("pos") or "", "label": r.get("label") or "", "verdict": tone,
            "headshot": r.get("headshot") or "", "why": [_sentence(w) for w in why + notes]}
+    # The stats the read leans on: what a finished game grades it by (engine/reportgrade).
+    if r.get("lean"):
+        out["lean"] = list(r["lean"])
     # MAY SIT (engine/availability, 2026-11-14): the mark, and why, first; the
     # scan's own "listed questionable" note gives way to it.
     if r.get("availability"):
@@ -490,14 +493,18 @@ def nhl_tape(c: Ctx) -> dict | None:
                        "expected goals, the quality of the chances, from our own shot model; tonight's "
                        "figure is the game model's, goalies and rest included."}]
     # Each side's form this season first (`team_form`, filled by nhl_build).
-    items = form_lines(c, c.g.get("form") or {})
+    items = [(x, None) for x in form_lines(c, c.g.get("form") or {})]
     for t in c.teams:
         mine, them = sides.get(t) or {}, sides.get(c.opp[t]) or {}
         r_for, r_against = (mine.get("ranks") or {}).get("sog_for"), (them.get("ranks") or {}).get("sog_against")
         if r_for and r_against and r_for <= 8 and r_against >= n - 7:
-            items.append(f"{t} shoots the {_ord(int(r_for))}-most, and {c.opp[t]} allows the "
-                         f"{_ord(n - int(r_against) + 1)}-most shots — a busy night for {c.opp[t]}'s goalie")
-    blocks.append(_list(items))
+            # Graded on a finished game: its shots on goal against its own a game.
+            base = _f(mine.get("sog_for"))
+            items.append((f"{t} shoots the {_ord(int(r_for))}-most, and {c.opp[t]} allows the "
+                          f"{_ord(n - int(r_against) + 1)}-most shots — a busy night for {c.opp[t]}'s goalie",
+                          {"kind": "team", "team": t, "opp": c.opp[t], "stat": "sog", "favors": "more",
+                           **({"base": round(base, 2)} if base is not None else {})}))
+    blocks.append(_claimed_list(items))
     return _section("tape", "The matchup", blocks)
 
 
@@ -798,10 +805,13 @@ def nba_carry(c: Ctx) -> dict | None:
 
 def nba_defense(c: Ctx) -> dict | None:
     dvp = c.meta.get("dvp") or {}
-    items = []
+    items: list = []
     for t in c.teams:
         d = dvp.get(t) or {}
         soft, hard = [], []
+        # What a finished game grades each line by (engine/reportgrade): what
+        # the opponent made of each stat against the number allowed a game.
+        soft_checks, hard_checks = [], []
         for k, word in DEF_STATS:
             r = d.get(k) or {}
             rank, of = r.get("rank"), r.get("of")
@@ -814,18 +824,23 @@ def nba_defense(c: Ctx) -> dict | None:
             avg = f"; the league average is {_num(r.get('league'))}" if _f(r.get("league")) is not None else ""
             if rank <= 5:
                 soft.append(f"the {_ord(int(rank))}-most {word} ({_num(r['pg'])} a game{avg})")
+                soft_checks.append({"stat": k, "pg": round(float(r["pg"]), 2), "side": "soft"})
             elif rank > of - 5:
                 hard.append(f"the {_ord(int(of - rank + 1))}-fewest {word} ({_num(r['pg'])} a game{avg})")
+                hard_checks.append({"stat": k, "pg": round(float(r["pg"]), 2), "side": "hard"})
         if soft:
-            items.append(f"{t}'s defense gives up {_join(soft)}")
+            items.append((f"{t}'s defense gives up {_join(soft)}",
+                          {"kind": "allowed", "team": t, "opp": c.opp[t], "checks": soft_checks}))
         if hard:
-            items.append(f"{t}'s defense gives up {_join(hard)}")
+            items.append((f"{t}'s defense gives up {_join(hard)}",
+                          {"kind": "allowed", "team": t, "opp": c.opp[t], "checks": hard_checks}))
     if not items:
         return None
     note = ("Per game, not per possession: a fast team's defense looks a little worse than it is"
             + ("; these are last season's numbers, because this season is too young to rank"
                if c.meta.get("dvp_last") else ""))
-    return _section("defense", "Where each defense gives", [_list(items), {"type": "note", "text": _sentence(note)}])
+    return _section("defense", "Where each defense gives", [_claimed_list(items),
+                                                            {"type": "note", "text": _sentence(note)}])
 
 
 def nba_tape(c: Ctx) -> dict | None:
@@ -846,10 +861,24 @@ def nba_tape(c: Ctx) -> dict | None:
     blocks = [{"type": "table", "title": "Tale of the tape", "head": ["", c.away, c.home], "rows": table,
                "rank_of": int(t.get("teams") or 30), "rank_skip": [r["label"] for r in rows if r.get("plain")],
                "note": _sentence(note) if note else ""}]
-    edges = [e.get("text") for e in t.get("edges") or [] if isinstance(e, dict) and e.get("text")]
+    edges = [(e.get("text"), _unit_claim(e)) for e in t.get("edges") or [] if isinstance(e, dict) and e.get("text")]
     if edges:
-        blocks += [_h("Key matchups"), _list(edges)]
+        blocks += [_h("Key matchups"), _claimed_list(edges)]
     return _section("tape", "The matchup", blocks)
+
+
+def _unit_claim(e: dict) -> dict | None:
+    """A key matchup as a finished game grades it (engine/reportgrade): the
+    offense on the floor, its unit and its own number coming in, and which
+    way the edge points — more for the offense's edge in a unit where more is
+    better, less for the defense's (turnovers the other way round)."""
+    off, dfn, unit, base = e.get("off"), e.get("def"), e.get("off_unit"), _f(e.get("base"))
+    if not off or not dfn or not unit or base is None or e.get("tone") not in ("off", "def"):
+        return None
+    from .nba.teams import BETTER
+    more_better = BETTER.get(unit, True)
+    more = more_better if e["tone"] == "off" else not more_better
+    return {"kind": "unit", "off": off, "def": dfn, "unit": unit, "base": base, "favors": "more" if more else "less"}
 
 
 def nba_watch(c: Ctx) -> dict | None:
@@ -1423,7 +1452,7 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
                 reports.append(r)
         # A game under way keeps the report it had before it started, college's
         # too once the board prices none of the night (engine/reportkeep).
-        reports, kept = keep_started(result, reports, sport, out, at)
+        reports, kept = keep_started(result, reports, sport, out, at, conn)
         result[KEY] = reports
         n_bets = _lift_bets(result)
         if not reports:

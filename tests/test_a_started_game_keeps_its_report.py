@@ -210,7 +210,7 @@ def test_every_league_keeps_them_and_the_page_says_so():
     gr = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
     lr = (ROOT / "engine" / "leaguereport.py").read_text(encoding="utf-8")
     for src in (gr, lr):
-        a = src.index("reports, kept = keep_started(result, reports, sport, out, at)")
+        a = src.index("reports, kept = keep_started(result, reports, sport, out, at, conn)")
         assert a < src.index("result[KEY] = reports", a) < src.index("n_bets = _lift_bets(result)", a), \
             "kept before the bets are lifted, so a kept report's bets reach the board"
     js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")

@@ -232,14 +232,18 @@ def key_matchups(home: str, away: str, prof: dict) -> list:
                 continue
             gap = rb - ra
             said_a, said_b = off_w.format(r=_ord(ra)), def_w.format(r=_ord(rb))
+            # WHAT A FINISHED GAME IS READ BY (engine/reportgrade, 2026-11-16):
+            # the offence on the floor, its unit and its own number coming in.
+            base = _f((teams.get(a) or {}).get(off_k))
+            graded = {"off": a, "def": b, "off_unit": off_k, **({"base": round(base, 4)} if base is not None else {})}
             if gap >= bar and ra <= top:
                 what = f"{a}'s {said_a} against {b}'s {said_b}"
                 out.append({"team": a, "tone": "off", "gap": gap, "unit": off_k, "order": order,
-                            "matchup": what, "text": f"Edge {a}: {what}"})
+                            "matchup": what, "text": f"Edge {a}: {what}", **graded})
             elif -gap >= bar and rb <= top:
                 what = f"{b}'s {said_b} against {a}'s {said_a}"
                 out.append({"team": b, "tone": "def", "gap": -gap, "unit": def_k, "order": order,
-                            "matchup": what, "text": f"Edge {b}: {what}"})
+                            "matchup": what, "text": f"Edge {b}: {what}", **graded})
     # The widest gap first; on a tie, the unit the list names first (the
     # ratings before the shooting before the glass), then the offence's.
     out.sort(key=lambda e: (-e["gap"], e["order"], e["tone"] != "off", e["text"]))

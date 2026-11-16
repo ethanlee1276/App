@@ -205,7 +205,17 @@ def _report(board=None, **kw):
 
 
 def _text(report) -> str:
-    return json.dumps(report, ensure_ascii=False)
+    """The report as JSON, less what a finished game is graded by
+    (engine/reportgrade, 2026-11-16): a read's `lean` and a line's `claims`
+    are market codes naming the stat a read is graded on, never drawn on the
+    page and never a pick (no line, no price, no chance)."""
+    def drop(x):
+        if isinstance(x, dict):
+            return {k: drop(v) for k, v in x.items() if k not in ("lean", "claims")}
+        if isinstance(x, list):
+            return [drop(v) for v in x]
+        return x
+    return json.dumps(drop(report), ensure_ascii=False)
 
 
 def test_the_report_comes_in_the_research_reports_order():

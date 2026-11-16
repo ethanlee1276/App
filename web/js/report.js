@@ -78,6 +78,16 @@
       ? `Scored${Number(x.actual) > 1 ? ` ${Number(x.actual)}` : ""}` : "Didn’t score";
     return ` <span class="${RES_TAG[x.status]}">${escapeHtml(words)}</span>`;
   }
+  /* WAS THE READ RIGHT (engine/reportgrade, 2026-11-16; Ethan: "we should
+     report on if they actually did good or not, and if we were correct in our
+     game report"). A finished game's report carries each read's grade: a
+     player's number in the stat his read leans on against his own average, a
+     team's against its own; right in green, wrong in red, the rest plain. */
+  function gradeLine(gr) {
+    if (!gr || !gr.words) return "";
+    const cls = gr.status === "right" ? "gr-graded won" : gr.status === "wrong" ? "gr-graded lost" : "gr-graded";
+    return `<span class="${cls}">${escapeHtml(gr.words)}</span>`;
+  }
   //: A ticket's verdict from its legs (app.js ticketResult): every leg that played won, or one lost.
   function ticketTag(legs) {
     if (!RESULTS || typeof RESULTS.ticket !== "function") return "";
@@ -285,7 +295,8 @@
   /* The sections that read open — our picks for the game (the research's
      card, engine/gamereport.sec_card) and the short version; the rest fold
      to their titles. */
-  const OPEN_SECTIONS = ["card", "short"];
+  // How the report did, on a finished game (engine/reportgrade), reads first.
+  const OPEN_SECTIONS = ["graded", "card", "short"];
 
   /* A rank as a bar's length: 1st the longest, last the shortest. */
   function rankWidth(rank, n) {
@@ -404,7 +415,8 @@
     if (b.type === "h") return `<h4 class="gr-h">${escapeHtml(b.text)}</h4>`;
     if (b.type === "note") return `<p class="gr-note">${named(b.text, b.names, b.marks)}</p>`;
     if (b.type === "list") {
-      return `<ul class="gr-list">${(b.items || []).map((t) => `<li>${named(t, b.names, b.marks, true)}</li>`).join("")}</ul>`;
+      return `<ul class="gr-list">${(b.items || []).map((t, i) => `<li>${named(t, b.names, b.marks, true)}${
+        gradeLine((b.grades || [])[i])}</li>`).join("")}</ul>`;
     }
     if (b.type === "table" && b.fold) {
       // EVERY NUMBER, ONE TAP UNDER THE CHART that draws its ranks.
@@ -443,6 +455,7 @@
                 i === 0 && v.scorer_bet ? scorerTag(v.scorer_bet) : ""}</li>`).join("")}</ul>` : "")
             : v.text ? `<p class="gr-person-text">${named(v.text, b.names)}</p>` : ""}
           ${v.pick ? `<p class="gr-person-pick">${named(v.pick, b.names)}${v.bet ? resTag(v.bet) : ""}</p>` : ""}
+          ${gradeLine(v.grade)}
           ${form(v.form)}
         </div>`;
       }).join("")}</div>`;

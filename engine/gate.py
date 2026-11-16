@@ -195,6 +195,9 @@ PAID_KEYS = (
     # reports' picks in one list, with prices and our chance, for the Report
     # Picks page — the picks under another name, so a paid key.
     "report_bets",
+    # A STARTED GAME'S PICKS, KEPT FROM BEFORE ITS START (engine/reportkeep,
+    # 2026-11-16): the rows its page drew, with our chance and the price.
+    "kept_picks",
     # EVERY UFC FIGHT, WRITTEN OUT (engine/ufc/report, 2026-11-16): the
     # card's picks, chances and grades in words, so as paid as `picks`.
     "fight_reports",

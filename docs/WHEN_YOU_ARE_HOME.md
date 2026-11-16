@@ -9338,6 +9338,31 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TB. A finished game keeps its parlays and picks, and its report says what it got right** (step 634;
+16 November). Nothing to run. You showed me a finished Pacers at 76ers page and a live NFL report with no
+Parlays or picks section, and asked that people be able to go back after a game and see whether the parlays
+and picks hit, and whether the report was right: the matchups, the breakout candidates and favorable players,
+and every offense against defense call.
+- **The parlays and picks stay.** The board only builds a game's parlays before it starts, and takes its picks
+  down at the start, so they used to vanish. Now each game's tickets and picks are kept with its report and put
+  back once it starts. The report's Parlays section, the Parlays page, Report Picks, and the game page's Most
+  Likely, Edge picks, Game bets and Long shots all keep them, each saying whether it won or lost. A kept ticket
+  is never recorded a second time.
+- **The report grades itself.** Once the box score is in, every read gets a line under it:
+  - every matchup read, breakout candidate, fade, starting pitcher and goalie is right or wrong on the stat it
+    points to, against that player's own average over his last games (for example, "Right: 31 points, above
+    his 26 average over his last 10 games");
+  - each offense against defense call is right or wrong on the night's numbers against the team's own: the run
+    game edges, the points or threes a defense was said to give up, basketball's key matchups (threes,
+    shooting, turnovers, rebounding), and hockey's shot counts.
+- **A summary on top.** The report opens on "How this report did": who we said wins and whether it was right,
+  then each kind of read with how many were right, and the total. The game page's Final card says the same in
+  one line.
+
+What isn't graded, and why: the pass rush against the pass protection (sacks aren't in our box scores), and
+neutral reads (they make no call). A player with fewer than two games before this one shows his number with no
+verdict. Games that finished before this went live aren't graded; it starts with tonight's.
+
 **TA. A finished game keeps its report's picks** (step 633; 16 November).
 Nothing to run. While checking that Report Picks fills in for every league, I
 found that once a game starts, the boards take that game's picks down (they
