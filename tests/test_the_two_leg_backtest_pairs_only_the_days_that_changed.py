@@ -99,15 +99,13 @@ def test_the_memo_keeps_what_the_run_read_and_a_changed_rule_is_not_served():
     assert one == T.backtest(conn, since="2099-10-06", games=games, per_kind=1)
 
 
-def test_the_export_keeps_the_memo_beside_its_cache():
+def test_the_export_no_longer_pairs_the_past_picks():
+    """The two-leg record retired from the Record page (2026-11-16): the export stopped running the
+    backtest, whose memo this file pins; tools/parlay_study.py still runs it on request."""
     src = (ROOT / "engine" / "ledger.py").read_text(encoding="utf-8")
-    i = src.index("def _two_leg_backtest(")
-    body = src[i:src.index("\ndef ", i + 1)]
-    assert 'memo_path = cache.with_name("two_leg_days.json")' in body
-    assert "twoleg.backtest(conn, since=RECORD_EPOCH, games=games, memo=memo)" in body
-    assert 'held_memo.get("db") == dbfile' in body and 'held_memo.get("v") == twoleg.BACKTEST_VERSION' in body
+    assert "_two_leg_backtest" not in src and "TWO_LEG_BACKTEST_TTL_S" not in src
+    assert "twoleg.backtest(" not in src
     json.dumps({"ok": True})
-
 
 if __name__ == "__main__":
     fails = 0

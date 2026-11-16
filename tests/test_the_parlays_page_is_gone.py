@@ -87,15 +87,16 @@ def test_no_board_builds_two_leg_tickets_but_each_game_keeps_its_parlays():
 
 def test_the_journal_and_the_record_keep_what_they_made():
     """No board carries `two_leg`, so nothing new is journaled; the journal
-    still reads one if an old board on disk carries it, and the Record page
-    keeps their history under a retired heading."""
+    still reads one if an old board on disk carries it; the Record page let
+    their history go on 2026-11-16."""
     from engine import parlayledger
     src = _read("engine", "parlayledger.py")
     assert 'tl = board.get("two_leg")' in src and "log_twoleg(conn, tl, sport" in src
     assert callable(parlayledger.log_twoleg)
+    # The Record page's retired heading went too (2026-11-16; Ethan: "retire the 2 leg parlays record and
+    # shit"): the journal keeps every ticket, the page draws each game report's parlays.
     rec = _read("web", "js", "record.js")
-    assert '<div class="section-title">Two-leg parlays — retired' in rec
-    assert "when each game’s report parlays took their place" in rec
+    assert "Two-leg parlays — retired" not in rec and "recTwoLegSection" not in rec
 
 
 def test_ask_answers_parlays_from_each_games_report():

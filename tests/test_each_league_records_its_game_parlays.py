@@ -134,8 +134,8 @@ def _node(body):
     node = shutil.which("node") or "/opt/node22/bin/node"
     if not Path(node).exists():
         return None
-    start = RECORD.index("const TL_SPORT_ORDER = ")
-    code = RECORD[start:RECORD.index("function recTwoLegSection(tl) {")]
+    start = RECORD.index("const tlAmerican = ")
+    code = RECORD[start:RECORD.index("/* The Most Likely paper record.")]
     js = ("const esc = (s) => String(s == null ? '' : s).replace(/[&<>\"']/g, (c) => '&#' + c.charCodeAt(0) + ';');"
           "const escapeHtml = esc; const icon = (n) => `[${n}]`; const PARLAY_RATE_FLOOR = 10;"
           "const marketWord = (m) => ({ receptions: 'Receptions', pass_td: 'Passing TDs', shots: 'Shots on goal',"

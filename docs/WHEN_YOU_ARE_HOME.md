@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TV. The two-leg parlays' record is retired** (step 654; 16 November). Nothing to run. Your answer, "retire the 2
+leg parlays record and shit": the Record page's "Two-leg parlays — retired" section is gone (the Edge and Most Likely
+parlay tiles, the staked parlays, the table of what pairing our past picks would have done, and the ticket list), and
+so is the older parlay screen below it ("The old parlay screen — graded, never staked", retired 31 October). The page's
+parlays are each game report's parlays now, under "The Game Report Picks and Parlays". Every ticket either one made
+stays in the journal, and tools/parlay_study.py still reads them. The settle pass also stopped pairing every graded
+day of our past picks for that table: it cost up to a minute of each record export (55.8 seconds on 7 November).
+
 **TU. A finished game says if its report was right** (step 653; 16 November). Nothing to run. Your circled card on
 the finished Patriots at Lions page now reads, top to bottom:
 - the final, the winner in bold;

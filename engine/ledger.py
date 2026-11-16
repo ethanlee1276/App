@@ -11456,15 +11456,10 @@ MIN_GRADED_FOR_SIGNAL = 30
 RECENT_LIMIT = 60
 
 
-#: The two-leg backtest's cache (data/cache): rebuilt when the graded record
-#: has moved and the copy is an hour old, so the five-minute settle pass does
-#: not pair the whole season again every time a pick grades.
-TWO_LEG_BACKTEST_TTL_S = 3600
 
 
-#: Where the last export's two-leg section spent its seconds: the pools'
-#: record and the backtest, and whether the backtest was served kept
-#: (`_two_leg_backtest`). The settle pass puts it on its phases as
+#: Where the last export's game-parlay section spent its seconds (the
+#: two-leg pools and their backtest left it 2026-11-16). The settle pass puts it on its phases as
 #: ``export_two_leg`` (engine/maintenance._export_record): the section took
 #: 63.7 of the export's 144.9 seconds at 04:36 on 10 November, with nothing
 #: to say which half.
@@ -11482,101 +11477,27 @@ def _game_parlay_record(conn) -> dict:
 
 
 def _two_leg_record(conn) -> dict:
-    """The two-leg parlays: each pool's record (parlayledger.report_twoleg)
-    and the backtest (twoleg.backtest). Never breaks the export."""
+    """Each game's parlays on the record (parlayledger.report_game_parlays) as
+    ``game``: the three-leg tickets and the scorer pairs, tracked from their
+    first day (2026-11-14). Never breaks the export.
+
+    THE TWO-LEG PARLAYS RETIRED FROM THE RECORD (2026-11-16; Ethan: "retire the
+    2 leg parlays record and shit"). Their pools' record and the backtest that
+    paired every graded day of our past picks left the Record page with them,
+    and the export stopped working them out: the backtest alone took up to a
+    minute of the settle pass's export (55.8 s on 7 November). Their tickets
+    stay in the journal; tools/parlay_study.py still reads them."""
     import time as _time
     out: dict = {}
     TWO_LEG_LAST.clear()
     t0 = _time.monotonic()
     try:
         from . import parlayledger
-        out.update(parlayledger.report_twoleg(conn))
-    except Exception as exc:                                  # noqa: BLE001
-        out["error"] = f"{type(exc).__name__}: {exc}"
-    # EACH GAME'S PARLAYS (engine/gameparlays, 2026-11-14), apart: the
-    # three-leg tickets and the scorer pairs, tracked from their first day.
-    try:
-        from . import parlayledger
         out["game"] = parlayledger.report_game_parlays(conn)
     except Exception as exc:                                  # noqa: BLE001
         out["game"] = {"error": f"{type(exc).__name__}: {exc}"}
-    t1 = _time.monotonic()
-    try:
-        out["backtest"] = _two_leg_backtest(conn)
-    except Exception as exc:                                  # noqa: BLE001
-        out["backtest"] = {"rows": [], "error": f"{type(exc).__name__}: {exc}"}
-    TWO_LEG_LAST.update(report_s=round(t1 - t0, 1), backtest_s=round(_time.monotonic() - t1, 1))
+    TWO_LEG_LAST.update(report_s=round(_time.monotonic() - t0, 1))
     return out
-
-
-def _two_leg_backtest(conn) -> dict:
-    """`twoleg.backtest` over the record since its epoch, with the history
-    database's schedule telling one game's two sides from two games, cached
-    (TWO_LEG_BACKTEST_TTL_S)."""
-    import time as _time
-    from . import twoleg
-    key = list(conn.execute("SELECT COUNT(*), COALESCE(MAX(id), 0) FROM bets "
-                            "WHERE status IN ('won','lost','push')").fetchone())
-    # WHOSE JOURNAL: a copy cached off one database is never another's.
-    dbfile = next((str(r[2]) for r in conn.execute("PRAGMA database_list") if r[1] == "main"), "")
-    cache = ROOT_DIR / "data" / "cache" / "two_leg_backtest.json"
-    try:
-        held = json.loads(cache.read_text(encoding="utf-8"))
-        fresh = _time.time() - cache.stat().st_mtime < TWO_LEG_BACKTEST_TTL_S
-        if (held.get("db") == dbfile and held.get("v") == twoleg.BACKTEST_VERSION and held.get("result")
-                and (held.get("key") == key or fresh)):
-            TWO_LEG_LAST["backtest"] = "kept"
-            return held["result"]
-    except (OSError, ValueError, KeyError, TypeError):
-        pass
-    games: dict = {}
-    t_sched = _time.monotonic()
-    try:
-        from . import db as _db
-        if _db.DEFAULT_DB.exists():
-            h = _db.connect()
-            try:
-                games = twoleg.schedule(h, RECORD_EPOCH)
-            finally:
-                h.close()
-    except Exception:                                         # noqa: BLE001
-        games = {}
-    TWO_LEG_LAST["schedule_s"] = round(_time.monotonic() - t_sched, 1)
-    # Each day's pairing under its inputs' fingerprint, kept beside the
-    # cache, so the hourly rerun pairs only the days whose picks changed
-    # (twoleg.backtest's memo; the whole record took 55.8 s at 20:21 on
-    # 7 November). Whose journal it is, as for the result.
-    memo_path = cache.with_name("two_leg_days.json")
-    memo: dict = {}
-    try:
-        held_memo = json.loads(memo_path.read_text(encoding="utf-8"))
-        if held_memo.get("db") == dbfile and held_memo.get("v") == twoleg.BACKTEST_VERSION:
-            memo = held_memo.get("days") or {}
-    except (OSError, ValueError, AttributeError):
-        memo = {}
-    held = {k: (v or {}).get("fp") for k, v in memo.items() if isinstance(v, dict)}
-    result = twoleg.backtest(conn, since=RECORD_EPOCH, games=games, memo=memo)
-    result["schedule"] = bool(games)
-    # How many of the day groups were paired again (no copy, or new picks).
-    TWO_LEG_LAST.update(backtest="worked out", groups=len(memo),
-                        paired=sum(1 for k, v in memo.items()
-                                   if not isinstance(v, dict) or held.get(k) != v.get("fp")))
-    try:
-        tmp = memo_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"db": dbfile, "v": twoleg.BACKTEST_VERSION, "days": memo}),
-                       encoding="utf-8")
-        tmp.replace(memo_path)
-    except OSError:
-        pass
-    try:
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        tmp = cache.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"db": dbfile, "v": twoleg.BACKTEST_VERSION, "key": key, "result": result}),
-                       encoding="utf-8")
-        tmp.replace(cache)
-    except OSError:
-        pass
-    return result
 
 
 def _parlay_report(conn) -> dict:
@@ -12406,9 +12327,8 @@ def export_json(conn, path) -> None:
         # Its own key, its own tables, its own notional — nothing above this
         # line moves when a ticket settles.
         "parlays": _parlay_report(conn),
-        # THE TWO-LEG PARLAYS (engine/twoleg, the Parlays page, 2026-10-31):
-        # each pool's record apart from the singles, and what pairing the
-        # past picks the same way would have done.
+        # EACH GAME'S PARLAYS (`two_leg.game`): the key kept from the two-leg
+        # parlays, whose own record retired from the page 2026-11-16.
         "two_leg": _two_leg_record(conn),
     }
     p = _Path(path)

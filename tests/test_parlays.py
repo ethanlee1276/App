@@ -885,13 +885,13 @@ def test_no_league_lists_a_parlays_tab_to_hide():
     assert '"parlays"' not in block, block
 
 
-def test_the_record_page_carries_the_singles_alternative():
-    """A parlay is measured against the same picks bet singly: on the Record
-    page, every backtest row prints both."""
+def test_the_two_leg_record_left_the_record_page():
+    """Ethan, 2026-11-16: "retire the 2 leg parlays record and shit". The two-leg
+    pools, their backtest against the same picks bet singly and the old parlay
+    screen left the Record page; each game report's parlays are its parlays now."""
     rec = open(os.path.join(_ROOT, "web", "js", "record.js"), encoding="utf-8").read()
-    i = rec.index("function recTwoLegSection(")
-    body = rec[i:rec.index("\n}\n", i)]
-    assert "fmtRoi(r.singles_roi)" in body and "As singles" in body
+    assert "recTwoLegSection" not in rec and "Two-leg parlays — retired" not in rec and "As singles" not in rec
+    assert "THE RETIRED PARLAY RECORDS LEFT THE PAGE" in rec
 
 
 

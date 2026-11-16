@@ -574,18 +574,6 @@ def _app_js():
     return app_js()
 
 
-def test_the_record_page_renders_the_parlay_bucket():
-    assert "recParlaySection(d.parlays)" in _app_js()
-
-
-def test_the_parlay_bucket_is_whole_journal_like_the_other_samplers():
-    """The 100-ticket bar is cross-sport, so a per-sport slice of it would
-    be a different (and much weaker) claim than the one §13 makes."""
-    src = _app_js()
-    i = src.index("recParlaySection(d.parlays)")
-    assert 'scoped ? "" : recParlaySection' in src[i - 40:i + 40]
-
-
 def test_the_legs_line_spans_the_whole_row():
     """.rl-row is a six-column GRID. A legs element added as a sixth child
     lands in the 72px P&L column and renders each leg as a vertical stack of
@@ -593,21 +581,6 @@ def test_the_legs_line_spans_the_whole_row():
     css = styles_css()
     i = css.index(".pl-legs")
     assert "grid-column: 1 / -1" in css[i:i + 200]
-
-
-def test_every_class_the_parlay_section_uses_is_styled():
-    """A class named in the JS and missing from the CSS renders as unstyled
-    text, which on this page reads as a layout bug rather than a missing
-    rule."""
-    src = _app_js()
-    css = styles_css()
-    i = src.index("function recParlaySection")
-    block = src[i:src.index("function recLongshotSection")]
-    import re
-    used = set(re.findall(r'class="(pl-[a-z-]+)', block))
-    assert len(used) >= 6, used          # the regex must actually be finding them
-    for cls in used:
-        assert f".{cls}" in css, cls
 
 
 def test_a_real_screened_ticket_journals_every_field():
@@ -973,49 +946,17 @@ def test_the_singles_verdict_is_asked_of_the_screens_own_tickets():
         "the recommendation is being judged on the refusals' results")
 
 
-def test_the_page_headline_reads_the_recommended_bucket_not_the_blend():
-    """Ethan, 2026-08-23: "we suck at parlays and they are loosing us alot
-    of money". The number he was reading was -84.1% over 19 tickets, and
-    EIGHTEEN of the nineteen were tickets the screen refused."""
+
+def test_the_old_parlay_screen_left_the_record_page_and_its_tickets_stay():
+    """Ethan, 2026-11-16: "retire the 2 leg parlays record and shit". The old
+    parlay screen, retired 2026-10-31, left the Record page with the two-leg
+    parlays; its tickets stay journaled and the export still reports them."""
     src = _app_js()
-    i = src.index("function recParlaySection")
-    block = src[i:src.index("function recLongshotSection")]
-    lead = block[block.index("rec-kpis"):block.index("pl-conds")]
-    assert "pz.roi" not in lead, "the blended ROI is back in the KPI row"
-    assert "rec.roi" in lead and "rec.net_units" in lead
-    # and the blend is still reported, below, rather than hidden
-    assert "Everything graded, blended" in block
-
-
-def test_no_rate_is_printed_on_a_sample_that_cannot_carry_one():
-    """THE FIRST CUT OF THE FIX SHIPPED A WORSE LIE. Splitting the record
-    made the headline "+160.0% ROI" in green off ONE winning ticket. A
-    rate quoted on a sample that cannot carry one is the same fault as
-    the blend, pointing the other way."""
-    src = _app_js()
-    assert "const PARLAY_RATE_FLOOR = 10;" in src, "the floor was removed"
-    i = src.index("function recParlaySection")
-    block = src[i:src.index("function recLongshotSection")]
-    assert "readable" in block, "the floor is defined and never consulted"
-    # the split rows honour it too — a row reading +160% beside a note
-    # saying one ticket is not a record is the page arguing with itself
-    split = src[src.index("function parlaySplitHTML"):
-                src.index("function recLongshotSection")]
-    assert "b.graded >= PARLAY_RATE_FLOOR" in split
-    # …and the verdict line does not conclude from it either
-    assert "a difference, not a finding" in block
-
-
-def test_the_refusals_are_labelled_as_the_gates_working():
-    """A heavy loss on the refused bucket is the screen being RIGHT.
-    Printing it without that sentence is how the split becomes a second
-    way to read the same wrong conclusion."""
-    src = _app_js()
-    split = src[src.index("function parlaySplitHTML"):
-                src.index("function recLongshotSection")]
-    assert "the gates working" in split
-    assert "never recommended" in split
-
+    assert "recParlaySection" not in src and "parlaySplitHTML" not in src
+    assert '"parlays": _parlay_report(conn)' in open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
+    css = styles_css()
+    assert ".pl-split" not in css and ".pl-verdict" not in css, "its styles went with it"
+    assert ".pl-legs" in css and ".pl-leg.won .pl-mark" in css, "the game parlays' legs still draw"
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

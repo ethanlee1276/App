@@ -296,9 +296,14 @@ def test_the_study_prints_every_section_on_a_journal():
         assert head in text, head
 
 
-def test_the_export_ships_the_parlays_and_the_backtest():
+def test_the_export_ships_each_game_s_parlays_and_no_longer_the_backtest():
+    """The two-leg record retired from the Record page (2026-11-16), and the export stopped pairing every
+    graded day of our past picks (up to a minute of the settle pass). Each game's parlays stay, under `game`."""
     src = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
-    assert '"two_leg": _two_leg_record(conn)' in src
+    assert '"two_leg": _two_leg_record(conn)' in src and "_two_leg_backtest" not in src
+    out = ledger._two_leg_record(_journal())
+    assert set(out) == {"game"} and set(out["game"]) == {"three", "scorers"}, out
+    assert set(ledger.TWO_LEG_LAST) == {"report_s"}, ledger.TWO_LEG_LAST
 
 
 if __name__ == "__main__":

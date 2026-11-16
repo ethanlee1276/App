@@ -151,8 +151,8 @@ def test_the_record_page_draws_the_reports_picks_and_parlays_in_one_section():
     both td and player props from all sports." One section above the folds
     (record.js recReportBook): the picks by kind off the book's market split,
     the newest picks, the parlays and pairs; a league's own, or every league."""
-    i = RECORD.index("const TL_SPORT_ORDER = ")
-    code = RECORD[i:RECORD.index("function recTwoLegSection(tl) {")]
+    i = RECORD.index("const tlAmerican = ")
+    code = RECORD[i:RECORD.index("/* The Most Likely paper record.")]
     nfl = {"settled": 9, "open": 3, "wins": 6, "losses": 3, "pushes": 1, "net_units": 0.21,
            "by_market": {"receptions": {"w": 4, "l": 1, "net_u": 0.25}, "anytime_td": {"w": 1, "l": 2, "net_u": -0.13},
                          "spread": {"w": 1, "l": 0, "net_u": 0.09}}}

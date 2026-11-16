@@ -105,10 +105,7 @@ def test_the_two_leg_halves_are_timed_and_reach_the_phases():
     conn = ledger.connect(":memory:")
     ledger._two_leg_record(conn)
     last = dict(ledger.TWO_LEG_LAST)
-    assert {"report_s", "backtest_s", "backtest"} <= set(last), last
-    assert last["backtest"] in ("kept", "worked out"), last
-    if last["backtest"] == "worked out":
-        assert {"schedule_s", "groups", "paired"} <= set(last), last
+    assert set(last) == {"report_s"}, "each game's parlays, timed; the two-leg backtest retired (2026-11-16)"
     real = ledger.export_json
     ledger.TWO_LEG_LAST.update(report_s=9.9)                 # a stale copy from an earlier export
 
