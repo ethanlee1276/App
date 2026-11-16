@@ -9338,26 +9338,30 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
-**TS. No search waits for a league's new name list** (step 651; 16 November). Nothing to run. Checked live after
-the deploy at 19:25 UTC: every search answered the right player alone ("jacoby brissett" and "brissett" both Jacoby
-Brissett, no near names beside him), college football, the NBA and the NFL in 0.3 to 0.7 seconds. But the first NHL,
-MLB and college basketball search after their logs moved took 17 to 25 seconds ("mcdavid", "judge", "buzelis"), and
-the same search straight after under a second:
-- a league under 20,000 names rebuilt its name list in line when its logs changed, which on a quiet box is a blink
-  and on the box minutes after a restart, boards building beside it, was 20 seconds. Every league now answers from the
-  list it has while the new one is built behind it, at most once a minute, so a player's first box score reaches the
-  search within the minute and no search waits for it;
+**TS. The player search reads a player off the index, and waits for nothing** (step 651; 16 November). Nothing to
+run. Checked live after the deploys at 19:25 and 19:56 UTC: every search answered the right player alone ("jacoby
+brissett" and "brissett" both Jacoby Brissett, no near names beside the answer), the WNBA and the NFL in 0.3 to 0.5
+seconds.
+But NHL, MLB and college basketball searches took 15 to 25 seconds ("mcdavid", "judge", "buzelis"), college football up
+to 11, again and again while the boards rebuilt after each restart:
+- the search counted each name's games, and found its club, by reading every line the name had ever logged out of the
+  table: a decade of Connor McDavid is some ten thousand pages of the box's 3.5 GB file, which the board builds keep
+  pushing out of memory. It counts the games off the player index alone now, and reads only the newest few games'
+  lines for the club, a handful of pages a player. A doubleheader counts once in the games beside a name;
+- a league under 20,000 names also rebuilt its name list in line when its logs changed, a blink on a quiet box and
+  seconds on a busy one. Every league answers from the list it has while the new one is built behind it, at most once
+  a minute, so a player's first box score reaches the search within the minute;
 - a roster file the nightly build rewrote was read in line by the next search (college's 41,888 names: 8 seconds
   once). It is read behind the search now too, and a file caught half-written keeps the roster in hand instead of
   emptying it for a quarter hour;
 - a search that comes in while the start's warm-up is building its league's list waits for that build instead of
   building a second one beside it;
-- the search listed Jeremiah Smith at "espn:194", his newest log row being the copy of a game filed under ESPN's
+- the search listed Jeremiah Smith at "espn:194", the newest log row being the copy of a game filed under ESPN's
   number for Ohio State (step TM), and once that was fixed, at "NU": the 14th's game against them is also held with
   the two sides swapped. The search now takes the club of a player's newest game in the newest season, a real
   abbreviation before ESPN's number, and on a tie the club with the most of the player's lines (OSU). A player traded
   mid-season still shows at the new club;
-- his page wore "LT · LB" in its header: the college roster published tonight is missing 268 schools that would not
+- the player's page wore "LT · LB" in its header: the college roster published tonight is missing 268 schools that would not
   load, Ohio State among them (the roster page's own note says so), and the one "Jeremiah Smith" left on it is Louisiana
   Tech's linebacker. A page now takes a lone roster row of the name from another club only in the position the
   player's games say they play (a trade or a transfer keeps the position; a namesake rarely does), so the receiver's

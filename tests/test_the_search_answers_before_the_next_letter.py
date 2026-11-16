@@ -23,6 +23,7 @@ Run directly: `python3 tests/test_the_search_answers_before_the_next_letter.py`
 
 import contextlib
 import io
+import inspect
 import json
 import os
 import random
@@ -196,6 +197,38 @@ def test_a_college_player_is_listed_at_his_school_not_espns_number():
     assert [(h["player"], h["team"], h["position"]) for h in hits] == [("Jeremiah Smith", "OSU", "WR")], hits
     hits = statlogs.search("cfb", "old walkon", db_path=path, data_dir=d)
     assert [h["team"] for h in hits] == ["espn:2000"], "the number, when it is all a season has"
+
+
+def test_the_search_reads_a_player_off_the_index_not_his_every_line():
+    """Live, 16 Nov: "mcdavid", "judge" and "buzelis" took 15 to 25 seconds
+    on the box, the search reading every line each name had logged out of a
+    3.5 GB file to count its games and find its club. The count is off the
+    player index alone now, and the club off the newest few games."""
+    from engine import ingest
+    assert statlogs.ESPN_PREFIX == ingest.ESPN_KEY_PREFIX
+    path = _db_with([_row("Aaron Judge", f"g{i}") for i in range(30)])
+    d = _roster_dir([], "mlb")
+    statlogs.search("mlb", "judge", db_path=path, data_dir=d)          # the name list is built
+    conn = db.connect(path)
+    seen = []
+    try:
+        conn.set_trace_callback(seen.append)
+        hits = statlogs._search_conn(conn, "mlb", "judge", 8, d)
+        conn.set_trace_callback(None)
+        asked = [q for q in seen if "FROM player_game_logs" in q]
+        assert any("COUNT(DISTINCT" in q for q in asked) and len(asked) >= 3, asked
+        for q in asked:
+            plan = " ".join(str(tuple(r)) for r in conn.execute("EXPLAIN QUERY PLAN " + q))
+            assert "idx_logs_player" in plan and "SCAN player_game_logs" not in plan, (q, plan)
+            if "COUNT(DISTINCT" in q:
+                assert "COVERING INDEX idx_logs_player" in plan, (q, plan)
+        assert statlogs._club_of(conn, "mlb", "Aaron Judge") == {"team": "SEA", "position": "C"}
+        assert statlogs._club_of(conn, "mlb", "Nobody Here") is None
+    finally:
+        conn.close()
+    assert hits and hits[0]["player"] == "Aaron Judge", hits
+    hits = statlogs.search("mlb", "judge", db_path=path, data_dir=_roster_dir([], "mlb"))
+    assert hits[0]["games"] == 1 and hits[0]["team"] == "SEA", "one period: one game, as the index counts"
 
 
 def test_a_traded_player_is_listed_at_his_new_club():

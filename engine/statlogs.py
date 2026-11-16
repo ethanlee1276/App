@@ -442,38 +442,28 @@ def _search_conn(conn, sport: str, q: str, limit: int,
     # (and a guess, closest spelling first), so the page's worth is its head.
     names = list(ranked)[:int(limit) * 3]
     marks = ", ".join("?" for _ in names)
-    rows = conn.execute(
-        f"SELECT player, COUNT(DISTINCT game_id) AS games, "
-        f"MAX(season || '-' || period) AS last "
-        f"FROM player_game_logs WHERE sport=? AND player IN ({marks}) "
-        f"GROUP BY player ORDER BY last DESC, games DESC",
-        (sport, *names)).fetchall()
+    # OFF THE PLAYER INDEX ALONE (2026-11-16). Counted by game id, this read
+    # every line each name ever logged out of the table, a page apiece: a
+    # decade of Connor McDavid is ten thousand pages of a 3.5 GB file the
+    # board builds keep pushing out of memory, and the box's first search
+    # for "mcdavid" after a deploy took 17 to 25 seconds. A game is a
+    # (season, period) on the index (`idx_logs_player`), which a doubleheader
+    # alone counts once; the newest of them is the same.
+    sql = (f"SELECT player, COUNT(DISTINCT season || '-' || period) AS games, "
+           f"MAX(season || '-' || period) AS last "
+           f"FROM player_game_logs INDEXED BY idx_logs_player WHERE sport=? AND player IN ({marks}) "
+           f"GROUP BY player ORDER BY last DESC, games DESC")
+    try:
+        rows = conn.execute(sql, (sport, *names)).fetchall()
+    except sqlite3.OperationalError:
+        # A file older than idx_logs_player: the same answer, row by row.
+        rows = conn.execute(sql.replace(" INDEXED BY idx_logs_player", ""), (sport, *names)).fetchall()
     place = {n: i for i, n in enumerate(names)}
     rows = sorted(rows, key=lambda r: (ranked[r["player"]],
                                        place[r["player"]] if ranked[r["player"]] == 3 else 0))[:int(limit)]
     out = []
     for r in rows:
-        # The team he was LAST seen with — the GROUP BY above would
-        # hand back an arbitrary row's team, and a deadline trade is
-        # exactly when someone gets looked up.
-        #
-        # SAID AS A CLUB, NOT AS ESPN'S NUMBER (2026-11-16): college's
-        # history keeps copies of a game keyed by ESPN's team number
-        # (ingest.ESPN_KEY_PREFIX; engine/gamelog.collapse reads them as
-        # one game), and the newest row can be that copy, so the search
-        # listed Jeremiah Smith at "espn:194" (Ohio State). The newest
-        # season's real abbreviation first, the number only when it is
-        # all the season has. Club by club, not row by row: the newest
-        # game can also be held in a copy with the two sides swapped (he
-        # read "NU", the side Ohio State beat on the 14th), so the club of
-        # the newest game wins, and on a tie the club with the most of his
-        # lines that season. The position is the newest row's (SQLite's
-        # bare column beside a single max()).
-        t = conn.execute(
-            "SELECT team, position, MAX(period) AS last, COUNT(*) AS n FROM player_game_logs "
-            "WHERE sport=? AND player=? GROUP BY season, team "
-            "ORDER BY season DESC, (substr(team, 1, 5) = 'espn:') ASC, last DESC, n DESC LIMIT 1",
-            (sport, r["player"])).fetchone()
+        t = _club_of(conn, sport, r["player"])
         # The face rides along when the ingest has stored one —
         # player_assets is in the same DB, and a search result
         # without the photo is the page Ethan keeps noticing.
@@ -523,6 +513,72 @@ def _search_conn(conn, sport: str, q: str, limit: int,
                             {r["player"] for r in out}, data_dir, fuzzy=not found)
     from .playersearch import no_guess_beside_an_answer
     return no_guess_beside_an_answer(out)
+
+
+#: How many of a player's newest games the search reads for his club.
+CLUB_GAMES = 4
+
+
+def _club_of(conn, sport: str, player: str) -> dict | None:
+    """``{"team", "position"}``: the club he was LAST seen with, or None.
+
+    The newest season's latest few games (CLUB_GAMES), found on the player
+    index and only their lines read from the table: the search's answer to
+    "where does he play", in a handful of pages where reading his every
+    line cost the box seconds (see the count above).
+
+    SAID AS A CLUB, NOT AS ESPN'S NUMBER (2026-11-16): college's history
+    keeps copies of a game keyed by ESPN's team number (ingest.
+    ESPN_KEY_PREFIX; engine/gamelog.collapse reads them as one game), and
+    the newest line can be that copy, so the search listed Jeremiah Smith
+    at "espn:194" (Ohio State); a real abbreviation comes first, the number
+    only when it is all those games have. Club by club, not line by line:
+    a game can also be held in a copy with the two sides swapped (he read
+    "NU", the side Ohio State beat on the 14th), so the club of the newest
+    game wins, and on a tie the club with the most of his lines. A deadline
+    trade is exactly when someone gets looked up: the new club's one game
+    is the newest."""
+    def run(sql, args):
+        try:
+            return conn.execute(sql, args).fetchall()
+        except sqlite3.OperationalError:
+            return conn.execute(sql.replace(" INDEXED BY idx_logs_player", ""), args).fetchall()
+    top = run("SELECT MAX(season) FROM player_game_logs INDEXED BY idx_logs_player WHERE sport=? AND player=?",
+              (sport, player))
+    season = top[0][0] if top else None
+    if season is None:
+        return None
+    periods = [r[0] for r in run(
+        "SELECT DISTINCT period FROM player_game_logs INDEXED BY idx_logs_player "
+        "WHERE sport=? AND player=? AND season=? ORDER BY period DESC LIMIT ?",
+        (sport, player, season, CLUB_GAMES))]
+    if not periods:
+        return None
+    marks = ", ".join("?" for _ in periods)
+    clubs: dict = {}
+    for period, team, position in run(
+            f"SELECT period, team, position FROM player_game_logs INDEXED BY idx_logs_player "
+            f"WHERE sport=? AND player=? AND season=? AND period IN ({marks})",
+            (sport, player, season, *periods)):
+        c = clubs.setdefault(str(team or ""), {"last": "", "n": 0, "position": ""})
+        c["n"] += 1
+        if str(period) > c["last"]:
+            c["last"] = str(period)
+            c["position"] = position or c["position"]
+        elif not c["position"] and position:
+            c["position"] = position
+    order = sorted(clubs.items(), key=lambda kv: -kv[1]["n"])
+    order = sorted(order, key=lambda kv: kv[1]["last"], reverse=True)
+    order = sorted(order, key=lambda kv: kv[0].startswith(ESPN_PREFIX) or not kv[0])
+    team, c = order[0]
+    return {"team": team, "position": c["position"] or ""}
+
+
+#: The prefix college's history keys a school under when it had no
+#: abbreviation: engine/ingest.ESPN_KEY_PREFIX, copied so a search does not
+#: import the ingest (tests/test_the_search_answers_before_the_next_letter
+#: holds the two equal).
+ESPN_PREFIX = "espn:"
 
 
 #: Where the published roster payloads live, and how long one stays
