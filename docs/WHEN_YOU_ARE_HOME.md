@@ -9382,8 +9382,11 @@ to 11, again and again while the boards rebuilt after each restart:
 - the player's page wore "LT · LB" in its header: the college roster published tonight is missing 268 schools that would not
   load, Ohio State among them (the roster page's own note says so), and the one "Jeremiah Smith" left on it is Louisiana
   Tech's linebacker. A page now takes a lone roster row of the name from another club only in the position the
-  player's games say they play (a trade or a transfer keeps the position; a namesake rarely does), so the receiver's
-  page shows Ohio State and WR, with no bio until the roster loads again.
+  player's games say they play (a trade or a transfer keeps the position; a namesake rarely does). Checked live after
+  that deploy, the header said "NU": the page takes the club of the newest game, and the 14th's game, held twice with
+  the sides swapped, was led by the swapped copy. A game held that way is now read on the side the player's nearest
+  other games were on (a trade happens between games, so a player who faced a future club keeps the side they played
+  on), and the receiver's page shows Ohio State and WR, with no bio until the roster loads again.
 
 **TR. A parlay leg's chance is one our own pick rules stand behind** (step 650; 16 November). Nothing to run. You
 asked why football's stated chances run 10 to 30 points too high. They did on the game parlays' legs, and only there:

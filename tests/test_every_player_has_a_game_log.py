@@ -168,6 +168,33 @@ def test_a_college_game_filed_more_than_once_is_one_game():
                               {"period": "010", "game_id": "b", "team": "CIN", "opponent": "PIT", "stats": {}}])
     assert len(nfl) == 2, "only where a league plays once a week and its file is known to hold copies"
 
+def test_a_game_held_with_the_sides_swapped_is_the_players_side():
+    """Live, 16 Nov: Ohio State's game against NU on the 14th is in Jeremiah
+    Smith's rows as OSU against NU and as NU against OSU; the copy read first
+    led the merged game and his page's header said "NU"."""
+    def g(day, gid, team, opp, home=0):
+        return {"period": day, "game_id": gid, "team": team, "opponent": opp, "home": home,
+                "stats": {"rec_yds": 90.0}}
+    for order in (0, 1):
+        copies = [g("2026-11-14", "x14", "NU", "OSU", 1), g("2026-11-14", "401014", "OSU", "NU", 0)]
+        games = [g("2026-10-31", "400", "espn:194", "USC"), g("2026-11-07", "407", "OSU", "ORE")]
+        games += copies if order == 0 else copies[::-1]
+        out = GL.collapse("cfb", games)
+        last = [x for x in out if x["period"] == "2026-11-14"]
+        assert len(last) == 1 and (last[0]["team"], last[0]["opponent"], last[0]["home"]) == ("OSU", "NU", 0), out
+        assert not any("_alt" in x for x in out)
+    # A player who faced the club they later joined keeps the side they played on.
+    games = [g("2026-09-06", "1", "AAA", "XXX"), g("2026-09-13", "2b", "BBB", "AAA"),
+             g("2026-09-13", "2a", "AAA", "BBB"), g("2026-09-20", "3", "AAA", "YYY"),
+             g("2026-10-25", "9", "BBB", "ZZZ")]
+    out = GL.collapse("cfb", games)
+    assert [(x["team"], x["opponent"]) for x in out] == [("AAA", "XXX"), ("AAA", "BBB"), ("AAA", "YYY"),
+                                                         ("BBB", "ZZZ")], out
+    # And ESPN's number gives way only to a copy whose other side agrees.
+    out = GL.collapse("cfb", [g("2026-11-14", "a", "espn:194", "NU"), g("2026-11-14", "b", "NU", "OSU")])
+    assert out[0]["team"] == "espn:194", "the swapped copy's club is not the player's"
+
+
 def test_each_player_shows_his_own_groups_and_columns():
     path = _history()
     wr = GL.season_log("nfl", "Ja'Marr Chase", db_path=path)

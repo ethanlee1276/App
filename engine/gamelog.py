@@ -186,6 +186,30 @@ def _day(period) -> "_dt.date | None":
         return None
 
 
+def _espn(team) -> bool:
+    return str(team or "").startswith("espn:")
+
+
+def _sides(sport: str, out: list) -> None:
+    """A game held twice WITH THE SIDES SWAPPED (2026-11-16, live: Ohio State's
+    14 November game against NU is in Jeremiah Smith's rows as OSU against NU
+    and as NU against OSU, and the copy read first led the merged game, so his
+    page's header said "NU"). Which side was his is the side his nearest other
+    games were on: a trade happens between games, never inside one, so this
+    holds for a man traded to the club he once played against."""
+    for i, g in enumerate(out):
+        alt = g.pop("_alt", None)
+        if not alt:
+            continue
+        near = ""
+        for j in sorted((j for j in range(len(out)) if j != i), key=lambda j: abs(j - i)):
+            if out[j].get("team") and not _espn(out[j]["team"]):
+                near = out[j]["team"]
+                break
+        if near and g.get("team") != near and alt[0] == near:
+            g["team"], g["opponent"], g["home"] = alt
+
+
 def collapse(sport: str, games: list) -> list:
     """One player's game dicts (period, game_id, team, opponent, stats), copies
     of one game merged where the league plays once a week (ONE_A_WEEK); each
@@ -199,8 +223,16 @@ def collapse(sport: str, games: list) -> list:
         d = _day(g["period"])
         head = out[-1] if out else None
         if head is not None and d and head["_day"] and (d - head["_day"]).days <= 1:
+            if (head.get("team") and g.get("team") and head["team"] != g["team"]
+                    and head.get("team") == g.get("opponent") and head.get("opponent") == g.get("team")):
+                head.setdefault("_alt", (g["team"], g.get("opponent"), g.get("home")))
             for key in ("team", "opponent"):
-                if str(head.get(key) or "").startswith("espn:") and g.get(key) and not str(g[key]).startswith("espn:"):
+                other = "opponent" if key == "team" else "team"
+                # ESPN's number gives way to a club's code only from a copy
+                # whose other side agrees: a copy with the sides swapped would
+                # hand the head the other club.
+                if (_espn(head.get(key)) and g.get(key) and not _espn(g[key])
+                        and (_espn(head.get(other)) or not head.get(other) or g.get(other) == head.get(other))):
                     head[key] = g[key]
             mine, theirs = head["stats"], g["stats"]
             for ms in groups:
@@ -217,6 +249,7 @@ def collapse(sport: str, games: list) -> list:
         out.append(dict(g, stats=dict(g["stats"]), copies=1, _day=d))
     for g in out:
         g.pop("_day", None)
+    _sides(sport, out)
     return out
 
 
