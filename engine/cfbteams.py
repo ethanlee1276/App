@@ -137,8 +137,16 @@ def remember_ids(pairs: dict, path: str | None = None) -> int:
     try:
         current = load_ids(path)
         fresh = {k: v for k, v in clean.items() if current.get(k) != v}
-        if not fresh:
+        # ONE ABBREVIATION, ONE SCHOOL (2026-11-16). "OSU" was Ohio State
+        # Newark's id here for weeks (cfbdata.parse_teams kept the feed's
+        # later row); a build that gives it to Ohio State's id retires the
+        # old pair, or a Newark row would still be keyed as the Buckeyes.
+        claimed = {v: k for k, v in clean.items()}
+        stale = [k for k, v in current.items() if k not in clean and claimed.get(v, k) != k]
+        if not fresh and not stale:
             return 0
+        for k in stale:
+            current.pop(k, None)
         current.update(clean)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = f"{path}.tmp"

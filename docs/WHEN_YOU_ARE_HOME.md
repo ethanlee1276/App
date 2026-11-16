@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TT. Ohio State is Ohio State again** (step 652; 16 November). Nothing to run. Found while checking Jeremiah Smith's
+page: the college board's team map, built from ESPN's teams feed, had "OSU" as Ohio State Newark Titans (ESPN id 3161,
+black, no logo of its own). The feed carries every division, 761 schools, and two of them use "OSU"; keyed by the
+abbreviation, the feed's later row won. What followed from that:
+- the board would have drawn Ohio State's next game as the Ohio State Newark Titans, in black;
+- the college build's map from ESPN ids to abbreviations lost Ohio State's id (194), so its history was never
+  re-keyed and stayed "espn:194": the "copy under ESPN's team number" of step TM, and the "espn:194" games in
+  Jeremiah Smith's log;
+- tonight's roster page fetched Newark's roster for "OSU" (it did not load) and had no Buckeyes.
+
+Now when two schools share an abbreviation, the one the feed describes in full (logos, both colours, then the lower
+id) keeps it and the other is keyed by its id ("espn:3161", the form a school below Division I already takes here).
+The next college build stores 194 as OSU, retires the stale 3161 pair, and re-keys Ohio State's "espn:194" history to
+OSU at once (its log line: "CFB history: re-keyed N school(s) from ESPN ids to abbreviations"); the next roster build
+fetches the Buckeyes' roster. Any other shared abbreviation in the feed is settled the same way. Step TM's two
+read-only counts are still worth running: they will now say how many college copies remain once Ohio State's are
+under one name.
+
 **TS. The player search reads a player off the index, and waits for nothing** (step 651; 16 November). Nothing to
 run. Checked live after the deploys at 19:25 and 19:56 UTC: every search answered the right player alone ("jacoby
 brissett" and "brissett" both Jacoby Brissett, no near names beside the answer), the WNBA and the NFL in 0.3 to 0.5

@@ -140,6 +140,36 @@ def test_team_names_join_across_feeds():
         assert D.resolve_team(spelling, lookup) == "TAMU"
 
 
+def test_two_schools_with_one_abbreviation_keep_the_program_its_own():
+    """Live, 16 Nov: the board's map had "OSU" as Ohio State Newark (id 3161,
+    black), the feed's later row; Ohio State (194) was gone, its history
+    stayed "espn:194" and the roster page had no Buckeyes."""
+    buckeyes = {"team": {"id": "194", "abbreviation": "OSU", "displayName": "Ohio State Buckeyes",
+                         "shortDisplayName": "Ohio State", "color": "ba0c2f", "alternateColor": "ffffff",
+                         "logos": [{"href": "https://a.espncdn.com/i/teamlogos/ncaa/500/194.png"}]}}
+    newark = {"team": {"id": "3161", "abbreviation": "OSU", "displayName": "Ohio State Newark Titans",
+                       "shortDisplayName": "Osunewark", "color": "000000"}}
+    for order in ([buckeyes, newark], [newark, buckeyes]):
+        teams = D.parse_teams({"sports": [{"leagues": [{"teams": order}]}]})
+        assert teams["OSU"]["id"] == "194" and teams["OSU"]["name"] == "Ohio State Buckeyes", teams
+        assert teams["espn:3161"]["name"] == "Ohio State Newark Titans", teams
+        assert D.resolve_team("Ohio State Buckeyes", D.team_lookup(teams)) == "OSU"
+    # The college build's id map takes real abbreviations only, and the stored
+    # map gives "OSU" to one school: the build that names 194 retires 3161.
+    import json as _json
+    import os as _os
+    import tempfile as _tf
+    from engine import cfbteams
+    build = open(_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "cfb_build.py"),
+                 encoding="utf-8").read()
+    assert 'if meta.get("id") and not abbr.startswith("espn:")}' in build
+    path = _os.path.join(_tf.mkdtemp(), "ids.json")
+    assert cfbteams.remember_ids({"3161": "OSU", "61": "UGA"}, path) == 2
+    assert cfbteams.remember_ids({"194": "OSU"}, path) == 1
+    assert cfbteams.load_ids(path) == {"194": "OSU", "61": "UGA"}, cfbteams.load_ids(path)
+    assert cfbteams.remember_ids({"194": "OSU"}, path) == 0
+
+
 def test_an_unknown_school_resolves_to_nothing_rather_than_the_wrong_one():
     lookup = {"toledo rockets": "TOL", "toledo": "TOL"}
     assert D.resolve_team("Toledo Rockets", lookup) == "TOL"

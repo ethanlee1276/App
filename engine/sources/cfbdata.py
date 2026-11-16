@@ -350,8 +350,20 @@ def parse_teams(payload: dict) -> dict[str, dict]:
     This is the identity the board draws with. It ships in the slate JSON
     rather than a checked-in file — 134 teams is exactly the kind of list
     that rots quietly.
+
+    ONE ABBREVIATION, TWO SCHOOLS (2026-11-16). The feed carries every
+    division (761 schools), and "OSU" is both Ohio State (ESPN id 194) and
+    Ohio State Newark (3161). Keyed by abbreviation, the later row won: the
+    board's map drew Ohio State as "Ohio State Newark Titans" in black, the
+    college build's id map lost 194 so Ohio State's history stayed keyed
+    "espn:194" (the copies of step TM, Jeremiah Smith's "espn:194" games),
+    and the roster page fetched Newark's roster for "OSU" and had no
+    Buckeyes. The school the feed describes in full keeps the abbreviation
+    (`_identity_rank`); the other is keyed by its id, "espn:3161", the form
+    a school below Division I already takes here (ingest.ESPN_KEY_PREFIX).
     """
     out: dict[str, dict] = {}
+    rank: dict[str, tuple] = {}
     try:
         rows = payload["sports"][0]["leagues"][0]["teams"]
     except (KeyError, IndexError, TypeError):
@@ -361,6 +373,19 @@ def parse_teams(payload: dict) -> dict[str, dict]:
         abbr = (t.get("abbreviation") or "").strip()
         if not abbr:
             continue
+        mine = _identity_rank(t)
+        if abbr in out:
+            held = out[abbr]
+            if mine < rank[abbr]:
+                if held.get("id"):
+                    out[f"espn:{held['id']}"] = held
+                out.pop(abbr)
+            else:
+                if str(t.get("id") or ""):
+                    abbr = f"espn:{t.get('id')}"
+                else:
+                    continue
+        rank[abbr] = mine
         color = (t.get("color") or "").strip().lstrip("#")
         alt = (t.get("alternateColor") or "").strip().lstrip("#")
         # No conference marker is read here. One was added on the guess that
@@ -378,6 +403,21 @@ def parse_teams(payload: dict) -> dict[str, dict]:
             "alt": f"#{alt}" if alt else "",
         }
     return out
+
+
+def _identity_rank(t: dict) -> tuple:
+    """Which of two schools sharing an abbreviation keeps it, lowest first.
+
+    The feed has no division on a team (`parse_teams`), but it describes a
+    Division I program in full and a placeholder school barely: logos, an
+    alternate colour, a colour that is not black, then the lower id (ESPN
+    numbered the established programs first: Ohio State 194, Newark 3161)."""
+    color = (t.get("color") or "").strip().lstrip("#").lower()
+    ident = str(t.get("id") or "")
+    return (0 if t.get("logos") else 1,
+            0 if (t.get("alternateColor") or "").strip() else 1,
+            0 if color and color != "000000" else 1,
+            int(ident) if ident.isdigit() else 10 ** 9)
 
 
 def team_lookup(teams: dict[str, dict]) -> dict[str, str]:

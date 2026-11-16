@@ -1473,8 +1473,12 @@ def main() -> None:
         try:
             from engine import cfbteams as _cfbteams, ingest as _cfbingest
             from engine import db as _cfbdb
+            # A school that lost its abbreviation to another (cfbdata.
+            # parse_teams: "OSU" is Ohio State's, Newark is "espn:3161")
+            # keeps its id key; only a real abbreviation re-keys history.
             ids = {str(meta.get("id") or ""): abbr
-                   for abbr, meta in teams.items() if meta.get("id")}
+                   for abbr, meta in teams.items()
+                   if meta.get("id") and not abbr.startswith("espn:")}
             _cfbteams.remember_ids(ids)
             # At most hourly, or at once when the map has grown
             # (ingest.remap_cfb_team_keys_paced); {} when it rested.
