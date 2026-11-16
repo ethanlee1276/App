@@ -98,7 +98,8 @@ const FEATURES = [
     ["Game Lines", "Moneylines, spreads and totals with the model’s number beside the book’s — and the book actually posting each side named on the card.", "futures"],
     ["Best price per book", "Odds shopping on every card: the best number available for the side taken, book by book, so you never bet a worse price than exists.", null],
     ["Reserve tier", "A thin shelf fills from a labelled reserve rather than publishing empty. The tier says it is a reserve; it is never dressed up as a recommendation.", null],
-    ["Parlays", "Two-leg parlays built from our own picks: the Edge picks paired by what they return at the price, the Most Likely picks by the chance both hit. A same-game pair only where the two legs belong together, each graded on the Record page.", "parlays"]]],
+    ["Parlays", "Two-leg parlays built from our own picks: the Edge picks paired by what they return at the price, the Most Likely picks by the chance both hit. A same-game pair only where the two legs belong together, each graded on the Record page.", "parlays"],
+    ["Report Picks", "Every bet our game reports post, game by game: each report’s picks, its matchup reads’ picks, its breakout candidates and fades, with the price and our chance, then the game’s three-leg parlays and pairs. All of it graded under Report bets on the Record page.", "reportpicks"]]],
 
   ["Live", "While the games are actually on",
    [["Live Now", "Every game in progress across every league we model, with the score, the clock, and your open bets on each one.", "live"],

@@ -751,13 +751,16 @@ const HIDDEN_WHY = {
          weather: "played indoors" },
   ufc: { parlays: "§9.1 caps a card at two legs in one fight, and we price "
                   + "fight winners only — there is no pair to screen",
+         reportpicks: "each fight's written report sits under its card on the UFC tab",
          futures: "a fight card has no season-long market",
          injuries: "no commission publishes an MMA injury report",
          weather: "fights are indoors", race: RACE_WHY },
   polymarket: { parlays: "prediction-market contracts are not screened as a "
                          + "parlay", futures: "not a season-long market",
+                reportpicks: "a contract has no game report",
                 weather: "not a sporting venue", race: RACE_WHY },
   fantasy: { parlays: "not a betting market", futures: "not a betting market",
+             reportpicks: "not a betting market",
              weather: "no single venue to report", race: RACE_WHY },
   // Long Shots LEFT this list 2026-08-25: "full-game markets only" went
   // stale when engine/cfb/tds.py shipped — anytime-TD quotes are pulled

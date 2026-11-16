@@ -9339,7 +9339,7 @@ waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
 **SY. Report bets on the Record page, and a Report Picks page** (step 631;
-16 November). Nothing to run. You asked that "all bets and parlays made from
+16 November). One optional command, below. You asked that "all bets and parlays made from
 the game reports should be categorized as 'report' bets under each sport on
 the record page", and for "a page like the most likely bets page but all game
 report parlays and bets".
@@ -9364,6 +9364,15 @@ parlays and pairs have been graded since 14 November, and their record now
 shows per sport here too. The same picks also sit in the Most Likely or Edge
 book, so the report book is shown on its own and never added into those
 totals or the headline.
+
+The optional command installs the updated Caddyfile, which now lists the new
+page's two files among the ones served trimmed (smaller, without the code's
+comments). The page works without it, just a little heavier on its first
+load. It checks the file first and leaves Caddy alone if the check fails:
+
+```
+cd /srv/qellys && sudo caddy validate --config deploy/Caddyfile --adapter caddyfile && sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+```
 
 **SX. The NFL's finished games get their results too** (step 630; 16
 November). Nothing to run. After step ST went live, the NFL board was the one

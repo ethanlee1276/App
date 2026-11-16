@@ -86,7 +86,10 @@ def test_no_surface_promises_a_certainty():
                 # Both were already clean — the point is that nothing had
                 # been holding them that way.
                 ("live picks", _fn("renderLivePicks")),
-                ("top picks", _fn("renderTopPicks"))]
+                ("top picks", _fn("renderTopPicks")),
+                # Every bet and parlay the game reports post (2026-11-16): the
+                # whole room, its renderer and the game sections it draws.
+                ("report picks", (ROOT / "web" / "js" / "reportpicks.js").read_text(encoding="utf-8"))]
     for name, body in surfaces:
         low = body.lower()
         for word in banned:
@@ -103,7 +106,7 @@ def test_every_pick_renderer_is_on_the_banned_list():
     found = set(_re.findall(r"async function (render\w*[Pp]ick\w*)\s*\(", src))
     found |= set(_re.findall(r"\bfunction (render\w*[Pp]ick\w*)\s*\(", src))
     checked = {"renderPickOfTheDay", "renderDayTopPick",
-               "renderLivePicks", "renderTopPicks"}
+               "renderLivePicks", "renderTopPicks", "renderReportPicks"}
     missing = found - checked
     assert not missing, (
         f"these pick renderers are not checked for banned claims: "
