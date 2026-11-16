@@ -4521,7 +4521,7 @@ def keep_started(result: dict, reports: list, sport: str, out, at: str | None, c
         reports, n = _keep.hold(result, reports, _keep.path_for(sport, _full_dir_for(out)), at)
     except Exception as exc:                                 # noqa: BLE001
         return reports, f"; ⚠️ reports before the start not kept ({type(exc).__name__}: {exc})"
-    graded = _grade_finals(result, reports, sport, conn)
+    graded = _grade_finals(result, reports, sport, conn, out)
     # KEPT FOR GOOD (engine/reportarchive): each graded final, for its page
     # after the board has moved on.
     from . import reportarchive
@@ -4531,10 +4531,16 @@ def keep_started(result: dict, reports: list, sport: str, out, at: str | None, c
                      + (f"; {n_arch} finished report{'' if n_arch == 1 else 's'} archived" if n_arch else ""))
 
 
-def _grade_finals(result: dict, reports: list, sport: str, conn) -> str:
+def _grade_finals(result: dict, reports: list, sport: str, conn, out=None) -> str:
     """WAS THE REPORT RIGHT (engine/reportgrade): every finished game's report
     read against its box score, in place. The build log's tail: "; 4
-    finished reports graded". Never raises."""
+    finished reports graded". Never raises.
+
+    GRADED ONCE (2026-11-16): a final graded on its box score does not change,
+    and grading every final again on every build cost the NFL build 21 seconds
+    on the morning it shipped (14 finals, its report stage 5s to 26s). With
+    ``out``, a final whose graded report is archived (engine/reportarchive) at
+    this grading's version is read back from there, its bets kept."""
     if conn is None:
         return ""
     try:
@@ -4544,11 +4550,38 @@ def _grade_finals(result: dict, reports: list, sport: str, conn) -> str:
         n = 0
         for r in reports or []:
             g = games.get(f"{r.get('away')}@{r.get('home')}|{str(r.get('date') or '')[:10]}")
-            if g and reportgrade.grade(r, g, conn, sport, str((result or {}).get("date") or "")):
+            if not g:
+                continue
+            if out and _graded_from_archive(r, g, sport, out):
+                n += 1
+                continue
+            if reportgrade.grade(r, g, conn, sport, str((result or {}).get("date") or "")):
                 n += 1
     except Exception as exc:                                 # noqa: BLE001
         return f"; ⚠️ finished reports not graded ({type(exc).__name__}: {exc})"
     return f"; {n} finished report{'' if n == 1 else 's'} graded" if n else ""
+
+
+def _graded_from_archive(r: dict, g: dict, sport: str, out) -> bool:
+    """A finished game's report, as graded and archived (engine/reportarchive),
+    in place of ``r`` — its bets kept, for the board's Report Picks list — when
+    the archive holds one graded on the box score at this grading's version."""
+    if str((g.get("live") or {}).get("state") or "") != "final":
+        return False
+    from . import reportarchive, reportgrade
+    from .gate import _full_dir_for
+    doc = reportarchive.load(sport, str(g.get("date") or "")[:10], g.get("away"), g.get("home"),
+                             where=_full_dir_for(out))
+    rep = (doc or {}).get("report")
+    graded = (rep or {}).get("graded") or {}
+    if graded.get("status") != "graded" or graded.get("version") != reportgrade.GRADE_VERSION:
+        return False
+    bets = r.get("_bets")
+    r.clear()
+    r.update(rep)
+    if bets:
+        r["_bets"] = bets
+    return True
 
 
 def summary(reports: list, logged: dict, out) -> str:

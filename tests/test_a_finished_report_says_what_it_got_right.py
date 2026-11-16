@@ -324,6 +324,21 @@ def test_a_graded_final_is_kept_for_good_and_read_back():
         D.connect = orig
     assert "; 1 finished report archived" in line, line
     assert "archived" not in line2, "nothing changed: not written again"
+    # GRADED ONCE: the build after reads the graded final back, its box never queried again.
+    from engine import reportgrade as RG
+    calls = []
+    real = RG._grade
+    RG._grade = lambda *a, **k: calls.append(1) or real(*a, **k)
+    D.connect = lambda *a, **k: orig(path)
+    try:
+        third, meta4 = _board(rows=False, state="final")
+        line3 = L.attach(third, "nba", meta=meta4, out=out, at="2026-10-23T01:40:00")
+    finally:
+        RG._grade = real
+        D.connect = orig
+    assert calls == [] and "; 1 finished report graded" in line3, (calls, line3)
+    assert third["game_reports"][0]["sections"][0]["key"] == "graded"
+    assert [b["player"] for b in third.get("report_bets") or []] == ["Jayson Tatum"], "its bets still reach the board"
     where = gate._full_dir_for(out)
     f = A.path_for(where, "nba", "2026-10-22", "MIA", "BOS")
     assert f.exists() and str(f).startswith(os.path.join(d, "data", "built")), f
