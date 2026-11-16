@@ -321,6 +321,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # (<error>)" in the build's log; the angles found before it stand,
         # and a failure must never cost the report its other sections.
         "for_game",
+        # THE REPORTS KEPT FROM BEFORE EACH START (engine/reportkeep.hold,
+        # 2026-11-16), caught by this sweep the hour it was written. Its
+        # (reports as built, 0) is also a slate with no game started yet, so
+        # a failure prints "reports as written before the start not kept
+        # (<error>)" in the build's log; a quiet slate prints nothing. A file
+        # that cannot be kept must never cost the build its reports.
+        "hold",
     }
 
     def broad(h):
