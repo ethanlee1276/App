@@ -313,7 +313,7 @@ function rpFactsHTML(league) {
    individual picks won from the game reports. Also organize the page better to
    make it easier to read and go through." Today's picks (rpTodayHTML); the
    Record, the same "The Game Report Picks and Parlays" the Record page draws,
-   for this league (record.js recReportBookInto), read the first time its tab
+   for this league (record.js renderReportBook), read the first time its tab
    opens; and How our reports did (rpFactsHTML), the same. The record and the
    checks are free, as the Record page is; today's picks are a member's. */
 //: A tab's content drawn the first time the tab shows, by a tap or the arrow keys.
@@ -361,7 +361,7 @@ async function renderReportPicks() {
       ["facts", "How our reports did", "Every finished game’s report, fact-checked", rpFactsHTML()]])}`;
   bindSubtabs(host);
   revealChildren(host);
-  rpOnShow(host, "record", (p) => recReportBookInto(p.querySelector("[data-rpk-book]"), state.sport));
+  rpOnShow(host, "record", (p) => renderReportBook(p.querySelector("[data-rpk-book]"), state.sport));
   rpOnShow(host, "facts", () => rpFactsFill(host));
   rpFactsScroll(host);
   host.querySelectorAll("[data-rpk-jump]").forEach((b) => b.addEventListener("click", (e) => {

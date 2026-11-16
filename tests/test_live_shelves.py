@@ -91,7 +91,7 @@ def test_live_polls_revalidate_instead_of_redownloading_the_boards():
     # the slim record_head.json first and falls back to the full file
     # with the same revalidating read (an old export has no slim copy).
     # Six on 2026-11-16: Report Picks' Record tab draws the Record page's
-    # report book (record.js recReportBookInto), whose parlays are
+    # report book (record.js renderReportBook), whose parlays are
     # RECORD_PAGE_ONLY, so it reads the full file the same revalidating way.
     assert src.count('boardFetch("/data/record.json", { cache: "no-cache" })'
                      ) + src.count(

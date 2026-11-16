@@ -3454,13 +3454,13 @@ function recFactsMount(host) {
    league, drawn into its tab. The parlays' record is the Record page's own
    (ledger.RECORD_PAGE_ONLY), so this reads the whole data/record.json itself,
    as renderRecord does, never the slim copy the other pages share. */
-async function recReportBookInto(slot, league) {
+async function renderReportBook(slot, league) {
   if (!slot || !league) return;
   slot.innerHTML = `<p class="loading">Loading the record…</p>`;
   let d = null;
   try {
     const res = await boardFetch("data/record.json", { cache: "no-cache" });
-    d = res.ok ? await res.json() : null;
+    d = res.ok ? adoptPooledRecord(await res.json()) : null;
   } catch (e) { d = null; }
   if (!slot.isConnected) return;
   if (d && d.market_words) _marketWords = d.market_words;

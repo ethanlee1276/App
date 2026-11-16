@@ -295,19 +295,19 @@ def test_the_page_has_its_own_record_tab():
     """Ethan, 2026-11-16: "On the report picks page, we should have a record page
     on there too to see if the parlays won and if the individual picks won from
     the game reports." Three tabs; the Record tab draws the Record page's own
-    section for the league (record.js recReportBookInto, through its room), the
+    section for the league (record.js renderReportBook, through its room), the
     first time it opens, from the whole record."""
     i = PAGE.index('subtabbedHTML("reportpicks", [')
     tabs = PAGE[i:PAGE.index("]])}`;", i)]
     assert tabs.index('["today", "Today’s picks",') < tabs.index('["record", "Record",') \
         < tabs.index('["facts", "How our reports did",')
-    assert 'rpOnShow(host, "record", (p) => recReportBookInto(p.querySelector("[data-rpk-book]"), state.sport));' in PAGE
+    assert 'rpOnShow(host, "record", (p) => renderReportBook(p.querySelector("[data-rpk-book]"), state.sport));' in PAGE
     assert 'rpOnShow(host, "facts", () => rpFactsFill(host));' in PAGE, "the checks too, when their tab opens"
     assert 'if (window._rpWantFacts) _subtab.reportpicks = "facts";' in PAGE, "a finished game's link opens the checks"
     assert "bindSubtabs(host);" in PAGE
-    assert ('function recReportBookInto(...a) { return roomCall(recReportBookInto, "recReportBookInto", '
+    assert ('function renderReportBook(...a) { return roomCall(renderReportBook, "renderReportBook", '
             '"js/record.js", "css/record.css", a); }') in APP
-    i = RECORD.index("async function recReportBookInto(slot, league) {")
+    i = RECORD.index("async function renderReportBook(slot, league) {")
     body = RECORD[i:RECORD.index("\n}\n", i)]
     assert 'boardFetch("data/record.json", { cache: "no-cache" })' in body, "the whole record, not the slim copy"
     assert "recReportBook({ rep: (d.report_by_sport || {})[league], bySport: d.report_by_sport," in body
