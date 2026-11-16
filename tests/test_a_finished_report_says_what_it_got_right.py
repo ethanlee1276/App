@@ -72,9 +72,12 @@ def _nba_report():
         {"key": "verdict", "title": "Who we think wins", "blocks": [{"type": "winner", "team": "BOS",
                                                                      "name": "Celtics", "chance": 0.7}]},
         {"key": "watch", "title": "Players to watch", "blocks": [{"type": "verdicts", "items": [
-            {"player": "Jayson Tatum", "team": "BOS", "pos": "F", "verdict": "up", "lean": ["pts", "pra"]},
-            {"player": "Jaylen Brown", "team": "BOS", "pos": "G", "verdict": "up", "lean": ["pts"]},
-            {"player": "Tyler Herro", "team": "MIA", "pos": "G", "verdict": "down", "lean": ["pts"]}]}]},
+            {"player": "Jayson Tatum", "title": "Jayson Tatum", "team": "BOS", "pos": "F", "verdict": "up",
+             "label": "BREAKOUT", "why": ["Miami gives up the second-most points to forwards."], "lean": ["pts", "pra"]},
+            {"player": "Jaylen Brown", "title": "Jaylen Brown", "team": "BOS", "pos": "G", "verdict": "up",
+             "label": "FAVORABLE", "why": ["His minutes are up with Holiday out."], "lean": ["pts"]},
+            {"player": "Tyler Herro", "title": "Tyler Herro", "team": "MIA", "pos": "G", "verdict": "down",
+             "label": "FADE", "why": ["Boston holds guards to the fourth-fewest points."], "lean": ["pts"]}]}]},
         {"key": "defense", "title": "Where each defense gives", "blocks": [{"type": "list", "items": [
             "MIA's defense gives up the second-most points (118.2 a game)."], "claims": [
             {"kind": "allowed", "team": "MIA", "opp": "BOS", "checks": [{"stat": "pts", "pg": 118.2, "side": "soft"}]}]}]},
@@ -132,7 +135,9 @@ def test_the_report_opens_on_how_it_did_and_the_call():
     first = rep["sections"][0]
     assert first["key"] == "graded" and first["title"] == "How this report did"
     lines = first["blocks"][0]["items"]
-    assert lines[0] == "Who we think wins: right — we called Celtics, and Celtics won 121-104.", lines
+    assert lines[0] == "Who we think wins: right — Celtics, our call, won 121-104.", lines
+    lost = G.call_line(_nba_report(), dict(FINAL, live={"state": "final", "away_score": 110, "home_score": 99}))
+    assert lost["words"] == "wrong — our call was Celtics; MIA won 110-99", lost
     assert "Breakout candidates: 1 of 1 beat their average; 1 didn’t play." in lines, lines
     assert "Fades: 0 of 1 fell short of it." in lines and "Offense against defense: 2 of 2 right." in lines
     assert first["blocks"][1]["text"] == "In all, 3 of the report’s 4 graded reads were right."

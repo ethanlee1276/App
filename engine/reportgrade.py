@@ -437,10 +437,10 @@ def call_line(report: dict, g: dict) -> dict | None:
                 if b.get("type") == "winner" and b.get("team"):
                     right = b["team"] == won
                     us = b.get("name") or b["team"]
-                    them = us if right else (b.get("other_name") or won)
+                    score = f"{_num(max(a, h))}-{_num(min(a, h))}"
                     return {"right": right, "team": b["team"], "won": won,
-                            "words": (f"{'right' if right else 'wrong'} — we called {us}, and {them} won "
-                                      f"{_num(max(a, h))}-{_num(min(a, h))}")}
+                            "words": (f"right — {us}, our call, won {score}" if right else
+                                      f"wrong — our call was {us}; {b.get('other_name') or won} won {score}")}
     return None
 
 
