@@ -178,6 +178,27 @@ def test_a_guess_is_not_shown_beside_the_name_typed():
     assert hits and hits[0]["player"] == "Jacoby Brissett" and hits[0]["rank"] == 3, hits
 
 
+def test_the_play_files_short_names_are_not_a_second_player():
+    """The NFL's red-zone and expected-points rows carry the play file's own
+    spelling ("J.Brissett"), which the fantasy layer joins to the real name.
+    In the search each was a second player with a game count and an empty
+    card: "brissett" found Jacoby Brissett and "J.Brissett" (44 games)."""
+    rows = [{"sport": "nfl", "period": f"{w:03d}", "game_id": f"g{w}", "player": "Jacoby Brissett"} for w in range(1, 5)]
+    rows += [{"sport": "nfl", "period": f"{w:03d}", "game_id": f"ARI-{w:03d}", "player": "J.Brissett",
+              "market": "rz_tgt", "value": 1.0} for w in range(1, 5)]
+    rows += [{"sport": "nfl", "period": "001", "game_id": "g1", "player": n} for n in ("A.J. Brown", "D.K. Metcalf")]
+    path = _db_with(rows)
+    d = _roster_dir([], "nfl")
+    assert [h["player"] for h in statlogs.search("nfl", "brissett", db_path=path, data_dir=d)] == ["Jacoby Brissett"]
+    assert [h["player"] for h in statlogs.search("nfl", "aj brown", db_path=path, data_dir=d)] == ["A.J. Brown"]
+    assert [h["player"] for h in statlogs.search("nfl", "metcalf", db_path=path, data_dir=d)] == ["D.K. Metcalf"]
+    for short in ("J.Brissett", "P.Mahomes", "A.St. Brown", "J.Smith-Njigba", "Ja.Chase"):
+        assert not statlogs._searchable("nfl", short), short
+    for real in ("A.J. Brown", "D.K. Metcalf", "C.J. Stroud", "J.J. McCarthy", "Amon-Ra St. Brown"):
+        assert statlogs._searchable("nfl", real), real
+    assert statlogs._searchable("mlb", "J.Brissett"), "only the NFL's play file spells names this way"
+
+
 def test_a_rostered_name_typed_beats_the_logs_guesses():
     """Nobody in the logs has the name, a freshman on the roster does: his
     exact name is the answer, and the logs' near spellings are not shown."""

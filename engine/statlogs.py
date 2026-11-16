@@ -32,6 +32,7 @@ every other DB-backed extra (player faces, team form, venue weather).
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -255,9 +256,24 @@ def _log_sig(conn, sport: str):
     return logcache.generations(conn, sport, None)
 
 
+#: THE PLAY-BY-PLAY'S SHORT NAMES ARE NOT PLAYERS TO SEARCH FOR. The NFL's
+#: red-zone and expected-points rows are filed under the play file's own
+#: spelling ("P.Mahomes", "A.St. Brown"; engine/sources/nflpbp.xfp_player_rows),
+#: which the fantasy layer joins to the real name. In the search each was a
+#: second player beside the real one, with a game count and an empty card:
+#: "brissett" found Jacoby Brissett and "J.Brissett" (44 games), 2026-11-16.
+#: An initial or two, a period, then a capitalised surname with no space; a
+#: real "A.J. Brown" or "D.K. Metcalf" has a second initial and a space.
+_PBP_SHORT = re.compile(r"^[A-Z][a-z]?\.[A-Z][a-z]")
+
+
+def _searchable(sport: str, name) -> bool:
+    return bool(name) and not (sport == "nfl" and _PBP_SHORT.match(name))
+
+
 def _build_names(conn, sport: str, sig):
     from .playersearch import NameIndex
-    return NameIndex(((r[0], r[1]) for r in _read_names(conn, sport) if r[0]),
+    return NameIndex(((r[0], r[1]) for r in _read_names(conn, sport) if _searchable(sport, r[0])),
                      at=time.time(), sig=sig)
 
 

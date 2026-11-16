@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TP. The NFL search no longer lists the play file's short names as players** (step 648; 16 November).
+Nothing to run. The NFL's red-zone and expected-points rows are filed under the play-by-play file's own spelling
+("J.Brissett", "P.Mahomes"), which the fantasy numbers join to the real name. The search listed each one as a second
+player beside the real one, with a game count and an empty card: "brissett" found Jacoby Brissett and "J.Brissett"
+(44 games). The search now leaves those spellings out. The rows themselves are unchanged, and real names with
+initials (A.J. Brown, D.K. Metcalf, C.J. Stroud) are still found.
+
 **TO. The player search answers in well under a second, once you stop typing** (step 647; 16 November).
 Nothing to run. Checking your "players are not showing up" message, I timed the live league search: college
 football took 8 to 16 seconds a search ("arch manning" 15.6 s), the NBA up to 5.9 s, the NFL 1 to 4 s. Every letter
