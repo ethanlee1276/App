@@ -12,7 +12,7 @@ will hit not my rules". So (engine/likelyboard.METHOD_AVOID):
     secondary-receiver rule takes its own alternative, 5 targets a game;
   * a pick breaking one of his rules stays on the board, tracked, but tops
     out at Worth a look and says which rule — the record keeps measuring it;
-  * his touchdown rule (45%, or 40% with 30% of the red-zone chances) on
+  * his touchdown rule (45%, or 40% with 30% of the red-zone work) on
     every touchdown pick and pair;
   * the reports carry his four scripts with the picks that hold in the most
     of them, each team's touchdown chances ranked beside what the defense
@@ -67,7 +67,7 @@ def test_the_touchdown_rule():
     assert B.td_rule({"model_prob": 0.47})["meets"] is True
     assert B.td_rule({"model_prob": 0.42, "rz_share": 0.35})["meets"] is True
     got = B.td_rule({"model_prob": 0.42, "rz_share": 0.2})
-    assert got["meets"] is False and "45%, or 40% with 30% of the red-zone chances" in got["why"]
+    assert got["meets"] is False and "45%, or 40% with 30% of the red-zone work" in got["why"]
     assert B.td_rule({"model_prob": 0.38, "rz_share": 0.6})["meets"] is False
 
 

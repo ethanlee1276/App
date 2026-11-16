@@ -9534,10 +9534,12 @@ inside the 20 over his last games, the same count the report's red-zone
 list says (step RZ). The estimate is kept only for a player with no count.
 His Most Likely touchdown pick says which it read: "41%, 34% of his team's
 red-zone touches — meets our touchdown rule (40% with a red-zone role)",
-or "red-zone chances" where it is still the estimate. It is in the code
-now and switched off; it switches on right after Sunday night's kickoff
-(one line, likelyboard.TD_RULE_MEASURED), so no Sunday pick changes
-mid-slate. Monday night's game is the first one it reads.
+or "red-zone chances" where it is still the estimate. It was put in the
+code switched off, so no Sunday pick changed mid-slate.
+
+**Switched on** 16 November, right after Sunday night's kickoff (one line,
+likelyboard.TD_RULE_MEASURED). Monday night's game is the first one it
+reads.
 
 **SF. The live game page without the field, in the order you'd read it**
 (step 612; 15 November). Nothing to run. You asked to make sure the field

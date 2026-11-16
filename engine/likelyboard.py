@@ -324,8 +324,9 @@ TD_RULE_PROB, TD_RULE_FALLBACK, TD_RULE_RZ_SHARE = 0.45, 0.40, 0.30
 #: The rule's red-zone share is the play-by-play's measured one where it counted
 #: one (Ethan, 2026-11-15: "switch"), from after Sunday night's kickoff (01:20
 #: UTC on 16 November) and not before, so no Sunday pick moved mid-slate. Off,
-#: the rule reads the estimate and words it as it always has.
-TD_RULE_MEASURED = False
+#: the rule reads the estimate and words it as it always has. Switched on
+#: 16 November, after that kickoff: Monday night's board is the first it reads.
+TD_RULE_MEASURED = True
 
 
 def method_fails(r: dict, sport: str) -> list:
