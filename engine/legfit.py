@@ -26,6 +26,24 @@ only when it also scores better on the newest legs it was not fitted on
 (TEST_SHARE). It waits for MIN_N graded legs with a fair chance; until then,
 and whenever the held-out legs do not get better, w is 0 and the leg is ours.
 
+THE SECOND CORRECTION: A SHIFT (FOOTCAL2, 2026-11-17; Ethan: "recalibrate
+football too"). Pulling toward the book cannot move a leg the book agreed
+with. The NFL's three-leg legs claimed 68% and hit 55% (each bet once, 128),
+and the books' own prices on them averaged 68% too: w can be anything and
+the chance barely moves. So each league and kind also learns a shift in
+log-odds, `s`, applied after the pull:
+
+    p'' = sigmoid(logit(p') + s)
+
+fitted the same way (the newest TEST_SHARE held out, kept only when it
+scores them better, 0 otherwise), from SHIFT_GRID. It learns only from legs
+built the current way: those whose journal names their pool (likely, edge,
+priced, scorer; from 16 November, 19:25 UTC). Before that, any priced prop
+became a leg at a number the Edge path itself refuses (gameparlays.
+credible_row), and that source is gone: a shift learned on it would hold the
+honest legs that replaced it to its errors, and with the floor at 60% leave
+the NFL with no parlays at all. MIN_N current legs, then the record speaks.
+
 The three-leg tickets' legs ("three", source game_three) and the scorer
 pairs' ("scorers", game_td) learn apart: a 70% receptions leg and a 30%
 touchdown are different claims. Fitted after each settle pass that graded a
@@ -52,6 +70,9 @@ TEST_SHARE = 0.3
 GRID = tuple(round(i / 20, 2) for i in range(21))
 #: A chance is kept inside these before the log loss is taken.
 EPS = 1e-4
+#: The shifts tried, in log-odds: -1.5 (a 70% leg to 34%) to +0.5 (70% to
+#: 79%), by 0.05. Down as far as the record could need, up a little.
+SHIFT_GRID = tuple(round(-1.5 + i / 20, 2) for i in range(41))
 
 
 def implied(odds) -> float | None:
@@ -78,11 +99,19 @@ def anchor(fair, odds) -> float | None:
     return implied(odds)
 
 
-def _ll(rows, w: float) -> float:
-    """Mean log loss of (p, fair, won) rows with the share w applied."""
+def shifted(p: float, s: float) -> float:
+    """``p`` moved ``s`` in log-odds (0 leaves it as it is)."""
+    if not s:
+        return p
+    q = min(max(p, EPS), 1 - EPS)
+    return 1.0 / (1.0 + math.exp(-(math.log(q / (1 - q)) + s)))
+
+
+def _ll(rows, w: float, s: float = 0.0) -> float:
+    """Mean log loss of (p, fair, won) rows with the share w and the shift s applied."""
     tot = 0.0
     for p, fair, won in rows:
-        q = min(max(p - w * (p - fair), EPS), 1 - EPS)
+        q = min(max(shifted(p - w * (p - fair), s), EPS), 1 - EPS)
         tot -= math.log(q if won else 1 - q)
     return tot / len(rows) if rows else 0.0
 
@@ -91,24 +120,31 @@ def _best(rows) -> float:
     return min(GRID, key=lambda w: (round(_ll(rows, w), 9), w))
 
 
+def _best_shift(rows, w: float) -> float:
+    """The shift that scores ``rows`` best after the share ``w`` (the smallest in size on a tie)."""
+    return min(SHIFT_GRID, key=lambda s: (round(_ll(rows, w, s), 9), abs(s)))
+
+
 def graded_legs(conn) -> dict:
-    """{(league, kind): [(date, id, p, fair, won)]}: every graded leg of the
-    game parlays with the book's chance (`anchor`), each bet once (its game's day,
+    """{(league, kind): [(date, id, p, fair, won, pool)]}: every graded leg of
+    the game parlays with the book's chance (`anchor`) and the pool it came
+    from ("" before the journal named pools), each bet once (its game's day,
     the game, the player, the market, the side and the line: the first copy
     journaled, as parlayledger.legs_once counts them), oldest first."""
     cols = {r[1] for r in conn.execute("PRAGMA table_info(parlay_legs)")}
     if "fair" not in cols:
         return {}
     raw = "COALESCE(l.p_raw, l.p_final)" if "p_raw" in cols else "l.p_final"
+    pool = "l.pool" if "pool" in cols else "''"
     marks = ",".join("?" * len(KINDS))
     rows = conn.execute(
         f"SELECT t.sport, t.source, t.date, t.grade, l.id, l.player, l.market, l.side, l.line, {raw} AS p, "
-        f"l.fair, l.odds, l.status FROM parlay_legs l JOIN parlays t ON t.id = l.parlay_id "
+        f"l.fair, l.odds, l.status, {pool} FROM parlay_legs l JOIN parlays t ON t.id = l.parlay_id "
         f"WHERE t.source IN ({marks}) ORDER BY t.date, l.id", tuple(KINDS.values())).fetchall()
     kind_of = {v: k for k, v in KINDS.items()}
     seen: set = set()
     out: dict = {}
-    for sport, source, date, game, lid, player, market, side, line, p, fair, odds, status in rows:
+    for sport, source, date, game, lid, player, market, side, line, p, fair, odds, status, from_pool in rows:
         key = (sport, source, str(date or ""), str(game or ""), str(player or "").strip().lower(), str(market or ""),
                str(side or "").upper(), line)
         if key in seen:
@@ -120,7 +156,8 @@ def graded_legs(conn) -> dict:
         p = float(p)
         if not 0 < p < 1:
             continue
-        out.setdefault((str(sport), kind_of[source]), []).append((str(date or ""), lid, p, fair, status == "won"))
+        out.setdefault((str(sport), kind_of[source]), []).append(
+            (str(date or ""), lid, p, fair, status == "won", str(from_pool or "")))
     return out
 
 
@@ -132,27 +169,28 @@ def fit(conn, write: bool = True) -> dict:
     out: dict = {"fitted_at": _dt.datetime.now().isoformat(timespec="seconds"), "min_n": MIN_N, "fits": {}}
     for (sport, kind), legs in sorted(graded_legs(conn).items()):
         n = len(legs)
-        rows = [(p, f, won) for _d, _i, p, f, won in legs]
+        rows = [(p, f, won) for _d, _i, p, f, won, _pool in legs]
+        current = [(p, f, won) for _d, _i, p, f, won, pool in legs if pool]
         said = {"n": n, "claimed": round(sum(r[0] for r in rows) / n, 4), "fair": round(sum(r[1] for r in rows) / n, 4),
                 "hit": round(sum(1 for r in rows if r[2]) / n, 4)}
         if n < MIN_N:
-            out["fits"][f"{sport}:{kind}"] = {**said, "w": 0.0, "fitted": False,
-                                               "why": f"waiting on the record: {n} graded leg(s), {MIN_N} needed"}
-            continue
-        cut = int(round(n * (1 - TEST_SHARE)))
-        train, test = rows[:cut], rows[cut:]
-        w_train = _best(train)
-        before, after = _ll(test, 0.0), _ll(test, w_train)
-        if w_train <= 0 or after >= before:
-            out["fits"][f"{sport}:{kind}"] = {**said, "w": 0.0, "fitted": False, "test_n": len(test),
-                                               "why": "the newest legs scored no better pulled toward the books' "
-                                                      "chances; ours stand"}
-            continue
-        w = _best(rows)
-        out["fits"][f"{sport}:{kind}"] = {
-            **said, "w": w, "fitted": True, "test_n": len(test), "test_loss": [round(before, 4), round(after, 4)],
-            "why": (f"our legs claimed {said['claimed']:.0%} and hit {said['hit']:.0%} over {n}; the books said "
-                    f"{said['fair']:.0%}: each leg's chance is pulled {w:.0%} of the way to the book's")}
+            fit_ = {**said, "w": 0.0, "fitted": False,
+                    "why": f"waiting on the record: {n} graded leg(s), {MIN_N} needed"}
+        else:
+            cut = int(round(n * (1 - TEST_SHARE)))
+            train, test = rows[:cut], rows[cut:]
+            w_train = _best(train)
+            before, after = _ll(test, 0.0), _ll(test, w_train)
+            if w_train <= 0 or after >= before:
+                fit_ = {**said, "w": 0.0, "fitted": False, "test_n": len(test),
+                        "why": "the newest legs scored no better pulled toward the books' chances; ours stand"}
+            else:
+                w = _best(rows)
+                fit_ = {**said, "w": w, "fitted": True, "test_n": len(test),
+                        "test_loss": [round(before, 4), round(after, 4)],
+                        "why": (f"our legs claimed {said['claimed']:.0%} and hit {said['hit']:.0%} over {n}; the books "
+                                f"said {said['fair']:.0%}: each leg's chance is pulled {w:.0%} of the way to the book's")}
+        out["fits"][f"{sport}:{kind}"] = {**fit_, **_shift_fit(current, fit_["w"] if fit_.get("fitted") else 0.0)}
     if write:
         import json as _json
         import os as _os
@@ -164,6 +202,31 @@ def fit(conn, write: bool = True) -> dict:
             _json.dump(out, f, indent=1, sort_keys=True)
         _os.replace(tmp, p)
     return out
+
+
+def _shift_fit(rows, w: float) -> dict:
+    """The shift for one league and kind, from its legs built the current way
+    (``rows``: (p, fair, won), oldest first), after the share ``w``: the fields
+    the fit carries for it ("shift", "shift_n", "shift_why"; "shift_test" when
+    one was tried)."""
+    n = len(rows)
+    if n < MIN_N:
+        return {"shift": 0.0, "shift_n": n,
+                "shift_why": f"waiting on legs built the current way: {n} graded, {MIN_N} needed"}
+    claimed = sum(shifted(p - w * (p - f), 0.0) for p, f, _won in rows) / n
+    hit = sum(1 for r in rows if r[2]) / n
+    cut = int(round(n * (1 - TEST_SHARE)))
+    train, test = rows[:cut], rows[cut:]
+    s_train = _best_shift(train, w)
+    before, after = _ll(test, w), _ll(test, w, s_train)
+    if not s_train or after >= before:
+        return {"shift": 0.0, "shift_n": n, "shift_test": [round(before, 4), round(after, 4)],
+                "shift_why": f"legs built the current way claimed {claimed:.0%} and hit {hit:.0%} over {n}; "
+                             "a shift scored the newest of them no better, so none"}
+    s = _best_shift(rows, w)
+    return {"shift": s, "shift_n": n, "shift_test": [round(before, 4), round(after, 4)],
+            "shift_why": (f"legs built the current way claimed {claimed:.0%} and hit {hit:.0%} over {n}: each "
+                          f"leg's chance is moved {s:+.2f} in log-odds (a 70% leg to {shifted(0.70, s):.0%})")}
 
 
 _HELD: dict = {}
@@ -208,16 +271,39 @@ def w_for(sport: str, kind: str) -> float:
         return 0.0
 
 
-def apply(leg: dict, sport: str, kind: str, w: float | None = None) -> dict:
-    """The leg with its chance corrected (``p``), ours kept as ``p_raw`` and
-    the share as ``fit_w``; the leg itself when nothing applies. Never raises."""
+def shift_for(sport: str, kind: str) -> float:
+    """The shift in force for a league and kind (0 until the record has
+    spoken, and whenever the fit kept none). Never raises."""
+    try:
+        s = float((fits().get(f"{sport}:{kind}") or {}).get("shift") or 0.0)
+        return min(max(s, SHIFT_GRID[0]), SHIFT_GRID[-1])
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def apply(leg: dict, sport: str, kind: str, w: float | None = None, shift: float | None = None) -> dict:
+    """The leg with its chance corrected (``p``): pulled toward the book's by
+    the share, then moved by the shift. Ours is kept as ``p_raw``, the share as
+    ``fit_w`` and the shift as ``fit_shift``; the leg itself when nothing
+    applies. Never raises."""
     try:
         w = w_for(sport, kind) if w is None else w
-        fair = anchor(leg.get("fair"), leg.get("odds"))
-        if not w or fair is None or leg.get("p") is None or leg.get("p_raw") is not None:
+        s = shift_for(sport, kind) if shift is None else shift
+        if leg.get("p") is None or leg.get("p_raw") is not None:
             return leg
-        p = float(leg["p"])
-        return {**leg, "p_raw": round(p, 4), "p": round(p - w * (p - fair), 4), "fit_w": w}
+        p = q = float(leg["p"])
+        fair = anchor(leg.get("fair"), leg.get("odds"))
+        if w and fair is not None:
+            q = q - w * (q - fair)
+        else:
+            w = 0.0
+        q = shifted(q, s)
+        if not w and not s:
+            return leg
+        out = {**leg, "p_raw": round(p, 4), "p": round(q, 4), "fit_w": w}
+        if s:
+            out["fit_shift"] = s
+        return out
     except (TypeError, ValueError):
         return leg
 
@@ -226,4 +312,5 @@ def census(sport: str) -> dict:
     """The fit in force for a league, both kinds, for the board's census."""
     got = fits()
     return {kind: {k: v for k, v in (got.get(f"{sport}:{kind}") or {}).items()
-                   if k in ("w", "fitted", "n", "why")} for kind in KINDS if got.get(f"{sport}:{kind}")}
+                   if k in ("w", "fitted", "n", "why", "shift", "shift_n", "shift_why")}
+            for kind in KINDS if got.get(f"{sport}:{kind}")}

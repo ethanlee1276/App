@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UG. Football's parlay legs get their own correction** (step 665; 17 November). Nothing to run. Your answer: "Yes
+recalibrate football too". What the record says first, counting each bet once: football's single picks are honest
+(NFL edge picks we gave 50-55% hit 50%, the model's error score beats the market's; Most Likely's gap is under half a
+point in the NFL and 1.4 points in college, both inside the noise), college's three-leg parlay legs claimed 69% and hit
+65%, and the NFL's claimed 68% and hit 55% over 128 legs. Grading is right: every recent football leg's result matches
+its actual number. The NFL's gap came from the source retired on 16 November (any priced prop became a leg at a number
+the Edge path itself refuses), and the books' own prices on those legs said 68% too, so yesterday's correction, which
+pulls a leg toward the book's chance, could not move them. Now each league and kind also learns a shift in log-odds,
+fitted the same way (the newest 30% of its graded legs held out, kept only when it scores them better), and only from
+legs built the current way (each leg's journal names its pool from 16 November, 19:25 UTC). A shift learned from the
+retired source would hold today's honest legs to its errors: at -13 points, almost no NFL leg would clear the 60% floor
+and NFL games would have no parlays. It applies before a leg is held to its floor, the ticket keeps our number beside
+the corrected one, and the nightly settle pass says when a league's shift moves ("nfl:three legs now shifted -0.55 in
+log-odds ..."). Football's legs reach the 60 graded legs it needs this week: college's after Saturday, the NFL's after
+Sunday.
+
 **UF. Your teams on the bracket** (step 664; 17 November). Nothing to run. One of mine, building on your team colours
 and today's brackets: every team you follow (Settings → Teams, or the star on a team's page) is lit gold with a star
 wherever a bracket draws it — the NFL's, college football's, the NBA Cup's. The NFL's race page also opens with a "Your

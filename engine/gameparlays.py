@@ -325,15 +325,18 @@ def legs_for(board: dict, sport: str, now=None) -> list[dict]:
     # "yes"): each leg's chance pulled toward the book's by the share its
     # league's record supports, before the floor, so a leg that only cleared
     # it on an overstated number is no leg. 0 until the record has spoken.
-    w = legfit.w_for(sport, "three")
+    # FOOTCAL2 (2026-11-17; Ethan: "recalibrate football too"): and moved by
+    # the shift its legs built the current way have earned, where the books
+    # agreed with an overstated number and the pull alone could not move it.
+    w, shift = legfit.w_for(sport, "three"), legfit.shift_for(sport, "three")
     for get in (T.likely_legs, T.edge_legs, pool_legs, priced_legs):
         try:
             rows = get(board, sport, now)
         except Exception:                                    # noqa: BLE001
             rows = []
         for leg in rows:
-            if leg and w:
-                leg = legfit.apply(leg, sport, "three", w)
+            if leg and (w or shift):
+                leg = legfit.apply(leg, sport, "three", w, shift)
             # Player props only: a game line's leg journals and grades on
             # another path, and his reports' tickets are props.
             if not leg or leg.get("_game_leg") or float(leg.get("p") or 0) < LEG_FLOOR:
@@ -355,7 +358,7 @@ def scorer_legs(board: dict, sport: str, now=None) -> list[dict]:
         return []
     floor = SCORER_FLOOR.get(sport, 0.25)
     from . import legfit
-    w = legfit.w_for(sport, "scorers")         # the learned correction, as legs_for's
+    w, shift = legfit.w_for(sport, "scorers"), legfit.shift_for(sport, "scorers")   # as legs_for's
     seen, out = set(), []
     rows = list(board.get("td_field") or []) + list(board.get("longshot_watch") or []) \
         + [r for r in board.get("most_likely") or [] if r.get("market") in markets] \
@@ -368,8 +371,8 @@ def scorer_legs(board: dict, sport: str, now=None) -> list[dict]:
         p = r.get("model_prob") if r.get("model_prob") is not None else r.get("hit_prob")
         leg = T._leg(dict(r, side=r.get("side") or "Over", line=r.get("line") if r.get("line") is not None else 0.5),
                      p, "scorer")
-        if leg and w:
-            leg = legfit.apply(leg, sport, "scorers", w)
+        if leg and (w or shift):
+            leg = legfit.apply(leg, sport, "scorers", w, shift)
         if not leg or leg["p"] < floor:
             continue
         leg = _norm_side(leg)
@@ -956,7 +959,7 @@ LEG_KEYS = ("player", "team", "opponent", "home", "away", "position", "market", 
             # Our own chance before the league's learned correction and the
             # share it was pulled by (engine/legfit), journaled so the
             # correction is learned on our number, never on itself.
-            "p_raw", "fit_w")
+            "p_raw", "fit_w", "fit_shift")
 
 
 def slim(leg: dict) -> dict:
