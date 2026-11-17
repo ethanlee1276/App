@@ -1371,6 +1371,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._report_archive(parse_qs(parsed.query))
         if parsed.path in ("/api/report_record", "/api/report_record/"):
             return self._report_record(parse_qs(parsed.query))
+        if parsed.path in ("/api/report_tickets", "/api/report_tickets/"):
+            return self._report_tickets(parse_qs(parsed.query))
         if parsed.path in ("/api/explain", "/api/explain/"):
             return self._explain(parse_qs(parsed.query))
         if parsed.path.startswith("/unsubscribe/") and len(parsed.path) > 13:
@@ -6434,6 +6436,44 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         if not doc:
             return self._send(404, b'{"error":"no such game on the feed"}', ".json")
         return self._send(200, json.dumps(doc).encode(), ".json")
+
+    def _report_tickets(self, q):
+        """Each finished game's report picks and tickets, every one won or
+        lost and every ticket's legs too (engine/reportoutcome.for_games), for
+        the rows of Report Picks' "How our reports did". Ethan, 2026-11-17: "I
+        wanna be able too see each parlay and pick on this page along side and
+        x or checkmark if the whole parlay hit and if the individual picks hit".
+
+        `games` names the rows asked for, "DAY|AWAY|HOME" joined by commas, a
+        screenful at a time (reportoutcome.MAX_GAMES). What has settled is
+        FREE, as every settled row is (`_record_day`); a pick or ticket still
+        waiting on its box score is a member's, and the rest are told how many."""
+        from engine import gate, reportoutcome
+        if self._rate_limited(RATE_GAME_PER_MIN, "report_tickets"):
+            return
+        league = (q.get("league") or [""])[0][:5].lower()
+        if not league.isalpha():
+            return self._send(400, b'{"error":"which league?"}', ".json")
+        keys = [tuple(x.split("|")) for x in (q.get("games") or [""])[0][:6000].split(",")
+                if x.count("|") == 2 and all(x.split("|"))]
+        if not keys:
+            return self._send(400, b'{"error":"which games?"}', ".json")
+        member = True
+        if gate.enabled():
+            A = _acct()
+            conn = A.connect()
+            try:
+                member = bool(self._entitled(conn, self._account(conn)))
+            finally:
+                conn.close()
+        try:
+            games = reportoutcome.for_games(league, keys[:reportoutcome.MAX_GAMES], member=member,
+                                            where=gate.FULL_DIR)
+        except Exception as exc:                                 # noqa: BLE001
+            print(f"  ⚠️ the reports' picks not read ({type(exc).__name__}: {exc})")
+            return self._send(503, b'{"error":"the record could not be read"}', ".json")
+        return self._send(200, json.dumps({"league": league, "member": member, "games": games,
+                                           "words": reportoutcome.market_words(games)}).encode(), ".json")
 
     def _report_archive(self, q):
         """A finished game's report, graded on its box score, with its

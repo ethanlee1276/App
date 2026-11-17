@@ -65,3 +65,42 @@ button.rpk-rec:empty { display: none; }
 .rpk-fact-calib { margin-top: 6px; }
 .rpk-fact-table { width: 100%; max-width: 560px; font-size: var(--fs-sm); }
 
+/* EVERY PICK AND PARLAY, A CHECK OR AN X (reportpicks.js rpBetsHTML, 2026-11-17; Ethan: "x or
+   checkmark if the whole parlay hit and if the individual picks hit"). Under a finished game's
+   checks, a strip of marks a kind, the count that hit beside it; open, every pick by name and
+   every ticket with each of its legs, each with its mark and the number it finished with. */
+.rpk-fact-bets:empty { display: none; }
+.rpk-bets { border-radius: var(--radius-sm); background: var(--fill-subtle); }
+.rpk-bets-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 9px 12px;
+  list-style: none; cursor: pointer; font-size: var(--fs-sm); }
+.rpk-bets-sum::-webkit-details-marker { display: none; }
+.rpk-bets-sum .row-fold-chev { margin-left: auto; color: var(--text-mute); }
+.rpk-bets[open] > summary .row-fold-chev { transform: rotate(135deg) translateY(2px); }
+.rpk-bets-part { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rpk-bets-k { color: var(--text-mute); font-weight: 600; }
+.rpk-bets-part b { font-variant-numeric: tabular-nums; color: var(--text); }
+.rpk-bets-part b.won { color: var(--good); }
+.rpk-bets-part b.lost { color: var(--bad); }
+.rpk-marks { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+/* A check, an X, or a dash for a push, a void or one still waiting. */
+.rpk-mk { display: inline-grid; place-items: center; flex: none; width: 18px; height: 18px; border-radius: 50%;
+  font-style: normal; color: var(--text-mute); background: color-mix(in oklab, var(--text-mute) 16%, transparent); }
+.rpk-mk.won { color: var(--good); background: color-mix(in oklab, var(--good) 18%, transparent); }
+.rpk-mk.lost { color: var(--bad); background: color-mix(in oklab, var(--bad) 18%, transparent); }
+.rpk-bets-body { padding: 0 12px 12px; }
+.rpk-bets-h { margin: 10px 0 6px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; }
+.rpk-bet-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.rpk-bet { display: flex; align-items: flex-start; gap: 8px; color: var(--text-dim); }
+.rpk-bet.won, .rpk-bet.lost { color: var(--text); }
+.rpk-bet-did { color: var(--text-mute); }
+.rpk-bet-tix { display: grid; gap: 5px; }
+.rpk-bet-tix-h { display: flex; align-items: center; gap: 8px; }
+.rpk-bet-tix-h span { color: var(--text-mute); }
+.rpk-bet-tix.won .rpk-bet-tix-h span { color: var(--good); }
+.rpk-bet-tix.lost .rpk-bet-tix-h span { color: var(--bad); }
+.rpk-bet-legs { display: grid; gap: 4px; margin: 0 0 4px 26px; padding: 0; list-style: none; }
+.rpk-bets-held { margin: 6px 0 0; color: var(--text-mute); }
+.rpk-fact-more { margin-top: 14px; }
+.rpk-fact-h + .rpk-fact-span { margin: 0 0 14px; }
+.rpk-fact-more[hidden] { display: none; }

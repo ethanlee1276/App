@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UA. Every finished game marks its picks and parlays** (step 659; 17 November). Nothing to run. Your ask, on Report
+Picks → How our reports did: "I wanna be able too see each parlay and pick on this page along side and x or checkmark if
+the whole parlay hit and if the individual picks hit". Every finished game on that list now shows, under its checks, a
+strip of marks: a green check for each pick that hit and a red X for each that missed, then one for each parlay and each
+touchdown (or scorer) pair, its mark the whole ticket's, with how many hit beside each kind ("Picks 5 of 6"). Tap the
+strip and it opens to every pick by name with the number it finished with ("Christian McCaffrey over 89.5 rushing yards,
+had 112"), then every parlay ("Parlay 2: missed by one leg") with each of its legs marked the same way. The newest game
+opens on its own. The picks are the report's own (the Report book) and the tickets the game's parlays and pairs, read
+from the record for every game the archive holds, so last week's games show theirs too; the NFL's are found under the
+week they were filed by. What has settled shows to everyone, as every settled bet on the Record does; one still waiting
+on its box score shows to members, and everyone else is told how many are waiting. The list now draws 20 games at a
+time, with "Show 20 more games" under them, so a long season stays quick on a phone. The same list on the free Record
+page gets the same marks.
+
 **TZ. Your team's colours on the whole site** (step 658; 17 November). Nothing to run. Your ask: "add how users can
 use there team colors too make the whole websites colors change like how the background on live pages looks with the
 team colors". Settings → Team colours is now three ways: Off, Bar (the old switch: the bar, the Live disc and the lit

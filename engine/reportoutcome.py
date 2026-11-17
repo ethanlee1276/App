@@ -39,6 +39,11 @@ TICKETS = {"threes": "game_three", "scorers": "game_td"}
 SETTLED = ("won", "lost", "push", "void")
 #: A guard on one game's list, never a cut a real game reaches.
 MAX_PICKS = 80
+#: The report's own book (engine/reportbets.CATEGORY): the picks a game report posted, which
+#: Report Picks lists (for_games). The game's page reads every book a pick of its can be in.
+REPORT_BOOKS = ("report",)
+#: Games one ask may name (for_games): the page asks a screenful at a time.
+MAX_GAMES = 40
 
 
 def _connect(path=None):
@@ -52,6 +57,13 @@ def _connect(path=None):
     if not p.exists():
         return None
     return sqlite3.connect(f"file:{p}?mode=ro", uri=True, timeout=5)
+
+
+def _dates(date) -> tuple:
+    """One day or several, each once, the empties dropped: a game's journal rows are filed
+    under its board's label (the NFL's week, "2026-W11") or under its own day."""
+    seq = date if isinstance(date, (list, tuple)) else (date,)
+    return tuple(dict.fromkeys(str(d) for d in seq if d))
 
 
 def _status(s) -> str:
@@ -88,17 +100,23 @@ def names_in(report) -> set:
     return out
 
 
-def picks(conn, sport: str, date: str, home: str, away: str, names=()) -> list:
+def picks(conn, sport: str, date, home: str, away: str, names=(), books=BOOKS) -> list:
     """The game's picks on the record, each once: a player's whose club is one
     of the two (or, with no club on the row, one the report names), and the
-    game bets on either club or on the game."""
+    game bets on either club or on the game. ``date`` is a day or several
+    (_dates); ``books`` the journal's books read, the first naming a pick in two."""
     from .gameresults import norm
+    days = _dates(date)
+    books = tuple(books or BOOKS)
+    if not days:
+        return []
     cols = {r[1] for r in conn.execute("PRAGMA table_info(bets)")}
     team = "team" if "team" in cols else "NULL"
-    marks = ",".join("?" * len(BOOKS))
+    marks = ",".join("?" * len(books))
     rows = conn.execute(
         f"SELECT player, market, side, line, odds, status, actual, category, {team} FROM bets "
-        f"WHERE sport=? AND date=? AND category IN ({marks}) ORDER BY id", (sport, date, *BOOKS)).fetchall()
+        f"WHERE sport=? AND date IN ({','.join('?' * len(days))}) AND category IN ({marks}) ORDER BY id",
+        (sport, *days, *books)).fetchall()
     clubs = {str(home or ""), str(away or "")} - {""}
     game = f"{away}@{home}"
     names = set(names or ())
@@ -117,7 +135,7 @@ def picks(conn, sport: str, date: str, home: str, away: str, names=()) -> list:
         elif norm(who) not in names:
             continue
         k = (norm(who), m, str(side or "").upper(), _num(line))
-        rank = BOOKS.index(book) if book in BOOKS else len(BOOKS)
+        rank = books.index(book) if book in books else len(books)
         if k in seen and seen[k][0] <= rank:
             continue
         row = {"player": who, "market": m, "side": str(side or "").upper(), "line": _num(line),
@@ -141,15 +159,18 @@ def picks(conn, sport: str, date: str, home: str, away: str, names=()) -> list:
     return out[:MAX_PICKS]
 
 
-def tickets(conn, sport: str, date: str, home: str, away: str) -> dict:
-    """The game's tickets on the record, by kind: each one's verdict and its legs'."""
+def tickets(conn, sport: str, date, home: str, away: str) -> dict:
+    """The game's tickets on the record, by kind: each one's verdict and its legs'.
+    ``date`` is a day or several (_dates)."""
     have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if "parlays" not in have or "parlay_legs" not in have:
+    days = _dates(date)
+    if "parlays" not in have or "parlay_legs" not in have or not days:
         return {}
     out: dict = {}
     for kind, source in TICKETS.items():
-        rows = conn.execute("SELECT id, status FROM parlays WHERE sport=? AND date=? AND grade=? AND source=? "
-                            "ORDER BY id", (sport, date, f"{away}@{home}", source)).fetchall()
+        rows = conn.execute(f"SELECT id, status FROM parlays WHERE sport=? AND date IN ({','.join('?' * len(days))}) "
+                            "AND grade=? AND source=? ORDER BY id",
+                            (sport, *days, f"{away}@{home}", source)).fetchall()
         got = []
         for pid, status in rows:
             legs = []
@@ -185,6 +206,80 @@ def of_game(conn, sport: str, date: str, g: dict, report: dict | None = None) ->
     if ts:
         out["tickets"] = ts
     return out
+
+
+def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> dict:
+    """EVERY FINISHED GAME'S PICKS AND PARLAYS, EACH WON OR LOST (2026-11-17).
+
+    Ethan, on Report Picks' "How our reports did": "I wanna be able too see
+    each parlay and pick on this page along side and x or checkmark if the
+    whole parlay hit and if the individual picks hit".
+
+    For each archived game named in ``keys`` ((day, away, home), the page's
+    rows; MAX_GAMES of them), the report's own picks (REPORT_BOOKS) and the
+    game's tickets off the record, each with its verdict and each ticket's
+    legs with theirs: {"DAY|AWAY|HOME": {"picks": [...], "threes": [...],
+    "scorers": [...], "held": n}}, a game the record holds nothing for as {}
+    and one not archived left out. The archive says which board label the
+    game's rows are filed under (its "label"; the NFL's is the week) and which
+    players its report names (a pick with no club on its row).
+
+    What has settled is public, as every settled row is (server._record_day:
+    "the evidence the subscription is sold on"); a pick or ticket still
+    waiting on its box score is a member's, and ``held`` tells the rest how
+    many there are."""
+    from . import reportarchive
+    want = []
+    for k in list(keys or [])[:MAX_GAMES]:
+        try:
+            day, away, home = (str(x) for x in k)
+        except (TypeError, ValueError):
+            continue
+        doc = reportarchive.load(sport, day, away, home, where)
+        if doc:
+            want.append((f"{day}|{away}|{home}", day, away, home, doc))
+    out: dict = {}
+    if not want:
+        return out
+    conn = _connect(path)
+    if conn is None:
+        return out
+    try:
+        for key, day, away, home, doc in want:
+            days = (doc.get("label"), day)
+            ts = tickets(conn, sport, days, home, away)
+            game = {"picks": [{k: v for k, v in p.items() if k != "book"}
+                              for p in picks(conn, sport, days, home, away, names_in(doc.get("report")),
+                                             books=REPORT_BOOKS)],
+                    "threes": ts.get("threes") or [], "scorers": ts.get("scorers") or []}
+            if not member:
+                held = 0
+                for part in ("picks", "threes", "scorers"):
+                    keep = [x for x in game[part] if x.get("status") in SETTLED]
+                    held += len(game[part]) - len(keep)
+                    game[part] = keep
+                game["held"] = held
+            out[key] = {k: v for k, v in game.items() if v}
+    finally:
+        conn.close()
+    return out
+
+
+def market_words(games: dict) -> dict:
+    """The reader's word for every market these games' picks and legs name
+    (engine/markets.label: "rush_yds" is "Rushing Yards"), so the page says
+    them as the Record does whether or not it has read the record's own list."""
+    from . import markets
+    seen: set = set()
+    for g in (games or {}).values():
+        for p in (g or {}).get("picks") or []:
+            seen.add(str(p.get("market") or ""))
+        for kind in TICKETS:
+            for t in (g or {}).get(kind) or []:
+                for leg in t.get("legs") or []:
+                    seen.add(str(leg.get("market") or ""))
+    seen.discard("")
+    return {m: markets.label(m) for m in sorted(seen)}
 
 
 def attach(result: dict, reports: list, sport: str, path=None) -> int:

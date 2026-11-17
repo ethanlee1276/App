@@ -150,8 +150,9 @@ function rpTodayHTML(d, byGame, keys) {
    we need to fact check ourselves after the game's over and see if we were
    correct or not." Every finished game's report is graded on its box score and
    kept; /api/report_record sends the counts (free, as the Record is): the totals
-   first, then every finished game, newest first, each opening its own graded
-   report (/api/report_archive, members). */
+   first, then every finished game, newest first, each with its picks and
+   parlays marked won or lost (/api/report_tickets, below) and opening its own
+   graded report (/api/report_archive, members). */
 const RP_FACTS = new Map();
 //: "34 of 52 (65%)" — a count of right with its share.
 function rpShare(pair) {
@@ -219,6 +220,7 @@ function rpFactRowHTML(r) {
   return `<div class="rpk-fact-row">
     <div class="rpk-fact-game"><b>${escapeHtml(score)}</b><span>${escapeHtml(formatGameDate(r.date))}</span></div>
     <div class="rpk-fact-chips">${chips.join("")}</div>
+    <div class="rpk-fact-bets" data-rpk-bets="${escapeAttr(key)}"></div>
     <button type="button" class="btn ghost rpk-fact-open" data-rpk-arch="${escapeAttr(key)}">Read the report</button>
     <div class="rpk-fact-report" data-rpk-arch-slot="${escapeAttr(key)}"></div>
   </div>`;
@@ -247,19 +249,159 @@ async function rpFactsFill(host, league) {
   const recentN = (b.recent || {}).games || 0;
   // Every game and the last month, as two chips, once the archive runs past a month.
   const split = recentN && recentN < (b.totals || {}).games;
+  const games = b.games || [];
   body.innerHTML = `${split ? `<div class="std-chips rpk-fact-span-chips">
       <button class="al-cat on" type="button" data-rpk-span="all">Every game</button>
       <button class="al-cat" type="button" data-rpk-span="recent">Last ${b.recent_days} days</button></div>` : ""}
     <div data-rpk-totals>${rpTotalsHTML(b.totals)}</div>
     <h4 class="rpk-fact-h">Every finished game</h4>
-    <div class="rpk-fact-list">${(b.games || []).map(rpFactRowHTML).join("")}</div>
+    <p class="mini rpk-fact-span">Each game’s picks and parlays, ${RP_MARK_WORDS}: a parlay’s mark is the whole ticket,
+      and its legs carry their own.</p>
+    <div class="rpk-fact-list"></div>
+    <button type="button" class="btn ghost rpk-fact-more" data-rpk-more hidden></button>
     ${b.more ? `<p class="mini">${escapeHtml(plural(b.more, "older game"))} not shown.</p>` : ""}`;
   body.querySelectorAll("[data-rpk-span]").forEach((btn) => btn.addEventListener("click", () => {
     body.querySelectorAll("[data-rpk-span]").forEach((x) => x.classList.toggle("on", x === btn));
     body.querySelector("[data-rpk-totals]").innerHTML = rpTotalsHTML(btn.dataset.rpkSpan === "recent" ? b.recent : b.totals);
   }));
-  body.querySelectorAll("[data-rpk-arch]").forEach((btn) => btn.addEventListener("click", () => rpArchiveOpen(body, btn)));
+  // One listener on the list for every row's report, the rows drawn later too.
+  const list = body.querySelector(".rpk-fact-list");
+  list.addEventListener("click", (e) => {
+    const btn = e.target.closest && e.target.closest("[data-rpk-arch]");
+    if (btn && list.contains(btn)) rpArchiveOpen(body, btn);
+  });
+  const more = body.querySelector("[data-rpk-more]");
+  const page = () => {
+    const from = list.children.length, rows = games.slice(from, from + RP_FACT_PAGE);
+    list.insertAdjacentHTML("beforeend", rows.map(rpFactRowHTML).join(""));
+    const left = games.length - list.children.length;
+    more.hidden = left <= 0;
+    more.textContent = `Show ${Math.min(left, RP_FACT_PAGE)} more ${left === 1 ? "game" : "games"}`;
+    rpBetsFill(list, sport, rows, !from);
+    revealChildren(list);
+  };
+  more.addEventListener("click", page);
+  page();
   revealChildren(slot);
+}
+
+/* EVERY PICK AND PARLAY, A CHECK OR AN X (2026-11-17). Ethan, on this list:
+   "I wanna be able too see each parlay and pick on this page along side and x
+   or checkmark if the whole parlay hit and if the individual picks hit". Each
+   finished game's report picks and its tickets come off the record
+   (/api/report_tickets, engine/reportoutcome.for_games), asked for a page of
+   rows at a time: under the game's checks, a strip of marks, one a pick and
+   one a ticket, opening to every pick by name and every ticket with each of
+   its legs, each with its mark and the number it finished with. What has
+   settled is free, as the Record's rows are; a member also sees what is still
+   waiting on the box score. */
+//: The rows the list draws at a time, and the games one ask names (reportoutcome.MAX_GAMES).
+const RP_FACT_PAGE = 20;
+const RP_MARK_WORDS = "a check for each one that hit and an X for each one that missed";
+const RP_BETS = new Map();
+//: The reader's word for each market the answers named (engine/markets.label), before marketWord's own guess.
+const RP_WORDS = {};
+async function rpBetsFill(list, sport, rows, first) {
+  const keys = (rows || []).map((r) => [r.date, r.away, r.home].join("|"));
+  const need = keys.filter((k) => !RP_BETS.has(`${sport}|${k}`));
+  if (need.length) {
+    let body = null;
+    try {
+      const q = new URLSearchParams({ league: sport, games: need.join(",") });
+      const r = await fetch(`/api/report_tickets?${q}`, { credentials: "same-origin" });
+      body = r.ok ? await r.json() : null;
+    } catch (e) { body = null; }
+    // A game the record could not be asked about is asked again next time; one it holds nothing for is kept as such.
+    if (body && body.games) need.forEach((k) => RP_BETS.set(`${sport}|${k}`, body.games[k] || null));
+    if (body && body.words) Object.assign(RP_WORDS, body.words);
+  }
+  if (!list.isConnected) return;
+  keys.forEach((k, i) => {
+    const slot = [...list.querySelectorAll("[data-rpk-bets]")].find((x) => x.dataset.rpkBets === k);
+    const x = RP_BETS.get(`${sport}|${k}`);
+    if (slot && x) slot.innerHTML = rpBetsHTML(x, sport, first && i === 0);
+  });
+}
+//: A verdict's mark and its tone: a check, an X, or a dash for a push, a void or one still waiting.
+function rpMk(status) {
+  const t = status === "won" ? "won" : status === "lost" ? "lost" : status === "push" || status === "void" ? "push" : "wait";
+  return `<i class="rpk-mk ${t}" aria-hidden="true">${icon(t === "won" ? "check" : t === "lost" ? "cross" : "dash", 12)}</i>`;
+}
+//: "5 of 7 hit": the ones that hit of the ones won or lost.
+function rpHit(list) {
+  const won = list.filter((x) => x.status === "won").length, lost = list.filter((x) => x.status === "lost").length;
+  return { won, n: won + lost, tone: !(won + lost) ? "" : won * 2 > won + lost ? "won" : won * 2 < won + lost ? "lost" : "" };
+}
+//: One pick or leg in plain words, as the game's page says it (js/detail.js gprPickWords; that room is the game page's).
+const RP_SCORE = { anytime_td: "to score a touchdown", anytime_goal: "to score a goal", goals: "to score a goal",
+                   first_td: "to score the first touchdown" };
+function rpPickWords(p) {
+  const m = String(p.market || "");
+  const down = ["UNDER", "NO"].includes(String(p.side || "").toUpperCase());
+  const num = (x) => { const v = Number(x); return Number.isInteger(v) ? String(v) : v.toFixed(1); };
+  const club = escapeHtml(teamName(p.team || p.player || ""));
+  if (p.game || RES_GAME_MARKETS.has(m)) {
+    if (m === "moneyline") return `${club} to win`;
+    if (m === "spread") {
+      const ln = -Number(p.line);
+      return Number.isFinite(ln) ? `${club} ${ln > 0 ? "+" : ln < 0 ? MINUS : ""}${num(Math.abs(ln))}` : `${club} spread`;
+    }
+    if (m === "total") return `${down ? "Under" : "Over"} ${num(p.line)} total`;
+    if (m === "team_total") return `${club} ${down ? "under" : "over"} ${num(p.line)}`;
+  }
+  const who = escapeHtml(p.player || "");
+  if (RP_SCORE[m]) return `${who} ${down ? "not " : ""}${RP_SCORE[m]}`;
+  return `${who} ${down ? "under" : "over"}${p.line == null ? "" : ` ${num(p.line)}`} ${
+    escapeHtml((RP_WORDS[m] || marketWord(m)).toLowerCase())}`;
+}
+function rpPickLI(p) {
+  const st = String(p.status || ""), m = String(p.market || ""), a = Number(p.actual);
+  const did = p.actual == null || !Number.isFinite(a) ? (st === "void" ? "didn’t play" : st === "push" ? "push"
+      : st === "won" || st === "lost" ? "" : "waiting on the box score")
+    : RP_SCORE[m] ? (a > 0 ? `scored${a > 1 ? ` ${a}` : ""}` : "didn’t score")
+    : RES_GAME_MARKETS.has(m) ? "" : `had ${Number.isInteger(a) ? a : a.toFixed(1)}`;
+  return `<li class="rpk-bet ${st === "won" ? "won" : st === "lost" ? "lost" : ""}">${rpMk(st)}<span>${rpPickWords(p)}${
+    did ? ` <span class="rpk-bet-did">${escapeHtml(did)}</span>` : ""}</span></li>`;
+}
+//: A ticket's verdict in words: "Hit", "Missed by one leg", "Missed: 2 of 3 legs".
+function rpTicketWords(t) {
+  const legs = t.legs || [];
+  const lost = legs.filter((l) => l.status === "lost").length;
+  if (t.status === "won") return "Hit";
+  if (t.status === "lost") return lost === 1 ? "Missed by one leg" : `Missed: ${plural(lost, "leg")} lost`;
+  if (t.status === "push" || t.status === "void") return "Void";
+  return "Waiting on the box score";
+}
+function rpTicketsHTML(list, kind, sport) {
+  const name = kind === "threes" ? "Parlay" : ["nfl", "cfb"].includes(sport) ? "Touchdown pair"
+    : sport === "nhl" ? "Goal-scorer pair" : "Scorer pair";
+  return list.map((t, i) => `<li class="rpk-bet-tix ${t.status === "won" ? "won" : t.status === "lost" ? "lost" : ""}">
+      <div class="rpk-bet-tix-h">${rpMk(t.status)}<b>${escapeHtml(`${name} ${i + 1}`)}</b> <span>${
+        escapeHtml(rpTicketWords(t))}</span></div>
+      <ul class="rpk-bet-legs">${(t.legs || []).map(rpPickLI).join("")}</ul></li>`).join("");
+}
+//: The game's picks and tickets: a strip of marks a kind, opening to every one by name.
+function rpBetsHTML(x, sport, open) {
+  const picks = x.picks || [], threes = x.threes || [], pairs = x.scorers || [];
+  const pairWord = ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
+  const parts = [["Picks", picks], ["Parlays", threes], [pairWord, pairs]].filter(([, l]) => l.length);
+  const held = x.held ? `<p class="mini rpk-bets-held">${escapeHtml(plural(x.held, "more pick or ticket", "more picks and tickets"))
+    } waiting on the box score: members see ${x.held === 1 ? "it" : "them"} now.</p>` : "";
+  if (!parts.length) return held;
+  const strip = parts.map(([w, l]) => {
+    const h = rpHit(l);
+    return `<span class="rpk-bets-part"><span class="rpk-bets-k">${escapeHtml(w)}</span>${
+      h.n ? ` <b class="${h.tone}">${h.won} of ${h.n}</b>` : ""} <span class="rpk-marks">${l.map((y) => rpMk(y.status)).join("")}</span></span>`;
+  }).join("");
+  const sec = (title, inner) => `<h5 class="rpk-bets-h">${escapeHtml(title)}</h5><ul class="rpk-bet-list">${inner}</ul>`;
+  return `<details class="rpk-bets"${open ? " open" : ""}>
+      <summary class="rpk-bets-sum">${strip}<span class="row-fold-chev" aria-hidden="true"></span></summary>
+      <div class="rpk-bets-body">
+        ${picks.length ? sec("The picks", picks.map(rpPickLI).join("")) : ""}
+        ${threes.length ? sec("The parlays", rpTicketsHTML(threes, "threes", sport)) : ""}
+        ${pairs.length ? sec(`The ${pairWord.toLowerCase()}`, rpTicketsHTML(pairs, "scorers", sport)) : ""}
+      </div>
+    </details>${held}`;
 }
 //: A finished game's own report, graded, under its row (a member's; the rest are told what it holds).
 async function rpArchiveOpen(body, btn) {
