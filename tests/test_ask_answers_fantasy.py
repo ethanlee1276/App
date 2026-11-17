@@ -91,7 +91,7 @@ def test_start_sit_puts_the_higher_projection_first_and_says_where_each_number_c
     assert olave["season"]["games"] == 4 and olave["season"]["weekly_swing_ppr"] == 3.0, "boom-or-bust, measured"
     tj = got["players"][1]
     assert tj["parts"]["rec_yds"] == {"value": 40.0, "from": "season average"}, "not on the board in that market"
-    assert tj["touchdowns"] == {"expected": 0.25, "from": "his season rate"}
+    assert tj["touchdowns"] == {"expected": 0.25, "from": "the season rate"}
     assert "interceptions" in got["how"]
 
 

@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UC. Ask Qellys reads the game reports, how they did, and the playoff races** (step 661; 17 November). Nothing to
+run. Your ask: "make sure the ask qellys feature is working correctly and has access to everything on the site and the
+game reports and all the data". What Ask could not reach before, and now can: (1) any game's report, by team, whether or
+not the question is asked from that league's page: who we think wins and why (with our ratings' and our simulation's
+own picks beside the call), the short version, what changed, the angles, the red zone, how the game should go, the
+injuries and form, and the report's own picks, parlays and scorer pairs; (2) a finished game's report, the newest one for
+the team: the final, how the report did (the call right or wrong, reads right of graded by kind, the injury report, the
+touchdowns), what it had said, and each of its picks and each leg of each parlay won or lost with the number it finished
+with; (3) How our reports did, every league's fact checks totalled; (4) the Report book's won-lost and each league's game
+parlays (wins, losses, lost by one leg, legs hit) inside its record answers; (5) the playoff races: the NFL's seeds and
+the clubs just outside, college football's twelve, the NBA Cup's groups, the NCAA tournament's seeds, each club's
+chances and the games that swing it. Its guide to the site now knows the NHL, college basketball, Report Picks, the
+game reports' after-game checks, the Playoff race and the team and player pages, and every word Ask is given about
+players and about Zeno is neutral (no he or his), so its answers are too. A live leg that already has its touchdown
+now says "Done: has one" (and an under, "Lost: one already"), on the Live tab and in Ask.
+
 **UB. The playoff race is drawn as a bracket** (step 660; 17 November). Nothing to run. Your ask, over the NFL's
 seed lists: "the playoff page should be layed out as a bracket and not this chart". The NFL's "If the season ended
 today" and college football's "If it started today" are now brackets. The NFL's: each conference as the playoffs run,

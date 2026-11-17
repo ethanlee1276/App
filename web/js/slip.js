@@ -371,7 +371,7 @@
     const now = Number(current);
     if (!Number.isFinite(now) || !Number.isFinite(line)) return "";
     const under = l.side === "under";
-    if (line === 0.5) return now >= 1 ? (under ? "Lost: he has one" : "Done: he has one") : (under ? "Holding: none yet" : "Needs one");
+    if (line === 0.5) return now >= 1 ? (under ? "Lost: one already" : "Done: has one") : (under ? "Holding: none yet" : "Needs one");
     const over = Math.floor(line) + 1;               // the first number that wins an over
     const top = Math.ceil(line) - 1;                 // the last number that wins an under
     if (!under) return now >= over ? "Cleared" : `Needs ${num(over - now)} more`;

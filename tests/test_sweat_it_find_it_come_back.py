@@ -70,7 +70,7 @@ CASES = [({"side": "over", "line": 259.5, "market": "pass_yds"}, 180, "Needs 80 
          ({"side": "under", "line": 5, "market": "receptions"}, 5, "On the number: a push now, one more loses"),
          ({"side": "under", "line": 5, "market": "receptions"}, 6, "Past the number"),
          ({"side": "over", "line": 0.5, "market": "anytime_td"}, 0, "Needs one"),
-         ({"side": "under", "line": 0.5, "market": "anytime_td"}, 1, "Lost: he has one")]
+         ({"side": "under", "line": 0.5, "market": "anytime_td"}, 1, "Lost: one already")]
 
 
 def test_a_live_leg_says_what_has_to_happen_in_ask_and_on_the_live_tab():
