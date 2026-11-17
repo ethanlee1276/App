@@ -101,6 +101,19 @@ def board_path(league: str) -> Path:
     return ROOT / "web" / "data" / routes.BOARD_FILES[league]
 
 
+def kickoff_epoch(g: dict) -> float | None:
+    """A board game's start: an ISO stamp, or the bare Eastern clock beside
+    its date that the NFL's board carries ("20:15" on "2026-11-19"), read as
+    the boards take a game's picks down on it (reportkeep.started,
+    linemoves.start_epoch). The first version read only a stamp, so on its
+    first morning live the watch held every league's games but the NFL's."""
+    t = _epoch(g.get("kickoff"))
+    if t is not None:
+        return t
+    from .linemoves import start_epoch
+    return start_epoch(g.get("kickoff"), g.get("date") or g.get("game_date"), "America/New_York")
+
+
 def watched_games(board: dict, now: float) -> list[dict]:
     """The board's games from six hours before now to eight days ahead:
     ``[{key, home, away, kickoff, names}]`` (names: the board's full names
@@ -109,7 +122,7 @@ def watched_games(board: dict, now: float) -> list[dict]:
     for g in (board or {}).get("games") or []:
         if not isinstance(g, dict) or not g.get("home") or not g.get("away"):
             continue
-        t = _epoch(g.get("kickoff"))
+        t = kickoff_epoch(g)
         if t is None or t < now - AFTER_KICKOFF_S or t > now + AHEAD_S:
             continue
         out.append({"key": f"{g['away']}@{g['home']}", "home": str(g["home"]), "away": str(g["away"]),

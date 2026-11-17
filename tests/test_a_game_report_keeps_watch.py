@@ -102,6 +102,22 @@ def test_the_watch_takes_this_weeks_games_and_knows_each_club():
     assert RW.code_of("Gonzaga Bulldogs", college) is None
 
 
+def test_the_nfls_bare_eastern_clock_is_read_beside_its_date():
+    """The NFL's board carries "20:15" beside "2026-11-19", not a stamp: the
+    first version read only a stamp, and on its first morning live it held
+    every league's games but the NFL's (17 November)."""
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    kick = dt.datetime(2026, 11, 19, 20, 15, tzinfo=ZoneInfo("America/New_York")).timestamp()
+    board = {"games": [{"away": "IND", "home": "HOU", "date": "2026-11-19", "kickoff": "20:15"},
+                       {"away": "MIA", "home": "BUF", "date": "2026-12-20", "kickoff": "13:00"},
+                       {"away": "TB", "home": "DET", "kickoff": "2026-11-19T18:00:00Z"}]}
+    assert RW.kickoff_epoch(board["games"][0]) == kick
+    got = RW.watched_games(board, kick - 2 * 86400)
+    assert [g["key"] for g in got] == ["IND@HOU", "TB@DET"], got
+    assert RW.watched_games(board, kick + 7 * 3600) == [], "six hours after kickoff it is let go"
+
+
 def test_a_designation_that_moved_is_an_update_and_the_first_look_only_remembers():
     state = Path(tempfile.mkdtemp()) / "state.json"
     first = _run(state, _rows())
