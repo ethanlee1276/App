@@ -9545,10 +9545,12 @@ input.acct-age { width: 24px; height: 24px; min-width: 24px; }
      scroll down", then "you didn't fix how this bar follows me when I
      scroll down the page". The first answer made it follow more neatly;
      what he wants is for it not to follow. It sits under the team's
-     header and goes up with it; the tabs are one scroll away. */
+     header and goes up with it; the tabs are one scroll away. Nothing
+     under it to hide, so no ground of its own: a plain band of the page's
+     colour lay across the club's light behind the page (MYCOLORS1). */
   display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;
   margin: 0 -16px 16px; padding: 0 16px;
-  background: var(--bg); border-bottom: var(--hairline) solid transparent;
+  background: transparent; border-bottom: var(--hairline) solid transparent;
 }
 .tm-tabs::-webkit-scrollbar { display: none; }
 .tm-tab:hover { color: var(--text); }
@@ -11182,3 +11184,58 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
   --amb-club-top: radial-gradient(125% 95% at 50% 0%, color-mix(in oklab, var(--amb-c) 24%, transparent) 0%, color-mix(in oklab, var(--amb-c) 10%, transparent) 36%, color-mix(in oklab, var(--amb-c) 3%, transparent) 68%, transparent 94%); }
 body.gp-on .ambient { display: none; }
 @media print { .ambient, .amb-club { display: none; } }
+
+/* ==========================================================================
+   YOUR TEAM'S COLOURS ON THE WHOLE SITE (MYCOLORS1, 2026-11-17; Ethan: "add
+   how users can use there team colors too make the whole websites colors
+   change like how the background on live pages looks with the team
+   colors"). Settings, Team colours, Whole site, or Wear these colours on a
+   team's page: app.js applyTeamColors puts html.team-wash on, with the
+   team's two colours deepened until white type reads on them (--tw-1,
+   --tw-2) and as they are (--tw-1-paper, --tw-2-paper). Every page then
+   sits on them as a live game's page sits on its clubs' (detail.css
+   --gp-wash): the first from the left, the second from the right, a shade
+   falling to the page's own ground further down. The bar and the strip
+   under the clock paint the same screen-sized picture pinned to the
+   screen's corner (app.js twPin says where the bar starts across it), so
+   the top of the screen is one piece with no rule in it, and the league
+   row lets it through. A game's page keeps its own two clubs' wash; a
+   club's page keeps its band and wears your colours behind it. Paper wears
+   the colours thinned into the paper, the type the theme's. Static:
+   nothing moves on a scroll, and nothing is blurred.
+   ========================================================================== */
+html.team-wash {
+  /* What the colours are until app.js sets the team's own on the page (an inline style, which wins). */
+  --tw-1: var(--team-1);
+  --tw-2: var(--team-2);
+  --tw-1-paper: var(--team-1);
+  --tw-2-paper: var(--team-2);
+  --tw-wash: linear-gradient(100deg, var(--tw-1) 6%, color-mix(in oklab, var(--tw-1) 50%, var(--tw-2)) 50%, var(--tw-2) 94%);
+  --tw-shade: linear-gradient(180deg, color-mix(in oklab, var(--bg) 6%, transparent) 0, color-mix(in oklab, var(--bg) 22%, transparent) 200px, color-mix(in oklab, var(--bg) 60%, transparent) 460px, var(--bg) 820px); }
+html.team-wash[data-theme="light"] {
+  --tw-wash: linear-gradient(100deg, color-mix(in oklab, var(--tw-1-paper) 34%, var(--bg)) 6%, color-mix(in oklab, color-mix(in oklab, var(--tw-1-paper) 50%, var(--tw-2-paper)) 34%, var(--bg)) 50%, color-mix(in oklab, var(--tw-2-paper) 34%, var(--bg)) 94%);
+  --tw-shade: linear-gradient(180deg, transparent 0, color-mix(in oklab, var(--bg) 28%, transparent) 180px, color-mix(in oklab, var(--bg) 70%, transparent) 400px, var(--bg) 640px); }
+html.team-wash .ambient, html.team-wash body:not(.gp-on) .topbar,
+html.store-ios.team-wash body:not(.gp-on)::before, html.ios-home.team-wash body:not(.gp-on)::before {
+  background: var(--tw-shade), var(--tw-wash), var(--bg);
+  background-size: 100vw 100vh; background-repeat: no-repeat; background-position: 0 0; }
+html.team-wash body:not(.gp-on) .topbar {
+  --tw-x: 0px;
+  background-position: var(--tw-x) 0; border-bottom-color: transparent; animation: none; }
+html.team-wash body:not(.gp-on) .topbar::before, html.team-wash body:not(.gp-on) .topbar::after { display: none; }
+html.team-wash body:not(.gp-on) .sportbar { background: transparent; }
+html.team-wash .amb-club { display: none; }
+/* A heading that sticks as its shelf scrolls (Most Likely) covers what passes under it, so it
+   keeps a ground: the same picture, fixed to the screen. Where a phone draws a fixed ground as
+   a scrolling one (an iPhone), the heading wears the top of the picture, as it does stuck. */
+html.team-wash .shelf-head {
+  background: var(--tw-shade), var(--tw-wash), var(--bg);
+  background-size: 100vw 100vh; background-repeat: no-repeat; background-attachment: fixed; }
+/* The button on a team's page. On its band, it and Follow are the night's in either theme, as the
+   band is (more.css .tm-band): the light theme's deeper gold read dark on the club's colour. */
+.wear-btn { display: inline-flex; align-items: center; gap: 6px; }
+.wear-btn.on { color: var(--brand); }
+.tm-band .wear-btn, .tm-band .fav-btn, .tm-band .wear-btn:hover, .tm-band .fav-btn:hover {
+  color: var(--night-text); background: color-mix(in oklab, var(--night-3) 40%, transparent); }
+.tm-band .fav-btn.on { color: var(--night-gold); }
+.tm-band .wear-btn.on { background: color-mix(in oklab, var(--night-text) 20%, transparent); }

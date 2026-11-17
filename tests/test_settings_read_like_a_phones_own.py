@@ -110,7 +110,7 @@ def test_settings_is_groups_of_rows_with_the_destructive_ones_last():
     assert rows.rindex("setGroup(") < i, "Sign out and Delete are the last group"
     for seg in ('setSeg("odds"', 'setSeg("stake"'):
         assert seg in rows, f"two or three choices are a segmented control: {seg}"
-    assert 'data-set-switch="teamColors"' in rows
+    assert 'setSeg("teamColors", tc.mode' in rows, "team colours: off, the bar, or the whole site"
 
 
 def test_every_row_that_opens_a_screen_has_that_screen_and_a_way_back():

@@ -9338,13 +9338,28 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TZ. Your team's colours on the whole site** (step 658; 17 November). Nothing to run. Your ask: "add how users can
+use there team colors too make the whole websites colors change like how the background on live pages looks with the
+team colors". Settings → Team colours is now three ways: Off, Bar (the old switch: the bar, the Live disc and the lit
+tab) or Whole site. On Whole site every page sits on your team's two colours the way a live game's page sits on its
+clubs': the first from the left, the second from the right, falling to the page's own dark further down (the Lions'
+blue into silver, the Steelers' gold into black). The top bar and the strip under the phone's clock paint the same
+picture, so the top of the screen is one piece with no line in it. Whose colours: a new row under it picks any team you
+follow, or "your team in each league" (the one you follow in the league you're on, else your first). Every team's page
+now has a **Wear these colours** button beside Follow: one tap and the whole site is in that team's colours, any league's
+team, followed or not; tap again for the site's own gold. Each colour is darkened just enough that white words read on
+it; the light theme wears them as a soft tint on the paper. A game's page keeps its own two clubs' colours, and a team's
+or player's page keeps its band. A club whose only colour is black keeps the site's gold behind the tinted bar. The team
+page's row of tabs stopped painting a dark band across the colour behind it, with this on or off.
+
 **TY. The game log in the club's colours** (step 657; 17 November). Nothing to run. Your ask: the game log "use team
 colors and headshots ... how like espn looks and how the colors looks on the live page". A player's game log now opens
-on a band in his club's colour (darkened toward night, as his page's header is), with his photo from the roster, his
-club's mark large and faint behind him, and the season picker on the band. The sheet sits on his club's colour, falling
-to the page's own dark, the way a live game's page sits on its two clubs'. Every game carries the other club's logo
-beside its name, and the result is a green or red pill ("W 35-10"). On his own page the Game Log tab keeps the page's
-header and draws only the season over the table, and the Overview's "Recent games" gets the logos and pills too.
+on a band in the club's colour (darkened toward night, as the player page's header is), with the player's photo from
+the roster, the club's mark large and faint behind it, and the season picker on the band. The sheet sits on the club's
+colour, falling to the page's own dark, the way a live game's page sits on its two clubs'. Every game carries the other
+club's logo beside its name, and the result is a green or red pill ("W 35-10"). On the player's own page the Game Log
+tab keeps the page's header and draws only the season over the table, and the Overview's "Recent games" gets the logos
+and pills too.
 
 **TX. The whole site wears its own light** (step 656; 16 November). Nothing to run. Your ask: the team colours behind
 the player and live pages, "for the whole site ... a subtle gold gradient ... to match the site". Every page now sits

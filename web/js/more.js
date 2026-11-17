@@ -2894,7 +2894,8 @@ function teamHeaderHTML(d, p) {
       <div class="tm-rec">${escapeHtml([(LEAGUE_LABEL[d.sport] || d.sport || "").toUpperCase(),
         record, where].filter(Boolean).join(" · "))}</div>
     </div>
-    <div class="tm-acts">${d.sport === state.sport ? favBtn(p.team) : ""}</div>
+    <div class="tm-acts">${d.sport === state.sport ? favBtn(p.team) : ""}${
+      typeof wearBtn === "function" ? wearBtn(d.sport, p.team) : ""}</div>
   </header>`;
 }
 

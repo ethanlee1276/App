@@ -51,8 +51,9 @@ def test_the_pill_breathes_only_for_readers_who_allow_motion():
 
 def test_team_colours_are_a_setting_off_by_default_and_tokens_until_set():
     assert 'teamColors: "off",' in APP
-    # A switch in the settings list since 2026-10-25 (account.js setListHTML).
-    assert 'end: setSwitch(s.teamColors === "on", `data-set-switch="teamColors"' in APP
+    # A switch in the settings list since 2026-10-25 (account.js setListHTML); three ways since
+    # 2026-11-17 (MYCOLORS1): off, the bar, or the whole site.
+    assert 'setSeg("teamColors", tc.mode, [["off", "Off"], ["on", "Bar"], ["site", "Whole site"]])' in APP
     at = APP.index("function applySport() {")
     assert "applyTeamColors();" in APP[at:at + 400]
     root = CSS[CSS.index(":root {"):CSS.index("}", CSS.index(":root {"))]
@@ -65,6 +66,9 @@ def test_team_colours_are_a_setting_off_by_default_and_tokens_until_set():
 def _tint(settings, sport):
     at = APP.index("function applyTeamColors() {")
     fn = APP[at:APP.index("\n}\n", at) + 2]
+    # Whose colours, its own helper since 2026-11-17 (MYCOLORS1).
+    who = APP.index("function teamColorsWho(s) {")
+    fn = APP[who:APP.index("\n}\n", who) + 2] + fn
     js = """
 const props = {}; let cls = false;
 global.document = { documentElement: { classList: { toggle: (c, on) => { cls = on; } },

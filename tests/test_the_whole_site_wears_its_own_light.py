@@ -56,6 +56,8 @@ def test_the_light_is_the_brand_s_gold_in_both_themes_and_never_moves():
     section = STYLES[STYLES.index("THE SITE'S OWN LIGHT (SITEBG1"):]
     assert ':root[data-theme="light"] .amb-club {\n  --amb-club-top:' in section, "and a club's light on paper too"
     rules = section.split("========================================================================== */", 1)[1]
+    # Its own rules: the section ends where the next one starts (MYCOLORS1's, which stops the bar's drift).
+    rules = rules.split("\n/* ====", 1)[0]
     for no in ("animation", "transition", "backdrop-filter", "filter: blur"):
         assert no not in rules, no
     # Each glow faint: the gold's strongest stop a fifth of the colour, at most.

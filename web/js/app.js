@@ -199,7 +199,8 @@ const SETTINGS_DEFAULTS = {
   tz: "",               // "" = this device's own zone
   teams: [],            // "nfl:DET" — sport-tagged, because CIN is two teams
   leagues: [],          // [] = every league in the nav
-  teamColors: "off",    // "on": the bar, the Live disc and the tab wear your first team's colours
+  teamColors: "off",    // "on": the bar, the Live disc and the tab wear your first team's colours; "site": the whole site does (MYCOLORS1)
+  teamColorsTeam: "",   // "nfl:DET": whose colours, any league's team; "" = the team you follow in the league in view
   books: [],            // the sportsbooks they use (js/account.js "Make it yours")
   goals: [],            // what they are here for: props · clv · parlays · live · fantasy
   limit_week: 0,        // their own weekly limit in dollars staked, 0 = none (Settings → Limits; engine/limits)
@@ -637,17 +638,173 @@ function markMoreMenu() {
 /* YOUR TEAM'S COLOURS (docs/IDEAS.md, 2026-10-24): with the setting on,
    the bar's edge, the Live disc and the lit tab wear your team's two
    colours — the team you follow in this league, else the first you follow.
-   Off, or nobody followed, the site's own gold. */
+   Off, or nobody followed, the site's own gold.
+
+   AND THE WHOLE SITE IN THEM (MYCOLORS1, 2026-11-17; Ethan: "add how users
+   can use there team colors too make the whole websites colors change like
+   how the background on live pages looks with the team colors"). Set to the
+   whole site ("site"), every page sits on your team's two colours the way a
+   live game's page sits on its two clubs' (detail.css, the game page's wash): the first
+   from the left, the second from the right, falling to the page's own ground
+   further down, and the bar and the strip under the clock paint the same
+   picture, so the top of the screen is one piece (styles.css "YOUR TEAM'S
+   COLOURS ON THE WHOLE SITE"). Whose: the team picked in Settings or on a
+   team's page ("Wear these colours"), any league's; else the team you follow
+   in the league in view, else the first you follow. */
+//: Whose colours: the team picked (Settings or a team's page), else the one you follow in the
+//: league in view, else the first you follow; "" with none. "sport:ABBR".
+function teamColorsWho(s) {
+  const pin = /^[a-z]+:[A-Za-z0-9]+$/.test(String(s.teamColorsTeam || "")) ? s.teamColorsTeam : "";
+  return pin || s.teams.find((t) => t.startsWith(`${state.sport}:`)) || s.teams[0] || "";
+}
 function applyTeamColors() {
   const root = document.documentElement, s = settings();
-  const mine = s.teamColors === "on"
-    ? (s.teams.find((t) => t.startsWith(`${state.sport}:`)) || s.teams[0]) : "";
+  const mode = s.teamColors === "on" || s.teamColors === "site" ? s.teamColors : "off";
+  const mine = mode === "off" ? "" : teamColorsWho(s);
   const [sport, abbr] = String(mine || "").split(":");
-  const t = abbr ? (teamsForSport(sport) || {})[abbr] : null;
+  const listed = abbr ? (teamsForSport(sport) || {})[abbr] : null;
+  // College's team list comes with its board: until it lands, the colours last seen.
+  const t = listed || (mode === "site" && abbr ? twSwatch(mine) : null);
+  if (listed && mode === "site") twSwatch(mine, listed);
+  const wash = t && t.primary && mode === "site" ? twWash(t) : null;
+  root.classList.toggle("team-wash", !!wash);
   root.classList.toggle("team-tint", !!(t && t.primary));
   if (t && t.primary) {
     root.style.setProperty("--team-1", t.primary);
     root.style.setProperty("--team-2", t.secondary || t.primary);
+  }
+  if (wash) {
+    root.style.setProperty("--tw-1", wash.deep[0]);
+    root.style.setProperty("--tw-2", wash.deep[1]);
+    root.style.setProperty("--tw-1-paper", wash.paper[0]);
+    root.style.setProperty("--tw-2-paper", wash.paper[1]);
+    twPin();
+  }
+}
+
+/* The two colours the whole site wears for a club: its own pair, the first
+   and second it lists, led by the one that is not black (the Steelers' gold,
+   then their black); a pair too alike gives way to another colour of theirs
+   with some hue, and a club with one colour to a deeper shade of it. For the
+   dark theme each is deepened until white type reads on it (OKLab lightness
+   at most 0.56, the game page's GP_DEEP_L; detail.js holds the same OKLab
+   arithmetic, but loads only with a game's page); paper wears them as they
+   are, thinned into the page (styles.css). A club in black alone keeps the
+   site's own light under the tinted bar. */
+const TW_DEEP_L = 0.56, TW_SHADE_L = 0.32, TW_HUED = 0.04, TW_APART = 0.1;
+function twRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function twLab(c) {
+  const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+          0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+}
+function twHex([L, a, b]) {
+  const l = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3);
+  const m = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3);
+  const s = Math.pow(L - 0.0894841775 * a - 1.291485548 * b, 3);
+  const byte = (v) => Math.round(Math.max(0, Math.min(1, v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)) * 255);
+  return "#" + [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+                -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s].map((v) => byte(v).toString(16).padStart(2, "0")).join("");
+}
+function twWash(t) {
+  const P = twRgb(t.primary), S = twRgb(t.secondary);
+  const extra = [t.tertiary, t.alt].map(twRgb).filter(Boolean);
+  const hued = (c) => { const [, a, b] = twLab(c); return Math.hypot(a, b) >= TW_HUED; };
+  const black = (c) => twLab(c)[0] < 0.2 && !hued(c);
+  const first = [P, S, ...extra].find((c) => c && !black(c));
+  // A club in black alone has no colour to wash with: the bar wears it, the page keeps the site's light.
+  if (!first) return null;
+  const far = (c) => { const p = twLab(c), q = twLab(first); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) >= TW_APART; };
+  // The club's own pair leads, black and all (the Steelers' black beside their gold, not the red of
+  // their mark); a pair too alike gives way to another colour of theirs with some hue.
+  const mate = [P, S].find((c) => c && c !== first && far(c)) || extra.find((c) => !black(c) && far(c));
+  const fmt = (c) => "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+  const deep = (c) => { const [L, a, b] = twLab(c); return twHex([Math.min(L, TW_DEEP_L), a, b]); };
+  if (mate) return { deep: [deep(first), deep(mate)], paper: [fmt(first), fmt(mate)] };
+  const [L, a, b] = twLab(first);
+  const shade = twHex([Math.min(TW_SHADE_L, L * 0.6), a, b]);
+  return { deep: [deep(first), shade], paper: [fmt(first), shade] };
+}
+//: A club's colours as this device last saw them, for a league whose team list has not
+//: loaded yet (college's comes with its board). One club: the one the site wears.
+const TW_SWATCH_KEY = "qb.teamSwatch";
+function twSwatch(key, t) {
+  let kept = {};
+  try { kept = JSON.parse(localStorage.getItem(TW_SWATCH_KEY)) || {}; } catch (e) { kept = {}; }
+  if (!t) return kept[key] || null;
+  const keep = { primary: t.primary, secondary: t.secondary, tertiary: t.tertiary, alt: t.alt };
+  if (JSON.stringify(kept[key]) !== JSON.stringify(keep)) {
+    try { localStorage.setItem(TW_SWATCH_KEY, JSON.stringify({ [key]: keep })); } catch (e) { /* the list again next time */ }
+  }
+  return keep;
+}
+
+/* WEAR THESE COLOURS (MYCOLORS1): on a team's page, the whole site in that
+   club's colours in one tap, any league's club, followed or not; tapped
+   again, the site's own gold. Settings → Team colours says the same and
+   changes it. Only a club with a colour to wash with offers it. */
+function wearingTeam(key) {
+  const s = settings();
+  return s.teamColors === "site" && teamColorsWho(s) === key;
+}
+function wearBtn(sport, abbr) {
+  const t = sport && abbr ? (teamsForSport(sport) || {})[abbr] : null;
+  if (!t || !twWash(t)) return "";
+  const key = `${sport}:${abbr}`, on = wearingTeam(key);
+  return `<button type="button" class="btn ghost wear-btn${on ? " on" : ""}" data-wear="${escapeAttr(key)}"
+    aria-pressed="${on}">${icon("palette", 14)} ${on ? "Wearing these colours" : "Wear these colours"}</button>`;
+}
+function wearToggle(key) {
+  const [sport, abbr] = String(key).split(":");
+  const name = teamNameIn(sport, abbr) || abbr;
+  if (wearingTeam(key)) {
+    setSetting("teamColors", "off");
+    setSetting("teamColorsTeam", "");
+    tfToast("Back to the site’s own gold.");
+  } else {
+    setSetting("teamColors", "site");
+    setSetting("teamColorsTeam", key);
+    tfToast(`The whole site in ${name} colours. Settings → Team colours changes it.`);
+  }
+  applyTeamColors();
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-wear]");
+  if (!b) return;
+  e.preventDefault();
+  wearToggle(b.dataset.wear);
+  // The button says which it is now, wherever it is drawn.
+  document.querySelectorAll("[data-wear]").forEach((x) => {
+    const on = wearingTeam(x.dataset.wear);
+    x.classList.toggle("on", on);
+    x.setAttribute("aria-pressed", String(on));
+    x.innerHTML = `${icon("palette", 14)} ${on ? "Wearing these colours" : "Wear these colours"}`;
+  });
+});
+
+/* The bar paints the wash's own screen-sized picture, pinned to the screen's
+   corner (styles.css), so it needs to know how far across the screen it
+   starts: the docked sidebar moves it right. Measured on every draw and
+   whenever the bar changes size (the phone turned, the sidebar slid away),
+   as the game page's gpPin measures its own. */
+let _twPinRO = null;
+function twPin() {
+  const top = document.querySelector(".topbar");
+  if (!top || !document.documentElement.classList.contains("team-wash")) return;
+  const r = top.getBoundingClientRect();
+  if (r.width) top.style.setProperty("--tw-x", `${-Math.round(r.left)}px`);
+  if (!_twPinRO && typeof ResizeObserver !== "undefined") {
+    _twPinRO = new ResizeObserver(() => twPin());
+    _twPinRO.observe(top);
+    window.addEventListener("resize", twPin);
   }
 }
 
@@ -28172,6 +28329,8 @@ async function fetchAllLive() {
     try {
       if (sport === "cfb" && d.teams) _cfbTeams = d.teams;
       if (sport === "cbb" && d.teams) _cbbTeams = d.teams;
+      // A college club's colours, once its league's list is in (applyTeamColors).
+      if ((sport === "cfb" || sport === "cbb") && d.teams && settings().teamColors !== "off") applyTeamColors();
       // The fast scoreboard when this sport has one, the board otherwise.
       // FALLING BACK IS THE POINT: a missing or unbuilt live file must
       // leave the page exactly as it was rather than emptying it, because

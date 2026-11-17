@@ -3797,6 +3797,25 @@ function setTeamName(t) {
   return teamNameIn(sport, abbr) || abbr;
 }
 
+/* TEAM COLOURS, THREE WAYS (MYCOLORS1, 2026-11-17): off, the bar (the bar,
+   the Live disc and the lit tab, since 2026-10-24), or the whole site, every
+   page on the team's colours as a live game's page is on its clubs'
+   (app.js applyTeamColors). Whose: the team picked here or on a team's page,
+   else the one you follow in the league you are on, else your first. With
+   no team at all there is nothing to choose, and the row says how to get one. */
+function setTeamColours(s) {
+  const pin = String(s.teamColorsTeam || "");
+  const mode = s.teamColors === "on" || s.teamColors === "site" ? s.teamColors : "off";
+  const who = teamColorsWho(s);
+  const name = who ? setTeamName(who) : "";
+  const sub = !who ? "Follow a team, or tap Wear these colours on a team’s page"
+    : mode === "site" ? `Every page in ${name} colours, as a live game’s page wears its clubs’`
+    : mode === "on" ? `${name} colours on the bar, the Live disc and the lit tab`
+    : `${name} colours on the bar, or on every page`;
+  const whoLabel = pin ? setTeamName(pin) : s.teams.length > 1 ? "Your team in each league" : name;
+  return { mode, who, sub, whoLabel };
+}
+
 /* A link that asked for one of the screens ("Link a league" on the
    fantasy pages: app.js toAccount) opens it, and the page lands on it
    once it is drawn (renderAccount). */
@@ -3853,7 +3872,7 @@ function setListHTML() {
     ], "Your bets, fantasy leagues, settings and searches follow this account to every device you sign in on."));
     out.push(`<div id="set-plan">${planRowsHTML(_billStatus)}</div>`);
   }
-  const team1 = s.teams.length ? setTeamName(s.teams[0]) : "";
+  const tc = setTeamColours(s);
   out.push(setGroup("Preferences", [
     setItem({ tag: "div", ico: "tag", tone: "green", title: "Prices",
               sub: s.odds === "decimal" ? "Shown as 1.91" : "Shown as −110",
@@ -3876,9 +3895,10 @@ function setListHTML() {
     setItem({ ico: "star", tone: "green", title: "Your teams",
               val: !s.teams.length ? "None" : s.teams.length > 2 ? `${s.teams.length} teams`
                 : escapeHtml(s.teams.map(setTeamName).join(", ")), chev: true, attrs: 'data-set-open="teams"' }),
-    setItem({ tag: "label", ico: "palette", tone: "green", title: "Team colours",
-              sub: team1 ? escapeHtml(`${team1} on the bar, the Live disc and the lit tab`) : "Follow a team first",
-              end: setSwitch(s.teamColors === "on", `data-set-switch="teamColors"${s.teams.length ? "" : " disabled"}`) }),
+    setItem({ tag: "div", ico: "palette", tone: "green", title: "Team colours", sub: escapeHtml(tc.sub),
+              end: tc.who ? setSeg("teamColors", tc.mode, [["off", "Off"], ["on", "Bar"], ["site", "Whole site"]]) : "" }),
+    ...(tc.who ? [setItem({ ico: "star", tone: "green", title: "Whose colours", val: escapeHtml(tc.whoLabel),
+                            chev: true, attrs: 'data-set-open="teamcolors"' })] : []),
   ]));
   out.push(`<div id="set-notif">${notifGroupHTML()}</div>`);
   // YOUR OWN LIMITS (engine/limits; the second paper: "Self-set limits (alert
@@ -4055,6 +4075,20 @@ function setPageHTML(page) {
       attrs: `data-set-unfav="${escapeAttr(t)}" aria-label="${escapeAttr(`Stop following ${setTeamName(t)}`)}"` })),
     "Their games ride at the front of the strip and wear a star. Picks stay ordered by edge — floating your teams up a ranked board would say the model likes them more than it does.")
       : `<p class="set-foot set-empty">None yet. Open a game and tap the ☆ beside a team.</p>`);
+  }
+  if (page === "teamcolors") {
+    // The team picked, then every team you follow: any league's, each with its mark.
+    const pin = String(s.teamColorsTeam || "");
+    const teams = [...new Set([...(pin ? [pin] : []), ...s.teams])];
+    const mark = (t) => { const [sp, ab] = t.split(":"); return typeof teamMarkIn === "function" ? teamMarkIn(sp, ab, 28) : ""; };
+    return head("Whose colours") + setGroup("", [
+      setItem({ title: "Your team in each league", sub: "The one you follow in the league you are on, else your first",
+                end: pin ? "" : setCheck(), attrs: `data-set-key="teamColorsTeam" data-set-val="" aria-pressed="${pin ? "false" : "true"}"` }),
+      ...teams.map((t) => setItem({ lead: mark(t), title: escapeHtml(setTeamName(t)),
+                sub: escapeHtml(((typeof LEAGUE_LABEL !== "undefined" && LEAGUE_LABEL[t.split(":")[0]]) || t.split(":")[0]).toUpperCase()),
+                end: t === pin ? setCheck() : "",
+                attrs: `data-set-key="teamColorsTeam" data-set-val="${escapeAttr(t)}" aria-pressed="${t === pin}"` })),
+    ], "A game’s page still wears its two clubs’ colours, and a team’s or a player’s page its club’s band. Any team’s page can be worn: tap Wear these colours on it.");
   }
   if (page === "password") {
     return head("Password") + `<div class="set-list">
