@@ -309,6 +309,60 @@ def test_the_door_looks_like_one():
 
 
 # --- styles -----------------------------------------------------------------
+def test_the_sim_lab_shades_and_counts_the_picks_own_side():
+    """An under pick was drawn as an over: the shaded bars were the right
+    of the line, the readout counted overs ("the model says 38%" under a
+    62% pick) and the note said "A 38% over still loses 6 nights in 10".
+    It also called every league's counts "receptions". Now the side the
+    pick wins on is the shaded one, counted and said, and the box shows
+    the curve faintly before the first run instead of sitting empty."""
+    import json
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        print("      (skipped: no node)")
+        return
+    rows = {"under": {"side": "UNDER", "line": 26.5, "projection": 24.1, "hit_prob": 0.62},
+            "over": {"side": "OVER", "line": 26.5, "projection": 28.9, "hit_prob": 0.62}}
+    prog = "\n".join([
+        "const escapeHtml = (s) => String(s), escapeAttr = escapeHtml, propId = () => 'x';",
+        "const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;",
+        _fn("invNorm"), _fn("simParams"), _fn("simBins"), _fn("simLabHTML"),
+        f"const rows = {json.dumps(rows)};",
+        "const out = {};",
+        "for (const [k, r] of Object.entries(rows)) {",
+        "  const html = simLabHTML(r);",
+        "  out[k] = {read: /class=\"sim-read\">([^<]*)</.exec(html)[1],",
+        "            note: /class=\"sim-note\">([\\s\\S]*?)<\\/p>/.exec(html)[1].replace(/\\s+/g, ' '),",
+        "            ghost: html.includes('sim-bars ghost'),",
+        "            bars: [...html.matchAll(/<i class=\"(pk)?\" style=\"transform:scaleY\\(([0-9.]+)\\)\"/g)]",
+        "              .map((m) => [m[1] === 'pk', Number(m[2])])};",
+        "}",
+        "process.stdout.write(JSON.stringify(out));"])
+    got = subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=60)
+    assert got.returncode == 0, got.stderr[-800:]
+    out = json.loads(got.stdout)
+    under, over = out["under"], out["over"]
+    assert under["read"] == "The under wins in the shaded part of the curve.", under["read"]
+    assert "A 62% under still loses 4 nights in 10." in under["note"], under["note"]
+    assert "A 62% over still loses 4 nights in 10." in over["note"], over["note"]
+    assert "receptions" not in under["note"], "a football word in every league's note"
+    assert under["ghost"] and len(under["bars"]) == 34, "the curve is drawn before the first run"
+    shaded = [pk for pk, _h in under["bars"]]
+    assert shaded[0] and not shaded[-1] and shaded == sorted(shaded, reverse=True), \
+        ("an under's shaded side is the left of the line", shaded)
+    shaded = [pk for pk, _h in over["bars"]]
+    assert not shaded[0] and shaded[-1] and shaded == sorted(shaded), ("an over's is the right", shaded)
+    heights = [h for _pk, h in over["bars"]]
+    assert max(heights) > 0.95 and heights[0] < 0.05 and heights[-1] < 0.05, ("a bell, peaked mid-box", heights)
+    run = _code("runSim")
+    assert "P.under ? x < P.line : x > P.line" in run, "the run counts the pick's side"
+    assert "(the model says ${(100 * P.pPick)" in run, "and quotes the pick's chance"
+    assert 'bars.classList.remove("ghost")' in run
+    assert ".sim-bars.ghost i" in CSS and ".sim-bars i.pk" in CSS
+
+
 def test_the_new_surfaces_have_their_styles():
     for sel in (".profile-deep", ".prof-depth"):
         assert sel + " " in CSS or sel + "," in CSS or sel + "{" in CSS, sel

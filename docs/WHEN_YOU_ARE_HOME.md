@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UV. The sim lab follows an under pick** (step 680; 17 November). Nothing to run. The "Run tonight ×2,000"
+lab under a pick drew every pick as an over: the shaded bars were the right of the line, the count was the over's
+("the model says 38%" under a 62% under), and its note said "A 38% over still loses 6 nights in 10". It now shades
+and counts the side the pick wins on and says it ("A 62% under still loses 4 nights in 10"). Before the first run
+the box shows the curve faintly instead of sitting empty, and the note no longer calls every league's counts
+"receptions". Also checked: the search, the player page and its market card behave the same in the NBA, college
+basketball, the NHL, college football, the WNBA and MLB as the NFL's test drives them, with Bet it and Ask on the
+card in each.
+
 **UU. The notes the board writes read the same for every player** (step 679; 17 November). Nothing to run.
 The last "he" and "his" were in the sentences the server writes onto the cards and reports, and the NBA's are the
 WNBA's too, so every WNBA card said "he" and "his" of its player ("he took 17% of the points"). Now: "Minutes up 20%

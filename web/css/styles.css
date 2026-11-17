@@ -2948,7 +2948,9 @@ select.calc-in { width: auto; font-weight: 600; }
 .sim-bars i { flex: 1; height: 100%; background: var(--fill-subtle);
   transform: scaleY(0.02); transform-origin: bottom;
   transition: transform var(--dur-fast) var(--ease-out); }
-.sim-bars i.ov { background: color-mix(in oklab, var(--good) 34%, transparent); }
+.sim-bars i.pk { background: color-mix(in oklab, var(--good) 34%, transparent); }
+/* Before a run: the curve the draws will fill, held faint. */
+.sim-bars.ghost i { opacity: .5; }
 .sim-note { margin: 10px 0 0; color: var(--text-mute); font-size: var(--fs-2xs); }
 
 /* ---------------- Tail or fade (you vs the model) ---------------- */

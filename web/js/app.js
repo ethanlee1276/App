@@ -13183,8 +13183,8 @@ function renderPropPage(...a) { return roomCall(renderPropPage, "renderPropPage"
    two seconds says it better than any disclaimer.
 
    Standard-normal inverse via Acklam's approximation; sampling via
-   Box–Muller. Count markets (receptions) are labelled as the normal
-   approximation they are. */
+   Box–Muller. Count markets (catches, shots, strikeouts) are labelled as
+   the normal approximation they are. */
 function invNorm(p) {
   const a = [-39.6968302866538, 220.946098424521, -275.928510446969,
              138.357751867269, -30.6647980661472, 2.50662827745924];
@@ -13219,17 +13219,38 @@ function simParams(r) {
   let p = Number(r.hit_prob);
   if (!Number.isFinite(proj) || !Number.isFinite(line) || !Number.isFinite(p))
     return null;
-  if (String(r.side || "OVER").toUpperCase() !== "OVER") p = 1 - p;
+  const under = String(r.side || "OVER").toUpperCase() === "UNDER";
+  if (under) p = 1 - p;
   p = Math.min(0.985, Math.max(0.015, p));
   const z = invNorm(1 - p);
   if (Math.abs(z) < 0.03 || Math.abs(proj - line) < 1e-9) return null;
   const sd = (line - proj) / z;
   if (!Number.isFinite(sd) || sd <= 0) return null;
-  return { proj, line, sd, pOver: p };
+  return { proj, line, sd, pOver: p, under, pPick: under ? 1 - p : p };
+}
+
+/* The bins the lab draws on, one set for the curve shown before a run and
+   for the run itself, so the two line up bar for bar. `pick` is the side
+   of the line the pick wins on: an under's is the left of it (it was
+   shaded as the over's whatever the pick, and the readout counted overs). */
+function simBins(P) {
+  const BINS = 34, lo = P.proj - 3.4 * P.sd, hi = P.proj + 3.4 * P.sd;
+  const at = Math.max(0, Math.min(BINS - 1, Math.floor((P.line - lo) / (hi - lo) * BINS)));
+  return { BINS, lo, hi, pick: (i) => (P.under ? i < at : i > at) };
 }
 
 function simLabHTML(r) {
-  if (!simParams(r)) return "";
+  const P = simParams(r);
+  if (!P) return "";
+  const { BINS, lo, hi, pick } = simBins(P);
+  const side = P.under ? "under" : "over";
+  const lose = Math.round((1 - P.pPick) * 10);
+  // Before a run, the curve the draws will fill, faint: the box says what
+  // it is for instead of sitting empty.
+  const curve = Array.from({ length: BINS }, (_, i) => {
+    const h = Math.exp(-0.5 * ((lo + (i + 0.5) * (hi - lo) / BINS - P.proj) / P.sd) ** 2);
+    return `<i class="${pick(i) ? "pk" : ""}" style="transform:scaleY(${Math.max(0.02, h).toFixed(3)})"></i>`;
+  }).join("");
   return `
     <div class="section-title minor">Sim lab
       <span class="sub">— run tonight 2,000 times and watch the distribution draw
@@ -13238,12 +13259,12 @@ function simLabHTML(r) {
       made visible, not new information.</span></div>
     <div class="card sim-lab" data-sim="${escapeAttr(propId(r))}">
       <button class="btn ghost sim-run">Run tonight ×2,000</button>
-      <span class="sim-read"></span>
-      <div class="sim-bars" aria-hidden="true"></div>
-      <p class="sim-note">${escapeHtml(`Normal approximation around the projection —
-        counts like receptions are continuous here on purpose, and no simulated
-        night changes the pick. A ${Math.round((simParams(r) || {}).pOver * 100)}% over
-        still loses ${10 - Math.round((simParams(r) || {}).pOver * 10)} nights in 10.`)}</p>
+      <span class="sim-read">The ${side} wins in the shaded part of the curve.</span>
+      <div class="sim-bars ghost" aria-hidden="true">${curve}</div>
+      <p class="sim-note">${escapeHtml(`A normal curve around the projection: whole-number
+        counts are drawn smooth here on purpose, and no simulated night changes the
+        pick. A ${Math.round(P.pPick * 100)}% ${side} still loses ${lose
+        ? `${plural(lose, "night")} in 10` : `${Math.max(1, Math.round((1 - P.pPick) * 100))} nights in 100`}.`)}</p>
     </div>`;
 }
 
@@ -13278,22 +13299,21 @@ function runSim(lab, P) {
   const bars = lab.querySelector(".sim-bars");
   const read = lab.querySelector(".sim-read");
   if (!bars || !read) return;
-  const BINS = 34, TOTAL = 2000, FRAMES = 26;
-  const lo = P.proj - 3.4 * P.sd, hi = P.proj + 3.4 * P.sd;
+  const { BINS, lo, hi, pick } = simBins(P);
+  const TOTAL = 2000, FRAMES = 26;
   const counts = new Array(BINS).fill(0);
-  const lineBin = Math.max(0, Math.min(BINS - 1,
-    Math.floor((P.line - lo) / (hi - lo) * BINS)));
+  bars.classList.remove("ghost");
   bars.innerHTML = new Array(BINS).fill(0).map((_, i) =>
-    `<i class="${i > lineBin ? "ov" : ""}"></i>`).join("");
+    `<i class="${pick(i) ? "pk" : ""}"></i>`).join("");
   const els = [...bars.children];
-  let drawn = 0, overs = 0;
+  let drawn = 0, wins = 0;
   const frame = () => {
     const batch = Math.min(Math.ceil(TOTAL / FRAMES), TOTAL - drawn);
     for (let i = 0; i < batch; i++) {
       const u1 = Math.random() || 1e-9, u2 = Math.random();
       const x = P.proj + P.sd
         * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-      if (x > P.line) overs++;
+      if (P.under ? x < P.line : x > P.line) wins++;
       const bin = Math.max(0, Math.min(BINS - 1,
         Math.floor((x - lo) / (hi - lo) * BINS)));
       counts[bin]++;
@@ -13303,9 +13323,8 @@ function runSim(lab, P) {
     els.forEach((el, i) => {
       el.style.transform = `scaleY(${Math.max(0.02, counts[i] / peak).toFixed(3)})`;
     });
-    read.textContent = `${drawn.toLocaleString()} nights · over ${P.line} in ${
-      (100 * overs / drawn).toFixed(1)}% (the model says ${
-      (100 * P.pOver).toFixed(0)}%)`;
+    read.textContent = `${drawn.toLocaleString()} nights · ${P.under ? "under" : "over"} ${P.line} in ${
+      (100 * wins / drawn).toFixed(1)}% (the model says ${(100 * P.pPick).toFixed(0)}%)`;
     if (drawn < TOTAL) requestAnimationFrame(frame);
     else delete lab.dataset.running;
   };
