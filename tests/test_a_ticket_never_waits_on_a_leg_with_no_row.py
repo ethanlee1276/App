@@ -50,26 +50,57 @@ def _tickets_with(conn, player):
     return [r[0] for r in conn.execute("SELECT DISTINCT parlay_id FROM parlay_legs WHERE player=?", (player,))]
 
 
-def test_a_leg_with_no_row_voids_once_its_ticket_s_other_legs_graded():
+def test_a_leg_with_no_row_gets_its_paper_row_and_grades_off_the_box():
+    """Six Magic at Celtics tickets of 16 November went void on Derrick White's
+    assists and Jalen Suggs's rebounds, legs with no row though both played.
+    A leg with no row in any book now gets its paper row, on the ticket's day
+    and journal time, and waits for the box like every other."""
     conn, _b = _journaled()
-    # The paper journal refused one leg (its game under way when the board was journaled).
+    # The paper journal refused one leg's player (the game under way when the board was journaled).
     conn.execute("DELETE FROM bets WHERE player='Isaiah Likely'")
     conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
     conn.commit()
     hit = _tickets_with(conn, "Isaiah Likely")
     assert hit, "the fixture has tickets on him"
     res = PL.settle(conn)
-    assert res["waiting"] == 0 and res["settled"] == 7, res
+    assert res["waiting"] == len(hit) and res["settled"] == 7 - len(hit), res
+    rows = conn.execute("SELECT * FROM bets WHERE player='Isaiah Likely'").fetchall()
+    assert rows and all(r["status"] == "open" and r["category"] == PL.PARLAY_LEG_CATEGORY
+                        and r["game_day"] == "2099-11-12" for r in rows), [dict(r) for r in rows]
+    t0 = conn.execute("SELECT ts FROM parlays WHERE id=?", (hit[0],)).fetchone()["ts"]
+    assert all(r["ts"] <= max(x["ts"] for x in conn.execute("SELECT ts FROM parlays")) for r in rows) and t0
+    assert PL.journal_missing_legs(conn) == 0, "once is enough"
+    # The singles settle grades the new rows off the box: the player played and lost the line.
+    conn.execute("UPDATE bets SET status='lost', pnl_units=-0.1, actual=0 WHERE player='Isaiah Likely'")
+    conn.commit()
+    res = PL.settle(conn)
+    assert res["waiting"] == 0 and res["settled"] == len(hit), res
     for pid in hit:
-        p = conn.execute("SELECT status, legs_void, n_legs FROM parlays WHERE id=?", (pid,)).fetchone()
-        assert p["legs_void"] == 1, dict(p)
-        assert p["status"] == ("won" if p["n_legs"] >= 3 else "void"), dict(p)
-        leg = conn.execute("SELECT status FROM parlay_legs WHERE parlay_id=? AND player='Isaiah Likely'",
-                           (pid,)).fetchone()
-        assert leg["status"] == "void"
-    # The re-audit reads the same rule: nothing reopened, nothing moved.
+        p = conn.execute("SELECT status, legs_lost, legs_void FROM parlays WHERE id=?", (pid,)).fetchone()
+        assert (p["status"], p["legs_void"]) == ("lost", 0) and p["legs_lost"] >= 1, dict(p)
+    assert PL.resettle(conn) == {"fixed": [], "reopened": 0}
+
+
+def test_a_ticket_graded_on_a_voided_leg_reopens_once_the_leg_has_a_row():
+    """The six void tickets already graded: the re-audit reopens each once its
+    leg has a row to grade from, and the settle grades it again off the box."""
+    conn, _b = _journaled()
+    conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
+    conn.commit()
+    assert PL.settle(conn)["settled"] == 7
+    hit = _tickets_with(conn, "Isaiah Likely")
+    # As the first fix graded them: his leg voided for want of a row.
+    conn.execute("DELETE FROM bets WHERE player='Isaiah Likely'")
+    conn.execute(f"UPDATE parlays SET status='void', legs_void=1 WHERE id IN ({','.join('?' * len(hit))})", hit)
+    conn.commit()
+    assert PL.journal_missing_legs(conn) > 0
     again = PL.resettle(conn)
-    assert again == {"fixed": [], "reopened": 0}, again
+    assert again["reopened"] == len(hit), again
+    conn.execute("UPDATE bets SET status='won', pnl_units=0.1, actual=9 WHERE player='Isaiah Likely'")
+    conn.commit()
+    assert PL.settle(conn)["settled"] == len(hit)
+    assert {r[0] for r in conn.execute(f"SELECT status FROM parlays WHERE id IN ({','.join('?' * len(hit))})",
+                                       hit)} == {"won"}
 
 
 def _receptions_leg(conn, player="Isaiah Likely"):
@@ -97,7 +128,7 @@ def test_a_leg_with_no_paper_row_grades_from_the_same_prop_in_another_book():
     conn, b = _journaled()
     leg = _receptions_leg(conn)
     assert leg is not None, "the fixture has his catches on a ticket"
-    conn.execute("DELETE FROM bets WHERE player='Isaiah Likely'")
+    conn.execute("DELETE FROM bets WHERE player='Isaiah Likely' AND market='receptions'")
     conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
     conn.commit()
     # Another book took a line a catch lower and won; on the leg's own line the box lost.
@@ -151,7 +182,7 @@ def test_the_waiting_report_says_what_each_leg_waits_on():
 def test_a_push_in_another_book_still_holds_the_players_number():
     conn, b = _journaled()
     leg = _receptions_leg(conn)
-    conn.execute("DELETE FROM bets WHERE player='Isaiah Likely'")
+    conn.execute("DELETE FROM bets WHERE player='Isaiah Likely' AND market='receptions'")
     conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
     conn.commit()
     # Another book's whole-number line pushed on the box's number; the leg's own line lost on it.

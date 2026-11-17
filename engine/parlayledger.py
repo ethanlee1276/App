@@ -636,6 +636,9 @@ def settle(conn) -> dict:
     """
     ensure_schema(conn)
     from .ledger import _bet_clv
+    # A leg with no row in any book gets its paper row first; the singles
+    # settle grades it off the box on its next pass (`journal_missing_legs`).
+    journal_missing_legs(conn)
     graded, waiting = [], 0
     for p in conn.execute("SELECT * FROM parlays WHERE status='open' "
                           "ORDER BY date, id").fetchall():
@@ -864,6 +867,63 @@ def _resolve_leg(conn, p, leg) -> tuple:
     if o is not None:
         return o, _own_verdict(leg, o)
     return b, None
+
+
+def journal_missing_legs(conn, days: int = 21, today=None) -> int:
+    """A GAME PARLAY'S LEG WITH NO ROW IN ANY BOOK GETS ITS PAPER ROW (STUCKLEGS1).
+
+    A ticket's legs are journaled on paper before it (`journal_game_parlay_legs`),
+    and the paper journal refuses a game already under way, so a board built just
+    before a start and journaled just after it wrote tickets whose legs had no
+    row. `_no_row_verdict` voided those beside the graded legs, and a leg on a
+    player who played was voided with them: six Magic at Celtics tickets of 16
+    November went void on Derrick White's assists and Jalen Suggs's rebounds,
+    both of whom played. Each such leg now gets the paper row it should have had,
+    on the ticket's own day and stamped with the ticket's own journal time, and
+    the singles settle grades it off the box like any other (a player who did not
+    play voids by the no-show rules). Open tickets and those graded with a void
+    leg in the last ``days``; a game line never (it grades on the game,
+    `_game_line_bet`); a football week's ticket only where its other legs' rows
+    give the day. Idempotent: returns the rows written."""
+    ensure_schema(conn)
+    from .ledger import GAME_MARKETS, GRADED_ELSEWHERE, _ISO_DAY_RE
+    since = ((today or datetime.date.today()) - datetime.timedelta(days=days)).isoformat()
+    marks = ",".join("?" * len(NO_ROW_VOID_SOURCES))
+    shut = ",".join("?" * len(GRADED_ELSEWHERE))
+    added = 0
+    for p in conn.execute(f"SELECT * FROM parlays WHERE source IN ({marks}) AND COALESCE(ts,'') >= ? "
+                          f"AND (status='open' OR COALESCE(legs_void,0) > 0) ORDER BY id",
+                          (*NO_ROW_VOID_SOURCES, since)).fetchall():
+        lost, seen = [], []
+        for leg in conn.execute("SELECT * FROM parlay_legs WHERE parlay_id=? ORDER BY leg_no",
+                                (p["id"],)).fetchall():
+            if str(leg["market"] or "").lower() in GAME_MARKETS:
+                continue
+            rows = conn.execute(f"SELECT game_day FROM bets WHERE sport=? AND date=? AND player=? AND market=? "
+                                f"AND COALESCE(category,'') NOT IN ({shut})",
+                                (p["sport"], p["date"], leg["player"], leg["market"], *GRADED_ELSEWHERE)).fetchall()
+            if rows:
+                seen += [str(r["game_day"]) for r in rows if r["game_day"]]
+            else:
+                lost.append(leg)
+        if not lost:
+            continue
+        day = str(p["date"] or "")
+        if not _ISO_DAY_RE.match(day):
+            day = min(d for d in seen if _ISO_DAY_RE.match(d)) if any(_ISO_DAY_RE.match(d) for d in seen) else ""
+        if not day:
+            continue
+        for leg in lost:
+            added += conn.execute(
+                "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, market, side, line, book, odds, "
+                "hit_prob, grade, stake_units, stake_dollars, status, category, team) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?, 'Parlay leg', 0.1, 0, 'open', ?, ?)",
+                (day, p["ts"], p["sport"], p["date"], leg["player"], leg["market"], str(leg["side"] or "").upper(),
+                 leg["line"], leg["book"] or "", leg["odds"], leg["p_final"], PARLAY_LEG_CATEGORY,
+                 leg["team"])).rowcount
+    if added:
+        conn.commit()
+    return added
 
 
 def waiting(conn, days: int = 2, today=None) -> list[dict]:

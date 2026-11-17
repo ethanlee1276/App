@@ -9355,9 +9355,12 @@ in our other books (the team to win, graded off the final score) and voids only 
 that bet is still open the ticket waits. The nightly re-audit re-grades every ticket graded the old way by itself,
 so the Ravens' ticket turns lost and the parlay count on the record moves with it. Tickets built since step WH are
 made of the report's player picks and carry no game line. The same goes for a prop leg: one with no row of its own,
-or whose own row never graded, now grades from the same prop settled in our other pick lists, on its own line from
-the player's real number, which should clear most of the nine Magic at Celtics tickets and the NFL's still waiting.
-RUN_NEXT 00n (optional) lists any still open two days after their game and what each leg waits on.
+or whose own row never graded, grades from the same prop settled in our other pick lists, on its own line from the
+player's real number; and one no list holds gets its own row written on the ticket's day, which the box score then
+grades like any other pick (a player who sat voids). Measured on the live record the minute it went out: the NFL's
+22 tickets still waiting all graded, and Magic at Celtics went from nine to one; six of those read void on Derrick
+White's assists and Jalen Suggs's rebounds, both of whom played, and the re-audit reopens and grades them off the
+box. RUN_NEXT 00n (optional) lists any still open two days after their game and what each leg waits on.
 
 **WH. A game's parlays are made of its report's own picks** (step 718; 17 November). Nothing to run; RUN_NEXT
 00n is an optional check. Your two screenshots of How our reports did (Monday's NBA: picks 4 of 5 and parlays 0 of
