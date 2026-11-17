@@ -207,13 +207,19 @@ def _sort_key(r: dict) -> tuple:
             r["player"])
 
 
-def build_rosters(blob: dict | None, faces: dict | None = None) -> dict:
+def build_rosters(blob: dict | None, faces: dict | None = None,
+                  faces_by_id: dict | None = None) -> dict:
     """``{teams: {ABBR: {...}}, counts, generated_from}`` from the feed.
 
     Pure: give it the players blob and it returns the payload the page
     renders. An empty or missing blob yields an empty payload rather than
     a partial one — "no roster feed" must never render as "empty rosters".
+
+    ``faces`` is the league roster file's ``{spelling: photo}`` and
+    ``faces_by_id`` its ``{gsis_id: photo}`` (nflverse.headshot_map and
+    headshots_by_id). See :func:`_nfl_face` for the order they are asked in.
     """
+    keyed = face_index(faces)
     teams: dict[str, list] = {}
     for p in (blob or {}).values():
         row = _player_row(p)
@@ -221,7 +227,7 @@ def build_rosters(blob: dict | None, faces: dict | None = None) -> dict:
         # players Sleeper keeps) carry no team and drop out above.
         if row is None or not row["position"]:
             continue
-        row["headshot"] = face_of(faces, row["player"])
+        row["headshot"] = _nfl_face(p, row["player"], keyed, faces_by_id)
         teams.setdefault(row["team"], []).append(row)
 
     out: dict[str, dict] = {}
@@ -643,6 +649,37 @@ def _norm_key(name: str) -> str:
     except Exception:                                         # noqa: BLE001
         return (name or "").strip().lower()
     return normalize_name(name or "")
+
+
+def face_index(faces: dict | None) -> dict:
+    """``faces`` with each spelling's join key beside it (the spelling's own
+    entry wins a clash), so :func:`face_of` finds "Nolan Smith Jr." under
+    the roster file's "Nolan Smith". A map keyed by spellings alone answered
+    only the exact one: on 2026-11-17 a third of the NFL players whose names
+    end in Jr., Sr., II, III or IV had no photo, against a tenth of the rest."""
+    out = dict(faces or {})
+    for name, url in (faces or {}).items():
+        if url:
+            out.setdefault(_norm_key(name), url)
+    return out
+
+
+def _nfl_face(p: dict, name: str, keyed: dict, by_id: dict | None) -> str:
+    """One Sleeper player's photo: the roster file's by the league's own id
+    (gsis), which cannot join the wrong player; then by name, the spelling or
+    its join key; then ESPN's by the id Sleeper carries, the path
+    nflverse._face_url already falls back to."""
+    gsis = str(p.get("gsis_id") or "").strip()
+    if gsis and by_id and by_id.get(gsis):
+        return by_id[gsis]
+    hit = face_of(keyed, name)
+    if hit:
+        return hit
+    espn = str(p.get("espn_id") or "").strip()
+    if espn.isdigit():
+        from .sources.nflverse import ESPN_HEADSHOT
+        return ESPN_HEADSHOT.format(pid=espn)
+    return ""
 
 
 def face_of(faces: dict | None, name: str) -> str:

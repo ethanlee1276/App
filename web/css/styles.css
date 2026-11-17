@@ -1458,19 +1458,22 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    player's page, a stripe of the club's colour down its edge. One column on
    a phone, as many as fit on a wide screen. */
 .psr-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 8px; }
-.psr-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; margin: 0;
-  padding: 10px 12px 10px 16px; border: var(--hairline) solid transparent; border-radius: var(--radius-sm);
-  background: var(--panel-2); box-shadow: inset 3px 0 0 var(--psr-c, var(--brand));
-  color: var(--text); font: inherit; text-align: left; cursor: pointer;
+.psr-row {
+  --psr-c: var(--brand);
+  position: relative; overflow: hidden; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px;
+  margin: 0; padding: 10px 12px 10px 16px; border: var(--hairline) solid transparent; border-radius: var(--radius-sm);
+  background: var(--panel-2); color: var(--text); font: inherit; text-align: left; cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+/* The club's colour down the row's edge (the row sets --psr-c). */
+.psr-row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--psr-c); }
 .psr-row:hover { background: var(--fill-hover); }
 .psr-row:active { transform: scale(.99); }
 .psr-row:focus-visible { outline: var(--focus-w) solid var(--brand); outline-offset: 2px; }
 .psr-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .psr-nm { font-size: var(--fs-lg); font-weight: 700; line-height: var(--lh-tight);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.psr-sub { color: var(--text-mute); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.psr-sub .team-mark-wrap { display: inline-block; vertical-align: -3px; margin-right: 2px; }
+.psr-sub { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--text-mute); font-size: var(--fs-sm); }
+.psr-sub > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .psr-go { flex: none; color: var(--text-mute); font-size: var(--fs-2xl); line-height: 1; }
 .psr-row:hover .psr-go { color: var(--brand); }
 .profile {

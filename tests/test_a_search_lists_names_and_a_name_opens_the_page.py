@@ -69,7 +69,8 @@ def test_a_row_is_a_face_a_name_and_a_door_to_the_page():
     for sel in (".psr-list {", ".psr-row {", ".psr-row:hover {", ".psr-row:focus-visible {", ".psr-who {",
                 ".psr-nm {", ".psr-sub {", ".psr-go {"):
         assert sel in CSS, sel
-    assert "box-shadow: inset 3px 0 0 var(--psr-c, var(--brand));" in CSS, "the club's stripe"
+    assert ".psr-row::before {" in CSS and "background: var(--psr-c); }" in CSS, "the club's stripe"
+    assert "\n  --psr-c: var(--brand);\n" in CSS, "a row with no club wears the brand's"
     assert "min-height: 64px;" in CSS[CSS.index(".psr-row {"):CSS.index("}", CSS.index(".psr-row {"))], "a thumb's target"
 
 
@@ -168,18 +169,18 @@ def test_rows_drawn_from_a_board_a_league_and_a_fight_card():
     assert 'data-player-page="josh-allen"' in qb and ">Josh Allen" in qb, qb
     assert 'data-face="https://x.test/ja.png" data-size="44"' in qb, "the face, at the row's size"
     assert '<span class="inj-tag" data-lg="nfl">Q</span>' in qb, "the designation beside the name"
-    assert '<b class="mk" data-lg="nfl">BUF</b> Bills · QB' in qb, qb
+    assert '<b class="mk" data-lg="nfl">BUF</b><span>Bills · QB</span>' in qb, qb
     assert "--psr-c:#00338D" in qb and "lg-badge" not in qb
-    assert 'data-player-page="james-cook"' in got["board"] and "Bills · RB" in got["board"], "a board row has no league: the tab's"
+    assert 'data-player-page="james-cook"' in got["board"] and "<span>Bills · RB</span>" in got["board"], "a board row has no league: the tab's"
     odd = got["odd"]
     assert "<img src=x" not in odd and "&lt;img src=x onerror=1&gt;" in odd and "&quot;QB&quot;" in odd, odd
     assert 'data-player-page="img-src-x-onerror-1"' in odd
     away = got["away"]
     assert '<span class="lg-badge">wnba</span>' in away and 'data-player-page="a-ja-wilson"' in away, "another league says so"
-    assert '<b class="mk" data-lg="wnba">LV</b> Aces · F' in away, "its own league's club"
+    assert '<b class="mk" data-lg="wnba">LV</b><span>Aces · F</span>' in away, "its own league's club"
     fighter = got["fighter"]
-    assert "light heavyweight · tracked 15 fights" in fighter and 'class="mk"' not in fighter, fighter
-    assert "--psr-c:var(--brand)" in fighter, "no club, the brand's stripe"
+    assert "<span>light heavyweight · tracked 15 fights</span>" in fighter and 'class="mk"' not in fighter, fighter
+    assert "--psr-c" not in fighter, "no club: the stylesheet's own stripe, the brand's"
     assert got["list"].startswith('<div class="psr-list">') and got["list"].count('class="psr-row"') == 2
     assert got["listed"] == ["ja-marr-chase", "josh-allen"], got["listed"]
 

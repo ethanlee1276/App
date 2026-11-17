@@ -185,6 +185,37 @@ def test_the_roster_page_carries_a_face_for_every_player_it_can():
     assert out2["teams"]["SF"]["players"][0]["headshot"] == ""
 
 
+def test_a_suffix_an_id_or_espns_id_still_finds_the_nfl_face():
+    """2026-11-17: Nolan Smith Jr.'s player page had no photo. The league's
+    roster file spells him "Nolan Smith", Sleeper "Nolan Smith Jr.", and the
+    photo map was keyed by spellings alone: a third of the NFL players whose
+    names end in Jr., Sr., II, III or IV had no face, against a tenth of the
+    rest. Asked in order now: the league's own id (which cannot join a
+    namesake), the name (its spelling, then its join key), and ESPN's photo
+    by the ESPN id Sleeper carries."""
+    from engine.sources.nflverse import ESPN_HEADSHOT
+    faces = {"Nolan Smith": "https://x/ns.png", "Michael Carter": "https://x/rb.png",
+             "Plain Name": "https://x/plain.png"}
+    by_id = {"00-0039999": "https://x/cb.png"}
+    blob = _blob(_p("Nolan Smith Jr.", "PHI", pos="LB"),
+                 dict(_p("Michael Carter II", "NYJ", pos="CB"), gsis_id=" 00-0039999 "),
+                 dict(_p("Plain Name", "SF"), espn_id=111),
+                 dict(_p("Espn Only", "SF"), espn_id=4241389),
+                 dict(_p("Nobody Knows", "SF"), espn_id="", gsis_id=None))
+    out = rosters.build_rosters(blob, faces=faces, faces_by_id=by_id)
+    got = {r["player"]: r["headshot"] for t in out["teams"].values() for r in t["players"]}
+    assert got["Nolan Smith Jr."] == "https://x/ns.png", "the suffix folds away"
+    assert got["Michael Carter II"] == "https://x/cb.png", "the id, never the namesake's face"
+    assert got["Plain Name"] == "https://x/plain.png", "a real photo by name beats ESPN's by id"
+    assert got["Espn Only"] == ESPN_HEADSHOT.format(pid="4241389")
+    assert got["Nobody Knows"] == ""
+    # The roster build hands both maps over (fantasy_build.py).
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fantasy_build.py"),
+               encoding="utf-8").read()
+    assert "out = _r.build_rosters(blob, faces=_faces, faces_by_id=_faces_by_id)" in src
+    assert "_faces_by_id = _nv.headshots_by_id(_season_of(\"nfl\", today))" in src
+
+
 def test_the_face_join_survives_the_punctuation_two_feeds_disagree_on():
     """The photo table is keyed by one feed's spelling and the roster rows
     carry another's. An exact-string join is why 100 of 105 WNBA photos

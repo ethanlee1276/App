@@ -69,9 +69,10 @@ def _write_rosters(path: Path, blob: dict | None) -> None:
         from engine.sources import nflverse as _nv
         from engine.seasons import season_of as _season_of
         _faces = _nv.headshot_map(_season_of("nfl", today))
+        _faces_by_id = _nv.headshots_by_id(_season_of("nfl", today))
     except Exception:                                          # noqa: BLE001
-        _faces = {}
-    out = _r.build_rosters(blob, faces=_faces)
+        _faces, _faces_by_id = {}, {}
+    out = _r.build_rosters(blob, faces=_faces, faces_by_id=_faces_by_id)
     # THE SECOND OPINION. Sleeper knows who is on every roster; ESPN's
     # injury report knows what is wrong with the ones who are hurt, and
     # often files first. Until now the two lived on different pages and

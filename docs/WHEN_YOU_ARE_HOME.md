@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UR. NFL players whose names end in Jr., Sr. or II have their photos** (step 676; 17 November). Nothing to run.
+Checking Nolan Smith Jr.'s page after the last deploy: his number, size and position are right now, but it had no
+photo, and the roster file showed why. The photos are listed under the league's spelling ("Nolan Smith") and the
+roster's names come from Sleeper ("Nolan Smith Jr."), so a third of the NFL players whose names end in Jr., Sr.,
+II, III or IV had no photo, against a tenth of everyone else: Aaron Jones Sr., Byron Murphy Jr. and Gardner
+Minshew II among them. A roster photo is now found by the league's own player id first (it can't match a
+different player with the same name), then by the name with the suffix folded away, then ESPN's photo by the ESPN
+id the roster carries. The roster file is rebuilt with the board's refreshes, so the rosters and the player pages
+get the photos within the hour of the deploy.
+
 **UQ. A search lists names, and a name opens the player's page** (step 675; 17 November). Nothing to run. Your
 two screenshots: the Players search now answers with a face and a name on each row (the club and position under
 it), and so does the page before you type anything, which lists everyone with a prop on tonight's board. Tapping a

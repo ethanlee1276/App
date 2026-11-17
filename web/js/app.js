@@ -14191,15 +14191,16 @@ function searchListHTML(rows) {
 function searchRowHTML(m) {
   const lg = m.sport || state.sport;
   const f = m.fighter || {};
-  const where = lg === "ufc"
+  const words = lg === "ufc"
     ? [String(f.division || "").replace(/_/g, " "), m.games != null ? `tracked ${plural(m.games, "fight")}` : ""]
-    : [m.team ? `${teamMarkIn(lg, m.team, 14)} ${escapeHtml(teamNameIn(lg, m.team))}` : "", escapeHtml(m.position || "")];
-  return `<button type="button" class="psr-row" data-player-page="${escapeAttr(slugify(m.player))}"
-      style="--psr-c:${escapeAttr(m.team ? teamPrimaryIn(lg, m.team) : "var(--brand)")}">
+    : [m.team ? teamNameIn(lg, m.team) : "", m.position || ""];
+  return `<button type="button" class="psr-row" data-player-page="${escapeAttr(slugify(m.player))}"${
+      m.team ? ` style="--psr-c:${escapeAttr(teamPrimaryIn(lg, m.team))}"` : ""}>
     ${playerAvatar(m.player, m.team, { size: 44, headshot: m.headshot })}
     <span class="psr-who"><span class="psr-nm">${escapeHtml(m.player)}${
       lg !== state.sport ? leagueBadge(m.sport) : ""}${injTag(m.sport || state.sport, m.player)}</span>
-      <span class="psr-sub">${where.filter(Boolean).map((w) => lg === "ufc" ? escapeHtml(w) : w).join(" · ")}</span></span>
+      <span class="psr-sub">${m.team ? teamMarkIn(lg, m.team, 14) : ""}<span>${
+        escapeHtml(words.filter(Boolean).join(" · "))}</span></span></span>
     <span class="psr-go" aria-hidden="true">›</span></button>`;
 }
 
