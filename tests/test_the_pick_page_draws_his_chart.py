@@ -175,27 +175,28 @@ def test_a_bet_asks_for_every_chart_he_could_have():
       };""")
     if got is None:
         return
-    # His role chart follows his own (2026-10-14): never ahead of them.
+    # The player's role chart follows the player's own (2026-10-14): never ahead of them.
     both, rb = ["routes", "carries", "role"], ["carries", "routes", "role"]
     # Every skill player in the NFL is asked for both, whatever the bet:
-    # a back's receptions over no longer draws only his routes.
+    # a back's receptions over no longer draws only the routes.
     for key in ("rbRec", "rbRush", "rbAtt", "rbTd", "rbRr", "noPosTd"):
         assert got[key] == rb, (key, got[key])
     for key in ("wrRec", "teYds", "wrRush", "teTd", "wrRr", "noPosRec"):
         assert got[key] == both, (key, got[key])
-    # A quarterback's own chart is his throws, whatever the bet; his runs
+    # A quarterback's own chart is the throws, whatever the bet; the runs
     # are the other (the passing chart, 2026-10-13).
     qb = ["passes", "carries", "role"]
     for key in ("qbRun", "qbTd", "qbPass", "qbRush", "noPosPass", "noPosInt"):
         assert got[key] == qb, (key, got[key])
-    # A kicker's bet draws every kick he tried (the kicker chart, 2026-10-14).
+    # A kicker's bet draws every kick tried (the kicker chart, 2026-10-14).
     assert got["kick"] == ["kicks"]
     # College has no route chart; its receivers' few carries are not theirs.
     # College has its targets since 2025 (the college target chart,
     # 2026-10-13): a college player is asked for both, as an NFL one is;
-    # a college quarterback has no passing chart, so his runs.
+    # a college quarterback has the throws since 2026-11-17
+    # (engine/passes.CfbPasses), then the runs, as an NFL one does.
     assert got["cfbRbRush"] == got["cfbRbTd"] == ["carries", "routes", "role"]
-    assert got["cfbQbTd"] == ["carries", "role"]
+    assert got["cfbQbTd"] == qb
     assert got["cfbWrTd"] == got["cfbTeTd"] == got["cfbWrRec"] == got["cfbWrRush"] == ["routes", "carries", "role"]
     assert got["tally"] == ["5-88", "1 for −2", "3-0"], "a game he lost yards in reads as one"
 

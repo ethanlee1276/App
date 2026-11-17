@@ -266,8 +266,8 @@ function plrChartRow(page, d) {
   const tab = typeof _profTab !== "undefined" ? _profTab[player] : "";
   const priced = rows.find((r) => r.market_label === tab) || rows[0];
   if (priced) return { ...priced, sport: priced.sport || sport, position: priced.position || d.position || "" };
-  // College keeps no passer's chart (no throw locations in its play file): a college passer's runs and role.
-  const mkt = sport === "cfb" && d.role === "passing" ? "rush_yds" : PLR_CHART_MKT[d.role] || "";
+  // A college passer's throws since 2026-11-17 (engine/passes.CfbPasses), as an NFL passer's.
+  const mkt = PLR_CHART_MKT[d.role] || "";
   return mkt ? { player, sport, market: mkt, position: d.position || "", opponent: "" } : null;
 }
 function plrChartsInto(page, d) {

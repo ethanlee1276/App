@@ -27,8 +27,8 @@ and `fill` does the reads for what is owed and nothing more:
 * the NGS rushing, receiving and passing files, when an NFL season was
   owed;
 * college: the season's play file, for the games the database has —
-  its carries and, from 2025, the targets it names, both kept to the
-  games the college logs keep;
+  its carries, from 2025 the targets it names, and every passer's throws
+  and sacks (2026-11-17), all kept to the games the college logs keep;
 * baseball (the hit tracker and the pitch chart, 2026-10-13): the
   season's finals from MLB's Stats API play-by-play, newest first, one
   night's budget of them (engine/mlb/charts.backfill); the nightly chores
@@ -51,7 +51,7 @@ import sys
 #: (`passes`, 2026-10-13) and the kicker chart (`kicks`, 2026-10-14) ride
 #: the NFL read the other two make.
 TABLES = (("nfl", "carries"), ("nfl", "targets"), ("nfl", "passes"), ("nfl", "kicks"),
-          ("cfb", "carries"), ("cfb", "targets"))
+          ("cfb", "carries"), ("cfb", "targets"), ("cfb", "passes"))
 #: Baseball's chart tables are keyed by game, not by league: one row per
 #: plate appearance and one per pitch, written together, so the pitches
 #: answer for both.
@@ -179,7 +179,9 @@ def fill(conn, want, log=print) -> list:
             n_c = CR.backfill_cfb(conn, s)
             n_t = conn.execute("SELECT COUNT(*) FROM targets WHERE sport='cfb' AND season=?",
                                (s,)).fetchone()[0]
-            say(f"CFB {s}: {n_c:,} carries, {n_t:,} targets"
+            n_p = conn.execute("SELECT COUNT(*) FROM passes WHERE sport='cfb' AND season=?",
+                               (s,)).fetchone()[0]
+            say(f"CFB {s}: {n_c:,} carries, {n_t:,} targets, {n_p:,} throws"
                 + ("" if s >= TG.CFB_FROM else " (college targets are drawn from 2025)"))
         except Exception as exc:                                   # noqa: BLE001
             say(f"CFB {s}: not read — {exc}")

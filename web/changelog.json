@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-17",
+      "kind": "ship",
+      "title": "College quarterbacks get a passing chart",
+      "body": "Every college throw and sack is now charted: each completion drawn to where the play ended, the misses, picks and sacks marked, a season shaded by how far the completions went, and splits by down and by receiver. The play file doesn’t record how far the ball travelled or to which side, so the chart says so."
+    },
+    {
+      "date": "2026-11-17",
       "kind": "fix",
       "title": "Every fighter’s page has a photo, the facts and the fights",
       "body": "A fighter who was not on the coming card had a page with a record and no photo, height, reach or fight history. Every fighter we keep is now read, and a searched fighter shows a face like every league’s players."

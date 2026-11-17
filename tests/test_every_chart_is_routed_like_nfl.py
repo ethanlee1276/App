@@ -99,7 +99,7 @@ def test_a_door_asks_for_the_bets_charts_or_the_leagues_every_one_and_the_matchu
     assert got[5] == {"cand": ["routes", "carries", "role"], "fam": "routes"}
     assert got[6] == {"cand": ["carries", "routes", "passes", "kicks", "role", "matchup"], "fam": ""}
     assert got[7] == {"cand": ["saves", "role", "matchup"], "fam": "saves"}
-    assert got[8]["cand"] == ["carries", "routes", "role"] and got[9]["cand"] == ["fights"]
+    assert got[8]["cand"] == ["carries", "routes", "passes", "role"] and got[9]["cand"] == ["fights"]
     assert "const D = auto ? doorKinds(lg, mkt, pos, opp)" in CC_JS and "fam: D.fam" in CC_JS
 
 

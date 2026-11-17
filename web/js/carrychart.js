@@ -154,6 +154,11 @@
   KIND["routes@cfb"] = { chip: "Targets", title: "Target chart", noun: "targets", one: "target",
                          where: "every target", dist: "Target distribution",
                          sec: "every pass thrown the player’s way that the play file names: caught or not, the yards, the down and where on the field" };
+  /* College throws (2026-11-17) have no air yards and no side either:
+     every throw the play file names the passer of, and the sacks. */
+  KIND["passes@cfb"] = Object.assign({}, KIND.passes, {
+    where: "every throw", all: "All throws",
+    sec: "every throw the play file names the passer of: complete or not, the yards, the down and where on the field, and the sacks taken" });
   const kindOf = (kind, sport) => KIND[`${kind}@${sport}`] || KIND[kind] || KIND.carries;
   //: The charts drawn by registered parts (`plugView`), by kind.
   const DRAW = {};
@@ -928,6 +933,116 @@
     return `<p class="cc-note">The college play file records who was thrown at, whether it was caught, the yards, the down and where the play started — not how far the ball travelled or to which side of the field — so each target is drawn straight upfield from the line: a catch as long as the yards it gained, an incompletion as a ring at the line. A game runs left to right in the order they were thrown; the season, shortest to longest. The file names the intended receiver on 92% of 2026’s incompletions and 78% of 2025’s; a miss it doesn’t name, and every interception (it never names that receiver), isn’t here, so the true target count can run a little higher. Seasons before 2025 name too few misses to draw, and a week the file lost its scoring plays from is left out, as it is from the game log.</p>`;
   }
 
+  /* ---------------- college throws (2026-11-17) ----------------
+     Ethan, on the player page: "We should still have the players route
+     charts and pass charts and shit on the player page." The college
+     play file names who threw every pass and who was sacked, whether a
+     pass was caught, the yards, the down and the yards to the goal, and
+     nothing about how far the ball travelled, to which side or whether
+     the passer was hit (engine/passes.CfbPasses). So a game's throws are
+     drawn the way a college target is: straight upfield from the line,
+     across the field in the order they were thrown; a completion as long
+     as its yards, an incompletion a ring at the line, an interception a
+     cross there, and a sack a cross behind it. The season is drawn as
+     bands (`cfbPassSeason`). */
+  const cfbPass = (d) => !!d && d.air === false;
+  const crossD = (c) => `M${(c[0] - 5).toFixed(1)} ${(c[1] - 5).toFixed(1)} l10 10 m0 -10 l-10 10`;
+  function cfbPassMarks(ts, xOf, ymax) {
+    let body = "";
+    ts.forEach(([t, i], j) => {
+      const x = xOf(j), cls = S && S.sel === i ? " sel" : "";
+      if (t.k === "sack" || t.int) {
+        const d = crossD(proj(x, t.k === "sack" ? POCKET + 2 : 0.6, ymax));
+        body += `<g class="cc-carry" data-i="${i}"><path class="cc-hit" d="${d}"/>
+          <path class="rc-sack cx-mark${cls}" d="${d}"/></g>`;
+        return;
+      }
+      if (!t.c) {
+        const c = proj(x, 0.6, ymax);
+        body += `<g class="cc-carry" data-i="${i}"><path class="cc-hit" d="M${c[0].toFixed(1)} ${(c[1] - 6).toFixed(1)} v12"/>
+          <circle class="rc-miss cx-mark${cls}" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="4"/></g>`;
+        return;
+      }
+      const ey = clampY(t.y, ymax), pts = [[x, 0], [x, ey]];
+      const end = proj(x, ey, ymax);
+      body += `<g class="cc-carry" data-i="${i}"><path class="cc-hit" d="${pathD(pts, ymax)}"/>
+        <path class="rc-route${cls}" d="${pathD(pts, ymax)}" pathLength="1" style="animation-delay:${Math.min(j * 45, 900)}ms"/>
+        <circle class="rc-catch" cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="3.4"/>
+        ${t.td ? `<circle class="cc-td" cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="7"/>` : ""}</g>`;
+      if (t.y > ymax) body += longTag(x, ymax, t.y);
+    });
+    return body;
+  }
+  function cfbPassGame(g) {
+    const ts = (g.throws || []).map((t, i) => [t, i]);
+    const ymax = yMaxFor(ts.map(([t]) => (t.k === "pass" && t.c ? t.y : 0)));
+    const n = ts.length, xOf = (j) => -20 + 40 * (j + 0.5) / Math.max(1, n), ticks = [];
+    let lastQ = null;
+    ts.forEach(([t], j) => {
+      if (t.q !== lastQ) { ticks.push([xOf(j) - 1.2, t.q > 4 ? "OT" : `Q${t.q || "?"}`]); lastQ = t.q; }
+    });
+    return svgWrap(fieldSVG(ymax, [], ticks) + cfbPassMarks(ts, xOf, ymax), g, "cfb",
+                   ts.filter(([t]) => t.k === "pass").length, "throws");
+  }
+  /* The season is a passer's hundreds of throws, too many to draw one
+     by one: the completions' bands, how far each went (the NFL season
+     chart's depths, read off the yards gained), each shaded by its share
+     and labelled with its count, every completion a dot where it ended,
+     and the misses and picks counted at the line. */
+  const CFB_BANDS = [[-7, 0, (y) => y < 0], [0, 10, (y) => y >= 0 && y < 10], [10, 20, (y) => y >= 10 && y < 20],
+                     [20, 99, (y) => y >= 20]];
+  function cfbPassSeason(d) {
+    const every = [];
+    d.games.forEach((g) => (g.throws || []).forEach((t) => { if (t.k === "pass") every.push(t); }));
+    if (!every.length) return "";
+    const done = every.filter((t) => t.c), n = done.length;
+    const ymax = yMaxFor(done.map((t) => Math.min(t.y, 38)).concat([22]));
+    const counts = CFB_BANDS.map(([, , inBand]) => done.filter((t) => inBand(t.y)).length);
+    const most = Math.max(1, ...counts);
+    let cells = "", labels = "", dots = "";
+    CFB_BANDS.forEach(([y0, y1], b) => {
+      const k = counts[b], yb = Math.max(YMIN + 0.4, y0), yt = Math.min(ymax, y1);
+      if (yt <= yb) return;
+      const poly = [proj(-SIDE, yb, ymax), proj(SIDE, yb, ymax), proj(SIDE, yt, ymax), proj(-SIDE, yt, ymax)];
+      cells += `<polygon class="rc-cell" points="${poly.map(pt).join(" ")}" style="fill-opacity:${k ? (0.1 + 0.45 * k / most).toFixed(2) : "0"}"/>`;
+      if (!k) return;
+      const m = proj(SIDE * 0.55, (yb + yt) / 2, ymax);
+      labels += `<text class="cc-raylbl rc-lbl" x="${m[0].toFixed(1)}" y="${(m[1] - 2).toFixed(1)}" text-anchor="middle">${pct(k / n)}</text>
+        <text class="cc-raysub rc-lbl" x="${m[0].toFixed(1)}" y="${(m[1] + 14).toFixed(1)}" text-anchor="middle">${k} of ${n}</text>`;
+    });
+    // Spread across the field by the golden ratio: no order to read, and no two dots on one another.
+    done.forEach((t, i) => {
+      const c = proj(-SIDE + 2 + (2 * SIDE - 4) * ((i * 0.6180339887) % 1), Math.max(-6.5, clampY(t.y, ymax)), ymax);
+      dots += `<circle class="rc-dot c" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.4"/>`;
+    });
+    const picks = every.filter((t) => t.int).length, missed = every.length - n - picks;
+    const at = proj(-SIDE + 1.5, 1.2, ymax);
+    labels += `<text class="cc-raylbl" x="${at[0].toFixed(1)}" y="${(at[1] - 4).toFixed(1)}">${missed} incomplete${picks ? ` · ${picks} intercepted` : ""}</text>`;
+    const L = d.season_line, avg = L.cmp ? L.yds / L.cmp : 0;
+    const a = proj(-SIDE, clampY(avg, ymax), ymax), b = proj(SIDE, clampY(avg, ymax), ymax);
+    labels += `<line class="cc-avg" x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"/>
+      <text class="cc-raylbl" x="${(a[0] + 6).toFixed(1)}" y="${(a[1] - 6).toFixed(1)}">${num1(avg)} a completion</text>`;
+    return svgWrap(fieldSVG(ymax, []) + cells + dots + labels, null, "cfb", every.length, "throws");
+  }
+  function cfbPassTiles(line) {
+    const t = [tile("Cmp/Att", `${line.cmp}/${line.att}`), tile("Yards", Math.round(line.yds)),
+               tile("TD–INT", `${line.td}–${line.int}`), tile("Yds/att", num1(line.ypa)),
+               tile("Completion", pct(line.pct)), tile("Sacked", line.sk ? `${line.sk} (${signed(line.sk_yds)})` : "0")];
+    return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
+  }
+  function cfbPassLegend(season) {
+    if (season) {
+      return `<div class="cc-legend" aria-hidden="true"><span><i class="dt c"></i>A completion, at the yards it gained</span>
+        <span><i class="sw cell"></i>Share of the completions</span></div>`;
+    }
+    return `<div class="cc-legend" aria-hidden="true"><span><i class="sw route"></i>Completed, to where the play ended</span>
+      <span><i class="dt m"></i>Incomplete</span><span><i class="mk td"></i>Touchdown</span>
+      <span><i class="mk int">×</i>Interception · sack</span></div>`;
+  }
+  function cfbPassNote() {
+    return `<p class="cc-note">The college play file records who threw every pass and who was sacked, whether a pass was caught, the yards, the down and where the play started — not how far the ball travelled, to which side of the field, or whether the passer was hit — so each throw is drawn straight upfield from the line: a completion as long as the yards it gained, an incompletion as a ring at the line, an interception as a cross there, and a sack as a cross behind it. A game runs left to right in the order they were thrown; the season shades how far the completions went, a dot for each, with the misses counted at the line. A completion’s passer is settled the way the game log settles it, so these totals are the game log’s; a receiver is named where the file names one, and a week the file lost its scoring plays from is left out, as it is from the game log.</p>`;
+  }
+
   /* ---------------- the passing chart (2026-10-13) ----------------
      A passer's throws, the route chart turned round: each from the
      pocket to where the ball arrived — its third of the field and its
@@ -1018,7 +1133,9 @@
     if (t.k === "sack") return "Sacked";
     if (t.k === "spike") return "Spiked to stop the clock";
     const air = t.ay == null ? (SIDE_WORD[t.s] || "") : airWords(t);
-    return [air, t.to ? `to ${t.to}` : "nobody targeted"].filter(Boolean).join(" · ");
+    // The college file names a receiver on most throws, not all: an unnamed one is not "nobody".
+    return [air, t.to ? `to ${t.to}` : S && S.sport === "cfb" ? "receiver not named" : "nobody targeted"]
+      .filter(Boolean).join(" · ");
   }
   function passTags(t) {
     const yac = t.k === "pass" && t.c ? Math.round(yacOf(t)) : 0;
@@ -1083,22 +1200,29 @@
     return `<p class="cc-note">Each line is a throw, from the pocket to where the ball arrived. How far past the line it went (air yards) and which third of the field it went to are the NFL play-by-play’s record; where inside that third is spread so no two sit on one another. Green is the run after the catch, as long as the record says. Sacks are marked behind the line with the yards lost. A spiked ball counts as an incomplete attempt, as in the box score, and isn’t drawn. Play action, screens, out of the pocket, throwaways, drops, blitzes (5+ rushers) and balls that should have been intercepted are FTN’s charting (2022 on). Time to throw and completion over expected are the NFL’s Next Gen Stats, published for passers past the league’s minimum in a game.</p>`;
   }
   DRAW.passes = {
-    one: "dropback", splitsTitle: "Every split · depth, side, pressure, down, receiver",
+    one: "dropback",
+    get splitsTitle() {
+      return S && S.sport === "cfb" ? "Every split · down, receiver" : "Every split · depth, side, pressure, down, receiver";
+    },
     items: (g) => g.throws || [],
     count: (L) => `${L.att} attempts`,
     chip: passChip,
-    game: (g) => passGameChart(g),
-    season: (d) => passSeasonChart(d),
-    gameSide: (g) => `${passLegend(false)}${passTiles(g.line, g.ngs)}`,
+    game: (g, d) => (cfbPass(d) ? cfbPassGame(g) : passGameChart(g)),
+    season: (d) => (cfbPass(d) ? cfbPassSeason(d) : passSeasonChart(d)),
+    gameSide: (g, d) => (cfbPass(d) ? `${cfbPassLegend()}${cfbPassTiles(g.line)}` : `${passLegend(false)}${passTiles(g.line, g.ngs)}`),
     seasonSide: (d) => {
       const L = d.season_line;
+      if (cfbPass(d)) {
+        return `${cfbPassLegend(true)}${cfbPassTiles(L)}
+        <div class="cc-tiles cc-tiles-2">${tile("Attempts a game", num1(L.att / Math.max(1, d.games.length)))}${tile("1st downs", L.first)}${tile("Long", L.long == null ? "—" : Math.round(L.long))}${tile("Yds/completion", L.cmp ? num1(L.yds / L.cmp) : "—")}</div>`;
+      }
       return `${passLegend(true)}${passTiles(L, d.ngs)}
         <div class="cc-tiles cc-tiles-2">${tile("Completion", pct(L.pct))}${tile("Deep (20+)", `${L.deep_cmp} of ${L.deep}`)}${tile("Sacked", `${L.sk} (${signed(L.sk_yds)})`)}${tile("Throwaways", L.away)}</div>
         ${passNgs(d)}`;
     },
     list: (g) => passList(g),
     splits: (d) => passTables(d),
-    note: () => passNote(),
+    note: (d) => (cfbPass(d) ? cfbPassNote() : passNote()),
     tip: (t, g) => `<b class="${passBand(t)}">${t.k === "sack" ? `Sacked, ${signed(t.y)} yds` : t.k === "spike" ? "Spiked"
       : t.int ? "Intercepted" : t.c ? `${signed(t.y)} yds` : "Incomplete"}</b>${t.td ? " · TD" : ""}
       <span>${esc([qLabel(t), downDist(t), spot(t, g), passWords(t)].filter(Boolean).join(" · "))}</span>`,
@@ -2070,7 +2194,7 @@
   /* Every chart a league has, for a door that knows neither his position
      nor a bet the charts read (a player page's head, a leg the parlay
      checker priced): probe asks for each and draws what he has. */
-  const ALL = { nfl: ["carries", "routes", "passes", "kicks", "role"], cfb: ["carries", "routes", "role"],
+  const ALL = { nfl: ["carries", "routes", "passes", "kicks", "role"], cfb: ["carries", "routes", "passes", "role"],
                 nba: ["shots", "role"], wnba: ["role"], cbb: ["shots", "role"], nhl: ["shotmap", "saves", "role"],
                 mlb: ["spray", "pitches", "role"], ufc: ["fights"] };
   function doorKinds(lg, mkt, pos, opp) {
@@ -2136,38 +2260,38 @@
     const m = String(mkt || ""), p = String(pos || "").toUpperCase();
     const runs = /rush|anytime/.test(m), catches = /rec|anytime/.test(m);
     const wide = p === "WR" || p === "TE";
-    /* HIS ROLE beside every league's own chart (2026-10-14): how much he
-       is used, game by game (engine/role). Offered after the chart of
-       what he did with it, never ahead of it (probe), and only where a
-       player bet has a chart at all. */
+    /* THE PLAYER'S ROLE beside every league's own chart (2026-10-14): how
+       much the player is used, game by game (engine/role). Offered after
+       the chart of what the player did with it, never ahead of it (probe),
+       and only where a player bet has a chart at all. */
     const role = (ks) => ks.concat("role");
     /* Baseball's chart is the bet's side of the ball: a pitcher's
-       strikeouts or outs draw every pitch he threw, a hitter's bet every
-       ball he put in play (engine/mlb/charts). */
+       strikeouts or outs draw every pitch thrown, a hitter's bet every
+       ball put in play (engine/mlb/charts). */
     if (sport === "mlb") return m ? role(/^(strikeouts|outs)$|pitcher|earned_runs|_allowed/.test(m) ? ["pitches"] : ["spray"]) : [];
-    /* A basketball player's chart is his shots, whatever the bet: his
-       points, threes and the combos are made there, and his rebounds and
+    /* A basketball player's chart is the player's shots, whatever the bet:
+       points, threes and the combos are made there, and rebounds and
        assists ride the same minutes (engine/nba/shots). College's shots
        come off each final's ESPN summary (2026-11-13). The WNBA has no
-       play file stored: her role. */
+       play file stored: the player's role. */
     if (sport === "nba" || sport === "cbb") return m ? role(["shots"]) : [];
     if (sport === "wnba") return m ? ["role"] : [];
-    /* A fighter's chart is every fight on his record (engine/ufc/history). */
+    /* A fighter's chart is every fight on the record (engine/ufc/history). */
     if (sport === "ufc") return ["fights"];
     /* Hockey's is the bet's side of the puck: a goalie's saves or goals
-       against draw every shot he faced, a skater's bet every shot he took
+       against draw every shot faced, a skater's bet every shot taken
        (engine/nhl/charts). */
     if (sport === "nhl") return m ? role(/save|goals_against|goalie/.test(m) ? ["saves"] : ["shotmap"]) : [];
     if (sport !== "nfl" && sport !== "cfb") return [];
-    /* A quarterback's own chart is his throws, whatever the bet; his runs
+    /* A quarterback's own chart is the throws, whatever the bet; the runs
        are the other (2026-10-13). A passing bet with no position on the
-       row asks for both too, and the numbers decide. College has no
-       passing chart: a college quarterback has his runs and his role. */
-    /* A kicker's chart is every kick he tried (engine/kicks), 2026-10-14. */
+       row asks for both too, and the numbers decide. College's throws
+       since 2026-11-17 (engine/passes.CfbPasses), drawn without depth or
+       side: a college quarterback has the throws, the runs and the role. */
+    /* A kicker's chart is every kick tried (engine/kicks), 2026-10-14. */
     if (sport === "nfl" && (p === "K" || /^(kick_pts|fg_made)$|kicking|field_goal/.test(m))) return ["kicks"];
-    if (sport === "cfb" && p === "QB") return runs ? role(["carries"]) : ["role"];
-    if (sport === "nfl" && (p === "QB" || (!p && /^pass/.test(m)))) return role(["passes", "carries"]);
-    if (!runs && !catches) return sport === "cfb" && /^pass/.test(m) ? ["role"] : [];
+    if (p === "QB" || (!p && /^pass/.test(m))) return role(["passes", "carries"]);
+    if (!runs && !catches) return [];
     const back = p === "RB" || p === "FB" || p === "HB";
     return role(wide || (!back && !runs) ? ["routes", "carries"] : ["carries", "routes"]);
   }
@@ -2279,5 +2403,6 @@
                                          cfbTargetTiles, cfbTargetNote, heroHTML, sideOf, sidesHTML, carryResult,
                                          carryFlags, targetFlags, csvOf, routeViews, routeBars, descOf,
                                          gridHTML, barList, segHTML, poolOf, zonesOf, toolsHTML, heroShell,
-                                         playerHero, heroShots, heroTiles, heroPhoto, nameLen } };
+                                         playerHero, heroShots, heroTiles, heroPhoto, nameLen,
+                                         cfbPassGame, cfbPassSeason, cfbPassTiles, cfbPassNote, passWords, DRAW } };
 })();

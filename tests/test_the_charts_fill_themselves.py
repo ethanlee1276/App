@@ -119,11 +119,11 @@ def test_a_season_played_with_no_chart_rows_is_owed_and_nothing_else_is():
     _game(conn, "cfb", 2026, "401752000")
     _game(conn, "cfb", 2025, "401700000", score=None, date="2025-09-01")   # never finished
     # The passing chart's table and the college target chart's rows
-    # (2026-10-13), and the kicker chart's (2026-10-14), are owed like the
-    # others.
+    # (2026-10-13), the kicker chart's (2026-10-14) and college's throws
+    # (2026-11-17) are owed like the others.
     assert CF.owed(conn, TODAY) == [("nfl", 2026, "carries"), ("nfl", 2026, "targets"),
                                     ("nfl", 2026, "passes"), ("nfl", 2026, "kicks"),
-                                    ("cfb", 2026, "carries"), ("cfb", 2026, "targets"),
+                                    ("cfb", 2026, "carries"), ("cfb", 2026, "targets"), ("cfb", 2026, "passes"),
                                     ("nfl", 2025, "carries"), ("nfl", 2025, "targets"),
                                     ("nfl", 2025, "passes"), ("nfl", 2025, "kicks")]
     _one_carry(conn)
@@ -131,7 +131,7 @@ def test_a_season_played_with_no_chart_rows_is_owed_and_nothing_else_is():
     _one_throw(conn, 2025)
     assert CF.owed(conn, TODAY) == [("nfl", 2026, "targets"), ("nfl", 2026, "passes"),
                                     ("nfl", 2026, "kicks"), ("cfb", 2026, "carries"),
-                                    ("cfb", 2026, "targets"), ("nfl", 2025, "carries"),
+                                    ("cfb", 2026, "targets"), ("cfb", 2026, "passes"), ("nfl", 2025, "carries"),
                                     ("nfl", 2025, "kicks")], \
         "a table with rows is never owed"
     # January is still last autumn's season: 2026 and 2025, not 2027.
@@ -347,7 +347,7 @@ def test_an_owed_nfl_season_is_read_once_for_both_charts():
         # nobody kicked.
         assert lines == ["NFL 2026: 1 carries, 1 targets, 0 throws, 0 kicks, no route charting published for it yet",
                          "NGS rushing: 0 rows", "NGS receiving: 0 rows", "NGS passing: 0 rows",
-                         "CFB 2026: 7 carries, 0 targets"]
+                         "CFB 2026: 7 carries, 0 targets, 0 throws"]
         assert CR.chart(conn, "nfl", "Josh Allen")["games"][0]["carries"][0]["y"] == 8.0
         assert TG.chart(conn, "Sam LaPorta")["games"][0]["line"]["yds"] == 12.0
 
@@ -359,7 +359,7 @@ def test_an_owed_nfl_season_is_read_once_for_both_charts():
         CF.fill(D.connect(":memory:"), [("nfl", 2025, "carries"), ("cfb", 2025, "carries")],
                 log=lines.append)
         assert lines[0] == "NFL 2025: not read — github.com unreachable"
-        assert lines[-1] == "CFB 2025: 7 carries, 0 targets"
+        assert lines[-1] == "CFB 2025: 7 carries, 0 targets, 0 throws"
     finally:
         for o, n, v in saved:
             setattr(o, n, v)

@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WF. A college quarterback has a passing chart** (step 716; 17 November). Nothing to run. A college
+passer's page and every college passing pick drew only the runs and the role: the chart said college had no
+passing chart. The college play file the logs are built from names the passer of every incompletion,
+interception and sack, and the logs already settle a completion's passer, so every college throw and sack is now
+kept beside the carries and targets (its totals match the game log to the throw for all 407 of 2025's passers
+with 50+ attempts). The file has no air yards, side or hit on the passer, so a game's throws are drawn straight
+upfield from the line (a completion as long as its yards, a miss as a ring, a pick or a sack as a cross) and a
+season as bands of how far the completions went, with the splits by down and by receiver; the chart says what the
+file lacks. The chart filler reads this season's and last season's college throws by itself the cycle after the
+deploy, and the nightly keeps them current. The throws are held compactly while the file streams (about 50 MB at
+most for a season), so the daily pass's memory barely moves.
+
 **WE. Every fighter's page has the fights, the face and the facts** (step 715; 17 November). Nothing to run;
 RUN_NEXT 00m is optional. Islam Makhachev's live page had the record and rates and no photo, no facts and no
 fights: the fight history read only the coming card's fighters, so a fighter drafted for an older card was never

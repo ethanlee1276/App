@@ -402,16 +402,20 @@ def kept_games(out: dict):
     return ids or None
 
 
-def store_cfb(conn, season: int, runs, catches, kept) -> tuple:
-    """Write one college season's carries and targets, kept to the games
-    the logs kept, and clear rows an earlier read stored for a game the
-    logs have since dropped. Returns ``(carries, targets)`` written."""
+def store_cfb(conn, season: int, runs, catches, kept, throws=None) -> tuple:
+    """Write one college season's carries, targets and (since 2026-11-17)
+    the passers' throws (engine/passes.CfbPasses), kept to the games the
+    logs kept, and clear rows an earlier read stored for a game the logs
+    have since dropped. Returns ``(carries, targets)`` written."""
     from . import db
     n_c = db.upsert_carries(conn, runs.rows(kept))
     n_t = db.upsert_targets(conn, catches.rows(kept))
+    if throws is not None:
+        from .passes import upsert_batched
+        upsert_batched(conn, throws.iter_rows(kept))
     if kept:
         marks = ",".join("?" * len(kept))
-        for table in ("carries", "targets"):
+        for table in ("carries", "targets") + (("passes",) if throws is not None else ()):
             conn.execute(f"DELETE FROM {table} WHERE sport='cfb' AND season=? AND game_id NOT IN ({marks})",
                          (int(season), *sorted(kept)))
         conn.commit()
@@ -420,10 +424,12 @@ def store_cfb(conn, season: int, runs, catches, kept) -> tuple:
 
 def backfill_cfb(conn, season: int) -> int:
     """One past college season's carries — and, from 2025, the targets
-    the play file names (engine/targets.CfbTargets) — read once, through
-    the college logs' own parse so both keep only the games it keeps.
-    Returns carries written."""
+    the play file names (engine/targets.CfbTargets), and every passer's
+    throws (engine/passes.CfbPasses) — read once, through the college
+    logs' own parse so all keep only the games it keeps. Returns carries
+    written."""
     from .ingest import cfb_games_for
+    from .passes import CfbPasses
     from .sources import cfbstats
     from .sources.fetch import DataUnavailable
     from .targets import CfbTargets
@@ -435,12 +441,14 @@ def backfill_cfb(conn, season: int) -> int:
     except DataUnavailable:
         roster = {}
     runs, catches = CfbCarries(int(season), games, roster), CfbTargets(int(season), games, roster)
+    throws = CfbPasses(int(season), games, roster)
 
-    def both(r):
+    def every(r):
         runs.add(r)
         catches.add(r)
-    out = cfbstats.fetch_season(int(season), games, roster=roster, also=both)
-    return store_cfb(conn, int(season), runs, catches, kept_games(out))[0]
+        throws.add(r)
+    out = cfbstats.fetch_season(int(season), games, roster=roster, also=every)
+    return store_cfb(conn, int(season), runs, catches, kept_games(out), throws)[0]
 
 
 # --- what the page draws ------------------------------------------------------

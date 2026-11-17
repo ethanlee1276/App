@@ -252,7 +252,7 @@ def test_the_door_answers_the_passing_chart():
         h._players_chart({"kind": ["passes"], "sport": ["nfl"], "player": ["Josh Allen"]})
         h._players_chart({"kind": ["passes"], "sport": ["nfl"], "player": ["Josh Allen"], "season": ["2025"]})
         h._players_chart({"kind": ["passes"], "sport": ["nfl"], "player": ["Nobody Here"]})
-        h._players_chart({"kind": ["passes"], "sport": ["cfb"], "player": ["Josh Allen"]})
+        h._players_chart({"kind": ["passes"], "sport": ["nba"], "player": ["Josh Allen"]})
         h._players_chart({"kind": ["nothing"], "sport": ["nfl"], "player": ["Josh Allen"]})
         h._players_chart({"kind": ["carries"], "sport": ["nfl"], "player": ["Nobody Here"]})
     finally:
@@ -265,7 +265,8 @@ def test_the_door_answers_the_passing_chart():
     assert sent[3] == (200, {}), "rows on file: a missing player is just missing"
     assert sent[4][0] == 400 and sent[5][0] == 400, "a chart the league does not have is refused"
     assert sent[6] == (200, {"filling": True}), "the carry chart through the same door"
-    assert CH.known("passes", "nfl") and not CH.known("passes", "cfb") and CH.known("carries", "cfb")
+    # College's throws since 2026-11-17 (engine/passes.CfbPasses).
+    assert CH.known("passes", "nfl") and CH.known("passes", "cfb") and not CH.known("passes", "nba")
     src = (ROOT / "server.py").read_text(encoding="utf-8")
     assert '"/api/players/chart"' in src
     i = src.index("def _players_chart(")
@@ -342,17 +343,17 @@ def test_the_page_draws_every_throw_and_lists_every_dropback():
 def test_every_door_reaches_it():
     i = APP_JS.index("function chartSlot(")
     # Since 2026-10-13 every player's bet leaves a slot and the chart
-    # module's kindsFor picks his charts (pinned above for a passer).
-    assert "return r && r.player ?" in APP_JS[i:i + 400], "a passing bet's pick page draws his chart"
+    # module's kindsFor picks the player's charts (pinned above for a passer).
+    assert "return r && r.player ?" in APP_JS[i:i + 400], "a passing bet's pick page draws the passer's chart"
     i = SLIP_JS.index("function chartsHTML(")
     assert 'data-kind="auto" data-mkt="${esc(l.market || "")}"' in SLIP_JS[i:i + 600], \
-        "a passing leg carries his charts' door, with its bet"
+        "a passing leg carries the passer's charts' door, with its bet"
     assert '`/api/players/chart?kind=${kind}&sport=`' in CC_JS
     # A door's charts are the bet's (kindsFor, a passer's throws first, as
-    # pinned above), or the league's every chart; his role is asked for
-    # after his own charts.
+    # pinned above), or the league's every chart; the player's role is asked
+    # for after the player's own charts.
     assert "const hint = kindsFor(lg, mkt, pos);" in CC_JS and "const D = auto ? doorKinds(lg, mkt, pos, opp)" in CC_JS
-    assert 'nfl: ["carries", "routes", "passes", "kicks", "role"], cfb: ["carries", "routes", "role"]' in CC_JS
+    assert 'nfl: ["carries", "routes", "passes", "kicks", "role"], cfb: ["carries", "routes", "passes", "role"]' in CC_JS
     for cls in (".rc-sack", ".rc-sack.sel"):
         assert cls in CC_CSS, cls
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", CC_CSS), "tokens only"

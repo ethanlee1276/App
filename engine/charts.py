@@ -36,7 +36,7 @@ def _routes(conn, sport, player, season):
 
 def _passes(conn, sport, player, season):
     from . import passes
-    return passes.chart(conn, player, season)
+    return passes.chart(conn, player, season, sport=sport)
 
 
 def _kicks(conn, sport, player, season):
@@ -129,7 +129,9 @@ def _rows_in(table):
 KINDS = {
     "carries": (("nfl", "cfb"), _carries, _rows_in("carries")),
     "routes": (("nfl", "cfb"), _routes, _rows_in("targets")),
-    "passes": (("nfl",), _passes, _rows_in("passes")),
+    # College's from 2026-11-17: every throw and sack the college play file
+    # names the passer of, drawn without depth or side (engine/passes).
+    "passes": (("nfl", "cfb"), _passes, _rows_in("passes")),
     # The kicker's (2026-10-14): every field goal and extra point he tried,
     # off the same play-by-play read (engine/kicks).
     "kicks": (("nfl",), _kicks, _rows_in("kicks")),

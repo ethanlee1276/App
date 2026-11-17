@@ -326,7 +326,9 @@ def test_the_page_draws_his_role():
     assert "Snap share" in got["list"] and "does not move any price" in got["note"] and "season 87%" in got["tip"]
     assert got["mlbChip"] == "4 PA" and ">2nd<" in got["mlbSide"] and "In the lineup or off the bench" in got["mlbTables"]
     assert got["mlbCount"] == "9 plate appearances"
-    assert got["kinds"] == [["routes", "carries", "role"], ["passes", "carries", "role"], ["kicks"], ["role"], ["role"],
+    # A college passer's throws since 2026-11-17 (engine/passes.CfbPasses), the NFL's way.
+    assert got["kinds"] == [["routes", "carries", "role"], ["passes", "carries", "role"], ["kicks"],
+                            ["passes", "carries", "role"], ["passes", "carries", "role"],
                             ["shots", "role"], ["role"], ["pitches", "role"], ["saves", "role"], []]
     assert got["sec"][0].startswith("minutes, starts and shots") and got["sec"][1].startswith("minutes and starts") and got["sec"][2] == "Role"
 

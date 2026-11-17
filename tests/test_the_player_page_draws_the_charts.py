@@ -115,7 +115,7 @@ def test_the_slot_names_the_market_the_reader_came_for_else_the_roles():
     a = _attrs(got["priced"]["html"])
     assert (a["cc"], a["lg"], a["mkt"], a["pos"], a["opp"]) == ("Ja&#39;Marr Chase", "nfl", "receptions", "WR", "PIT"), a
     assert _attrs(got["tapped"]["html"])["mkt"] == "rec_yds", "the market the tapped pick opened the cards on"
-    want = {"qb": ("nfl", "pass_yds", "QB"), "cfbqb": ("cfb", "rush_yds", "QB"), "back": ("nfl", "rush_yds", "RB"),
+    want = {"qb": ("nfl", "pass_yds", "QB"), "cfbqb": ("cfb", "pass_yds", "QB"), "back": ("nfl", "rush_yds", "RB"),
             "kicker": ("nfl", "kick_pts", "K"), "hitter": ("mlb", "hits", "RF"), "arm": ("mlb", "strikeouts", "P"),
             "shooter": ("nba", "pts", "G"), "goalie": ("nhl", "saves", "G"), "skater": ("nhl", "sog", "C")}
     for name, (lg, mkt, pos) in want.items():
@@ -127,7 +127,8 @@ def test_the_slot_names_the_market_the_reader_came_for_else_the_roles():
     cc = (ROOT / "web" / "js" / "carrychart.js").read_text(encoding="utf-8")
     kinds = cc[cc.index("  function kindsFor(sport, mkt, pos) {"):cc.index("  //: The charts whose zones")]
     assert 'if (sport === "mlb") return m ? role(/^(strikeouts|outs)$|pitcher' in kinds
-    assert 'if (sport === "nfl" && (p === "QB" || (!p && /^pass/.test(m)))) return role(["passes", "carries"]);' in kinds
+    # A quarterback's throws in both footballs since college's (engine/passes.CfbPasses, 2026-11-17).
+    assert 'if (p === "QB" || (!p && /^pass/.test(m))) return role(["passes", "carries"]);' in kinds
     assert 'const runs = /rush|anytime/.test(m), catches = /rec|anytime/.test(m);' in kinds
 
 
