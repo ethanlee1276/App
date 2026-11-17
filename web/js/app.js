@@ -24848,6 +24848,8 @@ function _switchViewNow(name, push, dir) {
   document.body.classList.toggle("own-league-row", ["live", "tonight", "record"].includes(name));
   // The game page's clubs' colours go with it (detail.js gpWashOn/gpWashOff).
   if (name !== "pbp" && typeof gpWashOff === "function") gpWashOff();
+  // And a player's page its club's (playerpage.js plrFrameOn/plrFrameOff).
+  if (name !== "players" && typeof plrFrameOff === "function") plrFrameOff();
   if (name !== "ask") document.body.classList.remove("ask-typing");
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   paneSplit(name, leaving);

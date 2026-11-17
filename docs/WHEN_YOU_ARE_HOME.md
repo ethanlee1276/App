@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VA. A player's page wears the club's colours, like the live page** (step 685; 17 November). Nothing to run.
+You sent the Panthers @ Saints live page with its top circled: "the player page should be colorful with there team
+colors like how the live page looks". A player's page now sits on the club's two colours the way a live game's
+page sits on its two clubs': the first from the left, the second from the right, fading into the page's own
+background further down, with the top bar and the strip under a phone's clock in the same picture, so there is no line at
+the top. At night the name lies on the colours and the cards are dark glass over them; in the light theme the
+colours are thinned into the paper and the header keeps its coloured band. White, silver and grey count as a kit's
+trim, so the Maple Leafs and Duke are blue on deeper blue, not blue fading into grey; a club whose only colours
+are black and silver (the Raiders, the Nets) keeps those, and a club in black alone keeps the site's own gold.
+While the page is open the search box and its chips step aside behind "← Back to the search", which brings them
+back. The colours come off on the way back to the search or to any other page, and if you wear your own team
+across the site (Settings → Team colours → Whole site), the player's club takes over only while their
+page is open.
+
 **UZ. The Players search box gives an example from its own league** (step 684; 17 November). Nothing to run.
 The box asked for "Amon-Ra, Rams" on every league's tab. It now offers an example you can find there: "Tatum,
 Celtics" on the NBA, "McDavid, Oilers" on the NHL, "Flagg, Duke" on college basketball, and "Search a fighter…"

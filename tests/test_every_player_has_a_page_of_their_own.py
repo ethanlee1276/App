@@ -341,8 +341,9 @@ def test_the_server_serves_it_free_and_the_players_page_becomes_it():
     mount = PAGE[i:PAGE.index("\n}\n", i)]
     assert "while (host.firstChild) kept.appendChild(host.firstChild);" in mount
     assert "tonight.replaceChildren(kept);" in PAGE, "the market cards this page always drew are kept, in Overview"
-    assert ("  if (same) {\n    plrMarkets(same, kept);\n    host.replaceChildren(same);\n    return;\n  }") in mount, \
-        "the 30-second redraw puts the same page back, only its market cards fresh"
+    assert ("  if (same) {\n    plrMarkets(same, kept);\n    host.replaceChildren(same);\n"
+            "    plrFrameOn(sport, same._plr.team);\n    return;\n  }") in mount, \
+        "the 30-second redraw puts the same page back, only its market cards fresh (in its club's colours, PLRWASH1)"
     assert "if (cached) plrFill(page, cached);" in mount, "a first visit draws at once from the visit's copy"
     assert ('  const b = e.target.closest && e.target.closest(".plr .gl-open");' in PAGE
             and "  e.stopPropagation();\n  plrShow(page, \"log\");\n  plrToTabs(page);\n}, true);" in PAGE), \

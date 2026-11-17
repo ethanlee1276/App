@@ -344,6 +344,11 @@ function plrFill(page, d) {
   const host = page.querySelector(".plr-hero");
   if (host && d && d.bio) host.outerHTML = plrHeroHTML(d.player, d.sport, d.team, d.position,
     d.bio.headshot || page._plr.face, d.bio);
+  // The page's own answer can name the club the search did not (a roster name, an address opened cold).
+  if (d && d.team && d.team !== page._plr.team && page.isConnected && _plrLive && _plrLive.page === page) {
+    page._plr.team = d.team;
+    plrFrameOn(page._plr.sport, d.team);
+  }
   const at = (sel) => page.querySelector(sel);
   if (!d || !d.player) {
     const msg = `<p class="plr-quiet">This page could not load. Open it again in a minute.</p>`;
@@ -399,6 +404,68 @@ function plrShow(page, tab) {
   if (tab === "log") loadRoom("js/gamelog.js", "css/gamelog.css").then((ok) => ok && plrLogInto(page));
 }
 
+/* THE PLAYER'S PAGE IN THE CLUB'S COLOURS (PLRWASH1; Ethan, 2026-11-17, with the Panthers @ Saints live
+   page, its top circled: "the player page should be colorful with there team colors like how the live
+   page looks"). The page wears its club's two colours as a live game's page wears its two clubs'
+   (playerpage.css): put on <body> deepened until white type reads on them and as they are (app.js
+   twWash, the whole-site wash's own pair), and the page is the player's alone: the search's head waits
+   behind the way back, as a game's page has no search above its score. Off as soon as the board stops
+   showing a player's page (a watcher on it, so every other drawing of the Players page takes the
+   colours with it) or another page opens (app.js _switchViewNow). A club in black alone, or none
+   known, keeps the site's light and the header's band. */
+const PLR_WASH_VARS = ["--pw-1", "--pw-2", "--pw-1-paper", "--pw-2-paper"];
+let _plrWatch = null, _plrPinRO = null;
+function plrFrameOn(sport, team) {
+  const view = document.getElementById("view-players"), board = document.getElementById("players-board");
+  if (!view || !board) return;
+  view.classList.add("plr-view");
+  const t = team && typeof teamsIn === "function" ? (teamsIn(sport) || {})[team] : null;
+  const wash = t && typeof twWash === "function" ? plrWashPair(t) : null;
+  if (wash) {
+    [wash.deep[0], wash.deep[1], wash.paper[0], wash.paper[1]].forEach((c, i) => document.body.style.setProperty(PLR_WASH_VARS[i], c));
+    document.body.classList.add("plr-on");
+    plrPin();
+  } else plrWashOff();
+  if (!_plrWatch && typeof MutationObserver !== "undefined") {
+    _plrWatch = new MutationObserver(() => { if (!board.querySelector(":scope > .plr")) plrFrameOff(); });
+    _plrWatch.observe(board, { childList: true });
+  }
+}
+/* The club's two colours for its page: the whole-site wash's pair (app.js twWash), save that white,
+   silver and grey are a kit's trim beside a club's real colours. Deepened until white type reads on
+   them they turn a fog grey, so the Leafs' and Duke's blue washed into grey; they step aside for the
+   club's next colour, else twWash's deeper shade of the first. A club whose colours are all trim and
+   black (the Raiders, the Nets) keeps them: they are the club. */
+function plrWashPair(t) {
+  const cs = [t.primary, t.secondary, t.tertiary, t.alt].map(twHex6);
+  const chroma = (c) => { const [, a, b] = okLab(c); return Math.hypot(a, b); };
+  const trim = (c) => c && okLab(c)[0] > 0.6 && chroma(c) < TW_HUED;
+  const pick = cs.some((c) => c && chroma(c) >= TW_HUED) ? cs.map((c) => (trim(c) ? "" : c)) : cs;
+  return twWash({ primary: pick[0], secondary: pick[1], tertiary: pick[2], alt: pick[3] });
+}
+function plrWashOff() {
+  document.body.classList.remove("plr-on");
+  PLR_WASH_VARS.forEach((k) => document.body.style.removeProperty(k));
+}
+function plrFrameOff() {
+  const view = document.getElementById("view-players");
+  if (view) view.classList.remove("plr-view");
+  if (document.body) plrWashOff();
+}
+//: The bar paints the wash's screen-sized picture pinned to the screen's corner, so it is told how far
+//: across the screen it starts (the docked sidebar moves it right), as app.js twPin tells it for the
+//: whole-site wash: on every draw, and whenever the bar changes size.
+function plrPin() {
+  const top = document.querySelector(".topbar");
+  if (!top || !document.body.classList.contains("plr-on")) return;
+  const r = top.getBoundingClientRect();
+  if (r.width) top.style.setProperty("--pw-x", `${-Math.round(r.left)}px`);
+  if (!_plrPinRO && typeof ResizeObserver !== "undefined") {
+    _plrPinRO = new ResizeObserver(() => plrPin());
+    _plrPinRO.observe(top);
+  }
+}
+
 /* THE PLAYER'S PAGE, in place of the card renderPlayers drew (it becomes the
    Overview's market section, with no door out to the pick page). The Players page redraws every 30 seconds while it
    is open: the same player's page is then put back as it was (the open menu, the
@@ -423,6 +490,7 @@ function renderPlayerPage(host, player, sport) {
   if (same) {
     plrMarkets(same, kept);
     host.replaceChildren(same);
+    plrFrameOn(sport, same._plr.team);
     return;
   }
   const open = PLR_TAB[key] || "overview";
@@ -433,6 +501,7 @@ function renderPlayerPage(host, player, sport) {
   page._plr = { key, player, sport, team, face: r0.headshot || "" };
   _plrLive = { key, page };
   plrMarkets(page, kept);
+  plrFrameOn(sport, team);
   if (cached) plrFill(page, cached);
   else plrFetch(sport, player, team).then((d) => { if (page.isConnected) plrFill(page, d); });
 }

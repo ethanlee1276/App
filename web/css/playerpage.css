@@ -94,6 +94,61 @@
 .plr-tonight:empty { display: none; }
 .plr-tonight { margin: 0 0 14px; }
 
+/* ==========================================================================
+   THE PLAYER'S PAGE IN THE CLUB'S COLOURS (PLRWASH1, 2026-11-17; Ethan, with
+   the Panthers @ Saints live page, its top circled: "the player page should be
+   colorful with there team colors like how the live page looks"). js/playerpage.js
+   plrFrameOn lights body.plr-on with the club's two colours on <body>: --pw-1 and
+   --pw-2 deepened until white type reads on them (app.js twWash, the whole-site
+   wash's own pair), --pw-1-paper and --pw-2-paper as they are. The page sits on
+   them as a live game's page sits on its clubs' (detail.css --gp-wash): the first
+   from the left, the second from the right, a shade falling to the page's own
+   ground further down. The bar and the strip under the clock paint the same
+   screen-sized picture pinned to the screen's corner (plrPin says where the bar
+   starts across it), so the top of the screen is one piece with no rule in it.
+   At night the header lies on the colours themselves and the cards are a dark
+   glass over them, as the live page's are; paper wears the colours thinned into
+   the paper and keeps the header's band, whose words are the night's. Static:
+   nothing moves on a scroll, and nothing is blurred (styles.css .topbar).
+   ========================================================================== */
+body.plr-on {
+  /* What the colours are until playerpage.js puts the club's own on <body> (an inline style, which wins). */
+  --pw-1: var(--night-2);
+  --pw-2: var(--night-3);
+  --pw-1-paper: var(--night-2);
+  --pw-2-paper: var(--night-3);
+  --pw-wash: linear-gradient(100deg, var(--pw-1) 6%, color-mix(in oklab, var(--pw-1) 50%, var(--pw-2)) 50%, var(--pw-2) 94%);
+  --pw-shade: linear-gradient(180deg, color-mix(in oklab, var(--bg) 6%, transparent) 0, color-mix(in oklab, var(--bg) 22%, transparent) 200px, color-mix(in oklab, var(--bg) 60%, transparent) 460px, var(--bg) 820px); }
+[data-theme="light"] body.plr-on {
+  --pw-wash: linear-gradient(100deg, color-mix(in oklab, var(--pw-1-paper) 34%, var(--bg)) 6%, color-mix(in oklab, color-mix(in oklab, var(--pw-1-paper) 50%, var(--pw-2-paper)) 34%, var(--bg)) 50%, color-mix(in oklab, var(--pw-2-paper) 34%, var(--bg)) 94%);
+  --pw-shade: linear-gradient(180deg, transparent 0, color-mix(in oklab, var(--bg) 28%, transparent) 180px, color-mix(in oklab, var(--bg) 70%, transparent) 400px, var(--bg) 640px); }
+/* Over the whole-site wash too (styles.css html.team-wash), as specific and later: the page is the club's. */
+html body.plr-on .ambient, html body.plr-on:not(.gp-on) .topbar,
+html.store-ios body.plr-on:not(.gp-on)::before, html.ios-home body.plr-on:not(.gp-on)::before {
+  background: var(--pw-shade), var(--pw-wash), var(--bg);
+  background-size: 100vw 100vh; background-repeat: no-repeat; background-position: 0 0; }
+html body.plr-on:not(.gp-on) .topbar {
+  --pw-x: 0px;
+  background-position: var(--pw-x) 0; border-bottom-color: transparent; animation: none; }
+html body.plr-on:not(.gp-on) .topbar::before, html body.plr-on:not(.gp-on) .topbar::after { display: none; }
+html body.plr-on:not(.gp-on) .sportbar { background: transparent; }
+body.plr-on .amb-club { display: none; }
+/* At night: the name on the club's colours, as the live page's score is, and glass for the cards. */
+html:not([data-theme="light"]) body.plr-on .plr-hero { background: none; padding-left: 2px; padding-right: 2px; }
+html:not([data-theme="light"]) body.plr-on #view-players {
+  --panel: rgba(12, 11, 14, .34);
+  --panel-2: rgba(12, 11, 14, .30);
+  --panel-3: rgba(255, 255, 255, .08);
+  --bg-2: rgba(12, 11, 14, .4);
+  --border: rgba(255, 255, 255, .08);
+  --border-soft: rgba(255, 255, 255, .05);
+  --grad-card: none;
+  --glow-card: none;
+  --glow-soft: none; }
+/* The page is the player's, as a game's page is the game's: the search's own head waits behind the way back. */
+#view-players.plr-view > .section-title, #view-players.plr-view > .search-scope, #view-players.plr-view > .search-recent,
+#view-players.plr-view > .search-wrap, #view-players.plr-view > #team-hits { display: none; }
+
 @media (max-width: 640px) {
   .plr-hero { padding: 16px 14px; gap: 12px; }
   .plr-name { font-size: var(--fs-2xl); }
