@@ -1700,6 +1700,10 @@ function paywallHTML(rec, status) {
             drawn by pwTonight once the numbers are in, and only on a day
             with picks up. */""}
       <div class="pw-free"></div><div class="pw-fl"></div><div class="pw-caught" hidden></div>
+      ${/* The game report, what a member reads before every game, with its
+            own record (flReportHTML, the welcome page's card) — drawn by
+            pwTonight once the feed is in. */""}
+      <div class="wf-report-host"></div>
       ${/* SPORTS FIRST (audit item 6, 2026-09-23): the lede sold three
             audiences at once — "bettors, fantasy players and market
             traders" — and the audit's question was which one this is.
@@ -2244,6 +2248,8 @@ function pwTonight(host) {
     const free = host.querySelector(".pw-free");
     if (free && fl) free.innerHTML = flFreeHTML(fl, true);
     if (slot && fl && (fl.tonight || []).some((x) => Number(x.picks) > 0)) slot.innerHTML = flTonightHTML(fl);
+    const rep = host.querySelector(".wf-report-host");
+    if (rep && fl) rep.innerHTML = flReportHTML(fl, "pw");
   });
 }
 
@@ -2259,6 +2265,7 @@ const PW_WHY = {
   longshots: ["Long shots are for members", "The big prices our model still likes, every night."],
   futures: ["Futures are for members", "Season-long prices, with our number against the book’s."],
   alerts: ["Alerts are for members", "Line moves, injuries and your players on tonight’s board, on your phone."],
+  reportpicks: ["Game reports are for members", "A full report before every game, its picks and the parlays made of them — and how every one did, free on the Record."],
 };
 
 /* TWO WAYS IN, BEFORE ANYTHING ELSE (Ethan, 2026-10-26: "the paywall page
@@ -3132,7 +3139,7 @@ const WF_REPORT_STEPS = [
 ];
 const WF_LEAGUE = { nfl: "NFL", cfb: "College football", nba: "NBA", cbb: "College basketball", nhl: "NHL",
                     mlb: "MLB", wnba: "WNBA" };
-// [icon, title, line, free (1) or members (0)]
+// [icon, title, line, open to a free account (1) or members only (0)]
 const WF_FEATURES = [
   ["play", "Every game, live", "Scores, play-by-play in plain words, a flash on every touchdown and goal, and a chat for every game.", 1],
   ["star", "Pick of the Day", "One bet a day in every league, priced against a sharp book and graded in public.", 1],
@@ -3173,16 +3180,17 @@ function flSampleHTML(g) {
   </div>`;
 }
 
-function flReportHTML(fl) {
+function flReportHTML(fl, key = "su") {
   const r = (fl && fl.reports) || {};
   const stats = [];
   if (r.picks && r.picks.w + r.picks.l) stats.push([`${r.picks.w}–${r.picks.l}`, "report picks, graded"]);
   if (r.calls && r.calls.n) stats.push([`${r.calls.right} of ${r.calls.n}`, "winners called"]);
   if (r.injuries && r.injuries.n) stats.push([`${Math.round((100 * r.injuries.right) / r.injuries.n)}%`, "of injury listings held"]);
   else if (r.games) stats.push([String(r.games), "games fact-checked"]);
-  return `<section class="wf-report" aria-labelledby="wf-report-h">
+  // Its own heading id a screen (`key`): the sign-up's and the plans' are both in the page.
+  return `<section class="wf-report" aria-labelledby="wf-report-h-${key}">
     <span class="fl-tag">${iconMark("book", 12)}Every game</span>
-    <h2 class="fl-h2" id="wf-report-h">A game report for every game</h2>
+    <h2 class="fl-h2" id="wf-report-h-${key}">A game report for every game</h2>
     <p class="wf-sub">Before every game in every league: a scouting report in plain words, the picks it makes, and parlays built only from those picks.</p>
     <ol class="wf-steps">${WF_REPORT_STEPS.map(([ic, h, t]) => `<li class="wf-step">${iconMark(ic, 15)}
       <span class="wf-step-t"><b>${h}</b><span>${t}</span></span></li>`).join("")}</ol>
@@ -3197,7 +3205,7 @@ function flFeaturesHTML() {
   return `<section class="wf-features" aria-labelledby="wf-feat-h">
     <h2 class="fl-h2" id="wf-feat-h">Everything else inside</h2>
     <ul class="wf-grid">${WF_FEATURES.map(([ic, h, t, free]) => `<li class="wf-tile${free ? " free" : ""}">
-      <span class="wf-tile-top">${iconMark(ic, 16)}<span class="wf-tile-tag">${free ? "Free" : "Members"}</span></span>
+      <span class="wf-tile-top">${iconMark(ic, 16)}<span class="wf-tile-tag">${free ? "Free account" : "Members"}</span></span>
       <b>${h}</b><span>${t}</span></li>`).join("")}</ul>
     <a class="wf-all" href="#features">See everything we built ${icon("chev", 12)}</a>
   </section>`;

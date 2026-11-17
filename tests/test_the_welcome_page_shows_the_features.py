@@ -132,7 +132,7 @@ def test_the_page_draws_the_report_card_and_the_tiles():
         "with no record yet, what a report holds and nothing invented"
     assert "We called the Ravens at 68% — wrong" in gone and "<b>5</b>" in gone and "games fact-checked" in gone
     assert tiles.count('<li class="wf-tile') == 10 and 'href="#features"' in tiles
-    assert tiles.count(">Free<") == 6 and tiles.count(">Members<") == 4
+    assert tiles.count(">Free account<") == 6 and tiles.count(">Members<") == 4
 
 
 #: Each tile, the pages it opens: free only where every one is open to a free account.
@@ -165,6 +165,17 @@ def test_the_signup_screen_places_them_before_the_form_and_redraws_the_card():
     drawn = set(re.findall(r'class="(wf-[a-z-]+)', ACCOUNT)) | set(re.findall(r'querySelector\("\.(wf-[a-z-]+)"', ACCOUNT))
     for cls in drawn:
         assert f".{cls}" in CSS, f"{cls} has no rule in account.css"
+
+
+def test_the_plans_page_carries_the_report_card_too():
+    i = ACCOUNT.index("function paywallHTML(")
+    pw = ACCOUNT[i:ACCOUNT.index("\n}\n", i)]
+    assert pw.index('<div class="pw-fl"></div>') < pw.index('<div class="wf-report-host"></div>')
+    j = ACCOUNT.index("function pwTonight(")
+    assert 'if (rep && fl) rep.innerHTML = flReportHTML(fl, "pw");' in ACCOUNT[j:ACCOUNT.index("\n}\n", j)]
+    assert 'id="wf-report-h-${key}"' in ACCOUNT, "the sign-up's card and the plans' are both in the page: one id each"
+    why = ACCOUNT[ACCOUNT.index("const PW_WHY = {"):ACCOUNT.index("};", ACCOUNT.index("const PW_WHY = {"))]
+    assert 'reportpicks: ["Game reports are for members"' in why, "a locked Report Picks tab says what it holds"
 
 
 def test_in_a_browser_it_fits_a_phone_two_tiles_a_row():
@@ -203,11 +214,12 @@ def test_in_a_browser_it_fits_a_phone_two_tiles_a_row():
                 page.add_init_script("try{localStorage.setItem('qb_intro_v1','1');}catch(e){}")
                 page.goto(f"http://127.0.0.1:{port}/#signup", wait_until="domcontentloaded")
                 for _ in range(30):                 # the page's CSP refuses wait_for_function's eval
-                    if page.evaluate("!!document.querySelector('.wf-stats')"):
+                    if page.evaluate("!!document.querySelector('#view-signup .wf-stats')"):
                         break
                     page.wait_for_timeout(500)
                 got = page.evaluate("""(() => {
-                  const card = document.querySelector('.wf-report'), tiles = [...document.querySelectorAll('.wf-tile')];
+                  const su = document.querySelector('#view-signup');
+                  const card = su && su.querySelector('.wf-report'), tiles = su ? [...su.querySelectorAll('.wf-tile')] : [];
                   if (!card || !tiles.length) return null;
                   const tops = new Set(tiles.map((t) => Math.round(t.getBoundingClientRect().top)));
                   const inside = [card, ...tiles].every((el) => { const r = el.getBoundingClientRect();
@@ -215,8 +227,8 @@ def test_in_a_browser_it_fits_a_phone_two_tiles_a_row():
                   return { text: card.textContent.replace(/\\s+/g, ' ').trim(), tiles: tiles.length, rows: tops.size,
                            inside, wide: document.documentElement.scrollWidth <= innerWidth }; })()""")
                 if shot:
-                    page.locator(".wf-report").screenshot(path=shot + "-report.png")
-                    page.locator(".wf-features").screenshot(path=shot + "-tiles.png")
+                    page.locator("#view-signup .wf-report").screenshot(path=shot + "-report.png")
+                    page.locator("#view-signup .wf-features").screenshot(path=shot + "-tiles.png")
                 ctx.close()
             finally:
                 browser.close()

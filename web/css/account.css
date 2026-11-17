@@ -834,7 +834,8 @@ html.vv-held .pw-dock, html.vv-held .fsu-dock { translate: 0 var(--vv-y); }
 .wf-stat b { font-family: var(--font-mono); font-size: var(--fs-xl); color: var(--text); }
 .wf-stat span { color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-snug); }
 .wf-sample { display: grid; gap: 6px; padding: 12px 14px; border-radius: var(--radius); background: var(--panel-2);
-  border-left: 3px solid var(--brand); }
+  --tone: var(--brand);
+  background-image: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%); }
 .wf-sample-top { display: flex; justify-content: space-between; gap: 4px 8px; flex-wrap: wrap; font-size: var(--fs-xs);
   color: var(--text-mute); }
 .wf-sample-top b { color: var(--brand); font-weight: 800; }
@@ -851,7 +852,7 @@ html.vv-held .pw-dock, html.vv-held .fsu-dock { translate: 0 var(--vv-y); }
   border: var(--hairline) solid transparent; background: var(--panel); }
 .wf-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--brand); }
 .wf-tile-tag { padding: 2px 8px; border-radius: 999px; background: var(--grad-brand); color: var(--brand-ink);
-  font-size: var(--fs-2xs); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+  font-size: var(--fs-2xs); font-weight: 900; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
 .wf-tile.free .wf-tile-tag { background: color-mix(in oklab, var(--good) 22%, var(--panel-2)); color: var(--good); }
 .wf-tile b { color: var(--text); font-size: var(--fs-md); line-height: var(--lh-snug); }
 .wf-tile > span:last-child { color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-snug); }
