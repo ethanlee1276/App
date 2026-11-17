@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VX. A fighter with no tracked fight still has a face and ESPN's facts** (step 708; 17 November). Nothing to
+run. Checked live after the fighter pages shipped: Islam Makhachev's page had his record and rates but no face,
+height, reach or stance, because the page read ESPN's id only off a tracked fight's photo, and the fight history
+holds none of his yet. The id now also comes from the name search the dossier's draft keeps, never fetched for the
+page, so a fighter on a card has the face and the facts as soon as the dossier is drafted.
+
 **VW. The player page draws the player's charts again, and its tables' pinned column is solid** (step 707;
 17 November). Nothing to run. You sent Jalon Daniels' page: "We should still have the players route charts and
 pass charts and shit on the player page", and its Recent games table: "fix this how it's transparent and u can see

@@ -114,6 +114,29 @@ def test_a_name_nobody_keeps_is_no_page_and_no_card_is_no_next_fight():
     assert "height" not in _page(d)["bio"], "no cached page, no facts invented"
 
 
+def test_a_fighter_with_no_tracked_fight_takes_the_id_from_the_kept_search():
+    """Seen live 2026-11-17: Islam Makhachev's page had his record and rates and no face, no height and no
+    reach, because the ESPN id was read only off a tracked fight's photo. The dossier's draft keeps ESPN's
+    name search; the id comes from it, never from a fetch."""
+    from engine.sources import espnmma
+    d = _world(with_next=False)
+    name = "Islam Makhachev"
+    dossiers = json.loads((d / "dossiers.json").read_text())
+    dossiers[name] = {"name": name, "age": 34, "division": "welterweight", "record": "28-1-0", "slpm": 2.6}
+    (d / "dossiers.json").write_text(json.dumps(dossiers))
+    hit = {"results": [{"type": "player", "contents": [
+        {"displayName": "Islam Makhachev", "description": "MMA",
+         "link": {"web": "https://www.espn.com/mma/fighter/_/id/3332412/islam-makhachev"}},
+        {"displayName": "Islam Makhachev", "description": "Soccer", "link": {"web": "https://x.test/_/id/99"}}]}]}
+    (d / "cache" / espnmma._search_name(name)).write_text(json.dumps(hit))
+    (d / "cache" / "espn_mma_ath_3332412.json").write_text(json.dumps({"displayHeight": "5' 10\"", "reach": 70.5,
+                                                                         "stance": {"text": "Southpaw"}}))
+    p = _page(d, name)
+    assert p["tracked"] == 0 and p["face"].endswith("/full/3332412.png"), p["face"]
+    assert (p["bio"]["height"], p["bio"]["reach"], p["bio"]["stance"]) == ("5' 10\"", '70.5"', "Southpaw"), p["bio"]
+    assert espnmma.cached_athlete_id("Someone Unsearched", d / "cache") is None, "nothing kept, nothing fetched"
+
+
 def test_the_page_endpoint_answers_for_a_fighter():
     assert 'if sport not in playerpage.SPORTS and sport != "ufc":' in SERVER
     assert "from engine.ufc import fighterpage\n                made = fighterpage.page(player)" in SERVER

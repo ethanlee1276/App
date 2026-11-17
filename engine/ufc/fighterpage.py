@@ -194,13 +194,21 @@ def page(fighter: str, db_path=None, dossier_path=None, cache_dir=None, board_pa
     m = re.search(r"/full/(\d+)\.png", str(hist.get("face") or ""))
     if m:
         aid = m.group(1)
+    face = hist.get("face") or ""
+    if not aid:
+        # No fight on the history table yet (seen live 2026-11-17: Islam Makhachev's page had his record and
+        # rates and no face, no height, no reach): ESPN's id from the name search the dossier's draft kept.
+        from ..sources import espnmma
+        aid = espnmma.cached_athlete_id(name, cache_dir or CACHE) or ""
+        if aid:
+            face = _history.FACE.format(aid=aid)   # the fight history chart's own
     facts = espn_bio(aid, cache_dir)
     bio = {"record": d.get("record") or "", "division": division_words(d.get("division") or hist.get("position")),
            "age": d.get("age"), "team": str(d.get("gym") or "").strip(),
            "first_fight": d.get("first_fight") or (games[-1]["date"] if games else ""),
            "last_fight": d.get("last_fight") or (games[0]["date"] if games else ""),
            "ufc_fights": d.get("ufc_fights"), "career_fights": d.get("career_fights"), **facts}
-    return {"player": name, "sport": "ufc", "face": hist.get("face") or "",
+    return {"player": name, "sport": "ufc", "face": face,
             "bio": {k: v for k, v in bio.items() if v not in (None, "")},
             "rates": rates(d), "tracked": len(games),
             "fights": games, "line": hist.get("season_line") or {},

@@ -4,6 +4,12 @@
     {
       "date": "2026-11-17",
       "kind": "fix",
+      "title": "Every fighter’s page has a face and the facts",
+      "body": "A fighter whose fights we have not tracked yet now has a face, height, reach and stance on their page too, from what was kept when their profile was drafted."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "fix",
       "title": "The player page draws the charts, and its tables’ first column is solid",
       "body": "A player’s page draws their charts on the Overview again, under the last game: the route chart, the throws, the carries, the spray chart, the pitches, the shots or the shot map, for the market you came for. And the game column that stays put while a table scrolls no longer lets the numbers behind it show through."
     },

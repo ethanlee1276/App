@@ -88,10 +88,36 @@ def _norm(s: str) -> str:
 
 
 # --- athlete lookup ---------------------------------------------------------
+def _search_name(query: str) -> str:
+    """The cache file a name search is kept in."""
+    return f"espn_mma_search_{_norm(query).replace(' ', '_')}.json"
+
+
 def _search_players(query: str) -> list[tuple[str, str]]:
     """Search hits typed 'player' → [(display name, athlete id)]."""
-    data = _get_json(SEARCH.format(q=urllib.parse.quote(query)),
-                     f"espn_mma_search_{_norm(query).replace(' ', '_')}.json")
+    return _players_in(_get_json(SEARCH.format(q=urllib.parse.quote(query)), _search_name(query)))
+
+
+def cached_athlete_id(name: str, cache_dir=None) -> str | None:
+    """A fighter's ESPN id from the name search a dossier's draft kept
+    (`find_athlete_id`), never fetched: None where no search for the name
+    is kept or it names no one fighter clearly (`_match_player`). The
+    fighter's page (engine/ufc/fighterpage) answers from what is kept."""
+    from pathlib import Path
+    for query in dict.fromkeys((name, name.strip().split()[-1] if name.strip() else "")):
+        if not query:
+            continue
+        try:
+            data = json.loads((Path(cache_dir or CACHE_DIR) / _search_name(query)).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        pid = _match_player(_players_in(data if isinstance(data, dict) else {}), name)
+        if pid:
+            return pid
+    return None
+
+
+def _players_in(data: dict) -> list[tuple[str, str]]:
     players: list[tuple[str, str]] = []
     for rt in data.get("results", []) or []:
         if rt.get("type") != "player":
