@@ -50,6 +50,10 @@ CSS = (ROOT / "web" / "css" / "race.css").read_text()
 RACE = (ROOT / "web" / "js" / "race.js").read_text()
 
 
+#: Which side of the bracket each conference is drawn on (left, right; the title game in the centre).
+SIDE = {"AFC": "l", "NFC": "r"}
+
+
 def _section(html, cls):
     i = html.index(f'<section class="{cls}')
     return html[i:html.index("</section>", i)]
@@ -67,7 +71,7 @@ def test_the_nfl_bracket_pairs_the_seeds_the_way_the_playoffs_do():
     d = T._nfl()
     html = T._render("nflHTML", d)
     for conf in ("AFC", "NFC"):
-        part = _section(html, f"rc-bk-conf rc-bk-{conf.lower()}")
+        part = _section(html, f"rc-bk-conf rc-bk-{SIDE[conf]}")
         # The Wild Card column: the 1 seed beside its bye, then 4 v 5, 3 v 6, 2 v 7; then the 1 seed at home.
         assert _seeds(part) == [1, 4, 5, 3, 6, 2, 7, 1], (conf, _seeds(part))
         by = {s["seed"]: s["team"] for s in d["today"][conf]["seeds"]}
@@ -75,9 +79,9 @@ def test_the_nfl_bracket_pairs_the_seeds_the_way_the_playoffs_do():
         assert "Bye" in part and "Lowest seed left" in part and "Wild Card winner" in part
         assert f"{conf} title game" in part and "Divisional winner" in part
         assert ("rc-bk-mirror" in part) == (conf == "NFC"), conf
-    sb = _section(html, "rc-bk-sb")
+    sb = _section(html, 'rc-bk-c"')
     assert "AFC champion" in sb and "NFC champion" in sb
-    assert html.index("rc-bk-afc") < html.index("rc-bk-sb") < html.index("rc-bk-nfc")
+    assert html.index('class="rc-bk-conf rc-bk-l"') < html.index('class="rc-bk-c"') < html.index('class="rc-bk-conf rc-bk-r"')
     assert "The divisional round is reseeded" in html
     assert "Just outside in the AFC:" in html and "back of the 7 seed" in html
 
@@ -89,7 +93,7 @@ def test_the_reasons_ride_with_each_seed_and_a_free_reader_sees_the_same_bracket
     assert f"{one['record']} · {one['why'].replace('AFC ', '')}" in html
     assert "AFC North leader" not in html, "the conference is the bracket's own heading"
     pub = T._render("nflHTML", gate.redact(d, "nfl_race.json"))
-    a, b = (_section(x, "rc-bk-conf rc-bk-afc") for x in (html, pub))
+    a, b = (_section(x, "rc-bk-conf rc-bk-l") for x in (html, pub))
     assert a == b, "the bracket is the standings' fact: a member and a reader without a plan see the same one"
 
 
@@ -116,9 +120,28 @@ def test_the_later_rounds_say_who_meets_whom_never_a_guessed_winner():
     d = T._nfl()
     html = T._render("nflHTML", d)
     for conf in ("AFC", "NFC"):
-        part = _section(html, f"rc-bk-conf rc-bk-{conf.lower()}")
+        part = _section(html, f"rc-bk-conf rc-bk-{SIDE[conf]}")
         later = part[part.index(f"{conf} title game"):]
         assert "data-mark" not in later, "no team is drawn into a round it has not reached"
+
+
+def test_the_cup_s_knockouts_and_the_college_playoff_s_real_bracket_draw_the_same_way():
+    """The NBA Cup's eight and college football's twelve, once named, on the same bracket: every league's
+    playoff page reads alike (Ethan, 2026-11-17: "all sports match eachother where it can")."""
+    import importlib
+    cup_t = importlib.import_module("test_the_nba_cup_bracket")
+    cup = cup_t._render(cup_t._built())
+    east, west = _section(cup, "rc-bk-conf rc-bk-l"), _section(cup, "rc-bk-conf rc-bk-r")
+    assert "rc-bk-mirror" in west and "rc-bk-mirror" not in east, "the West faces the East across the final"
+    for half in (east, west):
+        assert len(re.findall(r'class="rc-bk-game[ "]', half)) == 3 and "Winner of 1 v 4" in half
+    assert "East champion" in _section(cup, 'rc-bk-c"') and "rc-brk" not in cup
+    cfp_t = importlib.import_module("test_the_cfp_bracket")
+    cfp = cfp_t._render(cfp_t._built())
+    part = _section(cfp, "rc-bk-conf")
+    assert _seeds(part) == [8, 9, 5, 12, 7, 10, 6, 11, 1, 4, 2, 3], _seeds(part)
+    assert "Winner of 8 v 9" in part and "· our line " in part and "rc-brk" not in cfp
+    assert part.index("Quarterfinals") < part.index("Semifinals") < part.index("National championship")
 
 
 def test_the_nfc_turns_right_to_left_only_where_the_whole_bracket_fits():
@@ -148,11 +171,11 @@ GEOMETRY = """() => {
     s.scrollLeft = 0;
     return reach;
   });
-  const nfc = document.querySelector('.rc-bk-nfc .rc-bk-rounds');
+  const nfc = document.querySelector('.rc-bk-r .rc-bk-rounds');
   const nfcCols = nfc ? [...nfc.querySelectorAll('.rc-bk-col')].map((c) => c.getBoundingClientRect().left) : [];
   return {cols: secs.map(cols), swipe, wide: document.documentElement.scrollWidth > innerWidth + 1,
           dir: nfc ? getComputedStyle(nfc).direction : null, nfcCols,
-          afc: box('.rc-bk-afc'), sb: box('.rc-bk-sb'), nfcBox: box('.rc-bk-nfc')};
+          afc: box('.rc-bk-l'), sb: box('.rc-bk-c'), nfcBox: box('.rc-bk-r')};
 }"""
 
 

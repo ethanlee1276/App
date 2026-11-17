@@ -215,7 +215,7 @@ def test_a_crowned_champion_tops_the_bracket():
     out = _built(games, today="2026-12-12")
     names = out["names"]
     html = _render(gate.redact(out, "nba_cup.json"))
-    assert f"{names.get(es[0], es[0])} win the NBA Cup" in html and "rc-won" in html and "final score" in html
+    assert f"{names.get(es[0], es[0])} win the NBA Cup" in html and "rc-bk-won" in html and "final score" in html
 
 
 if __name__ == "__main__":

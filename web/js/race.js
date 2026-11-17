@@ -102,12 +102,33 @@ function rcBkSide(sport, s) {
     return `<div class="rc-bk-side rc-bk-tbd"><i class="rc-bk-dot" aria-hidden="true"></i><span class="rc-bk-who"><b>${
       escapeHtml((s && s.tbd) || "To be decided")}</b>${meta}</span></div>`;
   }
-  return `<div class="rc-bk-side">${teamMarkIn(sport, s.team, 20)}<span class="rc-bk-who"><b><span class="rc-bk-seed">${
-    escapeHtml(String(s.seed || ""))}</span>${escapeHtml(s.name || s.team)}</b>${meta}</span></div>`;
+  const done = s.won === true ? " rc-bk-won" : s.won === false ? " rc-bk-lost" : "";
+  return `<div class="rc-bk-side${done}">${teamMarkIn(sport, s.team, 20)}<span class="rc-bk-who"><b><span class="rc-bk-seed">${
+    escapeHtml(String(s.seed || ""))}</span>${escapeHtml(s.name || s.team)}</b>${meta}</span>${
+    s.score != null ? `<span class="rc-bk-score">${escapeHtml(String(s.score))}</span>` : ""}</div>`;
 }
+/* A game: its two sides, and under them, when it has one, its note (the
+   night, the site, the final, our line), already escaped by its maker. */
 function rcBkGameHTML(sport, g) {
-  return `<div class="rc-bk-game">${(g.sides || []).map((x) => rcBkSide(sport, x)).join("")}</div>`;
+  return `<div class="rc-bk-game${g.done ? " rc-bk-done" : ""}">${(g.sides || []).map((x) => rcBkSide(sport, x)).join("")}${
+    g.note ? `<div class="rc-bk-note">${g.note}</div>` : ""}</div>`;
 }
+/* A KNOCKOUT GAME OFF THE ENGINE (cfprace's and nbacup's bracket): each side
+   its club, seed and score, the winner marked once it is final, who is not
+   known yet in words (`tbd`, home's then away's); and under it the night, the
+   site, "final score" once played, and our line on it while it is still to
+   play (a member's: the free copy carries no bracket_lines). */
+function rcKoGame(sport, d, g, tbd, nm, where) {
+  if (!g) return { sides: [{ tbd: tbd[0] }, { tbd: tbd[1] }] };
+  const side = (team, seed, score, i) => (team
+    ? { team, seed, name: nm(team), score, won: g.done ? g.winner === team : null }
+    : { tbd: tbd[i] || "To be decided" });
+  const line = (d.bracket_lines || {})[g.id];
+  const note = [g.date ? escapeHtml(rcDay(g.date)) : "", where ? escapeHtml(where) : "", g.done ? "final score" : "",
+    line && !g.done ? `our line ${escapeHtml(nm(g.home))} <b>${rcPct(line.p_home)}</b>` : ""].filter(Boolean).join(" · ");
+  return { done: !!g.done, note, sides: [side(g.home, g.home_seed, g.home_score, 0), side(g.away, g.away_seed, g.away_score, 1)] };
+}
+
 function rcBkRoundsHTML(sport, rounds, mirror) {
   return `<div class="rc-bk-scroll"><div class="rc-bk-rounds${mirror ? " rc-bk-mirror" : ""}">${rounds.map((r) => `<div class="rc-bk-col">
       <div class="rc-bk-colh">${escapeHtml(r.title)}</div>
@@ -237,29 +258,8 @@ function cfpStandingsHTML(d) {
    and on in the bowls — each score as it lands with the winner in bold, and
    the champion on top. Our line on each game still to play and each team's
    chance to reach each round are a member's (`bracket_lines`, `chances`). */
-function cfpKoSide(d, team, seed, score, won, tbd) {
-  if (!team) return `<div class="rc-side rc-empty"><span></span><span></span><span class="rc-name">${escapeHtml(tbd)}</span></div>`;
-  const s = ((d.bracket || {}).seeds || []).find((x) => x.team === team) || {};
-  return `<div class="rc-side${won === true ? " rc-won" : won === false ? " rc-lost" : ""}">${teamMarkIn("cfb", team, 22)}
-    <span class="rc-seed">${seed || ""}</span><b class="rc-name">${escapeHtml(s.name || team)}</b>
-    ${score != null ? `<span class="rc-score">${escapeHtml(String(score))}</span>` : ""}</div>`;
-}
-function cfpKoGameHTML(d, g, tbd) {
-  if (!g) return "";
-  const b = d.bracket || {};
-  const nm = (t) => ((b.seeds || []).find((x) => x.team === t) || {}).name || t;
-  const line = (d.bracket_lines || {})[g.id];
-  const where = g.neutral ? (g.bowl || "neutral site") : (g.home ? `at ${nm(g.home)}` : "at the higher seed");
-  return `<div class="rc-match rc-ko${g.done ? " rc-done" : ""}">
-    ${cfpKoSide(d, g.home, g.home_seed, g.home_score, g.done ? g.winner === g.home : null, tbd[0])}
-    ${cfpKoSide(d, g.away, g.away_seed, g.away_score, g.done ? g.winner === g.away : null, tbd[1])}
-    <span class="rc-host">${g.date ? `${escapeHtml(rcDay(g.date))} · ` : ""}${escapeHtml(where)}${g.done ? " · final score" : ""}${
-      line && !g.done ? ` · our line ${escapeHtml(nm(g.home))} <b>${rcPct(line.p_home)}</b>` : ""}</span></div>`;
-}
 function cfpPlayoffHTML(d, locked) {
   const b = d.bracket || {};
-  const nights = b.nights || {};
-  const span = (k) => (nights[k] || []).map(rcDay).join(" – ");
   const nm = (t) => ((b.seeds || []).find((x) => x.team === t) || {}).name || t;
   const fr = b.first_round || [], qf = b.quarterfinals || [], sf = b.semifinals || [];
   const frLabel = (id) => { const g = fr.find((x) => x.id === id); return g ? `Winner of ${g.home_seed} v ${g.away_seed}` : "To be decided"; };
@@ -277,21 +277,30 @@ function cfpPlayoffHTML(d, locked) {
             <span class="rc-p">${rcPct(c.final)}</span><span class="rc-p rc-lead">${rcPct(c.title)}</span></div>`;
         }).join("")}
       </div>`;
+  // The bracket as the engine plays it (engine/cfprace QUARTERS, SEMIS): the 1 and 4 seeds' sides meet in
+  // one semifinal and the 2 and 3 seeds' in the other, so the quarterfinals are drawn in that order, each
+  // with the first-round game that feeds it beside it.
+  const where = (g) => (g.neutral ? (g.bowl || "neutral site") : (g.home ? `at ${nm(g.home)}` : "at the higher seed"));
+  const game = (g, tbd) => rcKoGame("cfb", d, g, tbd, nm, g ? where(g) : "");
+  const qs = [0, 3, 1, 2].map((k) => qf[k]).filter(Boolean);
+  const feeds = (q) => fr.find((x) => x.id === ((q.from || [])[0]));
+  const rounds = [
+    { title: "First round", groups: qs.map((q) => [game(feeds(q), ["", ""])]) },
+    { title: "Quarterfinals",
+      groups: [qs.slice(0, 2), qs.slice(2)].map((pair) => pair.map((q) => game(q, ["", frLabel((q.from || [])[0])]))) },
+    { title: "Semifinals",
+      groups: [sf.map((g) => game(g, ["Quarterfinal winner", "Quarterfinal winner"]))] },
+    { title: "National championship",
+      groups: [[game(b.final, ["Semifinal winner", "Semifinal winner"])]] },
+  ];
   return `${b.champion ? `<div class="rc-card rc-champ">${teamMarkIn("cfb", b.champion, 28)}<b>${escapeHtml(nm(b.champion))} win the national championship</b></div>` : ""}
     <div class="section-title">The College Football Playoff
       <span class="sub">— the twelve the committee named on selection day, seeded by its final ranking; the first round on the higher seed’s campus, the rest in the bowls.</span></div>
+    <div class="rc-bk-wrap"><div class="rc-bk rc-bk-solo">
+      <section class="rc-bk-conf" aria-label="The College Football Playoff">${rcBkRoundsHTML("cfb", rounds)}</section>
+    </div></div>
     <div class="rc-card"><b>The twelve</b>
       <ol class="rc-tb rc-twelve">${(b.seeds || []).map((s) => `<li>${escapeHtml(s.name || s.team)} <small>${escapeHtml(s.record || "")} · ${escapeHtml(s.bid || "")}</small></li>`).join("")}</ol></div>
-    <div class="rc-brk">
-      <div class="rc-col"><div class="rc-col-h">First round · ${escapeHtml(span("first_round"))}</div>
-        ${fr.map((g) => cfpKoGameHTML(d, g, ["", ""])).join("")}</div>
-      <div class="rc-col"><div class="rc-col-h">Quarterfinals · ${escapeHtml(span("quarterfinals"))}</div>
-        ${qf.map((g) => cfpKoGameHTML(d, g, ["", frLabel((g.from || [])[0])])).join("")}</div>
-      <div class="rc-col"><div class="rc-col-h">Semifinals · ${escapeHtml(span("semifinals"))}</div>
-        ${sf.map((g) => cfpKoGameHTML(d, g, ["Quarterfinal winner", "Quarterfinal winner"])).join("")}</div>
-      <div class="rc-col"><div class="rc-col-h">National championship · ${escapeHtml(span("final"))}</div>
-        ${cfpKoGameHTML(d, b.final, ["Semifinal winner", "Semifinal winner"])}</div>
-    </div>
     ${odds}
     ${cfpStandingsHTML(d)}
     ${d.generated_at ? `<p class="rc-note">Built ${escapeHtml(String(d.generated_at).replace("T", " ").slice(0, 16))}.</p>` : ""}`;
@@ -358,7 +367,7 @@ function rcNflSeedsHTML(d) {
           { sides: [{ tbd: "Wild Card winner" }, { tbd: "Wild Card winner" }] }]] },
       { title: `${c} title game`, groups: [[{ sides: [{ tbd: "Divisional winner" }, { tbd: "Divisional winner" }] }]] },
     ];
-    return `<section class="rc-bk-conf rc-bk-${c.toLowerCase()}" aria-label="${escapeHtml(`${c} if the season ended today`)}">
+    return `<section class="rc-bk-conf rc-bk-${c === "AFC" ? "l" : "r"}" aria-label="${escapeHtml(`${c} if the season ended today`)}">
       <div class="rc-bk-k">${c}</div>${rcBkRoundsHTML("nfl", rounds, c === "NFC")}</section>`;
   };
   const hunt = RC_NFL_CONFS.map((c) => {
@@ -373,7 +382,7 @@ function rcNflSeedsHTML(d) {
       <span class="sub">— the four division leaders seeded 1–4, then the three best records left. Only the 1 seed rests the first weekend.</span></div>
     <div class="rc-bk-wrap"><div class="rc-bk">
       ${conf("AFC")}
-      <section class="rc-bk-sb" aria-label="The Super Bowl"><div class="rc-bk-k">Super Bowl</div>${rcBkRoundsHTML("nfl",
+      <section class="rc-bk-c" aria-label="The Super Bowl"><div class="rc-bk-k">Super Bowl</div>${rcBkRoundsHTML("nfl",
         [{ title: "Neutral site", groups: [[{ sides: [{ tbd: "AFC champion" }, { tbd: "NFC champion" }] }]] }])}</section>
       ${conf("NFC")}
     </div></div>
@@ -548,46 +557,31 @@ function cupOddsHTML(d) {
    on top once there is one. While group play runs it is the bracket if it
    ended today. Our line on each game still to play is a member's
    (`bracket_lines`, emptied for anyone else). */
-function cupSide(d, team, seed, score, won, tbd) {
-  if (!team) return `<div class="rc-side rc-empty"><span></span><span></span><span class="rc-name">${escapeHtml(tbd)}</span></div>`;
-  return `<div class="rc-side${won === true ? " rc-won" : won === false ? " rc-lost" : ""}">${teamMarkIn("nba", team, 22)}
-    <span class="rc-seed">${seed || ""}</span><b class="rc-name">${escapeHtml(((d.names || {})[team]) || team)}</b>
-    ${score != null ? `<span class="rc-score">${escapeHtml(String(score))}</span>` : ""}</div>`;
-}
-function cupGameHTML(d, g, tbd) {
-  if (!g) return "";
-  const nm = (t) => ((d.names || {})[t]) || t;
-  const line = (d.bracket_lines || {})[g.id];
-  const where = g.site === "home" ? (g.home && g.away ? `at ${nm(g.home)}` : "at the better seed")
-    : `in ${g.site}`;
-  return `<div class="rc-match rc-ko${g.done ? " rc-done" : ""}">
-    ${cupSide(d, g.home, g.home_seed, g.home_score, g.done ? g.winner === g.home : null, tbd[0])}
-    ${cupSide(d, g.away, g.away_seed, g.away_score, g.done ? g.winner === g.away : null, tbd[1])}
-    <span class="rc-host">${g.date ? `${escapeHtml(rcDay(g.date))} · ` : ""}${escapeHtml(where)}${g.done ? " · final score" : ""}${
-      line && !g.done ? ` · our line ${escapeHtml(nm(g.home))} <b>${rcPct(line.p_home)}</b>` : ""}</span></div>`;
-}
 function cupBracketHTML(d) {
   const b = d.bracket || {};
   const confs = b.conferences || {};
   if (!confs.East || !confs.West) return "";
-  const nights = b.nights || {};
-  const span = (k) => (nights[k] || []).map(rcDay).join(" – ");
   const nm = (t) => ((d.names || {})[t]) || t;
   const champ = b.champion;
+  const where = (g) => (g.site === "home" ? (g.home && g.away ? `at ${nm(g.home)}` : "at the better seed") : `in ${g.site}`);
+  const game = (g, tbd) => rcKoGame("nba", d, g, tbd, nm, g ? where(g) : "");
+  // Each conference's side: its two quarterfinals (1 v 4, 2 v 3) feeding its semifinal; the West mirrors the
+  // East across the final where there is room (race.css .rc-bk-mirror).
+  const half = (c) => `<section class="rc-bk-conf rc-bk-${c === "East" ? "l" : "r"}" aria-label="The ${c}">
+      <div class="rc-bk-k">${c}</div>${rcBkRoundsHTML("nba", [
+        { title: "Quarterfinals",
+          groups: [confs[c].quarterfinals.map((g) => game(g, ["", ""]))] },
+        { title: "Semifinal",
+          groups: [[game(confs[c].semifinal, ["Winner of 1 v 4", "Winner of 2 v 3"])]] }], c === "West")}</section>`;
   return `<div class="section-title">${b.set ? "The knockout rounds" : "If group play ended today"}
       <span class="sub">— ${b.set
         ? "the eight, the quarterfinals at the higher seed, each semifinal at the better seed’s arena, the final in Indianapolis."
         : "each conference’s group winners seeded by record, its wild card fourth; the quarterfinals at the higher seed."}</span></div>
     ${champ ? `<div class="rc-card rc-champ">${teamMarkIn("nba", champ, 28)}<b>${escapeHtml(nm(champ))} win the NBA Cup</b></div>` : ""}
-    ${["East", "West"].map((c) => `<div class="rc-conf-k">${c}</div>
-      <div class="rc-brk">
-        <div class="rc-col"><div class="rc-col-h">Quarterfinals · ${escapeHtml(span("quarterfinals"))}</div>
-          ${confs[c].quarterfinals.map((g) => cupGameHTML(d, g, ["", ""])).join("")}</div>
-        <div class="rc-col"><div class="rc-col-h">Semifinal · ${escapeHtml(span("semifinals"))}</div>
-          ${cupGameHTML(d, confs[c].semifinal, ["Winner of 1 v 4", "Winner of 2 v 3"])}</div>
-      </div>`).join("")}
-    <div class="rc-conf-k">The final · ${escapeHtml(span("final"))}</div>
-    <div class="rc-brk">${cupGameHTML(d, b.final, ["East champion", "West champion"])}</div>`;
+    <div class="rc-bk-wrap"><div class="rc-bk">${half("East")}
+      <section class="rc-bk-c" aria-label="The final"><div class="rc-bk-k">The final</div>${rcBkRoundsHTML("nba",
+        [{ title: "Championship", groups: [[game(b.final, ["East champion", "West champion"])]] }])}</section>
+      ${half("West")}</div></div>`;
 }
 
 function cupHTML(d) {

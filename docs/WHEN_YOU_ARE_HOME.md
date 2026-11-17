@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UD. The NBA Cup's knockouts and the College Football Playoff draw as the same bracket** (step 662; 17 November).
+Nothing to run. So every league's playoff page reads alike ("all sports match eachother where it can"): the NBA Cup's
+knockout rounds (and its "if group play ended today" eight) and the College Football Playoff once the committee names
+its twelve now use the bracket the NFL's race got in step UB, instead of plain columns of games. The Cup's East runs left
+to right and the West mirrors it on the right, the final between them; college football's first round sits beside the
+quarterfinal its winner plays, then the semifinals (the 1 and 4 seeds' sides, the 2 and 3 seeds') and the title game.
+Each game shows both clubs with their seeds, the score once played (the winner bright, the loser faded), and under it
+the night, the site, "final score", and our line while it is still to play (members only, as before). Who is not known
+yet is said in words ("Winner of 8 v 9", "East champion"). On a phone each swipes by round, as the NFL's does.
+
 **UC. Ask Qellys reads the game reports, how they did, and the playoff races** (step 661; 17 November). Nothing to
 run. Your ask: "make sure the ask qellys feature is working correctly and has access to everything on the site and the
 game reports and all the data". What Ask could not reach before, and now can: (1) any game's report, by team, whether or
