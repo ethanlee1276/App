@@ -254,6 +254,20 @@ process.stdout.write(JSON.stringify([plrStatsHTML({json.dumps(page)}), plrStatsH
         "the Game Log tab says the same, not that a box score is still to come"
 
 
+def test_the_overview_says_why_a_page_has_no_numbers():
+    """A punter's Overview drew nothing at the top: its first block is the
+    season's numbers, and with none the server's reason (`no_stats`, the
+    line the Stats and Game Log menus already show) never reached it. A
+    team defense with no games said "No games on file" instead of what it
+    is."""
+    i = PAGE_JS.index("function plrFill(")
+    fn = PAGE_JS[i:PAGE_JS.index("\n}\n", i)]
+    assert 'plrSeasonHTML(d) || (d.no_stats ? quiet(d.no_stats) : "")' in fn, \
+        "games with no numbers: the Overview leads with the reason"
+    assert 'quiet(d.no_stats || "No games on file for this player yet.' in fn, \
+        "no games at all: the server's reason first, the roster line after"
+
+
 def test_a_name_with_no_games_is_never_a_near_names_page():
     """Live, 17 Nov: JK Scott, the Chargers' punter, has no games on file, and
     his page and his Game Log tab drew Nick Scott's, the Panthers' safety,

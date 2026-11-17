@@ -9338,6 +9338,11 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UY. A player page with no numbers says why on its Overview** (step 683; 17 November). Nothing to run. A
+punter's or a lineman's page opened on an empty Overview: its first block is the season's numbers, and the reason
+there are none ("Our NFL stats feed doesn't include punting") was shown only on the Stats and Game Log menus. The
+Overview leads with it now, and a team defense picked in fantasy says what it is instead of "No games on file".
+
 **UX. The player card's chart follows an under pick** (step 682; 17 November). Nothing to run. The market card on
 a player's page (and in the search's cards) coloured every game "over the line" whatever the pick was: an UNDER
 26.5 points card showed its four winning games in red and read "4/8 cleared 26.5", the thing you flagged on the
