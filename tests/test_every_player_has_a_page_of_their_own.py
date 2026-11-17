@@ -154,6 +154,31 @@ def test_a_quarterbacks_page_reads_like_espns():
     assert old["season"] == 2025 and old["last"]["result"] == "W" and old["last"]["opp_record"] == "0-1"
 
 
+def test_a_game_the_player_did_nothing_in_their_own_way_shows_what_they_did():
+    """Jalon Daniels' page (2026-11-17): a quarterback who threw no pass and ran twice read "YDS 0 · TD 0" on
+    the last game's card; the runs are the game they had."""
+    path = os.path.join(tempfile.mkdtemp(), "history.db")
+    conn = _db.connect(path)
+    conn.execute("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
+                 "VALUES ('nfl', 2026, '007', 'TB@CAR', 'CAR', 'TB', 13, 43, '2026-10-25')")
+    conn.executemany("INSERT INTO player_game_logs VALUES (?,?,?,?,?,?,?,?,?,?,?)", [
+        ("nfl", 2026, "006", "TB-006", "Jalon Daniels", "TB", "PIT", "QB", 1, m, v)
+        for m, v in (("pass_att", 43), ("pass_cmp", 22), ("pass_yds", 162), ("pass_td", 1), ("pass_int", 2),
+                     ("carries", 4), ("rush_yds", 39))] + [
+        ("nfl", 2026, "007", "TB-007", "Jalon Daniels", "TB", "CAR", "QB", 0, m, v)
+        for m, v in (("pass_att", 0), ("pass_cmp", 0), ("pass_yds", 0), ("pass_td", 0), ("pass_int", 0),
+                     ("carries", 2), ("rush_yds", -3), ("rush_td", 0))])
+    conn.commit()
+    conn.close()
+    PP._RANKS.clear()
+    d = PP.page("nfl", "Jalon Daniels", db_path=path, data_dir=tempfile.mkdtemp())
+    assert d["role"] == "passing"
+    assert [(t["label"], t["value"]) for t in d["last"]["tiles"]] == [("CAR", 2), ("YDS", -3), ("AVG", -1.5), ("TD", 0)], \
+        d["last"]["tiles"]
+    assert PP.tile_kind("nfl", "passing", {"pass_att": 31, "carries": 6}) == "passing", "a passer who passed"
+    assert PP.tile_kind("nfl", "passing", {"pass_att": 0}) == "passing", "nothing anywhere: their own"
+
+
 def test_a_newest_game_whose_box_score_is_not_in_yet_says_so():
     import datetime as _d
     path, rosters = _fresh()

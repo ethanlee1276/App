@@ -9338,6 +9338,11 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VZ. The last game's card shows what the player did in it** (step 710; 17 November). Nothing to run. On Jalon
+Daniels' page the "Previous game" card read YDS 0 · TD 0: a quarterback who threw no pass that week and ran twice.
+The card's four numbers now come from what the player did that game when they did nothing their usual way (the
+runs, there: CAR 2, YDS -3, AVG -1.5, TD 0); a passer who passed still shows the passing.
+
 **VY. A baseball player's splits read as totals, and a hitter's by the starter's hand** (step 709; 17
 November). Nothing to run. With the full lines on MLB pages (step VU), the splits read like ESPN's baseball splits:
 each row is the games added up (at-bats, hits, homers, RBI) with the averages beside them, where every other

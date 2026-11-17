@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-17",
+      "kind": "fix",
+      "title": "The last game’s card shows what the player did",
+      "body": "A player’s last-game card no longer shows a row of zeros for a game they spent another way: a quarterback who only ran that week shows the runs."
+    },
+    {
+      "date": "2026-11-17",
       "kind": "ship",
       "title": "Baseball splits as totals, and a hitter’s against lefties and righties",
       "body": "An MLB player’s splits now add the games up, the way a box score is read, with the averages beside them, and a hitter’s Splits menu shows how they hit against left-handed and right-handed starters."

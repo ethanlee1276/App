@@ -183,6 +183,20 @@ TILES = {
     "batting": ("batting.ab", "batting.h", "batting.hr", "batting.rbi", "batting.tb", "batting.pa"),
     "pitching": ("pitching.ip", "pitching.h", "pitching.er", "pitching.k"),
 }
+
+
+def tile_kind(sport: str, kind: str, stats: dict) -> str:
+    """Whose tiles a game's card shows: the player's own kind, unless they
+    did nothing there that game and did in another (2026-11-17, Jalon
+    Daniels' page: a quarterback who threw no pass and ran twice read
+    "YDS 0 · TD 0" for the passing; the runs were the game they had)."""
+    def busy(k):
+        return any((stats.get(m) or 0) > 0 for m in ROLE_NEED.get(k, ()))
+    if not kind or busy(kind):
+        return kind
+    return next((k for k in KINDS.get(sport, ()) if k != kind and busy(k)), kind)
+
+
 _MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
            "November", "December")
 _RANKS: dict = {}
@@ -867,7 +881,8 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
             last = {"date": g["date"], "opponent": g["opponent"] or "", "home": g["home"], "team": g["team"] or "",
                     "values": vals, "dnp": g["dnp"], "pending": g["pending"], "no_line": g["no_line"],
                     "tiles": [{"id": t, "label": labels[t][0], "title": labels[t][1], "value": vals.get(t)}
-                              for t in TILES.get(kind, ()) if t in labels and vals.get(t) is not None][:4]}
+                              for t in TILES.get(tile_kind(sport, kind, g["stats"]), ())
+                              if t in labels and vals.get(t) is not None][:4]}
             if sport in GL.WEEKLY and not GL._ISO.match(g["period"]):
                 try:
                     last["week"] = int(g["period"])
