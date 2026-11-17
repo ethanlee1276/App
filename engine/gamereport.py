@@ -4364,15 +4364,57 @@ VERDICT_NOTE = {
 }
 
 
+def _report_only(result: dict) -> None:
+    """engine/gameparlays.report_only, never raising past the reports."""
+    try:
+        from . import gameparlays
+        gameparlays.report_only(result)
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the parlays of games without a report not cleared ({exc})")
+
+
+def _parlays_from_picks(c: Ctx, built: dict) -> None:
+    """The game's three-leg tickets rebuilt from the picks this report shows
+    (engine/gameparlays.from_report): its card's, read here the way the card
+    will show them, and every pick the sections written so far carry. Never
+    raises: a report whose picks cannot be read keeps the board's tickets
+    until `gameparlays.report_only` clears them."""
+    try:
+        from . import gameparlays, reportbets
+        written = [s for s in built.values() if s]
+        try:
+            card = sec_card(c, {k: v for k, v in built.items() if v})
+        except Exception:                                    # noqa: BLE001
+            card = None
+        picks = reportbets.bets_of(([card] if card else []) + written,
+                                   reportbets.pool(_card_rows(c), c.reads))
+        gameparlays.from_report(c.result, c.sport, c.g, picks)
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the parlays not built from the report's picks for {c.away}@{c.home} ({exc})")
+
+
 def finish(c: Ctx, sections_fns, short_fn) -> dict:
     """The report: every section that has something to say, the short
     version written last from what they found and put first, what changed
-    under it. Shared by every league's report (engine/leaguereport)."""
+    under it. Shared by every league's report (engine/leaguereport).
+
+    THE PARLAYS LAST, FROM THE PICKS (GPLEGS1, engine/gameparlays.from_report):
+    every other section is written first, so the report's own picks are known
+    (its card, its reads, its breakout candidates and fades), and the game's
+    three-leg tickets are built from those picks alone before the parlays
+    section, the card's parlay line and the short version say them."""
     built = {}
     for fn in sections_fns:
+        if fn is sec_parlays:
+            built["parlays"] = None                      # its place, written below
+            continue
         s = fn(c)
         if s:
             built[s["key"]] = s
+    if "parlays" in built:
+        _parlays_from_picks(c, built)
+        built["parlays"] = sec_parlays(c)
+        built = {k: v for k, v in built.items() if v}
     short = short_fn(c, built)
     moved = sec_changes(c)
     # The watch's news and injury moves, under what changed (sec_news).
@@ -4607,6 +4649,9 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
             if r:
                 reports.append(r)
         _t = _clock.lap("game reports", "reports", _t)
+        # A GAME NO REPORT REBUILT POSTS NO THREE-LEG TICKET (GPLEGS1): its legs
+        # would be no report's picks (engine/gameparlays.report_only).
+        _report_only(result)
         # HOW THESE READS HAVE DONE (engine/reportrecord): each graded section opens
         # with its kind of read's record so far, before a started game's is kept.
         stamp_track(reports, sport, out)

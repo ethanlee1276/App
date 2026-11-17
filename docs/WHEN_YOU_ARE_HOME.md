@@ -9338,6 +9338,28 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WH. A game's parlays are made of its report's own picks** (step 718; 17 November). Nothing to run; RUN_NEXT
+00n is an optional check. Your two screenshots of How our reports did (Monday's NBA: picks 4 of 5 and parlays 0 of
+3, picks 6 of 7 and parlays 1 of 6) asked how the picks could hit and the parlays not, when the parlays use those
+picks. They did not use them. A game's tickets were built before its report, from every prop the board priced at
+60% or better, and more than half their legs were never a pick of the report's: 50 of Monday's 90 NBA legs, and all
+495 of the NFL's week. On Monday the report's own picks hit 41 of 62 (75% as legs) and the other legs 62%. Rockets at
+Heat shows it plainly: the four picks on its tickets all hit, and every ticket lost on a leg the report never
+picked (Bam Adebayo over 0.5 threes, twice). Built from the picks alone, Monday's tickets would have hit 7 of 25
+where they hit 4 of 30 (NHL: 1 of 5 where 1 of 8). Now each game's three-leg tickets are built inside its report,
+once its picks are known, from those picks and nothing else, under every rule a leg kept: the 60% floor, no
+conflicts, both sides, the learned correction, and the NFL's paper hold. A report whose picks fit together into
+fewer than four tickets posts fewer and says why, and the card's parlay line and the short version name the same
+tickets. The touchdown pairs are the touchdown research's own and did not change.
+
+The dashes: a ticket "waiting on the box score" days after its game (nine of Magic at Celtics', and six to nineteen
+on every NFL game of the 15th). A ticket's legs are journaled on paper first, and that journal refuses a game
+already under way, so a board built just before a start and journaled just after it wrote the tickets and not
+their legs: those legs never had a row to grade from. Such a leg now voids once the rest of its ticket has graded
+(the game is over), the way a book voids a leg it cannot settle, and no new ticket is journaled without its legs'
+rows. The waiting ones clear on the nightly settle by themselves. A player who never played was not the cause:
+outside football the no-show sweep already voids those once the night's games are final.
+
 **WG. The tab bar stays on the screen's foot as you scroll** (step 717; 17 November). Nothing to run.
 Your two screenshots from the Duo, the bar halfway up over the picks (beside DraftKings and on its own), had one
 more thing in them: the page's gold light stopped in a straight edge just under the bar. So the bar was not loose

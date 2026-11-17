@@ -14,10 +14,14 @@ parlays for each game."
 
 WHAT HIS REPORTS DO, AND SO WHAT THIS DOES, game by game:
 
-THE LEGS. Only numbers the board already prices for a reader: the game's
+THE LEGS ARE THE REPORT'S OWN PICKS (GPLEGS1, 2026-11-17; `from_report`).
+A game's three-leg tickets are rebuilt inside its report from the picks the
+report shows and no other leg (Ethan: "how are we hitting so many picks
+without winning any parlays, but we're still using those picks?"), each leg
+the board's own number for that pick: the board's priced picks (the game's
 Most Likely picks, its Edge picks, and every other prop it priced at a named
-book (engine/twoleg's legs and `priced_legs` — each a real price, none
-started, none held), at LEG_FLOOR or better
+book: engine/twoleg's legs and `priced_legs`, each a real price, none
+started, none held) narrowed to the report's, at LEG_FLOOR or better
 (their reports' bar: "they sit under the 65% hit-rate floor, so they don't
 qualify for the parlay"; ours is a little lower, and every leg shows its
 own chance). Never a past-the-cap row (Ethan, 09-01: "not a parlay leg"),
@@ -1274,24 +1278,33 @@ def game_label(game: dict) -> str:
     return f"{game.get('away')}@{game.get('home')}"
 
 
-def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
-               priced: int | None = None) -> dict:
-    """A game's four 3-leg tickets and three scorer pairs, and why there
-    are fewer when there are. ``priced`` is how many priced scorers the game
-    had before the research read them (`research_scorers`)."""
+def threes_of(sport: str, game: dict, legs: list[dict], memo: dict | None = None) -> tuple[list, int, int]:
+    """A game's three-leg tickets from ``legs``: (the chosen, the
+    combinations without a conflict, the legs tried), each chosen ticket
+    with its backups from the same legs."""
     pool = sorted(legs, key=lambda l: -float(l["p"]))[:MAX_POOL]
-    memo: dict = {}
+    memo = {} if memo is None else memo
     threes = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(pool, 3)) if t]
     chosen = choose(threes, THREE_PER_GAME)
     for t in chosen:
         t["backups"] = [{"for": b["for"], "leg": slim(b["leg"])} for b in backups(sport, t, pool, game)]
         t["legs"] = [slim(l) for l in t["legs"]]
+    return chosen, len(threes), len(pool)
+
+
+def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
+               priced: int | None = None) -> dict:
+    """A game's four 3-leg tickets and three scorer pairs, and why there
+    are fewer when there are. ``priced`` is how many priced scorers the game
+    had before the research read them (`research_scorers`)."""
+    memo: dict = {}
+    chosen, n_threes, n_pool = threes_of(sport, game, legs, memo)
     out = {"game": game_label(game), "home": game.get("home"), "away": game.get("away"),
            "date": game.get("date") or "", "kickoff": game.get("kickoff") or "",
-           "threes": chosen, "legs_read": len(pool), "threes_considered": len(threes)}
+           "threes": chosen, "legs_read": n_pool, "threes_considered": n_threes}
     if len(chosen) < THREE_PER_GAME:
-        out["threes_note"] = (f"{len(chosen)} of {THREE_PER_GAME}: this game has {len(pool)} pick(s) at "
-                              f"{LEG_FLOOR:.0%} or better, and only {len(threes)} three-leg combination(s) of "
+        out["threes_note"] = (f"{len(chosen)} of {THREE_PER_GAME}: this game has {n_pool} pick(s) at "
+                              f"{LEG_FLOOR:.0%} or better, and only {n_threes} three-leg combination(s) of "
                               f"them without a conflict")
     if sport in SCORER_MARKETS:
         researched = sport in RESEARCH_SPORTS
@@ -1422,6 +1435,11 @@ def attach(board: dict, sport: str) -> dict:
     have = board.get("game_parlays")
     if isinstance(have, dict) and have.get("pooled") and POOL_KEY not in board:
         return board
+    # THE REPORTS' TICKETS STAND (GPLEGS1): once a board's reports have built
+    # its three-leg tickets from their own picks (`report_only` marks it), a
+    # later pass of this hook (college's, after its report) builds nothing.
+    if isinstance(have, dict) and have.get("from_reports"):
+        return board
     try:
         board["game_parlays"] = build(board, sport)
         if POOL_KEY in board:
@@ -1437,6 +1455,138 @@ def for_game(board: dict, home: str, away: str) -> dict | None:
         if x.get("home") == home and x.get("away") == away:
             return x
     return None
+
+
+# --- the report's own picks are the legs ------------------------------------------------------
+# THE PARLAYS ARE MADE OF THE REPORT'S PICKS (GPLEGS1; Ethan, 2026-11-17, two
+# screenshots of How our reports did, Monday's NBA: picks 4 of 5 and parlays 0
+# of 3, picks 6 of 7 and parlays 1 of 6: "how are we hitting so many picks
+# without winning any parlays, but we're still using those picks? That doesn't
+# make any sense, so fix that").
+#
+# They were not using those picks. A game's tickets were built before its
+# report, from every prop the board priced at 60% or better (`legs_for`), and
+# on the record more than half their legs were no pick of the report's: 50 of
+# Monday's 90 NBA legs, all 495 of the NFL's week. The report's own picks hit
+# 41 of 62 that night (75% as legs), the others 62%; Rockets at Heat's four
+# picks on its tickets all hit, and each ticket lost on a leg the report never
+# picked (Bam Adebayo over 0.5 threes twice). Built from the picks alone, that
+# night's tickets would have hit 7 of 25 where they hit 4 of 30.
+#
+# So a game's three-leg tickets are built inside its report, once the report's
+# picks are known (engine/gamereport.finish), from those picks and no other
+# leg: the same leg (its chance with the league's learned correction, the 60%
+# floor, the -250 cap, the injury report, the clash rules, the two sides),
+# only now never one the report does not stand behind. A report whose picks
+# make fewer than four tickets posts fewer and says why, and a game no report
+# rebuilt posts none (`report_only`). The scorer pairs are the touchdown
+# research's own and are left as they were built.
+#: What a game's entry says its three-leg legs are (`from_report`).
+LEGS_FROM_REPORT = "report"
+#: Why a game no report rebuilt posts no three-leg ticket (`report_only`).
+NO_REPORT_NOTE = "the parlays use only a game report's own picks, and this game's report did not build"
+#: The legs of the board this process last read (`_board_legs`): read once a build, not once a game.
+_BOARD_LEGS: dict = {}
+
+
+def _pick_key(b: dict) -> tuple:
+    """A pick or a leg as one bet: who, the market, the side, the line."""
+    from .gameresults import norm
+    side = str((b or {}).get("side") or "").upper()
+    side = {"YES": "OVER", "Y": "OVER", "NO": "UNDER", "N": "UNDER"}.get(side, side)
+    line = (b or {}).get("line")
+    try:
+        line = None if line in (None, "") else round(float(line), 2)
+    except (TypeError, ValueError):
+        line = None
+    return (norm(str((b or {}).get("player") or "")), str((b or {}).get("market") or "").lower(), side, line)
+
+
+def _board_legs(board: dict, sport: str, now=None) -> list[dict]:
+    """Every leg the board offers (`legs_for`, `enrich`), read once a build
+    and shared by its reports: the same rows, so the same legs."""
+    recs = board.get("recommendations")
+    key = (id(board), id(recs), len(recs or []), sport)
+    if _BOARD_LEGS.get("key") != key:
+        _BOARD_LEGS.clear()
+        _BOARD_LEGS.update(key=key, legs=enrich(legs_for(board, sport, now), board))
+    return _BOARD_LEGS["legs"]
+
+
+def _report_note(n_ok: int, n_picks: int, chosen: int) -> str:
+    """Why a game's report made fewer than four tickets, after "No three-leg
+    parlay:" when it made none."""
+    head = f"{chosen} of {THREE_PER_GAME}: " if chosen else ""
+    if not n_picks:
+        return head + "the parlays use only this report's own picks, and it has none on a player's line"
+    if n_ok < 3:
+        return (head + f"the parlays use only this report's own picks, and {n_ok} of its {n_picks} clear the "
+                f"{LEG_FLOOR:.0%} a leg needs; a ticket takes three")
+    if chosen:
+        return (head + f"the parlays use only this report's own picks, and the {n_ok} that clear "
+                f"{LEG_FLOOR:.0%} make no more tickets without a conflict or a leg on too many")
+    return (head + f"the parlays use only this report's own picks, and no three of the {n_ok} that clear "
+            f"{LEG_FLOOR:.0%} fit together without a conflict")
+
+
+def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> dict | None:
+    """Rebuild one game's three-leg tickets on the board from its report's own
+    picks (``picks``: engine/reportbets.bets_of, what the report shows), in
+    place, and return the game's entry; None where the board has none. A
+    started game's kept entry (engine/reportkeep) is left as it was. A
+    league on paper (engine/parlayhold) keeps the new tickets on paper."""
+    sp = str(sport or "").lower()
+    if sp not in SPORTS or not isinstance(board.get("game_parlays"), dict):
+        return None
+    x = for_game(board, (game or {}).get("home"), (game or {}).get("away"))
+    if x is None or x.get("kept"):
+        return x
+    want = {_pick_key(b) for b in picks or []
+            if isinstance(b, dict) and b.get("market") and not b.get("game") and b.get("kind") != "game"}
+    want.discard(("", "", "", None))
+    legs = [l for l in _board_legs(board, sp, now) if _pick_key(l) in want and _game_of(l, [game])]
+    chosen, n_threes, n_pool = threes_of(sp, game, legs)
+    paper = bool(x.get("threes_paper"))
+    x["paper_threes" if paper else "threes"] = chosen
+    if paper:
+        x["threes"] = []
+    x.update(legs_read=n_pool, threes_considered=n_threes, legs_from=LEGS_FROM_REPORT, report_picks=len(want))
+    if not paper:
+        if len(chosen) < THREE_PER_GAME:
+            x["threes_note"] = _report_note(n_pool, len(want), len(chosen))
+        else:
+            x.pop("threes_note", None)
+    return x
+
+
+def report_only(board: dict) -> int:
+    """After a board's reports: a game no report rebuilt (`from_report`) posts
+    no three-leg ticket, since its legs would be no report's picks, and every
+    count is read again. A started game's kept entry stands. Returns the games
+    cleared."""
+    gp = (board or {}).get("game_parlays")
+    if not isinstance(gp, dict):
+        return 0
+    n = 0
+    for x in gp.get("games") or []:
+        if not isinstance(x, dict) or x.get("kept") or x.get("legs_from") == LEGS_FROM_REPORT:
+            continue
+        key = "paper_threes" if x.get("threes_paper") else "threes"
+        if x.get(key):
+            n += 1
+        x[key] = []
+        x["legs_from"] = LEGS_FROM_REPORT
+        if not x.get("threes_paper"):
+            x["threes_note"] = NO_REPORT_NOTE
+    gp["from_reports"] = True
+    c = gp.get("counts")
+    if isinstance(c, dict):
+        live = [x for x in gp.get("games") or [] if isinstance(x, dict)]
+        c["threes"] = sum(len(x.get("threes") or []) for x in live)
+        c["paper_threes"] = sum(len(x.get("paper_threes") or []) for x in live)
+        c["one_club_threes"] = sum(one_club(t) for x in live for t in x.get("threes") or [])
+        c["from_report"] = sum(x.get("legs_from") == LEGS_FROM_REPORT for x in live)
+    return n
 
 
 def summary(gp: dict) -> str:

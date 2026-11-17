@@ -1463,6 +1463,9 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
                       changes=logged.get(f"{g['away']}@{g['home']}|{str(g.get('date') or '')[:10]}"))
             if r:
                 reports.append(r)
+        # A GAME NO REPORT REBUILT POSTS NO THREE-LEG TICKET (GPLEGS1).
+        from .gamereport import _report_only
+        _report_only(result)
         # A game under way keeps the report it had before it started, college's
         # too once the board prices none of the night (engine/reportkeep).
         # HOW THESE READS HAVE DONE (engine/reportrecord): each graded section opens

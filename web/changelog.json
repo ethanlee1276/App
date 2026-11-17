@@ -4,6 +4,12 @@
     {
       "date": "2026-11-17",
       "kind": "fix",
+      "title": "Each game’s parlays are made of its report’s own picks",
+      "body": "A game’s three-leg parlays were built from every prop we priced at 60% or better, and more than half their legs were never one of the report’s picks: Monday’s NBA picks hit 41 of 62 while the parlays went 4 of 30, sunk mostly by legs the report never picked. Now each game’s parlays are built only from the picks its report shows, under the same rules, and a game whose picks make fewer than four says why. Parlays that sat “waiting on the box score” for days because a leg had nothing to grade from now settle, that leg voided the way a book voids it."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "fix",
       "title": "The tab bar stays at the bottom of the screen as you scroll",
       "body": "On an iPhone the app could go on drawing itself above a keyboard that had already gone (another app’s, beside it in Split View, counts), so the tab bar, the live pill and the page’s light stood halfway up the screen and slid with the page. The installed app now measures how far the screen stands from where those are pinned and moves them back by exactly that, every frame, letting go the moment the phone puts things right or one of the app’s own boxes takes the keyboard. When nothing is wrong, nothing moves."
     },

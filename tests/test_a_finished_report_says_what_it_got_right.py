@@ -33,8 +33,19 @@ sys.path.insert(0, str(ROOT / "tests"))
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 from engine import gate                                              # noqa: E402
+from engine import gameparlays as _GP                                # noqa: E402
 from engine import reportgrade as G                                  # noqa: E402
 from engine import reportkeep as K                                   # noqa: E402
+
+# These hold how a started game keeps the tickets it had and how a final is
+# graded; WHICH legs a game's tickets are made of is held by
+# test_the_parlays_are_made_of_the_reports_picks (GPLEGS1: built from the
+# report's picks, a game still to play). The fixture's games are dated in the
+# past, where no leg is still to play, so here a report keeps the board's
+# tickets as the fixture gives them.
+_GP.from_report = lambda board, sport, game, picks, now=None: _GP.for_game(
+    board, (game or {}).get("home"), (game or {}).get("away"))
+_GP.report_only = lambda board: 0
 
 LOG = ("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, position, home, "
        "market, value) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
