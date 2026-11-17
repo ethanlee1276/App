@@ -183,6 +183,10 @@ def test_the_sheet_paints_one_picture_like_the_live_page():
     # At night the name lies on the colours and the cards are glass with no blur.
     assert 'html:not([data-theme="light"]) body.plr-on .plr-hero { background: none;' in css
     assert "--panel: rgba(12, 11, 14, .34);" in css and "blur(" not in css
+    # Less transparency or more contrast asked for: the theme's own solid panels come back.
+    assert ("@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {\n"
+            "  html:not([data-theme=\"light\"]) body.plr-on #view-players {\n"
+            "    --panel: inherit; --panel-2: inherit; --panel-3: inherit; --bg-2: inherit;") in css
     # The page is the player's.
     assert ("#view-players.plr-view > .section-title, #view-players.plr-view > .search-scope, #view-players.plr-view > .search-recent,\n"
             "#view-players.plr-view > .search-wrap, #view-players.plr-view > #team-hits { display: none; }") in css

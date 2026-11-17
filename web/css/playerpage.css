@@ -145,6 +145,12 @@ html:not([data-theme="light"]) body.plr-on #view-players {
   --grad-card: none;
   --glow-card: none;
   --glow-soft: none; }
+/* Less transparency or more contrast asked for (styles.css's own rule for the bars): the cards keep the
+   theme's solid panels over the colours instead of the glass. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  html:not([data-theme="light"]) body.plr-on #view-players {
+    --panel: inherit; --panel-2: inherit; --panel-3: inherit; --bg-2: inherit; --border: inherit; --border-soft: inherit; }
+}
 /* The page is the player's, as a game's page is the game's: the search's own head waits behind the way back. */
 #view-players.plr-view > .section-title, #view-players.plr-view > .search-scope, #view-players.plr-view > .search-recent,
 #view-players.plr-view > .search-wrap, #view-players.plr-view > #team-hits { display: none; }

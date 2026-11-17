@@ -9338,6 +9338,11 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VC. A player's page keeps solid cards when a phone asks for more contrast** (step 687; 17 November). Nothing
+to run. The cards on a player's page are dark glass over the club's colours (step VA). On a phone set to Reduce
+Transparency or Increase Contrast they are the theme's solid cards again, so their words never sit on a bright
+colour showing through.
+
 **VB. The last notes that called you "he" say "they"** (step 686; 17 November). Nothing to run. Step UW
 changed about two hundred comments and docs, and a search with more phrasings found about one hundred and
 ninety more it had missed, in the stylesheets, the page's markup, the tests and the engine: "his open Duo", "his
