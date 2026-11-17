@@ -182,7 +182,11 @@ def test_the_league_you_are_looking_at_is_never_hidden():
     i = APP.index("function applyNavLeagues()")
     body = APP[i:APP.index("\n}", i)]
     assert "code === state.sport" in body
-    assert "!want.length" in body, "an empty list has to mean every league"
+    assert "navLeagueOn(code)" in body
+    # The rule itself (2026-11-17: one rule for the nav and Settings, hockey included).
+    i = APP.index("function navLeagueOn(")
+    rule = APP[i:APP.index("\n}", i)]
+    assert "!s.leagues.length" in rule, "an empty list has to mean every league"
 
 
 # --- the welcome-back banner -------------------------------------------------

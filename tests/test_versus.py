@@ -263,6 +263,11 @@ def test_no_league_or_team_names_are_hardcoded_in_the_flow():
     i = src.index("const VS_SPORTS")
     block = src[i:src.index("function pricedProfileHTML")]
     assert '"nfl", "cfb"' in src[i:i + 120], "NFL and CFB are the ask"
+    # Every league the server answers for (2026-11-17: hockey was left out).
+    import re as _re
+    from engine import statlogs
+    listed = _re.findall(r'"([a-z]+)"', src[i:src.index("];", i)])
+    assert sorted(listed) == sorted(statlogs.SPORT_MARKETS), listed
     # Ethan's quote lives in the comments and names his example teams —
     # the CODE is what must stay data-driven.
     code = re.sub(r"/\*.*?\*/", "", block, flags=re.S)

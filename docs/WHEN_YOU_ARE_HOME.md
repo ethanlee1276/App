@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VK. Hockey has its own address and is on every league list** (step 695; 17 November). Nothing to run; the
+deploy installs the Caddyfile after checking it. The app's list of leagues never carried the NHL, so
+qellysbook.com/nhl opened the site on another league, a shared hockey player, game or pick was read as a player
+named "nhl", "Tonight, every league" left hockey's slate out, swiping between leagues skipped it, and Settings'
+"Leagues in the nav" could not list it. A list narrowed in Settings before today keeps hockey showing until it is
+unticked there. The head-to-head ("History vs a team") also shows for hockey players now: the server answered it
+all along (Connor McDavid: 21 games against the Kings).
+
 **VJ. How our reports did names every college game** (step 694; 17 November). Nothing to run. The morning's live
 check of the game reports found one finished college game listed as "espn:2145 63 at DEN 101": Colorado-Colorado
 Springs at Denver, a game nothing was priced on, whose report called no winner and so kept each side's code as

@@ -202,7 +202,7 @@ def test_every_section_names_a_view_the_app_actually_has():
     """A table that can invent a destination is a table that will."""
     order = APP[APP.index("const VIEW_ORDER = ["):]
     order = order[:order.index("];")]
-    sports = ["mlb", "nfl", "nba", "wnba", "cfb", "cbb"]
+    sports = ["mlb", "nfl", "nba", "wnba", "cfb", "cbb", "nhl"]
     for name, (kind, target, label, desc) in routes.SECTIONS.items():
         assert label and desc, f"{name} has no preview text"
         if kind == "sport":
@@ -221,6 +221,22 @@ def test_college_basketball_has_its_own_address():
     assert "Division I" in r["description"]
     assert '"cbb"' in APP[APP.index("const SPORT_CODES = ["):][:80], "the app adopts the hint's league"
     assert " /cbb " in CADDY[CADDY.index("@sections path "):][:200], "Caddy hands the path to the app"
+
+
+def test_hockey_has_its_own_address():
+    """2026-11-17: hockey's board had no path either: /nhl opened the site
+    on another league and unfurled as the generic card, and the app read a
+    shared hockey player (`player/nhl/<slug>`) as a player named "nhl"."""
+    r = routes.resolve("/nhl")
+    assert (r["sport"], r["hash"], r["kind"]) == ("nhl", "nhl", "section")
+    assert r["canonical"] == "https://qellysbook.com/nhl" and r["title"].startswith("NHL")
+    codes = APP[APP.index("const SPORT_CODES = ["):]
+    codes = codes[:codes.index("];")]
+    assert '"nhl"' in codes, "the app adopts the hint's league"
+    assert " /nhl " in CADDY[CADDY.index("@sections path "):][:200], "Caddy hands the path to the app"
+    # The app's list is the server's: every board file's league, nothing else.
+    import re
+    assert sorted(re.findall(r'"([a-z]+)"', codes)) == sorted(routes.BOARD_FILES)
 
 
 def test_the_proxy_and_the_table_name_the_same_sections():

@@ -3884,8 +3884,8 @@ function setListHTML() {
               val: escapeHtml((TZ_CHOICES.find(([v]) => v === s.tz) || TZ_CHOICES[0])[1]), chev: true,
               attrs: 'data-set-open="tz"' }),
     setItem({ ico: "list", tone: "green", title: "Leagues in the nav",
-              val: !s.leagues.length || s.leagues.length >= SPORT_CODES.length ? "All"
-                : `${s.leagues.length} of ${SPORT_CODES.length}`, chev: true, attrs: 'data-set-open="leagues"' }),
+              val: ((n) => n >= SPORT_CODES.length ? "All" : `${n} of ${SPORT_CODES.length}`)(
+                SPORT_CODES.filter((c) => navLeagueOn(c, s)).length), chev: true, attrs: 'data-set-open="leagues"' }),
     setItem({ ico: "tag", tone: "green", title: "Your books",
               val: !s.books.length ? "None" : s.books.length > 2 ? `${s.books.length} books`
                 : escapeHtml(s.books.map((b) => (BOOKS[b] || [b])[0]).join(", ")), chev: true, attrs: 'data-set-open="books"' }),
@@ -4063,7 +4063,7 @@ function setPageHTML(page) {
   }
   if (page === "leagues") {
     return head("Leagues in the nav") + setGroup("", SPORT_CODES.map((c) => {
-      const on = !s.leagues.length || s.leagues.includes(c);
+      const on = navLeagueOn(c, s);
       return setItem({ title: escapeHtml((LEAGUE_LABEL && LEAGUE_LABEL[c]) || c.toUpperCase()),
                        end: on ? setCheck() : "", attrs: `data-set-league="${escapeAttr(c)}" aria-pressed="${on}"` });
     }), "All of them, unless you narrow it. The league you are looking at always shows.");
@@ -4492,13 +4492,15 @@ function bindSettings() {
     const league = hit("[data-set-league]");
     if (league) {
       const code = league.dataset.setLeague;
-      // An empty list means EVERY league, so the first tap has to
-      // materialise the full list before removing one — otherwise
+      // An empty list means EVERY league, so the tap starts from the
+      // leagues that are on (navLeagueOn: a league the saved list never
+      // offered, hockey before 2026-11-17, counts as on) — otherwise
       // un-ticking a league would read as ticking only that one.
-      const cur = settings().leagues.length
-        ? settings().leagues.slice() : SPORT_CODES.slice();
+      const cur = SPORT_CODES.filter((c) => navLeagueOn(c));
       const i = cur.indexOf(code);
       if (i >= 0) cur.splice(i, 1); else cur.push(code);
+      // The list now speaks for every league offered today.
+      settings().leaguesOffered = SPORT_CODES.slice();
       // Emptied back out means all of them again, which is also the only
       // state that cannot leave somebody with no leagues at all.
       setSetting("leagues", cur.length ? cur : []);

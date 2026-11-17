@@ -199,6 +199,7 @@ const SETTINGS_DEFAULTS = {
   tz: "",               // "" = this device's own zone
   teams: [],            // "nfl:DET" — sport-tagged, because CIN is two teams
   leagues: [],          // [] = every league in the nav
+  leaguesOffered: null, // the leagues offered when `leagues` was saved (null: before hockey joined, 2026-11-17; navLeagueOn)
   teamColors: "off",    // "on": the bar, the Live disc and the tab wear your first team's colours; "site": the whole site does (MYCOLORS1)
   teamColorsTeam: "",   // "nfl:DET": whose colours, any league's team; "" = the team you follow in the league in view
   books: [],            // the sportsbooks they use (js/account.js "Make it yours")
@@ -797,13 +798,24 @@ function markSportRow(lit = sportRowLeague()) {
    the page and its own navigation disagreeing about where you are, which
    is the exact failure HIDDEN_VIEWS' `off` rows exist to avoid. */
 function applyNavLeagues() {
-  const want = settings().leagues;
   document.querySelectorAll(".sport-btn").forEach((b) => {
     const code = b.dataset.sport;
     if (!code || !SPORT_CODES.includes(code)) return;   // tools, not leagues
-    const show = !want.length || want.includes(code) || code === state.sport || code === sportRowLeague();
+    const show = navLeagueOn(code) || code === state.sport || code === sportRowLeague();
     b.hidden = !show;
   });
+}
+
+/* WHETHER A LEAGUE IS ON IN THE NAV: an empty list is every league; a
+   narrowed list shows what it names, and also any league the list never
+   offered when it was saved. Hockey joined the setting on 2026-11-17, so
+   a list narrowed before then (it has no `leaguesOffered`) says nothing
+   about hockey, and hockey stays in the nav until its owner chooses. */
+const NAV_LEAGUES_BEFORE_HOCKEY = ["mlb", "nfl", "nba", "wnba", "cfb", "cbb"];
+function navLeagueOn(code, s = settings()) {
+  if (!s.leagues.length || s.leagues.includes(code)) return true;
+  const offered = Array.isArray(s.leaguesOffered) ? s.leaguesOffered : NAV_LEAGUES_BEFORE_HOCKEY;
+  return !offered.includes(code);
 }
 
 
@@ -14750,8 +14762,11 @@ function ccKeep(host) {
    in it lands on the stored spelling.
 
    Every log-backed league, because the data is the same shape in all of
-   them — they asked for NFL and CFB, and MLB/NBA/WNBA cost nothing more. */
-const VS_SPORTS = ["nfl", "cfb", "mlb", "nba", "wnba", "cbb"];
+   them — they asked for NFL and CFB, and MLB/NBA/WNBA cost nothing more.
+   Hockey's logs answered the same endpoint all along (Connor McDavid: 21
+   games against the Kings) while the block skipped the NHL (2026-11-17);
+   the list is engine/statlogs.SPORT_MARKETS, the server's own. */
+const VS_SPORTS = ["nfl", "cfb", "mlb", "nba", "wnba", "cbb", "nhl"];
 
 function vsBlockHTML(player, sport, opp = "") {
   const lg = String(sport || "").toLowerCase();
@@ -14855,6 +14870,8 @@ const VS_SHORT = {
   "Rushing Yards": "Rush Yds", "Receiving Yards": "Rec Yds",
   "Receptions": "Rec", "Targets": "Tgts", "Carries": "Car",
   "Pass Attempts": "Att", "Completions": "Cmp",
+  // Hockey's, as its box score prints them.
+  "Shots on Goal": "SOG", "Blocked Shots": "Blk", "Plus-Minus": "+/-", "Penalty Minutes": "PIM",
 };
 
 function vsStatsHTML(stats) {
@@ -25066,8 +25083,16 @@ function _switchViewNow(name, push, dir) {
    The mirroring is the risk here, and it is bounded on purpose: three
    short functions (`slugify`, `gameSlug`, `pickSlug`), each with a twin
    in engine/routes.py, checked against each other by
-   tests/test_routes.py on real board rows rather than by eye. */
-const SPORT_CODES = ["mlb", "nfl", "nba", "wnba", "cfb", "cbb"];
+   tests/test_routes.py on real board rows rather than by eye.
+
+   EVERY LEAGUE WITH A BOARD, IN THE NAV'S ORDER (2026-11-17). Hockey was
+   never on it: /nhl opened the site on another league, a shared hockey
+   player, game or pick (the server hands back `player/nhl/<slug>`) was
+   read as a player named "nhl", Tonight's every-league page skipped
+   hockey's slate, swiping between leagues passed over it, and the nav's
+   league setting could not list it. engine/routes.BOARD_FILES is the
+   server's half and names the same seven. */
+const SPORT_CODES = ["nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl"];
 
 /* Accents FOLDED, not dropped: José Ramírez has to reach `jose-ramirez`,
    because that is what anybody typing his name produces, and a slug
@@ -30670,11 +30695,11 @@ async function renderLiveBoard() {
       const want = b.dataset.chip;
       if (!want) return;
       _liveChip = want;
-      /* LIVE_FEEDS, NOT SPORT_CODES: the route list never carried hockey,
-         so the NHL chip filtered the cards and left the MLB bets under
-         them (Ethan, 2026-10-04: "MLB bets are showing in the live tab
-         for nhl bets"). Every league with a live feed has a sportbar
-         button to switch through. */
+      /* LIVE_FEEDS AS WELL AS SPORT_CODES: the route list did not carry
+         hockey until 2026-11-17, so the NHL chip filtered the cards and
+         left the MLB bets under them (Ethan, 2026-10-04: "MLB bets are
+         showing in the live tab for nhl bets"). Every league with a live
+         feed has a sportbar button to switch through. */
       if (want !== "all" && want !== state.sport && (SPORT_CODES.includes(want) || LIVE_FEEDS[want])) {
         // `_liveChipSport` IS DELIBERATELY NOT TOUCHED HERE. Setting it
         // to the chosen league looked like belt and braces and was a
