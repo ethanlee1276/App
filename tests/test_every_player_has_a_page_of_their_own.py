@@ -290,7 +290,7 @@ def test_a_headline_number_with_nothing_behind_it_gives_way_to_minutes():
     d = PP.page("wnba", "Caitlin Clark", db_path=path, data_dir=tempfile.mkdtemp())
     h = [(x["label"], x["value"], x["rank"]) for x in d["headline"]]
     assert h == [("PTS", 21.3, 1), ("REB", 3.7, 1), ("AST", 8.0, 1), ("MIN", 36.0, 1)], h
-    assert PP.SPARE["box"][:3] == ("min", "MIN", "Minutes a game")
+    assert PP.SPARE["box"][0][:3] == ("min", "MIN", "Minutes a game")
     nba_path, rosters = _fresh()
     labels = [x["label"] for x in PP.page("nba", "Jalen Brunson", db_path=nba_path, data_dir=rosters)["headline"]]
     assert labels == ["PTS", "REB", "AST", "FG%"], ("a page with shots keeps its FG%", labels)

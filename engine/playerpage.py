@@ -112,30 +112,45 @@ HEAD = {
                ("gaa", "GAA", "Goals against a 60 minutes", ("gaa",), False, True, "toi", True),
                ("sv", "SV", "Saves", ("sum", "saves"), False, False, None, True),
                ("gs", "GS", "Games started", ("sum", "started"), False, False, None, False)),
-    "batting": (("h", "H", "Hits", ("sum", "hits"), False, False, None, True),
+    # The numbers a sports site leads a hitter's and a pitcher's page with
+    # (2026-11-17), now the box scores' whole lines are kept (engine/mlb/
+    # fulllines). A rate is ranked among those with RATE_SHARE of the most
+    # plate appearances (or outs) behind it.
+    "batting": (("avg", "AVG", "Batting average", ("bavg", "hits", "at_bats"), False, False, "pa", True),
                 ("hr", "HR", "Home runs", ("sum", "home_runs"), False, False, None, True),
-                ("tb", "TB", "Total bases", ("sum", "total_bases"), False, False, None, True),
-                ("pa", "PA", "Plate appearances", ("sum", "pa"), False, False, None, False)),
-    "pitching": (("k", "K", "Strikeouts", ("sum", "strikeouts"), False, False, None, True),
-                 ("ip", "IP", "Innings pitched", ("ip", "outs"), False, False, None, True),
-                 ("k9", "K/9", "Strikeouts a nine innings", ("k9",), False, False, "outs", True),
-                 ("gp", "GP", "Games pitched", ("gp",), False, False, None, False)),
+                ("rbi", "RBI", "Runs batted in", ("sum", "rbis"), False, False, None, True),
+                ("ops", "OPS", "On-base plus slugging",
+                 ("ops", "hits", "walks", "hbp", "at_bats", "sac_flies", "total_bases"), False, False, "pa", True)),
+    "pitching": (("era", "ERA", "Earned run average", ("era", "earned_runs", "outs"), False, True, "outs", True),
+                 ("k", "K", "Strikeouts", ("sum", "strikeouts"), False, False, None, True),
+                 ("whip", "WHIP", "Walks and hits an inning", ("whip", "hits_allowed", "walks_allowed", "outs"),
+                  False, True, "outs", True),
+                 ("ip", "IP", "Innings pitched", ("ip", "outs"), False, False, None, True)),
 }
-#: A kind's fifth number, for a headline one whose season has none (PLAYERDATA4, 2026-11-17): the WNBA's box
-#: scores carry minutes, points, rebounds and assists and no shots, so every WNBA page read "FG% —" in its
-#: headline. A number with nothing behind it gives way to this one, ranked the same way.
-SPARE = {"box": ("min", "MIN", "Minutes a game", ("sum", "min"), True, False, None, True)}
+#: A kind's spare numbers, in order, for headline ones whose season has none (PLAYERDATA4, 2026-11-17): the
+#: WNBA's box scores carry minutes, points, rebounds and assists and no shots, so every WNBA page read "FG% —"
+#: in its headline. A number with nothing behind it gives way to the next spare, ranked the same way. A
+#: baseball season read before its box scores were filled (engine/mlb/fulllines) holds the props' numbers
+#: alone, so a hitter's page leads with those and a pitcher's with strikeouts a nine and games.
+SPARE = {"box": (("min", "MIN", "Minutes a game", ("sum", "min"), True, False, None, True),),
+         "batting": (("h", "H", "Hits", ("sum", "hits"), False, False, None, True),
+                     ("tb", "TB", "Total bases", ("sum", "total_bases"), False, False, None, True),
+                     ("pa", "PA", "Plate appearances", ("sum", "pa"), False, False, None, False)),
+         "pitching": (("k9", "K/9", "Strikeouts a nine innings", ("k9",), False, False, "outs", True),
+                      ("gp", "GP", "Games pitched", ("gp",), False, False, None, False))}
 
 
 def headline_specs(sport: str, kind: str, summed: dict, gp: int) -> list:
-    """[(spec, value)] for the headline: the kind's four, the spare in place of the first with no value."""
+    """[(spec, value)] for the headline: the kind's four, each with no value
+    given way to the next spare that has one (SPARE)."""
     specs = [(sp, head_value(sport, sp, summed, gp)) for sp in HEAD.get(kind, ())]
-    spare = SPARE.get(kind)
-    gap = next((i for i, (_, v) in enumerate(specs) if v is None), None)
-    if spare and gap is not None:
-        v = head_value(sport, spare, summed, gp)
-        if v is not None:
-            specs[gap] = (spare, v)
+    spares = ((sp, v) for sp in SPARE.get(kind, ()) for v in (head_value(sport, sp, summed, gp),) if v is not None)
+    for i, (_, v) in enumerate(specs):
+        if v is None:
+            nxt = next(spares, None)
+            if nxt is None:
+                break
+            specs[i] = nxt
     return specs
 
 
@@ -145,7 +160,7 @@ ROLE_NEED = {"passing": ("pass_att",), "rushing": ("carries", "rush_att"), "rece
              "kicking": ("fg_att", "xp_att"), "defense": ("tackles_ast", "tackles_solo"),
              "box": ("min",), "skater": ("goals", "assists", "points", "sog"), "goalie": ("shots_against",),
              "batting": ("pa",), "pitching": ("outs",)}
-#: The four numbers from his newest game, by the column ids of the game log.
+#: The four numbers from the newest game, by the column ids of the game log (the first four it has).
 TILES = {
     "passing": ("passing.rtg", "passing.pct", "passing.yds", "passing.td"),
     "rushing": ("rushing.car", "rushing.yds", "rushing.avg", "rushing.td"),
@@ -155,8 +170,9 @@ TILES = {
     "box": ("box.pts", "box.reb", "box.ast", "box.fg"),
     "skater": ("skater.g", "skater.a", "skater.sog", "skater.toi"),
     "goalie": ("goalie.sv", "goalie.sa", "goalie.svp", "goalie.ga"),
-    "batting": ("batting.h", "batting.tb", "batting.hr", "batting.pa"),
-    "pitching": ("pitching.ip", "pitching.k"),
+    # A baseball game's whole line where the box score is kept, else the props' numbers: the first four kept.
+    "batting": ("batting.ab", "batting.h", "batting.hr", "batting.rbi", "batting.tb", "batting.pa"),
+    "pitching": ("pitching.ip", "pitching.h", "pitching.er", "pitching.k"),
 }
 _MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
            "November", "December")
@@ -283,10 +299,17 @@ def head_value(sport: str, spec: tuple, s: dict, gp: int):
 
 
 def _rank_on(spec: tuple, s: dict, gp: int, sport: str):
-    """The number a headline is ranked on (innings are ranked on outs)."""
+    """The number a headline is ranked on (innings are ranked on outs; a rate
+    printed as baseball prints it, ".312", on its number)."""
     if spec[3][0] == "ip":
         return s.get("outs")
-    return head_value(sport, spec, s, gp)
+    v = head_value(sport, spec, s, gp)
+    if isinstance(v, str):
+        try:
+            return float(v)
+        except ValueError:
+            return None
+    return v
 
 
 def _league(conn, sport: str, season: int, markets) -> dict:
@@ -450,7 +473,7 @@ def warm(db_path=None, delay: float = 60.0) -> threading.Thread:
 
 
 def _build_table(conn, sport: str, season: int, kind: str) -> dict:
-    specs = tuple(HEAD.get(kind) or ()) + ((SPARE[kind],) if kind in SPARE else ())
+    specs = tuple(HEAD.get(kind) or ()) + tuple(SPARE.get(kind, ()))
     need = ROLE_NEED.get(kind, ())
     markets = {m for sp in specs for m in _markets(sp[3])} | {sp[6] for sp in specs if sp[6]} | set(need)
     if sport in HOOPS:
@@ -747,6 +770,8 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
             g = gs.setdefault((str(period), str(gid)), {"period": str(period), "game_id": str(gid), "team": club,
                                                         "opponent": opp, "position": pos, "home": home,
                                                         "stats": {}})
+            if pos and not g["position"]:
+                g["position"] = pos                # a box score's pinch hitter has none (engine/mlb/fulllines)
             if val is not None:
                 g["stats"][market] = float(val)
         by_season = {yr: {(g["period"], g["game_id"]): g for g in GL.collapse(sport, list(gs.values()))}
@@ -821,7 +846,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
             last = {"date": g["date"], "opponent": g["opponent"] or "", "home": g["home"], "team": g["team"] or "",
                     "values": vals, "dnp": g["dnp"], "pending": g["pending"], "no_line": g["no_line"],
                     "tiles": [{"id": t, "label": labels[t][0], "title": labels[t][1], "value": vals.get(t)}
-                              for t in TILES.get(kind, ()) if t in labels and vals.get(t) is not None]}
+                              for t in TILES.get(kind, ()) if t in labels and vals.get(t) is not None][:4]}
             if sport in GL.WEEKLY and not GL._ISO.match(g["period"]):
                 try:
                     last["week"] = int(g["period"])

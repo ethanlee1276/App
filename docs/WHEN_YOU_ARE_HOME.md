@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VU. MLB player pages carry the whole batting and pitching line** (step 705; 17 November). One command, once
+(RUN_NEXT 00l). You said "yes build it all" to the full lines. An MLB player's page and game log now show what a
+box score prints: a hitter's PA, AB, R, H, 2B, 3B, HR, RBI, BB, SO, SB and TB with AVG, OBP, SLG and OPS, and a
+pitcher's innings, hits, runs, earned runs, walks, strikeouts, homers allowed, pitches and the decision (W, L or
+SV) with ERA and WHIP. In the game log, AVG, OBP, SLG, OPS, ERA and WHIP read as the season through each game,
+the way ESPN's game logs print them. A hitter's page leads with AVG, HR, RBI and OPS and a pitcher's with ERA,
+strikeouts, WHIP and innings, each ranked in the league (ERA and WHIP with fewer ranking higher). From now on the
+nightly MLB read adds every final game's box score for everyone who played, priced or not: one request a game,
+about fifteen a night. The season just played needs the command once: it reads the 2026 schedule and each final
+regular-season and postseason game's box score, about 2,430 requests over about 25 minutes, without caching them,
+and adds only what the history lacks. A number the record graded is never changed, and each game lands on the
+graded rows' own game (a doubleheader is keyed the way the nightly keys it). Until the command runs, the 2026 pages
+show what they show today (hits, total bases, plate appearances and homers; a pitcher's strikeouts and innings),
+and nothing breaks. It is safe to run again: a day it could not read is left whole for the next run. A rate only
+counts the games that have their full line, so a game with only the props' numbers never lifts an average.
+
 **VT. Every fighter has a full page** (step 704; 17 November). Nothing to run. You said yes to a full UFC
 fighter page. Searching a fighter on the UFC tab now opens the fighter's own page, in the same frame as every
 other league's player page, where it used to open one card of career rates. The header carries the face, the

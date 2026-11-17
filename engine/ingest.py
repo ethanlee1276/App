@@ -906,8 +906,19 @@ def ingest_mlb_date(conn, date: str) -> dict:
         result["skipped"].append(f"mlb {date} box scores: {exc}")
     prows += boxed
     result["box_rows"] = len(boxed)
+    # EVERY PLAYER'S FULL LINE (engine/mlb/fulllines; Ethan, 2026-11-17: "yes
+    # build it all"): each final game's box score, every number a player page
+    # prints, for everyone who played. Written after the rows above and only
+    # where the history holds nothing, so a number the record graded stays.
+    try:
+        from .mlb import fulllines
+        full = fulllines.slate_rows(slate, date)
+    except Exception as exc:                                  # noqa: BLE001
+        full = []
+        result["skipped"].append(f"mlb {date} full lines: {exc}")
     result["games"] = db.upsert_games(conn, grows)
     result["player_logs"] = db.upsert_player_logs(conn, prows)
+    result["full_lines"] = fulllines.write(conn, full) if full else 0
     result["starters"] = db.upsert_game_starters(conn, mlb_starter_rows(slate, date))
     result["umpires"] = db.upsert_game_umpires(conn, mlb_umpire_rows(slate, date))
     db.log_ingest(conn, "mlb", "slate", date, result["games"] + result["player_logs"])

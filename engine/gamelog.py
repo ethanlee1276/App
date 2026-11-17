@@ -34,6 +34,12 @@ from . import db as _db
 #   ("rating",)           the passer rating (the NFL's; college's efficiency)
 #   ("toi", m)            time on ice in minutes, an average over the season
 #   ("ip", outs)          innings pitched from outs ("6.1")
+#   ("bavg", num, den)    a batting rate as baseball prints it (".312")
+#   ("obp", h, bb, hbp, ab, sf)      on-base percentage (".385")
+#   ("ops", h, bb, hbp, ab, sf, tb)  on-base plus slugging (".912")
+#   ("era", er, outs)     earned runs a nine innings ("3.45")
+#   ("whip", h, bb, outs) walks and hits an inning ("1.12")
+#   ("dec", w, l, sv)     a pitcher's decision ("W"); a season's, the record ("10-5")
 FOOTBALL = (
     ("passing", "Passing", ("pass_att",), (
         ("cmp", "CMP", "Completions", ("sum", "pass_cmp")),
@@ -118,14 +124,42 @@ HOCKEY = (
         ("toi", "TOI", "Time on ice", ("toi", "toi")))),
 )
 BASEBALL = (
+    # THE LINE A BOX SCORE PRINTS (2026-11-17; Ethan: "yes build it all").
+    # The file kept the four numbers the props grade (plate appearances, hits,
+    # total bases, home runs; a pitcher's outs and strikeouts); each final
+    # game's box score now adds every player's whole line (engine/mlb/
+    # fulllines). A season read before its box scores were filled shows the
+    # props' numbers alone: a column shows only where the file keeps it.
     ("batting", "Batting", ("pa", "hits", "total_bases"), (
         ("pa", "PA", "Plate appearances", ("sum", "pa")),
+        ("ab", "AB", "At bats", ("sum", "at_bats")),
+        ("r", "R", "Runs", ("sum", "runs")),
         ("h", "H", "Hits", ("sum", "hits")),
+        ("2b", "2B", "Doubles", ("sum", "doubles")),
+        ("3b", "3B", "Triples", ("sum", "triples")),
+        ("hr", "HR", "Home runs", ("sum", "home_runs")),
+        ("rbi", "RBI", "Runs batted in", ("sum", "rbis")),
+        ("bb", "BB", "Walks", ("sum", "walks")),
+        ("so", "SO", "Strikeouts", ("sum", "batter_strikeouts")),
+        ("sb", "SB", "Stolen bases", ("sum", "stolen_bases")),
         ("tb", "TB", "Total bases", ("sum", "total_bases")),
-        ("hr", "HR", "Home runs", ("sum", "home_runs")))),
+        ("avg", "AVG", "Batting average", ("bavg", "hits", "at_bats")),
+        ("obp", "OBP", "On-base percentage", ("obp", "hits", "walks", "hbp", "at_bats", "sac_flies")),
+        ("slg", "SLG", "Slugging percentage", ("bavg", "total_bases", "at_bats")),
+        ("ops", "OPS", "On-base plus slugging",
+         ("ops", "hits", "walks", "hbp", "at_bats", "sac_flies", "total_bases")))),
     ("pitching", "Pitching", ("outs",), (
         ("ip", "IP", "Innings pitched", ("ip", "outs")),
-        ("k", "K", "Strikeouts", ("sum", "strikeouts")))),
+        ("h", "H", "Hits allowed", ("sum", "hits_allowed")),
+        ("r", "R", "Runs allowed", ("sum", "runs_allowed")),
+        ("er", "ER", "Earned runs", ("sum", "earned_runs")),
+        ("bb", "BB", "Walks", ("sum", "walks_allowed")),
+        ("k", "K", "Strikeouts", ("sum", "strikeouts")),
+        ("hr", "HR", "Home runs allowed", ("sum", "home_runs_allowed")),
+        ("pc", "PC", "Pitches", ("sum", "pitches")),
+        ("dec", "DEC", "Decision: win, loss or save", ("dec", "wins", "losses", "saves")),
+        ("era", "ERA", "Earned run average", ("era", "earned_runs", "outs")),
+        ("whip", "WHIP", "Walks and hits an inning", ("whip", "hits_allowed", "walks_allowed", "outs")))),
 )
 LAYOUTS = {"nfl": FOOTBALL, "cfb": FOOTBALL, "nba": HOOPS, "wnba": HOOPS, "cbb": HOOPS, "nhl": HOCKEY,
            "mlb": BASEBALL}
@@ -133,16 +167,32 @@ LAYOUTS = {"nfl": FOOTBALL, "cfb": FOOTBALL, "nba": HOOPS, "wnba": HOOPS, "cbb":
 WEEKLY = ("nfl", "cfb")
 #: The stats a season holds at their best game, not their sum (the "max" rule).
 PEAK = frozenset({"fg_long"})
+#: A RATE READS ONLY THE GAMES WITH THEIR WHOLE LINE (2026-11-17). The file
+#: keeps a hitter's hits and total bases (the props' numbers) for games whose
+#: box score it may not hold: hits over no at-bats would lift an average. A
+#: game carrying its box score's line (at-bats for a hitter, earned runs for a
+#: pitcher) also adds that line's numbers under "<market>|whole", and a rate
+#: (WHOLE_RATES) reads those wherever a season has them.
+WHOLE = {"at_bats": ("at_bats", "hits", "total_bases", "walks", "hbp", "sac_flies"),
+         "earned_runs": ("earned_runs", "outs", "hits_allowed", "walks_allowed")}
+WHOLE_RATES = frozenset({"bavg", "obp", "ops", "era", "whip"})
+#: A game log prints these as the season's through each game, as a box score's
+#: and ESPN's game logs do: one game's batting average is noise.
+RUNNING = WHOLE_RATES
 
 
 def add_up(into: dict, stats: dict) -> dict:
     """One game's stats into a running season: summed, except a PEAK stat,
-    which keeps its most."""
+    which keeps its most; a game with its whole line adds it again (WHOLE)."""
     for m, v in stats.items():
         if m in PEAK:
             into[m] = max(into.get(m, v), v)
         else:
             into[m] = into.get(m, 0.0) + v
+    for key, marks in WHOLE.items():
+        if stats.get(key) is not None:
+            for m in marks:
+                into[f"{m}|whole"] = into.get(f"{m}|whole", 0.0) + (stats.get(m) or 0.0)
     return into
 _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
@@ -179,10 +229,61 @@ def _rating(sport: str, s: dict) -> float | None:
     return round((a + b + c + d) / 6 * 100, 1)
 
 
+def _whole(s: dict, m: str):
+    """A rate's number: the games with their whole line, where the stats are a
+    season's that has them (WHOLE); else the number as kept."""
+    w = s.get(f"{m}|whole")
+    return w if w is not None else s.get(m)
+
+
+def rate3(x: float) -> str:
+    """A batting rate as baseball prints it: .312, and 1.000."""
+    out = f"{x:.3f}"
+    return out[1:] if out.startswith("0.") else out
+
+
+def _obp(s: dict, h: str, bb: str, hbp: str, ab: str, sf: str) -> float | None:
+    hits, at_bats = _whole(s, h), _whole(s, ab)
+    if hits is None or at_bats is None:
+        return None
+    walks, hit_by, sac = (_whole(s, m) or 0.0 for m in (bb, hbp, sf))
+    den = at_bats + walks + hit_by + sac
+    return (hits + walks + hit_by) / den if den else None
+
+
+def _baseball(kind: str, how: tuple, s: dict, games: int):
+    """The baseball rates and a pitcher's decision (the kinds above)."""
+    if kind == "bavg":
+        num, den = _whole(s, how[1]), _whole(s, how[2])
+        return None if num is None or not den else rate3(num / den)
+    if kind == "obp":
+        v = _obp(s, *how[1:6])
+        return None if v is None else rate3(v)
+    if kind == "ops":
+        v, ab, tb = _obp(s, *how[1:6]), _whole(s, how[4]), _whole(s, how[6])
+        return None if v is None or tb is None else rate3(v + (tb / ab if ab else 0.0))
+    if kind == "era":
+        er, outs = _whole(s, how[1]), _whole(s, how[2])
+        return None if er is None or not outs else f"{er * 27.0 / outs:.2f}"
+    if kind == "whip":
+        h, bb, outs = _whole(s, how[1]), _whole(s, how[2]), _whole(s, how[3])
+        return None if h is None or bb is None or not outs else f"{(h + bb) * 3.0 / outs:.2f}"
+    if kind == "dec":
+        w, lo, sv = (int(s.get(m) or 0) for m in how[1:4])
+        if not (w or lo or sv):
+            return None
+        if games <= 1 and w + lo + sv == 1:
+            return "W" if w else "L" if lo else "SV"
+        return f"{w}-{lo}" + (f", {sv} SV" if sv else "")
+    return None
+
+
 def value(sport: str, how: tuple, s: dict, games: int = 1):
     """One column's value from a game's stats, or from the season's summed
     stats (``games`` played, for the averages a sum cannot carry)."""
     kind = how[0]
+    if kind in ("bavg", "obp", "ops", "era", "whip", "dec"):
+        return _baseball(kind, how, s, games)
     if kind in ("sum", "max"):
         return _first(s, how[1:])
     if kind in ("pct", "avg"):
@@ -225,7 +326,8 @@ def _group_markets(sport: str) -> list:
     for _, _, marks, cols in LAYOUTS.get(sport, ()):
         ms = set(marks)
         for c in cols:
-            if c[3][0] in ("sum", "max", "pct", "avg", "made", "toi", "ip"):
+            if c[3][0] in ("sum", "max", "pct", "avg", "made", "toi", "ip", "bavg", "obp", "ops", "era", "whip",
+                           "dec"):
                 ms.update(c[3][1:])
             elif c[3][0] == "rating":
                 ms.update(("pass_att", "pass_cmp", "pass_yds", "pass_td", "pass_int"))
@@ -383,6 +485,8 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None)
     for period, gid, team, opp, pos, home, market, val in rows:
         g = games.setdefault((str(period), str(gid)), {"period": str(period), "game_id": str(gid), "team": team,
                                                        "opponent": opp, "position": pos, "home": home, "stats": {}})
+        if pos and not g["position"]:
+            g["position"] = pos                    # a box score's pinch hitter has none (engine/mlb/fulllines)
         if val is not None:
             g["stats"][market] = float(val)
     games = {(g["period"], g["game_id"]): g for g in collapse(sport, list(games.values()))}
@@ -397,8 +501,10 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None)
     if not groups:
         return {}
     out_games, played, summed = [], 0, {}
-    for g in games.values():
+    # In the order played, so a RUNNING column reads the season through each game.
+    for g in sorted(games.values(), key=lambda g: (g["period"], g["game_id"])):
         s = g["stats"]
+        counted = False
         res = by_id.get(g["game_id"]) or by_pair.get((g["period"], frozenset((g["team"], g["opponent"]))))
         home = (res["home"] == g["team"]) if res else bool(g["home"])
         line = {"opponent": g["opponent"], "home": home, "team": g["team"]}
@@ -423,7 +529,9 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None)
         else:
             played += 1
             add_up(summed, s)
-        line["values"] = {f"{k}.{c[0]}": value(sport, c[3], s) for k, _, cols in groups for c in cols}
+            counted = True
+        line["values"] = {f"{k}.{c[0]}": cell(sport, c[3], s, summed, played, counted)
+                          for k, _, cols in groups for c in cols}
         out_games.append(line)
     out_games.sort(key=lambda x: (x.get("date") or "", x.get("week") or 0), reverse=True)
     totals = {f"{k}.{c[0]}": value(sport, c[3], summed, played) for k, _, cols in groups for c in cols}
@@ -433,9 +541,20 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None)
     last = max(games.values(), key=lambda g: g["period"])
     return {"sport": sport, "player": player, "season": season, "seasons": seasons,
             "team": last["team"] or "", "position": last["position"] or "",
-            "groups": [{"key": k, "title": t, "cols": [{"key": c[0], "label": c[1], "title": c[2]} for c in cols]}
+            "groups": [{"key": k, "title": t, "cols": [{"key": c[0], "label": c[1],
+                                                         "title": c[2] + (", the season's through each game"
+                                                                          if c[3][0] in RUNNING else "")}
+                                                        for c in cols]}
                        for k, t, cols in groups],
             "games": out_games, "played": played, "totals": totals, "per_game": per_game}
+
+
+def cell(sport: str, how: tuple, s: dict, summed: dict, played: int, counted: bool):
+    """A game's cell in the log: its own number, or for a RUNNING column the
+    season's through it (none for a game not counted)."""
+    if how[0] in RUNNING:
+        return value(sport, how, summed, played) if counted else None
+    return value(sport, how, s)
 
 
 def _first_key(s: dict, markets) -> str | None:
