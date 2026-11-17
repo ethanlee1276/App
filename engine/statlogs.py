@@ -917,7 +917,7 @@ def search_all(q: str, limit: int = 12, prefer: str = "",
     be able to look up mlb or ufc or wnba players." A search box that
     silently scopes itself to whichever tab you happen to be on is a
     search box you cannot trust — you type a name, get nothing, and have
-    no way to tell "he isn't in our data" from "you're on the wrong tab".
+    no way to tell "that player isn't in our data" from "you're on the wrong tab".
 
     THE LEAGUES IN THIS DATABASE ONLY. Fighters are not here and never
     were: nothing writes a UFC row to ``player_game_logs``. The box the

@@ -459,10 +459,13 @@ CREATE TABLE IF NOT EXISTS kicks (
 );
 CREATE INDEX IF NOT EXISTS kicks_player ON kicks (sport, player, season);
 -- UFC FIGHT HISTORY (2026-10-14, Ethan's list: "Yes do all of them"). Every
--- bout a fighter on the card has had, off the ESPN records his dossier is
--- drafted from: the opponent, the result, how and when it ended, the
--- rounds scheduled and both men's numbers. Its own table so a dossier a
--- human reviewed is never re-drafted to add it. engine/ufc/history.py.
+-- bout a fighter on the card has had, off the ESPN records the fighter's
+-- dossier is drafted from: the opponent, the result, how and when it ended,
+-- the rounds scheduled and both fighters' numbers. Its own table so a dossier
+-- a human reviewed is never re-drafted to add it. engine/ufc/history.py.
+-- `ufc_fighters_read.facts` (2026-11-17) keeps the facts ESPN's athlete page
+-- publishes (height, reach, stance, the day born) as JSON, for the fighter's
+-- page: kept here, not in the dossier file another process writes.
 CREATE TABLE IF NOT EXISTS ufc_fights (
     fighter TEXT, fighter_id TEXT, comp_id TEXT, event_id TEXT, date TEXT, opp TEXT, opp_id TEXT,
     result TEXT, method TEXT, rnd INTEGER, clock TEXT, secs REAL, rounds INTEGER, division TEXT,
@@ -471,7 +474,7 @@ CREATE TABLE IF NOT EXISTS ufc_fights (
     PRIMARY KEY (fighter, comp_id)
 );
 CREATE TABLE IF NOT EXISTS ufc_fighters_read (
-    fighter TEXT PRIMARY KEY, fighter_id TEXT, fetched TEXT, fights INTEGER
+    fighter TEXT PRIMARY KEY, fighter_id TEXT, fetched TEXT, fights INTEGER, facts TEXT
 );
 -- MLB PLATE APPEARANCES AND PITCHES (2026-10-13, Ethan: "Can we do a hit
 -- tracker for mlb?"). One row per completed plate appearance off the
@@ -878,6 +881,13 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
             column_exists_or_raise(exc)
     try:
         conn.execute("ALTER TABLE game_starters ADD COLUMN throws TEXT")
+        conn.commit()
+    except sqlite3.OperationalError as exc:
+        column_exists_or_raise(exc)
+    # A fighter's ESPN facts, for the fighter's page (engine/ufc/history,
+    # 2026-11-17). NULL on a fighter read before them: the next read adds them.
+    try:
+        conn.execute("ALTER TABLE ufc_fighters_read ADD COLUMN facts TEXT")
         conn.commit()
     except sqlite3.OperationalError as exc:
         column_exists_or_raise(exc)

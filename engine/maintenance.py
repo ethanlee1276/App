@@ -2834,8 +2834,8 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                     _xs.save(_xm)
                     log(f"  mlb expected stats: refitted on {_xm['n']:,} balls in play")
             # THE HIT PAGE'S OTHER NUMBERS (2026-10-14, Ethan: "do the first
-            # 7 page items"): every hitter's runs and stolen bases off his own
-            # game log, the parks and records of a season read before they
+            # 7 page items"): every hitter's runs and stolen bases off the hitter's
+            # own game log, the parks and records of a season read before they
             # were kept, the newest at-bats' video ids and MLB's own expected
             # stats and barrel rates (Baseball Savant). The parks and records
             # of this season came with the backfill's schedule above.
@@ -2864,6 +2864,29 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                     f"{got['left']} left" + (f", {got['failed']} for the next night" if got["failed"] else ""))
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  mlb full lines failed: {exc}")
+
+    # EVERY FIGHTER'S PAGE (engine/ufc/history, 2026-11-17; Ethan: "yes full
+    # fighter page"): the fights, the face and the facts of every fighter with
+    # a dossier, not only the coming card's (the UFC tick reads those every
+    # few days), the deepest records first, a night's budget at a time
+    # (history.NIGHTLY fighters or NIGHT_S seconds), each again after a month.
+    # RUN_NEXT 00m reads them all at once.
+    try:
+        from . import db as _udb
+        from .ufc import history as _uh
+        _names = _uh.dossier_names(ROOT / "data" / "ufc_dossiers.json")
+        if _names:
+            _uc = _udb.connect()
+            try:
+                got = _uh.nightly(_uc, _names, today=today)
+            finally:
+                _uc.close()
+            if got["read"]:
+                log(f"  ufc fighter pages: {got['read']} fighter(s) read, {got['fights']:,} fights kept"
+                    + (f", {got['missing']} not found on ESPN" if got["missing"] else "")
+                    + f", {got['left']} left")
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ⚠️  ufc fighter pages failed: {exc}")
 
     try:
         from . import db, ledger

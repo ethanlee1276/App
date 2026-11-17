@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WE. Every fighter's page has the fights, the face and the facts** (step 715; 17 November). Nothing to run;
+RUN_NEXT 00m is optional. Islam Makhachev's live page had the record and rates and no photo, no facts and no
+fights: the fight history read only the coming card's fighters, so a fighter drafted for an older card was never
+read. The nightly chores now read every fighter with a dossier, the deepest records first, about 30 a night
+(fifteen minutes at most), each again a month later (the card's fighters keep their read every few days), and
+keep ESPN's facts (height, reach, stance, the day born) beside the read. The fighter page and the search take
+the photo and the facts from it, so a searched fighter's row now shows the fighter's face like every league's
+players. The command reads them all at once.
+
 **WD. A fighter's face and facts are kept with the fighter** (step 714; 17 November). Nothing to run. The
 fighter page read ESPN's id and facts (height, reach, stance) from cached copies the nightly prunes after a month,
 so a fighter not on a recent card would lose them. Each dossier drafted from now on keeps ESPN's id and those facts

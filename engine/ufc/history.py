@@ -1,17 +1,20 @@
 """Every fight a fighter had: the fight history chart (kind "fights").
 
 Ethan, 2026-10-13: "Yes do all of them and don't stop till they are all
-done, then make sure they are all routed correctly like nfl." The list he
-said yes to had UFC fight history and finish times on it.
+done, then make sure they are all routed correctly like nfl." The list
+Ethan said yes to had UFC fight history and finish times on it.
 
 WHAT THE RECORD HAS. ESPN's MMA records, which the dossiers are already
-drafted from (engine/sources/espnmma.fight_log): each bout he has had —
-the date, the opponent, won, lost or neither (a draw or no contest), how
-it ended (KO/TKO, submission or decision), the round and the time in it,
-how long the fight lasted, the rounds scheduled, the division, and the
-per-fight numbers both men put up where ESPN tracked the bout
+drafted from (engine/sources/espnmma.fight_log): each bout the fighter has
+had — the date, the opponent, won, lost or neither (a draw or no contest),
+how it ended (KO/TKO, submission or decision), the round and the time in
+it, how long the fight lasted, the rounds scheduled, the division, and the
+per-fight numbers both fighters put up where ESPN tracked the bout
 (significant strikes landed and thrown, takedowns landed and tried,
-knockdowns, submission attempts).
+knockdowns, submission attempts). And, kept beside the read since
+2026-11-17, the facts ESPN's athlete page publishes (height, reach,
+stance, the day born): the fighter's page shows them (engine/ufc/
+fighterpage).
 
 ITS OWN TABLE, NOT THE DOSSIER. A dossier is the model's input and a
 human may have reviewed it (an auto red flag confirmed or deleted); a
@@ -21,21 +24,41 @@ nothing in it moves a price.
 
 `fill` reads a few fighters at a time (the scheduler's UFC tick does the
 upcoming card's, launch.py); `chart` is what the page draws.
+
+EVERY FIGHTER, NOT ONLY THE CARD'S (2026-11-17). A fighter page opens for
+anyone with a dossier (engine/ufc/fighters.search), and a fighter drafted
+for an older card had a record and rates on it and no face, no facts and
+no fights (seen live: Islam Makhachev). `nightly` reads the dossier
+fighters off the card too, the deepest records first, a night's budget at
+a time (NIGHTLY fighters or NIGHT_S seconds), each again after
+OFF_CARD_DAYS; `python3 -m engine.ufc.history --all` reads every one owed
+at once (RUN_NEXT 00m).
 """
 
 from __future__ import annotations
 
 import datetime as _dt
+import json
+import sys
+import time
 
 #: Fighters read per call: each is ~60 small, cached requests.
 PER_TICK = 4
 #: A fighter's history is read again after this many days.
 STALE_DAYS = 3
+#: A fighter off the coming card is read again after this many days: a
+#: fighter fights two or three times a year, and the card's own read (every
+#: STALE_DAYS) takes over once the fighter is booked.
+OFF_CARD_DAYS = 30
+#: The night's read of fighters off the card: at most this many, and none
+#: started after NIGHT_S seconds (a cold fighter is about half a minute).
+NIGHTLY = 40
+NIGHT_S = 900.0
 #: The fights kept per fighter (the dossier's own window).
 WINDOW = 15
 ROUND_S = 300.0
-#: His photo, by the ESPN athlete id his fights were read under: the
-#: league's own headshot address, as the NFL's faces are.
+#: The fighter's photo, by the ESPN athlete id the fights were read under:
+#: the league's own headshot address, as the NFL's faces are.
 FACE = "https://a.espncdn.com/i/headshots/mma/players/full/{aid}.png"
 COLS = ["fighter", "fighter_id", "comp_id", "event_id", "date", "opp", "opp_id", "result", "method",
         "rnd", "clock", "secs", "rounds", "division", "ssl", "ssa", "tdl", "tda", "kd", "sm",
@@ -79,7 +102,7 @@ def rows(name: str, aid: str, fights: list[dict]) -> list[dict]:
 
 def fetch(name: str, today: _dt.date | None = None):
     """``(athlete id, fights)`` for a fighter off ESPN, or None when ESPN
-    cannot find him."""
+    cannot find the fighter."""
     from ..sources import espnmma as E
     aid = E.find_athlete_id(name)
     if not aid:
@@ -88,14 +111,15 @@ def fetch(name: str, today: _dt.date | None = None):
     return aid, fights
 
 
-def owed(conn, names, today: _dt.date | None = None) -> list[str]:
-    """The fighters on the card whose history is missing or stale."""
+def owed(conn, names, today: _dt.date | None = None, stale_days: int = STALE_DAYS) -> list[str]:
+    """The fighters among ``names`` whose history is missing or older than
+    ``stale_days``, in the order given."""
     today = today or _dt.date.today()
     out = []
     for n in names:
         row = conn.execute("SELECT fetched FROM ufc_fighters_read WHERE fighter=?", (n,)).fetchone()
         try:
-            fresh = row and (today - _dt.date.fromisoformat(row[0])).days < STALE_DAYS
+            fresh = row and (today - _dt.date.fromisoformat(row[0])).days < stale_days
         except (TypeError, ValueError):
             fresh = False
         if not fresh:
@@ -103,17 +127,31 @@ def owed(conn, names, today: _dt.date | None = None) -> list[str]:
     return out
 
 
-def fill(conn, names, today: _dt.date | None = None, limit: int = PER_TICK, fetch_fn=None) -> dict:
-    """Read up to ``limit`` owed fighters' histories into `ufc_fights`.
-    Returns ``{"read", "fights", "missing", "left"}``. A fighter ESPN
-    cannot find is remembered as read (with no fights) until he is stale
-    again, so he does not hold up the rest of the card."""
+def _athlete_facts(aid: str) -> dict:
+    from ..sources import espnmma as E
+    return E.athlete_facts(aid)
+
+
+def fill(conn, names, today: _dt.date | None = None, limit: int = PER_TICK, fetch_fn=None,
+         facts_fn=None, stale_days: int = STALE_DAYS, until: float | None = None) -> dict:
+    """Read up to ``limit`` owed fighters' histories into `ufc_fights`, and
+    the facts ESPN's athlete page publishes beside each read. Returns
+    ``{"read", "fights", "missing", "left"}``. A fighter ESPN cannot find is
+    remembered as read (with no fights) until stale again, so one name does
+    not hold up the rest of the card. ``until`` (a `time.monotonic` reading)
+    starts no fighter after it: the nightly read's clock."""
     from .. import db
     today = today or _dt.date.today()
+    if facts_fn is None:
+        # ESPN's facts come with ESPN's fights: a caller that brings its own
+        # fights (a test, a replay) brings its own facts, or none.
+        facts_fn = _athlete_facts if fetch_fn is None else (lambda _aid: {})
     fetch_fn = fetch_fn or (lambda n: fetch(n, today))
-    todo = owed(conn, names, today)
-    out = {"read": 0, "fights": 0, "missing": 0, "left": max(0, len(todo) - limit)}
+    todo = owed(conn, names, today, stale_days)
+    out = {"read": 0, "fights": 0, "missing": 0, "left": len(todo)}
     for n in todo[:limit]:
+        if until is not None and time.monotonic() >= until:
+            break
         try:
             got = fetch_fn(n)
         except Exception:                                          # noqa: BLE001 — one fighter, never the card
@@ -123,15 +161,101 @@ def fill(conn, names, today: _dt.date | None = None, limit: int = PER_TICK, fetc
             out["missing"] += 1
         new = rows(n, aid, fights)
         if new:
-            # His fights as ESPN has them now: a bout it re-dated or
-            # dropped does not linger.
+            # The fighter's fights as ESPN has them now: a bout it re-dated
+            # or dropped does not linger.
             conn.execute("DELETE FROM ufc_fights WHERE fighter=?", (n,))
             out["fights"] += db.upsert_ufc_fights(conn, new)
-        conn.execute("INSERT OR REPLACE INTO ufc_fighters_read (fighter, fighter_id, fetched, fights) "
-                     "VALUES (?,?,?,?)", (n, str(aid), today.isoformat(), len(new)))
+        try:
+            facts = facts_fn(str(aid)) if aid else {}
+        except Exception:                                          # noqa: BLE001 — the facts are extra, never the read
+            facts = {}
+        # A read whose facts did not come keeps the ones an earlier read kept.
+        conn.execute("INSERT INTO ufc_fighters_read (fighter, fighter_id, fetched, fights, facts) "
+                     "VALUES (?,?,?,?,?) ON CONFLICT(fighter) DO UPDATE SET fighter_id=excluded.fighter_id, "
+                     "fetched=excluded.fetched, fights=excluded.fights, "
+                     "facts=COALESCE(excluded.facts, ufc_fighters_read.facts)",
+                     (n, str(aid), today.isoformat(), len(new), json.dumps(facts) if facts else None))
         conn.commit()
         out["read"] += 1
+        out["left"] -= 1
     return out
+
+
+def dossier_names(path=None) -> list[str]:
+    """Every fighter with a dossier, by the dossier file's own key (the
+    spelling the card's read uses, launch.py), the deepest UFC record
+    first (the likelier page to be opened), then by name."""
+    from . import fighters as _fighters
+    try:
+        raw = json.loads(open(path or _fighters.DOSSIERS, encoding="utf-8").read())
+    except (OSError, ValueError):
+        return []
+    book = {str(k): v for k, v in raw.items()
+            if isinstance(v, dict) and not str(k).startswith("_")} if isinstance(raw, dict) else {}
+
+    def depth(d):
+        try:
+            return -int(d.get("ufc_fights") or 0)
+        except (TypeError, ValueError):
+            return 0
+    return sorted(book, key=lambda n: (depth(book[n]), n.lower()))
+
+
+def nightly(conn, names, today: _dt.date | None = None, limit: int = NIGHTLY, budget_s: float = NIGHT_S,
+            fetch_fn=None, facts_fn=None) -> dict:
+    """The night's read of fighters off the card (`fill` at OFF_CARD_DAYS),
+    at most ``limit`` and none started after ``budget_s`` seconds."""
+    return fill(conn, names, today, limit, fetch_fn, facts_fn, stale_days=OFF_CARD_DAYS,
+                until=time.monotonic() + budget_s)
+
+
+def faces(conn, names) -> dict:
+    """``{name: face}`` for the fighters among ``names`` a read found on ESPN
+    (one pass over the read table, names matched folded): the fighter
+    search's faces (engine/playersearch)."""
+    from ..carries import _fold
+
+    def key(n):
+        return _fold(n).replace(" ", "")
+    want = {key(n): n for n in names if n}
+    out: dict = {}
+    if not want:
+        return out
+    try:
+        for fighter, aid in conn.execute("SELECT fighter, fighter_id FROM ufc_fighters_read "
+                                         "WHERE fighter_id != ''"):
+            n = want.get(key(fighter))
+            if n and str(aid).isdigit() and n not in out:
+                out[n] = FACE.format(aid=aid)
+    except Exception:                                              # noqa: BLE001 — no table yet
+        return {}
+    return out
+
+
+def kept(conn, fighter: str) -> dict:
+    """What the last read kept for a fighter: ``{"aid", "facts"}``, empty
+    values where nothing was read (or ESPN did not know the fighter)."""
+    try:
+        row = conn.execute("SELECT fighter_id, facts FROM ufc_fighters_read WHERE fighter=?",
+                           (fighter,)).fetchone()
+        if not row and fighter:
+            # A spelling the read was not keyed by ("Kauê" for "Kaue"): the
+            # one read whose folded name is the same, as `resolve` does.
+            from ..carries import _fold
+            want = _fold(fighter).replace(" ", "")
+            hits = [r for r in conn.execute("SELECT fighter, fighter_id, facts FROM ufc_fighters_read")
+                    if _fold(r[0]).replace(" ", "") == want] if want else []
+            row = hits[0][1:] if len(hits) == 1 else None
+    except Exception:                                              # noqa: BLE001 — no table yet
+        row = None
+    if not row:
+        return {"aid": "", "facts": {}}
+    try:
+        facts = json.loads(row[1]) if row[1] else {}
+    except ValueError:
+        facts = {}
+    aid = str(row[0] or "")
+    return {"aid": aid if aid.isdigit() else "", "facts": facts if isinstance(facts, dict) else {}}
 
 
 # --- what the page draws ------------------------------------------------------
@@ -155,7 +279,7 @@ def _pct(n, d):
 
 
 def _line(fs: list[dict]) -> dict:
-    """His record over these fights and how they ended."""
+    """The fighter's record over these fights and how they ended."""
     n = len(fs)
     w = [f for f in fs if f["result"] == "W"]
     lo = [f for f in fs if f["result"] == "L"]
@@ -172,8 +296,8 @@ def _line(fs: list[dict]) -> dict:
 
 
 def _stats(f: dict) -> list:
-    """That fight's numbers, his beside his opponent's, where ESPN
-    tracked the bout."""
+    """That fight's numbers, the fighter's beside the opponent's, where
+    ESPN tracked the bout."""
     out = []
     for key, name, att in (("ssl", "Significant strikes", "ssa"), ("tdl", "Takedowns", "tda"),
                            ("kd", "Knockdowns", None), ("sm", "Submission attempts", None)):
@@ -222,3 +346,40 @@ def chart(conn, player: str, season=None) -> dict:
             "face": FACE.format(aid=aid) if aid.isdigit() else "",
             "games": games, "season_line": _line(fights), "by_method": by_method,
             "by_rounds": by_rounds, "by_finish": by_finish}
+
+
+def main(argv=None) -> int:
+    """``python3 -m engine.ufc.history --all``: every dossier fighter whose
+    history is missing or older than OFF_CARD_DAYS, read now rather than a
+    night's budget at a time (RUN_NEXT 00m). ``--limit N`` stops after N.
+    Run from the app's folder (the dossiers are read from data/)."""
+    import argparse
+    from .. import db
+    ap = argparse.ArgumentParser(prog="python3 -m engine.ufc.history",
+                                 description="Read every dossier fighter's fights, face and facts now.")
+    ap.add_argument("--all", action="store_true", help="read every owed dossier fighter now")
+    ap.add_argument("--limit", type=int, default=0, help="stop after this many fighters (0: no limit)")
+    a = ap.parse_args(argv)
+    if not a.all:
+        ap.print_help()
+        return 2
+    names = dossier_names()
+    conn = db.connect()
+    try:
+        todo = owed(conn, names, stale_days=OFF_CARD_DAYS)
+        if a.limit > 0:
+            todo = todo[:a.limit]
+        print(f"{len(names)} fighter(s) with a dossier, {len(todo)} to read", flush=True)
+        done = fights = missing = 0
+        for i in range(0, len(todo), 10):
+            got = fill(conn, todo[i:i + 10], limit=10, stale_days=OFF_CARD_DAYS)
+            done, fights, missing = done + got["read"], fights + got["fights"], missing + got["missing"]
+            print(f"  {done}/{len(todo)} read, {fights:,} fights kept"
+                  + (f", {missing} not found on ESPN" if missing else ""), flush=True)
+    finally:
+        conn.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

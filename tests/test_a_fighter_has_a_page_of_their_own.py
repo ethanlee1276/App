@@ -15,7 +15,13 @@ league's player page: "yes full fighter page". What these hold:
     Fights, Stats, Bio, News), a fighter's hero line (division and record;
     nickname, height, reach and age), and our read of a fighter (archetype,
     red flags) nowhere on it;
-  * a searched fighter opens it, and in a browser it draws every menu.
+  * a searched fighter opens it, and in a browser it draws every menu;
+  * every fighter with a dossier is read, not only the coming card's (seen
+    live 2026-11-17: Islam Makhachev's page had no face, facts or fights):
+    the night's read takes them off the card, the deepest records first,
+    within a budget, keeps ESPN's facts beside the read, and reads a fighter
+    again after a month; the page and the search take the face and facts
+    from it; `python3 -m engine.ufc.history --all` reads them all at once.
 
 Run directly: `python3 tests/test_a_fighter_has_a_page_of_their_own.py`
 (the browser check with QB_BROWSER_TESTS=1 and /usr/bin/python3).
@@ -115,7 +121,7 @@ def test_a_name_nobody_keeps_is_no_page_and_no_card_is_no_next_fight():
 
 
 def test_a_fighter_with_no_tracked_fight_takes_the_id_from_the_kept_search():
-    """Seen live 2026-11-17: Islam Makhachev's page had his record and rates and no face, no height and no
+    """Seen live 2026-11-17: Islam Makhachev's page had the record and rates and no face, no height and no
     reach, because the ESPN id was read only off a tracked fight's photo. The dossier's draft keeps ESPN's
     name search; the id comes from it, never from a fetch."""
     from engine.sources import espnmma
@@ -158,6 +164,118 @@ def test_a_dossier_keeps_the_id_and_the_facts_so_no_cache_is_needed():
     src = (ROOT / "engine" / "sources" / "espnmma.py").read_text(encoding="utf-8")
     draft = src[src.index("def fetch_dossier("):]
     assert 'out["espn_id"] = str(aid)' in draft and 'out["facts"] = facts' in draft
+
+
+def test_every_dossier_fighter_is_read_and_the_facts_are_kept():
+    """The night's read: every dossier fighter off the card (by the file's own key, the spelling the card's read
+    uses), the deepest records first, within a count and a clock; ESPN's facts kept beside the read; a fighter
+    ESPN cannot find read as nothing found; a fighter read again a month on, keeping the facts a failed read
+    did not bring."""
+    import datetime as dt
+    d = Path(tempfile.mkdtemp())
+    book = {"_readme": "not a fighter", "_unfound": {"Ghost": {"attempts": 1}},
+            "Islam Makhachev": {"name": "Islam Makhachev", "ufc_fights": 16},
+            "Jon Jones": {"name": "Jon Jones", "ufc_fights": 22},
+            "Ghost": {"name": "Ghost", "ufc_fights": 0},
+            "Kaue Fernandes": {"name": "Kauê Fernandes", "ufc_fights": 1}}
+    (d / "dossiers.json").write_text(json.dumps(book))
+    names = H.dossier_names(d / "dossiers.json")
+    assert names == ["Jon Jones", "Islam Makhachev", "Kaue Fernandes", "Ghost"], names
+    assert H.dossier_names(d / "missing.json") == []
+    conn = DB.connect(d / "h.db")
+    day = dt.date(2026, 11, 18)
+    ids = {"Jon Jones": "2335639", "Islam Makhachev": "3332412", "Kaue Fernandes": "4567"}
+    facts = {"3332412": {"height": "5' 10\"", "reach": '70.5"'}, "2335639": {"height": "6' 4\""}}
+    asked = []
+
+    def fetch(n):
+        asked.append(n)
+        return (ids[n], []) if n in ids else None
+    got = H.nightly(conn, names, day, limit=3, fetch_fn=fetch, facts_fn=lambda aid: dict(facts.get(aid, {})))
+    assert got == {"read": 3, "fights": 0, "missing": 0, "left": 1}, got
+    assert asked == ["Jon Jones", "Islam Makhachev", "Kaue Fernandes"], asked
+    assert H.kept(conn, "Islam Makhachev") == {"aid": "3332412", "facts": {"height": "5' 10\"", "reach": '70.5"'}}
+    assert H.kept(conn, "Kauê Fernandes") == {"aid": "4567", "facts": {}}, "a spelling the read was not keyed by"
+    assert H.kept(conn, "Nobody") == {"aid": "", "facts": {}}
+    got = H.nightly(conn, names, day, fetch_fn=fetch)
+    assert got == {"read": 1, "fights": 0, "missing": 1, "left": 0}, got
+    assert H.kept(conn, "Ghost") == {"aid": "", "facts": {}}
+    assert H.nightly(conn, names, day + dt.timedelta(days=H.OFF_CARD_DAYS - 1), fetch_fn=fetch)["read"] == 0
+    later = day + dt.timedelta(days=H.OFF_CARD_DAYS)
+    got = H.nightly(conn, ["Islam Makhachev"], later, fetch_fn=fetch, facts_fn=lambda aid: {})
+    assert got["read"] == 1 and H.kept(conn, "Islam Makhachev")["facts"]["reach"] == '70.5"', "kept, not wiped"
+    assert H.nightly(conn, ["Jon Jones"], later, budget_s=0, fetch_fn=fetch) == \
+        {"read": 0, "fights": 0, "missing": 0, "left": 1}, "no fighter started after the night's clock"
+    # A caller that brings its own fights never reaches ESPN for the facts.
+    was = H._athlete_facts
+    H._athlete_facts = lambda aid: (_ for _ in ()).throw(AssertionError("fetched"))
+    try:
+        H.fill(conn, ["Jon Jones"], later, fetch_fn=fetch)
+    finally:
+        H._athlete_facts = was
+    assert (H.NIGHTLY, H.NIGHT_S, H.OFF_CARD_DAYS, H.STALE_DAYS) == (40, 900.0, 30, 3)
+
+
+def test_a_fighter_with_no_fight_on_file_has_the_face_and_facts_the_read_kept():
+    d = _world(with_next=False)
+    for f in (d / "cache").iterdir():
+        f.unlink()
+    name = "Islam Makhachev"
+    dossiers = json.loads((d / "dossiers.json").read_text())
+    dossiers[name] = {"name": name, "age": 34, "division": "welterweight", "record": "28-1-0"}
+    (d / "dossiers.json").write_text(json.dumps(dossiers))
+    assert _page(d, name)["face"] == "", "nothing read, nothing kept: no face"
+    conn = DB.connect(d / "h.db")
+    H.fill(conn, [name], fetch_fn=lambda n: ("3332412", []),
+           facts_fn=lambda aid: {"height": "5' 10\"", "stance": "Southpaw"})
+    conn.close()
+    p = _page(d, name)
+    assert p["tracked"] == 0 and p["face"].endswith("/full/3332412.png"), p["face"]
+    assert (p["bio"]["height"], p["bio"]["stance"], p["bio"]["record"]) == ("5' 10\"", "Southpaw", "28-1-0"), p["bio"]
+
+
+def test_a_searched_fighter_has_a_face():
+    from engine import playersearch as PS
+    from engine.ufc import fighters as F
+    d = _world(with_next=False)
+    dossiers = json.loads((d / "dossiers.json").read_text())
+    dossiers["Merab Dvalishvili"] = {"name": "Merab Dvalishvili", "record": "21-4-0", "espn_id": "3155424"}
+    dossiers["Islam Makhachev"] = {"name": "Islam Makhachev", "record": "28-1-0"}
+    dossiers["Islam Dulatov"] = {"name": "Islam Dulatov", "record": "11-1-0"}
+    (d / "dossiers.json").write_text(json.dumps(dossiers))
+    conn = DB.connect(d / "h.db")
+    H.fill(conn, ["Islam Makhachev"], fetch_fn=lambda n: ("3332412", []))
+    conn.close()
+    hits = {h["player"]: h["headshot"] for h in F.search("a", limit=20, path=str(d / "dossiers.json"))}
+    assert hits["Merab Dvalishvili"].endswith("/full/3155424.png") and hits["Islam Makhachev"] == "", hits
+    got = {h["player"]: h["headshot"] for h in PS.search("islam", ufc_path=str(d / "dossiers.json"),
+                                                          db_path=d / "h.db") if h["sport"] == "ufc"}
+    assert got["Islam Makhachev"].endswith("/full/3332412.png") and got["Islam Dulatov"] == "", got
+
+
+def test_a_database_read_before_the_facts_gets_the_column():
+    d = Path(tempfile.mkdtemp())
+    old = sqlite3.connect(d / "h.db")
+    old.execute("CREATE TABLE ufc_fighters_read (fighter TEXT PRIMARY KEY, fighter_id TEXT, fetched TEXT, "
+                "fights INTEGER)")
+    old.execute("INSERT INTO ufc_fighters_read VALUES ('Jon Jones', '2335639', '2026-11-01', 22)")
+    old.commit()
+    old.close()
+    conn = DB.connect(d / "h.db")
+    assert "facts" in [r[1] for r in conn.execute("PRAGMA table_info(ufc_fighters_read)")]
+    assert H.kept(conn, "Jon Jones") == {"aid": "2335639", "facts": {}}
+
+
+def test_the_night_reads_them_and_a_command_reads_them_all():
+    src = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
+    i = src.index("# EVERY FIGHTER'S PAGE")
+    block = src[i:i + 1600]
+    assert '_uh.dossier_names(ROOT / "data" / "ufc_dossiers.json")' in block, block
+    assert "_uh.nightly(_uc, _names, today=today)" in block and "ufc fighter pages failed" in block
+    assert src.index("mlb full lines failed") < i < src.index("n = ledger.settle_from_history(lconn, hconn)")
+    assert H.main([]) == 2, "no --all, nothing read"
+    runnext = (ROOT / "docs" / "RUN_NEXT.md").read_text(encoding="utf-8")
+    assert "python3 -m engine.ufc.history --all" in runnext
 
 
 def test_the_page_endpoint_answers_for_a_fighter():

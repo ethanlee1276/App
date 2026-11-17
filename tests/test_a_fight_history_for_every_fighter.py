@@ -13,15 +13,16 @@ What is pinned, offline, on fights shaped like ESPN's MMA records:
   * ESPN'S FIGHT LOG (engine/sources/espnmma.fight_log): the opponent's
     name read when the history asks for it and not otherwise, an upcoming
     bout never in the history, newest first;
-  * THE LINES AND SPLITS: his record, finishes won and lost, how often he
-    goes the distance, first-round finishes, the average fight, by method,
-    three rounds and five, and when his fights end, decisions last;
+  * THE LINES AND SPLITS: the fighter's record, finishes won and lost, how
+    often the fighter goes the distance, first-round finishes, the average
+    fight, by method, three rounds and five, and when the fights end,
+    decisions last;
   * THE FILL: a few fighters a tick, a fighter read again only when stale,
     one ESPN cannot find remembered (not retried every tick), a re-read
     replacing what was there, and the scheduler's UFC tick calling it for
     the upcoming card without touching a dossier;
   * THE DOOR AND THE PAGE: /api/players/chart answers kind=fights for UFC
-    only, with his photo off his ESPN id; every fighter block has the
+    only, with the fighter's photo off the ESPN id; every fighter block has the
     door; the drawing is its own module, CSP-clean, tokens only.
 
 Run directly: `python3 tests/test_a_fight_history_for_every_fighter.py`
@@ -191,7 +192,7 @@ def test_a_few_fighters_a_tick_and_none_twice():
     r3 = H.fill(conn, names, day, limit=2, fetch_fn=fetch)
     assert r3["read"] == 0 and asked == names, "one ESPN cannot find is remembered, not asked every tick"
     assert H.owed(conn, names, day + dt.timedelta(days=H.STALE_DAYS)) == names, "stale again"
-    # A re-read is his record as ESPN has it now: a bout it dropped goes.
+    # A re-read is the fighter's record as ESPN has it now: a bout it dropped goes.
     D.upsert_ufc_fights(conn, H.rows("Arman Tsarukyan", "3949584", FIGHTS))
     assert conn.execute("SELECT COUNT(*) FROM ufc_fights").fetchone()[0] == 6
     H.fill(conn, ["Arman Tsarukyan"], day + dt.timedelta(days=H.STALE_DAYS), fetch_fn=fetch)
@@ -228,7 +229,7 @@ def test_the_door_answers_the_fight_history():
     assert sent[0] == (200, {"filling": True})
     got = sent[1][1]
     assert sent[1][0] == 200 and got["kind"] == "fights" and got["season_line"]["n"] == 6
-    assert got["face"].endswith("3949584.png"), "his ESPN photo where the site has none"
+    assert got["face"].endswith("3949584.png"), "the fighter's ESPN photo where the site has none"
     assert sent[2][0] == 400
     assert CH.known("fights", "ufc") and not CH.known("fights", "nfl")
 
@@ -279,7 +280,7 @@ def test_the_page_draws_every_fight():
     assert ">4-1-1<" in got["side"] and ">Won by finish<" in got["side"] and ">Round 1<" in got["side"]
     assert ">Fight lasted<" in got["tiles"] and ">8:12<" in got["tiles"] and "3 rounds" in got["tiles"]
     assert "41 of 77" in got["list"] and '<span class="uf-o">22 of 60</span>' in got["list"]
-    assert got["listTitle"] == "That fight’s numbers · Tsarukyan’s, then Dan Hooker’s", "by surname, never him"
+    assert got["listTitle"] == "That fight’s numbers · Tsarukyan’s, then Dan Hooker’s", "by surname, never a pronoun"
     assert "Wins and losses by method" in got["tables"] and "Three rounds and five" in got["tables"] and "When it ended" in got["tables"]
     assert got["chip"] == ["W KO R2", "W DEC", "W"]
     assert got["titles"][0] == "Last 6 fights · 4-1-1" and got["titles"][1].startswith("vs Dan Hooker · Aug 2, 2026")

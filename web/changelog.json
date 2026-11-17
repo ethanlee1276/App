@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-17",
+      "kind": "fix",
+      "title": "Every fighter’s page has a photo, the facts and the fights",
+      "body": "A fighter who was not on the coming card had a page with a record and no photo, height, reach or fight history. Every fighter we keep is now read, and a searched fighter shows a face like every league’s players."
+    },
+    {
+      "date": "2026-11-17",
       "kind": "ship",
       "title": "The 2026 baseball season fills its box scores by itself",
       "body": "Each night now reads more of the 2026 season’s box scores until every MLB player’s page carries the whole line, newest games first."

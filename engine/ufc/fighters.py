@@ -3,7 +3,7 @@
 Ethan, 2026-08-23: "also i guess i should add im not able to search ufc
 players."
 
-He could not, and no amount of fixing the league-wide search would have
+Ethan could not, and no amount of fixing the league-wide search would have
 helped: that search reads ``player_game_logs``, and nothing writes a UFC
 row there. A fight is not a game with a stat line per market — the
 promotion's numbers are career RATES (strikes landed per minute, takedown
@@ -12,14 +12,14 @@ A different store, so a different reader.
 
 WHAT A FIGHTER CARD CANNOT HAVE, and must not pretend to. Every other
 sport's search result draws a bar chart of the last ten games because a
-per-game value exists to chart. A fighter has no such series here, so his
-card shows the measured rates and says plainly that they are career
+per-game value exists to chart. A fighter has no such series here, so the
+fighter's card shows the measured rates and says plainly that they are career
 numbers. An invented chart would be the worst of both.
 
 FACTS ONLY, because this rides the ungated search endpoint. Record, age,
 division, and rates measured from public fight data are on the same free
 footing as game logs and rosters — engine/statlogs.py's header carries the
-argument. Our READ of a fighter is not: the archetype we assigned him and
+argument. Our READ of a fighter is not: the archetype we assigned and
 the red flags we raised are analysis that blocks our own bets, and they
 stay on the paid side of the line with the picks.
 """
@@ -81,6 +81,15 @@ def brief(d: dict) -> dict:
     return out
 
 
+def _face(d: dict) -> str:
+    """ESPN's photo of a fighter by the id the dossier keeps, or ""."""
+    aid = str(d.get("espn_id") or "")
+    if not aid.isdigit():
+        return ""
+    from .history import FACE
+    return FACE.format(aid=aid)
+
+
 def search(q: str, limit: int = 12, path: str | None = None) -> list[dict]:
     """Fighters whose name contains ``q``, shaped like a log-search hit.
 
@@ -90,9 +99,9 @@ def search(q: str, limit: int = 12, path: str | None = None) -> list[dict]:
     plus a ``fighter`` block the card reads for the rates.
 
     ``team`` is empty on purpose — a fighter has no club, and inventing
-    one would put a team logo and a set of team colours on a man who has
-    neither. ``position`` carries his division, which is the thing that
-    actually belongs in that slot on the row.
+    one would put a team logo and a set of team colours on a fighter who
+    has neither. ``position`` carries the fighter's division, which is the
+    thing that actually belongs in that slot on the row.
     """
     from ..playersearch import rank as _rank
     q = (q or "").strip()
@@ -114,12 +123,14 @@ def search(q: str, limit: int = 12, path: str | None = None) -> list[dict]:
             # The count the row prints. UFC fights are what we have
             # STATS for; the career number rides in the brief beside it.
             "games": int(d.get("ufc_fights") or 0),
-            "headshot": "", "fighter": b,
+            # ESPN's photo by the id the dossier keeps (since 2026-11-17);
+            # engine/playersearch fills the rest from the fight history's read.
+            "headshot": _face(d), "fighter": b,
         })
     # Deepest record first among equals — a 12-fight veteran is the more
     # likely lookup than a debutant with the same surname.
     # Match quality first, then the deeper record among equals — a
     # 12-fight veteran is the likelier lookup than a debutant sharing a
-    # surname, but never over a man whose name was actually typed.
+    # surname, but never over a fighter whose name was actually typed.
     hits.sort(key=lambda h: (h["rank"], -h["games"], h["player"].lower()))
     return hits[:max(0, int(limit))]

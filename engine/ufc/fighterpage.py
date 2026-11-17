@@ -152,6 +152,7 @@ def page(fighter: str, db_path=None, dossier_path=None, cache_dir=None, board_pa
     dossiers = _fighters.load(dossier_path)
     name, d = dossier_of(fighter, dossiers)
     hist: dict = {}
+    read: dict = {"aid": "", "facts": {}}
     try:
         from .. import db as _db
         path = str(db_path or _db.DEFAULT_DB)
@@ -159,6 +160,10 @@ def page(fighter: str, db_path=None, dossier_path=None, cache_dir=None, board_pa
             conn = _db.connect(path)
             try:
                 hist = _history.chart(conn, name or fighter) or {}
+                # The id and facts the fight history's read kept (every
+                # dossier fighter's, nightly): a fighter with no fight on
+                # file still has a face and facts.
+                read = _history.kept(conn, name or hist.get("player") or fighter)
             finally:
                 conn.close()
     except Exception:                                        # noqa: BLE001
@@ -174,15 +179,17 @@ def page(fighter: str, db_path=None, dossier_path=None, cache_dir=None, board_pa
     m = re.search(r"/full/(\d+)\.png", str(hist.get("face") or ""))
     if m and not aid:
         aid = m.group(1)
+    aid = aid or read.get("aid") or ""
     face = hist.get("face") or (_history.FACE.format(aid=aid) if aid else "")
     if not aid:
-        # No fight on the history table yet (seen live 2026-11-17: Islam Makhachev's page had his record and
+        # Nothing read for the fighter yet (seen live 2026-11-17: Islam Makhachev's page had the record and
         # rates and no face, no height, no reach): ESPN's id from the name search the dossier's draft kept.
         from ..sources import espnmma
         aid = espnmma.cached_athlete_id(name, cache_dir or CACHE) or ""
         if aid:
             face = _history.FACE.format(aid=aid)   # the fight history chart's own
-    facts = d.get("facts") if isinstance(d.get("facts"), dict) and d.get("facts") else espn_bio(aid, cache_dir)
+    facts = next((f for f in (d.get("facts"), read.get("facts")) if isinstance(f, dict) and f), None) \
+        or espn_bio(aid, cache_dir)
     bio = {"record": d.get("record") or "", "division": division_words(d.get("division") or hist.get("position")),
            "age": d.get("age"), "team": str(d.get("gym") or "").strip(),
            "first_fight": d.get("first_fight") or (games[-1]["date"] if games else ""),

@@ -48,9 +48,9 @@ def norm(s: str) -> str:
     Ethan, 2026-08-23: "if you dont type the players name in exactly, they
     dont come up at all which makes it feel broken."
 
-    He is right, and the first cause is not typos — it is that the stored
-    spelling carries things nobody types. "Kauê Fernandes" is on his own
-    droplet right now and a search for "Kaue" could never find him,
+    Ethan is right, and the first cause is not typos — it is that the stored
+    spelling carries things nobody types. "Kauê Fernandes" is on Ethan's own
+    droplet right now and a search for "Kaue" could never find the fighter,
     because `LIKE '%kaue%'` does not match a circumflex. Same for the
     period in "St. Brown", the hyphen in "Amon-Ra", the apostrophe in
     "O'Neal". Strip the accents, drop the punctuation, and both sides of
@@ -162,7 +162,7 @@ def rank_normed(n: str, ql: str, fuzzy: bool = True):
 def no_guess_beside_an_answer(hits: list) -> list:
     """A GUESS IS NOT AN ANSWER. Ethan, 2026-11-16, with "jacoby brissett"
     typed: Jacoby Brissett came back, and eleven rostered players spelled
-    nearly like him came back with him ("Jacob Rodriguez", "Coby Bryant").
+    nearly like that name came back with it ("Jacob Rodriguez", "Coby Bryant").
     The closest spellings (tier 3) are for a search that found nobody by
     the name typed; beside someone who has it, they are only noise to
     scroll past."""
@@ -324,14 +324,14 @@ def merge(per_source: dict, q: str, limit: int, order,
     """Round-robin over already-ranked lists, best matches first.
 
     ONE ROUND PER TIER, not one round overall. A guessed spelling from a
-    league that happens to go first must never sit above the man whose
+    league that happens to go first must never sit above the player whose
     name was actually typed in the league that goes second — so every
     source offers its rank-0 hits before any source offers a rank-1, and
     so on down. Within a tier the round-robin is what keeps a short list
     from being filled by one league.
 
     THE TAB YOU ARE ON EMPTIES ITS SHELF FIRST. Ethan, 2026-09-01: "MLB
-    players are popping up on the NFL search." They belong there — his
+    players are popping up on the NFL search." They belong there — Ethan's
     own 2026-08-23 ask is why the box spans leagues at all — but the
     round-robin WOVE them between the NFL names on the NFL tab, which
     reads as the search not knowing where you are standing. So within
@@ -388,4 +388,28 @@ def search(q: str, limit: int = 12, prefer: str = "",
         q, limit, [s for s in order if s != "ufc"], db_path))
     # A store that is missing is not an error — see fighters.load.
     per["ufc"] = fighters.search(q, limit=limit, path=ufc_path)
+    ufc_faces(per["ufc"], db_path)
     return no_guess_beside_an_answer(merge(per, q, limit, order, prefer=prefer))
+
+
+def ufc_faces(hits: list[dict], db_path=None) -> None:
+    """A fighter's face on the search row, as every league's player has one
+    (2026-11-17): where the dossier keeps no ESPN id, the one the fight
+    history's read kept (engine/ufc/history.faces). One connection, only
+    when a fighter row has no face."""
+    need = [h for h in hits if not h.get("headshot")]
+    if not need:
+        return
+    import os
+    from . import db as _db
+    from .ufc import history as _hist
+    path = str(db_path or _db.DEFAULT_DB)
+    if not os.path.exists(path):
+        return
+    conn = _db.connect(path)
+    try:
+        got = _hist.faces(conn, [h["player"] for h in need])
+    finally:
+        conn.close()
+    for h in need:
+        h["headshot"] = got.get(h["player"], "")

@@ -118,6 +118,18 @@ def bio_facts(raw: dict) -> dict:
     return {k: v for k, v in out.items() if v}
 
 
+def athlete_facts(aid: str) -> dict:
+    """`bio_facts` for one ESPN athlete id, off the athlete record a dossier's
+    draft reads (the same cached file); {} for no id or no answer. The fight
+    history's read keeps them for the fighter's page (engine/ufc/history)."""
+    if not str(aid or "").isdigit():
+        return {}
+    try:
+        return bio_facts(_get_json(f"{CORE}/athletes/{aid}", f"espn_mma_ath_{aid}.json"))
+    except (DataUnavailable, ValueError):
+        return {}
+
+
 # --- athlete lookup ---------------------------------------------------------
 def _search_name(query: str) -> str:
     """The cache file a name search is kept in."""
