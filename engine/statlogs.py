@@ -72,7 +72,14 @@ SPORT_MARKETS = {
             ("pass_att", "Pass Attempts"), ("pass_cmp", "Completions"),
             # Interceptions thrown (2026-10-05): the label the priced
             # market wears (models.MARKET_LABELS[PASS_INT]).
-            ("pass_int", "Interceptions")),
+            ("pass_int", "Interceptions"),
+            # A KICKER'S AND A DEFENDER'S (2026-11-17; Ethan, with Cameron
+            # Dicker's empty page). The three the board prices, under the
+            # labels they wear there (models.MARKET_LABELS), had no chart on
+            # their own prop cards and nothing Ask could look up; sacks are
+            # the defender's number every page leads with.
+            ("kick_pts", "Kicking Points"), ("fg_made", "Field Goals Made"),
+            ("tackles_ast", "Tackles + Assists"), ("def_sacks", "Sacks")),
     "mlb": (("total_bases", "Total Bases"), ("hits", "Hits"),
             ("home_runs", "Home Runs"), ("strikeouts", "Strikeouts"),
             ("outs", "Outs Recorded")),
@@ -103,7 +110,10 @@ SPORT_MARKETS = {
             ("rec_yds", "Receiving Yards"), ("receptions", "Receptions"),
             ("carries", "Carries"), ("targets", "Targets"),
             ("pass_td", "Passing TDs"), ("pass_att", "Pass Attempts"),
-            ("pass_cmp", "Completions"), ("pass_int", "Interceptions")),
+            ("pass_cmp", "Completions"), ("pass_int", "Interceptions"),
+            # A kicker's field goals, off the play file (2026-11-17,
+            # sources/cfbstats.KICK_MARKETS); no tackle is in it.
+            ("fg_made", "Field Goals Made")),
     # Hockey joined 2026-10-03, off the NHL's own box scores
     # (engine/sources/nhldata). Labels match engine/nhl/model.MARKET_LABELS.
     "nhl": (("sog", "Shots on Goal"), ("points", "Points"), ("goals", "Goals"),

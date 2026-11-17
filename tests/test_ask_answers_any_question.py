@@ -254,8 +254,10 @@ def test_who_leads_the_league_in_a_stat():
     assert per["ranked_by"] == "per game, among players with at least 2 games"
     assert per["rows"][0]["per_game"] == 101.8
     assert AB.player_leaders("mlb", "hits")["rows"][0]["player"] == "Aaron Judge"
-    assert AB.player_leaders("nfl", "sacks")["error"].startswith("the NFL stats we hold are:"), \
+    assert AB.player_leaders("nfl", "punting yards")["error"].startswith("the NFL stats we hold are:"), \
         "a stat we do not log is named as such, with the ones we do"
+    assert AB.player_leaders("nfl", "sacks") == {"found": False, "note": "no stored NFL Sacks logs"}, \
+        "sacks are held since 2026-11-17 (a defender's page); this fixture has none"
 
 
 def test_his_question_from_the_mlb_tab_ranks_the_nfl():

@@ -419,6 +419,12 @@ def _made(cell) -> float | None:
         return None
 
 
+def _tried(cell) -> float | None:
+    """"2/3" → 3.0, the attempts half of a made/attempted cell."""
+    parts = str(cell or "").split("/")
+    return _num(parts[1]) if len(parts) == 2 else None
+
+
 def _num(cell) -> float | None:
     try:
         return float(str(cell).strip())
@@ -426,20 +432,32 @@ def _num(cell) -> float | None:
         return None
 
 
+#: A defender's box columns by ESPN's label, under the markets the weekly
+#: file's rows use (engine/ingest.NFL_DEFENSE_MARKETS), so the night's line
+#: and the morning's agree on every column the player page draws.
+DEFENSIVE_LABELS = {"TOT": "tackles_ast", "SOLO": "tackles_solo", "SACKS": "def_sacks", "TFL": "def_tfl",
+                    "PD": "def_pd", "QB HTS": "def_qb_hits", "TD": "def_td"}
+
+
 def special_rows(payload: dict) -> list:
-    """``[{player, team, position, market, value}]`` for the kicking and
-    defensive blocks: a kicker's field goals and points (3 a field goal, 1
-    an extra point, the book's and nflverse's sum), a defender's tackles
-    plus assists (ESPN's TOT, solo and assisted together). Columns are read
-    by label, never by position; a block whose labels are missing gives
-    nothing rather than a wrong number."""
+    """``[{player, team, position, market, value}]`` for the kicking,
+    defensive and interceptions blocks: a kicker's field goals and extra
+    points made and tried, the longest field goal made and the points (3 a
+    field goal, 1 an extra point, the book's and nflverse's sum); a
+    defender's tackles plus assists (ESPN's TOT, solo and assisted
+    together) and the rest of the line (DEFENSIVE_LABELS), and the
+    interceptions. A kicker's tries ride with the makes (2026-11-17): the
+    makes alone put a night's field goals over no attempts, and the season's
+    percentage read 100 until the morning file. Columns are read by label,
+    never by position; a block whose labels are missing gives nothing
+    rather than a wrong number."""
     from .sources.nflpreseason import _abbr
     out = []
     for side in ((payload or {}).get("boxscore") or {}).get("players") or []:
         team = _abbr(((side.get("team") or {}).get("abbreviation") or ""))
         for block in side.get("statistics") or []:
             kind = str(block.get("name") or "").lower()
-            if kind not in ("kicking", "defensive"):
+            if kind not in ("kicking", "defensive", "interceptions"):
                 continue
             cols = {str(x).upper(): i for i, x in enumerate(block.get("labels") or [])}
             for ath in block.get("athletes") or []:
@@ -449,22 +467,24 @@ def special_rows(payload: dict) -> list:
                 if not name:
                     continue
                 cell = lambda lab: stats[cols[lab]] if lab in cols and cols[lab] < len(stats) else None  # noqa: E731
+                pos = "K" if kind == "kicking" else "DEF"
+                got: dict = {}
                 if kind == "kicking":
                     fg, xp = _made(cell("FG")), _made(cell("XP"))
                     pts = _num(cell("PTS"))
                     if pts is None and fg is not None and xp is not None:
                         pts = 3 * fg + xp
-                    if fg is not None:
-                        out.append({"player": name, "team": team, "position": "K",
-                                    "market": "fg_made", "value": fg})
-                    if pts is not None:
-                        out.append({"player": name, "team": team, "position": "K",
-                                    "market": "kick_pts", "value": pts})
+                    long_ = _num(cell("LONG"))
+                    got = {"fg_made": fg, "fg_att": _tried(cell("FG")), "xp_made": xp,
+                           "xp_att": _tried(cell("XP")), "kick_pts": pts,
+                           # a long only off a make, as the weekly file stores it
+                           "fg_long": long_ if fg and long_ else None}
+                elif kind == "defensive":
+                    got = {market: _num(cell(lab)) for lab, market in DEFENSIVE_LABELS.items()}
                 else:
-                    tot = _num(cell("TOT"))
-                    if tot is not None:
-                        out.append({"player": name, "team": team, "position": "DEF",
-                                    "market": "tackles_ast", "value": tot})
+                    got = {"def_int": _num(cell("INT"))}
+                out.extend({"player": name, "team": team, "position": pos, "market": m, "value": v}
+                           for m, v in got.items() if v is not None)
     return out
 
 

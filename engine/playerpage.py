@@ -58,7 +58,9 @@ GAMES_SHARE = 0.5
 #: (`warm`) and no page waits on one.
 RANK_TTL = 6 * 3600
 #: The kinds of player each league's pages rank.
-KINDS = {"nfl": ("passing", "rushing", "receiving"), "cfb": ("passing", "rushing", "receiving"),
+KINDS = {"nfl": ("passing", "rushing", "receiving", "kicking", "defense"),
+         # no defense: college's play file names no tackler (NO_FEED)
+         "cfb": ("passing", "rushing", "receiving", "kicking"),
          "nba": ("box",), "wnba": ("box",), "cbb": ("box",), "nhl": ("skater", "goalie"),
          "mlb": ("batting", "pitching")}
 _REFRESHING: set = set()
@@ -86,6 +88,17 @@ HEAD = {
                   ("td", "TD", "Receiving touchdowns", ("sum", "rec_td"), False, False, None, True),
                   ("avg", "AVG", "Yards a catch", ("avg", "rec_yds", "receptions"), False, False, "receptions",
                    True)),
+    # A kicker's and a defender's (2026-11-17): the numbers a sports site
+    # leads those pages with. A long is one kick, the season's best, so it
+    # is shown and not ranked.
+    "kicking": (("fgm", "FGM", "Field goals made", ("sum", "fg_made"), False, False, None, True),
+                ("pct", "FG%", "Field goal percentage", ("pct", "fg_made", "fg_att"), False, False, "fg_att", True),
+                ("lng", "LNG", "Longest field goal made", ("max", "fg_long"), False, False, None, False),
+                ("pts", "PTS", "Kicking points", ("sum", "kick_pts"), False, False, None, True)),
+    "defense": (("tot", "TOT", "Total tackles", ("sum", "tackles_ast"), False, False, None, True),
+                ("sack", "SACK", "Sacks", ("sum", "def_sacks"), False, False, None, True),
+                ("int", "INT", "Interceptions", ("sum", "def_int"), False, False, None, True),
+                ("pd", "PD", "Passes defended", ("sum", "def_pd"), False, False, None, True)),
     "box": (("pts", "PTS", "Points a game", ("sum", "pts"), True, False, None, True),
             ("reb", "REB", "Rebounds a game", ("sum", "reb"), True, False, None, True),
             ("ast", "AST", "Assists a game", ("sum", "ast"), True, False, None, True),
@@ -111,6 +124,7 @@ HEAD = {
 #: Who a kind's places are among: a player with one of these in the season.
 #: (A hitter's strikeouts are no pitcher's, a skater's minutes no goalie's.)
 ROLE_NEED = {"passing": ("pass_att",), "rushing": ("carries", "rush_att"), "receiving": ("receptions", "targets"),
+             "kicking": ("fg_att", "xp_att"), "defense": ("tackles_ast", "tackles_solo"),
              "box": ("min",), "skater": ("goals", "assists", "points", "sog"), "goalie": ("shots_against",),
              "batting": ("pa",), "pitching": ("outs",)}
 #: The four numbers from his newest game, by the column ids of the game log.
@@ -118,6 +132,8 @@ TILES = {
     "passing": ("passing.rtg", "passing.pct", "passing.yds", "passing.td"),
     "rushing": ("rushing.car", "rushing.yds", "rushing.avg", "rushing.td"),
     "receiving": ("receiving.rec", "receiving.tgt", "receiving.yds", "receiving.td"),
+    "kicking": ("kicking.fg", "kicking.lng", "kicking.xp", "kicking.pts"),
+    "defense": ("defense.tot", "defense.sack", "defense.int", "defense.pd"),
     "box": ("box.pts", "box.reb", "box.ast", "box.fg"),
     "skater": ("skater.g", "skater.a", "skater.sog", "skater.toi"),
     "goalie": ("goalie.sv", "goalie.sa", "goalie.svp", "goalie.ga"),
@@ -128,6 +144,31 @@ _MONTHS = ("January", "February", "March", "April", "May", "June", "July", "Augu
            "November", "December")
 _RANKS: dict = {}
 _ROSTERS: dict = {}
+
+
+#: The positions a football page reads as a kicker's or a defender's: the
+#: board's own K and DEF (engine/sources/nflverse.board_position), and the
+#: positions a roster prints.
+KICKERS = frozenset({"K", "PK"})
+DEFENDERS = frozenset({"DEF", "LB", "ILB", "OLB", "MLB", "DE", "DT", "NT", "DL", "EDGE", "CB", "S", "SS", "FS",
+                       "DB", "SAF"})
+
+
+#: Football positions the stats we read carry no numbers for, by league: a
+#: page for one says so instead of "No seasons on file yet", which reads as a
+#: gap. College's play file names no tackler (engine/sources/cfbstats
+#: KICK_MARKETS), so a college defender is one.
+NO_FEED = {"nfl": {"P": "punting", "LS": "long snapping"},
+           "cfb": {"P": "punting", "LS": "long snapping", **{p: "defense" for p in DEFENDERS}}}
+#: How each league's feed is named in that note.
+FEED_NAME = {"nfl": "NFL", "cfb": "college"}
+
+
+def no_stats_note(sport: str, position: str) -> str:
+    """Why a football page has no numbers, where the feed is the reason."""
+    what = NO_FEED.get(sport, {}).get(str(position or "").upper())
+    return (f"Our {FEED_NAME[sport]} stats feed doesn't include {what}, so there are no numbers to show here."
+            if what else "")
 
 
 def role(sport: str, position: str, s: dict) -> str:
@@ -142,8 +183,14 @@ def role(sport: str, position: str, s: dict) -> str:
             return "rushing"
         if pos in ("WR", "TE"):
             return "receiving"
+        if pos in KICKERS:
+            return "kicking"
+        if pos in DEFENDERS:
+            return "defense"
         vol = {"passing": s.get("pass_att") or 0, "rushing": s.get("carries") or s.get("rush_att") or 0,
-               "receiving": s.get("targets") or s.get("receptions") or 0}
+               "receiving": s.get("targets") or s.get("receptions") or 0,
+               "kicking": (s.get("fg_att") or 0) + (s.get("xp_att") or 0),
+               "defense": s.get("tackles_ast") or 0}
         best = max(vol, key=vol.get)
         return best if vol[best] > 0 else ""
     if sport in HOOPS:
@@ -493,8 +540,7 @@ def _shape(groups) -> list:
 def _sum(games) -> dict:
     s: dict = {}
     for g in games:
-        for m, v in g["stats"].items():
-            s[m] = s.get(m, 0.0) + v
+        GL.add_up(s, g["stats"])
     return s
 
 
@@ -588,6 +634,9 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                "bio": bio(sport, player, row, position), "notes": notes(sport, player, row, data_dir),
                "seasons": seasons}
         if not seasons:
+            note = no_stats_note(sport, position)
+            if note:
+                out["no_stats"] = note
             return out if row else {}
         season = int(season) if season and str(season).isdigit() and int(season) in seasons else seasons[0]
         out["season"] = season

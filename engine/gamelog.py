@@ -29,6 +29,8 @@ from . import db as _db
 #   ("pct", made, tried)  made over tried, as a percentage
 #   ("avg", num, den)     num over den
 #   ("made", made, tried) "made-tried"
+#   ("max", m)            the most in one game (a kicker's long): a season's
+#                         is its best game's, never a sum (PEAK)
 #   ("rating",)           the passer rating (the NFL's; college's efficiency)
 #   ("toi", m)            time on ice in minutes, an average over the season
 #   ("ip", outs)          innings pitched from outs ("6.1")
@@ -53,6 +55,26 @@ FOOTBALL = (
         ("yds", "YDS", "Receiving yards", ("sum", "rec_yds")),
         ("avg", "AVG", "Yards per catch", ("avg", "rec_yds", "receptions")),
         ("td", "TD", "Receiving touchdowns", ("sum", "rec_td")))),
+    # A KICKER'S AND A DEFENDER'S LINES (2026-11-17; Ethan, with Cameron
+    # Dicker's page: "the player page is missing a bunch of data"), from
+    # engine/ingest's NFL_KICKING_MARKETS and NFL_DEFENSE_MARKETS.
+    ("kicking", "Kicking", ("kick_pts", "fg_att", "xp_att"), (
+        ("fg", "FG", "Field goals made-attempted", ("made", "fg_made", "fg_att")),
+        ("pct", "FG%", "Field goal percentage", ("pct", "fg_made", "fg_att")),
+        ("lng", "LNG", "Longest field goal made", ("max", "fg_long")),
+        ("fg50", "50+", "Field goals made from 50 yards or more", ("sum", "fg_50")),
+        ("xp", "XP", "Extra points made-attempted", ("made", "xp_made", "xp_att")),
+        ("pts", "PTS", "Kicking points", ("sum", "kick_pts")))),
+    ("defense", "Defense", ("tackles_ast", "tackles_solo"), (
+        ("tot", "TOT", "Total tackles", ("sum", "tackles_ast")),
+        ("solo", "SOLO", "Solo tackles", ("sum", "tackles_solo")),
+        ("sack", "SACK", "Sacks", ("sum", "def_sacks")),
+        ("tfl", "TFL", "Tackles for loss", ("sum", "def_tfl")),
+        ("qbh", "QBH", "Quarterback hits", ("sum", "def_qb_hits")),
+        ("int", "INT", "Interceptions", ("sum", "def_int")),
+        ("pd", "PD", "Passes defended", ("sum", "def_pd")),
+        ("ff", "FF", "Forced fumbles", ("sum", "def_ff")),
+        ("td", "TD", "Defensive touchdowns", ("sum", "def_td")))),
 )
 HOOPS = (
     ("box", "", ("min", "pts"), (
@@ -100,6 +122,19 @@ LAYOUTS = {"nfl": FOOTBALL, "cfb": FOOTBALL, "nba": HOOPS, "wnba": HOOPS, "cbb":
            "mlb": BASEBALL}
 #: A league whose `period` is a week number, not a day.
 WEEKLY = ("nfl", "cfb")
+#: The stats a season holds at their best game, not their sum (the "max" rule).
+PEAK = frozenset({"fg_long"})
+
+
+def add_up(into: dict, stats: dict) -> dict:
+    """One game's stats into a running season: summed, except a PEAK stat,
+    which keeps its most."""
+    for m, v in stats.items():
+        if m in PEAK:
+            into[m] = max(into.get(m, v), v)
+        else:
+            into[m] = into.get(m, 0.0) + v
+    return into
 _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 
@@ -129,7 +164,7 @@ def value(sport: str, how: tuple, s: dict, games: int = 1):
     """One column's value from a game's stats, or from the season's summed
     stats (``games`` played, for the averages a sum cannot carry)."""
     kind = how[0]
-    if kind == "sum":
+    if kind in ("sum", "max"):
         return _first(s, how[1:])
     if kind in ("pct", "avg"):
         num, den = s.get(how[1]), s.get(how[2])
@@ -171,7 +206,7 @@ def _group_markets(sport: str) -> list:
     for _, _, marks, cols in LAYOUTS.get(sport, ()):
         ms = set(marks)
         for c in cols:
-            if c[3][0] in ("sum", "pct", "avg", "made", "toi", "ip"):
+            if c[3][0] in ("sum", "max", "pct", "avg", "made", "toi", "ip"):
                 ms.update(c[3][1:])
             elif c[3][0] == "rating":
                 ms.update(("pass_att", "pass_cmp", "pass_yds", "pass_td", "pass_int"))
@@ -346,8 +381,7 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None)
             line["pending"] = True             # out of the games played until its line lands
         else:
             played += 1
-            for m, v in s.items():
-                summed[m] = summed.get(m, 0.0) + v
+            add_up(summed, s)
         line["values"] = {f"{k}.{c[0]}": value(sport, c[3], s) for k, _, cols in groups for c in cols}
         out_games.append(line)
     out_games.sort(key=lambda x: (x.get("date") or "", x.get("week") or 0), reverse=True)

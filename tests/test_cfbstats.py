@@ -414,7 +414,9 @@ def test_the_opportunity_columns_are_named_rather_than_inferred():
                            "receptions": "targets",
                            # the volume markets, 2026-10-05
                            "pass_cmp": "pass_att", "pass_int": "pass_att",
-                           "rush_att": "carries"}
+                           "rush_att": "carries",
+                           # a kicker's field goals, 2026-11-17
+                           "fg_made": "fg_att", "fg_50": "fg_att"}
     # EVERY COMPANION IS A COLUMN THIS PARSER ACTUALLY COUNTS — a market
     # it writes, or one it counts for this rule alone (COUNTED_ONLY). A
     # name that is merely plausible — "pass_attempts" for "pass_att" —

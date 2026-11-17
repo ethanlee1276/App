@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UM. Kickers' and defenders' pages have their numbers** (step 671; 17 November). Nothing to run. Your note
+with Cameron Dicker's page ("the player page is missing a bunch of data"). A kicker's and a defender's pages were
+empty because the stats file was read only for the three numbers the board prices, and the page knew only
+passing, rushing and receiving. Now a kicker's page leads with field goals made, field goal percentage, the
+longest and kicking points, each with its place in the league (the longest is shown, not ranked), and the Stats
+and Game Log tabs show field goals made and tried, the long, makes from 50 and beyond, extra points and points,
+game by game and season by season. A defender's page leads with tackles, sacks, interceptions and passes
+defended, and the tabs add solo tackles, tackles for loss, hits on the quarterback, forced fumbles and
+touchdowns. The night of a game the box score now carries the whole line too, so a kicker's season percentage
+no longer reads 100 until the morning file lands. College kickers get their field goals from the college play
+file, which has no extra points and no tackles, so a college page shows what the file has. A punter's or long
+snapper's page, and a college defender's, now say the stats feed doesn't include those numbers instead of "No
+seasons on file yet". The first restart after this update fills every season already on file once, in the
+background (a minute or two; the server's log says "kickers' and defenders' lines filled for ..."); after that
+it costs one quick check. Ask Qellys can answer kicker and defender questions too ("who leads the NFL in
+sacks"), and a kicker's or defender's prop page charts their recent games.
+
 **UL. The rest of the site says "the player" too** (step 670; 17 November). Nothing to run. The last part of
 the neutral wording you said yes to, about 140 lines across the site: the parlay notes ("the bats the pitcher
 faces", "a goal is a shot the goalie did not save"), the matchup charts' labels ("The player's targets"), the

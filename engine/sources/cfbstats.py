@@ -252,7 +252,9 @@ ZERO_WHEN = {"rush_yds": "carries", "rec_yds": "targets",
              # up by its market — finds a college back's carries the
              # way it finds an NFL back's (ingest.NFL_USAGE_MARKETS).
              "pass_cmp": "pass_att", "pass_int": "pass_att",
-             "rush_att": "carries"}
+             "rush_att": "carries",
+             # A kicker who tried and made none is a 0 on the record.
+             "fg_made": "fg_att", "fg_50": "fg_att"}
 
 #: Opportunity columns the parser COUNTS for `ZERO_WHEN` and never
 #: writes. `targets` is one because a named target proves he was thrown
@@ -264,7 +266,20 @@ COUNTED_ONLY = ("targets",)
 #: Emitted in this order so an ingest log reads the way a box score does.
 MARKETS = ("anytime_td", "carries", "rush_att", "rush_yds", "receptions", "rec_yds",
            "pass_att", "pass_cmp", "pass_int", "pass_yds", "rush_td", "rec_td", "pass_td",
-           "rz_car", "rz_rec", "i5_car")
+           "rz_car", "rz_rec", "i5_car",
+           "fg_att", "fg_made", "fg_long", "fg_50")
+
+#: A KICKER'S FIELD GOALS (2026-11-17; Ethan, with Cameron Dicker's empty
+#: page: "the player page is missing a bunch of data"). The file names the
+#: kicker on every try (4,632 in 2025, three in four made, the share FBS
+#: kickers make) with the distance the scoring line prints, so a college
+#: kicker's page carries field goals made and tried, the longest made and
+#: those from 50 and beyond, under the NFL's market names
+#: (engine/ingest.NFL_KICKING_MARKETS). No extra point and no tackle is in
+#: the file, so neither is written: a college page shows what the feed has.
+KICK_MARKETS = ("fg_att", "fg_made", "fg_long", "fg_50")
+#: The distance a field goal counts from in the 50+ column.
+LONG_FIELD_GOAL = 50.0
 
 #: A touchdown and the kick after it. The unit the coverage audit below
 #: converts credited touchdowns into points with.
@@ -375,6 +390,7 @@ def _slot(bag: dict, key: tuple) -> dict:
         "receptions": 0.0, "rec_yds": 0.0, "rec_td": 0.0, "targets": 0.0,
         "pass_att": 0.0, "pass_cmp": 0.0, "pass_int": 0.0, "pass_yds": 0.0, "pass_td": 0.0,
         "rz_car": 0.0, "rz_rec": 0.0, "i5_car": 0.0,
+        "fg_att": 0.0, "fg_made": 0.0, "fg_long": 0.0, "fg_50": 0.0,
     })
 
 
@@ -477,6 +493,20 @@ def parse_player_stats(rows, season: int, games: dict,
         if picked:
             _slot(bag, base + (picked,))["pass_int"] += 1
 
+        # THE FIELD GOAL, the kicking side's own play (KICK_MARKETS): one
+        # try a row, made when the same kicker is named as making it.
+        kicker = _name(r.get("field_goal_attempt_player"))
+        if kicker:
+            ids.setdefault((team, kicker), _name(r.get("field_goal_attempt_player_id")))
+            k = _slot(bag, base + (kicker,))
+            k["fg_att"] += 1
+            if _name(r.get("field_goal_made_player")) == kicker:
+                dist = _num(r.get("field_goal_made_stat"))
+                k["fg_made"] += 1
+                k["fg_long"] = max(k["fg_long"], dist)
+                if dist >= LONG_FIELD_GOAL:
+                    k["fg_50"] += 1
+
         ytg = _ytg(r.get("yards_to_goal"))
         td = _name(r.get("touchdown_player"))
 
@@ -556,9 +586,13 @@ def parse_player_stats(rows, season: int, games: dict,
             "player": display, "team": team, "opponent": opponent,
             "position": who.get("position", ""), "home": 1 if home else 0,
         }
+        # A kicker who only kicked is no scorer's zero: the "played and did
+        # not score" row (ALWAYS) is for a player with a touch, so the
+        # touchdown board's base rates never count a kicker's games.
+        touched = any(v for m, v in s.items() if m not in KICK_MARKETS)
         for market in MARKETS:
             value = s.get(market, 0.0)
-            if value or market in ALWAYS \
+            if value or (market in ALWAYS and touched) \
                     or s.get(ZERO_WHEN.get(market) or "", 0.0):
                 out.append({**base, "market": market, "value": float(value)})
     return {"rows": out, "assets": list(assets.values()),
@@ -747,7 +781,7 @@ def load_season(path, season: int, games: dict,
 
 
 __all__ = ["STATS_URL", "ROSTER_URL", "RED_ZONE", "INSIDE_5", "MARKETS",
-           "ZERO_WHEN", "COUNTED_ONLY",
+           "KICK_MARKETS", "ZERO_WHEN", "COUNTED_ONLY",
            "QB_COLUMNS", "DataUnavailable", "fetch_season", "fetch_rosters",
            "load_season", "parse_player_stats", "parse_rosters",
            "scored_geometrically", "split_pass"]

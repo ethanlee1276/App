@@ -282,7 +282,7 @@ function plrLatestHTML(d, news) {
 /* ---------------- Stats, Bio, Splits ---------------- */
 function plrStatsHTML(d) {
   const c = d.career || {};
-  if (!(c.rows || []).length) return `<p class="plr-quiet">No seasons on file yet.</p>`;
+  if (!(c.rows || []).length) return `<p class="plr-quiet">${escapeHtml(d.no_stats || "No seasons on file yet.")}</p>`;
   return (c.groups || []).map((g) => {
     const cols = plrCols([g]);
     const rows = c.rows.map((r) => ({ label: `${plrSeasonLabel(d.sport, r.season)}${r.team ? ` · ${r.team}` : ""}`, gp: r.gp,
@@ -335,6 +335,7 @@ function plrSplitsHTML(d) {
 
 /* ---------------- drawing ---------------- */
 function plrFill(page, d) {
+  page._plr.noStats = d.no_stats || "";
   const host = page.querySelector(".plr-hero");
   if (host && d && d.bio) host.outerHTML = plrHeroHTML(d.player, d.sport, d.team, d.position,
     d.bio.headshot || page._plr.face, d.bio);
@@ -373,7 +374,10 @@ async function plrLogInto(page, season) {
   if (!season && slot.dataset.drawn) return;
   const d = await glFetch(sport, player, season || (PLR_PICK[key] || {}).log);
   if (!slot.isConnected) return;
-  slot.innerHTML = glBodyHTML(d, sport, { inPage: true });
+  // A punter's page says why it has no games (engine/playerpage.no_stats_note).
+  const quiet = !(d && (d.games || []).length) && page._plr.noStats;
+  if (quiet) slot.innerHTML = `<p class="plr-quiet">${escapeHtml(quiet)}</p>`;
+  else slot.innerHTML = glBodyHTML(d, sport, { inPage: true });
   slot.dataset.drawn = "1";
 }
 function plrShow(page, tab) {

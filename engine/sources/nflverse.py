@@ -321,15 +321,17 @@ def load_snap_counts(season: int) -> list[dict]:
 
 
 # --- weekly player stats ----------------------------------------------------
-def load_weekly_stats(season: int) -> list[dict]:
-    """Weekly player stats for a season, from release URLs or a local CSV."""
+def load_weekly_stats(season: int, ttl: int | None = None) -> list[dict]:
+    """Weekly player stats for a season, from release URLs or a local CSV.
+    ``ttl`` is how old a cached copy may be (the fetcher's twelve hours
+    unless given): a finished season's file no longer changes."""
     local = CACHE_DIR / f"player_stats_{season}.csv"
     # See load_snap_counts — the exists() short-circuit that sat here
     # froze the file at its first write, forever.
     last_err = None
     for url in _weekly_stats_urls(season):
         try:
-            return fetch_csv(url, f"player_stats_{season}.csv")
+            return fetch_csv(url, f"player_stats_{season}.csv", **({"ttl": ttl} if ttl is not None else {}))
         except DataUnavailable as exc:
             last_err = exc
 

@@ -214,6 +214,142 @@ def nfl_usage_rows(stats_rows: list[dict], season: int) -> list[dict]:
     return out
 
 
+#: THE BOX SCORE'S OTHER HALF (2026-11-17; Ethan, with Cameron Dicker's
+#: page, Stats "No seasons on file yet": "the player page is missing a bunch
+#: of data"). A kicker's and a defender's lines as the weekly file publishes
+#: them, for their pages and game logs; no board prices them (`kick_pts`,
+#: `fg_made` and `tackles_ast` are the markets, POSITION_MARKETS). Stored
+#: under the board's K and DEF positions. Each is (columns to add, each with
+#: its spellings), so a sum (field goals from 50 and beyond) reads like a
+#: single column.
+NFL_KICKING_MARKETS = {
+    "fg_att": (("fg_att",),),
+    "fg_50": (("fg_made_50_59",), ("fg_made_60_",)),
+    "xp_made": (("pat_made",),),
+    "xp_att": (("pat_att",),),
+}
+#: A game's longest field goal, stored only where one was made: a blank in
+#: the file is "none made", not a 0-yard kick.
+NFL_KICK_LONG = ("fg_long",)
+NFL_DEFENSE_MARKETS = {
+    "tackles_solo": (("def_tackles_solo",),),
+    "def_sacks": (("def_sacks",),),
+    "def_tfl": (("def_tackles_for_loss",),),
+    "def_qb_hits": (("def_qb_hits",),),
+    "def_int": (("def_interceptions",),),
+    "def_pd": (("def_pass_defended",),),
+    "def_ff": (("def_fumbles_forced",),),
+    "def_td": (("def_tds",),),
+}
+#: The market whose presence says a season's kickers' lines are on file, in
+#: either league (`backfill_nfl_box`, `backfill_cfb_kicks`).
+BOX_MARKER = "fg_att"
+
+
+def nfl_box_rows(stats_rows: list[dict], season: int) -> list[dict]:
+    """A kicker's and a defender's box-score rows (NFL_KICKING_MARKETS,
+    NFL_DEFENSE_MARKETS) for every regular-season and playoff week."""
+    from .sources.nflverse import _s, _f, board_position
+    out = []
+    for r in stats_rows:
+        if not _is_regular(r):
+            continue
+        pos = board_position(r)
+        table = NFL_KICKING_MARKETS if pos == "K" else NFL_DEFENSE_MARKETS if pos == "DEF" else None
+        if table is None:
+            continue
+        wk = int(_f(r, "week", default=0))
+        name = _s(r, "player_display_name", "player_name", "full_name")
+        if wk <= 0 or not name:
+            continue
+        team = _s(r, "recent_team", "team")
+        base = {"sport": "nfl", "season": season, "period": f"{wk:03d}", "game_id": f"{team}-{wk:03d}",
+                "player": name, "team": team, "opponent": _s(r, "opponent_team", "opponent"),
+                "position": pos, "home": 1}
+        for market, parts in table.items():
+            out.append({**base, "market": market, "value": sum(_f(r, *cols, default=0.0) for cols in parts)})
+        if pos == "K":
+            long_ = _f(r, *NFL_KICK_LONG, default=None)
+            if long_:
+                out.append({**base, "market": "fg_long", "value": long_})
+    return out
+
+
+#: How old a FINISHED season's cached file may be before a fill reads it
+#: again: its numbers no longer change, so the copy on disk is the file.
+FINISHED_SEASON_TTL = 365 * 86400
+
+
+def _box_marked(conn, sport: str, season: int) -> bool:
+    """Does a season hold its kickers' lines (the BOX_MARKER market)? A
+    night's box score (engine/boxsettle, game ids ending "-box") is one
+    game's line, not the season's, so it does not count."""
+    return conn.execute("SELECT 1 FROM player_game_logs WHERE sport=? AND market=? AND season=? "
+                        "AND game_id NOT LIKE '%-box' LIMIT 1",
+                        (sport, BOX_MARKER, int(season))).fetchone() is not None
+
+
+def backfill_nfl_box(conn, seasons) -> dict:
+    """The box rows for seasons ingested before they existed: each season
+    with no BOX_MARKER row reads its weekly file again and stores those
+    rows alone (a finished season off the copy on disk, FINISHED_SEASON_TTL;
+    the newest at the fetcher's own age). Returns {"seasons": [...], "rows":
+    n, "skipped": [...]}; a season already on file costs one indexed query."""
+    from .sources.nflverse import load_weekly_stats
+    out = {"seasons": [], "rows": 0, "skipped": []}
+    wanted = sorted({int(x) for x in seasons})
+    for season in wanted:
+        if _box_marked(conn, "nfl", season):
+            continue
+        try:
+            weekly = load_weekly_stats(season, ttl=FINISHED_SEASON_TTL if season < wanted[-1] else None)
+        except DataUnavailable as exc:
+            out["skipped"].append(f"nfl box rows {season}: {exc}")
+            continue
+        rows = nfl_box_rows(weekly, season)
+        del weekly
+        if rows:
+            out["rows"] += db.upsert_player_logs(conn, rows)
+            conn.commit()
+            out["seasons"].append(season)
+    return out
+
+
+def backfill_cfb_kicks(conn, seasons) -> dict:
+    """College's field goals (cfbstats.KICK_MARKETS) for seasons ingested
+    before the play-file parser counted them: each season with none reads
+    its play file again through the same parser, so the rows are keyed,
+    named and kept (a dropped week stays dropped) exactly as the weekly
+    ingest keys, names and keeps them, and stores those rows alone. The
+    same shape and return as `backfill_nfl_box`."""
+    from .sources import cfbstats
+    out = {"seasons": [], "rows": 0, "skipped": []}
+    wanted = sorted({int(x) for x in seasons})
+    for season in wanted:
+        if _box_marked(conn, "cfb", season):
+            continue
+        games = cfb_games_for(conn, season)
+        if not games:
+            continue
+        old = season < wanted[-1]
+        try:
+            roster = cfbstats.fetch_rosters(season)
+        except DataUnavailable:
+            roster = {}                    # a name the feed spells, as the weekly ingest falls back to
+        try:
+            got = cfbstats.fetch_season(season, games, roster=roster,
+                                        **({"ttl": FINISHED_SEASON_TTL} if old else {}))
+        except DataUnavailable as exc:
+            out["skipped"].append(f"cfb field goals {season}: {exc}")
+            continue
+        rows = [r for r in got["rows"] if r["market"] in cfbstats.KICK_MARKETS]
+        if rows:
+            out["rows"] += db.upsert_player_logs(conn, rows)
+            conn.commit()
+            out["seasons"].append(season)
+    return out
+
+
 def nfl_td_rows(stats_rows: list[dict], season: int) -> list[dict]:
     """``anytime_td`` result rows: rushing + receiving touchdowns per game.
 
@@ -292,6 +428,7 @@ def ingest_nfl_results(conn, season: int) -> dict:
     rows = nfl_player_log_rows(weekly, season)
     rows += nfl_usage_rows(weekly, season)
     rows += nfl_td_rows(weekly, season)
+    rows += nfl_box_rows(weekly, season)
     result["player_logs"] = db.upsert_player_logs(conn, rows)
     # Snap counts ride along (separate release file, so its absence never
     # blocks the stats that settle bets).
@@ -401,6 +538,7 @@ def ingest_nfl(conn, seasons: list[int]) -> dict:
         rows = nfl_player_log_rows(weekly, season)
         rows += nfl_usage_rows(weekly, season)
         rows += nfl_td_rows(weekly, season)
+        rows += nfl_box_rows(weekly, season)
         # Snap counts ride the full ingest too — they were maintenance-only
         # at first, which left a July backfill without snap shares until
         # the in-season (Aug-Feb) job first ran.

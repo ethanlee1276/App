@@ -121,9 +121,12 @@ def test_the_sums_and_the_special_blocks_read_right():
     assert got["Jared Goff"]["pass_rush_yds"] == 281, "a passer who never ran: rushing is zero"
     assert got["Jared Goff"]["anytime_td"] == 0, "he played and did not score"
     assert got["Amon-Ra St. Brown"]["anytime_td"] == 1
-    assert got["Jake Bates"] == {"fg_made": 2.0, "kick_pts": 9.0}
-    assert got["Harrison Butker"] == {"fg_made": 1.0, "kick_pts": 5.0}, "3 a field goal, 1 a point after"
-    assert got["Jack Campbell"] == {"tackles_ast": 11.0}
+    assert got["Jake Bates"] == {"fg_made": 2.0, "fg_att": 3.0, "xp_made": 3.0, "xp_att": 3.0, "kick_pts": 9.0,
+                                 "fg_long": 51.0}, "the tries ride with the makes, so a night's FG% is real"
+    assert got["Harrison Butker"] == {"fg_made": 1.0, "fg_att": 1.0, "xp_made": 2.0, "xp_att": 2.0,
+                                      "kick_pts": 5.0, "fg_long": 40.0}, "3 a field goal, 1 a point after"
+    assert got["Jack Campbell"] == {"tackles_ast": 11.0, "tackles_solo": 7.0, "def_sacks": 1.0, "def_tfl": 2.0,
+                                    "def_pd": 0.0, "def_qb_hits": 1.0, "def_td": 0.0}
     assert "No Labels" not in got, "a block without labels gives nothing, never a guess"
 
 
