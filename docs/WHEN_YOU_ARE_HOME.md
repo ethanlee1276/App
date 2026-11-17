@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UP. Every player page is the right player, or says why it is empty** (step 674; 17 November). Nothing to
+run. I swept the live player pages (four a club in the NFL and the NHL, and a sample of college schools) and fixed
+what turned up. A name on a roster now only ever opens the same name: written another way ("D.J. Moore" and "DJ
+Moore"), or with or without "Jr.", "Sr." or "II". Before, Anthony Richardson Sr.'s page showed Anthony Gould's,
+Caleb Tiernan's showed Caleb Banks', Jakob Robinson's showed Wan'Dale Robinson's, and Nolan Smith Jr.'s was empty
+(the box scores call him Nolan Smith). The roster's fantasy team defenses ("New England Patriots") now say they are
+a fantasy pick, not a player, and point to the team's page. A player whose games on file record no stats says
+so instead of showing a blank Stats tab, and a college player at a school whose games we don't cover says that.
+Also in this batch: a kicker's long reads "52", not "52.0", in the splits, and Ask Qellys can rank skaters by
+plus-minus and penalty minutes. The hockey pages came through the sweep clean.
+
 **UO. A player with no games never shows someone else's** (step 673; 17 November). Nothing to run. Found while
 checking Cameron Dicker's page live: JK Scott, the Chargers' punter, has no games on file, so his page and its Game
 Log tab fell back to the nearest stored name and showed Nick Scott's, the Panthers' safety, tackles and all. A near

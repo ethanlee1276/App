@@ -167,16 +167,39 @@ NO_FEED = {"nfl": {"P": "punting"}, "cfb": {"P": "punting", **{p: "defense" for 
 FEED_NAME = {"nfl": "NFL", "cfb": "college"}
 
 
+#: What a page with games on file and not one number in them says.
+NO_NUMBERS = "No stats are recorded in this player's games on file yet."
+#: The NFL roster's 32 fantasy team defenses ("New England Patriots", DEF):
+#: a fantasy pick, not a player.
+TEAM_DEFENSE = "This is the team's defense as a fantasy pick, not a player. Its numbers are on the team's page."
+#: A college roster's school with no game on file: the play file covers games
+#: between FBS schools (engine/ingest.cfb_games_for).
+NOT_FBS = "Our college stats cover games between FBS schools, and this school has none on file."
+
+
 def no_stats_note(sport: str, position: str) -> str:
     """Why a football page has no numbers, where the position is the reason."""
     if sport not in FEED_NAME:
         return ""
     pos = str(position or "").upper()
+    if sport == "nfl" and pos == "DEF":
+        return TEAM_DEFENSE
     if pos in NO_BOX:
         return f"Box scores keep no numbers for {NO_BOX[pos]}, so there are none to show here."
     what = NO_FEED[sport].get(pos)
     return (f"Our {FEED_NAME[sport]} stats feed doesn't include {what}, so there are no numbers to show here."
             if what else "")
+
+
+def _school_without_games(conn, sport: str, team: str) -> bool:
+    """A college school with no game on file in the newest season."""
+    if sport != "cfb" or not team or conn is None:
+        return False
+    row = conn.execute("SELECT MAX(season) FROM games WHERE sport='cfb'").fetchone()
+    if not row or row[0] is None:
+        return False
+    return conn.execute("SELECT 1 FROM games WHERE sport='cfb' AND season=? AND (home=? OR away=?) LIMIT 1",
+                        (int(row[0]), team, team)).fetchone() is None
 
 
 def role(sport: str, position: str, s: dict) -> str:
@@ -501,29 +524,67 @@ def roster_row(sport: str, player: str, team: str = "", data_dir=None, position:
     return one
 
 
+#: The generational marks a roster and a box score disagree on: "Nolan Smith
+#: Jr." on the Eagles' roster is "Nolan Smith" in every box score.
+SUFFIXES = ("Jr.", "Jr", "Sr.", "Sr", "II", "III", "IV", "V")
+_SUFFIX_WORDS = frozenset(w.rstrip(".").lower() for w in SUFFIXES)
+
+
+def core_name(name: str) -> str:
+    """A name as two spellings of one person share it: accents, punctuation
+    and case dropped (playersearch.norm), initials run together ("D.J." and
+    "DJ" are both "dj"), and a generational suffix dropped too."""
+    from .playersearch import norm
+    words, run = [], ""
+    for w in norm(name).split():
+        if len(w) == 1:
+            run += w
+            continue
+        if run:
+            words.append(run)
+            run = ""
+        words.append(w)
+    if run:
+        words.append(run)
+    while len(words) > 2 and words[-1] in _SUFFIX_WORDS:
+        words.pop()
+    return " ".join(words)
+
+
+def _suffix_spellings(player: str) -> list:
+    """The same name with its suffix dropped, or with each suffix added."""
+    words = str(player or "").split()
+    if len(words) > 2 and words[-1].rstrip(".").lower() in _SUFFIX_WORDS:
+        return [" ".join(words[:-1])]
+    return [f"{player} {suf}" for suf in SUFFIXES]
+
+
 def stored_name(conn, sport: str, player: str, team: str = "", data_dir=None) -> str:
     """The name the history file keeps this player's games under, or "".
 
-    The exact name when it has games; else the nearest stored spelling
-    (statlogs.resolve_player) when that is this player: the same name
-    written another way ("D.J. Moore", "DJ Moore"), a typed name no roster
-    carries, or a near name on the club the roster lists this one on.
-    A NEAR NAME ON ANOTHER CLUB IS SOMEONE ELSE (2026-11-17): JK Scott, the
-    Chargers' punter, has no games on file, and his page and game log drew
-    Nick Scott's, the Panthers' safety, tackles and all."""
+    The exact name when it has games. Else the same person's other spelling:
+    with or without a generational suffix ("Nolan Smith Jr." is "Nolan Smith"
+    in the box scores), or the nearest stored name (statlogs.resolve_player)
+    when it is the same name written another way ("D.J. Moore", "DJ Moore").
+    A typed name no roster carries takes the nearest stored name, typo and
+    all. A NAME A ROSTER CARRIES IS NEVER SOMEONE ELSE'S (2026-11-17): JK
+    Scott, the Chargers' punter, has no games on file, and his page drew Nick
+    Scott's, the Panthers' safety; and on one club, Anthony Richardson Sr.'s
+    drew Anthony Gould's, Caleb Tiernan's Caleb Banks', Jakob Robinson's
+    Wan'Dale Robinson's."""
     if GL.seasons_of(conn, sport, player):
         return player
-    from .playersearch import norm
+    other = _suffix_spellings(player)
+    marks = ",".join("?" * len(other))
+    found = [r[0] for r in conn.execute(
+        f"SELECT DISTINCT player FROM player_game_logs WHERE sport=? AND player IN ({marks})", (sport, *other))]
+    if found:
+        return found[0]
     from .statlogs import resolve_player
-    found = resolve_player(conn, sport, player)
-    if not found or norm(found) == norm(player):
-        return found or ""
-    row = roster_row(sport, player, team, data_dir)
-    if not row:
-        return found
-    latest = conn.execute("SELECT team FROM player_game_logs WHERE sport=? AND player=? "
-                          "ORDER BY season DESC, period DESC LIMIT 1", (sport, found)).fetchone()
-    return found if latest and latest[0] == row.get("team") else ""
+    near = resolve_player(conn, sport, player)
+    if not near or core_name(near) == core_name(player):
+        return near or ""
+    return "" if roster_row(sport, player, team, data_dir) else near
 
 
 def _birthplace(sport: str, row: dict, player: str, position: str) -> str:
@@ -676,7 +737,8 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                "bio": bio(sport, player, row, position), "notes": notes(sport, player, row, data_dir),
                "seasons": seasons}
         if not seasons:
-            note = no_stats_note(sport, position)
+            note = no_stats_note(sport, position) or (
+                NOT_FBS if _school_without_games(conn, sport, out["team"]) else "")
             if note:
                 out["no_stats"] = note
             return out if row else {}
@@ -775,6 +837,8 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                     clubs[g["team"]] = clubs.get(g["team"], 0) + 1
             career_rows.append({"season": yr, "team": "/".join(clubs), "gp": len(mine),
                                 "values": _line(sport, cgroups, _sum(mine), len(mine), per_game)})
+        if not cgroups:
+            out["no_stats"] = no_stats_note(sport, position) or NO_NUMBERS
         out["career"] = {"groups": _shape(cgroups), "per_game": per_game, "rows": career_rows,
                          "total": {"gp": len(every), "values": _line(sport, cgroups, _sum(every), len(every),
                                                                      per_game)}}

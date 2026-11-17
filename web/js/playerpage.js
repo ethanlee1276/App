@@ -285,7 +285,9 @@ function plrLatestHTML(d, news) {
 /* ---------------- Stats, Bio, Splits ---------------- */
 function plrStatsHTML(d) {
   const c = d.career || {};
-  if (!(c.rows || []).length) return `<p class="plr-quiet">${escapeHtml(d.no_stats || "No seasons on file yet.")}</p>`;
+  if (!(c.rows || []).length || !(c.groups || []).length) {
+    return `<p class="plr-quiet">${escapeHtml(d.no_stats || "No seasons on file yet.")}</p>`;
+  }
   return (c.groups || []).map((g) => {
     const cols = plrCols([g]);
     const rows = c.rows.map((r) => ({ label: `${plrSeasonLabel(d.sport, r.season)}${r.team ? ` · ${r.team}` : ""}`, gp: r.gp,

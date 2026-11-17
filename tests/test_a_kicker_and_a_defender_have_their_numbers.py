@@ -265,8 +265,10 @@ def test_a_name_with_no_games_is_never_a_near_names_page():
                      "value": tot})
     rows.append({"sport": "nfl", "season": 2026, "period": "010", "game_id": "CHI-010", "player": "DJ Moore",
                  "team": "CHI", "opponent": "GB", "position": "WR", "home": 1, "market": "receptions", "value": 6.0})
-    rows.append({"sport": "nfl", "season": 2026, "period": "010", "game_id": "LAC-010", "player": "Kimani Vidal",
-                 "team": "LAC", "opponent": "KC", "position": "RB", "home": 1, "market": "carries", "value": 12.0})
+    for who, club, pos, market in (("Kimani Vidal", "LAC", "RB", "carries"), ("Anthony Richardson", "IND", "QB", "pass_att"),
+                                   ("Anthony Gould", "IND", "WR", "receptions"), ("Caleb Banks", "MIN", "DEF", "tackles_ast")):
+        rows.append({"sport": "nfl", "season": 2026, "period": "010", "game_id": f"{club}-010", "player": who,
+                     "team": club, "opponent": "KC", "position": pos, "home": 1, "market": market, "value": 4.0})
     path, conn = _history(rows)
     d = tempfile.mkdtemp()
     with open(os.path.join(d, "rosters_nfl.json"), "w", encoding="utf-8") as fh:
@@ -274,20 +276,61 @@ def test_a_name_with_no_games_is_never_a_near_names_page():
             "LAC": {"players": [{"player": "JK Scott", "team": "LAC", "position": "P", "number": 16},
                                 {"player": "Kimani Vidal Jr.", "team": "LAC", "position": "RB", "number": 30}]},
             "CHI": {"players": [{"player": "D.J. Moore", "team": "CHI", "position": "WR", "number": 2}]},
-            "CAR": {"players": [{"player": "Nick Scott", "team": "CAR", "position": "DB", "number": 21}]}}}, fh)
+            "CAR": {"players": [{"player": "Nick Scott", "team": "CAR", "position": "DB", "number": 21}]},
+            "IND": {"players": [{"player": "Anthony Richardson Sr.", "team": "IND", "position": "QB", "number": 5}]},
+            "MIN": {"players": [{"player": "Caleb Tiernan", "team": "MIN", "position": "OT", "number": 72}]},
+            "NE": {"players": [{"player": "New England Patriots", "team": "NE", "position": "DEF"}]}}}, fh)
     PP._ROSTERS.clear()
     try:
         assert PP.stored_name(conn, "nfl", "JK Scott", "", d) == "", "the roster's punter is not the Panthers' safety"
         assert PP.stored_name(conn, "nfl", "D.J. Moore", "", d) == "DJ Moore", "the same name written another way"
         assert PP.stored_name(conn, "nfl", "Kimani Vidal Jr.", "", d) == "Kimani Vidal", \
-            "a near name on the club the roster lists is the player"
+            "the box scores drop the suffix the roster keeps"
+        assert PP.stored_name(conn, "nfl", "Anthony Richardson Sr.", "", d) == "Anthony Richardson", \
+            "live, 17 Nov: his page drew Anthony Gould's, a near name on his own club"
+        assert PP.stored_name(conn, "nfl", "Caleb Tiernan", "MIN", d) == "", \
+            "a lineman with no games is not his club's Caleb Banks"
         assert PP.stored_name(conn, "nfl", "Nik Scot", "", d) == "Nick Scott", "a typed name no roster carries"
         assert PP.stored_name(conn, "nfl", "Nick Scott", "", d) == "Nick Scott"
+        assert PP.core_name("Nolan Smith Jr.") == PP.core_name("nolan smith") == "nolan smith"
+        assert PP.core_name("D.J. Moore") == PP.core_name("DJ Moore") == "dj moore"
+        assert PP.core_name("A. J. Brown III") == "aj brown"
     finally:
         conn.close()
     page = PP.page("nfl", "JK Scott", db_path=path, data_dir=d)
     assert page["player"] == "JK Scott" and page["position"] == "P" and page["seasons"] == []
     assert page["no_stats"].startswith("Our NFL stats feed doesn't include punting"), page
+    assert PP.page("nfl", "Caleb Tiernan", team="MIN", db_path=path, data_dir=d)["no_stats"].startswith(
+        "Box scores keep no numbers for offensive linemen")
+    assert PP.page("nfl", "New England Patriots", team="NE", db_path=path, data_dir=d)["no_stats"] == PP.TEAM_DEFENSE, \
+        "the roster's fantasy team defense is not a player"
+
+
+def test_a_page_with_no_numbers_says_why():
+    """The live sweep of 17 Nov: a tight end whose every game on file carries
+    zeros (Justin Joly) had a blank Stats tab, not even "No seasons on file
+    yet"; and college rosters list schools whose games the play file does
+    not cover, their pages empty without a word."""
+    rows = [{"sport": "nfl", "season": 2026, "period": wk, "game_id": f"MIA-{wk}", "player": "Justin Joly",
+             "team": "MIA", "opponent": "BUF", "position": "TE", "home": 1, "market": m, "value": 0.0}
+            for wk in ("009", "010") for m in ("targets", "receptions")]
+    games = [("cfb", 2026, "2026-11-14", "401", "OSU", "MICH", 31, 24, "2026-11-14")]
+    path, conn = _history(rows, games)
+    conn.close()
+    d = tempfile.mkdtemp()
+    with open(os.path.join(d, "rosters_cfb.json"), "w", encoding="utf-8") as fh:
+        json.dump({"teams": {"WORU": {"players": [{"player": "Logan South", "team": "WORU", "position": "PK"}]},
+                             "OSU": {"players": [{"player": "Brennen Schramm", "team": "OSU", "position": "WR"}]}}}, fh)
+    PP._ROSTERS.clear()
+    PP._RANKS.clear()
+    joly = PP.page("nfl", "Justin Joly", db_path=path, data_dir=tempfile.mkdtemp())
+    assert joly["seasons"] == [2026] and joly["no_stats"] == PP.NO_NUMBERS, joly.get("no_stats")
+    assert PP.page("cfb", "Logan South", db_path=path, data_dir=d)["no_stats"] == PP.NOT_FBS
+    assert "no_stats" not in PP.page("cfb", "Brennen Schramm", db_path=path, data_dir=d), \
+        "a backup at a school with games on file has simply not played: no note"
+    page_js = (ROOT / "web" / "js" / "playerpage.js").read_text(encoding="utf-8")
+    assert "if (!(c.rows || []).length || !(c.groups || []).length) {" in page_js, \
+        "seasons with no table draw the note, not a blank tab"
 
 
 # --- the seasons already on file -----------------------------------------------------------------
