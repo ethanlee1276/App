@@ -2749,8 +2749,8 @@ def _publish_feed(quiet: bool = False) -> None:
     # week, not date, and engine/streak.py says why that matters.
     try:
         from engine import streak as _streak
-        _streak.run({"mlb": MLB_OUT, "nba": NBA_OUT,
-                     "wnba": WNBA_OUT, "cfb": CFB_OUT, "cbb": CBB_OUT}, quiet=quiet)
+        _streak.run({"mlb": MLB_OUT, "nba": NBA_OUT, "wnba": WNBA_OUT,
+                     "cfb": CFB_OUT, "cbb": CBB_OUT, "nhl": NHL_OUT}, quiet=quiet)
     except Exception as exc:                              # noqa: BLE001
         if not quiet:
             print(f"  streak: skipped — {type(exc).__name__}: {exc}")

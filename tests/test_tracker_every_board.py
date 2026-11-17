@@ -145,6 +145,17 @@ def test_the_fast_file_is_matched_on_the_matchup_and_only_for_its_leagues():
     assert fast_live_overlay("nfl", games, fast_dir=os.path.join(d, "missing")) == 0
 
 
+def test_a_hockey_board_takes_the_fast_scoreboards_phase():
+    """2026-11-17: hockey's board took its phase only from its own build
+    (nhl_build._live_block), minutes behind the twelve-second scoreboard
+    the page already drew, so an open hockey bet read UPCOMING into the
+    first period, Ethan's NFL report of 2026-09-14 over again."""
+    d = _fast_file(tempfile.mkdtemp(), home="NYR", away="MTL", league="nhl")
+    games = [{"home": "NYR", "away": "MTL", "live": {"state": "scheduled"}}]
+    assert fast_live_overlay("nhl", games, fast_dir=d) == 1
+    assert games[0]["live"]["state"] == "live" and games[0]["live"]["home_score"] == 21
+
+
 # --- the window ----------------------------------------------------------------
 def test_a_week_label_has_no_neighbouring_days():
     assert shift_day("2026-W01", -1) == "2026-W01"

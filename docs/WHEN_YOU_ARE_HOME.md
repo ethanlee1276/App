@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VN. Hockey's open bets follow the live scoreboard, and hockey joins the streak game** (step 698; 17 November).
+Nothing to run. Three more lists that left the NHL out: the Live tab's open bets took a hockey game's phase only
+from the hockey build, minutes behind the twelve-second scoreboard beside them, so a bet could read UPCOMING into
+the first period (the NFL's 14 September report over again); the free streak game drew its questions from every
+board but hockey's, though hockey's box scores are filed by date like basketball's and the ledger settles off
+them; and the owner's to-do check counted rows and faces for every league but college football and hockey.
+
 **VM. A game with no stats says so, and a season with none played shows the last one** (step 697; 17 November).
 Nothing to run. Sampling 305 live player pages across five leagues found Jake Tonges' (49ers) Week 1 of 2026 still
 reading "The box score isn't in yet" two months on, with no season card at all. A game row with no line waited for

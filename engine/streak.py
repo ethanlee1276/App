@@ -100,8 +100,9 @@ KEEP_DAYS = 10
 VOID_AFTER_DAYS = 3
 
 #: Sports whose player logs are filed by ISO date — see the module
-#: docstring for why NFL is absent.
-SLATE_SPORTS = ("mlb", "nba", "wnba", "cfb", "cbb")
+#: docstring for why NFL is absent. Hockey's are too, and the ledger has
+#: settled its props off them since October; it joined on 2026-11-17.
+SLATE_SPORTS = ("mlb", "nba", "wnba", "cfb", "cbb", "nhl")
 
 _EASTERN = ZoneInfo("America/New_York")
 

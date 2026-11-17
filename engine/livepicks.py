@@ -28,6 +28,8 @@ FAST_DIR = "web/data"
 #: stopped loop must not pin a phase on anything.
 FAST_FRESH_S = 15 * 60
 _PHASE_RANK = {"scheduled": 0, "live": 1, "final": 2}
+#: The leagues whose boards take the fast scoreboard's phase (`fast_live_overlay`).
+FAST_LEAGUES = ("nfl", "cfb", "nba", "wnba", "cbb", "nhl")
 
 
 def fast_live_overlay(sport: str, games: list, fast_dir=None,
@@ -59,7 +61,10 @@ def fast_live_overlay(sport: str, games: list, fast_dir=None,
     import json
     import time
     from pathlib import Path
-    if sport not in ("nfl", "cfb", "nba", "wnba", "cbb"):
+    # Hockey joined on 2026-11-17: its board's phase came only from its own
+    # build (nhl_build._live_block), minutes behind the scoreboard beside it.
+    # Baseball's build reads its own live feed and is never painted here.
+    if sport not in FAST_LEAGUES:
         return 0
     path = Path(fast_dir or FAST_DIR) / f"live_{sport}.json"
     try:

@@ -487,6 +487,25 @@ def test_server_routes_and_launch_sweep_exist():
         "engine/streak.py before letting this through"
 
 
+def test_hockey_is_a_slate_sport_graded_off_its_own_box_scores():
+    """2026-11-17: hockey's logs are filed by date like basketball's, and the
+    ledger has settled its props off them since October; the streak left it
+    out. Its board's questions freeze and grade like any other league's."""
+    launch = _read("launch.py")
+    assert '"nhl": NHL_OUT' in launch.split("_streak.run(")[1].split(")")[0]
+    board = {"games": [{"home": "NYR", "away": "MTL", "kickoff": "2026-08-24T23:00:00Z"}],
+             "recommendations": [{"player": "Artemi Panarin", "team": "NYR", "opponent": "MTL",
+                                  "market": "sog", "market_label": "Shots on Goal", "line": 3.5,
+                                  "odds": -105, "has_market": True}]}
+    [q] = S.question_pool(board, "nhl", TODAY, NOW)
+    assert (q["sport"], q["market"], q["label"], q["line"]) == ("nhl", "sog", "Shots on Goal", 3.5)
+    hist = _hist_db()
+    hist.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, market, value) "
+                 "VALUES ('nhl', 2026, '2026-08-20', 'g1', 'Artemi Panarin', 'NYR', 'sog', 5)")
+    hist.commit()
+    assert S.grade_question(hist, {**q, "date": "2026-08-20"}, TODAY) == ("over", 5.0)
+
+
 def test_page_is_dispatched_and_outside_the_wall():
     app = app_js()
     assert 'if (name === "streak") renderStreak();' in app, \

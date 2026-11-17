@@ -223,6 +223,11 @@ def haircut_item(models: Path | None = None, conn=None) -> Item:
 
 # --- what has been ingested -------------------------------------------------
 
+#: Every league whose box scores land in the history database (college
+#: football and hockey were left out until 2026-11-17).
+DATA_SPORTS = ("mlb", "nfl", "cfb", "nba", "cbb", "wnba", "nhl")
+
+
 def data_items(conn=None) -> list[Item]:
     """Rows, recency, and faces — per sport, from the history database."""
     if conn is None:
@@ -230,7 +235,7 @@ def data_items(conn=None) -> list[Item]:
                      "not reachable from here; run this on the machine that "
                      "holds it")]
     out = []
-    for sport in ("mlb", "nfl", "nba", "wnba", "cbb"):
+    for sport in DATA_SPORTS:
         try:
             row = conn.execute(
                 "SELECT COUNT(*), MAX(season || '-' || period) FROM "
@@ -250,7 +255,7 @@ def data_items(conn=None) -> list[Item]:
 
     # Faces. Cosmetic, and the cards fall back to initials — so this is a
     # `todo` only when a league has none at all, not when it has gaps.
-    for sport in ("mlb", "nfl", "nba", "wnba", "cbb"):
+    for sport in DATA_SPORTS:
         try:
             have = conn.execute(
                 "SELECT COUNT(*) FROM player_assets WHERE sport=? AND "
