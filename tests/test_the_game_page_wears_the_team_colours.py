@@ -185,7 +185,9 @@ def test_the_wash_is_the_views_and_leaves_with_it():
     assert "if (d) gpWashOn(league, d); else gpWashOff();" in page
     assert page.count("gpWashOff();") >= 3, "no game, a veiled game and no file each draw without it"
     on = _fn(GP, "gpWashOn")
-    assert 'view.insertAdjacentHTML("afterbegin", `<div class="gp-wash" aria-hidden="true"></div>`)' in on
+    # ``data-wash``: the backdrop names itself, so the colour fade finds it without knowing this room's
+    # class names (js/washfade.js, tests/test_a_team_page_wears_its_club_and_the_colours_fade.py).
+    assert 'view.insertAdjacentHTML("afterbegin", `<div class="gp-wash" data-wash aria-hidden="true"></div>`)' in on
     assert 'document.body.style.setProperty("--wa", away);' in on and 'view.classList.add("gp-on");' in on
     assert 'if (name !== "pbp" && typeof gpWashOff === "function") gpWashOff();' in APP, "leaving the view takes it off"
     assert "#view-pbp.gp-on > .gp-wash {" in GP_CSS and "position: fixed; inset: 0; z-index: -1;" in GP_CSS

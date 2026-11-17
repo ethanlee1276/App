@@ -77,6 +77,7 @@ const S = %s; const settings = () => S; const state = { sport: %s };
 const TEAMS = { DET: { primary: "#005a8b", secondary: "#b0b7bc" } };
 const NBA_TEAMS = { BOS: { primary: "#007a33" } };
 const teamsForSport = (s) => s === "nba" ? NBA_TEAMS : s === "nfl" ? TEAMS : {};
+let _pageClub = "";   // no team page open: the colours are the reader's own (TEAMWASH1)
 %s
 applyTeamColors();
 console.log(JSON.stringify({ cls, props }));
