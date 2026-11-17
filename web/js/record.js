@@ -1099,7 +1099,7 @@ function gpBlockHTML(b, kind, sport) {
       ${b.paper && b.paper.note ? `<p class="rec-gp-close">${escapeHtml(b.paper.note)}</p>` : ""}
       <div class="stats rec-kpis">${tiles}</div>${close}
       ${markets ? `<div class="rr-head">Legs by market</div>${markets}` : ""}
-      ${recent ? `<div class="rr-head">Newest tickets</div><div class="rec-gp-recent">${recent}</div>` : ""}
+      ${recent ? `<div data-rec-flat="parlays"><div class="rr-head">Newest tickets</div><div class="rec-gp-recent">${recent}</div></div>` : ""}
     </div>`;
 }
 // The parlays half: a league's cards (gpBlockHTML), or on All one table of every league.
@@ -1186,7 +1186,10 @@ function rpPicksHTML(rep, scope, recent) {
       { tone: graded >= PARLAY_RATE_FLOOR ? toneOf(rep.net_units) : "" })
     + (open ? recTile("Still riding", String(open), "graded once their games are final") : "");
   const kinds = rpKinds(rep);
-  const byKind = REC_RP_KINDS.filter((k) => kinds[k] && kinds[k].w + kinds[k].l).map((k) => {
+  // One kind is the tile above again, word for word ("Player props 69 of 101 hit · 68% · +0.34u" under
+  // "69 of 101 · 68% · +0.34u" on the live NBA record): a split is two kinds or more (RECDUP1).
+  const graded2 = REC_RP_KINDS.filter((k) => kinds[k] && kinds[k].w + kinds[k].l);
+  const byKind = graded2.length < 2 ? "" : graded2.map((k) => {
     const x = kinds[k];
     const g = x.w + x.l;
     return `<div class="rec-row flush tight"><span class="rr-what">${escapeHtml(rpKindWord(k, scope))}</span>
@@ -1203,7 +1206,7 @@ function rpPicksHTML(rep, scope, recent) {
       <div class="rr-head">Picks${scope ? "" : " · every league"}</div>
       <div class="stats rec-kpis">${tiles}</div>
       ${byKind ? `<div class="rr-head">By kind</div>${byKind}` : ""}
-      ${rows ? `<div class="rr-head">Newest picks</div><div class="rr-rows">${rows}</div>` : ""}
+      ${rows ? `<div data-rec-flat="picks"><div class="rr-head">Newest picks</div><div class="rr-rows">${rows}</div></div>` : ""}
     </div>`;
 }
 // On All: every league's picks, kind by kind (a league with none graded says how many ride).
@@ -3192,9 +3195,28 @@ function recFactsSlot(scope) {
 }
 function recFactsMount(host) {
   host.querySelectorAll("[data-rec-facts]").forEach((el) => {
-    if (typeof rpFactsInto === "function") rpFactsInto(el, el.dataset.recFacts);
+    if (typeof rpFactsInto === "function") rpFactsInto(el, el.dataset.recFacts).then((games) => recReceiptsOnce(host, el, games));
   });
 }
+/* THE RECEIPTS ONCE (RECDUP1, 2026-11-17). A league's tab listed its report picks and its tickets twice: the
+   newest of each in a flat list under their totals, then every finished game's picks and parlays with a check or
+   an X under How our reports did, the same rows by game. Read on the live NBA record, the Suns at Nuggets
+   tickets were on the page eight times. Once the games are drawn, the flat lists give way to one line that
+   says where each game's are; a league with no finished game checked yet keeps them, as the All tab and the
+   Report Picks page's own record do. */
+function recReceiptsOnce(host, facts, games) {
+  if (!games || !facts.isConnected) return;
+  host.querySelectorAll("[data-rec-flat]").forEach((el) => {
+    el.innerHTML = `<p class="rec-gp-close">Each game’s ${el.dataset.recFlat === "picks" ? "picks" : "tickets"}, hit or missed, are listed game
+      by game under <button type="button" class="rec-to-facts" data-rec-to-facts>How our reports did</button>, below.</p>`;
+  });
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-rec-to-facts]");
+  const to = b && document.querySelector("[data-rec-facts]");
+  const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (to) to.scrollIntoView({ block: "start", behavior: still ? "instant" : "smooth" });
+});
 
 /* THE SAME RECORD ON THE REPORT PICKS PAGE (js/reportpicks.js, its Record tab,
    2026-11-16). Ethan: "On the report picks page, we should have a record page
@@ -3317,6 +3339,9 @@ function recPotdSection(rep, scope, recent, sit) {
    league's tab draws its own week (`by_sport`), and says so when nothing
    of that league settled; a file from before the cut existed draws
    nothing on a league's tab rather than another league's week. */
+//: The week's books under the names their own sections carry further down this page ("Most Likely board · by
+//: tier", "Most Likely — staked picks"); the engine's name for the first is "The one board", which no page says.
+const WK_BOOK = { "Most Likely": "Most Likely list, staked picks", "The one board": "Most Likely board, every tier" };
 function weekRecapHTML(w, scope) {
   const scoped = !!scope && scope !== "all";
   if (scoped && !(w || {}).by_sport) return "";
@@ -3330,11 +3355,13 @@ function weekRecapHTML(w, scope) {
       <p class="wk-none">No ${escapeHtml(name)} picks settled this week.</p></section>` : "";
   }
   const pc = (v) => v == null ? "—" : `${Math.round(v * 100)}%`;
+  // The market in words (marketWord, the engine's own names): the card read "under 2.5 fg3m",
+  // "over 13.5 pts reb" and "under 1.5 stl" on the live NBA record (RECDUP1, 2026-11-17).
   const bet = (x) => `${escapeHtml(x.player || "")} ${escapeHtml(String(x.side || "").toLowerCase())} ${x.line ?? ""} ${
-    escapeHtml(String(x.market || "").replace(/_/g, " "))} (${american(x.odds)})`;
+    escapeHtml(marketWord(x.market))} (${american(x.odds)})`;
   return `<section class="card wk-recap" aria-label="This week">
     ${head}
-    ${books.map((b) => `<div class="wk-book"><b>${escapeHtml(b.book)}</b>
+    ${books.map((b) => `<div class="wk-book"><b>${escapeHtml(WK_BOOK[b.book] || b.book)}</b>
       <span class="wk-line">${b.w}-${b.l}${b.p ? `-${b.p}` : ""} · <span class="${b.units >= 0 ? "pos" : "neg"}">${b.units >= 0 ? "+" : trueMinus("-")}${Math.abs(b.units).toFixed(1)}u</span>
         · hit ${pc(b.hit)} (we said ${pc(b.claimed)}, the price said ${pc(b.price)})</span>
       ${b.best ? `<span class="wk-pick">Best hit: ${bet(b.best)}</span>` : ""}

@@ -284,6 +284,7 @@ async function rpFactsFill(host, league) {
   more.addEventListener("click", page);
   page();
   revealChildren(slot);
+  return games.length;
 }
 
 /* EVERY PICK AND PARLAY, A CHECK OR AN X (2026-11-17). Ethan, on this list:
@@ -567,9 +568,10 @@ function rpFactsScroll(host) {
    Ethan said yes to putting it where anyone can see it): drawn into the slot
    the page leaves for it, for the league in its scope. The counts are free;
    a game's own report still opens for members only. */
+//: Answers with how many finished games it listed (the Record page lists their receipts once, record.js recReceiptsOnce).
 async function rpFactsInto(slot, league) {
-  if (!slot || !league) return;
+  if (!slot || !league) return 0;
   slot.innerHTML = rpFactsHTML(league);
-  await rpFactsFill(slot, league);
+  return (await rpFactsFill(slot, league)) || 0;
 }
 

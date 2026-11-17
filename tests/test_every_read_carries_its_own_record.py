@@ -115,7 +115,10 @@ def test_the_record_page_draws_how_our_reports_did_for_the_league_in_scope():
     assert "    + (scoped ? recFactsSlot(scope) : \"\")\n" in rec
     assert 'return `<div class="rec-facts" data-rec-facts="${escapeAttr(scope)}"></div>`;' in rec
     assert "  bindSubtabs(host);\n  recFactsMount(host);\n" in rec
-    assert 'if (typeof rpFactsInto === "function") rpFactsInto(el, el.dataset.recFacts);' in rec
+    # ...and, once the games are listed, the tab's flat lists of the same picks and tickets give way to them
+    # (tests/test_the_record_page_says_each_thing_once.py).
+    assert ('if (typeof rpFactsInto === "function") rpFactsInto(el, el.dataset.recFacts)'
+            '.then((games) => recReceiptsOnce(host, el, games));') in rec
     app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
     assert ('function rpFactsInto(...a) { return roomCall(rpFactsInto, "rpFactsInto", "js/reportpicks.js", '
             '"css/reportpicks.css", a); }') in app, "the room loads on the Record page too"

@@ -9338,6 +9338,45 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WQ. The Record page says each thing once, in words** (step 727; 17 November). Nothing to run. The same walk, on
+the NBA's record, about twenty phone screens long. The week's card printed the journal's market codes ("under 2.5
+fg3m", "over 13.5 pts reb", "under 1.5 stl") and called one of its books "The one board", a name no page uses: it
+now says 3-Pointers Made, Pts+Reb and Steals, and names the books as their own sections do further down ("Most
+Likely list, staked picks", "Most Likely board, every tier"). A league's tab listed its report picks and its tickets
+twice, the newest of each in a flat list and then every finished game's picks and parlays under How our reports did;
+the Suns at Nuggets tickets were on the page eight times. Once the games are listed, the flat lists give way to one
+line that links down to them; a league with no finished game checked yet keeps its lists, and so do the All tab and
+the Report Picks page's own record. And "By kind" with one kind in it repeated the tile above it word for word, so a
+split is two kinds or more. Still open on that page, for you to say: the Most Likely record is given four times
+under three different counts (tracked, the board by tier, the staked picks, and the verdict's), each a different set
+of picks; I have left those as they are.
+
+**WP. The player page says each thing once** (step 726; 17 November). Nothing to run. You said the repeated
+information and the odd-looking things are for me to find, so I opened real pages with the live site's own data and
+read them as a user would. Josh Allen's Overview said who the player is three times (the page's header, a card
+inside the chart with the name, club and number again, and a second name card over the markets with Copy link in the
+middle of the page), the season's totals twice, the last game's score twice, and that game's line seven times, twice
+in one table: under "This game" and again under "vs NYJ", the season's only game against the Jets. Now the header
+carries the club's name as the door to the club's page and the page's Copy link; the chart on the page draws no name
+card of its own and not the score of the game already in the Previous game card (pick another game and its card
+appears); the splits row is called Previous game, the card's own words, and a club's row waits for a second meeting;
+the markets card keeps of its old header only the grade, its title names tonight's opponent, and its doors to the
+charts and the game log, both already on the page, are gone. A quarterback's Receiving Yards, Receptions and Targets
+chips, there off one catch of a batted ball in ten games, are gone too: a role is something a player did in two of
+the games shown. None of this adds to the first visit's code, which has four bytes of room: it is all in the files
+that load with the page. One thing I could not fix inside that room: a game from last season in the By market list
+reads "Wk 20" under this season's Week 1 with no year on it.
+
+**WO. An NFL game was at home or on the road, and the page says which** (step 725; 17 November). Nothing to run.
+Found on the same walk: Josh Allen's By market card said "vs NYJ" for Week 10, a game played at the Jets, while
+Recent games on the same page said "@ NYJ". All 418 players on the NFL board had every game as a home game. The
+weekly stats file names a team and an opponent and never the venue, so every NFL row had been stored as home since
+the first ingest. Rows now take their side from the stored schedule as they are written, which corrects this season
+at the next results pull; the seasons stored before are corrected by the nightly chores one season a night, newest
+first, so the history file is never rewritten in one go (the chores' line reads "nfl home and away: season 2025, N
+visiting rows corrected"). Nothing prices on the flag; it is what the cards say. Also here: the projections' new
+rebuild (step WN) now lets a league whose build fails wait its turn instead of holding up the league behind it.
+
 **WN. A league's projections follow its results, and a waiting season says when it opens** (step 724; 17 November).
 Nothing to run. You asked that the site always carries the most up-to-date information, so every public feed on the
 live site was read and timed. All seven league boards were 5 to 13 minutes old with no failed step; standings,

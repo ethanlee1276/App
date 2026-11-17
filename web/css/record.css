@@ -460,3 +460,9 @@
 /* All leagues in one table: the kind under its league, the share under its count. */
 .rec-gp-table td:first-child b { font-weight: 700; }
 .rec-gp-kind, .rec-gp-pct { display: block; font-size: var(--fs-xs); color: var(--text-mute); font-weight: 400; }
+
+/* THE RECEIPTS' ONE POINTER (RECDUP1, js/record.js recReceiptsOnce): where a league's flat lists of picks and
+   tickets stood, a sentence with a link in it, drawn as a team's name is (.team-link). */
+.rec-to-facts { background: none; border: 0; padding: 0; margin: 0; min-height: 24px; cursor: pointer; font: inherit; color: inherit;
+  text-decoration: underline; text-decoration-color: var(--text-mute); text-underline-offset: 3px; }
+.rec-to-facts:hover, .rec-to-facts:focus-visible { text-decoration-color: var(--brand); }

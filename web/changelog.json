@@ -4,6 +4,24 @@
     {
       "date": "2026-11-17",
       "kind": "fix",
+      "title": "The Record page says each thing once",
+      "body": "The week’s card printed codes for markets (“fg3m”, “pts reb”, “stl”) and a book name no page uses; it now says 3-Pointers Made, Pts+Reb and Steals, and names its books as their sections do. A league’s record listed its report picks and tickets twice, in flat lists and again game by game; the flat lists now give way to one line that links to each game’s. A one-row “By kind” that repeated the tile above it is gone."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "fix",
+      "title": "A player’s page says each thing once",
+      "body": "A player’s page said who the player is three times, the season’s totals twice and the last game’s line seven times. The header now holds the club’s link and Copy link; the chart no longer repeats the name card or the score of the game shown above it; the split rows no longer list one game twice; the markets card lost its second header and its extra doors to the charts and game log. A quarterback no longer gets Receiving Yards chips off one fluke catch."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "fix",
+      "title": "NFL road games read “@”, not “vs”",
+      "body": "Every NFL game in a player’s By market list was labelled a home game: a Week 10 game at the Jets read “vs NYJ”. The weekly stats never say where a game was played, so the schedule now does. This season is corrected at the next results pull and earlier seasons over the next few nights."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "fix",
       "title": "Season projections and playoff brackets follow the night’s results",
       "body": "Every feed on the site was timed: boards, standings, injuries and news were minutes old and live scores seconds old. One was behind. The season projections and the NBA’s and NHL’s playoff brackets were rebuilt once a day, so after a night’s games they could read up to a day behind the standings beside them. A league whose results have changed is now rebuilt within about 45 minutes. And a standings page waiting on a season says when the league opens (“It opens in late March 2027”) instead of the first day of its calendar window."
     },
