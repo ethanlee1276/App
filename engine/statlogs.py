@@ -516,16 +516,68 @@ def _search_conn(conn, sport: str, q: str, limit: int,
                     "team": (t["team"] if t else "") or "",
                     "position": (t["position"] if t else "") or "",
                     "headshot": face})
+    seen = _lend_roster(sport, out, data_dir)
     # TOPPED UP, NOT REPLACED. A man with a stat line outranks one
     # without, always — so the roster only ever fills the space the
     # logs left empty, and a thin log store degrades into a roster
     # search instead of into a blank page.
     found = any(r < 3 for r in ranked.values())
     if len(out) < int(limit):
-        out += _roster_hits(sport, q, int(limit) - len(out),
-                            {r["player"] for r in out}, data_dir, fuzzy=not found)
+        out += _roster_hits(sport, q, int(limit) - len(out), seen, data_dir, fuzzy=not found)
     from .playersearch import no_guess_beside_an_answer
     return no_guess_beside_an_answer(out)
+
+
+#: A box score's filing, not a position: a defender's group, a basketball
+#: starter's or bench player's mark. The roster's own word replaces it.
+VAGUE_POSITIONS = {"nfl": frozenset({"", "DEF"}), "cfb": frozenset({"", "DEF"}),
+                   "nba": frozenset({"", "S", "B"}), "wnba": frozenset({"", "S", "B"}),
+                   "cbb": frozenset({"", "S", "B"})}
+
+
+def _lend_roster(sport: str, hits: list, data_dir=None) -> set:
+    """ONE PLAYER, ONE ROW (2026-11-17). A roster spells a name the club's
+    way ("Nolan Smith Jr.", "Aaron Jones Sr.") and the box scores often drop
+    the suffix, so the same player on the same club came back twice: the
+    logs' row and the roster's, with no games. The roster's row now lends the
+    logs' row what the box score lacks (a position where it files a group or
+    a starter's mark, a photo) and is not listed again. Returns every name
+    the hits answer for, both spellings."""
+    from .playerpage import core_name
+    seen = {h["player"] for h in hits}
+    if not hits:
+        return seen
+    by = _roster_by_player(sport, data_dir)
+    vague = VAGUE_POSITIONS.get(sport, frozenset({""}))
+    for h in hits:
+        pl = by.get((h["team"], core_name(h["player"])))
+        if not pl:
+            continue
+        seen.add(pl["player"])
+        if pl["position"] and h["position"] in vague:
+            h["position"] = pl["position"]
+        if not h["headshot"] and pl["headshot"]:
+            h["headshot"] = pl["headshot"]
+    return seen
+
+
+_ROSTER_BY_PLAYER: dict = {}
+
+
+def _roster_by_player(sport: str, data_dir=None) -> dict:
+    """``{(club, core name): roster row}`` (playerpage.core_name: suffixes,
+    initials and punctuation folded), built once per roster."""
+    from .playerpage import core_name
+    players = _roster_players(sport, data_dir)
+    key = (sport, str(data_dir or ROSTER_DIR))
+    hit = _ROSTER_BY_PLAYER.get(key)
+    if hit is not None and hit[0] is players:
+        return hit[1]
+    by: dict = {}
+    for p in players:
+        by.setdefault((p["team"], core_name(p["player"])), p)
+    _ROSTER_BY_PLAYER[key] = (players, by)
+    return by
 
 
 #: How many of a player's newest games the search reads for his club.

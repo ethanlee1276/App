@@ -64,7 +64,7 @@ def test_a_search_and_the_page_before_it_list_names_not_cards():
 def test_a_row_is_a_face_a_name_and_a_door_to_the_page():
     row = decl("searchRowHTML")
     assert '<button type="button" class="psr-row" data-player-page="${escapeAttr(slugify(m.player))}"' in row
-    assert "playerAvatar(m.player, m.team, { size: 44, headshot: m.headshot })" in row
+    assert "playerAvatar(m.player, club, { size: 44, headshot: m.headshot })" in row
     assert 'class="psr-go" aria-hidden="true"' in row
     # The focus ring is the site's own (styles.css :where(… button …):focus-visible).
     for sel in (".psr-list {", ".psr-row {", ".psr-row:hover {", ".psr-who {", ".psr-nm {", ".psr-sub {", ".psr-go {"):
@@ -114,6 +114,55 @@ def test_the_browse_shows_rows_enough_to_fill_a_screen():
     assert '"(max-width: 760px)").matches) ? 12 : 30;' in cap
 
 
+def _league(sport, logs, roster):
+    """A history store with ``logs`` [(player, team, position)] and a roster
+    file with ``roster`` [(player, team, position, photo)], fresh paths each,
+    so no cached name list or roster answers for another test's."""
+    os.environ.setdefault("QB_FEEDSTATE_DIR", tempfile.mkdtemp())
+    from engine import db as hist_db
+    from engine import statlogs
+    path = os.path.join(tempfile.mkdtemp(), "h.db")
+    conn = hist_db.connect(path)
+    market = {"nfl": "rush_yds", "nba": "pts"}[sport]
+    hist_db.upsert_player_logs(conn, [{"sport": sport, "season": 2026, "period": f"2026-11-{9 + i:02d}",
+                                       "game_id": f"g{i}-{n}", "player": n, "team": t, "opponent": "OPP",
+                                       "position": pos, "home": 1, "market": market, "value": 10.0}
+                                      for n, t, pos in logs for i in range(3)])
+    conn.close()
+    d = tempfile.mkdtemp()
+    teams = {}
+    for n, t, pos, face in roster:
+        teams.setdefault(t, {"players": []})["players"].append({"player": n, "position": pos, "headshot": face})
+    with open(os.path.join(d, f"rosters_{sport}.json"), "w", encoding="utf-8") as fh:
+        json.dump({"teams": teams}, fh)
+    return statlogs, path, d
+
+
+def test_a_roster_spelling_of_a_logged_player_is_one_row_not_two():
+    """Live, 2026-11-17: "nolan smith" found "Nolan Smith" (the box scores,
+    PHI, DEF, a photo) and "Nolan Smith Jr." (the roster, PHI, LB, none), two
+    rows for one player, and "aaron jones" the same with Aaron Jones Sr. The
+    roster's row now lends the logs' row its position and photo and is not
+    listed again; a namesake on another club is still another player."""
+    statlogs, path, d = _league("nfl",
+        [("Nolan Smith", "PHI", "DEF"), ("Aaron Jones", "MIN", "RB"), ("Michael Carter", "ARI", "RB")],
+        [("Nolan Smith Jr.", "PHI", "LB", ""), ("Aaron Jones Sr.", "MIN", "RB", "https://x/aj.png"),
+         ("Michael Carter II", "NYJ", "CB", "https://x/mc.png")])
+    got = {q: [(h["player"], h["team"], h["position"], h["headshot"], h["games"])
+               for h in statlogs.search("nfl", q, db_path=path, data_dir=d)]
+           for q in ("nolan smith", "aaron jones", "michael carter")}
+    assert got["nolan smith"] == [("Nolan Smith", "PHI", "LB", "", 3)], got["nolan smith"]
+    assert got["aaron jones"] == [("Aaron Jones", "MIN", "RB", "https://x/aj.png", 3)], got["aaron jones"]
+    assert [(n, t) for n, t, *_ in got["michael carter"]] == [("Michael Carter", "ARI"), ("Michael Carter II", "NYJ")], \
+        got["michael carter"]
+
+
+def test_a_basketball_starters_mark_gives_way_to_the_rosters_position():
+    statlogs, path, d = _league("nba", [("Jayson Tatum", "BOS", "S")], [("Jayson Tatum", "BOS", "F", "")])
+    hits = statlogs.search("nba", "tatum", db_path=path, data_dir=d)
+    assert [(h["player"], h["position"]) for h in hits] == [("Jayson Tatum", "F")], hits
+
+
 def _whole(name):
     """A small top-level function of app.js, to its closing brace. The site's
     escaper is read this way: its quote characters lose `decl`'s tokenizer."""
@@ -157,6 +206,9 @@ def test_rows_drawn_from_a_board_a_league_and_a_fight_card():
         state.sport = "ufc";
         out.fighter = searchRowHTML({ player: "Islam Makhachev", sport: "ufc", team: "", games: 15,
                                       fighter: { division: "light_heavyweight" } });
+        state.sport = "cbb";
+        out.bench = searchRowHTML({ player: "Cooper Briggs", sport: "cbb", team: "espn:332", position: "B" });
+        out.starter = searchRowHTML({ player: "Ace Flagg", sport: "cbb", team: "ME", position: "S" });
         out.list = searchListHTML([{ player: "Ja'Marr Chase", team: "CIN", position: "WR" }, { player: "Josh Allen", team: "BUF" }]);
         out.listed = [..._searchListed.keys()];
         console.log(JSON.stringify(out));""",
@@ -181,6 +233,8 @@ def test_rows_drawn_from_a_board_a_league_and_a_fight_card():
     fighter = got["fighter"]
     assert "<span>light heavyweight · tracked 15 fights</span>" in fighter and 'class="mk"' not in fighter, fighter
     assert "--psr-c" not in fighter, "no club: the stylesheet's own stripe, the brand's"
+    assert "<span>Bench</span>" in got["bench"] and "espn:" not in got["bench"], ("no ESPN number for a club", got["bench"])
+    assert "<span>ME · Starter</span>" in got["starter"], ("a starter's mark said in words", got["starter"])
     assert got["list"].startswith('<div class="psr-list">') and got["list"].count('class="psr-row"') == 2
     assert got["listed"] == ["ja-marr-chase", "josh-allen"], got["listed"]
 

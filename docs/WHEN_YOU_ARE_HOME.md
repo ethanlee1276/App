@@ -9367,7 +9367,11 @@ row opens the player's page too, and a Recent chip runs its search again. A figh
 of career rates, which is all a fighter's page has. Also on the card: the five form numbers no longer break in the
 middle on a phone ("250.3" had wrapped to "250." over "3"), the buttons read "Charts" and "History vs Dolphins…"
 instead of "His charts" and "How he's done vs…", and a fighter's row says how many fights we track (it said
-"tracked fights", with no number).
+"tracked fights", with no number). And the list itself: a player whose roster spells the name with "Jr." or "Sr."
+came back twice ("Nolan Smith" from the box scores and "Nolan Smith Jr." from the roster, two rows for one
+player); it's one row now, with the roster's position (LB, not "DEF"). A basketball row says "Starter" or "Bench"
+where it said "S" or "B", and a college player whose school we only know by ESPN's number no longer shows
+"espn:332" as the club.
 
 **UP. Every player page is the right player, or says why it is empty** (step 674; 17 November). Nothing to
 run. I swept the live player pages (four a club in the NFL and the NHL, and a sample of college schools) and fixed

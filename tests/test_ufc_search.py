@@ -282,7 +282,7 @@ def test_a_row_with_no_club_draws_no_team_chip():
     js = _js()
     # The search's name rows since 2026-11-17 (searchRowHTML).
     body = _fn(js, "function searchRowHTML(")
-    assert '${m.team ? teamMarkIn(lg, m.team, 14) : ""}' in body
+    assert '${club ? teamMarkIn(lg, club, 14) : ""}' in body and 'const club = /^espn:/.test(m.team || "") ? "" : m.team || "";' in body
     # "fight(s)" became a real plural on 2026-09-09, and the count is printed
     # with it (plural, not pluralWord: "tracked fights" said no number).
     assert 'tracked ${plural(m.games, "fight")}' in body

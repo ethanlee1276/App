@@ -14191,15 +14191,19 @@ function searchListHTML(rows) {
 function searchRowHTML(m) {
   const lg = m.sport || state.sport;
   const f = m.fighter || {};
+  // A school the feed knows only by ESPN's number ("espn:332") has no name to print.
+  const club = /^espn:/.test(m.team || "") ? "" : m.team || "";
+  // A basketball box score marks a starter (S) or the bench (B), not a position.
+  const role = /^(nba|wnba|cbb)$/.test(lg) ? { S: "Starter", B: "Bench" }[m.position] : "";
   const words = lg === "ufc"
     ? [String(f.division || "").replace(/_/g, " "), m.games != null ? `tracked ${plural(m.games, "fight")}` : ""]
-    : [m.team ? teamNameIn(lg, m.team) : "", m.position || ""];
+    : [club ? teamNameIn(lg, club) : "", role || m.position || ""];
   return `<button type="button" class="psr-row" data-player-page="${escapeAttr(slugify(m.player))}"${
-      m.team ? ` style="--psr-c:${escapeAttr(teamPrimaryIn(lg, m.team))}"` : ""}>
-    ${playerAvatar(m.player, m.team, { size: 44, headshot: m.headshot })}
+      club ? ` style="--psr-c:${escapeAttr(teamPrimaryIn(lg, club))}"` : ""}>
+    ${playerAvatar(m.player, club, { size: 44, headshot: m.headshot })}
     <span class="psr-who"><span class="psr-nm">${escapeHtml(m.player)}${
       lg !== state.sport ? leagueBadge(m.sport) : ""}${injTag(m.sport || state.sport, m.player)}</span>
-      <span class="psr-sub">${m.team ? teamMarkIn(lg, m.team, 14) : ""}<span>${
+      <span class="psr-sub">${club ? teamMarkIn(lg, club, 14) : ""}<span>${
         escapeHtml(words.filter(Boolean).join(" · "))}</span></span></span>
     <span class="psr-go" aria-hidden="true">›</span></button>`;
 }
