@@ -70,6 +70,25 @@ def test_the_strip_under_the_clock_wears_it_and_ends_softly():
             "{ background: var(--grad-team-ground), var(--bg); }") in CSS
 
 
+def _settled(page, clip, tries=12):
+    """The strip once it has stopped moving: two shots in a row the same.
+
+    The bar's background is a scroll-driven animation and the team wash a
+    layer of its own; on a gate running three browsers at once a fixed wait
+    caught them a frame behind the jump of the scroll (17 November: one run
+    in many read "a rule of 16 levels at 18px" that the same commit then
+    passed three times out of three alone). Bounded, so a page that keeps
+    moving is still measured."""
+    last = page.screenshot(clip=clip)
+    for _ in range(tries):
+        page.wait_for_timeout(120)
+        now = page.screenshot(clip=clip)
+        if now == last:
+            return now
+        last = now
+    return last
+
+
 def _seam(png: bytes, start: int = 0) -> tuple:
     """The biggest row-to-row change down the page's two outer edges (left
     and right of every button and crest), from `start` device rows down,
@@ -152,7 +171,7 @@ def test_in_a_browser_the_top_of_the_page_has_no_rule():
                     # an emulated viewport can draw a fixed layer a pixel or
                     # two low just after a jump of the scroll (a phone draws
                     # its clock over that row anyway).
-                    found[key]["away"] = _seam(page.screenshot(clip={"x": 0, "y": 0, "width": 390, "height": 120}), start=16)
+                    found[key]["away"] = _seam(_settled(page, {"x": 0, "y": 0, "width": 390, "height": 120}), start=16)
                     ctx.close()
             finally:
                 browser.close()
