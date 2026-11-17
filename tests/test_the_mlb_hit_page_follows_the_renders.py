@@ -282,7 +282,7 @@ def test_the_page_draws_the_renders():
     for part in (">OPS<", "Launch angle", "Exit velocity", "Sweet spot", "% of PA", "OBP"):
         assert part in got["side"], part
     assert [v[0] for v in got["views"]] == ["type", "dir", "pitch"] and got["views"][2][1] == "Pitch"
-    assert "Every pitch he saw, by kind" in got["pitch"] and "Four-seam" in got["pitch"]
+    assert "Every pitch seen, by kind" in got["pitch"] and "Four-seam" in got["pitch"]
     assert "Against right- and left-handers" in got["pitch"]
     assert dict((t, (n, pa)) for t, n, pa in got["seen"]) == {"FF": (3, 3), "CH": (1, 0)}, \
         "four pitches seen in three at-bats, each ended on a four-seamer"
@@ -314,7 +314,7 @@ def test_nothing_the_record_does_not_hold():
     assert "Runs scored, stolen bases and barrels are not shown" not in note
     assert "A barrel is MLB’s own rule on MLB’s own numbers" in note
     assert "shown only where our own count of the season’s finals agrees with it" in note
-    assert "The wall is the drawing’s, not his park’s" in note
+    assert "The wall is the drawing’s, not the home park’s" in note
 
 
 def test_the_styles_are_tokens_and_the_handlers_are_listeners():
@@ -367,7 +367,7 @@ def test_in_a_browser_every_control_of_the_hit_page_works():
             assert "Aaron" in hero and "Judge" in hero and "RF  #99" in page.evaluate(
                 "document.querySelector('.mb-hero-who span').textContent") and "2026 season" in hero
             assert page.evaluate("[...document.querySelectorAll('.cc-tab')].map((t) => t.textContent)") == \
-                ["By game", "Where he hits it", "Batted ball", "Direction", "Pitch"]
+                ["By game", "Where the balls land", "Batted ball", "Direction", "Pitch"]
             # By game: two chips, the at-bats, a tap on one lights its ball and its words.
             assert page.evaluate("document.querySelectorAll('.mb-chip').length") == 2
             assert page.evaluate("document.querySelectorAll('.cc-g-ab .cc-row').length") == 2
@@ -388,10 +388,10 @@ def test_in_a_browser_every_control_of_the_hit_page_works():
             assert page.evaluate("document.querySelectorAll('.cc-stage .cc-carry.off').length") == 1, "the single to right fades"
             assert page.evaluate("document.querySelector('.mb-z.pull').classList.contains('on')")
             page.select_option("select[data-opt='vs']", "L")
-            assert "His 2 plate appearances vs left-handers." in page.evaluate("document.querySelector('.mb-stats').textContent")
+            assert "2 plate appearances vs left-handers." in page.evaluate("document.querySelector('.mb-stats').textContent")
             assert page.evaluate("document.querySelector('select[data-opt=\"vs\"]').value") == "L", "kept across the redraw"
             page.click("[data-view='pitch']")
-            assert "Every pitch he saw, by kind" in page.evaluate("document.querySelector('.cc-dist').textContent")
+            assert "Every pitch seen, by kind" in page.evaluate("document.querySelector('.cc-dist').textContent")
             # The season picker asks for that season.
             page.select_option("[data-season-pick]", "2025")
             page.wait_for_function("() => document.querySelector('.mb-hero').textContent.includes('2025 season')", timeout=3000)

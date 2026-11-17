@@ -101,59 +101,59 @@
      where its rows are read from (for "still being filled"), the season
      tab and the section's line on a pick page. */
   const KIND = {
-    carries: { chip: "Carries", title: "Carry chart", noun: "carries", one: "carry", where: "where he runs",
+    carries: { chip: "Carries", title: "Carry chart", noun: "carries", one: "carry", where: "where the runs go",
                dist: "Carry distribution", all: "All runs" },
-    routes: { chip: "Targets", title: "Route chart", noun: "targets", one: "target", where: "where he’s thrown to",
+    routes: { chip: "Targets", title: "Route chart", noun: "targets", one: "target", where: "where the targets go",
               dist: "Target distribution", all: "All routes" },
-    passes: { chip: "Passes", title: "Passing chart", noun: "throws", one: "throw", where: "where he throws",
+    passes: { chip: "Passes", title: "Passing chart", noun: "throws", one: "throw", where: "where the throws go",
               dist: "Throw distribution", all: "All throws",
-              sec: "every throw he made: how far, which side, complete or not, and the sacks he took" },
+              sec: "every throw: how far, which side, complete or not, and the sacks taken" },
     spray: { chip: "Hits", title: "Hit tracker", noun: "plate appearances", one: "plate appearance",
-             where: "where he hits it", dist: "Hit distribution", all: "All balls",
-             sec: "every ball he put in play: how hard, how high, how far and where it landed" },
-    pitches: { chip: "Pitches", title: "Pitch chart", noun: "pitches", one: "pitch", where: "how he attacks",
+             where: "where the balls land", dist: "Hit distribution", all: "All balls",
+             sec: "every ball put in play: how hard, how high, how far and where it landed" },
+    pitches: { chip: "Pitches", title: "Pitch chart", noun: "pitches", one: "pitch", where: "the plan of attack",
                dist: "Pitch locations", all: "All pitches",
-               sec: "every pitch he threw: where it crossed the plate, what it was and what the batter did with it" },
-    shots: { chip: "Shots", title: "Shot chart", noun: "shots", one: "shot", where: "where he shoots",
+               sec: "every pitch thrown: where it crossed the plate, what it was and what the batter did with it" },
+    shots: { chip: "Shots", title: "Shot chart", noun: "shots", one: "shot", where: "where the shots come from",
              dist: "Shot distribution", all: "All shots",
-             sec: "every shot he took: where from, made or missed, and how" },
-    shotmap: { chip: "Shots", title: "Shot map", noun: "shot attempts", one: "shot attempt", where: "where he shoots from",
+             sec: "every shot taken: where from, made or missed, and how" },
+    shotmap: { chip: "Shots", title: "Shot map", noun: "shot attempts", one: "shot attempt", where: "where the shots come from",
                dist: "Shot distribution", all: "All shots",
-               sec: "every shot he took: where from, on goal, missed or blocked, and the goals" },
-    saves: { chip: "Saves", title: "Save map", noun: "shots faced", one: "shot faced", where: "where he’s beaten",
+               sec: "every shot taken: where from, on goal, missed or blocked, and the goals" },
+    saves: { chip: "Saves", title: "Save map", noun: "shots faced", one: "shot faced", where: "where the goals go in",
              dist: "Shots faced", all: "All shots",
-             sec: "every shot on goal he faced: where from, saved or scored" },
-    role: { chip: "Role", title: "Role chart", noun: "games", one: "number", where: "his role",
+             sec: "every shot on goal faced: where from, saved or scored" },
+    role: { chip: "Role", title: "Role chart", noun: "games", one: "number", where: "role this season",
             dist: "Usage, game by game",
-            sec: "how much he’s used, game by game, beside his season" },
-    kicks: { chip: "Kicks", title: "Kicker chart", noun: "kicks", one: "kick", where: "his range",
+            sec: "how much the player is used, game by game, beside the season" },
+    kicks: { chip: "Kicks", title: "Kicker chart", noun: "kicks", one: "kick", where: "the range",
              dist: "Kick distribution", all: "All kicks",
-             sec: "every field goal and extra point he tried: how far, made or missed, and in what weather" },
-    fights: { chip: "Fights", title: "Fight history", noun: "fights", one: "number", where: "his fights", by: "By fight",
+             sec: "every field goal and extra point tried: how far, made or missed, and in what weather" },
+    fights: { chip: "Fights", title: "Fight history", noun: "fights", one: "number", where: "every fight", by: "By fight",
               dist: "The fight",
-              sec: "every fight on his record: who, how it ended, the round and the time, and both men’s numbers",
+              sec: "every fight on the record: who, how it ended, the round and the time, and both fighters’ numbers",
               fill: "every fight is read from ESPN’s fight records a few fighters at a time" },
     /* Tonight's opponent beside his chart (2026-10-14, engine/matchview):
        one view, no games row; its chip names the opponent. */
     matchup: { chip: "Matchup", title: "Matchup", noun: "matchup", one: "zone", where: "tonight",
-               dist: "Where he goes · what they allow",
-               sec: "tonight’s opponent beside his chart: where he goes, and what they allow there" },
+               dist: "Where the player goes · what they allow",
+               sec: "tonight’s opponent beside the player’s chart: where the player goes, and what they allow there" },
   };
   /* Every league's role chart says what it counts (engine/role). */
   Object.entries({
-    nfl: "his snaps, targets and carries game by game, and his share of his team’s",
-    cfb: "his carries, catches and attempts game by game, and his share of his team’s",
-    nba: "his minutes, starts and shots, game by game", wnba: "her minutes and starts, game by game",
-    cbb: "his minutes, starts and shots, game by game",
-    mlb: "his plate appearances and spot in the order, or his pitch count and rest, game by game",
-    nhl: "his ice time and shots, or the shots he faced, game by game",
+    nfl: "snaps, targets and carries game by game, and the share of the team’s",
+    cfb: "carries, catches and attempts game by game, and the share of the team’s",
+    nba: "minutes, starts and shots, game by game", wnba: "minutes and starts, game by game",
+    cbb: "minutes, starts and shots, game by game",
+    mlb: "plate appearances and spot in the order, or pitch count and rest, game by game",
+    nhl: "ice time and shots, or the shots faced, game by game",
   }).forEach(([lg, sec]) => { KIND[`role@${lg}`] = Object.assign({}, KIND.role, { sec }); });
   /* A league whose file says less than the NFL's gets its own names for
      the same chart: college targets have no air yards, no side of the
      field and no route, so they are a target chart, not a route chart. */
   KIND["routes@cfb"] = { chip: "Targets", title: "Target chart", noun: "targets", one: "target",
                          where: "every target", dist: "Target distribution",
-                         sec: "every pass thrown his way that the play file names: caught or not, the yards, the down and where on the field" };
+                         sec: "every pass thrown the player’s way that the play file names: caught or not, the yards, the down and where on the field" };
   const kindOf = (kind, sport) => KIND[`${kind}@${sport}`] || KIND[kind] || KIND.carries;
   //: The charts drawn by registered parts (`plugView`), by kind.
   const DRAW = {};
@@ -697,7 +697,7 @@
     const out = [];
     const L = (x) => [x.n, num1(x.ypc), pct(x.success), x.explosive, x.td];
     if (d.holes && d.by_hole.length) {
-      out.push(tableHTML("Where he runs — by hole", ["Hole", "Carries", "Share", "Yds/carry", "Success", "10+ yds", "TD"],
+      out.push(tableHTML("Where the runs go — by hole", ["Hole", "Carries", "Share", "Yds/carry", "Success", "10+ yds", "TD"],
         d.by_hole.filter((h) => h.n).map((h) => [h.name, h.n, pct(h.share), num1(h.ypc), pct(h.success), h.explosive, h.td])));
     }
     if (d.kinds && d.kinds.designed) {
@@ -719,7 +719,7 @@
     const n = d.ngs || {};
     if (n.ryoe == null) return "";
     const bits = [`${n.ryoe > 0 ? "+" : ""}${Math.round(n.ryoe)} rushing yards over expected (${n.ryoe_per_att > 0 ? "+" : ""}${num1(n.ryoe_per_att)} a carry)`];
-    if (n.eight_box != null) bits.push(`8+ in the box on ${Math.round(n.eight_box)}% of his carries`);
+    if (n.eight_box != null) bits.push(`8+ in the box on ${Math.round(n.eight_box)}% of the carries`);
     if (n.time_to_los != null) bits.push(`${Number(n.time_to_los).toFixed(2)}s to the line`);
     return `<p class="cc-ngs"><b>Next Gen Stats, ${esc(d.season)}:</b> ${esc(bits.join(" · "))}.</p>`;
   }
@@ -743,7 +743,7 @@
     if (season) {
       return `<div class="cc-legend" aria-hidden="true"><span><i class="dt c"></i>Caught</span>
         <span><i class="dt m"></i>Incomplete</span><span><i class="dt i"></i>Intercepted</span>
-        <span><i class="sw cell"></i>Share of his targets</span></div>`;
+        <span><i class="sw cell"></i>Share of the targets</span></div>`;
     }
     return `<div class="cc-legend" aria-hidden="true">
       <span><i class="sw ${charted ? "route" : "throw"}"></i>${charted ? "Route" : "Throw"}</span>
@@ -845,7 +845,7 @@
     const bits = [`${num1(n.separation)} yds of separation when the ball arrived`];
     if (n.cushion != null) bits.push(`${num1(n.cushion)} yds of cushion at the snap`);
     if (n.intended_air != null) bits.push(`${num1(n.intended_air)} intended air yards a target`);
-    if (n.air_share != null) bits.push(`${Math.round(n.air_share)}% of his team’s air yards`);
+    if (n.air_share != null) bits.push(`${Math.round(n.air_share)}% of the team’s air yards`);
     if (n.yac_over != null) bits.push(`${n.yac_over > 0 ? "+" : ""}${num1(n.yac_over)} yards after the catch over expected a catch`);
     return `<p class="cc-ngs"><b>Next Gen Stats, ${esc(d.season)}:</b> ${esc(bits.join(" · "))}.</p>`;
   }
@@ -921,11 +921,11 @@
   }
   const redZone = (d) => (d.by_field || []).filter((z) => z.zone === "rz" || z.zone === "gl").reduce((a, z) => a + z.tgt, 0);
   function cfbTargetLegend() {
-    return `<div class="cc-legend" aria-hidden="true"><span><i class="sw route"></i>Caught, to where he was down</span>
+    return `<div class="cc-legend" aria-hidden="true"><span><i class="sw route"></i>Caught, to where the play ended</span>
       <span><i class="dt m"></i>Incomplete</span><span><i class="mk td"></i>Touchdown</span></div>`;
   }
   function cfbTargetNote(d) {
-    return `<p class="cc-note">The college play file records who was thrown at, whether he caught it, the yards, the down and where the play started — not how far the ball travelled or to which side of the field — so each target is drawn straight upfield from the line: a catch as long as the yards it gained, an incompletion as a ring at the line. A game runs left to right in the order they were thrown; the season, shortest to longest. The file names the intended receiver on 92% of 2026’s incompletions and 78% of 2025’s; a miss it doesn’t name, and every interception (it never names that receiver), isn’t here, so his true target count can run a little higher. Seasons before 2025 name too few misses to draw, and a week the file lost its scoring plays from is left out, as it is from his game log.</p>`;
+    return `<p class="cc-note">The college play file records who was thrown at, whether it was caught, the yards, the down and where the play started — not how far the ball travelled or to which side of the field — so each target is drawn straight upfield from the line: a catch as long as the yards it gained, an incompletion as a ring at the line. A game runs left to right in the order they were thrown; the season, shortest to longest. The file names the intended receiver on 92% of 2026’s incompletions and 78% of 2025’s; a miss it doesn’t name, and every interception (it never names that receiver), isn’t here, so the true target count can run a little higher. Seasons before 2025 name too few misses to draw, and a week the file lost its scoring plays from is left out, as it is from the game log.</p>`;
   }
 
   /* ---------------- the passing chart (2026-10-13) ----------------
@@ -1008,7 +1008,7 @@
     if (season) {
       return `<div class="cc-legend" aria-hidden="true"><span><i class="dt c"></i>Complete</span>
         <span><i class="dt m"></i>Incomplete</span><span><i class="dt i"></i>Intercepted</span>
-        <span><i class="sw cell"></i>Share of his attempts</span></div>`;
+        <span><i class="sw cell"></i>Share of the attempts</span></div>`;
     }
     return `<div class="cc-legend" aria-hidden="true"><span><i class="sw throw"></i>Throw</span>
       <span><i class="sw miss"></i>Incomplete</span><span><i class="sw yac"></i>After the catch</span>
@@ -1065,7 +1065,7 @@
     }
     if (d.by_down && d.by_down.length) out.push(tableHTML("By down", head2("Down"), d.by_down.map((x) => [ord(x.down), ...P(x)])));
     if (d.by_target && d.by_target.length) {
-      out.push(tableHTML("Who he threw to", ["Receiver", "Tgts", "Rec", "Yds", "TD", "INT"],
+      out.push(tableHTML("Who the throws went to", ["Receiver", "Tgts", "Rec", "Yds", "TD", "INT"],
         d.by_target.map((x) => [x.to, x.tgt, x.rec, Math.round(x.yds), x.td, x.int])));
     }
     return out.join("");
@@ -1080,7 +1080,7 @@
     return `<p class="cc-ngs"><b>Next Gen Stats, ${esc(d.season)}:</b> ${esc(bits.join(" · "))}.</p>`;
   }
   function passNote() {
-    return `<p class="cc-note">Each line is a throw, from the pocket to where the ball arrived. How far past the line it went (air yards) and which third of the field it went to are the NFL play-by-play’s record; where inside that third is spread so no two sit on one another. Green is the run after the catch, as long as the record says. Sacks are marked behind him with the yards lost. A spiked ball counts as an incomplete attempt, as in the box score, and isn’t drawn. Play action, screens, out of the pocket, throwaways, drops, blitzes (5+ rushers) and balls that should have been intercepted are FTN’s charting (2022 on). Time to throw and completion over expected are the NFL’s Next Gen Stats, published for passers past the league’s minimum in a game.</p>`;
+    return `<p class="cc-note">Each line is a throw, from the pocket to where the ball arrived. How far past the line it went (air yards) and which third of the field it went to are the NFL play-by-play’s record; where inside that third is spread so no two sit on one another. Green is the run after the catch, as long as the record says. Sacks are marked behind the line with the yards lost. A spiked ball counts as an incomplete attempt, as in the box score, and isn’t drawn. Play action, screens, out of the pocket, throwaways, drops, blitzes (5+ rushers) and balls that should have been intercepted are FTN’s charting (2022 on). Time to throw and completion over expected are the NFL’s Next Gen Stats, published for passers past the league’s minimum in a game.</p>`;
   }
   DRAW.passes = {
     one: "dropback", splitsTitle: "Every split · depth, side, pressure, down, receiver",
@@ -2185,9 +2185,9 @@
   function descOf(kind, sport) {
     const K = kindOf(kind, sport);
     if (K.sec) return K.sec;
-    return kind === "routes" ? "every pass thrown to him: how far, which side, caught or not, and the yards after"
-      : sport === "cfb" ? "every run he made: how far it went, and when in the game"
-        : "every run he made: the hole, how far it went, and where on the field";
+    return kind === "routes" ? "every pass thrown the player’s way: how far, which side, caught or not, and the yards after"
+      : sport === "cfb" ? "every run: how far it went, and when in the game"
+        : "every run: the hole, how far it went, and where on the field";
   }
   //: The section's own heading, kept short of the page's "why?" fold.
   function secHTML(c) {

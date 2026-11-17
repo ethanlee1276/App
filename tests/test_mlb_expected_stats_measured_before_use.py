@@ -337,7 +337,7 @@ def test_the_page_shows_xba_and_xslg_and_what_the_test_found():
     assert "Launch angle" in got["side"]
     assert "xBA ." in got["tip"] and "xBA" not in got["tipK"]
     assert "not yet been measured as a pick signal" in got["none"]
-    assert "read a hitter’s next game better than his own average did" in got["yes"]
+    assert "read a hitter’s next game better than the hitter’s own average did" in got["yes"]
     assert "did not read a hitter’s next game better" in got["no"]
     for k in ("none", "yes", "no"):
         assert "nothing here moves a price" in got[k]

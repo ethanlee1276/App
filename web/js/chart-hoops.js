@@ -187,7 +187,7 @@
     const L = g.line, B = g.box || {}, v = (x) => (x == null ? "—" : Math.round(x));
     const t = [tile("Points", L.pts), tile("FG", `${L.fgm}-${L.fga}`, pct(L.fg_pct)),
                tile("3PT", `${L.fg3m}-${L.fg3a}`, pct(L.fg3_pct)), tile("FT", `${L.ftm}-${L.fta}`, pct(L.ft_pct)),
-               tile("Assisted", `${L.assisted} of ${L.fgm}`, "his makes"), tile("In the paint", L.paint, "shots")];
+               tile("Assisted", `${L.assisted} of ${L.fgm}`, "makes"), tile("In the paint", L.paint, "shots")];
     if (Object.keys(B).length) {
       t.push(tile("Minutes", v(B.min)), tile("Rebounds", v(B.reb)), tile("Assists", v(B.ast)),
              tile("Steals", v(B.stl)), tile("Blocks", v(B.blk)), tile("Turnovers", v(B.tov)));
@@ -198,7 +198,7 @@
     const L = d.season_line;
     const t = [tile("Games", L.games), tile("Points", num1(L.ppg), "a game"), tile("FG", pct(L.fg_pct), `${num1(L.fga_pg)} a game`),
                tile("3PT", pct(L.fg3_pct), `${num1(L.fg3a_pg)} a game`), tile("FT", pct(L.ft_pct), `${L.ftm}-${L.fta}`),
-               tile("Assisted", pct(L.fgm ? L.assisted / L.fgm : null), "of his makes")];
+               tile("Assisted", pct(L.fgm ? L.assisted / L.fgm : null), "of the makes")];
     return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
   }
 
@@ -297,7 +297,7 @@
     splits: (d) => tables(d),
     note: (d) => `<p class="cc-note">Each mark is a shot from the floor, where it was taken, from ${isCollege(d)
       ? "ESPN’s play-by-play of the game (its court coordinates, to the foot, drawn with the basket at the top on the college court: a 12-foot lane and the three-point line at 22 feet 1¾ inches)"
-      : "the NBA’s own play-by-play (its court coordinates, drawn with the basket at the top)"}; the box score names the shooter. A lit green dot went in, a red cross missed. A free throw has no spot on the floor: it is listed, not drawn, and counted in no zone; a heave from past 36 feet sits on the far edge. The zones are the league’s own (the restricted area is the four feet around the basket, the paint the rest of the lane, the corner three the straight part of the line), and the league’s percentage in each is every shot of that season on file; the season view shades a zone green where he shoots two points or more better than the league there and red where two or more worse, deeper the more of his shots it takes. Minutes, rebounds, assists, steals, blocks and turnovers are his box score that night.</p>`,
+      : "the NBA’s own play-by-play (its court coordinates, drawn with the basket at the top)"}; the box score names the shooter. A lit green dot went in, a red cross missed. A free throw has no spot on the floor: it is listed, not drawn, and counted in no zone; a heave from past 36 feet sits on the far edge. The zones are the league’s own (the restricted area is the four feet around the basket, the paint the rest of the lane, the corner three the straight part of the line), and the league’s percentage in each is every shot of that season on file; the season view shades a zone green where the player shoots two points or more better than the league there and red where two or more worse, deeper the more of the player’s shots it takes. Minutes, rebounds, assists, steals, blocks and turnovers are the player’s box score that night.</p>`,
     tip: (s, g, d) => `<b class="${s.m ? "gain" : "loss"}">${esc(result(s))}</b>${s.d != null ? ` · ${esc(feet(s.d))}` : ""}
       <span>${esc([when(s, d), what(s), ...tags(s)].filter(Boolean).join(" · "))}</span>`,
   });

@@ -133,11 +133,11 @@
     const tall = y + (games.some((g) => g.start != null) ? 28 : 16);
     return `<svg class="cc-svg rl-svg" viewBox="0 0 ${W} ${tall}" role="img" aria-label="${esc(label)}">${body}</svg>`;
   }
-  const S_LIT = { game: "This game", season: "His last 3" };
+  const S_LIT = { game: "This game", season: "Last 3" };
   function legend(d) {
     const starts = d.games.some((g) => g.start != null);
     return `<div class="cc-legend" aria-hidden="true"><span><i class="dt rl-k"></i>${S_LIT[st().view] || "This game"}</span>
-      <span><i class="dt rl-m"></i>His average</span>${starts ? `<span><i class="dt rl-s"></i>${esc(startWord(d, true))}</span>` : ""}</div>`;
+      <span><i class="dt rl-m"></i>Season average</span>${starts ? `<span><i class="dt rl-s"></i>${esc(startWord(d, true))}</span>` : ""}</div>`;
   }
   /* ---------------- the numbers ---------------- */
   function gameTiles(g, d) {
@@ -159,8 +159,8 @@
     return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
   }
   function trend(m, a, b) {
-    if (a == null || b == null || Math.abs(a - b) < 1e-9) return "even with his season";
-    return better(m, a, b) ? "up on his season" : "down on his season";
+    if (a == null || b == null || Math.abs(a - b) < 1e-9) return "even with the season";
+    return better(m, a, b) ? "up on the season" : "down on the season";
   }
   /* THAT GAME BESIDE HIS SEASON, as the renders' table: each number, his
      game, his average, his last three and his high, and whether the game
@@ -172,7 +172,7 @@
                 { h: "Avg", c: "cc-c-v", w: "70px", r: 1 },
                 { h: "Last 3", c: "cc-c-v", w: "70px", r: 1 },
                 { h: "High", c: "cc-c-v", w: "70px", r: 1 },
-                { h: "Vs his avg", c: "cc-c-res", p: "86px", w: "120px" }];
+                { h: "Vs season avg", c: "cc-c-res", p: "86px", w: "120px" }];
   function rowList(g, d) {
     const L = d.season_line || {};
     return grid("role", COLS, d.metrics.map((m, i) => {
@@ -180,10 +180,10 @@
       const b = v == null || a == null || Math.abs(v - a) < 1e-9 ? "short" : better(m, v, a) ? "gain" : "loss";
       const avg = fmt(m, a, d.sport, true), l3 = fmt(m, (L.last3 || {})[m.key], d.sport, true);
       const top = fmt(m, m.unit === "spot" ? (L.low || {})[m.key] : (L.high || {})[m.key], d.sport);
-      const pill = v == null ? ["Not on file", "mute"] : b === "gain" ? ["Above his avg", "good"]
-        : b === "loss" ? ["Below his avg", "bad"] : ["Even", "mute"];
+      const pill = v == null ? ["Not on file", "mute"] : b === "gain" ? ["Above season avg", "good"]
+        : b === "loss" ? ["Below season avg", "bad"] : ["Even", "mute"];
       return {
-        i, said: [m.name, fmt(m, v, d.sport), `his season ${avg}`, `last 3 ${l3}`, `${m.unit === "spot" ? "highest" : "high"} ${top}`, pill[0]].join(", "),
+        i, said: [m.name, fmt(m, v, d.sport), `season ${avg}`, `last 3 ${l3}`, `${m.unit === "spot" ? "highest" : "high"} ${top}`, pill[0]].join(", "),
         cells: [two(m.name, `avg ${avg} · last 3 ${l3}`), two(m.name, m.short !== m.name ? m.short : ""),
                 [esc(fmt(m, v, d.sport)), b], esc(avg), esc(l3), esc(top), pills([pill])],
       };
@@ -198,7 +198,7 @@
   }
   function tables(d) {
     const L = d.season_line || {}, f = (m, v) => fmt(m, v, d.sport, true), out = [];
-    out.push(tableHTML("His stretch, beside his season", ["", "Last 3", "Last 5", "Season", "High"],
+    out.push(tableHTML("The stretch, beside the season", ["", "Last 3", "Last 5", "Season", "High"],
       d.metrics.map((m) => [m.name, f(m, L.last3[m.key]), f(m, L.last5[m.key]), f(m, L.avg[m.key]),
         fmt(m, m.unit === "spot" ? L.low[m.key] : L.high[m.key], d.sport)])));
     const two = (rows, cap) => {
@@ -213,18 +213,18 @@
 
   /* ---------------- how it's drawn ---------------- */
   const NOTE = {
-    nfl: "Snap share is his share of the offence’s snaps (nflverse’s snap counts). Target and carry shares are of every target or carry his team’s players were credited with that game. Red-zone looks are his targets and carries inside the 20, from the play-by-play. Air yards are how far past the line the passes thrown his way travelled.",
-    cfb: "Carries, catches and attempts are the box score’s. Shares are of every carry or catch his team’s players were credited with that game; red-zone touches are his carries and catches inside the 20, from the play file (it names no college target).",
-    nba: "Minutes and whether he started are the box score’s; shots from the floor, threes and free throws tried are from the NBA’s play-by-play (the shot chart’s).",
-    wnba: "Minutes and whether she started are the box score’s.",
-    cbb: "Minutes and whether he started are the box score’s.",
-    mlb: "Plate appearances and outs are the box score’s. His spot in the order is where he came up among his side’s first nine batters; pitches seen or thrown, batters faced and whether he started are from the play-by-play (the pitch chart’s). Days of rest count every game he pitched.",
+    nfl: "Snap share is the share of the offence’s snaps (nflverse’s snap counts). Target and carry shares are of every target or carry the team’s players were credited with that game. Red-zone looks are targets and carries inside the 20, from the play-by-play. Air yards are how far past the line the passes thrown the player’s way travelled.",
+    cfb: "Carries, catches and attempts are the box score’s. Shares are of every carry or catch the team’s players were credited with that game; red-zone touches are carries and catches inside the 20, from the play file (it names no college target).",
+    nba: "Minutes and starts are the box score’s; shots from the floor, threes and free throws tried are from the NBA’s play-by-play (the shot chart’s).",
+    wnba: "Minutes and starts are the box score’s.",
+    cbb: "Minutes and starts are the box score’s.",
+    mlb: "Plate appearances and outs are the box score’s. The spot in the order is where the hitter came up among the side’s first nine batters; pitches seen or thrown, batters faced and starts are from the play-by-play (the pitch chart’s). Days of rest count every game pitched.",
     nhl: "Ice time, shots on goal and shots faced are the box score’s; shot attempts (on goal, missed and blocked) and those on the power play are from the play-by-play the expected-goals model reads.",
   };
 
   Q.draw("role", {
-    one: "number", splitsTitle: "Every split · his stretch, home and away, started or not",
-    listTitle: (g, d = now()) => `That game beside his season · ${(d.metrics || []).length} numbers`,
+    one: "number", splitsTitle: "Every split · the stretch, home and away, started or not",
+    listTitle: (g, d = now()) => `That game beside the season · ${(d.metrics || []).length} numbers`,
     items: (g, d = now()) => d.metrics || [],
     count: (L, d = now()) => {
       const m = lead(d), a = (L.avg || {})[m.key];
@@ -239,8 +239,8 @@
       return v == null ? "—" : `${fmt(m, v, d.sport)} ${CHIP[m.key] || ""}`.trim();
     },
     game: (g, d) => strips(d, d.games.length - 1 - d.games.indexOf(g),
-      `His role by game, ${gameName(g, d)} lit: ${d.metrics.map((m) => m.name.toLowerCase()).join(", ")}. Every number is listed below.`),
-    season: (d) => strips(d, -1, `His role over the season, game by game: ${d.metrics.map((m) => m.name.toLowerCase()).join(", ")}.`),
+      `The role by game, ${gameName(g, d)} lit: ${d.metrics.map((m) => m.name.toLowerCase()).join(", ")}. Every number is listed below.`),
+    season: (d) => strips(d, -1, `The role over the season, game by game: ${d.metrics.map((m) => m.name.toLowerCase()).join(", ")}.`),
     legend: (g, d) => legend(d),
     gameSide: (g, d) => gameTiles(g, d),
     seasonSide: (d) => seasonTiles(d),
@@ -251,13 +251,13 @@
               ["Last 5", fmt(m, (L.last5 || {})[k], d.sport, true)],
               [m.unit === "spot" ? "Highest" : "High", fmt(m, m.unit === "spot" ? (L.low || {})[k] : (L.high || {})[k], d.sport)]]; },
     list: (g, d) => rowList(g, d),
-    csv: seasonCsv, file: "game log", fileWhat: "his season, game by game,",
+    csv: seasonCsv, file: "game log", fileWhat: "the season, game by game,",
     splits: (d) => tables(d),
-    note: (d) => `<p class="cc-note">Each bar is one of his games, the oldest on the left; the dashed line is his average over the season’s games on file. A gap is a game with that number not on file, never a zero. ${NOTE[d.sport] || ""} The chart describes his role; it does not move any price on the site.</p>`,
+    note: (d) => `<p class="cc-note">Each bar is one game, the oldest on the left; the dashed line is the average over the season’s games on file. A gap is a game with that number not on file, never a zero. ${NOTE[d.sport] || ""} The chart describes the role; it does not move any price on the site.</p>`,
     tip: (m, g, d) => {
       const L = d.season_line || {}, v = (g.v || {})[m.key];
       return `<b>${esc(m.name)} ${esc(fmt(m, v, d.sport))}</b> · ${esc(gameName(g, d))}
-        <span>${esc([`his season ${fmt(m, (L.avg || {})[m.key], d.sport, true)}`, `last 3 ${fmt(m, (L.last3 || {})[m.key], d.sport, true)}`,
+        <span>${esc([`season ${fmt(m, (L.avg || {})[m.key], d.sport, true)}`, `last 3 ${fmt(m, (L.last3 || {})[m.key], d.sport, true)}`,
           `${m.unit === "spot" ? "highest" : "high"} ${fmt(m, m.unit === "spot" ? (L.low || {})[m.key] : (L.high || {})[m.key], d.sport)}`].join(" · "))}</span>`;
     },
   });

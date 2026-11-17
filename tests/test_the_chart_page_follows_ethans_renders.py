@@ -227,7 +227,7 @@ def test_every_play_as_a_table_that_says_no_more_than_the_file():
     assert ">Right<" in r and ">Depth<" in r and ">8<" in r and ">+11<" in r and ">1st down<" in r
     assert ">Depth<" not in got["college"] and "Goal line" in got["college"] and ">Inc<" in got["college"], \
         "a college target has no depth or side on file"
-    assert got["desc"] == "every run he made: the hole, how far it went, and where on the field"
+    assert got["desc"] == "every run: the hole, how far it went, and where on the field"
 
 
 def test_the_spreadsheet_is_the_games_plays():

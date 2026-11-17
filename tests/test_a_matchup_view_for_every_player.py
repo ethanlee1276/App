@@ -408,7 +408,7 @@ def test_the_page_draws_one_row_a_zone():
     assert got["rows"] == 10 and got["gain"] >= 1
     assert got["top"] == '<div class="cc-title">Tonight: DET · 2026</div>'
     assert "Yards a target allowed to WRs" in got["fig"] and ">+" in got["fig"]
-    assert ">Fit<" in got["side"] and "1st of 6" in got["side"] and "yds/target where he’s thrown to" in got["side"]
+    assert ">Fit<" in got["side"] and "1st of 6" in got["side"] and "yds/target where the targets go" in got["side"]
     assert "Zone by zone" in got["tail"] and "(8)" in got["tail"]
     assert "did not make our picks better on their own" in got["note"] and "nothing here moves a price" in got["note"]
     assert got["kind"] == ["Matchup", "Matchup"]

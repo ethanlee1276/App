@@ -204,7 +204,7 @@ def test_the_page_draws_the_rink():
     assert got["chip"] == "3 SOG, 2 G" and got["count"] == "6 attempts", "the season: both games"
     assert "by Auston Matthews" in got["glist"] and "Save %" in got["gtiles"] and ">GSAx<" in got["gtiles"]
     assert got["gchip"] == "1/2 saved"
-    assert got["gcount"] == "2 shots faced" and "an empty net is not his" in got["note"]
+    assert got["gcount"] == "2 shots faced" and "an empty-net goal is not the goalie’s" in got["note"]
     assert got["kinds"] == [["shotmap", "role"], ["saves", "role"], ["saves", "role"], ["shotmap", "role"], []]
     assert got["titles"] == ["Shot map", "Save map"] and got["label"].startswith("2025-26 vs NYR")
 

@@ -324,12 +324,12 @@ def test_the_page_draws_both():
     assert "110 mph · 28° · 431 ft · fly ball" in got["list"] and ">Four-seam<" in got["list"]
     assert ">2-2<" in got["tiles"] and "Total bases" in got["tiles"] and ">5<" in got["tiles"]
     assert "Exit velocity" in got["side"] and "Sweet spot" in got["side"]
-    assert "Against right- and left-handers" in got["tables"] and "By where he hit it" in got["tables"]
+    assert "Against right- and left-handers" in got["tables"] and "By where it was hit" in got["tables"]
     assert got["chip"] == "2-2, 1 HR" and got["count"] == "3 plate appearances" and "431 ft" in got["tip"]
     assert got["dots"] == 8 and got["cells"] == 13
     assert "Aaron Judge (R)" in got["plist"] and "4 pitches" in got["plist"] and ">BB<" in got["plist"]
     assert "This game’s mix" in got["pside"] and "Four-seam" in got["pside"]
-    assert got["pchip"] == "0 K · 8p" and "His pitch mix" in got["pmix"]
+    assert got["pchip"] == "0 K · 8p" and "Pitch mix" in got["pmix"]
     assert got["kinds"] == [["pitches", "role"], ["pitches", "role"], ["spray", "role"], ["spray", "role"], ["spray", "role"]]
     assert got["titles"] == ["Hit tracker", "Pitch chart"]
 

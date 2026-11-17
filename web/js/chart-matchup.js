@@ -37,11 +37,11 @@
   const nth = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th")}`;
   //: What each family's fit is read in, and where.
   const FIT = {
-    routes: "yds/target where he’s thrown to", passes: "yds/attempt where he throws",
-    carries: "yds/carry where he runs", runs: "yds/carry where he runs", catches: "yds/target where he’s thrown to",
-    shots: "FG% points where he shoots", skater: "shooting % points where he shoots",
-    goalie: "their shooting % points where they shoot", hitter: "slugging where he’ll be pitched",
-    pitcher: "their slugging where he pitches",
+    routes: "yds/target where the targets go", passes: "yds/attempt where the throws go",
+    carries: "yds/carry where the runs go", runs: "yds/carry where the runs go", catches: "yds/target where the targets go",
+    shots: "FG% points where the shots come from", skater: "shooting % points where the shots come from",
+    goalie: "their shooting % points where they shoot", hitter: "slugging where the pitches will come",
+    pitcher: "their slugging where the pitches go",
   };
   const NOUN = { routes: "targets", passes: "throws", carries: "carries", runs: "carries", catches: "targets",
                  shots: "shots", skater: "shots", goalie: "shots on goal", hitter: "at bats", pitcher: "at bats" };
@@ -74,7 +74,7 @@
   }
   function legend() {
     return `<div class="cc-legend" aria-hidden="true"><span><i class="sw mv-sw"></i>Share of the volume</span>
-      <span><i class="sw gain"></i>Better for him than the league</span><span><i class="sw loss"></i>Worse for him</span></div>`;
+      <span><i class="sw gain"></i>Better for the player than the league</span><span><i class="sw loss"></i>Worse for the player</span></div>`;
   }
 
   /* ---------------- the numbers ---------------- */
@@ -84,7 +84,7 @@
     const out = [
       // The site's own tile (its icon too), coloured by which way the fit leans.
       tile("Fit", d.fit == null ? "—" : F.d(d.fit), FIT[d.family] || d.unit).replace('class="cc-tile"', `class="cc-tile mv-fit ${t}"`),
-      tile("Their rank", o.rank ? `${nth(o.rank)} of ${o.of}` : "—", "1st is the best for him"),
+      tile("Their rank", o.rank ? `${nth(o.rank)} of ${o.of}` : "—", "1st is the best for the player"),
       tile(d.family === "hitter" ? "Staff allows" : d.family === "goalie" || d.family === "pitcher" ? "They do" : "They allow",
            o.rate == null ? "—" : F.v(o.rate), o.league == null ? "" : `league ${F.v(o.league)}`),
       tile("Top zone", best ? best.name : "—", best ? `${pct(best.share)} of it` : ""),
@@ -96,18 +96,18 @@
   }
   function table(d) {
     const F = fmt(d), goalie = d.family === "goalie";
-    const head = ["Zone", "Share", goalie ? "Their shots" : "His", "Rate", "League", "Diff"].concat(goalie ? ["His save %"] : []);
+    const head = ["Zone", "Share", goalie ? "Their shots" : "Player", "Rate", "League", "Diff"].concat(goalie ? ["Save %"] : []);
     return tableHTML("Zone by zone", head, d.zones.map((z) => [z.name, pct(z.share), z.n, `${F.v(z.rate)}${z.rn ? ` (${z.rn})` : ""}`,
       F.v(z.league), F.d(z.diff)].concat(goalie ? [z.mine == null ? "—" : `${(z.mine * 100).toFixed(1)}%`] : [])));
   }
   function noteHTML(d, sport) {
     const who = opp(d, sport);
-    const right = d.family === "hitter" ? "his own slugging on the pitch that ended each plate appearance"
+    const right = d.family === "hitter" ? "the hitter’s own slugging on the pitch that ended each plate appearance"
       : d.family === "goalie" || d.family === "pitcher" ? `what ${who} does there` : `what ${who} allows there`;
     const tested = d.tested
       ? "Context only: on the 2022-2025 seasons, where a defence allows yards by depth, side and run gap did not make our picks better on their own, so nothing here moves a price."
       : "Context only, and not measured as a pick signal: nothing here moves a price.";
-    return `<p class="cc-note">Each row is a zone of his own chart. The left bar is the share of the volume that goes there (${esc(d.left.toLowerCase())}); the right is ${esc(right)}, beside the league’s, green where it is better for him and red where it is worse. The fit is that difference weighted by the share. Each zone’s rate is pulled toward the league’s by ${d.k} plays, so a zone seen a handful of times reads near the league; the counts are in the table, in brackets.${d.his_season && d.his_season !== d.season ? ` His shares are from his ${esc(String(d.his_season))} season.` : ""} ${tested}</p>`;
+    return `<p class="cc-note">Each row is a zone of the player’s own chart. The left bar is the share of the volume that goes there (${esc(d.left.toLowerCase())}); the right is ${esc(right)}, beside the league’s, green where it is better for the player and red where it is worse. The fit is that difference weighted by the share. Each zone’s rate is pulled toward the league’s by ${d.k} plays, so a zone seen a handful of times reads near the league; the counts are in the table, in brackets.${d.his_season && d.his_season !== d.season ? ` The player’s shares are from the ${esc(String(d.his_season))} season.` : ""} ${tested}</p>`;
   }
 
   Q.draw("matchup", {

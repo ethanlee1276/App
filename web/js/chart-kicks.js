@@ -170,7 +170,7 @@
       said: [when(k), what(k), RESULT[k.r] || k.r, score(k), weather(k)].filter(Boolean).join(", "),
       cells: [`${i + 1}`, esc(when(k) || "—"),
               two(what(k), [when(k), score(k), weather(k)].filter(Boolean).join(" · ")),
-              two(what(k), score(k) ? `${score(k)} when he lined up` : ""),
+              two(what(k), score(k) ? `${score(k)} at the kick` : ""),
               esc(weather(k) || (k.roof ? "outdoors" : "—")), pills([PILL[k.r] || [k.r, "mute"]]),
               [points(k) ? `+${points(k)}` : "—", points(k) ? "gain" : "miss"]],
     })));
@@ -180,7 +180,7 @@
     .filter(Boolean).join(" ");
   const FILTERS = [["", "Every kick"], ["fg", "Field goals"], ["xp", "Extra points"], ["made", "Made"],
                    ["miss", "Missed or blocked"], ["50", "From 50 or longer"]];
-  const csv = (g) => [["#", "Quarter", "Clock", "Kick", "Distance (yds)", "Result", "Score when he lined up", "Wind (mph)",
+  const csv = (g) => [["#", "Quarter", "Clock", "Kick", "Distance (yds)", "Result", "Score at the kick", "Wind (mph)",
                        "Temperature (F)", "Roof", "Points"]]
     .concat((g.kicks || []).map((k, i) => [i + 1, quarter(k.q), k.clk || "", k.k === "xp" ? "Extra point" : "Field goal",
       k.d == null ? "" : k.d, RESULT[k.r] || k.r, k.sd == null ? "" : k.sd, k.wind == null ? "" : k.wind,
@@ -232,7 +232,7 @@
     barTitle: (v) => TITLE[v],
     bars: (d, v) => kickBars(d, v),
     splits: (d) => tables(d),
-    note: () => `<p class="cc-note">Each ball is a field goal at the distance it was kicked from, the posts at the top; its line runs to the posts, green made, red dashes missed, and a cross is a kick that was blocked. The NFL’s play-by-play records how far, not where across the field or where between the uprights it went, so kicks are set side by side in the order he tried them. Extra points are listed and counted in his points, not drawn. The league’s rate in each distance band is every field goal of that season on file. Wind and temperature are the play-by-play’s readings for the game (none under a roof).</p>`,
+    note: () => `<p class="cc-note">Each ball is a field goal at the distance it was kicked from, the posts at the top; its line runs to the posts, green made, red dashes missed, and a cross is a kick that was blocked. The NFL’s play-by-play records how far, not where across the field or where between the uprights it went, so kicks are set side by side in the order they were tried. Extra points are listed and counted in the points, not drawn. The league’s rate in each distance band is every field goal of that season on file. Wind and temperature are the play-by-play’s readings for the game (none under a roof).</p>`,
     tip: (k) => `<b class="${band(k.r)}">${esc(what(k))} · ${esc(RESULT[k.r] || k.r)}</b>
       <span>${esc([when(k), score(k), weather(k)].filter(Boolean).join(" · "))}</span>`,
   });

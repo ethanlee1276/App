@@ -278,10 +278,10 @@ def test_the_page_draws_every_fight():
     assert ">4-1-1<" in got["side"] and ">Won by finish<" in got["side"] and ">Round 1<" in got["side"]
     assert ">Fight lasted<" in got["tiles"] and ">8:12<" in got["tiles"] and "3 rounds" in got["tiles"]
     assert "41 of 77" in got["list"] and '<span class="uf-o">22 of 60</span>' in got["list"]
-    assert got["listTitle"] == "That fight’s numbers · his, then Dan Hooker’s"
-    assert "How he wins and loses" in got["tables"] and "Three rounds and five" in got["tables"] and "When it ended" in got["tables"]
+    assert got["listTitle"] == "That fight’s numbers · Tsarukyan’s, then Dan Hooker’s", "by surname, never him"
+    assert "Wins and losses by method" in got["tables"] and "Three rounds and five" in got["tables"] and "When it ended" in got["tables"]
     assert got["chip"] == ["W KO R2", "W DEC", "W"]
-    assert got["titles"][0] == "His last 6 fights · 4-1-1" and got["titles"][1].startswith("vs Dan Hooker · Aug 2, 2026")
+    assert got["titles"][0] == "Last 6 fights · 4-1-1" and got["titles"][1].startswith("vs Dan Hooker · Aug 2, 2026")
     assert got["count"] == "6 fights" and "Nothing here moves a price" in got["note"]
     assert "Significant strikes 41 of 77" in got["tip"]
     assert re.search(r'<text class="uf-m" x="408" y="31" text-anchor="end">DEC</text>', got["dec"]), \

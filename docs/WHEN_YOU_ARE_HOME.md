@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**US. The charts read the same for every player** (step 677; 17 November). Nothing to run. The chart sheets a
+player page opens with "Charts" (the carry, route, passing, hit, pitch, shot, save, role, kicker and fight charts,
+and tonight's matchup) called every player "he" and "his": a WNBA player's shot chart said "where he shoots" and
+her role chart said "his last 3". They now read the same for everyone: "Where the shots come from", "Season
+average", "Last 6 fights", "Pitch mix", and a fight's numbers name the fighter by surname ("Tsarukyan's, then Dan
+Hooker's"). Also: a kicker's chart says "the score at the kick", and the boot budget for the first visit went from
+386 to 387 KB for the search's name list (264 bytes over; the note is in tests/test_the_first_paint_has_a_budget.py).
+
 **UR. NFL players whose names end in Jr., Sr. or II have their photos** (step 676; 17 November). Nothing to run.
 Checking Nolan Smith Jr.'s page after the last deploy: his number, size and position are right now, but it had no
 photo, and the roster file showed why. The photos are listed under the league's spelling ("Nolan Smith") and the

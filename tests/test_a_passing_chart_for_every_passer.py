@@ -329,7 +329,7 @@ def test_the_page_draws_every_throw_and_lists_every_dropback():
     assert "Throw time" in got["tiles"] and "2.92s" in got["tiles"] and ">2/6<" in got["tiles"]
     assert "Throw time" not in got["tilesNo"] and "Sacked" in got["tilesNo"], "never an estimate in its place"
     for cap in ("How far past the line", "Which third of the field", "Kept clean, hit, blitzed, play action",
-                "By down", "Who he threw to"):
+                "By down", "Who the throws went to"):
         assert cap in got["tables"], cap
     assert got["chip"] == "2/6 · 37" and got["count"] == "7 attempts"
     assert "Next Gen Stats, 2026" in got["side"] and "2.94s to throw" in got["side"] and "Deep (20+)" in got["side"]

@@ -208,7 +208,7 @@
     const tiles = [["Games", d.games.length], ["AVG", avg3(L.avg)], ["HR", L.hr], ["RBI", L.rbi], ["OPS", avg3(L.ops)]];
     const n = d.games.length, logged = Number(d.logged) || 0;
     const cover = logged > n
-      ? `<p class="mb-cover">${n} of his ${logged} games this season are charted so far: the rest are read from MLB’s play-by-play a few hundred games a night, newest first.</p>` : "";
+      ? `<p class="mb-cover">${n} of ${logged} games this season are charted so far: the rest are read from MLB’s play-by-play a few hundred games a night, newest first.</p>` : "";
     return `<div class="cc-hero mb-hero"${ink ? ` style="--ta:${ink};--tb:${ink}"` : ""}>${art}
       <div class="mb-hero-in">
         <div class="mb-hero-top">${pick}</div>
@@ -288,8 +288,8 @@
     s += Object.entries(zone).map(([z, marks]) => (marks ? `<g class="cc-carry" data-z="${z}">${marks}</g>` : "")).join("");
     if (g) s += (g.pas || []).map((p, i) => ballMark(p, i)).join("");
     const n = plays(d.games).filter((p) => p.x != null).length;
-    const label = g ? `This game’s balls in play over his season’s ${n}. Every at-bat is listed above.`
-      : `Where he hit it: ${n} balls in play this season.`;
+    const label = g ? `This game’s balls in play over the season’s ${n}. Every at-bat is listed above.`
+      : `Where the balls landed: ${n} in play this season.`;
     return `<svg class="cc-svg mb-svg mb-park-svg" viewBox="36 62 328 320" role="img" aria-label="${esc(label)}">${s}</svg>`;
   }
   //: One of the game's balls: its flight from the plate, lit, numbered as its at-bat is in the table.
@@ -344,7 +344,7 @@
      tiles that filter the drawing (the frame's side filter), each with
      its count, its share and a bar. */
   const sprayZones = {
-    label: "Where he hit it",
+    label: "Where the balls landed",
     list: [["pull", "Pull", "Pulled"], ["center", "Center", "Up the middle"], ["oppo", "Oppo", "Opposite field"]],
     of: (p) => p.dir || "",
     pool: (g) => (g.pas || []).filter((p) => p.x != null),
@@ -374,7 +374,7 @@
     return `<section class="cc-card cc-dist mb-dist${g ? " mb-dist-g" : ""}"${ink ? ` style="--tm:${ink}"` : ""}>
       <header class="cc-card-h"><h3 class="cc-card-t">Hit distribution${note ? INFO : ""}</h3>${Q.h.seg(sprayZones)}</header>
       ${note ? `<div class="cc-pop" hidden>${note}</div>` : ""}
-      ${g ? `<div class="mb-split">${fig}<div class="mb-split-s"><p class="mb-cap">His season’s balls in play, this game’s numbered as its at-bats are.</p>${side}</div></div>`
+      ${g ? `<div class="mb-split">${fig}<div class="mb-split-s"><p class="mb-cap">The season’s balls in play, this game’s numbered as its at-bats are.</p>${side}</div></div>`
         : fig + side}</section>`;
   }
 
@@ -551,8 +551,8 @@
       <div class="cc-tiles cc-tiles-2 mb-big${rs ? " mb-big6" : ""}">${big.join("")}</div>
       <div class="cc-tiles cc-tiles-7">${small.join("")}</div>
       ${k ? "" : mlbOwn(d)}
-      ${k ? `<p class="mb-cap">${esc(one[k] ? `His ${L.pa} plate appearances that ended on ${one[k]}: the pitch he put in play, struck out or walked on.`
-        : `His ${L.pa} plate appearances ${vs[1]}.`)}</p>` : ""}
+      ${k ? `<p class="mb-cap">${esc(one[k] ? `${L.pa} plate appearances that ended on ${one[k]}: the pitch put in play, struck out on or walked on.`
+        : `${L.pa} plate appearances ${vs[1]}.`)}</p>` : ""}
     </section>`;
   }
   /* HOMER IN HOW MANY OF THE 30 PARKS (engine/mlb/fences): each of his
@@ -576,7 +576,7 @@
                    tile("Gone somewhere", f.near_n || 0, "not a homer here")];
     return `<section class="cc-card mb-fences"><header class="cc-card-h"><h3 class="cc-card-t">A homer in how many of the ${P} parks?</h3><span class="cc-pill mute">Estimate</span></header>
       <div class="cc-tiles cc-tiles-2">${tiles.join("")}</div>
-      ${shown.length ? `<h4 class="cc-bh">His home runs</h4><div class="cc-bars">${shown.slice(0, 15).map((x) => row(x, "")).join("")}</div>${shown.length > 15 ? `<p class="mb-cap">And ${shown.length - 15} more out of more parks.</p>` : ""}` : ""}
+      ${shown.length ? `<h4 class="cc-bh">Home runs</h4><div class="cc-bars">${shown.slice(0, 15).map((x) => row(x, "")).join("")}</div>${shown.length > 15 ? `<p class="mb-cap">And ${shown.length - 15} more out of more parks.</p>` : ""}` : ""}
       ${near.length ? `<h4 class="cc-bh">Not a homer, but gone somewhere</h4><div class="cc-bars">${near.map((x) => row(x, x.ev || "")).join("")}</div>` : ""}
       <p class="mb-cap">An estimate from the fences alone: each ball’s distance (MLB’s own feed) against each park’s fence at the angle it was hit, the distances down the lines and to centre with a straight fence between, plus the wall’s height. No air, altitude or wind, and real outfields curve where these do not. Nothing on the board reads it.</p>
     </section>`;
@@ -616,8 +616,8 @@
     if (!d || !d.season_line || d.season_line.xba == null) return "";
     const m = d.x_measured;
     const said = !m ? "It has not yet been measured as a pick signal"
-      : m.hits || m.bases ? `Measured on games it never saw${m.at ? ` (${m.at})` : ""}, it read a hitter’s next game better than his own ${m.hits && m.bases ? "average and slugging" : m.hits ? "average" : "slugging"} did; it is still context`
-      : `Measured on games it never saw${m.at ? ` (${m.at})` : ""}, it did not read a hitter’s next game better than his own average and slugging did`;
+      : m.hits || m.bases ? `Measured on games it never saw${m.at ? ` (${m.at})` : ""}, it read a hitter’s next game better than the hitter’s own ${m.hits && m.bases ? "average and slugging" : m.hits ? "average" : "slugging"} did; it is still context`
+      : `Measured on games it never saw${m.at ? ` (${m.at})` : ""}, it did not read a hitter’s next game better than the hitter’s own average and slugging did`;
     return ` xBA and xSLG are ours: each ball’s chance of a hit and the bases it was worth, from how hard and at what angle it left the bat, over every ball in play we have stored; a strikeout counts nothing, and an at bat with no reading counts what it was. ${said}, so nothing here moves a price.`;
   }
   function sprayTables(d) {
@@ -626,10 +626,10 @@
     const C = (x) => [x.bip || x.n, x.h, x.hr, pct(x.n ? x.h / x.n : null)].concat(xs ? [avg3(x.xba)] : []);
     const H = (first) => [first, "In play", "Hits", "HR", "Hit rate"].concat(xs ? ["xBA"] : []);
     if (d.by_type && d.by_type.length) {
-      out.push(tableHTML("By how he hit it", H("Batted ball"), d.by_type.map((x) => [x.name, ...C(x)])));
+      out.push(tableHTML("By how it was hit", H("Batted ball"), d.by_type.map((x) => [x.name, ...C(x)])));
     }
     if (d.by_dir && d.by_dir.length) {
-      out.push(tableHTML("By where he hit it", H("Direction"), d.by_dir.map((x) => [x.name, ...C(x)])));
+      out.push(tableHTML("By where it was hit", H("Direction"), d.by_dir.map((x) => [x.name, ...C(x)])));
     }
     if (d.by_hand && d.by_hand.length) {
       out.push(tableHTML("Against right- and left-handers", ["Pitcher", "PA", "H", "HR", "BB", "K", "AVG", "OPS"],
@@ -642,8 +642,8 @@
      he swung, and what he did when an at-bat ended on it — with his
      plate appearances against each hand under them. */
   const SPRAY_VIEWS = [["type", "Batted ball"], ["dir", "Direction"], ["pitch", "Pitch"]];
-  const SPRAY_TITLE = { type: "Balls in play by how he hit them", dir: "Balls in play by direction",
-                        pitch: "The pitches he saw" };
+  const SPRAY_TITLE = { type: "Balls in play by how they were hit", dir: "Balls in play by direction",
+                        pitch: "The pitches seen" };
   function pitchesSeen(d) {
     const by = {};
     plays(d.games).forEach((p) => (p.ps || []).forEach((x, j, all) => {
@@ -666,7 +666,7 @@
       const seen = bars(pitchesSeen(d).map(([t, o]) => [pitchName(t), o.seen,
         `${o.sw ? pct(o.wh / o.sw) : "—"} of swings missed · ${o.pa} at-bat${o.pa === 1 ? "" : "s"} ended on it · ${o.ab ? avg3(o.h / o.ab) : "—"} AVG${o.hr ? ` · ${o.hr} HR` : ""}`]));
       const hand = bars((d.by_hand || []).map((x) => [x.name, x.pa, `${x.h} H · ${x.hr} HR · ${x.bb} BB · ${x.k} K · ${avg3(x.avg)} AVG · ${avg3(x.ops)} OPS`]));
-      return (seen ? `<h4 class="cc-bh">Every pitch he saw, by kind</h4>${seen}` : "")
+      return (seen ? `<h4 class="cc-bh">Every pitch seen, by kind</h4>${seen}` : "")
         + (hand ? `<h4 class="cc-bh">Against right- and left-handers</h4>${hand}` : "");
     }
     return bars(((view === "type" ? d.by_type : d.by_dir) || []).map((x) => [x.name, x.bip || x.n,
@@ -707,7 +707,7 @@
     barTitle: (v) => SPRAY_TITLE[v],
     bars: (d, v) => sprayBars(d, v),
     splits: (d) => sprayTables(d),
-    note: (d) => `<p class="cc-note">Each dot is where a ball he put in play landed, from MLB’s Stats API play-by-play (its hit coordinates, about two and a half feet a unit); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. The wall is the drawing’s, not his park’s: 330 feet down the lines, 375 in the gaps and 400 to centre. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate he stood on (within 15° of straightaway centre is up the middle). The pitch beside each at-bat is the one it ended on — the one he put in play, struck out or walked on — and its speed out of the hand; the breakdown is every pitch of it, in order. On base is hits, walks and hit-by-pitches over at-bats, walks, hit-by-pitches and sacrifice flies; OPS is that plus slugging. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn. A barrel is MLB’s own rule on MLB’s own numbers: a ball hit 98 mph or harder at 26 to 30 degrees, the window widening with every mph past that until at 116 mph it runs from 8 to 50; the barrel rate is barrels over balls in play. Runs and stolen bases are his own game log’s, game by game; the season’s are shown only when every game on the chart has them. A club’s record is the one through that game, from MLB’s schedule, and shown only where our own count of the season’s finals agrees with it. MLB’s own expected average, slugging and barrel rate are Baseball Savant’s, as of the day shown. The game opens on MLB.com.${xNote(d)}</p>`,
+    note: (d) => `<p class="cc-note">Each dot is where a ball put in play landed, from MLB’s Stats API play-by-play (its hit coordinates, about two and a half feet a unit); exit velocity, launch angle and distance are the league’s own numbers as that feed carries them. The wall is the drawing’s, not the home park’s: 330 feet down the lines, 375 in the gaps and 400 to centre. Pulled, up the middle and opposite field are read off where the ball landed and which side of the plate the hitter stood on (within 15° of straightaway centre is up the middle). The pitch beside each at-bat is the one it ended on — the one put in play, struck out on or walked on — and its speed out of the hand; the breakdown is every pitch of it, in order. On base is hits, walks and hit-by-pitches over at-bats, walks, hit-by-pitches and sacrifice flies; OPS is that plus slugging. Hard hit is 95 mph or harder; the sweet spot is a launch angle of 8 to 32 degrees. A walk, a hit by pitch or a strikeout has no ball in play: listed, not drawn. A barrel is MLB’s own rule on MLB’s own numbers: a ball hit 98 mph or harder at 26 to 30 degrees, the window widening with every mph past that until at 116 mph it runs from 8 to 50; the barrel rate is barrels over balls in play. Runs and stolen bases are the hitter’s own game log’s, game by game; the season’s are shown only when every game on the chart has them. A club’s record is the one through that game, from MLB’s schedule, and shown only where our own count of the season’s finals agrees with it. MLB’s own expected average, slugging and barrel rate are Baseball Savant’s, as of the day shown. The game opens on MLB.com.${xNote(d)}</p>`,
     // The page's own arithmetic, for its tests.
     _t: { line, result, nth, wallFt, inVs, pitchesSeen, where, sumOf, gameTiles, gameHead, scoreBoard, mlbOwn,
           fencesCard, GAMEDAY },
@@ -777,7 +777,7 @@
       const x = Math.max(4, Math.min(296, zx(p[2]))), y = Math.max(4, Math.min(306, zy(p[3])));
       dots += `<g class="cc-carry" data-i="${i}" data-z="${pitchZones.of(p)}"><circle class="mp cx-mark ${outcome(p[4])}${sel(i)}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5"/></g>`;
     });
-    return zsvg(zoneSVG(z) + dots, `Pitch chart: ${ps.length} pitches. Every batter he faced is listed below.`);
+    return zsvg(zoneSVG(z) + dots, `Pitch chart: ${ps.length} pitches. Every batter faced is listed below.`);
   }
   /* The season: the share of his pitches in each of the zone's nine boxes
      and in the four corners outside it, and his whiffs there. */
@@ -908,7 +908,7 @@
       return [`${day} vs ${v.opp}`, v.n, `${num1(v.avg)} mph average`];
     }));
   }
-  const PITCH_TITLE = { mix: "Pitches by type", zones: "Pitches by where they crossed", velo: "His fastball, start by start" };
+  const PITCH_TITLE = { mix: "Pitches by type", zones: "Pitches by where they crossed", velo: "Fastball, start by start" };
 
   Q.draw("pitches", {
     one: "batter faced", splitsTitle: "Every split · pitch mix",
@@ -918,7 +918,7 @@
     zones: pitchZones,
     game: (g) => pitchGame(g),
     season: (d) => pitchSeason(d),
-    legend: (g) => (g ? pitchLegend() : `<div class="cc-legend" aria-hidden="true"><span><i class="sw cell"></i>Share of his pitches</span></div>`),
+    legend: (g) => (g ? pitchLegend() : `<div class="cc-legend" aria-hidden="true"><span><i class="sw cell"></i>Share of the pitches</span></div>`),
     gameSide: (g) => `${pitchTiles(g.line)}${mixTable(g.mix, "This game’s mix")}`,
     seasonSide: (d) => {
       const L = d.season_line;
@@ -930,10 +930,10 @@
     flags: facedFlags, filters: FACED_FILTERS, csv: pitchCsv,
     views: (d) => [["mix", "Pitch mix", (d.mix || []).length], ["zones", "Zones", (d.zones || []).some((r) => r.n)],
                    ["velo", "Velocity", (d.velo || []).length > 1]].filter((v) => v[2]).map(([k, name]) => [k, name]),
-    barTitle: (v, d) => (v === "velo" ? `His ${pitchName(d.velo_type).toLowerCase()}, start by start` : PITCH_TITLE[v]),
+    barTitle: (v, d) => (v === "velo" ? `${pitchName(d.velo_type)}, start by start` : PITCH_TITLE[v]),
     bars: (d, v) => pitchBars(d, v),
-    splits: (d) => mixTable(d.mix, "His pitch mix"),
-    note: () => `<p class="cc-note">Each dot is a pitch where it crossed the plate, seen from behind the catcher (MLB’s Stats API: feet from the middle of the plate and up from the ground); the box is his average strike zone in those games, split in nine. Called strike and whiff are the umpire’s call and the swing as the feed records them; CSW is called strikes plus whiffs over every pitch, the whiff rate is misses over swings (a foul tip is contact). Fastballs are his four-seamers, sinkers and cutters; breaking balls his sliders, sweepers and curves; offspeed his changeups, splitters and the rest. The season view shades the zone’s nine boxes and the four corners outside it by the share of his pitches there. Speed is the release speed; mph is his average for that pitch.</p>`,
+    splits: (d) => mixTable(d.mix, "Pitch mix"),
+    note: () => `<p class="cc-note">Each dot is a pitch where it crossed the plate, seen from behind the catcher (MLB’s Stats API: feet from the middle of the plate and up from the ground); the box is the average strike zone in those games, split in nine. Called strike and whiff are the umpire’s call and the swing as the feed records them; CSW is called strikes plus whiffs over every pitch, the whiff rate is misses over swings (a foul tip is contact). Fastballs are four-seamers, sinkers and cutters; breaking balls sliders, sweepers and curves; offspeed changeups, splitters and the rest. The season view shades the zone’s nine boxes and the four corners outside it by the share of the pitches there. Speed is the release speed; mph is the average for that pitch.</p>`,
     tip: (x) => `<b>${esc(x.ev)}</b>${x.rbi ? ` · ${x.rbi} RBI` : ""}
       <span>${esc([innLabel(x.inn, x.half), `${x.b || "?"}${x.bs ? ` (${x.bs})` : ""}`, `${x.np} pitch${x.np === 1 ? "" : "es"}`].join(" · "))}</span>`,
   });

@@ -317,15 +317,15 @@ def test_the_page_draws_his_role():
     assert got["last3"] == 5 * 3 - 1 and got["seasonDoors"] == 0 and got["means"] == 5
     assert got["labels"] == 5 * 4 - 1, "four games: every number fits over its bar"
     assert got["chip"] == "91% snaps" and got["count"] == "87% of snaps" and got["items"] == 5
-    assert got["title"] == "That game beside his season · 5 numbers"
+    assert got["title"] == "That game beside the season · 5 numbers"
     assert "avg 87%" in got["side"] and ">Target share<" in got["side"] and "Last 3" in got["sside"]
-    assert "His stretch, beside his season" in got["tables"] and "Home (2)" in got["tables"]
-    assert "Snap share" in got["list"] and "does not move any price" in got["note"] and "his season 87%" in got["tip"]
+    assert "The stretch, beside the season" in got["tables"] and "Home (2)" in got["tables"]
+    assert "Snap share" in got["list"] and "does not move any price" in got["note"] and "season 87%" in got["tip"]
     assert got["mlbChip"] == "4 PA" and ">2nd<" in got["mlbSide"] and "In the lineup or off the bench" in got["mlbTables"]
     assert got["mlbCount"] == "9 plate appearances"
     assert got["kinds"] == [["routes", "carries", "role"], ["passes", "carries", "role"], ["kicks"], ["role"], ["role"],
                             ["shots", "role"], ["role"], ["pitches", "role"], ["saves", "role"], []]
-    assert got["sec"][0].startswith("his minutes") and got["sec"][1].startswith("her minutes") and got["sec"][2] == "Role"
+    assert got["sec"][0].startswith("minutes, starts and shots") and got["sec"][1].startswith("minutes and starts") and got["sec"][2] == "Role"
 
 
 def test_the_module_its_styles_and_the_lead():

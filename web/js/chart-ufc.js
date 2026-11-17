@@ -80,11 +80,11 @@
     });
     return { s, y };
   }
-  function fightSVG(g) {
+  function fightSVG(g, d) {
     let body = fightClock(g);
     const rows = statRows(g, 112);
     if ((g.stats || []).length) {
-      body += `<text class="uf-who" x="${W / 2 - 10}" y="92" text-anchor="end">him</text>
+      body += `<text class="uf-who" x="${W / 2 - 10}" y="92" text-anchor="end">${esc(mine(d))}</text>
         <text class="uf-who" x="${W / 2 + 10}" y="92">${esc(g.opp)}</text>` + rows.s;
     } else {
       body += `<text class="uf-none" x="${W / 2}" y="104" text-anchor="middle">ESPN tracked no numbers for this fight</text>`;
@@ -116,7 +116,7 @@
         <rect class="uf-fill ${c}" x="44" y="${y + 14}" width="${(x(g.secs) - 44).toFixed(1)}" height="9" rx="3"/>
         ${mLabel(g, x(g.secs), y)}`;
     });
-    return `<svg class="cc-svg uf-svg" viewBox="0 0 ${W} ${24 + gs.length * 34}" role="img" aria-label="${esc(`His last ${gs.length} fights, how long each lasted and how it ended.`)}">${body}</svg>`;
+    return `<svg class="cc-svg uf-svg" viewBox="0 0 ${W} ${24 + gs.length * 34}" role="img" aria-label="${esc(`The last ${gs.length} fights, how long each lasted and how it ended.`)}">${body}</svg>`;
   }
   function legend() {
     return `<div class="cc-legend" aria-hidden="true"><span><i class="dt c"></i>Won</span>
@@ -136,7 +136,7 @@
     return `<div class="cc-tiles cc-tiles-6">${[
       tile("Record", record(L), `last ${L.n} fights`),
       tile("Won by finish", `${L.ko_w + L.sub_w} of ${L.w}`, pct(L.finish_w)),
-      tile("Stopped", `${L.ko_l + L.sub_l} of ${L.l}`, "his losses"),
+      tile("Stopped", `${L.ko_l + L.sub_l} of ${L.l}`, "losses"),
       tile("Distance", pct(L.distance), "went to the cards"),
       tile("Average fight", clock(L.avg_secs)), tile("Round 1", L.r1, "finishes, either way")].join("")}</div>`;
   }
@@ -144,17 +144,19 @@
      opponent's, and who was ahead in it (on a wide card; a phone colours
      his number instead). */
   const last = (name) => { const w = String(name || "").trim().split(/\s+/); return w[w.length - 1] || "Opponent"; };
-  function statList(g) {
+  //: The fighter the chart is for, by surname, where the line names the two (a fighter is no "him": women fight too).
+  const mine = (d) => { const p = (d && d.player) || (state() || {}).player; return p ? last(p) : "Fighter"; };
+  function statList(g, d) {
     if (!(g.stats || []).length) return `<p class="cc-note">ESPN tracked no numbers for this fight.</p>`;
     const cols = [{ h: "Stat", c: "cc-c-m", p: "minmax(0,1fr)", w: "minmax(0,1fr)" },
-                  { h: "Him", c: "cc-c-y", p: "76px", w: "110px", r: 1 },
+                  { h: mine(d), c: "cc-c-y", p: "76px", w: "110px", r: 1 },
                   { h: last(g.opp), c: "uf-o", p: "76px", w: "110px", r: 1 },
                   { h: "Ahead", c: "cc-c-res", w: "110px" }];
     return grid("fight", cols, g.stats.map((st, i) => {
       const b = st.me == null || st.opp == null || st.me === st.opp ? "short" : st.me > st.opp ? "gain" : "loss";
-      const pill = b === "gain" ? ["Him", "good"] : b === "loss" ? [last(g.opp), "bad"] : ["Even", "mute"];
+      const pill = b === "gain" ? [mine(d), "good"] : b === "loss" ? [last(g.opp), "bad"] : ["Even", "mute"];
       return {
-        i, said: `${st.name}: his ${of(st.me, st.me_att)}, ${g.opp}’s ${of(st.opp, st.opp_att)}`,
+        i, said: `${st.name}: ${mine(d)}’s ${of(st.me, st.me_att)}, ${g.opp}’s ${of(st.opp, st.opp_att)}`,
         cells: [two(st.name, ""), [esc(of(st.me, st.me_att)), b], esc(of(st.opp, st.opp_att)), pills([pill])],
       };
     }));
@@ -193,7 +195,7 @@
     return hero(ink, art, side(d.player, record(L), false, true), mid, side(g.opp, (g.division || "").toLowerCase(), true, false), "uf-hero");
   }
   function tables(d) {
-    const out = [tableHTML("How he wins and loses", ["", "Won", "Lost"],
+    const out = [tableHTML("Wins and losses by method", ["", "Won", "Lost"],
       (d.by_method || []).map((m) => [m.name, m.w, m.l]))];
     if ((d.by_rounds || []).length) {
       out.push(tableHTML("Three rounds and five", ["Scheduled", "Fights", "Record", "Distance", "Average"],
@@ -204,17 +206,17 @@
   }
 
   Q.draw("fights", {
-    one: "number", splitsTitle: "Every split · how he wins and loses, three rounds and five, when it ended",
-    listTitle: (g) => `That fight’s numbers · his, then ${g.opp}’s`,
+    one: "number", splitsTitle: "Every split · by method, three rounds and five, when it ended",
+    listTitle: (g, d) => `That fight’s numbers · ${mine(d)}’s, then ${g.opp}’s`,
     items: (g) => g.stats || [],
     count: (L) => `${L.n} fights`,
-    seasonTitle: (d) => `His last ${d.games.length} fights · ${record(d.season_line)}`,
+    seasonTitle: (d) => `Last ${d.games.length} fights · ${record(d.season_line)}`,
     gameTitle: (g) => [`vs ${g.opp}`, day(g.date), (g.division || "").toLowerCase()].filter(Boolean).join(" · "),
     chip: (g) => `${g.result} ${g.method === "DEC" ? "DEC" : `${SHORT[g.method] || ""}${g.rnd ? ` R${g.rnd}` : ""}`}`.trim(),
-    game: (g) => fightSVG(g),
+    game: (g, d) => fightSVG(g, d),
     season: (d) => careerSVG(d),
     hero: (g, d) => fightHero(g, d),
-    distTitle: (v) => (v === "game" ? "The fight" : "How his fights end"),
+    distTitle: (v) => (v === "game" ? "The fight" : "How the fights end"),
     legend: () => legend(),
     gameSide: (g) => gameTiles(g),
     seasonSide: (d) => seasonTiles(d),
@@ -222,19 +224,19 @@
     heroSide: (d) => `<span class="cc-hero-name"><small>Record</small><b>${esc(record(d.season_line || {}))}</b></span>`,
     heroTiles: (d) => { const L = d.season_line || {};
       return [["Fights", L.n], ["KO/TKO", L.ko_w], ["Subs", L.sub_w], ["Decisions", L.w - L.ko_w - L.sub_w]]; },
-    list: (g) => statList(g),
-    csv, file: "fights", fileWhat: "his fight history",
-    views: (d) => [["method", "How he wins", (d.by_method || []).some((m) => m.w + m.l)],
+    list: (g, d) => statList(g, d),
+    csv, file: "fights", fileWhat: "the fight history",
+    views: (d) => [["method", "By method", (d.by_method || []).some((m) => m.w + m.l)],
                    ["rounds", "Rounds", (d.by_rounds || []).length], ["finish", "Finishes", (d.by_finish || []).length]]
       .filter((v) => v[2]).map(([k, name]) => [k, name]),
-    barTitle: (v) => ({ method: "How he wins and loses", rounds: "Three rounds and five", finish: "When his fights ended" }[v]),
+    barTitle: (v) => ({ method: "Wins and losses by method", rounds: "Three rounds and five", finish: "When the fights ended" }[v]),
     bars: (d, v) => (v === "method"
       ? bars((d.by_method || []).map((m) => [m.name, m.w + m.l, `${m.w} won · ${m.l} lost`]))
       : v === "rounds"
         ? bars((d.by_rounds || []).map((r) => [`${r.rounds} rounds`, r.n, `${record(r)} · ${pct(r.distance)} went the distance · ${clock(r.avg_secs)} on average`]))
         : bars((d.by_finish || []).map((f) => [f.name, f.n, f.name === "Decision" ? "went to the cards" : "finished in that round, either way"]))),
     splits: (d) => tables(d),
-    note: () => `<p class="cc-note">Every fight on ESPN’s record of his last fights (up to fifteen), newest first: the result, how it ended, the round and the time in it, and how long it lasted on the rounds it was scheduled for. Both men’s numbers are ESPN’s, where it tracked the bout; a regional fight often has none. Nothing here moves a price.</p>`,
+    note: () => `<p class="cc-note">Every fight on ESPN’s record of the fighter’s last fights (up to fifteen), newest first: the result, how it ended, the round and the time in it, and how long it lasted on the rounds it was scheduled for. Both fighters’ numbers are ESPN’s, where it tracked the bout; a regional fight often has none. Nothing here moves a price.</p>`,
     tip: (st, g) => `<b>${esc(st.name)} ${esc(of(st.me, st.me_att))}</b>
       <span>${esc(`${g.opp}: ${of(st.opp, st.opp_att)}`)}</span>`,
   });
