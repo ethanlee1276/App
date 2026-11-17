@@ -142,20 +142,25 @@ def test_the_price_refusals_stay_on_the_edge_board():
 
 
 def test_the_row_the_url_and_the_page_carry_it():
-    assert "if (kind === \"likely\") return openProp(target, { likely: true });" in APP
+    assert "if (kind === \"likely\") return openPick(target, { likely: true });" in APP
     assert 'return ` data-open="likely:${escapeAttr(propId(r))}"`;' in APP
     assert 'data-prop="${escapeAttr(propId(r))}" data-likely="1"' in APP
-    assert APP.count('openProp(card.dataset.prop, { likely: card.dataset.likely === "1", bet: card.dataset.bet })') == 2
+    assert APP.count('openPick(card.dataset.prop, { likely: card.dataset.likely === "1", bet: card.dataset.bet })') == 2
     assert "state.propLikely = !!opts.likely;" in APP
     assert '`#pick/${encodeURIComponent(state.propId)}${state.propLikely ? "/likely" : ""}`' in APP
     assert 'const likely = kind === "pick" && p.length >= 3 && p[p.length - 1] === "likely";' in APP
     body = APP[APP.index("function renderPropPage()"):APP.index("function invNorm(")]
     # A bet opened from the Live tab is drawn the same way, at its own
     # number (betPickFor, 2026-09-25); from any other board, nothing.
-    assert "const lk = state.propLikely ? (lkRow || likelyFor(r)) : betPickFor(r);" in body
-    assert body.index("whyLikelyHTML(v, r, lk)") < body.index("propAnalysis({ ...v, logs: r.logs }")
+    shared = APP[APP.index("function pickTermsFor("):APP.index("function renderPropPage()")]
+    assert "const lk = likely ? (lkRow || likelyFor(r)) : betPickFor(r, bet);" in shared
+    assert body.index("whyLikelyHTML(v, r, lk)") < body.index("${pickChartHTML(t)}")
+    assert "propAnalysis({ ...v, logs: r.logs }" in shared
+    # The pick heading the player's page reads the same, in the same order.
+    tapped = shared[shared.index("function pickOnPlayerHTML("):]
+    assert tapped.index("whyLikelyHTML(v, r, lk)") < tapped.index("${pickChartHTML(t)}")
     assert "${lk ? \"\" : checksHTML(r)}" in body, "the edge board's gates stay on the edge board"
-    assert "!lk && r.edge != null" in body and "${lk ? \"\" : r.grade ?" in body
+    assert "!lk && r.edge != null" in shared and "${lk ? \"\" : r.grade ?" in body
 
 
 def test_the_chart_shows_the_chance_not_the_edge_boards_ev():

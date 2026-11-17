@@ -117,8 +117,9 @@ def test_the_most_likely_rows_and_cards_carry_it_and_nothing_else_does():
     # why it's likely section"). The PILL stays on the likely surfaces only
     # (the two probTierHTML calls above).
     assert _strip(APP).count("probTier(") == 6, "defined once, read by the pill, the head and the why sections"
-    page = APP[APP.index("function renderPropPage()"):APP.index("function invNorm(")]
-    assert "const tier = lk ? probTier(lk.model_prob) : null;" in page
+    # The head reads it through the pick's terms, shared with the pick heading the player's page.
+    terms = _fn("pickTermsFor")
+    assert "tier: lk ? probTier(lk.model_prob) : null" in terms
     why = _fn("whyLikelyHTML")
     assert "const t = probTier(p);" in why
 

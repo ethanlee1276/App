@@ -72,6 +72,11 @@
 .plr-break td { padding-top: 14px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: .08em; text-transform: uppercase; }
 .plr-pick:empty { display: none; }
+/* The pick a tap opened the page on (plrTappedInto): the card is the pick page's own (detail.css). */
+.plr-tapped:empty { display: none; }
+.plr-tapped { margin: 0 0 18px; }
+.plr-tapped > .plr-quiet { padding: 0 16px; }
+.plr-tapped-go { margin: 10px 16px 0; }
 .plr-pick { margin: 0 0 12px; }
 
 /* News: his note first, then the headlines that name him or his club. */

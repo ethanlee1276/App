@@ -256,11 +256,13 @@ def test_an_anytime_scorer_reads_as_one_or_more():
     """St. Brown's pick page read "yes 0 Anytime TD", "ODDS (UNDER)" and a
     0/10 hit rate: the Most Likely scorer row carries side "yes" and no
     line, and the page took that as under a line of 0."""
-    page = APP[APP.index("function renderPropPage("):]
-    page = page[:page.index("\n}\n")]
-    assert 'const scorer = WHY_SCORER.test(String(r.market || "")) && !(Number(v0.line) >= 1);' in page
-    assert 'side: /^(no|under)$/i.test(String(v0.side || "")) ? "UNDER" : "OVER", line: 0.5' in page
-    assert '${over ? "Yes" : "No"}' in page
+    # Read once for the pick page and the pick heading the player's page (pickTermsFor).
+    terms = APP[APP.index("function pickTermsFor("):]
+    terms = terms[:terms.index("\n}\n")]
+    assert 'const scorer = WHY_SCORER.test(String(r.market || "")) && !(Number(v0.line) >= 1);' in terms
+    assert 'side: /^(no|under)$/i.test(String(v0.side || "")) ? "UNDER" : "OVER", line: 0.5' in terms
+    words = APP[APP.index("function pickWordsHTML("):]
+    assert '${String(v.side).toUpperCase() === "OVER" ? "Yes" : "No"}' in words[:words.index("\n}\n")]
 
 
 # ── the build and the page ─────────────────────────────────────────────────

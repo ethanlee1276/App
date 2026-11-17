@@ -93,10 +93,14 @@ def test_the_door_carries_the_bet_and_every_path_passes_it_on():
     assert APP.count('bet: card.dataset.bet }') == 2, "the click and the keyboard"
     # Tonight, every league: the bet and — for a Most Likely card — which
     # board it came from (2026-09-25 review).
-    assert 'openProp(door.dataset.prop, { likely: door.dataset.likely === "1", bet: door.dataset.bet })' in APP
+    assert 'openPick(door.dataset.prop, { likely: door.dataset.likely === "1", bet: door.dataset.bet })' in APP
     assert "state.propBet = JSON.parse(opts.bet)" in _fn("openProp")
+    # A tap opens the player's page (Ethan, 2026-11-17), the bet as placed heading it.
+    assert "bet = o.bet && !o.likely ? JSON.parse(o.bet) : null" in _fn("openPick")
     page = _fn("renderPropPage")
-    assert "const lk = state.propLikely ? (lkRow || likelyFor(r)) : betPickFor(r);" in page
+    assert "pickTermsFor(state.propId, state.propLikely, state.propLikelyId, state.propBet)" in page
+    assert "const lk = likely ? (lkRow || likelyFor(r)) : betPickFor(r, bet);" in _fn("pickTermsFor")
+    assert "function betPickFor(r, b = state.propBet) {" in APP
     # (The "+ Parlay" button this page hid on a bet already placed left with
     # the slip on 2026-10-31, so there is no button left to hide.)
     assert "data-slip=" not in page, "a parlay button is back on the pick page"

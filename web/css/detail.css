@@ -522,6 +522,17 @@
 .pp-book { color: var(--text-mute); font-weight: 400; }
 .pp-board { margin-top: 3px; font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .06em;
   text-transform: uppercase; color: var(--good); }
+/* The pick a tap opened, heading the player's page (pickOnPlayerHTML,
+   2026-11-17): the pick page's card, its board said above the pick. */
+.pp-tapped { margin: 0 16px;
+  --tone: var(--gold);
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone), var(--grad-card); }
+.pp-tapped-k { font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-mute); }
+.pp-tapped .pick { margin-top: 4px; }
+.pp-tapped .pp-actions { margin-top: 10px; }
+@media (max-width: 560px) { .pp-tapped { margin: 0 14px; } }
 .wl-moves { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
 .wl-moves b.pos { color: var(--good); }
 .wl-moves b.neg { color: var(--bad); }

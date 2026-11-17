@@ -709,6 +709,112 @@ function whyGameHTML(b, likely) {
   return whySectionHTML(items, p, likely ? "likely" : b.recommended === false ? "pass" : "edge");
 }
 
+/* THE PICK A DOOR NAMES, resolved once for the pick page and for the
+   player's page it now opens (pickOnPlayerHTML): the row, the board's
+   reading of it (a Most Likely row, or the bet a Live row was placed at) and
+   the side and line every part of the card reads. Null when the board no
+   longer holds it. */
+function pickTermsFor(id, likely, likelyId, bet) {
+  // A Most Likely pick with no prop on the edge board is drawn from its
+  // own row (likelyTarget) — the row is its own pick.
+  const lkRow = likely && likelyId ? findLikelyProp(likelyId) : null;
+  let r = findProp(id) || (likely ? findLikelyProp(id) : null);
+  // NEVER ANOTHER OF THE PLAYER'S PROPS UNDER THIS PICK: the page draws the
+  // tapped row's own market, or the row itself (Geno Smith, 2026-09-25).
+  if (lkRow && (!r || r.player !== lkRow.player || r.market !== lkRow.market)) {
+    r = likelyTarget(lkRow);
+  }
+  if (!r) return null;
+  /* OPENED FROM MOST LIKELY, the page is that board's pick (2026-09-23,
+     Ethan: "when I click on them it just shows charts, it doesn't show
+     the page we show when you click on edge bets"). The pick page led
+     with the EDGE board's reading of the same prop — "Edge +0.0%", a
+     grade, a 66% that was not the 71% on the row they tapped — and the
+     first explanation sat under the charts, sixty percent of the way
+     down, opening "No credible market edge". Now: the row's own side,
+     line, book, price and chance head the page; "Why it’s likely" comes
+     straight after; the chart and the logs read against that line; and
+     the edge board's gates and price refusals stay on the edge board. */
+  const lk = likely ? (lkRow || likelyFor(r)) : betPickFor(r, bet);
+  const v0 = lk && lk.line != null
+    ? { ...r, side: lk.side || r.side, line: lk.line, odds: lk.odds, book: lk.book }
+    : lk ? { ...r, odds: lk.odds, book: lk.book } : r;
+  /* AN ANYTIME SCORER IS OVER 0.5 (2026-09-25). A Most Likely scorer row
+     carries side "yes" and no line; read literally that was UNDER a line
+     of 0 — "yes 0 Anytime TD", "ODDS (UNDER)", and a 0/10 hit rate on
+     Amon-Ra St. Brown, who scores in half the games played (Ethan's
+     screenshot). The bet is one touchdown or more, and every number here
+     reads it so. */
+  const scorer = WHY_SCORER.test(String(r.market || "")) && !(Number(v0.line) >= 1);
+  const v = scorer
+    ? { ...v0, side: /^(no|under)$/i.test(String(v0.side || "")) ? "UNDER" : "OVER", line: 0.5 }
+    : v0;
+  return { r, lk, v, scorer, tier: lk ? probTier(lk.model_prob) : null };
+}
+//: "Over 199.5 Passing Yds", or "Anytime TD · Yes".
+function pickWordsHTML({ r, v, scorer }) {
+  const what = escapeHtml(r.market_label || r.market || "");
+  if (scorer) return `${what} · ${String(v.side).toUpperCase() === "OVER" ? "Yes" : "No"}`;
+  const line = Number(v.line);
+  return `${escapeHtml(v.side || "")} ${Number.isFinite(line) ? escapeHtml(String(line)) : ""} ${what}`;
+}
+function pickMetricsHTML({ r, lk }) {
+  const proj = r.projection != null
+    ? `<div class="metric"><div class="k">Projection</div><div class="v">${
+        Number(r.projection).toFixed(1)}${r.proj_low != null
+        ? ` <span class="sub">(${Number(r.proj_low).toFixed(0)}–${
+            Number(r.proj_high).toFixed(0)})</span>` : ""}</div></div>` : "";
+  /* EV deliberately absent: the chart's own stat row below carries it, and
+     a number twice on one screen is the duplication Ethan had just finished
+     pointing at on the prop cards. Three metrics also fill the row instead
+     of wrapping one onto a second line by itself. */
+  return `<div class="metrics">
+        ${lk ? likelyMetricsHTML(lk, proj) : proj}
+        ${!lk && r.hit_prob != null ? modelMetric(r, r.hit_prob) : ""}
+        ${!lk && r.edge != null ? `<div class="metric primary"><div class="k">Edge</div>
+          <div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>` : ""}
+      </div>`;
+}
+//: The chart and its hit-rate strip, read against the pick's own line.
+function pickChartHTML({ r, lk, v, tier }) {
+  return lk ? propAnalysis({ ...v, logs: r.logs }, { chance: lk.model_prob, tier: tier && tier.word, min: 1 })
+    : propAnalysis(r, { min: 1 });
+}
+
+/* THE PICK A TAP OPENED, AT THE TOP OF THE PLAYER'S PAGE. Ethan, asked on
+   2026-11-17 whether a pick on the Edge and Most Likely boards should keep
+   opening this page or the player's: "always send too the new player page".
+   So a tap on a player's pick opens the player's page (app.js openPick), and
+   the pick comes with it, in its own board's terms: the side, line and price
+   tapped, the chance, Bet it and Ask, why it's likely and the chart against
+   that line. Drawn with this page's own pieces (pickTermsFor and the three
+   above), so the two never tell a pick differently. The player's markets
+   below it carry the rest (the books, the line's moves, the script, the
+   checks, the sim lab). Null when the board no longer holds the pick. */
+function pickOnPlayerHTML(p) {
+  const t = p && pickTermsFor(p.id, p.likely, p.likelyId, p.bet);
+  if (!t) return null;
+  const { r, lk, v } = t;
+  const board = lk && lk.bet ? lk.book_name : lk ? `Most Likely${t.tier ? ` · ${t.tier.word}` : ""}`
+    : { longshot: "Long shot", pass: "Not an Edge pick at this price" }[whyBoardOf(r)] || "Edge";
+  const label = `${r.player || ""} ${v.side || ""} ${v.line ?? ""} ${r.market_label || ""}`.replace(/\s+/g, " ").trim();
+  return `<article class="card pp-card pp-tapped" aria-label="The pick you tapped">
+      <div class="pp-tapped-k">The pick you tapped · ${escapeHtml(board)}</div>
+      <div class="pick">${pickWordsHTML(t)}${v.book || v.odds != null ? ` <span class="pp-book">· ${
+        escapeHtml([v.book, v.odds != null ? oddsTxt(v.odds) : ""].filter(Boolean).join(" "))}</span>` : ""}</div>
+      ${lk && lk.bet ? `<div class="pp-board">Placed ${escapeHtml(oddsTxt(lk.odds))}${
+        lk.placed_at ? ` · ${escapeHtml(placedStamp(lk.placed_at))}` : ""}</div>` : ""}
+      ${pickWarnHTML(lk || r)}
+      ${lk && lk.locked && lk.lock_note ? `<div class="lk-lock mini">${icon("lock", 12)} Locked in — ${escapeHtml(lk.lock_note)}</div>` : ""}
+      <div class="pp-actions">${lk && lk.bet ? "" : betItHTML(lk || r, "btn primary")}
+        <button class="btn ghost" data-ask-pick="${escapeAttr(propId(r))}" data-ask-label="${escapeAttr(label)}">Ask</button></div>
+      ${pickMetricsHTML(t)}
+      ${whyLikelyHTML(v, r, lk)}
+      ${lk && lk.bet ? "" : shoppedLineNote(v)}
+      ${pickChartHTML(t)}
+    </article>`;
+}
+
 function renderPropPage() {
   const host = document.getElementById("prop-body");
   if (!host) return;
@@ -736,16 +842,8 @@ function renderPropPage() {
       .find((g) => g.kind === "game" && gameBetId(g) === state.propId);
     if (lkRow || b) return renderGameBetPage(lkRow || b);
   }
-  // A Most Likely pick with no prop on the edge board is drawn from its
-  // own row (likelyTarget) — the row is its own pick.
-  const lkRow = state.propLikely && state.propLikelyId ? findLikelyProp(state.propLikelyId) : null;
-  let r = findProp(state.propId) || (state.propLikely ? findLikelyProp(state.propId) : null);
-  // NEVER ANOTHER OF HIS PROPS UNDER THIS PICK: the page draws the tapped
-  // row's own market, or the row itself (Geno Smith, 2026-09-25).
-  if (lkRow && (!r || r.player !== lkRow.player || r.market !== lkRow.market)) {
-    r = likelyTarget(lkRow);
-  }
-  if (!r) {
+  const t = pickTermsFor(state.propId, state.propLikely, state.propLikelyId, state.propBet);
+  if (!t) {
     // A bookmarked or stale link. Say so — a blank page reads as broken.
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("search", 30)}</div>
       <h3>That pick is not on tonight’s board</h3>
@@ -756,40 +854,12 @@ function renderPropPage() {
     if (b0) b0.addEventListener("click", detailBack);
     return;
   }
-  /* OPENED FROM MOST LIKELY, the page is that board's pick (2026-09-23,
-     Ethan: "when I click on them it just shows charts, it doesn't show
-     the page we show when you click on edge bets"). The pick page led
-     with the EDGE board's reading of the same prop — "Edge +0.0%", a
-     grade, a 66% that was not the 71% on the row they tapped — and the
-     first explanation sat under the charts, sixty percent of the way
-     down, opening "No credible market edge". Now: the row's own side,
-     line, book, price and chance head the page; "Why it’s likely" comes
-     straight after; the chart and the logs read against that line; and
-     the edge board's gates and price refusals stay on the edge board. */
-  const lk = state.propLikely ? (lkRow || likelyFor(r)) : betPickFor(r);
-  const v0 = lk && lk.line != null
-    ? { ...r, side: lk.side || r.side, line: lk.line, odds: lk.odds, book: lk.book }
-    : lk ? { ...r, odds: lk.odds, book: lk.book } : r;
-  /* AN ANYTIME SCORER IS OVER 0.5 (2026-09-25). A Most Likely scorer row
-     carries side "yes" and no line; read literally that was UNDER a line
-     of 0 — "yes 0 Anytime TD", "ODDS (UNDER)", and a 0/10 hit rate on
-     Amon-Ra St. Brown, who scores in half his games (Ethan's screenshot).
-     The bet is one touchdown or more, and every number here reads it so. */
-  const scorer = WHY_SCORER.test(String(r.market || "")) && !(Number(v0.line) >= 1);
-  const v = scorer
-    ? { ...v0, side: /^(no|under)$/i.test(String(v0.side || "")) ? "UNDER" : "OVER", line: 0.5 }
-    : v0;
+  const { r, lk, v, tier } = t;
   const over = String(v.side || "OVER").toUpperCase() === "OVER";
   const line = Number(v.line);
   const logs = (r.logs || []).filter((g) => Number.isFinite(Number(g.value)));
   const N = 5;
   const shown = Math.min(N, logs.length);
-  const tier = lk ? probTier(lk.model_prob) : null;
-  const proj = r.projection != null
-    ? `<div class="metric"><div class="k">Projection</div><div class="v">${
-        Number(r.projection).toFixed(1)}${r.proj_low != null
-        ? ` <span class="sub">(${Number(r.proj_low).toFixed(0)}–${
-            Number(r.proj_high).toFixed(0)})</span>` : ""}</div></div>` : "";
   const reasons = (lk ? likelyNotes(r) : (r.reasons || [])).slice(0, 8)
     .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   /* SIX PILL BUTTONS WERE PILED ABOVE THIS CARD, wrapping into two
@@ -818,9 +888,7 @@ function renderPropPage() {
               r.team ? teamLinkHTML(state.sport, r.team) : "",
               r.opponent ? `vs ${teamLinkHTML(state.sport, r.opponent)}` : ""]
               .filter(Boolean).join(" · ")}</div>
-            <div class="pick">${scorer ? `${escapeHtml(r.market_label || r.market || "")} · ${over ? "Yes" : "No"}`
-              : `${escapeHtml(v.side || "")} ${Number.isFinite(line) ? escapeHtml(String(line)) : ""} ${
-              escapeHtml(r.market_label || r.market || "")}`}${lk && v.book
+            <div class="pick">${pickWordsHTML(t)}${lk && v.book
               ? ` <span class="pp-book">· ${escapeHtml(v.book)}</span>` : ""}</div>
             ${lk && lk.bet ? `<div class="pp-board">${escapeHtml(lk.book_name)} · placed ${escapeHtml(oddsTxt(lk.odds))}${
                 lk.placed_at ? ` · ${escapeHtml(placedStamp(lk.placed_at))}` : ""}</div>`
@@ -852,21 +920,10 @@ function renderPropPage() {
       </div>
       <div id="fr-send-slot"></div>
       <div id="pp-explain" class="pp-explain" hidden aria-live="polite"></div>
-      <div class="metrics">
-        ${lk ? likelyMetricsHTML(lk, proj) : proj}
-        ${!lk && r.hit_prob != null ? modelMetric(r, r.hit_prob) : ""}
-        ${!lk && r.edge != null ? `<div class="metric primary"><div class="k">Edge</div>
-          <div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>` : ""}
-        ${/* EV deliberately absent: the chart's own stat row below carries
-              it, and a number twice on one screen is the duplication Ethan
-              had just finished pointing at on the prop cards. Three
-              metrics also fill the row instead of wrapping one onto a
-              second line by itself. */""}
-      </div>
+      ${pickMetricsHTML(t)}
       ${whyLikelyHTML(v, r, lk)}
       ${lk && lk.bet ? "" : shoppedLineNote(v)}
-      ${lk ? propAnalysis({ ...v, logs: r.logs }, { chance: lk.model_prob, tier: tier && tier.word, min: 1 })
-           : propAnalysis(r, { min: 1 })}
+      ${pickChartHTML(t)}
     </article>
 
     ${booksTableHTML(r)}

@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VR. A tapped pick opens the player's page** (step 702; 17 November). Nothing to run. You answered "always
+send too the new player page" for the picks on the Edge and Most Likely boards. A tap on a player's pick, wherever
+it is drawn (Most Likely, the Edge page and the board's cards, long shots, Tonight, the Live tab's bets, a shared
+ticket's leg), now opens that player's page instead of the pick page. The page opens on its Overview, and the pick
+you tapped heads it in its own board's terms: "The pick you tapped · Most Likely" (or Edge, or the bet as you
+placed it), the side, line, book and price, Bet it and Ask, the chance, the case for the pick, "Why it's likely"
+and its chart against that line. It is drawn by the pick page's own code, so the two can never tell a pick
+differently. Under it, "This market's every number" scrolls to the same market's full card further down the
+page (the books, the line's moves, the script, the checks, the sim lab), which opens on that market. Still on
+the pick page: a game bet (moneyline, spread, total), a UFC fight until the fighter page is built, and a pick
+link someone shared or bookmarked. If the board has dropped the pick by the time the page draws, it says so.
+
 **VQ. The game reports keep watch on the injury report and the news** (step 701; 17 November). Nothing to
 run: the watcher starts with the restart this deploy brings. You asked for the game reports to "keep a constant
 watch and update on nfl news and injuries". A report is written once a board sweep, about every half hour, so a

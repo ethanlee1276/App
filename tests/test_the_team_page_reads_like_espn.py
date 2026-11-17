@@ -245,8 +245,9 @@ def test_a_pick_with_one_or_two_games_still_draws_its_chart():
     fn = _fn("propAnalysis", VIS)
     assert "if (vals.length < (opts.min || 3)) return \"\";" in fn, "lists keep three"
     assert "ONLY ${n} GAME${n === 1 ? \"\" : \"S\"} SO FAR vs PROP LINE" in fn
-    prop = _fn("renderPropPage")
-    assert "tier: tier && tier.word, min: 1 })" in prop and "propAnalysis(r, { min: 1 })" in prop
+    assert "${pickChartHTML(t)}" in _fn("renderPropPage")
+    chart = _fn("pickChartHTML")
+    assert "tier: tier && tier.word, min: 1 })" in chart and "propAnalysis(r, { min: 1 })" in chart
 
 
 if __name__ == "__main__":

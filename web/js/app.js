@@ -8369,7 +8369,7 @@ async function renderTonightAll(host) {
         if (door.dataset.open) openFrom(door.dataset.open);
         // A Most Likely card's door names its own row (likelyDoor), so it
         // opens as that board's pick — as the site-wide handler opens it.
-        else if (door.dataset.prop) openProp(door.dataset.prop, { likely: door.dataset.likely === "1", bet: door.dataset.bet });
+        else if (door.dataset.prop) openPick(door.dataset.prop, { likely: door.dataset.likely === "1", bet: door.dataset.bet });
         else if (door.dataset.gid) openGame(door.dataset.gid);
       };
       afterBoardFor(s, () => { switchView("tonight"); again(); });
@@ -9956,8 +9956,8 @@ function openFrom(spec) {
   // chance it was ranked on, the line it names, why it is likely — and
   // not in the edge board's (Ethan, 2026-09-23: "it just shows charts,
   // it doesn't show the page we show when you click on edge bets").
-  if (kind === "likely") return openProp(target, { likely: true });
-  if (kind === "prop") return openProp(target);
+  if (kind === "likely") return openPick(target, { likely: true });
+  if (kind === "prop") return openPick(target);
   if (kind === "player") return openPlayerRoute(target);
 }
 
@@ -12717,7 +12717,7 @@ document.addEventListener("click", (e) => {
   // A FOLD INSIDE A CARD is its own control (the bigger lines, 2026-10-23):
   // opening it reads it and never leaves the board. A fold around cards is not.
   if (card && foldInside(card, e.target)) return;
-  if (card) return openProp(card.dataset.prop, { likely: card.dataset.likely === "1", bet: card.dataset.bet });
+  if (card) return openPick(card.dataset.prop, { likely: card.dataset.likely === "1", bet: card.dataset.bet });
   const who = e.target.closest("[data-peek]");
   if (who) openPeek(who.dataset.peek);
 });
@@ -12742,7 +12742,7 @@ document.addEventListener("keydown", (e) => {
   if (card && foldInside(card, e.target)) return;
   if (card) {
     e.preventDefault();
-    return openProp(card.dataset.prop, { likely: card.dataset.likely === "1", bet: card.dataset.bet });
+    return openPick(card.dataset.prop, { likely: card.dataset.likely === "1", bet: card.dataset.bet });
   }
   const who = e.target.closest("[data-peek]");
   if (who) {
@@ -12831,13 +12831,25 @@ function openProp(id, opts = {}) {
   switchView("prop");
 }
 
+/* A TAPPED PICK OPENS THE PLAYER'S PAGE (Ethan, 2026-11-17: "always send too
+   the new player page"), on its market, the pick heading the Overview in its
+   own board's terms (js/detail.js pickOnPlayerHTML). A game bet, a fight and a
+   pick the board no longer holds open the pick page as before. */
+function openPick(id, o = {}) {
+  const lk = o.likely && findLikelyProp(id), r = (lk && likelyTarget(lk)) || findProp(id) || lk;
+  if (!r || !r.player || !PLR_LG.test(r.sport || state.sport)) return openProp(id, o);
+  if (r.market_label) _profTab[r.player] = r.market_label;
+  let bet = null;
+  try { bet = o.bet && !o.likely ? JSON.parse(o.bet) : null; } catch (_) { bet = null; }
+  openPlayerRoute(slugify(r.player), r.player, { id: pickSlug(r) || id, likely: !!o.likely, likelyId: lk ? propId(lk) : null, bet });
+}
+
 /* The bet a Live or riding row opened, as the pick page draws it: the
    same shape as a Most Likely row (`likelyFor`), so every part of the
    page that reads the pick — the header, the chance, the chart's line,
    "Why it's likely" — reads the bet. Only for the player and stat it was
    opened on. */
-function betPickFor(r) {
-  const b = state.propBet;
+function betPickFor(r, b = state.propBet) {
   if (!b || !r || b.player !== r.player || b.market !== r.market) return null;
   const odds = Number(b.odds);
   return { bet: true, side: b.side, line: b.line, odds: b.odds, book: b.book || "",
@@ -14674,8 +14686,9 @@ function profileHTML(player, opts) {
    matchup where the page names the opponent. Loaded on the first tap; the
    door carries the face this page is showing, so the chart has one even
    where its own lookup finds none. */
+const PLR_LG = /^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/;
 function chartDoor(player, lg, r) {
-  return /^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/.test(lg) ? `<div class="prof-vs prof-charts">${ccDoor(player, lg, "auto", "Charts", r.headshot, r)}<button class="btn gl-open" type="button" data-gl="${escapeAttr(player)}" data-lg="${lg}">Game log</button></div>` : "";
+  return PLR_LG.test(lg) ? `<div class="prof-vs prof-charts">${ccDoor(player, lg, "auto", "Charts", r.headshot, r)}<button class="btn gl-open" type="button" data-gl="${escapeAttr(player)}" data-lg="${lg}">Game log</button></div>` : "";
 }
 /* HIS GAME LOG (js/gamelog.js; Ethan, 2026-11-16: "we should have game logs for
    every player too that you can look up and see for each player"): his season
@@ -26090,7 +26103,7 @@ document.addEventListener("click", async (e) => {
     await load(true);
   }
   const slug = b.dataset.openShare;
-  if (findProp(slug)) { openProp(slug); return; }
+  if (findProp(slug)) { openPick(slug); return; }
   const player = b.dataset.sharePlayer || "";
   const market = b.dataset.shareMarket || "";
   if (GAME_MARKET_WORDS[market] && player.includes("@")) {
@@ -26231,10 +26244,11 @@ function entityRoute(h) {
    entire gap: `renderPlayers` searches the board first and the league
    history second, so a de-slugged name reaches a bench bat nobody priced
    as readily as it reaches a star. */
-function openPlayerRoute(slug, shown) {
+function openPlayerRoute(slug, shown, pick) {
   // Spelled as the list or the door showed it ("Ja'Marr Chase", not "ja marr chase") where one did.
   const name = shown || (_searchListed.get(slugify(slug)) || {}).player || deslug(slug);
   if (!name) return false;
+  state.playerPick = pick ? { ...pick, slug: slugify(slug) } : null;
   // Remembered so the address stays HIS rather than collapsing to
   // #players the moment the view switches — the same flattening the
   // prop page had. Cleared by typing in the search box, which is a

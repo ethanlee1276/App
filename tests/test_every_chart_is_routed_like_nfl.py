@@ -119,6 +119,9 @@ def test_every_pick_page_leaves_a_slot_in_every_league():
 def test_the_player_page_has_one_door_to_his_charts_in_every_league():
     i = APP_JS.index("function chartDoor(")
     door = APP_JS[i:APP_JS.index("\n}\n", i) + 2]
+    # The leagues with a player page: one list, read by this door and the pick door (openPick).
+    k = APP_JS.index("const PLR_LG = ")
+    door = APP_JS[k:APP_JS.index("\n", k)] + "\n" + door
     j = APP_JS.index("const ccDoor = ")
     cc = APP_JS[j:APP_JS.index("\n", j)]
     row = {"market": "pts", "position": "G", "opponent": "BOS", "headshot": "https://img.example/x.png"}

@@ -137,7 +137,8 @@ def test_a_most_likely_pick_with_no_edge_prop_is_drawn_from_its_own_row():
     and its address both resolve that id to the row. (The Parlay button, the
     third, left with the slip on 2026-10-31.)"""
     prop = _fn("renderPropPage")
-    assert "findProp(state.propId) || (state.propLikely ? findLikelyProp(state.propId) : null)" in prop
+    assert "pickTermsFor(state.propId, state.propLikely, state.propLikelyId, state.propBet)" in prop
+    assert "findProp(id) || (likely ? findLikelyProp(id) : null)" in _fn("pickTermsFor")
     op = _fn("openProp")
     assert "const lkRow = opts.likely ? findLikelyProp(id) : null;" in op, \
         "a /pick/<slug>/likely address, so a reload or a shared link lands on it"

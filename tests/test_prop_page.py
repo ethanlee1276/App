@@ -129,8 +129,12 @@ def test_the_page_does_not_print_the_same_number_twice():
     pointing at exactly this duplication on the prop cards themselves."""
     fn = APP[APP.index("function renderPropPage("):]
     fn = fn[:fn.index("\n}\n")]
-    head = fn[:fn.index("propAnalysis(")]
-    assert "EV / unit" not in head, "EV is on the chart's stat row already"
+    head = fn[:fn.index("pickChartHTML(t)")]
+    # The metrics row is shared with the pick heading the player's page (pickOnPlayerHTML).
+    metrics = APP[APP.index("function pickMetricsHTML("):]
+    metrics = metrics[:metrics.index("\n}\n")]
+    assert "pickMetricsHTML(t)" in head
+    assert "EV / unit" not in head and "EV / unit" not in metrics, "EV is on the chart's stat row already"
 
 
 def test_the_form_ladder_is_read_against_the_side_that_was_taken():

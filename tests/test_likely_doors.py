@@ -68,7 +68,8 @@ def test_the_shelf_row_opens_the_same_pick():
     assert js.count('e.target.closest("[data-open]")') == 1
     assert "function openFrom(spec)" in js
     opn = _fn(js, "openFrom")
-    assert "openProp(target)" in opn and "openPlayerRoute(target)" in opn
+    # A pick opens the player's page now (openPick; Ethan, 2026-11-17), a game bet its own page.
+    assert "openPick(target)" in opn and "openPlayerRoute(target)" in opn
 
 
 def test_the_prop_page_carries_the_versus_block():

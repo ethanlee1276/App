@@ -146,7 +146,7 @@ function plrTabsHTML(open) {
 }
 function plrPanelsHTML(open) {
   return PLR_TABS.map(([k]) => `<div class="plr-panel" data-plr-panel="${k}" role="tabpanel"${k === open ? "" : " hidden"}>${
-    k === "overview" ? `<div class="plr-season"></div><div class="plr-prev"></div><div class="plr-splitlet"></div>
+    k === "overview" ? `<div class="plr-tapped"></div><div class="plr-season"></div><div class="plr-prev"></div><div class="plr-splitlet"></div>
       <div class="plr-recent"></div><div class="plr-latest"></div><div class="plr-tonight"></div>`
       : `<p class="plr-wait">Loading…</p>`}</div>`).join("");
 }
@@ -498,6 +498,34 @@ function plrMarkets(page, kept) {
   tonight.replaceChildren(kept);
   if (tonight.firstElementChild) tonight.insertAdjacentHTML("afterbegin", `<h3 class="plr-h">${plrTonightTitle(page)}</h3>`);
 }
+/* THE PICK A TAP OPENED THIS PAGE ON (app.js openPick; Ethan, 2026-11-17: a pick on the Edge and Most
+   Likely boards "always send too the new player page"). It heads the Overview, drawn by the pick page's
+   own code (js/detail.js pickOnPlayerHTML, loaded the first time a pick opens a page), with a way down to
+   the same market's every number. Redrawn with the page only when it changed, so a fold opened inside
+   it stays open; gone with the next door to a player that is not a pick. */
+function plrTappedInto(page) {
+  const slot = page.querySelector(".plr-tapped"), p = state.playerPick;
+  if (!slot) return;
+  page._pick = p;
+  if (!p || p.slug !== slugify(page._plr.player)) { slot._html = ""; slot.replaceChildren(); return; }
+  loadRoom("js/detail.js", "css/detail.css").then((ok) => {
+    if (!ok || !slot.isConnected || page._pick !== p || typeof pickOnPlayerHTML !== "function") return;
+    const card = pickOnPlayerHTML(p);
+    const html = card ? `${card}<button type="button" class="btn ghost plr-tapped-go">This market’s every number</button>`
+      : `<p class="plr-quiet">The pick you tapped is no longer on tonight’s board.</p>`;
+    if (slot._html === html) return;
+    slot._html = html;
+    slot.innerHTML = html;
+    if (typeof fillMeters === "function") fillMeters(slot);
+  });
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest(".plr-tapped-go");
+  const to = b && b.closest(".plr") && b.closest(".plr").querySelector(".plr-tonight");
+  const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (to) to.scrollIntoView({ block: "start", behavior: still ? "instant" : "smooth" });
+});
+
 //: renderPlayers hands over this player's card alone (the search lists names; only the address draws a card).
 function renderPlayerPage(host, player, sport) {
   if (!host || !player || !PLR_SPORTS.includes(sport)) return;
@@ -510,15 +538,19 @@ function renderPlayerPage(host, player, sport) {
     plrMarkets(same, kept);
     host.replaceChildren(same);
     plrFrameOn(sport, same._plr.team);
+    // A pick tapped since this page was last drawn opens it on the Overview, where the pick heads it.
+    if (state.playerPick && same._pick !== state.playerPick) plrShow(same, "overview");
+    plrTappedInto(same);
     return;
   }
-  const open = PLR_TAB[key] || "overview";
+  const open = state.playerPick ? "overview" : PLR_TAB[key] || "overview";
   const cached = PLR_CACHE.get(`${sport}|${player}|${team}|`);
   host.innerHTML = `<section class="plr">${plrHeroHTML(player, sport, team, r0.position || "", r0.headshot,
     cached && cached.bio)}${plrTabsHTML(open)}${plrPanelsHTML(open)}</section>`;
   const page = host.querySelector(".plr");
   page._plr = { key, player, sport, team, face: r0.headshot || "" };
   _plrLive = { key, page };
+  plrTappedInto(page);
   plrMarkets(page, kept);
   plrFrameOn(sport, team);
   if (cached) plrFill(page, cached);

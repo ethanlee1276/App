@@ -80,16 +80,23 @@ def test_the_page_draws_the_tapped_row():
     assert "const lkRow = opts.likely ? findLikelyProp(id) : null;" in op
     assert "state.propLikelyId = lkRow ? propId(lkRow) : null;" in op
     page = _fn("renderPropPage")
-    assert "findLikelyProp(state.propLikelyId)" in page
-    assert "r.market !== lkRow.market" in page, "never another of his props under the pick"
-    assert "const lk = state.propLikely ? (lkRow || likelyFor(r)) : betPickFor(r);" in page
+    # One resolution for the pick page and the pick heading the player's page (pickOnPlayerHTML).
+    assert "pickTermsFor(state.propId, state.propLikely, state.propLikelyId, state.propBet)" in page
+    assert "pickTermsFor(p.id, p.likely, p.likelyId, p.bet)" in _fn("pickOnPlayerHTML")
+    terms = _fn("pickTermsFor")
+    assert "findLikelyProp(likelyId)" in terms
+    assert "r.market !== lkRow.market" in terms, "never another of the player's props under the pick"
+    assert "const lk = likely ? (lkRow || likelyFor(r)) : betPickFor(r, bet);" in terms
+    # The tap that opens the player's page carries the same row: the Most Likely row's own id.
+    tap = _fn("openPick")
+    assert "o.likely && findLikelyProp(id)" in tap and "likelyId: lk ? propId(lk) : null" in tap
 
 
 def test_another_leagues_card_on_tonight_opens_as_its_pick():
     """Tonight, every league: a tap on another league's Most Likely card
     switches the board and then opens it — as that board's pick, now that
     its door names its own row (found in the 2026-09-25 review)."""
-    assert ('else if (door.dataset.prop) openProp(door.dataset.prop, '
+    assert ('else if (door.dataset.prop) openPick(door.dataset.prop, '
             '{ likely: door.dataset.likely === "1", bet: door.dataset.bet });') in APP
 
 
