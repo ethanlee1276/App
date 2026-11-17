@@ -72,6 +72,67 @@ def test_a_leg_with_no_row_voids_once_its_ticket_s_other_legs_graded():
     assert again == {"fixed": [], "reopened": 0}, again
 
 
+def _ml_ticket():
+    """A first-week three-leg ticket (14-16 November) that took a club to win:
+    two props on paper, and the club's moneyline, which no paper row holds."""
+    conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "t.db"))
+    ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
+    b = EG.board()
+    GP.attach(b, "nfl")
+    x = GP.for_game(b, "NYG", "WAS")
+    t = dict(x["threes"][0])
+    props = [l for l in t["legs"] if l["player"] != "Malik Nabers"][:2]
+    ml = {"player": "NYG ML", "team": "NYG", "market": "moneyline", "side": "", "line": 0.0, "odds": -130,
+          "book": "FanDuel", "p": 0.62, "_game_leg": True}
+    t["legs"] = props + [ml]
+    x.update(threes=[t], scorers=[])
+    b["game_parlays"]["games"] = [x]
+    PL.journal_game_parlay_legs(conn, b, "nfl")
+    assert PL.log_game_parlays(conn, b["game_parlays"], "nfl", b["date"]) == 1
+    assert not conn.execute("SELECT 1 FROM bets WHERE market='moneyline'").fetchone(), "no paper row for the club"
+    conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
+    conn.commit()
+    return conn, b
+
+
+def _club_bet(conn, b, status):
+    """The same moneyline in the Most Likely book, as the journal writes one
+    (ledger.game_row_keys: the club at OVER 0.5), graded off the final."""
+    conn.execute("INSERT INTO bets (ts, sport, date, player, market, side, line, odds, stake_units, stake_dollars, "
+                 "status, category, team) VALUES ('2099-11-12T12:00:00', 'nfl', ?, 'NYG', 'moneyline', 'OVER', 0.5, "
+                 "-130, 0.1, 1, ?, 'likely', 'NYG')", (b["date"], status))
+    conn.commit()
+
+
+def test_a_moneyline_leg_is_graded_on_the_game_not_voided():
+    conn, b = _ml_ticket()
+    _club_bet(conn, b, "lost")
+    assert PL.settle(conn)["settled"] == 1
+    p = conn.execute("SELECT status, legs_void, legs_lost FROM parlays").fetchone()
+    assert (p["status"], p["legs_void"], p["legs_lost"]) == ("lost", 0, 1), dict(p)
+    leg = conn.execute("SELECT status FROM parlay_legs WHERE market='moneyline'").fetchone()
+    assert leg["status"] == "lost"
+
+
+def test_a_ticket_graded_on_a_voided_moneyline_is_put_right():
+    """The Ravens' ticket of 16 November: graded while its moneyline had nothing
+    to grade on (void), so it read won on its two props though the club lost.
+    The re-audit reads the club's own bet and grades it again."""
+    conn, b = _ml_ticket()
+    assert PL.settle(conn)["settled"] == 1
+    p = conn.execute("SELECT status, legs_void FROM parlays").fetchone()
+    assert (p["status"], p["legs_void"]) == ("won", 1), dict(p)
+    _club_bet(conn, b, "lost")
+    again = PL.resettle(conn)
+    assert len(again["fixed"]) == 1 and again["fixed"][0]["status"] == "lost", again
+    p = conn.execute("SELECT status, legs_void, legs_lost FROM parlays").fetchone()
+    assert (p["status"], p["legs_void"], p["legs_lost"]) == ("lost", 0, 1), dict(p)
+    # The club's bet still to grade keeps the ticket waiting, never graded around it.
+    conn2, b2 = _ml_ticket()
+    _club_bet(conn2, b2, "open")
+    assert PL.settle(conn2)["waiting"] == 1
+
+
 def test_a_ticket_none_of_whose_legs_has_a_row_waits():
     conn, _b = _journaled()
     conn.execute("DELETE FROM bets")

@@ -4,6 +4,12 @@
     {
       "date": "2026-11-17",
       "kind": "fix",
+      "title": "A parlay that takes a team to win is graded on the game",
+      "body": "Some of the first week’s three-leg parlays took a team to win beside two player props. That leg had nothing of its own to grade from, so it was voided, and a ticket whose team lost could read won on its props (Monday night’s Ravens ticket did). It is now graded on the game’s final score, and every ticket graded the old way is put right on the next nightly check."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "fix",
       "title": "Each game’s parlays are made of its report’s own picks",
       "body": "A game’s three-leg parlays were built from every prop we priced at 60% or better, and more than half their legs were never one of the report’s picks: Monday’s NBA picks hit 41 of 62 while the parlays went 4 of 30, sunk mostly by legs the report never picked. Now each game’s parlays are built only from the picks its report shows, under the same rules, and a game whose picks make fewer than four says why. Parlays that sat “waiting on the box score” for days because a leg had nothing to grade from now settle, that leg voided the way a book voids it."
     },

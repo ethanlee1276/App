@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WI. A parlay that took a team to win is graded on the game** (step 719; 17 November). Nothing to run. Once
+step WH was live, a re-read of every NFL ticket found one graded wrong: a three-leg ticket on Chargers at Ravens
+(Monday night) that took the Ravens to win beside two props read won, though the Ravens lost 23 to 20. The first
+week's tickets (14 to 16 November) could carry a team's moneyline, and a game line is never journaled on paper (it
+grades on the game's own path), so that leg had no row of its own; under step WH's rule it voided beside the graded
+props and the ticket was paid on those two. Now a ticket's moneyline leg reads the same bet in our other books (the
+team to win, graded off the final score) and voids only when none of them holds it; while that bet is still open
+the ticket waits. The nightly re-audit re-grades every ticket graded the old way by itself, so the Ravens' ticket
+turns lost and the parlay count on the record moves with it. Tickets built since step WH are made of the report's
+player picks and carry no game line.
+
 **WH. A game's parlays are made of its report's own picks** (step 718; 17 November). Nothing to run; RUN_NEXT
 00n is an optional check. Your two screenshots of How our reports did (Monday's NBA: picks 4 of 5 and parlays 0 of
 3, picks 6 of 7 and parlays 1 of 6) asked how the picks could hit and the parlays not, when the parlays use those

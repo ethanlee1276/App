@@ -645,14 +645,14 @@ def settle(conn) -> dict:
             continue
         resolved, pending, missing = [], False, []
         for leg in legs:
-            b = _matching_bet(conn, p, leg)
+            b, verdict = _resolve_leg(conn, p, leg)
             if b is None:
                 missing.append(leg)
                 continue
             if b["status"] == "open":
                 pending = True
                 break
-            resolved.append((leg, _own_verdict(leg, b)))
+            resolved.append((leg, verdict))
         if pending or (missing and not _voids_missing(p, resolved)):
             waiting += 1
             continue
@@ -698,14 +698,14 @@ def resettle(conn) -> dict:
             continue
         resolved, back_open, missing = [], False, []
         for leg in legs:
-            b = _matching_bet(conn, p, leg)
+            b, verdict = _resolve_leg(conn, p, leg)
             if b is None:
                 missing.append(leg)
                 continue
             if b["status"] == "open":
                 back_open = True
                 break
-            resolved.append((leg, _own_verdict(leg, b)))
+            resolved.append((leg, verdict))
         # The settle's own rule for a leg with no row (`_no_row_verdict`), so the
         # two never disagree: void beside legs that graded, open on its own.
         back_open = back_open or bool(missing and not _voids_missing(p, resolved))
@@ -797,6 +797,42 @@ def _no_row_verdict(leg) -> dict:
     no new ticket without its legs' rows (`_with_leg_rows`)."""
     return {"status": "void", "actual": None, "closing_line": None, "line": leg["line"],
             "side": leg["side"], "odds": leg["odds"]}
+
+
+def _game_line_bet(conn, p, leg):
+    """A GAME LINE ON A GAME PARLAY (STUCKLEGS1). The first three-leg tickets
+    (14 to 16 November) could take a club to win, and a game leg is never
+    journaled on paper (gameparlays.journal_rows passes it by: it grades on
+    the game's own path). Its verdict is the game's, off the same bet in any
+    book: the journal writes a moneyline as the club at OVER 0.5
+    (ledger.game_row_keys). Graded on nothing, it voided, and a ticket whose
+    club lost could read won (the Ravens' on 16 November). A moneyline only:
+    the only game line a ticket ever carried. The settled row first."""
+    if str(leg["market"] or "").lower() != "moneyline":
+        return None
+    src = p["source"] if "source" in p.keys() else None
+    if src not in NO_ROW_VOID_SOURCES:
+        return None
+    team = (leg["team"] if "team" in leg.keys() else None) or str(leg["player"] or "").replace(" ML", "").strip()
+    if not team:
+        return None
+    return conn.execute("SELECT * FROM bets WHERE sport=? AND date=? AND player=? AND market='moneyline' "
+                        "ORDER BY CASE WHEN status='open' THEN 1 ELSE 0 END, id",
+                        (p["sport"], p["date"], team)).fetchone()
+
+
+def _resolve_leg(conn, p, leg) -> tuple:
+    """(the row a leg grades from, its verdict): its own paper row (`_matching_bet`,
+    graded on its own side and line, `_own_verdict`), else a game line's own bet in
+    any book (`_game_line_bet`, that bet's verdict as it stands); (None, None) with
+    neither (`_no_row_verdict`). A verdict is None while the row is open."""
+    b = _matching_bet(conn, p, leg)
+    if b is not None:
+        return b, (_own_verdict(leg, b) if b["status"] != "open" else None)
+    g = _game_line_bet(conn, p, leg)
+    if g is not None:
+        return g, ({k: g[k] for k in g.keys()} if g["status"] != "open" else None)
+    return None, None
 
 
 #: The tickets whose legs ride on their own paper bucket (engine/gameparlays): only
