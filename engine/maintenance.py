@@ -802,6 +802,10 @@ PRUNABLE_CACHE_PREFIXES = (
     # kind, under its own name so the shot ingest's `nhl_pbp_` never does.
     "nhl_live_score_", "nhl_live_box_", "nhl_live_pbp_",
     "espn_mma_", "espn_nfl_", "espn_injuries_", "espn_cfb_", "meteo_",
+    # Each league's newsroom for the game reports' watch (engine/sources/
+    # espnnews, 2026-11-17): one file a league, overwritten every five
+    # minutes, keyless refetch. The same class as espn_injuries_.
+    "espn_news_",
     # THE TWO BASKETBALL SCOREBOARDS livescore_build ADDED. One file per
     # league, overwritten every poll, so these do not grow in COUNT the
     # way `mlb_pbp_{pk}` does — but `test_cacheclass._classified` passed
