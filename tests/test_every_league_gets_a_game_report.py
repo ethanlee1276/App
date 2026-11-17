@@ -13,7 +13,7 @@ NFL report's shape, from what its board holds:
     the goalies (confirmed or not, save rate, goals saved above
     expected), the injury report and pulled props, and the reads;
   * NBA and WNBA: rest and travel off the schedule spots, who carries
-    each team over his last ten (the build's own logs), where each
+    each team over the last ten (the build's own logs), where each
     defence gives up the most and the fewest, and the injury report;
   * every league: the market, the short version, what changed (a starter
     scratched, a goalie confirmed, the lineups out), no prop pick, the
@@ -76,7 +76,7 @@ def _mlb_board():
              "umpire": {"name": "Pat Hoberg", "k": 1.04, "runs": 0.97},
              "league": {"slg": 0.4, "k_rate": 0.22}}}
     reads = [_read("Zack Wheeler", "PHI", "CHC", "SP", "good", "Good matchup",
-                   pro=["CHC strikes out 25.0% of the time (the league average is 22%)", "Strikes out 29% of the batters he faces"],
+                   pro=["CHC strikes out 25.0% of the time (the league average is 22%)", "Strikes out 29% of the batters faced"],
                    con=["Wind blowing out at 16 mph"]),
              _read("Javier Assad", "CHC", "PHI", "SP", "tough", "Tough matchup",
                    pro=["Expected ERA 4.60"], con=["PHI rarely strikes out (21.0%)", "Expected ERA 4.60"]),
@@ -158,8 +158,8 @@ def test_the_mlb_report_reads_the_pitching_matchup_the_park_and_the_reads():
     for want in ("The Phillies are the moneyline favorites, with a 60% chance to win once the book's cut is "
                  "taken out. They are −1.5 on the run line, and the total is 9.5 runs.",
                  "On the mound, the Phillies start right-hander Zack Wheeler (a 3.05 expected ERA, striking out "
-                 "29% of the batters he faces), and the Cubs start right-hander Javier Assad (a 4.60 expected "
-                 "ERA, striking out 19% of the batters he faces).",
+                 "29% of the batters faced), and the Cubs start right-hander Javier Assad (a 4.60 expected "
+                 "ERA, striking out 19% of the batters faced).",
                  "The wind is blowing out at 16 mph, which adds about 19% to the chance of a home run.",
                  "The Cubs' bullpen is tired: it threw 7.1 relief innings over the last two days.",
                  "Who could have a big day: Kyle Schwarber, the Phillies' designated hitter and a breakout "
@@ -181,7 +181,7 @@ def test_the_mlb_report_reads_the_pitching_matchup_the_park_and_the_reads():
                  "usual strikeouts",
                  "Weather: 82°F, wind 16 mph blowing out",
                  "The wind is blowing out at 16 mph, which adds about 19% to the chance of a home run",
-                 "Plate umpire Pat Hoberg: his games have 4% more strikeouts and 3% fewer runs than average",
+                 "Plate umpire Pat Hoberg: games behind this plate umpire have 4% more strikeouts and 3% fewer runs than average",
                  "On the injured list: Bryce Harper (PHI).",
                  "Lineups come out two to four hours before first pitch"):
         assert want in text, (want, text)
@@ -228,7 +228,7 @@ def test_the_nhl_report_reads_the_tape_the_goalies_and_the_injuries():
                  "Anthony Stolarz for TOR — confirmed",
                  "TOR shoots the second-most, and BOS allows the sixth-most shots — a busy night for BOS's goalie",
                  "Charlie McAvoy (BOS) — out, shoulder",
-                 "Every sportsbook pulled its props on Brad Marchand before puck drop, so we treat him as out",
+                 "Every sportsbook pulled its props on Brad Marchand before puck drop, so we treat them as out",
                  "Starting goalies are confirmed after the morning skate; not yet for BOS"):
         assert want in text, (want, text)
     tab = next(b for s in rep["sections"] if s["key"] == "tape" for b in s["blocks"] if b["type"] == "table")
@@ -250,8 +250,8 @@ def test_the_nba_report_reads_rest_who_carries_each_team_and_the_defences():
                  "chance to win.",
                  "The Heat is on the second night of a back-to-back.",
                  "The Heat is without Tyler Herro.",
-                 "Leading the scoring lately: Bam Adebayo for the Heat (18 points a game over his last 3) and "
-                 "Jayson Tatum for the Celtics (27.5 points a game over his last 4).",
+                 "Leading the scoring lately: Bam Adebayo for the Heat (18 points a game over the last 3) and "
+                 "Jayson Tatum for the Celtics (27.5 points a game over the last 4).",
                  "Blowout watch: with a spread of 10 or more, the starters' minutes are the first thing",
                  "Tip-off: Thursday, Oct. 22, 7:30 PM ET", "Arena: TD Garden",
                  "Heat: on the second night of a back-to-back; traveled 1,760 miles from DEN a day ago; 2 time "
@@ -272,7 +272,7 @@ def test_the_nba_report_reads_rest_who_carries_each_team_and_the_defences():
     assert miami == ["Bam Adebayo"], miami
     assert "Bam Adebayo (MIA) — Starter: 35 minutes" in text, text
     assert players[1]["items"][0]["text"] == ("36.5 minutes, 27.5 points, 8.5 rebounds, 5 assists, 3 threes a game "
-                                              "over his last 4"), players[1]["items"][0]["text"]
+                                              "over the last 4"), players[1]["items"][0]["text"]
     # The WNBA reads the NBA's report.
     board2, meta2 = _nba_board()
     assert L.attach(board2, "wnba", meta=meta2).startswith("Game reports: 1 game(s)")
