@@ -937,6 +937,28 @@ def for_player(sport: str, player: str, db_path=None) -> dict:
 VS_GAMES = 20
 
 
+#: How near one word typed must be to a word of a stored name for the name to be its misspelling: a letter off in
+#: a short name ("Luca" for Luka, 0.75) is, a different first name ("Cooper" for Ace, 0.44) is not.
+MISSPELT_WORD = 0.7
+
+
+def _misspelled(q: str, name: str) -> bool:
+    """Whether ``name`` is ``q`` misspelled: near as a whole (playersearch.FUZZ_WHOLE) and word by word, every
+    word typed near one of its words (MISSPELT_WORD) or the start of one (a short form, three letters or more).
+    One shared word is a guess, not the same person: Cooper Flagg is not Ace Flagg."""
+    import difflib
+    from .playersearch import FUZZ_WHOLE, closeness, norm
+    ql, nl = norm(q), norm(name)
+    if closeness(ql, nl) < FUZZ_WHOLE:
+        return False
+    words = nl.split()
+
+    def near(w):
+        return any(difflib.SequenceMatcher(None, w, c).ratio() >= MISSPELT_WORD
+                   or (min(len(w), len(c)) >= 3 and (c.startswith(w) or w.startswith(c))) for c in words)
+    return all(near(w) for w in ql.split() if len(w) > 1)
+
+
 def resolve_player(conn, sport: str, q: str) -> str:
     """The stored spelling for a typed name, or "".
 
@@ -952,9 +974,12 @@ def resolve_player(conn, sport: str, q: str) -> str:
     whose page, log or history this is. College's page for Cooper Flagg (in
     the NBA now, so on no college roster) drew TJ Cope's, Tarleton's guard,
     because "Cope" is near "Cooper". A name found only that way answers only
-    when the whole of it is as near as the search's own whole-name bar
-    (playersearch.FUZZ_WHOLE): "Nik Scot" is Nick Scott, and Cooper Flagg is
-    nobody college holds.
+    when it is a misspelling of every word typed (`_misspelled`): the whole of
+    it as near as the search's own whole-name bar (playersearch.FUZZ_WHOLE),
+    and each word typed near a word of it (FUZZ_TOKEN) — the whole-name bar
+    alone let Cooper Flagg be Ace Flagg, his twin at Maine, the surname
+    carrying the score. "Nik Scot" is Nick Scott, "Jaylen Brunson" is Jalen
+    Brunson, and Cooper Flagg is nobody college holds.
     """
     q = (q or "").strip()
     if not q:
@@ -970,9 +995,7 @@ def resolve_player(conn, sport: str, q: str) -> str:
     best = min(ranked.values())
     names = sorted(n for n in ranked if ranked[n] == best)
     if best == 3:
-        from .playersearch import FUZZ_WHOLE, closeness, norm
-        ql = norm(q)
-        names = [n for n in names if closeness(ql, norm(n)) >= FUZZ_WHOLE]
+        names = [n for n in names if _misspelled(q, n)]
         if not names:
             return ""
     if len(names) == 1:

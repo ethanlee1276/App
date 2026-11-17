@@ -9396,7 +9396,9 @@ Checking the live player pages league by league, college basketball's page for C
 in no college box score or roster) came back as TJ Cope's, Tarleton's guard, because the name lookup's last resort
 takes a name when any one word is near one word asked for, and "Cope" is near "Cooper". That is a fair guess to
 list under a search, and no reason to say whose page, game log or matchup history it is. The lookup now takes a
-near name only when the whole name is a misspelling ("Nik Scot" still finds Nick Scott). A page for a name the
+near name only when the whole name is a misspelling, word by word ("Nik Scot" still finds Nick Scott, "Luca
+Doncic" Luka Doncic). The first version of this, live for an hour, judged the whole name only, and Cooper Flagg
+then drew Ace Flagg's page, his twin at Maine, the shared surname carrying the score. A page for a name the
 league holds nobody by now says so: "We have no NCAAB player named Cooper Flagg: no box score or roster we keep
 lists them". Before, every menu said "This page could not load", and a page whose request really did fail threw
 an error instead of saying even that.

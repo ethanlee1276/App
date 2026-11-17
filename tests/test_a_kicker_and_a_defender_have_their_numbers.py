@@ -296,6 +296,8 @@ def test_a_name_with_no_games_is_never_a_near_names_page():
                  "team": "CHI", "opponent": "GB", "position": "WR", "home": 1, "market": "receptions", "value": 6.0})
     rows.append({"sport": "nfl", "season": 2026, "period": "010", "game_id": "TEN-010", "player": "TJ Cope",
                  "team": "TEN", "opponent": "HOU", "position": "WR", "home": 1, "market": "receptions", "value": 3.0})
+    rows.append({"sport": "nfl", "season": 2026, "period": "010", "game_id": "HOU-010", "player": "Ace Flagg",
+                 "team": "HOU", "opponent": "TEN", "position": "WR", "home": 0, "market": "receptions", "value": 2.0})
     for who, club, pos, market in (("Kimani Vidal", "LAC", "RB", "carries"), ("Anthony Richardson", "IND", "QB", "pass_att"),
                                    ("Anthony Gould", "IND", "WR", "receptions"), ("Caleb Banks", "MIN", "DEF", "tackles_ast")):
         rows.append({"sport": "nfl", "season": 2026, "period": "010", "game_id": f"{club}-010", "player": who,
@@ -331,6 +333,10 @@ def test_a_name_with_no_games_is_never_a_near_names_page():
         from engine.statlogs import resolve_player
         assert resolve_player(conn, "nfl", "Cooper Flagg") == "" and resolve_player(conn, "nfl", "Nik Scot") == "Nick Scott", \
             "the rule is the resolver's, so a log and a matchup history keep it too"
+        # Live, after the first fix: Cooper Flagg drew Ace Flagg's page, his twin at Maine, the whole-name
+        # score carried by the surname. A misspelling is near word by word.
+        assert PP.stored_name(conn, "nfl", "Cooper Flagg", "", d) == "", "the twin is not the same player"
+        assert resolve_player(conn, "nfl", "Ace Flag") == "Ace Flagg", "and a letter off is still a misspelling"
         assert PP.stored_name(conn, "nfl", "Nick Scott", "", d) == "Nick Scott"
         assert PP.core_name("Nolan Smith Jr.") == PP.core_name("nolan smith") == "nolan smith"
         assert PP.core_name("D.J. Moore") == PP.core_name("DJ Moore") == "dj moore"
