@@ -259,7 +259,7 @@ def test_the_card_names_the_town():
     result = {"games": [{"home": "DET", "away": "CHI", "spread": -3.0, "total": 44.5}], "recommendations": []}
     L.annotate(rows, result, "nfl")
     assert "hometown_under" in rows[0]["scout_flags"]
-    assert any("his hometown (Detroit, MI)" in n for n in rows[0]["scout_notes"]), rows[0]["scout_notes"]
+    assert any("the player's hometown (Detroit, MI)" in n for n in rows[0]["scout_notes"]), rows[0]["scout_notes"]
     rows[0]["side"] = "OVER"
     result["games"][0]["neutral_site"] = True
     L.annotate(rows, result, "nfl")

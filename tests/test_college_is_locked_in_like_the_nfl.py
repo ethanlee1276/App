@@ -128,7 +128,7 @@ def test_a_college_teammate_out_says_what_it_opens_in_catches():
                  usage=usage, injuries=[NS(team="UGA", player="Wide Out", status="OUT", position="WR", role="wr1")])
     reads = {x["player"]: x for x in out["scan_reads"]["UGA@TENN"]["players"]}
     assert "Wide Out (WR) is out — 30% of the catches to go around" in reads["Slot Guy"]["pro"]
-    assert out["games"][0]["scan"]["injuries"][0]["opens"] == "his 30% of UGA's catches go to other players"
+    assert out["games"][0]["scan"]["injuries"][0]["opens"] == "a 30% share of UGA's catches goes to other players"
     assert "Wide Out" not in reads, "a ruled-out player gets no read"
     assert "Gone Guy" not in reads, "nor one every book took down"
 

@@ -115,7 +115,7 @@ def test_the_reads_quote_the_charting_and_the_tracking_as_notes():
     track = {"avg_separation": 2.67, "avg_separation_rank": 44, "n_ranked": 67, "avg_cushion": 4.98,
              "avg_yac_above_expectation": 0.02}
     lines = G.charting_notes("wr", "CHI", smith, chi, track)
-    assert lines[0] == "Charting: 0 drops on 13 catchable balls this season (0%); 10% of his targets were contested"
+    assert lines[0] == "Charting: 0 drops on 13 catchable balls this season (0%); 10% of the targets were contested"
     assert lines[1].startswith("Player tracking: 2.7 yards from the nearest defender when the ball arrives "
                                "(44th of 67 receivers), 5.0 yards of cushion at the snap")
     assert lines[2] == "CHI blitzes on 39% of dropbacks this season"
@@ -123,12 +123,12 @@ def test_the_reads_quote_the_charting_and_the_tracking_as_notes():
                                                     "rush_yards_over_expected_per_att_rank": 3, "n_ranked": 30,
                                                     "percent_attempts_gte_eight_defenders": 21.4})
     assert rb[0] == ("Player tracking: 0.41 more rushing yards a carry than expected (3rd of 30 running backs); "
-                     "he faces 8 or more defenders near the line on 21% of his carries")
+                     "8 or more defenders were near the line on 21% of the carries")
     assert rb[1] == "CHI puts 8 or more defenders near the line on 22% of runs this season and 6 or fewer on 35%"
     qb = G.charting_notes("qb", "CHI", {"attempts": 62, "iw": 1, "iw_rate": 0.016, "catchable_rate": 0.694,
                                         "play_action_rate": 0.191}, chi, None)
-    assert qb[0] == ("Charting: 1 throw that could have been intercepted in 62 attempts (2%); 69% of his throws "
-                     "were catchable, and he used play action on 19% of dropbacks")
+    assert qb[0] == ("Charting: 1 throw that could have been intercepted in 62 attempts (2%); 69% of the throws "
+                     "were catchable, with play action on 19% of dropbacks")
     assert G.charting_notes("wr", "CHI", None, None, None) == [], "nothing charted, nothing said"
     # A figure that rounds to nothing carries no sign: "-0.0 over expected"
     # read as a fault on the first full board (2026-10-19).

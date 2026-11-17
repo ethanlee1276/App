@@ -66,7 +66,7 @@ def test_the_scan_gives_no_read_to_a_ruled_out_player_and_notes_a_questionable_o
     q = G.scan_game("DAL", "BAL", ratings={}, charts={}, defenders_now={}, usage=usage,
                     injuries=[_Inj("Zay Flowers", "BAL", "WR", "QUESTIONABLE")], props=props)
     (me,) = [p for p in q["players"] if p["player"] == "Zay Flowers"]
-    assert me["notes"][0] == "Zay Flowers is listed questionable himself — this read assumes he plays"
+    assert me["notes"][0] == "Zay Flowers is listed questionable — this read assumes Zay Flowers plays"
     assert me["own_status"] == "QUESTIONABLE"
 
 

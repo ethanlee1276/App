@@ -1001,7 +1001,7 @@ def weather_line(group: str, pos: str, weather) -> tuple[int, str]:
              "qb": "a quarterback's passing yards"}[group]
     if m > 1.0:
         if group == "rb" and kind == "rain":
-            return 1, (f"{said}: teams run more in rain and a back keeps his share, about "
+            return 1, (f"{said}: teams run more in rain and a back keeps the same share, about "
                        f"{round((m - 1) * 100):.0f}% more carries (measured, 2016-2025)")
         return 1, f"{said}: about {round((m - 1) * 100):.0f}% more on {words} (measured, 2016-2025)"
     return -1, f"{said}: about {round((1 - m) * 100):.0f}% off {words} (measured, 2016-2025)"
@@ -1070,7 +1070,7 @@ def mate_line(m, kind: str) -> tuple[str, bool]:
     the man out played his position. A shift across positions nobody has
     measured is shown, not counted."""
     if isinstance(m, str):
-        return f"{m} is out — his {kind} are open", True
+        return f"{m} is out — those {kind} are open", True
     who, word = m.get("name") or "", kind
     rip, applied = m.get("ripple") or {}, m.get("applied") or {}
     counted_words = ", ".join(f"{(v - 1) * 100:+.0f}% {_MATE_WORDS.get(k, k)}"
@@ -1085,7 +1085,7 @@ def mate_line(m, kind: str) -> tuple[str, bool]:
                 if share else "")
         text = f"{who} ({m.get('pos') or '?'}) is out{size}"
         if rip:
-            text += "; not enough games without him to measure who takes them"
+            text += "; not enough games without that player to measure who takes them"
         counted = bool(m.get("same_pos")) or bool(counted_words)
     if counted_words:
         text += f" · our projection counts it: {counted_words}"
@@ -1131,7 +1131,7 @@ def charting_notes(group: str, opp: str, charting: dict | None, charting_def: di
         if (c.get("catchable") or 0) >= 8:
             out.append(f"Charting: {c.get('drops', 0)} drop{'s' if c.get('drops', 0) != 1 else ''} on "
                        f"{c['catchable']} catchable balls this season ({_pct(c.get('drops_rate'))}); "
-                       f"{_pct(c.get('contested_rate'))} of his targets were contested")
+                       f"{_pct(c.get('contested_rate'))} of the targets were contested")
         if t.get("avg_separation") is not None and t.get("n_ranked"):
             out.append(f"Player tracking: {t['avg_separation']:.1f} yards from the nearest defender when "
                        f"the ball arrives ({_ord(t.get('avg_separation_rank'))} of {t['n_ranked']} "
@@ -1145,8 +1145,8 @@ def charting_notes(group: str, opp: str, charting: dict | None, charting_def: di
             out.append("Player tracking: " + _than_expected(t['rush_yards_over_expected_per_att'], 2,
                                                             "rushing yards a carry")
                        + f" ({_ord(t.get('rush_yards_over_expected_per_att_rank'))} of "
-                       f"{t['n_ranked']} running backs); he faces 8 or more defenders near the line on "
-                       f"{t['percent_attempts_gte_eight_defenders']:.0f}% of his carries")
+                       f"{t['n_ranked']} running backs); 8 or more defenders were near the line on "
+                       f"{t['percent_attempts_gte_eight_defenders']:.0f}% of the carries")
         if d.get("heavy_box_rate") is not None:
             out.append(f"{opp} puts 8 or more defenders near the line on {_pct(d['heavy_box_rate'])} of "
                        f"runs this season" + (f" and 6 or fewer on {_pct(d['light_box_rate'])}"
@@ -1156,7 +1156,7 @@ def charting_notes(group: str, opp: str, charting: dict | None, charting_def: di
             iw = c.get("iw", 0)
             out.append(f"Charting: {iw} throw{'s' if iw != 1 else ''} that could have been intercepted "
                        f"in {c['attempts']} attempts ({_pct(c.get('iw_rate'))}); "
-                       f"{_pct(c.get('catchable_rate'))} of his throws were catchable, and he used play "
+                       f"{_pct(c.get('catchable_rate'))} of the throws were catchable, with play "
                        f"action on {_pct(c.get('play_action_rate'))} of dropbacks")
         if t.get("completion_percentage_above_expectation") is not None and t.get("n_ranked"):
             cp = round(float(t["completion_percentage_above_expectation"]), 1)
@@ -1269,7 +1269,7 @@ def interception_facts(team: str, opp: str, *, targets: list | None, room: dict 
     rate = c.get("iw_rate")
     if (c.get("attempts") or 0) >= 30 and rate is not None and league_iw:
         sign = 1 if rate >= league_iw + 0.01 else -1 if rate <= league_iw - 0.01 else 0
-        facts.append({"text": f"Interception-worthy throws: {rate:.1%} of his attempts this season "
+        facts.append({"text": f"Interception-worthy throws: {rate:.1%} of the attempts this season "
                               f"(league {league_iw:.1%}) — charted by FTN, shown beside the number until a "
                               f"held-out run says it belongs inside it",
                       "sign": sign, "markets": ["pass_int"], "in_number": False, "kind": "charting"})
@@ -1297,7 +1297,7 @@ def depth_facts(depth: dict | None, opp: str, ratings_def: dict | None, n_teams:
         return []
     weak, strong = _weak(rank, n_teams), _strong(rank, n_teams)
     sign = 1 if weak else -1 if strong else 0
-    text = (f"{share:.0%} of his targets are {DEPTH_WORDS[zone]}; {opp} ranks {_ord(rank)} of "
+    text = (f"{share:.0%} of the targets are {DEPTH_WORDS[zone]}; {opp} ranks {_ord(rank)} of "
             f"{n_teams} against them"
             + (f", allowing {val:.1f} yards a target" if isinstance(val, (int, float)) else ""))
     markets = [m for m in lean if m in ("rec_yds", "receptions", "anytime_td")] or ["rec_yds", "receptions"]
@@ -1321,7 +1321,7 @@ def contact_facts(contact: dict | None, own: dict | None, opp: str) -> list[dict
     text = (f"{opp} allows {c['yac_pc']:.2f} yards after contact a carry ({_ord(rank)}-fewest of {n}) and "
             f"{c['ybc_pc']:.2f} before contact ({_ord(int(c['ybc_rank']))}-fewest)")
     if own and own.get("yac_pc") is not None:
-        text += f"; he averages {own['yac_pc']:.2f} after contact"
+        text += f"; {own['yac_pc']:.2f} after contact a carry"
     if c.get("last_season"):
         text += " — last season’s numbers until it has faced 60 carries"
     return [{"text": text, "sign": sign, "markets": ["rush_yds", "rush_att"], "in_number": False,
@@ -1336,7 +1336,7 @@ def pocket_facts(pocket: dict | None, opp: str, ratings_def: dict | None, n_team
     pk = pocket or {}
     if pk.get("clean_pct") is None:
         return []
-    text = f"Completes {pk['clean_pct']:.0%} of his throws when not hit"
+    text = f"Completes {pk['clean_pct']:.0%} of throws when not hit"
     if pk.get("hit_pct") is not None:
         text += f" and {pk['hit_pct']:.0%} when hit"
     if pk.get("league_clean_pct") is not None and pk.get("league_hit_pct") is not None:
@@ -1466,8 +1466,8 @@ def read_facts(group: str, pos: str, team: str, opp: str, *, usage: dict, allowe
             st = str(c.get("status") or "").upper()
             if st in ("QUESTIONABLE", "Q", "LIMITED") and not c.get("next_man_up"):
                 spot = "slot corner" if c["spot"] == "NB" else f"{c['spot']} corner"
-                facts.append({"text": f"{opp}'s {spot} {c['name']} is questionable — if he sits, the backup covers "
-                                      f"his side; check the inactives 90 minutes before kickoff",
+                facts.append({"text": f"{opp}'s {spot} {c['name']} is questionable — if that player sits, the backup covers "
+                                      f"that side; check the inactives 90 minutes before kickoff",
                               "sign": 0, "markets": ["rec_yds", "receptions"], "in_number": False,
                               "kind": "watch"})
         for m in room.get("missing") or []:
@@ -1583,7 +1583,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                 else f"{ls.get('carry_share', 0):.0%} of the carries" if group == "rb"
                 else f"{ls.get('attempts_pg', 0):g} attempts a game")
         notes.append(f"Usage is {u['blend']:.0%} this season, {1 - u['blend']:.0%} last "
-                     f"season — last season he had {then} over {ls.get('games', 0)} games")
+                     f"season — last season, {then} over {ls.get('games', 0)} games")
 
     if group in ("wr", "te"):
         lean = ["receptions", "rec_yds", "anytime_td"]
@@ -1668,7 +1668,7 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
                       else bool(rr and rr <= round(n_teams * 0.31)))
             if stingy:
                 said(pro, f"{u['targets_pg']:g} targets a game — a strong run defense pushes "
-                          f"the ball to him through the air", RL.ROLE)
+                          f"the ball to the backs through the air", RL.ROLE)
         for m in mates_out or []:
             text, counted = mate_line(m, "carries")
             said(pro, text, RL.TEAMMATES) if counted else notes.append(text)
@@ -1713,8 +1713,8 @@ def player_read(name: str, team: str, opp: str, pos: str, *, usage: dict | None,
     elif wx_sign < 0:
         said(con, wx_text, RL.WEATHER)
     if wx_text and group == "rb" and "rec_yds" in lean and wx_sign > 0:
-        notes.append("His catches come down in rain (a back's receiving yards ×0.79 there, "
-                     "measured 2016-2025); the extra is in his carries")
+        notes.append("A back's catches come down in rain (receiving yards ×0.79 there, "
+                     "measured 2016-2025); the extra is in the carries")
     # ONE VOTE A FAMILY (engine/readlogic.score): the defence he faces is
     # one reason however many of its numbers say the same thing.
     score = RL.score(pro, con, fam)
@@ -1764,7 +1764,7 @@ def _opens(inj, team: str, opp: str, ratings: dict, charts: dict, usage: dict) -
     who may yet play."""
     said = _opens_if_out(inj, team, opp, ratings, charts, usage)
     st = str(getattr(inj, "status", "") or "").upper()
-    return f"If he sits, {said}" if said and st not in OUT_STATUSES else said
+    return f"If that player sits, {said}" if said and st not in OUT_STATUSES else said
 
 
 def _opens_if_out(inj, team: str, opp: str, ratings: dict, charts: dict, usage: dict) -> str:
@@ -1786,12 +1786,12 @@ def _opens_if_out(inj, team: str, opp: str, ratings: dict, charts: dict, usage: 
     if pos in ("WR", "TE"):
         u = usage.get((team, _key(who))) or {}
         share, word = u.get("tgt_share"), u.get("share_of") or "targets"
-        return (f"his {share:.0%} of {team}'s {word} go to other players" if share else
+        return (f"a {share:.0%} share of {team}'s {word} goes to other players" if share else
                 f"{team}'s {word} shift")
     if pos in ("RB", "FB"):
         u = usage.get((team, _key(who))) or {}
         share = u.get("carry_share")
-        return (f"his {share:.0%} of {team}'s carries go to other players" if share else
+        return (f"a {share:.0%} share of {team}'s carries goes to other players" if share else
                 f"{team}'s carries shift")
     if pos == "QB":
         return f"{team} starts a different quarterback"
@@ -2019,7 +2019,7 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
             kind = "targets" if rec else "carries"
             maybe_lines.append(
                 f"{who} ({ip}) is questionable — " + (
-                    f"if he sits, our projection moves {', '.join(sorted(set(moves)))}"
+                    f"if that player sits, our projection moves {', '.join(sorted(set(moves)))}"
                     if moves else f"{share:.0%} of the {kind} ride on it"))
         ch, tr = charting or {}, tracking or {}
         own_chart = ((ch.get("qbs") if group == "qb" else ch.get("receivers")) or {}).get((team, _abbr(name)))
@@ -2041,7 +2041,7 @@ def scan_game(home: str, away: str, *, ratings: dict, charts: dict, defenders_no
         read["notes"] = list(read.get("notes") or []) + maybe_lines
         # HIS OWN LISTING, when it is short of out: the read assumes he plays.
         if own_status in ("QUESTIONABLE", "GTD"):
-            read["notes"].insert(0, f"{name} is listed {own_status.lower()} himself — this read assumes he plays")
+            read["notes"].insert(0, f"{name} is listed {own_status.lower()} — this read assumes {name} plays")
             read["own_status"] = own_status
         # HIS FACE, not a helmet (Ethan, 2026-09-25): the prop row's own
         # headshot, else the roster's.

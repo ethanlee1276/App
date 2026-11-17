@@ -137,16 +137,16 @@ FLAGS = {
     "fast_under": "an under in a game the books expect to be high-scoring",
     "slow_over": "an over in a game the books expect to be low-scoring",
     "b2b_over": "an over on the second night of a back-to-back",
-    "mate_out_under": "an under while a regular teammate sits — his shots and minutes go somewhere",
-    "mate_back_over": "an over the night a regular teammate returns — his recent numbers were made without him",
+    "mate_out_under": "an under while a regular teammate sits — those shots and minutes go somewhere",
+    "mate_back_over": "an over the night a regular teammate returns — the recent numbers were made without that teammate",
     "role_up_under": "an under on a player whose minutes just went up",
     "role_down_over": "an over on a player whose minutes just went down",
-    "back_over": "an over in his first game back after missing time",
-    "line_stretch_over": "an over at a line well above his last five games — the book sees something",
-    "line_shrink_under": "an under at a line well below his last five games",
+    "back_over": "an over in the first game back after missing time",
+    "line_stretch_over": "an over at a line well above the player's last five games — the book sees something",
+    "line_shrink_under": "an under at a line well below the player's last five games",
     "hot_hand_over": "a scoring over after a hot three-point stretch — shooting runs cool off",
-    "boom_bust": "his games swing too widely for a sure thing",
-    "thin": "too few games this season to know his role",
+    "boom_bust": "the player's games swing too widely for a sure thing",
+    "thin": "too few games this season to know the player's role",
 }
 
 #: WHAT TWO SEASONS SAID (2026-11-04, docs/NBA_LAB.md "The scout"): each
@@ -155,16 +155,16 @@ FLAGS = {
 #: either way) — flagged picks against unflagged ones on the same side.
 VERDICT = {
     "mate_out_under": ("warning", "in two seasons, unders like this hit 3-7% less often than our number "
-                                  "said (the low end once the minutes his absence opens are on)"),
+                                  "said (the low end once the minutes the absence opens are on)"),
     "mate_back_over": ("warning", "in two seasons, overs like this hit 2-3% less often than our number said, "
                                   "even after the minutes the return takes back"),
     "role_down_over": ("warning", "in two seasons, overs like this hit 4-5% less often than our number said: "
-                                  "a drop in his minutes mostly holds"),
+                                  "a drop in minutes mostly holds"),
     "fast_under": ("warning", "in two seasons, unders like this hit 2-3% less often than our number said"),
-    "boom_bust": ("warning", "in two seasons, our number ran about 1% hot on men whose games swing like his"),
-    "thin": ("warning", "our number ran about 2% hot on men this early in their season (one season measured)"),
-    "back_over": ("priced", "his first games back play light — our minutes already take it out"),
-    "role_up_under": ("priced", "a jump in his minutes mostly holds — our minutes already read it"),
+    "boom_bust": ("warning", "in two seasons, our number ran about 1% hot on players whose games swing like this"),
+    "thin": ("warning", "our number ran about 2% hot on players this early in their season (one season measured)"),
+    "back_over": ("priced", "first games back play light — our minutes already take it out"),
+    "role_up_under": ("priced", "a jump in minutes mostly holds — our minutes already read it"),
     "hot_hand_over": ("priced", "a hot shooting run cools — our shooting read already regresses it"),
     "blowout_over": ("refused", "overs like this hit more often than our number said, not less"),
     "b2b_over": ("refused", "overs on a back-to-back hit as often as other overs against our number"),
@@ -191,17 +191,17 @@ CARD = tuple(c for c in FLAGS if VERDICT.get(c, ("",))[0] == "warning")
 #: wrong by far more, and an under in a projected shootout does not.
 VERDICT_CBB = {
     "mate_out_under": ("warning", "in five college seasons, unders like this hit 4-6% less often than our "
-                                  "number said (3-4% once the minutes his absence opens are on)"),
+                                  "number said (3-4% once the minutes the absence opens are on)"),
     "back_over": ("warning", "in five college seasons, overs like this hit 7-12% less often than our number "
-                             "said, even after the minutes his first game back takes out"),
+                             "said, even after the minutes a first game back takes out"),
     "role_down_over": ("warning", "in five college seasons, overs like this hit 2-5% less often than our "
-                                  "number said: a drop in his minutes mostly holds"),
+                                  "number said: a drop in minutes mostly holds"),
     "b2b_over": ("warning", "in five college seasons, overs like this hit 1-3% less often than our number said"),
     "mate_back_over": ("warning", "in five college seasons, overs like this hit about 2% less often than our "
                                   "number said"),
     "role_up_under": ("warning", "in five college seasons, unders like this hit 1-2% less often than our "
-                                 "number said: a jump in his minutes mostly holds"),
-    "thin": ("warning", "in four college seasons, our number ran 1-5% hot on men this early in their season"),
+                                 "number said: a jump in minutes mostly holds"),
+    "thin": ("warning", "in four college seasons, our number ran 1-5% hot on players this early in their season"),
     "blowout_over": ("refused", "in four college seasons, overs like this hit more often than our number "
                                 "said, not less"),
     "fast_under": ("refused", "in four college seasons, unders like this hit as often as our number said "

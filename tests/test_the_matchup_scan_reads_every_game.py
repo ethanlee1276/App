@@ -174,7 +174,7 @@ def test_a_prop_clears_only_at_65_and_no_heavier_than_minus_250():
 
 def test_a_questionable_player_reads_as_if():
     txt = G._opens(_inj("Billy Bowman Jr.", "ATL", "CB", "QUESTIONABLE"), "ATL", "GB", {}, CHART, {})
-    assert txt.startswith("If he sits, ATL loses a starter in coverage: Sydney Brown steps in, and GB's "
+    assert txt.startswith("If that player sits, ATL loses a starter in coverage: Sydney Brown steps in, and GB's "
                           "receivers face the backup")
 
 

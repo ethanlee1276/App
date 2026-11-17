@@ -84,26 +84,26 @@ FLAGS = {
     "blowout_over": "an over in a game expected to be decided early — starters can sit in the fourth",
     "wind_pass_over": "a passing or receiving over in strong wind",
     "low_implied_td": "a touchdown on a team expected to score under 18",
-    "back_from_absence": "his first game back after missing his team's last game",
-    "line_above_form": "the book's line is well above what he has done lately — it may know something",
-    "line_below_form": "the book's line is well below what he has done lately — it may know something",
-    "role_down_over": "an over while his role has been shrinking",
-    "role_up_under": "an under while his role has been growing",
+    "back_from_absence": "the first game back after missing the team's last game",
+    "line_above_form": "the book's line is well above what the player has done lately — it may know something",
+    "line_below_form": "the book's line is well below what the player has done lately — it may know something",
+    "role_down_over": "an over while the player's role has been shrinking",
+    "role_up_under": "an under while the player's role has been growing",
     "thin_sample": "fewer than three games of evidence this season",
-    "boom_bust": "a boom-or-bust player — his games swing widely",
+    "boom_bust": "a boom-or-bust player — the games swing widely",
     "short_week_over": "an over on a short week (Thursday)",
     # Ethan, 2026-10-11: "hometown returns ... when they come back to their
     # hometown and play a game in their hometown, I feel like that matters."
     # Both sides are flagged, because the occasion can cut either way, and
     # the five-season replay decides which (if either) is real.
-    "hometown_over": "an over in a road game in his hometown — family in the stands, and nerves that "
+    "hometown_over": "an over in a road game in the player's hometown — family in the stands, and nerves that "
                      "cut both ways",
-    "hometown_under": "an under in a road game in his hometown — the game a player circles on the calendar",
+    "hometown_under": "an under in a road game in the player's hometown — the game a player circles on the calendar",
     # Ethan's research post-mortem, 2026-10-07 ("stat legs went 8 for 11,
     # but both 2-legs died on one leg. The new rule: reception overs
     # outside a team's top-2 targets need 15%+ target share"). A note
     # until the record proves it, like every flag here.
-    "thin_target_over": "a receiving over outside his team's top-two targets, with under 15% of its "
+    "thin_target_over": "a receiving over outside the team's top-two targets, with under 15% of its "
                         "targets and under 5 a game — thin volume to hit a line on",
     # Ethan's NFL Bet checking method (2026-11-15, "implementing that too ...
     # how the most likely bets are selected"): the slate log's Oct 8 rule —
@@ -112,7 +112,7 @@ FLAGS = {
     # overs ... unless 2-minute + route role is locked". Notes until the
     # record proves them, like every flag here (engine/likelyctx).
     "qb_rush_under": "a quarterback's rushing under — scrambles and late kneel-downs beat it",
-    "rb_route_over": "a running back's receiving over with under 10% of his team's targets — no locked "
+    "rb_route_over": "a running back's receiving over with under 10% of the team's targets — no locked "
                      "route role to carry it",
 }
 #: A receiver outside the top two with less than this share of his team's
@@ -136,14 +136,14 @@ SPOTS = {
     "primetime": "a primetime game",
     "extra_rest": "a game off extra rest (a bye, or the long week after a Thursday game)",
     "long_trip": "a road game two or more time zones from home",
-    "body_clock": "a game that kicks off at 10am or earlier by his team's home clock",
+    "body_clock": "a game that kicks off at 10am or earlier by the team's home clock",
     "div_rematch": "a second meeting this season with a division rival",
-    "new_coach": "one of his team's first four games under a new head coach",
+    "new_coach": "one of the team's first four games under a new head coach",
     "altitude": "a road game at altitude",
-    "surface_switch": "a road game on a different surface from his home field",
+    "surface_switch": "a road game on a different surface from the home field",
     "late_season": "a late-season game for a team that has clinched or is eliminated",
-    "revenge": "his first game against a team he used to play for",
-    "contract_year": "the last season of his contract",
+    "revenge": "the first game against a former team",
+    "contract_year": "the last season of the player's contract",
     "milestone": "a late-season chase of a round number",
 }
 #: What a reader sees for each spot when it is not (yet) a caution.

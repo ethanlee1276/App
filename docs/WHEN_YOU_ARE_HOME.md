@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UH. The prop cards' scouting notes say "the player" too** (step 666; 17 November). Nothing to run. The second part
+of the neutral wording you said yes to: the scout's warnings on every football and basketball prop card ("the first game
+back after missing the team's last game", "an over while the player's role has been shrinking", "a road game in the
+player's hometown (Detroit, MI)", "an under while a regular teammate sits — those shots and minutes go somewhere"), what
+those warnings measured ("a drop in minutes mostly holds"), and the matchup scan's notes ("58% of the targets are short
+throws", "8 or more defenders were near the line on 21% of the carries", "If that player sits, our projection moves +18%
+catches", "Zay Flowers is listed questionable — this read assumes Zay Flowers plays"). Still to do in the same way:
+the fantasy pages, the slip grader and the Lab's notes.
+
 **UG. Football's parlay legs get their own correction** (step 665; 17 November). Nothing to run. Your answer: "Yes
 recalibrate football too". What the record says first, counting each bet once: football's single picks are honest
 (NFL edge picks we gave 50-55% hit 50%, the model's error score beats the market's; Most Likely's gap is under half a

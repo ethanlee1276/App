@@ -360,7 +360,7 @@ def test_the_quarterback_s_card_lights_the_path_to_a_pick():
     assert "T. Diggs (LCB) has allowed a 68 passer rating on 31 targets" in cov["text"]
     assert "J. Lewis" not in cov["text"], "a corner with three targets is not rated"
     ch = kinds["charting"]
-    assert ch["sign"] == 1 and "4.4% of his attempts" in ch["text"] and "league 2.9%" in ch["text"]
+    assert ch["sign"] == 1 and "4.4% of the attempts" in ch["text"] and "league 2.9%" in ch["text"]
     assert all(f["in_number"] is False for f in facts)
     # Through read_facts, only a quarterback gets them.
     got = G.read_facts("qb", "QB", "NYG", "DAL", usage={}, allowed=None, ratings_def={}, points=None,

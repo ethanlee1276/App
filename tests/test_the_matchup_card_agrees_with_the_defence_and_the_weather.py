@@ -73,7 +73,7 @@ def test_rain_counts_for_a_back_the_way_the_board_priced_him():
     assert wet["read"] == "good", wet
     assert len(wet["pro"]) == 1 and wet["con"] == []
     line = wet["pro"][0]
-    assert line == ("Rain is 74% likely at kickoff: teams run more in rain and a back keeps his "
+    assert line == ("Rain is 74% likely at kickoff: teams run more in rain and a back keeps the same "
                     "share, about 5% more carries (measured, 2016-2025)"), line
     # The card's verdict is the read's: FAVORABLE, not UNFAVORABLE.
     from engine.gamereport import VERDICT

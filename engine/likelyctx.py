@@ -414,8 +414,8 @@ def annotate(rows: list[dict], result: dict, sport: str = "nfl") -> int:
                 continue
             t = SC.note(c, sport)
             if mi is not None and c in ("hometown_over", "hometown_under"):
-                # The card names the town: "…in his hometown (Detroit, MI)…".
-                t = t.replace("in his hometown", f"in his hometown ({town['city']}, {town['state']})", 1)
+                # The card names the town: "…in the player's hometown (Detroit, MI)…".
+                t = t.replace("in the player's hometown", f"in the player's hometown ({town['city']}, {town['state']})", 1)
             notes.append(t)
         r["scout_flags"] = codes
         r["scout_notes"] = notes

@@ -46,7 +46,7 @@ def test_an_unmeasured_absence_says_the_share_it_leaves():
     text, counted = G.mate_line(same, "targets")
     assert counted and text == "Keenan Allen (WR) is out — 21% of the targets (6.1 a game) to go around"
     thin = dict(same, ripple={"out": "Keenan Allen", "measured": False})
-    assert "not enough games without him to measure who takes them" in G.mate_line(thin, "targets")[0]
+    assert "not enough games without that player to measure who takes them" in G.mate_line(thin, "targets")[0]
 
 
 def test_an_absence_across_positions_is_shown_not_counted():
@@ -105,7 +105,7 @@ def test_a_questionable_teammate_is_a_note_with_what_happens_if_he_sits():
                        injuries=[_Inj("Keenan Allen", "LAC", "WR", "QUESTIONABLE"),
                                  _Inj("Will Dissly", "LAC", "TE", "QUESTIONABLE")], props=[prop])
     (me,) = [p for p in scan["players"] if p["player"] == "Ladd McConkey"]
-    assert "Keenan Allen (WR) is questionable — if he sits, our projection moves +18% catches" in me["notes"]
+    assert "Keenan Allen (WR) is questionable — if that player sits, our projection moves +18% catches" in me["notes"]
     assert "Will Dissly (TE) is questionable — 13% of the targets ride on it" in me["notes"]
     assert not any("questionable" in t for t in me["pro"]), "he may play: shown, never counted"
 
@@ -132,7 +132,7 @@ def test_a_player_is_never_his_own_teammate():
             (me,) = mine
             said = (me.get("pro") or []) + (me.get("con") or []) + (me.get("notes") or [])
             assert not any(t.startswith("Keenan Allen (") for t in said), (status, said)
-            assert said and "himself — this read assumes he plays" in said[0] if me.get("notes") else True
+            assert said and "— this read assumes" in said[0] and "plays" in said[0] if me.get("notes") else True
         mc = [p for p in scan["players"] if p["player"] == "Ladd McConkey"]
         if mc:
             assert any("Keenan Allen" in t for t in (mc[0].get("pro") or []) + (mc[0].get("notes") or []))

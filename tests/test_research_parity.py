@@ -315,7 +315,7 @@ def test_the_card_says_where_his_targets_come_from_and_how_the_defence_does_ther
     lean = ["rec_yds", "receptions", "anytime_td"]
     f = G.depth_facts({"short": 0.58, "mid": 0.3, "deep": 0.12, "targets": 40}, "TB", ratings_def, 32, lean)
     assert len(f) == 1 and f[0]["text"] == \
-        "58% of his targets are short throws (under 10 air yards); TB ranks 24th of 32 against them, " \
+        "58% of the targets are short throws (under 10 air yards); TB ranks 24th of 32 against them, " \
         "allowing 6.9 yards a target"
     assert f[0]["sign"] == 1 and f[0]["in_number"] is False and f[0]["kind"] == "depth"
     assert f[0]["markets"] == lean and f[0]["zone"] == "short"
@@ -394,7 +394,7 @@ def test_yards_after_contact_allowed_come_free_from_the_pfr_rushing_rows():
     # The card: the defence's two numbers, ranked, his own beside them.
     f = G.contact_facts({**c["DAL"]}, own[irving], "DAL")
     assert f[0]["text"] == ("DAL allows 3.50 yards after contact a carry (3rd-fewest of 3) and 2.50 before "
-                            "contact (1st-fewest); he averages 3.50 after contact")
+                            "contact (1st-fewest); 3.50 after contact a carry")
     assert f[0]["in_number"] is False and f[0]["kind"] == "contact" and f[0]["markets"] == ["rush_yds", "rush_att"]
     big = {"yac_pc": 1.73, "ybc_pc": 2.1, "yac_rank": 1, "ybc_rank": 4, "of": 32}
     assert G.contact_facts(big, None, "DAL")[0]["sign"] == -1, "the stingiest tackling: against the over"
@@ -468,11 +468,11 @@ def test_the_passers_clean_pocket_split_comes_free_from_the_play_by_play():
     # hits or sacks the passer — the pressure unit the scan already ranks.
     rd = {"def": {"pressure": {"rank": 5, "value": 0.091, "of": 32}}}
     f = G.pocket_facts(m, "DAL", rd, 32)
-    assert f[0]["text"] == ("Completes 71% of his throws when not hit and 33% when hit (league 56% / 43%); "
+    assert f[0]["text"] == ("Completes 71% of throws when not hit and 33% when hit (league 56% / 43%); "
                             "DAL hits or sacks the passer on 9.1% of dropbacks, 5th of 32")
     assert f[0]["sign"] == -1 and f[0]["kind"] == "pocket" and f[0]["in_number"] is False
     assert G.pocket_facts({**m, "hit_pct": None}, "DAL", {"def": {}}, 32)[0]["text"] \
-        == "Completes 71% of his throws when not hit (league 56% / 43%)"
+        == "Completes 71% of throws when not hit (league 56% / 43%)"
     assert G.pocket_facts(None, "DAL", rd, 32) == []
     facts = G.read_facts("qb", "QB", "TB", "DAL", usage={"games": 5, "pocket": m}, allowed=None, ratings_def=rd,
                          points=None, line_words="", n_teams=32, room=None)
