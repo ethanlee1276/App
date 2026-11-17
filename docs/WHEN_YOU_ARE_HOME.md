@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VF. A WNBA player's page heads with minutes where it had an empty FG%** (step 690; 17 November). Nothing to
+run. The WNBA box scores we hold carry minutes, points, rebounds and assists and no shots, so every WNBA page's
+four headline numbers ended in "FG% —" (Caitlin Clark, Breanna Stewart, Napheesa Collier, Paige Bueckers, all
+live). A headline number with nothing behind it for the season now gives way to minutes a game, ranked against the
+league like the rest; the NBA's and college's pages keep their FG%.
+
 **VE. Changing league on a player's page takes the address back to the list** (step 689; 17 November). Nothing to
 run. On Josh Allen's page, tapping NBA in the league row drew the NBA's player list but left the address at
 "#player/josh-allen", so reloading the page or sharing its link opened Josh Allen's name in the NBA. The address

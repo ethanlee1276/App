@@ -229,6 +229,31 @@ def test_a_basketball_page_averages_a_game_and_ranks_the_regulars():
     assert {x["key"]: x["rank"] for x in again["headline"]}["pts"] == 1, "forty games under one name set no bar"
 
 
+def test_a_headline_number_with_nothing_behind_it_gives_way_to_minutes():
+    """Live, 17 Nov: the WNBA's box scores carry minutes, points, rebounds and assists and no shots, so every
+    WNBA page (Caitlin Clark, Breanna Stewart, Napheesa Collier, Paige Bueckers) read "FG% —" in its headline.
+    The first number with no value gives way to minutes a game, ranked like the rest; a page with shots keeps
+    its FG%."""
+    path = os.path.join(tempfile.mkdtemp(), "history.db")
+    conn = _db.connect(path)
+    for i, (mn, p, r, a) in enumerate(((37, 18, 2, 4), (35, 24, 5, 10), (36, 22, 4, 10))):
+        for who, scale in (("Caitlin Clark", 1.0), ("Bench Guard", 0.5)):
+            for m, v in (("min", mn * scale), ("pts", p * scale), ("reb", r * scale), ("ast", a * scale)):
+                conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, "
+                             "position, home, market, value) VALUES ('wnba', 2026, ?, ?, ?, 'IND', 'LV', 'G', 1, ?, ?)",
+                             (f"2026-09-0{i + 1}", f"w{i}", who, m, v))
+    conn.commit()
+    conn.close()
+    PP._RANKS.clear()
+    d = PP.page("wnba", "Caitlin Clark", db_path=path, data_dir=tempfile.mkdtemp())
+    h = [(x["label"], x["value"], x["rank"]) for x in d["headline"]]
+    assert h == [("PTS", 21.3, 1), ("REB", 3.7, 1), ("AST", 8.0, 1), ("MIN", 36.0, 1)], h
+    assert PP.SPARE["box"][:3] == ("min", "MIN", "Minutes a game")
+    nba_path, rosters = _fresh()
+    labels = [x["label"] for x in PP.page("nba", "Jalen Brunson", db_path=nba_path, data_dir=rosters)["headline"]]
+    assert labels == ["PTS", "REB", "AST", "FG%"], ("a page with shots keeps its FG%", labels)
+
+
 def test_a_goalie_and_a_pitcher_lead_with_their_own_numbers():
     path, rosters = _fresh()
     g = PP.page("nhl", "Joseph Woll", db_path=path, data_dir=rosters)

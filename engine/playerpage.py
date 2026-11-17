@@ -121,6 +121,24 @@ HEAD = {
                  ("k9", "K/9", "Strikeouts a nine innings", ("k9",), False, False, "outs", True),
                  ("gp", "GP", "Games pitched", ("gp",), False, False, None, False)),
 }
+#: A kind's fifth number, for a headline one whose season has none (PLAYERDATA4, 2026-11-17): the WNBA's box
+#: scores carry minutes, points, rebounds and assists and no shots, so every WNBA page read "FG% —" in its
+#: headline. A number with nothing behind it gives way to this one, ranked the same way.
+SPARE = {"box": ("min", "MIN", "Minutes a game", ("sum", "min"), True, False, None, True)}
+
+
+def headline_specs(sport: str, kind: str, summed: dict, gp: int) -> list:
+    """[(spec, value)] for the headline: the kind's four, the spare in place of the first with no value."""
+    specs = [(sp, head_value(sport, sp, summed, gp)) for sp in HEAD.get(kind, ())]
+    spare = SPARE.get(kind)
+    gap = next((i for i, (_, v) in enumerate(specs) if v is None), None)
+    if spare and gap is not None:
+        v = head_value(sport, spare, summed, gp)
+        if v is not None:
+            specs[gap] = (spare, v)
+    return specs
+
+
 #: Who a kind's places are among: a player with one of these in the season.
 #: (A hitter's strikeouts are no pitcher's, a skater's minutes no goalie's.)
 ROLE_NEED = {"passing": ("pass_att",), "rushing": ("carries", "rush_att"), "receiving": ("receptions", "targets"),
@@ -432,7 +450,7 @@ def warm(db_path=None, delay: float = 60.0) -> threading.Thread:
 
 
 def _build_table(conn, sport: str, season: int, kind: str) -> dict:
-    specs = HEAD.get(kind) or ()
+    specs = tuple(HEAD.get(kind) or ()) + ((SPARE[kind],) if kind in SPARE else ())
     need = ROLE_NEED.get(kind, ())
     markets = {m for sp in specs for m in _markets(sp[3])} | {sp[6] for sp in specs if sp[6]} | set(need)
     if sport in HOOPS:
@@ -771,11 +789,10 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
 
         # The headline, with the league's places.
         places = rank_table(conn, sport, season, kind, db_path=path) if kind and conn is not None else {}
-        out["headline"] = [{"key": sp[0], "label": sp[1], "title": sp[2],
-                            "value": head_value(sport, sp, summed, gp),
+        out["headline"] = [{"key": sp[0], "label": sp[1], "title": sp[2], "value": v,
                             "rank": (places.get(sp[0]) or {}).get(player) if sp[7] else None,
                             "per_game": sp[4], "low": sp[5]}
-                           for sp in HEAD.get(kind, ())]
+                           for sp, v in headline_specs(sport, kind, summed, gp)]
 
         # The newest game.
         if games:
