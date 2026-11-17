@@ -180,7 +180,7 @@ def _fn(name):
 
 
 def _render(game, sport="nfl", open_=True, words=None):
-    helpers = "".join(_fn(n) for n in ("rpMk", "rpHit", "rpPickWords", "rpPickLI", "rpTicketWords", "rpTicketsHTML",
+    helpers = "".join(_fn(n) for n in ("rpMk", "rpHit", "rpBetWords", "rpPickLI", "rpTicketWords", "rpTicketsHTML",
                                        "rpBetsHTML"))
     score = RP[RP.index("const RP_SCORE = "):RP.index("};", RP.index("const RP_SCORE = ")) + 3]
     score += "\nconst RP_WORDS = %s;\n" % json.dumps(words or {})

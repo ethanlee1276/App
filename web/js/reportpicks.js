@@ -335,7 +335,7 @@ function rpHit(list) {
 //: One pick or leg in plain words, as the game's page says it (js/detail.js gprPickWords; that room is the game page's).
 const RP_SCORE = { anytime_td: "to score a touchdown", anytime_goal: "to score a goal", goals: "to score a goal",
                    first_td: "to score the first touchdown" };
-function rpPickWords(p) {
+function rpBetWords(p) {
   const m = String(p.market || "");
   const down = ["UNDER", "NO"].includes(String(p.side || "").toUpperCase());
   const num = (x) => { const v = Number(x); return Number.isInteger(v) ? String(v) : v.toFixed(1); };
@@ -360,7 +360,7 @@ function rpPickLI(p) {
       : st === "won" || st === "lost" ? "" : "waiting on the box score")
     : RP_SCORE[m] ? (a > 0 ? `scored${a > 1 ? ` ${a}` : ""}` : "didn’t score")
     : RES_GAME_MARKETS.has(m) ? "" : `had ${Number.isInteger(a) ? a : a.toFixed(1)}`;
-  return `<li class="rpk-bet ${st === "won" ? "won" : st === "lost" ? "lost" : ""}">${rpMk(st)}<span>${rpPickWords(p)}${
+  return `<li class="rpk-bet ${st === "won" ? "won" : st === "lost" ? "lost" : ""}">${rpMk(st)}<span>${rpBetWords(p)}${
     did ? ` <span class="rpk-bet-did">${escapeHtml(did)}</span>` : ""}</span></li>`;
 }
 //: A ticket's verdict in words: "Hit", "Missed by one leg", "Missed: 2 of 3 legs".
