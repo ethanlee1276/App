@@ -70,9 +70,11 @@ def _journal():
     conn.executescript(PL.SCHEMA)
 
     def ticket(sport, date, grade, source, status, legs):
+        # The journal's own key for a ticket (engine/parlayledger.log_game_parlays), which names it on the report too.
+        key = PL.legs_key([{"player": p, "market": m, "side": sd, "line": ln} for p, m, sd, ln, _st, _a in legs])
         cur = conn.execute("INSERT INTO parlays (sport, date, legs_key, parlay_type, n_legs, grade, source, status) "
                            "VALUES (?, ?, ?, 'same_game', ?, ?, ?, ?)",
-                           (sport, date, f"{grade}-{source}-{status}-{len(legs)}", len(legs), grade, source, status))
+                           (sport, date, key, len(legs), grade, source, status))
         for i, (player, market, side, line, st, actual) in enumerate(legs, start=1):
             conn.execute("INSERT INTO parlay_legs (parlay_id, leg_no, player, team, market, side, line, status, actual) "
                          "VALUES (?,?,?,?,?,?,?,?,?)", (cur.lastrowid, i, player, "", market, side, line, st, actual))
@@ -91,13 +93,25 @@ def _journal():
     return p
 
 
-def _archive():
+#: The set NE at DET's report carried at the start (engine/reportkeep): the second parlay, and a pair the
+#: record never journaled. The first parlay was an earlier version of the board's.
+KEPT = {"away": "NE", "home": "DET", "kept": "kept before the start",
+        "threes": [{"legs": [{"player": "Jared Goff", "market": "pass_yds", "side": "over", "line": 230.5},
+                             {"player": "Drake Maye", "market": "pass_yds", "side": "OVER", "line": 220.5},
+                             {"player": "Jahmyr Gibbs", "market": "rush_yds", "side": "OVER", "line": 74.5}]}],
+        "scorers": [{"legs": [{"player": "Jahmyr Gibbs", "market": "anytime_td", "side": "OVER", "line": 0.5},
+                              {"player": "Amon-Ra St. Brown", "market": "anytime_td", "side": "OVER", "line": 0.5}]}]}
+
+
+def _archive(kept=None):
     where = Path(tempfile.mkdtemp())
     for sport, label, date, away, home in (("nfl", "2026-W11", "2026-11-15", "NE", "DET"),
                                             ("nfl", "2026-W11", "2026-11-15", "KC", "BUF"),
                                             ("nba", "2026-11-16", "2026-11-16", "BOS", "NYK")):
         doc = {"sport": sport, "date": date, "label": label, "away": away, "home": home, "game": f"{away}@{home}",
                "final": {"away": 10, "home": 35}, "report": {"away": away, "home": home, "sections": []}, "results": {}}
+        if kept and away == "NE":
+            doc["parlays"] = kept
         RA.write(RA.path_for(where, sport, date, away, home), doc)
     return where
 
@@ -118,8 +132,23 @@ def test_each_finished_game_lists_its_report_picks_and_tickets_off_the_record():
     assert [t["status"] for t in game["threes"]] == ["won", "lost"]
     assert [l["status"] for l in game["threes"][1]["legs"]] == ["won", "lost", "won"], "each leg its own mark"
     assert [t["status"] for t in game["scorers"]] == ["pending"]
+    assert game["versions"] is True and "earlier" not in game, "no set kept at the start: every version, said so"
+    assert not any("key" in t for t in game["threes"]), "the journal's key stays in the engine"
     nba = O.for_games("nba", [("2026-11-16", "BOS", "NYK")], member=True, path=path, where=where)["2026-11-16|BOS|NYK"]
     assert [p["player"] for p in nba["picks"]] == ["Jalen Brunson"] and len(nba["threes"]) == 1, "filed under its day"
+
+
+def test_the_report_s_own_tickets_lead_and_the_earlier_versions_are_counted():
+    path, where = _journal(), _archive(kept=KEPT)
+    game = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=where)["2026-11-15|NE|DET"]
+    assert [t["status"] for t in game["threes"]] == ["lost"], "the set the report carried at the start"
+    assert [l["player"] for l in game["threes"][0]["legs"]] == ["Jahmyr Gibbs", "Drake Maye", "Jared Goff"]
+    assert game["earlier"] == {"threes": [1, 1]}, "the earlier version, graded, counted beside it"
+    assert [t["status"] for t in game["scorers"]] == ["pending"] and "versions" not in game
+    lone = dict(KEPT, threes=[{"legs": [{"player": "Nobody", "market": "points", "side": "OVER", "line": 1.5},
+                                        {"player": "Else", "market": "points", "side": "OVER", "line": 2.5}]}], scorers=[])
+    game = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive(kept=lone))["2026-11-15|NE|DET"]
+    assert len(game["threes"]) == 2 and game["versions"] is True, "a kept set the record never journaled: every version"
 
 
 def test_what_has_settled_is_everyone_s_and_what_waits_is_a_member_s():
@@ -181,7 +210,8 @@ def _fn(name):
 
 def _render(game, sport="nfl", open_=True, words=None):
     helpers = "".join(_fn(n) for n in ("rpMk", "rpHit", "rpBetWords", "rpPickLI", "rpTicketWords", "rpTicketsHTML",
-                                       "rpBetsHTML"))
+                                       "rpEarlierHTML", "rpBetsHTML"))
+    helpers += RP[RP.index("const RP_STRIP_MAX = "):RP.index("\n", RP.index("const RP_STRIP_MAX = ")) + 1]
     score = RP[RP.index("const RP_SCORE = "):RP.index("};", RP.index("const RP_SCORE = ")) + 3]
     score += "\nconst RP_WORDS = %s;\n" % json.dumps(words or {})
     js = """
@@ -224,6 +254,20 @@ def test_the_page_marks_every_pick_every_ticket_and_every_leg():
     said = _render(game, words=O.market_words({"g": game}))
     assert "Jahmyr Gibbs over 74.5 rushing yards" in said, "the engine's word for the market, when the answer brings it"
     assert not _render(game, open_=False).startswith('<details class="rpk-bets" open>')
+
+
+def test_the_earlier_versions_and_a_long_strip_are_said_once():
+    path = _journal()
+    kept = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive(kept=KEPT))["2026-11-15|NE|DET"]
+    html = _render(kept)
+    assert "Before the start the board also posted 1 earlier version of its parlays; 1 of them hit." in html
+    every = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive())["2026-11-15|NE|DET"]
+    assert "Every version of this game’s parlays the board posted before" in _render(every)
+    many = {"threes": [{"status": "lost", "legs": []}] * 15}
+    strip = _render(many)
+    strip = strip[:strip.index("</summary>")]
+    assert strip.count('class="rpk-mk lost"') == 12 and '<span class="rpk-marks-more">+3</span>' in strip, \
+        "a week of versions does not swamp a phone: the list under it has every one"
 
 
 def test_a_reader_without_the_subscription_is_told_what_waits():

@@ -101,6 +101,8 @@ button.rpk-rec:empty { display: none; }
 .rpk-bet-tix.lost .rpk-bet-tix-h span { color: var(--bad); }
 .rpk-bet-legs { display: grid; gap: 4px; margin: 0 0 4px 26px; padding: 0; list-style: none; }
 .rpk-bets-held { margin: 6px 0 0; color: var(--text-mute); }
+.rpk-bets-note { margin: 8px 0 2px; color: var(--text-mute); }
+.rpk-marks-more { align-self: center; margin-left: 2px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; }
 .rpk-fact-more { margin-top: 14px; }
 .rpk-fact-h + .rpk-fact-span { margin: 0 0 14px; }
 .rpk-fact-more[hidden] { display: none; }

@@ -9347,7 +9347,11 @@ strip and it opens to every pick by name with the number it finished with ("Chri
 had 112"), then every parlay ("Parlay 2: missed by one leg") with each of its legs marked the same way. The newest game
 opens on its own. The picks are the report's own (the Report book) and the tickets the game's parlays and pairs, read
 from the record for every game the archive holds, so last week's games show theirs too; the NFL's are found under the
-week they were filed by. What has settled shows to everyone, as every settled bet on the Record does; one still waiting
+week they were filed by. The board posts a game's parlays afresh as lines and news move, and the record grades every
+version (36 for Bills at Jets last week), so a game lists the set its report carried at the start, with one line
+counting the earlier versions and how many of them hit; the games kept before that set was kept (Sunday's and before)
+list every version and say so. The Report book itself started on 16 November, so Sunday's NFL games show their parlays
+and pairs but no single picks. What has settled shows to everyone, as every settled bet on the Record does; one still waiting
 on its box score shows to members, and everyone else is told how many are waiting. The list now draws 20 games at a
 time, with "Show 20 more games" under them, so a long season stays quick on a phone. The same list on the free Record
 page gets the same marks.

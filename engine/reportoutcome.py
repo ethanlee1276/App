@@ -159,20 +159,21 @@ def picks(conn, sport: str, date, home: str, away: str, names=(), books=BOOKS) -
     return out[:MAX_PICKS]
 
 
-def tickets(conn, sport: str, date, home: str, away: str) -> dict:
+def tickets(conn, sport: str, date, home: str, away: str, with_key: bool = False) -> dict:
     """The game's tickets on the record, by kind: each one's verdict and its legs'.
-    ``date`` is a day or several (_dates)."""
+    ``date`` is a day or several (_dates); ``with_key`` gives each its journal key
+    (engine/parlayledger.legs_key), which names the same ticket on the report."""
     have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     days = _dates(date)
     if "parlays" not in have or "parlay_legs" not in have or not days:
         return {}
     out: dict = {}
     for kind, source in TICKETS.items():
-        rows = conn.execute(f"SELECT id, status FROM parlays WHERE sport=? AND date IN ({','.join('?' * len(days))}) "
-                            "AND grade=? AND source=? ORDER BY id",
+        rows = conn.execute(f"SELECT id, status, legs_key FROM parlays WHERE sport=? "
+                            f"AND date IN ({','.join('?' * len(days))}) AND grade=? AND source=? ORDER BY id",
                             (sport, *days, f"{away}@{home}", source)).fetchall()
         got = []
-        for pid, status in rows:
+        for pid, status, key in rows:
             legs = []
             for player, team, market, side, line, st, actual in conn.execute(
                     "SELECT player, team, market, side, line, status, actual FROM parlay_legs "
@@ -186,7 +187,7 @@ def tickets(conn, sport: str, date, home: str, away: str) -> dict:
                     leg["actual"] = a
                 legs.append(leg)
             if len(legs) >= 2:
-                got.append({"status": _status(status), "legs": legs})
+                got.append({"status": _status(status), "legs": legs, **({"key": key or ""} if with_key else {})})
         if got:
             out[kind] = got
     return out
@@ -224,6 +225,15 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
     game's rows are filed under (its "label"; the NFL's is the week) and which
     players its report names (a pick with no club on its row).
 
+    THE REPORT'S OWN TICKETS. The board posts a game's four parlays and
+    three pairs afresh as lines and news move, and the record journals every
+    version it posts (a week of them, for the NFL: 36 for one game). The
+    archive keeps the set the report carried at the start ("parlays",
+    engine/reportkeep), so those are the game's tickets here, in the report's
+    order, and the earlier versions are counted beside them ("earlier":
+    {kind: [hit, graded]}); a game kept before the start was (16 November)
+    lists every version, said so ("versions").
+
     What has settled is public, as every settled row is (server._record_day:
     "the evidence the subscription is sold on"); a pick or ticket still
     waiting on its box score is a member's, and ``held`` tells the rest how
@@ -247,11 +257,14 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
     try:
         for key, day, away, home, doc in want:
             days = (doc.get("label"), day)
-            ts = tickets(conn, sport, days, home, away)
+            ts = tickets(conn, sport, days, home, away, with_key=True)
             game = {"picks": [{k: v for k, v in p.items() if k != "book"}
                               for p in picks(conn, sport, days, home, away, names_in(doc.get("report")),
-                                             books=REPORT_BOOKS)],
-                    "threes": ts.get("threes") or [], "scorers": ts.get("scorers") or []}
+                                             books=REPORT_BOOKS)]}
+            own, earlier = _own_tickets(ts, doc.get("parlays"))
+            game.update(own)
+            if earlier:
+                game["earlier"] = earlier
             if not member:
                 held = 0
                 for part in ("picks", "threes", "scorers"):
@@ -263,6 +276,35 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
     finally:
         conn.close()
     return out
+
+
+def _own_tickets(ts: dict, kept) -> tuple[dict, dict]:
+    """The game's tickets as the report carried them at the start, in its order,
+    and the earlier versions' count by kind ({kind: [hit, graded]}). With no kept
+    set, or none of it on the record, every version, marked "versions"."""
+    from .parlayledger import legs_key
+    strip = lambda t: {k: v for k, v in t.items() if k != "key"}       # noqa: E731
+    out: dict = {}
+    earlier: dict = {}
+    kept = kept if isinstance(kept, dict) else {}
+    wanted = {kind: [legs_key(t.get("legs") or []) for t in kept.get(kind) or []
+                     if isinstance(t, dict) and len(t.get("legs") or []) >= 2] for kind in TICKETS}
+    every = not any(wanted.values()) or not any(t.get("key") in set(wanted[kind])
+                                                 for kind in TICKETS for t in ts.get(kind) or [])
+    for kind in TICKETS:
+        allk = ts.get(kind) or []
+        if every:
+            out[kind] = [strip(t) for t in allk]
+            continue
+        order = {k: i for i, k in enumerate(wanted[kind])}
+        out[kind] = [strip(t) for t in sorted((t for t in allk if t.get("key") in order),
+                                              key=lambda t: order[t["key"]])]
+        rest = [t for t in allk if t.get("key") not in order and t.get("status") in ("won", "lost")]
+        if rest:
+            earlier[kind] = [sum(t["status"] == "won" for t in rest), len(rest)]
+    if every and any(out.values()):
+        out["versions"] = True
+    return out, earlier
 
 
 def market_words(games: dict) -> dict:

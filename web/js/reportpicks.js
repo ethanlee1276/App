@@ -380,6 +380,22 @@ function rpTicketsHTML(list, kind, sport) {
         escapeHtml(rpTicketWords(t))}</span></div>
       <ul class="rpk-bet-legs">${(t.legs || []).map(rpPickLI).join("")}</ul></li>`).join("");
 }
+//: The marks a kind's strip draws before it counts the rest ("+24"): the list under it has every one.
+const RP_STRIP_MAX = 12;
+/* THE REPORT'S OWN TICKETS (engine/reportoutcome._own_tickets). The board posts
+   a game's parlays afresh as lines and news move, and the record grades every
+   version; the list is the set the report carried at the start, and a line
+   under it counts the earlier versions. A game kept before the start was (16
+   November) lists every version the board posted, and says so. */
+function rpEarlierHTML(x, kind, word) {
+  const e = (x.earlier || {})[kind];
+  if (e && e[1]) {
+    return `<p class="mini rpk-bets-note">Before the start the board also posted ${escapeHtml(plural(e[1], `earlier version of its ${word}`,
+      `earlier versions of its ${word}`))}; ${e[0]} of them hit. Every one counts on the Record.</p>`;
+  }
+  return x.versions ? `<p class="mini rpk-bets-note">Every version of this game’s ${escapeHtml(word)} the board posted before
+    the start, as the record kept them: the report’s own set at the start was not yet kept on this date.</p>` : "";
+}
 //: The game's picks and tickets: a strip of marks a kind, opening to every one by name.
 function rpBetsHTML(x, sport, open) {
   const picks = x.picks || [], threes = x.threes || [], pairs = x.scorers || [];
@@ -390,16 +406,19 @@ function rpBetsHTML(x, sport, open) {
   if (!parts.length) return held;
   const strip = parts.map(([w, l]) => {
     const h = rpHit(l);
+    const more = l.length > RP_STRIP_MAX ? `<span class="rpk-marks-more">+${l.length - RP_STRIP_MAX}</span>` : "";
     return `<span class="rpk-bets-part"><span class="rpk-bets-k">${escapeHtml(w)}</span>${
-      h.n ? ` <b class="${h.tone}">${h.won} of ${h.n}</b>` : ""} <span class="rpk-marks">${l.map((y) => rpMk(y.status)).join("")}</span></span>`;
+      h.n ? ` <b class="${h.tone}">${h.won} of ${h.n}</b>` : ""} <span class="rpk-marks">${
+      l.slice(0, RP_STRIP_MAX).map((y) => rpMk(y.status)).join("")}${more}</span></span>`;
   }).join("");
   const sec = (title, inner) => `<h5 class="rpk-bets-h">${escapeHtml(title)}</h5><ul class="rpk-bet-list">${inner}</ul>`;
   return `<details class="rpk-bets"${open ? " open" : ""}>
       <summary class="rpk-bets-sum">${strip}<span class="row-fold-chev" aria-hidden="true"></span></summary>
       <div class="rpk-bets-body">
         ${picks.length ? sec("The picks", picks.map(rpPickLI).join("")) : ""}
-        ${threes.length ? sec("The parlays", rpTicketsHTML(threes, "threes", sport)) : ""}
-        ${pairs.length ? sec(`The ${pairWord.toLowerCase()}`, rpTicketsHTML(pairs, "scorers", sport)) : ""}
+        ${threes.length ? sec("The parlays", rpTicketsHTML(threes, "threes", sport)) + rpEarlierHTML(x, "threes", "parlays") : ""}
+        ${pairs.length ? sec(`The ${pairWord.toLowerCase()}`, rpTicketsHTML(pairs, "scorers", sport))
+          + rpEarlierHTML(x, "scorers", pairWord.toLowerCase()) : ""}
       </div>
     </details>${held}`;
 }
