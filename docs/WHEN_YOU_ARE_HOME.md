@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WA. A football player's market chips are the roles they play** (step 711; 17 November). Nothing to run.
+Jalon Daniels' "By market" card offered a quarterback Receiving Yards, Receptions and Targets: ten games of zeros,
+a box score's empty columns. A family of markets (passing, rushing, receiving, kicking, defense) whose volume is
+nothing in every game on the card is no chip now; one carry in ten games still counts as a role, and Anytime TD
+stays on everyone's card. It applies from each board's next build.
+
 **VZ. The last game's card shows what the player did in it** (step 710; 17 November). Nothing to run. On Jalon
 Daniels' page the "Previous game" card read YDS 0 · TD 0: a quarterback who threw no pass that week and ran twice.
 The card's four numbers now come from what the player did that game when they did nothing their usual way (the

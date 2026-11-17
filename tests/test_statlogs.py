@@ -84,6 +84,33 @@ def test_two_games_is_an_anecdote_and_ships_nothing():
     assert out == {}, "a 2-game series must not become a chart"
 
 
+def test_a_football_players_chips_are_the_roles_they_play():
+    """Jalon Daniels' page (2026-11-17) offered a quarterback Receiving Yards,
+    Receptions and Targets: ten games of zeros. A family whose volume is
+    nothing in every game kept is no chip; Anytime TD is everyone's."""
+    tmp = tempfile.mkdtemp()
+    path = os.path.join(tmp, "hist.db")
+    conn = _db.connect(path)
+    rows = []
+    for wk in range(1, 6):
+        def row(player, market, value, pos):
+            return dict(sport="nfl", season=2026, period=f"{wk:03d}", game_id=f"Q{wk}", player=player, team="TB",
+                        opponent="CAR", position=pos, home=1, market=market, value=value)
+        rows += [row("Test Passer", m, v, "QB") for m, v in (
+            ("pass_yds", 210 + wk), ("pass_att", 30), ("pass_td", 1), ("rush_yds", 4 if wk == 2 else 0),
+            ("carries", 1 if wk == 2 else 0), ("rec_yds", 0), ("receptions", 0), ("targets", 0), ("anytime_td", 0))]
+        rows += [row("Test Wideout", m, v, "WR") for m, v in (
+            ("rec_yds", 60), ("receptions", 5), ("targets", 8), ("pass_yds", 0), ("pass_att", 0), ("pass_td", 0),
+            ("anytime_td", 0))]
+    _db.upsert_player_logs(conn, rows)
+    conn.commit()
+    conn.close()
+    out = statlogs.for_board([{"player": "Test Passer"}, {"player": "Test Wideout"}], "nfl", db_path=path)
+    assert list(out["Test Passer"]) == ["Passing Yards", "Rushing Yards", "Carries", "Anytime TD", "Passing TDs",
+                                        "Pass Attempts"], "one run in five games is a role; no catch is none"
+    assert list(out["Test Wideout"]) == ["Receiving Yards", "Receptions", "Targets", "Anytime TD"], out["Test Wideout"]
+
+
 def test_only_board_players_are_queried():
     """The section is for tonight's players — shipping the whole league
     would be megabytes of JSON nobody asked for."""

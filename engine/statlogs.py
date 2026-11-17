@@ -126,6 +126,29 @@ SPORT_MARKETS = {
 N_GAMES = 10       # what a profile chart can legibly hold
 MIN_GAMES = 3      # below this a chart is an anecdote, so it is not drawn
 
+#: A FOOTBALL PLAYER'S CHIPS ARE THE ROLES THEY PLAY (2026-11-17; Ethan's
+#: screenshot of Jalon Daniels' page offered a quarterback Receiving Yards,
+#: Receptions and Targets: ten games of zeros, a box score's empty columns).
+#: A family of markets whose volume is nothing in every game kept is no
+#: chip; Anytime TD belongs to no family and is everyone's.
+FAMILY = {"pass_yds": "pass", "pass_td": "pass", "pass_att": "pass", "pass_cmp": "pass", "pass_int": "pass",
+          "rush_yds": "rush", "carries": "rush", "rec_yds": "rec", "receptions": "rec", "targets": "rec",
+          "kick_pts": "kick", "fg_made": "kick", "tackles_ast": "def", "def_sacks": "def"}
+VOLUME = {"pass": ("pass_att", "pass_cmp", "pass_yds"), "rush": ("carries", "rush_yds"),
+          "rec": ("targets", "receptions", "rec_yds"), "kick": ("kick_pts", "fg_made"),
+          "def": ("tackles_ast", "def_sacks")}
+ROLE_SPORTS = ("nfl", "cfb")
+
+
+def _kept(sport: str, markets, per: dict) -> dict:
+    """A player's chips, in SPORT_MARKETS order: each market with MIN_GAMES
+    on file, a football one only in a family the player has volume in."""
+    labels = dict(markets)
+    roles = ({f for f, vols in VOLUME.items() if any(g["value"] for m in vols for g in per.get(m, ()))}
+             if sport in ROLE_SPORTS else None)
+    return {labels[m]: per[m] for m, _ in markets
+            if len(per.get(m, [])) >= MIN_GAMES and (roles is None or m not in FAMILY or FAMILY[m] in roles)}
+
 
 def for_board(recommendations, sport: str, db_path=None) -> dict:
     """``player_stats`` for every player named in ``recommendations``.
@@ -1155,7 +1178,6 @@ def _query(conn, sport, markets, players) -> dict:
     before it existed) is read the old way."""
     import sqlite3
     ids = [m for m, _ in markets]
-    labels = dict(markets)
     q = ("SELECT season, period, game_id, opponent, home, value "
          "FROM player_game_logs INDEXED BY idx_logs_lookup "
          "WHERE sport=? AND market=? AND player=? "
@@ -1188,9 +1210,7 @@ def _query(conn, sport, markets, players) -> dict:
         return _query_scan(conn, sport, markets, players)
     out: dict[str, dict[str, list]] = {}
     for player in sorted(grouped, key=lambda p: (newest[p], p), reverse=True):
-        per = grouped[player]
-        keep = {labels[m]: per[m] for m, _ in markets
-                if len(per.get(m, [])) >= MIN_GAMES}
+        keep = _kept(sport, markets, grouped[player])
         if keep:
             out[player] = keep
     return out
@@ -1201,7 +1221,6 @@ def _query_scan(conn, sport, markets, players) -> dict:
     sorted newest first, ten kept a pair. Kept for a file without the
     (sport, market, player) index."""
     ids = [m for m, _ in markets]
-    labels = dict(markets)
     rows = conn.execute(
         "SELECT player, market, period, opponent, home, value "
         "FROM player_game_logs "
@@ -1232,8 +1251,7 @@ def _query_scan(conn, sport, markets, players) -> dict:
     # HERE, once, not per surface.
     out: dict[str, dict[str, list]] = {}
     for player, per in grouped.items():
-        keep = {labels[m]: per[m] for m, _ in markets
-                if len(per.get(m, [])) >= MIN_GAMES}
+        keep = _kept(sport, markets, per)
         if keep:
             out[player] = keep
     return out

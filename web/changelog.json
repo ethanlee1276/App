@@ -4,6 +4,12 @@
     {
       "date": "2026-11-17",
       "kind": "fix",
+      "title": "No more charts of zeros on a player’s market card",
+      "body": "A football player’s market chips are now the roles they play: a quarterback is no longer offered receiving yards, receptions and targets, ten games of zeros."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "fix",
       "title": "The last game’s card shows what the player did",
       "body": "A player’s last-game card no longer shows a row of zeros for a game they spent another way: a quarterback who only ran that week shows the runs."
     },
