@@ -259,8 +259,8 @@ def test_the_sheet_draws_the_log_like_a_box_score():
     assert "Joe Burrow <span>Game log</span>" in qb_html and "CIN · QB · NFL · 2026" in qb_html
     assert '<th colspan="8">Passing</th><th colspan="4">Rushing</th>' in qb_html, "the groups over their columns"
     assert qb_html.index("<b>Wk 11</b>") < qb_html.index("<b>Wk 10</b>"), "the newest game first"
-    assert "<b>Wk 10</b><span>@ PIT · " in qb_html and '<span class="gl-w">W</span> 33-27' in qb_html
-    assert '<span class="gl-l">L</span> 20-23' in qb_html and "<b>Wk 11</b><span>vs TB · " in qb_html
+    assert "<b>Wk 10</b><span>@ PIT · " in qb_html and '<span class="gl-pill gl-w">W</span> 33-27' in qb_html
+    assert '<span class="gl-pill gl-l">L</span> 20-23' in qb_html and "<b>Wk 11</b><span>vs TB · " in qb_html
     assert '<td class="num">7.0</td>' in qb_html and '<td class="num">\u22121</td>' in qb_html, \
         "a rate to a tenth, a true minus"
     assert '<td class="num">89.5</td>' in qb_html and '<td class="num">105.2</td>' in qb_html
@@ -273,6 +273,48 @@ def test_the_sheet_draws_the_log_like_a_box_score():
     assert '<td class="num">60:00</td>' in goalie_html and '<td class="num">93.3</td>' in goalie_html
     assert "No games are on file for this player yet." in empty
 
+
+
+def test_the_sheet_wears_his_club_s_colours_his_face_and_each_opponent_s_mark():
+    """LOGLOOK1 (Ethan, 2026-11-16: "in the game log use team colors and headshots and shit how like espn
+    looks and how the colors looks on the live page"): the sheet opens on a band of his club's colour with his
+    face and his club's mark, every game carries the other club's mark, the sheet sits on his club's wash, and
+    on his own page the log keeps the page's header and draws only the season over it."""
+    node = shutil.which("node") or "/opt/node22/bin/node"
+    if not Path(node).exists():
+        return
+    qb = GL.season_log("nfl", "Joe Burrow", db_path=_history())
+    qb["headshot"] = "https://a.espncdn.com/i/headshots/nfl/players/full/3915511.png"
+    js = ("const esc = (s) => String(s == null ? '' : s).replace(/[&<>\"']/g, (c) => '&#' + c.charCodeAt(0) + ';');"
+          "const escapeHtml = esc, escapeAttr = esc;"
+          "const plural = (n, one) => `${n} ${n === 1 ? one : one + 's'}`;"
+          "const trueMinus = (x) => String(x);"
+          "const teamsIn = () => ({ CIN: { primary: 'fb4f14' }, PIT: { primary: '#FFB612' } });"
+          "const teamMarkIn = (sport, a, n) => `<mark-${a}-${n}>`;"
+          "const playerAvatar = (name, team, o) => `<face ${o.headshot}>`;\n" + PAGE
+          + f"\nconst D = {json.dumps(qb)};"
+          + "process.stdout.write(JSON.stringify([glBodyHTML(D, 'nfl'), glBodyHTML(D, 'nfl', { inPage: true }),"
+            " glClubColor('nfl', 'CIN'), glClubColor('nfl', 'NOPE')]));")
+    out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr[-1500:]
+    sheet, in_page, cin, none = json.loads(out.stdout)
+    assert cin == "#fb4f14" and none == "", "a colour a feed wrote without its hash still reads; no club, none"
+    assert '<header class="gl-head gl-band" style="--gl-c:#fb4f14">' in sheet, sheet[:300]
+    assert '<span class="gl-band-mark" aria-hidden="true"><mark-CIN-150></span>' in sheet
+    assert '<div class="gl-face"><face https://a.espncdn.com/i/headshots/nfl/players/full/3915511.png></div>' in sheet
+    assert "<p><mark-CIN-18>CIN · QB · NFL · 2026" in sheet
+    assert '@ <i class="gl-opp"><mark-PIT-16></i>PIT' in sheet, "each game carries the other club's mark"
+    assert "gl-band" not in in_page and '<div class="gl-head gl-head-in"><h3>Game log <span>2026</span></h3>' in in_page, \
+        "on his page, under the page's own header"
+    assert '<i class="gl-opp"><mark-PIT-16></i>' in in_page
+    page_js = (ROOT / "web" / "js" / "playerpage.js").read_text(encoding="utf-8")
+    assert "slot.innerHTML = glBodyHTML(d, sport, { inPage: true });" in page_js
+    assert 'ov.classList.toggle("gl-club", !!color);' in PAGE and 'ov.style.setProperty("--gl-c", color);' in PAGE
+    css = (ROOT / "web" / "css" / "gamelog.css").read_text(encoding="utf-8")
+    assert "#gl-overlay.gl-club { background: var(--gl-wash); }" in css and ".gl-band {" in css and ".gl-pill {" in css
+    srv = (ROOT / "server.py").read_text(encoding="utf-8")
+    body = srv[srv.index("def _players_gamelog(self, q):"):srv.index("def _players_page(self, q):")]
+    assert 'out["headshot"] = row["headshot"]' in body, "the roster's photo rides on the log"
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

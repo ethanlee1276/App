@@ -7,6 +7,12 @@
   overflow-y: auto; overscroll-behavior: contain;
   background: color-mix(in oklab, var(--bg) 78%, transparent); backdrop-filter: blur(6px); }
 #gl-overlay.open { display: flex; }
+/* ON HIS CLUB'S WASH (LOGLOOK1): the colour from the top of the screen, falling to the page's own
+   ground, as a live game's page sits on its clubs' (detail.css --gp-wash). */
+#gl-overlay {
+  --gl-c: var(--gold);
+  --gl-wash: linear-gradient(180deg, color-mix(in oklab, var(--gl-c) 46%, var(--bg)) 0, color-mix(in oklab, var(--gl-c) 20%, var(--bg)) 300px, color-mix(in oklab, var(--bg) 94%, transparent) 680px); }
+#gl-overlay.gl-club { background: var(--gl-wash); }
 .gl { position: relative; width: 100%; max-width: 1100px; padding: 18px 18px 20px; border-radius: var(--radius-lg);
   background: var(--panel); color: var(--text); }
 /* It floats, so it is glass (styles.css "GLASS FOR WHAT FLOATS"); solid when less transparency is asked for. */
@@ -15,6 +21,25 @@
 .gl-x { position: sticky; top: 8px; z-index: 3; display: block; margin: -8px -8px -26px auto; width: 34px; height: 34px;
   border-radius: 50%; border: 0; background: var(--panel-2); color: var(--text-dim); font-size: 20px; cursor: pointer; }
 .gl-head { margin: 0 40px 12px 0; }
+/* The header in his club's colours with his face (LOGLOOK1), as his page's is
+   (playerpage.css .plr-hero): a band of the colour toward night, the club's mark
+   large and faint behind him, the words the night's in either theme. */
+.gl-band {
+  --gl-band: linear-gradient(118deg, color-mix(in oklab, var(--gl-c, var(--night-2)) 78%, var(--night-3)) 0%, color-mix(in oklab, var(--gl-c, var(--night-2)) 46%, var(--night-3)) 100%);
+  position: relative; overflow: hidden; display: flex; align-items: center; gap: 14px;
+  margin: -18px -18px 14px; padding: 18px 54px 18px 18px; border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--gl-band); color: var(--night-text); }
+.gl-band-mark { position: absolute; right: -14px; top: 50%; transform: translateY(-50%); opacity: .16; pointer-events: none; }
+.gl-face { position: relative; flex: none; }
+.gl-who { position: relative; min-width: 0; }
+.gl-head.gl-band h3 span, .gl-head.gl-band p, .gl-head.gl-band .gl-season {
+  color: color-mix(in oklab, var(--night-text) 80%, transparent); }
+.gl-band p { display: flex; align-items: center; gap: 6px; }
+.gl-band .gl-season select { color: var(--night-text); background: color-mix(in oklab, var(--night-3) 55%, transparent); }
+.gl-head-in { margin-right: 0; }
+/* The band reaches the sheet's top edge: the body holds its own margins, so the close
+   button's pulled-up margin does not collapse into the band's and leave a strip above it. */
+.gl-body { display: flow-root; }
 .gl-head h3 { margin: 0; font-size: var(--fs-xl); }
 .gl-head h3 span { margin-left: 6px; color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600;
   letter-spacing: .06em; text-transform: uppercase; }
@@ -33,11 +58,16 @@
    result and the stats scroll beside it, so a phone keeps its room for numbers. */
 .gl-table .gl-fix { position: sticky; left: 0; z-index: 1; background: var(--panel); }
 .gl-day b { display: block; font-weight: 600; }
-.gl-day span { display: block; color: var(--text-mute); font-size: var(--fs-xs); }
+.gl-day span { display: flex; align-items: center; gap: 4px; color: var(--text-mute); font-size: var(--fs-xs); }
+/* The other club's mark beside its name, as a schedule on ESPN draws it. */
+.gl-opp { display: inline-flex; font-style: normal; }
 .gl-res { font-weight: 600; }
 .gl-w { color: var(--good); }
 .gl-l { color: var(--bad); }
 .gl-t { color: var(--text-mute); }
+/* The result as a pill, tinted in its own colour (app.js .pr-won / .pr-lost). */
+.gl-pill { display: inline-grid; place-items: center; min-width: 22px; padding: 1px 6px; border-radius: 999px;
+  font-size: var(--fs-xs); font-weight: 800; background: color-mix(in oklab, currentColor 16%, transparent); }
 .gl-dnp { color: var(--text-mute); font-style: italic; }
 .gl-sum td { font-weight: 700; }
 .gl-gloss { margin-top: 16px; }

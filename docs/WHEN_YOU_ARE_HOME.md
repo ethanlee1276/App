@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**TY. The game log in the club's colours** (step 657; 17 November). Nothing to run. Your ask: the game log "use team
+colors and headshots ... how like espn looks and how the colors looks on the live page". A player's game log now opens
+on a band in his club's colour (darkened toward night, as his page's header is), with his photo from the roster, his
+club's mark large and faint behind him, and the season picker on the band. The sheet sits on his club's colour, falling
+to the page's own dark, the way a live game's page sits on its two clubs'. Every game carries the other club's logo
+beside its name, and the result is a green or red pill ("W 35-10"). On his own page the Game Log tab keeps the page's
+header and draws only the season over the table, and the Overview's "Recent games" gets the logos and pills too.
+
 **TX. The whole site wears its own light** (step 656; 16 November). Nothing to run. Your ask: the team colours behind
 the player and live pages, "for the whole site ... a subtle gold gradient ... to match the site". Every page now sits
 on one soft layer behind it: the site's gold rising from the top of the screen, a faint amber glow low in the far

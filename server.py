@@ -4909,6 +4909,18 @@ class Handler(BaseHTTPRequestHandler):
             out = gamelog.season_log(sport, player, int(season) if season.isdigit() else None)
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the game log could not be read"}', ".json")
+        # HIS FACE ON THE LOG'S HEADER (LOGLOOK1, 2026-11-16; Ethan: "use team colors
+        # and headshots ... how like espn looks"): the roster's photo, as his page
+        # has it (engine/playerpage.roster_row); none is no face, never an error.
+        if out and out.get("player"):
+            try:
+                from engine import playerpage
+                row = playerpage.roster_row(sport, out["player"], str(out.get("team") or ""),
+                                            position=str(out.get("position") or ""))
+                if row.get("headshot"):
+                    out["headshot"] = row["headshot"]
+            except Exception:                            # noqa: BLE001
+                pass
         return self._send(200, json.dumps(out or {}).encode(), ".json")
 
     def _players_page(self, q):

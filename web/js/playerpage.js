@@ -373,7 +373,7 @@ async function plrLogInto(page, season) {
   if (!season && slot.dataset.drawn) return;
   const d = await glFetch(sport, player, season || (PLR_PICK[key] || {}).log);
   if (!slot.isConnected) return;
-  slot.innerHTML = glBodyHTML(d, sport);
+  slot.innerHTML = glBodyHTML(d, sport, { inPage: true });
   slot.dataset.drawn = "1";
 }
 function plrShow(page, tab) {

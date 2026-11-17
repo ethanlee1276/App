@@ -42,14 +42,38 @@ function glCell(v, label) {
   else out = GL_RATES.includes(label) ? v.toFixed(1) : Number.isInteger(v) ? String(v) : v.toFixed(1);
   return typeof trueMinus === "function" ? trueMinus(out) : out;
 }
+/* IN THE CLUB'S COLOURS, WITH HIS FACE (LOGLOOK1, 2026-11-16; Ethan: "in the game
+   log use team colors and headshots and shit how like espn looks and how the
+   colors looks on the live page"). The sheet opens on a band of his club's
+   colour toward night, his face and his club's mark large and faint behind him,
+   as his page's header does (playerpage.css .plr-hero); the sheet sits on his
+   club's wash, as a live game's page sits on its two clubs'; every game carries
+   the other club's mark, and the result is a green or red pill. */
+//: His club's colour as CSS reads it (a feed may write it without its hash), or "".
+function glClubColor(sport, team) {
+  const t = (typeof teamsIn === "function" ? teamsIn(sport) || {} : {})[team] || {};
+  const raw = String(t.primary || "").trim();
+  return /^#?[0-9a-f]{6}$/i.test(raw) ? (raw[0] === "#" ? raw : `#${raw}`) : "";
+}
+//: A club's mark at a size, where the page can draw one.
+function glMark(sport, team, size) {
+  return team && sport && typeof teamMarkIn === "function" ? teamMarkIn(sport, team, size) : "";
+}
 //: The game, held at the left while the stats scroll: the week (football) or the day,
-//: and under it the opponent and where, with the day in football.
-function glGame(g) {
+//: and under it the other club's mark, the opponent and where, with the day in football.
+function glGame(g, sport) {
   const d = g.date ? new Date(`${g.date}T12:00:00`) : null;
   const day = d && !isNaN(d) ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
-  const opp = `${g.home ? "vs" : "@"} ${g.opponent || ""}`;
-  return g.week ? `<b>Wk ${g.week}</b><span>${escapeHtml([opp, day].filter(Boolean).join(" · "))}</span>`
-    : `<b>${escapeHtml(day || g.date || "")}</b><span>${escapeHtml(opp)}</span>`;
+  const mark = glMark(sport, g.opponent, 16);
+  const opp = `${g.home ? "vs" : "@"} ${mark ? `<i class="gl-opp">${mark}</i>` : ""}${escapeHtml(g.opponent || "")}`;
+  return g.week ? `<b>Wk ${g.week}</b><span>${opp}${day ? ` · ${escapeHtml(day)}` : ""}</span>`
+    : `<b>${escapeHtml(day || g.date || "")}</b><span>${opp}</span>`;
+}
+//: The result as a pill, green for a win and red for a loss: "W 35-10".
+function glResult(g) {
+  if (!g.result) return "";
+  const cls = g.result === "W" ? "gl-w" : g.result === "L" ? "gl-l" : "gl-t";
+  return `<span class="gl-pill ${cls}">${escapeHtml(g.result)}</span> ${escapeHtml(g.score || "")}`;
 }
 
 function glTableHTML(d) {
@@ -61,12 +85,11 @@ function glTableHTML(d) {
     <tr><th class="gl-fix gl-day">Game</th><th>Result</th>${cols.map((c) =>
       `<th class="num" title="${escapeAttr(c.title)}">${escapeHtml(c.label)}</th>`).join("")}</tr></thead>`;
   const rows = (d.games || []).map((g) => {
-    const res = g.result ? `<span class="${g.result === "W" ? "gl-w" : g.result === "L" ? "gl-l" : "gl-t"}">${
-      escapeHtml(g.result)}</span> ${escapeHtml(g.score || "")}` : "";
+    const res = glResult(g);
     const cells = g.dnp ? `<td class="gl-dnp" colspan="${cols.length}">Did not play</td>`
       : g.pending ? `<td class="gl-dnp" colspan="${cols.length}">Box score not in yet</td>`
       : cols.map((c) => `<td class="num">${escapeHtml(glCell((g.values || {})[c.id], c.label))}</td>`).join("");
-    return `<tr><td class="gl-fix gl-day">${glGame(g)}</td><td class="gl-res">${res}</td>${cells}</tr>`;
+    return `<tr><td class="gl-fix gl-day">${glGame(g, d.sport)}</td><td class="gl-res">${res}</td>${cells}</tr>`;
   }).join("");
   const sumRow = (label, vals) => `<tr class="gl-sum"><td class="gl-fix gl-day">${escapeHtml(label)}</td><td></td>${cols.map((c) =>
     `<td class="num">${escapeHtml(glCell((vals || {})[c.id], c.label))}</td>`).join("")}</tr>`;
@@ -84,22 +107,45 @@ function glGlossaryHTML(d) {
   }));
   return seen.size ? `<div class="gl-gloss"><h4>What the columns mean</h4><ul>${[...seen.values()].join("")}</ul></div>` : "";
 }
-function glBodyHTML(d, sport) {
+//: The log: in the sheet, under a band in his club's colours with his face; on his
+//: page (``opts.inPage``), under the page's own header, the season and its picker alone.
+function glBodyHTML(d, sport, opts) {
   if (!d || !d.player || !(d.games || []).length) {
     return `<p class="gl-empty">No games are on file for this player yet. A game is added once its box score is in.</p>`;
   }
+  const o = opts || {};
   const pick = (d.seasons || []).length > 1 ? `<label class="gl-season">Season <select data-gl-season>${d.seasons.map((s) =>
     `<option value="${s}"${s === d.season ? " selected" : ""}>${s}</option>`).join("")}</select></label>` : "";
   const who = [d.team, d.position, GL_SPORT[sport] || String(sport || "").toUpperCase()].filter(Boolean).join(" · ");
-  return `<div class="gl-head"><h3>${escapeHtml(d.player)} <span>Game log</span></h3>
-      <p>${escapeHtml(who)} · ${escapeHtml(String(d.season))}</p>${pick}</div>
-    ${glTableHTML(d)}${glGlossaryHTML(d)}`;
+  if (o.inPage) {
+    return `<div class="gl-head gl-head-in"><h3>Game log <span>${escapeHtml(String(d.season))}</span></h3>${pick}</div>
+      ${glTableHTML({ ...d, sport: d.sport || sport })}${glGlossaryHTML(d)}`;
+  }
+  const color = glClubColor(sport, d.team);
+  const face = typeof playerAvatar === "function"
+    ? playerAvatar(d.player, d.team, { size: 72, headshot: d.headshot || null,
+                                       map: typeof teamsIn === "function" ? teamsIn(sport) : undefined }) : "";
+  return `<header class="gl-head gl-band"${color ? ` style="--gl-c:${escapeAttr(color)}"` : ""}>
+      ${d.team ? `<span class="gl-band-mark" aria-hidden="true">${glMark(sport, d.team, 150)}</span>` : ""}
+      ${face ? `<div class="gl-face">${face}</div>` : ""}
+      <div class="gl-who"><h3>${escapeHtml(d.player)} <span>Game log</span></h3>
+        <p>${glMark(sport, d.team, 18)}${escapeHtml(who)} · ${escapeHtml(String(d.season))}</p>${pick}</div>
+    </header>
+    ${glTableHTML({ ...d, sport: d.sport || sport })}${glGlossaryHTML(d)}`;
+}
+//: The sheet sits on his club's wash, as a live game's page sits on its two clubs'.
+function glWash(ov, d, sport) {
+  const color = d && d.team ? glClubColor(sport, d.team) : "";
+  ov.classList.toggle("gl-club", !!color);
+  if (color) ov.style.setProperty("--gl-c", color);
+  else ov.style.removeProperty("--gl-c");
 }
 
 function glClose() {
   const ov = document.getElementById("gl-overlay");
   if (!ov) return;
-  ov.classList.remove("open");
+  ov.classList.remove("open", "gl-club");
+  ov.style.removeProperty("--gl-c");
   ov.innerHTML = "";
   if (typeof lockScroll === "function") lockScroll(false);
   document.removeEventListener("keydown", glKey);
@@ -122,7 +168,10 @@ async function glOpen(player, sport) {
       const body = ov.querySelector(".gl-body");
       if (body) body.innerHTML = `<p class="gl-empty">Loading ${escapeHtml(sel.value)}…</p>`;
       const d = await glFetch(ov._gl.sport, ov._gl.player, sel.value);
-      if (body && ov._gl) body.innerHTML = glBodyHTML(d, ov._gl.sport);
+      if (body && ov._gl) {
+        body.innerHTML = glBodyHTML(d, ov._gl.sport);
+        glWash(ov, d, ov._gl.sport);
+      }
     });
   }
   ov._gl = { player, sport };
@@ -136,5 +185,8 @@ async function glOpen(player, sport) {
   if (x) x.focus({ preventScroll: true });
   const d = await glFetch(sport, player);
   const body = ov.querySelector(".gl-body");
-  if (body && ov._gl && ov._gl.player === player) body.innerHTML = glBodyHTML(d, sport);
+  if (body && ov._gl && ov._gl.player === player) {
+    body.innerHTML = glBodyHTML(d, sport);
+    glWash(ov, d, sport);
+  }
 }
