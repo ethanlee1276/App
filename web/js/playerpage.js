@@ -17,8 +17,9 @@
                links only);
      Stats     season by season, and the career;
      Bio       the roster's facts;
-     Splits    the season a game's average at a time, by venue, result,
-               month and opponent;
+     Splits    the season a game's average at a time (a baseball season's
+               totals), by venue, result, month, opponent and, for a
+               hitter, the starter's hand;
      Game Log  the season a line a game (js/gamelog.js, drawn in place).
 
    Everything but the headlines comes from /api/players/page (engine/
@@ -232,7 +233,8 @@ function plrSplitletHTML(d) {
   const where = by.get(g.home ? "home" : "away");
   if (where) rows.push(where);
   if (by.get("season")) rows.push(by.get("season"));
-  return `<section class="plr-card"><h3>Splits <span>A game’s average</span></h3>${plrSplitTable(rows, cols, { avg: true })}
+  return `<section class="plr-card"><h3>Splits <span>${plrSplitWord(sp)}</span></h3>${
+    plrSplitTable(rows, cols, { avg: !sp.totals })}
     <button class="btn plr-go" type="button" data-plr-go="splits">Every split</button></section>`;
 }
 //: A priced card wears its grade; a card from his history has none.
@@ -375,6 +377,8 @@ function plrSeasonPick(d, attr) {
   return (d.seasons || []).length > 1 ? `<label class="gl-season">Season <select ${attr}>${d.seasons.map((s) =>
     `<option value="${s}"${s === d.season ? " selected" : ""}>${escapeHtml(plrSeasonLabel(d.sport, s))}</option>`).join("")}</select></label>` : "";
 }
+//: A split is a game's average, or (a baseball split, `totals`) the games added up, as a box score reads.
+const plrSplitWord = (sp) => (sp.totals ? "Totals" : "A game’s average");
 function plrSplitsHTML(d) {
   const sp = d.splits || {};
   if (!(sp.rows || []).length) return `<p class="plr-quiet">No games on file for this season.</p>`;
@@ -387,8 +391,8 @@ function plrSplitsHTML(d) {
     rows.push(r);
   });
   return `<div class="plr-pick">${plrSeasonPick(d, "data-plr-season")}</div>` + (sp.groups || []).map((g) =>
-    `<section class="plr-card"><h3>${escapeHtml(g.title || "Splits")} <span>A game’s average</span></h3>${
-      plrSplitTable(rows, plrCols([g]), { avg: true })}</section>`).join("");
+    `<section class="plr-card"><h3>${escapeHtml(g.title || "Splits")} <span>${plrSplitWord(sp)}</span></h3>${
+      plrSplitTable(rows, plrCols([g]), { avg: !sp.totals })}</section>`).join("");
 }
 
 /* ---------------- drawing ---------------- */

@@ -266,6 +266,44 @@ def test_the_page_leads_with_the_numbers_a_sports_site_leads_with():
     assert specs == ["k9", "k", "gp", "ip"], specs
 
 
+def test_a_baseball_split_is_its_totals_and_a_hitter_is_split_by_the_starters_hand():
+    path, conn = _history()
+    _season(conn)
+    conn.executemany("INSERT INTO game_starters VALUES (?,?,?,?,?,?,?)", [
+        ("mlb", 2026, "2026-06-01", "BOS@NYY", "BOS", "Chris Sale", "L"),
+        ("mlb", 2026, "2026-06-01", "BOS@NYY", "NYY", "Gerrit Cole", "R"),
+        ("mlb", 2026, "2026-06-02", "BOS@NYY", "BOS", "Brayan Bello", "R"),
+        ("mlb", 2026, "2026-06-03", "BOS@NYY", "BOS", "Garrett Crochet", "L")])
+    conn.commit()
+    conn.close()
+    PP._RANKS.clear()
+    data = tempfile.mkdtemp()
+    sp = PP.page("mlb", "Aaron Judge", db_path=path, data_dir=data)["splits"]
+    assert sp["totals"] is True, "a baseball split is read as a box score's totals"
+    rows = {r["key"]: r for r in sp["rows"]}
+    assert rows["season"]["values"]["batting.h"] == 6 and rows["season"]["values"]["batting.avg"] == ".375", \
+        "6 hits, not 2.0 a game"
+    left, right = rows["hand:L"], rows["hand:R"]
+    assert (left["label"], left["gp"], left["values"]["batting.ab"], left["values"]["batting.avg"]) == (
+        "vs left-handed starters", 2, 8, ".375"), left
+    assert (right["label"], right["gp"], right["values"]["batting.h"], right["values"]["batting.avg"]) == (
+        "vs right-handed starters", 1, 3, None), "the props' game: its hits, no average without at-bats"
+    keys = [r["key"] for r in sp["rows"]]
+    assert keys.index("losses") < keys.index("hand:L") < keys.index("hand:R"), keys
+    arm = PP.page("mlb", "Gerrit Cole", db_path=path, data_dir=data)["splits"]
+    assert not any(r["key"].startswith("hand:") for r in arm["rows"]), "a pitcher faces no starter"
+    # A club with two starters on a day (a doubleheader) is left out: the day cannot say which game was whose.
+    conn = _db.connect(path)
+    conn.execute("INSERT INTO game_starters VALUES ('mlb', 2026, '2026-06-03', 'BOS@NYY-G2', 'BOS', 'Kutter Crawford', 'R')")
+    conn.commit()
+    hands = PP.starter_hands(conn, 2026)
+    conn.close()
+    assert hands[("2026-06-01", "BOS")] == "L" and ("2026-06-03", "BOS") not in hands, hands
+    js = (ROOT / "web" / "js" / "playerpage.js").read_text(encoding="utf-8")
+    assert 'const plrSplitWord = (sp) => (sp.totals ? "Totals" : "A game’s average");' in js
+    assert js.count("{ avg: !sp.totals }") == 2, "the Overview's splits and the Splits menu alike"
+
+
 def test_the_nightly_adds_each_final_games_lines():
     src = (ROOT / "engine" / "ingest.py").read_text(encoding="utf-8")
     body = src[src.index("def ingest_mlb_date("):]

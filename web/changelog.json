@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-17",
+      "kind": "ship",
+      "title": "Baseball splits as totals, and a hitter’s against lefties and righties",
+      "body": "An MLB player’s splits now add the games up, the way a box score is read, with the averages beside them, and a hitter’s Splits menu shows how they hit against left-handed and right-handed starters."
+    },
+    {
+      "date": "2026-11-17",
       "kind": "fix",
       "title": "Every fighter’s page has a face and the facts",
       "body": "A fighter whose fights we have not tracked yet now has a face, height, reach and stance on their page too, from what was kept when their profile was drafted."

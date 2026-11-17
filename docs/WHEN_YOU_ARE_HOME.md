@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VY. A baseball player's splits read as totals, and a hitter's by the starter's hand** (step 709; 17
+November). Nothing to run. With the full lines on MLB pages (step VU), the splits read like ESPN's baseball splits:
+each row is the games added up (at-bats, hits, homers, RBI) with the averages beside them, where every other
+league's splits stay a game's average. A hitter's Splits menu also has two new rows, against left-handed and
+against right-handed starters (the starters the nightly already stores with their hand), the platoon split a
+prop bettor checks first. A day a club played two games is left out of those two rows, since the day alone
+cannot say which game was whose.
+
 **VX. A fighter with no tracked fight still has a face and ESPN's facts** (step 708; 17 November). Nothing to
 run. Checked live after the fighter pages shipped: Islam Makhachev's page had his record and rates but no face,
 height, reach or stance, because the page read ESPN's id only off a tracked fight's photo, and the fight history

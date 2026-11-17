@@ -16,8 +16,10 @@ Bio, Splits and Game Log, for anyone the history file or a roster knows.
              each with where it ranks in the league this season;
   * last     the newest game: the score, the result, both clubs' records
              through it, and four of his numbers from it;
-  * splits   the season a game's average at a time: all of it, the last
-             five, home and away, wins and losses, month by month and
+  * splits   the season a game's average at a time (a baseball season's
+             totals, as its box scores are read): all of it, the last
+             five, home and away, wins and losses, a hitter's against
+             left- and right-handed starters, month by month and
              opponent by opponent;
   * career   season by season, totals (a game's average in basketball, as
              the box score is read there) and the career line.
@@ -70,6 +72,13 @@ _RANK_FAIL_SAID = False
 #: (seen live 2026-11-16, the Dodgers "29-19-1" in mid-October). No record is
 #: printed there rather than a wrong one.
 NO_RECORDS = ("mlb",)
+#: Leagues whose splits are read as totals, as a box score's are (2026-11-17):
+#: a baseball split is its at-bats, hits and homers with the rates beside
+#: them (ESPN's MLB splits), not 0.3 homers a game.
+SPLIT_TOTALS = ("mlb",)
+#: A hitter's platoon split, by the hand of the starter they faced
+#: (`game_starters`, the starters the nightly stores with their hand).
+HANDS = (("L", "vs left-handed starters"), ("R", "vs right-handed starters"))
 
 # A headline number: (key, label, title, how, per_game, low_is_better, volume, ranked).
 #   how      gamelog's rule (sum/pct/avg/rating/ip), or "gaa" / "k9" / "gp" below;
@@ -723,6 +732,18 @@ def _line(sport: str, groups, s: dict, gp: int, per_game: bool) -> dict:
             for k, _, cols in groups for c in cols}
 
 
+def starter_hands(conn, season: int) -> dict:
+    """``{(day, club): hand}``: the hand of each club's starter, a day at a
+    time, for a season's MLB games. A club with two starters on a day (a
+    doubleheader) is left out: which game a hitter's row is cannot be told
+    from the day alone."""
+    seen: dict = {}
+    for period, team, throws in conn.execute(
+            "SELECT period, team, throws FROM game_starters WHERE sport='mlb' AND season=?", (int(season),)):
+        seen.setdefault((str(period)[:10], team), []).append(str(throws or "").upper()[:1])
+    return {k: v[0] for k, v in seen.items() if len(v) == 1 and v[0] in ("L", "R")}
+
+
 def _date_of(sport: str, g: dict, res: dict | None) -> str:
     if sport in GL.WEEKLY and not GL._ISO.match(g["period"]):
         return str((res or {}).get("date") or "")[:10]
@@ -859,13 +880,14 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                     last["opp_record"] = _record(by_id, g["opponent"], g["period"])
             out["last"] = last
 
-        # The season's splits, a game's average at a time.
+        # The season's splits, a game's average at a time (a baseball split's totals: SPLIT_TOTALS).
         split_rows = []
+        averages = sport not in SPLIT_TOTALS
 
         def add(key, label, chosen):
             if chosen:
                 split_rows.append({"key": key, "label": label, "gp": len(chosen),
-                                   "values": _line(sport, groups, _sum(chosen), len(chosen), True)})
+                                   "values": _line(sport, groups, _sum(chosen), len(chosen), averages)})
         add("season", "Season", played)
         if len(played) > 5:
             add("last5", "Last 5 games", played[:5])
@@ -873,6 +895,10 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
         add("away", "Away", [g for g in played if not g["home"]])
         add("wins", "Wins", [g for g in played if g.get("result") == "W"])
         add("losses", "Losses", [g for g in played if g.get("result") == "L"])
+        if sport == "mlb" and kind == "batting" and conn is not None:
+            hands = starter_hands(conn, season)
+            for hand, label in HANDS:
+                add(f"hand:{hand}", label, [g for g in played if hands.get((g["date"], g["opponent"])) == hand])
         months: dict = {}
         for g in played:
             if GL._ISO.match(g["date"] or ""):
@@ -885,7 +911,8 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                 opps.setdefault(g["opponent"], []).append(g)
         for opp, chosen in opps.items():
             add(f"vs:{opp}", f"vs {opp}", chosen)
-        out["splits"] = {"season": season, "groups": _shape(groups), "rows": split_rows}
+        out["splits"] = {"season": season, "groups": _shape(groups), "rows": split_rows,
+                         **({} if averages else {"totals": True})}
 
         # Season by season.
         counts = lambda g: GL._played(sport, g["stats"]) and GL.has_line(sport, g["stats"])   # noqa: E731
