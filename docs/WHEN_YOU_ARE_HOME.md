@@ -9350,7 +9350,9 @@ file lacks. The chart filler reads this season's and last season's college throw
 deploy, and the nightly keeps them current. The throws are held compactly while the file streams (about 50 MB at
 most for a season), so the daily pass's memory barely moves. A college passer's matchup view (tonight's defence
 beside the chart) reads the throws too: where on the field the passer throws, and the yards an attempt the
-defence allows there (a sack is no attempt), where it read the passer's runs before.
+defence allows there (a sack is no attempt), where it read the passer's runs before. The college target chart's
+season view is drawn the same banded way: a busy receiver's 150 targets drawn one by one were a solid wedge with the
+longest catches' labels piled on one another.
 
 **WE. Every fighter's page has the fights, the face and the facts** (step 715; 17 November). Nothing to run;
 RUN_NEXT 00m is optional. Islam Makhachev's live page had the record and rates and no photo, no facts and no

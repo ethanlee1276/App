@@ -862,14 +862,55 @@
     return `<p class="cc-note">${how} ${where} Separation is the NFL’s Next Gen Stats number, published for receivers with 5+ targets in a game. Screen, play action, contested, drop and catchable are FTN’s charting.</p>`;
   }
 
+  /* ---------------- a college season, in bands (2026-11-17) ----------------
+     A college season is drawn as bands, not a mark a play: the play file
+     has no depth or side, so a busy receiver's 150 targets or a passer's
+     300 throws drawn one by one, shortest to longest, were a solid wedge
+     with the longest catches' labels on top of one another. The bands are
+     how far the caught ones went (the NFL season chart's depths, read off
+     the yards gained), each shaded by its share and labelled with its
+     count, every catch a dot where it ended, the misses counted at the
+     line and the average across the field. */
+  const CFB_BANDS = [[-7, 0, (y) => y < 0], [0, 10, (y) => y >= 0 && y < 10], [10, 20, (y) => y >= 10 && y < 20],
+                     [20, 99, (y) => y >= 20]];
+  function cfbBands(every, per, missLine) {
+    const done = every.filter((t) => t.c), n = done.length;
+    const ymax = yMaxFor(done.map((t) => Math.min(t.y, 38)).concat([22]));
+    const counts = CFB_BANDS.map(([, , inBand]) => done.filter((t) => inBand(t.y)).length);
+    const most = Math.max(1, ...counts);
+    let cells = "", labels = "", dots = "";
+    CFB_BANDS.forEach(([y0, y1], b) => {
+      const k = counts[b], yb = Math.max(YMIN + 0.4, y0), yt = Math.min(ymax, y1);
+      if (yt <= yb) return;
+      const poly = [proj(-SIDE, yb, ymax), proj(SIDE, yb, ymax), proj(SIDE, yt, ymax), proj(-SIDE, yt, ymax)];
+      cells += `<polygon class="rc-cell" points="${poly.map(pt).join(" ")}" style="fill-opacity:${k ? (0.1 + 0.45 * k / most).toFixed(2) : "0"}"/>`;
+      if (!k) return;
+      const m = proj(SIDE * 0.55, (yb + yt) / 2, ymax);
+      labels += `<text class="cc-raylbl rc-lbl" x="${m[0].toFixed(1)}" y="${(m[1] - 2).toFixed(1)}" text-anchor="middle">${pct(k / n)}</text>
+        <text class="cc-raysub rc-lbl" x="${m[0].toFixed(1)}" y="${(m[1] + 14).toFixed(1)}" text-anchor="middle">${k} of ${n}</text>`;
+    });
+    // Spread across the field by the golden ratio: no order to read, and no two dots on one another.
+    done.forEach((t, i) => {
+      const c = proj(-SIDE + 2 + (2 * SIDE - 4) * ((i * 0.6180339887) % 1), Math.max(-6.5, clampY(t.y, ymax)), ymax);
+      dots += `<circle class="rc-dot c" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.4"/>`;
+    });
+    const at = proj(-SIDE + 1.5, 1.2, ymax);
+    labels += `<text class="cc-raylbl" x="${at[0].toFixed(1)}" y="${(at[1] - 4).toFixed(1)}">${missLine}</text>`;
+    const avg = n ? done.reduce((a, t) => a + t.y, 0) / n : 0;
+    const a = proj(-SIDE, clampY(avg, ymax), ymax), b = proj(SIDE, clampY(avg, ymax), ymax);
+    labels += `<line class="cc-avg" x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"/>
+      <text class="cc-raylbl" x="${(a[0] + 6).toFixed(1)}" y="${(a[1] - 6).toFixed(1)}">${num1(avg)} ${per}</text>`;
+    return fieldSVG(ymax, []) + cells + dots + labels;
+  }
+
   /* ---------------- college targets (2026-10-13) ----------------
      The college play file names who was thrown at, whether he caught it,
      the yards, the down and the yards to the goal — and nothing about how
      far the ball travelled or to which side. So a college target is drawn
      the way a college carry is: straight upfield from the line, across
-     the field in the order they were thrown (a game) or shortest to
-     longest (the season); a catch as long as its yards, a miss a ring at
-     the line. */
+     the field in the order they were thrown; a catch as long as its
+     yards, a miss a ring at the line. The season is drawn as bands
+     (`cfbBands`). */
   const zoneWord = (t) => (t.yl == null ? "" : t.yl <= 5 ? "Goal line" : t.yl <= 20 ? "Red zone" : "");
   function cfbTargetMarks(ts, xOf, ymax) {
     let body = "";
@@ -907,16 +948,8 @@
     const every = [];
     d.games.forEach((g) => (g.targets || []).forEach((t) => every.push(t)));
     if (!every.length) return "";
-    const sorted = every.map((t, i) => [t, -1 - i]).sort((a, b) => (a[0].c ? a[0].y : -99) - (b[0].c ? b[0].y : -99));
-    const ymax = yMaxFor(sorted.map(([t]) => (t.c ? t.y : 0)));
-    const n = sorted.length;
-    let body = cfbTargetMarks(sorted, (j) => -22 + 44 * (j + 0.5) / n, ymax);
-    const L = d.season_line, avg = L.rec ? L.yds / L.rec : 0;
-    const a = proj(-SIDE, clampY(avg, ymax), ymax), b = proj(SIDE, clampY(avg, ymax), ymax);
-    // The average on the left, over the misses, where no catch is drawn.
-    body += `<line class="cc-avg" x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"/>
-      <text class="cc-raylbl" x="${(a[0] + 6).toFixed(1)}" y="${(a[1] - 6).toFixed(1)}">${num1(avg)} a catch</text>`;
-    return svgWrap(fieldSVG(ymax, [], [[-22, "Misses"], [15, "Longest"]]) + body, null, "cfb", n, "targets");
+    const missed = every.filter((t) => !t.c).length;
+    return svgWrap(cfbBands(every, "a catch", `${missed} not caught`), null, "cfb", every.length, "targets");
   }
   function cfbTargetTiles(line) {
     const t = [tile("Targets", line.tgt), tile("Receptions", line.rec), tile("Yards", Math.round(line.yds)),
@@ -925,12 +958,16 @@
     return `<div class="cc-tiles cc-tiles-7">${t.join("")}</div>`;
   }
   const redZone = (d) => (d.by_field || []).filter((z) => z.zone === "rz" || z.zone === "gl").reduce((a, z) => a + z.tgt, 0);
-  function cfbTargetLegend() {
+  function cfbTargetLegend(season) {
+    if (season) {
+      return `<div class="cc-legend" aria-hidden="true"><span><i class="dt c"></i>A catch, at the yards it gained</span>
+        <span><i class="sw cell"></i>Share of the catches</span></div>`;
+    }
     return `<div class="cc-legend" aria-hidden="true"><span><i class="sw route"></i>Caught, to where the play ended</span>
       <span><i class="dt m"></i>Incomplete</span><span><i class="mk td"></i>Touchdown</span></div>`;
   }
   function cfbTargetNote(d) {
-    return `<p class="cc-note">The college play file records who was thrown at, whether it was caught, the yards, the down and where the play started — not how far the ball travelled or to which side of the field — so each target is drawn straight upfield from the line: a catch as long as the yards it gained, an incompletion as a ring at the line. A game runs left to right in the order they were thrown; the season, shortest to longest. The file names the intended receiver on 92% of 2026’s incompletions and 78% of 2025’s; a miss it doesn’t name, and every interception (it never names that receiver), isn’t here, so the true target count can run a little higher. Seasons before 2025 name too few misses to draw, and a week the file lost its scoring plays from is left out, as it is from the game log.</p>`;
+    return `<p class="cc-note">The college play file records who was thrown at, whether it was caught, the yards, the down and where the play started — not how far the ball travelled or to which side of the field — so each target is drawn straight upfield from the line: a catch as long as the yards it gained, an incompletion as a ring at the line. A game runs left to right in the order they were thrown; the season shades how far the catches went, a dot for each, with the misses counted at the line. The file names the intended receiver on 92% of 2026’s incompletions and 78% of 2025’s; a miss it doesn’t name, and every interception (it never names that receiver), isn’t here, so the true target count can run a little higher. Seasons before 2025 name too few misses to draw, and a week the file lost its scoring plays from is left out, as it is from the game log.</p>`;
   }
 
   /* ---------------- college throws (2026-11-17) ----------------
@@ -984,45 +1021,13 @@
     return svgWrap(fieldSVG(ymax, [], ticks) + cfbPassMarks(ts, xOf, ymax), g, "cfb",
                    ts.filter(([t]) => t.k === "pass").length, "throws");
   }
-  /* The season is a passer's hundreds of throws, too many to draw one
-     by one: the completions' bands, how far each went (the NFL season
-     chart's depths, read off the yards gained), each shaded by its share
-     and labelled with its count, every completion a dot where it ended,
-     and the misses and picks counted at the line. */
-  const CFB_BANDS = [[-7, 0, (y) => y < 0], [0, 10, (y) => y >= 0 && y < 10], [10, 20, (y) => y >= 10 && y < 20],
-                     [20, 99, (y) => y >= 20]];
   function cfbPassSeason(d) {
     const every = [];
     d.games.forEach((g) => (g.throws || []).forEach((t) => { if (t.k === "pass") every.push(t); }));
     if (!every.length) return "";
-    const done = every.filter((t) => t.c), n = done.length;
-    const ymax = yMaxFor(done.map((t) => Math.min(t.y, 38)).concat([22]));
-    const counts = CFB_BANDS.map(([, , inBand]) => done.filter((t) => inBand(t.y)).length);
-    const most = Math.max(1, ...counts);
-    let cells = "", labels = "", dots = "";
-    CFB_BANDS.forEach(([y0, y1], b) => {
-      const k = counts[b], yb = Math.max(YMIN + 0.4, y0), yt = Math.min(ymax, y1);
-      if (yt <= yb) return;
-      const poly = [proj(-SIDE, yb, ymax), proj(SIDE, yb, ymax), proj(SIDE, yt, ymax), proj(-SIDE, yt, ymax)];
-      cells += `<polygon class="rc-cell" points="${poly.map(pt).join(" ")}" style="fill-opacity:${k ? (0.1 + 0.45 * k / most).toFixed(2) : "0"}"/>`;
-      if (!k) return;
-      const m = proj(SIDE * 0.55, (yb + yt) / 2, ymax);
-      labels += `<text class="cc-raylbl rc-lbl" x="${m[0].toFixed(1)}" y="${(m[1] - 2).toFixed(1)}" text-anchor="middle">${pct(k / n)}</text>
-        <text class="cc-raysub rc-lbl" x="${m[0].toFixed(1)}" y="${(m[1] + 14).toFixed(1)}" text-anchor="middle">${k} of ${n}</text>`;
-    });
-    // Spread across the field by the golden ratio: no order to read, and no two dots on one another.
-    done.forEach((t, i) => {
-      const c = proj(-SIDE + 2 + (2 * SIDE - 4) * ((i * 0.6180339887) % 1), Math.max(-6.5, clampY(t.y, ymax)), ymax);
-      dots += `<circle class="rc-dot c" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="2.4"/>`;
-    });
-    const picks = every.filter((t) => t.int).length, missed = every.length - n - picks;
-    const at = proj(-SIDE + 1.5, 1.2, ymax);
-    labels += `<text class="cc-raylbl" x="${at[0].toFixed(1)}" y="${(at[1] - 4).toFixed(1)}">${missed} incomplete${picks ? ` · ${picks} intercepted` : ""}</text>`;
-    const L = d.season_line, avg = L.cmp ? L.yds / L.cmp : 0;
-    const a = proj(-SIDE, clampY(avg, ymax), ymax), b = proj(SIDE, clampY(avg, ymax), ymax);
-    labels += `<line class="cc-avg" x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"/>
-      <text class="cc-raylbl" x="${(a[0] + 6).toFixed(1)}" y="${(a[1] - 6).toFixed(1)}">${num1(avg)} a completion</text>`;
-    return svgWrap(fieldSVG(ymax, []) + cells + dots + labels, null, "cfb", every.length, "throws");
+    const picks = every.filter((t) => t.int).length, missed = every.filter((t) => !t.c).length - picks;
+    return svgWrap(cfbBands(every, "a completion", `${missed} incomplete${picks ? ` · ${picks} intercepted` : ""}`),
+                   null, "cfb", every.length, "throws");
   }
   function cfbPassTiles(line) {
     const t = [tile("Cmp/Att", `${line.cmp}/${line.att}`), tile("Yards", Math.round(line.yds)),
@@ -1668,7 +1673,7 @@
       tail = splitsCard("Every split · depth, side, route, coverage, down", routeTables(d));
     } else if (S.view === "season" && R && d.air === false) {
       title = `<div class="cc-title">${esc(`${d.season} season · ${L.tgt} targets in ${d.games.length} game${d.games.length === 1 ? "" : "s"}`)}</div>`;
-      dist = distCard(K, "", "", stage(cfbTargetSeason(d)), cfbTargetLegend(), note, ink);
+      dist = distCard(K, "", "", stage(cfbTargetSeason(d)), cfbTargetLegend(true), note, ink);
       stats = statsCard("Season stats", `${cfbTargetTiles(L)}
         <div class="cc-tiles cc-tiles-2">${tile("Yds/target", num1(L.ypt))}${tile("Targets a game", num1(L.tgt / d.games.length))}${tile("Red zone targets", redZone(d))}${tile("Long", L.long == null ? "—" : Math.round(L.long))}</div>`);
       tail = splitsCard("Every split · down, field position", routeTables(d));

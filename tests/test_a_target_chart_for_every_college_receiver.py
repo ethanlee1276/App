@@ -258,7 +258,8 @@ def test_the_page_draws_college_targets_straight_upfield():
         catches: (svg.match(/class="rc-route/g) || []).length, misses: (svg.match(/class="rc-miss/g) || []).length,
         tds: (svg.match(/class="cc-td"/g) || []).length, marks: (svg.match(/class="cc-carry"/g) || []).length,
         aria: /aria-label="Target chart: 3 targets vs ALA\\. Each one is listed below\\."/.test(svg),
-        seasonMarks: (season.match(/class="cc-carry"/g) || []).length, avg: season.includes("18.0 a catch"),
+        dots: (season.match(/class="rc-dot c"/g) || []).length, avg: season.includes("18.0 a catch"),
+        missed: season.includes("2 not caught"), bands: (season.match(/>1 of 3</g) || []).length,
         rows: (list.match(/class="cc-row/g) || []).length, list,
         tiles: T.cfbTargetTiles(d.season_line), note: T.cfbTargetNote(d), tables: T.routeTables(d),
         title: T.kindOf("routes", "cfb").title, nflTitle: T.kindOf("routes", "nfl").title,
@@ -268,7 +269,9 @@ def test_the_page_draws_college_targets_straight_upfield():
     if got is None:
         return
     assert got["catches"] == 2 and got["misses"] == 1 and got["tds"] == 1 and got["marks"] == 3 and got["aria"]
-    assert got["seasonMarks"] == 5 and got["avg"], "54 yards on three catches: 18.0 a catch over the season"
+    # The season is bands since 2026-11-17 (`cfbBands`): a busy receiver's 150 targets drawn one by one were a wedge.
+    assert got["dots"] == 3 and got["avg"], "54 yards on three catches: 18.0 a catch over the season"
+    assert got["missed"] and got["bands"] == 3, "14, 9 and 31 yards: one in each band, the two misses counted"
     assert got["rows"] == 3 and ">Inc<" in got["list"] and ">+14<" in got["list"] and "Red zone" in got["list"]
     # Targets and receptions are two tiles since Ethan's renders (2026-10-14).
     assert "Targets</span><b>5</b>" in got["tiles"] and "Receptions</span><b>3</b>" in got["tiles"]
