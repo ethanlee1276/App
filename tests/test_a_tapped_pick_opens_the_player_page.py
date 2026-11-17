@@ -67,6 +67,7 @@ CARD = _Harness("test_the_whole_pick_card_opens_its_pick")
 #: market at another line, and a fight.
 STUBS = r"""
 var state = { sport: "nfl" }, _profTab = {}, calls = [];
+const _searchListed = new Map();
 const PLR_LG = /^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/;
 const EDGE = [{ player: "Chuba Hubbard", market: "rec", market_label: "Receptions", side: "OVER", line: 2.5, sport: "nfl" },
               { player: "Ilia Topuria", market: "ml", market_label: "Moneyline", side: "YES", line: null, sport: "ufc" }];
@@ -100,7 +101,7 @@ def test_a_players_pick_opens_the_player_page_on_its_market():
       openPick("Chuba Hubbard|rec|over|1.5", { likely: true });
       openPick("Chuba Hubbard|rec|OVER|2.5", { bet: JSON.stringify({ player: "Chuba Hubbard", market: "rec", odds: -150 }) });
       openPick("Chuba Hubbard|rec|OVER|2.5", { bet: "not json" });
-      return { calls, tab: _profTab };
+      return { calls, tab: _profTab, listed: _searchListed.get("chuba-hubbard") };
     """)
     if got is None:
         return
@@ -112,6 +113,8 @@ def test_a_players_pick_opens_the_player_page_on_its_market():
     assert bet[3]["bet"] == {"player": "Chuba Hubbard", "market": "rec", "odds": -150}, "a Live row's bet as placed"
     assert broken[0] == "player page" and broken[3]["bet"] is None, "a bad bet never stops the tap"
     assert got["tab"] == {"Chuba Hubbard": "Receptions"}, "the page opens on the tapped market"
+    assert got["listed"] == {"player": "Chuba Hubbard", "team": "", "position": "", "headshot": "", "sport": "nfl"}, \
+        "the page is handed its player, as a search hands one over: no league search first"
 
 
 def test_a_game_bet_a_fight_and_a_gone_pick_keep_the_pick_page():
