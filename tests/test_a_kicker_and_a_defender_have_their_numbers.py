@@ -235,12 +235,18 @@ def test_a_punters_page_and_a_college_defenders_page_say_why_they_are_empty():
     if not Path(node).exists():
         return
     stubs = ("const esc = (s) => String(s == null ? '' : s).replace(/[&<>\"']/g, (c) => '&#' + c.charCodeAt(0) + ';');"
-             "const escapeHtml = esc, escapeAttr = esc; const document = { addEventListener() {} };\n")
+             "const escapeHtml = esc, escapeAttr = esc; const trueMinus = (x) => x;"
+             "const document = { addEventListener() {} };\n")
     js = stubs + PAGE_JS + f"""
-process.stdout.write(JSON.stringify([plrStatsHTML({json.dumps(page)}), plrStatsHTML({{}})]));"""
+process.stdout.write(JSON.stringify([plrStatsHTML({json.dumps(page)}), plrStatsHTML({{}}),
+  plrNum(52, "LNG", true), plrNum(100, "FT%", false), plrNum(41.0, "3P%", true)]));"""
     out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-1500:]
-    punter, nobody = json.loads(out.stdout)
+    punter, nobody, lng, ftp, fg3p = json.loads(out.stdout)
+    assert lng == "52", "a long is one kick, never a game's average (52.0)"
+    assert (ftp, fg3p) == ("100.0", "41.0"), "a percentage reads to a tenth, as FG% does"
+    gl_js = (ROOT / "web" / "js" / "gamelog.js").read_text(encoding="utf-8")
+    assert 'const GL_RATES = ["CMP%", "AVG", "RTG", "FG%", "3P%", "FT%", "SV%"];' in gl_js
     assert punter == ('<p class="plr-quiet">Our NFL stats feed doesn&#39;t include punting, '
                       'so there are no numbers to show here.</p>'), punter
     assert nobody == '<p class="plr-quiet">No seasons on file yet.</p>'

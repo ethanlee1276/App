@@ -32,7 +32,9 @@ const PLR_TABS = [["overview", "Overview"], ["news", "News"], ["stats", "Stats"]
 const PLR_CACHE = new Map();
 const PLR_TAB = {};
 //: Rates print to a tenth (goals against to a hundredth), counts whole.
-const PLR_RATES = ["CMP%", "AVG", "RTG", "FG%", "SV%", "K/9"];
+const PLR_RATES = ["CMP%", "AVG", "RTG", "FG%", "3P%", "FT%", "SV%", "K/9"];
+//: A season's best single game, never an average: a kicker's long reads 52, not 52.0.
+const PLR_WHOLE = ["LNG"];
 //: Leagues whose season is said across two years ("2026–27"); the file labels a season by the year it started.
 const PLR_TWO_YEARS = ["nba", "nhl", "cbb"];
 //: The seasons picked in the Splits and Game Log menus, kept through the page's redraw.
@@ -72,7 +74,8 @@ function plrNum(v, label, avg) {
   else if (label === "TOI") {
     const m = Math.floor(v), s = Math.round((v - m) * 60);
     out = `${m}:${String(s === 60 ? 0 : s).padStart(2, "0")}`;
-  } else if (avg) out = v.toFixed(1);
+  } else if (PLR_WHOLE.includes(label)) out = String(Math.round(v));
+  else if (avg) out = v.toFixed(1);
   else if (Number.isInteger(v)) out = v.toLocaleString();
   else out = v.toFixed(1);
   return trueMinus(out);

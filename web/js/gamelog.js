@@ -29,7 +29,7 @@ async function glFetch(sport, player, season) {
 }
 
 //: The rate columns, always to a tenth (7.0, not 7).
-const GL_RATES = ["CMP%", "AVG", "RTG", "FG%", "SV%"];
+const GL_RATES = ["CMP%", "AVG", "RTG", "FG%", "3P%", "FT%", "SV%"];
 //: A cell as the column says it: counts whole, rates to a tenth, time on ice as m:ss, a true minus.
 function glCell(v, label) {
   if (v == null || v === "") return "—";
