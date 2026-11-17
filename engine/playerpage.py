@@ -364,6 +364,20 @@ def _rebuild_ranks(key: tuple, db_path=None) -> None:
         _REFRESHING.discard(key)
 
 
+def forget_ranks(sport: str) -> int:
+    """Drop a league's kept rank tables, so the next ask (or `warm`, which
+    builds only the ones missing) reads the rows as they now stand. For a
+    fill that writes a column the tables were built without
+    (launch._fill_missing_lines): live on 17 Nov a page asked for during the
+    first fill built the kickers' table off a few nights' tries, and kept it
+    six hours (RANK_TTL), Cameron Dicker first in everything and Brandon
+    Aubrey in nothing. Returns how many it dropped."""
+    gone = [k for k in list(_RANKS) if k[0] == sport]
+    for k in gone:
+        _RANKS.pop(k, None)
+    return len(gone)
+
+
 def warm(db_path=None, delay: float = 60.0) -> threading.Thread:
     """Every league's rank tables for its newest season, built in the
     background (after ``delay`` seconds, so the server's own start comes

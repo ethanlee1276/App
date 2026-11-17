@@ -5118,6 +5118,10 @@ def _fill_missing_lines() -> dict:
                 continue
             if got["rows"]:
                 print(f"  {league.upper()} {what} filled ({got['rows']:,} rows).")
+                # A table asked for while the fill ran was built without these
+                # rows; the warm below builds only the missing ones.
+                from engine import playerpage as _pp
+                _pp.forget_ranks(league)
             for why in got["skipped"][:5]:
                 print(f"  ⚠️  {why}")
     finally:

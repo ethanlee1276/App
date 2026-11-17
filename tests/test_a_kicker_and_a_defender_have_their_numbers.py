@@ -344,6 +344,12 @@ def test_the_server_fills_them_at_start_and_never_falls_over_on_it():
         assert call in fill, call
     assert "WHERE sport=? AND market=?" in fill and "PASS_YDS" in fill, \
         "the seasons the pages show, not the games table's back to 1999"
+    assert "_pp.forget_ranks(league)" in fill, "a table built mid-fill is not kept six hours"
+    PP._RANKS.clear()
+    PP._RANKS[("nfl", 2026, "kicking")] = (0.0, {"fgm": {"Cameron Dicker": 1}})
+    PP._RANKS[("nba", 2026, "box")] = (0.0, {})
+    assert PP.forget_ranks("nfl") == 1 and list(PP._RANKS) == [("nba", 2026, "box")]
+    PP._RANKS.clear()
     import launch
     from engine import db as dbmod
     real = dbmod.connect

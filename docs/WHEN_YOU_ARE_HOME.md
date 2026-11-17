@@ -9346,7 +9346,10 @@ Moore"), a typed name no roster carries (a typo), or a near name on the club the
 says the stats feed doesn't include punting. And a second fill for kickers and defenders: the first one gave
 past seasons their box lines but not the board's own three numbers (field goals made, kicking points, total
 tackles), which were only ever stored from 10 October, so Dicker's and Anderson's 2025 rows read "—" there. The
-next restart fills those for every past season too; nothing on the board is priced from them.
+next restart fills those for every past season too; nothing on the board is priced from them. One more from
+the live check: the league ranks on those pages were built while the first fill was still running and kept for
+six hours, so Dicker read first in everything and Brandon Aubrey had no place at all. A fill now drops its
+league's kept ranks, and the restart rebuilds them from the filled rows.
 
 **UN. Hockey's +/- and penalty minutes, basketball's percentages, and a skater with no goal yet** (step 672;
 17 November). Nothing to run. More of "the player page is missing a bunch of data". A real bug first: a skater
