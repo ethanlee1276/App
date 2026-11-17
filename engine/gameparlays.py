@@ -1364,9 +1364,20 @@ def build(board: dict, sport: str, now=None) -> dict:
         if not x:
             continue
         out_games.append(build_game(sp, x["g"], x["legs"], x["scorers"], priced=x["priced"]))
+    # A LEAGUE'S THREE-LEG TICKETS ON PAPER (engine/parlayhold; Ethan,
+    # 2026-11-17: "ok" to tracking them without posting while they hit under
+    # 25%): built and journaled as ever (`paper_threes`), posted nowhere, and
+    # each game says why in their place.
+    paper = paper_hold(sp)
+    if paper:
+        for x in out_games:
+            x["paper_threes"], x["threes"] = x.get("threes") or [], []
+            x["threes_note"], x["threes_paper"] = paper["note"], True
     return {"sport": sp, "date": board.get("date") or "", "games": out_games,
+            **({"threes_paper": paper} if paper else {}),
             "take_edge": TAKE_EDGE, "leg_floor": LEG_FLOOR,
             "counts": {"games": len(out_games), "threes": sum(len(x["threes"]) for x in out_games),
+                       "paper_threes": sum(len(x.get("paper_threes") or []) for x in out_games),
                        "scorers": sum(len(x["scorers"]) for x in out_games),
                        # One-club tickets (`choose`), each saying why it is one.
                        "one_club_threes": sum(one_club(t) for x in out_games for t in x["threes"]),
@@ -1384,6 +1395,17 @@ def build(board: dict, sport: str, now=None) -> dict:
                      "parlays have lost money on our record so far, because a book's same-game price "
                      "takes more than the link between our picks has paid. Take one only at its price "
                      "or better.")}
+
+
+def paper_hold(sport: str) -> dict | None:
+    """The hold on a league's three-leg tickets (engine/parlayhold) with its
+    words, or None. A hold that cannot be read holds nothing."""
+    try:
+        from . import parlayhold
+        h = parlayhold.held(sport)
+        return {**h, "note": parlayhold.words(h)} if h else None
+    except Exception:                                        # noqa: BLE001
+        return None
 
 
 def attach(board: dict, sport: str) -> dict:
@@ -1446,7 +1468,8 @@ def journal_rows(gp: dict) -> list[dict]:
         # their legs were journaled before it, or not at all.
         if isinstance(x, dict) and x.get("kept"):
             continue
-        for t in (x.get("threes") or []) + (x.get("scorers") or []):
+        # Tickets on paper too (`paper_threes`): graded like every other.
+        for t in (x.get("threes") or []) + (x.get("paper_threes") or []) + (x.get("scorers") or []):
             for l in t.get("legs") or []:
                 k = _leg_id(l)
                 if k in seen or l.get("_game_leg"):

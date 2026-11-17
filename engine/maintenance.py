@@ -1462,6 +1462,17 @@ def settle_open(log=print, state_path: Path | None = None,
                         f"{len(ph['released'])} back")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  paper holds skipped: {exc}")
+            # A LEAGUE'S THREE-LEG PARLAYS ON PAPER while they hit under 25%
+            # (engine/parlayhold; Ethan, 2026-11-17: "ok"), measured on the
+            # same fresh grades; the builds read it.
+            try:
+                from . import parlayhold
+                plh = parlayhold.refresh(lconn)
+                verdicts["three-leg parlays on paper"] = parlayhold.verdict(plh)
+                if plh["holds"]:
+                    log("  three-leg parlays on paper: " + ", ".join(h["sport"].upper() for h in plh["holds"]))
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  three-leg parlay holds skipped: {exc}")
             # The journal fitters: temperature + player memory for every
             # sport with no deep-history harness (hoops, college, UFC).
             # A sport crosses its 200-bet floor the night it happens.

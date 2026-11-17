@@ -380,8 +380,10 @@ def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
         if isinstance(x, dict) and x.get("kept"):
             continue
         for kind, source in SOURCES.items():
-            key_name = "threes" if kind == "three" else "scorers"
-            for t in x.get(key_name) or []:
+            # A league's three-leg tickets on paper (engine/parlayhold) are
+            # journaled and graded as ever: the record keeps learning on them.
+            keys = ("threes", "paper_threes") if kind == "three" else ("scorers",)
+            for t in [t for k in keys for t in x.get(k) or []]:
                 legs = t.get("legs") or []
                 if len(legs) < 2:
                     continue
@@ -610,6 +612,16 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                          "chance": round(sum(leg_p) / len(leg_p), 3) if leg_p else None,
                          "once": once, "by_pool": by_pool},
                 "markets": mk, "recent": news}
+    # A league's three-leg tickets on paper (engine/parlayhold) say so on
+    # their record: still graded here, posted nowhere until they hit 25%.
+    try:
+        from . import parlayhold
+        for sp, kinds in out.items():
+            h = parlayhold.held(sp)
+            if h and "three" in kinds:
+                kinds["three"]["paper"] = {"since": h.get("since"), "note": parlayhold.words(h)}
+    except Exception:                                        # noqa: BLE001
+        pass
     return out
 
 

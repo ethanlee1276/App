@@ -1096,6 +1096,7 @@ function gpBlockHTML(b, kind, sport) {
   }).join("");
   return `<div class="card rec-report rec-gp">
       <div class="rr-head">${escapeHtml(gpKindWord(kind, sport))}${b.since ? ` <span class="rr-mute">· since ${escapeHtml(gpDay(b.since))}</span>` : ""}</div>
+      ${b.paper && b.paper.note ? `<p class="rec-gp-close">${escapeHtml(b.paper.note)}</p>` : ""}
       <div class="stats rec-kpis">${tiles}</div>${close}
       ${markets ? `<div class="rr-head">Legs by market</div>${markets}` : ""}
       ${recent ? `<div class="rr-head">Newest tickets</div><div class="rec-gp-recent">${recent}</div>` : ""}

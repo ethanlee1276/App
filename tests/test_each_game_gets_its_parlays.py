@@ -24,6 +24,11 @@ sys.path.insert(0, str(ROOT))
 
 from engine import gameparlays as GP                # noqa: E402
 
+# These hold the builder's own choices. A league's tickets on paper (engine/
+# parlayhold: the NFL's from 17 November) leave the board by a rule with its own
+# tests (test_three_leg_parlays_go_on_paper), so here no league is held.
+GP.paper_hold = lambda sport: None
+
 #: The matchup scan's numbers for the game (engine/gamescan): each defence's
 #: rank against the pass and the run, and red-zone trips both ways — what the
 #: touchdown pairs' research reads (gameparlays.research, 2026-11-14).

@@ -839,7 +839,9 @@
     RESULTS = (opts && typeof opts.results === "function" && opts.results(g)) || null;
     CLOSED = !!((g && g.kept) || RESULTS);
     try {
+      // On paper while the league's three-leg tickets hit under 25% (engine/parlayhold): the page says why once.
       return `${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
+        : g.threes_paper ? `<p class="gr-note">Three-leg parlays: on paper for now, built and graded but not posted.</p>`
         : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}
         ${(g.scorers || []).length ? block({ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) })
           : (g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : "")}`;

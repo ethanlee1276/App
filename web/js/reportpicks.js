@@ -516,8 +516,10 @@ async function renderReportPicks() {
       <div class="es-sub">The reports are written with the board, one for every game on it, and their picks and
         parlays land here as they are.</div></div>`
     : rpTodayHTML(d, byGame, keys);
+  // A league's three-leg parlays on paper (engine/parlayhold) say why once, here.
+  const paper = locked ? "" : ((d.game_parlays || {}).threes_paper || {}).note || "";
   host.innerHTML = `<p class="set-note rpk-lead">Every pick and parlay our game reports post, game by game, and how
-      they have done.</p>${subtabbedHTML("reportpicks", [
+      they have done.</p>${paper ? `<p class="set-note">${escapeHtml(paper)}</p>` : ""}${subtabbedHTML("reportpicks", [
       ["today", "Today’s picks", "Every game’s picks, then its parlays and pairs", today],
       ["record", "Record", "Every report pick and parlay, won or lost", `<div class="rpk-book" data-rpk-book="1"></div>`],
       ["facts", "How our reports did", "Every finished game’s report, fact-checked", rpFactsHTML()]])}`;

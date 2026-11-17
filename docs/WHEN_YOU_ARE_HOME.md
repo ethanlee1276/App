@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VS. The NFL's three-leg parlays are on paper while they hit under 25%** (step 703; 17 November). Nothing to
+run. You said "ok" to tracking the NFL's three-leg parlays without posting them while they hit under 25% (they
+had hit 30 of 175, 17%). From the first NFL build after this deploy, each game's three-leg parlays are still
+built, journaled and graded every slate, but no page shows them as picks: the game report's parlays section, the
+Report Picks page and each game's tickets say they are on paper and why, and the Record page's NFL three-leg block
+keeps grading them under the same note. The touchdown pairs are untouched. The rule is automatic and every
+league's, like the Most Likely paper holds: a league whose last 100 graded three-leg tickets (50 at least) hit
+under 25% goes on paper the same way, and a league comes back by itself once 50 tickets graded since its hold
+began hit 25% or better. It is measured each night on the settle pass, beside the Most Likely holds
+(engine/parlayhold, saved as parlayhold.json in the model state); the NFL's starts as a standing hold from today,
+so it applies from the first build, before any night has measured it.
+
 **VR. A tapped pick opens the player's page** (step 702; 17 November). Nothing to run. You answered "always
 send too the new player page" for the picks on the Edge and Most Likely boards. A tap on a player's pick, wherever
 it is drawn (Most Likely, the Edge page and the board's cards, long shots, Tonight, the Live tab's bets, a shared
