@@ -280,26 +280,38 @@ def nfl_box_rows(stats_rows: list[dict], season: int) -> list[dict]:
 FINISHED_SEASON_TTL = 365 * 86400
 
 
-def _box_marked(conn, sport: str, season: int) -> bool:
-    """Does a season hold its kickers' lines (the BOX_MARKER market)? A
-    night's box score (engine/boxsettle, game ids ending "-box") is one
-    game's line, not the season's, so it does not count."""
+def _box_marked(conn, sport: str, season: int, market: str = BOX_MARKER) -> bool:
+    """Does a season hold its kickers' lines (the BOX_MARKER market, or the
+    one named)? A night's box score (engine/boxsettle, game ids ending
+    "-box") is one game's line, not the season's, so it does not count."""
     return conn.execute("SELECT 1 FROM player_game_logs WHERE sport=? AND market=? AND season=? "
                         "AND game_id NOT LIKE '%-box' LIMIT 1",
-                        (sport, BOX_MARKER, int(season))).fetchone() is not None
+                        (sport, market, int(season))).fetchone() is not None
+
+
+#: The market whose presence says a season holds the board's own kicker and
+#: defender rows (`nfl_player_log_rows`' K and DEF markets: points, field
+#: goals made, tackles). Stored from 2026-10-10, so every season ingested
+#: before has none, and its pages read "—" for FG, PTS and TOT (seen live
+#: 17 Nov on Cameron Dicker's and Will Anderson Jr.'s 2025 rows).
+BOARD_KICK_MARKER = "kick_pts"
 
 
 def backfill_nfl_box(conn, seasons) -> dict:
-    """The box rows for seasons ingested before they existed: each season
-    with no BOX_MARKER row reads its weekly file again and stores those
-    rows alone (a finished season off the copy on disk, FINISHED_SEASON_TTL;
-    the newest at the fetcher's own age). Returns {"seasons": [...], "rows":
-    n, "skipped": [...]}; a season already on file costs one indexed query."""
+    """A kicker's and a defender's whole line for seasons ingested before
+    the rows kept it: each season missing the box rows (BOX_MARKER) or the
+    board's own K and DEF rows (BOARD_KICK_MARKER) reads its weekly file
+    again and stores those rows alone (a finished season off the copy on
+    disk, FINISHED_SEASON_TTL; the newest at the fetcher's own age). A row
+    already on file as it stands is left where it is (db.upsert_player_logs).
+    None of this prices anything: the board reads the weekly files
+    (sources/nflverse.build_slate). Returns {"seasons": [...], "rows": n,
+    "skipped": [...]}; a season already whole costs two indexed queries."""
     from .sources.nflverse import load_weekly_stats
     out = {"seasons": [], "rows": 0, "skipped": []}
     wanted = sorted({int(x) for x in seasons})
     for season in wanted:
-        if _box_marked(conn, "nfl", season):
+        if _box_marked(conn, "nfl", season) and _box_marked(conn, "nfl", season, BOARD_KICK_MARKER):
             continue
         try:
             weekly = load_weekly_stats(season, ttl=FINISHED_SEASON_TTL if season < wanted[-1] else None)
@@ -307,6 +319,7 @@ def backfill_nfl_box(conn, seasons) -> dict:
             out["skipped"].append(f"nfl box rows {season}: {exc}")
             continue
         rows = nfl_box_rows(weekly, season)
+        rows += [r for r in nfl_player_log_rows(weekly, season) if r["position"] in ("K", "DEF")]
         del weekly
         if rows:
             out["rows"] += db.upsert_player_logs(conn, rows)

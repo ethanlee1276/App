@@ -9343,7 +9343,10 @@ checking Cameron Dicker's page live: JK Scott, the Chargers' punter, has no game
 Log tab fell back to the nearest stored name and showed Nick Scott's, the Panthers' safety, tackles and all. A near
 name now stands in only when it is the same player: the same name written another way ("D.J. Moore" and "DJ
 Moore"), a typed name no roster carries (a typo), or a near name on the club the roster lists. JK Scott's page now
-says the stats feed doesn't include punting.
+says the stats feed doesn't include punting. And a second fill for kickers and defenders: the first one gave
+past seasons their box lines but not the board's own three numbers (field goals made, kicking points, total
+tackles), which were only ever stored from 10 October, so Dicker's and Anderson's 2025 rows read "—" there. The
+next restart fills those for every past season too; nothing on the board is priced from them.
 
 **UN. Hockey's +/- and penalty minutes, basketball's percentages, and a skater with no goal yet** (step 672;
 17 November). Nothing to run. More of "the player page is missing a bunch of data". A real bug first: a skater

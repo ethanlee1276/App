@@ -304,9 +304,20 @@ def test_the_fill_reads_each_season_once_and_a_finished_one_off_the_disk():
         assert got["seasons"] == [2025, 2026] and got["rows"] > 0 and not got["skipped"], got
         assert calls == [(2025, IG.FINISHED_SEASON_TTL), (2026, None)], \
             "a finished season off the copy on disk; the newest at the fetcher's own age"
+        board = {r[0] for r in conn.execute("SELECT DISTINCT market FROM player_game_logs WHERE sport='nfl' "
+                                            "AND season=2025 AND position IN ('K', 'DEF')")}
+        assert {"kick_pts", "fg_made", "tackles_ast"} <= board, \
+            "the board's own kicker and defender rows too: a season ingested before 2026-10-10 has none"
         calls.clear()
         again = IG.backfill_nfl_box(conn, [2025, 2026])
         assert again == {"seasons": [], "rows": 0, "skipped": []} and calls == [], "a season on file is not read"
+        # Live, 17 Nov: the first fill wrote the box rows and not the board's,
+        # so Dicker's 2025 read "—" for FG and PTS. A season half-filled so is
+        # read again.
+        conn.execute("DELETE FROM player_game_logs WHERE sport='nfl' AND season=2025 AND market='kick_pts'")
+        conn.commit()
+        third = IG.backfill_nfl_box(conn, [2025, 2026])
+        assert third["seasons"] == [2025] and calls == [(2025, IG.FINISHED_SEASON_TTL)], third
     finally:
         nflverse.load_weekly_stats = real
     from engine.sources.fetch import DataUnavailable
