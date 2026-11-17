@@ -203,6 +203,42 @@ def test_college_by_field_zone():
     assert d["fit"] > 0 and d["overall"]["rank"] == 1
 
 
+def _cfb_throws(conn):
+    """College throws (engine/passes.CfbPasses, 2026-11-17): by field zone, an
+    incompletion as no yards and a sack no attempt."""
+    rows = []
+    for opp, y in (("Michigan", 9.0), ("Ohio State", 6.0), ("Texas", 7.0)):
+        for per in (1, 2, 3):
+            for yl in (70, 35, 12, 3):
+                for i in range(10):
+                    rows.append(_row({}, sport="cfb", period=f"{per:03d}", team="Rutgers", opponent=opp,
+                                     player=f"QB{i}", position="QB", kind="pass", complete=1 if i % 2 else 0,
+                                     yards=(y + (2 if yl == 12 else 0)) if i % 2 else 0.0, yardline_100=yl))
+            # A sack is no attempt: whatever it costs is not "yards an attempt allowed".
+            rows.append(_row({}, sport="cfb", period=f"{per:03d}", team="Rutgers", opponent=opp, player="QB0",
+                             position="QB", kind="sack", complete=0, yards=-40.0, yardline_100=70))
+    for yl in (70, 70, 35, 12):
+        rows.append(_row({}, sport="cfb", team="Rutgers", opponent="Iowa", player="Athan Kaliakmanis",
+                         position="QB", kind="pass", complete=1, yards=8.0, yardline_100=yl))
+    D.upsert_passes(conn, rows)
+    # Two carries do not make a runner of a passer with four throws: throws count three to one.
+    D.upsert_carries(conn, [_row({}, sport="cfb", team="Rutgers", opponent="Iowa", player="Athan Kaliakmanis",
+                                 position="QB", hole="", yards=4.0, scramble=0, yardline_100=yl)
+                            for yl in (70, 35)])
+
+
+def test_a_college_passer_by_field_zone():
+    conn = D.connect(":memory:")
+    _cfb_throws(conn)
+    d = M.chart(conn, "cfb", "Athan Kaliakmanis", "Michigan Wolverines")
+    assert d["family"] == "throws" and d["opp"] == "Michigan" and d["tested"] is False
+    assert d["overall"]["n"] == 120, "Michigan's 120 attempts against the passers: its three sacks are no attempt"
+    assert [z["key"] for z in d["zones"]] == ["own", "mid", "rz", "gl"]
+    assert _zone(d, "own")["share"] == 0.5 and _zone(d, "rz")["share"] == 0.25
+    assert d["fit"] > 0 and d["overall"]["rank"] == 1, "Michigan allows the most an attempt"
+    assert M.SPEC["throws"]["right"] == "Yards an attempt allowed" and M.MIN_N["throws"] == M.MIN_N["passes"]
+
+
 def test_basketball_by_shot_zone():
     conn = D.connect(":memory:")
     rows, a = [], 0

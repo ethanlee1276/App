@@ -19,8 +19,10 @@ the left-hand share, in the rate's own units.
   carries  nfl     his carries by hole        yards a carry the defence allows
   runs     cfb     his carries by field zone  yards a carry the defence allows (the
   catches  cfb     his targets by field zone  college play file has no hole and no
-                                              depth or side: field position is what
-                                              it has)
+  throws   cfb     his throws by field zone   depth or side: field position is what
+                                              it has; a college passer's throws and
+                                              the yards an attempt allowed since
+                                              2026-11-17, engine/passes.CfbPasses)
   shots    nba     his shots by zone          the field-goal % the defence allows
   skater   nhl     his shots by distance      goals a shot on goal the opponent allows
   goalie   nhl     the opponent's shots on    the opponent's goals a shot on goal there
@@ -49,13 +51,13 @@ import threading
 import time
 
 #: Pseudo-plays an opponent's rate in a zone is shrunk toward the league's by.
-SHRINK = {"routes": 25, "passes": 30, "carries": 25, "runs": 30, "catches": 25, "shots": 40,
+SHRINK = {"routes": 25, "passes": 30, "carries": 25, "runs": 30, "catches": 25, "throws": 30, "shots": 40,
           "skater": 30, "goalie": 30, "hitter": 30, "pitcher": 40}
 #: About three games of the right-hand side; an opponent with less in the
 #: newest season is read on the season before. A route chart's is three
 #: games of one position group (a defence sees a tight end about seven
 #: times a game).
-MIN_N = {"routes": 20, "passes": 90, "carries": 60, "runs": 90, "catches": 60, "shots": 240,
+MIN_N = {"routes": 20, "passes": 90, "carries": 60, "runs": 90, "catches": 60, "throws": 90, "shots": 240,
          "skater": 75, "goalie": 75, "hitter": 100, "pitcher": 100}
 #: League-wide sums are kept this long in one process.
 TTL = 3 * 3600
@@ -75,6 +77,8 @@ SPEC = {
              "good": 1, "tested": False},
     "catches": {"left": "The player's targets", "right": "Yards a target allowed", "unit": "yds/target", "fmt": "yds",
                 "good": 1, "tested": False},
+    "throws": {"left": "The player's throws", "right": "Yards an attempt allowed", "unit": "yds/attempt", "fmt": "yds",
+               "good": 1, "tested": False},
     "shots": {"left": "The player's shots", "right": "FG% allowed", "unit": "FG%", "fmt": "pct", "good": 1,
               "tested": False},
     "skater": {"left": "The player's shots", "right": "Shooting % allowed", "unit": "shooting %", "fmt": "pct",
@@ -234,10 +238,14 @@ def _carries(conn, season: int) -> dict:
 
 
 def _field(conn, season: int, table: str) -> dict:
+    """What each college defence allowed by field zone that season: yards a
+    carry, a target, or (the passes table) an attempt, a sack no attempt."""
+    cond = " AND kind='pass'" if table == "passes" else ""
+
     def build():
         out: dict = {}
         for opp, yl, yards in conn.execute(
-                f"SELECT opponent, yardline_100, yards FROM {table} WHERE sport='cfb' AND season=?", (season,)):
+                f"SELECT opponent, yardline_100, yards FROM {table} WHERE sport='cfb' AND season=?{cond}", (season,)):
             _add(out, opp, field_zone(yl), 1, float(yards or 0.0))
         return out
     return _memo(conn, ("field", table, season), build)
@@ -433,6 +441,7 @@ def _newest(conn, sport: str, family: str) -> int | None:
            "carries": "SELECT MAX(season) FROM carries WHERE sport='nfl'",
            "runs": "SELECT MAX(season) FROM carries WHERE sport='cfb'",
            "catches": "SELECT MAX(season) FROM targets WHERE sport='cfb'",
+           "throws": "SELECT MAX(season) FROM passes WHERE sport='cfb' AND kind='pass'",
            "shots": "SELECT MAX(season) FROM nba_shots",
            "skater": "SELECT MAX(season) FROM nhl_shots", "goalie": "SELECT MAX(season) FROM nhl_shots",
            "hitter": "SELECT MAX(season) FROM mlb_pa", "pitcher": "SELECT MAX(season) FROM mlb_pa"}[family]
@@ -469,15 +478,18 @@ def family_of(conn, sport: str, player: str, hint: str = "") -> tuple[str, str]:
         best = max(vol, key=lambda f: (vol[f] * (3 if f == "passes" else 1)))
         return (best, names[best]) if vol[best] else ("", "")
     if sport == "cfb":
-        from . import carries as C, targets as T
-        runs, catches = C.resolve(conn, "cfb", player), T.resolve(conn, player, "cfb")
-        nr = conn.execute("SELECT COUNT(*) FROM carries WHERE sport='cfb' AND player=?", (runs,)).fetchone()[0] \
-            if runs else 0
-        nc = conn.execute("SELECT COUNT(*) FROM targets WHERE sport='cfb' AND player=?", (catches,)).fetchone()[0] \
-            if catches else 0
-        if not nr and not nc:
-            return "", ""
-        return ("runs", runs) if nr >= nc else ("catches", catches)
+        from . import carries as C, passes as P, targets as T
+        names = {"runs": C.resolve(conn, "cfb", player), "catches": T.resolve(conn, player, "cfb"),
+                 "throws": P.resolve(conn, player, "cfb")}
+        vol = {}
+        for f, (tbl, extra) in {"runs": ("carries", ""), "catches": ("targets", ""),
+                                "throws": ("passes", " AND kind='pass'")}.items():
+            vol[f] = conn.execute(f"SELECT COUNT(*) FROM {tbl} WHERE sport='cfb' AND player=?{extra}",
+                                  (names[f],)).fetchone()[0] if names[f] else 0
+        # As in the NFL: a passer's throws count three to one, so a
+        # quarterback who runs is still a passer.
+        best = max(("throws", "runs", "catches"), key=lambda f: vol[f] * (3 if f == "throws" else 1))
+        return (best, names[best]) if vol[best] else ("", "")
     if sport in ("nba", "cbb"):
         from .nba.shots import resolve
         _pid, name = resolve(conn, player, sport)
@@ -533,15 +545,16 @@ def chart(conn, sport: str, player: str, opp: str, season=None, hint: str = "") 
     k = SHRINK[fam]
     spec = dict(SPEC[fam])
     extra: dict = {}
-    if fam in ("routes", "passes", "carries", "runs", "catches"):
+    if fam in ("routes", "passes", "carries", "runs", "catches", "throws"):
         tbl, zones_, zone_of, cols = {
             "routes": ("targets", PASS_ZONES, pass_zone, "air_yards, side"),
             "passes": ("passes", PASS_ZONES, pass_zone, "air_yards, side"),
             "carries": ("carries", _hole_zones(), lambda h: h, "hole"),
             "runs": ("carries", _field_zones(), field_zone, "yardline_100"),
-            "catches": ("targets", _field_zones(), field_zone, "yardline_100")}[fam]
-        lg = "cfb" if fam in ("runs", "catches") else "nfl"
-        cond = " AND kind='pass'" if fam == "passes" else " AND scramble=0" if fam == "carries" else ""
+            "catches": ("targets", _field_zones(), field_zone, "yardline_100"),
+            "throws": ("passes", _field_zones(), field_zone, "yardline_100")}[fam]
+        lg = "cfb" if fam in ("runs", "catches", "throws") else "nfl"
+        cond = " AND kind='pass'" if fam in ("passes", "throws") else " AND scramble=0" if fam == "carries" else ""
         his_season, left = _his(conn, f"SELECT season, {cols} FROM {tbl} WHERE sport=? AND player=?{cond}",
                                 (lg, name), zone_of)
         if fam == "routes":
@@ -555,7 +568,8 @@ def chart(conn, sport: str, player: str, opp: str, season=None, hint: str = "") 
         else:
             table_of = {"passes": lambda s: _passes(conn, s), "carries": lambda s: _carries(conn, s),
                         "runs": lambda s: _field(conn, s, "carries"),
-                        "catches": lambda s: _field(conn, s, "targets")}[fam]
+                        "catches": lambda s: _field(conn, s, "targets"),
+                        "throws": lambda s: _field(conn, s, "passes")}[fam]
         season_, table, key = _season_for(conn, lg, fam, table_of, opp)
         if not key or not left:
             return {}

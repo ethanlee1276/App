@@ -39,11 +39,12 @@
   const FIT = {
     routes: "yds/target where the targets go", passes: "yds/attempt where the throws go",
     carries: "yds/carry where the runs go", runs: "yds/carry where the runs go", catches: "yds/target where the targets go",
+    throws: "yds/attempt where the throws go",
     shots: "FG% points where the shots come from", skater: "shooting % points where the shots come from",
     goalie: "their shooting % points where they shoot", hitter: "slugging where the pitches will come",
     pitcher: "their slugging where the pitches go",
   };
-  const NOUN = { routes: "targets", passes: "throws", carries: "carries", runs: "carries", catches: "targets",
+  const NOUN = { routes: "targets", passes: "throws", carries: "carries", runs: "carries", catches: "targets", throws: "throws",
                  shots: "shots", skater: "shots", goalie: "shots on goal", hitter: "at bats", pitcher: "at bats" };
   const opp = (d, sport) => (typeof teamNameIn === "function" ? teamNameIn(sport, d.opp) : d.opp) || d.opp;
 
