@@ -947,7 +947,7 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
         if (sport == "mlb" and pf in PITCHER_FAMILIES and prop_up
                 and not line_up and line_team == (prop.get("opponent") or "").upper()):
             r, meas = rho_for("pitcher_vs_lineup", 0.275, sport)
-            return Relation(r, "strikeouts up and the lineup he is facing held "
+            return Relation(r, "strikeouts up and the lineup the pitcher faces held "
                                "down — §5.1's cleanest MLB correlation, and "
                                "§5.2's pitcher stack" + (
                                    f", measured at {r:+.2f} on "
@@ -978,7 +978,7 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
                                   "+0.50", 0, "ok")
         if sport == "mlb" and pf in PITCHER_FAMILIES and prop_up:
             return Relation(0.275, "managers leave winners in — §5.1 puts outs "
-                                  "recorded against his team's line at +0.20 "
+                                  "recorded against the pitcher's team line at +0.20 "
                                   "to +0.35", 0, "ok")
         if pf in ("pass", "catch") and prop_up:
             # §4.1's trailing-dog mechanism: the script that makes the dog
@@ -1091,7 +1091,7 @@ def relate_prior(sport: str, a: dict, b: dict, game: dict | None = None,
                                   "together — §5.2's pitcher stack, which books "
                                   "often price as if the pair were independent",
                             5, "ok")
-        return Relation(0.0, "the same player twice — if he sits, everything "
+        return Relation(0.0, "the same player twice — if that player sits, everything "
                              "dies; §3 Type 5 bans it", 5, "kill")
 
     if not same_game:
@@ -1129,7 +1129,7 @@ def relate_prior(sport: str, a: dict, b: dict, game: dict | None = None,
                                        "-0.25 to -0.40", 7, "kill")
             if facing and _side_up(pitcher) and not _side_up(hitter):
                 r, meas = rho_for("pitcher_vs_lineup", 0.275, sport)
-                return Relation(r, "strikeouts up, the bats he is facing "
+                return Relation(r, "strikeouts up, the bats the pitcher faces "
                                    "down — one mechanism, §5.1's cleanest "
                                    "MLB correlation" + (
                                        f", measured at {r:+.2f} on "
@@ -1137,7 +1137,7 @@ def relate_prior(sport: str, a: dict, b: dict, game: dict | None = None,
                                        f"of our own games" if meas else ""),
                                 0, "ok", measured=meas)
     if same_team and {fa, fb} == {"pass", "catch"} and ua != ub:
-        return Relation(-0.30, "a quarterback and his own receiver need "
+        return Relation(-0.30, "a quarterback and a receiver of the same team need "
                                "opposite passing games — §4.1 calls this "
                                "incoherent", 7, "kill")
 
@@ -1212,17 +1212,17 @@ def relate_prior(sport: str, a: dict, b: dict, game: dict | None = None,
     # MEASURED and engine/corrfit's role_pair fits.
     if same_team and {fa, fb} == {"passtd", "td"} and ua and ub:
         r, meas = rho_for("qb_td_wr_td", SAME_GAME_BASELINE_RHO, sport)
-        return Relation(r, "his passing touchdown is usually this receiver's "
-                           "touchdown — the WR1 scores in half the games his "
-                           "quarterback throws one and one in twenty when he "
-                           "does not" + (f", measured at {r:+.2f} on "
+        return Relation(r, "the quarterback's passing touchdown is usually this "
+                           "receiver's touchdown — the WR1 scores in half the games "
+                           "the quarterback throws one and one in twenty when the "
+                           "quarterback does not" + (f", measured at {r:+.2f} on "
                                          f"{rho_n('qb_td_wr_td', sport):,} team-weeks"
                                          if meas else ""), 0, "ok", measured=meas)
     if same_team and {fa, fb} == {"pass", "td"} and ua and ub:
         r, meas = rho_for("qb_td_game", SAME_GAME_BASELINE_RHO, sport)
         return Relation(r, "the passing game that reaches the end zone is the "
                            "one that piles up yards — the quarterback's "
-                           "yardage against his receiver's touchdown" + (
+                           "yardage against the receiver's touchdown" + (
                                f", measured at {r:+.2f} on "
                                f"{rho_n('qb_td_game', sport):,} team-weeks"
                                if meas else ""), 0, "ok", measured=meas)
@@ -1260,13 +1260,13 @@ def _relate_hockey(a, b, fa, fb, ua, ub, same_team) -> Relation | None:
         fo, go_up, o_up = _family(o), _side_up(g), _side_up(o)
         facing = (o.get("team") or "") == (g.get("opponent") or "") and not _is_game_leg(o)
         if facing and fo == "nhlshot" and go_up and o_up:
-            return Relation(0.30, "every shot he takes is a save to make — the "
+            return Relation(0.30, "every shot the shooter takes is a save to make — the "
                                   "shooter's volume is the goalie's", 0, "ok")
         if facing and fo in HOCKEY_SCORING and go_up and o_up:
-            return Relation(-0.10, "a goal is a shot he did not save — his saves "
+            return Relation(-0.10, "a goal is a shot the goalie did not save — the saves "
                                    "and their scoring pull apart", 7, "ok")
         if _is_game_leg(o) and fo == "side" and (o.get("team") or "") == (g.get("team") or "") and go_up:
-            return Relation(-0.10, "a busy goalie usually means his team is being "
+            return Relation(-0.10, "a busy goalie usually means the goalie's team is being "
                                    "outshot — the side wants the other script", 2, "ok")
         if not _is_game_leg(o) and (o.get("team") or "") == (g.get("team") or ""):
             return Relation(0.0, "different ends of the ice", 0, "ok")

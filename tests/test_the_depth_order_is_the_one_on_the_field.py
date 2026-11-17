@@ -75,7 +75,7 @@ def test_the_starter_out_lifts_the_man_behind_him_by_the_snap_measurement():
                                  market="receptions")
     mult, why, card = T.effect(prop, game)
     assert mult == T.EFFECT_SNAPS[("receptions", "TE", "above_new")] and mult > 1.4
-    assert "Mason Taylor just ruled out ahead of him at TE" in why and card["applied"] == round(mult, 3)
+    assert "Mason Taylor just ruled out ahead of the player at TE" in why and card["applied"] == round(mult, 3)
 
 
 def test_the_snap_table_is_what_the_measurement_shipped():

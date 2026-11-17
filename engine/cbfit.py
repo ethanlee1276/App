@@ -181,7 +181,7 @@ def effects(rows: list[dict]) -> dict:
 
     out = {}
     for key, fn, claim in (("h1", h1, "WR1 keeps catches better than yards against an elite corner"),
-                           ("h2", h2, "WR2 catches more when his team faces an elite corner")):
+                           ("h2", h2, "WR2 catches more when the team faces an elite corner")):
         eff, n = fn(rows)
         parts = [fn([r for r in rows if keep(r)]) for keep in halves]
         proven = bool(eff is not None and all(g is not None and g >= PROVEN_GAP and k >= PROVEN_N

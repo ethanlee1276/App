@@ -202,7 +202,7 @@ def chart(conn, player: str, season=None) -> dict:
     fights = [dict(zip(COLS, r)) for r in cur.fetchall()]
     if not fights:
         return {}
-    games = [{"id": f["comp_id"], "date": f["date"], "opp": f["opp"] or "his opponent", "home": True,
+    games = [{"id": f["comp_id"], "date": f["date"], "opp": f["opp"] or "the opponent", "home": True,
               "team": "", "result": f["result"], "method": f["method"], "rnd": f["rnd"], "clock": f["clock"],
               "secs": f["secs"], "rounds": f["rounds"], "division": f["division"], "stats": _stats(f),
               "line": {"n": 1}} for f in fights]

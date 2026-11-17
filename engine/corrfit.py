@@ -95,7 +95,7 @@ PRIORS: tuple[Prior, ...] = (
           "Type 3 possession pie — two teammates splitting one set of targets",
           "same_market_teammates", "rec_yds", "rec_yds"),
     Prior("qb_pass_yds__own_points", "nfl", (0.30, 0.45), "§4.1",
-          "a quarterback's yardage against his own team's total", "team_points",
+          "a quarterback's yardage against the team's own total", "team_points",
           "pass_yds"),
     Prior("rb_carries__own_margin", "nfl", (0.35, 0.50), "§4.1",
           "leading teams run — carries against the team's own result",
@@ -121,12 +121,12 @@ PRIORS: tuple[Prior, ...] = (
     # top targets, the RB1 its top carries.
     Prior("qb_pass_td__wr1_anytime_td", "nfl", (0.10, 0.10), "§9",
           "the literal pair: the quarterback's passing touchdowns against "
-          "his most-targeted receiver's anytime TD — the WR's touchdown "
+          "the most-targeted receiver's anytime TD — the WR's touchdown "
           "usually IS the QB's touchdown", "role_pair", "pass_td",
           "anytime_td", by_a="pass_att", by_b="targets"),
     Prior("qb_pass_yds__wr1_anytime_td", "nfl", (0.10, 0.10), "§9",
           "the pair the board can actually form today — the QB's yardage "
-          "over next to his WR1's anytime TD", "role_pair", "pass_yds",
+          "over next to the WR1's anytime TD", "role_pair", "pass_yds",
           "anytime_td", by_a="pass_att", by_b="targets"),
     Prior("wr1_anytime_td__rb1_anytime_td", "nfl", (-0.10, 0.10), "§3",
           "Type 3 on touchdowns: the receiver and the back splitting one "
@@ -134,8 +134,8 @@ PRIORS: tuple[Prior, ...] = (
           by_a="targets", by_b="carries"),
     # MLB — measurable the moment the history carries the markets.
     Prior("sp_strikeouts__opp_runs", "mlb", (-0.35, -0.20), "§5.1",
-          "§5.2's pitcher stack: strikeouts against the runs the lineup he is "
-          "facing scores. §5.1 states it as K-over against opposing-total "
+          "§5.2's pitcher stack: strikeouts against the runs the lineup the "
+          "pitcher faces scores. §5.1 states it as K-over against opposing-total "
           "UNDER (+0.20 to +0.35), so against RUNS the sign inverts",
           "opp_points", "strikeouts"),
     Prior("sp_outs__own_margin", "mlb", (0.20, 0.35), "§5.1",

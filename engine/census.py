@@ -36,7 +36,7 @@ GATE_WORDS = {
     "confidence": "confidence under the threshold",
     "edge": "edge under the minimum",
     "juice": "priced too rich to be worth laying",
-    "health": "an injury designation on him",
+    "health": "an injury designation on the player",
     "kelly": "the price already matches our number (no stake)",
     "lineup": "waiting on the lineup card",
 }

@@ -894,11 +894,11 @@ def _scorer(conn, board, league, leg, who, prop, game, opp_team, card, rows, use
     out.update(_common(leg, who, team, opponent, card, rows, used, season))
     out["why_off"] = why_off(board, league, leg, who, pos, card)
     if not _posted(card):
-        out["refused"] = "no posted spread and total for his game yet — the touchdown model starts from those"
+        out["refused"] = "no posted spread and total for the player's game yet — the touchdown model starts from those"
         return out
     share = _touch_share(conn, league, team, season, who["player"])
     if share is None or pos not in ("RB", "WR", "TE", "QB"):
-        out["refused"] = "no workload of his on record this season to scale a touchdown chance by"
+        out["refused"] = "no workload on record for the player this season to scale a touchdown chance by"
         return out
     from .touchdowns import td_probability, team_implied_total
     p, why = td_probability(prop, game, opp_team, share)
@@ -1236,15 +1236,15 @@ def _common(leg: dict, who: dict, team: str, opponent: str, card: dict | None, r
 def why_off(board: dict | None, league: str, leg: dict, who: dict, pos: str, card: dict | None) -> str:
     """Why the board did not carry this prop, in the board's own terms."""
     if not card:
-        return "his game is not on tonight's board yet, so nothing in it was priced"
+        return "the player's game is not on tonight's board yet, so nothing in it was priced"
     market = leg["market"]
     if league == "nfl" and pos in POSITION_MARKETS_NFL and market not in POSITION_MARKETS_NFL[pos]:
         return f"our board does not build that market for {POSITION_WORDS.get(pos, pos.lower())}"
     rows = [r for r in (board or {}).get("recommendations") or [] if isinstance(r, dict)]
     mine = [r for r in rows if _key(r.get("player")) == _key(who.get("player"))]
     if mine:
-        return "we price other markets of his, not this one"
-    return "he is not one of the players our board prices in that game"
+        return "we price other markets for this player, not this one"
+    return "the player is not one our board prices in that game"
 
 
 # ---- the Most Likely board's four questions ------------------------------------------------------
@@ -1379,7 +1379,7 @@ def read(boards: dict, leg: dict, conn=None) -> dict | None:
                     for k in ("projection", "model_over", "model_under", "proj_low", "proj_high",
                               "proj_std", "rung_probs", "hit_prob"):
                         row[k] = None
-                    row["refused"] = ("every book took his props down — the board treats that as out"
+                    row["refused"] = ("every book took the player's props down — the board treats that as out"
                                       if st == "pulled" else
                                       f"he is listed {st.lower()} — the board takes a ruled-out player off")
             return row

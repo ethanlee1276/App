@@ -392,7 +392,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     # be a lie the moment the shade stopped being applied above.
     left = [g for g in prop.logs[:3] if getattr(g, "partial", False)]
     early = (f" (one of them a game he left early, {round(100 * left[0].snaps)}% of the snaps)"
-             if left and left[0].snaps is not None else " (one of them a game he left early)" if left else "")
+             if left and left[0].snaps is not None else " (one of them a game left early)" if left else "")
     if form.trend == "up":
         reasons.append(f"Trending up — last 3 games {form.trend_delta:+.0f} vs prior form{early}")
     elif form.trend == "down":
@@ -436,7 +436,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
         chain.step("player", player_mult,
                    "The record's own correction for players this blend "
                    "persistently misreads." if abs(player_mult - 1.0) >= 0.005
-                   else "Nothing in the record says this blend misreads him."),
+                   else "Nothing in the record says this blend misreads the player."),
         chain.step("lineup", lineup_mult, "; ".join(lineup_why)),
     ]
     if air_mult != 1.0:

@@ -90,7 +90,7 @@ def test_the_call_is_the_most_points_and_how_often():
     got = C.compare([_row("Back B", ppr=11.0), _row("Back A", ppr=16.0)])
     assert got["call"]["start"] == "Back A" and got["call"]["order"] == ["Back A", "Back B"]
     p = got["pairs"][0]["p"]
-    assert p > 0.6 and got["call"]["text"] == f"Start Back A: he outscores Back B {round(p * 100)}% of the time."
+    assert p > 0.6 and got["call"]["text"] == f"Start Back A: A outscores Back B {round(p * 100)}% of the time."
     assert got["scoring"] == "PPR" and [c["player"] for c in got["players"]] == ["Back A", "Back B"]
 
 
@@ -108,9 +108,9 @@ def test_a_listed_player_who_plays_first_is_waited_on():
     call = got["call"]
     assert call["conditional"] and call["start"] == "Back A" and call["if_out"] == "Back B"
     p_if = got["pairs"][0]["p_if_both_play"]
-    assert call["text"] == ("Wait on Back A (questionable, 65% to play): his inactives are out about "
-                            "Sun 11:30 AM ET, before Back B's game locks. Active: start him (he outscores "
-                            f"Back B {round(p_if * 100)}% of the time when he plays). Out: start Back B.")
+    assert call["text"] == ("Wait on Back A (questionable, 65% to play): the inactives are out about "
+                            "Sun 11:30 AM ET, before Back B's game locks. Active: start A (A outscores "
+                            f"Back B {round(p_if * 100)}% of the time when playing). Out: start Back B.")
     assert not any("Back A is questionable" in n for n in got["notes"]), "the call already said it"
 
 
@@ -147,14 +147,14 @@ def test_floor_and_ceiling_speak_only_when_close_and_both_play():
     tight = _row("Steady", pos="WR", ppr=12.6, sd=4.0, range=[7.0, 19.0])
     got = C.compare([wide, tight])
     assert got["call"]["start"] == "Steady"
-    assert any(n.startswith("Boom has the bigger week in him: one week in ten he passes 28.0") for n in got["notes"])
+    assert any(n.startswith("Boom has the bigger week in reach: one week in ten Boom passes 28.0") for n in got["notes"])
     far = C.compare([dict(wide, ppr=6.0, expected=6.0), tight])
     assert not any("bigger week" in n for n in far["notes"]), "six points apart, the points decide"
     listed = C.compare([dict(wide, play=0.7, expected=8.4, status="Questionable"), tight])
     assert not any("bigger week" in n or "safer start" in n for n in listed["notes"]), \
         "a listed man's floor is a zero"
     safe = C.compare([dict(wide, ppr=12.6, expected=12.6), dict(tight, ppr=12.0, expected=12.0)])
-    assert any(n.startswith("Steady is the safer start: eight weeks in ten he scores at least 7.0") for n in safe["notes"])
+    assert any(n.startswith("Steady is the safer start: eight weeks in ten Steady scores at least 7.0") for n in safe["notes"])
 
 
 def test_kickers_get_points_and_no_invented_chance():

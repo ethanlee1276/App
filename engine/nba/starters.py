@@ -127,7 +127,7 @@ def note(starts, five_out: int, five_back: int, shift: float) -> str:
                 f"(measured: a new starter plays over a base made partly of bench games)")
     if int(five_out or 0) >= 1:
         one = int(five_out) == 1
-        who = "one of his club's last starting five is" if one else \
+        who = "one of the club's last starting five is" if one else \
               f"{int(five_out)} of his club's last starting five are"
         return (f"Off the bench, and {who} ruled out tonight — {sign} "
                 f"(measured: a bench man starts {'about a quarter' if one else 'nearly half'} "

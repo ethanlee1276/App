@@ -289,7 +289,7 @@ FOOTBALL_SHELVES = (
     # on (likely.RANK_AUC). Their own shelves, because nobody shopping a
     # receiver is shopping a kicker.
     ("kicking", "Kickers", ("kick_pts", "fg_made"),
-     "A kicker's points and his field goals — whole numbers a game, and "
+     "A kicker's points and field goals — whole numbers a game, and "
      "among the best-ranked markets measured (field goals 0.700)."),
     ("tackles", "Tackles", ("tackles_ast",),
      "A defender's tackles plus assists — a linebacker's or a safety's "
@@ -325,7 +325,7 @@ BASEBALL_SHELVES = (
     ("bats", "Hits & total bases", ("hits", "total_bases"),
      "Contact and extra bases — the volume side of a hitter's night."),
     ("arms", "Strikeouts & outs", ("strikeouts", "outs"),
-     "Pitcher swing-and-miss, and how deep he goes. A different engine "
+     "Pitcher swing-and-miss, and how deep the starter goes. A different engine "
      "from the bats above, and shelved apart so its evidence reads apart."),
     ("gamelines", "Game lines", ("moneyline", "spread", "total", "team_total"),
      "Who wins, the run line, over or under — from the run ratings and "

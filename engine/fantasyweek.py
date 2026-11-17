@@ -166,7 +166,7 @@ def play_chance(status: str, practice: dict | None = None,
         club = practice.get("club")
         held = (practice.get("held_out") or {}).get("holds")
         if club is not None and held:
-            return float(club), "practice report and his club's record"
+            return float(club), "practice report and the club's record"
         if practice.get("league") is not None:
             return float(practice["league"]), "practice report"
     table = fallback if fallback is not None else fallback_play()
@@ -174,7 +174,7 @@ def play_chance(status: str, practice: dict | None = None,
     for key in ("Doubtful", "Questionable"):
         if st != key.upper():
             continue
-        for cell in ((f"{key}|{how}", "designation and how he practised"),
+        for cell in ((f"{key}|{how}", "designation and how the player practised"),
                      (f"{key}|*", "designation")):
             p = table.get(cell[0]) if cell[0] != f"{key}|" else None
             if p is not None:

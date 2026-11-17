@@ -1341,7 +1341,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                        "opportunity is inferred from yardage share alone"]
             if prov and prov[0] == "prior":
                 caveats.append(
-                    "Role built from last season’s logs (he has not "
+                    "Role built from last season’s logs (no game "
                     "played yet this year) — returning production is "
                     "real evidence, a changed role is invisible to it")
             elif prov and prov[0] == "own" and prov[1] < 3:

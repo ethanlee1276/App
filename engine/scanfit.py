@@ -65,7 +65,7 @@ MARKETS = {
 #: Each signal and the markets it claims to move, in the scan's words.
 SIGNALS = {
     "pressure": {"markets": [("pass_yds", "QB")],
-                 "says": "his line against their pass rush (sacks and hits per dropback, both sides)"},
+                 "says": "the quarterback's line against their pass rush (sacks and hits per dropback, both sides)"},
     "pass_defense": {"markets": [("pass_yds", "QB"), ("rec_yds", "WR"), ("rec_yds", "TE"),
                                  ("receptions", "WR"), ("receptions", "TE")],
                      "says": "their pass defence's opponent-adjusted EPA per dropback"},
@@ -76,14 +76,14 @@ SIGNALS = {
     "cb_out": {"markets": [("rec_yds", "WR"), ("receptions", "WR")],
                "says": "starting corners missing from their side (≥70% of snaps before)"},
     "zone_fit": {"markets": [("rec_yds", "WR"), ("receptions", "WR")],
-                 "says": "his yards per target vs zone over vs man (last season) × their zone rate over the league's"},
+                 "says": "the player's yards per target vs zone over vs man (last season) × their zone rate over the league's"},
     # MEASURED 2026-10-13 (below): the three that waited on the box's run,
     # and the three the carry and route charts made the same day.
     # 2026-10-08 (the Bucs @ Cowboys research): the defence's yards a
     # target in HIS biggest air-yard zone (short / intermediate / deep),
     # against the league's.
     "depth": {"markets": [("rec_yds", "WR"), ("rec_yds", "TE"), ("receptions", "WR"), ("receptions", "TE")],
-              "says": "their yards a target allowed in his biggest air-yard zone (short / intermediate / deep), "
+              "says": "their yards a target allowed in the player's biggest air-yard zone (short / intermediate / deep), "
                       "over the league's"},
     # 2026-10-08, Ethan: "seems like it should be free data". Two more off
     # the free tables: what the defence allows after contact (PFR's rows,
@@ -92,7 +92,7 @@ SIGNALS = {
     "yac_allowed": {"markets": [("rush_yds", "RB")],
                     "says": "their yards after contact allowed a carry (PFR, by opponent), over the league's"},
     "pocket_fit": {"markets": [("pass_yds", "QB")],
-                   "says": "his completion rate not hit minus hit (play-by-play) × their hits-and-sacks rate "
+                   "says": "the quarterback's completion rate not hit minus hit (play-by-play) × their hits-and-sacks rate "
                            "over the league's"},
     # 2026-10-13, Ethan, after the carry and route charts: "is there more
     # features or tools … to get more accurate data and able to use this
@@ -103,13 +103,13 @@ SIGNALS = {
     # takes, and x is zero for it, as it is for a player whose mix is the
     # league's.
     "run_direction": {"markets": [("rush_yds", "RB")],
-                      "says": "his inside/outside run mix (the play-by-play's run gap) × their yards a carry "
+                      "says": "the back's inside/outside run mix (the play-by-play's run gap) × their yards a carry "
                               "by direction, over their overall"},
     "side_fit": {"markets": [("rec_yds", "WR"), ("rec_yds", "TE"), ("receptions", "WR"), ("receptions", "TE")],
-                 "says": "his left/middle/right target mix × their yards a target by side of the field, "
+                 "says": "the player's left/middle/right target mix × their yards a target by side of the field, "
                          "over their overall"},
     "yac_fit": {"markets": [("rec_yds", "WR"), ("rec_yds", "TE")],
-                "says": "his share of yards after the catch over the league's × their yards after the "
+                "says": "the player's share of yards after the catch over the league's × their yards after the "
                         "catch a catch over the league's"},
 }
 

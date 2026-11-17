@@ -65,7 +65,7 @@ def test_every_check_fires_on_its_own_case():
     players.append({"player": "McConkey", "no_pick": {"best": {"side": "over", "line": 109.5,
                                                                "market": "rec_yds", "odds": 700,
                                                                "model_prob": 0.04}}})
-    players.append({"player": "D", "notes": ["David Njoku is out — his targets are open"]})
+    players.append({"player": "D", "notes": ["David Njoku is out — those targets are open"]})
     b["data_freshness"] = {"played": 3, "behind": ["unit ratings"]}
     rep = T.check(b)
     assert rep["by_check"] == {"FLOOR": 1, "CAP": 1, "OLD PRICE": 1, "NO NOW": 1, "LOCK NOTE": 1,

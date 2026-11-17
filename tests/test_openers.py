@@ -81,7 +81,7 @@ def test_the_opener_gate_refuses_both_sides():
     different statement from "the over is bad"."""
     src = open(os.path.join(ROOT, "engine", "mlb", "pipeline.py"),
                encoding="utf-8").read()
-    i = src.index("OPENER — his recent starts")
+    i = src.index("OPENER — the recent starts")
     block = src[max(0, i - 1200):i]
     assert '"recommended"] = False' in block.replace("d[", '"')  \
         or 'd["recommended"] = False' in block

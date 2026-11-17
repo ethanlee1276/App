@@ -261,7 +261,7 @@ def hr_probability(prop: MLBProp, game: MLBGame) -> tuple[float, dict]:
     if not getattr(game, "lineups_confirmed", True):
         caveats.append("Projected from the team's last lineup — "
                        + _lineup_eta(game)
-                       + "; verify he's starting before betting")
+                       + "; verify the lineup before betting")
     elif prop.lineup_spot in (0, None):
         caveats.append("Lineup spot unconfirmed — plate appearances estimated")
 

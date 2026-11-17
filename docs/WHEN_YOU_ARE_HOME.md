@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UL. The rest of the site says "the player" too** (step 670; 17 November). Nothing to run. The last part of
+the neutral wording you said yes to, about 140 lines across the site: the parlay notes ("the bats the pitcher
+faces", "a goal is a shot the goalie did not save"), the matchup charts' labels ("The player's targets"), the
+teammate notes ("Isiah Pacheco just ruled out ahead of the player at RB", "If that player sits"), the slip grader
+and its reads, Start A or B ("Start Josh Allen: Allen outscores Patrick Mahomes 62% of the time"), the fantasy
+week, the alerts ("you follow this player"), the Lab's scan notes, and the settle check's output. One fix on the
+way: the board's own check for a teammate-out line with no number in it still looked for the old wording, so it
+could never fire; it reads the current wording now.
+
 **UK. The NBA's and the NHL's playoff races** (step 669; 17 November). Nothing to run. Your yes to "NHL and
 NBA playoff race pages". The Playoff race page now has both, drawn as brackets like the NFL's: if the season
 ended today, who is in and who plays whom. The NBA's shows each conference's play-in (7 v 8 for the 7 seed,

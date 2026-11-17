@@ -137,9 +137,9 @@ def test_the_teammate_out_moves_the_number_and_the_card_says_so():
     g = sl.games[0]
     m, why, card = T.effect(sl.props[0], g)
     assert m == 1.647 and card["case"] == "above_new" and card["applied"] == 1.647
-    assert card["headline"] == "Isiah Pacheco just ruled out ahead of him at RB"
-    assert why == "Teammate out: Isiah Pacheco just ruled out ahead of him at RB — measured (×1.65)"
-    assert "65% more than his own form — applied" in card["note"]
+    assert card["headline"] == "Isiah Pacheco just ruled out ahead of the player at RB"
+    assert why == "Teammate out: Isiah Pacheco just ruled out ahead of the player at RB — measured (×1.65)"
+    assert "65% more than the player's own form — applied" in card["note"]
     m, why, card = T.effect(sl.props[1], g)
     assert (m, why) == (1.0, "") and card["note"].startswith("Shown for you"), "a touchdown is shown, not priced"
     assert T.effect(sl.props[2], g) == (1.0, "", None), "nobody out at his position"
@@ -151,9 +151,9 @@ def test_the_teammate_out_moves_the_number_and_the_card_says_so():
     assert (m, why, card["applied"], card["out"]) == (1.0, "", 1.0, []), "questionable is not out"
     assert card["if_sits"] == {"who": ["Isiah Pacheco"], "mult": 1.647, "case": "above_new"}
     assert card["headline"] == "Isiah Pacheco questionable at RB"
-    assert card["note"].startswith("Isiah Pacheco is questionable. If he sits, our projection moves "
+    assert card["note"].startswith("Isiah Pacheco is questionable. If that player sits, our projection moves "
                                    "+65% on rushing yards"), card["note"]
-    assert "goes in on its own the moment he is ruled out" in card["note"]
+    assert "goes in on its own the moment that player is ruled out" in card["note"]
     assert T.effect(q.props[2], q.games[0]) == (1.0, "", None), "a questionable back is no TE's news"
 
 
@@ -201,7 +201,7 @@ def _row(player, market, side, line, proj, steps, prob, **kw):
 
 
 def test_the_wiring_check_passes_a_good_board_and_names_every_break():
-    card = {"applied": 1.647, "headline": "Isiah Pacheco just ruled out ahead of him at RB"}
+    card = {"applied": 1.647, "headline": "Isiah Pacheco just ruled out ahead of the player at RB"}
     good = _row("Kareem Hunt", RUSH_YDS, "OVER", 49.5, 65.9,
                 [{"key": "usage", "mult": 1.0}, {"key": "lineup", "mult": 1.647}], 0.71, mate_card=card)
     ml = {"kind": "prop", "rung": "main", "player": "Kareem Hunt", "market": RUSH_YDS, "side": "OVER",
@@ -305,10 +305,10 @@ def test_homecheck_prints_it():
 
 def test_the_rows_the_page_and_ask_carry_it():
     from engine import askbot as A
-    card = {"team": "KC", "headline": "Isiah Pacheco just ruled out ahead of him at RB", "applied": 1.647,
+    card = {"team": "KC", "headline": "Isiah Pacheco just ruled out ahead of the player at RB", "applied": 1.647,
             "note": "Measured over four seasons"}
     assert A.compact({"player": "Kareem Hunt", "mate_card": card})["teammate_out"] == \
-        "Isiah Pacheco just ruled out ahead of him at RB. Measured over four seasons"
+        "Isiah Pacheco just ruled out ahead of the player at RB. Measured over four seasons"
     for f in ("pipeline.py", "likely.py", "touchdowns.py", "longshots.py"):
         assert "mate_card" in open(os.path.join(ROOT, "engine", f), encoding="utf-8").read(), f
     build = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
@@ -332,7 +332,7 @@ def test_the_rows_the_page_and_ask_carry_it():
         os.unlink(path)
     assert out.returncode == 0, out.stderr
     html, none = json.loads(out.stdout)
-    assert none == "" and "Teammate out" in html and "Isiah Pacheco just ruled out ahead of him at RB" in html
+    assert none == "" and "Teammate out" in html and "Isiah Pacheco just ruled out ahead of the player at RB" in html
 
 
 def test_mlb_s_coherence_step_keeps_its_chain_reaching_the_number():

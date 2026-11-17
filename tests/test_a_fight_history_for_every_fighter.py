@@ -148,7 +148,7 @@ def test_the_lines_and_the_splits():
     assert d["player"] == "Arman Tsarukyan" and d["sport"] == "ufc" and d["seasons"] == [0]
     assert d["position"] == "Lightweight" and d["face"].endswith("/mma/players/full/3949584.png")
     assert [g["opp"] for g in d["games"]][:2] == ["Dan Hooker", "Mateusz Gamrot"], "newest first"
-    assert d["games"][-1]["opp"] == "his opponent", "an unnamed opponent is not a blank"
+    assert d["games"][-1]["opp"] == "the opponent", "an unnamed opponent is not a blank"
     L = d["season_line"]
     assert (L["n"], L["w"], L["l"], L["d"]) == (6, 4, 1, 1)
     assert (L["ko_w"], L["sub_w"], L["dec_w"], L["sub_l"]) == (2, 0, 1, 1)

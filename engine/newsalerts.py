@@ -65,11 +65,11 @@ def players(conn, user_id) -> dict:
     out = {}
     for w in AL.list_watches(conn, user_id):
         if w.get("kind") == "player" and w.get("value"):
-            out[_key(w["value"])] = "you follow him"
+            out[_key(w["value"])] = "you follow this player"
     for r in SW.pending_slips(conn, user_id=user_id):
         for leg in r["bet"].get("legs") or []:
             if isinstance(leg, dict) and leg.get("player"):
-                out[_key(leg["player"])] = "he is in your open bet"
+                out[_key(leg["player"])] = "this player is in your open bet"
     return out
 
 

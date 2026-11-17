@@ -398,7 +398,7 @@ def player_spots(sched: Schedule, g: dict | None, team, *, player: str = "", pos
     if contracts and g:
         from .contracts import contract_year, lookup
         if contract_year(lookup(contracts, player, position), g["season"]):
-            out["contract_year"] = "the last season of his deal"
+            out["contract_year"] = "the last season of the player's deal"
     chase = milestone(market, values, games_left(sched, g, team)) if values is not None else None
     if chase and chase["flag"]:
         out["milestone"] = chase["note"]

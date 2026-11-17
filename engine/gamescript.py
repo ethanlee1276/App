@@ -148,11 +148,11 @@ def projection_tilt(team_spread: float, market: str, position: str = "") -> tupl
     # MEASURED AND RETIRED 2026-10-12 (the note on matchup.SCRIPT_COEF_PASS):
     # on his form, his last season and the defence, the spread adds nothing.
     if m in ("pass_yds", "pass_att", "pass_cmp"):
-        return 1.0, ("no script tilt is applied — measured: once his form, last season and the "
+        return 1.0, ("no script tilt is applied — measured: once the player's form, last season and the "
                      "defence are counted, an underdog quarterback does not throw for more")
     if m in ("rec_yds", "receptions"):
-        return 1.0, ("no script tilt is applied — measured: once his form, last season and the "
-                     "defence are counted, the spread adds nothing to his targets")
+        return 1.0, ("no script tilt is applied — measured: once the player's form, last season and the "
+                     "defence are counted, the spread adds nothing to the targets")
     if m == "rush_yds":
         return 1.0, ("no rush tilt is applied — five seasons of logs show no "
                      "usable relationship between a team's spread and its "

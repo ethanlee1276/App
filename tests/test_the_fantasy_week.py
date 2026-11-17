@@ -135,7 +135,7 @@ def test_the_practice_report_names_a_man_the_board_did_not():
     report's designation stands, and with no fit the measured cell for how
     he practised."""
     assert FW.play_chance("", {"designation": "Questionable", "practice": "DNP"},
-                          fallback=FW.FALLBACK_PLAY) == (0.5183, "designation and how he practised")
+                          fallback=FW.FALLBACK_PLAY) == (0.5183, "designation and how the player practised")
     assert FW.play_chance("", {"designation": "Out"})[0] == 0.0
     assert FW.play_chance("Doubtful", None, fallback=FW.FALLBACK_PLAY)[0] < 0.05
     assert FW.play_chance("", None) == (1.0, "")

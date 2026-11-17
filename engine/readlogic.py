@@ -220,7 +220,7 @@ def scoring_words(x: dict, team_words: str = "") -> str:
     s = (x or {}).get("scoring") or {}
     if not s.get("go_to"):
         return ""
-    who = team_words or str(x.get("team") or "his team")
+    who = team_words or str(x.get("team") or "the team")
     # "Duke's", but "Lions'" (a plural nickname: "Lions's" on 2026-11-15).
     poss = f"{who}'" if who.endswith("s") and not who.endswith("ss") else f"{who}'s"
     text = f"{poss} likeliest scorer by our touchdown numbers ({float(s['prob']):.0%})"

@@ -197,9 +197,9 @@ def test_injury_news_is_a_change_never_a_first_sight():
     board("OUT", "PROBABLE")
     assert NA.news_pass(c, tmp, now=NOW + 300) == 1
     t = _told(c)[-1]
-    assert t["title"] == "Ja Morant (MEM): Questionable → Out" and t["body"] == "Ankle. News: you follow him.", t
+    assert t["title"] == "Ja Morant (MEM): Questionable → Out" and t["body"] == "Ankle. News: you follow this player.", t
     board("OUT", "QUESTIONABLE")
-    assert NA.news_pass(c, tmp, now=NOW + 600) == 1 and _told(c)[-1]["body"] == "Foot. News: he is in your open bet."
+    assert NA.news_pass(c, tmp, now=NOW + 600) == 1 and _told(c)[-1]["body"] == "Foot. News: this player is in your open bet."
     assert NA.news_pass(c, tmp, now=NOW + 900) == 0, "no change, nothing"
 
 

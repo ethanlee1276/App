@@ -177,7 +177,7 @@ def test_the_reports_line_says_where_from_the_league_beside_and_the_caveat():
     thin = R.words(R.card("Tra Blake", "espn", STORE))
     assert "His 6 games since 2024, a thin sample:" in thin and "(ESPN)" in thin
     new = R.words(R.card("New Referee", "set", STORE))
-    assert new.startswith("Referee: New Referee (named by hand). We have no games of his")
+    assert new.startswith("Referee: New Referee (named by hand). We have no games with this referee")
     assert R.words({}) == ""
 
 

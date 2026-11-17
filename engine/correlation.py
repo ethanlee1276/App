@@ -389,7 +389,7 @@ def flag_hoops_correlations(recs: list[dict]) -> dict:
                 if r.get("market") in ("pts", "fg3m"):
                     other = "fg3m" if r["market"] == "pts" else "pts"
                     r.setdefault("correlations", []).append(
-                        "A made three IS three points — this and his "
+                        "A made three IS three points — this and the player's "
                         f"{other} Over are one bet wearing two markets; "
                         "counted as combined exposure")
                     flagged += 1

@@ -419,7 +419,7 @@ def test_the_box_check_names_what_each_owed_bet_waits_on():
     nfl = next(x for x in lines if x.startswith("NFL"))
     assert "open 1" in nfl and "OWED 1" in nfl and "NOT FINAL 0" in nfl, nfl
     assert "Amon-Ra St. Brown rec_yds [main] — stat line on file (box score)" in text, text
-    assert "Jay Star pts [main] — no stat line for him yet" in text, text
+    assert "Jay Star pts [main] — no stat line for the player yet" in text, text
     mlb = next(x for x in lines if x.startswith("MLB"))
     assert "OWED 0" in mlb and "NOT FINAL 1" in mlb, mlb
     nhl = next(x for x in lines if x.startswith("NHL"))
@@ -464,10 +464,10 @@ def test_the_box_check_says_which_step_holds_a_college_bet_with_no_stat_line():
                                "position": "RB", "home": 1, "market": "rush_yds", "value": 70.0}])
     H.commit()
     text = "\n".join(S.report(t / "l.db", t / "h.db", today=TODAY))
-    assert "Nobody Known anytime_td [stale] — no stat line for him — no team for him" in text, text
-    assert "Box Missing anytime_td [stale] — no stat line for him — UGA's game is final but its box score is not filed" in text, text
-    assert "Gone Man anytime_td [stale] — no stat line for him — the absent-player rule voids it" in text, text
-    assert (f"Off Day anytime_td [stale] — no stat line for him — FAU has no final game a day either side "
+    assert "Nobody Known anytime_td [stale] — no stat line for the player — no team for the player" in text, text
+    assert "Box Missing anytime_td [stale] — no stat line for the player — UGA's game is final but its box score is not filed" in text, text
+    assert "Gone Man anytime_td [stale] — no stat line for the player — the absent-player rule voids it" in text, text
+    assert (f"Off Day anytime_td [stale] — no stat line for the player — FAU has no final game a day either side "
             f"of the date; its nearest final on file is {later} (+3 days)") in text, text
     L.row_factory = H.row_factory = __import__("sqlite3").Row
     got = {b["player"]: ledger._absent_player_verdict(H, b)

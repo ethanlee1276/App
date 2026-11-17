@@ -1043,7 +1043,7 @@ def ensure_registered(path=None) -> dict:
             TD_EDGE_NFL["id"], TD_EDGE_NFL_XFP["id"],
             "the touchdown model it was registered against was replaced: "
             "engine.touchdowns now blends the share toward the player's "
-            "xFP share of his offence (XFP_SHARE_WEIGHT), measured at "
+            "xFP share of the offence (XFP_SHARE_WEIGHT), measured at "
             "+0.037 AUC on 8,442 held-out player-weeks. The claim is "
             "unchanged and re-asked of the model that will actually take "
             "the bets.", path)

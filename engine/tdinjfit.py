@@ -86,11 +86,11 @@ CATCHERS = {"WR", "SWR", "TE"}
 #: claim -> (side, depth group, positions it is about, words)
 CLAIMS = {
     "secondary": ("opp", SECONDARY, frozenset({"WR", "TE"}),
-                  "starting defensive backs out → his receivers score more"),
+                  "starting defensive backs out → the other side's receivers score more"),
     "front": ("opp", FRONT, frozenset({"RB"}),
-              "starting defensive linemen out → his backs score more"),
+              "starting defensive linemen out → the other side's backs score more"),
     "catchers": ("own", CATCHERS, frozenset({"WR", "TE", "RB"}),
-                 "a starting WR or TE out → his teammates score more"),
+                 "a starting WR or TE out → the teammates score more"),
 }
 
 #: Team codes as the replay's logs spell them.

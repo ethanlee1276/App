@@ -536,7 +536,7 @@ def words(o: dict, home: str = "the home team") -> str:
     head = f"Referee: {name} ({o.get('source_words') or o.get('source') or ''})."
     n = rec.get("games") or 0
     if not n:
-        return head + " We have no games of his in our record yet."
+        return head + " We have no games with this referee in our record yet."
     bits = []
     if rec.get("flags") is not None and lg.get("flags") is not None:
         bits.append(f"{rec['flags']:.1f} penalties a game (league {lg['flags']:.1f})")

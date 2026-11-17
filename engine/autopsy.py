@@ -54,7 +54,7 @@ MIN_Z = 2.0
 MIN_LOSSES = 100
 REFRESH_SECONDS = 86400
 STORE = "autopsy.json"
-STEPS = {"volume": "the usage step (how much he is used)", "efficiency": "the per-touch step (what he does with each)",
+STEPS = {"volume": "the usage step (how much the player is used)", "efficiency": "the per-touch step (what the player does with each)",
          "script": "the game-script step", "left_early": "availability (an injury or an early exit)"}
 
 

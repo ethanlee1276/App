@@ -83,8 +83,8 @@ EFFECT_SNAPS = {
     ("rush_yds", "RB", "below_new"): 1.144,      # ± .046  n 330
 }
 #: The words for each case, on the card.
-CASE_WORDS = {"above_new": "just ruled out ahead of him", "above_cont": "out ahead of him",
-              "below_new": "just ruled out behind him", "below_cont": "out behind him"}
+CASE_WORDS = {"above_new": "just ruled out ahead of the player", "above_cont": "out ahead of the player",
+              "below_new": "just ruled out behind the player", "below_cont": "out behind the player"}
 #: A TEAMMATE BACK — engine/matefit.back_check on 2022-2025 snap counts
 #: (`python3 matefit.py --back`). The markets and positions whose held-out
 #: error the deflation cut (matefit.back_verdicts' bar); a tight end's
@@ -301,10 +301,10 @@ def effect(prop, game, form_mean=None) -> tuple:
     head = f"{' and '.join(who)} {words} at {pos}"
     if mult != 1.0:
         note = (f"Measured {_measured_on(lu)}: a {pos} in this spot produced "
-                f"{abs(round((mult - 1) * 100))}% {'more' if mult > 1 else 'less'} than his own form — applied (×{mult:.2f})")
+                f"{abs(round((mult - 1) * 100))}% {'more' if mult > 1 else 'less'} than the player's own form — applied (×{mult:.2f})")
         reason = f"Teammate out: {head} — measured (×{mult:.2f})"
     elif held:
-        note = "His games since the change already carry it (the sample was reset to them), so nothing is added"
+        note = "The player's games since the change already carry it (the sample was reset to them), so nothing is added"
         reason = ""
     else:
         note = (f"Shown for you. {_measured_on(lu).capitalize()} this did not move this bet enough to price it"
@@ -375,13 +375,13 @@ def back(prop, lu: dict, form_mean) -> tuple:
         return 1.0, "", None
     who = [n for side, w, n in mates if any(x not in w for x in weeks_now)]
     missed = sorted({w for w in cases})
-    head = (f"{' and '.join(who)} back at {pos} — {len(missed)} of his {len(now)} game"
+    head = (f"{' and '.join(who)} back at {pos} — {len(missed)} of the player's {len(now)} game"
             f"{'' if len(now) == 1 else 's'} this season came without "
-            f"{'them' if len(who) > 1 else 'him'}")
+            f"{'them' if len(who) > 1 else 'that teammate'}")
     lifts = sorted({table.get((market, pos, c), 1.0) for cs in cases.values() for c in cs} - {1.0})
     how = (" and ".join(f"×{x:.2f}" for x in lifts) if lifts else "")
     note = (f"Measured over four seasons: a {pos}'s games without "
-            f"{'a teammate ahead of him' if above else 'a teammate behind him'} run high"
+            f"{'a teammate ahead' if above else 'a teammate behind'} run high"
             + (f" ({how})" if how else "")
             + f", so those games are counted at that much less — applied (×{mult:.2f})")
     reason = f"Teammate back: {head} — measured (×{mult:.2f})"
@@ -399,10 +399,10 @@ def _if_sits_note(maybe: dict, mult: float, market: str, lu: dict | None = None)
     """The card's sentence for a questionable teammate."""
     move = maybe["mult"] / mult - 1
     who, many = " and ".join(maybe["who"]), len(maybe["who"]) > 1
-    return (f"{who} {'are' if many else 'is'} questionable. If {'they sit' if many else 'he sits'}, "
+    return (f"{who} {'are' if many else 'is'} questionable. If {'they sit' if many else 'that player sits'}, "
             f"our projection moves {move * 100:+.0f}% on {_WORDS.get(market, market)} (measured "
             f"{_measured_on(lu)}) — not in the number yet; it goes in on its own the moment "
-            f"{'they are' if many else 'he is'} ruled out")
+            f"{'they are' if many else 'that player is'} ruled out")
 
 
 def _college_measured() -> bool:

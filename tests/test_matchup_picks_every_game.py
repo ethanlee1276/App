@@ -149,7 +149,7 @@ def test_build_and_the_journal_rows():
                     [{"player": "Josh Allen", "position": "QB", "market": "pass_yds"}])
     assert [b["game"] for b in board] == ["BUF@DET"]
     allen = [r for r in board[0]["td"] if r["player"] == "Josh Allen"][0]
-    assert allen["position"] == "QB" and "(he scores on the ground)" in " ".join(allen["matchup_lines"])
+    assert allen["position"] == "QB" and "(the quarterback scores on the ground too)" in " ".join(allen["matchup_lines"])
     assert all(r["game"] == "BUF@DET" for r in board[0]["td"])
     assert len(M.journal_rows(board, "td")) == 4 and M.journal_rows(board, "prop") == []
 

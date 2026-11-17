@@ -254,7 +254,7 @@ def load(sport: str = "nfl") -> dict:
 
 def report_lines(res: dict) -> list:
     out = [f"Practice reports — {res['sport'].upper()}: {res['listings']} listed player-weeks, seasons {res['seasons']}"]
-    out.append("  designation × practice: played (n) · snap share vs his last four when he played")
+    out.append("  designation × practice: played (n) · snap share vs the last four played")
     for k in sorted(res["table"], key=lambda k: (DESIGNATIONS.index(k.split("|")[0]), k)):
         v = res["table"][k]
         out.append(f"    {k:24s} {v['played']:.0%} ({v['n']}) · {v['ratio'] if v['ratio'] is not None else '—'}")

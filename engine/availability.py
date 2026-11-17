@@ -186,7 +186,7 @@ def note(r: dict, c=None) -> str:
     a = r.get("availability")
     if a == QUESTIONABLE:
         return (f"{r.get('player')} is listed questionable — this read only holds if he plays; "
-                "check the injury report before you bet on him")
+                "check the injury report before you bet on this player")
     if a == MISSED:
         m = r.get("missed") or {}
         g = m.get("game") or {}
@@ -197,10 +197,10 @@ def note(r: dict, c=None) -> str:
             where = f" ({_game_words(g, c)})"
         what = "no stat line" if m.get("kind") == "stat" else "did not play"
         return (f"{r.get('player')} had {what} in {name}'s last game{where} and is on no injury report "
-                "— he may be hurt or held out; check he is in the lineup before you bet on him"
+                "— the player may be hurt or held out; check the lineup before you bet"
                 if what == "no stat line" else
                 f"{r.get('player')} did not play in {name}'s last game{where} and is on no injury report "
-                "— check he is in the lineup before you bet on him")
+                "— check the lineup before you bet")
     return ""
 
 

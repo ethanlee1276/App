@@ -141,7 +141,7 @@ def test_plays_that_fit_are_the_reads_plays_volume_first_and_say_their_seat():
         "catches and touchdowns (by our chance) before yardage; a 50% case is not a fit"
     shakir = fits[0]
     assert shakir["on_board"] and shakir["tier"] == "top" and shakir["tier_label"] == "Top pick"
-    assert shakir["volume"] and "A volume market — a bet on his role, not on a big play." in shakir["why"]
+    assert shakir["volume"] and "A volume market — a bet on the player's role, not on a big play." in shakir["why"]
     # A favourite that runs the clock pushes PASS volume down: against a
     # receiver's catches over, and said so (2026-10-06 — it was listed as
     # a reason FOR the over until Ethan's "make sure everything here is

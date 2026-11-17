@@ -4790,8 +4790,8 @@ def _week_day_for(hist_conn, b, season: int, period: str) -> tuple:
                             "settle it")
         if player:
             return "", "", ("no team on file for this player — a rookie, or "
-                            "a name the logs spell differently. His own game "
-                            "log places him the moment the week is played")
+                            "a name the logs spell differently. The player's own game "
+                            "log places the player the moment the week is played")
     except Exception:                                      # noqa: BLE001
         # A pre-migration or unreadable history DB means no bridge, which
         # is the state every one of these rows is already in. Never let a
@@ -6079,7 +6079,7 @@ def _college_absent(hist_conn, b, target):
     t0 = _absent_lap("team", t0)
     if not team:
         _absent_tally("no team")
-        return None, ("no team for him — none stamped on the bet, no stat row in the "
+        return None, ("no team for the player — none stamped on the bet, no stat row in the "
                       "45 days before, not on the cached roster")
     # ONE FIXTURE, however many rows. The games table holds the same
     # college game twice — once keyed AWAY@HOME, once by its ESPN id —

@@ -41,7 +41,7 @@ def note(market: str, opponent: str, teams: dict, proj: dict | None) -> str:
     p = proj or {}
     if market == "saves":
         mult = M.opp_factor(teams, opponent, "sog_for")
-        what = "their shot volume moves his shots against"
+        what = "their shot volume moves the goalie's shots against"
     else:
         mult = float(p.get("opp") or 1.0) / float(p.get("pp_factor") or 1.0)
         what = ("the chances they allow at five-on-five and their starter against chances move it"

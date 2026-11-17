@@ -41,7 +41,7 @@ SHARED = {
 MENUS = {
     "mlb": {
         "late-scratch": "starter/lineup change after the bet",
-        "early-hook": "the manager pulled him before the number had a "
+        "early-hook": "the manager pulled the pitcher before the number had a "
                       "chance",
         "bullpen-game": "the start dissolved into a bullpen night",
         "ump-zone": "the zone squeezed or widened the whole night",
@@ -60,7 +60,7 @@ MENUS = {
         "late-scratch": "inactive/role change after the bet",
         "script-flip": "the game script inverted the usage",
         "weather-flip": "conditions changed after pick time",
-        "injury-in-game": "he left the game early",
+        "injury-in-game": "the player left the game early",
     },
 }
 

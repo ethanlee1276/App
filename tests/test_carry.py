@@ -331,7 +331,7 @@ def test_holding_a_bet_back_says_so_on_the_card():
     never there — the reader cannot tell it from a modelling result."""
     r = _mover_rec()
     warn = " ".join(r["warnings"])
-    assert "job he holds now" in warn
+    assert "job the player holds now" in warn
 
 
 def test_a_carried_player_who_did_not_move_can_still_be_staked():

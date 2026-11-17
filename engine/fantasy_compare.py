@@ -152,10 +152,26 @@ def clock(t: _dt.datetime | None) -> str:
 
 # --- the answer ----------------------------------------------------------------------------
 
+#: The note for a player who will not play.
+NO_POINTS = "no points this week."
+_SUFFIXES = ("jr", "sr", "ii", "iii", "iv", "v")
+
+
+def _surname(name: str) -> str:
+    """What a box score calls a player: "Marvin Harrison Jr." is Harrison."""
+    parts = name.split()
+    while len(parts) > 1 and parts[-1].rstrip(".").lower() in _SUFFIXES:
+        parts.pop()
+    return parts[-1] if parts else name
+
+
 def _they(row: dict) -> tuple[str, str, str]:
-    """A player is "he"; a team defense is "they": (subject, outscores,
-    scores)."""
-    return ("they", "outscore", "score") if row.get("position") == "DEF" else ("he", "outscores", "scores")
+    """Who a sentence is about, with its verbs: (subject, outscores,
+    scores). A team defense is "they"; a player is called by surname, never
+    "he" — the site's wording for every player since 2026-11-17."""
+    if row.get("position") == "DEF":
+        return ("they", "outscore", "score")
+    return (_surname(row.get("player") or ""), "outscores", "scores")
 
 
 def _pct(p: float) -> str:
@@ -277,7 +293,7 @@ def compare(rows: list, scoring: str = "ppr") -> dict:
     # Who will not play at all.
     for r in got:
         if ms[r["player"]]["play"] <= 0:
-            notes.append(f"{r['player']} is {str(r.get('status') or 'out').lower()}: he scores nothing this week.")
+            notes.append(f"{r['player']} is {str(r.get('status') or 'out').lower()}: {NO_POINTS}")
     # The clock, for a listed player against the one he is weighed with
     # (the conditional call already says it for its own man).
     for r in got:
@@ -300,7 +316,7 @@ def compare(rows: list, scoring: str = "ppr") -> dict:
         if ms2["hi"] - ml["hi"] >= EDGE_RANGE:
             he = _they(second)[0]
             notes.append(f"{second['player']} {'have' if he == 'they' else 'has'} the bigger week in "
-                         f"{'them' if he == 'they' else 'him'}: one week in ten {he} "
+                         f"reach: one week in ten {he} "
                          f"{'pass' if he == 'they' else 'passes'} {_pts(ms2['hi'])}, to {lead['player']}'s "
                          f"{_pts(ml['hi'])}. The underdog this week? That is the start that can win it.")
             said = True
@@ -316,10 +332,11 @@ def compare(rows: list, scoring: str = "ppr") -> dict:
         p_if = top["p_if_both_play"]
         before = (f"before {second['player']}'s game locks" if len(got) == 2
                   else "before the others' games lock")
+        who = _they(lead)[0]
         text = (f"Wait on {lead['player']} ({str(lead.get('status') or 'listed').lower()}, {_pct(ml['play'])} "
-                f"to play): his inactives are out about {told}, {before}. Active: start him"
-                + (f" (he outscores {second['player']} {_pct(p_if)} of the time when he plays)" if p_if is not None
-                   else "") + f". Out: start {second['player']}.")
+                f"to play): the inactives are out about {told}, {before}. Active: start {who}"
+                + (f" ({who} outscores {second['player']} {_pct(p_if)} of the time when playing)"
+                   if p_if is not None else "") + f". Out: start {second['player']}.")
     elif top["p"] is None:
         text = f"Start {lead['player']}: {_pts(top['edge'])} more points this week."
     elif coin:
@@ -335,7 +352,7 @@ def compare(rows: list, scoring: str = "ppr") -> dict:
                 else f"Start {lead['player']}: {' and '.join(out_)} {'is' if len(out_) == 1 else 'are'} out.")
     if text.endswith(" out."):
         # The call already says who is out; the note would say it twice.
-        notes = [n for n in notes if not n.endswith("he scores nothing this week.")]
+        notes = [n for n in notes if not n.endswith(NO_POINTS)]
     return {
         "scoring": SCORINGS[key],
         "players": [_card(r, ms[r["player"]]) for r in got],

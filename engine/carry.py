@@ -596,7 +596,7 @@ def decorate(recommendations: list[dict], report: dict) -> int:
                 r["warnings"].append(
                     "Not staked while that is the only sample there is. It "
                     "stays on the board so the number is visible, but a bet "
-                    "wants evidence about the job he holds now")
+                    "wants evidence about the job the player holds now")
         n += 1
     thin = report.get("thin") or {}
     for r in recommendations:

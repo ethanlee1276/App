@@ -230,10 +230,10 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     elif early_exits["kept"]:
         recent = [i for i in _ex if i < _RECENT]
         context_notes.append(
-            f"Left early {'in his last game' if not recent[0] else f'{recent[0] + 1} games ago'} "
+            f"Left early {'in the last game' if not recent[0] else f'{recent[0] + 1} games ago'} "
             f"({minutes[recent[0]]:.0f} min) — kept: a recent early exit predicts a "
             f"quieter game (measured)" if recent else
-            "Early exits kept in his minutes")
+            "Early exits kept in the minutes")
 
     return {"projection": proj, "proj_min": proj_min, "base": base, "grade": grade,
             "stability": stability, "context": context_notes, "early_exits": early_exits,

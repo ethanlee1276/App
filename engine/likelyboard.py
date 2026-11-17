@@ -816,7 +816,7 @@ def matchup_check(r: dict, leans: dict, td_scores: dict, steps: dict | None = No
     if lane == "td":
         s = td_scores.get(r.get("player") or "")
         if s is None:
-            return None, "no matchup read for him"
+            return None, "no matchup read for the player"
         if s >= TD_CASE:
             return True, f"matchup {s} of 8 for a touchdown"
         if s <= TD_AGAINST:

@@ -244,7 +244,7 @@ def _fit_reason(r: dict) -> list:
         elif backs < 0:
             why.append(f"Against it — the script: {gs['lean']}.")
     if r.get("market") in VOLUME_MARKETS:
-        why.append("A volume market — a bet on his role, not on a big play.")
+        why.append("A volume market — a bet on the player's role, not on a big play.")
     elif r.get("market") in YARDAGE_MARKETS:
         # The volume market under this yardage one, by name: a back's
         # rushing yards ride on his carries, not on catches.
@@ -323,7 +323,7 @@ def avoids(g: dict, reads: list, props: list) -> list:
         why = ""
         if read.get("read") in ("tough", "avoid") and market in (read.get("lean") or []):
             con = (read.get("con") or [""])[0]
-            why = f"The over fights the matchup — {con.rstrip('.') if con else 'the read says he could struggle'}."
+            why = f"The over fights the matchup — {con.rstrip('.') if con else 'the read says the player could struggle'}."
         else:
             td = r.get("trend_delta")
             chase = CHASE_RECEPTIONS if market in ("receptions", "pass_td") else CHASE_YARDS

@@ -1036,8 +1036,8 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
                 d["stake_units"] = 0.0
                 d["grade"] = "Pass"
                 d.setdefault("warnings", []).append(
-                    "OPENER — his recent starts run 1-2 innings, so this "
-                    "projection assumes a workload he will not have. Both "
+                    "OPENER — the recent starts run 1-2 innings, so this "
+                    "projection assumes a workload the pitcher will not have. Both "
                     "sides refused: the number is invalid, not merely low")
         if getattr(game, "doubleheader", False):
             # Say WHICH game of the doubleheader this prop is for — on the

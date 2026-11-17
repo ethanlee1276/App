@@ -47,7 +47,7 @@ def test_darnold_back_at_qb1_is_a_return_and_moves_nothing():
     assert "starts over" not in Q.headline(ch)
     wr = NS(team="SEA", position="WR", market="rec_yds", player="Jaxon Smith-Njigba")
     mult, reason, card = Q.effect(wr, NS(qb_changes={"SEA": ch}))
-    assert mult == 1.0 and reason == "" and card["note"] == "His usual quarterback is back — nothing to adjust"
+    assert mult == 1.0 and reason == "" and card["note"] == "The usual quarterback is back — nothing to adjust"
     own = Q.effect(NS(team="SEA", position="QB", market="pass_yds", player="Sam Darnold"),
                    NS(qb_changes={"SEA": ch}))[2]
     assert own["note"] == "Back as the starter; Drew Lock started while he was out"

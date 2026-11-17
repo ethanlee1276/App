@@ -241,7 +241,7 @@ def test_the_grade_counts_the_link_each_college_prop_stops_at_and_times_its_read
         "outside a pass's index nothing is kept"
     hist, day = _links_history(today)
     b = {"sport": "cfb", "market": "rush_yds", "category": "main", "date": day, "player": "Nobody Known"}
-    assert "no team for him" in ledger.absent_blocker(hist, b), "the settle check's words, unchanged"
+    assert "no team for the player" in ledger.absent_blocker(hist, b), "the settle check's words, unchanged"
 
 
 

@@ -175,7 +175,7 @@ def projection_mult(stat: str, rate: float, read: dict | None,
     if rate_new <= 0:
         return 1.0, ""
     m = rate_new / rate
-    tail = ("his older games and his role's league rate in it "
+    tail = ("the player's older games and the role's league rate in it "
             "(measured: closer on a season it never saw)")
     if len(shown) == 1:
         p, (r0, r1) = shown[0]
@@ -201,7 +201,7 @@ def lift_zero(stat: str, read: dict | None, league_key: str = "nba") -> tuple:
     if b is None or b[0] > 0 or b[1] <= 0:
         return None, ""
     return b[1], (f"No {LABEL[parts[0]]} in his last {WINDOW} games: read past them at "
-                  f"{b[1] * 36:.2f} a 36 minutes, his older games and his role's league rate in it "
+                  f"{b[1] * 36:.2f} a 36 minutes, the player's older games and the role's league rate in it "
                   f"(measured: closer on a season it never saw)")
 
 

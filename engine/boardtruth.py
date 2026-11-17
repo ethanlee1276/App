@@ -66,7 +66,9 @@ LONGSHOT_PROB = 0.20
 #: How many problems the heartbeat carries per board (the count is whole).
 KEEP = 8
 
-_BARE_MATE = re.compile(r" is out — his (targets|carries) are open$")
+#: A teammate-out line with no number in it (engine/gamescan's bare form,
+#: "Njoku is out — those targets are open"): flagged, never shipped quiet.
+_BARE_MATE = re.compile(r" is out — those (targets|carries) are open$")
 #: The edges the short version names (engine/gamereport.sec_short).
 REPORT_EDGES = 3
 _NOW_PCT = re.compile(r"now (\d+)%")

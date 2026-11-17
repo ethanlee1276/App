@@ -257,7 +257,7 @@ def build(board: list[dict], ranks: dict, teams: int, slot: int,
                  "consensus draft order run through the room's reach — the "
                  "stated prior until the room has made enough picks to "
                  "measure. It does not know camp news, a Friday injury, or "
-                 "that seat 4 only drafts his own team."),
+                 "that seat 4 only drafts one team's players."),
     }
 
 

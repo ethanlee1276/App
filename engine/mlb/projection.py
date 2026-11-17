@@ -349,7 +349,7 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
         "player", player_mult,
         "The record's own correction for players this blend persistently "
         "misreads." if abs(player_mult - 1.0) >= 0.005
-        else "Nothing in the record says this blend misreads him."))
+        else "Nothing in the record says this blend misreads the player."))
     _src = "rate" if prop.market in RARE_EVENT_MARKETS else "form"
     return MLBProjection(
         mean=mean, std=adj_std, form=form,

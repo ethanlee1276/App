@@ -155,7 +155,7 @@ def apply_rules(
     if concern and config.block_injury_concern:
         recommend = False
         warnings.append(f"{prop.player} listed {concern} — hold until inactives confirm status")
-    checks.append(condition("health", "No designation on him",
+    checks.append(condition("health", "No designation on the player",
                          not (concern and config.block_injury_concern),
                          concern or "not listed", "not listed"))
 

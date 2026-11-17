@@ -72,7 +72,7 @@ def test_the_card_says_what_the_projection_actually_did():
     for m in ("pass_att", "pass_cmp"):
         assert G.for_prop(g, "NO", m, "QB")["tilt"] == 1.0
     olave = G.for_prop(g, "NO", "receptions", "WR")
-    assert olave["tilt"] == 1.0 and "adds nothing to his targets" in olave["applied"]
+    assert olave["tilt"] == 1.0 and "adds nothing to the targets" in olave["applied"]
     gibbs = G.for_prop(g, "DET", "rush_yds", "RB")
     assert gibbs["tilt"] == 1.0 and "no rush tilt is applied" in gibbs["applied"]
     td = G.for_prop(g, "DET", "anytime_td", "RB")

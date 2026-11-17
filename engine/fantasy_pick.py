@@ -292,5 +292,5 @@ def advice(draft: dict, picks: list, ranks: dict, board: list,
         "note": ("Survival is measured from THIS room — how far off "
                  "consensus its picks have actually reached — not from a "
                  "national average. It does not know who is about to be "
-                 "ruled out, or that seat 4 only drafts his own team."),
+                 "ruled out, or that seat 4 only drafts one team's players."),
     }

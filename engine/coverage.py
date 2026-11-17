@@ -449,7 +449,7 @@ def nfl(conn) -> SportCoverage:
               _fresh("injuries_*.csv"), "refreshes with the launcher"),
         Layer("Weather", "§7's wind bands block deep passing above 25mph",
               OK, "Open-Meteo, keyless"),
-        Layer("Rosters / depth charts", "a traded player projected on his old "
+        Layer("Rosters / depth charts", "a traded player projected on the old "
               "team is a silently wrong number",
               OK if _cache_age_h("sleeper_players_nfl*.json") is not None else MISSING,
               _fresh("sleeper_players_nfl*.json"),
@@ -472,7 +472,7 @@ def mlb(conn) -> SportCoverage:
         _game_lines_layer(conn, "mlb"),
         _prop_closes_layer(conn, "mlb"),
         Layer("Statcast", "exit velocity and barrel rate are the difference "
-              "between a hitter's luck and his contact quality",
+              "between a hitter's luck and contact quality",
               OK if _cache_age_h("savant_*.csv") is not None else PARTIAL,
               _fresh("savant_*.csv"), "refreshes with the launcher"),
         Layer("Confirmed lineups", "a projected lineup that never took the "

@@ -108,7 +108,7 @@ def _absent_why(hist, b) -> str:
     absent-player rule holds it (engine.ledger.absent_blocker) — 61 college
     rows read only "no stat line" on 2026-10-17 and nobody could tell a
     missing box from a man with no team."""
-    plain = "no stat line for him yet (box or league file not in, or he did not play)"
+    plain = "no stat line for the player yet (box or league file not in, or the player did not play)"
     if b["sport"] != "cfb":
         return plain
     try:
@@ -116,7 +116,7 @@ def _absent_why(hist, b) -> str:
         why = ledger.absent_blocker(hist, b)
     except Exception:                                    # noqa: BLE001
         return plain
-    return f"no stat line for him — {why}" if why else plain
+    return f"no stat line for the player — {why}" if why else plain
 
 
 def report(ledger_path, history_path, today=None) -> list:

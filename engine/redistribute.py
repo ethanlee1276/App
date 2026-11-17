@@ -296,7 +296,7 @@ def note_text(out_player: str, status: str, kind: str, res: dict,
                 "with": b["with"], "without": b["without"],
                 "n_without": b["n_without"], "text": text}
     why = (f"{games} since last season" if n_out
-           else "he has not missed a game in the sample")
+           else "the player has not missed a game in the sample")
     return {"out": out_player, "status": status, "kind": kind,
             "n_out": n_out, "delta": None, "measured": False,
             "text": f"{out_player} {st} — usage likely up; not enough games "

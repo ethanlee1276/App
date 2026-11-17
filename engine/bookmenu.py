@@ -58,9 +58,9 @@ from .models import (PASS_YDS, REC_YDS, PASS_CMP, RECEPTIONS, RUSH_YDS,
 ROOT = Path(__file__).resolve().parents[1]
 
 CHECKS = {
-    "pass_rec": {"label": "Passing yards against his receivers' yards",
+    "pass_rec": {"label": "Passing yards against the receivers' yards",
                  "kind": "team", "parent": PASS_YDS, "part": REC_YDS, "unit": "yds"},
-    "cmp_rec": {"label": "Completions against his receivers' catches",
+    "cmp_rec": {"label": "Completions against the receivers' catches",
                 "kind": "team", "parent": PASS_CMP, "part": RECEPTIONS, "unit": "catches"},
     "rush_rec": {"label": "Rush + rec yards against the two apart",
                  "kind": "player", "parent": RUSH_REC_YDS, "parts": (RUSH_YDS, REC_YDS), "unit": "yds"},

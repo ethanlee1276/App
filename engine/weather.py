@@ -359,8 +359,8 @@ def evaluate_weather(w: Weather, position: str | None = None) -> WeatherEffect:
             if kind == "rain" and RUSH_ATT in markets and RUSH_YDS in markets \
                     and (RUSH_ATT, _group(RUSH_ATT, position)) in table \
                     and (RUSH_YDS, _group(RUSH_YDS, position)) not in table:
-                reasons.append("Teams run more in rain and a back keeps his share, so his carries "
-                               "go up; his rushing yards are left alone — per carry they fell in "
+                reasons.append("Teams run more in rain and a back keeps the same share, so the back's carries "
+                               "go up; the rushing yards are left alone — per carry they fell in "
                                "rain in most seasons, so the extra carries do not reliably add yards")
         else:
             reasons.append(f"{kind.capitalize()} {p:.0%} likely at kickoff — no clear "

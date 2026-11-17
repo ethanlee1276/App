@@ -86,10 +86,10 @@ _VOLUME_WORDS = (("team_pass_att", "pass attempts"), ("team_completions", "compl
 #: GREEN_ATTEMPTS passes behind him (this season and last); it moves no
 #: number.
 GREEN_ATTEMPTS = 50
-BACKS_BEHIND_GREEN = ("Behind a quarterback with almost no passes behind him (under 50; 341 team-games, "
+BACKS_BEHIND_GREEN = ("Behind a quarterback with almost no passing experience (under 50 passes; 341 team-games, "
                       "2016–26), teams ran 5% more and threw 6% less, but mostly on the quarterback's "
-                      "own runs: the lead back's carries moved +1% and his yards +3%, inside the noise, "
-                      "so it is left out of his number")
+                      "own runs: the lead back's carries moved +1% and yards +3%, inside the noise, "
+                      "so it is left out of the lead back's number")
 
 
 def volume_line(tier: str) -> str:
@@ -321,7 +321,7 @@ def headline(ch: dict) -> str:
         src = (ch["reported"] or {}).get("source") or "reports"
         who = f"{ch['replacement']} expected to start (per {src})"
     else:
-        who = f"{ch['replacement']} starts" if ch.get("replacement") else "his replacement is not named yet"
+        who = f"{ch['replacement']} starts" if ch.get("replacement") else "the replacement is not named yet"
     return f"{ch['starter']} ({ch['status']}) — {who}"
 
 
@@ -404,7 +404,7 @@ def card(ch: dict, applied: float = 1.0, own: bool = False, position: str = "") 
     elif own:
         note = f"Starting in place of {ch['starter']}"
     elif ch.get("status") == "RETURNS":
-        note = "His usual quarterback is back — nothing to adjust"
+        note = "The usual quarterback is back — nothing to adjust"
     elif applied != 1.0:
         note = (f"Measured over four seasons: behind a quarterback this far below the starter, "
                 f"receivers lost {round((1 - applied) * 100)}% — applied (×{applied:.2f})")

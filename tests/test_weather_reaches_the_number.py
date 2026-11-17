@@ -111,7 +111,7 @@ def test_rain_raises_a_backs_carries_and_leaves_his_yards_alone():
     e = W.evaluate_weather(_wind(4.0, precip_chance=0.8, rain=True), "RB")
     assert abs(e.multipliers[RUSH_ATT] - (1 + 0.8 * (W.RAIN[("rush_att", "RB")] - 1))) < 1e-9
     assert e.multipliers[RUSH_ATT] > 1.05 and e.multipliers[RUSH_YDS] == 1.0
-    assert "carries ran 7% higher" in e.reasons[0] and "his rushing yards are left alone" in e.reasons[1]
+    assert "carries ran 7% higher" in e.reasons[0] and "the rushing yards are left alone" in e.reasons[1]
     assert "at an 80% chance, that's carries 6% higher, receiving yards 17% lower" in e.reasons[0]
     assert W.evaluate_weather(_wind(4.0, precip_chance=0.1), "RB").multipliers[RUSH_ATT] == 1.0
     wr = W.evaluate_weather(_wind(4.0, precip_chance=0.8, rain=True), "WR")
