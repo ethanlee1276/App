@@ -509,8 +509,11 @@ const HIDDEN_VIEWS = {
   // page needs no college branch because there is no longer a college
   // difference for it to branch on.
   // Hockey has no long-shot board (the anytime scorer rides the props and
-  // Most Likely) and no futures pull yet; every rink is indoors.
-  nhl: ["longshots", "futures", "weather", "race"],
+  // Most Likely), and every rink is indoors. Futures and the race OPENED
+  // 2026-11-17: the season simulation has been built since 2026-10-03 and
+  // now starts from the real table, and the NHL's playoff race is played
+  // off it (engine/seasonrace).
+  nhl: ["longshots", "weather"],
   // College basketball (2026-11-13): no first-basket market is bought for
   // it, no title futures are built, and every gym is indoors.
   // The race OPENED 2026-11-14: the NCAA tournament (engine/ncaarace).
@@ -518,9 +521,11 @@ const HIDDEN_VIEWS = {
   // books' (engine/ncaarace.futures_payload).
   cbb: ["longshots", "weather"],
   cfb: [],
-  // The race page is the NFL's and college football's playoffs, the NBA
-  // Cup and the NCAA tournament (js/race.js); the NFL's opened 2026-11-03
-  // (engine/nflrace), college basketball's 2026-11-14 (engine/ncaarace).
+  // The race page is the NFL's, the NBA's, the NHL's and college
+  // football's playoffs, the NBA Cup and the NCAA tournament (js/race.js);
+  // the NFL's opened 2026-11-03 (engine/nflrace), college basketball's
+  // 2026-11-14 (engine/ncaarace), the NBA's and the NHL's 2026-11-17
+  // (engine/seasonrace).
   nfl: [], mlb: ["race"],
 };
 
@@ -756,7 +761,7 @@ function applySport() {
   const hidden = HIDDEN_VIEWS[state.sport] || [];
   markOffRows(hidden);
   document.querySelectorAll(".sb-race").forEach((el) => {
-    el.textContent = state.sport === "nba" ? "NBA Cup" : state.sport === "cbb" ? "NCAA tournament" : "Playoff race";
+    el.textContent = state.sport === "cbb" ? "NCAA tournament" : "Playoff race";
   });
   if (hidden.includes(state.view)) switchView("recommended");
   const gt = document.getElementById("games-title");

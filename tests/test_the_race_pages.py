@@ -93,14 +93,14 @@ def test_the_page_is_wired_where_every_page_is():
 
 
 def test_the_row_is_named_for_its_league_and_quiet_elsewhere():
-    assert ('el.textContent = state.sport === "nba" ? "NBA Cup" : state.sport === "cbb" ? "NCAA tournament" '
-            ': "Playoff race";') in APP
+    # The NBA's row reads "Playoff race" since 2026-11-17: its page holds the playoff race and the Cup.
+    assert 'el.textContent = state.sport === "cbb" ? "NCAA tournament" : "Playoff race";' in APP
     hidden = APP[APP.index("const HIDDEN_VIEWS = {"):APP.index("\n};", APP.index("const HIDDEN_VIEWS = {"))]
-    for sport in ("mlb", "wnba", "nhl", "ufc", "polymarket", "fantasy"):
+    for sport in ("mlb", "wnba", "ufc", "polymarket", "fantasy"):
         line = next(ln for ln in hidden.splitlines() if ln.strip().startswith(f"{sport}:")
                     or f" {sport}: [" in ln)
         assert '"race"' in line, sport
-    for sport in ("nba", "cfb", "cbb"):
+    for sport in ("nba", "cfb", "cbb", "nhl"):          # the NHL's opened 2026-11-17 (engine/seasonrace)
         line = next(ln for ln in hidden.splitlines() if ln.strip().startswith(f"{sport}:"))
         assert '"race"' not in line, sport
     assert "  nfl: [], mlb: [\"race\"]," in hidden, "the NFL's race is open (2026-11-03)"
@@ -112,10 +112,10 @@ def test_the_row_is_named_for_its_league_and_quiet_elsewhere():
 
 def test_it_reads_through_the_entitled_route():
     assert ('const RACE_FILES = { nfl: "nfl_race.json", cfb: "cfp_race.json", nba: "nba_cup.json", '
-            'cbb: "ncaa_race.json" };') in RACE
+            'cbb: "ncaa_race.json",\n                     nhl: "nhl_race.json" };') in RACE
     assert "const res = await paidFetch(name);" in RACE
-    assert "data/cfp_race" not in RACE and "data/nba_cup" not in RACE and "data/nfl_race" not in RACE
-    assert "data/ncaa_race" not in RACE
+    for stem in ("cfp_race", "nba_cup", "nfl_race", "ncaa_race", "nba_race", "nhl_race"):
+        assert f"data/{stem}" not in RACE, stem
 
 
 # --- what each reader sees ----------------------------------------------------------
@@ -292,7 +292,7 @@ def test_in_a_browser_both_pages_draw_at_a_phones_width():
     assert not errs, errs
     for (sport, who), g in got.items():
         assert g["view"] == "race", (sport, who, g)
-        assert g["label"] == {"nba": "NBA Cup", "cbb": "NCAA tournament"}.get(sport, "Playoff race")
+        assert g["label"] == {"cbb": "NCAA tournament"}.get(sport, "Playoff race")
         assert not g["wide"], f"{sport} {who}: the page scrolls sideways at 390px"
         assert g["lock"] == (who == "free"), (sport, who)
     assert "IF IT STARTED TODAY" in got[("cfb", "member")]["text"].upper()

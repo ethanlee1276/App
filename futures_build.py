@@ -96,6 +96,23 @@ def build(sport: str, conn, trials: int = 20000, live_odds: bool = False) -> dic
     return out
 
 
+def publish(sport: str, data: dict, conn) -> str:
+    """Write a futures board through the gate, and for a league whose race
+    page is played off the same run (engine/seasonrace: the NBA's and the
+    NHL's playoff races), that race too. Returns the race's log line, or
+    "" for a league without one. The one writer both this command and the
+    refresh loop's daily rebuild use, so neither can skip the paywall or
+    leave the race a day behind its board."""
+    from engine import seasonrace
+    gate.publish(data, OUT / f"futures_{sport}.json")
+    if sport not in seasonrace.SPORTS:
+        return ""
+    try:
+        return seasonrace.publish(sport, data, conn, OUT)
+    except Exception as exc:                           # noqa: BLE001
+        return f"{sport.upper()} playoff race: not built ({type(exc).__name__}: {exc})"
+
+
 def main(argv: list[str]) -> None:
     args = [a for a in argv[1:] if not a.startswith("--")]
     live = "--odds" in argv
@@ -115,15 +132,15 @@ def main(argv: list[str]) -> None:
         except Exception as exc:                       # noqa: BLE001
             print(f"  ✗ {sport.upper()}: {exc}")
             continue
-        path = OUT / f"futures_{sport}.json"
-        gate.publish(data, path)
+        race = publish(sport, data, conn)
         n = len(data.get("teams") or [])
         priced = data.get("priced", 0)
         note = data.get("note") or ""
         print(f"  {sport.upper():>4}: {n} team(s), {data.get('fixtures_remaining', 0)} "
               f"game(s) left, {priced} priced"
               + (f"  — {note}" if note else "")
-              + (f"\n        prices: {data['price_note']}" if data.get("price_note") else ""))
+              + (f"\n        prices: {data['price_note']}" if data.get("price_note") else "")
+              + (f"\n        {race}" if race else ""))
     conn.close()
 
 

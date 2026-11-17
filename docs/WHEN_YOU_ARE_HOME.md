@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UK. The NBA's and the NHL's playoff races** (step 669; 17 November). Nothing to run. Your yes to "NHL and
+NBA playoff race pages". The Playoff race page now has both, drawn as brackets like the NFL's: if the season
+ended today, who is in and who plays whom. The NBA's shows each conference's play-in (7 v 8 for the 7 seed,
+9 v 10, then the last game for the 8 seed) and its fixed bracket (1 v 8 and 4 v 5 meet in the second round). The
+NHL's shows the top three in each division, the two wild cards, and the first round the league draws (the
+division winner with the better record against the second wild card). Below each: the clubs just outside and how
+far back they are, each conference's or division's table, and, for members, every club's chance to make the
+playoffs, the play-in or the division, win the conference and win the title, with its projected wins or points.
+The chances come from the same simulation as the Futures page, so the two pages always agree. That simulation
+now plays each league's real format: the NBA's play-in and fixed bracket, the NHL's division bracket, and every
+final as a best-of-seven series, not one game. The NBA's page opens on the Cup while the Cup is being played
+(until 17 December) and on the playoff race after, with a button for each. The NHL's Futures and Playoff race
+tabs are open now; they had been hidden. Ask Qellys answers both. Both pages fill on the box's next daily
+futures rebuild, which this deploy brings forward.
+
 **UJ. A command you run by hand keeps the paywall** (step 668; 17 November). Nothing to run. The paywall switch
 lives in /etc/qellys/env, which only root can read. So a build you ran as the site's user (the college futures
 command waiting below is one) could not see it, took the paywall for off, and wrote the full board where anyone

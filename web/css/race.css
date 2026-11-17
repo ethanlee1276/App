@@ -182,3 +182,20 @@
   .rc-bk:not(.rc-bk-solo) .rc-bk-c .rc-bk-game::before { right: 100%; }
   .rc-bk:not(.rc-bk-solo) .rc-bk-c .rc-bk-game::after { left: 100%; }
 }
+
+/* THE NBA'S TWO RACES ON ONE PAGE (RACE2, 2026-11-17): the Cup and the
+   playoffs, a pressable pair in the look of the site's section tabs. */
+.rc-modes { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.rc-mode {
+  cursor: pointer; border-radius: var(--radius-sm);
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 600;
+  background: var(--fill-subtle); border: var(--hairline) solid transparent;
+  color: var(--text-dim); padding: 9px 14px;
+  transition: color var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
+}
+.rc-mode:hover { color: var(--text); background: var(--fill-hover); }
+.rc-mode.active { background: var(--brand); color: var(--brand-ink); font-weight: 700; }
+.rc-mode:focus-visible { outline-offset: 2px; }
+/* The last place in, ruled off: the NBA's 6 and 10 seeds, a division's third. */
+.rc-row.rc-cut { border-bottom-color: var(--border); }
+.rc-seedno { color: var(--text-mute); font-variant-numeric: tabular-nums; }

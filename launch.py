@@ -2928,7 +2928,8 @@ FUTURES_EVERY_HOURS = 24
 #: daily rebuild's stamp carries it, so the first pass after that deploy
 #: rebuilds every league rather than serving the old numbers for up to a
 #: day. 2026-11-17: the projection starts from the real table (every
-#: league had started each club at 0-0 since August).
+#: league had started each club at 0-0 since August), plays each league's
+#: own playoff format, and writes the NBA's and the NHL's races with it.
 FUTURES_VERSION = "futures-v2-banked-records"
 
 
@@ -2952,7 +2953,6 @@ def _run_futures(quiet: bool = False) -> None:
             return
         import futures_build
         from engine import db as _hdb
-        from engine import gate as _gate
         conn = _hdb.connect()
         try:
             for sport in futures_build.SPORTS:
@@ -2965,9 +2965,10 @@ def _run_futures(quiet: bool = False) -> None:
                 # around the gate: every day the paid futures sat unsealed
                 # there until the next restart's seal, and the members' copy
                 # was never refreshed — they read the last `futures_build.py`
-                # run's numbers. `publish` writes both copies atomically,
-                # the way `futures_build.main` always has.
-                _gate.publish(data, futures_build.OUT / f"futures_{sport}.json")
+                # run's numbers. `futures_build.publish` writes both copies
+                # through the gate, and the NBA's and the NHL's playoff
+                # races off the same run (engine/seasonrace).
+                futures_build.publish(sport, data, conn)
         finally:
             conn.close()
         stamp.parent.mkdir(parents=True, exist_ok=True)

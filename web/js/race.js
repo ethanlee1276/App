@@ -13,9 +13,10 @@
    a plan is served the file with them emptied (engine/gate,
    PAID_KEYS_BY_FILE); the page says what is behind them, never a number. */
 
-const RACE_FILES = { nfl: "nfl_race.json", cfb: "cfp_race.json", nba: "nba_cup.json", cbb: "ncaa_race.json" };
+const RACE_FILES = { nfl: "nfl_race.json", cfb: "cfp_race.json", nba: "nba_cup.json", cbb: "ncaa_race.json",
+                     nhl: "nhl_race.json" };
 const RACE_TITLES = { nfl: "NFL playoff race", cfb: "College Football Playoff race", nba: "NBA Cup",
-                      cbb: "NCAA tournament" };
+                      cbb: "NCAA tournament", nhl: "NHL playoff race" };
 
 /* A chance as a reader takes it in: whole points, and never "0%" or
    "100%" for something a run of the season merely did not see happen —
@@ -51,22 +52,42 @@ async function renderRace() {
   const sport = state.sport;
   const title = document.getElementById("race-title");
   const sub = document.getElementById("race-sub");
-  const file = RACE_FILES[sport];
-  if (title) title.childNodes[0].nodeValue = `${RACE_TITLES[sport] || "Playoff race"} `;
+  const mode = sport === "nba" ? rcNbaMode() : "";
+  const season = sport === "nhl" || mode === "playoffs";
+  const file = mode ? RC_NBA_MODES[mode].file : RACE_FILES[sport];
+  if (title) title.childNodes[0].nodeValue = `${(mode ? RC_NBA_MODES[mode].title : RACE_TITLES[sport]) || "Playoff race"} `;
   if (!file) {
     if (sub) sub.textContent = "";
     host.innerHTML = `<div class="empty-slate"><h3>No race for this league</h3>
-      <p>The race pages are the NFL’s and college football’s playoffs, the NBA Cup and the NCAA tournament.</p></div>`;
+      <p>The race pages are the NFL’s, the NBA’s, the NHL’s and college football’s playoffs, the NBA Cup and the NCAA tournament.</p></div>`;
     return;
   }
-  host.innerHTML = `<div class="rc-wait" role="status">Loading the race…</div>`;
+  const modes = mode ? rcNbaModesHTML(mode) : "";
+  const wire = () => host.querySelectorAll("[data-rc-mode]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.rcMode === rcNbaMode()) return;
+    state.raceNba = b.dataset.rcMode;
+    renderRace();
+  }));
+  host.innerHTML = `${modes}<div class="rc-wait" role="status">Loading the race…</div>`;
+  wire();
   const d = await rcLoad(file);
-  if (state.view !== "race" || state.sport !== sport) return;
+  if (state.view !== "race" || state.sport !== sport || (mode && rcNbaMode() !== mode)) return;
   if (!d || (!d.today && !d.groups)) {
-    host.innerHTML = `<div class="empty-slate"><h3>The race has not been built yet</h3>
+    host.innerHTML = `${modes}<div class="empty-slate"><h3>The race has not been built yet</h3>
       <p>${sport === "cbb"
         ? "It is played out on the college basketball build once the season’s schedule has been read off the scoreboard; the next one fills this page."
-        : `It is played out on every ${sport === "nba" ? "NBA" : sport === "nfl" ? "NFL" : "college"} build; the next one fills this page.`}</p></div>`;
+        : season
+          ? "It is played out with the season projections, once a day; the next one fills this page."
+          : `It is played out on every ${sport === "nba" ? "NBA" : sport === "nfl" ? "NFL" : "college"} build; the next one fills this page.`}</p></div>`;
+    wire();
+    return;
+  }
+  if (season) {
+    if (sub) sub.textContent = sport === "nba"
+      ? `— 20 teams, 10 a conference, four of them through the play-in. Our ratings play the rest of the season ${Number(d.sims || 0).toLocaleString()} times.`
+      : `— 16 teams, 8 a conference: three from each division and two wild cards. Our ratings play the rest of the season ${Number(d.sims || 0).toLocaleString()} times.`;
+    host.innerHTML = modes + seasonRaceHTML(sport, d);
+    wire();
     return;
   }
   if (sub) sub.textContent = sport === "cbb"
@@ -80,7 +101,8 @@ async function renderRace() {
       : (d.bracket || {}).set
         ? `— the twelve the committee named. Our game model plays the playoff out ${Number(d.sims || 0).toLocaleString()} times.`
         : `— 12 teams. Our game model plays the rest of the season ${Number(d.sims || 0).toLocaleString()} times.`;
-  host.innerHTML = sport === "nba" ? cupHTML(d) : sport === "nfl" ? nflHTML(d) : sport === "cbb" ? ncaaHTML(d) : cfpHTML(d);
+  host.innerHTML = modes + (sport === "nba" ? cupHTML(d) : sport === "nfl" ? nflHTML(d) : sport === "cbb" ? ncaaHTML(d) : cfpHTML(d));
+  wire();
 }
 
 /* ---------------- college football ---------------- */
@@ -505,6 +527,246 @@ function nflHTML(d) {
       ${locked ? "" : `Each game left is played at our win chance off the same ratings as the Futures page; they stay where
       they are for the rest of the season, and no game is drawn as a tie. The playoffs are played out too: the Wild Card round
       at the higher seed, the divisional round reseeded, the Super Bowl on neutral ground.`}
+      ${d.generated_at ? `Built ${escapeHtml(String(d.generated_at).replace("T", " ").slice(0, 16))}.` : ""}</p>`;
+}
+
+/* ---------------- the NBA's and the NHL's playoff races ----------------
+   RACE2 (2026-11-17; Ethan, yes to "NHL and NBA playoff race pages ... seeds
+   free, chances for members"). engine/seasonrace, off the Futures page's own
+   season simulation, which plays each league's own format: the NBA's
+   play-in and its fixed 1 v 8 / 4 v 5 bracket, the NHL's division bracket
+   with two wild cards a conference. The field if it ended today and the
+   standings are the results', free; the chances are members'. */
+
+function rcName(sport, t) { return (typeof teamNameIn === "function" && teamNameIn(sport, t)) || t; }
+
+/* The NBA keeps two races on one page: its Cup, which runs to mid-December,
+   and the playoffs. The Cup leads while it is being played; the reader's
+   own pick stands for the visit. */
+const RC_NBA_MODES = { playoffs: { file: "nba_race.json", title: "NBA playoff race" },
+                       cup: { file: "nba_cup.json", title: "NBA Cup" } };
+function rcNbaMode() {
+  if (state.raceNba && RC_NBA_MODES[state.raceNba]) return state.raceNba;
+  const now = new Date();
+  const m = now.getMonth() + 1;
+  return m === 11 || (m === 12 && now.getDate() <= 17) ? "cup" : "playoffs";
+}
+function rcNbaModesHTML(mode) {
+  return `<div class="rc-modes" role="tablist" aria-label="Which NBA race">${Object.entries(RC_NBA_MODES).map(([k, m]) =>
+    `<button type="button" class="rc-mode${k === mode ? " active" : ""}" role="tab" aria-selected="${k === mode}"
+      data-rc-mode="${k}">${escapeHtml(k === "cup" ? "NBA Cup" : "Playoff race")}</button>`).join("")}</div>`;
+}
+
+function rcSeasonSide(sport, s, label) {
+  if (!s) return { tbd: label || "Place open" };
+  const meta = sport === "nhl" ? `${s.record} · ${s.points} pts` : s.record;
+  return { team: s.team, seed: label || s.seed, name: rcName(sport, s.team), meta };
+}
+
+/* THE NBA IF THE SEASON ENDED TODAY. Each conference's play-in first —
+   7 v 8 for the seventh seed, 9 v 10, then 7–8's loser against 9–10's
+   winner for the eighth — and then its bracket, fixed from the first round:
+   1 v 8 and 4 v 5 meet in one semifinal, 3 v 6 and 2 v 7 in the other. */
+function rcNbaBracketHTML(d) {
+  const t = d.today || {};
+  const confs = Object.keys(t);
+  const conf = (c, i) => {
+    const by = {};
+    ((t[c] || {}).seeds || []).forEach((s) => { by[s.seed] = s; });
+    const side = (n) => rcSeasonSide("nba", by[n]);
+    const name = (n) => (by[n] ? rcName("nba", by[n].team) : `the ${n} seed`);
+    const playIn = [
+      { title: "Play-in", groups: [[{ sides: [side(7), side(8)], note: "the winner is the 7 seed" }],
+                                   [{ sides: [side(9), side(10)], note: "the loser is out" }]] },
+      { title: "For the 8 seed", groups: [[{ sides: [{ tbd: "7 v 8 loser", meta: `${name(7)} or ${name(8)}` },
+                                                     { tbd: "9 v 10 winner", meta: `${name(9)} or ${name(10)}` }] }]] },
+    ];
+    const rounds = [
+      { title: "First round", groups: [
+          [{ sides: [side(1), { tbd: "The 8 seed", meta: "out of the play-in" }] }, { sides: [side(4), side(5)] }],
+          [{ sides: [side(3), side(6)] }, { sides: [side(2), { tbd: "The 7 seed", meta: "out of the play-in" }] }]] },
+      { title: "Semifinals", groups: [[
+          { sides: [{ tbd: "1 v 8 winner" }, { tbd: "4 v 5 winner" }] },
+          { sides: [{ tbd: "3 v 6 winner" }, { tbd: "2 v 7 winner" }] }]] },
+      { title: `${c} finals`, groups: [[{ sides: [{ tbd: "Semifinal winner" }, { tbd: "Semifinal winner" }] }]] },
+    ];
+    return `<section class="rc-bk-conf rc-bk-${i ? "r" : "l"}" aria-label="${escapeHtml(`The ${c} if the season ended today`)}">
+      <div class="rc-bk-k">${escapeHtml(c)}</div>${rcBkRoundsHTML("nba", playIn, i === 1)}${rcBkRoundsHTML("nba", rounds, i === 1)}</section>`;
+  };
+  const hunt = confs.map((c) => {
+    const h = (t[c] || {}).hunt || [];
+    const back = (b, first) => (b == null ? "" : b > 0 ? `, ${b} game${b === 1 ? "" : "s"} back${first ? " of the 10 seed" : ""}`
+      : `, level${first ? " with the 10 seed" : ""}`);
+    return h.length ? `<p class="rc-note"><b>Just outside in the ${escapeHtml(c)}:</b> ${h.map((x, i) =>
+      `${escapeHtml(rcName("nba", x.team))} ${escapeHtml(x.record)}${back(x.back, !i)}`).join("; ")}.</p>` : "";
+  }).join("");
+  return `<div class="section-title">If the season ended today
+      <span class="sub">— the six best records in each conference straight in, the next four into the play-in for the last two places.</span></div>
+    <div class="rc-bk-wrap"><div class="rc-bk">
+      ${confs[0] ? conf(confs[0], 0) : ""}
+      <section class="rc-bk-c" aria-label="The NBA Finals"><div class="rc-bk-k">NBA Finals</div>${rcBkRoundsHTML("nba",
+        [{ title: "Best of seven", groups: [[{ sides: [{ tbd: `${confs[0] || "East"} champion` }, { tbd: `${confs[1] || "West"} champion` }] }]] }])}</section>
+      ${confs[1] ? conf(confs[1], 1) : ""}
+    </div></div>
+    <p class="rc-note">Every series is best of seven, with home court to the better record. The bracket is fixed: no reseeding after a round.</p>
+    ${hunt}`;
+}
+
+/* THE NHL IF THE SEASON ENDED TODAY. Each division's top three, then two
+   wild cards a conference; the division winner with the better record
+   draws the lower wild card, the other winner the first, and 2 meets 3 in
+   each division. The bracket stays inside the divisions until the
+   conference final. */
+function rcNhlBracketHTML(d) {
+  const t = d.today || {};
+  const confs = Object.keys(t);
+  const conf = (c, i) => {
+    const e = t[c] || {};
+    const find = (team) => {
+      for (const v of Object.values(e.divisions || {})) { const s = v.find((x) => x.team === team); if (s) return [s, `${s.seed}`]; }
+      const w = (e.wild_cards || []).find((x) => x.team === team);
+      return w ? [w, "WC"] : [null, ""];
+    };
+    const side = (team) => { const [s, label] = find(team); return rcSeasonSide("nhl", s, label); };
+    const fr = e.first_round || [];
+    if (fr.length !== 2) {
+      return `<section class="rc-bk-conf rc-bk-${i ? "r" : "l"}"><div class="rc-bk-k">${escapeHtml(c)}</div>
+        <p class="rc-note">Not every division has three clubs with a game played yet.</p></section>`;
+    }
+    const rounds = [
+      { title: "First round", groups: fr.map((div) => div.games.map(([a, b]) => ({ sides: [side(a), side(b)] }))) },
+      { title: "Second round", groups: [fr.map((div) => ({ sides: [{ tbd: "1 v WC winner", meta: div.division },
+                                                                    { tbd: "2 v 3 winner", meta: div.division }] }))] },
+      { title: `${c} final`, groups: [[{ sides: [{ tbd: `${fr[0].division} champion` }, { tbd: `${fr[1].division} champion` }] }]] },
+    ];
+    return `<section class="rc-bk-conf rc-bk-${i ? "r" : "l"}" aria-label="${escapeHtml(`The ${c} Conference if the season ended today`)}">
+      <div class="rc-bk-k">${escapeHtml(c)}</div>${rcBkRoundsHTML("nhl", rounds, i === 1)}</section>`;
+  };
+  const hunt = confs.map((c) => {
+    const h = (t[c] || {}).hunt || [];
+    const why = (x, first) => {
+      const back = x.back == null ? "" : x.back > 0 ? `, ${x.back} point${x.back === 1 ? "" : "s"} back${first ? " of the second wild card" : ""}`
+        : `, level on points${first ? " with the second wild card" : ""}`;
+      const hand = x.in_hand > 0 ? ` with ${x.in_hand} game${x.in_hand === 1 ? "" : "s"} in hand` : "";
+      return back + hand;
+    };
+    return h.length ? `<p class="rc-note"><b>Just outside in the ${escapeHtml(c)} Conference:</b> ${h.map((x, i) =>
+      `${escapeHtml(rcName("nhl", x.team))} ${escapeHtml(x.record)}${why(x, !i)}`).join("; ")}.</p>` : "";
+  }).join("");
+  return `<div class="section-title">If the season ended today
+      <span class="sub">— the top three in each division, then the two best records left in each conference as wild cards.</span></div>
+    <div class="rc-bk-wrap"><div class="rc-bk">
+      ${confs[0] ? conf(confs[0], 0) : ""}
+      <section class="rc-bk-c" aria-label="The Stanley Cup Final"><div class="rc-bk-k">Stanley Cup Final</div>${rcBkRoundsHTML("nhl",
+        [{ title: "Best of seven", groups: [[{ sides: [{ tbd: `${confs[0] || "Eastern"} champion` }, { tbd: `${confs[1] || "Western"} champion` }] }]] }])}</section>
+      ${confs[1] ? conf(confs[1], 1) : ""}
+    </div></div>
+    <p class="rc-note">Every series is best of seven, with home ice to the better record. A record is wins, regulation losses and overtime losses; a win is two points and an overtime loss one.</p>
+    ${hunt}`;
+}
+
+/* Where each team you follow stands: its place if the season ended today,
+   or how far back it is; for a member, its chance to make the playoffs. */
+function rcSeasonMineHTML(sport, d) {
+  const mine = (typeof settings === "function" ? settings().teams || [] : [])
+    .filter((k) => String(k).startsWith(`${sport}:`)).map((k) => String(k).slice(sport.length + 1));
+  const t = d.today || {};
+  const rows = mine.map((team) => {
+    let where = "";
+    for (const [c, e] of Object.entries(t)) {
+      if (sport === "nba") {
+        const s = (e.seeds || []).find((x) => x.team === team);
+        if (s) where = s.seed <= 6 ? `the ${c}’s ${s.seed} seed if the season ended today` : `in the ${c}’s play-in as the ${s.seed} seed`;
+      } else {
+        for (const [dv, v] of Object.entries(e.divisions || {})) {
+          const s = v.find((x) => x.team === team);
+          if (s) where = `${s.seed === 1 ? "first" : s.seed === 2 ? "second" : "third"} in the ${dv} if the season ended today`;
+        }
+        const w = (e.wild_cards || []).find((x) => x.team === team);
+        if (w) where = `the ${c}’s ${w.seed === 1 ? "first" : "second"} wild card if the season ended today`;
+      }
+      const h = (e.hunt || []).find((x) => x.team === team);
+      if (!where && h && h.back != null) {
+        where = sport === "nba" ? (h.back > 0 ? `${h.back} game${h.back === 1 ? "" : "s"} back of the ${c}’s 10 seed` : `level with the ${c}’s 10 seed`)
+          : (h.back > 0 ? `${h.back} point${h.back === 1 ? "" : "s"} back of the ${c}’s second wild card` : `level on points with the ${c}’s second wild card`);
+      }
+      if (where) break;
+    }
+    const ch = ((d.chances || {})[team] || {}).playoffs;
+    const odds = ch != null ? `, ${rcPct(ch)} to make the playoffs` : "";
+    return where || odds ? `<li>${teamMarkIn(sport, team, 20)}<span><b>${escapeHtml(rcName(sport, team))}</b>: ${
+      escapeHtml(where || "outside the race today")}${odds}</span></li>` : "";
+  }).filter(Boolean);
+  return rows.length ? `<div class="rc-card rc-mine"><b>Your teams</b><ul class="rc-mine-list">${rows.join("")}</ul></div>` : "";
+}
+
+/* One conference's race for a member: every club, best chance first, and
+   under each its projected finish. */
+function rcSeasonTeamsHTML(sport, d, c) {
+  const ch = d.chances || {};
+  const rows = (d.teams || []).filter((r) => r.conference === c && ch[r.team])
+    .sort((a, b) => (ch[b.team].playoffs || 0) - (ch[a.team].playoffs || 0) || (ch[b.team].title || 0) - (ch[a.team].title || 0));
+  if (!rows.length) return "";
+  const nba = sport === "nba";
+  return `<div class="rc-card rc-flush">
+    <div class="rc-conf-h">${escapeHtml(c)}</div>
+    <div class="rc-row rc-head"><span>Team</span><span>In</span>${nba ? "<span>Play-in</span>" : "<span>Div</span>"}<span>Conf</span><span>Title</span></div>
+    ${rows.map((r) => {
+      const x = ch[r.team];
+      const proj = x.proj && x.proj[0] != null ? `${x.proj[0]}–${x.proj[1]}` : "—";
+      return `<details class="rc-team">
+        <summary class="rc-row">
+          <span class="rc-who">${teamMarkIn(sport, r.team, 22)}<span><b>${escapeHtml(rcName(sport, r.team))}</b>
+            <small>${escapeHtml(r.record)} · ${escapeHtml(r.division)}</small></span></span>
+          <span class="rc-p rc-lead">${rcPct(x.playoffs)}</span><span class="rc-p">${rcPct(nba ? x.playin : x.division)}</span>
+          <span class="rc-p">${rcPct(x.conference)}</span><span class="rc-p">${rcPct(x.title)}</span></summary>
+        <div class="rc-games"><p class="rc-note">Projected ${nba ? "wins" : "points"} ${proj}${
+          x.mean != null ? ` (about ${Math.round(x.mean)})` : ""}${nba ? ` · wins its division ${rcPct(x.division)}` : ""}.</p></div></details>`;
+    }).join("")}
+  </div>`;
+}
+
+/* The tables that decide the seeds: the NBA's conferences, in seed order
+   (its divisions seed nothing), and the NHL's divisions, in points. */
+function rcSeasonStandingsHTML(sport, d) {
+  const st = d.standings || {};
+  const keys = Object.keys(st);
+  if (!keys.length) return "";
+  const nba = sport === "nba";
+  return `<div class="section-title">${nba ? "The conferences" : "The divisions"}
+      <span class="sub">— ${nba ? "in seed order; 1–6 straight in, 7–10 into the play-in." : "in points; the top three of each are in, and the two best left in each conference take the wild cards."}</span></div>
+    <div class="rc-grid">${keys.map((k) => `<div class="rc-card rc-flush">
+      <div class="rc-conf-h">${escapeHtml(k)}</div>
+      <div class="rc-row rc-crow rc-head"><span>Team</span><span>${nba ? "W-L" : "Record"}</span>${nba ? "<span>Pct</span>" : "<span>Pts</span><span>RW</span>"}<span>Diff</span></div>
+      ${st[k].map((r, i) => {
+        const cut = nba ? (r.seed === 6 || r.seed === 10) : i === 2;
+        const diff = Number(r.diff || 0);
+        return `<div class="rc-row rc-crow${i === 0 ? " rc-lead-row" : ""}${cut ? " rc-cut" : ""}"><span class="rc-who">${teamMarkIn(sport, r.team, 18)}
+          <span>${nba ? `<small class="rc-seedno">${r.seed}</small> ` : ""}${escapeHtml(rcName(sport, r.team))}</span></span>
+          <span class="rc-p">${escapeHtml(r.record || "")}</span>${nba
+            ? `<span class="rc-p">${r.pct != null ? Number(r.pct).toFixed(3).replace(/^0/, "") : "—"}</span>`
+            : `<span class="rc-p">${r.points ?? "—"}</span><span class="rc-p">${r.reg_wins ?? "—"}</span>`}
+          <span class="rc-p rc-pd ${diff > 0 ? "pos" : diff < 0 ? "neg" : ""}">${diff > 0 ? "+" : ""}${Math.round(diff)}</span></div>`;
+      }).join("")}</div>`).join("")}</div>`;
+}
+
+function seasonRaceHTML(sport, d) {
+  const locked = rcLocked(d);
+  const confs = Object.keys(d.today || {});
+  const what = sport === "nba"
+    ? "Every club’s chance to make the playoffs, land in the play-in, win the conference and win the title, and its projected wins."
+    : "Every club’s chance to make the playoffs, win its division, win the conference and win the Stanley Cup, and its projected points.";
+  return `<p class="rc-note rc-lede">${plural(d.games_played || 0, "game")} played, ${d.games_left || 0} left in the regular season.</p>
+    ${rcSeasonMineHTML(sport, d)}
+    ${sport === "nba" ? rcNbaBracketHTML(d) : rcNhlBracketHTML(d)}
+    ${locked ? memberLockHTML("Our chances are for members", what)
+      : `<div class="section-title">The race
+          <span class="sub">— each club’s chances out of the same seasons the Futures page plays. Tap a club for its projected finish.</span></div>
+        <div class="rc-grid">${confs.map((c) => rcSeasonTeamsHTML(sport, d, c)).join("")}</div>`}
+    ${rcSeasonStandingsHTML(sport, d)}
+    <p class="rc-note">Ties are broken by ${escapeHtml(d.tiebreakers || "the league’s own steps")}. The table is ${escapeHtml(d.source || "counted from our games")}.
+      ${locked ? "" : `Each game left is played at our win chance off the ratings the Futures page uses; they stay where they
+      are for the rest of the season. The playoffs are played out too, in the league’s own format.`}
       ${d.generated_at ? `Built ${escapeHtml(String(d.generated_at).replace("T", " ").slice(0, 16))}.` : ""}</p>`;
 }
 

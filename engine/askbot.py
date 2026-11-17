@@ -197,6 +197,10 @@ RECORD_WINDOWS = {"today": 0, "yesterday": 1, "last_7_days": 7, "last_30_days": 
 LIVE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "mlb", "cbb")
 #: Each league's race file (the Playoff race page, js/race.js).
 RACE_FILES = {"nfl": "nfl_race.json", "cfb": "cfp_race.json", "nba": "nba_cup.json", "cbb": "ncaa_race.json"}
+#: The season-long playoff races played off the Futures page's simulation
+#: (engine/seasonrace, 2026-11-17). The NBA keeps both: the Cup above and
+#: this one.
+SEASON_RACE_FILES = {"nba": "nba_race.json", "nhl": "nhl_race.json"}
 
 CACHE_PATH = Path(os.environ.get("QB_ASK_CACHE", "").strip() or (ROOT / "data" / "ask_cache.json"))
 USAGE_PATH = Path(os.environ.get("QB_ASK_USAGE", "").strip() or (ROOT / "data" / "ask_usage.json"))
@@ -619,11 +623,12 @@ TOOLS = [
           "stat"),
     _tool("playoff_race",
           "A league's race as its page draws it, from our season simulation: who is in if it ended today "
-          "(the NFL's seeds and the clubs just outside, college football's twelve, the NBA Cup's groups, the "
-          "NCAA tournament's seeds), every club's chances (the playoffs, a bye, the division, the title...), "
-          "and the games left that swing the race most. For playoff pictures, seeds, brackets, who is in, "
-          "a team's playoff or title chances.",
-          {"sport": {"type": "string", "enum": list(RACE_FILES)},
+          "(the NFL's seeds and the clubs just outside, college football's twelve, the NBA's seeds and "
+          "play-in with its Cup's groups, the NHL's division places and wild cards, the NCAA tournament's "
+          "seeds), every club's chances (the playoffs, a bye, the play-in, the division, the title...), and "
+          "the games left that swing the race most. For playoff pictures, seeds, brackets, who is in, a "
+          "team's playoff or title chances.",
+          {"sport": {"type": "string", "enum": sorted(set(RACE_FILES) | set(SEASON_RACE_FILES))},
            "team": {"type": "string", "description": "Optional: one club's chances."}}, "sport"),
     _tool("prediction_markets",
           "Prediction-market prices we carry: Kalshi (the exchange's chance, the sportsbooks' de-vigged "
@@ -2885,6 +2890,7 @@ RACE_WORDS = {"nfl": "the NFL playoffs", "cfb": "the College Football Playoff", 
               "cbb": "the NCAA tournament"}
 RACE_TEAMS = 12
 RACE_SWING = 5
+SEASON_RACE_WORDS = {"nba": "the NBA playoffs", "nhl": "the NHL playoffs"}
 
 
 def _race_today(sport: str, d: dict, name) -> dict:
@@ -2914,12 +2920,82 @@ def _race_today(sport: str, d: dict, name) -> dict:
             "first_four": [" v ".join(name(x) for x in pair) for pair in t.get("first_four") or []]}
 
 
+def _season_today(sport: str, t: dict, name) -> dict:
+    """The NBA's or the NHL's field if the season ended today, as its page draws it."""
+    def rec(x):
+        return f"{name(x['team'])} {x.get('record', '')}" + (f", {x['points']} pts" if x.get("points") is not None else "")
+    out = {}
+    for conf, e in (t or {}).items():
+        if sport == "nba":
+            out[conf] = {"seeds": [f"{x['seed']}. {rec(x)}" + (" (play-in)" if x.get("why") == "Play-in" else "")
+                                   for x in e.get("seeds") or []],
+                         "just_outside": [rec(x) + ("" if x.get("back") is None
+                                                    else f", {_n(x['back'])} games back of the 10 seed")
+                                          for x in e.get("hunt") or []]}
+        else:
+            out[conf] = {"divisions": {dv: [f"{x['seed']}. {rec(x)}" for x in v]
+                                       for dv, v in (e.get("divisions") or {}).items()},
+                         "wild_cards": [rec(x) for x in e.get("wild_cards") or []],
+                         "first_round": [f"{name(a)} v {name(b)}" for div in e.get("first_round") or []
+                                         for a, b in div.get("games") or []],
+                         "just_outside": [rec(x) + ("" if x.get("back") is None
+                                                    else f", {x['back']} points back of the second wild card")
+                                          for x in e.get("hunt") or []]}
+    return out
+
+
+def _season_race(league: str, team: str, data_dir) -> dict:
+    """The NBA's or the NHL's playoff race off the season simulation (engine/seasonrace)."""
+    from engine import teamdex as T
+    words = SEASON_RACE_WORDS[league]
+    d = _paid(SEASON_RACE_FILES[league], data_dir)
+    if not d:
+        return {"found": False, "note": f"the race for {words} is not built right now"}
+    name = lambda code: T.label(code, league)  # noqa: E731
+    chances = d.get("chances") if isinstance(d.get("chances"), dict) else {}
+
+    def pct(ch):
+        row = {k: round(float(v), 3) for k, v in ch.items()
+               if isinstance(v, (int, float)) and k != "mean"}
+        lo, hi = (ch.get("proj") or [None, None])[:2]
+        if lo is not None and hi is not None:
+            row["projected_" + ("wins" if league == "nba" else "points")] = f"{_n(lo)}-{_n(hi)}"
+        return row
+    out: dict = {"race": words, "as_of": d.get("generated_at") or d.get("date"),
+                 "simulations": d.get("sims"), "today": _season_today(league, d.get("today") or {}, name),
+                 "tiebreakers": d.get("tiebreakers")}
+    want = _codes_for(team, league) if team else set()
+    if want:
+        mine = {c: ch for c, ch in chances.items() if c in want}
+        if not mine:
+            return {**out, "found": False, "note": f"{team} is not in the race for {words}"}
+        out["team"] = {name(c): pct(ch) for c, ch in mine.items()}
+    top = sorted(chances.items(), key=lambda kv: (-float((kv[1] or {}).get("title") or 0),
+                                                  -float((kv[1] or {}).get("playoffs") or 0)))[:RACE_TEAMS]
+    out["best_chances"] = [{"team": name(c), **pct(ch)} for c, ch in top if (ch or {}).get("playoffs")]
+    return out
+
+
 def playoff_race(sport: str = "", team: str = "", data_dir=None, prefer: str = "") -> dict:
     """A league's race as its page draws it: who is in if it ended today, those just outside, every
-    club's chances from our simulation, and the games left that swing it most."""
-    league = sport if sport in RACE_FILES else (prefer if prefer in RACE_FILES else "")
+    club's chances from our simulation, and the games left that swing it most. The NBA's answer is
+    its playoff race with its Cup beside it."""
+    known = set(RACE_FILES) | set(SEASON_RACE_FILES)
+    league = sport if sport in known else (prefer if prefer in known else "")
     if not league:
-        return {"error": "a race is kept for the NFL, college football, the NBA Cup and the NCAA tournament"}
+        return {"error": "a race is kept for the NFL, the NBA, the NHL, college football, the NBA Cup "
+                         "and the NCAA tournament"}
+    if league in SEASON_RACE_FILES:
+        season = _season_race(league, team, data_dir)
+        if league not in RACE_FILES:
+            return season
+        return {**season, "nba_cup": _event_race(league, team, data_dir)}
+    return _event_race(league, team, data_dir)
+
+
+def _event_race(league: str, team: str, data_dir) -> dict:
+    """A race kept as its own event: the NFL's and college football's playoffs, the NBA Cup and the
+    NCAA tournament."""
     d = _paid(RACE_FILES[league], data_dir)
     if not d:
         return {"found": False, "note": f"the {RACE_WORDS[league]} race is not built right now"}

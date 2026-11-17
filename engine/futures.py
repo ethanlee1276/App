@@ -96,18 +96,41 @@ class LeagueShape:
     byes: int = 0
     #: Games per playoff series. One means single elimination.
     series_len: int = 1
+    #: Games in the final. One is a neutral-site game (the Super Bowl);
+    #: more is a series, the better regular season holding home advantage.
+    final_len: int = 1
+    #: Seeds that play in for the last two places, below and around the
+    #: berths: the NBA's four (7 v 8 for the seventh seed, 9 v 10, then
+    #: 7-8's loser v 9-10's winner for the eighth). Zero: none.
+    play_in: int = 0
+    #: Does each round re-pair the survivors by seed (the NFL, MLB) or is
+    #: the bracket fixed from the first round (the NBA, the NHL)?
+    reseed: bool = True
 
 
 SHAPES = {
     "nfl": LeagueShape("NFL", berths=7, divisions_seed=True, byes=1),
     "mlb": LeagueShape("MLB", berths=6, divisions_seed=True, byes=2,
-                       series_len=5),
-    "nba": LeagueShape("NBA", berths=8, divisions_seed=False, series_len=7),
-    "wnba": LeagueShape("WNBA", berths=4, divisions_seed=False, series_len=5),
+                       series_len=5, final_len=7),
+    # THE LEAGUES' OWN FORMATS (2026-11-17, for the NBA's and the NHL's
+    # playoff race pages). Both brackets are fixed from the first round —
+    # 1 v 8's winner meets 4 v 5's, never "the lowest seed left" — and the
+    # NBA's seventh and eighth seeds come out of the play-in. Played as a
+    # reseeded top eight, the race page would have drawn one bracket and
+    # priced another.
+    "nba": LeagueShape("NBA", berths=8, divisions_seed=False, series_len=7,
+                       final_len=7, play_in=4, reseed=False),
+    "wnba": LeagueShape("WNBA", berths=4, divisions_seed=False, series_len=5,
+                        final_len=7),
     # Eight a conference: the top three of each division, then two wild
-    # cards (``_seed_field``'s hockey branch), every round best of seven.
-    "nhl": LeagueShape("NHL", berths=8, divisions_seed=True, series_len=7),
+    # cards (`_nhl_bracket`), every round best of seven, the bracket fixed.
+    "nhl": LeagueShape("NHL", berths=8, divisions_seed=True, series_len=7,
+                       final_len=7, reseed=False),
 }
+
+#: An eight-team conference bracket in playing order, by seed index:
+#: 1 v 8 and 4 v 5 feed one semifinal, 2 v 7 and 3 v 6 the other.
+BRACKET_8 = (0, 7, 3, 4, 1, 6, 2, 5)
 
 #: Division places that make the NHL playoffs before the wild cards.
 NHL_DIVISION_BERTHS = 3
@@ -175,15 +198,12 @@ def _seed_field(shape: LeagueShape, table: dict, teams: list[str],
         return (-table[t], rng.random())
 
     if sport == "nhl" and has_divisions(sport):
-        # The top three of each division, then the best two left over —
-        # seeded by points for the bracket (the league's own bracket keeps
-        # division pairings; seeding by points is the approximation here).
-        by_div: dict[str, list[str]] = {}
-        for t in teams:
-            by_div.setdefault(group_of(sport, t)[1], []).append(t)
-        tops = [t for v in by_div.values() for t in sorted(v, key=rec)[:NHL_DIVISION_BERTHS]]
-        wild = sorted((t for t in teams if t not in set(tops)), key=rec)[:max(0, shape.berths - len(tops))]
-        return sorted(tops + wild, key=rec)[:shape.berths]
+        tb = {t: rng.random() for t in teams}
+
+        def key(t):
+            return (-table[t], tb[t])
+        order = _nhl_bracket(sport, teams, key)
+        return sorted(order, key=key) if order else sorted(teams, key=key)[:shape.berths]
     if shape.divisions_seed and has_divisions(sport):
         by_div: dict[str, list[str]] = {}
         for t in teams:
@@ -193,6 +213,93 @@ def _seed_field(shape: LeagueShape, table: dict, teams: list[str],
         rest = sorted((t for t in teams if t not in set(champs)), key=rec)
         return (champs + rest)[:shape.berths]
     return sorted(teams, key=rec)[:shape.berths]
+
+
+def _nhl_bracket(sport: str, teams: list[str], key) -> list[str] | None:
+    """One NHL conference's first round in playing order — [D1, wild card,
+    D2, D3] for each division, the division winner with the better record
+    drawing the lower wild card — or None when the conference is not two
+    divisions of at least three (a partial table).
+
+    ``key`` orders clubs best first (points, then the trial's tiebreak), so
+    every sort in one trial agrees about who is ahead of whom.
+    """
+    by_div: dict[str, list[str]] = {}
+    for t in teams:
+        by_div.setdefault(group_of(sport, t)[1], []).append(t)
+    if len(by_div) != 2:
+        return None
+    tops = [sorted(v, key=key)[:NHL_DIVISION_BERTHS] for v in by_div.values()]
+    if any(len(v) < NHL_DIVISION_BERTHS for v in tops):
+        return None
+    taken = {t for v in tops for t in v}
+    wild = sorted((t for t in teams if t not in taken), key=key)[:2]
+    if len(wild) < 2:
+        return None
+    first, second = sorted(tops, key=lambda v: key(v[0]))
+    return [first[0], wild[1], first[1], first[2],
+            second[0], wild[0], second[1], second[2]]
+
+
+def _play_in(sport: str, top: list[str], ratings: dict, rng) -> list[str]:
+    """The NBA's play-in, on a conference's top ten in seed order: 7 hosts
+    8 and the winner is the seventh seed; 9 hosts 10; 7-8's loser hosts
+    9-10's winner for the eighth. Returns the eight, in seed order."""
+    if len(top) < 10:
+        return top[:8]
+    s7, s8, s9, s10 = top[6:10]
+
+    def game(home, away):
+        return home if rng.random() < win_prob(sport, ratings.get(home, 0.0),
+                                               ratings.get(away, 0.0)) else away
+    seventh = game(s7, s8)
+    eighth = game(s8 if seventh == s7 else s7, game(s9, s10))
+    return top[:6] + [seventh, eighth]
+
+
+def _conference_field(sport: str, shape: LeagueShape, table: dict,
+                      members: list[str], ratings: dict, rng):
+    """(field in seed order, fixed bracket in playing order or None, the
+    clubs that played in) for one conference in one trial."""
+    if shape.reseed:
+        return _seed_field(shape, table, members, sport, rng), None, ()
+    tb = {t: rng.random() for t in members}
+
+    def key(t):
+        return (-table[t], tb[t])
+    if sport == "nhl" and has_divisions(sport):
+        order = _nhl_bracket(sport, members, key)
+        if order:
+            return sorted(order, key=key), order, ()
+        return sorted(members, key=key)[:shape.berths], None, ()
+    seeded = sorted(members, key=key)
+    played_in: tuple = ()
+    if shape.play_in:
+        extra = shape.play_in // 2
+        top = seeded[:shape.berths + extra]
+        played_in = tuple(top[shape.berths - extra:])
+        field = _play_in(sport, top, ratings, rng)
+    else:
+        field = seeded[:shape.berths]
+    order = [field[i] for i in BRACKET_8] if len(field) == 8 else None
+    return field, order, played_in
+
+
+def _run_fixed(sport: str, shape: LeagueShape, order: list[str],
+               ratings: dict, rng, key) -> str:
+    """Play a fixed bracket down to one club: neighbours meet, then their
+    winners, never re-paired. The better regular season holds home
+    advantage in every series (``key``, best first)."""
+    alive = list(order)
+    while len(alive) > 1:
+        nxt = []
+        for i in range(0, len(alive) - 1, 2):
+            a, b = sorted(alive[i:i + 2], key=key)
+            nxt.append(_play_series(sport, a, b, ratings, shape.series_len, rng))
+        if len(alive) % 2:
+            nxt.append(alive[-1])
+        alive = nxt
+    return alive[0]
 
 
 def _play_series(sport: str, a: str, b: str, ratings: dict, best_of: int,
@@ -329,6 +436,7 @@ def simulate(sport: str, ratings: dict, records: dict,
     n_po = {t: 0 for t in teams}
     n_conf = {t: 0 for t in teams}
     n_title = {t: 0 for t in teams}
+    n_playin = {t: 0 for t in teams}
 
     for _ in range(trials):
         wins = dict(base)
@@ -358,20 +466,32 @@ def simulate(sport: str, ratings: dict, records: dict,
 
         champs = []
         for _conf, members in by_conf.items():
-            field = _seed_field(shape, table, members, sport, rng)
+            field, order, played_in = _conference_field(sport, shape, table, members,
+                                                        ratings, rng)
+            for t in played_in:
+                n_playin[t] += 1
             for t in field:
                 n_po[t] += 1
             if not field:
                 continue
-            w = _run_bracket(sport, shape, field, ratings, rng)
+            if order:
+                w = _run_fixed(sport, shape, order, ratings, rng, lambda t: -table[t])
+            else:
+                w = _run_bracket(sport, shape, field, ratings, rng)
             n_conf[w] += 1
             champs.append(w)
         if len(champs) >= 2:
-            # The final is neutral-site in every league here that plays one.
             a, b = champs[0], champs[1]
-            p = win_prob(sport, ratings.get(a, 0.0), ratings.get(b, 0.0),
-                         neutral=True)
-            n_title[a if rng.random() < p else b] += 1
+            if shape.final_len > 1:
+                # A series: the better regular season holds home advantage.
+                if table[b] > table[a]:
+                    a, b = b, a
+                n_title[_play_series(sport, a, b, ratings, shape.final_len, rng)] += 1
+            else:
+                # A single game at a neutral site (the Super Bowl).
+                p = win_prob(sport, ratings.get(a, 0.0), ratings.get(b, 0.0),
+                             neutral=True)
+                n_title[a if rng.random() < p else b] += 1
         elif len(champs) == 1:
             n_title[champs[0]] += 1
 
@@ -385,6 +505,9 @@ def simulate(sport: str, ratings: dict, records: dict,
             extra[t] = {"points": base_pts[t], "proj_points": round(sum(ps) / len(ps), 1),
                         "proj_points_lo": ps[int(0.10 * (len(ps) - 1))],
                         "proj_points_hi": ps[int(0.90 * (len(ps) - 1))]}
+        if shape.play_in:
+            # Finished seventh to tenth: into the play-in, whatever came of it.
+            extra.setdefault(t, {})["p_playin"] = round(n_playin[t] / trials, 4)
         out.append(TeamOutlook(
             team=t,
             conference=conf_of[t],
@@ -406,6 +529,7 @@ def simulate(sport: str, ratings: dict, records: dict,
         "points_league": pts_league,
         "divisions_seed": shape.divisions_seed,
         "berths": shape.berths,
+        "play_in": shape.play_in,
         # How much of this rests on games that have not been played. 1.0 in
         # the preseason, falling as the year goes; a page that does not say
         # this is presenting a prior as a projection.

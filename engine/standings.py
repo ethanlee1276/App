@@ -76,6 +76,9 @@ class Record:
     away_wins: int = 0
     away_losses: int = 0
     streak: int = 0                     # + wins, - losses
+    #: Hockey's first tiebreaker after points: wins inside sixty minutes.
+    #: Counted for a points league only (`_row` drops it elsewhere).
+    reg_wins: int = 0
     last10: list = field(default_factory=list)   # newest last, "W"/"L"/"T"
     #: A feed's own last-ten record ("6-4"). Set only when the league
     #: publishes it; the ordered run above is ours and cannot be derived
@@ -136,6 +139,37 @@ def _hockey(r) -> tuple[int | None, str]:
     return kind, str(ex.get("ended_in") or "").upper()
 
 
+def _regular(conn, sport: str, season: int):
+    """The regular season's finished rows, each with whether it went past
+    regulation — the one filter the table and every reader of its games
+    share. No postseason (playoffs.POSTSEASON's dates or weeks) and no
+    hockey playoff game (its stored type)."""
+    from .playoffs import is_postseason
+    for r in _finished(conn, sport, [season]):
+        if is_postseason(sport, season, r["period"]):
+            continue
+        kind, ended = _hockey(r) if sport in OTL_SPORTS else (None, "")
+        if kind == NHL_PLAYOFF_TYPE:
+            continue
+        yield r, ended in PAST_REGULATION
+
+
+def season_games(conn, sport: str, season: int) -> list[dict]:
+    """The games the table counts, one dict each, names canonical: for a
+    reader that needs who beat whom (a head-to-head tiebreaker), not only
+    the totals. A row with equal scores in a sport without ties is left
+    out, as the table leaves it out."""
+    out = []
+    for r, past in _regular(conn, sport, season):
+        hs, as_ = float(r["home_score"]), float(r["away_score"])
+        if hs == as_ and sport not in TIES_EXIST:
+            continue
+        out.append({"home": divisions.canonical(sport, r["home"]),
+                    "away": divisions.canonical(sport, r["away"]),
+                    "home_score": hs, "away_score": as_, "past_regulation": past})
+    return out
+
+
 def team_rows(table: dict):
     """Every team row of a standings payload, in table order.
 
@@ -160,8 +194,6 @@ def compute(conn, sport: str, season: int | None = None,
     every summer is not a static fact, so it rides in with the slate
     instead of living in a table that is wrong by September.
     """
-    from .playoffs import is_postseason
-
     day = today or _dt.date.today().isoformat()
     season = season if season is not None else season_of(sport, day)
     # REGULAR SEASON ONLY. The games table holds postseason results too,
@@ -175,14 +207,7 @@ def compute(conn, sport: str, season: int | None = None,
     # holds for a points league, as `from_feed` fills it) — a point banked,
     # not a loss. Counted as a loss, a club's points came up short by every
     # one it took past regulation.
-    rows: list[tuple] = []
-    for r in _finished(conn, sport, [season]):
-        if is_postseason(sport, season, r["period"]):
-            continue
-        kind, ended = _hockey(r) if sport in OTL_SPORTS else (None, "")
-        if kind == NHL_PLAYOFF_TYPE:
-            continue
-        rows.append((r, ended in PAST_REGULATION))
+    rows = list(_regular(conn, sport, season))
 
     table: dict[str, Record] = {}
 
@@ -215,6 +240,7 @@ def compute(conn, sport: str, season: int | None = None,
                 me.wins += 1
                 me.home_wins += at_home
                 me.away_wins += (not at_home)
+                me.reg_wins += not past_regulation
                 outcome = "W"
             elif mine < theirs and past_regulation:
                 me.ties += 1
@@ -369,6 +395,8 @@ def _row(sport: str, rank: int, r: Record) -> dict:
     if sport in OTL_SPORTS:
         d["otl"] = r.ties
         d["points"] = 2 * r.wins + r.ties
+    else:
+        d.pop("reg_wins", None)
     d.pop("results", None)              # ordering detail, not page content
     return d
 

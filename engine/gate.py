@@ -319,6 +319,11 @@ PAID_KEYS_BY_FILE = {
     # school's games at our price, its chance at the automatic bid, the
     # swing games and our line on each tournament game are the model's.
     "ncaa_race.json": ("chances", "remaining", "swing", "bracket_lines", "bids"),
+    # The NBA's and the NHL's playoff races (engine/seasonrace, 2026-11-17):
+    # the field if it ended today and the standings are free; the chances
+    # are the season simulation's, members' as on the Futures page.
+    "nba_race.json": ("chances",),
+    "nhl_race.json": ("chances",),
 }
 
 
@@ -508,8 +513,10 @@ KNOWN_BOARDS = (
     # The races, written by cfb_build, nba_build and nfl_build
     # (engine/cfprace, engine/nbacup, engine/nflrace), and the NCAA
     # tournament's by nba_build for college (engine/ncaarace). Mixed: see
-    # MIXED_FILES.
+    # MIXED_FILES. The NBA's and the NHL's playoff races by futures_build
+    # (engine/seasonrace), off the season simulation's own run.
     "cfp_race.json", "nba_cup.json", "nfl_race.json", "ncaa_race.json",
+    "nba_race.json", "nhl_race.json",
     # Zeno's bets, written beside record.json by ledger.export_json and on
     # every owner post (engine/zeno.publish_tickets). Paid whole.
     "zeno.json",
@@ -551,10 +558,11 @@ MIXED_FILES = (
     # `ranks` are ordinary words and a global entry would strip them off
     # any future board that happened to use the name.
     "fantasy.json", "memecoins.json",
-    # The College Football Playoff race, the NBA Cup, the NFL's race and
-    # the NCAA tournament's: free standings, a paid model half
-    # (PAID_KEYS_BY_FILE).
+    # The College Football Playoff race, the NBA Cup, the NFL's race, the
+    # NCAA tournament's and the NBA's and the NHL's playoff races: free
+    # standings, a paid model half (PAID_KEYS_BY_FILE).
     "cfp_race.json", "nba_cup.json", "nfl_race.json", "ncaa_race.json",
+    "nba_race.json", "nhl_race.json",
     # The day's top pick and every league's Pick of the Day: free picks,
     # members' leans and best bets (`free_top_pick`).
     "day_top_pick.json",

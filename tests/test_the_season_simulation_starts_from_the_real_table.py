@@ -155,8 +155,11 @@ def test_the_daily_rebuild_publishes_through_the_paywall():
     src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
     i = src.index("def _run_futures(")
     block = src[i:src.index("\ndef ", i + 1)]
-    assert "_gate.publish(data, futures_build.OUT / " in block
+    assert "futures_build.publish(sport, data, conn)" in block
     assert "json.dumps(data" not in block and "os.replace(" not in block
+    src = open(os.path.join(ROOT, "futures_build.py"), encoding="utf-8").read()
+    body = src[src.index("def publish("):src.index("def main(")]
+    assert 'gate.publish(data, OUT / f"futures_{sport}.json")' in body
 
 
 def test_a_fix_to_the_projection_rebuilds_on_the_first_pass_after_its_deploy():
@@ -171,10 +174,10 @@ def test_a_fix_to_the_projection_rebuilds_on_the_first_pass_after_its_deploy():
     real_root, real_build = launch.ROOT, None
     import futures_build
     real_build, real_sports = futures_build.build, futures_build.SPORTS
-    real_publish = gate.publish
+    real_publish = futures_build.publish
     futures_build.build = lambda sport, conn, **k: built.append(sport) or {"sport": sport, "teams": []}
     futures_build.SPORTS = ("nhl",)
-    gate.publish = lambda data, path, *a, **k: (str(path), str(path))
+    futures_build.publish = lambda sport, data, conn: ""
     launch.ROOT = __import__("pathlib").Path(d)
     try:
         with open(stamp, "w", encoding="utf-8") as fh:
@@ -187,7 +190,7 @@ def test_a_fix_to_the_projection_rebuilds_on_the_first_pass_after_its_deploy():
     finally:
         launch.ROOT = real_root
         futures_build.build, futures_build.SPORTS = real_build, real_sports
-        gate.publish = real_publish
+        futures_build.publish = real_publish
 
 
 def test_ask_answers_hockey_in_w_l_ot_and_points():
