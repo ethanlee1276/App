@@ -455,7 +455,7 @@
           <div class="rc-team"><span class="rc-loc">${ha === "home" ? "Home" : "Away"} · ${esc(t.loc || "")}</span>
             <b class="rc-nick">${esc(nick)}</b>
             ${rec ? `<span class="rc-rec">${esc(rec)}</span>` : ""}${goal != null
-              ? `<span class="gp-td-word" role="status" aria-label="${esc(`Goal, ${nick}`)}">Goal</span>` : ""}</div>
+              ? `<span class="rc-goal-word" role="status" aria-label="${esc(`Goal, ${nick}`)}">Goal</span>` : ""}</div>
           <b class="rc-pts">${puck}${score != null ? esc(score) : "–"}</b></div>`;
     };
     const per = Number(c.period) || (/^P?(\d)/i.exec(String(lv.period || "")) || [])[1] || 0;

@@ -93,11 +93,14 @@ def test_an_overtime_winner_flashes_as_the_game_ends():
 
 
 def test_the_score_wears_it_and_says_it():
-    assert "goalSeen(d);" in RC and 'class="gp-td-word" role="status"' in RC
+    # Its own word: a room's sheet styles only what that room draws (test_a_rooms_styles_are_its_own).
+    assert "goalSeen(d);" in RC and 'class="rc-goal-word" role="status"' in RC and "gp-td-word" not in RC
     assert 'aria-label="${esc(`Goal, ${nick}`)}">Goal</span>' in RC
     assert '" rc-goal" : ""}"${goal != null ? ` style="--td-t:-${Math.round(goal)}ms"` : ""}' in RC
     assert ".rc-goal .rc-pts { animation: gp-td-pulse 1.5s ease-out 3 both;" in CSS
-    assert "@media (prefers-reduced-motion: reduce)" in CSS[CSS.index(".rc-goal .rc-team"):]
+    tail = CSS[CSS.index(".rc-goal .rc-team"):]
+    assert ".rc-goal-word { position: absolute;" in tail and "animation: gp-td-word 4.5s" in tail
+    assert ".rc-goal-word { animation-name: gp-td-fade; }" in tail[tail.index("@media (prefers-reduced-motion: reduce)"):]
 
 
 if __name__ == "__main__":
