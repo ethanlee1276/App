@@ -222,7 +222,9 @@ def test_the_server_serves_it_free_and_the_page_has_its_door():
     assert 'if parsed.path in ("/api/players/gamelog", "/api/players/gamelog/"):' in srv
     i = srv.index("def _players_gamelog(self, q):")
     body = srv[i:srv.index("def _parlay_check(self, body: dict):", i)]
-    assert "gamelog.season_log(sport, player, int(season) if season.isdigit() else None)" in body
+    assert "gamelog.season_log(sport, name, int(season) if season.isdigit() else None) if name else {}" in body
+    assert "name = _pp.stored_name(conn, sport, player)" in body, \
+        "whose games these are, by the player page's own rule (a near name on another club is someone else)"
     assert "_entitled" not in body, "a box score is a fact, free like his other logs"
     i = APP.index("function chartDoor(")
     door = APP[i:APP.index("\n}\n", i)]

@@ -487,6 +487,31 @@ def roster_row(sport: str, player: str, team: str = "", data_dir=None, position:
     return one
 
 
+def stored_name(conn, sport: str, player: str, team: str = "", data_dir=None) -> str:
+    """The name the history file keeps this player's games under, or "".
+
+    The exact name when it has games; else the nearest stored spelling
+    (statlogs.resolve_player) when that is this player: the same name
+    written another way ("D.J. Moore", "DJ Moore"), a typed name no roster
+    carries, or a near name on the club the roster lists this one on.
+    A NEAR NAME ON ANOTHER CLUB IS SOMEONE ELSE (2026-11-17): JK Scott, the
+    Chargers' punter, has no games on file, and his page and game log drew
+    Nick Scott's, the Panthers' safety, tackles and all."""
+    if GL.seasons_of(conn, sport, player):
+        return player
+    from .playersearch import norm
+    from .statlogs import resolve_player
+    found = resolve_player(conn, sport, player)
+    if not found or norm(found) == norm(player):
+        return found or ""
+    row = roster_row(sport, player, team, data_dir)
+    if not row:
+        return found
+    latest = conn.execute("SELECT team FROM player_game_logs WHERE sport=? AND player=? "
+                          "ORDER BY season DESC, period DESC LIMIT 1", (sport, found)).fetchone()
+    return found if latest and latest[0] == row.get("team") else ""
+
+
 def _birthplace(sport: str, row: dict, player: str, position: str) -> str:
     if row.get("birthplace"):
         return str(row["birthplace"])
@@ -613,13 +638,8 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
     conn = _db.connect(path) if os.path.exists(path) else None
     try:
         if conn is not None:
+            player = stored_name(conn, sport, player, team, data_dir) or player
             seasons = GL.seasons_of(conn, sport, player)
-            if not seasons:
-                from .statlogs import resolve_player
-                found = resolve_player(conn, sport, player)
-                if found and found != player:
-                    player = found
-                    seasons = GL.seasons_of(conn, sport, player)
             if seasons:
                 rows = conn.execute(
                     "SELECT season, period, game_id, team, opponent, position, home, market, value "

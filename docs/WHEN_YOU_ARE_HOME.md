@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UO. A player with no games never shows someone else's** (step 673; 17 November). Nothing to run. Found while
+checking Cameron Dicker's page live: JK Scott, the Chargers' punter, has no games on file, so his page and its Game
+Log tab fell back to the nearest stored name and showed Nick Scott's, the Panthers' safety, tackles and all. A near
+name now stands in only when it is the same player: the same name written another way ("D.J. Moore" and "DJ
+Moore"), a typed name no roster carries (a typo), or a near name on the club the roster lists. JK Scott's page now
+says the stats feed doesn't include punting.
+
 **UN. Hockey's +/- and penalty minutes, basketball's percentages, and a skater with no goal yet** (step 672;
 17 November). Nothing to run. More of "the player page is missing a bunch of data". A real bug first: a skater
 who hadn't scored a goal yet this season had an empty page and game log, because the page chose which stats to

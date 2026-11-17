@@ -4908,7 +4908,15 @@ class Handler(BaseHTTPRequestHandler):
         if sport not in gamelog.LAYOUTS:
             return self._send(400, b'{"error":"no game log for this sport"}', ".json")
         try:
-            out = gamelog.season_log(sport, player, int(season) if season.isdigit() else None)
+            # The page's own rule for whose games these are (engine/playerpage
+            # .stored_name): a near name on another club is someone else.
+            from engine import db as _hdb, playerpage as _pp
+            conn = _hdb.connect()
+            try:
+                name = _pp.stored_name(conn, sport, player)
+            finally:
+                conn.close()
+            out = gamelog.season_log(sport, name, int(season) if season.isdigit() else None) if name else {}
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the game log could not be read"}', ".json")
         # HIS FACE ON THE LOG'S HEADER (LOGLOOK1, 2026-11-16; Ethan: "use team colors

@@ -248,6 +248,42 @@ process.stdout.write(JSON.stringify([plrStatsHTML({json.dumps(page)}), plrStatsH
         "the Game Log tab says the same, not that a box score is still to come"
 
 
+def test_a_name_with_no_games_is_never_a_near_names_page():
+    """Live, 17 Nov: JK Scott, the Chargers' punter, has no games on file, and
+    his page and his Game Log tab drew Nick Scott's, the Panthers' safety,
+    tackles and all: the nearest stored name stood in for one with none."""
+    rows = []
+    for wk, tot in (("009", 6.0), ("010", 1.0)):
+        rows.append({"sport": "nfl", "season": 2026, "period": wk, "game_id": f"CAR-{wk}", "player": "Nick Scott",
+                     "team": "CAR", "opponent": "NO", "position": "DEF", "home": 1, "market": "tackles_ast",
+                     "value": tot})
+    rows.append({"sport": "nfl", "season": 2026, "period": "010", "game_id": "CHI-010", "player": "DJ Moore",
+                 "team": "CHI", "opponent": "GB", "position": "WR", "home": 1, "market": "receptions", "value": 6.0})
+    rows.append({"sport": "nfl", "season": 2026, "period": "010", "game_id": "LAC-010", "player": "Kimani Vidal",
+                 "team": "LAC", "opponent": "KC", "position": "RB", "home": 1, "market": "carries", "value": 12.0})
+    path, conn = _history(rows)
+    d = tempfile.mkdtemp()
+    with open(os.path.join(d, "rosters_nfl.json"), "w", encoding="utf-8") as fh:
+        json.dump({"teams": {
+            "LAC": {"players": [{"player": "JK Scott", "team": "LAC", "position": "P", "number": 16},
+                                {"player": "Kimani Vidal Jr.", "team": "LAC", "position": "RB", "number": 30}]},
+            "CHI": {"players": [{"player": "D.J. Moore", "team": "CHI", "position": "WR", "number": 2}]},
+            "CAR": {"players": [{"player": "Nick Scott", "team": "CAR", "position": "DB", "number": 21}]}}}, fh)
+    PP._ROSTERS.clear()
+    try:
+        assert PP.stored_name(conn, "nfl", "JK Scott", "", d) == "", "the roster's punter is not the Panthers' safety"
+        assert PP.stored_name(conn, "nfl", "D.J. Moore", "", d) == "DJ Moore", "the same name written another way"
+        assert PP.stored_name(conn, "nfl", "Kimani Vidal Jr.", "", d) == "Kimani Vidal", \
+            "a near name on the club the roster lists is the player"
+        assert PP.stored_name(conn, "nfl", "Nik Scot", "", d) == "Nick Scott", "a typed name no roster carries"
+        assert PP.stored_name(conn, "nfl", "Nick Scott", "", d) == "Nick Scott"
+    finally:
+        conn.close()
+    page = PP.page("nfl", "JK Scott", db_path=path, data_dir=d)
+    assert page["player"] == "JK Scott" and page["position"] == "P" and page["seasons"] == []
+    assert page["no_stats"].startswith("Our NFL stats feed doesn't include punting"), page
+
+
 # --- the seasons already on file -----------------------------------------------------------------
 def test_the_fill_reads_each_season_once_and_a_finished_one_off_the_disk():
     from engine.sources import nflverse
