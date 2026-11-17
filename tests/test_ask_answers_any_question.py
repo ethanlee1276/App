@@ -245,6 +245,37 @@ def test_who_has_the_worst_defense_in_the_league():
     assert AB.league_table("nba", "points_allowed")["found"] is False, "a league with no games says so"
 
 
+def test_ask_reads_baseballs_whole_line_beside_the_chips():
+    """MLB's box-score lines (engine/mlb/fulllines, 2026-11-17): Ask ranks RBIs and a pitcher's earned runs, and
+    reads a hitter's RBIs over a line, while the market cards' chips stay the props' markets."""
+    from engine import statlogs as SL
+    path = _TMP / "fulllines.db"
+    conn = _db.connect(str(path))
+    rows = [dict(sport="mlb", season=2026, period=d, game_id=f"{p}-{d}", player=p, team=t, opponent="BOS",
+                 position=pos, home=1, market=m, value=v)
+            for p, t, pos, m, vals in (("Aaron Judge", "NYY", "RF", "rbis", (3, 0, 2, 1)),
+                                       ("Juan Soto", "NYM", "RF", "rbis", (1, 1, 0, 0)),
+                                       ("Gerrit Cole", "NYY", "P", "earned_runs", (2, 4, 1, 0)))
+            for d, v in zip(("2026-08-01", "2026-08-02", "2026-08-03", "2026-08-04"), vals)]
+    _db.upsert_player_logs(conn, rows)
+    conn.commit()
+    conn.close()
+    keep = AB.HISTORY_DB
+    try:
+        AB.HISTORY_DB = str(path)
+        rbi = AB.player_leaders("mlb", "RBIs")
+        er = AB.player_leaders("mlb", "earned runs")
+        rate = AB.prop_hit_rate({}, "Aaron Judge", "rbis", 0.5, "over", "", "mlb")
+    finally:
+        AB.HISTORY_DB = keep
+    assert (rbi["stat"], [(r["player"], r["total"]) for r in rbi["rows"]]) == (
+        "RBIs", [("Aaron Judge", 6), ("Juan Soto", 2)]), rbi
+    assert er["stat"] == "Earned Runs" and er["rows"][0]["total"] == 7, er
+    assert "error" not in rate and rate.get("player") == "Aaron Judge", rate
+    assert "RBIs" in AB._stat_menu() and "Earned Runs" in AB._stat_menu()
+    assert ("rbis", "RBIs") not in SL.SPORT_MARKETS["mlb"], "the chips stay the props' markets"
+
+
 def test_who_leads_the_league_in_a_stat():
     lead = AB.player_leaders("nfl", "rushing yards")
     assert lead["stat"] == "Rushing Yards" and lead["season"] == 2025

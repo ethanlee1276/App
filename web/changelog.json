@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-17",
+      "kind": "ship",
+      "title": "Ask knows a baseball player’s whole line",
+      "body": "Ask can now answer with RBIs, runs, walks, stolen bases and a pitcher’s earned runs, hits and walks allowed: who leads the league, and how often a player has cleared a number."
+    },
+    {
+      "date": "2026-11-17",
       "kind": "fix",
       "title": "No more charts of zeros on a player’s market card",
       "body": "A football player’s market chips are now the roles they play: a quarterback is no longer offered receiving yards, receptions and targets, ten games of zeros."

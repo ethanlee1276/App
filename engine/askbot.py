@@ -474,8 +474,8 @@ def _stat_menu() -> str:
     """Every stat player_leaders can rank, by league — read from the logs'
     own market list, so a stat added there is offered here."""
     from engine import statlogs as SL
-    return "; ".join(f"{s.upper()}: " + ", ".join(label for _, label in m)
-                     for s, m in SL.SPORT_MARKETS.items())
+    return "; ".join(f"{s.upper()}: " + ", ".join(label for _, label in SL.ask_markets(s))
+                     for s in SL.SPORT_MARKETS)
 
 
 #: Sorted by name and never changed per request: the tools are the front of
@@ -1849,7 +1849,7 @@ def player_history(player: str, opponent: str = "", sport: str = "", prefer: str
     if s == "ufc":
         out["fighter"] = top.get("fighter") or {}
         return out
-    markets = SL.SPORT_MARKETS.get(s) or ()
+    markets = SL.ask_markets(s)
     labels = dict(markets)
     conn = _history()
     if conn is None or not markets:
@@ -1996,7 +1996,7 @@ def player_leaders(sport: str = "", stat: str = "", by: str = "total", season=No
     """A league's season leaders in one stat, by total or per game."""
     from engine import statlogs as SL
     s = _league(sport, prefer)
-    markets = SL.SPORT_MARKETS.get(s) or ()
+    markets = SL.ask_markets(s)
     m = _market(stat, markets)
     if not m:
         return {"error": f"the {s.upper()} stats we hold are: " + ", ".join(label for _, label in markets)}
@@ -2377,9 +2377,9 @@ def prop_hit_rate(boards: dict, player: str, stat: str, line=None, side: str = "
     if not hits:
         return {"found": False, "note": f"no stored games for a player called {player}"}
     s, name = hits[0]["sport"], hits[0]["player"]
-    m = _market(stat, SL.SPORT_MARKETS[s])
+    m = _market(stat, SL.ask_markets(s))
     if not m:
-        return {"error": f"the {s.upper()} stats we hold are: " + ", ".join(l for _, l in SL.SPORT_MARKETS[s])}
+        return {"error": f"the {s.upper()} stats we hold are: " + ", ".join(l for _, l in SL.ask_markets(s))}
     mid, label = m
     tonight = None
     for r in (boards.get(s) or {}).get("recommendations") or []:

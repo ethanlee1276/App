@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WB. Ask reads baseball's whole box-score line** (step 712; 17 November). Nothing to run. With the MLB full
+lines (step VU), Ask can rank and read RBIs, runs, walks, a hitter's strikeouts, stolen bases, doubles, triples,
+at-bats, plate appearances, and a pitcher's earned runs, hits, walks, runs and homers allowed, pitches, wins and
+saves: "who leads the league in RBIs", "how often has Judge driven one in". The market cards' chips stay the
+props' markets. It answers on 2026 once the season's command (RUN_NEXT 00l) has run.
+
 **WA. A football player's market chips are the roles they play** (step 711; 17 November). Nothing to run.
 Jalon Daniels' "By market" card offered a quarterback Receiving Yards, Receptions and Targets: ten games of zeros,
 a box score's empty columns. A family of markets (passing, rushing, receiving, kicking, defense) whose volume is

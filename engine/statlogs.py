@@ -123,6 +123,22 @@ SPORT_MARKETS = {
             ("plus_minus", "Plus-Minus"), ("pim", "Penalty Minutes")),
 }
 
+#: WHAT ASK READS BESIDE THE CHIPS (2026-11-17): MLB's whole box-score line
+#: (engine/mlb/fulllines), so "who leads the league in RBIs" or a pitcher's
+#: earned runs has an answer; the market cards' chips stay the markets above.
+ASK_MARKETS = {"mlb": SPORT_MARKETS["mlb"] + (
+    ("rbis", "RBIs"), ("runs", "Runs"), ("walks", "Walks"), ("batter_strikeouts", "Strikeouts (batting)"),
+    ("stolen_bases", "Stolen Bases"), ("doubles", "Doubles"), ("triples", "Triples"), ("at_bats", "At Bats"),
+    ("pa", "Plate Appearances"), ("earned_runs", "Earned Runs"), ("hits_allowed", "Hits Allowed"),
+    ("walks_allowed", "Walks Allowed"), ("runs_allowed", "Runs Allowed"), ("home_runs_allowed", "Home Runs Allowed"),
+    ("pitches", "Pitches"), ("wins", "Wins"), ("saves", "Saves"))}
+
+
+def ask_markets(sport: str) -> tuple:
+    """The stats Ask reads for a league: its chips', and more where kept."""
+    return ASK_MARKETS.get(sport) or SPORT_MARKETS.get(sport) or ()
+
+
 N_GAMES = 10       # what a profile chart can legibly hold
 MIN_GAMES = 3      # below this a chart is an anecdote, so it is not drawn
 
