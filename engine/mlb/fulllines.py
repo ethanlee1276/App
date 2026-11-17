@@ -32,7 +32,10 @@ game, and a doubleheader's second game is one game for a player who sat out
 the first, not two. A day is read whole or left for the next read.
 
 The nightly MLB ingest adds each final game's lines (engine/ingest.
-ingest_mlb_date); a season already played is filled by the command, once:
+ingest_mlb_date), and the nightly chores (engine/maintenance) read a season
+not yet whole about FILL_PER_NIGHT games a night, newest first (`nightly`),
+so a season played before the full lines were kept fills by itself. The
+command does a season at once:
 
     python3 -m engine.mlb.fulllines --season 2026
 
@@ -60,6 +63,9 @@ PIT = (("hits", "hits_allowed"), ("runs", "runs_allowed"), ("earnedRuns", "earne
 GAME_TYPES = ("R", "F", "D", "L", "W")
 #: Seconds between box scores on a backfill, as the other statsapi readers pace.
 PAUSE_S = 0.25
+#: Box scores the nightly chores read a night for a season not yet whole
+#: (`nightly`): about three minutes of requests, a season in about twelve nights.
+FILL_PER_NIGHT = 200
 
 
 def _num(v):
@@ -224,23 +230,18 @@ def box_uncached(game_pk: int, timeout: int = 30) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def backfill(conn, season: int, start: str | None = None, end: str | None = None, fetch_box=None,
-             fetch_schedule=None, log=print, pause: float = PAUSE_S) -> dict:
-    """Every final game of a season (or a stretch of it), its box score's full
-    lines into the history. One schedule request, then a box score a game, a
-    day at a time: a day with a box score that cannot be read is left whole
-    for the next run (the command can be run again; what is kept stays)."""
-    if fetch_schedule is None:
-        from .sources.mlbstats import fetch_schedule
-    if fetch_box is None:
-        fetch_box = box_uncached
-    start, end = start or f"{season}-03-01", end or f"{season}-11-30"
-    games = games_of(fetch_schedule(start, end))
+def _by_day(games: list[dict]) -> dict:
     days: dict = {}
     for g in games:
         days.setdefault(g["date"], []).append(g)
+    return days
+
+
+def _fill(conn, days: dict, fetch_box, log, pause: float) -> dict:
+    """``days`` ({day: [game]}) into the history, a day whole or not at all:
+    a day with a box score that cannot be read is left for the next run."""
     added = failed = read = 0
-    for day in sorted(days):
+    for day in sorted(days, reverse=True):
         boxes, broken = [], False
         for g in sorted(days[day], key=lambda g: g["game_number"]):
             try:
@@ -250,17 +251,70 @@ def backfill(conn, season: int, start: str | None = None, end: str | None = None
                 log(f"  {g['date']} {g['away']}@{g['home']}: {type(exc).__name__}: {exc}")
             if pause:
                 time.sleep(pause)
-        before = read
-        read += len(days[day])
         if broken:
             failed += len(days[day])
             log(f"  {day} left for the next run: a box score could not be read")
             continue
         legs: dict = {}
         added += write(conn, [r for box, g in boxes for r in rows(box, g["home"], g["away"], day, legs)])
+        before, read = read, read + len(days[day])
         if read // 100 > before // 100:
-            log(f"  {read} of {len(games)} games read, {added} numbers added")
-    return {"games": len(games), "added": added, "failed": failed}
+            log(f"  {read} games read, {added} numbers added")
+    return {"games": read, "added": added, "failed": failed}
+
+
+def backfill(conn, season: int, start: str | None = None, end: str | None = None, fetch_box=None,
+             fetch_schedule=None, log=print, pause: float = PAUSE_S) -> dict:
+    """Every final game of a season (or a stretch of it), its box score's full
+    lines into the history. One schedule request, then a box score a game, a
+    day at a time, newest first: a day with a box score that cannot be read is
+    left whole for the next run (the command can be run again; what is kept
+    stays)."""
+    if fetch_schedule is None:
+        from .sources.mlbstats import fetch_schedule
+    start, end = start or f"{season}-03-01", end or f"{season}-11-30"
+    games = games_of(fetch_schedule(start, end))
+    out = _fill(conn, _by_day(games), fetch_box or box_uncached, log, pause)
+    return {"games": len(games), "added": out["added"], "failed": out["failed"]}
+
+
+def filled(conn, season: int) -> dict:
+    """``{(day, club): second game kept}`` for each club's days whose whole
+    lines the history holds (a hitter's at-bats), and whether a second game
+    that day is (a doubleheader's ``-G2``)."""
+    return {(str(day)[:10], team): bool(second) for day, team, second in conn.execute(
+        "SELECT period, team, MAX(game_id LIKE '%-G2') FROM player_game_logs "
+        "WHERE sport='mlb' AND market='at_bats' AND season=? GROUP BY period, team", (int(season),))}
+
+
+def _day_done(day: str, games: list, have: dict) -> bool:
+    from collections import Counter
+    count = Counter(t for g in games for t in (g["home"], g["away"]))
+    return all((day, t) in have and (n == 1 or have[(day, t)]) for t, n in count.items())
+
+
+def nightly(conn, season: int, through: str, budget: int = FILL_PER_NIGHT, fetch_box=None, fetch_schedule=None,
+            log=print, pause: float = PAUSE_S) -> dict:
+    """The season's final games whose whole lines the history lacks, newest
+    day first, about ``budget`` games a night (engine/maintenance's chores),
+    until none are left: a season played before the full lines were kept
+    fills by itself, and a night whose read missed a box score is mended.
+    The schedule is the one the hit tracker's backfill reads the same night
+    (statsapi's, cached for the day)."""
+    if fetch_schedule is None:
+        from .sources.mlbstats import fetch_schedule
+    days = _by_day(games_of(fetch_schedule(f"{int(season)}-03-01", through)))
+    have = filled(conn, season)
+    todo = sorted((d for d in days if not _day_done(d, days[d], have)), reverse=True)
+    picked, n = {}, 0
+    for d in todo:
+        if picked and n + len(days[d]) > budget:
+            break
+        picked[d] = days[d]
+        n += len(days[d])
+    out = _fill(conn, picked, fetch_box or box_uncached, log, pause)
+    out["left"] = sum(len(days[d]) for d in todo) - out["games"]
+    return out
 
 
 def _cli(argv=None) -> int:

@@ -4,6 +4,12 @@
     {
       "date": "2026-11-17",
       "kind": "ship",
+      "title": "The 2026 baseball season fills its box scores by itself",
+      "body": "Each night now reads more of the 2026 season’s box scores until every MLB player’s page carries the whole line, newest games first."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "ship",
       "title": "Ask knows a baseball player’s whole line",
       "body": "Ask can now answer with RBIs, runs, walks, stolen bases and a pitcher’s earned runs, hits and walks allowed: who leads the league, and how often a player has cleared a number."
     },

@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WC. The 2026 MLB season fills its whole lines by itself** (step 713; 17 November). Nothing to run; RUN_NEXT
+00l is optional now. The nightly chores read this season's final games whose box scores are not in the history
+yet, about 200 a night, newest first (about three minutes of requests), the way the hit tracker's charts already
+fill a season. The 2026 pages are whole in about twelve nights; the command does it in one go. In the season, the
+same pass mends any night whose read missed a box score.
+
 **WB. Ask reads baseball's whole box-score line** (step 712; 17 November). Nothing to run. With the MLB full
 lines (step VU), Ask can rank and read RBIs, runs, walks, a hitter's strikeouts, stolen bases, doubles, triples,
 at-bats, plate appearances, and a pitcher's earned runs, hits, walks, runs and homers allowed, pitches, wins and

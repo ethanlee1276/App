@@ -189,8 +189,47 @@ def test_the_seasons_fill_reads_a_day_whole_or_leaves_it_for_the_next_run():
     assert ids == ["Aaron Judge-2026-06-01", "Aaron Judge-2026-06-01-G2", "Aaron Judge-2026-10-20"], ids
     assert any("2026-06-02 left for the next run" in s for s in said), said
     src = (ROOT / "engine" / "mlb" / "fulllines.py").read_text(encoding="utf-8")
-    assert "        fetch_box = box_uncached\n" in src, "a season's box scores are read, not cached"
+    assert src.count("fetch_box or box_uncached") == 2, "a season's box scores are read, not cached"
     conn.close()
+
+
+def test_the_nightly_fills_a_season_not_yet_whole_newest_first_a_budget_a_night():
+    def game(pk, d, home, away, n=1):
+        return {"gamePk": pk, "officialDate": d, "gameType": "R", "gameNumber": n,
+                "status": {"abstractGameState": "Final"},
+                "teams": {"home": {"team": {"id": home}}, "away": {"team": {"id": away}}}}
+    sched = {"dates": [
+        {"date": "2026-09-01", "games": [game(1, "2026-09-01", 147, 111)]},
+        {"date": "2026-09-02", "games": [game(2, "2026-09-02", 147, 111), game(3, "2026-09-02", 147, 111, n=2)]},
+        {"date": "2026-09-03", "games": [game(4, "2026-09-03", 119, 135)]},
+        {"date": "2026-09-04", "games": [game(5, "2026-09-04", 147, 111)]}]}
+    box = _box([_player("Aaron Judge", "RF", JUDGE_1)], [_player("Rafael Devers", "3B", JUDGE_1)])
+    read = []
+
+    def fetch(pk):
+        read.append(pk)
+        return box
+    path, conn = _history()
+    # 4 September is whole already; 2 September has only its first game.
+    F.write(conn, F.rows(box, "NYY", "BOS", "2026-09-04"))
+    F.write(conn, F.rows(box, "NYY", "BOS", "2026-09-02"))
+    have = F.filled(conn, 2026)
+    assert have[("2026-09-04", "NYY")] is False and ("2026-09-03", "LAD") not in have
+    got = F.nightly(conn, 2026, "2026-09-04", budget=3, fetch_box=fetch, fetch_schedule=lambda a, b: sched,
+                    log=lambda *_: None, pause=0)
+    assert read == [4, 2, 3], "newest first, a doubleheader day whole, the budget's worth"
+    assert (got["games"], got["left"]) == (3, 1), got
+    assert F.filled(conn, 2026)[("2026-09-02", "NYY")] is True, "the second game is in"
+    got = F.nightly(conn, 2026, "2026-09-04", budget=3, fetch_box=fetch, fetch_schedule=lambda a, b: sched,
+                    log=lambda *_: None, pause=0)
+    assert read[-1] == 1 and (got["games"], got["left"]) == (1, 0), got
+    got = F.nightly(conn, 2026, "2026-09-04", fetch_box=fetch, fetch_schedule=lambda a, b: sched,
+                    log=lambda *_: None, pause=0)
+    assert got == {"games": 0, "added": 0, "failed": 0, "left": 0}, "a whole season reads nothing"
+    conn.close()
+    m = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
+    i = m.index("got = _fl.nightly(_fc, today.year, yesterday.isoformat(), log=log)")
+    assert m.rindex("if today.month >= 3:", 0, i) > m.rindex("def ", 0, i), "in the chores, from March"
 
 
 def _season(conn):

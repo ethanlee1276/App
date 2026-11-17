@@ -2844,6 +2844,27 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  mlb charts failed: {exc}")
 
+    # EVERY MLB PLAYER'S WHOLE LINE (engine/mlb/fulllines, 2026-11-17; Ethan:
+    # "yes build it all"): this season's finals whose box scores are not in the
+    # history yet, about FILL_PER_NIGHT a night, newest first, until none are
+    # left, so a season played before the full lines were kept fills by itself
+    # (RUN_NEXT 00l reads it at once). The schedule is the one the hit tracker
+    # just read; each box score is read once and not kept.
+    if today.month >= 3:
+        try:
+            from . import db as _fdb
+            from .mlb import fulllines as _fl
+            _fc = _fdb.connect()
+            try:
+                got = _fl.nightly(_fc, today.year, yesterday.isoformat(), log=log)
+            finally:
+                _fc.close()
+            if got["games"] or got["failed"]:
+                log(f"  mlb full lines {today.year}: {got['games']} game(s) read, {got['added']:,} numbers added, "
+                    f"{got['left']} left" + (f", {got['failed']} for the next night" if got["failed"] else ""))
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  mlb full lines failed: {exc}")
+
     try:
         from . import db, ledger
         lconn = ledger.connect()
