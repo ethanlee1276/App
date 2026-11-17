@@ -573,7 +573,9 @@ def stored_name(conn, sport: str, player: str, team: str = "", data_dir=None) ->
     Scott, the Chargers' punter, has no games on file, and his page drew Nick
     Scott's, the Panthers' safety; and on one club, Anthony Richardson Sr.'s
     drew Anthony Gould's, Caleb Tiernan's Caleb Banks', Jakob Robinson's
-    Wan'Dale Robinson's."""
+    Wan'Dale Robinson's. And a closest spelling stands in only for a misspelling
+    of the whole name (statlogs.resolve_player, 2026-11-17: college's page for
+    Cooper Flagg drew TJ Cope's, "Cope" being near "Cooper")."""
     if GL.seasons_of(conn, sport, player):
         return player
     other = _suffix_spellings(player)

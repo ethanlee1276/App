@@ -340,7 +340,7 @@ function plrSplitsHTML(d) {
 
 /* ---------------- drawing ---------------- */
 function plrFill(page, d) {
-  page._plr.noStats = d.no_stats || "";
+  page._plr.noStats = (d && d.no_stats) || "";
   const host = page.querySelector(".plr-hero");
   if (host && d && d.bio) host.outerHTML = plrHeroHTML(d.player, d.sport, d.team, d.position,
     d.bio.headshot || page._plr.face, d.bio);
@@ -351,8 +351,13 @@ function plrFill(page, d) {
   }
   const at = (sel) => page.querySelector(sel);
   if (!d || !d.player) {
-    const msg = `<p class="plr-quiet">This page could not load. Open it again in a minute.</p>`;
-    page.querySelectorAll(".plr-panel[data-plr-panel]:not([data-plr-panel=\"overview\"])").forEach((p) => { p.innerHTML = msg; });
+    // No answer at all is a page that could not load; an empty one is the server saying the league holds
+    // nobody by this name (no box score, no roster: a player who left for another league, an old link).
+    const { player, sport } = page._plr;
+    const msg = `<p class="plr-quiet">${d ? `We have no ${escapeHtml(lgCode(sport))} player named ${escapeHtml(player)}: no box
+      score or roster we keep lists them.` : "This page could not load. Open it again in a minute."}</p>`;
+    page.querySelectorAll(".plr-panel[data-plr-panel]:not([data-plr-panel=\"overview\"]), .plr-season")
+      .forEach((p) => { p.innerHTML = msg; });
     return;
   }
   const set = (sel, html) => { const el = at(sel); if (el) el.innerHTML = html; };

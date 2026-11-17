@@ -268,6 +268,21 @@ def test_the_overview_says_why_a_page_has_no_numbers():
         "no games at all: the server's reason first, the roster line after"
 
 
+def test_a_page_that_finds_nobody_says_so_and_one_that_failed_says_that():
+    """The server's empty answer means the league holds nobody by the name (no box score, no roster: a player
+    gone to another league, an old link); no answer at all means the page could not load. Both said "could
+    not load", on every menu but the Overview, and a failed load threw before saying anything (`d.no_stats`
+    read off null)."""
+    i = PAGE_JS.index("function plrFill(")
+    fn = PAGE_JS[i:PAGE_JS.index("\n}\n", i)]
+    assert fn.startswith('function plrFill(page, d) {\n  page._plr.noStats = (d && d.no_stats) || "";'), \
+        "a failed load reaches its message"
+    assert "We have no ${escapeHtml(lgCode(sport))} player named ${escapeHtml(player)}: no box" in fn
+    assert ': "This page could not load. Open it again in a minute."}</p>`;' in fn
+    assert 'page.querySelectorAll(".plr-panel[data-plr-panel]:not([data-plr-panel=\\"overview\\"]), .plr-season")' in fn, \
+        "the Overview's first block says it too"
+
+
 def test_a_name_with_no_games_is_never_a_near_names_page():
     """Live, 17 Nov: JK Scott, the Chargers' punter, has no games on file, and
     his page and his Game Log tab drew Nick Scott's, the Panthers' safety,
@@ -279,6 +294,8 @@ def test_a_name_with_no_games_is_never_a_near_names_page():
                      "value": tot})
     rows.append({"sport": "nfl", "season": 2026, "period": "010", "game_id": "CHI-010", "player": "DJ Moore",
                  "team": "CHI", "opponent": "GB", "position": "WR", "home": 1, "market": "receptions", "value": 6.0})
+    rows.append({"sport": "nfl", "season": 2026, "period": "010", "game_id": "TEN-010", "player": "TJ Cope",
+                 "team": "TEN", "opponent": "HOU", "position": "WR", "home": 1, "market": "receptions", "value": 3.0})
     for who, club, pos, market in (("Kimani Vidal", "LAC", "RB", "carries"), ("Anthony Richardson", "IND", "QB", "pass_att"),
                                    ("Anthony Gould", "IND", "WR", "receptions"), ("Caleb Banks", "MIN", "DEF", "tackles_ast")):
         rows.append({"sport": "nfl", "season": 2026, "period": "010", "game_id": f"{club}-010", "player": who,
@@ -305,6 +322,15 @@ def test_a_name_with_no_games_is_never_a_near_names_page():
         assert PP.stored_name(conn, "nfl", "Caleb Tiernan", "MIN", d) == "", \
             "a lineman with no games is not his club's Caleb Banks"
         assert PP.stored_name(conn, "nfl", "Nik Scot", "", d) == "Nick Scott", "a typed name no roster carries"
+        # Live, 17 Nov: college's page for Cooper Flagg (in the NBA now) drew TJ Cope's, because "Cope" is
+        # near "Cooper". One word near one word is a guess for a search list, not whose page this is.
+        assert PP.stored_name(conn, "nfl", "Cooper Flagg", "", d) == "", "a name on no roster is not a near word's"
+        assert PP.page("nfl", "Cooper Flagg", db_path=path, data_dir=d) == {}, "and the page knows nobody by it"
+        assert PP.stored_name(conn, "nfl", "Tj Cope", "", d) == "TJ Cope", "the same name, another case"
+        assert PP.stored_name(conn, "nfl", "Nick Scot", "", d) == "Nick Scott", "a whole name misspelled still is"
+        from engine.statlogs import resolve_player
+        assert resolve_player(conn, "nfl", "Cooper Flagg") == "" and resolve_player(conn, "nfl", "Nik Scot") == "Nick Scott", \
+            "the rule is the resolver's, so a log and a matchup history keep it too"
         assert PP.stored_name(conn, "nfl", "Nick Scott", "", d) == "Nick Scott"
         assert PP.core_name("Nolan Smith Jr.") == PP.core_name("nolan smith") == "nolan smith"
         assert PP.core_name("D.J. Moore") == PP.core_name("DJ Moore") == "dj moore"

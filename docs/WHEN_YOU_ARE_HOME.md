@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VD. A player's page never borrows a stranger whose one word is close** (step 688; 17 November). Nothing to run.
+Checking the live player pages league by league, college basketball's page for Cooper Flagg (in the NBA now, so
+in no college box score or roster) came back as TJ Cope's, Tarleton's guard, because the name lookup's last resort
+takes a name when any one word is near one word asked for, and "Cope" is near "Cooper". That is a fair guess to
+list under a search, and no reason to say whose page, game log or matchup history it is. The lookup now takes a
+near name only when the whole name is a misspelling ("Nik Scot" still finds Nick Scott). A page for a name the
+league holds nobody by now says so: "We have no NCAAB player named Cooper Flagg: no box score or roster we keep
+lists them". Before, every menu said "This page could not load", and a page whose request really did fail threw
+an error instead of saying even that.
+
 **VC. A player's page keeps solid cards when a phone asks for more contrast** (step 687; 17 November). Nothing
 to run. The cards on a player's page are dark glass over the club's colours (step VA). On a phone set to Reduce
 Transparency or Increase Contrast they are the theme's solid cards again, so their words never sit on a bright

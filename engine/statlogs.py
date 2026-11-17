@@ -942,9 +942,19 @@ def resolve_player(conn, sport: str, q: str) -> str:
 
     Exact hit first (free, and almost always the case — the page sends
     the name it already displays). Then the ranked search the box uses,
-    best tier only; a tie inside the tier goes to the man seen most
+    best tier only; a tie inside the tier goes to the one seen most
     recently, the same "current starter over 2021 namesake" rule search
     results follow.
+
+    A CLOSEST SPELLING IS A MISSPELLING OF THE WHOLE NAME (2026-11-17). The
+    search's last tier takes a name when one word of it is near one word
+    typed: a fair guess to list under a search, and no ground for saying
+    whose page, log or history this is. College's page for Cooper Flagg (in
+    the NBA now, so on no college roster) drew TJ Cope's, Tarleton's guard,
+    because "Cope" is near "Cooper". A name found only that way answers only
+    when the whole of it is as near as the search's own whole-name bar
+    (playersearch.FUZZ_WHOLE): "Nik Scot" is Nick Scott, and Cooper Flagg is
+    nobody college holds.
     """
     q = (q or "").strip()
     if not q:
@@ -959,6 +969,12 @@ def resolve_player(conn, sport: str, q: str) -> str:
         return ""
     best = min(ranked.values())
     names = sorted(n for n in ranked if ranked[n] == best)
+    if best == 3:
+        from .playersearch import FUZZ_WHOLE, closeness, norm
+        ql = norm(q)
+        names = [n for n in names if closeness(ql, norm(n)) >= FUZZ_WHOLE]
+        if not names:
+            return ""
     if len(names) == 1:
         return names[0]
     marks = ", ".join("?" for _ in names)
