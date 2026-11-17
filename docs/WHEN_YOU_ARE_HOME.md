@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VM. A game with no stats says so, and a season with none played shows the last one** (step 697; 17 November).
+Nothing to run. Sampling 305 live player pages across five leagues found Jake Tonges' (49ers) Week 1 of 2026 still
+reading "The box score isn't in yet" two months on, with no season card at all. A game row with no line waited for
+its box score forever; now it waits four days in football and two in the daily leagues, and after that the Game
+Log reads "No stats recorded" and the last-game card "No stats in this game's box score". A season with games on
+file and none played (hurt, inactive) shows the newest season the player did play, said as such. The rest of the
+sample held: hockey 64 of 64 clean; the other flags were pages that already say why they have no numbers, or a
+roster spelling the page rightly resolved ("Anthony Richardson Sr." is Anthony Richardson).
+
 **VL. The Lab replays hockey, and Ask reads hockey's scores and team names** (step 696; 17 November). Nothing
 to run. The Lab's weekly run left the NHL out though hockey's walk-forward (engine/nhl/backtest) has measured the
 ranking fit since October and the Lab page already had a place for it: the next weekly run replays hockey first

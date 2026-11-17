@@ -152,15 +152,24 @@ function plrPanelsHTML(open) {
 }
 
 /* ---------------- Overview ---------------- */
-function plrSeasonHTML(d) {
+function plrSeasonHTML(d, note = "") {
   const nums = (d.headline || []).filter((h) => h.value != null);
   if (!nums.length) return "";
   const ranked = nums.some((h) => h.rank);
   return `<section class="plr-card plr-strip"><h3>${escapeHtml(plrSeasonLabel(d.sport, d.season))} season${ranked
-      ? ` <span>Where each ranks in the ${escapeHtml(lgCode(d.sport))} this season</span>` : ""}</h3>
+      ? ` <span>Where each ranks in the ${escapeHtml(lgCode(d.sport))} this season</span>` : ""}</h3>${
+      note ? `<p class="plr-quiet">${escapeHtml(note)}</p>` : ""}
     <div class="plr-nums">${nums.map((h) => `<div class="plr-num" title="${escapeAttr(h.title)}">
       <span class="plr-k">${escapeHtml(h.label)}</span><b>${escapeHtml(plrNum(h.value, h.label, h.per_game))}</b>${
       h.rank ? `<span class="plr-rank">${plrOrd(h.rank)}${h.low ? " fewest" : ""}</span>` : ""}</div>`).join("")}</div></section>`;
+}
+/* A season with games on file and none played: the newest season the player did play, said as such
+   (engine/playerpage `prior`; Jake Tonges' 2026 showed no season card at all). */
+function plrPriorHTML(d) {
+  const p = d.prior;
+  if (!p) return "";
+  return plrSeasonHTML({ ...d, season: p.season, headline: p.headline },
+    `No games played in ${plrSeasonLabel(d.sport, d.season)} yet; these are the numbers from the last season played.`);
 }
 function plrPrevHTML(d) {
   const g = d.last;
@@ -176,6 +185,7 @@ function plrPrevHTML(d) {
   const res = g.result ? `<span class="${g.result === "W" ? "gl-w" : g.result === "L" ? "gl-l" : "gl-t"}">${
     escapeHtml(g.result === "W" ? "Won" : g.result === "L" ? "Lost" : "Tied")}</span> · Final` : "";
   const tiles = g.dnp ? `<p class="plr-dnp">Did not play.</p>` : g.pending ? `<p class="plr-dnp">The box score isn’t in yet.</p>`
+    : g.no_line ? `<p class="plr-dnp">No stats in this game’s box score.</p>`
     : (g.tiles || []).length ? `<div class="plr-tiles">${g.tiles.map((t) =>
     `<div class="plr-tile" title="${escapeAttr(t.title)}"><span class="plr-k">${escapeHtml(t.label)}</span><b>${
       escapeHtml(plrNum(t.value, t.label))}</b></div>`).join("")}</div>` : "";
@@ -206,7 +216,7 @@ function plrSplitletHTML(d) {
   const cols = plrCols(sp.groups, group);
   if (!cols.length) return "";
   const rows = [];
-  if (!g.dnp && !g.pending) rows.push({ label: "This game", gp: 1, values: g.values, avg: false });
+  if (!g.dnp && !g.pending && !g.no_line) rows.push({ label: "This game", gp: 1, values: g.values, avg: false });
   const month = g.date ? by.get(`m:${g.date.slice(0, 7)}`) : null;
   if (month) rows.push(month);
   const vs = by.get(`vs:${g.opponent}`);
@@ -368,7 +378,7 @@ function plrFill(page, d) {
   // Games with no numbers in them (a punter, a lineman, a team defense) say the server's reason, as the
   // Stats and Game Log menus do, rather than leaving the Overview's first block empty.
   const quiet = (t) => `<p class="plr-quiet">${escapeHtml(t)}</p>`;
-  set(".plr-season", (d.seasons || []).length ? plrSeasonHTML(d) || (d.no_stats ? quiet(d.no_stats) : "")
+  set(".plr-season", (d.seasons || []).length ? plrSeasonHTML(d) || plrPriorHTML(d) || (d.no_stats ? quiet(d.no_stats) : "")
     : quiet(d.no_stats || "No games on file for this player yet. A game is added once its box score is in."));
   set(".plr-prev", plrPrevHTML(d));
   set(".plr-splitlet", plrSplitletHTML(d));

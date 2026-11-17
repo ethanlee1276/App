@@ -307,6 +307,26 @@ def collapse(sport: str, games: list) -> list:
     return out
 
 
+#: HOW LONG A ROW WITH NO LINE WAITS FOR ITS BOX SCORE (2026-11-17). Joe
+#: Burrow's Sunday row (a touchdown flag) carried no passing line until the
+#: week's box scores landed (`has_line`); but a row that never gets a line,
+#: a player who recorded nothing, waited for ever: Jake Tonges' Week 1 of
+#: 2026 read "box score not in yet" two months on. The weekly leagues' box
+#: scores are in within the week, the daily leagues' by the next night.
+LINE_WAIT_DAYS = {"nfl": 4, "cfb": 4}
+LINE_WAIT_DEFAULT = 2
+
+
+def awaiting_line(sport: str, date, today: _dt.date | None = None) -> bool:
+    """Is a row with no line still waiting for its box score? A game with no
+    known date waits; one older than the league's wait has none coming."""
+    try:
+        day = _dt.date.fromisoformat(str(date or "")[:10])
+    except ValueError:
+        return True
+    return ((today or _dt.date.today()) - day).days <= LINE_WAIT_DAYS.get(sport, LINE_WAIT_DEFAULT)
+
+
 def has_line(sport: str, s: dict) -> bool:
     """Does a game's row carry a box-score line in the league's layout? Seen on
     the live file 2026-11-16: Joe Burrow's Sunday game had a row the night of
@@ -397,7 +417,9 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None)
         if not _played(sport, s):
             line["dnp"] = True
         elif not has_line(sport, s):
-            line["pending"] = True             # out of the games played until its line lands
+            # Out of the games played either way: waiting for its line, or past
+            # the wait with none (a game the player recorded nothing in).
+            line["pending" if awaiting_line(sport, line.get("date")) else "no_line"] = True
         else:
             played += 1
             add_up(summed, s)

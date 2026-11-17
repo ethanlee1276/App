@@ -262,7 +262,8 @@ def test_the_overview_says_why_a_page_has_no_numbers():
     is."""
     i = PAGE_JS.index("function plrFill(")
     fn = PAGE_JS[i:PAGE_JS.index("\n}\n", i)]
-    assert 'plrSeasonHTML(d) || (d.no_stats ? quiet(d.no_stats) : "")' in fn, \
+    # The last season played stands between them (2026-11-17, `prior`): a page with no numbers at all has none.
+    assert 'plrSeasonHTML(d) || plrPriorHTML(d) || (d.no_stats ? quiet(d.no_stats) : "")' in fn, \
         "games with no numbers: the Overview leads with the reason"
     assert 'quiet(d.no_stats || "No games on file for this player yet.' in fn, \
         "no games at all: the server's reason first, the roster line after"

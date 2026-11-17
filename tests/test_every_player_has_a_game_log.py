@@ -104,8 +104,10 @@ def test_a_game_whose_box_score_is_not_in_yet_is_no_game_played():
     stays out of the games played, the totals and the averages."""
     path = _history()
     conn = _db.connect(path)
+    # Played today: a row with no line waits for its box score a few days (GL.awaiting_line).
+    import datetime as _d
     conn.execute("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
-                 "VALUES ('nfl', 2026, '012', 'BAL@CIN', 'CIN', 'BAL', 30, 20, '2026-11-23')")
+                 "VALUES ('nfl', 2026, '012', 'BAL@CIN', 'CIN', 'BAL', 30, 20, ?)", (_d.date.today().isoformat(),))
     conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, position, home, "
                  "market, value) VALUES ('nfl', 2026, '012', 'CIN-012', 'Joe Burrow', 'CIN', 'BAL', 'QB', 1, "
                  "'anytime_td', 0)")
@@ -118,6 +120,32 @@ def test_a_game_whose_box_score_is_not_in_yet_is_no_game_played():
         "the game still to come is no game of zeros"
     assert GL.has_line("nfl", {"pass_att": 0}) and not GL.has_line("nfl", {"anytime_td": 1, "fp_ppr": 4.2})
     assert 'g.pending ? `<td class="gl-dnp" colspan="${cols.length}">Box score not in yet</td>`' in PAGE
+
+
+def test_a_game_with_no_line_long_after_it_is_one_with_no_stats():
+    """Seen live 2026-11-17: Jake Tonges' Week 1 of 2026 (10 September) read
+    "box score not in yet" two months on. A row whose box score has had its
+    days (GL.awaiting_line: four for football, two for the daily leagues) and
+    still has no line is a game the player recorded nothing in."""
+    import datetime as _d
+    path = _history()
+    conn = _db.connect(path)
+    conn.execute("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
+                 "VALUES ('nfl', 2026, '012', 'BAL@CIN', 'CIN', 'BAL', 30, 20, '2026-09-10')")
+    conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, position, home, "
+                 "market, value) VALUES ('nfl', 2026, '012', 'CIN-012', 'Joe Burrow', 'CIN', 'BAL', 'QB', 1, "
+                 "'anytime_td', 0)")
+    conn.commit()
+    conn.close()
+    d = GL.season_log("nfl", "Joe Burrow", db_path=path)
+    gone = [g for g in d["games"] if g.get("week") == 12][0]
+    assert gone.get("no_line") and not gone.get("pending") and not gone.get("dnp"), gone
+    assert d["played"] == 2, "still no game of zeros"
+    today = _d.date(2026, 11, 17)
+    assert GL.awaiting_line("nfl", "2026-11-14", today) and not GL.awaiting_line("nfl", "2026-11-12", today)
+    assert GL.awaiting_line("nba", "2026-11-15", today) and not GL.awaiting_line("nba", "2026-11-14", today)
+    assert GL.awaiting_line("nfl", "", today), "a game with no date keeps waiting"
+    assert 'g.no_line ? `<td class="gl-dnp" colspan="${cols.length}">No stats recorded</td>`' in PAGE
 
 def _college_copies(path):
     """Arch Manning's season as the live file held it on 2026-11-16: one game

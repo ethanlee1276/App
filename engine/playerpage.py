@@ -771,9 +771,13 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
         for g in by_season.get(season, {}).values():
             res = by_id.get(g["game_id"]) or by_pair.get((g["period"], frozenset((g["team"], g["opponent"]))))
             sat = not GL._played(sport, g["stats"])
+            day = _date_of(sport, g, res)
+            bare = not sat and not GL.has_line(sport, g["stats"])
+            # A row with no line waits for its box score a few days (GL.awaiting_line); past
+            # that it is a game the player recorded nothing in, not one still to come.
+            waiting = bare and GL.awaiting_line(sport, day)
             g = dict(g, home=(res["home"] == g["team"]) if res else bool(g["home"]), res=res,
-                     date=_date_of(sport, g, res), played=not sat and GL.has_line(sport, g["stats"]),
-                     pending=not sat and not GL.has_line(sport, g["stats"]))
+                     date=day, played=not sat and not bare, dnp=sat, pending=waiting, no_line=bare and not waiting)
             if res and res["hs"] is not None and res["as"] is not None:
                 mine, theirs = (res["hs"], res["as"]) if g["home"] else (res["as"], res["hs"])
                 g["result"] = "W" if mine > theirs else "L" if mine < theirs else "T"
@@ -793,6 +797,21 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                             "rank": (places.get(sp[0]) or {}).get(player) if sp[7] else None,
                             "per_game": sp[4], "low": sp[5]}
                            for sp, v in headline_specs(sport, kind, summed, gp)]
+        # GAMES ON FILE THIS SEASON AND NONE PLAYED (hurt, inactive, nothing in
+        # the box score), none still waiting for a line: the Overview shows the
+        # newest season the player did play, said as such, where it showed
+        # nothing (Jake Tonges, 2026: one game on file, no line).
+        if games and not played and not any(g["pending"] for g in games):
+            for yr in seasons:
+                past = [g for g in by_season.get(yr, {}).values()
+                        if yr < season and GL._played(sport, g["stats"]) and GL.has_line(sport, g["stats"])]
+                if past:
+                    was = _sum(past)
+                    out["prior"] = {"season": yr, "headline": [
+                        {"key": sp[0], "label": sp[1], "title": sp[2], "value": v, "rank": None,
+                         "per_game": sp[4], "low": sp[5]}
+                        for sp, v in headline_specs(sport, role(sport, position, was) or kind, was, len(past))]}
+                    break
 
         # The newest game.
         if games:
@@ -800,7 +819,7 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
             vals = {f"{k}.{c[0]}": GL.value(sport, c[3], g["stats"]) for k, _, cols in groups for c in cols}
             labels = {f"{k}.{c[0]}": (c[1], c[2]) for k, _, cols in groups for c in cols}
             last = {"date": g["date"], "opponent": g["opponent"] or "", "home": g["home"], "team": g["team"] or "",
-                    "values": vals, "dnp": not g["played"] and not g["pending"], "pending": g["pending"],
+                    "values": vals, "dnp": g["dnp"], "pending": g["pending"], "no_line": g["no_line"],
                     "tiles": [{"id": t, "label": labels[t][0], "title": labels[t][1], "value": vals.get(t)}
                               for t in TILES.get(kind, ()) if t in labels and vals.get(t) is not None]}
             if sport in GL.WEEKLY and not GL._ISO.match(g["period"]):

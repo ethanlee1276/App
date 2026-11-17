@@ -155,10 +155,12 @@ def test_a_quarterbacks_page_reads_like_espns():
 
 
 def test_a_newest_game_whose_box_score_is_not_in_yet_says_so():
+    import datetime as _d
     path, rosters = _fresh()
     conn = _db.connect(path)
+    # Played today: a row with no line waits for its box score a few days (GL.awaiting_line).
     conn.execute("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
-                 "VALUES ('nfl', 2026, '012', 'HOU@BUF', 'BUF', 'HOU', 27, 17, '2026-11-23')")
+                 "VALUES ('nfl', 2026, '012', 'HOU@BUF', 'BUF', 'HOU', 27, 17, ?)", (_d.date.today().isoformat(),))
     conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, position, home, "
                  "market, value) VALUES ('nfl', 2026, '012', 'BUF-012', 'Josh Allen', 'BUF', 'HOU', 'QB', 1, "
                  "'anytime_td', 1)")
@@ -173,7 +175,47 @@ def test_a_newest_game_whose_box_score_is_not_in_yet_says_so():
     assert d["career"]["rows"][0]["gp"] == 3 and d["career"]["total"]["gp"] == 4 and d["bio"]["games"] == 4
     assert {x["key"]: x["value"] for x in d["headline"]}["yds"] == 803
     assert 'g.pending ? `<p class="plr-dnp">The box score isn’t in yet.</p>`' in PAGE
-    assert "if (!g.dnp && !g.pending) rows.push(" in PAGE
+    assert "if (!g.dnp && !g.pending && !g.no_line) rows.push(" in PAGE
+
+
+def test_a_season_with_games_on_file_and_none_played_shows_the_last_one_played():
+    """Seen live 2026-11-17: Jake Tonges (49ers) had one 2026 game on file, 10
+    September, with no line, and the page called it "the box score isn't in
+    yet" and drew no season card. A game past its box score's days with no
+    line has no stats in it; with none played this season, the Overview shows
+    the newest season played, said as such."""
+    path, rosters = _fresh()
+    conn = _db.connect(path)
+    conn.execute("DELETE FROM player_game_logs WHERE player='Josh Allen' AND season=2026")
+    conn.execute("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
+                 "VALUES ('nfl', 2026, '001', 'BUF@LA', 'LA', 'BUF', 7, 27, '2026-09-10')")
+    conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, position, home, "
+                 "market, value) VALUES ('nfl', 2026, '001', 'BUF-001', 'Josh Allen', 'BUF', 'LA', 'QB', 0, "
+                 "'anytime_td', 0)")
+    conn.commit()
+    conn.close()
+    d = PP.page("nfl", "Josh Allen", db_path=path, data_dir=rosters)
+    last = d["last"]
+    assert (last["no_line"], last["pending"], last["dnp"]) == (True, False, False), last
+    assert d["season"] == 2026 and not [h for h in d["headline"] if h["value"]], "nothing played this season"
+    prior = d["prior"]
+    assert prior["season"] == 2025 and {h["key"]: h["value"] for h in prior["headline"]}["yds"] == 292
+    assert all(h["rank"] is None for h in prior["headline"]), "no league places for a season gone by"
+    # A game still waiting for its line holds the card back: the season may yet have numbers.
+    import datetime as _d
+    conn = _db.connect(path)
+    conn.execute("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
+                 "VALUES ('nfl', 2026, '002', 'MIA@BUF', 'BUF', 'MIA', 24, 10, ?)", (_d.date.today().isoformat(),))
+    conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, position, home, "
+                 "market, value) VALUES ('nfl', 2026, '002', 'BUF-002', 'Josh Allen', 'BUF', 'MIA', 'QB', 1, "
+                 "'anytime_td', 1)")
+    conn.commit()
+    conn.close()
+    waiting = PP.page("nfl", "Josh Allen", db_path=path, data_dir=rosters)
+    assert waiting["last"]["pending"] and "prior" not in waiting
+    assert 'g.no_line ? `<p class="plr-dnp">No stats in this game’s box score.</p>`' in PAGE
+    assert "plrSeasonHTML(d) || plrPriorHTML(d) ||" in PAGE
+    assert "No games played in ${plrSeasonLabel(d.sport, d.season)} yet; these are the numbers from the last season played." in PAGE
 
 def test_a_college_game_filed_more_than_once_counts_once_on_the_page_and_in_the_ranks():
     path, rosters = _fresh()

@@ -97,6 +97,7 @@ function glTableHTML(d) {
     const res = glResult(g);
     const cells = g.dnp ? `<td class="gl-dnp" colspan="${cols.length}">Did not play</td>`
       : g.pending ? `<td class="gl-dnp" colspan="${cols.length}">Box score not in yet</td>`
+      : g.no_line ? `<td class="gl-dnp" colspan="${cols.length}">No stats recorded</td>`
       : cols.map((c) => `<td class="num">${escapeHtml(glCell((g.values || {})[c.id], c.label))}</td>`).join("");
     return `<tr><td class="gl-fix gl-day">${glGame(g, d.sport, d.season)}</td><td class="gl-res">${res}</td>${cells}</tr>`;
   }).join("");
