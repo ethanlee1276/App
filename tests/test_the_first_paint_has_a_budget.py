@@ -381,7 +381,14 @@ APP_JS_BUDGET_KB = 290
 #: It cannot load later: the list is drawn under the search box the moment a
 #: letter is typed, and a list in a room would wait for that room first.
 #: Told to Ethan.
-BOOT_BUDGET_KB = 387
+#: 387 -> 388 on 2026-11-17: changing league on a player's page left the
+#: address at #player/<name>, so a reload or a shared link opened that name
+#: in the new league (app.js, the league buttons' handler: the hash goes back
+#: to #players with ?sport=). 18 B gz: 396,296 B, 8 over 387. It cannot live
+#: in the player page's room: the page's own watcher sees a board with no
+#: page in it while a cold address is still being looked up, and would send
+#: that address back to the list. Told to Ethan.
+BOOT_BUDGET_KB = 388
 
 
 def _gz_trimmed(rel: str) -> int:
