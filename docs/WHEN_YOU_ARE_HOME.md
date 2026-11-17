@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UJ. A command you run by hand keeps the paywall** (step 668; 17 November). Nothing to run. The paywall switch
+lives in /etc/qellys/env, which only root can read. So a build you ran as the site's user (`sudo -u qellys
+python3 futures_build.py cbb --odds`, one of the commands waiting below) could not see it, took the paywall for
+off, and wrote the full board where anyone could download it until the next restart sealed it. Now the site
+notes the setting it was started with every time it starts, and a command that cannot read the settings uses
+that note (and seals the copy if there is no note yet). Your commands stay the same.
+
 **UI. Every league's season outlook counts the games already played** (step 667; 17 November). Nothing to
 run. Since 3 August the Futures page's season simulation read the standings in a shape they are not written in,
 so every league's projection (NFL, NBA, MLB, college football, NHL) started each club at 0-0 and played out only

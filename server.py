@@ -7416,6 +7416,9 @@ def seal_on_boot() -> None:
     """
     try:
         from engine import gate as _gate
+        # First, before any board is written: what this service was started
+        # with, for a build run by hand that cannot read the settings.
+        _gate.record_state()
         if not _gate.enabled():
             return
         res = _gate.seal(web_data=WEB / "data", verbose=False)

@@ -36,6 +36,10 @@ secrets.local~
 # here — only named files under it are — so this needs saying explicitly,
 # which is exactly the hole `data/*.pre-rescale-*` below was added for.
 data/yahoo_token.json
+# The paywall flag the service was started with (engine/gate.record_state),
+# written at every boot for builds run by hand. The box's state, not code.
+data/.paywall_state
+data/.paywall_state.tmp
 
 # OS / editor
 .DS_Store

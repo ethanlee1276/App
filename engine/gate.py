@@ -586,8 +586,59 @@ ENV_ENABLED = "QB_PAYWALL"
 ENV_COMP = "QB_COMP_EMAILS"
 
 
+#: THE SERVICE'S OWN ANSWER, for a process that cannot read the settings
+#: (2026-11-17). The flag lives in /etc/qellys/env, which systemd hands
+#: the service and which no other user can read. So a build run by hand as
+#: the service's user — `sudo -u qellys python3 futures_build.py cbb
+#: --odds`, a RUN_NEXT command — saw no flag, took the paywall for off and
+#: wrote the full board onto the public path Caddy serves, where it stayed
+#: until the next restart's seal. The service writes the flag it was
+#: started with here at boot (`record_state`, from server.seal_on_boot).
+STATE_FILE = FULL_DIR.parent / ".paywall_state"
+
+
 def enabled() -> bool:
-    return os.environ.get(ENV_ENABLED, "").strip().lower() in ("1", "true", "yes")
+    raw = os.environ.get(ENV_ENABLED)
+    if raw is None:
+        return _service_said()
+    return raw.strip().lower() in ("1", "true", "yes")
+
+
+def _service_said() -> bool:
+    """An unset flag is off — except in a process that cannot read the
+    box's settings file, where unset means "not told". There the service's
+    recorded answer stands, and with no record it fails CLOSED: a board
+    sealed by mistake is put right by the service's next build of it, and
+    a board leaked by mistake is already in a stranger's cache."""
+    try:
+        from .secrets import system_env_hidden
+        hidden = system_env_hidden()
+    except Exception:                                         # noqa: BLE001
+        hidden = False
+    if not hidden:
+        return False
+    try:
+        return STATE_FILE.read_text(encoding="utf-8").strip() != "off"
+    except OSError:
+        return True
+
+
+def record_state() -> bool:
+    """The service, at boot: write the flag it was started with where a
+    hand-run tool can read it, and pin it in this process's own
+    environment so the service itself never has to ask the file. Returns
+    the flag. Never raises — a note that cannot be written is the old
+    behaviour, not an outage."""
+    on = os.environ.get(ENV_ENABLED, "").strip().lower() in ("1", "true", "yes")
+    os.environ[ENV_ENABLED] = "1" if on else "0"
+    try:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = STATE_FILE.with_name(STATE_FILE.name + ".tmp")
+        tmp.write_text("on" if on else "off", encoding="utf-8")
+        os.replace(tmp, STATE_FILE)
+    except OSError:
+        pass
+    return on
 
 
 #: THE ACCOUNT WALL (Ethan, 2026-10-25, with the Live tab open on his phone:
