@@ -41,7 +41,15 @@ API = "https://api-web.nhle.com/v1"
 KEEP_TYPES = (2, 3)
 #: States a game is over in. "OFF" is the API's settled final.
 FINAL = ("OFF", "FINAL")
-SKATER_MARKETS = ("goals", "assists", "points", "sog", "blocks", "hits", "ppg", "toi", "anytime_goal")
+SKATER_MARKETS = ("goals", "assists", "points", "sog", "blocks", "hits", "ppg", "toi", "anytime_goal",
+                  "plus_minus", "pim")
+#: The skater columns the box score carried all along and the rows began
+#: keeping on 2026-11-17 (Ethan: "the player page is missing a bunch of
+#: data"): a page's +/- and PIM. `backfill_lines` fills the games before.
+LATER_MARKETS = ("plus_minus", "pim")
+#: How old a final's cached box score may be when a fill reads it: a final
+#: does not change.
+FINAL_BOX_TTL = 365 * 86400
 GOALIE_MARKETS = ("saves", "shots_against", "goals_against", "toi", "started")
 
 
@@ -168,6 +176,7 @@ def parse_boxscore(box: dict) -> list[dict]:
                     "blocks": float(p.get("blockedShots") or 0), "hits": float(p.get("hits") or 0),
                     "ppg": float(p.get("powerPlayGoals") or 0), "toi": parse_toi(p.get("toi")),
                     "anytime_goal": 1.0 if goals >= 1 else 0.0,
+                    "plus_minus": float(p.get("plusMinus") or 0), "pim": float(p.get("pim") or 0),
                 })
         for g in block.get("goalies") or []:
             sv, sa = _saves(g)
@@ -408,6 +417,41 @@ def ingest_day(conn, date: str, scores_only: bool = False, fetch_box=fetch_boxsc
     if result["games"] or result["player_logs"]:
         db.log_ingest(conn, "nhl", "slate", date, result["games"] + result["player_logs"])
     return result
+
+
+def backfill_lines(conn, season: int, fetch_box=fetch_boxscore, fetch_person=fetch_player) -> dict:
+    """The LATER_MARKETS for a season's finals stored before the rows kept
+    them: each final whose clubs have no penalty-minutes row on its date
+    reads its box score again (the cached copy, FINAL_BOX_TTL) and stores
+    those columns alone, under the day ingest's own keys (`log_rows`).
+    Returns {"games", "rows", "skipped"}; a game already filled costs one
+    indexed query."""
+    from .. import db
+    out: dict = {"games": 0, "rows": 0, "skipped": []}
+    finals = conn.execute("SELECT period, home, away, extra FROM games WHERE sport='nhl' AND season=? "
+                          "AND home_score IS NOT NULL ORDER BY period", (int(season),)).fetchall()
+    for period, home, away, extra in finals:
+        if conn.execute("SELECT 1 FROM player_game_logs WHERE sport='nhl' AND market=? AND period=? "
+                        "AND team IN (?, ?) LIMIT 1", (LATER_MARKETS[-1], period, home, away)).fetchone():
+            continue
+        try:
+            nhl_id = (json.loads(extra or "{}") or {}).get("nhl_id")
+        except (TypeError, ValueError):
+            nhl_id = None
+        if not nhl_id:
+            continue
+        try:
+            players = [p for p in parse_boxscore(fetch_box(nhl_id, ttl=FINAL_BOX_TTL)) if not p["goalie"]]
+        except DataUnavailable as exc:
+            out["skipped"].append(f"nhl box {nhl_id}: {exc}")
+            continue
+        names = full_names(conn, {p["pid"] for p in players}, fetch=fetch_person)
+        rows = [r for r in log_rows(players, names, str(period)) if r["market"] in LATER_MARKETS]
+        if rows:
+            out["rows"] += db.upsert_player_logs(conn, rows)
+            out["games"] += 1
+    conn.commit()
+    return out
 
 
 def schedule_day(date: str, fetch_day=fetch_score) -> list[dict]:

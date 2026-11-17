@@ -289,10 +289,12 @@ def test_the_fill_reads_each_season_once_and_a_finished_one_off_the_disk():
 def test_the_server_fills_them_at_start_and_never_falls_over_on_it():
     src = (ROOT / "launch.py").read_text(encoding="utf-8")
     chores = src[src.index("def _startup_chores"):]
-    assert chores.index("_fill_football_box_lines()") < chores.index("playerpage.warm(delay=0)"), \
+    assert chores.index("_fill_missing_lines()") < chores.index("playerpage.warm(delay=0)"), \
         "the lines are in before the ranks are built on them"
-    fill = src[src.index("def _fill_football_box_lines"):src.index("def _kick_chores")]
-    assert '(("nfl", _ing.backfill_nfl_box), ("cfb", _ing.backfill_cfb_kicks))' in fill
+    fill = src[src.index("def _fill_missing_lines"):src.index("def _kick_chores")]
+    for call in ('football("nfl", _ing.backfill_nfl_box)', 'football("cfb", _ing.backfill_cfb_kicks)',
+                 "_nhl.backfill_lines(conn, int(season))"):
+        assert call in fill, call
     assert "WHERE sport=? AND market=?" in fill and "PASS_YDS" in fill, \
         "the seasons the pages show, not the games table's back to 1999"
     import launch
@@ -303,7 +305,7 @@ def test_the_server_fills_them_at_start_and_never_falls_over_on_it():
         raise OSError("disk unplugged")
     dbmod.connect = broken
     try:
-        assert launch._fill_football_box_lines() == {}
+        assert launch._fill_missing_lines() == {}
     finally:
         dbmod.connect = real
 

@@ -5072,38 +5072,53 @@ def _kick_lane(lane: str, force_settle: bool = False) -> str:
         return "started"
 
 
-def _fill_football_box_lines() -> dict:
-    """Every football season with players' games on file gets its kickers'
-    and defenders' lines: the NFL's off its weekly files
-    (engine/ingest.backfill_nfl_box), college's field goals off its play
-    files (engine/ingest.backfill_cfb_kicks). The seasons are the ones the
-    player pages show (a quarterback's passing yards, stored since the first
-    ingest), not the games table's, which reaches back to 1999. A season
-    already filled costs one query. Never raises: a page without these lines
-    is the state before, not an outage. Returns {league: what its fill did}."""
+def _fill_missing_lines() -> dict:
+    """Every column a player page draws, for the games stored before the
+    rows kept it, filled once (2026-11-17; Ethan, with Cameron Dicker's
+    empty page): the NFL's kickers' and defenders' lines off its weekly
+    files (engine/ingest.backfill_nfl_box), college's field goals off its
+    play files (engine/ingest.backfill_cfb_kicks), and the NHL season's +/-
+    and penalty minutes off its box scores (engine/sources/nhldata
+    .backfill_lines). The football seasons are the ones the player pages
+    show (a quarterback's passing yards, stored since the first ingest),
+    not the games table's, which reaches back to 1999; hockey's is the
+    season being played. A season or game already filled costs one query.
+    Never raises: a page without these columns is the state before, not an
+    outage. Returns {league: what its fill did}."""
     out: dict = {}
     try:
         from engine import db as _hdb
         from engine import ingest as _ing
         from engine.models import PASS_YDS
+        from engine.sources import nhldata as _nhl
         conn = _hdb.connect()
     except Exception as exc:                                    # noqa: BLE001
-        print(f"  ⚠️  football box lines not filled ({type(exc).__name__}: {exc})")
+        print(f"  ⚠️  player lines not filled ({type(exc).__name__}: {exc})")
         return out
+
+    def football(league, fill):
+        seasons = [int(r[0]) for r in conn.execute(
+            "SELECT DISTINCT season FROM player_game_logs WHERE sport=? AND market=?", (league, PASS_YDS))]
+        return fill(conn, seasons)
+
+    def hockey():
+        season = conn.execute("SELECT MAX(season) FROM games WHERE sport='nhl'").fetchone()[0]
+        return _nhl.backfill_lines(conn, int(season)) if season else {"games": 0, "rows": 0, "skipped": []}
+
+    fills = (("nfl", "kickers' and defenders' lines", lambda: football("nfl", _ing.backfill_nfl_box)),
+             ("cfb", "kickers' field goals", lambda: football("cfb", _ing.backfill_cfb_kicks)),
+             ("nhl", "skaters' +/- and penalty minutes", hockey))
     try:
-        for league, fill in (("nfl", _ing.backfill_nfl_box), ("cfb", _ing.backfill_cfb_kicks)):
+        for league, what, run in fills:
             try:
-                seasons = [int(r[0]) for r in conn.execute(
-                    "SELECT DISTINCT season FROM player_game_logs WHERE sport=? AND market=?", (league, PASS_YDS))]
-                got = out[league] = fill(conn, seasons)
+                got = out[league] = run()
             except Exception as exc:                            # noqa: BLE001
                 conn.rollback()
-                print(f"  ⚠️  {league.upper()} box lines not filled ({type(exc).__name__}: {exc})")
+                print(f"  ⚠️  {league.upper()} {what} not filled ({type(exc).__name__}: {exc})")
                 continue
-            if got["seasons"]:
-                print(f"  {league.upper()} kickers' and defenders' lines filled for "
-                      f"{', '.join(map(str, got['seasons']))} ({got['rows']:,} rows).")
-            for why in got["skipped"]:
+            if got["rows"]:
+                print(f"  {league.upper()} {what} filled ({got['rows']:,} rows).")
+            for why in got["skipped"][:5]:
                 print(f"  ⚠️  {why}")
     finally:
         conn.close()
@@ -12378,13 +12393,12 @@ def main() -> None:
             _WARMING = False
             print(f"  Boards built — the site is fully current "
                   f"({time.time() - _BOOT_AT:.0f}s after start).")
-        # A KICKER'S AND A DEFENDER'S LINES for every football season on file
-        # (2026-11-17; Ethan, with Cameron Dicker's empty page): filled once
-        # a season from the files already cached, before the ranks below are
-        # built on them. A season already filled costs one query, so every
-        # later restart is free; the daily and weekly pulls keep the current
-        # season's coming.
-        _fill_football_box_lines()
+        # EVERY COLUMN A PLAYER PAGE DRAWS, for games stored before the rows
+        # kept it (2026-11-17; Ethan, with Cameron Dicker's empty page):
+        # filled once from the files already cached, before the ranks below
+        # are built on them. Anything already filled costs one query, so
+        # every later restart is free; the daily pulls keep new games coming.
+        _fill_missing_lines()
         # Every league's player-page ranks, built in the background once the
         # boards are (engine/playerpage.warm), so no player's page waits
         # seconds on a cold table (measured live: MLB 4.3 s, college 4.8 s).

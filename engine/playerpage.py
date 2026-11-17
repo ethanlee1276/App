@@ -532,7 +532,7 @@ def _groups(sport: str, games) -> list:
     """The layout's groups he has a number in, and the columns the file keeps."""
     out = []
     for key, title, marks, cols in GL.LAYOUTS[sport]:
-        if not any(GL._first(g["stats"], marks) for g in games):
+        if not GL.shows(games, marks):
             continue
         kept = [c for c in cols if any(GL.value(sport, c[3], g["stats"]) is not None for g in games)]
         if kept:

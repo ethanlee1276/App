@@ -88,14 +88,23 @@ HOOPS = (
         ("fg", "FG", "Field goals made-attempted", ("made", "fgm", "fga")),
         ("fgp", "FG%", "Field goal percentage", ("pct", "fgm", "fga")),
         ("fg3", "3PT", "Three-pointers made-attempted", ("made", "fg3m", "fg3a")),
+        # The two percentages a box score prints beside its makes
+        # (2026-11-17), off the makes and tries already stored.
+        ("fg3p", "3P%", "Three-point percentage", ("pct", "fg3m", "fg3a")),
         ("ft", "FT", "Free throws made-attempted", ("made", "ftm", "fta")),
+        ("ftp", "FT%", "Free throw percentage", ("pct", "ftm", "fta")),
         ("oreb", "OREB", "Offensive rebounds", ("sum", "oreb")))),
 )
 HOCKEY = (
-    ("skater", "", ("goals", "assists", "sog", "points"), (
+    # hits and blocks too: a grinder with neither a point nor a shot played
+    ("skater", "", ("goals", "assists", "sog", "points", "hits", "blocks"), (
         ("g", "G", "Goals", ("sum", "goals")),
         ("a", "A", "Assists", ("sum", "assists")),
         ("pts", "PTS", "Points", ("sum", "points")),
+        # A skater's plus-minus and penalty minutes (2026-11-17), stored from
+        # the box score since then (engine/sources/nhldata LATER_MARKETS).
+        ("pm", "+/-", "Plus-minus", ("sum", "plus_minus")),
+        ("pim", "PIM", "Penalty minutes", ("sum", "pim")),
         ("sog", "SOG", "Shots on goal", ("sum", "sog")),
         ("blk", "BLK", "Blocked shots", ("sum", "blocks")),
         ("hit", "HIT", "Hits", ("sum", "hits")),
@@ -143,6 +152,16 @@ def _first(stats: dict, markets) -> float | None:
         if stats.get(m) is not None:
             return float(stats[m])
     return None
+
+
+def shows(games, marks) -> bool:
+    """Does a group belong on a player's page: a number other than zero in
+    any of its marks, in any game. A receiver's carries of 0 every week are
+    no rushing line, so a group of zeros stays off. But every mark counts,
+    not only the first one stored (2026-11-17): read that way, a skater with
+    no goal yet had no skater group at all, so a defenseman with assists
+    and shots all season had an empty page and game log."""
+    return any(g["stats"].get(m) for g in games for m in marks)
 
 
 def _rating(sport: str, s: dict) -> float | None:
@@ -350,7 +369,7 @@ def season_log(sport: str, player: str, season: int | None = None, db_path=None)
     # The groups this player has a number in, and the columns the file keeps.
     groups = []
     for key, title, marks, cols in layout:
-        if not any(_first(g["stats"], marks) for g in games.values()):
+        if not shows(games.values(), marks):
             continue
         kept = [c for c in cols if any(value(sport, c[3], g["stats"]) is not None for g in games.values())]
         if kept:

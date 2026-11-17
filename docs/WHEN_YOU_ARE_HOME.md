@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UN. Hockey's +/- and penalty minutes, basketball's percentages, and a skater with no goal yet** (step 672;
+17 November). Nothing to run. More of "the player page is missing a bunch of data". A real bug first: a skater
+who hadn't scored a goal yet this season had an empty page and game log, because the page chose which stats to
+show by the goals column alone, so a defenseman with assists and shots all season showed nothing. It now
+counts every column. Hockey pages also show +/- and penalty minutes (the box score always had them; the stored
+lines now keep them, and the next restart fills this season's games so far once, from the box scores already
+saved). Basketball pages (NBA, WNBA and college) show 3P% and FT% beside the makes.
+
 **UM. Kickers' and defenders' pages have their numbers** (step 671; 17 November). Nothing to run. Your note
 with Cameron Dicker's page ("the player page is missing a bunch of data"). A kicker's and a defender's pages were
 empty because the stats file was read only for the three numbers the board prices, and the page knew only
