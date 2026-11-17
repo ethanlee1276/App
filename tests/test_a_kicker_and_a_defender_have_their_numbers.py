@@ -214,7 +214,11 @@ def test_the_league_places_are_among_kickers_and_among_defenders():
 def test_a_punters_page_and_a_college_defenders_page_say_why_they_are_empty():
     assert PP.no_stats_note("nfl", "P") == ("Our NFL stats feed doesn't include punting, "
                                             "so there are no numbers to show here.")
-    assert "long snapping" in PP.no_stats_note("nfl", "LS")
+    assert PP.no_stats_note("nfl", "LS") == ("Box scores keep no numbers for long snappers, "
+                                             "so there are none to show here.")
+    for pos in ("OT", "G", "C", "OL"):
+        assert PP.no_stats_note("cfb", pos) == PP.no_stats_note("nfl", pos) == \
+            "Box scores keep no numbers for offensive linemen, so there are none to show here.", pos
     assert "college stats feed doesn't include defense" in PP.no_stats_note("cfb", "LB")
     assert PP.no_stats_note("nfl", "LB") == "" and PP.no_stats_note("nfl", "K") == "", "the NFL's feed has both"
     assert PP.no_stats_note("cfb", "PK") == "" and PP.no_stats_note("nba", "P") == ""

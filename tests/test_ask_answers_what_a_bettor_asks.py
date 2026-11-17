@@ -229,7 +229,9 @@ def test_how_often_he_goes_over_the_line():
                              "average": 97.5}
     assert _run("prop_hit_rate", player="Gibbs", stat="rush_yds", line=85)["last_5"]["push"] == 1, \
         "a push is counted, and out of the rate"
-    assert _run("prop_hit_rate", player="Gibbs", stat="sacks", line=1)["error"].startswith("the NFL stats")
+    assert _run("prop_hit_rate", player="Gibbs", stat="punting yards", line=1)["error"].startswith("the NFL stats")
+    assert _run("prop_hit_rate", player="Gibbs", stat="sacks", line=1) == {
+        "found": False, "note": "no stored Sacks games for Jahmyr Gibbs"}, "a stat held since 2026-11-17, none of his"
 
 
 def test_betting_splits_home_away_favorite_underdog():

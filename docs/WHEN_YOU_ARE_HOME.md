@@ -9348,9 +9348,9 @@ game by game and season by season. A defender's page leads with tackles, sacks, 
 defended, and the tabs add solo tackles, tackles for loss, hits on the quarterback, forced fumbles and
 touchdowns. The night of a game the box score now carries the whole line too, so a kicker's season percentage
 no longer reads 100 until the morning file lands. College kickers get their field goals from the college play
-file, which has no extra points and no tackles, so a college page shows what the file has. A punter's or long
-snapper's page, and a college defender's, now say the stats feed doesn't include those numbers instead of "No
-seasons on file yet". The first restart after this update fills every season already on file once, in the
+file, which has no extra points and no tackles, so a college page shows what the file has. Instead of "No
+seasons on file yet", a punter's page and a college defender's now say the stats feed doesn't include those
+numbers, and an offensive lineman's or long snapper's page says box scores keep none for them. The first restart after this update fills every season already on file once, in the
 background (a minute or two; the server's log says "kickers' and defenders' lines filled for ..."); after that
 it costs one quick check. Ask Qellys can answer kicker and defender questions too ("who leads the NFL in
 sacks"), and a kicker's or defender's prop page charts their recent games.

@@ -154,19 +154,27 @@ DEFENDERS = frozenset({"DEF", "LB", "ILB", "OLB", "MLB", "DE", "DT", "NT", "DL",
                        "DB", "SAF"})
 
 
-#: Football positions the stats we read carry no numbers for, by league: a
-#: page for one says so instead of "No seasons on file yet", which reads as a
-#: gap. College's play file names no tackler (engine/sources/cfbstats
-#: KICK_MARKETS), so a college defender is one.
-NO_FEED = {"nfl": {"P": "punting", "LS": "long snapping"},
-           "cfb": {"P": "punting", "LS": "long snapping", **{p: "defense" for p in DEFENDERS}}}
+#: WHY A FOOTBALL PAGE HAS NO NUMBERS, where that is the whole story: it
+#: says so instead of "No seasons on file yet", which reads as a gap.
+#: A box score keeps no line for an offensive lineman or a long snapper.
+LINEMEN = frozenset({"OL", "OT", "OG", "T", "G", "C", "IOL"})
+NO_BOX = {**{p: "offensive linemen" for p in LINEMEN}, "LS": "long snappers"}
+#: The positions a box score has numbers for and the stats we read do not,
+#: by league: no punting in either, and no tackler in college's play file
+#: (engine/sources/cfbstats KICK_MARKETS).
+NO_FEED = {"nfl": {"P": "punting"}, "cfb": {"P": "punting", **{p: "defense" for p in DEFENDERS}}}
 #: How each league's feed is named in that note.
 FEED_NAME = {"nfl": "NFL", "cfb": "college"}
 
 
 def no_stats_note(sport: str, position: str) -> str:
-    """Why a football page has no numbers, where the feed is the reason."""
-    what = NO_FEED.get(sport, {}).get(str(position or "").upper())
+    """Why a football page has no numbers, where the position is the reason."""
+    if sport not in FEED_NAME:
+        return ""
+    pos = str(position or "").upper()
+    if pos in NO_BOX:
+        return f"Box scores keep no numbers for {NO_BOX[pos]}, so there are none to show here."
+    what = NO_FEED[sport].get(pos)
     return (f"Our {FEED_NAME[sport]} stats feed doesn't include {what}, so there are no numbers to show here."
             if what else "")
 
