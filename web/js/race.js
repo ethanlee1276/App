@@ -85,12 +85,34 @@ async function renderRace() {
 
 /* ---------------- college football ---------------- */
 
-function rcSide(s, sport) {
-  if (!s) return `<div class="rc-side rc-empty">—</div>`;
-  return `<div class="rc-side">${teamMarkIn(sport, s.team, 22)}<span class="rc-seed">${s.seed}</span>
-    <b class="rc-name">${escapeHtml(s.name || s.team)}</b>
-    <span class="rc-meta">${s.rank ? `#${s.rank} · ` : ""}${escapeHtml(s.record || "")}${
-      s.bid ? ` · ${escapeHtml(s.bid)}` : ""}</span></div>`;
+/* ---------------- a bracket, drawn as one ----------------
+   BRACKET1 (2026-11-17; Ethan, on the NFL playoff race's seed lists: "the
+   playoff page should be layed out as a bracket and not this chart"). The
+   rounds left to right, each game a card centred beside the games that feed
+   it, a line from each to the game it feeds, the way a bracket is read. A
+   round is {title, groups}: each group the games that feed one game of the
+   next round, two, or one where a seed waits on a single winner. A side is
+   {team, seed, name, meta} or {tbd, meta}: who is not known yet is said in
+   words ("Lowest seed left"), never guessed. A mirrored bracket (the NFC,
+   beside the AFC where there is room) runs right to left (race.css
+   .rc-bk-mirror). */
+function rcBkSide(sport, s) {
+  const meta = s && s.meta ? `<small>${escapeHtml(s.meta)}</small>` : "";
+  if (!s || !s.team) {
+    return `<div class="rc-bk-side rc-bk-tbd"><i class="rc-bk-dot" aria-hidden="true"></i><span class="rc-bk-who"><b>${
+      escapeHtml((s && s.tbd) || "To be decided")}</b>${meta}</span></div>`;
+  }
+  return `<div class="rc-bk-side">${teamMarkIn(sport, s.team, 20)}<span class="rc-bk-who"><b><span class="rc-bk-seed">${
+    escapeHtml(String(s.seed || ""))}</span>${escapeHtml(s.name || s.team)}</b>${meta}</span></div>`;
+}
+function rcBkGameHTML(sport, g) {
+  return `<div class="rc-bk-game">${(g.sides || []).map((x) => rcBkSide(sport, x)).join("")}</div>`;
+}
+function rcBkRoundsHTML(sport, rounds, mirror) {
+  return `<div class="rc-bk-scroll"><div class="rc-bk-rounds${mirror ? " rc-bk-mirror" : ""}">${rounds.map((r) => `<div class="rc-bk-col">
+      <div class="rc-bk-colh">${escapeHtml(r.title)}</div>
+      <div class="rc-bk-games">${r.groups.map((grp) => `<div class="rc-bk-pair${grp.length === 1 ? " rc-bk-one" : ""}">${
+        grp.map((g) => rcBkGameHTML(sport, g)).join("")}</div>`).join("")}</div></div>`).join("")}</div></div>`;
 }
 
 /* THE FIELD IF IT STARTED TODAY. The four bye seeds in one column, each
@@ -105,21 +127,36 @@ function cfpBracketHTML(d) {
   const by = {};
   (t.seeds || []).forEach((s) => { by[s.seed] = s; });
   const fr = ((d.format || {}).first_round || [[5, 12], [6, 11], [7, 10], [8, 9]]);
-  // Each bye seed meets this first-round game's winner (engine/cfprace QUARTERS).
+  const side = (n) => {
+    const s = by[n];
+    return s ? { team: s.team, seed: n, name: s.name, meta: [s.rank ? `#${s.rank}` : "", s.record].filter(Boolean).join(" · ") }
+      : { tbd: `The ${n} seed` };
+  };
+  // Each bye seed meets this first-round game's winner (engine/cfprace QUARTERS), drawn in the
+  // order the semifinals pair them (SEMIS): 1 with 4's side, 2 with 3's.
   const meets = { 1: [8, 9], 2: [7, 10], 3: [6, 11], 4: [5, 12] };
+  const order = [1, 4, 2, 3];
+  const first = (n) => fr.find(([x, y]) => meets[n].includes(x) && meets[n].includes(y)) || meets[n];
+  const rounds = [
+    { title: "First round", groups: order.map((n) => {
+        const [x, y] = first(n);
+        return [{ sides: [side(x), side(y)] }];
+      }) },
+    { title: "Quarterfinals", groups: [[1, 4], [2, 3]].map((pair) => pair.map((n) => ({
+        sides: [side(n), { tbd: `${meets[n].join("/")} winner` }] }))) },
+    { title: "Semifinals", groups: [[[1, 4], [2, 3]].map((pair) => ({
+        sides: pair.map((n) => ({ tbd: `${n} v ${meets[n].join("/")} winner` })) }))] },
+    { title: "National title", groups: [[{ sides: [{ tbd: "Semifinal winner" }, { tbd: "Semifinal winner" }] }]] },
+  ];
   const poll = (d.poll || {}).name || "the poll";
   const out = (t.first_four_out || []).map((x) => `${escapeHtml(x.name || x.team)}${x.rank ? ` (#${x.rank})` : ""}`).join(", ");
   return `<div class="section-title">If it started today
       <span class="sub">— ${escapeHtml(poll)} as the ranking, today’s conference leaders as the champions.</span></div>
-    <div class="rc-brk">
-      <div class="rc-col"><div class="rc-col-h">Byes</div>
-        ${[1, 2, 3, 4].map((n) => `<div class="rc-match">${rcSide(by[n], "cfb")}
-          <span class="rc-host">meets the ${meets[n].join("/")} winner</span></div>`).join("")}</div>
-      <div class="rc-col"><div class="rc-col-h">First round · Dec 18–19</div>
-        ${fr.map(([a, b]) => `<div class="rc-match">${rcSide(by[a], "cfb")}${rcSide(by[b], "cfb")}
-          <span class="rc-host">${by[a] ? `at ${escapeHtml(by[a].name || by[a].team)}` : ""}</span></div>`).join("")}</div>
-    </div>
-    ${out ? `<p class="rc-note">First four out: ${out}.</p>` : ""}`;
+    <div class="rc-bk-wrap"><div class="rc-bk rc-bk-solo">
+      <section class="rc-bk-conf" aria-label="The College Football Playoff if it started today">${rcBkRoundsHTML("cfb", rounds)}</section>
+    </div></div>
+    <p class="rc-note">The top four seeds wait out the first round; 5 through 12 play it on the better seed’s campus,
+      and the quarterfinals on are in the bowls.${out ? ` First four out: ${out}.` : ""}</p>`;
 }
 
 function cfpTeamsHTML(d) {
@@ -289,23 +326,60 @@ const RC_NFL_CONFS = ["AFC", "NFC"];
 
 function rcNflName(t) { return (typeof teamNameIn === "function" && teamNameIn("nfl", t)) || t; }
 
-/* IF THE SEASON ENDED TODAY: each conference's seven, the four division
-   leaders first, then the wild cards; the one bye marked; then the clubs
-   just outside and how far back of the seventh they are. */
+/* IF THE SEASON ENDED TODAY, AS A BRACKET (BRACKET1, 2026-11-17; Ethan: "the
+   playoff page should be layed out as a bracket and not this chart"). Each
+   conference's seven as the playoffs run: the 1 seed's bye, then 4 v 5, 3 v 6
+   and 2 v 7 at the better seed; the divisional round; the conference's title
+   game; and the Super Bowl between the two. The rounds after the first say
+   who meets whom, not who wins: the divisional round is reseeded, the 1 seed
+   at home to the lowest seed left and the other two winners at the better
+   seed's, so its games are said that way. AFC on the left and the NFC
+   mirrored on the right where there is room, one above the other on a phone;
+   then the clubs just outside and how far back of the seventh they are. */
+function rcNflSeedSide(s) {
+  if (!s) return { tbd: "Seed open" };
+  const why = String(s.why || "").replace(/^(AFC|NFC)\s+/, "");
+  return { team: s.team, seed: s.seed, name: rcNflName(s.team), meta: `${s.record} · ${why}` };
+}
 function rcNflSeedsHTML(d) {
   const t = d.today || {};
+  const conf = (c) => {
+    const by = {};
+    ((t[c] || {}).seeds || []).forEach((s) => { by[s.seed] = s; });
+    const rounds = [
+      { title: "Wild Card", groups: [
+          [{ sides: [rcNflSeedSide(by[1]), { tbd: "Bye", meta: "rests this round" }] },
+           { sides: [rcNflSeedSide(by[4]), rcNflSeedSide(by[5])] }],
+          [{ sides: [rcNflSeedSide(by[3]), rcNflSeedSide(by[6])] },
+           { sides: [rcNflSeedSide(by[2]), rcNflSeedSide(by[7])] }]] },
+      { title: "Divisional", groups: [[
+          { sides: [by[1] ? { team: by[1].team, seed: 1, name: rcNflName(by[1].team), meta: "at home" } : { tbd: "The 1 seed" },
+                    { tbd: "Lowest seed left" }] },
+          { sides: [{ tbd: "Wild Card winner" }, { tbd: "Wild Card winner" }] }]] },
+      { title: `${c} title game`, groups: [[{ sides: [{ tbd: "Divisional winner" }, { tbd: "Divisional winner" }] }]] },
+    ];
+    return `<section class="rc-bk-conf rc-bk-${c.toLowerCase()}" aria-label="${escapeHtml(`${c} if the season ended today`)}">
+      <div class="rc-bk-k">${c}</div>${rcBkRoundsHTML("nfl", rounds, c === "NFC")}</section>`;
+  };
+  const hunt = RC_NFL_CONFS.map((c) => {
+    const h = (t[c] || {}).hunt || [];
+    // "Back" is games behind the 7 seed (engine/nflrace back()); said in full once, then short.
+    const back = (b, first) => (b == null ? "" : b > 0 ? `, ${b} game${b === 1 ? "" : "s"} back${first ? " of the 7 seed" : ""}`
+      : `, level${first ? " with the 7 seed" : ""}`);
+    return h.length ? `<p class="rc-note"><b>Just outside in the ${c}:</b> ${h.map((x, i) =>
+      `${escapeHtml(rcNflName(x.team))} ${escapeHtml(x.record)}${back(x.back, !i)}`).join("; ")}.</p>` : "";
+  }).join("");
   return `<div class="section-title">If the season ended today
       <span class="sub">— the four division leaders seeded 1–4, then the three best records left. Only the 1 seed rests the first weekend.</span></div>
-    <div class="rc-brk">${RC_NFL_CONFS.map((c) => {
-      const conf = t[c] || {};
-      const hunt = conf.hunt || [];
-      return `<div class="rc-col"><div class="rc-col-h">${c}</div>
-        <div class="rc-match">${(conf.seeds || []).map((s) => `<div class="rc-side">${teamMarkIn("nfl", s.team, 22)}<span class="rc-seed">${s.seed}</span>
-          <b class="rc-name">${escapeHtml(rcNflName(s.team))}</b>
-          <span class="rc-meta">${escapeHtml(s.record)} · ${escapeHtml(s.why)}${s.seed === 1 ? " · the bye" : ""}</span></div>`).join("")}</div>
-        ${hunt.length ? `<p class="rc-note">In the hunt: ${hunt.map((h) => `${escapeHtml(rcNflName(h.team))} ${escapeHtml(h.record)}${
-          h.back != null ? ` (${h.back > 0 ? `${h.back} back` : "level"})` : ""}`).join(", ")}.</p>` : ""}</div>`;
-    }).join("")}</div>`;
+    <div class="rc-bk-wrap"><div class="rc-bk">
+      ${conf("AFC")}
+      <section class="rc-bk-sb" aria-label="The Super Bowl"><div class="rc-bk-k">Super Bowl</div>${rcBkRoundsHTML("nfl",
+        [{ title: "Neutral site", groups: [[{ sides: [{ tbd: "AFC champion" }, { tbd: "NFC champion" }] }]] }])}</section>
+      ${conf("NFC")}
+    </div></div>
+    <p class="rc-note">Every game is at the better seed’s home until the Super Bowl. The divisional round is reseeded:
+      the 1 seed hosts the lowest seed left, and the other two winners meet.</p>
+    ${hunt}`;
 }
 
 /* One conference's race: every club, best chance first, each one's games

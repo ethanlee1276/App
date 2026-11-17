@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UB. The playoff race is drawn as a bracket** (step 660; 17 November). Nothing to run. Your ask, over the NFL's
+seed lists: "the playoff page should be layed out as a bracket and not this chart". The NFL's "If the season ended
+today" and college football's "If it started today" are now brackets. The NFL's: each conference as the playoffs run,
+the 1 seed beside its bye and then 4 v 5, 3 v 6 and 2 v 7 in the Wild Card column, each club with its logo, seed, record
+and why it is in ("6-0 · North leader", "5-1 · Wild card"); then the divisional round, the conference title game and the
+Super Bowl, with thin lines joining every game to the one its winner plays next. The rounds after the first say who
+meets whom in words ("Lowest seed left", "Wild Card winner"), never a guessed winner, and a note says the divisional
+round is reseeded. On a computer the AFC runs left to right, the Super Bowl sits in the middle and the NFC is mirrored on
+the right, the way a printed bracket looks; on a phone the AFC, the NFC and the Super Bowl stack, each swiping sideways
+through its rounds with the next round peeking in, so no name is squeezed. Under it the clubs just outside are listed
+per conference with how far back of the 7 seed they are ("Just outside in the AFC: Bengals 5-5, 1 game back of the 7
+seed; Colts 5-5, level"). College football's twelve draw the same way: the four first-round games on the better seed's
+campus, each feeding the bye seed it meets (8/9 to the 1, 5/12 to the 4, 7/10 to the 2, 6/11 to the 3), the
+quarterfinals, the semifinals (the 1 and 4 sides, the 2 and 3 sides) and the title game, with the first four out under
+it. The bracket shows to everyone; the chances below it stay a member's.
+
 **UA. Every finished game marks its picks and parlays** (step 659; 17 November). Nothing to run. Your ask, on Report
 Picks → How our reports did: "I wanna be able too see each parlay and pick on this page along side and x or checkmark if
 the whole parlay hit and if the individual picks hit". Every finished game on that list now shows, under its checks, a

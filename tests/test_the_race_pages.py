@@ -171,7 +171,7 @@ def test_the_nfl_race_for_a_member_and_for_a_reader_without_a_plan():
     d = _nfl()
     html = _render("nflHTML", d)
     assert "If the season ended today" in html and "The race" in html and "The divisions" in html
-    assert "member-lock" not in html and "In the hunt:" in html
+    assert "member-lock" not in html and "Just outside in the AFC:" in html and "back of the 7 seed" in html
     top = d["teams"][0]["team"]
     c = d["chances"][top]["playoffs"]
     assert (f"{round(c * 100)}%" if 0.005 <= c <= 0.995 else ">99%") in html
