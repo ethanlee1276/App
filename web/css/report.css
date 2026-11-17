@@ -191,7 +191,11 @@
    2026-11-17): what landed on the injury report and in the news since the
    report was written, over the report, and the report's own news list. The
    move's colour is its meaning: out red, questionable amber, cleared green. */
-.gr-watch { margin: 0 0 var(--sp-3); padding: var(--sp-3); border-left: 3px solid var(--warn); }
+/* Light from the left edge, the house's stripe (test_no_hard_lines), over the card's own wash. */
+.gr-watch { margin: 0 0 var(--sp-3); padding: var(--sp-3);
+  --tone: var(--warn);
+  --grad-tone: linear-gradient(90deg, color-mix(in oklab, var(--tone) 15%, transparent), transparent 60%);
+  background-image: var(--grad-tone), var(--grad-card); }
 .gr-watch-h { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2);
   margin-bottom: var(--sp-2); }
 .gr-watch-h span { color: var(--text-mute); font-size: var(--fs-xs); white-space: nowrap; }
@@ -209,5 +213,6 @@
 .gr-news a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .gr-news-src { display: block; color: var(--text-mute); font-size: var(--fs-xs); }
 .gr-news-flag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: var(--radius-sm);
-  font-size: var(--fs-xs); font-weight: 700; color: var(--warn); border: 1px solid currentColor; }
+  font-size: var(--fs-xs); font-weight: 700; color: var(--warn);
+  background: color-mix(in oklab, currentColor 12%, transparent); }
 .gr-news-flag.roster { color: var(--text-mute); }
