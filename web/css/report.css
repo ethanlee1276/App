@@ -206,6 +206,8 @@
 .gr-watch-ups li.up { color: var(--good); }
 .gr-watch-ups .gr-name { color: inherit; font-weight: 700; }
 .gr-watch-team { color: var(--text-mute); font-size: var(--fs-xs); }
+/* A move on a player the report bets on: the bet, said under the move. */
+.gr-watch-stake { display: block; margin-top: 2px; color: var(--text); font-size: var(--fs-xs); }
 .gr-watch-quiet { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--sp-3);
   color: var(--text-mute); font-size: var(--fs-xs); }
 .gr-news { margin: var(--sp-1) 0; padding-left: 1.1em; }

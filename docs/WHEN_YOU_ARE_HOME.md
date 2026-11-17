@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VV. The watch card names the report's bets a move touches** (step 706; 17 November). Nothing to run. The
+card at the top of a game report ("Since this report was written") listed who moved on the injury report since the
+report was built. Now, when the player who moved is in one of that report's own bets (a pick, a read's pick, a
+parlay's leg), the card says which, under the move: "In this report: Travis Kelce over 4.5 receptions; Parlay 1:
+Travis Kelce over 4.5 receptions (its backup: Noah Gray over 1.5 receptions). Wait for the next update before
+betting these." A player cleared to play gets no warning. The next build (about half an hour) takes the move
+into the report itself; this covers the minutes between.
+
 **VU. MLB player pages carry the whole batting and pitching line** (step 705; 17 November). One command, once
 (RUN_NEXT 00l). You said "yes build it all" to the full lines. An MLB player's page and game log now show what a
 box score prints: a hitter's PA, AB, R, H, 2B, 3B, HR, RBI, BB, SO, SB and TB with AVG, OBP, SLG and OPS, and a

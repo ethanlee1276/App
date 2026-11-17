@@ -4,6 +4,12 @@
     {
       "date": "2026-11-17",
       "kind": "ship",
+      "title": "The watch card names the bets a move touches",
+      "body": "When a player moves on the injury report after a game’s report was written, the card at the top now says which of that report’s picks and parlay legs name them, with the parlay’s backup leg, and to wait for the next update before betting it."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "ship",
       "title": "MLB player pages carry the whole box-score line",
       "body": "An MLB player’s page and game log now show the full line a box score prints: AB, R, H, 2B, 3B, HR, RBI, BB, SO, SB and total bases with AVG, OBP, SLG and OPS for a hitter, and innings, hits, runs, earned runs, walks, strikeouts, homers, pitches and the decision with ERA and WHIP for a pitcher. The game log’s rates read as the season through each game, and a hitter’s page leads with AVG, HR, RBI and OPS, a pitcher’s with ERA, strikeouts, WHIP and innings, each ranked in the league."
     },

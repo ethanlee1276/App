@@ -700,7 +700,33 @@
     if (now === "active") return was ? `cleared to play (was ${was})` : "cleared to play";
     return `${was ? `${was} to ${now}` : `newly listed ${now}`}${u.injury ? ` (${String(u.injury).toLowerCase()})` : ""}`;
   }
-  function watchCardHTML(w, since) {
+  /* WHAT A MOVE TOUCHES (2026-11-17). A player ruled out at noon may be in
+     the report's own bets: its picks, a read's pick, a parlay's leg. The card
+     names each beside the move, with the parlay's backup leg for that player
+     where the ticket has one, so a reader does not bet a pick the next update
+     will change. Keyed by the name's slug, as the page's player links are. */
+  function stakesOf(r) {
+    const out = new Map();
+    const put = (name, line) => {
+      const k = slugify(name || "");
+      if (!k || !line) return;
+      if (!out.has(k)) out.set(k, []);
+      if (!out.get(k).includes(line)) out.get(k).push(line);
+    };
+    ((r && r.sections) || []).forEach((s) => ((s && s.blocks) || []).forEach((b) => ((b && b.items) || []).forEach((it) => {
+      if (!it) return;
+      if (b.type === "parlays") {
+        (it.legs || []).forEach((l) => {
+          if (!l || !l.player) return;
+          const lead = `If ${l.player} is out or that number moves: `;
+          const backup = (it.backups || []).find((x) => String(x).startsWith(lead));
+          put(l.player, `${it.title}: ${l.pick}${backup ? ` (its backup: ${String(backup).slice(lead.length)})` : ""}`);
+        });
+      } else if (it.player && it.pick) put(it.player, it.pick);
+    })));
+    return out;
+  }
+  function watchCardHTML(w, since, stakes) {
     const t0 = Date.parse(since || "") || 0;
     const fresh = (x) => (Date.parse(x.at || "") || 0) > t0;
     const ups = (w.updates || []).filter(fresh).slice(0, 5);
@@ -715,9 +741,14 @@
       : /active/i.test(u.to || "") ? "up" : "warn";
     return `<div class="card gr-watch" role="status">
       <div class="gr-watch-h"><b>Since this report was written</b>${when ? `<span>${escapeHtml(when)}</span>` : ""}</div>
-      ${ups.length ? `<ul class="gr-watch-ups">${ups.map((u) => `<li class="${tone(u)}"><span class="gr-name" data-open="player:${
-        escapeAttr(slugify(u.player || ""))}">${escapeHtml(u.player || "")}</span> <span class="gr-watch-team">${
-        escapeHtml(u.team || "")}</span> ${escapeHtml(moveWords(u))}</li>`).join("")}</ul>` : ""}
+      ${ups.length ? `<ul class="gr-watch-ups">${ups.map((u) => {
+        const bets = tone(u) === "up" ? [] : ((stakes && stakes.get(slugify(u.player || ""))) || []);
+        return `<li class="${tone(u)}"><span class="gr-name" data-open="player:${
+          escapeAttr(slugify(u.player || ""))}">${escapeHtml(u.player || "")}</span> <span class="gr-watch-team">${
+          escapeHtml(u.team || "")}</span> ${escapeHtml(moveWords(u))}${bets.length
+          ? `<span class="gr-watch-stake">In this report: ${bets.map(escapeHtml).join("; ")}. Wait for the next update
+            before betting ${bets.length > 1 ? "these" : "it"}.</span>` : ""}</li>`;
+      }).join("")}</ul>` : ""}
       ${news.length ? newsListHTML(news) : ""}
     </div>`;
   }
@@ -785,7 +816,7 @@
         solo ? "" : `<button type="button" class="btn ghost" data-gr-share="${escapeAttr(r.game)}">Share this game</button>`}${
         folded ? `<button type="button" class="btn ghost" data-gr-all="1">Open every section</button>` : ""}</div>`;
     // The watch's newest, over the report, until the game is under way.
-    const watch = extras && extras.watch && !CLOSED && !solo ? watchCardHTML(extras.watch, r.watch_at) : "";
+    const watch = extras && extras.watch && !CLOSED && !solo ? watchCardHTML(extras.watch, r.watch_at, stakesOf(r)) : "";
     return `<div${solo ? "" : ' id="gp-sec-report"'} class="gr">${head}${tools}${watch}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
   }
 

@@ -20,6 +20,9 @@ between builds engine/reportwatch looks every five minutes. What these hold:
   - the report's own "Latest news and injury moves" says them in words, and
     the page's card at the top shows what landed after the build, read
     again while the page is open;
+  - a move on a player the report bets on (a pick, a read's pick, a parlay
+    leg) names the bet under the move, with the parlay's backup leg, and
+    says to wait for the next update; a player cleared to play does not;
   - the launcher runs the watch on its own thread.
 
     python3 tests/test_a_game_report_keeps_watch.py
@@ -27,6 +30,8 @@ between builds engine/reportwatch looks every five minutes. What these hold:
 import datetime as dt
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -204,14 +209,55 @@ def test_the_report_says_the_watch_in_words():
 
 def test_the_page_draws_the_watch_and_reads_it_again():
     assert 'if (b.type === "headlines") return newsListHTML(b.items || []);' in REPORT_JS
-    assert "function watchCardHTML(w, since)" in REPORT_JS and "Since this report was written" in REPORT_JS
-    assert "watchCardHTML(extras.watch, r.watch_at)" in REPORT_JS
+    assert "function watchCardHTML(w, since, stakes)" in REPORT_JS and "Since this report was written" in REPORT_JS
+    assert "watchCardHTML(extras.watch, r.watch_at, stakesOf(r))" in REPORT_JS
     assert 'target="_blank" rel="noopener noreferrer"' in REPORT_JS
     assert "function reportWatchFor(g, sport)" in DETAIL_JS and 'fetch("data/report_watch.json", { cache: "no-cache" })' in DETAIL_JS
     assert "const RWATCH_MS = 120000;" in DETAIL_JS
     for rule in (".gr-watch {", ".gr-watch-ups li.down", ".gr-news {", ".gr-news-flag {"):
         assert rule in CSS, rule
     assert '"watch_at": (_watch_doc() or {}).get("generated_at") or ""' in (ROOT / "engine" / "gamereport.py").read_text()
+
+
+def test_a_move_on_a_player_the_report_bets_on_names_the_bet():
+    node = shutil.which("node") or "/opt/node22/bin/node"
+    if not Path(node).exists():
+        return
+    r = {"game": "DEN@KC", "watch_at": "2026-11-22T12:00:00Z", "minutes": 4, "sections": [
+        {"key": "card", "title": "Our picks", "blocks": [{"type": "picks", "items": [
+            {"rank": 1, "player": "Isiah Pacheco", "team": "KC", "pick": "Isiah Pacheco over 62.5 rushing yards",
+             "price": "DraftKings -115", "chance": 0.58}]}]},
+        {"key": "players", "title": "Players to watch", "blocks": [{"type": "players", "items": [
+            {"player": "Travis Kelce", "team": "KC",
+             "pick": "Most Likely pick: Travis Kelce over 4.5 receptions \u2014 take it at -150"}]}]},
+        {"key": "parlays", "title": "Parlays", "blocks": [{"type": "parlays", "items": [
+            {"title": "Parlay 1", "price_line": "31% by our numbers",
+             "legs": [{"pick": "Travis Kelce over 4.5 receptions", "player": "Travis Kelce", "team": "KC"},
+                      {"pick": "Courtland Sutton over 3.5 receptions", "player": "Courtland Sutton", "team": "DEN"}],
+             "backups": ["If Travis Kelce is out or that number moves: Noah Gray over 1.5 receptions (-130, 61%)"]}]}]}]}
+    watch = {"checked_at": "2026-11-22T13:00:00Z", "news": [], "updates": [
+        {"player": "Travis Kelce", "team": "KC", "from": "Questionable", "to": "Out", "injury": "Ankle",
+         "at": "2026-11-22T12:30:00Z"},
+        {"player": "Courtland Sutton", "team": "DEN", "from": "Questionable", "to": "Active",
+         "at": "2026-11-22T12:40:00Z"},
+        {"player": "Isiah Pacheco", "team": "KC", "from": "", "to": "Questionable", "at": "2026-11-22T11:00:00Z"}]}
+    js = ("const vm = require('vm'); const fs = require('fs');"
+          "const esc = (s) => String(s == null ? '' : s).replace(/[&<>\"']/g, (c) => '&#' + c.charCodeAt(0) + ';');"
+          "const ctx = { window: {}, escapeHtml: esc, escapeAttr: esc, icon: () => '', playerAvatar: () => '',"
+          " slugify: (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-'), teamName: (t) => t };"
+          "vm.createContext(ctx);"
+          f"vm.runInContext(fs.readFileSync({json.dumps(str(ROOT / 'web' / 'js' / 'report.js'))}, 'utf8'), ctx);"
+          f"const html = ctx.window.QBReport.html({json.dumps(r)}, {{ watch: {json.dumps(watch)}, sport: 'nfl' }});"
+          "const card = html.slice(html.indexOf('gr-watch'), html.indexOf('gr-card'));"
+          "process.stdout.write(JSON.stringify(card.split('<li').slice(1)));")
+    out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr[-1500:]
+    kelce, sutton = json.loads(out.stdout)
+    assert ("In this report: Most Likely pick: Travis Kelce over 4.5 receptions \u2014 take it at -150; Parlay 1: "
+            "Travis Kelce over 4.5 receptions (its backup: Noah Gray over 1.5 receptions (-130, 61%)). Wait for the "
+            "next update") in " ".join(kelce.split()), kelce
+    assert "before betting these." in " ".join(kelce.split())
+    assert "cleared to play" in sutton and "In this report" not in sutton, "a player cleared to play needs no warning"
 
 
 def test_the_launcher_runs_the_watch_on_its_own_thread():
