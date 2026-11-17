@@ -452,10 +452,22 @@ def ingest_day(conn, date: str, league: str = "wnba",
     # Warriors could never meet a games row filed under "GS". The WNBA's
     # rows are left as they have always been stored.
     club = ((lambda t: _divisions.canonical("nba", t)) if league == "nba" else (lambda t: t))
+    from .. import hoopsexhibitions as _exh
     for g in games:
         if g.get("preseason"):
             continue                # never a result, never a player's form
         g = dict(g, home=club(g["home"]), away=club(g["away"]))
+        # A LEAGUE'S GAME, BOTH SIDES ITS CLUBS (2026-11-17). ESPN files the
+        # WNBA's All-Star Game ("SPO" against "COOP", 129-122) and an
+        # exhibition against Nigeria's national team as games of the season,
+        # and their box scores counted in every player's averages, form and
+        # hit rates. Said, so a club that joins the league before
+        # engine/divisions lists it shows up here (engine/hoopsexhibitions
+        # removes what was stored before).
+        if league in _exh.LEAGUES and not _exh.league_game(league, g["home"], g["away"]):
+            result["skipped"].append(f"{league} {g['game_id']} {date}: {g['away']} at {g['home']} is not two "
+                                     f"{league.upper()} clubs (an All-Star or exhibition game); not stored")
+            continue
         grows.append({
             "sport": league, "season": _season_of(date, league), "period": date,
             "game_id": g["game_id"], "home": g["home"], "away": g["away"],

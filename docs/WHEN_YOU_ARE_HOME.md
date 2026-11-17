@@ -9338,6 +9338,27 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VI. Any time: take the All-Star and exhibition games out of the NBA's and the WNBA's history** (step 693; 17
+November). Two commands, seconds each. Checking the live player pages, Caitlin Clark's 2026 game log held 47 games
+and a club called "SPO": ESPN files the WNBA's All-Star Game (25 July, "SPO" against "COOP", 129-122) and an
+exhibition against Nigeria's national team (2 May, 105-57) as games of the season, so the nightly kept their box
+scores, and every number read off a player's games counted them: the page's averages and league places, the
+boards' recent form and hit rates, the Game Log, and the Nigeria game as a win in Indiana's record. The nightly
+now stores a game only when both sides are the league's own clubs, and says what it leaves out. The first command
+lists what was stored before (each game's day, sides and how many players' lines) and writes nothing; paste it
+back. The second removes them:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.hoopsexhibitions
+```
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.hoopsexhibitions --apply
+```
+
+If the list holds a real club (one that joined a league and is not yet in engine/divisions), don't run the second;
+tell me which, and it goes into the table first.
+
 **VH. Optional, any time: fill the WNBA pages' shooting numbers** (step 692; 17 November). One command, a few
 minutes. The basketball box scores have kept shots (field goals, threes and free throws made and tried) since 20
 October, and the WNBA's 2026 season ended before that, so its pages have no FG%, 3P% or FT% (step VF puts minutes
