@@ -27207,8 +27207,11 @@ const PANE_DETAILS = ["prop", "game", "team", "pbp"];
 const PANE_LISTS = ["likely", "recommended", "tonight", "live", "edge", "props", "longshots", "players"];
 let _paneList = "";
 function paneSplit(name, leaving) {
-  const on = !!(window.matchMedia && matchMedia(TWO_PANE_MQ).matches) && PANE_DETAILS.includes(name);
-  _paneList = !on ? "" : PANE_LISTS.includes(leaving) ? leaving : PANE_DETAILS.includes(leaving) ? _paneList : "";
+  // A player's page (the address names one) is a detail, as the pick page it replaced was: a tapped pick opens there.
+  const detail = (v) => PANE_DETAILS.includes(v) || (v === "players" && !!state.playerSlug);
+  const on = !!(window.matchMedia && matchMedia(TWO_PANE_MQ).matches) && detail(name);
+  _paneList = !on ? "" : leaving === name || PANE_DETAILS.includes(leaving) ? _paneList
+    : PANE_LISTS.includes(leaving) ? leaving : "";
   document.querySelectorAll(".view.pane-list").forEach((v) => v.classList.remove("pane-list"));
   const list = _paneList && document.getElementById(`view-${_paneList}`);
   if (list) list.classList.add("pane-list");

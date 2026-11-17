@@ -170,27 +170,28 @@ def test_in_a_browser_each_shape_and_posture():
                 assert bar[3] <= 64, bar
                 assert page.evaluate("getComputedStyle(document.querySelector('.tb-item')).fontSize") == "0px"
                 ctx.close()
-                # The Duo on its side: the board stays beside the pick; folded, the pick is the page.
+                # The Duo on its side: the board stays beside the pick; folded, the pick is the page. A tapped
+                # pick opens the player's page, the pick heading it (2026-11-17), so that is the detail pane.
                 ctx, page, errors = open_page(browser, 951, 543)
                 page.click("#view-likely .ob-card .ob-who")
                 page.wait_for_timeout(900)
                 state = "() => ({two: document.body.classList.contains('two-pane'), active: document.querySelector('.view.active').id, list: (document.querySelector('.view.pane-list') || {}).id || ''})"
-                assert page.evaluate(state) == {"two": True, "active": "view-prop", "list": "view-likely"}
-                left, det = page.evaluate(rect, "#view-likely"), page.evaluate(rect, "#view-prop")
+                assert page.evaluate(state) == {"two": True, "active": "view-players", "list": "view-likely"}
+                left, det = page.evaluate(rect, "#view-likely"), page.evaluate(rect, "#view-players")
                 assert left[2] >= 300 and det[0] >= left[0] + left[2] - 1, (left, det)
                 page.click("#view-likely .ob-card:nth-of-type(2) .ob-who")
                 page.wait_for_timeout(700)
                 assert page.evaluate(state)["list"] == "view-likely", "the next pick replaces the right pane"
                 page.set_viewport_size({"width": 382, "height": 580})
                 page.wait_for_timeout(500)
-                assert page.evaluate(state) == {"two": False, "active": "view-prop", "list": ""}
+                assert page.evaluate(state) == {"two": False, "active": "view-players", "list": ""}
                 assert not errors, errors
                 ctx.close()
                 # A Surface Duo folded like a book: the panes meet at the hinge.
                 ctx, page, _e = open_page(browser, 1114, 720, ("vertical", 540, 34))
                 page.click("#view-likely .ob-card .ob-who")
                 page.wait_for_timeout(900)
-                left, det = page.evaluate(rect, "#view-likely"), page.evaluate(rect, "#view-prop")
+                left, det = page.evaluate(rect, "#view-likely"), page.evaluate(rect, "#view-players")
                 assert (round(left[0]), round(left[2]), round(det[0]), round(det[2])) == (0, 540, 574, 540), (left, det)
                 ctx.close()
                 # A Flip on the table: the page above, the controls filling the bottom half.
