@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VW. The player page draws the player's charts again, and its tables' pinned column is solid** (step 707;
+17 November). Nothing to run. You sent Jalon Daniels' page: "We should still have the players route charts and
+pass charts and shit on the player page", and its Recent games table: "fix this how it's transparent and u can see
+through it". Since a tapped pick opens the player page, the charts the pick page drew in place were only behind
+the Charts button on the market card. The Overview now draws them itself, under the last game: a receiver's route
+chart, a passer's throws, a back's carries, a kicker's kicks, a hitter's spray chart, a pitcher's pitches, a
+shooter's shots and a skater's or a goalie's shot map, for the market you came for (the tapped pick's, else
+tonight's first priced one, with the matchup against tonight's opponent) or the one the player's role leads with.
+A college passer gets their runs (college keeps no throw locations), and a defender or a lineman, who has no
+chart, gets none. In every stat table the game column that stays put while the numbers scroll was see-through: on
+the player page at night it was the cards' glass, and a tapped row swapped it for a near-clear tint, so the
+scrolled numbers showed through it. It is solid now everywhere (on the player page, the glass over the club's
+colour), and a tapped row's tint sits on top of it.
+
 **VV. The watch card names the report's bets a move touches** (step 706; 17 November). Nothing to run. The
 card at the top of a game report ("Since this report was written") listed who moved on the injury report since the
 report was built. Now, when the player who moved is in one of that report's own bets (a pick, a read's pick, a

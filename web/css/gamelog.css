@@ -55,8 +55,17 @@
 .gl-groups th { text-align: center; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: .08em; text-transform: uppercase; }
 /* The game (the week or the day, the opponent and where) stays put while the
-   result and the stats scroll beside it, so a phone keeps its room for numbers. */
-.gl-table .gl-fix { position: sticky; left: 0; z-index: 1; background: var(--panel); }
+   result and the stats scroll beside it, so a phone keeps its room for numbers.
+   SOLID, NOT GLASS (2026-11-17; Ethan, a screenshot of a player page's Recent
+   games: "fix this how it's transparent and u can see through it"). The cards
+   are glass at night on the player page (playerpage.css), and a tapped row's
+   tint is a wash of white: each let the numbers scrolled under the column show
+   through it. The column is the panel laid over the page's own ground, opaque
+   wherever it is drawn, and a tapped row lays its tint over that. */
+.gl-table .gl-fix { position: sticky; left: 0; z-index: 1;
+  background: linear-gradient(var(--panel), var(--panel)), var(--bg); }
+.agate.gl-table tbody tr:hover td.gl-fix {
+  background: linear-gradient(var(--fill-subtle), var(--fill-subtle)), linear-gradient(var(--panel), var(--panel)), var(--bg); }
 .gl-day b { display: block; font-weight: 600; }
 .gl-day span { display: flex; align-items: center; gap: 4px; color: var(--text-mute); font-size: var(--fs-xs); }
 /* The other club's mark beside its name, as a schedule on ESPN draws it. */

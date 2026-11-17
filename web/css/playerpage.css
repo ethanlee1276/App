@@ -156,6 +156,15 @@ html:not([data-theme="light"]) body.plr-on #view-players {
   --grad-card: none;
   --glow-card: none;
   --glow-soft: none; }
+/* The pinned game column on the glass (gamelog.css .gl-fix, solid since 2026-11-17: the numbers scrolled under
+   it showed through). The wash behind the cards is fixed to the screen, so no one colour matches it as the page
+   scrolls; the column is the glass over the club's colour mixed into the ground, as the wash reads at the card's
+   left edge, and a tapped row lays its tint over that. */
+html:not([data-theme="light"]) body.plr-on #view-players .gl-table .gl-fix {
+  background: linear-gradient(var(--panel), var(--panel)), color-mix(in oklab, var(--pw-1) 48%, var(--bg)); }
+html:not([data-theme="light"]) body.plr-on #view-players .agate.gl-table tbody tr:hover td.gl-fix {
+  background: linear-gradient(var(--fill-subtle), var(--fill-subtle)), linear-gradient(var(--panel), var(--panel)),
+    color-mix(in oklab, var(--pw-1) 48%, var(--bg)); }
 /* Less transparency or more contrast asked for (styles.css's own rule for the bars): the cards keep the
    theme's solid panels over the colours instead of the glass. */
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {

@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-17",
+      "kind": "fix",
+      "title": "The player page draws the charts, and its tables’ first column is solid",
+      "body": "A player’s page draws their charts on the Overview again, under the last game: the route chart, the throws, the carries, the spray chart, the pitches, the shots or the shot map, for the market you came for. And the game column that stays put while a table scrolls no longer lets the numbers behind it show through."
+    },
+    {
+      "date": "2026-11-17",
       "kind": "ship",
       "title": "The watch card names the bets a move touches",
       "body": "When a player moves on the injury report after a game’s report was written, the card at the top now says which of that report’s picks and parlay legs name them, with the parlay’s backup leg, and to wait for the next update before betting it."

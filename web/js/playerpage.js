@@ -154,7 +154,7 @@ function plrTabsHTML(open, sport) {
 function plrPanelsHTML(open, sport) {
   return plrTabsOf(sport).map(([k]) => `<div class="plr-panel" data-plr-panel="${k}" role="tabpanel"${k === open ? "" : " hidden"}>${
     k === "overview" ? `<div class="plr-tapped"></div><div class="plr-season"></div>${sport === "ufc" ? `<div class="plr-next"></div>`
-      : `<div class="plr-prev"></div><div class="plr-splitlet"></div>`}
+      : `<div class="plr-prev"></div><div class="plr-charts"></div><div class="plr-splitlet"></div>`}
       <div class="plr-recent"></div><div class="plr-latest"></div><div class="plr-tonight"></div>`
       : `<p class="plr-wait">Loading…</p>`}</div>`).join("");
 }
@@ -245,6 +245,38 @@ async function plrRecentInto(slot, d) {
   if (!slot.isConnected || !log || !(log.games || []).length) return;
   slot.innerHTML = `<section class="plr-card"><h3>Recent games</h3>${glTableHTML({ ...log, games: log.games.slice(0, 5), played: 0 })}
     <button class="btn plr-go" type="button" data-plr-go="log">Full game log</button></section>`;
+}
+
+/* THE PLAYER'S CHARTS, ON THE PAGE (Ethan, 2026-11-17, with Jalon Daniels' page: "We should still have the
+   players route charts and pass charts and shit on the player page"). The pick page drew them in place (app.js
+   chartSlot, js/carrychart.js `mount`); a tapped pick opens this page now, so the Overview draws them under the
+   last game, as the pick page did: for the market the reader came for (the tapped pick's, shown first in the
+   market cards), else tonight's first priced market, else the one the player's role leads with, with the
+   position and tonight's opponent, so a receiver gets the route chart, a passer the throws, a back the carries,
+   a hitter the spray chart, a pitcher the pitches, a shooter the shots and a skater or a goalie the shot map, each
+   with the matchup where an opponent is named. The chart module picks which and hides the slot when there are
+   none (a lineman, a defender). Drawn once: the minute's redraw keeps the chart and the game picked in it. */
+const PLR_CHART_MKT = { passing: "pass_yds", rushing: "rush_yds", receiving: "rec_yds", kicking: "kick_pts",
+  box: "pts", skater: "sog", goalie: "saves", batting: "hits", pitching: "strikeouts" };
+function plrChartRow(page, d) {
+  const { player, sport } = page._plr;
+  const rows = ((typeof _profRows !== "undefined" && _profRows.get(player)) || []).filter((r) => r && r.market);
+  const tab = typeof _profTab !== "undefined" ? _profTab[player] : "";
+  const priced = rows.find((r) => r.market_label === tab) || rows[0];
+  if (priced) return { ...priced, sport: priced.sport || sport, position: priced.position || d.position || "" };
+  // College keeps no passer's chart (no throw locations in its play file): a college passer's runs and role.
+  const mkt = sport === "cfb" && d.role === "passing" ? "rush_yds" : PLR_CHART_MKT[d.role] || "";
+  return mkt ? { player, sport, market: mkt, position: d.position || "", opponent: "" } : null;
+}
+function plrChartsInto(page, d) {
+  const slot = page.querySelector(".plr-charts");
+  if (!slot || typeof chartSlot !== "function" || typeof mountCharts !== "function") return;
+  const r = plrChartRow(page, d);
+  const html = r ? chartSlot(r) : "";
+  if (slot._html === html) return;
+  slot._html = html;
+  slot.innerHTML = html;
+  if (html) mountCharts(slot);
 }
 
 /* ---------------- News ---------------- */
@@ -502,6 +534,7 @@ function plrFill(page, d) {
   set(".plr-season", (d.seasons || []).length ? plrSeasonHTML(d) || plrPriorHTML(d) || (d.no_stats ? quiet(d.no_stats) : "")
     : quiet(d.no_stats || "No games on file for this player yet. A game is added once its box score is in."));
   set(".plr-prev", plrPrevHTML(d));
+  plrChartsInto(page, d);
   set(".plr-splitlet", plrSplitletHTML(d));
   set("[data-plr-panel=\"stats\"]", plrStatsHTML(d));
   set("[data-plr-panel=\"bio\"]", plrBioHTML(d));
