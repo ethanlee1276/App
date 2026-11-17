@@ -9363,8 +9363,9 @@ words ("priced by its own model, which this replay does not walk yet") instead o
 Ask left hockey off two lists: it never read hockey's live scoreboard ("score of the Rangers game") and never knew
 a hockey team named in words ("Oilers at Flames"). Both read hockey now.
 
-**VK. Hockey has its own address and is on every league list** (step 695; 17 November). Nothing to run; the
-deploy installs the Caddyfile after checking it. The app's list of leagues never carried the NHL, so
+**VK. Hockey has its own address and is on every league list** (step 695; 17 November). One command, any time
+(RUN_NEXT section 00k): the automatic update does not reinstall the front door's routing file, which hockey's
+link preview needs; the address itself already opens the NHL board. The app's list of leagues never carried the NHL, so
 qellysbook.com/nhl opened the site on another league, a shared hockey player, game or pick was read as a player
 named "nhl", "Tonight, every league" left hockey's slate out, swiping between leagues skipped it, and Settings'
 "Leagues in the nav" could not list it. A list narrowed in Settings before today keeps hockey showing until it is
