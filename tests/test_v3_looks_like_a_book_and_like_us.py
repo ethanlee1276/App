@@ -88,7 +88,7 @@ def test_the_live_card_draws_a_win_probability_bar_only_from_a_read_clock():
 def test_the_record_is_a_ribbon_with_a_ring_and_form_dots_from_its_own_rows():
     rec = _fn("recordRibbonsHTML")   # v5: one builder for the deck and the Record page
     assert 'dots(recent, "status")' in rec, "the model's last five are the scope's own settled rows"
-    assert 'dots(z.recent, "result")' in rec, "Zeno's last five are his tickets"
+    assert 'dots(z.recent, "result")' in rec, "Zeno's last five are their tickets"
     assert "const rate = (t) => ((t.wins || 0) + (t.losses || 0)) ? (t.wins || 0) / ((t.wins || 0) + (t.losses || 0)) : 0;" in rec, \
         "the ring is wins over decisions, pushes out"
     assert "if (ov.settled) {" in rec and "if (zo.settled) {" in rec, "no ribbon over nothing"

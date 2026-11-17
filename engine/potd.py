@@ -820,7 +820,7 @@ def shortfall(row: dict, min_ev=None, min_fair=None) -> str:
     # — and the reason the card prints should be the one the product is
     # about. Before the reorder it said "the price is not far enough off
     # the fair", which is an answer to a question Ethan had just told us
-    # he does not care about.
+    # they do not care about.
     fair = fair_prob(row)
     if fair is not None and fair < (MIN_FAIR if min_fair is None
                                     else float(min_fair)):

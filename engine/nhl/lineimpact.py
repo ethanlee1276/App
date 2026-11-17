@@ -1,6 +1,6 @@
 """Each forward line's and defence pair's expected goals for and against, on the ice together.
 
-Ethan, 2026-10-15, from the brainstorm he asked to have built: NHL line
+Ethan, 2026-10-15, from the brainstorm they asked to have built: NHL line
 matchups — the lines and pairs with their xGF and xGA. The board already
 reads each team's lines off the shift charts of its newest games
 (engine/nhl/lines); this reads the same games' play-by-play and counts,

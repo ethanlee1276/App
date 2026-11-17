@@ -1,6 +1,6 @@
 """Every book's line on a market, and the steam marked where they moved together.
 
-Ethan, 2026-10-15, one of the sixteen ideas he asked to have built ("do
+Ethan, 2026-10-15, one of the sixteen ideas they asked to have built ("do
 every one for every sport"): a line movement chart with every book on it
 and steam marks. Context only; nothing on the board reads it.
 

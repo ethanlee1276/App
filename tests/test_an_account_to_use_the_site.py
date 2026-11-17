@@ -1,7 +1,7 @@
 """An account to use the site, the paid side shown before it, and the ways
 from the free site into the paid one.
 
-Ethan, 2026-10-25, the Live tab open on his phone: "there should be an
+Ethan, 2026-10-25, the Live tab open on their phone: "there should be an
 option on this screen to make an account bc people need an account to use
 the site ... Look at the Real app and how they make u create an account on
 the first screen", "make sure there's [a way] to get into the paid site from

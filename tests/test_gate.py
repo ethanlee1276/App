@@ -278,7 +278,7 @@ def test_with_the_paywall_on_the_public_file_loses_the_picks():
 
 def test_a_comp_list_exists_so_the_owner_is_not_locked_out():
     """Without it the only route to an entitled account is a completed
-    Paddle checkout — which means Ethan cannot see his own board, cannot
+    Paddle checkout — which means Ethan cannot see their own board, cannot
     comp a tester, and cannot honour a refund without going through the
     processor and waiting. Read from the environment, never the database,
     so nothing reachable from the web can grant it."""

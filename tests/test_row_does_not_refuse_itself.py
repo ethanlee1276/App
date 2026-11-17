@@ -1,6 +1,6 @@
 """A likelihood row does not print the edge board's refusal of it.
 
-Ethan, 2026-09-08, with the Vikings card filling his phone: a green
+Ethan, 2026-09-08, with the Vikings card filling their phone: a green
 "67%" badge and the words "The likely side" at the top, and four lines
 below it, in red:
 

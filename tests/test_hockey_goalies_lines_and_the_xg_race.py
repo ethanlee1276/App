@@ -1,6 +1,6 @@
 """Hockey's three: the goalie board, the line matchups, and the live xG race.
 
-Ethan, 2026-10-15, three of the sixteen ideas he asked to have built ("do
+Ethan, 2026-10-15, three of the sixteen ideas they asked to have built ("do
 every one for every sport"): an NHL goalie board, line matchups with each
 line's and pair's xGF and xGA, and a live xG race. Context, all of it: the
 board already prices the goalie, and a line's on-ice record over two games

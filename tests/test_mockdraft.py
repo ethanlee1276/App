@@ -465,7 +465,7 @@ def test_the_room_is_styled():
 
 
 # --- the draft room, built to Ethan's render 2026-08-20 -----------------------
-# He sent a mock-draft mockup and asked for the page to match it. Most of it
+# They sent a mock-draft mockup and asked for the page to match it. Most of it
 # is built. Three things in it are not, and these tests are why they stay
 # out — a render is a picture and cannot be argued with, so the argument
 # lives here.

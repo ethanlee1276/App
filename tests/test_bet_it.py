@@ -287,7 +287,7 @@ def test_the_page_draws_the_button_safely_where_the_picks_are():
 
 
 def test_the_box_is_a_sheet_of_book_tiles_with_every_colour_set():
-    """Ethan, 2026-10-07, from his phone, at a black panel with one price in
+    """Ethan, 2026-10-07, from their phone, at a black panel with one price in
     it: "It should be showing a box with the Score Bets logo, FanDuel's
     logo … all the sportsbooks logos that we offer. The click button to
     take you to that sportsbook and bet the bet."

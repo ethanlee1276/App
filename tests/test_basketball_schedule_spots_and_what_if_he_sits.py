@@ -1,6 +1,6 @@
 """Basketball's two Toolbox cards: tonight's schedule spots, and what if he sits.
 
-Ethan, 2026-10-15, two of the sixteen ideas he asked to have built ("do
+Ethan, 2026-10-15, two of the sixteen ideas they asked to have built ("do
 every one for every sport"): NBA schedule flags — the back-to-back, three
 in four, the trip, the altitude, the blowout risk — context until
 measured; and a "what if he sits" toggle that moves no number unless a

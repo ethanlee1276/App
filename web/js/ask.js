@@ -47,7 +47,7 @@ function askOpenBets() {
                    legs: Array.isArray(b.legs) ? b.legs : undefined }));
 }
 
-/* THE CHAT ROOM. Ethan, 2026-09-23, the site footer circled on his phone:
+/* THE CHAT ROOM. Ethan, 2026-09-23, the site footer circled on their phone:
    "Get rid of all this shit down here and make this look more like an
    actual ai chat room." One column pinned between the top bar and the tab
    bar (askRoomSize measures it, as msgThreadSize does for a message
@@ -594,7 +594,7 @@ function askRoomSize() {
   if (log) log.scrollTop = el.classList.contains("is-empty") ? 0 : log.scrollHeight;
 }
 
-/* THE KEYBOARD. Ethan, 2026-09-23, a screenshot from his phone: "Fix how
+/* THE KEYBOARD. Ethan, 2026-09-23, a screenshot from their phone: "Fix how
    every time I click on the keyboard it makes the screen do this" — the
    box shoved up under the clock, a screen of nothing under it and the tab
    bar floating over the keys. An iPhone does not shrink the page for its

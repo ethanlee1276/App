@@ -1,7 +1,7 @@
 """No hard lines: every outline a fill or nothing, a selected chip a tint,
 edges that fade (web/css/*.css; THE BLEND's "NO HARD LINES" in styles.css).
 
-Ethan, 2026-10-27, a screenshot of his phone with the top bar and the league
+Ethan, 2026-10-27, a screenshot of their phone with the top bar and the league
 row circled: "notice how sharp all the lines are on the whole site for
 everything. I need you to fix that as well. Make everything smoother and more
 blended and just like feel more professional." What these hold:

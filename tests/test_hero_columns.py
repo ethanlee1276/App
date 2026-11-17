@@ -1,6 +1,6 @@
 """The football and baseball scoreboard has a column for every block in it.
 
-Ethan, 2026-09-06, circling the top card on his phone: "this area on the
+Ethan, 2026-09-06, circling the top card on their phone: "this area on the
 play by play screen is bugged out." The header then was five children (away
 block, away score, the state, home score, home block) and the phone rule
 lifted the state onto a row of its own while handing the other four THREE

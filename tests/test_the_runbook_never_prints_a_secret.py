@@ -79,7 +79,7 @@ def test_the_check_is_not_vacuous():
 def test_the_unanchored_form_would_be_caught():
     """MUTATION, INLINE. The exact command Ethan refused, checked against
     the rule — so a future edit that reintroduces it fails here rather
-    than on his screen."""
+    than on their screen."""
     old = "tr '\\0' '\\n' < /proc/1/environ | grep -E 'MALLOC|TZ'"
     assert "grep" in old and not re.search(r"\^\(?[A-Z_]", old), \
         "the rule stopped recognising the shape it was written for"

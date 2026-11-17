@@ -1,5 +1,5 @@
 """The iPhone app's tab bar sits low (web/css/styles.css "THE CAPSULE'S FOOT";
-Ethan, 2026-10-28, a screenshot from his iPhone with the bar circled: "this
+Ethan, 2026-10-28, a screenshot from their iPhone with the bar circled: "this
 bar should be lower on the screen").
 
 The capsule stood 8px above the home indicator's whole strip (34pt on his

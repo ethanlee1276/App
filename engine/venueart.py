@@ -83,7 +83,7 @@ def classify_incoming(names) -> dict:
     """Split ``incoming/`` into ``{"sheets": [...], "singles": [...]}``.
 
     THE DISTINCTION IS THE POINT, and the probe got it wrong on its first
-    real run. Ethan, 2026-08-14, ran `--venues` on his laptop and was told
+    real run. Ethan, 2026-08-14, ran `--venues` on their laptop and was told
     "Run `python3 tools/venues_ingest.py` to cut and install them" about
     seven files that were the ORIGINAL 2026-08-11 sources — the very
     sheets whose tiles the same output had just rejected fifteen times,
@@ -283,7 +283,7 @@ def served_by_site(app_js=None) -> list[str]:
 
     The measurement and the site can legitimately disagree. On 2026-08-14
     Ethan looked at a board of white-lit stadiums and asked for the colour
-    back knowing the tiles are off-generation, which is his call to make —
+    back knowing the tiles are off-generation, which is their call to make —
     so this reads what is SERVED rather than assuming it equals what the
     measurement endorses.
     """

@@ -1706,7 +1706,7 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
 #: in the top rows and the old watchlist had buried every audit under two
 #: hundred names a night. Then the board became the product. Ethan,
 #: 2026-09-25, with the Live tab open during Falcons-Packers: a Packers
-#: back over 9.5 rushing yards he had seen on Most Likely was nowhere on
+#: back over 9.5 rushing yards they had seen on Most Likely was nowhere on
 #: it — "it's still an issue that you have not solved."
 #:
 #: TEN WAS ROWS, NOT PICKS. The board is one list in probability order
@@ -10380,7 +10380,7 @@ def likely_is_staked(sport, conn=None) -> bool:
 #: ROI) before it was allowed to risk a penny. The likelihood boards were
 #: switched on below their own bar at Ethan's call on 2026-09-19, four of
 #: them with no settled record at all — and nothing anywhere would have
-#: told him if one of them started bleeding. He would have found out by
+#: told them if one of them started bleeding. They would have found out by
 #: reading the Record page and noticing.
 #:
 #: A promotion bar with no demotion bar is not a policy, it is an
@@ -10438,7 +10438,7 @@ def live_verdict(conn, sport, since: str | None = None) -> dict:
     place this file does not fail closed. The safe-by-default reading
     would be to stop betting when the breaker cannot see; the reason it
     does not is that Ethan asked for these boards to be staked, and a
-    database hiccup silently cancelling his bets is a surprise he did
+    database hiccup silently cancelling their bets is a surprise they did
     not agree to. The caller says out loud that the check could not run,
     which is the honest version of carrying on.
     """
@@ -12151,7 +12151,7 @@ def export_json(conn, path) -> None:
         # THE SAME SCAN, THE QUARANTINED BOOKS. Per sport, so a league's
         # scope can account for every row it placed instead of only the
         # three books it leads with — Ethan, 2026-09-19, on college
-        # football's 210 stale rows appearing nowhere he could scope to.
+        # football's 210 stale rows appearing nowhere they could scope to.
         # Never pooled into any headline: see SHADOW_SECTIONS.
         "shadow_books": book_records(conn, since=since,
                                      sections=SHADOW_SECTIONS),

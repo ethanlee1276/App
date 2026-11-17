@@ -398,7 +398,7 @@ subscribed, which is the point of quoting it, so it rides on the status
 payload outside the entitled branch. Unset, the Discord page simply drops
 the sentence that mentions it.
 
-The `+400 units` beside it is Ethan's own count of his own page, and the
+The `+400 units` beside it is Ethan's own count of their own page, and the
 page says so in those words. It is not a figure this site graded. What
 this site stands behind is the Record page, and the sentence points at it
 in the same breath — a performance number stated flatly in the site's own
@@ -474,7 +474,7 @@ nothing else.
 
 So it described a tier the site does not grant, on a page customers read
 after paying. It was never on the paywall, which is why Ethan asked what
-the free plan was and where it lived — he had been through checkout
+the free plan was and where it lived — they had been through checkout
 without ever seeing it.
 
 The Record page **is** genuinely free and stays that way (`gate.FREE_FILES`,

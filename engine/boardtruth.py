@@ -1,6 +1,6 @@
 """Does the published board say what its own data says? Checked every build.
 
-Ethan, 2026-09-25, after two claims got to his phone before anything
+Ethan, 2026-09-25, after two claims got to their phone before anything
 caught them — a scan card calling Over 109.5 at +700 (4%) Ladd McConkey's
 "likeliest over", and prices a board read an hour late still called
 "priced 4m ago": "what's next so we can keep working and making sure all

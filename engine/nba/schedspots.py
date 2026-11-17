@@ -1,6 +1,6 @@
 """Tonight's schedule spots for every NBA and WNBA team: context, not a price.
 
-Ethan, 2026-10-15, from the brainstorm he asked to have built ("do every
+Ethan, 2026-10-15, from the brainstorm they asked to have built ("do every
 one for every sport"): NBA schedule flags — the back-to-back, three games
 in four nights, the trip, the altitude, the blowout risk. CONTEXT ONLY
 UNTIL MEASURED: the minutes model already prices the rest buckets it was

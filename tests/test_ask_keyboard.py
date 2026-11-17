@@ -1,6 +1,6 @@
 """The Ask page with the keyboard up: the chat sits above the keys.
 
-Ethan, 2026-09-23, a screenshot from his phone with the keyboard open —
+Ethan, 2026-09-23, a screenshot from their phone with the keyboard open —
 the message box shoved up under the clock, a screen of nothing below it
 and the tab bar floating over the keys: "Fix how every time I click on
 the keyboard it makes the screen do this."

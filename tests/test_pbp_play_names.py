@@ -16,7 +16,7 @@ sentence ESPN wrote.
 THE FIRST CUT SHIPPED THAT SENTENCE AND WAS WRONG TO. `docs/LAUNCH.md`
 says of ESPN: "Assume no right", and this repo already had a test —
 `test_prose_never_reaches_a_deep_file` — holding the module to composing
-rows from the numbers beside the prose. Ethan drew the line himself: "Ok
+rows from the numbers beside the prose. Ethan drew the line themselves: "Ok
 dont use there exact sentence then. We can still use that idea tho too
 push free information the public can view."
 

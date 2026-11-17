@@ -1,6 +1,6 @@
 """Our own expected average and slugging, measured before they touch a pick.
 
-Ethan, 2026-10-13, on the list he said yes to ("Yes do all of them"):
+Ethan, 2026-10-13, on the list they said yes to ("Yes do all of them"):
 "MLB expected stats: once batted balls are stored, we could build our own
 expected batting average and slugging from exit velocity and launch angle,
 as we did for NHL expected goals. I'd test it before it touches a pick."

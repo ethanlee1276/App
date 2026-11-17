@@ -65,7 +65,7 @@ def test_the_measured_transfer_moves_the_projection():
     # hoopsdvpfit.py on the box, 2026-09-27: the NBA's whole lean in every
     # stat, the WNBA's 78-100% — capped at the whole lean, never more.
     # Steals, blocks and turnovers joined 2026-10-14, measured on the box and
-    # read in on Ethan's yes (pin widened that night and told to him).
+    # read in on Ethan's yes (pin widened that night and told to them).
     assert H.TRANSFER["nba"] == {"pts": 1.0, "reb": 1.0, "ast": 1.0, "fg3m": 1.0,
                                  "stl": 1.0, "blk": 0.96, "tov": 1.0}
     assert H.TRANSFER["wnba"] == {"pts": 0.79, "reb": 0.78, "ast": 1.0, "fg3m": 0.89}

@@ -284,7 +284,7 @@ def test_the_wall_hides_the_strip_too():
 
 
 def test_the_strip_is_chrome_and_the_page_keeps_the_pills():
-    """Ethan, 2026-09-10, on the Record page on his phone: "it looks
+    """Ethan, 2026-09-10, on the Record page on their phone: "it looks
     like the record page buttons and our actual sports buttons at the
     top are together, but they're not and that's confusing … that looks
     very sloppy and just bunched together."

@@ -1,6 +1,6 @@
 """The More sheet holds the page still.
 
-Ethan, 2026-09-22, from his phone with the sheet open: "when I'm in
+Ethan, 2026-09-22, from their phone with the sheet open: "when I'm in
 this menu I'm able to swipe the page behind it and not the actual
 menu."
 

@@ -260,8 +260,8 @@ def test_an_unreadable_journal_keeps_staking_and_says_so():
 
     Stopping when the breaker cannot see would be the safe-by-default
     reading. It is not what happens, because Ethan asked for these
-    boards to be staked and a database hiccup silently cancelling his
-    bets is a surprise he did not agree to. The verdict says the check
+    boards to be staked and a database hiccup silently cancelling their
+    bets is a surprise they did not agree to. The verdict says the check
     could not run, which is the honest version of carrying on."""
     class Broken:
         def execute(self, *a, **k):

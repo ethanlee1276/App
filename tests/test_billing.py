@@ -209,7 +209,7 @@ def test_a_failed_payment_locks_the_account_at_once():
     it said: Stripe moves the period forward when it opens the renewal
     invoice, paid or not, so the date it waited for was the end of the
     month nobody had paid for. Changed on Ethan's word, and reported to
-    him as a changed pin. A failed card is fixed on Stripe's billing page
+    them as a changed pin. A failed card is fixed on Stripe's billing page
     and the payment that clears lets them back in (`active` again)."""
     now = time.time()
     assert B.entitled("past_due", now + 30 * 86400) is False, \
@@ -322,7 +322,7 @@ def test_what_gates_is_written_down_and_the_record_stays_free():
     Until 2026-08-21 it said "Nothing is charging anyone yet" and checked
     that NO engine module read entitlement — the plumbing was complete
     and deliberately not connected, because switching a paywall on before
-    Ethan had said what was behind it would have locked him out of his
+    Ethan had said what was behind it would have locked them out of their
     own board on an inference.
 
     He has said. The Stripe account is approved and the gate is on, so the

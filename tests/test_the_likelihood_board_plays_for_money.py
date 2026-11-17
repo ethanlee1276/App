@@ -113,7 +113,7 @@ def test_the_whole_boards_settled_count_survives_the_per_market_loop():
     later — and the by-market loop rebound it to whichever shelf came
     last out of GROUP BY. So Ethan's NFL board, 160 settled against a
     bar of 100, reported `enough: False` because its last shelf was a
-    two-row spread, and the page answered him with "100 needed before
+    two-row spread, and the page answered them with "100 needed before
     this can say anything" on a board that had cleared the bar weeks
     earlier. The verdict it withheld was the sentence that says real
     money is on this book."""
@@ -547,7 +547,7 @@ def test_the_verdict_speaks_to_a_reader_not_to_the_code():
 # --- the arithmetic behind the verdict ---------------------------------
 def test_the_z_matches_the_number_the_decision_was_made_on():
     """586 settled at 69.5% and +2.1% is z 0.75 — the figure Ethan was
-    shown before he said stake it anyway. If this drifts, the sentence on
+    shown before they said stake it anyway. If this drifts, the sentence on
     the page stops describing the decision that was made."""
     assert ledger._roi_z(0.695, 0.021, 586) == 0.75
 

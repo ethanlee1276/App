@@ -266,7 +266,7 @@ PAID_KEYS = (
 #: for something harmless. So a board whose product has a board-specific
 #: name declares it here instead.
 #:
-#: ADDED 2026-08-22, answering Ethan on his own audit output: *"remeber we
+#: ADDED 2026-08-22, answering Ethan on their own audit output: *"remeber we
 #: talked about there not being a free plan and only the 3 day trial with
 #: full access. so why is it should free for all of that"*. The paywall
 #: page sells "The full fantasy suite — draft kit, mock draft, lineups,
@@ -587,7 +587,7 @@ ENV_ENABLED = "QB_PAYWALL"
 #:
 #: NOT A BACK DOOR — the alternative to it is worse. Without this the only
 #: route to an entitled account is a completed Paddle checkout, which
-#: means Ethan cannot see his own board, cannot comp a tester, and cannot
+#: means Ethan cannot see their own board, cannot comp a tester, and cannot
 #: honour a refund without issuing one through the processor and waiting.
 #: It reads from the environment rather than the database so that it
 #: cannot be granted by anything reachable from the web.
@@ -649,7 +649,7 @@ def record_state() -> bool:
     return on
 
 
-#: THE ACCOUNT WALL (Ethan, 2026-10-25, with the Live tab open on his phone:
+#: THE ACCOUNT WALL (Ethan, 2026-10-25, with the Live tab open on their phone:
 #: "people need an account to use the site ... look at the Real app and how
 #: they make u create an account on the first screen"). Signed out, the page
 #: opens on the sign-up, as Real's does; the plans, the Record and the
@@ -952,7 +952,7 @@ def would_downgrade(payload: dict, full_path, name: str = "") -> bool:
     """Would publishing this replace a priced board with an unpriced one?
 
     Ethan, 2026-09-09, two hours before the season opener, after a build
-    I told him to run could not see the box's API key: a board carrying
+    I told them to run could not see the box's API key: a board carrying
     173 matched props and 21 priced games was republished with 286 props,
     none priced, and no game prices at all. The build said "Wrote
     web/data/recommendations.json" and meant it.

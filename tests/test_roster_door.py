@@ -1,6 +1,6 @@
 """A player on YOUR synced roster opens, and the keyboard opens him too.
 
-Ethan, 2026-09-09, holding his phone with his own Sleeper roster on it:
+Ethan, 2026-09-09, holding their phone with their own Sleeper roster on it:
 *"when you click on a player, it will show you weekly fantasy
 projections, and trade targets and if you should bench them for that
 week."*

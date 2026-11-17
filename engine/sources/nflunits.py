@@ -1,7 +1,7 @@
 """NFL units per team-week, both sides of the ball, from play-by-play.
 
 Ethan, 2026-09-24, with a matchup breakdown for Falcons @ Packers beside
-him: "ranking the defenses and offenses and looking at where exactly in
+them: "ranking the defenses and offenses and looking at where exactly in
 the defense and offense is good and bad". The breakdown ranked eight
 units a side — overall, passing, rushing, pressure, explosive plays —
 from a paid model. These are the same units measured from the free

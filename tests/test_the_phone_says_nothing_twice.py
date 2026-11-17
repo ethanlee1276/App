@@ -1,6 +1,6 @@
 """v4, slice one: the phone says nothing twice.
 
-Ethan, 2026-09-22, with three screenshots of his phone: "there's a lot
+Ethan, 2026-09-22, with three screenshots of their phone: "there's a lot
 of repeats … it still kinda looks like the same old website." The
 repeats he circled: the league crest said its code inside the circle
 and again beneath it; the More sheet was thirty identical pills; Record

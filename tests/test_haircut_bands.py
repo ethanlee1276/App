@@ -1,6 +1,6 @@
 """Does the over-claim depend on the PRICE? Measured, applied to nothing.
 
-Ethan, 2026-09-02, reading his own book: "ok so what should we do then,
+Ethan, 2026-09-02, reading their own book: "ok so what should we do then,
 can we dive deeper into that and fix it" — about the +200-and-longer
 band landing 12.5% against a claimed 27.9%, and the smallest-stake
 quartile returning -15.2%.

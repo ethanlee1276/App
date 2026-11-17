@@ -149,7 +149,7 @@ HOCKEY = ("nhl",)
 #:
 #: FOUR, NOT TWELVE (2026-10-25). Twelve was "the loop's period", and the
 #: loop got faster (launch.SCORES_FAST_S, five asleep plus the pass) when
-#: Ethan timed the site against his television at about forty-five
+#: Ethan timed the site against their television at about forty-five
 #: seconds behind. The rule above is unchanged: under one pass, so every
 #: pass reads the play list afresh. The other readers of this cache (the
 #: live-bet tracker, the settle) get a summary at most four seconds old.

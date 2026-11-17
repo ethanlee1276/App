@@ -1699,7 +1699,7 @@
   }
 
   /* ---------------- the scoring plays ----------------
-     ESPN'S SCORING PLAYS (Ethan, 2026-10-30, the third of his screenshots
+     ESPN'S SCORING PLAYS (Ethan, 2026-10-30, the third of their screenshots
      of the Panthers–Packers final): every score a quarter at a time — who
      scored and when, the play that did it, the drive behind it ("12 plays,
      70 yards, 5:03") and the score it left. Football reads the drives: one

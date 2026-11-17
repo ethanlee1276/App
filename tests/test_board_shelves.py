@@ -47,7 +47,7 @@ def _src(*parts):
 
 # --- the shape ------------------------------------------------------------
 def test_football_leads_with_touchdowns():
-    """What Ethan asked for, in the position he asked for it."""
+    """What Ethan asked for, in the position they asked for it."""
     sh = boards.shelves("nfl")
     assert sh[0]["key"] == "touchdowns", [x["key"] for x in sh]
     assert sh[0]["markets"] == ["anytime_td"]
@@ -176,7 +176,7 @@ def test_the_host_is_not_a_card_grid_any_more():
 
 
 def test_the_jump_bar_puts_every_shelf_one_tap_from_the_top():
-    """Ethan, 2026-09-02, circling a shelf head halfway down his phone:
+    """Ethan, 2026-09-02, circling a shelf head halfway down their phone:
     "we should put home run and hits and shit like that all at the top
     so we can not have too scroll and just click. Do the same thing for
     nfl and CFB and nba and wnba too." The chips are built from the

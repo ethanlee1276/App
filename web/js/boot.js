@@ -58,7 +58,7 @@ try {
   }
 } catch (e) {}
 
-/* THE SCREEN'S LAST STRIP (Ethan, 2026-10-28, from his iPhone: "Fix this
+/* THE SCREEN'S LAST STRIP (Ethan, 2026-10-28, from their iPhone: "Fix this
    black bar": the menu and its shade stopping 62pt above the bottom of the
    screen over a bare strip). iOS 26 can open a Home Screen app with its
    page a status bar shorter than the screen until it settles (innerHeight
@@ -99,7 +99,7 @@ try {
   })();
 } catch (e) {}
 
-/* THE BAR AND THE PICKER (Ethan, 2026-11-05, his iPhone Duo at 7:11 with the
+/* THE BAR AND THE PICKER (Ethan, 2026-11-05, their iPhone Duo at 7:11 with the
    tab bar circled halfway up the Home page, right under "Sort: Start Time":
    "the menu bar is moving around fix that"). That sort is a <select>, and an
    iPhone opens its wheel, like the keyboard, from the foot of the screen

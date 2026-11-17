@@ -3,7 +3,7 @@
 
     python3 tools/qbmark.py
 
-Ethan, 2026-08-23, with the header logo circled on his phone: "can we
+Ethan, 2026-08-23, with the header logo circled on their phone: "can we
 remove the shiny lights on the left and right side of the crown so the
 logo can look more natural sitting there and not like a picture placed
 there if that makes sense."

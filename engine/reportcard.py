@@ -1,6 +1,6 @@
 """Your report card's one server half: the close on the bets you logged.
 
-Ethan, 2026-10-15, from the brainstorm he asked to have built ("do every
+Ethan, 2026-10-15, from the brainstorm they asked to have built ("do every
 one for every sport"): a betting report card in My Bets — your hit rate
 against what your prices needed, and your closing-line value against our
 closes. The hit rate needs nothing but your own log and is worked out on

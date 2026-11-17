@@ -201,7 +201,7 @@ def haircut_item(models: Path | None = None, conn=None) -> Item:
                     f"ledger ({exc})")
     # NOTHING TO FIT IS NOT A CHORE. With no settled bets the fit has no
     # input, and printing "run the refit" would send Ethan to a command
-    # that can only tell him again that it declined. The first draft of
+    # that can only tell them again that it declined. The first draft of
     # this did exactly that, on this container, because the guard below
     # keys on `saw` and fell through when both numbers were zero.
     if not now:

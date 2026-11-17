@@ -1,6 +1,6 @@
 """Every book's line on one market over time, and the steam marks: where the books moved together.
 
-Ethan, 2026-10-15, from the brainstorm he asked to have built: a line
+Ethan, 2026-10-15, from the brainstorm they asked to have built: a line
 movement chart with every book on it and the steam marked. The pick page
 already draws one line (engine/linetape: the best number a bettor could
 have taken, minute by minute). This reads the same table, `odds_history`,

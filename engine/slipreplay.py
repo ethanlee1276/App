@@ -1,6 +1,6 @@
 """The bet replay: a saved slip's live chance, kept as the box watches it, played back once it settles.
 
-Ethan, 2026-10-15, from the brainstorm he asked to have built: a live
+Ethan, 2026-10-15, from the brainstorm they asked to have built: a live
 sweat meter and a bet replay. The box already grades every member's open
 saved slips once a minute (engine/slipwatch.sweep, slipgrade.grade brief)
 for the last-leg alert and the settle; that grade carries the ticket's

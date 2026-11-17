@@ -1,6 +1,6 @@
 """The chips and the cards that say what the site covers.
 
-Ethan, 2026-08-22, circling it on his phone: *"we should be using emojis
+Ethan, 2026-08-22, circling it on their phone: *"we should be using emojis
 matching what we are talking about here."*
 
 WHAT WAS WRONG WITH THE DRAWN MARKS. The icon set has no football and no

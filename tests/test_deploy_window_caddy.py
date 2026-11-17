@@ -1,6 +1,6 @@
 """A restart is a pause, not a 502.
 
-Ethan, 2026-09-09, with a photo of his phone on opener day: "the site
+Ethan, 2026-09-09, with a photo of their phone on opener day: "the site
 crashed. It won't load anything and won't show logos."
 
 It had not crashed. `systemctl restart` is a hard stop and start —

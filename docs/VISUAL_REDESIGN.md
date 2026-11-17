@@ -292,7 +292,7 @@ surface.
   travels as an absolute URL (`absoluteSrc`); and an unpriced pick
   used to print the word "undefined" on the hero's sub-line.
 * **Slice 11 — v4, the shell (in progress, 2026-09-22).** Ethan, with
-  three screenshots of his phone: "there's a lot of repeats … it still
+  three screenshots of their phone: "there's a lot of repeats … it still
   kinda looks like the same old website." The repeats he circled, and
   what each became:
   * *The crest said its code twice.* The circle now holds the sport's
@@ -490,7 +490,7 @@ surface.
   * *The tab you are on says so.* The active tab's icon lifts and a
     dot lands under its label, on `--dur-base`; the centre disc keeps
     still; More counts as on while its sheet is open.
-  * *The More sheet holds the page still.* Ethan, from his phone:
+  * *The More sheet holds the page still.* Ethan, from their phone:
     "I'm able to swipe the page behind it and not the actual menu."
     The body is pinned in place (position fixed at its offset) while
     the sheet is open and put back on close; the sheet scrolls itself

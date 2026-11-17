@@ -166,8 +166,8 @@ def test_the_theme_colour_matches_the_page():
 
 
 def test_the_card_wears_the_mark_the_site_wears():
-    """Ethan found this in a group text, next to a promo code he had just
-    sent his friends: the preview was still the amber ellipse and the
+    """Ethan found this in a group text, next to a promo code they had just
+    sent their friends: the preview was still the amber ellipse and the
     pre-gold palette, two days after the site started wearing the QB
     crown. A preview is the brand for everyone who has not arrived yet,
     and it had quietly become a picture of a site that no longer exists."""

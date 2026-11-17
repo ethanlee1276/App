@@ -456,7 +456,7 @@ async function yourPlayersMount(host) {
 }
 
 /* THE WAY INTO THE PAID SITE FROM THE FREE ONE (Ethan, 2026-10-25, the Live
-   tab on his phone: "make sure there's [a way] to get into the paid site
+   tab on their phone: "make sure there's [a way] to get into the paid site
    from this free version"). Over the strip, for a signed-in reader without
    a plan: how many picks are up today, by league, and the door to the
    plans. A count, never a pick (engine/firstlook); asked again at most

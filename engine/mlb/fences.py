@@ -1,6 +1,6 @@
 """In how many of the 30 parks would this ball have been a home run? An estimate.
 
-Ethan, 2026-10-15, from the brainstorm he asked to have built: MLB
+Ethan, 2026-10-15, from the brainstorm they asked to have built: MLB
 "homer in X of 30 parks". The hit page already draws every ball a hitter put
 in play from MLB's own feed — where it landed (its spray angle) and how far
 it went (the feed's `totalDistance`). This lays that ball over every park's

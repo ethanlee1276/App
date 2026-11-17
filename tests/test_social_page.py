@@ -101,7 +101,7 @@ def test_the_banner_never_combines_aspect_ratio_with_a_minimum_height():
 # --- the banner and the composer ----------------------------------------------
 
 def test_the_banner_is_ethans_backdrop_and_promises_no_wins():
-    """Ethan, 2026-10-07, with a render of the backdrop he circled on the
+    """Ethan, 2026-10-07, with a render of the backdrop they circled on the
     page render. The crown and the wordmark are IN his art, so the banner
     draws nothing over them — a second, drawn logo on top was the old
     banner's. Profile covers use the same arena with the logo cut out
@@ -222,7 +222,7 @@ def test_tail_opens_the_bet_it_sheet_with_a_tile_per_book():
 
 def test_a_field_on_a_phone_never_zooms_the_page():
     """Ethan, 2026-10-07, three screenshots of posting a parlay from the
-    slip on his phone: "it zooms in the page and shit."
+    slip on their phone: "it zooms in the page and shit."
 
     iOS Safari zooms the page when a focused field is under 16px, so the
     phone rule is !important, the one place the device's rule beats the

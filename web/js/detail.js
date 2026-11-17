@@ -1116,7 +1116,7 @@ function gpTeamDoor(team, opp) {
 }
 
 /* ═══ THE MATCHUP SCAN (2026-09-24) ════════════════════════════════════
-   Ethan, with a Falcons @ Packers breakdown he wanted for every game:
+   Ethan, with a Falcons @ Packers breakdown they wanted for every game:
    "ranking the defenses and offenses and looking at where exactly in the
    defense and offense is good and bad and what players could shine and
    what players could hurt". engine/gamescan builds it per game: the
@@ -4523,7 +4523,7 @@ function pbpBoardSVG(d, league = "mlb", boardGame = null) {
    What it shows is what the live state holds, and a score that has just
    changed flashes, as on the ballpark's board. How it is drawn into the
    photograph is the note under this one. */
-/* PART OF THE BOARD, NOT ON IT (Ethan, 2026-10-25, his phone's screenshot:
+/* PART OF THE BOARD, NOT ON IT (Ethan, 2026-10-25, their phone's screenshot:
    "it looks ugly ... It looks like you place stickers or something on top
    of it ... Make sure it looks real and blended in"). Two things made the
    first draft a sticker. Its panels were cards of our own (a grey border,
@@ -6340,7 +6340,7 @@ function gpDrivesHTML(d, league) {
    people in it. It replaces the bar chart of the drive, the strip that
    said "Ball on" again, and the Last play card of its own. Ethan's
    photograph keeps its place under the win chance, running the drive on
-   his render as before.
+   their render as before.
    EACH THING ONCE (Ethan, 2026-11-15, on the live NE @ DET page: "we dont
    need the drive chart since we have one at the top of the screen. go look
    through the live page bc it seems likes there is alot of repeated

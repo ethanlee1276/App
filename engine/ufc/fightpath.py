@@ -1,6 +1,6 @@
 """Each fighter's path: how his fights have ended, beside how the model says this one will.
 
-Ethan, 2026-10-15, from the brainstorm he asked to have built: UFC "fight
+Ethan, 2026-10-15, from the brainstorm they asked to have built: UFC "fight
 path". The card already carries the model's six-way read of every fight it
 priced (`method`: each man by knockout, submission or decision) and, where
 enough finishes are stored, the round it ends in (engine/ufc/rounds). What

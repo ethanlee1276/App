@@ -1,6 +1,6 @@
 """The weekly pick'em: pick the winner of every game on the board, free, graded from the final.
 
-Ethan, 2026-10-15, the last of the sixteen ideas he asked to have built
+Ethan, 2026-10-15, the last of the sixteen ideas they asked to have built
 ("do every one for every sport"): a free weekly pick'em with a leaderboard
 on Social. Nothing on the board reads or moves for it.
 

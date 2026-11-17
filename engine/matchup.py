@@ -174,7 +174,7 @@ def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game,
 
     if defense.ratings:
         # Ethan, 2026-09-23: top and bottom defences against each position
-        # were winning him bets. The measured version of that, card and all
+        # were winning them bets. The measured version of that, card and all
         # (engine/defensevs.effect; defensefit.py for the numbers).
         from . import defensevs as DV
         factor, reason, card = DV.effect(defense.team, defense.ratings, prop.position, prop.market,

@@ -1,6 +1,6 @@
 """Nothing on the top bar may be pushed out of reach.
 
-Ethan, 2026-08-22, from his phone: *"The search button is now gone."*
+Ethan, 2026-08-22, from their phone: *"The search button is now gone."*
 
 It was, and it was not hidden — it was CLIPPED. `.slate-meta` carries the
 icon row with `justify-content: flex-end` and `overflow: hidden`, so when

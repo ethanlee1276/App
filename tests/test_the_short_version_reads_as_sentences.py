@@ -1,6 +1,6 @@
 """The short version reads as sentences, not a wire slip.
 
-Ethan, 2026-10-22, at the Patriots–Bears report on his phone: "Fix how in
+Ethan, 2026-10-22, at the Patriots–Bears report on their phone: "Fix how in
 the short version that we need to be more descriptive in the wording. It's
 very blunt." It read:
 
@@ -39,7 +39,7 @@ from engine import leaguereport as L                                # noqa: E402
 
 
 def _chi_ne():
-    """Ethan's game, rebuilt from what his screenshot showed."""
+    """Ethan's game, rebuilt from what their screenshot showed."""
     game = {"away": "NE", "home": "CHI", "date": "2026-10-25", "kickoff": "13:00",
             "spread": -3.0, "total": 50.5, "home_ml": -166, "away_ml": 140,
             "sim": {"trials": 4000, "p_home_win": 0.59, "one_score": 0.44},

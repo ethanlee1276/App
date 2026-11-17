@@ -1,5 +1,5 @@
 """The screen's last strip (web/js/boot.js, web/css/styles.css; Ethan,
-2026-10-28, a screenshot from his iPhone with the strip circled: "Fix this
+2026-10-28, a screenshot from their iPhone with the strip circled: "Fix this
 black bar").
 
 The menu and the shade behind it stopped 62pt short of the bottom of his

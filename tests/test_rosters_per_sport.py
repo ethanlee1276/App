@@ -306,7 +306,7 @@ def test_the_feed_parser_accepts_both_roster_shapes():
     versions and as a bare list on others. The dict-only parse raised
     AttributeError on the list shape, the builder's fallback swallowed it,
     and the page ran pitcher-less while the dict-shaped fixture stayed
-    green — the exact live failure Ethan reported from his phone."""
+    green — the exact live failure Ethan reported from their phone."""
     from engine.mlb.sources import mlbstats as MS
     entry = {"person": {"fullName": "List Shape Arm", "id": 9},
              "position": {"abbreviation": "SP"},

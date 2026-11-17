@@ -552,7 +552,7 @@ def test_loopback_is_not_treated_as_a_network():
 
 
 def test_a_tailnet_is_not_treated_as_cleartext():
-    """Ethan, 2026-08-15, uses `http://100.87.149.86:8000` from his phone.
+    """Ethan, 2026-08-15, uses `http://100.87.149.86:8000` from their phone.
 
     `http://` OVER A TAILNET IS NOT CLEARTEXT. Tailscale is WireGuard —
     packets are encrypted device-to-device before they touch any network,

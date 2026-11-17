@@ -23,7 +23,7 @@ LONGSHOT that is the worst possible combination: the sharp book runs the
 thinnest margin, so on a +600 dog it is frequently the LONGEST price on
 the board — which is exactly what `max` is looking for. The card then
 prints a book Ethan does not have an account with, beside a number no
-book he can reach is offering. To him that is simply a wrong price, and
+book they can reach is offering. To them that is simply a wrong price, and
 he has now reported wrong prices four times in a week.
 
 THE DE-VIG IS NOT TOUCHED, the same doctrine `best_over_line` already

@@ -1,6 +1,6 @@
 """The next pitch, by the pitcher's own mix in this count.
 
-Ethan, 2026-10-15, from the brainstorm he asked to have built: MLB
+Ethan, 2026-10-15, from the brainstorm they asked to have built: MLB
 "next-pitch odds" on the live pitch tracker. What it is, said plainly: for
 the man on the mound, every pitch we have stored from him this season and
 last (engine/mlb/charts' `mlb_pitches`), grouped by the count it was thrown

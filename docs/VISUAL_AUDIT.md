@@ -189,7 +189,7 @@ phone and a desktop width, both themes, and the iPhone app's capsule bar.
 
 # No hard lines — 2026-10-27
 
-Ethan, a screenshot of his phone with the top bar and the league row circled:
+Ethan, a screenshot of their phone with the top bar and the league row circled:
 "notice how sharp all the lines are on the whole site for everything ... Make
 everything smoother and more blended and just like feel more professional."
 His shot was the old build, but he was right about the lines: a probe of every

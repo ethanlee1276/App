@@ -1,6 +1,6 @@
 """The parlay builder: tonight's legs put together, priced with the correlation between them.
 
-Ethan, 2026-10-15, from the brainstorm he asked to have built: a correlated
+Ethan, 2026-10-15, from the brainstorm they asked to have built: a correlated
 parlay builder. The site already holds every piece: our chance on each leg
 (the board), how two legs relate (engine/parlays.relate — the clash
 taxonomy and its measured priors, the rules the model's own tickets obey)

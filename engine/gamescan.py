@@ -1,6 +1,6 @@
 """The matchup scan: every NFL game, unit by unit and player by player.
 
-Ethan, 2026-09-24, pasting a Falcons @ Packers breakdown he wanted done
+Ethan, 2026-09-24, pasting a Falcons @ Packers breakdown they wanted done
 for every game: "ranking the defenses and offenses and looking at where
 exactly in the defense and offense is good and bad and what players could
 shine and what players could hurt". The breakdown ranked each side's

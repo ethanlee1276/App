@@ -1,6 +1,6 @@
 """A touchdown flashes on the live football score, at the top and in the bar.
 
-Ethan, 2026-11-16, asked whether he wanted a touchdown flash on the score at
+Ethan, 2026-11-16, asked whether they wanted a touchdown flash on the score at
 the top of the live page: "Yes". detail.js gpTouchdownSeen runs once a draw
 on the football page (gpFootballHTML), after the TV delay's hold and the
 spoiler veil, so it reads the score the reader is shown. When one side's

@@ -276,7 +276,7 @@ def test_the_inline_styles_in_the_renderer_obey_the_same_three_steps():
 def test_there_is_no_radius_left_to_have_steps():
     """Night Form set every radius token to 0 — "a rounded container
     cannot be reintroduced by picking a number at all." RE-DECIDED
-    2026-08-11: Ethan's render is a rounded system, and he approved it
+    2026-08-11: Ethan's render is a rounded system, and they approved it
     wholesale ("go new look… ship it fully"). What SURVIVES the pivot is
     the discipline underneath: exactly three steps, all tokenized, so
     nobody picks both 9 and 10 and 11 ever again. The audit above this

@@ -21,7 +21,7 @@ last shots on the basketball page (their own tests pin those pages). Here:
   * baseball's at-bat — the league's own pitch tracking on each pitch row,
     and the strike zone with every pitch of the at-bat where it crossed,
     numbered and coloured by what came of it, the newest flying in;
-  * the same runs on Ethan's photographs (his question the same day: "are we
+  * the same runs on Ethan's photographs (their question the same day: "are we
     still using all our renders … All the animations should work flawlessly
     with the stadium art and field art"), on the cards' clock: the drive on
     the field render through a camera measured off its painted lines, the

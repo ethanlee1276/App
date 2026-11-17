@@ -3,7 +3,7 @@
    the three gain colours and the marks are the site's own, and re-tint in
    light mode with the rest. A team's colour arrives only as a custom
    property the module sets from the team data (--ta, --tb, --tm). */
-/* THE STATUS BAR. Ethan, 2026-10-13, from his phone: "the X button is stuck
+/* THE STATUS BAR. Ethan, 2026-10-13, from their phone: "the X button is stuck
    up top in the bar so I can't even click it." The site runs edge to edge
    under the iPhone's status bar (viewport-fit=cover, black-translucent), and
    this overlay started at the very top of the screen with nothing taking the

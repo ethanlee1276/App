@@ -2509,7 +2509,7 @@ def test_every_launch_cli_path_added_tonight_actually_runs():
 
 def test_reading_the_paper_switch_does_not_flip_it():
     """A toggle that changes state when you ask what it is set to is a
-    trap, and this is the call Ethan makes when he is unsure."""
+    trap, and this is the call Ethan makes when they are unsure."""
     import importlib
     import pathlib
     import tempfile

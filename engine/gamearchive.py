@@ -1,7 +1,7 @@
 """Any game's page, finished long ago or not — every game on every
 team's schedule.
 
-Ethan, 2026-10-30, with ESPN's Panthers–Packers final open on his Duo
+Ethan, 2026-10-30, with ESPN's Panthers–Packers final open on their Duo
 (the game leaders, the scoring plays a quarter at a time, the box score,
 the team stats): "one thing we need to add is being able to see game
 history for each team. We should be able to go to each specific game and

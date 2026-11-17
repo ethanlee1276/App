@@ -199,7 +199,7 @@ def record() -> list:
 
     Ethan, 2026-09-19, with `grading` showing cfb 285 likely + 8 main +
     1 longshot settled — all three in books the Record page renders —
-    and the page showing him nothing.
+    and the page showing them nothing.
 
     EVERY LAYER BETWEEN THE TWO IS GENERIC, which is why this check
     exists rather than another guess. `TRACKED_SPORTS` includes cfb;

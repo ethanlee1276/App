@@ -228,7 +228,7 @@ another machine:
 **`http://` over a tailnet is not cleartext.** Tailscale is WireGuard:
 packets are encrypted device-to-device before they touch any network, so
 the scheme in the address bar describes the last inch rather than the
-wire. Ethan reaches the site at `http://100.87.149.86:8000` from his
+wire. Ethan reaches the site at `http://100.87.149.86:8000` from their
 phone, and refusing that would be refusing a genuinely private link —
 worse than useless in practice, because the way round it is
 `QB_ALLOW_INSECURE_LOGIN=1`, which switches the check off *everywhere*

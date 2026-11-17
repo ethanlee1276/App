@@ -668,7 +668,7 @@ def pbp_doc(league: str, g: dict, payload: dict,
             doc["drive"] = drive
     # THE GAME'S HEADER (2026-10-15, Ethan's NBA render): the period-by-
     # period line and the building, where ESPN carries them — every sport
-    # since 2026-11-01 (his Apple Sports screenshots of Vikings @ Lions put
+    # since 2026-11-01 (their Apple Sports screenshots of Vikings @ Lions put
     # the quarter line under the score and the building under Game
     # Information; the summary's header and game info have both for
     # football and hockey too, read by the same two parsers). The scorer's

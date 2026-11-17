@@ -420,7 +420,7 @@ SHARP_BOOKS = {"pinnacle"}
 #: at ANY age and never touches the network" — deliberately, because the
 #: last paid pull's real prices beat proxies on a cycle the budget
 #: declines. What nobody bounded is how old "any" gets. Ethan, 2026-09-08,
-#: with his sportsbook beside our page: MIN -125 there, MIN ML -220 on our
+#: with their sportsbook beside our page: MIN -125 there, MIN ML -220 on our
 #: Most Likely board, and the same story on a second game. Every book he
 #: can bet is in `DEFAULT_BOOKS` and `parse_event_h2h` keeps the BEST
 #: price per side across them, so a live payload could not have produced
@@ -3346,7 +3346,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # right for a man who is where the slate says he is and wrong
         # for one who has moved: Isiah Pacheco filed under the Chiefs
         # (Ethan, 2026-09-15) took the Lions' game's price and priced a
-        # card for a game he was not playing in. `menu` remembers which
+        # card for a game they were not playing in. `menu` remembers which
         # event priced each key; a pair that does not contain the
         # prop's team is refused, counted, and the prop stays proxy.
         if lines:

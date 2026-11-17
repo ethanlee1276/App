@@ -1,7 +1,7 @@
 """The staking audit, the defect that made it necessary, and the mistake
 the audit itself made.
 
-Ethan, 2026-08-08, reading the settled list on his phone: "We got .05
+Ethan, 2026-08-08, reading the settled list on their phone: "We got .05
 units back for a +100 bet. Our units per bet is too low or something
 because that seems wrong."
 
@@ -1809,7 +1809,7 @@ def test_a_slice_that_cannot_be_shown_says_why_with_its_counts():
 
 def test_the_paper_book_is_labelled_as_paper_not_scolded_as_noise():
     """`--paper` used to trip the longshot warning, which told Ethan to
-    drop a flag he had not passed. A tool that scolds you for doing the
+    drop a flag they had not passed. A tool that scolds you for doing the
     thing you just decided to do teaches you to stop reading it."""
     import contextlib
     import io

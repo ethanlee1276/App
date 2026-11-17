@@ -1,7 +1,7 @@
 """What `launch.py` accepts on the command line, and what it refuses.
 
 Ethan, 2026-09-06, ran `python3 launch.py --resettle` — a command this
-script's OWN parlay report told him to run — and got:
+script's OWN parlay report told them to run — and got:
 
     ⚠️  Port 8000 is already in use — Qellys Book is almost certainly
         already running.

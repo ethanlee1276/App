@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """What we actually staked, against what the sizing rules asked for.
 
-Ethan, 2026-08-08, reading the settled list on his phone: "Look at the
+Ethan, 2026-08-08, reading the settled list on their phone: "Look at the
 amount of money spent on each bet compared to the amount of money being
 returned. We got .05 units back for a +100 bet. Our units per bet is too
 low or something."

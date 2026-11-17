@@ -42,7 +42,7 @@ rest.
 ONLY ON A MARKET THAT CLAIMS A RANKING. Spreads and totals ship as
 labelled leans because Ethan asked to see them, and there the model
 disagrees with the close by thirty points as a matter of course —
-feeding those to this bar would empty both shelves and reverse his call
+feeding those to this bar would empty both shelves and reverse their call
 without asking.
 
 AND NOT ON A ROW RANKED ON THE MARKET'S NUMBER (2026-09-08). Four days

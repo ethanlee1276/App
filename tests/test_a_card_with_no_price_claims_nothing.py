@@ -1,6 +1,6 @@
 """A game card nobody posted a price for claims no edge, and no haircut.
 
-#258, decided by Ethan 2026-09-16 after he read the MLB census: mark
+#258, decided by Ethan 2026-09-16 after they read the MLB census: mark
 these unpriced rather than buy team-total quotes we would never stake.
 
 `gamebets.price_team_total` defaulted both its odds to -110, and no sport

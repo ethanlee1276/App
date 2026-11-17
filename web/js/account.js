@@ -1293,7 +1293,7 @@ function pwResultsHTML(rec) {
      the ring, the W-L, the ROI, the units, the settled count and the
      last five, drawn by the same builder as the home and the Record
      page (recordRibbonsHTML) from the same pooled record. AND THE
-     COMBINED LINE, as on the Record page (Ethan, the day his Pikkit
+     COMBINED LINE, as on the Record page (Ethan, the day their Pikkit
      record went up: "we need to display the new combined record here too
      on the paywall"): "Everything we've bet" leads with its split on the
      tile — the model's units and Zeno's, his unit's dollar value beside

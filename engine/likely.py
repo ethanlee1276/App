@@ -631,7 +631,7 @@ SANE_ODDS = (-100000, 2000)
 #: How far a game's MONEYLINE and its own SPREAD may disagree about who
 #: wins before the pair is not a price any book has posted.
 #:
-#: Ethan, 2026-09-08, with two screenshots side by side — his book and
+#: Ethan, 2026-09-08, with two screenshots side by side — their book and
 #: our page: "Also the money lines we are showing on the most likley
 #: page is completely wrong." His book had DAL -3 and DAL -162 at the
 #: Giants; our board had NYG ML -218 as a 66% favourite. The two numbers
@@ -691,7 +691,7 @@ HEAVIEST_PRICE = -250
 #: is a view of what it hides.
 #:
 #: IT WOULD NOT HAVE NAMED BURDEN, and that is written here so nobody takes
-#: this for his fix. The 73% and 72% put to Ethan when he chose were the
+#: this for his fix. The 73% and 72% put to Ethan when they chose were the
 #: plain normal, from a build with no fitted curves; on the fitted mixture
 #: the box ranks those markets with (engine/yardagefit, the 08-30 fits) the
 #: same projections — 4.7 catches, 54.4 yards — give 4+ catches 66% and 40+
@@ -2318,7 +2318,7 @@ def from_game_bet(row: dict, sport: str = "nfl",
         # fallback outlived it, so a card with no book printed a book
         # called "best" beside a real-looking price.
         #
-        # Ethan, 2026-09-09, with his sportsbook open next to ours:
+        # Ethan, 2026-09-09, with their sportsbook open next to ours:
         # "FanDuel and draft kings show the lines in the screenshot yet
         # we show a different line. That's wrong." Both cards in that
         # screenshot read "Moneyline · best". A name we made up is worse
@@ -2360,7 +2360,7 @@ def from_game_bet(row: dict, sport: str = "nfl",
         # WHOSE NUMBER THIS IS, carried rather than inferred.
         #
         # Ethan, 2026-09-16, on the Pick of the Day being moneylines in
-        # practice when he had asked for spreads and totals too. The
+        # practice when they had asked for spreads and totals too. The
         # cause was here: a sharp-anchored SPREAD card arrives with
         # `win_prob` already set to the sharp book's de-vigged fair
         # (`gamebets._sharpify`, the same rewrite `price_moneyline_sharp`

@@ -1,6 +1,6 @@
 """Every view has to say where it lands you. Most of them never did.
 
-Ethan, 2026-08-23, with a screen recording from his phone: "every time on
+Ethan, 2026-08-23, with a screen recording from their phone: "every time on
 mobile I click on a player to see the chart, it will load me at the bottom
 of the page which I don't like it need to be at the top of the page."
 

@@ -2260,7 +2260,7 @@ function unitRankingsHTML(ur, d) {
   /* NEVER SILENTLY ABSENT ON A FOOTBALL PAGE. This returned "" whenever
      the build had no rankings — and for the NFL that is every day until
      Week 1 has finals, so the section Ethan asked for on 09-02 was
-     invisible when he looked for it on 09-05 and he asked again. The
+     invisible when they looked for it on 09-05 and they asked again. The
      rankings themselves are unchanged (scoring offense and defense from
      the same finished games as the table); what changes is the empty
      case, which now says WHY and, on the NFL, shows the model's own

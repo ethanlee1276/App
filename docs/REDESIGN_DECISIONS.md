@@ -24,7 +24,7 @@ winning results, CLV gains, active nav item, live/material venue conditions
 | **amber** | a **condition** is live or material — the LIVE badge, wind that moved a line, a roof, the active nav item, the data-mode pill |
 
 **Why.** Ethan reads this board every night and green/red for won/lost is
-the one convention he does not want re-taught. It is also a *better*
+the one convention they do not want re-taught. It is also a *better*
 encoding than the spec's: two orthogonal things — "is this number good" and
 "is this condition live" — were being pushed through one accent. The spec
 half-noticed this itself, warning that more than ~8 amber elements on a
@@ -257,7 +257,7 @@ inversion, which is the exact failure this started as.
 
 ## THE NEW LOOK — 2026-08-11, Ethan's render
 
-Ethan drew the site he wanted (a dark violet sportsbook-style dashboard:
+Ethan drew the site they wanted (a dark violet sportsbook-style dashboard:
 left rail of destinations, slim top bar, stadium cards, a Top Picks
 strip, a performance dashboard, insights + live-now in a right rail) and
 said: **"go new look … copy my render and ship it fully. make sure to do

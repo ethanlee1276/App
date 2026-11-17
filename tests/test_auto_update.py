@@ -1,6 +1,6 @@
 """Pushed code reaches the site without anyone typing anything.
 
-Turned on 2026-08-31 at Ethan's request, from his phone, at work. The
+Turned on 2026-08-31 at Ethan's request, from their phone, at work. The
 CFB board had sat crashed most of a day for want of somebody reaching a
 terminal to run a deploy.
 

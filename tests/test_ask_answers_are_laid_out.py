@@ -1,6 +1,6 @@
 """An Ask answer is laid out, not run together.
 
-Ethan, 2026-09-23, a top-ten answer circled on his phone: "Also can we make
+Ethan, 2026-09-23, a top-ten answer circled on their phone: "Also can we make
 the format of the responses better. Everything we ask is all jumbled up in
 one paragraph so it makes it hard to read." The page split an answer only
 at blank lines, so a ranking written one team to a line arrived as one

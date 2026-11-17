@@ -340,7 +340,7 @@ def test_the_probe_reports_both_sets_rather_than_assuming_they_match():
 
 
 def test_the_probe_does_not_nag_about_a_deliberate_override():
-    """Ethan restored the colours with the evidence in front of him.
+    """Ethan restored the colours with the evidence in front of them.
     Repeating "you should change this" every run would be arguing with a
     decision, not reporting a fact."""
     src = (ROOT / "launch.py").read_text(encoding="utf-8")

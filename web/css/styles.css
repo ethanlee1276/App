@@ -4363,8 +4363,8 @@ body.pk-open { overflow: hidden; }
    warning that fits this exact moment: "the temptation to redraw this
    because you have looked at it a thousand times is the single biggest
    risk to it ever working." The lock names Ethan as the one who can open
-   it, and he did, with three variants rendered side by side in front of
-   him. §1 is updated rather than ignored.
+   it, and they did, with three variants rendered side by side in front of
+   them. §1 is updated rather than ignored.
 
    WHAT CAME BACK: the fills. Grass, infield dirt, hardwood, the team's
    own colour on the stands and the end zones — all of it was still in
@@ -4932,7 +4932,7 @@ body.pk-open { overflow: hidden; }
 }
 
 /* The page never scrolls sideways — Ethan's screen recording
-   (2026-08-10): the whole site panned left-right on his phone because
+   (2026-08-10): the whole site panned left-right on their phone because
    the header cluster ran past the viewport and nothing clipped it.
    Two fixes, and this is the seatbelt: even if some future element
    overflows again, the DOCUMENT refuses to pan. `clip` rather than
@@ -4967,7 +4967,7 @@ html, body { overflow-x: clip; }
   padding: env(safe-area-inset-top) 20px 0;
   background: var(--topbar-bg);
   /* NO backdrop-filter — FOURTH TIME this property has hurt someone,
-     and this one was the worst: Ethan, 2026-08-25, on his iPhone —
+     and this one was the worst: Ethan, 2026-08-25, on their iPhone —
      "anytime I try to click any menu … my whole phone will black
      screen … a little gear spinning … then it'll send me to my lock
      screen." That is an iOS RESPRING: WebKit's GPU process dying, and
@@ -5120,7 +5120,7 @@ body.has-rail .shell {
    lid of the board, it just does not follow you down. */
 /* IT IS PART OF THE HEADER, NOT THE TOP OF THE PAGE.
 
-   Ethan, 2026-09-10, on the Record page on his phone: "it looks like
+   Ethan, 2026-09-10, on the Record page on their phone: "it looks like
    the record page buttons and our actual sports buttons at the top are
    together, but they're not and that's confusing … that looks very
    sloppy and just bunched together."
@@ -5763,7 +5763,7 @@ body.has-rail .shell {
      `justify-content: flex-end`, which means the EARLIEST icon is the one
      that disappears, silently, with nothing to show a control is missing.
      Two icons were added on 2026-08-22 and search vanished; Ethan found
-     it by looking at his phone.
+     it by looking at their phone.
      A wordmark is the thing on this bar that can afford to give way. */
   .brand-home { flex: 0 1 auto; min-width: 0; }
   #data-source { display: none; }
@@ -6436,7 +6436,7 @@ body.has-deck #rail-live { display: none; }
     transform: translateX(-103%); will-change: transform;
     transition: transform var(--dur-base) var(--ease-out); }
   .more-scrim[hidden], .more-sheet[hidden] { display: none; }
-  /* THE PAGE HOLDS STILL UNDER THE SHEET. Ethan, 2026-09-22, from his
+  /* THE PAGE HOLDS STILL UNDER THE SHEET. Ethan, 2026-09-22, from their
      phone: "when I'm in this menu I'm able to swipe the page behind it
      and not the actual menu." iOS ignores overflow: hidden on the body
      for touch, so the body is pinned in place instead — position fixed
@@ -9052,7 +9052,7 @@ body.ask-open .footer { display: none; }
    page keeps for the bar would only be a band of scroll under it.
 
    BUT THE PAGE MUST STILL BE A SCREEN TALL. Ethan, 2026-09-23, a
-   screenshot from his phone: "when you're on this page it puts this weird
+   screenshot from their phone: "when you're on this page it puts this weird
    black bar down at the bottom" — the tab bar standing 55px off the
    bottom edge with bare page under it. Measured: with the padding gone
    the document was 760px on an 844px screen, and his iPhone set the fixed
@@ -10157,7 +10157,7 @@ button.chip, a.chip, .chip[role="button"], .chip[tabindex] { min-height: 28px; }
 /* BET IT (engine/betlinks): one button; a sheet of every book that has
    the bet, a tile each. Every colour here is SET — the first box let the
    pick page's `btn primary` ink leak into the dropdown and drew ink on
-   ink, the black panel Ethan sent from his phone (2026-10-07). */
+   ink, the black panel Ethan sent from their phone (2026-10-07). */
 .betit-box { display: inline-block; margin-top: 4px; }
 .betit { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer;
   font-family: inherit; font-size: var(--fs-xs); font-weight: 800; line-height: var(--lh-snug);
@@ -10509,7 +10509,7 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
      tab its first (deepened under white, pulled toward the text colour,
      so a pale or a black colour still reads on either theme).
    ========================================================================== */
-/* THE CAPSULE'S FOOT (Ethan, 2026-10-28, his iPhone with the bar circled:
+/* THE CAPSULE'S FOOT (Ethan, 2026-10-28, their iPhone with the bar circled:
    "this bar should be lower on the screen"). It stood 8px above the home
    indicator's whole strip, 42pt off the bottom of his screen with the page
    showing under it. It comes down by as much of that strip as there is, up
@@ -10530,7 +10530,7 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
   html.store-ios .riding-tray, html.ios-home .riding-tray {
     bottom: calc(98px + env(safe-area-inset-bottom, 0px) - var(--tb-drop)); }
 }
-/* THE SCREEN'S LAST STRIP (Ethan, 2026-10-28, from his iPhone: "Fix this
+/* THE SCREEN'S LAST STRIP (Ethan, 2026-10-28, from their iPhone: "Fix this
    black bar"). iOS 26 can open a Home Screen app with its page a status
    bar shorter than the screen until it settles (62pt on his phone), and
    everything pinned to the bottom stopped that far up: the menu and its
@@ -10613,7 +10613,7 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
     right: calc(var(--strip-w) + 12px); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   html.side-rail-left .crash-note, html.side-rail-left.store-ios .crash-note, html.side-rail-left.ios-home .crash-note {
     right: 12px; left: calc(var(--strip-w) + 12px); }
-  /* THE BAR AND THE PICKER (Ethan, 2026-11-05, his iPhone with the tab bar
+  /* THE BAR AND THE PICKER (Ethan, 2026-11-05, their iPhone with the tab bar
      circled halfway up the Home page: "the menu bar is moving around fix
      that"). An iPhone's <select> wheel and its keyboard rise from the foot of
      the screen without shrinking the page, and the fixed bar rode up over the
@@ -10625,7 +10625,7 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
 }
 
 /* YOUR TEAM'S COLOURS, THROUGH THE BAR AND OUT OF IT (Ethan, 2026-10-28,
-   his phone's top bar and league row circled again: "the colors up here
+   their phone's top bar and league row circled again: "the colors up here
    could be blended better too. Still have sharp lines"). The colour spilled
    from the bar's foot at full strength, under a bar that had none of it: a
    dark band, then a blue one, ruled where they met. The bar wears the colour
@@ -10908,7 +10908,7 @@ body { letter-spacing: -.006em; -webkit-font-smoothing: antialiased; -moz-osx-fo
 .chip.up { background-color: color-mix(in oklab, var(--good) 14%, transparent); }
 .chip.down { background-color: color-mix(in oklab, var(--bad) 13%, transparent); }
 .gc-mk-teams { background-color: transparent; }
-/* NO HARD LINES (2026-10-27, later). Ethan, his phone's top bar and league
+/* NO HARD LINES (2026-10-27, later). Ethan, their phone's top bar and league
    row circled: "notice how sharp all the lines are on the whole site for
    everything ... Make everything smoother and more blended." Every outline
    in every sheet became a fill or nothing, and a selected chip a tint, not a

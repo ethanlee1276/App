@@ -1,7 +1,7 @@
 """A season-sized backfill must not lock the board builds out of the file.
 
 Ethan on the droplet, 2026-09-03, running the college backfill the CFB
-build's own diagnostic told him to run:
+build's own diagnostic told them to run:
 
     python3 ingest.py cfb --seasons 2022-2026
       2022  player-log rows: 114,047

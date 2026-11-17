@@ -1,6 +1,6 @@
 """Baseball's two: a homer in how many of the 30 parks, and the next pitch.
 
-Ethan, 2026-10-15, two of the sixteen ideas he asked to have built ("do
+Ethan, 2026-10-15, two of the sixteen ideas they asked to have built ("do
 every one for every sport"): MLB "homer in X of 30 parks", labelled an
 estimate, and next-pitch odds on the live pitch tracker. Neither moves a
 number on any board.

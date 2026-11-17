@@ -528,7 +528,7 @@ def bettable_lines(lines: list) -> list:
     book runs the thinnest margin, so on a +600 dog it is often the
     LONGEST price quoted — which is exactly what `max` is hunting for. So
     those cards named a book Ethan has no account with, beside a number
-    no book he can reach was offering. To him that is a wrong price, and
+    no book they can reach was offering. To them that is a wrong price, and
     it is the fourth week he has reported one.
 
     THE FALLBACK IS DELIBERATE and matches `best_over_line`'s: a market

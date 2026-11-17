@@ -621,7 +621,7 @@ def test_the_render_gate_catches_a_refused_row_from_a_stale_file():
 def test_the_page_enforces_the_same_rules_a_stale_file_could_dodge():
     """2026-09-02: the droplet served a PRE-FIX board file while its
     builds were starved, and the page happily drew the -1200 unders the
-    engine had already banned — Ethan, from his phone: "your still doing
+    engine had already banned — Ethan, from their phone: "your still doing
     these dumb ass bets." A rule the render does not also enforce is a
     rule any stale file overrides; the page is the last gate, and its
     price cap is pinned equal to the engine's so they cannot drift."""

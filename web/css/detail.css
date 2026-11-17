@@ -917,7 +917,7 @@ button.tr-opt { cursor: pointer; }
 .pbp-split-ends { display: flex; justify-content: space-between; font-size: var(--fs-xs); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* ======================================================================
-   THE GAME PAGE IN THE CLUBS' COLOURS (Ethan, 2026-11-01, his Apple Sports
+   THE GAME PAGE IN THE CLUBS' COLOURS (Ethan, 2026-11-01, their Apple Sports
    screenshots of Vikings @ Lions: "I love how they use the team color for
    the background"). detail.js gpWashOn puts the two colours on <body> as
    --wa and --wh and lights #view-pbp.gp-on; js/hoopscast.js and

@@ -1,6 +1,6 @@
 """The angles: where each defence leaks to the players this offence has (2026-11-14).
 
-Ethan, 2026-11-14, of the research reports he writes for himself: "it looks
+Ethan, 2026-11-14, of the research reports they write for themselves: "it looks
 at the player's defense and offense and tries to find good matchups ...
 the Giants are blitz-heavy defense and forces Daniels to run, so it gives
 credit to one of those props. It explains how the Commanders are not good

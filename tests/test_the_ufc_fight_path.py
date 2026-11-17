@@ -1,6 +1,6 @@
 """UFC's fight path: how each man wins by our read, beside how his own fights ended.
 
-Ethan, 2026-10-15, one of the sixteen ideas he asked to have built ("do
+Ethan, 2026-10-15, one of the sixteen ideas they asked to have built ("do
 every one for every sport"): a UFC fight path. Context only; nothing moves
 a price.
 

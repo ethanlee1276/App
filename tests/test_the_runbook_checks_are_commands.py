@@ -693,7 +693,7 @@ def _doc(**kw):
 def test_a_league_the_journal_graded_and_the_file_lost_is_shouted_about():
     """Ethan, 2026-09-19: `grading` showed cfb with 285 likely, 8 main
     and 1 longshot settled — all three rendered books — and the page
-    showed him nothing. Every layer between is generic, so the artifact
+    showed them nothing. Every layer between is generic, so the artifact
     is where the two can disagree."""
     out = _record(_doc(), graded=[("cfb", 294)])
     assert "the journal has graded 294 cfb bet(s)" in out, out

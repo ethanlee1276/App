@@ -81,7 +81,7 @@ way it mostly fails. A FAIL means not shown, not disproved.
 
 Changing the grid or these constants after seeing a run is fitting the
 bar. A PASS changes nothing by itself: it is reported to Ethan with the
-w and T the latest week chose, and the board moves only on his yes.
+w and T the latest week chose, and the board moves only on their yes.
 
 THE YES SO FAR. 2026-10-17, the NFL one board ("yes nfl board"): it passed
 at 0.6966 -> 0.6852 over 199 held-out picks, every week better, the weeks

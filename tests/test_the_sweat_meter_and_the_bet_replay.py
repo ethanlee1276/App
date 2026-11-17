@@ -1,6 +1,6 @@
 """The sweat meter on a live saved slip, and the replay of its night once it settles.
 
-Ethan, 2026-10-15, two of the sixteen ideas he asked to have built ("do
+Ethan, 2026-10-15, two of the sixteen ideas they asked to have built ("do
 every one for every sport"): a live sweat meter and a bet replay. Our own
 number throughout; nothing grades or moves a bet.
 

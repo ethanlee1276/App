@@ -63,7 +63,7 @@ PLAYS_MAX_GAMES = 15
 #: The schedule call's cache — score, inning, outs, the count. Under one
 #: pass of the loop, so every pass reads it afresh: it was thirty, which
 #: outlived two passes of the twelve-second loop (2026-10-25, Ethan timing
-#: the site against his television). One small request per pass.
+#: the site against their television). One small request per pass.
 SCOREBOARD_TTL = 4
 
 

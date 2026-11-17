@@ -1,6 +1,6 @@
 """What if he sits? The on/off record behind a basketball teammate's absence.
 
-Ethan, 2026-10-15, from the brainstorm he asked to have built: an NBA
+Ethan, 2026-10-15, from the brainstorm they asked to have built: an NBA
 "what if he sits" toggle. THE RULE IT KEEPS: a number on the board moves
 only through a measured rule. Your O run met the vacancy bar (a held-out
 test is earned), but no rule has been adopted, so this moves nothing: it

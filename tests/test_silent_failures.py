@@ -224,7 +224,7 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # every caller that prints it says the check could not run. The
         # choice not to fail closed is argued on `live_verdict` itself:
         # stopping the bets Ethan asked for because a query threw is a
-        # surprise he did not agree to.
+        # surprise they did not agree to.
         "live_verdict",
         # ZENO'S RECORD, 2026-09-21, caught by this sweep the hour it was
         # written. Its empty block IS what a quiet day produces — no

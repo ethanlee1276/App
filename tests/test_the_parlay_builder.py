@@ -1,6 +1,6 @@
 """The parlay builder: tonight's legs put together, priced with the correlation between them.
 
-Ethan, 2026-10-15, one of the sixteen ideas he asked to have built ("do
+Ethan, 2026-10-15, one of the sixteen ideas they asked to have built ("do
 every one for every sport"): a correlated parlay builder. Context only;
 nothing on the board moves for it.
 

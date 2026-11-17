@@ -1,6 +1,6 @@
 """Each game's parlays: four 3-leg parlays and three 2-leg touchdown parlays (2026-11-14).
 
-Ethan, 2026-11-14, of the research reports he writes for himself ("Nabers 5+
+Ethan, 2026-11-14, of the research reports they write for themselves ("Nabers 5+
 receptions (max -250) + Skattebo 12+ rush attempts (max -200) + Daniels 25+
 rush yds (max -250). Modeled joint hit rate is ~32-33% with mildly positive
 correlation, so the fair price is ≈ +205. Bet only at +210 or better"):

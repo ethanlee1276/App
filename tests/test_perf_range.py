@@ -1,6 +1,6 @@
 """The range chips window the whole panel, not just the picture.
 
-Ethan, 2026-08-13, from his phone with 1W lit: "when I click the 1 week
+Ethan, 2026-08-13, from their phone with 1W lit: "when I click the 1 week
 button here for the record, it still displays all the information from
 our all time record. fix that so when you click the one week button it
 just shows the record and chart and roi and shit only from that week."

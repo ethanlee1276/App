@@ -1,6 +1,6 @@
 """A moneyline that contradicts its own game's spread is not a price.
 
-Ethan, 2026-09-08, two screenshots side by side — his sportsbook and our
+Ethan, 2026-09-08, two screenshots side by side — their sportsbook and our
 Most Likely page:
 
     his book   DAL -3   ·  DAL -162 / NYG +136

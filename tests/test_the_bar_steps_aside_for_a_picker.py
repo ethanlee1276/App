@@ -1,7 +1,7 @@
 """The tab bar steps aside while a picker or a keyboard is up, on an iPhone
 (web/js/boot.js and web/css/styles.css, "THE BAR AND THE PICKER").
 
-Ethan, 2026-11-05, his iPhone Duo at 7:11 with the tab bar circled halfway up
+Ethan, 2026-11-05, their iPhone Duo at 7:11 with the tab bar circled halfway up
 the Home page, right under "Sort: Start Time": "the menu bar is moving around
 fix that". The sort is a <select>; an iPhone opens its wheel, like its
 keyboard, from the foot of the screen without shrinking the page, and the

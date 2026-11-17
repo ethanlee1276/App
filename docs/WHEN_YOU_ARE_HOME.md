@@ -6105,7 +6105,7 @@ The checks in one go:
 cd /srv/qellys && nice -n 19 bash tools/catchup.sh FO 2>&1 | tee /tmp/fo.txt
 ```
 
-**FP. No hard lines** (step 224). Ethan, with his phone's top bar and league
+**FP. No hard lines** (step 224). Ethan, with their phone's top bar and league
 row circled: "notice how sharp all the lines are on the whole site for
 everything ... Make everything smoother and more blended." Every outline on
 the site is gone (docs/VISUAL_AUDIT.md, "No hard lines"):
@@ -9337,6 +9337,12 @@ starts until the restart lands; one held back that way starts right
 after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
+
+**UW. The code's notes say "they" for you and Zeno** (step 681; 17 November). Nothing to run. About two hundred
+comments, docstrings and docs quoted you as "he" ("from his phone", "the brainstorm he asked to have built",
+"he was right"); they say "they" and "their" now, and so does the one line of it on the page, Zeno's description
+("with the line and price they got"). Your own words inside quotation marks are untouched, and so is every "his"
+that is a player's.
 
 **UV. The sim lab follows an under pick** (step 680; 17 November). Nothing to run. The "Run tonight ×2,000"
 lab under a pick drew every pick as an over: the shaded bars were the right of the line, the count was the over's

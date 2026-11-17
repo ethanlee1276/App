@@ -21,7 +21,7 @@ in `record.json`, and its own section on the page.
 
 WHERE THE ROWS COME FROM, and what this cannot do. FanDuel, DraftKings
 and theScore Bet publish no API for a customer's bet history. Juice Reel
-gets it because Ethan links his sportsbook logins to Juice Reel's own
+gets it because Ethan links their sportsbook logins to Juice Reel's own
 service, and this site will not hold those logins to do the same. So the
 pipeline is book → Juice Reel → an export of what Juice Reel has → this
 store, through `import_rows`, which is idempotent: a row imported open
@@ -346,7 +346,7 @@ def import_rows(conn, rows, source: str = "manual") -> dict:
                            "WHERE key=?", (r["key"],)).fetchone()
         if cur is None and source != POST_SOURCE:
             # THE SAME BET, POSTED BY HAND AND THEN SYNCED. Zeno posts a
-            # bet the moment he places it; Juice Reel later sends the book's
+            # bet the moment they place it; Juice Reel later sends the book's
             # own copy under the book's ticket id. Matched on what both
             # agree on — book, stake, price, the day it was placed (a day
             # either side, for time zones) — the posted row takes the

@@ -28,7 +28,7 @@ let _pbpShowAll = false;
 let _pbpTimer = null;
 let _pbpStrip = { at: 0, league: "", games: [] };
 /* HOW OFTEN AN OPEN LIVE GAME ASKS FOR NEWS (2026-10-25). Ethan, timing
-   the site against his television: "about a 45-second delay". The box
+   the site against their television: "about a 45-second delay". The box
    now writes a fresh file every eight to ten seconds while a game is on
    (launch.SCORES_FAST_S); a page that asked every twelve could add most
    of another twelve on top. Five, and the asking is cheap: `no-cache`
@@ -566,7 +566,7 @@ function closeMoreMenu() {
 
 /* THE CREST IS A GLYPH, THE LABEL IS THE CODE. v3 drew the league code
    inside the circle and again beneath it — Ethan, 2026-09-22, circling
-   the strip on his phone: "a lot of repeats." Every book's league row is
+   the strip on their phone: "a lot of repeats." Every book's league row is
    a picture over a word, so the circle holds the sport's own mark and
    the button's text stays the code, once. The crest is inert markup
    (aria-hidden, no text), so the button's name and every reader of its
@@ -4048,7 +4048,7 @@ async function renderPickOfTheDay() {
      SO THE CARD CHANGES ANYWAY, because the reason it changes is not an
      ROI claim. A page that names a bet, its price and its book under a
      banner saying NO BET is arguing with itself whatever that bet went
-     on to do; Ethan read it that way and he was right to. The lean is
+     on to do; Ethan read it that way and they were right to. The lean is
      still computed, still published, still in `potd_report` and the
      operator log — it is the working, and the working is honest. It is
      not the product, and a surface that recommends by placement while
@@ -6130,7 +6130,7 @@ function renderLivePicks() {
      time — while the game cards above them can be filtered to any league
      or to all of them at once. Nothing on the page said so, which is how
      Ethan came to be looking at the Lions live above a list of baseball
-     bets on 2026-09-18 and had no way to tell what he was reading.
+     bets on 2026-09-18 and had no way to tell what they were reading.
 
      The chip now moves the whole tab (see `renderLiveBoard`), so the two
      halves agree whenever a league is chosen. "All" is the state that
@@ -9485,8 +9485,8 @@ function envChip(r) {
    already on the card rather than printing the same fact twice in two
    wordings. */
 /* THE MATCHUP, UNDER THE PICK. Ethan, 2026-09-23: top and bottom defences
-   against each position were winning him bets — the Lions giving up big
-   receiving days — and he wanted the model following it and the picks
+   against each position were winning them bets — the Lions giving up big
+   receiving days — and they wanted the model following it and the picks
    showing it. `matchup_card` comes from engine/defensevs.effect: what this
    defence gives up per game to the player's position, where that ranks
    (1st = gives up the most), a second line beside it (touchdowns under a
@@ -10107,7 +10107,7 @@ function likelyTier(r) {
      shown only because nothing cleared the bar, and it is already
      labelled "below the bar" on the card itself. `bettable` false is a
      market we can rank but not price. What is left is a row that cleared
-     MIN_PROB, which is 0.55, which Ethan set himself. Picking a prettier
+     MIN_PROB, which is 0.55, which Ethan set themselves. Picking a prettier
      number here — 0.65 for a gold tier, say — would be inventing a claim
      the measurements do not make and painting it the most confident
      colour we own. */
@@ -10999,7 +10999,7 @@ function renderLikely() {
                                   .filter((r) => !likelyDropped(r)) }))
     .filter((sh) => sh.rows.length);
   /* THE JUMP BAR. Ethan, 2026-09-02, circling a shelf head halfway down
-     his screen: "we should put home run and hits and shit like that all
+     their screen: "we should put home run and hits and shit like that all
      at the top so we can not have too scroll and just click. Do the
      same thing for nfl and CFB and nba and wnba too." Built from the
      same shelves array every sport publishes — football gets touchdown
@@ -19726,7 +19726,7 @@ const FAQ = [
    is the entire pitch. */
 /* THE NUMBERS, AT THE TOP, WHERE THEY DO WORK.
    -------------------------------------------------------------------
-   Ethan, 2026-08-23, looking at the plans on his phone: "are we
+   Ethan, 2026-08-23, looking at the plans on their phone: "are we
    displaying as bunch captivating and eye catching information as we
    can?"
 
@@ -20758,7 +20758,7 @@ function injWhen(ts) {
 }
 
 /* Rebuilt 2026-08-18 from a six-column agate table. Ethan, screenshot of
-   his phone: "organize this page better as well. it seems so smooshed" —
+   their phone: "organize this page better as well. it seems so smooshed" —
    and it was: Team + Player + Status + Injury + Filed + Return at 393px
    crushed every column and pushed Status half off the screen behind an
    overflow scroll. A row is now two lines with nothing to crush: who and
@@ -23225,7 +23225,7 @@ function renderSleeperPanel(d, ctx) {
     (POS_ORDER[a.pos] ?? 9) - (POS_ORDER[b.pos] ?? 9)
     || (b.u ? b.u.fp_pg : 0) - (a.u ? a.u.fp_pg : 0));
 
-  /* THE ROW IS A DOOR. Ethan, 2026-09-09, with his own Sleeper roster on
+  /* THE ROW IS A DOOR. Ethan, 2026-09-09, with their own Sleeper roster on
      screen: "when you click on a player, it will show you weekly fantasy
      projections, and trade targets and if you should bench them for that
      week." Every other player on this page already opens the dossier —
@@ -24283,7 +24283,7 @@ function wallBlocked(name) {
     && !WALL_OPEN.includes(name);
 }
 
-/* THE ACCOUNT WALL (Ethan, 2026-10-25, the Live tab open on his phone:
+/* THE ACCOUNT WALL (Ethan, 2026-10-25, the Live tab open on their phone:
    "people need an account to use the site ... Look at the Real app and how
    they make u create an account on the first screen"). Signed out, every
    page but these opens the sign-up instead, and the one asked for waits in
@@ -25779,7 +25779,7 @@ function askErrorText(status, body) {
 
    The state is one attribute on the room (data-bot), and only the robots
    marked .live act on it: the big one in the empty room, and the newest
-   answer's. The header's holds still — Ethan, circling both heads on his
+   answer's. The header's holds still — Ethan, circling both heads on their
    phone: "we only need this one to move, don't make the one [at] the top
    move." One robot talking at a time is a conversation; two is a mirror.
    Every face gets its own filter ids; nothing moves under reduced motion. */

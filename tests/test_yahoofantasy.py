@@ -1,6 +1,6 @@
 """A Yahoo league, read through OAuth2 — and the boundary that allows it.
 
-Ethan, 2026-08-15, named Yahoo among the platforms he plays in.
+Ethan, 2026-08-15, named Yahoo among the platforms they play in.
 
 WHY YAHOO IS BUILT AND A PRIVATE ESPN LEAGUE IS NOT, in one sentence:
 Yahoo's flow never shows this app a password, the user approves it on

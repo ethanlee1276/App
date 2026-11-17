@@ -14,7 +14,7 @@ until both left on 2026-10-31: Parlays became a page of its own, and High
 Confidence gave way to the ranked Most Likely list (Ethan: "we have most
 likely picks that are ranked ... so we don't need that anymore"). Predict,
 Fantasy and Radar stay where Ethan put them on 2026-09-10 (the audit's item
-6 is his call).
+6 is their call).
 """
 import json
 import os

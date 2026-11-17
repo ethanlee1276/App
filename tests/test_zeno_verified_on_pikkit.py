@@ -1,4 +1,4 @@
-"""Zeno's picks say where to verify them: his Pikkit page, everywhere.
+"""Zeno's picks say where to verify them: their Pikkit page, everywhere.
 
 Ethan, 2026-09-26: "here is the link to my pikkit page we users can use it
 to verrify my charts and picks and record and we need to plaster

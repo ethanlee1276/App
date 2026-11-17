@@ -1,6 +1,6 @@
 """A Yahoo fantasy league, read through OAuth2 — no password, revocable.
 
-Ethan, 2026-08-15, named Yahoo among the platforms he plays in.
+Ethan, 2026-08-15, named Yahoo among the platforms they play in.
 
 WHY THIS ONE IS DIFFERENT FROM THE OTHER TWO. Sleeper is public and ESPN
 is public when a league says so; neither needs anything of yours. Yahoo

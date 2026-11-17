@@ -22,8 +22,8 @@ reads this file and picks up the top item.
 The paywall itself is BUILT AND SWITCHED OFF. `QB_PAYWALL` unset means
 boards publish whole and the site behaves exactly as it does today. Put
 Ethan's address in `QB_COMP_EMAILS` in `/etc/qellys/env` BEFORE ever
-setting `QB_PAYWALL=1`, or the first thing the paywall does is lock him
-out of his own board.
+setting `QB_PAYWALL=1`, or the first thing the paywall does is lock them
+out of their own board.
 
 ---
 

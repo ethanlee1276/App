@@ -1,7 +1,7 @@
 """The carry and route chart's X sits below the phone's status bar, and stays in reach.
 
 Ethan, 2026-10-13, a screenshot of Christian McCaffrey's route chart from
-his phone with the X circled under the clock and the battery: "fix this
+their phone with the X circled under the clock and the battery: "fix this
 issue where the X button is stuck up top in the bar so I can't even click
 it." The site runs edge to edge under the iPhone's status bar
 (viewport-fit=cover, black-translucent), and the chart overlay began at the

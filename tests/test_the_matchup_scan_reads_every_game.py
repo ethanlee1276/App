@@ -1,6 +1,6 @@
 """The matchup scan: corners, scheme, injuries and a read on every player.
 
-Ethan, 2026-09-24, with a Falcons @ Packers breakdown he wants for every
+Ethan, 2026-09-24, with a Falcons @ Packers breakdown they want for every
 game: "what players could shine and what players couldn't and where
 there's holes in the defense and offense". engine/sources/nflscheme reads
 the defender-level files (PFR coverage allowed, participation charting);

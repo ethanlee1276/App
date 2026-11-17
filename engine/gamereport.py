@@ -1,6 +1,6 @@
 """The game report: every NFL game written out top to bottom, the way a reader reads it.
 
-Ethan, 2026-10-19, of the outside research reports he had been pasting in
+Ethan, 2026-10-19, of the outside research reports they had been pasting in
 all season (Bucs @ Cowboys, Bills @ Rams and the rest): "I want our board
 too kinda look like that when you click on a game. I want a full layed out
 detailed explanation for every nfl game just like how the report is. Obv
@@ -2718,7 +2718,7 @@ def sec_changes(c: Ctx) -> dict | None:
 
 
 # --- the short version, said in sentences ---------------------------------------------
-# Ethan, 2026-10-22, at the Patriots–Bears short version on his phone: "we
+# Ethan, 2026-10-22, at the Patriots–Bears short version on their phone: "we
 # need to be more descriptive in the wording. It's very blunt." It read like
 # a wire slip — "CHI by 3 at home, total 50.5", "Out: T.J. Edwards (CHI
 # LB)", "Last meeting: 2024 week 10 at CHI: NE won 19-3 · CHI −6.5, NE

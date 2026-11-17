@@ -584,7 +584,7 @@ def sitout_report(days: int) -> int:
     table: every league's slates over the window and the share that carried
     a pick, then the site as a whole. Read-only, like the rest of this tool.
 
-    Ethan, 2026-10-29: the card had read NO BET on his screen often enough to
+    Ethan, 2026-10-29: the card had read NO BET on their screen often enough to
     ask; this is the count, the same one the Record page prints."""
     try:
         from engine import ledger

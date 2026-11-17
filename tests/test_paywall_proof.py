@@ -1,6 +1,6 @@
 """The one claim on the shop a stranger can check, put where it is read.
 
-Ethan, 2026-08-23, scrolling the plans on his phone: "are we displaying as
+Ethan, 2026-08-23, scrolling the plans on their phone: "are we displaying as
 bunch captivating and eye catching information as we can?"
 
 The page was never short of INFORMATION — a hero, nine sport chips, ten

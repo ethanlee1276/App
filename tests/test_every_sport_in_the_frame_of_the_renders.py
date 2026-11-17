@@ -1,6 +1,6 @@
 """Every other sport's chart in the frame of Ethan's two NFL renders.
 
-Ethan, 2026-10-14, after the carry and route pages took his renders:
+Ethan, 2026-10-14, after the carry and route pages took their renders:
 "Now I need you to take those renders ... and go match it with all the
 other sports too, but obviously make sense and correlate it with that
 sport. ... we want all these pages to be matching between sports. So it

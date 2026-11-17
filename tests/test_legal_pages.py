@@ -303,7 +303,7 @@ def test_the_policy_does_not_claim_we_avoid_something_we_do():
 
 
 def test_no_document_still_calls_itself_a_draft():
-    """Completed 2026-08-22. Ethan supplied the counterparty (himself, as
+    """Completed 2026-08-22. Ethan supplied the counterparty (themselves, as
     a sole proprietor) and the contact addresses; the arbitration clause
     and the remaining boilerplate were drafted to ordinary practice.
 

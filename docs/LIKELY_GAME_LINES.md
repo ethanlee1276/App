@@ -262,7 +262,7 @@ survive a bias that moves with how many books a pull returned.
 
 ## The page is never blank, and never shows a number we doubt (2026-09-08)
 
-Ethan, the same day he asked for the right prices: "Also I don't want an
+Ethan, the same day they asked for the right prices: "Also I don't want an
 empty boar either we need to have picks period." Two days before that he
 had set MIN_PROB to 0.55 himself, having been shown it costs about half
 the game-lines shelf. Both instructions stand. They only conflict if the
@@ -394,7 +394,7 @@ both leagues.
 
 ## The moneyline and the spread, read together (2026-09-08)
 
-Ethan, with two screenshots side by side — his sportsbook and our page:
+Ethan, with two screenshots side by side — their sportsbook and our page:
 
     his book   DAL -3   ·  DAL -162 / NYG +136
     our board  NYG ML -218, 66% likely, "the likely side"

@@ -54,7 +54,7 @@ def test_both_icons_exist_in_the_bar():
 
 
 def test_the_social_links_live_in_the_drawer_not_the_topbar():
-    """Ethan, 2026-08-25, circling the icon row on his phone: "clean up
+    """Ethan, 2026-08-25, circling the icon row on their phone: "clean up
     this top row. Maybe put the discord and instagram button at the
     bottom of the 3bar menu page." Outbound social links are
     destinations, not tools you reach for mid-scroll — they moved to

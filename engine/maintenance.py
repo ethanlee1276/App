@@ -53,7 +53,7 @@ MAX_CATCH_UP_DAYS = 45
 NHL_CATCHUP_BUDGET_S = 20 * 60
 # Never auto-harvest below this measured remaining quota — live odds for
 # today's picks always come first. Was 3000; Ethan, 2026-09-07, setting the
-# credit budget the data plan asked him for: "set the harvest floor to 1000
+# credit budget the data plan asked them for: "set the harvest floor to 1000
 # and day budget 400". A thinner floor buys more weeks of prop closes on a
 # lean month; the day cap below is what keeps one night from spending it.
 HARVEST_MIN_REMAINING = 1000

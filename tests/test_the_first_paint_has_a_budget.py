@@ -51,7 +51,7 @@ HTML = (WEB / "index.html").read_text()
 #: first use like the chart library (Ethan: "a full social feature …
 #: profiles for users" — 13 KB gz that no first visit should carry). What
 #: stays is the loader, the route and two icons. Told to Ethan.
-#: 481 -> 483 on 2026-10-07 by the Bet it sheet (Ethan, from his phone, at
+#: 481 -> 483 on 2026-10-07 by the Bet it sheet (Ethan, from their phone, at
 #: a black panel: "a box with … all the sportsbooks logos that we offer"):
 #: the book table with each book's colours, the tile renderer and the
 #: sheet that opens on its own layer — +1.35 KB gz. Told to Ethan.

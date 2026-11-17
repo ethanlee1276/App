@@ -1,6 +1,6 @@
 """Is the data we add actually used, or is it just sitting there?
 
-Ethan asked exactly that, and on the day he asked it `velocity.py` — ten
+Ethan asked exactly that, and on the day they asked it `velocity.py` — ten
 tests, validated against a real pitcher — had zero consumers outside its
 own module and a CLI probe.
 """

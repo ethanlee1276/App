@@ -4063,7 +4063,7 @@ def ml_doctor(sport: str = "nfl") -> None:
     """Is the moneyline on the board the price a book is actually posting?
 
     THE QUESTION THAT HAD BEEN ASKED FOUR TIMES AND ANSWERED BY HAND
-    EVERY TIME. Ethan, with his sportsbook open beside ours, 2026-09-03:
+    EVERY TIME. Ethan, with their sportsbook open beside ours, 2026-09-03:
     "These lines along with more are completely wrong, none of these
     teams are favored to win on any sports book." 2026-09-08: "I don't
     want you too stop working until we display the right lines and
@@ -11668,7 +11668,7 @@ def main() -> None:
     # AN UNKNOWN FLAG STOPS HERE. Every branch below tests membership in
     # argv, so a flag nobody recognises matches nothing and falls through
     # to the bottom of this function — which starts the web server. Ethan typed
-    # `launch.py --resettle` (a command this script's own output told him
+    # `launch.py --resettle` (a command this script's own output told them
     # to run) and got "Port 8000 is already in use", which is a true
     # sentence about the wrong question and reads like the box is broken.
     # Refusing by name, with a suggestion, costs one comparison.
