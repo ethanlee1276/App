@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WL. A game that ends after its board has moved on is still fact-checked** (step 722; 17 November). Nothing to run.
+Building the welcome page's numbers showed How our reports did holding 14 NFL games, 12 of college basketball, 8 of
+the NBA, 2 of the NHL and none of college football. Two things made that zero. The fact checks began on 16 November
+and college football's last games were Saturday the 14th, so none had finished since. And a real hole: a report is
+graded and archived off the board's own game, and college football's board is a day's, moving to its next slate at
+midnight Eastern while Saturday's late games are still being played, so a final the board no longer held would never
+have been checked (in any league: a box score that lands after the board has moved had the same end). Now the report
+kept before the start, with its picks and parlays, is graded against the history's own final and archived once its
+box score is in, for a day after the game leaves the board, and the build's line says "N more archived after leaving
+the board". Reproduced both ways on a college final: on the board (the ordinary path grades it) and off it (the new
+one does). Tuesday's three college games are the first to finish since the fact checks began; the overnight check
+reads them.
+
 **WK. The welcome page shows the game report, then everything else** (step 721; 17 November). Nothing to run. You
 asked for more features on the welcome page, the game report first. The sign-up screen now has, under tonight's
 locked picks and above the form, a card for the game report: what one holds (who we think wins, what decides it, the

@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-17",
+      "kind": "fix",
+      "title": "A game that ends after the board moves on is still fact-checked",
+      "body": "A report was fact-checked only while its game was still on the board, and college football’s board moves to its next slate at midnight Eastern, with Saturday’s late games still being played. A game that finishes after that, or whose box score arrives late in any league, is now graded and kept from the report written before its start, with its picks and parlays."
+    },
+    {
+      "date": "2026-11-17",
       "kind": "ship",
       "title": "The welcome page shows the game report and everything else",
       "body": "The first screen now shows what a game report holds, from who we think wins to the parlays made of its picks and how it grades itself after the final, with the reports’ own record and the newest game they fact-checked, right or wrong. Under it, a tile for every other feature says whether it is free or for members, and the Features page now leads with the game reports."

@@ -4730,9 +4730,78 @@ def keep_started(result: dict, reports: list, sport: str, out, at: str | None, c
     # after the board has moved on.
     from . import reportarchive
     n_arch = reportarchive.save(result, reports, sport, out)
+    # A FINAL THE BOARD NO LONGER HOLDS (`_archive_departed`): graded off the
+    # history's final from the report kept before its start.
+    n_late = _archive_departed(result, sport, out, conn)
     return reports, ((f"; {n} started game{'' if n == 1 else 's'} kept as written before the start"
                       if n else "") + graded
-                     + (f"; {n_arch} finished report{'' if n_arch == 1 else 's'} archived" if n_arch else ""))
+                     + (f"; {n_arch} finished report{'' if n_arch == 1 else 's'} archived" if n_arch else "")
+                     + (f"; {n_late} more archived after leaving the board" if n_late else ""))
+
+
+def _archive_departed(result: dict, sport: str, out, conn) -> int:
+    """A GAME THAT ENDED AFTER ITS BOARD MOVED ON IS STILL GRADED (CFBFACT1,
+    2026-11-17). A finished report is graded and archived off the board's own
+    game (`_grade_finals`, reportarchive.save), so a final the board no longer
+    held was never checked: college football's board is a day's, and moves to
+    its next slate at midnight Eastern while Saturday's late games are still
+    being played; any league's game whose box score lands after its board has
+    moved had the same end. Live on 17 November, How our reports did held 14
+    NFL games, 12 of college basketball, 8 of the NBA and none of college
+    football.
+
+    The report kept before the start (engine/reportkeep: it stays a day past
+    its date once off the board), its tickets and picks with it, is graded
+    against the history's own final (the `games` row the settle grades bets
+    on: written for a completed game only) and archived the same way, once its
+    box score is in; a box not in yet is tried again next build. The NFL's
+    board is its week's and holds every final until the week turns, so it is
+    left to that. Returns the reports archived; never raises."""
+    if not out or conn is None or str(sport or "").lower() == "nfl":
+        return 0
+    try:
+        import copy
+        from . import reportarchive, reportgrade, reportkeep, reportoutcome
+        from .gate import _full_dir_for
+        from .reportlog import game_key, read
+        where = _full_dir_for(out)
+        kept = read(reportkeep.path_for(sport, where)).get("games")
+        if not isinstance(kept, dict) or not kept:
+            return 0
+        on_board = {game_key(g) for g in (result or {}).get("games") or [] if isinstance(g, dict)}
+        n = 0
+        for key, rec in kept.items():
+            if key in on_board or not isinstance(rec, dict) or not isinstance(rec.get("report"), dict):
+                continue
+            pair, _, day = key.rpartition("|")
+            away, _, home = pair.partition("@")
+            if len(day) != 10 or not away or not home:
+                continue
+            done = ((reportarchive.load(sport, day, away, home, where=where) or {}).get("report") or {}).get("graded")
+            if isinstance(done, dict) and done.get("status") == "graded" \
+                    and done.get("version") == reportgrade.GRADE_VERSION:
+                continue
+            row = conn.execute("SELECT home_score, away_score FROM games WHERE sport=? AND period=? AND home=? "
+                               "AND away=? AND home_score IS NOT NULL AND away_score IS NOT NULL",
+                               (sport, day, home, away)).fetchone()
+            if row is None:
+                continue
+            r = copy.deepcopy(rec["report"])
+            g = {"home": home, "away": away, "date": day, "kickoff": r.get("kickoff") or "",
+                 "live": {"state": "final", "home_score": row[0], "away_score": row[1]}}
+            if (reportgrade.grade(r, g, conn, sport, day) or {}).get("status") != "graded":
+                continue
+            board = {"date": day, "games": [g]}
+            if isinstance(rec.get("parlays"), dict) and rec["parlays"]:
+                board["game_parlays"] = {"games": [rec["parlays"]]}
+            if isinstance(rec.get("picks"), dict) and rec["picks"]:
+                board[reportkeep.KEPT_PICKS] = {f"{away}@{home}": rec["picks"]}
+            reportoutcome.attach(board, [r], sport)
+            n += reportarchive.save(board, [r], sport, out)
+        return n
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ finals off the board not archived ({type(exc).__name__}: {exc})")
+        return 0
 
 
 def _grade_finals(result: dict, reports: list, sport: str, conn, out=None) -> str:
