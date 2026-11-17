@@ -66,6 +66,8 @@ READ_WORDS = {"breakout": "favorable, a breakout candidate", "good": "favorable"
 #: How a listed player practised (engine/practice.PRACTICE), in words.
 PRACTICE_WORDS = {"DNP": "did not practice", "Limited": "was limited in practice",
                   "Full": "practiced fully"}
+#: The day before's, said after it ("the day before: no practice").
+PRACTICE_BEFORE = {"DNP": "no practice", "Limited": "limited", "Full": "full"}
 
 
 def path_for(sport: str, where) -> Path:
@@ -266,7 +268,7 @@ def diff(old: dict, new: dict, home: str, away: str) -> list:
         opr, npr = old["practice"], new["practice"]
         for p in sorted(set(opr) & set(npr)):
             if opr[p] != npr[p]:
-                out.append(f"{name(p)} {PRACTICE_WORDS[npr[p]]}, after he {PRACTICE_WORDS[opr[p]]}")
+                out.append(f"{name(p)} {PRACTICE_WORDS[npr[p]]} (the day before: {PRACTICE_BEFORE[opr[p]]})")
     return out
 
 

@@ -36,11 +36,11 @@ def test_goal_line_work_reads_as_counts():
                       targets_goal_line=0.5, rz_touch_share=0.6, measured=True, games=2)
     assert rz.goal_line() == {"games": 2, "rz_car": 11, "i5_car": 5, "rz_tgt": 2, "i10_tgt": 1}
     assert rz.goal_line_text() == ("11 red-zone carries (5 inside the 5), 2 red-zone targets "
-                                   "(1 inside the 10) in his last 2 games")
+                                   "(1 inside the 10) in the last 2 games")
     st = RedZoneUsage(targets_inside_10=3.0, targets_goal_line=1.5, measured=True, games=2)
-    assert st.goal_line_text() == "6 red-zone targets (3 inside the 10) in his last 2 games"
+    assert st.goal_line_text() == "6 red-zone targets (3 inside the 10) in the last 2 games"
     assert RedZoneUsage(measured=False, games=0).goal_line_text() == ""
-    assert RedZoneUsage(measured=True, games=1).goal_line_text() == "No red-zone touches in his last 1 game"
+    assert RedZoneUsage(measured=True, games=1).goal_line_text() == "No red-zone touches in the last 1 game"
 
 
 def test_the_touchdown_chain_says_it_and_carries_it():
@@ -73,9 +73,9 @@ def _scorer(player, team, prob, odds, **kw):
 
 FIELD = [
     _scorer("Jahmyr Gibbs", "DET", 0.70, -320,
-            goal_line_text="11 red-zone carries (5 inside the 5) in his last 2 games"),
+            goal_line_text="11 red-zone carries (5 inside the 5) in the last 2 games"),
     _scorer("Amon-Ra St. Brown", "DET", 0.61, -125, position="WR",
-            goal_line_text="6 red-zone targets (3 inside the 10) in his last 2 games"),
+            goal_line_text="6 red-zone targets (3 inside the 10) in the last 2 games"),
     _scorer("Breece Hall", "NYJ", 0.57, -105),
     _scorer("Sam LaPorta", "DET", 0.40, 195, position="TE"),
     _scorer("Garrett Wilson", "NYJ", 0.37, 180, position="WR"),
@@ -93,7 +93,7 @@ def test_who_scores_ranks_the_game_and_says_each_seat():
                                            "Garrett Wilson", "Jameson Williams"], \
         "six, likeliest first; a questionable player and another game's are not in it"
     gibbs, asb, hall, laporta = rows[:4]
-    assert gibbs["why"][0] == "11 red-zone carries (5 inside the 5) in his last 2 games"
+    assert gibbs["why"][0] == "11 red-zone carries (5 inside the 5) in the last 2 games"
     assert gibbs["why"][-1].startswith("Likely — but -320 is past the board's -250 cap, so it is priced out")
     assert asb["on_board"] and asb["why"][-1] == "On the Most Likely board — Top pick."
     assert hall["why"][-1] == "Clears the bar; the board's seats went to likelier picks."

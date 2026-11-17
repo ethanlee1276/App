@@ -541,7 +541,7 @@ def research_scorers(scorers: list[dict], board: dict, games: list, sport: str,
         read = reads.get((_key(leg.get("player")), leg.get("team") or ""))
         r = research(leg, read, _game_of(leg, games), sport)
         if not r:
-            no("no matchup read on him" if not read else "his read says avoid" if read.get("read") == "avoid"
+            no("no matchup read on the player" if not read else "the read says avoid" if read.get("read") == "avoid"
                else "a position the readings do not cover")
             continue
         if not r["red_zone"]:
@@ -723,8 +723,8 @@ def script_need(leg: dict, game: dict | None) -> dict:
         put("margin", -s * t, f"{team} chasing or trading scores — teams throw when behind" if up
             else f"{team} ahead — a leading team throws less late")
     elif mkt in _PASS:
-        put("points", s, "points — a quarterback's yards rise with his team's score" if up
-            else "a low-scoring game for his team")
+        put("points", s, "points — a quarterback's yards rise with the team's score" if up
+            else "a low-scoring game for the team")
     elif mkt in _TD:
         put("points", s, "points — a touchdown is points" if up else "a low-scoring game")
     elif mkt in _K:
@@ -795,7 +795,7 @@ def pair_link(sport: str, a: dict, b: dict, game: dict | None) -> tuple:
     from . import parlays as P
     from .twoleg import plain
     if (a.get("player") or "_a") == (b.get("player") or "_b"):
-        return False, 0.0, "the same player twice — if he sits, both legs die", ""
+        return False, 0.0, "the same player twice — if that player sits, both legs die", ""
     try:
         rel = P.relate(sport, a, b)
     except Exception:                                        # noqa: BLE001
@@ -914,7 +914,7 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
     for l in legs:
         st = str(l.get("injury_status") or l.get("own_status") or "").upper()
         if st in ("QUESTIONABLE", "GTD", "DAY-TO-DAY"):
-            caveats.append(f"{l.get('player')} is listed questionable — confirm he plays before you bet it")
+            caveats.append(f"{l.get('player')} is listed questionable — confirm they play before you bet it")
     # CAN A BOOK PAY IT? The most generous same-game price a book plausibly
     # quotes is the legs' product less the doctrine's best-case cut
     # (parlays.BEST_CASE_SGP_TAX); a ticket that needs more than that is
@@ -1242,7 +1242,7 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
         script = f"What it needs: {t['script']}"
         if t.get("script_chance") is not None:
             script += f" — about {float(t['script_chance']):.0%} likely by the lines"
-    backs = [f"If {b['for']} is out or his number moves: {pick_words(b['leg'])} "
+    backs = [f"If {b['for']} is out or that number moves: {pick_words(b['leg'])} "
              f"({_odds_words(b['leg'].get('odds'))}, {float(b['leg'].get('p') or 0):.0%})"
              for b in t.get("backups") or []]
     out = {"title": head, "price_line": price, "legs": legs, "script": script,
@@ -1315,8 +1315,8 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
                 out["scorers_note"] = (
                     f"{len(out['scorers'])} of {SCORER_PER_GAME}: {len(sc)} of the {n_priced} priced "
                     f"scorer(s) in this game at {floor} or better carry a research case — a red-zone role "
-                    f"and {RESEARCH_MIN} or more of the {RESEARCH_MAX} research points (his team's expected "
-                    f"points, the defence he faces, his usage and red-zone work, the matchup read and the "
+                    f"and {RESEARCH_MIN} or more of the {RESEARCH_MAX} research points (the team's expected "
+                    f"points, the defence faced, usage and red-zone work, the matchup read and the "
                     f"game script)")
             else:
                 out["scorers_note"] = (f"{len(out['scorers'])} of {SCORER_PER_GAME}: {len(sc)} priced "

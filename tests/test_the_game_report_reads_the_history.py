@@ -167,7 +167,7 @@ def test_form_reads_his_season_his_last_three_and_his_red_zone():
     rows = dict((k, v) for k, v in card["form"])
     assert rows["This season"] == ["5 games: 88 carries, 400 yds (4.5 a carry), 1 TD; 12 catches, 80 yds"]
     assert rows["Last 3"][0] == "Wk 5 at O5: 25 carries, 120 yds, 1 TD; 4 catches, 20 yds"
-    assert rows["Lately"] == ["130 yards from scrimmage a game over his last 3, up from 45 in his other 2"]
+    assert rows["Lately"] == ["130 yards from scrimmage a game over the last 3, up from 45 in the other 2"]
     assert rows["Red zone"] == ["15 carries inside the 20 (5 inside the 5) — 75% of DET's; "
                                 "5 targets inside the 20 (0 inside the 10) — 25% of DET's"]
     text = R.to_text(rep)
@@ -369,8 +369,8 @@ PRACTICE = {"rows": [
 def test_the_practice_report_says_how_often_men_listed_the_same_way_have_played():
     rep = _built(ideas={"practice": PRACTICE})
     text = _blocks_text(_sec(rep, "injuries"))
-    assert ("Jahmyr Gibbs (DET, ankle) — questionable; he was limited in practice at his last practice of the "
-            "week. Players listed questionable who were limited in practice have played 81% of the time "
+    assert ("Jahmyr Gibbs (DET, ankle) — questionable; last practice of the week: limited"
+            ". Players listed questionable who were limited in practice have played 81% of the time "
             "(1,240 listings), taking 93% of their usual snaps when they did") in text
     assert "own record" not in text, "the club's number waits until it holds out"
     assert "Also listed: Backup Guy (GB, doubtful)" in text
@@ -386,7 +386,7 @@ ROLE = {"rows": [{"player": "Mike Williams", "team": "GB", "share": "tgt", "labe
 
 def test_a_role_change_is_his_share_before_and_since_called_a_reading_until_it_holds():
     text = _blocks_text(_sec(_built(ideas={"role": ROLE}), "watch"))
-    assert ("Mike Williams (GB): target share up to 21% over his last 3 games, from 8% before — the detector "
+    assert ("Mike Williams (GB): target share up to 21% over the last 3 games, from 8% before — the detector "
             "is 82% sure the change is real") in text
     assert "this is a reading" in text and "Roles on the move" in text
     held = {"rows": [dict(ROLE["rows"][0], holds=True)]}

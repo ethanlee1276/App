@@ -62,8 +62,8 @@ def test_the_short_version_says_our_chance_beside_his_price_then_the_evidence():
     i = text.index("Likeliest to score: ")
     line = text[i:text.index("\n", i)]
     assert line.startswith("Likeliest to score: Jahmyr Gibbs, the Lions' running back — 64% to score by our "
-                           "numbers (his price, −175, says 64%): "), line
-    assert ("14 carries (5 inside the 5) and 2 targets (1 inside the 10) inside the 20 in his last 6 games, "
+                           "numbers (the price, −175, says 64%): "), line
+    assert ("14 carries (5 inside the 5) and 2 targets (1 inside the 10) inside the 20 in the last 6 games, "
             "36% of the Lions' red-zone work") in line, line
     assert "the Packers give up the second-most touchdowns to running backs" in line, line
     # Not the books' team total as the reason, and never "Lions's".
@@ -73,7 +73,7 @@ def test_the_short_version_says_our_chance_beside_his_price_then_the_evidence():
 def test_our_chance_and_his_price_can_disagree_and_both_are_said():
     line = R.to_text(_rep(odds=150))
     i = line.index("Likeliest to score: ")
-    assert "64% to score by our numbers (his price, +150, says 40%)" in line[i:i + 200], line[i:i + 200]
+    assert "64% to score by our numbers (the price, +150, says 40%)" in line[i:i + 200], line[i:i + 200]
 
 
 def test_his_card_says_whose_likeliest_scorer_he_is():
@@ -81,7 +81,7 @@ def test_his_card_says_whose_likeliest_scorer_he_is():
     sec = next(s for s in rep["sections"] if s["key"] == "matchups")
     cards = [it for b in sec["blocks"] if b.get("type") == "verdicts" for it in b.get("items") or []]
     gibbs = next(it for it in cards if it.get("player") == "Jahmyr Gibbs")
-    assert gibbs["why"][0].startswith("The Lions' likeliest scorer — 64% to score by our numbers (his price, −175, "
+    assert gibbs["why"][0].startswith("The Lions' likeliest scorer — 64% to score by our numbers (the price, −175, "
                                       "says 64%): "), gibbs["why"][0]
 
 

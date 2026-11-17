@@ -496,13 +496,13 @@ def injury_check(sport: str, claim: dict, bx) -> dict | None:
         return {"status": "right" if says == "sits" else "info", "says": says, "played": None,
                 "words": "No stats in the box score" + (", as listed." if says == "sits" else ".")}
     if says == "sits":
-        return ({"status": "wrong", "says": says, "played": True, "words": f"Wrong: he played — {line}."} if did else
-                {"status": "right", "says": says, "played": False, "words": "Right: he sat."})
+        return ({"status": "wrong", "says": says, "played": True, "words": f"Wrong: played — {line}."} if did else
+                {"status": "right", "says": says, "played": False, "words": "Right: sat out."})
     if says == "plays":
-        return ({"status": "right", "says": says, "played": True, "words": f"Right: he played — {line}."} if did else
-                {"status": "wrong", "says": says, "played": False, "words": "Wrong: he sat."})
-    return ({"status": "played", "says": says, "played": True, "words": f"He played — {line}."} if did else
-            {"status": "sat", "says": says, "played": False, "words": "He sat."})
+        return ({"status": "right", "says": says, "played": True, "words": f"Right: played — {line}."} if did else
+                {"status": "wrong", "says": says, "played": False, "words": "Wrong: sat out."})
+    return ({"status": "played", "says": says, "played": True, "words": f"Played — {line}."} if did else
+            {"status": "sat", "says": says, "played": False, "words": "Sat out."})
 
 
 def _listed_text(report: dict) -> str:

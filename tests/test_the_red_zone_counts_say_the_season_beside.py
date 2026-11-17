@@ -62,7 +62,7 @@ def test_the_play_by_play_reader_counts_his_whole_season_beside_his_last_six():
     gl = rz.goal_line()
     assert gl["games"] == 6 and gl["season"]["games"] == 9 and gl["season"]["rz_car"] == 23, gl
     text = rz.goal_line_text()
-    assert text.endswith("in his last 6 games; 23 carries (9 inside the 5) and 3 targets in his 9 games this season"), text
+    assert text.endswith("in the last 6 games; 23 carries (9 inside the 5) and 3 targets in 9 games this season"), text
 
 
 def test_a_season_no_longer_than_the_games_counted_says_nothing_more():
@@ -86,11 +86,11 @@ def test_the_red_zone_list_and_the_scorer_line_say_the_season_beside_the_last_si
     board = _board()
     rep = R.build(board["games"][0], board, allowed=GR.ALLOWED, names=GR.NAMES)
     text = R.to_text(rep)
-    assert ("Jahmyr Gibbs (RB): 14 carries (5 inside the 5) and 2 targets (1 inside the 10) in his last 6 games "
-            "— 2.7 a game, 36% of DET's; 21 carries (8 inside the 5) and 3 targets (1 inside the 10) in his 9 games "
+    assert ("Jahmyr Gibbs (RB): 14 carries (5 inside the 5) and 2 targets (1 inside the 10) in the last 6 games "
+            "— 2.7 a game, 36% of DET's; 21 carries (8 inside the 5) and 3 targets (1 inside the 10) in 9 games "
             "this season. Against GB: about 3.1 this game.") in text, text
-    assert ("14 carries (5 inside the 5) and 2 targets (1 inside the 10) inside the 20 in his last 6 games "
-            "(21 carries and 3 targets in his 9 games this season), 36% of the Lions' red-zone work") in text, text
+    assert ("14 carries (5 inside the 5) and 2 targets (1 inside the 10) inside the 20 in the last 6 games "
+            "(21 carries and 3 targets in 9 games this season), 36% of the Lions' red-zone work") in text, text
 
 
 if __name__ == "__main__":

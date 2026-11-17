@@ -167,14 +167,14 @@ def test_the_build_says_why_each_priced_scorer_is_no_leg_and_the_audit_prints_it
     b = _board(reads, scorers)
     gp = GP.build(b, "nfl")
     assert gp["scorers_priced"] == 6 and gp["scorers_researched"] == 2
-    assert gp["research_census"] == {"no matchup read on him": 1, "his read says avoid": 1,
+    assert gp["research_census"] == {"no matchup read on the player": 1, "the read says avoid": 1,
                                      "no red-zone role (under 0.9 expected red-zone chances)": 1,
                                      f"under {GP.RESEARCH_MIN} of the {GP.RESEARCH_MAX} research points": 1}, \
         gp["research_census"]
     b["game_parlays"] = gp
     lines = PA.report("nfl", b)
     assert any("2 of 6 priced scorers carry a research case" in ln for ln in lines), lines
-    assert any(ln.strip() == "turned away: his read says avoid — 1" for ln in lines)
+    assert any(ln.strip() == "turned away: the read says avoid — 1" for ln in lines)
     assert "research_census" not in GP.build({"games": [], "td_field": []}, "nhl")
 
 if __name__ == "__main__":

@@ -127,7 +127,7 @@ def test_the_lines_that_read_worst_say_it_plainly():
             "allows about 9.8 (6% more than an average defense). Both are adjusted for the teams they've played. "
             "This game: about 10.6 for GB.") in text
     assert "by our numbers" not in text
-    assert "GB allows the second-most touchdowns to running backs; the touchdown matchup backs him." in text
+    assert "GB allows the second-most touchdowns to running backs; the touchdown matchup backs it." in text
     assert "; the matchup backs him" not in text
 
 

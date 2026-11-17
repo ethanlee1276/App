@@ -236,9 +236,9 @@ def mlb_pitching(c: Ctx) -> dict | None:
                 ["SLG allowed, lefties", cell(sa, "slg_vs_l", _slg), cell(sh, "slg_vs_l", _slg)],
                 ["SLG allowed, righties", cell(sa, "slg_vs_r", _slg), cell(sh, "slg_vs_r", _slg)]]
         rows = [r for r in rows if r[1] != "—" or r[2] != "—"]
-        note = "Expected ERA is what the contact he allowed should have cost, not what it did"
+        note = "Expected ERA is what the contact allowed should have cost, not what it did"
         if any(r[0].startswith("SLG") for r in rows):
-            note += "; SLG allowed is the slugging percentage he allows to each side of the plate"
+            note += "; SLG allowed is the slugging percentage allowed to each side of the plate"
         blocks.append({"type": "table", "title": "The starters",
                        "head": ["", f"{sa.get('name') or 'TBA'} ({t_a})", f"{sh.get('name') or 'TBA'} ({t_h})"],
                        "rows": rows, "note": _sentence(note)})
@@ -323,7 +323,7 @@ def mlb_park(c: Ctx) -> dict | None:
             v = _f(ump.get(k))
             if v is not None and abs(v - 1) >= 0.02:
                 bits.append(f"{round(abs(v - 1) * 100)}% {'more' if v > 1 else 'fewer'} {word}")
-        items.append(f"Plate umpire {ump['name']}" + (f": his games have {_join(bits)} than average" if bits else
+        items.append(f"Plate umpire {ump['name']}" + (f": games behind this plate umpire have {_join(bits)} than average" if bits else
                                                       ": calls an average zone"))
     blocks.append(_list(items))
     return _section("weather", "The park and the weather", blocks)
@@ -349,8 +349,8 @@ def mlb_before(c: Ctx) -> dict | None:
     lines = []
     if c.g.get("lineups_confirmed") is not True:
         lines.append("Lineups come out two to four hours before first pitch; a hitter who isn't in the "
-                     "lineup won't bat, so skip his read")
-    lines.append("A probable starter can be scratched up to first pitch — the line moves when he is")
+                     "lineup won't bat, so skip that read")
+    lines.append("A probable starter can be scratched up to first pitch — the line moves when one is")
     w = c.g.get("weather") or {}
     if w and not w.get("dome") and (w.get("rain") or (_f(w.get("wind_mph")) or 0) >= 10):
         lines.append("Check the wind and the rain again close to first pitch: they move run scoring "
@@ -371,7 +371,7 @@ def _sp_clause(c: Ctx, t: str) -> str:
         x = f"{float(sp['xera']):.2f}"
         bits.append(f"{'an' if x.startswith('8') or x.startswith('11.') else 'a'} {x} expected ERA")
     if _f(sp.get("k_rate")) is not None:
-        bits.append(f"striking out {_pct(sp['k_rate'])} of the batters he faces")
+        bits.append(f"striking out {_pct(sp['k_rate'])} of the batters faced")
     who = f"{hand} {sp['name']}" if hand else sp["name"]
     return (f"{team_np(c, t)} {team_be(c, t, 'start', 'starts')} {who}"
             + (f" ({', '.join(bits)})" if bits else ""))
@@ -567,7 +567,7 @@ def nhl_lines(c: Ctx) -> dict | None:
                if isinstance(i, dict) and i.get("player")
                and str(i.get("status") or "").strip().lower() in NHL_OUT]
         if out and items:
-            items.append(f"Built without {_join(out)} (out): whoever takes {'his' if len(out) == 1 else 'their'} "
+            items.append(f"Built without {_join(out)} (out): whoever takes their "
                          f"shifts gets more ice time")
         if items:
             blocks += [_h(c.name(t)), _list(items)]
@@ -637,7 +637,7 @@ def nhl_injuries(c: Ctx) -> dict | None:
     blocks = [_claimed_list(items)]
     if pulled:
         blocks.append(_p(f"Every sportsbook pulled its props on {_join(pulled)} before puck drop, so we treat "
-                         f"{'him' if len(pulled) == 1 else 'them'} as out until the lineup or the books say "
+                         "them as out until the lineup or the books say "
                          "otherwise"))
     return _section("injuries", "Injuries", blocks)
 
@@ -799,7 +799,7 @@ def nba_carry(c: Ctx) -> dict | None:
                     if _f(r.get(k)) is not None]
             items.append({"player": r["player"], "team": t, "pos": r.get("pos") or "",
                           "label": "Starter" if r.get("starter") else "", "tone": "",
-                          "text": (f"{', '.join(bits)} a game over his last {r.get('games')}"
+                          "text": (f"{', '.join(bits)} a game over the last {r.get('games')}"
                                    if bits else "")})
         # His name wears his matchup read's colour (gamereport.color_names).
         blocks += [_h(f"{c.name(t)}"), {"type": "players", "items": items}]
@@ -936,7 +936,7 @@ def nba_short(c: Ctx, built: dict) -> dict | None:
             r = rows[0]
             n = int(r.get("games") or 0)
             leads.append(f"{r['player']} for {team_np(c, t)} ({_num(r['pts'])} points a game"
-                         + (f" over his last {n}" if n else "") + ")")
+                         + (f" over the last {n}" if n else "") + ")")
     if leads:
         items.append(_sentence("Leading the scoring lately: " + _join(leads)))
     edges = [e for e in (c.g.get("nba_tape") or {}).get("edges") or [] if isinstance(e, dict) and e.get("text")]
@@ -1202,24 +1202,24 @@ def nba_absences(c: Ctx) -> dict | None:
         items = []
         for x in rows:
             bits = [f"{_num(x.get('mpg'), 0)} minutes"] + ([f"{_num(x['ppg'])} points"] if x.get("ppg") else [])
-            items.append(f"{x['player']} is out: {' and '.join(bits)} a game over his last ten")
+            items.append(f"{x['player']} is out: {' and '.join(bits)} a game over the last ten")
         of, n = a.get("of") or "", int(a.get("n_out") or 0)
         takers = [x for x in a.get("takers") or [] if isinstance(x, dict) and x.get("player")]
         if of and a.get("enough") and takers:
             items.append(f"In the {n} games {of} missed this season, " + _join(
                 f"{x['player']} took {_pct(x['without'])} of {team_owner(c, t)} points ({_pct(x['with'])} with "
-                f"him playing)" for x in takers))
+                f"{of} playing)" for x in takers))
         elif of and n:
             items.append(f"{of} has missed {n} game{'s' if n != 1 else ''} this season — too few to say who takes "
-                         f"his shots")
+                         f"those shots")
         elif of:
-            items.append(f"{of} has not missed a game this season, so who takes his shots is still to be seen")
+            items.append(f"{of} has not missed a game this season, so who takes those shots is still to be seen")
         blocks += [_h(c.name(t)), _list(items)]
     if not blocks:
         return None
     blocks.append({"type": "note", "text": _sentence(
-        "Measured from the box scores: each teammate's share of his team's points in the games the player sat, "
-        "against the games he played")})
+        "Measured from the box scores: each teammate's share of the team's points in the games the player sat, "
+        "against the games the player played")})
     return _section("absences", "What the absences change", blocks)
 
 

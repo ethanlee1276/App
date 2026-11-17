@@ -10829,9 +10829,9 @@ function renderScanTop() {
     ${locked ? `<div class="card ms-locked"><b>Who could shine and who could struggle, in every game</b> —
         a read on every key player with the reasons for and against — is part of the subscription.</div>`
       : `<div class="sct-grid">${list("Could shine", shine, true)}${list("Could struggle", struggle, false)}</div>
-    <p class="ms-note">A player who could shine gets his likeliest over on Most Likely, one who could
-      struggle his likeliest under — when one clears the board’s bars (55% or better, −250 or better).
-      The read picks the side; it never moves our number. Tap a player for his pick. The full read is on
+    <p class="ms-note">A player who could shine gets the likeliest over on Most Likely, one who could
+      struggle the likeliest under — when one clears the board’s bars (55% or better, −250 or better).
+      The read picks the side; it never moves our number. Tap a player for the pick. The full read is on
       each game’s page.</p>`}`;
 }
 
@@ -13666,9 +13666,9 @@ function scanPickHTML(x, cls = "ms-pick") {
     /* OUR NUMBER DISAGREES (2026-11-14): every read whose side our number has
        at even or better carries that pick now (engine/matchpicks), so a read
        left here is one the model says loses more often than not. */
-    const why = !x.no_pick.priced ? "the books have not priced his props yet."
-      : b && Number(b.model_prob) < 0.5 ? `our number disagrees with this read: his likeliest ${side} at −250 or better is ${say(b)}.`
-      : b ? `his likeliest ${side} at −250 or better is ${say(b)}${Number(b.model_prob) < bar
+    const why = !x.no_pick.priced ? "the books have not priced the props yet."
+      : b && Number(b.model_prob) < 0.5 ? `our number disagrees with this read: the likeliest ${side} at −250 or better is ${say(b)}.`
+      : b ? `the likeliest ${side} at −250 or better is ${say(b)}${Number(b.model_prob) < bar
           ? ` — under the ${wholePct(bar)} the board needs.` : "."}${Number(b.model_prob) < bar ? "" : refused}`
       /* ONE REASON, THE TRUE ONE (Gibbs, 2026-10-06: "none of his overs is
          priced at −250 or better … The board turned it down: no book has a

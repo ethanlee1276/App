@@ -187,7 +187,7 @@ class RedZoneUsage:
         if g["rz_tgt"]:
             bits.append(f"{g['rz_tgt']} red-zone target{'' if g['rz_tgt'] == 1 else 's'}"
                         + (f" ({g['i10_tgt']} inside the 10)" if g["i10_tgt"] else ""))
-        last = f" in his last {g['games']} game{'' if g['games'] == 1 else 's'}"
+        last = f" in the last {g['games']} game{'' if g['games'] == 1 else 's'}"
         s = g.get("season") or {}
         sbits = []
         if s.get("rz_car"):
@@ -196,7 +196,7 @@ class RedZoneUsage:
         if s.get("rz_tgt"):
             sbits.append(f"{s['rz_tgt']} target{'' if s['rz_tgt'] == 1 else 's'}"
                          + (f" ({s['i10_tgt']} inside the 10)" if s.get("i10_tgt") else ""))
-        season = (f"; {' and '.join(sbits)} in his {s['games']} games this season" if sbits else "")
+        season = (f"; {' and '.join(sbits)} in {s['games']} games this season" if sbits else "")
         if not bits:
             return f"No red-zone touches{last}" + season
         return f"{', '.join(bits)}{last}" + season
@@ -498,7 +498,7 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
         base_share = clamp(
             (1.0 - XFP_SHARE_WEIGHT) * base_share + XFP_SHARE_WEIGHT * from_xfp,
             0.01, 0.55)
-        share_src += (f", pulled toward his {xfp_share:.0%} share of the "
+        share_src += (f", pulled toward a {xfp_share:.0%} share of the "
                       f"offence's expected points")
 
     # Red-zone work converts opportunity into touchdowns — but the share above

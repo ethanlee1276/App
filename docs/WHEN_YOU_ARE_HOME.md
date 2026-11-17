@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UE. The game reports say "the player", never "he"** (step 663; 17 November). Nothing to run. A wording pass over
+everything the game reports, the after-game checks and the game parlays say about a player: about sixty sentences that
+said "his last 6 games", "he played", "backs him", "his work" now read "the last 6 games", "Right: played — 22 points",
+"the touchdown matchup backs it", "Role: 22% of the targets". A few read better for it: the practice line is now
+"questionable; last practice of the week: limited", the practice change on What changed is "was limited in practice
+(the day before: no practice)", and the share a player took while a teammate sat says the teammate's name ("17% with
+Tyler Herro playing"). The No-pick card's reason says "the likeliest over" rather than "his likeliest over".
+
 **UD. The NBA Cup's knockouts and the College Football Playoff draw as the same bracket** (step 662; 17 November).
 Nothing to run. So every league's playoff page reads alike ("all sports match eachother where it can"): the NBA Cup's
 knockout rounds (and its "if group play ended today" eight) and the College Football Playoff once the committee names

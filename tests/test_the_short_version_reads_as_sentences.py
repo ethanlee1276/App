@@ -93,7 +93,7 @@ def test_ethans_game_reads_as_sentences():
         "the Patriots' run defense (22nd), so there is room to run for the Bears. The Bears' pass protection "
         "(2nd) faces the Patriots' pass rush (15th), so the Bears' quarterback should have time to throw.",
         "The softest spot in coverage: the Bears' right cornerback Tyrique Stevenson has allowed a 139 passer "
-        "rating on 17 targets. A perfect passer rating is 158.3, so the receivers who line up across from him "
+        "rating on 17 targets. A perfect passer rating is 158.3, so the receivers who line up across from that spot "
         "have the easier matchup.",
         "Who could have a big day: D'Andre Swift, the Bears' running back — the Patriots give up the "
         "sixth-most rushing yards to running backs (98.4 a game). A.J. Brown, the Patriots' wide receiver — "
@@ -224,7 +224,7 @@ def test_every_soft_corner_is_named_and_one_who_may_sit_says_so():
     assert got == [
         "The softest spots in coverage: the Bears' right cornerback Tyrique Stevenson (questionable) has allowed "
         "a 139 passer rating on 17 targets, and left cornerback Jaylon Johnson a 130.7 on 28. A perfect passer "
-        "rating is 158.3, so the receivers who line up across from them have the easier matchup."], got
+        "rating is 158.3, so the receivers who line up across from those spots have the easier matchup."], got
     # Three targets is not a sample, and 88 is not soft; one corner past
     # the bar is still said as one.
     one = [dict(x, status="") for x in corners[:1]] + corners[2:]
@@ -232,7 +232,7 @@ def test_every_soft_corner_is_named_and_one_who_may_sit_says_so():
     got = [x for x in R.sec_short(R.Ctx(g, {"games": [g]}, names={"NE": "Patriots", "CHI": "Bears"}), {})
            ["blocks"][0]["items"] if "coverage" in x]
     assert got and got[0].startswith("The softest spot in coverage: the Bears' right cornerback Tyrique Stevenson "
-                                     "has allowed a 139") and got[0].endswith("across from him have the easier matchup."), got
+                                     "has allowed a 139") and got[0].endswith("across from that spot have the easier matchup."), got
 
 
 def test_two_starting_linemen_out_are_said_against_the_pass_rush():

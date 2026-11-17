@@ -183,7 +183,7 @@ def test_each_read_carries_its_pick_and_the_one_boards_verdict():
     assert R.read_pick(by["Darius Slayton"]).startswith("No pick: our number on his over is 52%")
     assert R.read_pick(by["Isaiah Likely"]).startswith("No pick: our number disagrees with this read")
     rob = R.read_pick(dict(by["Wan'Dale Robinson"], matchup_pick=None))
-    assert rob.startswith("Our Most Likely pick on him goes the other way: Under 52.5"), rob
+    assert rob.startswith("Our Most Likely pick on this player goes the other way: Under 52.5"), rob
     # Stamped again, a read never keeps another build's pick or reason.
     M.stamp_reads(reads, [])
     assert not any("matchup_pick" in x for x in reads)
@@ -259,7 +259,7 @@ def test_the_card_draws_the_pick_the_hold_and_the_reason_in_words():
     assert got[1].endswith("— the read’s side, and our number backs it — take it at -170 or better."), got[1]
     assert got[2] == ("No pick — our number on his over is 52%, close to a coin flip — a pick needs 55%, "
                       "so the read alone is not a bet."), got[2]
-    assert "our number disagrees with this read: his likeliest over" in got[3], got[3]
+    assert "our number disagrees with this read: the likeliest over" in got[3], got[3]
 
 
 if __name__ == "__main__":

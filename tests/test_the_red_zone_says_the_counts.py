@@ -9,7 +9,7 @@ should get based off the match up for the game and offense and defense".
 
 What these hold (engine/gamereport.sec_redzone, rz_usage_lines):
 
-  * each player's carries and targets inside the 20 in his last games, from
+  * each player's carries and targets inside the 20 in the last games, from
     the play-by-play (inside the 5 and the 10 said where he has them), a game,
     and his share of his team's — the touchdown row carries the counts
     (`goal_line`) and the share (`rz_share`) to the read (engine/gamescan);
@@ -74,9 +74,9 @@ def test_each_player_says_his_counts_his_rate_his_share_and_this_game():
     lines = blocks[heads and [t for k, t in blocks].index("Who gets the ball inside the 20 for Lions") + 1][1]
     # GB allows 15% more plays inside the 20 than an average defense: x1.15.
     assert lines == [
-        "Jahmyr Gibbs (RB): 14 carries (5 inside the 5) and 2 targets (1 inside the 10) in his last 6 games "
+        "Jahmyr Gibbs (RB): 14 carries (5 inside the 5) and 2 targets (1 inside the 10) in the last 6 games "
         "— 2.7 a game, 36% of DET's. Against GB: about 3.1 this game.",
-        "Amon-Ra St. Brown (WR): 7 targets (3 inside the 10) in his last 6 games — 1.2 a game, 18% of DET's. "
+        "Amon-Ra St. Brown (WR): 7 targets (3 inside the 10) in the last 6 games — 1.2 a game, 18% of DET's. "
         "Against GB: about 1.3 this game.",
     ], lines
     # The counts come before who can score, for each team.
@@ -92,7 +92,7 @@ def test_a_players_touchdown_line_leaves_the_share_to_the_counts():
     rep = R.build(board["games"][0], board, allowed=GR.ALLOWED, names=GR.NAMES)
     text = R.to_text(rep)
     assert ("Jahmyr Gibbs (RB): 43% to score, at +333; GB allows the second-most touchdowns to running backs; "
-            "the touchdown matchup backs him") in text
+            "the touchdown matchup backs it") in text
     assert "of DET's red-zone chances" not in text
 
 

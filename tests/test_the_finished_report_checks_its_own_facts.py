@@ -227,10 +227,10 @@ def test_basketballs_pace_points_close_game_and_blowout_watch():
 def test_the_injury_report_is_checked_and_a_regular_it_missed_is_named():
     rep, summary = _grade()
     ware, brown, bam = _sec(rep, "injuries")["blocks"][0]["grades"]
-    assert ware == {"status": "right", "says": "sits", "played": False, "words": "Right: he sat."}, \
+    assert ware == {"status": "right", "says": "sits", "played": False, "words": "Right: sat out."}, \
         "the NBA's box files a man who sat with zero minutes"
-    assert brown["status"] == "sat" and brown["words"] == "He sat.", brown
-    assert bam["status"] == "wrong" and bam["words"] == "Wrong: he played — 36 minutes, 20 points.", bam
+    assert brown["status"] == "sat" and brown["words"] == "Sat out.", brown
+    assert bam["status"] == "wrong" and bam["words"] == "Wrong: played — 36 minutes, 20 points.", bam
     inj = summary["injuries"]
     assert (inj["right"], inj["wrong"], inj["missed_names"]) == (1, 2, ["Jrue Holiday"]), inj
     assert inj["words"] == ("1 of the 2 listed out or doubtful sat; the one listed questionable or day-to-day sat; "
@@ -253,7 +253,7 @@ def test_the_injury_report_is_checked_and_a_regular_it_missed_is_named():
     out = F.injury_check("nfl", {"player": "Jayden Reed", "team": "GB", "status": "out"}, bx)
     assert out["words"] == "No stats in the box score, as listed." and out["status"] == "right", out
     q = F.injury_check("nfl", {"player": "Josh Jacobs", "team": "GB", "status": "questionable", "pos": "RB"}, bx)
-    assert q["words"] == "He played — 6 carries for 40 yards." and q["status"] == "played", q
+    assert q["words"] == "Played — 6 carries for 40 yards." and q["status"] == "played", q
     assert F._says("Out (season)") == "sits" and F._says("Probable") == "plays" and F._says("Day-To-Day") == "maybe"
 
 

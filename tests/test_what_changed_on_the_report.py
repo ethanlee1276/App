@@ -187,7 +187,7 @@ def test_practice_kickoff_and_a_quarterback_change():
     moved = L.diff(old, new, "DET", "GB")
     assert moved == ["Kickoff moved from 1:00 PM to 4:25 PM ET",
                      "Malik Willis starts for GB (Jordan Love out)",
-                     "Amon-Ra St. Brown (DET) was limited in practice, after he did not practice"], moved
+                     "Amon-Ra St. Brown (DET) was limited in practice (the day before: no practice)"], moved
     # The practice report's rows (engine/practice.game_view) make the snapshot.
     f = L.facts({"away": "GB", "home": "DET"}, {}, {"practice": {"rows": [
         {"player": "Amon-Ra St. Brown", "team": "DET", "designation": "Questionable", "practice": "Full"},

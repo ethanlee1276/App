@@ -97,9 +97,9 @@ def _report(spread=-3.5, total=232.5, **over):
 def test_the_report_says_what_the_absences_change_measured():
     text = R.to_text(_report())
     assert "WHAT THE ABSENCES CHANGE" in text, text
-    assert "Tyler Herro is out: 34 minutes and 22 points a game over his last ten." in text, text
-    assert ("In the 6 games Tyler Herro missed this season, Bam Adebayo took 28% of the Heat's points (23% with him "
-            "playing) and Norman Powell took 21% of the Heat's points (17% with him playing).") in text, text
+    assert "Tyler Herro is out: 34 minutes and 22 points a game over the last ten." in text, text
+    assert ("In the 6 games Tyler Herro missed this season, Bam Adebayo took 28% of the Heat's points (23% with Tyler Herro "
+            "playing) and Norman Powell took 21% of the Heat's points (17% with Tyler Herro playing).") in text, text
 
 
 def test_a_small_sample_says_so_instead_of_guessing():
@@ -108,7 +108,7 @@ def test_a_small_sample_says_so_instead_of_guessing():
     board = {"date": "2026-11-16", "games": [g], "scan_reads": {}}
     L.attach(board, "nba", meta={"MIA@BOS": meta})
     text = R.to_text(board["game_reports"][0])
-    assert "Tyler Herro has missed 2 games this season — too few to say who takes his shots." in text, text
+    assert "Tyler Herro has missed 2 games this season — too few to say who takes those shots." in text, text
     assert "Bam Adebayo took" not in text
 
 

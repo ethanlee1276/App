@@ -106,7 +106,7 @@ def test_each_pick_carries_what_the_research_carried():
     assert kraft["form"] == "Over 3.5 in 5 of 6 games this season, 4 of the last 5 (last 5: 6, 5, 4, 3, 7)", kraft["form"]
     # The read's reason, in the report's plain words ("4th-most" said aloud).
     assert kraft["why"][0] == "Detroit gives up the fourth-most catches to tight ends", kraft["why"]
-    assert any(w.startswith("His work: 22% of the targets") for w in kraft["why"]), kraft["why"]
+    assert any(w.startswith("Role: 22% of the targets") for w in kraft["why"]), kraft["why"]
     assert kraft["kind"] == ("Receptions overs: 66% of 412 on our board at this chance (we said 65%); "
                              "25 of 30 in our hand-researched picks"), kraft["kind"]
     # A tough read is not a reason for an over: Love's "con" is never one of

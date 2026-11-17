@@ -645,8 +645,8 @@ def form_trend(group: str, f: dict, season: int) -> str:
     gap = recent - rest
     if abs(gap) < FORM_TREND_YDS[group] or abs(gap) < FORM_TREND_SHARE * max(rest, 1.0):
         return ""
-    return (f"{_num(recent, 0)} {MAIN_WORDS[group]} a game over his last {len(last)}, "
-            f"{'up' if gap > 0 else 'down'} from {_num(rest, 0)} in his other {n_all - len(last)}")
+    return (f"{_num(recent, 0)} {MAIN_WORDS[group]} a game over the last {len(last)}, "
+            f"{'up' if gap > 0 else 'down'} from {_num(rest, 0)} in the other {n_all - len(last)}")
 
 
 def form_rz(group: str, rz: dict) -> str:
@@ -726,7 +726,7 @@ def hit_lines(c: "Ctx", r: dict) -> list:
         what = ("Scored" if mk == "anytime_td" and side == "OVER" else
                 f"{'Over' if side == 'OVER' else 'Under'} {line:g} {HIT_WORDS[mk]}")
         out.append(f"{what}: {sum(hit)} of {len(hit)} games this season"
-                   + (f", {sum(recent)} of his last {len(recent)}" if len(hit) > len(recent) else ""))
+                   + (f", {sum(recent)} of the last {len(recent)}" if len(hit) > len(recent) else ""))
     return out
 
 
@@ -1156,7 +1156,7 @@ def rematch_blocks(c: Ctx, m: dict) -> list:
         res = [x.get("player") for x in (c.scan.get("reserve") or {}).get(t) or [] if x.get("player")]
         if res:
             changed.append(f"{c.name(t)} is without {_join(res)}, on a reserve list now — check whether "
-                           f"{'he' if len(res) == 1 else 'they'} played in the first meeting")
+                           f"{'that player' if len(res) == 1 else 'they'} played in the first meeting")
     if m.get("home") and m["home"] != c.home and not m.get("neutral"):
         changed.append(f"The game moves to {c.name(c.home)}'s field — the first was at {c.name(m['home'])}'s")
     if changed:
@@ -1527,7 +1527,7 @@ def sec_injuries(c: Ctx) -> dict | None:
         if res:
             blocks.append(_p(f"{c.name(t)} without, for the season or a while: " + "; ".join(
                 f"{r['player']}" + (f" ({r['position']})" if r.get("position") else "")
-                + f" — {r['status']}; he had {r['what']} this season" for r in res)))
+                + f" — {r['status']}; {r['what']} this season" for r in res)))
     lines = c.scan.get("line_out") or {}
     for t in c.teams:
         if lines.get(t):
@@ -1538,7 +1538,7 @@ def sec_injuries(c: Ctx) -> dict | None:
     pulled = [p for p in c.scan.get("pulled") or [] if p]
     if pulled:
         blocks.append(_p(f"Every sportsbook has pulled its props on {_join(pulled)}, so we treat "
-                         f"{'him' if len(pulled) == 1 else 'them'} as out until the props come back"))
+                         "them as out until the props come back"))
     for q in c.result.get("qb_changes") or []:
         if isinstance(q, dict) and q.get("team") in c.teams and q.get("headline"):
             text = q["headline"]
@@ -1552,7 +1552,7 @@ def sec_injuries(c: Ctx) -> dict | None:
         for who, r in (resets.get(bucket) or {}).items():
             det = str((r or {}).get("detail") or "")
             if any(f"joined {t} " in det + " " for t in c.teams):
-                blocks.append(_p(f"{who} {det} (week {r.get('week')}) — his games before the move "
+                blocks.append(_p(f"{who} {det} (week {r.get('week')}) — the games before the move "
                                  f"count for less"))
     if not blocks:
         if status.get("applied") or status.get("asked") or status.get("total"):
@@ -1566,20 +1566,20 @@ def sec_injuries(c: Ctx) -> dict | None:
 
 #: How a listed player practised, in words (engine/practice.PRACTICE).
 PRACTICE_WORDS = {"DNP": ("did not practice", "who did not practice"),
-                  "Limited": ("was limited in practice", "who were limited in practice"),
-                  "Full": ("practiced fully", "who practiced fully")}
+                  "Limited": ("limited", "who were limited in practice"),
+                  "Full": ("full", "who practiced fully")}
 
 
 def practice_line(x: dict, held: bool) -> str:
-    """One listed player: his designation, how he practised, how often men
-    listed the same way have played, and — once it has beaten the league's
-    number on held-out seasons — his club's own record."""
+    """One listed player: the designation, the last practice, how often
+    players listed the same way have played, and — once it has beaten the
+    league's number on held-out seasons — the club's own record."""
     head = (f"{x.get('player')} ({x.get('team')}"
             + (f", {str(x['injury']).lower()}" if x.get("injury") else "")
             + f") — {str(x.get('designation') or '').lower()}")
     pw = PRACTICE_WORDS.get(x.get("practice"))
     if pw:
-        head += f"; he {pw[0]} at his last practice of the week"
+        head += f"; last practice of the week: {pw[0]}"
     out = [head]
     lg = _f(x.get("league"))
     if lg is not None:
@@ -1715,7 +1715,7 @@ def sec_matchups(c: Ctx) -> dict | None:
             order = [w for why in whys for w in why]
             said = sorted(common, key=order.index)
             text = "; ".join(said)
-            if text.split(" ")[0] in ("The", "Only", "A", "An", "His", "He", "Takes"):
+            if text.split(" ")[0] in ("The", "Only", "A", "An", "His", "He", "Their", "They", "Takes"):
                 text = text[:1].lower() + text[1:]
             sub.append(_p(f"True for every {off} player below: {text}"))
         items = []
@@ -1948,17 +1948,17 @@ def td_chance_pairs(c: Ctx, off: str) -> list:
         if x.get("rank") and x.get("of"):
             rank, of = int(x["rank"]), int(x["of"])
             funnel = rank <= TD_FUNNEL_RANK
-            bits.append(f"{dfn} allows {_place(rank, of, 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'his position')}")
+            bits.append(f"{dfn} allows {_place(rank, of, 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'the position')}")
         usage = share is not None and share >= TD_USAGE_SHARE
         # THE TOUCHDOWN MATCHUP, SAID AS ONE (2026-11-15): his name wears
         # his whole matchup read's colour, which can differ from what this
         # defense gives up in touchdowns to his position.
         if usage and funnel:
-            bits.append("his red-zone role and the touchdown matchup both back him")
+            bits.append("the red-zone role and the touchdown matchup both back it")
         elif usage:
-            bits.append("his red-zone role backs him")
+            bits.append("the red-zone role backs it")
         elif funnel:
-            bits.append("the touchdown matchup backs him")
+            bits.append("the touchdown matchup backs it")
         meets = p >= 0.45 or (p >= 0.40 and usage)
         if meets:
             bits.append("meets our touchdown rule")
@@ -2028,7 +2028,7 @@ def _rz_season(td: dict, detail: bool = True) -> str:
         bits.append(f"{car} carr{'y' if car == 1 else 'ies'}" + (f" ({i5} inside the 5)" if i5 and detail else ""))
     if tgt:
         bits.append(f"{tgt} target{'' if tgt == 1 else 's'}" + (f" ({i10} inside the 10)" if i10 and detail else ""))
-    return f"{' and '.join(bits)} in his {n} games this season"
+    return f"{' and '.join(bits)} in {n} games this season"
 
 
 def rz_usage_lines(c: Ctx, off: str, factor) -> list:
@@ -2054,7 +2054,7 @@ def rz_usage_lines(c: Ctx, off: str, factor) -> list:
         pos = str(r.get("pos") or "").upper()
         season = _rz_season(td)
         text = (f"{r['player']}{f' ({pos})' if pos else ''}: {words}"
-                + f" in his last {n} game{'' if n == 1 else 's'} — {_num(per)} a game"
+                + f" in the last {n} game{'' if n == 1 else 's'} — {_num(per)} a game"
                 + (f", {_pct(share)} of {off}'s" if share else "")
                 + (f"; {season}" if season else "")
                 + (f". Against {dfn}: about {_num(per * factor)} this game" if factor else "") + ".")
@@ -2497,7 +2497,7 @@ def read_pick(r: dict) -> str:
         take = take_at(mp.get("model_prob"))
         return f"Matchup pick{tier}: {_pick_words(mp)}" + (f" — take it at {take}" if take else "")
     if r.get("pick_other_side"):
-        return (f"Our Most Likely pick on him goes the other way: {_pick_words(r['pick_other_side'])} — "
+        return (f"Our Most Likely pick on this player goes the other way: {_pick_words(r['pick_other_side'])} — "
                 f"our number disagrees with this read")
     # NO FORCED PICK (engine/matchpicks.not_backed): why the data does not
     # back a bet on the read.
@@ -2506,7 +2506,7 @@ def read_pick(r: dict) -> str:
     best = ((r.get("no_pick") or {}).get("best")) or {}
     p = _f(best.get("model_prob"))
     if p is not None and p < 0.5:
-        return (f"No pick: our number disagrees with this read — his likeliest "
+        return (f"No pick: our number disagrees with this read — the likeliest "
                 f"{'over' if str(best.get('side')).lower() == 'over' else 'under'} is {_pick_words(best)}")
     return ""
 
@@ -2576,7 +2576,7 @@ def role_blocks(c: Ctx) -> list:
             continue
         word = "up" if after > before else "down"
         lines.append(f"{x.get('player')} ({x.get('team')}): {str(x.get('label') or '').lower()} {word} to "
-                     f"{_pct(after)} over his last {_plural(n, 'game')}, from {_pct(before)} before — the "
+                     f"{_pct(after)} over the last {_plural(n, 'game')}, from {_pct(before)} before — the "
                      f"detector is {_pct(x.get('changed'))} sure the change is real")
     if not lines:
         return []
@@ -3044,7 +3044,7 @@ def _with_name(player, why: str) -> str:
     catches in his last 2 games" (the edge's caveat, 2026-11-14) — names him:
     "though Matthew Golden has only 4 catches in his last 2 games"."""
     import re
-    if not player or not why or str(player).split()[-1] in why or not re.search(r"\b(his|he|him)\b", why, re.I):
+    if not player or not why or str(player).split()[-1] in why or not re.search(r"\b(his|he|him|their|they|them)\b", why, re.I):
         return why
     w = why[0].lower() + why[1:]
     if w.startswith("only "):
@@ -3144,7 +3144,7 @@ def scorer_words(c: Ctx, r: dict, lead: bool = False) -> str:
     odds = _f(td.get("odds"))
     book = _implied(odds)
     if odds and book is not None:
-        head += f" (his price, {_odds(odds)}, says {_pct(book)})"
+        head += f" (the price, {_odds(odds)}, says {_pct(book)})"
     parts = []
     tds, rush, rec, n = season_tds(c, r)
     if tds:
@@ -3155,14 +3155,14 @@ def scorer_words(c: Ctx, r: dict, lead: bool = False) -> str:
     if words:
         share = _f(td.get("rz_share"))
         season = _rz_season(td, detail=False)
-        parts.append(f"{words} inside the 20 in his last {_count(games, 'game')}"
+        parts.append(f"{words} inside the 20 in the last {_count(games, 'game')}"
                      + (f" ({season})" if season else "")
                      + (f", {_pct(share)} of {team_owner(c, t)} red-zone work" if share else ""))
     pos = str(r.get("pos") or "").upper()
     x = ((getattr(c, "allowed", None) or {}).get(dfn) or {}).get(_TD_STAT.get(pos, "")) or {}
     if dfn and x.get("rank") and x.get("of"):
         parts.append(f"{team_np(c, dfn)} {team_be(c, dfn, 'give', 'gives')} up "
-                     f"{_place(x['rank'], x['of'], 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'his position')}")
+                     f"{_place(x['rank'], x['of'], 'most', 'fewest')} touchdowns to {_TD_WORD.get(pos, 'the position')}")
     text = head + (": " + "; ".join(parts) if parts else "")
     return f"{team_owner(c, t)} likeliest scorer — {text}" if lead else text
 
@@ -3443,7 +3443,7 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
         items.append(_sentence(cap(f"The softest spot{'s' if n_soft > 1 else ''} in coverage: "
                                    + "; ".join(soft)))
                      + " A perfect passer rating is 158.3, so the receivers who line up across from "
-                     + ("them have" if n_soft > 1 else "him have") + " the easier matchup.")
+                     + ("those spots" if n_soft > 1 else "that spot") + " have the easier matchup.")
     items += shine_lines(c, c.reads, key_only=True)
     scorers = scorer_sentence(c)
     if scorers:
@@ -3618,7 +3618,7 @@ def card_why(c: Ctx, r: dict, angles: dict) -> list:
             out += [str(x) for x in (reasons or [])[:2] if x]
         role = _role_line(rd)
         if role:
-            out.append(f"His work: {role}")
+            out.append(f"Role: {role}")
     if r.get("method_note"):
         out.append(str(r["method_note"]))
     seen, keep = set(), []

@@ -78,7 +78,7 @@ def test_the_lines_say_who_plays_with_whom_and_who_they_are_built_without():
     assert "Top line: Matthew Knies, Auston Matthews and Mitch Marner (together for 72% of their ice lately)." in text
     assert "Top pair: Morgan Rielly and Jake McCabe (together for 80% of their ice lately)." in text
     # BOS lists Charlie McAvoy out (the fixture's injury report).
-    assert ("Built without Charlie McAvoy (out): whoever takes his shifts gets more ice time.") in text, text
+    assert ("Built without Charlie McAvoy (out): whoever takes their shifts gets more ice time.") in text, text
     assert "From the shift charts of each team's last 5 games." in text
 
 

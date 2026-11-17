@@ -151,9 +151,9 @@ def test_a_card_shows_his_game_log_and_how_often_he_clears_the_boards_number():
             {"wk": 4, "opp": "ARI", "s": {"receptions": 5, "rec_yds": 66, "targets": 7}},
             {"wk": 3, "opp": "TEN", "s": {"receptions": 2, "rec_yds": 12, "targets": 3}}]}}
     hits = GR.hit_lines(C, {"player": "Isaiah Likely"})
-    assert hits == ["Over 46.5 receiving yards: 4 of 6 games this season, 4 of his last 5",
-                    "Scored: 2 of 6 games this season, 2 of his last 5",
-                    "Over 3.5 catches: 4 of 6 games this season, 4 of his last 5"], hits
+    assert hits == ["Over 46.5 receiving yards: 4 of 6 games this season, 4 of the last 5",
+                    "Scored: 2 of 6 games this season, 2 of the last 5",
+                    "Over 3.5 catches: 4 of 6 games this season, 4 of the last 5"], hits
     log = GR.season_log("rec", C.form["Isaiah Likely"]["log"])
     assert log.startswith("Wk 9 PHI 5-53 (6), 1 TD · Wk 7 HOU 3-31 (4)"), log
     assert GR.hit_lines(C, {"player": "Nobody"}) == []
