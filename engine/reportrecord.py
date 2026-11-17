@@ -238,6 +238,37 @@ def refresh(where, sport: str) -> int:
         return 0
 
 
+def league_names(sport: str) -> dict:
+    """{code: name} the league's pages print, for a row whose report named no side: college basketball's kept
+    school cards (cbbteams, the school's short name as its reports say it: "Denver"), the pro leagues' nicknames
+    off the odds feed (leaguereport.team_names). {} where none is kept; never raises."""
+    try:
+        if sport == "cbb":
+            from . import cbbteams
+            return {k: (c.get("short") or c.get("loc") or c.get("name")) for k, c in cbbteams.cards().items()
+                    if c.get("short") or c.get("loc") or c.get("name")}
+        from .leaguereport import team_names
+        return team_names(sport)
+    except Exception:                                        # noqa: BLE001 — a code is still a name to print
+        return {}
+
+
+def named(sport: str, rows_: list) -> list:
+    """The rows with a side's code in place of its name filled where the league keeps one. A report that called
+    no winner (a college game nothing was priced on) leaves its codes as its names: live on 17 Nov How our reports
+    did read "espn:2145 63 at DEN 101" for Colorado-Colorado Springs at Denver."""
+    table = None
+    for r in rows_:
+        names = r.get("names") if isinstance(r.get("names"), dict) else {}
+        for code in (r.get("away"), r.get("home")):
+            if code and names.get(code) in (None, "", code):
+                table = league_names(sport) if table is None else table
+                if table.get(code):
+                    names[code] = table[code]
+        r["names"] = names
+    return rows_
+
+
 def record(where, sport: str, today: str | None = None) -> dict:
     """The league's record on its reports: totals over every graded game and
     over the last RECENT_DAYS, and the newest CARD_ROWS games."""
@@ -249,7 +280,7 @@ def record(where, sport: str, today: str | None = None) -> dict:
     since = (day - _dt.timedelta(days=RECENT_DAYS)).isoformat()
     recent = [r for r in every if str(r.get("date") or "") >= since]
     return {"sport": sport, "totals": totals(every), "recent": totals(recent), "recent_days": RECENT_DAYS,
-            "games": every[:CARD_ROWS], "more": max(0, len(every) - CARD_ROWS)}
+            "games": named(sport, every[:CARD_ROWS]), "more": max(0, len(every) - CARD_ROWS)}
 
 
 # --- how each kind of read has done, said on the next report -------------------------------------

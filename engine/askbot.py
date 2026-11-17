@@ -2795,6 +2795,7 @@ def _report_finished(league: str, wanted) -> dict | None:
                 if wanted(r.get("home"), r.get("away"))), None)
     if not row:
         return None
+    row = reportrecord.named(league, [row])[0]     # a side the report named nowhere, by the league's own name
     day, away, home = row["date"], row["away"], row["home"]
     names = row.get("names") or {}
     fin = row.get("final") or {}

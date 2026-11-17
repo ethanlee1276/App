@@ -201,7 +201,8 @@ function rpCalibHTML(c) {
 }
 //: One finished game: the final, then its checks as chips, then a door to its report.
 function rpFactRowHTML(r) {
-  const nm = (t) => (r.names || {})[t] || teamName(t);
+  // A name the row carries, unless it is the code itself (a report that named no side): then the page's own.
+  const nm = (t) => { const n = (r.names || {})[t]; return n && n !== t ? n : teamName(t); };
   const f = r.final || {};
   const score = f.home != null && f.away != null ? `${nm(r.away)} ${f.away} at ${nm(r.home)} ${f.home}` : `${nm(r.away)} at ${nm(r.home)}`;
   const chip = (ok, words) => `<span class="${ok === true ? "rpk-fact-chip won" : ok === false ? "rpk-fact-chip lost" : "rpk-fact-chip"}">${escapeHtml(words)}</span>`;

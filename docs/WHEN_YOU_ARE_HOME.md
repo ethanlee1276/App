@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VJ. How our reports did names every college game** (step 694; 17 November). Nothing to run. The morning's live
+check of the game reports found one finished college game listed as "espn:2145 63 at DEN 101": Colorado-Colorado
+Springs at Denver, a game nothing was priced on, whose report called no winner and so kept each side's code as
+its name. A side named by its code now takes the league's own name (college's school cards: "UC Col Springs 63 at
+Denver 101"; the pro leagues' nicknames), on the page and in Ask's answer about that game.
+
 **VI. Any time: take the All-Star and exhibition games out of the NBA's and the WNBA's history** (step 693; 17
 November). Two commands, seconds each. Checking the live player pages, Caitlin Clark's 2026 game log held 47 games
 and a club called "SPO": ESPN files the WNBA's All-Star Game (25 July, "SPO" against "COOP", 129-122) and an
