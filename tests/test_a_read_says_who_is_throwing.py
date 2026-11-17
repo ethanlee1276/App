@@ -61,7 +61,7 @@ console.log(JSON.stringify(out));
     # Tight ends are named as the exception since 2026-09-28: their catches
     # rose behind a backup (qbfit, 2021-25), not enough to price.
     assert "Tyson Bagent starts" in o["te"] and "Tight ends are the exception" in o["te"] and "left alone" in o["te"]
-    assert "taken off his numbers" in o["wr"]
+    assert "taken off this player’s numbers" in o["wr"]
     assert "Starting in place of Caleb Williams" in o["qb"]
     assert "ran only about 3% more often" in o["rb"] and "carries and yards did not move" in o["rb"]
     assert o["other"] == "", "the other team's players are not told about CHI's quarterback"

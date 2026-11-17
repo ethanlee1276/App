@@ -47,7 +47,7 @@ const GLOSSARY = [
   ["Long shot", "A bet at long odds tracked in its own bucket, never mixed into the headline record."],
   ["Prediction market", "Kalshi and Polymarket: exchanges where traders buy contracts on outcomes. Their prices are shown as a chance and as odds, beside the books’."],
   ["Zeno", "A person’s real tickets, shown beside the model’s picks and never inside them."],
-  ["Pikkit", "The app Zeno’s tickets are synced from, so they are his real bets at his real prices."],
+  ["Pikkit", "The app Zeno’s tickets are synced from, so they are Zeno’s real bets at the real prices."],
 ];
 
 function glossaryHTML() {
@@ -113,9 +113,9 @@ const FEATURES = [
   ["Research", "Look anything up",
    [["Player search", "Search any player across every league we cover — typos forgiven, recent searches remembered — and open their own page: a header in the club’s colours, then Overview (the season’s numbers with their league ranks, the previous game, splits, recent games, news, tonight’s markets), News, Stats, Bio, Splits and the full game log.", "players"],
     ["Player page", "Per prop: the bar graph, the game logs, current form, the game script, the line’s movement since it opened, every book’s price and what the pick had to survive. A searched player’s card and the prop page are the same page, not two.", "prop"],
-    ["Past stats against a specific team", "The versus block on a player’s prop page: what this player has actually done against tonight’s opponent, game by game, from the logs on disk — laid out a game to a block, with a stat pill for each phase he played in.", null],
-    ["Next man up, on the card", "When a teammate at the same position is ruled out, the beneficiary’s card says what the weekly stats measured the last times that teammate sat — “Pacheco out — over his 4 missed games, Hunt absorbed +11% of the carries” — or says the sample is too thin to say. The projection moves by what four seasons measured for the same spot (a back whose starter was just ruled out ran for 65% more than his own form); the card shows his own history beside it.", null],
-    ["A quarterback’s passing touchdowns", "Every NFL quarterback carries a projected touchdown count beside his passing yards, with the game-by-game history behind it. College quarterbacks deliberately do not: measured on our own college seasons, the same projection sorts a passer barely better than a coin toss, which is under the bar we publish anything at.", null],
+    ["Past stats against a specific team", "The versus block on a player’s prop page: what this player has actually done against tonight’s opponent, game by game, from the logs on disk — laid out a game to a block, with a stat pill for each phase the player played in.", null],
+    ["Next man up, on the card", "When a teammate at the same position is ruled out, the beneficiary’s card says what the weekly stats measured the last times that teammate sat — “Pacheco out — over 4 missed games, Hunt absorbed +11% of the carries” — or says the sample is too thin to say. The projection moves by what four seasons measured for the same spot (a back whose starter was just ruled out ran for 65% more than their own form); the card shows the player’s own history beside it.", null],
+    ["A quarterback’s passing touchdowns", "Every NFL quarterback carries a projected touchdown count beside the passing yards, with the game-by-game history behind it. College quarterbacks deliberately do not: measured on our own college seasons, the same projection sorts a passer barely better than a coin toss, which is under the bar we publish anything at.", null],
     ["Sim lab", "Run tonight two thousand times on any prop and watch the distribution draw itself — on the prop’s own page and on a searched player’s card. Every draw comes from the model’s curve for that pick, so it shows the number’s uncertainty rather than new information.", null],
     ["Team page", "Search a team, pick an opponent at the top of the page and read the head-to-head record with every meeting behind it — then the seasons, the leaders, the stat tables and the whole squad by position. Every game it has played opens its own page: the leaders, every scoring play with its drive, the box score and every play.", "team"],
     ["Rosters", "Every team’s roster in every league, each row opening the player.", "rosters"],
@@ -181,7 +181,7 @@ const FEATURES = [
 
   ["The receipts", "How you check whether any of it works",
    [["Record", "Every settled pick at the price we found it, graded in public, with a profit calendar and the verdict in units.", "record"],
-    ["Zeno’s Picks", "Zeno’s own tickets at FanDuel, DraftKings and theScore Bet — the record as the books settled it, and what he has riding now to tail.", "zeno"],
+    ["Zeno’s Picks", "Zeno’s own tickets at FanDuel, DraftKings and theScore Bet — the record as the books settled it, and what is riding now to tail.", "zeno"],
     ["By product", "Edge bets and Most Likely kept in separate books, so a good month on one cannot flatter the other.", null],
     ["Calibration", "When we say 60%, does it land 60% of the time — plotted, not claimed.", null],
     ["What it learned", "What the model changed its mind about, and on what evidence.", null],
@@ -485,7 +485,7 @@ function labCarried(section) {
 function labRippleHTML(rp) {
   if (!rp) return "";
   const head = `<div class="section-title minor">Usage ripple against the close
-      <span class="sub">— when a teammate at his position sat, did he beat the
+      <span class="sub">— when a teammate at the same position sat, did the player beat the
       book’s number by more than the book allowed? The card’s note prices
       nothing until a market clears here.</span></div>`;
   if (!rp.markets) return `${head}<p class="mini" style="padding:4px 0">${escapeHtml(rp.unavailable || "not measured")}</p>`;
@@ -773,7 +773,7 @@ function zenoCalendarHTML(months, snap) {
     arrow(i < keys.length - 1 ? keys[i + 1] : null, "›", "Later month")}</span>` : "";
   return `<div class="zeno-cal">
     <div class="section-title"><span class="st-ico">${icon("calendar", 15)}</span>Profit calendar
-      <span class="sub">— his dollars by day</span>${nav}</div>
+      <span class="sub">— Zeno’s dollars by day</span>${nav}</div>
     <div class="card rc-card zeno-cal-card">${zenoCalMonthHTML(ms[i])}</div>
     ${snap && snap.days_note ? `<p class="list-note">${escapeHtml(snap.days_note)}</p>` : ""}</div>`;
 }
@@ -978,7 +978,7 @@ async function renderZeno() {
     ${ribbon ? `<div class="hd-stats rec-ribbons">${ribbon}</div>`
              : `<div class="card"><p class="list-note">No tickets yet.</p></div>`}
     <div class="card pk-card">${pikkitBadgeHTML("Every Zeno pick is verified on Pikkit")}
-      <p class="list-note">Every bet Zeno places is tracked on Pikkit, synced straight from his
+      <p class="list-note">Every bet Zeno places is tracked on Pikkit, synced straight from Zeno’s
         sportsbooks — the record, the charts and each pick. Check it yourself before you tail
         anything.</p></div>
     ${zenoSnapshotHTML(z.snapshot, z.unit_dollars)}
@@ -1841,7 +1841,7 @@ function rosterPlayerHTML(p, byAppearance) {
     ? ` · back ${escapeHtml(String(p.return_date).slice(5))}` : "";
   const contested = p.injury_conflict
     ? `<span class="chip warn" title="Sleeper and the ESPN injury report
-         disagree about whether he plays. The more pessimistic reading is
+         disagree about whether the player plays. The more pessimistic reading is
          shown — this board never clears a player on one feed’s word.">${
          icon("warn")} feeds disagree</span>` : "";
   const tags = [
@@ -2163,8 +2163,8 @@ async function renderInjuries() {
     ${teams.map((t) => injTeamBlock(t, byTeam[t], severity[t])).join("")}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
       Statuses are the league’s own filings via ESPN’s public feed, refreshed with the
-      site on a 30-minute cache, one row per player — his newest filing.${
-      _nextUp.size ? ` <b>Next man up</b> names who holds an injured man’s work and the
+      site on a 30-minute cache, one row per player — the newest filing.${
+      _nextUp.size ? ` <b>Next man up</b> names who holds an injured player’s work and the
       share each already held, from the usage board — a measured role, never a
       claim about who is on your league’s wire.` : ""} The NFL’s
       practice-level detail (limited/DNP, the usage model’s injury inputs) lives on the
@@ -2611,8 +2611,8 @@ function teamSquadHTML(sq, sport) {
   return `
     <div class="section-title">Squad${sq.season ? ` · ${sq.season}` : ""}
       <span class="sub">— every player with a game logged for this team,
-      by position, ordered by what he actually did rather than by a chart
-      somebody filed. Tap a name for his own page.</span></div>
+      by position, ordered by what each actually did rather than by a chart
+      somebody filed. Tap a name for the player’s page.</span></div>
     <div class="tsq">${body}</div>
     <p class="rank-help">Built from the game logs this site has ingested,
       so a player who has not taken a snap for this team yet is not here —
@@ -2720,8 +2720,8 @@ function teamH2HHTML(h, sport) {
               : `${g.total} ${g.ou || ""}`}</td>
       </tr>`).join("")}
     </tbody></table></div>
-    <p class="rank-help">The line is HIS number, not the home team’s — a
-      minus means he was laying it. A game we hold no line for still counts
+    <p class="rank-help">The line is this team’s number, not the home team’s — a
+      minus means it was laying the points. A game we hold no line for still counts
       in the record above and is left blank here rather than graded. Tap a
       meeting for its game page.</p>`;
 }
@@ -3175,7 +3175,7 @@ function teamLiveRosterHTML(d) {
   return `<div class="section-title">Roster · ${players.length} players
       <span class="sub">— from ${escapeHtml(src)}${r.generated_at
         ? `, updated ${escapeHtml(String(r.generated_at).replace("T", " ").slice(0, 16))}` : ""}.
-      Tap a name for his own page.</span></div>
+      Tap a name for the player’s page.</span></div>
     ${groups.map((g) => `<div class="section-title minor">${escapeHtml(g.pos)}</div>
       <div class="rank-scroll"><table class="rank-table"><thead><tr><th>Name</th>${
         cols.map(([, lab]) => `<th>${escapeHtml(lab)}</th>`).join("")}<th>Status</th></tr></thead><tbody>
@@ -4747,7 +4747,7 @@ function renderAbout() {
         <p>Sports are random and betting is gambling. A 90% favourite loses
         one time in ten, and that one time can be tonight, and it can happen
         three nights in a row. A quarterback rolls an ankle on the first
-        drive. A fighter who has never been stopped gets caught by a punch he
+        drive. A fighter who has never been stopped gets caught by a punch they
         did not see. A game gets called for weather in the sixth inning.</p>
         <p><strong>No model can predict a single event, and this one does not
         claim to.</strong> It claims something much smaller: that across

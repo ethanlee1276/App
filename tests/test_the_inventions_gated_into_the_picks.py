@@ -209,7 +209,7 @@ def test_the_rookie_prior_comes_from_his_college_line_once_proven():
     assert "_ideagate.rookie_prior(spec.player, spec.market, len(logs))" in src
     assert 'thin.get("prior_games")' in src and 'props[-1].form_prior_kind = "rookie"' in src
     app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    assert 'base.shrink_kind === "rookie"' in app and "his last college season, translated to the NFL" in app
+    assert 'base.shrink_kind === "rookie"' in app and "the player’s last college season, translated to the NFL" in app
 
 
 def _usage_conn():

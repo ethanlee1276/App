@@ -142,7 +142,7 @@ def test_the_pick_page_shows_his_college_line_translated():
     out = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-1200:]
     h = json.loads(out.stdout)["h"]
-    assert "His college line, translated" in h and "Arizona" in h and "#8" in h
+    assert "A rookie’s college line, translated" in h and "Arizona" in h and "#8" in h
     assert "Measured · does not hold" in h
 
 

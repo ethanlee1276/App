@@ -100,11 +100,11 @@ def test_the_flags_the_pace_and_his_games():
         return
     live, early, final, thin, none, college, pre = got
     assert live.startswith("Crew watch Shawn Hochuli’s crew 4 flags so far · on pace for 6"), live
-    assert "His games average 13.4 penalties (league 12.1)." in live and "over 40 games" not in live
+    assert "The crew’s games average 13.4 penalties (league 12.1)." in live and "over 40 games" not in live
     assert "closing line" in live, "the report's caveat rides with it"
     assert "4 flags so far" in early and "on pace" not in early, early
     assert "4 flags in the game" in final and "on pace" not in final, final
-    assert "His games average 15.0 penalties (league 12.1) over 3 games." in thin, thin
+    assert "The crew’s games average 15.0 penalties (league 12.1) over 3 games." in thin, thin
     assert none == college == pre == "", (none, college, pre)
 
 

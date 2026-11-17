@@ -124,8 +124,8 @@ def test_the_wall_prints_the_pooled_book_then_zenos():
     # the wall's headline; the pooled journal follows it, labelled.
     assert "20-20" in h and "\u22122.5% ROI" in h, "the model's own book leads"
     assert "35-24-1" in h and "+1.7% ROI" in h and "+7.6u · 60 settled" in h, "the pooled book, second and named"
-    assert h.count('class="hd-ribbon"') == 3 and "Zeno · his own book" in h
-    assert h.index("Edge picks") < h.index("Combined · edge + Most Likely boards") < h.index("Zeno · his own book"), \
+    assert h.count('class="hd-ribbon"') == 3 and "Zeno · personal book" in h
+    assert h.index("Edge picks") < h.index("Combined · edge + Most Likely boards") < h.index("Zeno · personal book"), \
         "the model's tile, then the pooled one, then his"
     assert 'data-pc="50"' in h and '<i class="w">W</i>' in h
     assert "50.0%" in h and "52.4% needed at our prices" in h and "40.0u" in h
@@ -149,7 +149,7 @@ def test_the_wall_leads_with_the_combined_line_and_its_split():
         print("  SKIP node not installed"); return
     assert got.count('class="hd-ribbon"') == 4
     assert (got.index("Edge picks") < got.index("Combined · edge + Most Likely boards")
-            < got.index("Combined · Zeno’s book + ours") < got.index("Zeno · his own book")), \
+            < got.index("Combined · Zeno’s book + ours") < got.index("Zeno · personal book")), \
         "the model's own tile leads; every total follows, labelled (audit P1-1)"
     assert "1457-2008-36" in got and "model +4.3u · Zeno +800.2u (1u = $10)" in got, "the split rides the tile"
     assert "+22.3% ROI" in got, "the combined tile's headline is its ROI, as the model's is"

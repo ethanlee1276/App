@@ -335,7 +335,7 @@ def test_an_empty_game_log_does_not_promise_data_that_cannot_exist():
     body = app[i:i + 2200]
     assert 'source === "market"' in body, \
         "one empty state for two different silences"
-    assert "has not played an NFL" in body
+    assert "No game log — no NFL" in body
 
 
 if __name__ == "__main__":

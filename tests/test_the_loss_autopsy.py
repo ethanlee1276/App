@@ -138,7 +138,7 @@ def test_autopsy_joins_the_logs_and_the_build_refreshes_daily():
     assert run.returncode == 0, run.stderr[-1200:]
     h = json.loads(run.stdout)["h"]
     assert "When picks like this lose" in h and "The step wrong most" in h and "lb-tags" in h
-    assert "His last graded picks" in h and "Context" in h
+    assert "The last graded picks" in h and "Context" in h
 
 
 if __name__ == "__main__":

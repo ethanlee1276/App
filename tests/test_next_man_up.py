@@ -142,7 +142,7 @@ def test_the_page_reads_it_once_draws_it_under_the_row_and_says_what_it_is():
     body = APP[i:APP.index("\n/* ONE TEAM, FOLDED", i)]
     assert 'if (sport === "nfl") {' in body and "const fx = await loadNextUp();" in body
     assert "_nextUp.set(nextUpKey({ player: e.hurt, team: e.team }), e)" in body
-    assert "<b>Next man up</b> names who holds an injured man’s work" in body
+    assert "<b>Next man up</b> names who holds an injured player’s work" in body
     assert "never a\n      claim about who is on your league’s wire" in body
     row = _fn("injRow")
     assert "${nextUpLine(_nextUp.get(nextUpKey(r)))}" in row

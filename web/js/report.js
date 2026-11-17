@@ -525,7 +525,7 @@
           <span class="gr-parlay-pick"><b>${named(l.pick || "", b.names)}</b>${l.price
             ? ` <span class="gr-parlay-px">${escapeHtml(l.price)}</span>` : ""}${l.chance
             ? ` <span class="gr-parlay-p">${Math.round(Number(l.chance) * 100)}%</span>` : ""}${l.research != null
-            ? ` <span class="gr-parlay-r" title="Our research score: his team’s expected points, the defense he faces, his usage and red-zone work, the matchup read and the game script">research score ${escapeHtml(String(l.research))} of ${escapeHtml(String(l.research_of || 13))}</span>` : ""}${
+            ? ` <span class="gr-parlay-r" title="Our research score: the team’s expected points, the defense faced, the usage and red-zone work, the matchup read and the game script">research score ${escapeHtml(String(l.research))} of ${escapeHtml(String(l.research_of || 13))}</span>` : ""}${
             l.bet ? resTag(l.bet) : ""}</span>
           ${(l.why || []).length ? `<ul class="gr-why">${items(l.why)}</ul>` : ""}</li>`).join("")}</ol>
         ${t.script ? `<p class="gr-parlay-script">${escapeHtml(t.script)}</p>` : ""}
@@ -768,7 +768,7 @@
       legs: (t.legs || []).map((l) => ({ pick: pickWords(l), player: l.player,
         price: [oddsWords(l.odds), l.book || ""].filter(Boolean).join(" "), chance: l.p, why: l.why || [],
         research: l.research, research_of: l.research_of, bet: l })),
-      backups: (t.backups || []).map((b) => `If ${b.for} is out or his number moves: ${pickWords(b.leg || {})} (${
+      backups: (t.backups || []).map((b) => `If ${b.for} is out or that number moves: ${pickWords(b.leg || {})} (${
         oddsWords((b.leg || {}).odds)}, ${pct((b.leg || {}).p)})`),
       bet_legs: t.legs || [],
     };

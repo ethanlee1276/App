@@ -227,7 +227,7 @@ def test_the_section_only_reads_and_reads_nothing_before_the_first_journal():
     out = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-1200:]
     h = json.loads(out.stdout)["h"]
-    assert "How much the public is reading about him" in h and "2.5×" in h and "lb-spark" in h
+    assert "How much the public is reading about this player" in h and "2.5×" in h and "lb-spark" in h
     assert "far more than usual" in h
 
 

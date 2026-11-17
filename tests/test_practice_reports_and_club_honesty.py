@@ -130,7 +130,7 @@ def test_the_section_reads_this_weeks_report_and_the_pages_draw_it():
     out = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-1200:]
     got = json.loads(out.stdout)
-    assert "The injury report, read closely" in got["p"] and "he was limited in practice" in got["p"]
+    assert "The injury report, read closely" in got["p"] and "— was limited in practice" in got["p"]
     assert "the board’s injury hold is unchanged" in got["p"]
     assert "Who is on the injury report" in got["g"] and "Travis Kelce" in got["g"]
 

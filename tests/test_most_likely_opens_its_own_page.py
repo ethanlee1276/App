@@ -98,8 +98,8 @@ def test_the_card_explains_the_pick_from_the_row_itself():
         return
     assert "Why it’s likely" in got
     assert "71% — Top, the 68% or more band" in got
-    assert "We have him at 58.2 receiving yards — 8.7 above the 49.5 line." in got
-    assert "Over 49.5 in 7 of his last 9 — one was a game he left early, and it is one of the misses." in got
+    assert "We have the player at 58.2 receiving yards — 8.7 above the 49.5 line." in got
+    assert "Over 49.5 in 7 of the last 9 — one was a game left early, and it is one of the misses." in got
     assert "Matchup +8%</b> — Soft matchup — DET allow the 2nd-most passing yards (329 a game) (×1.05); " \
            "Game script: 6.5-pt underdog (×1.03)" in got, "the whole reason, so +8% adds up"
     assert "Weather" not in got, "a step that moved nothing is not a reason"
@@ -113,7 +113,7 @@ def test_an_alternate_line_says_which_number_it_stands_beside():
     got = _why(PROP, rung)
     if got is None:
         return
-    assert "We have him at 58.2 receiving yards — 18.7 above the 39.5 line." in got
+    assert "We have the player at 58.2 receiving yards — 18.7 above the 39.5 line." in got
     assert "An alternate line: the book’s main number is over 49.5 at -150" in got
 
 
@@ -124,7 +124,7 @@ def test_a_scorer_and_a_thin_player_read_right():
                     "line": None, "book": "FanDuel", "odds": -220, "model_prob": 0.68, "implied_prob": 0.66})
     if got is None:
         return
-    assert "Scored in 3 of his last 4" in got and "We have him at" not in got
+    assert "Scored in 3 of the last 4" in got and "We have the player at" not in got
     thin = _why(PROP, LIKELY, data={"thin": {"Garrett Wilson": {"games": 2}}})
     assert "only 2 games this season to go on — shown, not staked" in thin
 

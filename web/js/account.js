@@ -1794,7 +1794,7 @@ function paywallHTML(rec, status) {
       ${feature("🤖", "Ask Qellys",
         "An AI assistant for any team, player or game in any sport — tonight’s boards and every past game we have stored — answered from our own numbers, with the sources shown.")}
       ${feature("🎟️", "All of Zeno’s props and parlays",
-        "Every prop and parlay Zeno places at FanDuel, DraftKings and theScore Bet — the pick, the book, the price he got and the stake — posted the moment he places it. Every one is verified on Pikkit, synced from his sportsbooks: check his record there before you pay.")}
+        "Every prop and parlay Zeno places at FanDuel, DraftKings and theScore Bet — the pick, the book, the price taken and the stake — posted the moment it is placed. Every one is verified on Pikkit, synced from Zeno’s sportsbooks: check the record there before you pay.")}
       ${feature("🎯", "Picks and props",
         "Daily best bets, player props and parlay tickets across every sport we cover, each with the arithmetic that produced it.")}
       ${feature("📊", "The model, shown working",
@@ -1903,7 +1903,7 @@ function igIcon(size = 17) {
    an email address. */
 
 const DISCORD_PERKS = [
-  "Ethan’s own picks — the ones he is actually on",
+  "Ethan’s own picks — the ones Ethan is actually on",
   "Live line-movement alerts",
   "Injury news and late scratches",
   "Lineup breakdowns and projections",
@@ -1915,7 +1915,7 @@ const DISCORD_PERKS = [
 
 const DISCORD_INSIDE = [
   ["target", "Daily picks",
-   "The plays Ethan has picked out himself, posted as he takes them."],
+   "The plays Ethan has picked out, posted as they are taken."],
   ["bolt", "Live alerts",
    "Line moves, steam and injury news while there is still time to act."],
   ["chart", "Projections",
@@ -2042,13 +2042,13 @@ function discordPageHTML(s, welcome, feed) {
       <div class="dc-main-words">
         <h2 class="dc-h2">Join the <em>Qellys</em> Discord</h2>
         <p class="dc-body">This is the point of the server: Ethan goes
-          through the board and picks out the ones he thinks are winners,
-          and posts them as he takes them. Everything else — the alerts,
+          through the board, picks out the ones that look like winners,
+          and posts them as they are taken. Everything else — the alerts,
           the projections, the chat — is around that.</p>
-        ${gram ? `<p class="dc-body">It is the same thing he has been
+        ${gram ? `<p class="dc-body">It is the same thing Ethan has been
           posting publicly on <a href="${safeHref(gram)}" target="_blank"
-          rel="noopener noreferrer">Instagram</a> — he puts that run at
-          <b>+400 units</b>. That is his own count, on his own page;
+          rel="noopener noreferrer">Instagram</a>, where that run stands at
+          <b>+400 units</b>. That count is Ethan’s own, on that page;
           what this site publishes is graded here, pick by pick, on the
           <a href="#record">Record</a> page.</p>`
         : `<p class="dc-body">Every pick this site makes is graded in
@@ -2989,7 +2989,7 @@ const FL_ROWS = [
   ["Every other pick tonight — props, parlays, the whole board", 0],
   ["Most Likely — every pick, tiered by its chance", 0],
   ["Ask Qellys, the AI, on any team or player", 0],
-  ["Zeno’s bets as he places them, verified on Pikkit", 0],
+  ["Zeno’s bets as they are placed, verified on Pikkit", 0],
   ["Game reports, matchups, line moves and pick alerts", 0],
   ["The members’ Discord", 0],
 ];
@@ -3326,7 +3326,7 @@ function planStepHTML(fl) {
         <li>${iconMark("check", 13)}<span>Every pick before the game, with its price and our chance</span></li>
         <li>${iconMark("check", 13)}<span>Most Likely, parlay tickets and every prop board</span></li>
         <li>${iconMark("check", 13)}<span>Ask Qellys, the AI, on any team or player</span></li>
-        <li>${iconMark("check", 13)}<span>Zeno’s bets as he places them, verified on Pikkit</span></li>
+        <li>${iconMark("check", 13)}<span>Zeno’s bets as they are placed, verified on Pikkit</span></li>
       </ul>
       <button type="button" class="btn primary ps-go" data-ps="${escapeAttr((trial ? tpl : mo).id)}">${
         trial ? `Start ${days} days free` : `Become a member — $${mo.price} a month`}</button>

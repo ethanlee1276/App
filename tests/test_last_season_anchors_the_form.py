@@ -102,7 +102,7 @@ def test_the_build_hands_it_to_the_prop_and_the_page_says_which_anchor():
     proj = open(os.path.join(ROOT, "engine", "projection.py"), encoding="utf-8").read()
     assert "shrink_kind=" in proj
     js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
-    assert 'base.shrink_kind === "season"' in js and "his own per-game number last season" in js
+    assert 'base.shrink_kind === "season"' in js and "the player’s own per-game number last season" in js
 
 
 def test_the_calibration_replay_reads_last_season_as_the_board_does():

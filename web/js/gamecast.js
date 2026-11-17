@@ -996,7 +996,7 @@
      for the at-bat in progress (its count after the newest pitch), or at
      0-0 for the batter just up. */
   const NP_SIDE = { L: "left-handed batters", R: "right-handed batters" };
-  const NP_FAM = { ahead: "when he is ahead", behind: "when he is behind", even: "in even counts" };
+  const NP_FAM = { ahead: "when ahead in the count", behind: "when behind in the count", even: "in even counts" };
   function nextPitch(d, ps, done) {
     const np = d.next_pitch, cur = d.current;
     if (!np || !cur || np.pitcher_id !== cur.pitcher_id) return "";
@@ -1011,7 +1011,7 @@
                    all: `to ${np.side ? side : "every batter"}, every count` }[row.basis] || "";
     return `<div class="gc-np"><div class="gc-k">Next pitch · ${esc(key)}${cur.pitcher ? ` · ${esc(cur.pitcher)}` : ""}</div>
       <div class="gc-np-bars">${row.mix.map(([, name, sh]) => `<div class="gc-np-row"><span>${esc(name)}</span><i><b style="width:${(100 * sh).toFixed(1)}%"></b></i><em>${Math.round(100 * sh)}%</em></div>`).join("")}</div>
-      <p class="gc-np-cap">His own mix ${esc(said)}, this season and last (${row.n} pitch${row.n === 1 ? "" : "es"}). A record of what he throws, not a forecast.</p></div>`;
+      <p class="gc-np-cap">The pitcher’s own mix ${esc(said)}, this season and last (${row.n} pitch${row.n === 1 ? "" : "es"}). A record of what gets thrown, not a forecast.</p></div>`;
   }
   function zone(d) {
     const lv = d.live || {};

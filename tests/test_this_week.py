@@ -212,7 +212,7 @@ def test_a_benched_man_the_desk_wants_in_is_a_start_call():
                 "gain": 4.4}],
         bench=["Star Wr"])
     out = _panel("Star Wr", "SEA", desk=desk)
-    assert "START HIM" in out, out
+    assert ">START</b>" in out, out
     assert "+4.4" in out and "Someone Else" in out
 
 
@@ -223,7 +223,7 @@ def test_a_started_man_the_desk_wants_out_is_a_bench_call():
                 "gain": 6.0}],
         bench=["Bench Te"])
     out = _panel("Bench Te", "DET", desk=desk)
-    assert "BENCH HIM" in out, out
+    assert ">SIT</b>" in out, out
     assert "Better Guy" in out and "+6" in out
 
 
@@ -232,7 +232,7 @@ def test_a_man_already_started_correctly_is_told_he_is_right():
                  swaps=[])
     out = _panel("Star Wr", "SEA", desk=desk)
     assert "STARTING" in out and "14.2" in out
-    assert "BENCH" not in out
+    assert "BENCH" not in out and ">SIT</b>" not in out
 
 
 def test_a_platform_that_cannot_see_your_lineup_says_where_he_belongs():
@@ -251,8 +251,8 @@ def test_a_man_on_your_bench_with_no_swap_is_a_plain_bench():
     desk = _desk(starters=[{"slot": "WR", "player": "Better Guy", "points": 20}],
                  swaps=[], bench=["Bench Te"])
     out = _panel("Bench Te", "DET", desk=desk)
-    assert "BENCH" in out and "BENCH HIM" not in out
-    assert "not in the best legal lineup" in out
+    assert ">BENCH</b>" in out and ">SIT</b>" not in out
+    assert "Not in the best legal lineup" in out
 
 
 # ------------------------------------------------ what it refuses to claim
@@ -260,7 +260,7 @@ def test_a_man_on_your_bench_with_no_swap_is_a_plain_bench():
 def test_with_no_league_linked_there_is_no_call_at_all():
     out = _panel("Star Wr", "SEA", desk=None)
     assert "No league linked" in out and "Account page" in out
-    for word in ("START HIM", "BENCH HIM", "STARTING", "BEST LINEUP"):
+    for word in (">START</b>", ">SIT</b>", "STARTING", "BEST LINEUP"):
         assert word not in out, (word, out)
     # …but the day projection is still there. It needs no league.
     assert "18.1" in out
@@ -271,7 +271,7 @@ def test_somebody_elses_player_is_not_given_a_verdict():
                  swaps=[])
     out = _panel("Star Wr", "SEA", desk=desk)
     assert "Not on your roster" in out
-    for word in ("START HIM", "BENCH HIM", "STARTING"):
+    for word in (">START</b>", ">SIT</b>", "STARTING"):
         assert word not in out, (word, out)
 
 
@@ -322,7 +322,7 @@ def test_his_week_off_the_board_comes_first_when_it_is_built():
 
 def test_a_questionable_man_shows_both_numbers_and_the_chance():
     out = _panel("Hurt Rb", "SEA", week=_WEEK)
-    assert "9.1" in out and "14.0 if he plays" in out and "65% that he does" in out, out
+    assert "9.1" in out and "14.0 if they play" in out and "65% that they do" in out, out
     assert "Questionable, Limited in practice" in out
 
 
@@ -330,7 +330,7 @@ def test_a_part_from_his_season_average_says_so():
     week = json.loads(json.dumps(_WEEK))
     week["players"][0]["filled"] = ["receptions"]
     out = _panel("Star Wr", "SEA", week=week)
-    assert "His catches from his season average: the board has no line on it" in out, out
+    assert "The catches from the season average: the board has no line on it" in out, out
 
 
 def test_the_room_draws_the_week_by_position():
@@ -356,7 +356,7 @@ def test_the_room_draws_the_week_by_position():
     assert 'data-ffwpos="RB"' in all_ and 'data-ffwpos="QB"' not in all_, "a filter for each position on the board"
     assert all_.index("Star Wr") < all_.index("Hurt Rb"), "ordered by what each is worth this week"
     assert "soft matchup" in all_ and "Questionable · 65% to play" in all_
-    assert "14.0 if he plays" in all_ and "8 in 10 weeks 7.2–31.8" in all_ and "TD 46%" in all_
+    assert "14.0 if they play" in all_ and "8 in 10 weeks 7.2–31.8" in all_ and "TD 46%" in all_
     assert "72.3% of the time to the season average’s 71.3%" in all_
     assert "part of the subscription" in out["locked"] and "not built yet" in out["none"]
 

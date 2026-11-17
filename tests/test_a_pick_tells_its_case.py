@@ -131,7 +131,7 @@ def test_the_page_sorts_the_case_for_the_under_and_says_why_it_stands():
     assert "The case for the under 84.5" in html and "Works against it" in html
     assert "shown — not in our number" in html and "in our number" in html
     assert "pull the other way" in html or "pulls the other way" in html, "the verdict says why it still stands"
-    assert "Who covers him" in html and "Tyson Campbell" in html and "171" in html
+    assert "Who covers the player" in html and "Tyson Campbell" in html and "171" in html
     assert "this is worth" in html and "take it past" in html, "the fair price and the worst one to take"
     assert "back-and-forth" in over_for, "the same script backs the over"
 

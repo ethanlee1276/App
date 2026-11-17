@@ -108,7 +108,7 @@ def test_the_ribbon_serves_a_persons_book_under_its_own_label():
       return { zeno, you, noRoi, nothing };""")
     if got is None:
         print("  SKIP node not installed"); return
-    assert '<span class="hd-eyebrow">Zeno · his own book · verified on Pikkit</span>' in got["zeno"]
+    assert '<span class="hd-eyebrow">Zeno · personal book · verified on Pikkit</span>' in got["zeno"]
     assert "+4.1% ROI · $2,140.00 risked · 38 settled · 2 open" in got["zeno"], "the ROI rides the sub-line, the dollars grouped"
     assert '<span class="hd-eyebrow">You · logged by hand</span>' in got["you"], "the same tile, your label"
     assert "−12.5% ROI · $100.00 risked · 5 settled · 2 open" in got["you"]
@@ -117,7 +117,7 @@ def test_the_ribbon_serves_a_persons_book_under_its_own_label():
     assert got["nothing"] == "", "no ribbon over nothing settled"
     # A person's own label wins; Zeno's names Pikkit when his record was
     # carried in from it (tests/test_zenos_pikkit_record_is_carried_in.py).
-    assert 'tile(z.label || "Zeno · his own book · verified on Pikkit"' in _fn("recordRibbonsHTML"), \
+    assert 'tile(z.label || "Zeno · personal book · verified on Pikkit"' in _fn("recordRibbonsHTML"), \
         "a person's own label wins; Zeno's says where to check it (tests/test_zeno_verified_on_pikkit.py)"
 
 

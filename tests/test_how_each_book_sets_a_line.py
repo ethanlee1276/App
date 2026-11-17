@@ -144,7 +144,7 @@ def test_the_pick_page_shows_each_books_recipe_beside_its_line():
     out = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-1200:]
     h = json.loads(out.stdout)["h"]
-    assert "How the books set his line" in h and "<td>dk</td>" in h and "Results weigh last game" in h
+    assert "How the books set the line" in h and "<td>dk</td>" in h and "Results weigh last game" in h
     assert "Reading · not measured yet" in h
 
 

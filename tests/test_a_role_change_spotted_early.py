@@ -125,7 +125,7 @@ def test_the_pick_and_game_pages_show_the_change():
     out = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-1200:]
     h = json.loads(out.stdout)
-    assert "His role, watched for a change" in h["p"] and "over his last 3 games" in h["p"]
+    assert "The role, watched for a change" in h["p"] and "over the last 3 games" in h["p"]
     assert 'class="new"' in h["p"] and "Snap share" in h["p"] and "Reading · not measured yet" in h["p"]
     assert "Roles that just changed" in h["g"] and "Khalil Shakir" in h["g"]
 

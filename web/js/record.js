@@ -3239,8 +3239,8 @@ function recNumberSection(x, scope) {
           x.level ? `, level on ${x.level}` : ""}</span></div>
       ${rows ? `<div class="rr-head">By market</div>${rows}` : ""}
       <p class="rr-note">Each pick counts once, whichever books hold it. A pick is made where our number and the line
-        disagree, so this asks which of the two the result came out nearer. Our number is his average; the line sits
-        where half his games land. In yards markets a few big games pull an average up, so the line comes out nearer
+        disagree, so this asks which of the two the result came out nearer. Our number is the player’s average; the line sits
+        where half the games land. In yards markets a few big games pull an average up, so the line comes out nearer
         more often there even when the average is right. Read it beside the units the same picks won or lost.</p>
     </div>`;
 }

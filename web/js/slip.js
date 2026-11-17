@@ -288,7 +288,7 @@
     }
     if (l.found !== "read" || !r || l.prob != null) return "";
     return `<div class="pgr-leg-w">Not on our board${r.why_off ? ` — ${esc(r.why_off)}` : ""}. ${
-      r.refused ? `Our model won’t price it: ${esc(r.refused)}` : "We keep too few of his games to price it."}</div>`;
+      r.refused ? `Our model won’t price it: ${esc(r.refused)}` : "We keep too few of the player’s games to price it."}</div>`;
   }
 
   /* BETTER LEGS FOR THIS SPOT (slipgrade.replacements, Ethan 2026-10-13: "we
@@ -298,7 +298,7 @@
   function swapsHTML(l) {
     const sw = Array.isArray(l.swaps) ? l.swaps : [];
     if (!sw.length) return "";
-    const tag = (x) => x.kind === "number" ? "Better number" : x.same_player ? "His other bet"
+    const tag = (x) => x.kind === "number" ? "Better number" : x.same_player ? "Same player, other bet"
       : x.tier ? x.tier : x.found === "game" ? "Our game line" : "Our projection";
     return `<div class="pgr-swaps"><b>Better legs for this spot</b><ul>${sw.map((x) => `<li><span class="pgr-swap-k">${
       esc(tag(x))}</span> <b>${esc(x.label)}</b>${x.odds ? ` at ${esc(price(x.odds))}` : ""}${x.book ? ` (${esc(x.book)})` : ""} — ours ${

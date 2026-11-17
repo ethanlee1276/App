@@ -296,7 +296,7 @@ def test_the_note_does_not_pretend_the_projection_knew():
     by a healthy man."""
     out = _note({"player": "A Back", "warnings": []},
                 {"status": "Out", "injury": "knee", "date": "2026-08-19"})
-    assert "games he played healthy" in out, out
+    assert "games played healthy" in out, out
 
 
 if __name__ == "__main__":

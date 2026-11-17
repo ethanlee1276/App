@@ -204,8 +204,8 @@ def test_the_units_claim_is_attributed_rather_than_asserted():
     body = _fn(app_js(), "discordPageHTML")
     i = body.index("+400 units")
     around = body[max(0, i - 400):i + 400]
-    assert "his own count" in around, (
-        "the figure reads as this site's, not as his")
+    assert "count is Ethan’s own" in around, (
+        "the figure reads as this site's, not as Ethan's")
     assert "#record" in around, (
         "the claim is made without pointing at the graded record beside it")
 

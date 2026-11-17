@@ -92,7 +92,7 @@
     const rc = r.role_change;
     if (rc && rc.before != null && rc.after != null) {
       const word = { tgt: "target share", car: "carry share", snap: "snap share" }[rc.share] || "role";
-      out.push(`Role change: his ${word} went from ${Math.round(rc.before * 100)}% to ${
+      out.push(`Role change: the ${word} went from ${Math.round(rc.before * 100)}% to ${
         Math.round(rc.after * 100)}% ${rc.games_ago} game${rc.games_ago === 1 ? "" : "s"} ago`);
     }
     return out.slice(0, n || 3);
@@ -149,8 +149,8 @@
      mark on the number, the words in its title and on his panel. */
   function partMark(r) {
     const said = [];
-    if ((r.filled || []).length) said.push(`His ${r.filled.map((k) => PART[k] || k).join(", ")} from his season average`);
-    if ((r.missing || []).length) said.push(`no line for his ${r.missing.map((k) => PART[k] || k).join(", ")}, left out`);
+    if ((r.filled || []).length) said.push(`${r.filled.map((k) => PART[k] || k).join(", ")} from the season average`);
+    if ((r.missing || []).length) said.push(`no line for the ${r.missing.map((k) => PART[k] || k).join(", ")}, left out`);
     return said.length ? `<sup class="ffr-part" title="${escapeAttr(said.join("; "))}">•</sup>` : "";
   }
 
@@ -192,7 +192,7 @@
       </span>
       ${rangeBar(r, top)}
       <span class="ffr-pts"><b>${Number(r.expected).toFixed(1)}${partMark(r)}</b><span>${
-        maybe ? `${Number(r.ppr).toFixed(1)} if he plays` : "PPR"}</span></span>
+        maybe ? `${Number(r.ppr).toFixed(1)} if they play` : "PPR"}</span></span>
     </div>`;
   }
 
@@ -221,8 +221,8 @@
     // row with its workings cut (engine/gate.ROW_PAID_KEYS_BY_FILE).
     if (w.locked_reason && !(w.players || []).length) {
       return `<div class="card ms-locked"><b>Every player’s week in fantasy points</b> — the prop
-        board’s projections added up: the defence against his position, the game script, the
-        weather, who is out around him, his touchdown chance and the chance he plays, with the
+        board’s projections added up: the defence against the position, the game script, the
+        weather, who is out around the player, the touchdown chance and the chance to play, with the
         reasons — is part of the subscription. Your league desk scores your lineup on it too.</div>`;
     }
     if (!current(w)) {
@@ -243,9 +243,9 @@
     // wants it looks, rather than standing between the reader and them.
     return `
       <div class="section-title">Week ${escapeHtml(String(w.week || ""))} in fantasy points
-        <span class="sub">— every player on the NFL board, PPR, at the chance he plays</span></div>
+        <span class="sub">— every player on the NFL board, PPR, at the chance each plays</span></div>
       ${w.locked && w.locked["players[].fields"] ? `<p class="rank-help">${icon("lock", 12)} Members also see each
-        player’s stat line, touchdown chance and game script, and the reasons behind his number —
+        player’s stat line, touchdown chance and game script, and the reasons behind the number —
         <a href="#paywall">the plans</a>.</p>` : ""}
       ${compareHTML(w)}
       <div class="ffr-bar">
@@ -258,13 +258,13 @@
         || panelEmpty("No players at this position on this week’s board.")}</div>
       ${rows.length > shown.length ? `<button type="button" class="btn ghost" data-ffwmore>Show all ${
         rows.length} ${want === "ALL" ? "players" : want === "DEF" ? "defense" : want}s ▾</button>` : ""}
-      ${parts ? `<p class="ffr-key"><sup class="ffr-part">•</sup> Part of the number is his season average: the
+      ${parts ? `<p class="ffr-key"><sup class="ffr-part">•</sup> Part of the number is the player’s season average: the
         board has no line on it. Tap the name for which part.</p>` : ""}
       <details class="ffr-how"><summary>How these numbers are built</summary>
-        <p class="rank-help">Each line is the prop board’s own projection — the defence against his
-          position, the game script, the weather, who is out around him — and his touchdowns are the
-          touchdown model’s. A questionable player counts at the chance he plays; tap any name for
-          his whole week. Your league desk (My team) scores your lineup on these numbers under your
+        <p class="rank-help">Each line is the prop board’s own projection — the defence against the
+          position, the game script, the weather, who is out around the player — and the touchdowns are the
+          touchdown model’s. A questionable player counts at the chance to play; tap any name for
+          the player’s whole week. Your league desk (My team) scores your lineup on these numbers under your
           league’s own scoring.</p>
         ${byesNote(w)}${measuredHTML(w.measured)}
       </details>`;
@@ -337,13 +337,13 @@
   function dossier(r) {
     if (r.bye) {
       return `<p class="ffd-note">On a bye this week — worth nothing to a lineup until
-        ${escapeHtml(nflName(r.team) || "his team")} play again.</p>`;
+        ${escapeHtml(nflName(r.team) || "the team")} play again.</p>`;
     }
     const stat = (k, v) => v == null || v === "" ? ""
       : `<span class="ffd-stat"><span class="k">${k}</span><b>${v}</b></span>`;
     const why = reasons(r, 3);
     const listed = r.play > 0 && r.play < 1
-      ? ` — ${Number(r.ppr).toFixed(1)} if he plays, and ${Math.round(r.play * 100)}% that he does (${
+      ? ` — ${Number(r.ppr).toFixed(1)} if they play, and ${Math.round(r.play * 100)}% that they do (${
         escapeHtml(r.status || "listed")}${r.practice ? `, ${escapeHtml(r.practice)} in practice` : ""})`
       : r.play === 0 ? ` — ${escapeHtml(r.status || "ruled out")}, so nothing` : "";
     const stats = stat("8 in 10 weeks", r.range ? `${Number(r.range[0])}–${Number(r.range[1])}` : null)
@@ -356,8 +356,8 @@
       ${stats ? `<div class="ffd-stats">${stats}</div>` : ""}
       ${r.matchup && r.matchup.text ? `<p class="ffd-note">${escapeHtml(r.matchup.text)}.</p>` : ""}
       ${why.length ? `<p class="ffd-note">${why.map(escapeHtml).join(" · ")}</p>` : ""}
-      ${(r.filled || []).length ? `<p class="ffd-note">His ${escapeHtml(r.filled.map((k) =>
-        PART[k] || k).join(", "))} from his season average: the board has no line on
+      ${(r.filled || []).length ? `<p class="ffd-note">The ${escapeHtml(r.filled.map((k) =>
+        PART[k] || k).join(", "))} from the season average: the board has no line on
         ${r.filled.length === 1 ? "it" : "them"} this week.</p>` : ""}`;
   }
 
@@ -438,12 +438,12 @@
       <div class="ffc-n"><b>${Number(c.points).toFixed(1)}</b><span>${def ? "points" : escapeHtml(sc)}</span></div>
       <dl class="ffc-stats">
         ${c.play < 1 ? stat("To play", `${Math.round(c.play * 100)}%${c.status ? ` (${c.status})` : ""}`) : ""}
-        ${c.if_plays != null ? stat("If he plays", Number(c.if_plays).toFixed(1)) : ""}
+        ${c.if_plays != null ? stat("If they play", Number(c.if_plays).toFixed(1)) : ""}
         ${c.floor != null ? stat("8 in 10 weeks", `${Number(c.floor).toFixed(1)}${c.floor < 0 ? " to " : "–"}${
           Number(c.ceiling).toFixed(1)}`) : ""}
         ${stat("Matchup", CMP_GRADE[(c.matchup || {}).grade] || "")}
         ${stat("Kickoff", c.kickoff || "")}
-        ${stat("His line", line)}
+        ${stat("Projected line", line)}
         ${c.td_prob != null ? stat(c.position === "QB" ? "Rush TD" : "TD chance", `${Math.round(c.td_prob * 100)}%`) : ""}
         ${c.dst ? stat("Sacks · takeaways", `${c.dst.sacks} · ${c.dst.takeaways}`) : ""}
       </dl>
@@ -484,7 +484,7 @@
       <div class="ffc-grid">${(o.players || []).map((c, i) => cmpCardHTML(c, i, o.scoring || "PPR")).join("")}</div>
       ${(o.notes || []).length ? `<ul class="ffc-notes">${o.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>` : ""}
       ${free ? `<p class="ffc-lock">${icon("lock", 12)} Members also see each player’s stat line, touchdown chance
-        and the reason behind his number — <a href="#paywall">the plans</a>.</p>` : ""}`;
+        and the reason behind the number — <a href="#paywall">the plans</a>.</p>` : ""}`;
   }
 
   function compareHTML(w) {
@@ -685,7 +685,7 @@
         <span class="ffl-wp-n"><b>${Math.round(wp * 100)}%</b> to win</span></div>` : ""}
       <div class="ffl-rows">${rows}</div>
       <p class="ffl-note">Points so far are Sleeper’s, under your league’s scoring, for the lineup you set. What is
-        left is projected: a player yet to play at this week’s projection, one in a game at his points plus his
+        left is projected: a player yet to play at this week’s projection, one in a game at the points so far plus the
         projection for the time left.${L.in_progress ? " This card refreshes every minute." : ""}</p>
     </div>`;
   }
@@ -1010,8 +1010,8 @@
       const n = b.season || 0;
       return `<p class="rank-help">Scored on Week ${escapeHtml(String(pw.week || ""))}’s projections —
         the matchup, the game script, the weather and who is out around each player, at the chance
-        he plays; a bye or a player ruled out counts as zero.${n ? ` ${n} starter${n === 1 ? " is" : "s are"}
-        on ${n === 1 ? "his" : "their"} season average: this week’s board does not carry ${n === 1 ? "him" : "them"}.` : ""}
+        each plays; a bye or a player ruled out counts as zero.${n ? ` ${n} starter${n === 1 ? " is" : "s are"}
+        on their season average: this week’s board does not carry them.` : ""}
         Trades stay on season averages — a trade is the rest of the season’s question.</p>`;
     }
     if (!pw.note) return "";
@@ -1045,7 +1045,7 @@
   /* Under the dossier's start/sit call, when the desk scored it on the week. */
   function callNote() {
     return `<p class="ffd-note">The call is scored under your league’s own scoring and slots on
-      this week’s projection, at the chance he plays — the same week as above, not his season
+      this week’s projection, at the chance to play — the same week as above, not the season
       average.</p>`;
   }
 

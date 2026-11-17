@@ -116,7 +116,7 @@ def test_the_toolbox_card_reads_corner_a_first_and_says_what_it_is():
     assert "Fight path" in html and "Pick: Alex Pereira" in html and "5 rounds" in html
     assert "KO/TKO 40%" in html and "Won: 2 KO/TKO · 1 Sub · 1 Dec" in html and "Lost: 0 KO/TKO · 1 Sub · 1 Dec" in html
     assert "R1 2 · R2 1" in html and "R1 22% · R2 18% · Distance 30%" in html
-    assert "His fights are not on file yet." in html, "Hill has no path"
+    assert "No fights on file yet." in html, "Hill has no path"
     assert html.count('class="xt-fp-l t-good"') == 3 and "1 drawn or no contest" in html
     assert "Context, not a pick." in html
     assert "membership" in got["locked"] and "No fights read on the card yet" in got["none"]

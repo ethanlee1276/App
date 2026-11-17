@@ -156,7 +156,7 @@ def test_the_pick_page_says_the_pull_where_the_number_starts():
         os.unlink(path)
     assert out.returncode == 0, out.stderr
     said, none = json.loads(out.stdout)
-    assert "Only 2 games of his own, so the blend is pulled 33% toward 36.0 — the typical WR" in said and none == ""
+    assert "Only 2 games of the player’s own, so the blend is pulled 33% toward 36.0 — the typical WR" in said and none == ""
 
 
 if __name__ == "__main__":

@@ -595,7 +595,7 @@ def test_the_buy_low_card_speaks_english():
     volume branch beside it."""
     js = _js()
     assert "his say the production" not in js
-    assert "his chances are worth more than he has scored from them so far" in js
+    assert "the chances are worth more than the points scored from them so far" in js
 
 
 def test_game_script_cards_wear_the_clubs_marks_and_one_grid():

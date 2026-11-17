@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UT. The rest of the site reads the same for every player** (step 678; 17 November). Nothing to run. The
+last pages that still called every player "he": the Lab cards on a pick ("How the books set the line", "The role,
+watched for a change", "A rookie's college line, translated"), the Most Likely page ("We have the player at 58.2
+receiving yards"), the fantasy draft room and the week ("Will they last?", "If they fall", "14.0 if they play"),
+and the start/sit call, which said "BENCH HIM" and now says "SIT" beside "START". The referee card reads "The
+crew's games average 13.4 penalties", and the copy about Zeno and the Discord uses names instead of "he": Zeno's
+tile reads "Zeno · personal book · verified on Pikkit", and the Discord page says the +400 units on Instagram is
+your own count.
+
 **US. The charts read the same for every player** (step 677; 17 November). Nothing to run. The chart sheets a
 player page opens with "Charts" (the carry, route, passing, hit, pitch, shot, save, role, kicker and fight charts,
 and tonight's matchup) called every player "he" and "his": a WNBA player's shot chart said "where he shoots" and

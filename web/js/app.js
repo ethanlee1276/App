@@ -4873,8 +4873,8 @@ function futuresTotals(d) {
   if (!blocks.length) return "";
   return `
     <div class="section-title">Season totals
-      <span class="sub">— each player’s rate so far, times the games his team has
-      left, with the games he actually plays taken into account.</span></div>
+      <span class="sub">— each player’s rate so far, times the games the team has
+      left, with the games the player actually plays taken into account.</span></div>
     ${blocks.map((m) => `
       <div class="fx-market">
         <div class="fx-market-head">${escapeHtml(m.label)}</div>
@@ -4884,7 +4884,7 @@ function futuresTotals(d) {
           <span class="fx-pnow">${p.banked}</span>
           <span class="fx-pproj"><b>${p.mean}</b>
             <span class="fx-band">±${p.sd}</span></span>
-          <span class="fx-pav" title="Share of his team’s games he has actually played">${(p.availability * 100).toFixed(0)}%</span>
+          <span class="fx-pav" title="Share of the team’s games the player has actually played">${(p.availability * 100).toFixed(0)}%</span>
           ${p.line == null ? `<span class="fx-pp"></span>`
             : `<span class="fx-pp ${p.p_over >= 0.5 ? "pos" : ""}">${fxPct(p.p_over)} o${p.line}</span>`}
         </div>`).join("")}
@@ -5533,7 +5533,7 @@ async function renderBestBets() {
           earlyRows.length === 1 ? "" : "s"} at real book prices, waiting only
         on the lineup card</b> — it posts 2–4 hours before first pitch. Each
         becomes an official pick (and enters the record) on the refresh after
-        his card posts with him in it; a scratch never does. Not picks yet,
+        the lineup card posts with the player in it; a scratch never does. Not picks yet,
         and not journaled.</p>
       ${earlyRows.map(earlyRow).join("")}
     </div>` : "";
@@ -5819,7 +5819,7 @@ const CENSUS_GATE_NAMES = { no_real_price: "no real book price yet",
   confidence: "confidence under the threshold",
   edge: "edge under the minimum",
   juice: "priced too rich to be worth laying",
-  health: "an injury designation on him",
+  health: "an injury designation",
   kelly: "the price already matches our number — no stake",
   lineup: "waiting on the lineup card",
   // Hoops: the two the build drops before the model ever sees them.
@@ -6649,7 +6649,7 @@ function renderIncentives() {
       <span class="chip">${escapeHtml(r.team || "")}</span>
       <span style="flex:1;min-width:150px;font-weight:600">${escapeHtml(r.player || "")}</span>
       <span style="min-width:130px">${(r.total ?? 0).toLocaleString()} of ${(r.threshold ?? 0).toLocaleString()} ${escapeHtml(r.stat_label || "")}</span>
-      <span style="font-variant-numeric:tabular-nums" title="What he still needs, against his own per-game pace (${r.pace ?? "—"})">
+      <span style="font-variant-numeric:tabular-nums" title="Still needed, against the player’s own per-game pace (${r.pace ?? "—"})">
         ${r.need > 0 ? `needs ${r.need.toLocaleString()} in ${plural(r.games_left, "game")}` : "done"}</span>
       <span style="font-weight:700">${money(r.bonus_usd ?? 0)}</span>
       <span class="chip" style="color:${tone(r.status)}">${escapeHtml(r.status || "")}</span>
@@ -6666,7 +6666,7 @@ function renderIncentives() {
     <div class="section-title">Incentive watch
       <span class="sub">— contract money on the line down the stretch. Each
       chase is measured from our own ingested game logs — season total,
-      distance, and his real per-game pace — because a team feeds a player
+      distance, and the real per-game pace — because a team feeds a player
       who is close, and the books are slow to price that. Picks touching a
       live chase say so on their card.</span></div>
     <div class="card" style="padding:0">${body}</div>${miles ? `
@@ -9326,11 +9326,11 @@ function veloChip(r) {
   const drop = d <= -1.0;
   const mph = `${d >= 0 ? "+" : ""}${d.toFixed(1)} mph`;
   const tip = drop
-    ? "Down a full mph or more on his main pitch against his own last "
+    ? "Down a full mph or more on the main pitch against the pitcher’s own last "
       + "starts. §5 treats this as a red flag: check injury and mechanics "
       + "reporting before trusting the projection. It does not change the "
       + "price."
-    : "Change on his main pitch against his own last starts. Evidence "
+    : "Change on the main pitch against the pitcher’s own last starts. Evidence "
       + "only — nothing prices from it.";
   return `<span class="chip ${drop ? "down" : ""}" title="${tip}">`
        + `${drop ? iconMark("warn") : ""}Velo ${mph}`
@@ -9592,7 +9592,7 @@ function pickInjuryNote(r) {
        + `${icon("warn")} <b style="color:${tone}">${escapeHtml(inj.status)}</b>`
        + ` — ${escapeHtml(r.player)} is on tonight’s injury report`
        + `${bits ? ` (${escapeHtml(bits)})` : ""}. Filed ${injWhen(Date.parse(inj.date || "") || 0)}.`
-       + ` The projection is built on games he played healthy.</div>`;
+       + ` The projection is built on games played healthy.</div>`;
 }
 
 /* THE FORM, NEXT TO THE BET.
@@ -9627,15 +9627,15 @@ function hitChipsHTML(r) {
     const n = xs.filter((v) => (under ? v < line : v > line)).length;
     const share = n / xs.length;
     return `<span class="hit-chip${share >= .6 ? " up" : share <= .4 ? " down" : ""}" title="${
-      escapeAttr(`${side} ${line} in ${n} of ${label === "All" ? `all ${xs.length} stored games` : `his last ${xs.length}`}`)}"><b>${
+      escapeAttr(`${side} ${line} in ${n} of ${label === "All" ? `all ${xs.length} stored games` : `the last ${xs.length}`}`)}"><b>${
       n}/${xs.length}</b> ${label}</span>`;
   };
   // A STREAK (docs/IDEAS.md round three): tonight's number cleared in each
   // of his last four or more games, newest first, said as a run.
   let run = 0;
   while (run < vals.length && (under ? vals[run] < line : vals[run] > line)) run++;
-  return `<span class="hit-chips" aria-label="${escapeAttr(`How often he went ${side.toLowerCase()} ${line}`)}"><em>${side}</em>${
-    run >= 4 ? `<span class="hit-chip hot" title="${escapeAttr(`${side} ${line} in each of his last ${run}`)}">${
+  return `<span class="hit-chips" aria-label="${escapeAttr(`How often the player went ${side.toLowerCase()} ${line}`)}"><em>${side}</em>${
+    run >= 4 ? `<span class="hit-chip hot" title="${escapeAttr(`${side} ${line} in each of the last ${run}`)}">${
       icon("hot", 12)}<b>${run}</b> straight</span>` : ""}${
     chip("L5", vals.slice(0, 5))}${vals.length >= 10 ? chip("L10", vals.slice(0, 10)) : ""}${
     vals.length > 10 ? chip("All", vals) : ""}</span>`;
@@ -9683,10 +9683,10 @@ function rippleCardHTML(r) {
   const notes = (r && r.ripples) || [];
   if (!notes.length) return "";
   const items = notes.map((n) => `<li>${escapeHtml(n.text || "")}${
-    n.measured ? ` <span class="mini">(share ${(n.with * 100).toFixed(0)}% → ${(n.without * 100).toFixed(0)}% over ${n.n_without} game${n.n_without === 1 ? "" : "s"} without him)</span>` : ""}</li>`).join("");
+    n.measured ? ` <span class="mini">(share ${(n.with * 100).toFixed(0)}% → ${(n.without * 100).toFixed(0)}% over ${n.n_without} game${n.n_without === 1 ? "" : "s"} without that teammate)</span>` : ""}</li>`).join("");
   const moved = r && r.mate_card && Number(r.mate_card.applied) !== 1;
   return `<div class="section-title minor">Next man up
-      <span class="sub">— a teammate at his position is ruled out. His own history
+      <span class="sub">— a teammate at the same position is ruled out. The player’s own history
       when that teammate sat, from the weekly stats; ${moved
         ? "the projection above carries the measured league-wide change (Teammate out)"
         : "the projection above has not been moved for it"}.</span></div>
@@ -11112,7 +11112,7 @@ function likelyTagsHTML(r) {
   if (sr) {
     const said = scanReadForBet(sr, r.side) || { text: sr.label, tone: "up" };
     tags.push([said.text, said.tone,
-               "The matchup scan’s read on him — it chose this side, and never moved the number"]);
+               "The matchup scan’s read on the player — it chose this side, and never moved the number"]);
   }
   const qb = r.qb_card, mate = r.mate_card;
   if (qb && qb.headline) {
@@ -11154,7 +11154,7 @@ function likelyTagsHTML(r) {
      2026-09-24): shown, and not recorded until the card posts. */
   if (r.lineup_confirmed === false) {
     tags.push(["Lineup not posted", "down",
-               "His team’s lineup card is not out yet — he is projected to play, not confirmed. "
+               "The team’s lineup card is not out yet — the player is projected to play, not confirmed. "
                + "The pick is recorded only once the card posts."]);
   }
   return tagsOut(tags);
@@ -11349,8 +11349,8 @@ function tdScenariosHTML() {
     <div class="shelf-head"><h3 class="shelf-title">Touchdown scenarios
       <span class="mini" style="opacity:.6">${rows.length}</span></h3>
       <span class="chip">built from the matchup</span></div>
-    <p class="ls-note">Scorers the matchup builds a case for — his offence, their defence at his
-      position, his share of the work, his red-zone looks — ranked by our chance. Not picks:
+    <p class="ls-note">Scorers the matchup builds a case for — their offence, the defence they face at their
+      position, their share of the work, their red-zone looks — ranked by our chance. Not picks:
       tracked on paper, so the record says how they do.</p>
     <div class="ml-rows">${rows.map((r) => {
       const g = gameFor(r.game);
@@ -11703,7 +11703,7 @@ function obCardHTML(r, rank, opts = {}) {
 function obMatchupWords() {
   const src = ((state.data || {}).likely_board || {}).matchup_source;
   if (src === "model") return "our model’s matchup step — what tonight’s defence allows, at its measured weight — moved the number toward this side";
-  if (src === "scan+model") return `${state.sport === "mlb" ? "the matchup scan backs this side — his split against this hand, what the starter allows to his side, the park and the wind —" : "the offence-against-defence read backs this side"} or, where it has no read, our model’s matchup step moved the number toward it`;
+  if (src === "scan+model") return `${state.sport === "mlb" ? "the matchup scan backs this side — the hitter’s split against this hand, what the starter allows to that side, the park and the wind —" : "the offence-against-defence read backs this side"} or, where it has no read, our model’s matchup step moved the number toward it`;
   if (src === "none") return "no matchup read for this sport yet, so its picks top out at Strong";
   return "the offence-against-defence read backs this side";
 }
@@ -12048,7 +12048,7 @@ function firstOursHTML(rows) {
     <span class="hd-what"><b>${escapeHtml(r.player)}</b>
       <span>${escapeHtml(teamName(r.team))} · ${pct(r.prob)} by our numbers</span></span>
     <span class="hd-state"><span class="hd-num"><span class="hd-o">${r.need_odds ? `${oddsTxt(r.need_odds)} or longer` : "—"}</span>
-      <span class="hd-p flat">${r.need_odds ? "the price that makes him a pick" : "no price we take makes him one"}</span></span></span></div>`;
+      <span class="hd-p flat">${r.need_odds ? "the price that makes it a pick" : "no price we take makes it one"}</span></span></span></div>`;
   return `<div class="ls-ours" style="grid-column:1/-1;min-width:0"><div class="section-title">Not priced yet
     <span class="sub">— who scores first by our numbers, and the price that would make each a pick.</span></div>
     ${foldRowsHTML(games.map((g) => `<div class="card" style="padding:0"><div class="mp-head">${escapeHtml(g.r.matchup || g.k)}
@@ -12950,7 +12950,7 @@ function chainHTML(r) {
         <span class="ch-run">${Number(c.base.value).toFixed(decimals)}</span>
         ${blend ? `<span class="ch-why">${escapeHtml(blend)}${
           c.base.sample_games != null
-            ? ` · ${c.base.sample_games} game${c.base.sample_games === 1 ? "" : "s"} of his own`
+            ? ` · ${c.base.sample_games} game${c.base.sample_games === 1 ? "" : "s"} of the player’s own`
             : ""}</span>` : ""}
         ${chainShrinkHTML(c.base, r.position, decimals)}
         ${c.base.form_mean != null && Math.abs(c.base.form_mean - c.base.value) > 1e-9
@@ -12993,10 +12993,10 @@ function chainShrinkHTML(base, position, decimals) {
   /* A ROOKIE whose college line, translated, held out better than draft
      slot (engine/ideagate, 2026-10-17): that number is the pull. */
   const rookie = base.shrink_kind === "rookie";
-  const who = season ? "his own per-game number last season"
-    : rookie ? "his last college season, translated to the NFL"
+  const who = season ? "the player’s own per-game number last season"
+    : rookie ? "the player’s last college season, translated to the NFL"
     : position ? `the typical ${escapeHtml(String(position).toUpperCase())}` : "a longer record’s rate";
-  return `<span class="ch-why">${season ? "" : "Only "}${n} game${n === 1 ? "" : "s"} ${season ? "this season" : "of his own"}${
+  return `<span class="ch-why">${season ? "" : "Only "}${n} game${n === 1 ? "" : "s"} ${season ? "this season" : "of the player’s own"}${
     pull != null ? `, so the blend is pulled ${pull}%` : ", so the blend is pulled"} toward ${
     Number(base.shrunk_to).toFixed(decimals)} — ${who} — as measured ${season ? "on 2022–2025" : "for samples this thin"}.</span>`;
 }
@@ -13072,7 +13072,7 @@ function compsHTML(r) {
       <p class="cp-foot">Form band ${Number(c.form_lo).toFixed(2)}–${
         Number(c.form_hi).toFixed(2)}${c.push ? ` · ${c.push} push${
         c.push === 1 ? "" : "es"} excluded` : ""}${c.own ? ` · ${c.own} of them
-        his own` : ""}. ${agree === null ? ""
+        the player’s own` : ""}. ${agree === null ? ""
         : agree
           ? `The history and the model agree here, which is the ordinary case
              and is worth no extra confidence on its own.`
@@ -13410,7 +13410,7 @@ function scriptNeed(r) {
     // keeps both teams throwing — a catch over fits it, an under does not.
     out.shoot = s;
   } else if (GS_PASS.test(mkt)) {
-    set("points", s, up ? "points — a quarterback’s yards rise with his team’s score" : "a low-scoring game for his team");
+    set("points", s, up ? "points — a quarterback’s yards rise with the team’s score" : "a low-scoring game for the team");
     out.shoot = s;
   } else if (GS_TD.test(mkt)) {
     set("points", s, up ? "points — a touchdown is points" : "a low-scoring game");
@@ -13651,7 +13651,7 @@ function scanPickHTML(x, cls = "ms-pick") {
     return `<span class="${cls} good"><b>Matchup pick${m.tier_label ? ` · ${escapeHtml(m.tier_label)}` : ""}:</b> ${say(m)} — the read’s side, and our number backs it${take(m)}.</span>`;
   }
   if (x.pick_other_side) {
-    return `<span class="${cls} warn"><b>Our Most Likely pick on him goes the other way:</b> ${say(x.pick_other_side)}
+    return `<span class="${cls} warn"><b>Our Most Likely pick on this player goes the other way:</b> ${say(x.pick_other_side)}
       — the model’s likeliest number disagrees with this read.</span>`;
   }
   /* NO FORCED PICK (engine/matchpicks.not_backed; Ethan: "we wanna make sure
@@ -13679,7 +13679,7 @@ function scanPickHTML(x, cls = "ms-pick") {
          main line on it" — two answers that cannot both be the reason).
          When the board names its reason, that is the sentence. */
       : x.no_pick.refused ? `${x.no_pick.refused.charAt(0).toUpperCase()}${x.no_pick.refused.slice(1)}.`
-      : `none of his ${side}s is priced at −250 or better with a chance we would stand behind.`;
+      : `none of the player’s ${side}s is priced at −250 or better with a chance we would stand behind.`;
     return `<span class="${cls} none"><b>No Most Likely pick</b> — ${why}</span>`;
   }
   return "";
@@ -13698,16 +13698,16 @@ function scanDoor(x, market) {
     .filter((r) => same(r) && r.kind !== "game" && r.market === named.market) : [];
   const own = market ? null : (scanPickRow(x)
     || onMarket.find((r) => low(r.side) === low(named.side)) || onMarket[0] || null);
-  if (own) return { attrs: likelyOpen(own), what: `his Most Likely pick — ${own.market_label || own.market}` };
+  if (own) return { attrs: likelyOpen(own), what: `the player’s Most Likely pick — ${own.market_label || own.market}` };
   const want = market ? [market] : (x.lean || []);
   const ml = (d.most_likely || []).filter((r) => same(r) && r.kind !== "game");
   const lk = ml.find((r) => want.includes(r.market)) || (market ? null : ml[0]);
-  if (lk) return { attrs: likelyOpen(lk), what: `his Most Likely pick — ${lk.market_label || lk.market}` };
+  if (lk) return { attrs: likelyOpen(lk), what: `the player’s Most Likely pick — ${lk.market_label || lk.market}` };
   const props = (d.recommendations || []).filter(same);
   const pr = props.find((r) => want.includes(r.market) && propOpenable(r))
     || (market ? null : props.find((r) => propOpenable(r)));
-  if (pr) return { attrs: ` data-open="prop:${escapeAttr(propId(pr))}"`, what: `his ${pr.market_label || pr.market} prop` };
-  return { attrs: ` data-open="player:${escapeAttr(slugify(x.player))}"`, what: "his player page" };
+  if (pr) return { attrs: ` data-open="prop:${escapeAttr(propId(pr))}"`, what: `the ${pr.market_label || pr.market} prop` };
+  return { attrs: ` data-open="player:${escapeAttr(slugify(x.player))}"`, what: "the player page" };
 }
 
 /* His share of the work, as the read's header prints it — and as the pick
@@ -13905,7 +13905,7 @@ let _playersSeq = 0;
    a label, because showing the scope and offering to change it are the
    same control — and every league the search can reach gets one, so the
    row is also the honest list of where the box is able to look. */
-const SEARCH_SCOPES = ["nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl", "ufc"];   // his order of importance
+const SEARCH_SCOPES = ["nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl", "ufc"];   // Ethan’s order of importance
 
 function renderSearchScope() {
   const host = document.getElementById("search-scope");
@@ -14854,7 +14854,7 @@ function vsStatsHTML(stats) {
   // this line already drew it.
   Object.keys(s).forEach((k) => { if (!known.has(k)) out.push(pill(k)); });
   return out.join("") ||
-    `<span class="vs-none">nothing recorded for him in this one</span>`;
+    `<span class="vs-none">nothing recorded for this player in this one</span>`;
 }
 
 document.addEventListener("change", async (e) => {
@@ -15091,7 +15091,7 @@ function historyProfileHTML(r0, label, logs, chips, tail = "") {
         ${rows}
       </table>
       <div class="profile-pick"><div class="lbl">${escapeHtml(label)}
-        <small>no line on tonight’s board — his last ${logs.length} games, for the read</small></div></div>
+        <small>no line on tonight’s board — the last ${logs.length} games, for the read</small></div></div>
       ${tail}
     </article>`;
 }
@@ -16291,7 +16291,7 @@ function verdictBooksHTML(edge, lk, chart, lines, o, opts) {
 const PIKKIT_URL = "https://links.pikkit.com/user/QellysBook";
 function pikkitBadgeHTML(text) {
   return `<a class="pk-verified" href="${PIKKIT_URL}" target="_blank" rel="noopener noreferrer"
-    title="Zeno’s record, charts and every bet, synced from his sportsbooks and verified by Pikkit"
+    title="Zeno’s record, charts and every bet, synced from Zeno’s sportsbooks and verified by Pikkit"
     >${iconMark("check", 12)}<span>${escapeHtml(text || "Zeno’s picks verified on Pikkit")}</span><span aria-hidden="true">↗</span></a>`;
 }
 
@@ -16356,10 +16356,10 @@ async function zenoTickets(force) {
 function zenoLockedHTML(z) {
   const n = Number((z || {}).open_n) || 0;
   return `<div class="card ms-locked zeno-locked"><b>${n ? `${plural(n, "bet")} riding right now.` : "Zeno’s bets"}</b>
-    Every prop and parlay Zeno places — the pick, the book, the price he got and the stake — is for
-    members. His record above is free, and always will be. <a href="#paywall">See the plans</a></div>`;
+    Every prop and parlay Zeno places — the pick, the book, the price Zeno got and the stake — is for
+    members. The record above is free, and always will be. <a href="#paywall">See the plans</a></div>`;
 }
-let _zenoCalMonth = null;    // "YYYY-MM" in view on his calendar; null = the latest
+let _zenoCalMonth = null;    // "YYYY-MM" in view on Zeno’s calendar; null = the latest
 window._zenoCalSetMonth = (ym) => { _zenoCalMonth = ym; renderZeno(); };
 
 // renderZeno is in js/more.js, loaded the first time its page opens (loadRoom).
@@ -18214,8 +18214,8 @@ async function renderFeedZone() {
         ic: "falling", tone: "warn",
         title: `Velocity red flag: ${who} down ${Math.abs(e.delta || 0).toFixed(1)} mph on the four-seam`,
         cond: e.rec
-          ? "he is on tonight’s board — the model already prices the drop; treat his props with care"
-          : "warm-up reading vs his season norm — a tired arm underperforms its projection",
+          ? "on tonight’s board — the model already prices the drop; treat the pitcher’s props with care"
+          : "warm-up reading vs the season norm — a tired arm underperforms its projection",
       };
       case "stale_line": return {
         ic: "clock", tone: "warn",
@@ -18242,7 +18242,7 @@ async function renderFeedZone() {
         ic: "shield", tone: e.k_tilt ? "warn" : "",
         title: `Ump assigned: ${escapeHtml(e.ump)} behind the plate — ${escapeHtml(e.away)} @ ${escapeHtml(e.home)}`,
         cond: e.k_tilt
-          ? `his measured zone tilts K props ${e.k_tilt} (${((e.k_factor - 1) * 100).toFixed(0)}% vs league)`
+          ? `the umpire’s measured zone tilts K props ${e.k_tilt} (${((e.k_factor - 1) * 100).toFixed(0)}% vs league)`
           : "no measurable K tilt in our history — neutral zone assumed",
       };
       case "first_pitch": return {
@@ -19648,7 +19648,7 @@ const PLAN_FEATURES = [
   // ZENO'S BETS (Ethan, 2026-09-26: the paywall should say it "gets access
   // to ALL of my Zeno's props and parlays"). Third, so the longer plans'
   // four-line summary carries it too. Paid for real: engine/zeno.PAID_BOARD.
-  "All of Zeno’s props and parlays, posted as he places them — verified on Pikkit",
+  "All of Zeno’s props and parlays, posted as they are placed — verified on Pikkit",
   "Daily picks, player props and parlay tickets",
   "Line movement, line shopping and the price tape",
   "The full fantasy suite — draft kit, mock draft, lineups, trades",
@@ -21396,7 +21396,7 @@ function ffLineupHTML(d) {
         Valued from the draft board, not from games played:
         <b>${(L.projected || []).map(escapeHtml).join(", ")}</b>. They have no
         logs to average \u2014 rookies, or anyone who missed the season \u2014 so
-        each is carried at the projection the board gives him, which is the
+        each is carried at the projection the board gives that player, which is the
         market\u2019s draft rank rather than a read of ours. Before this they were
         scored at zero and benched behind anyone with a pulse; a projection is
         better than that, and still not a measurement.</p>` : ""}
@@ -21512,7 +21512,7 @@ function marketLine(kit) {
       \u2014 ${m.rookies} rookie${m.rookies === 1 ? "" : "s"}${
       pos ? ` (${escapeHtml(pos)})` : ""}. They have no ${
       kit.season || "prior"} usage to project from, so each sits at the rank
-      Sleeper drafts him and takes the points our own board shows at that
+      Sleeper drafts the player and takes the points our own board shows at that
       rank. They can never read as a value or a reach, because we have no
       independent opinion on them.</p>`;
   }
@@ -21687,7 +21687,7 @@ function ffThisWeekHTML(info) {
     bits.push(`<p class="ffd-note" style="color:${injTone(day.ruled.inj.status)}">
       Ruled out for ${_ffCalSay(day.date)} — ${escapeHtml(day.ruled.inj.status)}${
       day.ruled.inj.injury ? `, ${escapeHtml(day.ruled.inj.injury)}` : ""}.
-      He cannot be the play on any day he is not playing.</p>`);
+      A day the player is out cannot be the play.</p>`);
   } else if (day && day.x) {
     const { r, e, mult, score } = day.x;
     bits.push(`<div class="ffcal-p-proj">
@@ -21697,12 +21697,12 @@ function ffThisWeekHTML(info) {
         × ${mult.toFixed(2)} game environment</span></div>`);
   } else if (day && day.env) {
     bits.push(`<p class="ffd-note">${_ffCalSay(day.date)}
-      ${day.env.home ? "vs" : "at"} ${nflName(day.env.opp)}. He is not on the
+      ${day.env.home ? "vs" : "at"} ${nflName(day.env.opp)}. The player is not on the
       draft board, so there is no projection to scale — the matchup is all
-      we have on him.</p>`);
+      we have.</p>`);
   } else {
     bits.push(`<p class="ffd-note">No upcoming game for
-      ${escapeHtml(nflName(info.team) || info.team || "his team")} on the
+      ${escapeHtml(nflName(info.team) || info.team || "the team")} on the
       schedule we hold.</p>`);
   }
 
@@ -21712,22 +21712,22 @@ function ffThisWeekHTML(info) {
       and this line becomes your own league’s scoring and slots.</p>`,
     "not-yours": `<p class="ffd-note">Not on your roster in the league you
       have open.</p>`,
-    start: () => `<p class="ffd-call"><b class="ffd-verdict up">START HIM</b>
-      He is on your bench and the ${escapeHtml(seat.slot || "")} seat is his:
+    start: () => `<p class="ffd-call"><b class="ffd-verdict up">START</b>
+      On your bench, and the ${escapeHtml(seat.slot || "")} seat should be this player’s:
       worth ${seat.gain > 0 ? "+" : ""}${seat.gain} projected points${
       seat.over ? ` over ${escapeHtml(seat.over)}` : ""}.</p>`,
-    bench: () => `<p class="ffd-call"><b class="ffd-verdict down">BENCH HIM</b>
+    bench: () => `<p class="ffd-call"><b class="ffd-verdict down">SIT</b>
       ${escapeHtml(seat.behind)} in the ${escapeHtml(seat.slot || "")} seat is
       worth ${seat.gain > 0 ? "+" : ""}${seat.gain} projected points instead.</p>`,
     keep: () => `<p class="ffd-call"><b class="ffd-verdict up">STARTING</b>
       ${escapeHtml(seat.slot || "")}, ${seat.points} projected — and that is
-      right: he is in the best legal lineup on your roster.</p>`,
+      right: the player is in the best legal lineup on your roster.</p>`,
     best: () => `<p class="ffd-call"><b class="ffd-verdict">IN THE BEST LINEUP</b>
       ${escapeHtml(seat.slot || "")}, ${seat.points} projected. This league
       link does not tell us who you have actually started, so that is where
-      he belongs rather than a change to make.</p>`,
+      the player belongs rather than a change to make.</p>`,
     sit: `<p class="ffd-call"><b class="ffd-verdict down">BENCH</b>
-      He is not in the best legal lineup on your roster this week.</p>`,
+      Not in the best legal lineup on your roster this week.</p>`,
   }[seat.state];
   bits.push(typeof call === "function" ? call() : (call || ""));
   if (seat.state !== "no-league" && seat.state !== "not-yours") {
@@ -21767,7 +21767,7 @@ function ffDossierHTML(info) {
       ${stat(u.rz_label || "RZ/g", u.rz_pg)}${stat("PPR/g", u.fp_pg)}
     </div><p class="ffd-note">${u.delta == null || Math.abs(u.delta) < 0.03
       ? "Role steady vs the last four weeks"
-      : `${u.delta > 0 ? "\u25b2 +" : "\u25bc \u2212"}${Math.abs(u.delta * 100).toFixed(0)}pt vs his 4-week share`}
+      : `${u.delta > 0 ? "\u25b2 +" : "\u25bc \u2212"}${Math.abs(u.delta * 100).toFixed(0)}pt vs the 4-week share`}
       — the delta is the money: a riser at 42% beats a flat 60%.</p>`));
   }
   const bs = info.buy || info.sell;
@@ -21776,7 +21776,7 @@ function ffDossierHTML(info) {
       ${stat("Actual PPG", bs.actual_ppg)}${stat("Expected", bs.expected_ppg)}
       ${stat("Gap", (bs.gap > 0 ? "+" : "") + bs.gap)}
     </div><p class="ffd-note">${info.buy
-      ? "Expected points say the production is coming — his chances are worth more than he has scored from them so far."
+      ? "Expected points say the production is coming — the chances are worth more than the points scored from them so far."
       : "Producing above what the opportunity supports — regression risk."}</p>`));
   }
   const r = info.rank;
@@ -21784,7 +21784,7 @@ function ffDossierHTML(info) {
     const srcs = Object.entries(r.ranks || {})
       .filter(([, v]) => v != null)
       .map(([s, v]) => stat(ffSrcLabel(s), v)).join("");
-    parts.push(sect("Where the rankings put him", `<div class="ffd-stats">
+    parts.push(sect("Where the rankings put this player", `<div class="ffd-stats">
       ${stat("Consensus", r.consensus)}${stat("Spread", r.spread)}${srcs}
     </div>`));
   }
@@ -21800,7 +21800,7 @@ function ffDossierHTML(info) {
       different offense.</p>`));
   }
   if (parts.length === 1) {           // the week block, and nothing else
-    parts.push(`<p class="ffd-note">No fantasy read on him this season —
+    parts.push(`<p class="ffd-note">No fantasy read on this player this season —
       the boards are built from last season\u2019s volume and this camp.</p>`);
   }
   return `
@@ -21815,7 +21815,7 @@ function ffDossierHTML(info) {
     </div>
     ${parts.join("")}
     <div class="ffd-sect" id="ffd-charts"><div class="ffd-h">Weekly volume</div>
-      <p class="ffd-note">Loading his game log\u2026</p></div>`;
+      <p class="ffd-note">Loading the game log\u2026</p></div>`;
 }
 
 async function _ffDossierCharts(name, position) {
@@ -21844,9 +21844,9 @@ async function _ffDossierCharts(name, position) {
     const row = (_ffDossierInfo(name) || {}).kit;
     zone.innerHTML = `<div class="ffd-h">Weekly volume</div>`
       + (row && row.source === "market"
-        ? `<p class="ffd-note">No game log — he has not played an NFL
+        ? `<p class="ffd-note">No game log — no NFL
            snap${row.rookie ? " (rookie)" : " in the season this board is built from"}.
-           That is why his projection is the market\u2019s draft rank rather than a
+           That is why the projection is the market\u2019s draft rank rather than a
            read of ours, and why there is nothing to chart.</p>`
         : `<p class="ffd-note">No game logs on this machine — the droplet and
            the laptop fill these in.</p>`);
@@ -21906,8 +21906,8 @@ function _ffTakeaways(p, info) {
   const u = info.usage;
   if (u && u.delta != null && Math.abs(u.delta) >= 0.03) {
     out.push(u.delta > 0
-      ? `Role growing: +${(u.delta * 100).toFixed(0)}pt of team ${u.metric || "volume"} vs his 4-week average.`
-      : `Role shrinking: \u2212${Math.abs(u.delta * 100).toFixed(0)}pt of team ${u.metric || "volume"} vs his 4-week average.`);
+      ? `Role growing: +${(u.delta * 100).toFixed(0)}pt of team ${u.metric || "volume"} vs the 4-week average.`
+      : `Role shrinking: \u2212${Math.abs(u.delta * 100).toFixed(0)}pt of team ${u.metric || "volume"} vs the 4-week average.`);
   }
   if (info.buy) out.push("Buy low — expected points say the production is coming.");
   if (info.sell) out.push("Sell high — producing above what the opportunity supports.");
@@ -22430,7 +22430,7 @@ function teamStatsHTML(st, sport) {
     <div class="section-title">Team stats${st.season ? ` · ${st.season}` : ""}
       <span class="sub">— every player with a game logged for this team,
       ranked by ${escapeHtml(({ nhl: "points", nba: "points", wnba: "points", cbb: "points",
-        mlb: "playing time" })[sport] || "yards")}. Tap a row for his own page.</span></div>
+        mlb: "playing time" })[sport] || "yards")}. Tap a row for the player’s page.</span></div>
     ${body}
     <p class="rank-help">Totals and averages are computed from the game
       logs this site ingests${["nfl", "cfb"].includes(sport) ? `, which is why there is no longest-play or
@@ -22811,7 +22811,7 @@ function ffCalPanelHTML(d, date, ns, only) {
     : `No line posted for this game yet, so the baseline stands alone.`);
   if (e.read) why.push(`<b>${escapeHtml(e.archetype || "")}.</b>
     ${escapeHtml(e.read)}`);
-  if (u) why.push(`Usage: ${pct(u.season)} of his team’s
+  if (u) why.push(`Usage: ${pct(u.season)} of the team’s
     ${escapeHtml(u.metric || "volume")} this season${u.l4 != null
       ? `, ${pct(u.l4)} over the last four weeks` : ""} —
     the volume behind the baseline is ${u.delta != null && u.delta > 0.02
@@ -22837,7 +22837,7 @@ function ffCalPanelHTML(d, date, ns, only) {
       <span class="k">projected points that day — baseline ${r.proj}
         × ${mult.toFixed(2)} environment</span>
     </div>
-    <div class="ffd-sect"><div class="ffd-h">Why he’s the play</div>
+    <div class="ffd-sect"><div class="ffd-h">Why this player is the play</div>
       <ul class="ffcal-checks">${why.map((w) =>
         `<li>${icon("check", 12)} <span>${w}</span></li>`).join("")}</ul></div>
     ${e.implied != null ? `
@@ -23042,7 +23042,7 @@ function ffRosterCalendarHTML(d, myRows) {
           absent.length > 4 ? ", …" : ""}) ${
           pluralWord(absent.length, "is", "are")} not on the projection board,
           so there is nothing to scale for ${
-          pluralWord(absent.length, "him", "them")}` : ""}.`;
+          pluralWord(absent.length, "that player", "them")}` : ""}.`;
   return ffCalendarHTML(d, {
     ns: "roster", only: new Set(covered.map((r) => ffNorm(r.name))),
     title: "Your start calendar", sub,
@@ -23065,7 +23065,7 @@ function mkt(r) {
      difference between one marker and a marker that is silently missing
      on whichever surface got refactored last. */
   return r && (r.source === "market" || r.market === true)
-    ? ` <span class="dk-market" title="No last-season usage to project from — he sits at the market\u2019s draft rank and takes the points our board shows there.">MKT</span>`
+    ? ` <span class="dk-market" title="No last-season usage to project from — the player sits at the market\u2019s draft rank and takes the points our board shows there.">MKT</span>`
     : "";
 }
 
@@ -31545,7 +31545,7 @@ function recordRibbonsHTML(rec, ov, recent, opts) {
     const asOf = String(((z.snapshot || {}).as_of) || "").slice(0, 10);
     const asOfNote = zeno && /^\d{4}-\d{2}-\d{2}$/.test(asOf)
       ? ` · Pikkit count as of ${new Date(`${asOf}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "";
-    tiles.push(tile(z.label || "Zeno · his own book · verified on Pikkit", wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
+    tiles.push(tile(z.label || "Zeno · personal book · verified on Pikkit", wl(zo), `${sign(pr)}${zenoMoney(Math.abs(pr))}`, tone(pr),
                     `${zu}${roi}${zenoMoney(zo.staked || 0)} risked · ${zo.settled} settled${zo.open ? ` · ${zo.open} open` : ""}${asOfNote}${
                       zeno ? ` · ${pikkitBadgeHTML("check it on Pikkit")}` : ""}`,
                     dots(z.recent, "result"), rate(zo), zo.roi == null ? "" : roiRing(zo.roi)));

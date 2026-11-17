@@ -74,7 +74,7 @@ def test_sections_render_only_where_the_data_is():
     assert "if (k && k.proj != null)" in body
     assert "const bs = info.buy || info.sell;" in body
     assert "if (info.camp)" in body and "if (info.move)" in body
-    assert "No fantasy read on him this season" in body, \
+    assert "No fantasy read on this player this season" in body, \
         "the empty dossier must say so instead of showing bare headings"
 
 

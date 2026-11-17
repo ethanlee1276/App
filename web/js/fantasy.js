@@ -307,8 +307,8 @@ async function renderFantasy() {
 `;
   const _ffTrade = `    <div class="section-title">Buy low
       <span class="sub">— volume-expected points say the production is coming</span></div>
-    <p class="ffr-note">Each bar: what he has scored a game (the fill) against what his chances are worth
-      (the mark): expected points (xFP) off every play where the play-by-play is in, his volume where it
+    <p class="ffr-note">Each bar: what the player has scored a game (the fill) against what the chances are worth
+      (the mark): expected points (xFP) off every play where the play-by-play is in, the volume where it
       is not. A gap beyond ~${bs.band || 1.5} points a game is flagged; inside that band a good player
       sustains it.</p>
     <div class="card ffr-list">${(bs.buy_low || []).map((r) => tradeCard(r, "buy")).join("") ||
@@ -493,9 +493,9 @@ const FF101_TERMS = [
   ["Bye", "the one week each NFL team has off: its players score zero"],
   ["Waivers", "claiming a player nobody owns, usually Tuesday or Wednesday night"],
   ["FAAB", "a season budget (often $100) you bid from, blind, for waiver claims"],
-  ["Stream", "picking up a defense, kicker or quarterback for one good matchup, then dropping him"],
-  ["Handcuff", "the backup to your starting running back, who takes the job if he is hurt"],
-  ["Floor / ceiling", "a bad week and a big week for him: eight weeks in ten land between them"],
+  ["Stream", "picking up a defense, kicker or quarterback for one good matchup, then dropping them"],
+  ["Handcuff", "the backup to your starting running back, who takes the job if the starter is hurt"],
+  ["Floor / ceiling", "a bad week and a big week for the player: eight weeks in ten land between them"],
   ["Q / D / Out / IR", "questionable (usually plays), doubtful (usually doesn’t), out, injured reserve (out for weeks)"],
 ];
 /* Is a league linked in this browser? Sleeper by username, ESPN by league
@@ -658,8 +658,8 @@ function ffShareBar(now, before) {
   const at = (v) => `${Math.max(0, Math.min(100, Number(v) * 100)).toFixed(1)}%`;
   const was = before == null ? 0 : Math.max(0, before);
   const lo = Math.min(was, now), hi = Math.max(was, now);
-  const words = before == null ? `${pct0Or(now)} of his team’s work`
-    : `${pct0Or(was)} of his team’s work before, ${pct0Or(now)} now`;
+  const words = before == null ? `${pct0Or(now)} of the team’s work`
+    : `${pct0Or(was)} of the team’s work before, ${pct0Or(now)} now`;
   return `<span class="ffr-range" title="${escapeAttr(words)}" aria-label="${escapeAttr(words)}">
     <span class="ffr-end">${before == null ? "0%" : pct0Or(was)}</span>
     <span class="ffr-track"><i class="${now >= was ? "up" : "down"}" style="left:${at(lo)};width:${at(hi - lo)}"></i><b
@@ -694,13 +694,13 @@ function waiverBoardHTML(w) {
       (rows || []).length ? rows.map(waiverRowHTML).join("")
                           : panelEmpty(empty)}</div>`;
   return sec("Jobs just vacated",
-             "somebody is Out, Doubtful or on IR, and his work has to go "
+             "somebody is Out, Doubtful or on IR, and that work has to go "
              + "somewhere. Ranked by the share the beneficiary ALREADY holds "
-             + "— the man second in line inherits the job, not the biggest name",
+             + "— the player second in line inherits the job, not the biggest name",
              w.vacancies,
              "Nobody at a skill position is ruled out right now.")
     + sec("Roles on the rise",
-          "last week\u2019s target or carry share against his prior four "
+          "last week\u2019s target or carry share against the prior four "
           + "weeks. Volume is far stickier week to week than the yards it "
           + "produces, which is why this reads share and not fantasy points",
           w.rising,
@@ -733,8 +733,8 @@ function streamerHTML(st) {
         ${(st[p] || []).map((r) => row(r, p)).join("")}
       </div>`).join("")}</div>
     <details class="ffr-how"><summary>What the spot score is</summary>
-      <p class="rank-help">The score is his share of the work multiplied by the points the
-        market has his offense scoring, tilted by pass rate over
+      <p class="rank-help">The score is the player’s share of the work multiplied by the points the
+        market has the offense scoring, tilted by pass rate over
         expectation — a run-lean offense helps its back and costs its
         receivers. It is a ranking of SPOTS, not a projection of points.
         Quarterbacks are absent on purpose: every share here is targets or
@@ -930,7 +930,7 @@ function rankBoardHTML(ranks) {
     <div class="section-title">Rankings, side by side
       <span class="sub">— every source we can read without a password, and
         where they argue. Ordered by <b>consensus</b>: the median rank
-        across every source that lists him, so a player two sources love
+        across every source that lists the player, so a player two sources love
         outranks one that only ours does.</span></div>
     <div class="card" id="rank-card">
       <p class="pre-note" id="rank-coverage"></p>
@@ -982,7 +982,7 @@ function renderRankBoard() {
       `<span class="chip ${counts[k] ? "" : "ff-dim"}">${escapeHtml(label)}: ${
         counts[k] ? counts[k] : "—"}</span>`).join(" ")
       + ` <span class="rank-help">A blank cell means that source doesn’t
-          list him — not that it ranked him last. Every rookie is absent
+          list the player — not that it ranked them last. Every rookie is absent
           from our board by construction, and scoring that as rank 999
           would put the whole rookie class at the top of the arguments.</span>`;
   }
@@ -1127,8 +1127,8 @@ function dkBoardHTML(kit) {
      which it is, and whose opinion the number is. */
   const marketNote = (r) => `<span class="dk-market" title="No ${
       kit.season || "last-season"} usage to project from, so this player sits where the
-      market drafts him — his points are read off our own board at that rank.
-      We have no independent read on him.">${
+      market drafts them — the points are read off our own board at that rank.
+      We have no independent read of our own.">${
       r.rookie ? "ROOKIE" : "NO " + (kit.season || "") + " USAGE"} · market #${
       r.market_rank}</span>`;
   const basisNote = (r) => r.source === "market" ? marketNote(r)
@@ -1138,7 +1138,7 @@ function dkBoardHTML(kit) {
     : r.roster_flag
       ? ` · <span class="dk-moved">${escapeHtml(r.roster_flag)}</span>` : "";
   const valueCell = (r) => auc
-    ? `<span class="dl-num strong dk-money" title="what he is worth of a ${
+    ? `<span class="dl-num strong dk-money" title="what the player is worth of a ${
         dkMoney(auc)} budget — $1 is the minimum bid, not an opinion">${
         dkMoney(dkDollars(kit, r, auc))}</span>`
     : `<span class="dl-num strong pos" title="points per game over the best freely-available ${escapeHtml(r.position)}">+${r.vorp}</span>`;
@@ -1167,7 +1167,7 @@ function dkBoardHTML(kit) {
   return `<div class="section-title">Overall board
       <span class="sub">— ${auc
         ? `ordered by what each player is worth of a ${dkMoney(auc)} budget,
-           priced against the last man drafted at his position`
+           priced against the last player drafted at the position`
         : `ordered by VORP, not points: value over the best player
            still on the wire at the same position`}</span></div>
     <div class="card" style="padding:0">${body}</div>`;
@@ -1245,7 +1245,7 @@ function dkAucBodyHTML(kit) {
       drafted at each position, not the last starter. An auction buys every bench
       spot in the room, so the alternative to paying up is the cheapest body who
       still gets drafted, and that is a deeper baseline than the snake board’s.</p>
-    <p class="dk-aucnote"><b>This is what he is worth, not what he will go
+    <p class="dk-aucnote"><b>This is what the player is worth, not what they will go
       for.</b> Rooms overpay at the top and leave dollars unspent at the bottom.
       We have never logged an auction, so there is no inflation curve here to fit
       — the gap between this sheet and the room is yours to trade against.</p>`;
@@ -1580,7 +1580,7 @@ function dkPlanBodyHTML(plan) {
         ${r.plan ? `<div class="dk-plan-take">${who(r.plan)}${
             r.plan.verdict !== "safe" ? ` <span class="chip warn">toss-up</span>` : ""}</div>`
           : `<div class="dk-advice-note">nobody on the board is likely to be here — best available when you get there</div>`}
-        ${r.stretch ? `<div class="mini"><span class="dk-bl">If he falls</span> ${
+        ${r.stretch ? `<div class="mini"><span class="dk-bl">If they fall</span> ${
             escapeHtml(r.stretch.player)} (${escapeHtml(r.stretch.position)}, ${pct(r.stretch.survives)})</div>` : ""}
         ${(r.fallbacks || []).length ? `<div class="mini"><span class="dk-bl">Or</span> ${
             r.fallbacks.map((c) => `${escapeHtml(c.player)} (${escapeHtml(c.position)}, ${pct(c.survives)})`).join(" · ")}</div>` : ""}
@@ -1619,7 +1619,7 @@ function dkAssistAdviceHTML(a, plan) {
           pct(take.survives)} to be here at ${a.next_pick || "your next pick"}</span>
         ${take.fills_need ? `<span class="chip up">fills a starting slot</span>` : ""}
         ${mkt(take)}
-        <button class="btn" type="button" data-assist-mine="${escapeAttr(take.player)}">I took him</button>
+        <button class="btn" type="button" data-assist-mine="${escapeAttr(take.player)}">I took them</button>
       </div>` : ""}
       ${(a.board || []).length ? `<div class="dk-wait"><span class="dk-bl">Best available</span>
         ${a.board.slice(0, 6).map((r) => `<span class="chip ${tone[r.verdict] || ""}">${
@@ -3018,7 +3018,7 @@ function _mockWaitHTML(sim) {
     <p class="mk-wait-foot">Every room in this draft has its own build, and
       they keep it — the spread above is what those builds do to the board,
       not a random number. The percentages beside each player are how often
-      he was still there.</p>
+      that player was still there.</p>
   </div>`;
 }
 
@@ -3182,8 +3182,8 @@ function _mockGradeHTML(m) {
         · board rank ${x.at == null ? "—" : x.at + 1}</span></span></div>`;
   return `<div class="section-title minor">Where you won and lost value
       <span class="sub">— each pick against where that player sat on the
-      kit’s own board. Positive means he was still there later than his
-      rank said he should be.</span></div>
+      kit’s own board. Positive means the player was still there later than the
+      rank said they should be.</span></div>
     <div class="card mk-panel">
       <div class="mk-log-row"><span class="mk-meta">Average
         <b style="color:${g.net >= 0 ? "var(--good)" : "var(--warn)"}">${
@@ -3332,15 +3332,15 @@ function _mockWhy(m, p, sim, spread) {
   const e = _mockEdge(m, p);
   if (e && Math.abs(e.slots) >= 3) {
     out.push(e.slots > 0
-      ? `<b>We rate him ${e.slots} slots above the room</b> — our board has
-         him ${e.ours + 1}, the rooms draft him around ${e.market + 1}.`
-      : `<b>The room rates him ${-e.slots} slots above us</b> — they draft him
-         around ${e.market + 1}, our board has him ${e.ours + 1}. Taking him
+      ? `<b>We rate this player ${e.slots} slots above the room</b> — our board has
+         them ${e.ours + 1}, the rooms draft them around ${e.market + 1}.`
+      : `<b>The room rates this player ${-e.slots} slots above us</b> — the rooms draft them
+         around ${e.market + 1}, our board has them ${e.ours + 1}. Taking them
          here is paying their price, not ours.`);
   }
   if (spread) {
     out.push(`<b>${Math.round(spread.consistency * 100)}% of weeks</b> clear
-      three-quarters of his projection across ${MOCK_SPREAD_SIMS.toLocaleString()}
+      three-quarters of the projection across ${MOCK_SPREAD_SIMS.toLocaleString()}
       simulated seasons — ${escapeHtml(p.position)}s carry a
       ${MOCK_WEEK_CV[p.position] || 0.55} weekly spread, which is an assumption
       and the only one on this card.`);
@@ -3353,11 +3353,11 @@ function _mockWhy(m, p, sim, spread) {
            ${sim.sims.toLocaleString()} simulated drafts — this pick can wait.`
         : `<b>Only ${Math.round(sv * 100)}% to survive to your next turn</b>
            across ${sim.sims.toLocaleString()} simulated drafts — a later round
-           probably cannot give him back.`);
+           probably cannot give them back.`);
     }
   }
   if (p.source === "market") {
-    out.push(`<b>No last-season usage.</b> He sits at the market’s own draft
+    out.push(`<b>No last-season usage.</b> This player sits at the market’s own draft
       rank and carries the points our board shows there, so this row is the
       room’s read rather than ours.`);
   }
@@ -3392,7 +3392,7 @@ function _mockPlayerCardHTML(m, p, sim) {
           ${inj ? `<span class="mk-badge mk-badge-warn">${escapeHtml(inj.status)}</span>` : ""}
         </div>
         <div class="mk-card-nums">
-          ${metric("Room takes him", e ? _mockPickNo(e.market, m.teams) : "—",
+          ${metric("Room takes them", e ? _mockPickNo(e.market, m.teams) : "—",
                    "at this league size")}
           ${metric("Projection", spread
             ? `${Math.round(spread.season)}` : `${(+p.proj || 0).toFixed(1)}`,
@@ -3405,7 +3405,7 @@ function _mockPlayerCardHTML(m, p, sim) {
         <span class="k">QELLYS EDGE</span>
         <span class="v">${e.slots >= 0 ? "+" : "−"}${Math.abs(e.slots)}</span>
         <span class="s">slots ${e.slots >= 0 ? "above" : "below"} where this
-          room drafts him</span></div>` : ""}
+          room drafts them</span></div>` : ""}
     </div>
   </div>
   <div class="mk-detail">
@@ -3424,7 +3424,7 @@ function _mockPlayerCardHTML(m, p, sim) {
         weekly spread the season panel runs on.</p>
     </div>
     <div class="card mk-panel mk-survive">
-      <div class="mk-h">Will he last?</div>
+      <div class="mk-h">Will they last?</div>
       ${sv != null ? `
         <div class="mk-svbig ${sv >= 0.75 ? "up" : sv >= 0.4 ? "warn" : "down"}">${
           Math.round(sv * 100)}%</div>
@@ -3440,10 +3440,10 @@ function _mockPlayerCardHTML(m, p, sim) {
     <div class="card mk-panel mk-trend" id="mk-trend"
          data-mktrend="${escapeAttr(p.player)}">
       <div class="mk-h">Last season, week by week</div>
-      <p class="mk-fine">Loading his game log\u2026</p>
+      <p class="mk-fine">Loading the game log\u2026</p>
     </div>
     <div class="card mk-panel mk-why">
-      <div class="mk-h">Why he is worth the pick</div>
+      <div class="mk-h">Why this player is worth the pick</div>
       <ul class="mk-whylist">${why.map((w) => `<li>${iconMark("check", 14)}<span>${w}</span></li>`).join("")}</ul>
       ${inj ? `<div class="mk-injline" style="color:${injTone(inj.status)}">
         ${escapeHtml(inj.status)}${inj.note ? ` — ${escapeHtml(inj.note)}` : ""}</div>`
@@ -3759,7 +3759,7 @@ function _mockSetupHTML(kit) {
       <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0">
         On every one of your picks the draft ahead of you is simulated
         ${MOCK_SIMS.toLocaleString()} times, and each available player
-        carries how often he was still there when it came back to you.
+        carries how often they were still there when it came back to you.
         Your finished roster is judged on its starters\u2019 projected PPG
         against the room, and on where each pick beat or missed the board
         — not on a letter grade nobody fitted.</p>
@@ -4192,8 +4192,8 @@ async function _mockTrend(name) {
   const head = `<div class="mk-h">Last season, week by week</div>`;
   if (!vals.length) {
     z.innerHTML = head + `<p class="mk-fine">${row.source === "market"
-      ? `No game log — he has not played an NFL snap${
-          row.rookie ? " (rookie)" : ""}, which is why his projection is the
+      ? `No game log — no NFL snap played yet${
+          row.rookie ? " (rookie)" : ""}, which is why the projection is the
          market’s draft rank rather than a read of ours.`
       : `No game log on this machine. The droplet and the laptop fill these
          in; the projection above does not depend on it.`}</p>`;
@@ -4211,7 +4211,7 @@ async function _mockTrend(name) {
     + `<div class="mk-kv"><span>Worst week</span><b>${worst.toFixed(1)}</b></div>`
     + `<div class="mk-kv"><span>Weeks played</span><b>${vals.length}</b></div>`
     + `<p class="mk-fine">Actual scoring, not a projection — the dashed
-       line is his own average. The floor and ceiling above are simulated
+       line is the player’s own average. The floor and ceiling above are simulated
        forward; this is what already happened.</p>`;
 }
 
@@ -4531,7 +4531,7 @@ async function dkAdvice(draftId) {
           take.verdict === "safe" ? "will last" : "toss-up"} · ${
           pct(take.survives)} to be here at ${a.next_pick || "your next pick"}</span>
         ${take.fills_need ? `<span class="chip up">fills a starting slot</span>` : ""}
-        ${mkt(take) ? `<span class="chip" title="No last-season usage to project from, so he sits at the market\u2019s own draft rank and takes the points our board shows there. This is the room\u2019s read, not ours.">market\u2019s number, not ours</span>` : ""}
+        ${mkt(take) ? `<span class="chip" title="No last-season usage to project from, so the player sits at the market\u2019s own draft rank and takes the points our board shows there. This is the room\u2019s read, not ours.">market\u2019s number, not ours</span>` : ""}
       </div>` : ""}
       ${a.can_wait && a.can_wait.length ? `<div class="dk-wait">
         <span class="dk-bl">Can wait</span>

@@ -401,7 +401,7 @@ function caseScriptFact(r, g, chainWhy) {
   const tot = exp.total, sp = exp.spread;
   if (tot == null && sp == null) return null;
   const mkt = String(r.market || "").toLowerCase();
-  const mine = r.team ? teamName(r.team) : "his team";
+  const mine = r.team ? teamName(r.team) : "the team";
   const fav = exp.fav && exp.fav === r.team, dog = exp.fav && exp.fav !== r.team;
   const lines = [sp != null && exp.fav ? `${teamName(exp.fav)} ${MINUS}${sp.toFixed(1)}` : "",
     tot != null ? `total ${tot}` : ""].filter(Boolean).join(", ");
@@ -460,8 +460,8 @@ function pickCase(r, lk, x, g) {
     const anytime = scorer || !Number.isFinite(line);
     const hits = logs.filter((gm) => anytime ? Number(gm.value) > 0 : Number(gm.value) > line).length;
     const rate = hits / logs.length;
-    all.push({ text: anytime ? `Scored in ${hits} of his last ${logs.length} games`
-        : `Went over ${String(line)} in ${hits} of his last ${logs.length} games`,
+    all.push({ text: anytime ? `Scored in ${hits} of the last ${logs.length} games`
+        : `Went over ${String(line)} in ${hits} of the last ${logs.length} games`,
       sign: rate >= 0.6 ? 1 : rate <= 0.4 ? -1 : 0, in_number: true, kind: "form" });
   }
   // THE LINE'S OWN MOVE (the breakdowns' "pushed from 78.5 to 84.5 — the
@@ -526,11 +526,11 @@ function pickCaseHTML(r, lk, x, g, p) {
   let corners = "";
   if (c.corners.length) {
     const who = c.te
-      ? `Tight ends draw linebackers and safeties more than corners; these are ${escapeHtml(c.opp)}’s corners for the snaps he lines up wide.`
+      ? `Tight ends draw linebackers and safeties more than corners; these are ${escapeHtml(c.opp)}’s corners for the snaps the tight end lines up wide.`
       : c.lead
-      ? `As his team’s lead receiver he lines up outside on most snaps, so he sees ${escapeHtml(c.opp)}’s outside corners most, and the nickel when he moves inside.`
+      ? `As the team’s lead receiver, this player lines up outside on most snaps, so sees ${escapeHtml(c.opp)}’s outside corners most, and the nickel when moving inside.`
       : `${escapeHtml(c.opp)}’s corners — outside and in the slot.`;
-    corners = `<div class="pc-cover"><div class="pc-col-k">Who covers him</div><p class="pc-cover-note">${who}
+    corners = `<div class="pc-cover"><div class="pc-col-k">Who covers the player</div><p class="pc-cover-note">${who}
       No free data publishes which corner shadows which receiver, so this is the room, not a confirmed assignment.</p>
       <div class="pc-table" role="table">
         <div class="pc-tr pc-th" role="row"><span>Corner</span><span>Targets</span><span>Catches</span><span>Yards</span><span>Yds/target</span><span>Rating</span><span>TD</span></div>
@@ -581,9 +581,9 @@ function whyLikelyHTML(v, r, lk) {
   if (!anytime && Number.isFinite(proj)) {
     const gap = proj - line;
     const withIt = over ? gap > 0 : gap < 0;
-    items.push(["The projection", `We have him at ${num(proj)} ${escapeHtml(what)} —
+    items.push(["The projection", `We have the player at ${num(proj)} ${escapeHtml(what)} —
       ${num(Math.abs(gap))} ${gap >= 0 ? "above" : "below"} the ${num(line)} line${withIt
-        ? "" : ", the other side of it: the chance comes from how widely his games spread"}.`]);
+        ? "" : ", the other side of it: the chance comes from how widely the games spread"}.`]);
   }
   const logs = (r.logs || []).filter((g) => Number.isFinite(Number(g.value))).slice(0, 10);
   if (logs.length >= 3) {
@@ -592,11 +592,11 @@ function whyLikelyHTML(v, r, lk) {
     const hits = logs.filter(hit).length;
     const early = logs.filter((g) => g.partial);
     const missed = early.filter((g) => !hit(g)).length;
-    items.push(["His games", `${anytime ? (/home_run/.test(String(r.market || "")) ? "Homered" : "Scored")
+    items.push(["Recent games", `${anytime ? (/home_run/.test(String(r.market || "")) ? "Homered" : "Scored")
       : `${over ? "Over" : "Under"} ${num(line)}`} in
-      ${hits} of his last ${logs.length}${early.length ? ` — ${early.length === 1
-        ? `one was a game he left early${missed ? ", and it is one of the misses" : ""}`
-        : `${early.length} were games he left early`}` : ""}.`]);
+      ${hits} of the last ${logs.length}${early.length ? ` — ${early.length === 1
+        ? `one was a game left early${missed ? ", and it is one of the misses" : ""}`
+        : `${early.length} were games left early`}` : ""}.`]);
   }
   const c = r.chain;
   if (c && (c.steps || []).length) {
@@ -614,7 +614,7 @@ function whyLikelyHTML(v, r, lk) {
             ${m >= 1 ? "+" : "−"}${Math.abs(Math.round((m - 1) * 100))}%</b>${why
             ? ` — ${escapeHtml(why.length > 240 ? why.slice(0, 237) + "…" : why)}` : ""}</li>`;
         }).join("")}</ul>`
-      : "Nothing around him — matchup, weather, who plays — moved his number by as much as 2%; it is his own form."]);
+      : "Nothing around the player — matchup, weather, who plays — moved the number by as much as 2%; it is the player’s own form."]);
   }
   if (v.odds != null) {
     const book = v.book ? `${escapeHtml(v.book)} ` : "";
@@ -635,7 +635,7 @@ function whyLikelyHTML(v, r, lk) {
     cautions.push(`only ${thin.games} game${thin.games === 1 ? "" : "s"} this season to go on — shown, not staked`);
   }
   if (lk.lineup_confirmed === false) {
-    cautions.push("his team’s lineup card is not out yet — he is projected to play, and the pick is recorded only once it posts");
+    cautions.push("the team’s lineup card is not out yet — the player is projected to play, and the pick is recorded only once it posts");
   }
   if (r.qb_card && r.qb_card.headline) cautions.push(escapeHtml(r.qb_card.headline));
   if (r.mate_card && r.mate_card.headline) cautions.push(escapeHtml(r.mate_card.headline));
@@ -892,23 +892,23 @@ function renderPropPage() {
 
     ${(() => { const vs = vsBlockHTML(r.player, state.sport, r.opponent || "");
       return vs ? `<div class="section-title minor">Versus
-        <span class="sub">— his games against ${escapeHtml(teamName(r.opponent || ""))}
-        and any other club he has faced.</span></div>
+        <span class="sub">— the player’s games against ${escapeHtml(teamName(r.opponent || ""))}
+        and any other club faced.</span></div>
       <div class="card">${vs}</div>` : ""; })()}
 
     ${r.mate_card ? `<div class="section-title minor">${mateCardHTML(r.mate_card, 1)}
         <span class="sub">— ${({ "Teammate out": "a teammate is ruled out, and what the model did with it",
-          "Teammate back": "a teammate is back; his games without him count for less",
-          "Teammate questionable": "a teammate may not play, and what the model does if he sits" })[mateCardHTML(r.mate_card, 1)]}.</span></div>
+          "Teammate back": "a teammate is back; the games without that teammate count for less",
+          "Teammate questionable": "a teammate may not play, and what the model does if that teammate sits" })[mateCardHTML(r.mate_card, 1)]}.</span></div>
       ${mateCardHTML(r.mate_card)}` : ""}
 
     ${r.qb_card ? `<div class="section-title minor">Quarterback
-        <span class="sub">— his team is not starting its usual one.</span></div>
+        <span class="sub">— the team is not starting its usual one.</span></div>
       ${qbCardHTML(r.qb_card)}` : ""}
 
     ${r.matchup_card ? `<div class="section-title minor">Matchup
         <span class="sub">— what ${escapeHtml(r.matchup_card.opponent || r.opponent || "")}
-        give up to his position, and what the model did with it.</span></div>
+        give up to the position, and what the model did with it.</span></div>
       ${matchupCardHTML(r)}` : ""}
 
     ${reasons ? `<div class="section-title minor">${lk ? "The model’s notes" : "Why this pick"}</div>
@@ -1396,19 +1396,19 @@ function scanQbLine(x) {
   if (!c) return "";
   const pos = String(x.pos || "").toUpperCase();
   let what;
-  if (c.status === "RETURNS") what = "His usual quarterback is back — nothing adjusted.";
+  if (c.status === "RETURNS") what = "The usual quarterback is back — nothing adjusted.";
   else if (pos === "QB") what = c.replacement && x.player === c.replacement
     ? `Starting in place of ${escapeHtml(c.starter)}.` : "";
   else if (pos === "WR" && c.tier === "downgrade")
-    what = "Behind a quarterback this far below the starter, receivers lost about 10% of their yards and 9% of their catches over four seasons — taken off his numbers.";
+    what = "Behind a quarterback this far below the starter, receivers lost about 10% of their yards and 9% of their catches over four seasons — taken off this player’s numbers.";
   else if (pos === "WR")
-    what = "The quarterback coming in has thrown like the starter, so his numbers are left as they are.";
+    what = "The quarterback coming in has thrown like the starter, so this player’s numbers are left as they are.";
   else if (pos === "RB")
-    what = "Over five seasons (2021–25) teams behind a replacement ran only about 3% more often and their backs’ carries and yards did not move, so his numbers are left alone. His touchdown chance still moves with the points his team is expected to score, which the lines set with the new quarterback in.";
+    what = "Over five seasons (2021–25) teams behind a replacement ran only about 3% more often and their backs’ carries and yards did not move, so this player’s numbers are left alone. The touchdown chance still moves with the points the team is expected to score, which the lines set with the new quarterback in.";
   else if (pos === "TE")
-    what = "Tight ends are the exception: behind a backup their catches rose about 5% over five seasons (2021–25) — the short, safe throw — but not by enough to price, so his numbers are left alone. His touchdown chance still moves with the points his team is expected to score, which the lines set with the new quarterback in.";
+    what = "Tight ends are the exception: behind a backup their catches rose about 5% over five seasons (2021–25) — the short, safe throw — but not by enough to price, so this player’s numbers are left alone. The touchdown chance still moves with the points the team is expected to score, which the lines set with the new quarterback in.";
   else
-    what = "Over four seasons a quarterback change did not move these numbers enough to price, so his are left alone. His touchdown chance still moves with the points his team is expected to score, which the lines set with the new quarterback in.";
+    what = "Over four seasons a quarterback change did not move these numbers enough to price, so this player’s are left alone. The touchdown chance still moves with the points the team is expected to score, which the lines set with the new quarterback in.";
   // THE TEAM'S OWN VOLUME, on every read of every team with a change
   // (Ethan, 2026-09-28: "you should do it for all the teams") — so "they'll
   // be losing and throw more" meets what those teams actually did.
@@ -1867,7 +1867,7 @@ function matchupScanHTML(g) {
           read Questionable. No read for them below, and this says why. */
       (scan.pulled || []).length ? `<p class="ms-note ms-pulled"><b>Taken down by the books:</b> ${
         escapeHtml(scan.pulled.join(", "))} — priced in an earlier pull and on no book now, before kickoff.
-        Treated as out: no read for ${scan.pulled.length === 1 ? "him" : "them"} below, until the report or the books say otherwise.</p>` : ""}
+        Treated as out: no read for ${scan.pulled.length === 1 ? "that player" : "them"} below, until the report or the books say otherwise.</p>` : ""}
     <p class="ms-note">Ranked 1–${n}, 1 best, ${adjusted ? "adjusted for the opponents each team has faced"
       : "not adjusted for schedule, so a soft schedule flatters a unit"}. ${escapeHtml(blend)}</p>
     ${edges.length ? `<div class="card ms-edges"><div class="ms-sub">${planOn ? "More mismatches" : "Biggest mismatches"}</div>
@@ -1887,8 +1887,8 @@ function matchupScanHTML(g) {
       <p class="ms-note">The markets the good reads point at, as this board prices them, likeliest first.</p>
       ${micro.map(scanMicroHTML).join("")}</div>` : ""}
     <p class="ms-note">${adjusted
-      ? `Each player read counts only what the model measured to predict: his share of the work, what this
-      defense gives up in the bet’s own stat, and the points the lines expect his team to score — the same
+      ? `Each player read counts only what the model measured to predict: the player’s share of the work, what this
+      defense gives up in the bet’s own stat, and the points the lines expect the team to score — the same
       numbers already inside our chances, so the scan moves none of them. The rest is shown as “also
       noticed”: pressure, unit rankings, missed tackles, a starting corner out, a receiver’s zone-or-man
       split. Tested against the NFL’s 2022–2025 games, none predicted a player’s line beyond those. Coverage
@@ -1949,7 +1949,7 @@ function mlbScanHTML(g) {
       ? `<div class="card ms-locked"><b>Who could shine and who could struggle</b> — a read on every hitter and
           starter, with the reasons for and against, is part of the subscription.</div>` : ""}
     <p class="ms-note">None of this moves our numbers: every piece — the hitter’s own split against this hand,
-      the slugging the starter allows to his side, expected stats, the park by the batter’s hand, the wind,
+      the slugging the starter allows to the batter’s side, expected stats, the park by the batter’s hand, the wind,
       the pens and the umpire — is already inside the model’s chance. The read picks a side; career numbers
       against tonight’s starter are shown and never counted, the samples are too small.</p>
   </div>`;
@@ -2778,7 +2778,7 @@ function pbpPaceHTML() {
         <span>${pctRoundOr(r.chance)}</span></div>`).join("")}
     </div>
     ${rows.length > 12 ? `<button type="button" class="btn ghost pbp-pace-more" data-pace-all>${PBP_PACE.all ? "Fewer" : `All ${rows.length}`}</button>` : ""}
-    <p class="mini pbp-pace-foot">Pace is his number over the share of the game played. Over is the market’s own chance at
+    <p class="mini pbp-pace-foot">Pace is the player’s number over the share of the game played. Over is the market’s own chance at
       the start, watched live — not our pick. Analytics, not guarantees.</p>`;
 }
 async function pbpPaceFill(league, event) {
@@ -2871,7 +2871,7 @@ function pbpCrewHTML(d, league, boardGame) {
   const m = /^(\d+):(\d+)/.exec(String(lv.clock || ""));
   const played = lv.state === "final" || q > 4 ? 1 : q ? Math.min(1, ((q - 1) * 900 + 900 - (m ? m[1] * 60 + Number(m[2]) : 0)) / 3600) : 0;
   const pace = played >= 0.25 && played < 1 ? ` · on pace for ${Math.round(flags / played)}` : "";
-  const avg = rec.flags != null ? `His games average ${Number(rec.flags).toFixed(1)} penalties${
+  const avg = rec.flags != null ? `The crew’s games average ${Number(rec.flags).toFixed(1)} penalties${
     lg.flags != null ? ` (league ${Number(lg.flags).toFixed(1)})` : ""}${(rec.games || 0) < 12 ? ` over ${Number(rec.games || 0)} games` : ""}.` : "";
   return `<div class="card pbp-crew"><div class="pbp-rail-head">Crew watch <span class="mini">${escapeHtml(o.referee)}’s crew</span></div>
     <p class="pbp-crew-n"><b>${flags}</b> flag${flags === 1 ? "" : "s"} ${lv.state === "final" ? "in the game" : "so far"}${pace}</p>

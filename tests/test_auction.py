@@ -219,7 +219,7 @@ def test_the_budget_survives_a_reload_and_reaches_the_other_screen():
 
 
 def test_the_panel_refuses_to_predict_the_price():
-    assert "what he is worth, not what he will go\n      for" in APP
+    assert "what the player is worth, not what they will go\n      for" in APP
     assert "no inflation curve here to fit" in APP
 
 

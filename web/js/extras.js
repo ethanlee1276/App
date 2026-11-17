@@ -603,7 +603,7 @@
         `${field("Bankroll $", "br-b", String(roll))}${field("Bets", "br-n", "500")}${field("Price", "br-o", "-110")}${field("True chance %", "br-p", "54")}
          <label class="xt-f"><span>Stake by</span><select data-xc="br-r"><option value="flat">Flat $</option><option value="pct" selected>% of roll</option><option value="kelly">Kelly ×</option></select></label>
          ${field("Size", "br-s", "2", 'placeholder="$, % or fraction"')}`)}
-      ${calcCard("slate", "Slate sizer", "Kelly for a slate, not one bet. Bets that move together — one game, one quarterback and his receiver — share a bad night, so they earn less together than each would alone.",
+      ${calcCard("slate", "Slate sizer", "Kelly for a slate, not one bet. Bets that move together — one game, one quarterback and that quarterback’s receiver — share a bad night, so they earn less together than each would alone.",
         `${[1, 2, 3, 4, 5, 6].map((i) => `<div class="xt-leg">${field(`Bet ${i} chance %`, `sk-p${i}`, i < 3 ? "56" : "", i > 2 ? 'placeholder="—"' : "")}${field("Price", `sk-o${i}`, i < 3 ? "-110" : "", i > 2 ? 'placeholder="odds"' : "")}${field("Game", `sk-g${i}`, i < 3 ? "A" : "", 'placeholder="A, B …" maxlength="2"')}</div>`).join("")}
          <label class="xt-f"><span>Same-game pull</span><select data-xc="sk-r"><option value="0">None</option><option value="0.15">Light</option><option value="0.3" selected>Usual</option><option value="0.5">Strong</option></select></label>
          <label class="xt-f"><span>Fraction</span><select data-xc="sk-f"><option value="1">Full</option><option value="0.5">Half</option><option value="0.25" selected>Quarter</option><option value="0.1">Tenth</option></select></label>`)}
@@ -671,7 +671,7 @@
         ${r.ev == null
           ? `<p class="xt-note">With a standard two-way hold taken out of each leg it is worth about ${pctTxt(noVigEach)} — the hold compounds on every leg you add. Add your own chances to see its value.</p>`
           : `<p class="xt-note">At your chances the ticket is worth <b class="${r.ev >= 0 ? "pos" : "neg"}">${ptsTxt(r.ev)}%</b> per dollar.</p>`}
-        <p class="xt-fine">Legs are treated as independent. Two legs from one game are not — a quarterback’s yards and his receiver’s move together — which is why books price same-game parlays on their own.</p>`;
+        <p class="xt-fine">Legs are treated as independent. Two legs from one game are not — a quarterback’s yards and that quarterback’s receiver’s move together — which is why books price same-game parlays on their own.</p>`;
     },
     kelly(box) {
       const r = kelly((num(val(box, "ky-p")) || 0) / 100, val(box, "ky-o"), Number(val(box, "ky-f")) || 0.25, num(val(box, "ky-r")) || 0);
@@ -737,7 +737,7 @@
         ${r.width > 0 ? stat("Lands between", `${r.both >= 0 ? "+" : "−"}${money(r.both)}`, "good") : ""}
         ${stat("Chance between", pctTxt(r.pMiddle))}${stat("Worth", `${r.ev >= 0 ? "+" : "−"}${money(r.ev)}`, r.ev >= 0 ? "good" : "bad")}</div>
       <p class="xt-note">${word}</p>
-      <p class="xt-fine">The chance is a normal around ${r.mean.toFixed(1)} with a spread of ${r.sd.toFixed(1)}${val(box, "md-c") === "1" ? ", counted one result at a time, so a whole-number line pushes" : ""}. A player's own spread is on his pick page; a game total's is about 13 in the NFL and 18 in college.</p>`;
+      <p class="xt-fine">The chance is a normal around ${r.mean.toFixed(1)} with a spread of ${r.sd.toFixed(1)}${val(box, "md-c") === "1" ? ", counted one result at a time, so a whole-number line pushes" : ""}. A player's own spread is on the pick page; a game total's is about 13 in the NFL and 18 in college.</p>`;
   };
   CALC.roll = function (box) {
     const rule = val(box, "br-r") || "pct";
@@ -781,7 +781,7 @@
   function upsetsHTML(d) {
     const rows = upsets((d && d.game_bets) || []);
     const head = `<header class="xt-card-h"><h3>Upset meter</h3><p>Every college underdog on the board, ranked by
-      our chance he wins outright, beside the chance the market’s price gives him with the hold taken out.</p></header>`;
+      our chance it wins outright, beside the chance the market’s price gives it with the hold taken out.</p></header>`;
     if (!rows.length) {
       const locked = d && d.locked && d.locked.game_bets;
       return `<section class="xt-card xt-wide">${head}<p class="xt-hint">${locked
@@ -850,8 +850,8 @@
     const every = typeof teamsForSport === "function" ? Object.keys(teamsForSport(sport) || {}) : [];
     const teams = tonight.length ? tonight : every;
     return `<section class="xt-card xt-wide" data-xw-league="${esc(sport)}">
-      <header class="xt-card-h"><h3>What if he sits</h3><p>Pick a club and a man in its rotation: in the games he missed for
-        this club, how each teammate’s share of the minutes, points, rebounds and assists moved against the games he played.</p></header>
+      <header class="xt-card-h"><h3>What if a player sits</h3><p>Pick a club and a player in its rotation: in the games that player missed for
+        this club, how each teammate’s share of the minutes, points, rebounds and assists moved against the games the player played.</p></header>
       <div class="xt-in">
         <label class="xt-f"><span>${tonight.length ? "Tonight’s clubs" : "Club"}</span><select data-xw="team"><option value="">Pick a club</option>${
           teams.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("")}</select></label>
@@ -859,7 +859,7 @@
       </div>
       <div class="xt-wi-out" aria-live="polite"></div>
       <p class="xt-fine">Evidence only: the board’s numbers do not move for it. A share is of the team’s total that night,
-        so pace cancels; a game he missed is read from the box score, not a report; his games before he joined the club
+        so pace cancels; a game missed is read from the box score, not a report; the games before the player joined the club
         don’t count as sitting.</p>
     </section>`;
   }
@@ -868,13 +868,13 @@
     const s = (r.stats || {})[stat];
     if (!s) return "";
     const chips = WI_STATS.map(([k, w]) => `<button type="button" class="xt-tab${k === stat ? " on" : ""}" data-xt="wi-stat" data-arg="${k}">${w}</button>`).join("");
-    const warn = s.enough ? "" : `<p class="xt-verdict bad">He has missed ${s.n_out} game${s.n_out === 1 ? "" : "s"} for this club since ${esc(r.since || "")} —
+    const warn = s.enough ? "" : `<p class="xt-verdict bad">Missed ${s.n_out} game${s.n_out === 1 ? "" : "s"} for this club since ${esc(r.since || "")} —
       under ${r.floor}, so what follows is the shape, not evidence.</p>`;
     const rows = (s.rows || []).map((x) => `<tr><td>${esc(x.player)}</td><td>${pctTxt(x.with)}</td><td>${pctTxt(x.without)}</td>
       <td class="${x.delta >= 0 ? "pos" : "neg"}">${ptsTxt(x.delta)}</td><td>${x.n_with}/${x.n_without}</td></tr>`).join("");
     return `<div class="xt-tabs">${chips}</div>
       <p class="xt-note">${esc(r.player)}: ${s.n_played} game${s.n_played === 1 ? "" : "s"} played, ${s.n_out} missed for ${esc(r.team)} since ${esc(r.since || "")}.</p>
-      ${warn}${rows ? `<table class="xt-tbl"><thead><tr><th>Teammate</th><th>With him</th><th>Without</th><th>±</th><th>Games</th></tr></thead><tbody>${rows}</tbody></table>`
+      ${warn}${rows ? `<table class="xt-tbl"><thead><tr><th>Teammate</th><th>With</th><th>Without</th><th>±</th><th>Games</th></tr></thead><tbody>${rows}</tbody></table>`
         : `<p class="xt-hint">No teammate played enough games on both sides to compare.</p>`}`;
   }
   async function whatifAsk(box, player) {
@@ -925,7 +925,7 @@
     const sport = sportNow();
     const rows = goalies(d);
     const head = `<header class="xt-card-h"><h3>Goalie board</h3><p>Tonight’s starters, best goals saved above expected
-      first: whether his club has named him, his save rate, his share of the starts and what the man shooting at him is
+      first: whether the club has named them, the save rate, the share of the starts and what the shooters they face are
       expected to score.</p></header>`;
     if (!rows.length) {
       return `<section class="xt-card xt-wide">${head}<p class="xt-hint">No starters on the board yet — they fill with the slate.</p></section>`;
@@ -944,7 +944,7 @@
     }).join("");
     return `<section class="xt-card xt-wide">${head}<div class="xt-scroll"><table class="xt-tbl xt-gk-tbl"><thead><tr><th>Goalie</th><th>Named</th>
       <th>GSAx</th><th>Save %</th><th>Starts</th><th>Faces</th></tr></thead><tbody>${li}</tbody></table></div>
-      <p class="xt-fine">GSAx: goals saved above what our shot model expected on the shots he faced, over his recent games.
+      <p class="xt-fine">GSAx: goals saved above what our shot model expected on the shots faced, over the recent games.
       Save % is regressed toward the league, as the board prices it. “Faces” is the opponent’s expected goals tonight. The
       board already prices every one of these; this lays them side by side.</p></section>`;
   }
@@ -977,7 +977,7 @@
     return `<section class="xt-card xt-wide">${head}${body}
       <p class="xt-fine">Context only, and small: two games of one line is a handful of attempts, so the attempt count sits
       beside every rate. “Together” is how much of its members’ ice they spent with each other. The home coach gets the last
-      change, so who meets whom tonight is his call.</p></section>`;
+      change, so who meets whom tonight is the home coach’s call.</p></section>`;
   }
 
   // ---- UFC: each fight's path (drawn on the UFC page, under its card) -----
@@ -1012,13 +1012,13 @@
     return `<div class="xt-fp-s ${tone}"><h4>${esc(s.name)}${s.record ? ` <small>${esc(s.record)}</small>` : ""}</h4>
       <p><span>Our read</span><i><b>${pctTxt(s.win, 0)}</b> to win · ${FP_KEYS.map(([k, w]) => `${w} ${pctTxt(s.how[k], 0)}`).join(" · ")}</i></p>
       ${p ? `<p><span>Last ${p.n}</span><i>Won: ${fpCount(p.wins)}</i></p><p><span></span><i>Lost: ${fpCount(p.losses)}${p.draws ? ` · ${p.draws} drawn or no contest` : ""}</i></p>
-        ${won ? `<p><span>His finishes</span><i>${won}</i></p>` : ""}${last ? `<div class="xt-fp-last">${last}</div>` : ""}`
-        : `<p class="xt-hint">His fights are not on file yet.</p>`}</div>`;
+        ${won ? `<p><span>Finishes</span><i>${won}</i></p>` : ""}${last ? `<div class="xt-fp-last">${last}</div>` : ""}`
+        : `<p class="xt-hint">No fights on file yet.</p>`}</div>`;
   }
   function pathsHTML(d) {
     const rows = fightPaths(d);
-    const head = `<header class="xt-card-h"><h3>Fight path</h3><p>How each man wins by our read — knockout, submission or
-      decision — beside how his own recent fights ended, and when this one ends.</p></header>`;
+    const head = `<header class="xt-card-h"><h3>Fight path</h3><p>How each fighter wins by our read — knockout, submission or
+      decision — beside how their own recent fights ended, and when this one ends.</p></header>`;
     if (!rows.length) {
       const locked = d && d.locked && (d.locked.picks || d.locked.pass_list);
       return `<section class="xt-card xt-wide">${head}<p class="xt-hint">${locked

@@ -43,8 +43,8 @@ def test_it_is_everywhere_his_record_is():
     assert "pikkitBadgeHTML()" in _fn("recZenoSection"), "the Record page's card"
     deck = APP[APP.index("async function deckRecordHTML("):APP.index("\n}\n", APP.index("async function deckRecordHTML("))]
     assert deck.count("pikkitBadgeHTML()") == 2, "the Home strip, open or locked"
-    assert "posted as he places them — verified on Pikkit" in APP, "the plan line"
-    assert "Every one is verified on Pikkit, synced from his sportsbooks" in APP, "the feature card"
+    assert "posted as they are placed — verified on Pikkit" in APP, "the plan line"
+    assert "Every one is verified on Pikkit, synced from Zeno’s sportsbooks" in APP, "the feature card"
     assert "Every Zeno pick is verified on Pikkit." in APP and "Zeno’s record on Pikkit &#8599;" in APP, "the proof box"
     assert "every one verified on Pikkit" in HTML, "his page's subtitle"
 

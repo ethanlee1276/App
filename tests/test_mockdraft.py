@@ -561,7 +561,7 @@ def test_the_week_by_week_panel_is_the_only_thing_that_already_happened():
     assert fn.count("dataset.mktrend !== name") >= 2, \
         "a slow response can land on the wrong player"
     # Two silences, told apart: never played vs not ingested here.
-    assert "has not played an NFL snap" in fn and "on this machine" in fn
+    assert "no NFL snap played yet" in fn and "on this machine" in fn
     assert "--mk-mean" in CSS, "the mean rule has no scale to sit on"
 
 
@@ -573,7 +573,7 @@ def test_there_is_no_opposing_defence_panel():
     actually has: will he still be there next turn."""
     card = APP[APP.index("function _mockPlayerCardHTML("):]
     card = card[:card.index("\nfunction mockDraftHTML(")]
-    assert "Will he last?" in card
+    assert "Will they last?" in card
     for bad in ("Fantasy Boost", "Allowed (", "vs Opponent", "Matchup Rank"):
         assert bad not in card, f"an in-season matchup panel appeared: {bad!r}"
 

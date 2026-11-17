@@ -59,7 +59,7 @@
     const state = menuState(sec);
     const sub = whose === "game"
       ? `${s.checked || 0} menus at this game checked · ${s.flagged || 0} flagged`
-      : "Every menu at every book that prices him, checked: do its own numbers add up?";
+      : "Every menu at every book that prices this player, checked: do its own numbers add up?";
     const foot = state === "holds"
       ? "A flagged menu’s lean has beaten its fair price on held-out seasons; it is still not on the board without a yes."
       : `A menu is flagged ${num(sec.flag_z || 2)} spreads from what this box measured as normal for that book’s menu. Which side a gap points to is a reading: nothing on the board uses it until the measurement clears its bar.`;
@@ -105,7 +105,7 @@
     const f = sec.form || {};
     const rows = sec.books.map((b) => `<tr><td>${esc(b.book)}</td><td>${esc(num(b.line))}</td><td>${esc(num(b.recipe))}</td>
       <td>${pct(b.last1)}</td></tr>`).join("");
-    return card("How the books set his line", `Last game ${num(f.last1)} · last three ${num(f.last3)} · season ${num(f.season)} · career ${num(f.career)}`, state,
+    return card("How the books set the line", `Last game ${num(f.last1)} · last three ${num(f.last3)} · season ${num(f.season)} · career ${num(f.career)}`, state,
       `<div class="lb-stats"><div class="lb-stat"><span>Results expect</span><b>${esc(num(sec.expect))}</b></div>
        <div class="lb-stat"><span>Results weigh last game</span><b>${pct(sec.last1)}</b></div></div>
        <div class="lb-scroll"><table class="lb-tbl"><thead><tr><th>Book</th><th>Hung</th><th>Its recipe</th><th>Last-game weight</th></tr></thead>
@@ -143,8 +143,8 @@
     const stats = sec.league == null ? "" : `<div class="lb-stats">
       <div class="lb-stat"><span>${esc(sec.designation)} + ${esc(sec.practice)}: played</span><b>${pct(sec.league)}</b></div>
       ${sec.club != null ? `<div class="lb-stat"><span>With ${esc(sec.team)}’s record</span><b>${pct(sec.club)}</b></div>` : ""}
-      ${sec.ratio != null ? `<div class="lb-stat"><span>Snaps when he plays</span><b>${pct(sec.ratio)}</b></div>` : ""}</div>`;
-    return card("The injury report, read closely", `${esc(sec.designation)}${sec.injury ? ` (${esc(sec.injury)})` : ""} — he ${esc(PRACTISED[sec.practice] || PRACTISED.None)}.`,
+      ${sec.ratio != null ? `<div class="lb-stat"><span>Snaps when playing</span><b>${pct(sec.ratio)}</b></div>` : ""}</div>`;
+    return card("The injury report, read closely", `${esc(sec.designation)}${sec.injury ? ` (${esc(sec.injury)})` : ""} — ${esc(PRACTISED[sec.practice] || PRACTISED.None)}.`,
       practiceState(sec), stats || `<p class="lb-read">How often a man listed like this plays is measured on every stored report first.</p>`,
       `How often players listed and practising like this have played, from every report since the box’s first season${sec.club_n ? `, and how often this club’s questionable players did (${sec.club_n} listings, pulled toward the league)` : ""}. A reading: the board’s injury hold is unchanged.`);
   }
@@ -152,7 +152,7 @@
     if (!sec || !(sec.rows || []).length) return "";
     const rows = sec.rows.map((r) => `<tr><td>${esc(r.player)} <small>${esc(r.team)}</small></td><td>${esc(r.designation)}</td>
       <td>${esc(r.practice)}</td><td>${pct(r.league)}</td><td>${pct(r.club)}</td></tr>`).join("");
-    return card("Who is on the injury report", "Every listed player in this game, how he practised, and how often men listed like him have played.",
+    return card("Who is on the injury report", "Every listed player in this game, how each practised, and how often players listed the same way have played.",
       practiceState(sec), `<div class="lb-scroll"><table class="lb-tbl"><thead><tr><th>Player</th><th>Listed</th><th>Practice</th><th>Played</th><th>Club-adjusted</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`, "A reading: the board’s injury hold is unchanged.");
   }
@@ -169,10 +169,10 @@
     if (!sec || sec.ratio == null) return "";
     const v = sec.verdict || {};
     const state = v.holds ? "holds" : v.closes ? "fails" : "pending";
-    return card("How much the public is reading about him", `Wikipedia: ${num(sec.recent, 0)} views a day lately against ${num(sec.usual, 0)} usually`, state,
+    return card("How much the public is reading about this player", `Wikipedia: ${num(sec.recent, 0)} views a day lately against ${num(sec.usual, 0)} usually`, state,
       `<div class="lb-stats"><div class="lb-stat ${sec.spike ? "bad" : ""}"><span>Attention</span><b>${esc(num(sec.ratio, 1))}×</b></div></div>
-       ${spark(sec.days)}${sec.spike ? `<p class="lb-read">He is being read about <b>far more than usual</b>. Public money follows public attention, and a book that knows it may lean his over.</p>` : ""}`,
-      "Daily human views of his Wikipedia page (Wikimedia’s own public count). Whether a spike means his over is overpriced is being measured on every past close; until it holds, nothing on the board reads it.");
+       ${spark(sec.days)}${sec.spike ? `<p class="lb-read">This player is being read about <b>far more than usual</b>. Public money follows public attention, and a book that knows it may lean the over.</p>` : ""}`,
+      "Daily human views of the player’s Wikipedia page (Wikimedia’s own public count). Whether a spike means the over is overpriced is being measured on every past close; until it holds, nothing on the board reads it.");
   }
 
   // ---- 7. the air a kick flies through (engine/kickphysics) ------------------
@@ -204,10 +204,10 @@
       ? `Last college season at ${esc(sec.school)}: ${num(sec.college_pg, 1)} a game over ${sec.college_games} games · drafted ${sec.pick >= 260 ? "undrafted" : `#${sec.pick}`}`
       : `Last season at ${esc(sec.school)}: ${num(sec.college_pg, 1)} a game over ${sec.college_games} games`;
     const stat = rookie
-      ? `<div class="lb-stat"><span>His college line, translated</span><b>${esc(num(sec.translated, 1))}</b></div>`
-      : `<div class="lb-stat"><span>Transfers keep</span><b>${pct(sec.keep)}</b></div><div class="lb-stat"><span>His line, carried over</span><b>${esc(num(sec.translated, 1))}</b></div>`;
-    return card(rookie ? "His college line, translated" : "A transfer’s line, carried over", sub, state, `<div class="lb-stats">${stat}</div>`,
-      rookie ? "A first NFL month projected from his last college season and where he was drafted, fitted on past rookie classes. Whether it beats the draft slot alone and his position’s rookie mean is tested on the two newest classes; until it does, nothing on the board reads it."
+      ? `<div class="lb-stat"><span>College line, translated</span><b>${esc(num(sec.translated, 1))}</b></div>`
+      : `<div class="lb-stat"><span>Transfers keep</span><b>${pct(sec.keep)}</b></div><div class="lb-stat"><span>Line, carried over</span><b>${esc(num(sec.translated, 1))}</b></div>`;
+    return card(rookie ? "A rookie’s college line, translated" : "A transfer’s line, carried over", sub, state, `<div class="lb-stats">${stat}</div>`,
+      rookie ? "A first NFL month projected from the last college season and the draft slot, fitted on past rookie classes. Whether it beats the draft slot alone and the position’s rookie mean is tested on the two newest classes; until it does, nothing on the board reads it."
         : `How much of their old production college transfers kept in their first four games at the new school (${sec.keep_n} transfers). Context: nothing on the board reads it.`);
   }
 
@@ -230,8 +230,8 @@
       return `<tr><td>${esc(l.player)}</td><td>${esc(MKT(l.market))} ${esc(num(l.line))}</td><td>${pct(l.their_over)}</td>
         <td class="${lift == null ? "" : lift >= 0.03 ? "good" : lift <= -0.03 ? "bad" : ""}">${pct(l.their_over_given_his)}</td><td>${signed(l.rho)}</td><td>${signed(l.pricer_rho)}</td></tr>`;
     }).join("");
-    return card("The same simulated games", `His over hits in ${pct(sec.sim_over)} of ${Number(sec.trials || 0).toLocaleString()} simulated games at ${num(sec.line)}`, simState(sec.verdict),
-      `<div class="lb-scroll"><table class="lb-tbl"><thead><tr><th>Teammate</th><th>Leg</th><th>Hits</th><th>When his hits</th><th>Sim link</th><th>Pricer’s</th></tr></thead>
+    return card("The same simulated games", `The over hits in ${pct(sec.sim_over)} of ${Number(sec.trials || 0).toLocaleString()} simulated games at ${num(sec.line)}`, simState(sec.verdict),
+      `<div class="lb-scroll"><table class="lb-tbl"><thead><tr><th>Teammate</th><th>Leg</th><th>Hits</th><th>When the over hits</th><th>Sim link</th><th>Pricer’s</th></tr></thead>
        <tbody>${rows}</tbody></table></div>`, simFoot(sec.verdict));
   }
   function simGameHTML(sec) {
@@ -253,7 +253,7 @@
       return `<rect class="${cut != null && i >= cut ? "new" : ""}" x="${(i * bw + 1).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${h.toFixed(1)}"/>`;
     }).join("");
     const mark = cut != null ? `<line x1="${(cut * bw).toFixed(1)}" x2="${(cut * bw).toFixed(1)}" y1="0" y2="${H}"/>` : "";
-    return `<svg class="lb-role" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`His share, game by game, ${vs.length} games`)}">${bars}${mark}</svg>`;
+    return `<svg class="lb-role" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`The player’s share, game by game, ${vs.length} games`)}">${bars}${mark}</svg>`;
   }
   const ROLE_NAMES = { tgt: "Target share", car: "Carry share", snap: "Snap share" };
   function roleState(rd) {
@@ -267,18 +267,18 @@
     const lead = reads[sec.lead] ? sec.lead : keys[0];
     const rd = reads[lead];
     const sub = rd.games_ago && rd.flag
-      ? `${ROLE_NAMES[lead]} ${pct(rd.before)} → ${pct(rd.after)} over his last ${rd.games_ago} game${rd.games_ago === 1 ? "" : "s"}`
-      : `${ROLE_NAMES[lead]}: no clear change in his role`;
+      ? `${ROLE_NAMES[lead]} ${pct(rd.before)} → ${pct(rd.after)} over the last ${rd.games_ago} game${rd.games_ago === 1 ? "" : "s"}`
+      : `${ROLE_NAMES[lead]}: no clear change in the role`;
     const others = keys.filter((k) => k !== lead).map((k) => {
       const o = reads[k];
       return `<li><b>${esc(ROLE_NAMES[k])}</b> ${pct(o.forecast)} next game${o.flag && o.games_ago ? ` — changed ${o.games_ago} game${o.games_ago === 1 ? "" : "s"} ago (${pct(o.before)} → ${pct(o.after)})` : ""}</li>`;
     }).join("");
-    return card("His role, watched for a change", sub, roleState(rd),
+    return card("The role, watched for a change", sub, roleState(rd),
       `<div class="lb-stats"><div class="lb-stat ${rd.flag ? "good" : ""}"><span>Chance it changed in the last 3 games</span><b>${pct(rd.changed)}</b></div>
        <div class="lb-stat"><span>Detector’s next game</span><b>${pct(rd.forecast, 1)}</b></div>
        <div class="lb-stat"><span>Four-week average</span><b>${pct(rd.four_week, 1)}</b></div></div>
        ${roleBars(rd)}${others ? `<ul class="lb-list">${others}</ul>` : ""}`,
-      "A Bayesian changepoint detector reads his share game by game and weighs every possible start of his current role by how well it explains the games since. The board reads volume as his last four weeks; whether the detector forecasts the next game closer is measured on held-out seasons, and until it does, the board’s number is unchanged.");
+      "A Bayesian changepoint detector reads the player’s share game by game and weighs every possible start of the current role by how well it explains the games since. The board reads volume as the last four weeks; whether the detector forecasts the next game closer is measured on held-out seasons, and until it does, the board’s number is unchanged.");
   }
   function roleGameHTML(sec) {
     if (!sec || !(sec.rows || []).length) return "";
@@ -309,9 +309,9 @@
     const r50 = sec.ranges["0.5"], r80 = sec.ranges["0.8"];
     const mr = sec.model_range || [];
     const cov = v.coverage ? ` On the newest ${v.n} graded picks the 50% range covered ${pct(v.coverage["0.5"])} and the 80% range ${pct(v.coverage["0.8"])}.` : "";
-    return card("How wide it really is", `Half his games like this land ${num(r50[0])}–${num(r50[1])}; four in five ${num(r80[0])}–${num(r80[1])}`, state,
+    return card("How wide it really is", `Half the games like this land ${num(r50[0])}–${num(r50[1])}; four in five ${num(r80[0])}–${num(r80[1])}`, state,
       `${rangeBar(sec)}<div class="lb-stats">
-       <div class="lb-stat"><span>His ${esc(sec.side || "pick")} by the range</span><b>${pct(sec.range_chance)}</b></div>
+       <div class="lb-stat"><span>The ${esc(sec.side || "pick")} by the range</span><b>${pct(sec.range_chance)}</b></div>
        <div class="lb-stat"><span>The model’s chance</span><b>${pct(sec.model_chance)}</b></div>
        ${mr[0] != null && mr[1] != null ? `<div class="lb-stat"><span>The model’s own range</span><b>${esc(num(mr[0]))}–${esc(num(mr[1]))}</b></div>` : ""}</div>`,
       `Built from how far ${Number(sec.n || 0).toLocaleString()} graded picks landed from the number we published (conformal prediction: no assumption about the shape of the misses).${cov} A reading: nothing on the board reads it.`);
@@ -319,20 +319,20 @@
 
   // ---- 12. the loss autopsy (engine/autopsy) --------------------------------
   const TAG_ORDER = ["volume", "efficiency", "script", "left early", "both"];
-  const STEP_NAMES = { volume: "Usage (how much he is used)", efficiency: "Per touch (what he does with each)", script: "Game script", left_early: "Availability (left early)" };
+  const STEP_NAMES = { volume: "Usage (how much the player is used)", efficiency: "Per touch (what the player does with each)", script: "Game script", left_early: "Availability (left early)" };
   function autopsyHTML(sec) {
     const s = sec && sec.summary;
     if (!s || !s.losses) return "";
     const tags = TAG_ORDER.filter((t) => s.tags[t]).map((t) => `<span class="lb-tag t-${t.replace(" ", "-")}" style="flex:${s.tags[t]}">${esc(t)} ${Math.round(s.tags[t] / s.losses * 100)}%</span>`).join("");
     const steps = Object.entries(s.steps || {}).map(([k, v]) => `<tr><td>${esc(STEP_NAMES[k] || k)}</td><td>${pct(v.losses)}</td><td>${pct(v.wins)}</td>
       <td class="${v.z >= 2 && v.excess > 0 ? "bad" : ""}">${v.excess >= 0 ? "+" : "−"}${Math.abs(v.excess * 100).toFixed(0)}</td></tr>`).join("");
-    const his = (sec.his || []).map((h) => `<li><b>${esc(h.date)}</b> ${esc(h.side)} ${esc(num(h.line))}: we said ${esc(num(h.projection))}, he did ${esc(num(h.actual))} — ${h.won ? "won" : `lost (${esc(h.tag)})`}; volume ${signed(h.parts.volume, 1)}, per touch ${signed(h.parts.efficiency, 1)}</li>`).join("");
+    const graded = (sec.his || []).map((h) => `<li><b>${esc(h.date)}</b> ${esc(h.side)} ${esc(num(h.line))}: we said ${esc(num(h.projection))}, the result was ${esc(num(h.actual))} — ${h.won ? "won" : `lost (${esc(h.tag)})`}; volume ${signed(h.parts.volume, 1)}, per touch ${signed(h.parts.efficiency, 1)}</li>`).join("");
     return card("When picks like this lose", `${s.losses} graded ${MKT(sec.market)} losses, each miss split into usage and per-touch`, "info",
       `<div class="lb-tags">${tags}</div>
        <div class="lb-scroll"><table class="lb-tbl"><thead><tr><th>Step</th><th>Against us in losses</th><th>In wins</th><th>Excess</th></tr></thead><tbody>${steps}</tbody></table></div>
        <p class="lb-read">${s.wrong_most_label ? `The step wrong most: <b>${esc(s.wrong_most_label)}</b>.` : "No step stands out from the wins yet."}</p>
-       ${his ? `<details class="lb-more"><summary>His last graded picks in this market</summary><ul class="lb-list">${his}</ul></details>` : ""}`,
-      "Each miss is split exactly into how much he was used against his four games before (usage) and what he did with each touch. A step is named only when it goes against our picks in losses clearly more often than in wins (z ≥ 2, 100 losses). Context: nothing on the board reads it.");
+       ${graded ? `<details class="lb-more"><summary>The last graded picks in this market</summary><ul class="lb-list">${graded}</ul></details>` : ""}`,
+      "Each miss is split exactly into how much the player was used against the four games before (usage) and what the player did with each touch. A step is named only when it goes against our picks in losses clearly more often than in wins (z ≥ 2, 100 losses). Context: nothing on the board reads it.");
   }
 
   /* Section drawers, in the order the page shows them. */
