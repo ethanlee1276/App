@@ -27472,6 +27472,9 @@ function bind() {
       if (rsearch) rsearch.value = "";
       const url = new URL(location.href);
       url.searchParams.set("sport", state.sport);
+      // A player's address names someone in the league just left, and the page under it is now the new
+      // league's list: the address says so, or a reload or a shared link opens the old name in this league.
+      if (url.hash.startsWith("#player/")) url.hash = "#players";
       history.replaceState(null, "", url);
       // Switching sports from an OPEN menu loads quietly. The skeleton
       // wipe and entrance animations exist for a page you are looking at;

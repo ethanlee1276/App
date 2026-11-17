@@ -121,6 +121,16 @@ def test_the_box_gives_an_example_from_its_own_league():
     assert "PLAYER_SEARCH_EG[state.sport] || PLAYER_SEARCH_EG.nfl" in head
 
 
+def test_a_league_tapped_on_a_page_takes_the_address_back_to_the_list():
+    """On Josh Allen's page, tapping NBA drew the NBA's list but left the address at #player/josh-allen, so a
+    reload or a shared link opened the old name in the new league. The league's button clears the open name
+    and its address together."""
+    i = APP.index("      state.sport = b.dataset.sport;\n")
+    body = APP[i:APP.index("applySport();", i)]
+    assert 'state.playerSlug = "";' in body
+    assert 'if (url.hash.startsWith("#player/")) url.hash = "#players";\n      history.replaceState(null, "", url);' in body
+
+
 def test_the_browse_shows_rows_enough_to_fill_a_screen():
     cap = decl("playerBrowseCap")
     assert '"(max-width: 760px)").matches) ? 12 : 30;' in cap

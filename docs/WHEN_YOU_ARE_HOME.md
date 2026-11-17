@@ -9338,6 +9338,11 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VE. Changing league on a player's page takes the address back to the list** (step 689; 17 November). Nothing to
+run. On Josh Allen's page, tapping NBA in the league row drew the NBA's player list but left the address at
+"#player/josh-allen", so reloading the page or sharing its link opened Josh Allen's name in the NBA. The address
+now goes back to the list ("#players") with the league.
+
 **VD. A player's page never borrows a stranger whose one word is close** (step 688; 17 November). Nothing to run.
 Checking the live player pages league by league, college basketball's page for Cooper Flagg (in the NBA now, so
 in no college box score or roster) came back as TJ Cope's, Tarleton's guard, because the name lookup's last resort
