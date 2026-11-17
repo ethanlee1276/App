@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VH. Optional, any time: fill the WNBA pages' shooting numbers** (step 692; 17 November). One command, a few
+minutes. The basketball box scores have kept shots (field goals, threes and free throws made and tried) since 20
+October, and the WNBA's 2026 season ended before that, so its pages have no FG%, 3P% or FT% (step VF puts minutes
+in the headline instead). This re-reads every 2026 WNBA game day from ESPN's free summaries, about 300 requests,
+and writes the missing columns beside the ones already there; nothing is removed. Paste back the last line
+(`N days re-read, N player lines written`). The pages pick the numbers up within six hours, or at the next restart:
+
+```
+cd /srv/qellys && sudo -u qellys nice -n 19 python3 -c "from engine import db; from engine.sources import espnhoops as h; c = db.connect(); days = [r[0] for r in c.execute(\"SELECT DISTINCT period FROM games WHERE sport='wnba' AND season=2026 ORDER BY period\")]; n = sum(h.ingest_day(c, d, league='wnba').get('player_logs', 0) for d in days); c.commit(); print(len(days), 'days re-read,', n, 'player lines written')"
+```
+
 **VG. An NFL playoff game is named by its round** (step 691; 17 November). Nothing to run. Justin Tucker's page
 led with "Previous game Week 20" (the 2024 Divisional round at Buffalo), and every player's Game Log listed
 playoff games as "Wk 19" to "Wk 22", the week numbers the NFL's own files give them. The page now says
