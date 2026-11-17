@@ -117,7 +117,10 @@ SPORT_MARKETS = {
     # Hockey joined 2026-10-03, off the NHL's own box scores
     # (engine/sources/nhldata). Labels match engine/nhl/model.MARKET_LABELS.
     "nhl": (("sog", "Shots on Goal"), ("points", "Points"), ("goals", "Goals"),
-            ("assists", "Assists"), ("blocks", "Blocked Shots"), ("saves", "Saves")),
+            ("assists", "Assists"), ("blocks", "Blocked Shots"), ("saves", "Saves"),
+            # Stored from the box score since 2026-11-17 (sources/nhldata
+            # LATER_MARKETS), for the skater's page and Ask.
+            ("plus_minus", "Plus-Minus"), ("pim", "Penalty Minutes")),
 }
 
 N_GAMES = 10       # what a profile chart can legibly hold
