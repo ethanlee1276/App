@@ -643,16 +643,20 @@ def settle(conn) -> dict:
                             "ORDER BY leg_no", (p["id"],)).fetchall()
         if not legs:
             continue
-        resolved, pending = [], False
+        resolved, pending, missing = [], False, []
         for leg in legs:
             b = _matching_bet(conn, p, leg)
-            if b is None or b["status"] == "open":
+            if b is None:
+                missing.append(leg)
+                continue
+            if b["status"] == "open":
                 pending = True
                 break
             resolved.append((leg, _own_verdict(leg, b)))
-        if pending:
+        if pending or (missing and not _voids_missing(p, resolved)):
             waiting += 1
             continue
+        resolved += [(leg, _no_row_verdict(leg)) for leg in missing]
 
         for leg, b in resolved:
             conn.execute(
@@ -692,13 +696,21 @@ def resettle(conn) -> dict:
                             "ORDER BY leg_no", (p["id"],)).fetchall()
         if not legs:
             continue
-        resolved, back_open = [], False
+        resolved, back_open, missing = [], False, []
         for leg in legs:
             b = _matching_bet(conn, p, leg)
-            if b is None or b["status"] == "open":
+            if b is None:
+                missing.append(leg)
+                continue
+            if b["status"] == "open":
                 back_open = True
                 break
             resolved.append((leg, _own_verdict(leg, b)))
+        # The settle's own rule for a leg with no row (`_no_row_verdict`), so the
+        # two never disagree: void beside legs that graded, open on its own.
+        back_open = back_open or bool(missing and not _voids_missing(p, resolved))
+        if not back_open:
+            resolved += [(leg, _no_row_verdict(leg)) for leg in missing]
         if back_open:
             # A leg was reopened (repair-premature). The ticket's verdict
             # rests on a bet that no longer has one — reopen it too and let
@@ -768,6 +780,63 @@ def _matching_bet(conn, p, leg):
 #: Which way each side wants the number: up for an over (and a scorer's
 #: "yes", line 0.5), down for an under.
 _UP_SIDES, _DOWN_SIDES = ("OVER", "YES"), ("UNDER", "NO")
+
+
+def _no_row_verdict(leg) -> dict:
+    """A LEG WITH NO ROW TO GRADE FROM (STUCKLEGS1, 2026-11-17). A ticket's legs
+    are journaled on paper first (`journal_game_parlay_legs`), and the paper
+    journal refuses a game already under way; a board built just before a
+    start and journaled just after it wrote its tickets and not their legs,
+    and those tickets waited on the box score for good (Ethan's How our
+    reports did, 17 November: nine of the Magic at Celtics tickets, six to
+    nineteen of every NFL game of the 15th, two days on). A leg with no row
+    never gets one. So once every other leg of its ticket has graded (the
+    game is over), it voids, as a book voids a leg it cannot settle, and the
+    ticket is graded on the rest; a ticket none of whose legs has a row
+    waits, as nothing says its game is over. `journal_built_boards` journals
+    no new ticket without its legs' rows (`_with_leg_rows`)."""
+    return {"status": "void", "actual": None, "closing_line": None, "line": leg["line"],
+            "side": leg["side"], "odds": leg["odds"]}
+
+
+#: The tickets whose legs ride on their own paper bucket (engine/gameparlays): only
+#: there is a leg with no row a journaling gap. A Parlay Zone leg earned the board
+#: as a single, so a missing single is an error upstream, and its ticket waits.
+NO_ROW_VOID_SOURCES = ("game_three", "game_td")
+
+
+def _voids_missing(p, resolved: list) -> bool:
+    """Whether a ticket's legs with no row void (`_no_row_verdict`): a game
+    parlay's, and only beside a leg that has graded."""
+    source = p["source"] if "source" in p.keys() else None
+    return bool(resolved) and source in NO_ROW_VOID_SOURCES
+
+
+def _has_leg_row(conn, sport: str, date: str, leg: dict) -> bool:
+    """Whether the paper bucket holds a row this leg grades from (`_matching_bet`'s own
+    match: the day, the player and the market)."""
+    return conn.execute("SELECT 1 FROM bets WHERE sport=? AND date=? AND player=? AND market=? AND category=? "
+                        "LIMIT 1", (sport, date, leg.get("player"), leg.get("market"),
+                                    PARLAY_LEG_CATEGORY)).fetchone() is not None
+
+
+def _with_leg_rows(conn, gp: dict, sport: str, date: str) -> tuple[dict, int]:
+    """The board's game parlays with only the tickets every leg of which has a row on
+    paper to grade from (`_no_row_verdict`), and how many were left out."""
+    out, dropped = dict(gp), 0
+    games = []
+    for x in gp.get("games") or []:
+        if not isinstance(x, dict):
+            continue
+        y = dict(x)
+        for k in ("threes", "paper_threes", "scorers"):
+            keep = [t for t in x.get(k) or [] if all(_has_leg_row(conn, sport, date, l) for l in t.get("legs") or [])]
+            dropped += len(x.get(k) or []) - len(keep)
+            if k in x:
+                y[k] = keep
+        games.append(y)
+    out["games"] = games
+    return out, dropped
 
 
 def _own_verdict(leg, b) -> dict:
@@ -1462,7 +1531,11 @@ def journal_built_boards(conn, root) -> dict:
         if isinstance(gp, dict) and gp.get("games"):
             try:
                 journal_game_parlay_legs(conn, board, sport)
-                wrote += log_game_parlays(conn, gp, sport, board.get("date") or gp.get("date") or "")
+                # ONLY A TICKET WHOSE LEGS HAVE ROWS (STUCKLEGS1): a leg the paper
+                # journal refused (its game under way) would leave it waiting for good.
+                day = board.get("date") or gp.get("date") or ""
+                gp_ok, _left = _with_leg_rows(conn, gp, sport, day)
+                wrote += log_game_parlays(conn, gp_ok, sport, day)
             except sqlite3.Error as exc:
                 skipped.append(f"{sport}/game_parlays: {exc}")
         # EVERY BET THE GAME REPORTS POST (engine/reportbets, 2026-11-16), in
