@@ -2983,6 +2983,7 @@ def _run_futures(quiet: bool = False) -> None:
         conn = _hdb.connect()
         try:
             now = time.time()
+            built = True
             if daily:
                 todo = list(futures_build.SPORTS)
             else:
@@ -2996,6 +2997,10 @@ def _run_futures(quiet: bool = False) -> None:
                 try:
                     data = futures_build.build(sport, conn, live_odds=False)
                 except Exception:                   # noqa: BLE001
+                    # Tried again after the gap, and never ahead of the league behind it: the count
+                    # it was last built on stands, the hour of the try is now.
+                    seen[sport] = {"finals": (seen.get(sport) or {}).get("finals"), "at": now}
+                    built = False
                     continue
                 seen[sport] = {"finals": _futures_finals(conn, sport), "at": now}
                 # THROUGH THE ONE DOOR (2026-11-17). This wrote the full
@@ -3017,7 +3022,7 @@ def _run_futures(quiet: bool = False) -> None:
         if daily:
             stamp.parent.mkdir(parents=True, exist_ok=True)
             stamp.write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {FUTURES_VERSION}")
-        if not quiet:
+        if not quiet and (daily or built):
             print("  Futures: season projections rebuilt (free)." if daily
                   else f"  Futures: {todo[0].upper()}'s results moved — its projection rebuilt (free).")
     except Exception as exc:  # noqa: BLE001 — never take the site down

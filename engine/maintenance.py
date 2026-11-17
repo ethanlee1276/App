@@ -3099,6 +3099,18 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 log(f"  ⚠️  {s}")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  nfl results ingest failed: {exc}")
+        # WHERE EACH STORED GAME WAS PLAYED (engine/ingest.nfl_set_home): the
+        # seasons written before the rows took their side from the schedule
+        # all say home. One season a night, newest first, until none is left.
+        try:
+            from . import db as _hdb
+            from .ingest import correct_nfl_home
+            fixed = correct_nfl_home(_hdb.connect())
+            if fixed["seasons"]:
+                log(f"  nfl home and away: season {fixed['seasons'][0]}, {fixed['rows']:,} visiting rows corrected"
+                    + (f"; {fixed['left']} season(s) still to do" if fixed["left"] else ""))
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  nfl home and away correction failed: {exc}")
 
         # The season-boundary backfill (Ethan circled the card's own
         # confession, 2026-08-26: "Red-zone usage inferred … play-by-play

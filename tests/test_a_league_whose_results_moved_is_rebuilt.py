@@ -116,7 +116,18 @@ def test_a_failed_build_is_tried_again_and_an_unreadable_count_never_loops():
         w.fail.add("nhl")
         assert w.run() == [] and w.run() == [], "nothing built"
         w.fail.clear()
+        assert w.run() == [], "it was tried a moment ago: after the gap, not every pass"
+        w.age("nhl", launch.FUTURES_AFTER_FINALS_MIN)
         assert w.run() == ["nhl"], "tried again once it can be built"
+        # A league that cannot be built never holds up the one behind it.
+        w.finals["nba"] += 1
+        w.finals["nhl"] += 1
+        w.age("nba", 60)
+        w.age("nhl", 60)
+        w.fail.add("nba")
+        assert w.run() == [] and w.run() == ["nhl"], "the pass after the failure is the next league's"
+        w.fail.clear()
+        w.finals["nba"] = 200
         # A history that cannot be counted says -1 every time: one build, not one a pass.
         w.finals["nba"] = -1
         w.age("nba", 60)

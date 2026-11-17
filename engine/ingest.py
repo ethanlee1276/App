@@ -106,6 +106,63 @@ def _is_regular(row: dict) -> bool:
     return _s(row, "season_type", "game_type", default="REG").upper() in REGULAR_TYPES
 
 
+#: WHERE AN NFL GAME WAS PLAYED (NFLHOME1, 2026-11-17). The weekly stats file
+#: names a player's team and opponent and never the venue, so every NFL row
+#: went in as a home game from the first ingest on: live that day, all 418
+#: players on the board read "vs" for every game on their By market card and
+#: its bar chart (Josh Allen "vs NYJ" in Week 10, a game at the Jets). The
+#: schedule knows, and it is already stored (`games`: maintenance refreshes
+#: it daily), so a row takes its side from there as it is written. Nothing
+#: prices on the flag (no NFL model reads a log's `home`); it is what the
+#: page says about a game.
+def nfl_set_home(conn, rows: list[dict]) -> int:
+    """Each NFL row's ``home`` from the stored schedule: 1 where its team
+    hosted that week's game, 0 where it visited. A row the schedule cannot
+    place (a week not stored yet, a team spelled another way) is left as it
+    was given. Returns how many were left."""
+    sides: dict = {}
+    for season in {r["season"] for r in rows}:
+        for period, home, away in conn.execute(
+                "SELECT period, home, away FROM games WHERE sport='nfl' AND season=?", (season,)):
+            sides[(season, period, home)] = 1
+            sides[(season, period, away)] = 0
+    left = 0
+    for r in rows:
+        side = sides.get((r["season"], r["period"], r["team"]))
+        if side is None:
+            left += 1
+        else:
+            r["home"] = side
+    return left
+
+
+def correct_nfl_home(conn, limit: int = 1) -> dict:
+    """The seasons stored before `nfl_set_home`: every row of theirs says
+    home. The newest ``limit`` of them have their visiting rows corrected
+    from the stored schedule, one statement a season, so a night's write is
+    one season's and the history file is never rewritten in one go. A season
+    with a visiting row is done; one whose schedule is not stored is left
+    for the night it is. Returns {"seasons": [...], "rows": n, "left": n}."""
+    out = {"seasons": [], "rows": 0, "left": 0}
+    seasons = [r[0] for r in conn.execute(
+        "SELECT DISTINCT season FROM games WHERE sport='nfl' AND home_score IS NOT NULL ORDER BY season DESC")]
+    todo = [s for s in seasons
+            if conn.execute("SELECT 1 FROM player_game_logs WHERE sport='nfl' AND season=? LIMIT 1", (s,)).fetchone()
+            and not conn.execute("SELECT 1 FROM player_game_logs WHERE sport='nfl' AND season=? AND home=0 LIMIT 1",
+                                 (s,)).fetchone()]
+    for season in todo[:max(0, int(limit))]:
+        cur = conn.execute(
+            "UPDATE player_game_logs SET home=0 WHERE sport='nfl' AND season=? AND home IS NOT 0 AND EXISTS ("
+            "SELECT 1 FROM games g WHERE g.sport='nfl' AND g.season=player_game_logs.season "
+            "AND g.period=player_game_logs.period AND g.away=player_game_logs.team)", (season,))
+        conn.commit()
+        if cur.rowcount:
+            out["seasons"].append(season)
+            out["rows"] += cur.rowcount
+    out["left"] = max(0, len(todo) - len(out["seasons"]))
+    return out
+
+
 def nfl_player_log_rows(stats_rows: list[dict], season: int) -> list[dict]:
     from .sources.nflverse import _s, _f, POSITION_MARKETS, board_position, stat_value
     out = []
@@ -322,6 +379,7 @@ def backfill_nfl_box(conn, seasons) -> dict:
         rows += [r for r in nfl_player_log_rows(weekly, season) if r["position"] in ("K", "DEF")]
         del weekly
         if rows:
+            nfl_set_home(conn, rows)
             out["rows"] += db.upsert_player_logs(conn, rows)
             conn.commit()
             out["seasons"].append(season)
@@ -442,13 +500,15 @@ def ingest_nfl_results(conn, season: int) -> dict:
     rows += nfl_usage_rows(weekly, season)
     rows += nfl_td_rows(weekly, season)
     rows += nfl_box_rows(weekly, season)
+    nfl_set_home(conn, rows)
     result["player_logs"] = db.upsert_player_logs(conn, rows)
     # Snap counts ride along (separate release file, so its absence never
     # blocks the stats that settle bets).
     try:
         from .sources.nflverse import load_snap_counts
-        n = db.upsert_player_logs(conn, snap_count_rows(load_snap_counts(season),
-                                                        season))
+        snaps = snap_count_rows(load_snap_counts(season), season)
+        nfl_set_home(conn, snaps)
+        n = db.upsert_player_logs(conn, snaps)
         result["player_logs"] += n
     except DataUnavailable as exc:
         result["skipped"].append(f"nfl snap counts {season}: {exc}")
@@ -560,6 +620,7 @@ def ingest_nfl(conn, seasons: list[int]) -> dict:
             rows += snap_count_rows(load_snap_counts(season), season)
         except DataUnavailable as exc:
             result["skipped"].append(f"nfl snap counts {season}: {exc}")
+        nfl_set_home(conn, rows)
         n = db.upsert_player_logs(conn, rows)
         result["player_logs"] += n
         db.log_ingest(conn, "nfl", "player_logs", str(season), n)
@@ -594,7 +655,9 @@ def ingest_nfl(conn, seasons: list[int]) -> dict:
             units = Units()
             agg = aggregate_pbp(load_pbp_rows(season, columns=UNIT_COLS),
                                 also=units.add)
-            n_x = db.upsert_player_logs(conn, xfp_player_rows(agg, season))
+            xrows = xfp_player_rows(agg, season)
+            nfl_set_home(conn, xrows)
+            n_x = db.upsert_player_logs(conn, xrows)
             n_t = db.upsert_team_weeks(conn, team_week_rows(agg, season))
             n_u = db.upsert_team_units(conn, units.rows(season))
             result["pbp_rows"] += n_x + n_t + n_u
