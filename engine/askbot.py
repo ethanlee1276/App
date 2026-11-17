@@ -2552,7 +2552,18 @@ def futures(sport: str = "", team: str = "", limit=None, data_dir=None, prefer: 
         teams = [t for t in teams if t.get("team") in codes or _norm(team).strip() in _norm(T.label(t.get("team"), s))]
     rows = []
     for t in teams[:_limit(limit)]:
-        row = {"team": T.label(t.get("team"), s), "record": f"{t.get('wins', 0)}-{t.get('losses', 0)}"}
+        # Hockey's table is W-L-OT and points (engine/futuresdata.project
+        # restores the third column): a club two points clear is not the
+        # same answer as one two wins clear.
+        row = {"team": T.label(t.get("team"), s),
+               "record": f"{t.get('wins', 0)}-{t.get('losses', 0)}"
+                         + (f"-{t['otl']}" if t.get("otl") is not None else "")}
+        if f.get("points_league") and t.get("points") is not None:
+            row["points"] = t["points"]
+            if t.get("proj_points") is not None:
+                row["projected_points"] = round(float(t["proj_points"]), 1)
+                if t.get("proj_points_lo") is not None and t.get("proj_points_hi") is not None:
+                    row["projected_points_range"] = f"{t['proj_points_lo']}-{t['proj_points_hi']}"
         if t.get("proj_wins") is not None:
             row["projected_wins"] = round(float(t["proj_wins"]), 1)
             if t.get("proj_wins_lo") is not None and t.get("proj_wins_hi") is not None:

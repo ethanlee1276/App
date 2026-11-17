@@ -76,18 +76,22 @@ def points_banked(conn, sport: str, season: int) -> tuple[dict, dict]:
     except Exception:
         return {}, {}
     pts, otl = {}, {}
-    for group in table.get("groups", []) or []:
-        for row in group.get("rows", []) or []:
-            t = row.get("team")
-            if t:
-                o = int(row.get("otl", 0) or 0)
-                pts[t], otl[t] = 2 * int(row.get("wins", 0)) + o, o
+    for row in standings.team_rows(table):
+        t = row.get("team")
+        if t:
+            o = int(row.get("otl", 0) or 0)
+            pts[t], otl[t] = 2 * int(row.get("wins", 0)) + o, o
     return pts, otl
 
 
 def records(conn, sport: str, season: int, conferences: dict | None = None
             ) -> dict[str, tuple[int, int]]:
-    """``{team: (wins, losses)}`` for the regular season so far."""
+    """``{team: (wins, losses)}`` for the regular season so far.
+
+    A loss is a game NOT WON — the simulation's own outcome, which has no
+    third kind. So a hockey club's overtime losses are in it, and its
+    W-L-OT is restored after the run (`project`), from `points_banked`.
+    """
     from . import standings
     try:
         table = standings.compute(conn, sport, season=season,
@@ -95,11 +99,11 @@ def records(conn, sport: str, season: int, conferences: dict | None = None
     except Exception:
         return {}
     out: dict[str, tuple[int, int]] = {}
-    for group in table.get("groups", []) or []:
-        for row in group.get("rows", []) or []:
-            t = row.get("team")
-            if t:
-                out[t] = (int(row.get("wins", 0)), int(row.get("losses", 0)))
+    for row in standings.team_rows(table):
+        t = row.get("team")
+        if t:
+            out[t] = (int(row.get("wins", 0)),
+                      int(row.get("losses", 0)) + int(row.get("otl", 0) or 0))
     return out
 
 
@@ -416,7 +420,11 @@ def project(conn, sport: str, season: int | None = None, trials: int = 20000,
                    trials=trials, banked_points=pts or None)
     for row in out["teams"]:
         if row["team"] in otl:
+            # The table's W-L-OT: the run counted every game not won as a
+            # loss; the page and the league write a loss past regulation in
+            # its own column.
             row["otl"] = otl[row["team"]]
+            row["losses"] = max(0, row["losses"] - row["otl"])
     out.update(season=data["season"], note=data["note"],
                prior_share=data["prior_share"],
                games_played=data["games_played"],

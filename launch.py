@@ -2924,6 +2924,12 @@ def _run_maintenance() -> None:
 #: seconds of every minute re-answering a question whose answer barely
 #: changes. Once a day is generous.
 FUTURES_EVERY_HOURS = 24
+#: Bumped when a fix changes what the season projection should say. The
+#: daily rebuild's stamp carries it, so the first pass after that deploy
+#: rebuilds every league rather than serving the old numbers for up to a
+#: day. 2026-11-17: the projection starts from the real table (every
+#: league had started each club at 0-0 since August).
+FUTURES_VERSION = "futures-v2-banked-records"
 
 
 def _run_futures(quiet: bool = False) -> None:
@@ -2937,11 +2943,16 @@ def _run_futures(quiet: bool = False) -> None:
     import time
     stamp = ROOT / "web" / "data" / ".futures_built"
     try:
+        # A day-old stamp is only fresh if it was written by THIS code: a
+        # fix to what the projection says rebuilds on the first pass after
+        # its deploy, not up to a day later (FUTURES_VERSION).
         if stamp.exists() and (time.time() - stamp.stat().st_mtime) < \
-                FUTURES_EVERY_HOURS * 3600:
+                FUTURES_EVERY_HOURS * 3600 and \
+                stamp.read_text().endswith(FUTURES_VERSION):
             return
         import futures_build
         from engine import db as _hdb
+        from engine import gate as _gate
         conn = _hdb.connect()
         try:
             for sport in futures_build.SPORTS:
@@ -2949,15 +2960,18 @@ def _run_futures(quiet: bool = False) -> None:
                     data = futures_build.build(sport, conn, live_odds=False)
                 except Exception:                   # noqa: BLE001
                     continue
-                # Atomic — the Futures page polls while this loop writes.
-                _fp = futures_build.OUT / f"futures_{sport}.json"
-                _ftmp = _fp.with_suffix(".json.tmp")
-                _ftmp.write_text(json.dumps(data, indent=2))
-                os.replace(_ftmp, _fp)
+                # THROUGH THE ONE DOOR (2026-11-17). This wrote the full
+                # projection straight onto the public path, atomically but
+                # around the gate: every day the paid futures sat unsealed
+                # there until the next restart's seal, and the members' copy
+                # was never refreshed — they read the last `futures_build.py`
+                # run's numbers. `publish` writes both copies atomically,
+                # the way `futures_build.main` always has.
+                _gate.publish(data, futures_build.OUT / f"futures_{sport}.json")
         finally:
             conn.close()
         stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.write_text(time.strftime("%Y-%m-%dT%H:%M:%S"))
+        stamp.write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {FUTURES_VERSION}")
         if not quiet:
             print("  Futures: season projections rebuilt (free).")
     except Exception as exc:  # noqa: BLE001 — never take the site down

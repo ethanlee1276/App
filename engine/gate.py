@@ -338,6 +338,11 @@ PAID_FILES = (
     "futures_nfl.json", "backtest.json", "kalshi.json",
     # College basketball's title futures (engine/ncaarace, 2026-11-14).
     "futures_cbb.json",
+    # Hockey's, built by futures_build since 2026-10-03 and never listed:
+    # `redact` stripped only the generic paid keys, which `teams` is not,
+    # so every club's playoff and Cup chances sat on the public path — the
+    # one league's season simulation that was free (found 2026-11-17).
+    "futures_nhl.json",
     # `day_top_pick.json` was here, paid whole, while the per-league card
     # was paid. It is the same object promoted to the top level, so it went
     # free with the card on 2026-10-30 — see MIXED_FILES and `free_top_pick`.
@@ -496,7 +501,8 @@ KNOWN_BOARDS = (
     "recommendations.json", "mlb_recommendations.json", "nba.json",
     "wnba.json", "cfb.json", "ufc.json", "nhl.json", "cbb.json",
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
-    "futures_nfl.json", "futures_cbb.json", "backtest.json", "kalshi.json", "predmarkets.json",
+    "futures_nfl.json", "futures_cbb.json", "futures_nhl.json", "backtest.json", "kalshi.json",
+    "predmarkets.json",
     "record.json", "record_head.json", "injuries.json", "news.json", "fantasy.json",
     "memecoins.json",
     # The races, written by cfb_build, nba_build and nfl_build

@@ -37,6 +37,7 @@ quietly being wrong about theirs.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 from dataclasses import dataclass, field, asdict
 
 from . import divisions
@@ -99,7 +100,7 @@ class Record:
 
 
 def _finished(conn, sport: str, seasons: list[int] | None):
-    q = ("SELECT season, period, home, away, home_score, away_score "
+    q = ("SELECT season, period, home, away, home_score, away_score, extra "
          "FROM games WHERE sport=? AND home_score IS NOT NULL "
          "AND away_score IS NOT NULL")
     args: list = [sport]
@@ -107,6 +108,46 @@ def _finished(conn, sport: str, seasons: list[int] | None):
         q += " AND season IN (%s)" % ",".join("?" * len(seasons))
         args += list(seasons)
     return conn.execute(q + " ORDER BY period", args).fetchall()
+
+
+#: How a hockey game ended (engine/sources/nhldata stores the API's
+#: periodDescriptor.periodType as `ended_in`). A loss in either is the
+#: NHL's third column — an overtime loss, worth one point — and not a loss.
+PAST_REGULATION = ("OT", "SO")
+#: The NHL API's game type for a playoff game. Hockey is not in
+#: playoffs.POSTSEASON (its first playoff day moves every spring), so the
+#: stored type is what keeps a Cup run out of the regular-season table.
+NHL_PLAYOFF_TYPE = 3
+
+
+def _hockey(r) -> tuple[int | None, str]:
+    """(game type, how it ended) from a stored hockey row — (None, "")
+    when the row carries neither, which counts it as a regulation game."""
+    try:
+        ex = json.loads(r["extra"] or "{}")
+    except (TypeError, ValueError, IndexError, KeyError):
+        return None, ""
+    if not isinstance(ex, dict):
+        return None, ""
+    try:
+        kind = int(ex.get("type")) if ex.get("type") is not None else None
+    except (TypeError, ValueError):
+        kind = None
+    return kind, str(ex.get("ended_in") or "").upper()
+
+
+def team_rows(table: dict):
+    """Every team row of a standings payload, in table order.
+
+    THE ONE READER OF THE SHAPE `_grouped` WRITES. The season simulation
+    read `group["rows"]` from August to November 2026 while this module has
+    always written `group["teams"]` — so every league's projection started
+    each club at 0-0 and played out only the games left, and nothing
+    failed, because an empty table is a valid table. A caller iterates
+    this instead of the dict.
+    """
+    for group in (table or {}).get("groups") or []:
+        yield from group.get("teams") or []
 
 
 def compute(conn, sport: str, season: int | None = None,
@@ -129,8 +170,19 @@ def compute(conn, sport: str, season: int | None = None,
     # last thing most teams do is lose a playoff game), and rewarded the
     # deepest run with the best "regular season" record. Standings and a
     # bracket are two different questions about the same rows.
-    rows = [r for r in _finished(conn, sport, [season])
-            if not is_postseason(sport, season, r["period"])]
+    # Each row with whether it went past regulation, read once: an
+    # overtime or shootout loss is the NHL's third column (the slot `ties`
+    # holds for a points league, as `from_feed` fills it) — a point banked,
+    # not a loss. Counted as a loss, a club's points came up short by every
+    # one it took past regulation.
+    rows: list[tuple] = []
+    for r in _finished(conn, sport, [season]):
+        if is_postseason(sport, season, r["period"]):
+            continue
+        kind, ended = _hockey(r) if sport in OTL_SPORTS else (None, "")
+        if kind == NHL_PLAYOFF_TYPE:
+            continue
+        rows.append((r, ended in PAST_REGULATION))
 
     table: dict[str, Record] = {}
 
@@ -144,7 +196,7 @@ def compute(conn, sport: str, season: int | None = None,
         return table[key]
 
     skipped_unfinished = 0
-    for r in rows:
+    for r, past_regulation in rows:
         hs, as_ = float(r["home_score"]), float(r["away_score"])
         # In a sport with no ties, equal scores mean the row is not a
         # finished game — a suspension, a postponement, or a score we
@@ -164,6 +216,9 @@ def compute(conn, sport: str, season: int | None = None,
                 me.home_wins += at_home
                 me.away_wins += (not at_home)
                 outcome = "W"
+            elif mine < theirs and past_regulation:
+                me.ties += 1
+                outcome = "T"
             elif mine < theirs:
                 me.losses += 1
                 me.home_losses += at_home
@@ -337,8 +392,7 @@ def unit_rankings(table: dict) -> dict | None:
     """
     if table.get("sport") not in UNIT_RANKING_SPORTS:
         return None
-    rows = [t for g in table.get("groups") or []
-            for t in g.get("teams") or [] if t.get("games")]
+    rows = [t for t in team_rows(table) if t.get("games")]
     if len(rows) < 4:
         return None
 

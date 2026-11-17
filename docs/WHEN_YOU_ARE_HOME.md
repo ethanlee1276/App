@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UI. Every league's season outlook counts the games already played** (step 667; 17 November). Nothing to
+run. Since 3 August the Futures page's season simulation read the standings in a shape they are not written in,
+so every league's projection (NFL, NBA, MLB, college football, NHL) started each club at 0-0 and played out only
+the games left: a 9-1 team got no credit for the nine, and its playoff, division and title chances were worked
+out as if the season had just started. Found on the NHL's page: every club 0-0 with 0 points, 321 games in. Now
+each league starts from its real table. The NHL's counts an overtime or shootout loss as the third column, a
+point each, so it reads W-L-OT like the league's own, and a playoff game no longer counts in the regular
+season. The NHL's projection is members-only now, like every other league's (it was the one left public), and
+the daily rebuild goes through the paywall step, so members get that day's numbers (before, they read whatever
+copy the last hand-run build had left). The corrected numbers go up on the first pass after this deploy. Ask
+Qellys answers hockey in W-L-OT and points. The playoff race pages count their own records and were never
+affected.
+
 **UH. The prop cards' scouting notes say "the player" too** (step 666; 17 November). Nothing to run. The second part
 of the neutral wording you said yes to: the scout's warnings on every football and basketball prop card ("the first game
 back after missing the team's last game", "an over while the player's role has been shrinking", "a road game in the
