@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UF. Your teams on the bracket** (step 664; 17 November). Nothing to run. One of mine, building on your team colours
+and today's brackets: every team you follow (Settings → Teams, or the star on a team's page) is lit gold with a star
+wherever a bracket draws it — the NFL's, college football's, the NBA Cup's. The NFL's race page also opens with a "Your
+teams" card saying where each of yours stands: "Chiefs: the AFC's 3 seed if the season ended today, 92% to make the
+playoffs", or "2 games back of the NFC's 7 seed". The chance is a member's; a reader without a plan sees where the team
+stands. No team followed, no card.
+
 **UE. The game reports say "the player", never "he"** (step 663; 17 November). Nothing to run. A wording pass over
 everything the game reports, the after-game checks and the game parlays say about a player: about sixty sentences that
 said "his last 6 games", "he played", "backs him", "his work" now read "the last 6 games", "Right: played — 22 points",

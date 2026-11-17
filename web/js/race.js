@@ -103,8 +103,10 @@ function rcBkSide(sport, s) {
       escapeHtml((s && s.tbd) || "To be decided")}</b>${meta}</span></div>`;
   }
   const done = s.won === true ? " rc-bk-won" : s.won === false ? " rc-bk-lost" : "";
-  return `<div class="rc-bk-side${done}">${teamMarkIn(sport, s.team, 20)}<span class="rc-bk-who"><b><span class="rc-bk-seed">${
-    escapeHtml(String(s.seed || ""))}</span>${escapeHtml(s.name || s.team)}</b>${meta}</span>${
+  const mine = rcFollows(sport, s.team);
+  return `<div class="rc-bk-side${done}${mine ? " rc-bk-mine" : ""}">${teamMarkIn(sport, s.team, 20)}<span class="rc-bk-who"><b><span class="rc-bk-seed">${
+    escapeHtml(String(s.seed || ""))}</span>${escapeHtml(s.name || s.team)}${
+    mine ? `<span class="rc-bk-star" title="A team you follow" aria-label="a team you follow">★</span>` : ""}</b>${meta}</span>${
     s.score != null ? `<span class="rc-bk-score">${escapeHtml(String(s.score))}</span>` : ""}</div>`;
 }
 /* A game: its two sides, and under them, when it has one, its note (the
@@ -345,6 +347,34 @@ function rcNflName(t) { return (typeof teamNameIn === "function" && teamNameIn("
    seed's, so its games are said that way. AFC on the left and the NFC
    mirrored on the right where there is room, one above the other on a phone;
    then the clubs just outside and how far back of the seventh they are. */
+/* YOUR TEAMS ON THE BRACKET (2026-11-17): a team you follow (Settings, or
+   the star on its page) is lit wherever the bracket draws it, and the NFL's
+   race says first where each of yours stands: its seed if the season ended
+   today, how far back of the 7 seed, and, for a member, its chance to get in. */
+function rcFollows(sport, team) {
+  return !!team && typeof isFavTeam === "function" && isFavTeam(team, sport);
+}
+function rcNflMineHTML(d) {
+  const mine = (typeof settings === "function" ? settings().teams || [] : [])
+    .filter((k) => String(k).startsWith("nfl:")).map((k) => String(k).slice(4));
+  const t = d.today || {};
+  const rows = mine.map((team) => {
+    let where = "";
+    for (const c of RC_NFL_CONFS) {
+      const s = ((t[c] || {}).seeds || []).find((x) => x.team === team);
+      const h = ((t[c] || {}).hunt || []).find((x) => x.team === team);
+      if (s) where = `the ${c}’s ${s.seed} seed if the season ended today`;
+      else if (h && h.back != null) where = h.back > 0 ? `${h.back} game${h.back === 1 ? "" : "s"} back of the ${c}’s 7 seed`
+        : `level with the ${c}’s 7 seed, out on the tiebreaker`;
+      if (where) break;
+    }
+    const ch = ((d.chances || {})[team] || {}).playoffs;
+    const odds = ch != null ? `, ${rcPct(ch)} to make the playoffs` : "";
+    return where || odds ? `<li>${teamMarkIn("nfl", team, 20)}<span><b>${escapeHtml(rcNflName(team))}</b>: ${
+      escapeHtml(where || "outside the race today")}${odds}</span></li>` : "";
+  }).filter(Boolean);
+  return rows.length ? `<div class="rc-card rc-mine"><b>Your teams</b><ul class="rc-mine-list">${rows.join("")}</ul></div>` : "";
+}
 function rcNflSeedSide(s) {
   if (!s) return { tbd: "Seed open" };
   const why = String(s.why || "").replace(/^(AFC|NFC)\s+/, "");
@@ -463,6 +493,7 @@ function nflHTML(d) {
   const locked = rcLocked(d);
   return `<p class="rc-note rc-lede">Week ${escapeHtml(String(d.week || "—"))} next · ${plural(d.games_played || 0, "game")} played,
       ${d.games_left || 0} left in the regular season.</p>
+    ${rcNflMineHTML(d)}
     ${rcNflSeedsHTML(d)}
     ${locked ? memberLockHTML("Our chances are for members",
       "Every club’s chance to make the playoffs, win its division, take the 1 seed and win the Super Bowl — each game it has left at our price, and the week’s games that swing the field.")

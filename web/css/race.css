@@ -135,6 +135,14 @@
 /* Who is not known yet is said in words; they wrap rather than lose their end. */
 .rc-bk-tbd b { color: var(--text-mute); font-weight: 600; line-height: var(--lh-tight); white-space: normal; }
 .rc-bk-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--fill-tone); }
+/* A team you follow, lit wherever the bracket draws it. */
+.rc-bk-mine { border-radius: var(--radius-sm); background: color-mix(in oklab, var(--gold) 13%, transparent); }
+.rc-bk-star { margin-left: 5px; color: var(--gold); font-size: var(--fs-xs); }
+/* Where each of your teams stands, above the NFL's bracket. */
+.rc-mine-list { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.rc-mine-list li { display: grid; grid-template-columns: 20px minmax(0, 1fr); column-gap: 8px; align-items: center;
+  color: var(--text-dim); font-size: var(--fs-sm); }
+.rc-mine-list b { color: var(--text); }
 /* A game played: the score at the side's end, the winner bright and the loser faded. */
 .rc-bk-score { color: var(--text-dim); font-size: var(--fs-sm); font-weight: 800; font-variant-numeric: tabular-nums; }
 .rc-bk-won .rc-bk-score, .rc-bk-won .rc-bk-who b { color: var(--text); }

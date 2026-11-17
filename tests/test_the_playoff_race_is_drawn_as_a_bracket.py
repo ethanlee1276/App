@@ -144,6 +144,45 @@ def test_the_cup_s_knockouts_and_the_college_playoff_s_real_bracket_draw_the_sam
     assert part.index("Quarterfinals") < part.index("Semifinals") < part.index("National championship")
 
 
+def _render_following(fn, payload, teams):
+    """The race page drawn for a reader who follows ``teams`` ("nfl:DET")."""
+    import json
+    import subprocess
+    js = f"""
+    const state = {{ sport: "nfl", view: "race" }};
+    const escapeHtml = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const teamMarkIn = (sp, t) => `<i data-mark="${{t}}"></i>`;
+    const teamNameIn = (sp, t) => t;
+    const plural = (n, w) => `${{n}} ${{w}}${{n === 1 ? "" : "s"}}`;
+    const formatGameDate = (s) => s;
+    const memberLockHTML = (t, b) => `<div class="card member-lock"><b>${{t}}</b><p>${{b}}</p></div>`;
+    const settings = () => ({{ teams: {json.dumps(teams)} }});
+    const isFavTeam = (abbr, sport) => settings().teams.includes(`${{sport || state.sport}}:${{abbr}}`);
+    {RACE}
+    console.log(JSON.stringify({fn}({json.dumps(payload)})));
+    """
+    out = subprocess.run(["node", "-"], input=js, capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def test_a_team_you_follow_is_lit_on_the_bracket_and_said_first():
+    d = T._nfl()
+    seeded = d["today"]["AFC"]["seeds"][2]["team"]
+    hunted = d["today"]["NFC"]["hunt"][0]
+    html = _render_following("nflHTML", d, [f"nfl:{seeded}", f"nfl:{hunted['team']}"])
+    mine = html[html.index('class="rc-card rc-mine"'):html.index("</ul>", html.index('class="rc-card rc-mine"'))]
+    assert f"the AFC’s 3 seed if the season ended today" in mine
+    assert "back of the NFC’s 7 seed" in mine or "level with the NFC’s 7 seed" in mine
+    assert "to make the playoffs" in mine, "a member sees each one's chance"
+    afc = _section(html, "rc-bk-conf rc-bk-l")
+    assert afc.count("rc-bk-mine") == 1 and "a team you follow" in afc, "the 3 seed is lit where it is drawn"
+    free = _render_following("nflHTML", gate.redact(d, "nfl_race.json"), [f"nfl:{seeded}"])
+    card = free[free.index('class="rc-card rc-mine"'):free.index("</ul>", free.index('class="rc-card rc-mine"'))]
+    assert "the AFC’s 3 seed" in card and "to make the playoffs" not in card, "the chance is a member's"
+    assert "rc-mine" not in T._render("nflHTML", d), "no teams followed, no card"
+
+
 def test_the_nfc_turns_right_to_left_only_where_the_whole_bracket_fits():
     q = CSS.index("@container (min-width: 980px)")
     assert CSS.count(".rc-bk-mirror { direction: rtl; }") == 1
