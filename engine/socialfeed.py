@@ -474,15 +474,6 @@ def suggest_handle(conn, user_id: int) -> str:
     return cand if taken in (None, int(user_id)) else ""
 
 
-def public_name(conn, user_id: int) -> str:
-    """What the rest of the site calls this account when it has a profile:
-    the display name, else @handle. '' when there is no profile."""
-    p = profile_of(conn, user_id)
-    if not p:
-        return ""
-    return p["name"] or p["handle"]
-
-
 # ─── blocks and follows ─────────────────────────────────────────────────────
 
 def blocked_ids(conn, viewer) -> set:

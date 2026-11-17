@@ -617,19 +617,6 @@ def next_game_day(date: str, days: int = 5) -> str | None:
     return None
 
 
-def fetch_results(start: str, end: str) -> list[dict]:
-    """Final scores for every completed game between two dates (inclusive).
-
-    One request covers the whole range, so ingesting a full season is a handful
-    of calls rather than one per day."""
-    return parse_results(fetch_schedule(start, end))
-
-
-def fetch_abandoned(start: str, end: str) -> list[dict]:
-    """Postponed/cancelled games in a date range — see parse_abandoned."""
-    return parse_abandoned(fetch_schedule(start, end))
-
-
 def build_games(date: str, with_weather: bool = True) -> list[MLBGame]:
     """Real games for a date (YYYY-MM-DD) with probable pitchers and, where
     the park is mapped, live weather."""

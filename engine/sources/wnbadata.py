@@ -99,36 +99,3 @@ def probe(date: str = "2026-07-15") -> list[dict]:
     return out
 
 
-def ingest_wnba_date(conn, date: str) -> dict:
-    """Store one date's player logs and finals. Mirrors ingest_nba_date."""
-    from .. import db
-    result = {"games": 0, "player_logs": 0, "skipped": []}
-    try:
-        sched = fetch_schedule()
-    except Exception as exc:                       # noqa: BLE001
-        result["skipped"].append(f"wnba schedule: {exc}")
-        return result
-    games = parse_schedule_day(sched, date)
-    grows, prows = [], []
-    for g in games:
-        grows.append({
-            "sport": "wnba", "season": int(date[:4]), "period": date,
-            "game_id": g["game_id"], "home": g["home"], "away": g["away"],
-            "home_score": g.get("home_score"), "away_score": g.get("away_score"),
-            "spread": 0.0, "total": None, "roof": "indoor", "surface": "hardwood",
-            "temp": None, "wind": None, "extra": None,
-        })
-        if g.get("home_score") is None:
-            continue                               # not final — nothing to log
-        try:
-            box = fetch_boxscore(g["game_id"])
-        except Exception as exc:                   # noqa: BLE001
-            result["skipped"].append(f"wnba box {g['game_id']}: {exc}")
-            continue
-        rows = log_rows(parse_boxscore(box), date, g["game_id"])
-        for r in rows:
-            r["sport"] = "wnba"
-        prows += rows
-    result["games"] = db.upsert_games(conn, grows)
-    result["player_logs"] = db.upsert_player_logs(conn, prows)
-    return result

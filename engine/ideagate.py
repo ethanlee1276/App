@@ -170,11 +170,6 @@ def endgame_verdict() -> dict:
     return endgame.verdict()
 
 
-def curve_verdict(sport: str) -> dict:
-    from . import altcurve
-    return altcurve.load_verdict(sport) or {}
-
-
 # ---- the projection hooks --------------------------------------------------------------------
 
 def rookie_prior(player: str, market: str, nfl_games: int) -> float | None:

@@ -386,16 +386,6 @@ def fit_sigma_on_over(train, beta, lines, weight: float = 0.0,
     return best[1] if best else 1.0
 
 
-def pit_chi(data, cdf) -> float:
-    """Uniformity of the probability integral transform, by decile."""
-    counts = [0] * DECILES
-    for d in data:
-        u = min(max(cdf(d), 0.0), 0.999999)
-        counts[int(u * DECILES)] += 1
-    expected = len(data) / DECILES
-    return sum((c - expected) ** 2 / expected for c in counts)
-
-
 def report(market: str, conn=None, db_path=None) -> list:
     close = conn is None
     conn = conn or sqlite3.connect(str(db_path or DEFAULT_DB))

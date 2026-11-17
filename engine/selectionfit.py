@@ -809,28 +809,6 @@ def apply_haircut(sport: str, p: float, path=None) -> float:
     return shift_prob(p, shift_for(sport, path))
 
 
-def points_at(p: float, sport: str, path=None) -> float:
-    """How many probability POINTS the LIVE haircut takes off a claim.
-
-    Log-odds is the honest frame to fit in and a terrible one to read
-    in, so this is the reader's frame.
-
-    "Everything user-facing quotes this instead" is what this docstring
-    used to say, and the nightly sweep found nothing quoting it at all
-    (2026-09-02). What the surfaces actually use is near it but not it:
-    `launch.py --haircut` prints `(out - p)` for the fit in the table it
-    is drawing, and the site prints `_entry`'s `example_55`. Both are
-    deliberate — the table shows what a PARTICULAR fit would do, which
-    is not always the live one, and this reads `shift_for`, which is.
-
-    So the sentence was a claim about the codebase rather than about the
-    function, and it was wrong. Kept as the one call that answers "what
-    is the live cut worth at this price" without the caller re-deriving
-    it; described as what it is.
-    """
-    return apply_haircut(sport, p, path) - float(p)
-
-
 #: The price bands the haircut is CHECKED against, matching
 #: `stakecheck.py`'s so the two tools cannot disagree about which bets
 #: are in which bucket. `(label, low, high)`, American odds, high

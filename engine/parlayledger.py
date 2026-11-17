@@ -304,23 +304,6 @@ def _reasoning(t: dict) -> str:
     return " · ".join(out)
 
 
-def log_slate_play(conn, sport: str, date: str, legs: list[dict]) -> int:
-    """Mark the ticket §10.2's cross-sport arbitration left standing.
-
-    Journaled separately from the ticket itself because the arbitration runs
-    after every board is built, and the winner is not known while any single
-    board is being written. Nothing is staked either way — this records which
-    ONE ticket the operating rule would have allowed, so the record can later
-    be read both ways: how the screen did, and how the policy did.
-    """
-    ensure_schema(conn)
-    cur = conn.execute(
-        "UPDATE parlays SET was_play=1 WHERE sport=? AND date=? AND legs_key=?",
-        (sport, date, legs_key(legs)))
-    conn.commit()
-    return cur.rowcount
-
-
 # --- two-leg tickets (engine/twoleg, the Parlays page) ---------------------------------
 def log_twoleg(conn, two_leg: dict, sport: str, date: str) -> int:
     """Journal every two-leg ticket a board posted, both pools. Returns rows
@@ -924,18 +907,6 @@ def _loss_codes(conn, p, won, lost, singles_pnl: float) -> list[str]:
 #: `calibration()` answers it properly — observed ticket wins against the
 #: modeled joint, and against the independent joint, over every ticket
 #: that claimed the legs move together.
-
-
-def _priced_positive_correlation(p) -> bool:
-    """Did this ticket claim a positive correlation between its legs?
-
-    Read back off the reasoning text the screen wrote, which is where the
-    rhos were recorded. No longer used to stamp a loss code — see the note
-    above — but kept because it is the only reader of that text and the
-    aggregate check may want it when a ticket has no stored joint.
-    """
-    text = p["conditional_reasoning"] or ""
-    return "rho +" in text
 
 
 def calibration(conn) -> dict:

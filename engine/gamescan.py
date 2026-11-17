@@ -1100,14 +1100,6 @@ def _pct(v) -> str:
     return f"{float(v):.0%}" if v is not None else "—"
 
 
-def _plus(v, nd: int) -> str:
-    """A signed figure (+0.41, -0.12), but a figure that rounds to nothing
-    is 0.0: a reader shown "-0.0 over expected" sees a fault, not a
-    quarterback exactly at his expected rate."""
-    s = f"{float(v):+.{nd}f}"
-    return s[1:] if float(s) == 0 else s
-
-
 def _than_expected(v, nd: int, what: str) -> str:
     """"0.41 more rushing yards a carry than expected", "0.2 fewer …"; a
     figure that rounds to nothing is "right at the expected …" — never

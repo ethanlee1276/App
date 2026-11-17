@@ -134,26 +134,3 @@ def hazard_tilt(a: dict, b: dict) -> str | None:
     return None
 
 
-def triangle_report(p_a_devig: float, p_distance_model: float,
-                    props_implied: dict | None) -> list[str]:
-    """Residual lines for the card — the identities, checked out loud.
-
-    ``props_implied``: {family: [raw implied probs]} for whatever the
-    feed carried; families absent from the menu produce no line rather
-    than an invented one.
-    """
-    lines: list[str] = []
-    for fam, anchor, label in (
-            ("method_a", p_a_devig, "A's method family"),
-            ("method_b", (1.0 - p_a_devig) if p_a_devig is not None else None,
-             "B's method family"),
-            ("distance", p_distance_model, "the decision family")):
-        implied = (props_implied or {}).get(fam)
-        if not implied or anchor is None:
-            continue
-        mult, _ = family_devig(implied, anchor)
-        if mult:
-            lines.append(f"{label} sums to {sum(implied):.0%} against a "
-                         f"{anchor:.0%} anchor — {(mult - 1) * 100:.0f}% "
-                         f"internal hold")
-    return lines

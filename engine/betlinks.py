@@ -425,19 +425,6 @@ def links_for(row: dict, sport: str, events: dict, mkeys: dict | None = None) ->
     return slips, (evs[0] if matched and len(evs) == 1 else None)
 
 
-def link_for(row: dict, sport: str, events: dict, mkeys: dict | None = None) -> tuple:
-    """(url, kind) — the first link `stamp` would put on this row, or ("", "")."""
-    slips, ev = links_for(row, sport, events, mkeys)
-    if slips:
-        return slips[0][1], "slip"
-    if ev is not None:
-        for bk in _books(row.get("book")):
-            url = (ev.get("page") or {}).get(bk)
-            if url:
-                return url, "page"
-    return "", ""
-
-
 #: Books a game parlay's leg keeps links for (`_parlay_legs`): enough for the
 #: books that hold the whole ticket, fewer than a pick's twelve, since one
 #: leg sits in several tickets and each copy carries its own.
