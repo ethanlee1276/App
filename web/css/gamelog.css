@@ -62,10 +62,12 @@
    tint is a wash of white: each let the numbers scrolled under the column show
    through it. The column is the panel laid over the page's own ground, opaque
    wherever it is drawn, and a tapped row lays its tint over that. */
-.gl-table .gl-fix { position: sticky; left: 0; z-index: 1;
-  background: linear-gradient(var(--panel), var(--panel)), var(--bg); }
+.gl-table .gl-fix {
+  --gl-fix-bg: linear-gradient(var(--panel), var(--panel)), var(--bg);
+  position: sticky; left: 0; z-index: 1; background: var(--gl-fix-bg); }
 .agate.gl-table tbody tr:hover td.gl-fix {
-  background: linear-gradient(var(--fill-subtle), var(--fill-subtle)), linear-gradient(var(--panel), var(--panel)), var(--bg); }
+  --gl-fix-tint: linear-gradient(var(--fill-subtle), var(--fill-subtle));
+  background: var(--gl-fix-tint), var(--gl-fix-bg); }
 .gl-day b { display: block; font-weight: 600; }
 .gl-day span { display: flex; align-items: center; gap: 4px; color: var(--text-mute); font-size: var(--fs-xs); }
 /* The other club's mark beside its name, as a schedule on ESPN draws it. */

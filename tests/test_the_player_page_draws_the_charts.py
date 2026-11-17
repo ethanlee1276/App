@@ -134,15 +134,15 @@ def test_the_slot_names_the_market_the_reader_came_for_else_the_roles():
 def test_the_pinned_column_is_solid_wherever_it_is_drawn():
     i = GLCSS.index(".gl-table .gl-fix {")
     rule = GLCSS[i:GLCSS.index("}", i)]
-    assert "position: sticky; left: 0;" in rule
-    assert "background: linear-gradient(var(--panel), var(--panel)), var(--bg);" in rule, \
+    assert "position: sticky; left: 0;" in rule and "background: var(--gl-fix-bg);" in rule
+    assert "--gl-fix-bg: linear-gradient(var(--panel), var(--panel)), var(--bg);" in rule, \
         "the panel over the page's own ground: opaque however see-through the panel is"
     i = GLCSS.index(".agate.gl-table tbody tr:hover td.gl-fix {")
-    assert "var(--fill-subtle)" in GLCSS[i:GLCSS.index("}", i)] and "var(--bg)" in GLCSS[i:GLCSS.index("}", i)], \
+    assert "background: var(--gl-fix-tint), var(--gl-fix-bg);" in GLCSS[i:GLCSS.index("}", i)], \
         "a tapped row's tint is laid over the solid column, never in its place (styles.css .agate tr:hover)"
     i = PLRCSS.index('html:not([data-theme="light"]) body.plr-on #view-players .gl-table .gl-fix {')
-    assert "color-mix(in oklab, var(--pw-1) 48%, var(--bg))" in PLRCSS[i:PLRCSS.index("}", i)], \
-        "on the player page's glass, the club's colour in the ground"
+    assert ("--gl-fix-bg: linear-gradient(var(--panel), var(--panel)), color-mix(in oklab, var(--pw-1) 48%, var(--bg));"
+            in PLRCSS[i:PLRCSS.index("}", i)]), "on the player page's glass, the club's colour in the ground"
 
 
 def _history():
