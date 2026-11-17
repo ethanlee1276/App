@@ -912,7 +912,7 @@ def ingest_mlb_date(conn, date: str) -> dict:
     # where the history holds nothing, so a number the record graded stays.
     try:
         from .mlb import fulllines
-        full = fulllines.slate_rows(slate, date)
+        full = fulllines.slate_rows(slate, date, done=fulllines.done_teams(conn, date))
     except Exception as exc:                                  # noqa: BLE001
         full = []
         result["skipped"].append(f"mlb {date} full lines: {exc}")

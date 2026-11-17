@@ -108,6 +108,23 @@ def test_a_doubleheader_is_keyed_as_the_game_log_keys_it():
         "mlb", 2026, "2026-07-04", "NYY", "BOS", 1)
 
 
+def test_a_game_whose_lines_are_kept_is_not_read_again():
+    box = _box([_player("Aaron Judge", "RF", JUDGE_1)], [_player("Rafael Devers", "3B", JUDGE_1)])
+    asked = []
+
+    def fetch(pk):
+        asked.append(pk)
+        return box
+    slate = _slate((1, "NYY", "BOS", 1, "Final"), (2, "LAD", "SD", 1, "Final"), (3, "SF", "ARI", 1, "Final"),
+                   (4, "SF", "ARI", 2, "Final"))
+    F.slate_rows(slate, "2026-07-04", fetch=fetch, done={"NYY", "BOS", "SF", "ARI"})
+    assert asked == [2, 3, 4], "a doubleheader's clubs are read whole; a kept game is not read again"
+    path, conn = _history()
+    F.write(conn, F.rows(box, "NYY", "BOS", "2026-06-01"))
+    assert F.done_teams(conn, "2026-06-01") == {"NYY", "BOS"} and F.done_teams(conn, "2026-06-02") == set()
+    conn.close()
+
+
 def _history():
     path = os.path.join(tempfile.mkdtemp(), "history.db")
     conn = _db.connect(path)
@@ -252,7 +269,7 @@ def test_the_page_leads_with_the_numbers_a_sports_site_leads_with():
 def test_the_nightly_adds_each_final_games_lines():
     src = (ROOT / "engine" / "ingest.py").read_text(encoding="utf-8")
     body = src[src.index("def ingest_mlb_date("):]
-    assert "        full = fulllines.slate_rows(slate, date)\n" in body
+    assert "        full = fulllines.slate_rows(slate, date, done=fulllines.done_teams(conn, date))\n" in body
     assert body.index('result["player_logs"] = db.upsert_player_logs(conn, prows)') < body.index(
         'result["full_lines"] = fulllines.write(conn, full) if full else 0'), "after the graded rows, never over them"
     assert 'result["skipped"].append(f"mlb {date} full lines: {exc}")' in body

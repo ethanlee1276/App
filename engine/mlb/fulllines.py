@@ -176,18 +176,35 @@ def games_of(schedule: dict) -> list[dict]:
     return out
 
 
-def slate_rows(slate, date: str, fetch=None) -> list[dict]:
+def done_teams(conn, date: str) -> set:
+    """The clubs whose whole lines for a day the history holds already: a
+    hitter's at-bats are on file (the props' rows never carry them)."""
+    return {r[0] for r in conn.execute(
+        "SELECT DISTINCT team FROM player_game_logs WHERE sport='mlb' AND season=? AND period=? AND market='at_bats'",
+        (int(str(date)[:4]), str(date)[:10]))}
+
+
+def slate_rows(slate, date: str, fetch=None, done=frozenset()) -> list[dict]:
     """The nightly's share: every final game on a slate, its box score's full
     lines, the day's games in the order played (engine/ingest.ingest_mlb_date).
     One box score that cannot be read leaves the day for the next read: a
     doubleheader's second game, read without its first, would key the
-    players in both as their first game."""
+    players in both as their first game.
+
+    A game whose clubs' lines are kept already (``done``, `done_teams`) is not
+    read again: the settle pass reads an open day several times a game day,
+    and each read would fetch the day's fifteen box scores anew. A
+    doubleheader's clubs are read whole each time (their games key together)."""
+    from collections import Counter
     from ..ingest import _game_state
     if fetch is None:
         from .sources.statslogs import fetch_boxscore as fetch
     finals = sorted((g for g in getattr(slate, "games", []) or []
                      if str(_game_state(g)).lower() == "final" and getattr(g, "game_pk", 0)),
                     key=lambda g: int(getattr(g, "game_number", 1) or 1))
+    games = Counter(t for g in getattr(slate, "games", []) or [] for t in (g.home, g.away))
+    finals = [g for g in finals
+              if not (g.home in done and g.away in done and games[g.home] == 1 and games[g.away] == 1)]
     boxes = [(fetch(int(g.game_pk)), g) for g in finals]
     legs: dict = {}
     out = []
