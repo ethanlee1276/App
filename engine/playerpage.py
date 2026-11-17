@@ -501,15 +501,17 @@ def roster_row(sport: str, player: str, team: str = "", data_dir=None, position:
     its header: "LT · LB". A trade or a transfer moves a man to another club
     in his position; a namesake on another club in another one is not him.
     `position` is what his logs say he plays."""
-    from .playersearch import norm
-    want = norm(player)
+    # By the name's core (core_name), so the box scores' "Nolan Smith" finds
+    # the roster's "Nolan Smith Jr.": his number, size and face, not the
+    # stored rows' "DEF" (live, 17 Nov).
+    want = core_name(player)
     if not want:
         return {}
     hits = []
     for club, entry in ((_roster_doc(sport, data_dir).get("teams") or {}).items()):
         rows = (entry.get("players") if isinstance(entry, dict) else entry) or []
         for r in rows:
-            if isinstance(r, dict) and norm(r.get("player") or "") == want:
+            if isinstance(r, dict) and core_name(r.get("player") or "") == want:
                 hits.append(dict(r, team=r.get("team") or club))
     if team:
         mine = [r for r in hits if r.get("team") == team]

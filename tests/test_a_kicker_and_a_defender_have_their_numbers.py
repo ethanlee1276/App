@@ -300,6 +300,9 @@ def test_a_name_with_no_games_is_never_a_near_names_page():
     page = PP.page("nfl", "JK Scott", db_path=path, data_dir=d)
     assert page["player"] == "JK Scott" and page["position"] == "P" and page["seasons"] == []
     assert page["no_stats"].startswith("Our NFL stats feed doesn't include punting"), page
+    rich = PP.page("nfl", "Anthony Richardson Sr.", team="IND", db_path=path, data_dir=d)
+    assert (rich["player"], rich["position"], rich["bio"].get("number")) == ("Anthony Richardson", "QB", "5"), \
+        "the box scores' spelling still wears the roster's number and position (a Jr.'s page read 'DEF')"
     assert PP.page("nfl", "Caleb Tiernan", team="MIN", db_path=path, data_dir=d)["no_stats"].startswith(
         "Box scores keep no numbers for offensive linemen")
     assert PP.page("nfl", "New England Patriots", team="NE", db_path=path, data_dir=d)["no_stats"] == PP.TEAM_DEFENSE, \

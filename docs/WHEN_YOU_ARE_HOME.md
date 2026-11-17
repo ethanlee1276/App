@@ -9347,7 +9347,8 @@ Caleb Tiernan's showed Caleb Banks', Jakob Robinson's showed Wan'Dale Robinson's
 a fantasy pick, not a player, and point to the team's page. A player whose games on file record no stats says
 so instead of showing a blank Stats tab, and a college player at a school whose games we don't cover says that.
 Also in this batch: a kicker's long reads "52", not "52.0", in the splits, and Ask Qellys can rank skaters by
-plus-minus and penalty minutes. The hockey pages came through the sweep clean.
+plus-minus and penalty minutes. The hockey pages came through the sweep clean. And a page found under the box
+scores' spelling ("Nolan Smith") still wears the roster's number, size, photo and position, not "DEF".
 
 **UO. A player with no games never shows someone else's** (step 673; 17 November). Nothing to run. Found while
 checking Cameron Dicker's page live: JK Scott, the Chargers' punter, has no games on file, so his page and its Game
