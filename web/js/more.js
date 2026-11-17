@@ -86,6 +86,15 @@ function glossaryHTML() {
    HERE, WITH ITS PAGE, since 2026-10-30: it sat in app.js, in the first
    visit, for a page most visits never open. */
 const FEATURES = [
+  // THE GAME REPORTS, FIRST (Ethan, 2026-11-17: "we need to show the game
+  // report feature on the welcome page and all that"): the welcome page's
+  // report card opens on this list, so it leads with them.
+  ["The game reports", "A full report for every game, then its own grade",
+   [["Game report", "Every game in every league gets one before it starts: who we think wins and how sure we are, the matchups that decide it, who is hurt and what that changes, the red-zone roles, the last meeting and how the game should go, in plain words. It keeps watching the injury report and the news until the start.", "reportpicks"],
+    ["The report’s picks and parlays", "Every read the numbers back becomes a pick, with its price and our chance, and each game’s three-leg parlays and touchdown pairs are built only from those picks. A report whose picks make fewer than four parlays says why.", "reportpicks"],
+    ["How our reports did", "After the final the report grades itself: every pick and parlay with a check or an X, the call right or wrong, the injury report checked, and why a read missed. Free on the Record.", "record"],
+    ["Fact checks", "Every finished game’s pre-game numbers against the box score, with running totals, and how sure we were against how often it held.", "record"]]],
+
   ["The boards", "What we publish every day, in every league",
    [["Tonight’s board", "Every game on the slate with its venue, the lines, and every prop that cleared the bar — the page the site opens on.", "recommended"],
     ["Pick of the Day", "One bet a day in every league, priced against a sharp book’s fair and graded on the Record — free for everyone, every league side by side.", "potd"],
@@ -120,7 +129,7 @@ const FEATURES = [
     ["Team page", "Search a team, pick an opponent at the top of the page and read the head-to-head record with every meeting behind it — then the seasons, the leaders, the stat tables and the whole squad by position. Every game it has played opens its own page: the leaders, every scoring play with its drive, the box score and every play.", "team"],
     ["Rosters", "Every team’s roster in every league, each row opening the player.", "rosters"],
     ["Standings & rankings", "Records, the bracket, and — for football — a ranking of every team’s offence and defence.", "standings"],
-    ["The races", "College football’s playoff race — the bracket if it started today, every contender’s chances, the games that swing it — and the NBA Cup’s groups, tiebreakers and odds.", "race"],
+    ["The races", "The playoff races drawn as brackets — the NFL, college football, the NBA and the NHL: who is in if it started today, every contender’s chances and the games that swing it — with the NBA Cup’s groups and the NCAA tournament race beside them.", "race"],
     ["Trending", "Form movers: who is climbing and who is falling, measured rather than asserted.", "trending"],
     ["Injuries & news", "Designations league-wide, who replaces the man who is out, and a rights-clean news section.", "injuries"],
     ["Weather", "Tonight’s conditions park by park, with the roof and the surface.", "weather"],
@@ -144,7 +153,7 @@ const FEATURES = [
     ["Informed flow", "Polymarket’s public tape — who is betting, scored for anomalies, with receipts on every chip. Kalshi does not publish this.", null],
     ["Top traders", "Who is actually winning on that tape, by realised profit.", null],
     ["Rocket Radar", "Solana meme-coin momentum and danger, on its own fast clock.", "memes"],
-    ["UFC", "The fight model — the card, the styles, and the live bout feed.", "ufc"]]],
+    ["UFC", "The fight model — the card, the styles, a written report for every fight, a page for every fighter with the fights, the face and the facts, and the live bout feed.", "ufc"]]],
 
   ["Finding the wrong price", "Where the market disagrees with itself",
    [["Line shopping", "Every book’s number on one row, per market, per side.", "scanner"],

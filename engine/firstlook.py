@@ -125,6 +125,64 @@ def free_pick(web: Path = WEB, today: _dt.date | None = None) -> dict | None:
     return out
 
 
+#: What the welcome page keeps of the newest fact-checked game.
+SAMPLE_FIELDS = ("date", "away", "home", "names", "final", "call", "reads", "injuries")
+
+
+def reports(web: Path = WEB, where=None) -> dict | None:
+    """THE GAME REPORTS' OWN RECORD, for the welcome page's report card (Ethan,
+    2026-11-17: "for the welcome page, we need to show more features, like we
+    need to show the game report feature on the welcome page").
+
+    Public figures only, each the free page's own: the report picks graded (the
+    `report` book of record_head.json, which the Record page draws), and over
+    every league's fact checks (engine/reportrecord, the free "How our reports
+    did") the games checked, the winners called and the injury listings that
+    held. And the newest fact-checked game as the sample, whatever it did, as
+    `last_graded` shows the newest pick: a welcome page that picked its own best
+    game would be the one claim on it nobody could check. A figure with nothing
+    graded is left out; None with none at all."""
+    from engine import widgetfeed
+    out: dict = {}
+    head = widgetfeed._load(Path(web) / "data" / "record_head.json") \
+        or widgetfeed._load(Path(web) / "data" / "record.json")
+    rep = head.get("report") if isinstance(head.get("report"), dict) else {}
+    w, l = int(rep.get("wins") or 0), int(rep.get("losses") or 0)
+    if w + l:
+        out["picks"] = {"w": w, "l": l, "units": round(float(rep.get("net_units") or 0), 1)}
+    try:
+        from engine import gate, reportrecord
+        # The archive beside the web folder it was handed, as gate.FULL_DIR sits
+        # beside the site's own: a test's folder never reads the box's.
+        if where is None:
+            where = gate.FULL_DIR if Path(web).resolve() == WEB.resolve() else Path(web).parent / "data" / "built"
+        games = calls = called = held = listed = 0
+        newest = None
+        for lg in reportrecord.LEAGUE_WORDS:
+            rec = reportrecord.record(where, lg)
+            t = rec.get("totals") or {}
+            games += int(t.get("games") or 0)
+            c, i = t.get("call") or (0, 0), t.get("injuries") or (0, 0)
+            called, calls = called + int(c[0] or 0), calls + int(c[1] or 0)
+            held, listed = held + int(i[0] or 0), listed + int(i[1] or 0)
+            for g in rec.get("games") or []:
+                if isinstance(g, dict) and g.get("final") and (newest is None or str(g.get("date") or "")
+                                                                > str(newest[1].get("date") or "")):
+                    newest = (lg, g)
+        if games:
+            out["games"] = games
+        if calls:
+            out["calls"] = {"right": called, "n": calls}
+        if listed:
+            out["injuries"] = {"right": held, "n": listed}
+        if newest:
+            lg, g = newest
+            out["sample"] = {"league": lg, **{k: g[k] for k in SAMPLE_FIELDS if g.get(k) not in (None, "")}}
+    except Exception:                                        # noqa: BLE001
+        pass                    # the reports' figures are a nicety; the page stands without them
+    return out or None
+
+
 def build(web: Path = WEB, today: _dt.date | None = None, conn=None) -> dict:
     from engine import widgetfeed
     out = widgetfeed.build(web, today)
@@ -143,6 +201,7 @@ def build(web: Path = WEB, today: _dt.date | None = None, conn=None) -> dict:
         if own and conn is not None:
             conn.close()
     out["proof"] = proof()
+    out["reports"] = reports(web)
     return out
 
 

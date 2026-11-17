@@ -126,9 +126,11 @@ def test_the_feed_is_the_widgets_own_numbers_plus_that_row():
     finally:
         conn.close()
     # And `proof` (2026-10-26): real counts of who is here, or None under their floors;
-    # and `free_pick` (2026-11-03): today's free Pick of the Day, the public file's.
-    assert set(out) == {"record", "last_night", "tonight", "updated", "last", "proof", "free_pick"}, out
+    # and `free_pick` (2026-11-03): today's free Pick of the Day, the public file's;
+    # and `reports` (2026-11-17): the game reports' own record, the welcome page's report card.
+    assert set(out) == {"record", "last_night", "tonight", "updated", "last", "proof", "free_pick", "reports"}, out
     assert out["free_pick"] is None, "no file, no pick"
+    assert out["reports"] is None, "nothing graded, nothing said"
     src = (ROOT / "engine" / "firstlook.py").read_text()
     assert "widgetfeed.build(web, today)" in src, "the counts are the widget's — a count, never a pick"
 
@@ -276,7 +278,7 @@ def test_with_the_wall_up_the_sign_up_has_no_way_past():
     const escapeHtml = (s) => String(s), escapeAttr = escapeHtml, icon = () => "", iconMark = () => "";
     const brandMarkHTML = () => "", phoneDoorHTML = () => "", referralTyped = () => "", storeSells = () => true;
     const acctFieldsHTML = (m, extra) => extra, flTonightHTML = () => "", flMembersHTML = () => "", flProofHTML = () => "",
-          flFreeHTML = () => "";
+          flFreeHTML = () => "", flReportHTML = () => "", flFeaturesHTML = () => "";
     const suWhyHTML = () => "";
     const sessionStorage = {{ getItem: () => "#pbp/nfl/1" }}; const WALL_OPEN = ["pbp"]; const PLANS = [{{}}];
     {_fn(ACCOUNT, "wallWhyLine")}

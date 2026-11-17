@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WK. The welcome page shows the game report, then everything else** (step 721; 17 November). Nothing to run. You
+asked for more features on the welcome page, the game report first. The sign-up screen now has, under tonight's
+locked picks and above the form, a card for the game report: what one holds (who we think wins, what decides it, the
+picks, parlays made of those picks, and how it grades itself after the final), its own record from the free pages
+(the report picks graded, the winners called, the injury listings that held), and the newest game it fact-checked,
+whatever it did, the way the last graded pick is shown. Under it, a tile for ten more features (live games, Pick of
+the Day, the Record, the playoff races, fantasy and your bets, alerts, Most Likely and Edge, player pages, Ask
+Qellys, UFC), each marked Free or Members by what a free account can actually open, and a link to the full Features
+page, which now leads with the game reports and has the brackets and the fighter pages in its lines. On the phone's
+sticky "Create your free account" button nothing changed.
+
 **WJ. A game with fewer than four parlays says why under them** (step 720; 17 November). Nothing to run. Since step
 WH a game's three-leg parlays are made of its report's own picks only, so a report with five picks that fit together
 into two tickets posts two. The reason was written down but shown only when a game made none; a game with one to

@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-17",
+      "kind": "ship",
+      "title": "The welcome page shows the game report and everything else",
+      "body": "The first screen now shows what a game report holds, from who we think wins to the parlays made of its picks and how it grades itself after the final, with the reports’ own record and the newest game they fact-checked, right or wrong. Under it, a tile for every other feature says whether it is free or for members, and the Features page now leads with the game reports."
+    },
+    {
+      "date": "2026-11-17",
       "kind": "fix",
       "title": "A game with fewer than four parlays says why",
       "body": "A game’s parlays are made only of its report’s own picks, so a report whose picks fit together into one to three tickets posts just those. The game page and Report Picks now say why under them, instead of only when a game has none."

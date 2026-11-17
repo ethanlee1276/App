@@ -3115,6 +3115,94 @@ function flMembersHTML(fl, status) {
   </section>`;
 }
 
+/* THE GAME REPORT, FIRST, THEN EVERYTHING ELSE (Ethan, 2026-11-17: "for the
+   welcome page, we need to show more features, like we need to show the game
+   report feature on the welcome page"). What a report holds, step by step;
+   its own record off /api/firstlook (engine/firstlook.reports) — the report
+   picks graded, the winners called, the injury listings that held — and the
+   newest game it fact-checked, whatever it did, as the last graded pick is
+   shown. Then the rest of the site as tiles, each saying free or members, and
+   the door to the full list (#features). */
+const WF_REPORT_STEPS = [
+  ["target", "Who we think wins", "Our call and how sure we are, beside our ratings’ own pick."],
+  ["people", "What decides it", "The matchups, who is hurt and what that changes, the red-zone roles, the last meeting and how the game should go."],
+  ["check", "The picks", "Every read the numbers back becomes a pick, with its price and our chance."],
+  ["ticket", "Parlays made of those picks", "Three-leg parlays and touchdown pairs, built only from the report’s own picks."],
+  ["chart", "Then it grades itself", "After the final, every pick and parlay gets a check or an X, the injury report is checked, and a miss says why."],
+];
+const WF_LEAGUE = { nfl: "NFL", cfb: "College football", nba: "NBA", cbb: "College basketball", nhl: "NHL",
+                    mlb: "MLB", wnba: "WNBA" };
+// [icon, title, line, free (1) or members (0)]
+const WF_FEATURES = [
+  ["play", "Every game, live", "Scores, play-by-play in plain words, a flash on every touchdown and goal, and a chat for every game.", 1],
+  ["star", "Pick of the Day", "One bet a day in every league, priced against a sharp book and graded in public.", 1],
+  ["chart", "The Record", "Every pick we post, graded at the price we found it, with a profit calendar.", 1],
+  ["trophy", "Playoff races", "The races drawn as brackets: who is in if it started today and what the next games swing.", 1],
+  ["football", "Fantasy and your bets", "Start or sit help for your own league, your lineups, and a tracker for the bets you place.", 1],
+  ["bell", "Alerts for your teams", "Kickoff, the big moments and the final score, for the teams you follow.", 1],
+  ["gauge", "Most Likely and Edge", "Every pick ranked by how likely it is to hit, and the ones where our number beats the price.", 0],
+  ["user", "A page for every player", "Game logs, splits and the charts: routes, passes, carries, shots and pitches.", 0],
+  ["search", "Ask Qellys", "Ask anything about any team, player or game and get an answer written from our data.", 0],
+  ["glove", "UFC, fight by fight", "A written report for every fight and a page for every fighter.", 0],
+];
+
+function wfDay(iso) {
+  const d = new Date(`${String(iso || "").slice(0, 10)}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function flSampleHTML(g) {
+  if (!g || !g.final || !g.away || !g.home) return "";
+  const nm = (c) => escapeHtml((g.names && g.names[c]) || c);
+  const call = g.call || {};
+  const right = call.right === true, wrong = call.right === false;
+  const pair = (x) => (Array.isArray(x) && Number(x[1]) > 0 ? [Number(x[0]) || 0, Number(x[1])] : null);
+  const reads = pair(g.reads), inj = pair(g.injuries);
+  const bits = [reads ? `${reads[0]} of ${reads[1]} reads right` : "",
+                inj ? `${inj[0]} of ${inj[1]} injury listings held` : ""].filter(Boolean);
+  const pts = (v) => (v == null || Number.isNaN(Number(v)) ? "" : String(Math.round(Number(v))));
+  return `<div class="wf-sample">
+    <div class="wf-sample-top"><span>${escapeHtml(WF_LEAGUE[g.league] || String(g.league || "").toUpperCase())}${
+      g.date ? ` · ${escapeHtml(wfDay(g.date))}` : ""}</span><b>The newest game we fact-checked</b></div>
+    <div class="wf-score"><span>${nm(g.away)}</span><b>${pts(g.final.away)}</b>
+      <span>${nm(g.home)}</span><b>${pts(g.final.home)}</b></div>
+    ${call.team ? `<p class="wf-call${right ? " won" : wrong ? " lost" : ""}">${right ? iconMark("check", 13)
+      : wrong ? iconMark("cross", 13) : ""}<span>We called the ${nm(call.team)}${call.chance ? ` at ${
+      Math.round(Number(call.chance) * 100)}%` : ""}${right ? " — right" : wrong ? " — wrong" : ""}</span></p>` : ""}
+    ${bits.length ? `<p class="wf-sample-sub">${escapeHtml(bits.join(" · "))}</p>` : ""}
+  </div>`;
+}
+
+function flReportHTML(fl) {
+  const r = (fl && fl.reports) || {};
+  const stats = [];
+  if (r.picks && r.picks.w + r.picks.l) stats.push([`${r.picks.w}–${r.picks.l}`, "report picks, graded"]);
+  if (r.calls && r.calls.n) stats.push([`${r.calls.right} of ${r.calls.n}`, "winners called"]);
+  if (r.injuries && r.injuries.n) stats.push([`${Math.round((100 * r.injuries.right) / r.injuries.n)}%`, "of injury listings held"]);
+  else if (r.games) stats.push([String(r.games), "games fact-checked"]);
+  return `<section class="wf-report" aria-labelledby="wf-report-h">
+    <span class="fl-tag">${iconMark("book", 12)}Every game</span>
+    <h2 class="fl-h2" id="wf-report-h">A game report for every game</h2>
+    <p class="wf-sub">Before every game in every league: a scouting report in plain words, the picks it makes, and parlays built only from those picks.</p>
+    <ol class="wf-steps">${WF_REPORT_STEPS.map(([ic, h, t]) => `<li class="wf-step">${iconMark(ic, 15)}
+      <span class="wf-step-t"><b>${h}</b><span>${t}</span></span></li>`).join("")}</ol>
+    ${stats.length ? `<div class="wf-stats">${stats.map(([n, w]) => `<div class="wf-stat"><b>${escapeHtml(n)}</b>
+      <span>${escapeHtml(w)}</span></div>`).join("")}</div>` : ""}
+    ${flSampleHTML(r.sample)}
+    <p class="fl-note">Members read every report before the game. How each one did is free on the Record, right or wrong.</p>
+  </section>`;
+}
+
+function flFeaturesHTML() {
+  return `<section class="wf-features" aria-labelledby="wf-feat-h">
+    <h2 class="fl-h2" id="wf-feat-h">Everything else inside</h2>
+    <ul class="wf-grid">${WF_FEATURES.map(([ic, h, t, free]) => `<li class="wf-tile${free ? " free" : ""}">
+      <span class="wf-tile-top">${iconMark(ic, 16)}<span class="wf-tile-tag">${free ? "Free" : "Members"}</span></span>
+      <b>${h}</b><span>${t}</span></li>`).join("")}</ul>
+    <a class="wf-all" href="#features">See everything we built ${icon("chev", 12)}</a>
+  </section>`;
+}
+
 /* The page the account wall held back (app.js acctWallTurns), said over
    the form: "the link you were sent opens once you're in". */
 function wallWhyLine() {
@@ -3152,6 +3240,8 @@ function signupHTML() {
   </div>
   <div class="fl-free-host">${flFreeHTML(_fl)}</div>
   <div class="fl-host">${flTonightHTML(_fl)}</div>
+  <div class="wf-report-host">${flReportHTML(_fl)}</div>
+  ${flFeaturesHTML()}
   <div class="card acct-card" id="su-form">
     <div class="card-head">
       <div><div class="player">Create your free account</div>
@@ -3218,7 +3308,9 @@ function flPaint(host) {
     const b = host.querySelector(".fl-more");
     const c = host.querySelector(".fl-proof-host");
     const f = host.querySelector(".fl-free-host");
+    const r = host.querySelector(".wf-report-host");
     if (a && fl) a.innerHTML = flTonightHTML(fl);
+    if (r && fl) r.innerHTML = flReportHTML(fl);
     if (c && fl) c.innerHTML = flProofHTML(fl);
     if (f && fl) f.innerHTML = flFreeHTML(fl);
     if (b) b.innerHTML = flMembersHTML(fl, _pwStatus);
