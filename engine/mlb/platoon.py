@@ -125,7 +125,7 @@ def attach_platoon(slate, splits_by_market: dict[str, dict]) -> int:
             verb = "hits" if factor > 1.0 else "struggles"
             prop.platoon_note = (f"Measured split: {verb} vs "
                                  f"{'lefties' if hand == 'L' else 'righties'} "
-                                 f"({(factor - 1) * 100:+.0f}% vs his own "
+                                 f"({(factor - 1) * 100:+.0f}% vs the hitter's own "
                                  f"average, {n} games)")
         if factor != 1.0:
             attached += 1
@@ -178,5 +178,5 @@ def attach_official_splits(slate, splits: dict[int, dict]) -> int:
         prop.platoon_note = (f"Official season split: {verb} "
                              f"{'lefties' if hand == 'L' else 'righties'} "
                              f"(.{side['slg'] * 1000:03.0f} SLG in {pa_s} PA, "
-                             f"{(factor - 1) * 100:+.0f}% vs his blend)")
+                             f"{(factor - 1) * 100:+.0f}% vs the blend)")
     return attached

@@ -43,14 +43,14 @@ def test_the_usual_starter_is_last_seasons_leader():
 def test_darnold_back_at_qb1_is_a_return_and_moves_nothing():
     ch = Q.changes(_seattle(), [], {"SEA": "Sam Darnold"})["SEA"]
     assert (ch["status"], ch["tier"], ch["replacement"]) == ("RETURNS", "return", "Sam Darnold"), ch
-    assert Q.headline(ch) == "Sam Darnold is back at QB — Drew Lock started while he was out"
+    assert Q.headline(ch) == "Sam Darnold is back at QB — Drew Lock started in the meantime"
     assert "starts over" not in Q.headline(ch)
     wr = NS(team="SEA", position="WR", market="rec_yds", player="Jaxon Smith-Njigba")
     mult, reason, card = Q.effect(wr, NS(qb_changes={"SEA": ch}))
     assert mult == 1.0 and reason == "" and card["note"] == "The usual quarterback is back — nothing to adjust"
     own = Q.effect(NS(team="SEA", position="QB", market="pass_yds", player="Sam Darnold"),
                    NS(qb_changes={"SEA": ch}))[2]
-    assert own["note"] == "Back as the starter; Drew Lock started while he was out"
+    assert own["note"] == "Back as the starter; Drew Lock started in the meantime"
 
 
 def test_a_real_benching_is_still_a_change():
@@ -67,7 +67,7 @@ def test_the_page_and_the_scenario_say_it():
     read = {"player": "Jaxon Smith-Njigba", "team": "SEA", "opp": "WAS", "pos": "WR",
             "usage": {"tgt_share": 0.41}, "td": {"model_prob": 0.44, "odds": 105, "book": "BetMGM",
                                                   "implied_total": 24.0, "rz_chances": 3.1,
-                                                  "qb_change": "Sam Darnold is back at QB — Drew Lock started while he was out"}}
+                                                  "qb_change": "Sam Darnold is back at QB — Drew Lock started in the meantime"}}
     s = S.score(read, {"def": {"passing": {"rank": 28}}}, rz_own={"off": 12.1, "off_rel": 0.38},
                 rz_opp={"def": 8.5, "def_rel": -0.04})
     assert any(l.startswith("QB: Sam Darnold is back at QB") for l in s["lines"]), s["lines"]

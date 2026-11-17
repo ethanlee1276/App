@@ -162,9 +162,9 @@ def read_skater(name: str, p: dict, team: str, opp: str, teams: dict, ctx: dict,
     if len(t5) == 5 and len(t15) >= 5:
         move = sum(t5) / 5 / (sum(t15) / len(t15)) - 1
         if move >= 0.10:
-            said(pro, f"Ice time up {move:.0%} over his last five games", RL.ROLE)
+            said(pro, f"Ice time up {move:.0%} over the last five games", RL.ROLE)
         elif move <= -0.10:
-            said(con, f"Ice time down {abs(move):.0%} over his last five games", RL.ROLE)
+            said(con, f"Ice time down {abs(move):.0%} over the last five games", RL.ROLE)
     if them.get("b2b") and not me.get("b2b"):
         said(pro, f"{opp} is on the second night of a back-to-back", RL.SCHEDULE)
     elif me.get("b2b") and not them.get("b2b"):
@@ -180,12 +180,12 @@ def read_skater(name: str, p: dict, team: str, opp: str, teams: dict, ctx: dict,
         elif pp["unit"] == 1 and ratio is not None and ratio <= 1 - PP_EDGE:
             said(con, f"{opp} concedes {1 - ratio:.0%} fewer power-play chances than average", RL.SPECIAL_TEAMS)
     elif ppg >= 3:
-        notes.append(f"{int(ppg)} power-play goals in his last 20 — on the top unit")
+        notes.append(f"{int(ppg)} power-play goals in the last 20 — on the top unit")
     if len(sog) >= 5:
-        notes.append(f"{sum(sog[:5]) / 5:.1f} shots a game his last five, {sum(sog) / len(sog):.1f} his last ten")
+        notes.append(f"{sum(sog[:5]) / 5:.1f} shots a game over the last five, {sum(sog) / len(sog):.1f} over the last ten")
     if xp and xp.get("iff"):
         luck = xp["goals"] - xp["ixg"]
-        notes.append(f"{xp['ixg']:.1f} expected goals, {xp['goals']} scored over his last {xp['games']}"
+        notes.append(f"{xp['ixg']:.1f} expected goals, {xp['goals']} scored over the last {xp['games']}"
                      + (f" — finishing {'hot, due to cool' if luck > 0 else 'cold, due to warm'}"
                         if abs(luck) >= M.LUCK_GOALS else ""))
     volume = len(sog) >= 5 and sum(sog) / len(sog) >= 3.0

@@ -294,7 +294,7 @@ def game_spots(sched: Schedule, g: dict | None, team, staff: dict | None = None)
         out["primetime"] = f"kicks off {_clock(hour)} Eastern"
     rest = g["rest"].get(team)
     if rest and rest >= EXTRA_REST_DAYS and sched.before(team, g):
-        out["extra_rest"] = f"{rest} days since his team's last game"
+        out["extra_rest"] = f"{rest} days since the team's last game"
     if g["neutral"]:
         out["long_trip"] = "a neutral site abroad"
     elif road:
@@ -303,7 +303,7 @@ def game_spots(sched: Schedule, g: dict | None, team, staff: dict | None = None)
             out["long_trip"] = f"{abs(mine - theirs)} time zones from home"
     clock = body_clock(team, g["kickoff"])
     if clock is not None and clock <= BODY_CLOCK_EARLY:
-        out["body_clock"] = f"kicks off at {_clock(clock)} by his team's home clock"
+        out["body_clock"] = f"kicks off at {_clock(clock)} by the team's home clock"
     if g["div"] or DIVISIONS.get(team) == DIVISIONS.get(opp):
         if any(opp in (x["home"], x["away"]) for x in sched.before(team, g)):
             out["div_rematch"] = f"second meeting with {opp} this season"
@@ -367,10 +367,10 @@ def milestone(market: str, values, games_left) -> dict | None:
         return None
     label = LABELS.get(market, market)
     games = "game" if games_left == 1 else f"{games_left} games"
-    note = (f"{total:,.0f} {label} — needs {need:,.0f} more in his last {games} for {target:,} "
-            f"(he averages {pace:,.1f} a game)" if pace < 10 else
-            f"{total:,.0f} {label} — needs {need:,.0f} more in his last {games} for {target:,} "
-            f"(he averages {pace:,.0f} a game)")
+    note = (f"{total:,.0f} {label} — needs {need:,.0f} more in the last {games} for {target:,} "
+            f"(averaging {pace:,.1f} a game)" if pace < 10 else
+            f"{total:,.0f} {label} — needs {need:,.0f} more in the last {games} for {target:,} "
+            f"(averaging {pace:,.0f} a game)")
     return {"target": target, "total": round(total, 1), "need": round(need, 1), "games_left": games_left,
             "pace": round(pace, 2), "flag": flag, "note": note}
 
@@ -394,7 +394,7 @@ def player_spots(sched: Schedule, g: dict | None, team, *, player: str = "", pos
     if games is not None and i is not None:
         old = revenge(games, i)
         if old:
-            out["revenge"] = f"first game against {old} since he left"
+            out["revenge"] = f"first game against {old} since leaving"
     if contracts and g:
         from .contracts import contract_year, lookup
         if contract_year(lookup(contracts, player, position), g["season"]):

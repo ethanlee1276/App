@@ -252,7 +252,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
                 usage_why = (
                     f"{float(usage['opp_per_game']):.1f} {per} "
                     f"× {float(usage['eff']):.2f} {unit} — measured role says {role:.1f}"
-                    + (f", pulled {1.0 - s:.0%} toward his {float(form.shrunk_to):.1f} last season "
+                    + (f", pulled {1.0 - s:.0%} toward the player's {float(form.shrunk_to):.1f} last season "
                        f"to {est:.1f}" if pulled else "")
                     + f", weighted {1.0 - w:.0%} against form")
                 reasons.append(f"Usage bridge: {usage_why}")
@@ -377,7 +377,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     if abs(player_mult - 1.0) >= 0.02:
         direction = "high" if player_mult < 1.0 else "low"
         reasons.append(f"Player memory: the record shows the blend runs "
-                       f"{direction} on him — corrected ×{player_mult:.2f}")
+                       f"{direction} on this player — corrected ×{player_mult:.2f}")
     reasons += ctx_reasons
     reasons += matchup.reasons
     reasons += weather.reasons
@@ -391,7 +391,7 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     # line used to end "(projection shaded -7%)" and that sentence would
     # be a lie the moment the shade stopped being applied above.
     left = [g for g in prop.logs[:3] if getattr(g, "partial", False)]
-    early = (f" (one of them a game he left early, {round(100 * left[0].snaps)}% of the snaps)"
+    early = (f" (one of them a game left early, {round(100 * left[0].snaps)}% of the snaps)"
              if left and left[0].snaps is not None else " (one of them a game left early)" if left else "")
     if form.trend == "up":
         reasons.append(f"Trending up — last 3 games {form.trend_delta:+.0f} vs prior form{early}")

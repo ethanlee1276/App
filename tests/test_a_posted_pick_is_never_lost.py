@@ -119,7 +119,7 @@ def test_a_pick_that_comes_off_is_listed_until_kickoff_with_why():
     bq, tq = _board([_row("Josh Jacobs", injury_status="Questionable")],
                     previous=_prev(b0, t0), now="2026-09-24T02:00:00Z")
     (q,) = bq
-    assert q["locked"] and q["lock_note"] == "Now listed questionable — check his status before kickoff."
+    assert q["locked"] and q["lock_note"] == "Now listed questionable — check the player's status before kickoff."
     assert tq["earlier"] == []
     # Thursday lunchtime: the final injury report rules him out. That is a
     # bet that cannot be made as posted, and it comes down.

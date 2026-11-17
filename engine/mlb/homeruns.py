@@ -147,7 +147,7 @@ def pitcher_multiplier(prop: MLBProp, game: MLBGame) -> tuple[float, list[str]]:
             platoon_applied = True
             reasons.append(
                 f"Measured power split: {side.get('hr', 0)} HR in {pa_s} PA "
-                f"vs {throws}HP ({(pm - 1) * 100:+.0f}% vs his overall rate)")
+                f"vs {throws}HP ({(pm - 1) * 100:+.0f}% vs the overall rate)")
     if not platoon_applied:
         if bats != throws and bats in ("L", "R"):
             mult *= 1.06

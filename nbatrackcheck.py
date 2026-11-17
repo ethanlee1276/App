@@ -307,7 +307,7 @@ def _label(s: int) -> str:
 def report(res: dict, coverage: str = "", min_judged: int = MIN_JUDGED) -> list:
     word = {"ast": "ASSISTS", "reb": "REBOUNDS", "pts": "POINTS"}
     lines = ["NBA PLAYER TRACKING, HELD OUT: the board's number alone, refitted, against the board's "
-             "number and his tracking (read-only)"]
+             "number and the player's tracking (read-only)"]
     if coverage:
         lines.append(coverage)
     for market in MARKETS:
@@ -315,7 +315,7 @@ def report(res: dict, coverage: str = "", min_judged: int = MIN_JUDGED) -> list:
         if not m:
             continue
         lines.append("")
-        lines.append(f"{word[market]}: {m['tracked']:,} of {m['rows']:,} priced games have his tracking"
+        lines.append(f"{word[market]}: {m['tracked']:,} of {m['rows']:,} priced games have the player's tracking"
                      + (f"; not in the stored answers: {', '.join(m['dropped'])}" if m["dropped"] else ""))
         for s, r in sorted(m["seasons"].items()):
             if not r.get("n"):

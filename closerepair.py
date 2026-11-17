@@ -181,7 +181,7 @@ def plan(conn, hist_conn, schedule_rows, snapshots, harvested) -> dict:
         team = teams.get((who, season, week))
         k = kicks.get((season, week, team)) if team else None
         if k is None:
-            unplaced.append((b, "no stat log for him that week" if not team else "no kickoff on the schedule"))
+            unplaced.append((b, "no stat log for that player that week" if not team else "no kickoff on the schedule"))
             continue
         placed.append((b, k))
         wanted[(who, b["market"])].add(k)

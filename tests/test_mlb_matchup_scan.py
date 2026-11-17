@@ -148,7 +148,7 @@ def test_pitch_type_matchups_and_the_lineup_against_his_hand():
     got = SC.scan(sl, ars)
     m = {x["player"]: x for x in got["reads"]["BOS@NYY"]["players"]}["Lefty Masher"]
     line = next(t for t in m["pro"] if t.startswith("Sees the ball well"))
-    assert "four-seamers 45%, sliders 35%, changeups 20%" in line and "his usual" in line, line
+    assert "four-seamers 45%, sliders 35%, changeups 20%" in line and "usually" in line, line
     assert got["tapes"]["BOS@NYY"]["sides"]["NYY"]["mix"] == "four-seamers 45%, sliders 35%, changeups 20%"
     # The lineup against a hand needs four measured bats.
     props = [_prop(f"H{i}", "BOS", "NYY", "LF", "hits", bats="L", platoon_factor=1.06) for i in range(4)]

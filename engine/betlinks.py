@@ -574,7 +574,7 @@ def report(sport: str = "nfl") -> list[str]:
         held = sorted(k for e in events.values() for k in (e.get("slip") or {})
                       if k.split("|")[0] in books and f"|{who}|" in k)[:4]
         lines.append(f"    unlinked at a linking book: {r.get('book')} · {r.get('player')} {r.get('market')} "
-                     f"{r.get('side')} {r.get('line')} — keys held for him: {held or 'none'}")
+                     f"{r.get('side')} {r.get('line')} — keys held for that player: {held or 'none'}")
         shown += 1
         if shown >= 6:
             break

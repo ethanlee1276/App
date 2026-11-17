@@ -87,11 +87,11 @@ def test_a_hot_fortnight_comes_down_and_a_thin_twenty_leans_on_his_role():
     usual = [_game(stl=1.0) for _ in range(40)]
     m, note = RT.projection_mult("stl", 3.0 / 30.0, _read(hot, usual))
     assert m < 0.75, m
-    assert "steals read past his last 20 games" in note and "measured" in note, note
+    assert "steals read past the last 20 games" in note and "measured" in note, note
     cold = [_game(stl=0.0) for _ in range(20)]
     assert RT.projection_mult("stl", 0.0, _read(cold, usual)) == (1.0, ""), "a zero rate has nothing to scale"
     lifted, why = RT.lift_zero("stl", _read(cold, usual))
-    assert 0 < lifted < 1.0 / 30.0 and "No steals in his last 20 games" in why, (lifted, why)
+    assert 0 < lifted < 1.0 / 30.0 and "No steals in the last 20 games" in why, (lifted, why)
     assert RT.lift_zero("stl", _read(hot, usual)) == (None, ""), "only a twenty with none of it"
     assert RT.lift_zero("reb_ast", _read(cold, usual)) == (None, "") and RT.lift_zero("stl", None) == (None, "")
     rookie = [_game(mins=12.0, blk=1.0) for _ in range(5)]          # 5 blocks in 60 minutes, no older games
@@ -165,7 +165,7 @@ def test_the_projection_carries_it_as_a_step_and_the_chain_closes():
     keys = [s["key"] for s in read["chain"]["steps"]]
     assert "rates" in keys and "rates" not in [s["key"] for s in plain["chain"]["steps"]]
     assert chain.closes(read["chain"]) and chain.closes(plain["chain"])
-    assert any("blocks read past his last 20 games" in c for c in read["context"])
+    assert any("blocks read past the last 20 games" in c for c in read["context"])
     assert chain.STEP_LABELS["rates"]
 
 
@@ -185,7 +185,7 @@ def test_a_twenty_with_none_of_it_is_no_longer_a_certain_under():
     # that rounding here rather than to its 1% (`chain.closes`).
     assert abs(chain.product(read["chain"]) - read["projection"]) <= 0.005, read["chain"]
     assert read["chain"]["base"]["rate_per_min"] > 0, "the read is the rate the chain starts from"
-    assert any("No blocks in his last 20 games" in c for c in read["context"])
+    assert any("No blocks in the last 20 games" in c for c in read["context"])
 
 
 def test_the_logs_give_his_last_sixty_any_club():

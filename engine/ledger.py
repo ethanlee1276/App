@@ -5034,13 +5034,13 @@ def _date_shift_repair_note(hist_conn, b, found_on: str,
         # The likely truth is that his real game on the bet's date was
         # never stored.
         return (f"logged the day AFTER the bet — that direction is never "
-                f"the UTC drift; his game on {b['date']} was probably never "
+                f"the UTC drift; the player's game on {b['date']} was probably never "
                 f"stored. Re-ingest it: python3 ingest.py {b['sport']} "
                 f"--dates {b['date']} --refresh")
     where, wargs = _hist_where(b)
     rows, alt = _neighbour_day_rows_raw(hist_conn, b, where, wargs)
     if not rows:
-        return (f"he is logged on {found_on}, but with no {b['market']} stat "
+        return (f"the player is logged on {found_on}, but with no {b['market']} stat "
                 f"row — that market was not stored for that day. Re-ingest "
                 f"it: python3 ingest.py {b['sport']} --dates {found_on} "
                 f"--refresh")

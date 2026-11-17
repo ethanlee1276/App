@@ -238,7 +238,7 @@ def test_a_pick_on_tonights_five_says_so():
     assert row["player"] == "Sam Hauser" and "likely starting five tonight" in row["reasons"][1], row["reasons"]
     assert [p["player"] for p in b["picks"]] == ["Sam Hauser"], "his starter's chance against a bench man's price"
     bench = FB.board({"a": _quote("Derrick White", "BOS", "NYK", 1600)}, games, conn=conn, date="2026-10-31")
-    assert "not in BOS's likely starting five" in bench["rows"][0]["reasons"][1]
+    assert "Not in BOS's likely starting five" in bench["rows"][0]["reasons"][1]
     assert bench["picks"] == []
 
 

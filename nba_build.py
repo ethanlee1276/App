@@ -1298,7 +1298,7 @@ def main() -> None:
         print((f"Rosters: {len(roster)} player(s) placed by the clubs' current rosters"
                + (f" (⚠️ {len(roster_missed)} club(s) would not load)" if roster_missed else ""))
               if roster else
-              "⚠️  Rosters unreadable — each player keeps the team of his newest game")
+              "⚠️  Rosters unreadable — each player keeps the team of the newest game")
         if moved:
             print(f"  {len(moved)} player(s) in tonight's teams' logs play for another club now; "
                   f"their games for the old one are set aside: {', '.join(sorted(moved)[:8])}"
@@ -1669,7 +1669,7 @@ def main() -> None:
             if _mate and _vac_min:
                 _mate["note"] = _mate["note"].replace(
                     "our minutes model does not move for it",
-                    f"our minutes model gives him {_vac_min:.1f} more of them (measured held out, "
+                    f"our minutes model gives this player {_vac_min:.1f} more of them (measured held out, "
                     f"nbavacancy.py)")
             props.append({
                 "dvp_mult": _dm, "dvp_note": _dn,

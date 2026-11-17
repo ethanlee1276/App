@@ -858,7 +858,7 @@ def week_card(row: dict) -> dict:
     rc = row.get("role_change")
     if rc and rc.get("before") is not None and rc.get("after") is not None:
         word = {"tgt": "target share", "car": "carry share", "snap": "snap share"}.get(rc.get("share"), "role")
-        why.append(f"Role change: his {word} went from {rc['before']:.0%} to {rc['after']:.0%} "
+        why.append(f"Role change: the {word} went from {rc['before']:.0%} to {rc['after']:.0%} "
                    f"{rc['games_ago']} game{'s' if rc['games_ago'] != 1 else ''} ago")
     if why:
         out["why"] = why

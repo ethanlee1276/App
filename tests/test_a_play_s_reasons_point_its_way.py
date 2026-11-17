@@ -50,7 +50,7 @@ def test_an_over_keeps_its_script_and_says_when_it_is_against():
 def test_the_yardage_line_is_worded_for_the_side_and_the_market():
     over = _fit_reason({"side": "OVER", "market": "rec_yds"})
     under = _fit_reason({"side": "UNDER", "market": "rush_yds"})
-    assert over[-1].startswith("Yardage — a bet on his role AND a big play; the catches")
+    assert over[-1].startswith("Yardage — a bet on the role AND a big play; the catches")
     assert under[-1] == "Yardage under — one long play can beat it; the carries under is the steadier way in."
 
 

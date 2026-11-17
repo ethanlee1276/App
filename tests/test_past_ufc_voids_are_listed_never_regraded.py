@@ -86,9 +86,9 @@ def test_a_bout_espn_now_shows_won_or_lost_is_marked_with_its_grade():
     lines = ufcvoids.report(path, lookup=_now)
     ada = _block(lines, "Ada Striker")
     assert "(+120, DraftKings, 1u)" in ada, ada
-    assert "he WON (bout dated 2026-09-27) — LOOKS LIKE THE BUG; it would have graded won, +1.20u" in ada, ada
+    assert "the fighter WON (bout dated 2026-09-27) — LOOKS LIKE THE BUG; it would have graded won, +1.20u" in ada, ada
     bo = _block(lines, "Bo Grappler")
-    assert "he LOST" in bo and "would have graded lost, -1.50u" in bo, bo
+    assert "the fighter LOST" in bo and "would have graded lost, -1.50u" in bo, bo
     assert lines[-1] == ("LOOKS LIKE THE BUG: 2 — would have won 1 (+1.20u), lost 1 (-1.50u); "
                          "net -0.30u. Their grades stay as they are (void)."), lines[-1]
 

@@ -229,7 +229,7 @@ def report(out: dict) -> None:
 
 def report_history(h: dict) -> None:
     print(f"\n=== THE FLAGS ON EVERY GAME, seasons {h['seasons']} (halves split at {h['split']})")
-    print("    line = his last-five average; gap = flagged side's hit rate minus the same side's in unflagged games")
+    print("    line = the last-five average; gap = flagged side's hit rate minus the same side's in unflagged games")
     for f in SC.FLAGS:
         for ms, res in sorted((h["flags"].get(f) or {}).items()):
             parts = [f"{half} {r['rate']:.1%} vs {r['base']:.1%} ({r['gap']:+.1%}, n {r['n']})"

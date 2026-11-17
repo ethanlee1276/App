@@ -3350,9 +3350,9 @@ def why_pick(name: str, sport: str = "mlb") -> None:
     if not recs and not shots:
         print(f"  NOT ON THE BUILT BOARD at all ({len(d.get('recommendations') or [])} "
               f"analyzed prop(s) tonight).\n"
-              f"  Either the name is spelled differently in the feed, or his "
+              f"  Either the name is spelled differently in the feed, or the "
               f"game is not on\n  this slate, or the board has rebuilt since "
-              f"you saw him. Check the spelling\n  the site shows and try "
+              f"you saw the player. Check the spelling\n  the site shows and try "
               f"again.")
         return
 
@@ -3766,10 +3766,10 @@ def _where_on_board(name: str) -> None:
             break
     if not found:
         print(f"  board: '{name}' is on NONE of the fantasy boards, so a trade "
-              f"for him is never looked for.")
+              f"for that player is never looked for.")
         print(f"         The boards are built from last season's volume — a "
               f"player who didn't play, or ranks outside the kit, simply has "
-              f"no row to stamp. That is why he is absent rather than wrong.")
+              f"no row to stamp. That is why the player is absent rather than wrong.")
     moves = ((d.get("offseason") or {}).get("moves") or [])
     hit = [m for m in moves if normalize_name(m.get("player", "")) == want]
     if hit:
@@ -8616,7 +8616,7 @@ def show_prescan(season: int | None = None) -> None:
               f"starter\n  {cuts['league_rest_rate']:.0%} of the time. "
               f"\"plays\" is a rest rate at or under "
               f"{cuts['rest_lo']:.0%}, \"rests\" at or over "
-              f"{cuts['rest_hi']:.0%};\n  when he does play, the median "
+              f"{cuts['rest_hi']:.0%};\n  when the starter does play, the median "
               f"outing is {cuts['play_cut']:.0f} attempts.\n")
     if not out["games"]:
         print("  No unplayed preseason fixtures.\n")
@@ -8638,7 +8638,7 @@ def show_prescan(season: int | None = None) -> None:
             # five past outings. The line now names the club for the
             # history and brackets the man we expect to see this year.
             shape = (f"starter played {played} of {seen}"
-                     + (f", {when:.0f} att when he did" if when else ""))
+                     + (f", {when:.0f} att when playing" if when else ""))
             print(f"     {s['team']:<4} {s['verdict']:<7} {shape:<44} "
                   f"(2026: {s['qb'] or '?'})")
         print()
@@ -8933,7 +8933,7 @@ def show_player_injury(name: str) -> None:
                 if live_out and not row.get("unavailable"):
                     file_disagrees = True
                     print("\n            ⚠️  THE FILE DISAGREES WITH THE FEED. The"
-                          "\n            engine reads him as out (above) and the built"
+                          "\n            engine reads the player as out (above) and the built"
                           "\n            file still says otherwise, so the page is"
                           "\n            serving a stale build — rebuild it:"
                           "\n"
@@ -8956,10 +8956,10 @@ def show_player_injury(name: str) -> None:
         missing = [k.upper() for k, ok in heard.items() if not ok]
         print(f"\n  VERDICT   Cannot answer — {' and '.join(missing)} did not"
               "\n            respond, and a feed that did not answer is not a"
-              "\n            feed saying he is healthy. Re-run this where the"
+              "\n            feed saying the player is healthy. Re-run this where the"
               "\n            feeds are reachable (the droplet).")
     elif not designated and not espn_has:
-        print("\n  VERDICT   Neither feed carries a designation for him, so the"
+        print("\n  VERDICT   Neither feed carries a designation for the player, so the"
               "\n            page says Active because that is the last thing"
               "\n            anyone official said — not because it is stale."
               "\n"
@@ -9857,7 +9857,7 @@ def show_arsenal(person_id=None, season: int | None = None) -> None:
         print(f"\n  could not read starts: {exc}\n")
         return
     if not hist:
-        print(f"\n  No starts parsed for {person_id} in {season}. Either he "
+        print(f"\n  No starts parsed for {person_id} in {season}. Either the pitcher "
               f"has not started,\n  or the payloads did not load — "
               f"`--pbp <gamePk>` says which.\n")
         return
@@ -9887,7 +9887,7 @@ def show_arsenal(person_id=None, season: int | None = None) -> None:
                       f"{w['whiff_rate']:.0%}")
     sh = _ar.mix_shift(hist)
     if sh["enough"]:
-        print(f"\n  MIX AGAINST HIS OWN BASELINE")
+        print(f"\n  MIX AGAINST THE PITCHER'S OWN BASELINE")
         for t, v in sh["types"].items():
             if v["dropped"]:
                 print(f"    {t:<4} SHELVED — was {v['baseline']:.0%}, "
@@ -9899,7 +9899,7 @@ def show_arsenal(person_id=None, season: int | None = None) -> None:
                       f"   ({v['delta']:+.0%})")
     print("\n  Whiff is per SWING, not per pitch: a pitch nobody offers at")
     print("  is a ball, and dividing by every pitch would measure how often")
-    print("  he is in the zone rather than how hard the pitch is to hit.")
+    print("  the pitcher is in the zone rather than how hard the pitch is to hit.")
     print("\n  Evidence only — nothing prices from this.\n")
 
 
@@ -10041,7 +10041,7 @@ def show_matchup(person_id=None, batter=None, season: int | None = None) -> None
     if not hist:
         print(f"\n  No starts parsed for {person_id} in {now} or {now - 1}.")
         print(f"  `python3 launch.py --arsenal {person_id}` says whether "
-              f"that is him\n  or the payloads.\n")
+              f"that is the pitcher\n  or the payloads.\n")
         return
     # His mix over the whole window, not one start — a matchup is about
     # what he throws, and one start is a sample of that.
@@ -10083,9 +10083,9 @@ def show_matchup(person_id=None, batter=None, season: int | None = None) -> None
               f"this one's.")
     m = _ar.matchup(shares, prof)
     print(f"\n{'='*70}\n  {batter.upper()} vs person {person_id}\n{'='*70}")
-    print(f"\n  his last {len(hist)} start(s), {p_season}   ·   "
+    print(f"\n  the pitcher's last {len(hist)} start(s), {p_season}   ·   "
           f"hitter board {used}")
-    print(f"\n  his mix: " + ", ".join(f"{t} {sh:.0%}" for t, sh in
+    print(f"\n  the mix: " + ", ".join(f"{t} {sh:.0%}" for t, sh in
                                         sorted(shares.items(),
                                                key=lambda kv: -kv[1])))
     if m["whiff_vs_mix"] is None:
@@ -10100,7 +10100,7 @@ def show_matchup(person_id=None, batter=None, season: int | None = None) -> None
               f"({m['xwoba_delta']:+.3f})")
     print(f"\n  by pitch")
     for t, v in m["types"].items():
-        print(f"    {t:<4} he sees {v['share']:.0%} of it   "
+        print(f"    {t:<4} sees {v['share']:.0%} of it   "
               f"whiffs {v['whiff_pct']:.0%}   ({v['pa']:.0f} PA)")
     print(f"\n  coverage {m['coverage']:.0%} of the arsenal"
           + ("" if m["enough"] else
@@ -10108,7 +10108,7 @@ def show_matchup(person_id=None, batter=None, season: int | None = None) -> None
              "hold,\n  not about tonight"))
     print("\n  The DIFFERENCE is the read, not the level: the market "
           "already knows")
-    print("  how he handles a slider. Evidence only — nothing prices from "
+    print("  how a hitter handles a slider. Evidence only — nothing prices from "
           "this.\n")
 
 
@@ -10210,7 +10210,7 @@ def show_velocity(person_id=None, season: int | None = None) -> None:
         print(f"    {h['date']}   {arsenal}")
     rows = _v.trend_all(hist)
     if not rows:
-        print("\n  No comparable baseline — his latest pitch types do not")
+        print("\n  No comparable baseline — the latest pitch types do not")
         print("  appear in the earlier starts. That is a real answer, and")
         print("  common in April.\n")
         return
@@ -10227,7 +10227,7 @@ def show_velocity(person_id=None, season: int | None = None) -> None:
         print(f"   {star} {t['pitch_type']:<3} {t['latest']:>6} vs "
               f"{t['baseline']:>6} over {t['baseline_starts']}"
               f"   {t['delta']:+.2f} mph{mark}")
-    print(f"\n  * his primary pitch, by volume")
+    print(f"\n  * the primary pitch, by volume")
     flagged = [t for t in rows if t["flag"] or t.get("dropped")]
     if flagged:
         for t in flagged:
@@ -10734,8 +10734,8 @@ def repair_close_lines(apply: bool = False, sport: str | None = None) -> None:
     # filed under two players with one first initial and surname at once
     # (A.J. Brown's under Amon-Ra St. Brown's name) is the close only of the
     # man whose own reads say it was his (`linemoves._Copies`).
-    print(f"  {r.get('copied', 0):>5} COPIED      its close was another player's quotes; re-read from his own")
-    print(f"  {r.get('cleared', 0):>5} CLEARED     its close was another player's quotes and he has none of his own")
+    print(f"  {r.get('copied', 0):>5} COPIED      its close was another player's quotes; re-read from the player's own")
+    print(f"  {r.get('cleared', 0):>5} CLEARED     its close was another player's quotes and the player has none of their own")
     print(f"  {r.get('game_lines', 0):>5} game lines  moneylines, spreads, totals: their close is the settle's, left alone")
 
     if r.get("moves"):
@@ -11043,7 +11043,7 @@ def show_stuck() -> None:
             "since the last leg finished.",
         "player has no log":
             "that day IS ingested and this player is not in it: a scratch or "
-            "a DNP (correct to void), or the journal spells his name "
+            "a DNP (correct to void), or the journal spells the name "
             "differently from the feed (a name-map fix — the line shows the "
             "closest name the feed has, when there is one).",
         "logged under the next day":
@@ -11058,7 +11058,7 @@ def show_stuck() -> None:
             "Re-run it (python3 ingest.py <sport> --dates <date>) and settle "
             "again.",
         "market not ingested":
-            "he played, but this stat was never stored for him — the ingest "
+            "the player played, but this stat was never stored for them — the ingest "
             "for that sport does not carry this market.",
         "game not found":
             "a game-level bet whose game is not in the results: usually a "

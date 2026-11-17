@@ -235,22 +235,22 @@ def _clock_note(q: dict, mq: dict, o: dict, mo: dict, start: str) -> str:
     p_if = beats(mq, mo, if_both_play=True)
     better_if = (p_if > 0.5) if p_if is not None else mq["if_plays"] > mo["if_plays"]
     if not better_if:
-        return f"{name} is {tag}, and even if he plays {other} is the better start."
+        return f"{name} is {tag}, and even if they play, {other} is the better start."
     if kq is None or ko is None:
-        return (f"{name} is {tag}. His team names its inactives about 90 minutes before kickoff: "
-                f"if he is active he is the better start; if not, {other}.")
+        return (f"{name} is {tag}. The team names its inactives about 90 minutes before kickoff: "
+                f"if active, {name} is the better start; if not, {other}.")
     told = clock(kq - _dt.timedelta(minutes=INACTIVES_MINUTES))
     if kq <= ko:
-        return (f"{name} is {tag}: his inactives are out about {told}, before {other}'s game "
-                f"({clock(ko)}). Active: start him. Out: start {other}.")
+        return (f"{name} is {tag}: the team's inactives are out about {told}, before {other}'s game "
+                f"({clock(ko)}). Active: start {name}. Out: start {other}.")
     if start == name:
-        return (f"{name} is {tag}, and his game ({clock(kq)}) is after {other}'s ({clock(ko)}): if he "
+        return (f"{name} is {tag} and plays later ({clock(kq)}) than {other} ({clock(ko)}): if {name} "
                 f"sits, {other} is already locked, so only a bench player in a game at {clock(kq)} or "
-                f"later can replace him. Have one ready.")
-    return (f"{name} is {tag}, and his game ({clock(kq)}) is after {other}'s ({clock(ko)}): {other} "
+                f"later can step in. Have one ready.")
+    return (f"{name} is {tag} and plays later ({clock(kq)}) than {other} ({clock(ko)}): {other} "
             f"locks before {name}'s inactives are out (about {told}), so this is decided on the "
             f"chance, and on the chance it is {other}. With a bench player in a game at {clock(kq)} "
-            f"or later to swap in if he sits, {name} is worth the risk.")
+            f"or later to swap in for a scratch, {name} is worth the risk.")
 
 
 def compare(rows: list, scoring: str = "ppr") -> dict:

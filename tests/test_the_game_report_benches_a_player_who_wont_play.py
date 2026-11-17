@@ -69,7 +69,7 @@ def test_a_questionable_player_is_kept_and_marked_and_not_the_headline():
              scan={"injuries": [{"player": "Carson Beck", "status": "Questionable"}]})
     rows = A.annotate(c)
     assert len(rows) == 1 and rows[0]["availability"] == A.QUESTIONABLE
-    assert "only holds if he plays" in rows[0]["availability_note"]
+    assert "only holds if the player plays" in rows[0]["availability_note"]
     assert not A.sure(rows[0]), "the short version may not sum the game up through him"
     # A read with its own questionable status, with nothing on the scan.
     c2 = _Ctx([{"player": "Carson Beck", "team": "MIA", "pos": "QB", "read": "good",

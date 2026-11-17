@@ -335,7 +335,7 @@ def render(rep: dict) -> str:
         return "\n".join(out)
     f = rep["fit"]
     lo, mid, hi = f["minutes_spread"]
-    out.append(f"  fitted on {rep['labels'][0]} ({rep['train']:,} player-games): minutes against his base "
+    out.append(f"  fitted on {rep['labels'][0]} ({rep['train']:,} player-games): minutes against the base "
                f"{lo:+.1f} / {mid:+.1f} / {hi:+.1f} (5th / 50th / 95th); PHI "
                + ", ".join(f"{s} {v}" for s, v in f["phi"].items()) + "; the board's cv "
                + ", ".join(f"{s} {f['cv'][s]} (inherited {f['cv_inherited'][s]})" for s in STATS))

@@ -148,7 +148,7 @@ SPORT_MARKETS = {
 
 #: Sports whose board has no recency dial for this fit to turn, and why.
 _HOOPS_NO_DIAL = ("the basketball board's projection is minutes × a per-minute rate over "
-                  "his last twenty games, with no blend of windows for a recency dial to "
+                  "the last twenty games, with no blend of windows for a recency dial to "
                   "turn; its memory and temperatures walk that model (engine/hoopsreplay.walk)")
 NO_DIAL = {"nba": _HOOPS_NO_DIAL, "wnba": _HOOPS_NO_DIAL, "cbb": _HOOPS_NO_DIAL}
 

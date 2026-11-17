@@ -194,8 +194,8 @@ def test_the_new_quarterbacks_offence_is_described_by_its_shape():
           "replacement_ypa": 5.5, "starter_ypa": 7.2, "replacement_attempts": 27,
           "replacement_profile": pr["Jalon Daniels"], "starter_profile": pr["Baker Mayfield"]}
     words = Q.shape_words(ch)
-    assert "in his 1 start this season the team threw on 47% of its plays (Baker Mayfield’s starts: 69%)" in words
-    assert "he has run 8.0 times a game for 55 yards" in words
+    assert "in 1 start this season the team threw on 47% of its plays (Baker Mayfield’s starts: 69%)" in words
+    assert "8.0 runs a game for 55 yards" in words
     assert "4.2 air yards an attempt against Baker Mayfield’s 8.1" in words
     d = Q.detail(ch)
     assert d.startswith("Jalon Daniels has thrown for 5.5 yards an attempt (27 attempts) against Baker Mayfield’s 7.2 — ")
@@ -219,7 +219,7 @@ def test_the_new_quarterbacks_offence_is_described_by_its_shape():
     assert pr["Jalon Daniels"]["short_share"] is None, "without the table, nothing is said"
     ch3 = {**ch, "replacement_profile": pr3["Jalon Daniels"], "starter_profile": pr3["Baker Mayfield"]}
     w3 = Q.shape_words(ch3)
-    assert ("in his starts 73% of the team’s targets were short throws (under 10 air yards) and 7% deep (20+) — "
+    assert ("in Jalon Daniels’s starts 73% of the team’s targets were short throws (under 10 air yards) and 7% deep (20+) — "
             "Baker Mayfield’s starts: 50% short, 18% deep") in w3, w3
     assert "short throws" not in words, "no table: the old sentence"
     # The build puts the rows in the report; the slate builder hands them on.

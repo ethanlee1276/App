@@ -58,9 +58,9 @@ def layoff_score(days: int | None) -> tuple[float | None, str]:
     if days < SHORT_TURNAROUND:
         return 0.35, (f"{days}-day turnaround — too short for a full camp")
     if days < IDEAL_MIN:
-        return 0.70, f"{days} days since his last fight — a quick turnaround"
+        return 0.70, f"{days} days since the last fight — a quick turnaround"
     if days <= IDEAL_MAX:
-        return 1.0, f"{days} days since his last fight — a normal camp cycle"
+        return 1.0, f"{days} days since the last fight — a normal camp cycle"
     if days <= LONG_LAYOFF:
         return 0.70, f"{days // 30}-month layoff — longer than a usual cycle"
     if days <= DEAD_LAYOFF:

@@ -238,7 +238,7 @@ def assess_prop(market: str, side: str, line: float, win: float, fair: float, ed
             # his shots were worth — more goals for this skater.
             lean = them["gskill"] - 1
             note = (f"faces {them.get('starter')}, {them.get('gsax', 0):+.1f} goals saved above expected "
-                    f"lately (lets in {them['gskill']:.2f}× what his shots were worth, regressed)")
+                    f"lately (lets in {them['gskill']:.2f}× what the shots faced were worth, regressed)")
             parts["goalie"] = (EDGE_WEIGHTS["goalie"] * _clamp(0.5 + d * lean / 0.10), note)
         elif them.get("sv") is not None and lsv:
             diff = lsv - them["sv"]
@@ -246,7 +246,7 @@ def assess_prop(market: str, side: str, line: float, win: float, fair: float, ed
                     f"({-diff:+.3f} vs the league)")
             raw = them.get("raw_sv")
             if raw is not None and abs(raw - them["sv"]) >= 0.008:
-                note += (f"; his raw .{round(raw * 1000):03d} runs "
+                note += (f"; the raw .{round(raw * 1000):03d} runs "
                          f"{'hot' if raw > them['sv'] else 'cold'} — regression "
                          f"{'toward more' if raw > them['sv'] else 'toward fewer'} goals")
             parts["goalie"] = (EDGE_WEIGHTS["goalie"] * _clamp(0.5 + d * diff / 0.02), note)
@@ -293,7 +293,7 @@ def assess_prop(market: str, side: str, line: float, win: float, fair: float, ed
         ppg = sum(g.get("ppg", 0.0) for g in games[:20])
         share = 1.0 if ppg >= 3 else 0.5 if ppg >= 1 else 0.0
         parts["special_teams"] = (EDGE_WEIGHTS["special_teams"] * (share if d > 0 else 1 - share),
-                                  f"{int(ppg)} power-play goal(s) in his last 20")
+                                  f"{int(ppg)} power-play goal(s) in the last 20")
     # REST.
     if not goalie and (me.get("b2b") or them.get("b2b")):
         tired_them = bool(them.get("b2b")) and not me.get("b2b")
@@ -317,7 +317,7 @@ def assess_prop(market: str, side: str, line: float, win: float, fair: float, ed
         passes.append(f"only {proj.get('n') or len(games)} games of history — too small a sample")
     vote = _record_vote(proj.get("recent") or [], line, side, fair)
     if vote is not None and (vote - fair) * (win - fair) < 0:
-        passes.append(f"models disagree: the shot model says {win:.0%}, his own record at "
+        passes.append(f"models disagree: the shot model says {win:.0%}, the player's own record at "
                       f"{line:g} says {vote:.0%}")
     context = {
         "goalie": (f"{them.get('starter')} for {opponent}" if not goalie and them.get("starter")
@@ -430,7 +430,7 @@ def _contradicts(a: dict, b: dict) -> str:
         return ""
     team = a.get("team")
     if b.get("team") != team and b.get("side") == "UNDER":
-        return f"{team} to win needs shots on {b.get('player')}; his saves UNDER bets against them"
+        return f"{team} to win needs shots on {b.get('player')}; that goalie's saves UNDER bets against them"
     if b.get("team") == team and b.get("side") == "OVER":
-        return f"{team} to win usually means fewer shots on {b.get('player')}; his saves OVER bets on more"
+        return f"{team} to win usually means fewer shots on {b.get('player')}; that goalie's saves OVER bets on more"
     return ""

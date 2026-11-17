@@ -108,7 +108,7 @@ def projection_mult(sport: str, rating: dict, opponent: str, market: str) -> tup
     if abs(mult - 1.0) < 0.005:
         return 1.0, ""
     return mult, (f"Matchup: {opponent} {said(market, r['pg'])} a game "
-                  f"({_ord(r['rank'])}-most of {r['of']}) — {(mult - 1) * 100:+.0f}% on his projection "
+                  f"({_ord(r['rank'])}-most of {r['of']}) — {(mult - 1) * 100:+.0f}% on the projection "
                   f"(measured: {'the whole' if t >= 1 else f'{t:.0%} of the'} defence's lean reaches one player)")
 
 

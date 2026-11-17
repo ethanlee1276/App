@@ -1715,7 +1715,7 @@ def sec_matchups(c: Ctx) -> dict | None:
             order = [w for why in whys for w in why]
             said = sorted(common, key=order.index)
             text = "; ".join(said)
-            if text.split(" ")[0] in ("The", "Only", "A", "An", "His", "He", "Their", "They", "Takes"):
+            if text.split(" ")[0] in ("The", "Only", "A", "An", "His", "He", "Their", "They", "Takes", "In", "Not", "Holds"):
                 text = text[:1].lower() + text[1:]
             sub.append(_p(f"True for every {off} player below: {text}"))
         items = []

@@ -33,7 +33,7 @@ def main() -> None:
     ap.add_argument("--snaps", action="store_true",
                     help="rank the depth order on snap share (data/cache/snap_counts_<season>.csv)")
     ap.add_argument("--back", action="store_true",
-                    help="a teammate BACK tonight: the games he missed deflated by the measured "
+                    help="a teammate BACK tonight: the games missed deflated by the measured "
                          "absence, each season held out (engine/matefit.back_check)")
     args = ap.parse_args()
     if args.back:

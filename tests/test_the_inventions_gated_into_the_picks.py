@@ -139,7 +139,7 @@ def test_the_readings_move_the_chance_by_what_they_measured_capped():
         assert under["model_prob"] == round(0.60 + G.MAX_SHIFT, 4), "+0.04 +0.03 +0.05 is capped at the most"
         assert under["board_raw_prob"] == 0.60 and under["idea_raw_prob"] == 0.60
         assert "menu does not add up" in under["idea_note"] and "outcome recipe" in under["idea_note"]
-        assert "reading about him" in under["idea_note"]
+        assert "reading about this player" in under["idea_note"]
         assert over["model_prob"] == round(0.58 - G.MAX_SHIFT, 4), "the same readings count against the over"
         assert under["market_fair"] == 0.60 and over["market_fair"] == 0.40
         ok, words = LB.market_check(dict(under, model_prob=0.80))
@@ -194,7 +194,7 @@ def test_the_honest_range_holds_only_where_it_beat_our_chance():
             assert bool(over.get("idea_hold")) is held, (better, over.get("idea_hold"))
             assert "idea_hold" not in under, "the range backs the under"
             if held:
-                assert "the honest range puts his over at" in over["idea_hold"]
+                assert "the honest range puts the over at" in over["idea_hold"]
 
 
 def test_the_rookie_prior_comes_from_his_college_line_once_proven():
@@ -249,7 +249,7 @@ def test_the_air_step_reads_tonights_air_against_his_usual_once_proven():
         m.put("kickphysics.json", {"nfl": {"holds": True, "full": [4.5, -0.6, -0.05, 0.0, -1.5], "mean_dev": -0.02}})
         den = Game(home="DEN", away="KC", weather=Weather(temp_f=50.0, measured=True))
         mult, why = G.kick_factor("fg_made", den, "nfl", "KC")
-        assert mult > 1.0 and "thinner than the air his record was kicked in" in why
+        assert mult > 1.0 and "thinner than the air the kicker's record was kicked in" in why
         home, _w = G.kick_factor("fg_made", den, "nfl", "DEN")
         assert 1.0 <= home < mult, "a Denver kicker's record already flew through half of it"
         pts, _w = G.kick_factor("kick_pts", den, "nfl", "KC")

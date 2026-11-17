@@ -249,7 +249,7 @@ def _fit_reason(r: dict) -> list:
         # The volume market under this yardage one, by name: a back's
         # rushing yards ride on his carries, not on catches.
         vol = {"rush_yds": "carries", "rec_yds": "catches", "pass_yds": "completions"}[r["market"]]
-        why.append(f"Yardage — a bet on his role AND a big play; the {vol} or the score is the steadier way in."
+        why.append(f"Yardage — a bet on the role AND a big play; the {vol} or the score is the steadier way in."
                    if over else
                    f"Yardage under — one long play can beat it; the {vol} under is the steadier way in.")
     return why[:4]
@@ -328,8 +328,8 @@ def avoids(g: dict, reads: list, props: list) -> list:
             td = r.get("trend_delta")
             chase = CHASE_RECEPTIONS if market in ("receptions", "pass_td") else CHASE_YARDS
             if td is not None and float(td) >= chase:
-                why = (f"Chasing last week — his last three sit {float(td):+g} {_MARKET_WORD.get(market, market)} "
-                       f"above his form, and the number is priced off them.")
+                why = (f"Chasing last week — the last three sit {float(td):+g} {_MARKET_WORD.get(market, market)} "
+                       f"above the player's form, and the number is priced off them.")
         if not why:
             continue
         odds, book = _side_price(r, "over")
@@ -473,7 +473,7 @@ def watch_items(g: dict, scan: dict, props: list) -> list:
         if moves:
             out.append({"player": i.get("player"), "team": i.get("team"), "position": i.get("position"),
                         "status": i.get("status"), "headshot": i.get("headshot"),
-                        "text": f"If he sits: {', '.join(sorted(set(moves)))}."})
+                        "text": f"If that player sits: {', '.join(sorted(set(moves)))}."})
     w = g.get("weather") if isinstance(g.get("weather"), dict) else {}
     if w and not w.get("dome") and w.get("forecast") is False and str(g.get("roof") or "outdoors") in ("outdoors", "open"):
         out.append({"player": "", "team": "", "status": "weather",

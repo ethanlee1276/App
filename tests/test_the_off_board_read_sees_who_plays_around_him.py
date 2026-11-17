@@ -178,7 +178,7 @@ def test_the_card_says_who_is_out_around_him():
     leg = card["legs"][0]
     assert leg["found"] == "read" and leg["prob"] is not None
     facts = {f["k"]: f["t"] for f in leg["why"]}
-    assert "Around him" in facts and "RB BUF" in facts["Around him"], facts
+    assert "Around the player" in facts and "RB BUF" in facts["Around the player"], facts
 
 
 if __name__ == "__main__":

@@ -88,7 +88,7 @@ def test_the_change_log_never_says_back_up_for_a_player_listed_out():
     assert L.diff(old, new, "CHI", "NE") == []
     for st in ("ir", "doubtful", "suspended"):
         assert L.diff(old, {**new, "injuries": {"Kyle Monangai": st}}, "CHI", "NE") == \
-            [f"Kyle Monangai (CHI RB) is now {L.STATUS_WORDS[st]}; he was out"]
+            [f"Kyle Monangai (CHI RB) is now {L.STATUS_WORDS[st]} (listed out before)"]
     # Not listed out: a return is news, and so is a player the books take
     # down after the report already has him out.
     assert L.diff({"injuries": {}, "pulled": ["Zay Flowers"]}, {"injuries": {}, "pulled": []},

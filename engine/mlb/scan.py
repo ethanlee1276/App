@@ -147,7 +147,7 @@ def read_hitter(prop, game, park, arsenal: dict | None = None) -> dict:
     if sp:
         hand = (sp.throws or "R").upper()
         if prop.platoon_factor >= PLATOON_EDGE:
-            said(pro, prop.platoon_note or f"Hits {hand}HP better than his average", RL.PLATOON)
+            said(pro, prop.platoon_note or f"Hits {hand}HP better than the hitter's average", RL.PLATOON)
         elif prop.platoon_factor <= 2 - PLATOON_EDGE:
             said(con, prop.platoon_note or f"Struggles against {hand}HP", RL.PLATOON)
         side_slg = sp.slg_allowed_vs_l if (prop.bats or "R").upper() in ("L", "S") else sp.slg_allowed_vs_r
@@ -171,7 +171,7 @@ def read_hitter(prop, game, park, arsenal: dict | None = None) -> dict:
             m = _am(mx["shares"], row) if row else None
             if m and m.get("enough") and m.get("whiff_delta") is not None:
                 what = (f"against {sp.name}'s mix ({_mix_words(mx['shares'])}): whiffs "
-                        f"{m['whiff_vs_mix']:.0%}, his usual {m['whiff_baseline']:.0%}")
+                        f"{m['whiff_vs_mix']:.0%}, usually {m['whiff_baseline']:.0%}")
                 if m["whiff_delta"] <= -WHIFF_DELTA:
                     said(pro, "Sees the ball well " + what, RL.PITCHER)
                 elif m["whiff_delta"] >= WHIFF_DELTA:
@@ -187,14 +187,14 @@ def read_hitter(prop, game, park, arsenal: dict | None = None) -> dict:
             gap = sc.xslg - sc.slg
             if gap >= XSLG_GAP:
                 breakout = True
-                said(pro, f"Hitting better than his results — xSLG .{sc.xslg * 1000:.0f} "
+                said(pro, f"Hitting better than the results — xSLG .{sc.xslg * 1000:.0f} "
                           f"vs SLG .{sc.slg * 1000:.0f}", RL.CONTACT)
             elif gap <= -XSLG_GAP:
-                said(con, f"Results ahead of his contact — SLG .{sc.slg * 1000:.0f} "
+                said(con, f"Results ahead of the contact — SLG .{sc.slg * 1000:.0f} "
                           f"vs xSLG .{sc.xslg * 1000:.0f}", RL.CONTACT)
         if sc.barrel_pct is not None and sc.barrel_pct >= BARREL_POWER:
             power = True
-            said(pro, f"Barrels {sc.barrel_pct:.0%} of his batted balls", RL.CONTACT)
+            said(pro, f"Barrels {sc.barrel_pct:.0%} of batted balls", RL.CONTACT)
     if prop.lineup_spot and prop.lineup_spot <= 3:
         said(pro, f"Bats {_ord(prop.lineup_spot)} — the most trips to the plate", RL.LINEUP)
     elif prop.lineup_spot >= 8:
@@ -250,7 +250,7 @@ def read_starter(prop, game, park) -> dict:
         # His own stuff is one reason, however many numbers say it.
         if me.k_rate >= SP_K_ELITE:
             breakout = True
-            said(pro, f"Strikes out {me.k_rate:.0%} of the batters he faces", RL.CONTACT)
+            said(pro, f"Strikes out {me.k_rate:.0%} of the batters faced", RL.CONTACT)
         if me.xera <= XERA_GOOD:
             said(pro, f"Expected ERA {me.xera:.2f}", RL.CONTACT)
         elif me.xera >= XERA_BAD:
@@ -274,7 +274,7 @@ def read_starter(prop, game, park) -> dict:
         said(con, f"{park.name} takes strikeouts away ({(park.k_factor - 1) * 100:+.0f}%)", RL.PARK)
     own = (game.bullpen_fatigue or {}).get(team)
     if own is not None and own >= 6.0:
-        said(pro, f"His own bullpen is tired ({own:.1f} relief innings in two days) — a longer leash", RL.BULLPEN)
+        said(pro, f"The pitcher's own bullpen is tired ({own:.1f} relief innings in two days) — a longer leash", RL.BULLPEN)
     if prop.streak_note:
         notes.append(prop.streak_note)
     key, label = _label(pro, con, breakout, fam, featured=True)

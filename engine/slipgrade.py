@@ -1123,7 +1123,7 @@ def why(boards: dict, leg: dict) -> list[dict]:
         _read_head(leg, row, add)
     if market in SCORER_MARKETS:
         if ctx.get("implied_total") is not None:
-            add("Game", f"{ctx.get('team') or 'His team'} expected to score {_fmt(ctx['implied_total'])}")
+            add("Game", f"{ctx.get('team') or 'The team'} expected to score {_fmt(ctx['implied_total'])}")
         if ctx.get("rz_chances") is not None:
             add("Red zone", f"{_fmt(ctx['rz_chances'])} red-zone chances expected this week")
         if ctx.get("goal_line_text"):
@@ -1138,7 +1138,7 @@ def why(boards: dict, leg: dict) -> list[dict]:
         if vals:
             hit = sum(1 for v in vals if (v > line if over else v < line))
             shown = ", ".join(_fmt(v) for v in vals[:6]) + ("…" if len(vals) > 6 else "")
-            add("Recent games", f"{'Cleared' if over else 'Stayed under'} {_fmt(line)} in {hit} of his "
+            add("Recent games", f"{'Cleared' if over else 'Stayed under'} {_fmt(line)} in {hit} of the "
                                 f"last {len(vals)} ({shown}, latest first)")
         opp = str(ctx.get("opponent") or leg.get("opponent") or "")
         met = [float(g["value"]) for g in (ctx.get("logs") or [])
@@ -1146,7 +1146,7 @@ def why(boards: dict, leg: dict) -> list[dict]:
                and isinstance(g.get("value"), (int, float))][:5]
         if met:
             hit = sum(1 for v in met if (v > line if over else v < line))
-            add(f"Against {opp}", f"{', '.join(_fmt(v) for v in met)} in his log against them "
+            add(f"Against {opp}", f"{', '.join(_fmt(v) for v in met)} in the player's log against them "
                                   f"({'cleared' if over else 'stayed under'} {_fmt(line)} in {hit} of {len(met)})")
     card = ctx.get("matchup_card") or {}
     if card.get("text"):
@@ -1183,7 +1183,7 @@ def why(boards: dict, leg: dict) -> list[dict]:
             add("Matchup read", " · ".join(bits))
     for c in (ctx.get("qb_card"), ctx.get("mate_card")):
         if isinstance(c, dict) and c.get("headline"):
-            add("Around him", c["headline"])
+            add("Around the player", c["headline"])
     ripples = sorted((r for r in ctx.get("ripples") or [] if isinstance(r, dict) and r.get("measured") and r.get("text")),
                      key=lambda r: -abs(_num(r.get("delta"), 0.0)))
     for r in ripples[:1]:
@@ -1208,7 +1208,7 @@ def _read_head(leg: dict, row: dict, add) -> None:
     rd = leg.get("read") or {}
     why_off = rd.get("why_off") or str(row.get("why_off") or "")
     n, carried = int(rd.get("games") or 0), int(rd.get("carried") or 0)
-    on = (f"{n} game{'s' if n != 1 else ''} of his this season" if n else "his games")
+    on = (f"the player's {n} game{'s' if n != 1 else ''} this season" if n else "the player's games")
     if carried:
         on += f", topped up with {carried} from last season"
     add("Our read", f"Not on our board{' — ' + why_off if why_off else ''}. So we ran the board's own model "
@@ -1226,8 +1226,8 @@ def _read_head(leg: dict, row: dict, add) -> None:
                       + (f", {float(f['xera']):.2f} xERA" if f.get("xera") is not None else "")
                       + (f", strikes out {float(f['k_rate']):.0%}" if f.get("k_rate") is not None else "") + ")")
     if row.get("implied_total") is not None and leg["market"] in SCORER_MARKETS:
-        add("Game", f"{row.get('team') or 'His team'} expected to score {_fmt(row['implied_total'])}"
-                    + (f"; he has {float(row['touch_share']):.0%} of their carries and targets"
+        add("Game", f"{row.get('team') or 'The team'} expected to score {_fmt(row['implied_total'])}"
+                    + (f"; the player has {float(row['touch_share']):.0%} of their carries and targets"
                        if row.get("touch_share") is not None else ""))
 
 
@@ -1254,7 +1254,7 @@ def _read_tail(leg: dict, row: dict, add) -> None:
 WHY_RANK = {"Our read": 0, "Would be": 0, "Projection": 0, "Game": 0, "Red zone": 0, "Our model": 0,
             "The books": 1, "Defense": 1, "This season": 1, "Facing": 1,
             "Recent games": 1, "Our record": 1, "Goal line": 1, "Prediction markets": 1, "Status": 2,
-            "Game script": 2, "Matchup read": 2, "Around him": 2, "Line move": 2, "Money": 2,
+            "Game script": 2, "Matchup read": 2, "Around the player": 2, "Line move": 2, "Money": 2,
             "The case": 3, "Checks": 3, "Lineup": 3, "Watch": 3, "Scout": 4, "Milestone": 4,
             "Incentive": 4,
             # A side or a total read off the board (engine/slipgame).

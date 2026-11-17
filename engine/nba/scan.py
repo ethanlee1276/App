@@ -427,20 +427,20 @@ def read_player(name: str, h: dict, team: str, opp: str, *, dvp: dict | None = N
     if m5 is not None and m_before:
         move = m5 / m_before - 1
         if move >= MIN_TREND:
-            said(pro, f"Minutes up {move:.0%} over his last five ({m5:.1f} a game, {m_before:.1f} before)", RL.ROLE)
+            said(pro, f"Minutes up {move:.0%} over the last five ({m5:.1f} a game, {m_before:.1f} before)", RL.ROLE)
             role = True
         elif move <= -MIN_TREND:
-            said(con, f"Minutes down {abs(move):.0%} over his last five ({m5:.1f} a game, {m_before:.1f} before)",
+            said(con, f"Minutes down {abs(move):.0%} over the last five ({m5:.1f} a game, {m_before:.1f} before)",
                  RL.ROLE)
     u5 = usage_share(h, team, nights, 0, 5)
     u_before = usage_share(h, team, nights, 5, 15)
     if u5 is not None and u_before is not None:
         if u5 - u_before >= USAGE_EDGE:
-            said(pro, f"Usage up: {u5:.0%} of {team}'s plays while he is on the floor over his last five, "
+            said(pro, f"Usage up: {u5:.0%} of {team}'s plays while on the floor over the last five, "
                       f"{u_before:.0%} before", RL.ROLE)
             role = True
         elif u_before - u5 >= USAGE_EDGE:
-            said(con, f"Usage down: {u5:.0%} of {team}'s plays while he is on the floor over his last five, "
+            said(con, f"Usage down: {u5:.0%} of {team}'s plays while on the floor over the last five, "
                       f"{u_before:.0%} before", RL.ROLE)
     v = (vacancy or {}).get(team) or {}
     gone = [(n, m) for n, m in v.get("out") or [] if n != name]
@@ -449,11 +449,11 @@ def read_player(name: str, h: dict, team: str, opp: str, *, dvp: dict | None = N
         inh = v.get("inherit") or {}
         b = (inh.get("beneficiaries") or {}).get(name) if inh.get("player") == big else None
         if inh.get("enough") and b and float(b.get("delta") or 0) >= INHERIT_EDGE:
-            said(pro, f"In the {inh.get('n_out')} games {big} missed, he took {b['without']:.0%} of {team}'s "
+            said(pro, f"In the {inh.get('n_out')} games {big} missed, this player took {b['without']:.0%} of {team}'s "
                       f"points ({b['with']:.0%} with {big} playing)", RL.TEAMMATES)
             role = True
         elif big_m >= VACANCY_MPG and (made.get("min") or 0) >= MIN_MPG:
-            notes.append(f"{big} is out ({big_m:.0f} minutes a game) — his minutes and shots go to the "
+            notes.append(f"{big} is out ({big_m:.0f} minutes a game) — those minutes and shots go to the "
                          f"rest of the rotation")
     mine, theirs = (rest or {}).get(team, ""), (rest or {}).get(opp, "")
     if theirs in TIRED and mine not in TIRED:
@@ -467,20 +467,20 @@ def read_player(name: str, h: dict, team: str, opp: str, *, dvp: dict | None = N
                   f"a blowout takes", RL.BLOWOUT)
     # WHAT IS SHOWN, NEVER COUNTED.
     if status and status not in OUT:
-        notes.insert(0, f"{name} is listed {status} himself — this read assumes he plays")
+        notes.insert(0, f"{name} is listed {status} — this read assumes {name} plays")
     form = [f"{_avg(h.get(k)[:5]):.1f} {w}" for k, bar, w in LEAN_STATS
             if (made.get(k) or 0) >= bar and len(h.get(k) or []) >= 5]
     if form:
-        notes.append(f"{', '.join(form)} a game over his last five")
+        notes.append(f"{', '.join(form)} a game over the last five")
     opps = list(h.get("opps") or [])
     vs = [float(h["pts"][i]) for i, o in enumerate(opps[:len(h.get("pts") or [])]) if o == opp]
     if len(vs) >= 2:
-        notes.append(f"{sum(vs) / len(vs):.1f} points a game in his last {len(vs)} against {opp}")
+        notes.append(f"{sum(vs) / len(vs):.1f} points a game in the last {len(vs)} against {opp}")
     att = [((h.get("by_week") or {}).get(d) or {}) for d in (h.get("dates") or [])[:5]]
     if att and all(g.get("fg3a") is not None for g in att):
         a3, m3 = sum(g["fg3a"] for g in att), sum(g.get("fg3m") or 0 for g in att)
         if a3 >= 5:
-            notes.append(f"{m3:.0f} of {a3:.0f} from three over his last five ({m3 / a3:.0%})")
+            notes.append(f"{m3:.0f} of {a3:.0f} from three over the last five ({m3 / a3:.0%})")
     score = RL.score(pro, con, fam)
     # A STARTER'S MINUTES ARE A FLOOR (engine/readlogic rule 2): a man who
     # plays 28 minutes, or runs a quarter of his team's plays, can have a

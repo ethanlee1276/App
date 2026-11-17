@@ -154,7 +154,7 @@ def test_the_build_gives_the_vacancy_to_the_rotation_and_no_one_else():
     assert nba_build.vacancy_for("Wing", "BOS", gone, hist, listed, 0.0) == 0.0, "no verdict, no vacancy"
     src = (ROOT / "nba_build.py").read_text()
     assert '"vacancy_minutes": _vac_min' in src and "_vac.k_for(args.league)" in src
-    assert "our minutes model gives him" in src, "the teammate card says what moved"
+    assert "our minutes model gives this player" in src, "the teammate card says what moved"
 
 
 if __name__ == "__main__":

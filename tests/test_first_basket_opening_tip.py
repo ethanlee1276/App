@@ -173,7 +173,7 @@ def test_the_board_prices_the_team_half_by_the_jumpers_and_says_so():
                    "quotes": [{"book": "DraftKings", "yes_odds": 400, "no_odds": None, "player": "Jayson Tatum"}]}}
     b = FB.board(quote, games, conn=conn, date="2026-12-31")
     line = b["rows"][0]["reasons"][0]
-    assert "by tonight's two jumpers (Kristaps Porzingis: his side gained 30 of 40" in line, line
+    assert "by tonight's two jumpers (Kristaps Porzingis: the side gained 30 of 40" in line, line
 
 
 if __name__ == "__main__":

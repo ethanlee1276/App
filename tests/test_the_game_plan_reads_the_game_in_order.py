@@ -149,7 +149,7 @@ def test_plays_that_fit_are_the_reads_plays_volume_first_and_say_their_seat():
     assert "Against it — the script: leads late and runs the clock." in shakir["why"]
     assert not any(w.startswith("Script:") for w in shakir["why"])
     assert not fits[2]["on_board"] and not fits[2]["volume"]
-    assert "Yardage — a bet on his role AND a big play" in fits[2]["why"][-1]
+    assert "Yardage — a bet on the role AND a big play" in fits[2]["why"][-1]
     note = _step(_plan(), "fits")["note"]
     assert note.startswith("Receiving yards and rushing yards are read-only on this site"), note
 
@@ -163,7 +163,7 @@ def test_plays_to_avoid_are_the_over_that_fights_the_matchup_or_chases_last_week
     assert qj["why"] == "The over fights the matchup — BUF gives up the 3rd-fewest catches to receivers."
     assert abs(qj["model_prob"] - 0.42) < 1e-9, "our chance on the over"
     k = by["Dalton Kincaid"]
-    assert k["why"].startswith("Chasing last week — his last three sit +1.7 catches above his form")
+    assert k["why"].startswith("Chasing last week — the last three sit +1.7 catches above the player's form")
     assert "Khalil Shakir" not in by and "Josh Allen" not in by
 
 
@@ -182,7 +182,7 @@ def test_where_we_disagree_is_named_never_staked_and_journaled_at_the_raw_chance
 
 def test_what_changes_the_read_is_a_call_that_moves_a_number_and_the_weather():
     watch = _step(_plan(), "watch")["rows"]
-    assert watch[0]["player"] == "Keon Coleman" and watch[0]["text"] == "If he sits: Khalil Shakir +18% receiving yards."
+    assert watch[0]["player"] == "Keon Coleman" and watch[0]["text"] == "If that player sits: Khalil Shakir +18% receiving yards."
     assert watch[1]["status"] == "weather" and "no game-time forecast" in watch[1]["text"]
     assert len(watch) == 2, "a questionable player who moves nothing sits under 'who is out', not here"
 

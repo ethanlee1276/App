@@ -50,7 +50,7 @@ def test_the_board_reads_his_role_minutes_and_says_so():
     card = evaluate_prop(dict(base, minutes=mins), WNBA)
     assert card.get("base_minutes") == M.base_minutes([m for i, m in enumerate(mins) if i != 5], WNBA)
     assert card["early_exits"] == {"kept": [], "left_out": [6.0]}
-    assert any("left out of his minutes" in n for n in card["context"]), card["context"]
+    assert any("left out of the minutes" in n for n in card["context"]), card["context"]
     fresh = evaluate_prop(dict(base, line=16.5, minutes=[31.0, 6.0] + mins[2:5] + [33.0] + mins[6:]), WNBA)
     assert fresh["early_exits"] == {"kept": [6.0], "left_out": []}
     assert "Left early 2 games ago (6 min) — kept: a recent early exit predicts a quieter game (measured)" \

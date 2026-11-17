@@ -81,7 +81,7 @@ def test_it_stays_in_the_number_and_the_cooling_off_line_names_it():
                           Team(abbr="DET", name="DET", defense=DefenseProfile(team="DET")))
     assert pr.form.sample_games == 9, "the partial game is still a game in the blend"
     cool = [x for x in pr.reasons if x.startswith("Cooling off")]
-    assert cool == ["Cooling off — last 3 games -20 vs prior form (one of them a game he left early, 39% of the snaps)"], cool
+    assert cool == ["Cooling off — last 3 games -20 vs prior form (one of them a game left early, 39% of the snaps)"], cool
     assert pr.chain["steps"][[s["key"] for s in pr.chain["steps"]].index("trend")]["mult"] == 1.0
 
 

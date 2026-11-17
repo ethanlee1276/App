@@ -304,7 +304,7 @@ def main(argv=None) -> int:
                                 "calibration", SPREAD, off_r, on_r, show_rmse=False)
             os.environ["QB_NBA_SHOOTING"] = "1"
             cal, raw = _ladder(conn, SPREAD, tune=tune, league=league)
-            lad_cal = _print_ladder("MOST LIKELY'S KIND OF OVER (lines at 0.5, 0.65 and 0.8 of his "
+            lad_cal = _print_ladder("MOST LIKELY'S KIND OF OVER (lines at 0.5, 0.65 and 0.8 of the "
                                     "projection) — through today's stored calibration", cal)
             lad_raw = _print_ladder("MOST LIKELY'S KIND OF OVER — raw, before any calibration", raw)
 

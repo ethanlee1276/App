@@ -332,7 +332,7 @@ def report(res: dict) -> str:
         tc = f", clustered {r['t_cluster']:.1f}" if r.get("t_cluster") is not None else ""
         verdict = ("PASSES" if r["passes"] else "fails") if r.get("decides", True) else "(by group, reading only)"
         lines.append(f"  {name:<14} {grp:<3} b = {r['b']:+.3f}{se} (t {r['t']:.1f}{tc})  n {r['n']:>6}   "
-                     f"1 SD of defence moves his chance {100 * r['per_sd']:+.1f}%   held out {held}   "
+                     f"1 SD of defence moves the chance {100 * r['per_sd']:+.1f}%   held out {held}   "
                      f"mean {100 * r['mean_gain']:+.3f}%   {verdict}")
     return "\n".join(lines)
 

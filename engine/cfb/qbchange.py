@@ -108,7 +108,7 @@ def card(ch: dict, own: bool = False, mult: float = 1.0) -> dict:
     elif ch.get("status") == "RETURNS":
         note = "The usual quarterback is back — nothing to adjust"
     elif mult != 1.0:
-        note = (f"Measured on college games: behind a {ch.get('tier')} at quarterback, players in his "
+        note = (f"Measured on college games: behind a {ch.get('tier')} at quarterback, players in this "
                 f"spot produced {abs(round((mult - 1) * 100))}% {'more' if mult > 1 else 'less'} than their "
                 f"own form — applied (×{mult:.2f})")
     elif _measured() and ch.get("tier"):

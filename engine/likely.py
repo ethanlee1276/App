@@ -422,7 +422,7 @@ def lock_note(why: str, now=None, then=None) -> str:
         return (f"The price has moved past −{abs(HEAVIEST_PRICE)} since this went up — "
                 "the books like it more now. Shown at the price we posted.")
     if lw.startswith("listed "):
-        return f"Now {why.split(' —')[0].lower()} — check his status before kickoff."
+        return f"Now {why.split(' —')[0].lower()} — check the player's status before kickoff."
     if ("no real" in lw or "no book" in lw or "no longer offered" in lw
             or "could not have posted" in lw or "could post" in lw or "price is missing" in lw):
         return "No book is quoting this number right now. Shown at the price we posted."

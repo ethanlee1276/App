@@ -935,7 +935,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
                 helps = (s > 0) == (side == "OVER")
                 reasons[i] = r + (" — with this side" if helps else " — against this side")
             elif getattr(getattr(proj, "weather", None), "by_kind", None):
-                reasons[i] = r + f" — his {wx_label(prop.market)} left alone"
+                reasons[i] = r + f" — the {wx_label(prop.market)} left alone"
     # And the grade's own script note said the same thing a second time
     # in different words, under a green tick. One sentence per fact: the
     # numbered bullet above carries it; the note only runs when there is

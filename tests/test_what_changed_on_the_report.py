@@ -107,7 +107,7 @@ def test_a_move_is_written_under_its_time_right_under_the_short_version():
     for want in ("The spread moved from DET −2.5 to DET −3.5.",
                  "The total moved from 48.5 to 47.",
                  "Our simulator moved DET from 58% to 64% to win.",
-                 "Amon-Ra St. Brown (DET WR) is now out; he was questionable.",
+                 "Amon-Ra St. Brown (DET WR) is now out (listed questionable before).",
                  "Every book took Amon-Ra St. Brown (DET WR)'s props down.",
                  "The forecast moved from 51°F, wind 6 mph, a 10% chance of rain to 44°F, wind 18 mph, "
                  "a 60% chance of rain, rain."):
@@ -200,7 +200,7 @@ def test_the_first_forecast_and_a_listing_and_a_return():
     new = {"injuries": {"B": "questionable", "C": "doubtful"}, "pulled": [],
            "weather": {"temp_f": 38, "wind_mph": 12, "snow": True}}
     moved = L.diff(old, new, "DET", "GB")
-    assert moved == ["A (GB WR) came off the injury report; he was out",
+    assert moved == ["A (GB WR) came off the injury report (listed out before)",
                      "C was listed doubtful",
                      "A (GB WR)'s props are back up",
                      "The first forecast is in: 38°F, wind 12 mph, snow"], moved

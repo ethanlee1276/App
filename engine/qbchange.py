@@ -314,7 +314,7 @@ def headline(ch: dict) -> str:
     chart and not an injury (a benching, or the usual starter back from
     one): "Brock Purdy starts over Mac Jones (this week's depth chart)"."""
     if ch["status"] == "RETURNS":
-        return f"{ch['replacement']} is back at QB — {ch['starter']} started while he was out"
+        return f"{ch['replacement']} is back at QB — {ch['starter']} started in the meantime"
     if ch["status"] == "BENCHED" and ch.get("replacement"):
         return f"{ch['replacement']} starts over {ch['starter']} (this week’s depth chart)"
     if ch.get("replacement") and ch.get("reported"):
@@ -335,13 +335,13 @@ def shape_words(ch: dict) -> str:
         return ""
     bits = []
     if rp.get("pass_rate") is not None and rp.get("starts"):
-        s = (f"in his {rp['starts']} start{'s' if rp['starts'] != 1 else ''} this season the team threw on "
+        s = (f"in {rp['starts']} start{'s' if rp['starts'] != 1 else ''} this season the team threw on "
              f"{rp['pass_rate']:.0%} of its plays")
         if sp.get("pass_rate") is not None and sp.get("starts"):
             s += f" ({ch['starter']}’s starts: {sp['pass_rate']:.0%})"
         bits.append(s)
     if rp.get("games"):
-        bits.append(f"he has run {rp['carries_pg']:.1f} times a game for {rp['rush_yds_pg']:.0f} yards")
+        bits.append(f"{rp['carries_pg']:.1f} runs a game for {rp['rush_yds_pg']:.0f} yards")
     if rp.get("air_per_att"):
         s = f"{rp['air_per_att']:.1f} air yards an attempt"
         if sp.get("air_per_att"):
@@ -350,7 +350,7 @@ def shape_words(ch: dict) -> str:
     # Where the ball goes under him (engine/sources/nflunits, 2026-10-08):
     # the team's short and deep shares of its targets in his starts.
     if rp.get("short_share") is not None:
-        s = (f"in his starts {rp['short_share']:.0%} of the team’s targets were short throws (under 10 air "
+        s = (f"in {ch['replacement']}’s starts {rp['short_share']:.0%} of the team’s targets were short throws (under 10 air "
              f"yards) and {rp.get('deep_share') or 0:.0%} deep (20+)")
         if sp.get("short_share") is not None:
             s += f" — {ch['starter']}’s starts: {sp['short_share']:.0%} short, {sp.get('deep_share') or 0:.0%} deep"
@@ -400,7 +400,7 @@ def card(ch: dict, applied: float = 1.0, own: bool = False, position: str = "") 
     green quarterback's extra runs go (BACKS_BEHIND_GREEN)."""
     note = ""
     if own and ch.get("status") == "RETURNS":
-        note = f"Back as the starter; {ch['starter']} started while he was out"
+        note = f"Back as the starter; {ch['starter']} started in the meantime"
     elif own:
         note = f"Starting in place of {ch['starter']}"
     elif ch.get("status") == "RETURNS":
@@ -458,4 +458,4 @@ def _college_effect(prop, ch: dict) -> tuple:
 def game_note(ch: dict) -> str:
     """The sentence for a game card."""
     return (f"QB change: {headline(ch)}. The book's price already knows; our own rating is built "
-            f"from games he started.")
+            f"from the games before the change.")

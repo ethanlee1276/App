@@ -158,7 +158,7 @@ def test_the_usage_bridge_leans_on_last_season_where_it_measured():
     assert abs(got.form.mean - form) < 1e-9
     base = got.chain["steps"][0]["mult"] * got.form.mean if got.chain["steps"][0]["key"] == "usage" else None
     assert base is not None and abs(base - (w * form + (1 - w) * role)) < 1e-6, base
-    assert "pulled 60% toward his 40.0 last season to 52.8" in " ".join(got.reasons)
+    assert "pulled 60% toward the player's 40.0 last season to 52.8" in " ".join(got.reasons)
     untouched = proj("pass_yds", position="QB")
     assert "last season to" not in " ".join(untouched.reasons), "passing yards keeps its bridge as it was"
     thin = proj("rec_yds", kind="thin")

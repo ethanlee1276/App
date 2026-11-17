@@ -671,7 +671,7 @@ def board(quotes: dict, games: list, conn=None, date: str = "", why: str = "",
                          "ev": round(ev, 4), "ev_per_unit": round(ev, 4),
                          "fair_odds": _ftd.fair_odds(p), "need_odds": _ftd.need_odds(p), "priced": True,
                          "primary_reason": (f"{team} score first {hit['team_first']:.0%} by the tip · "
-                                            f"his share {hit['share']:.0%}"),
+                                            f"the player's share {hit['share']:.0%}"),
                          "reasons": [
                              _tip_reason(hit, team),
                              _share_reason(hit, team),
@@ -703,9 +703,9 @@ def _tip_reason(hit: dict, team: str) -> str:
                 f"teams' tip records this season" + tail)
     if hit["jumper"]:
         won, of = hit["jumper_won"], hit["jumper_jumps"]
-        rec = f"{won:g} of {of:g}" if of else "no record yet"
+        rec = f"the side gained {won:g} of {of:g} opening tips" if of else "no tip record yet"
         return (f"{team} take the game's first shot {hit['first_shot']:.0%} of the time by tonight's two "
-                f"jumpers ({hit['jumper']}: his side gained {rec} of his opening tips)" + tail)
+                f"jumpers ({hit['jumper']}: {rec})" + tail)
     return (f"{team} take the game's first shot {hit['first_shot']:.0%} of the time by tonight's two "
             f"jumpers (no jumper of theirs on file, read as even)" + tail)
 
@@ -713,13 +713,13 @@ def _tip_reason(hit: dict, team: str) -> str:
 def _share_reason(hit: dict, team: str) -> str:
     """The card's line for his share: tonight's five's words on its path."""
     if "in_five" not in hit:
-        return (f"He takes {hit['share']:.0%} of {team}'s shots in the first three minutes of "
+        return (f"Takes {hit['share']:.0%} of {team}'s shots in the first three minutes of "
                 f"its games — the share that picks the first scorer best.")
     if hit["in_five"]:
-        return (f"He is in {team}'s likely starting five tonight and takes {hit['per_start']:.1f} of its "
+        return (f"In {team}'s likely starting five tonight, taking {hit['per_start']:.1f} of its "
                 f"shots in the first three minutes a start — {hit['share']:.0%} of its first baskets "
                 f"by our numbers.")
-    return (f"He is not in {team}'s likely starting five tonight, so his share of its first baskets "
+    return (f"Not in {team}'s likely starting five tonight, so the share of its first baskets "
             f"is small: {hit['share']:.0%}.")
 
 

@@ -169,13 +169,13 @@ STORE = {"league": {"games": 635, "flags": 12.89, "over": 0.5253, "home_cover": 
 
 def test_the_reports_line_says_where_from_the_league_beside_and_the_caveat():
     line = R.words(R.card("Clay Martin", "footballzebras", STORE))
-    assert line.startswith("Referee: Clay Martin (Football Zebras). His 38 games since 2024: ")
+    assert line.startswith("Referee: Clay Martin (Football Zebras). In 38 games since 2024: ")
     assert "12.4 penalties a game (league 12.9)" in line or "12.5 penalties a game (league 12.9)" in line
     assert "50% over the closing total (league 53%)" in line
     assert "home teams covered 54% (league 51%)" in line
     assert line.endswith(R.CAVEAT) and "not part of the read" in R.CAVEAT
     thin = R.words(R.card("Tra Blake", "espn", STORE))
-    assert "His 6 games since 2024, a thin sample:" in thin and "(ESPN)" in thin
+    assert "In 6 games since 2024, a thin sample:" in thin and "(ESPN)" in thin
     new = R.words(R.card("New Referee", "set", STORE))
     assert new.startswith("Referee: New Referee (named by hand). We have no games with this referee")
     assert R.words({}) == ""

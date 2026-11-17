@@ -271,7 +271,7 @@ def test_the_grader_says_who_is_out_around_him():
     leg = card["legs"][0]
     assert leg["found"] == "read" and leg["prob"] is not None, leg.get("found")
     facts = {f["k"]: f["t"] for f in leg["why"]}
-    assert "Around him" in facts and "D.J. Wideout" in facts["Around him"], facts
+    assert "Around the player" in facts and "D.J. Wideout" in facts["Around the player"], facts
 
 
 def test_the_runbook_says_so():

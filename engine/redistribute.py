@@ -167,8 +167,8 @@ def redistribution(rows, team: str, player: str, kind: str = "targets"
 def report(res: dict, limit: int = 6) -> str:
     lines = ["", "=" * 70,
              f"  WHERE {res['player'].upper()}'S {res['kind'].upper()} GO "
-             f"WHEN HE IS OUT", "=" * 70,
-             f"  {res['team']} · {res['n_played']} game(s) with him, "
+             f"WHEN OUT", "=" * 70,
+             f"  {res['team']} · {res['n_played']} game(s) with that player, "
              f"{res['n_out']} without"]
     if not res["enough"]:
         lines += [
@@ -285,10 +285,10 @@ def note_text(out_player: str, status: str, kind: str, res: dict,
     if res.get("enough") and b:
         d = float(b["delta"])
         if d >= MOVED:
-            text = (f"{out_player} {st} — over his {games}, "
+            text = (f"{out_player} {st} — over the {games}, "
                     f"{beneficiary.split()[-1]} absorbed {d:+.0%} of the {word}")
         else:
-            text = (f"{out_player} {st} — over his {games}, "
+            text = (f"{out_player} {st} — over the {games}, "
                     f"{beneficiary.split()[-1]}'s share of the {word} did not "
                     f"move ({d:+.1%})")
         return {"out": out_player, "status": status, "kind": kind,

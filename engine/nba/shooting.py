@@ -170,8 +170,8 @@ def projection_mult(stat: str, rate: float, read: dict | None,
             return 1.0, ""
         m = new / raw
         lately = s["p3_recent"]
-        note = (f"Threes read as his attempts times his 3P% over his last {LONG_GAMES} games "
-                f"({s['p3']:.1%} shrunk toward the league's), not his makes"
+        note = (f"Threes read as attempts times the 3P% over the last {LONG_GAMES} games "
+                f"({s['p3']:.1%} shrunk toward the league's), not recent makes"
                 + (f" — {lately:.1%} lately" if lately is not None else "")
                 + f" (measured: {MEASURED.get(league_key, MEASURED['nba'])['fg3m']} closer on a season it never saw)")
     else:
@@ -183,9 +183,9 @@ def projection_mult(stat: str, rate: float, read: dict | None,
         if base_rate <= 0 or new_rate <= 0:
             return 1.0, ""
         m = new_rate / base_rate
-        note = (f"Points read from his shot volume at his long-run percentages "
+        note = (f"Points read from shot volume at long-run percentages "
                 f"(2s {s['p2']:.1%}, 3s {s['p3']:.1%}, FTs {s['pf']:.1%}, shrunk toward the league's), "
-                f"not his recent makes (measured: {MEASURED.get(league_key, MEASURED['nba'])['pts']} closer on a "
+                f"not recent makes (measured: {MEASURED.get(league_key, MEASURED['nba'])['pts']} closer on a "
                 f"season it never saw)")
     m = round(m, 4)
     if abs(m - 1.0) < 0.005:

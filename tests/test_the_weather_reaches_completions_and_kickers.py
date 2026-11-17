@@ -143,7 +143,7 @@ def test_a_picks_weather_sentence_is_signed_by_its_own_market():
     # His rushing yards are left alone, and the sentence says so rather than taking a side.
     yards = _card("RB", RUSH_YDS, (70, 64, 75, 68, 72, 66), 68.5, (40.5, 95.5))
     for side in ("OVER", "UNDER"):
-        assert yards[side] and all(r.endswith("— his rushing yards left alone") for r in yards[side]), yards
+        assert yards[side] and all(r.endswith("— the rushing yards left alone") for r in yards[side]), yards
     # A quarterback's legs: the passing cut is not his rushing yards'.
     legs = _card("QB", RUSH_YDS, (40, 35, 50, 45, 38, 42), 40.5, (20.5, 60.5))
     assert len(legs["OVER"]) == 2 and all(r.endswith("left alone") for r in legs["OVER"]), legs

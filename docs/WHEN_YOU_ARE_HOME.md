@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UU. The notes the board writes read the same for every player** (step 679; 17 November). Nothing to run.
+The last "he" and "his" were in the sentences the server writes onto the cards and reports, and the NBA's are the
+WNBA's too, so every WNBA card said "he" and "his" of its player ("he took 17% of the points"). Now: "Minutes up 20%
+over the last five", "In the 6 games Bam Adebayo missed, this player took 17% of MIA's points", "Not in BOS's
+likely starting five tonight", "Referee: Clay Martin. In 38 games since 2024", "Drew Lock started in the
+meantime", "Jaylen Brown (BOS) is now out (listed questionable before)", and Start A or B's "even if they play,
+Back B is the better start". The MLB, NHL, UFC, college and fantasy notes, the slip grader and the commands you
+run on the box (`launch.py` and the checks) read the same way. docs/MARKET_CENSUS.md is regenerated for its two
+changed lines.
+
 **UT. The rest of the site reads the same for every player** (step 678; 17 November). Nothing to run. The
 last pages that still called every player "he": the Lab cards on a pick ("How the books set the line", "The role,
 watched for a change", "A rookie's college line, translated"), the Most Likely page ("We have the player at 58.2

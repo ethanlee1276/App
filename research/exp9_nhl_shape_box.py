@@ -354,13 +354,13 @@ def study(conn, holdout: bool = False) -> dict:
 
 
 def render(rep: dict) -> str:
-    out = ["EXP-009 — NHL skater props: a shape built from his ice time against the board's own count, one centre"]
+    out = ["EXP-009 — NHL skater props: a shape built from ice time against the board's own count, one centre"]
     if "labels" not in rep:
         out.append(f"  {rep['verdict']}")
         return "\n".join(out)
     f = rep["fit"]
     lo, mid, hi = f["toi_ratio"]
-    out.append(f"  fitted on {rep['labels'][0]} ({rep['train']:,} player-games): ice time over his projection "
+    out.append(f"  fitted on {rep['labels'][0]} ({rep['train']:,} player-games): ice time over the projection "
                f"{lo:.2f} / {mid:.2f} / {hi:.2f} (5th / 50th / 95th); PHI given ice time "
                + ", ".join(f"{s} {v}" for s, v in f["phi"].items()) + "; PHI_N given the projection "
                + ", ".join(f"{s} {v}" for s, v in f["phi_n"].items())

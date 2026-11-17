@@ -500,13 +500,13 @@ def board(quotes: dict, games: list, sport: str = "nfl", conn=None, date: str = 
                          "implied": round(imp, 4), "implied_prob": round(imp, 4),
                          "ev": round(ev, 4), "ev_per_unit": round(ev, 4),
                          "primary_reason": (f"{team} score first {tf:.0%} by the lines · "
-                                            f"his share {sh:.0%}"),
+                                            f"the player's share {sh:.0%}"),
                          "reasons": [
                              f"{team} score the game's first touchdown {tf:.0%} of the time by the lines "
                              f"(the favourite does {params(sport)['fav_rate']:.0%}, measured over "
                              f"{params(sport)['games']} games).",
-                             f"He has {sh:.0%} of {team}'s first-touchdown share: two-thirds his share of "
-                             f"their carries and targets, one-third his share of their touchdowns.",
+                             f"Holds {sh:.0%} of {team}'s first-touchdown share: two-thirds the player's share of "
+                             f"their carries and targets, one-third the share of their touchdowns.",
                              f"Our chance {p:.1%} against {imp:.1%} in the price ({ev:+.0%} expected return).",
                          ]})
     rows.sort(key=lambda r: -r["prob"])

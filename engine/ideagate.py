@@ -269,7 +269,7 @@ def kick_factor(market: str, game, sport: str, team: str | None = None) -> tuple
         return 1.0, ""
     gap = dev - usual
     return round(mult, 4), (f"Tonight's air is {abs(gap) * 100:.0f}% {'thinner' if gap < 0 else 'thicker'} than the air "
-                            f"his record was kicked in: field goals {(f - 1) * 100:+.1f}%, from a fit that held on "
+                            f"the kicker's record was kicked in: field goals {(f - 1) * 100:+.1f}%, from a fit that held on "
                             f"held-out kicks")
 
 
@@ -371,7 +371,7 @@ def shifts(r: dict, reads: _Reads) -> tuple:
         ex = float(((reads.att_v.get("under_when_spiked") or {}).get("excess")) or 0.0)
         s = ex if side == "under" else -ex
         total += s
-        why.append(f"the public is reading about him {att.get('ratio')}× more than usual: measured {s:+.0%} on this side")
+        why.append(f"the public is reading about this player {att.get('ratio')}× more than usual: measured {s:+.0%} on this side")
     total = max(-MAX_SHIFT, min(MAX_SHIFT, total))
     return round(total, 4), why
 
@@ -408,7 +408,7 @@ def hold_reason(r: dict, reads: _Reads) -> str | None:
         if cal:
             ch = conformal.side_chance(cal, proj, line, side)
             if ch < 0.5:
-                return (f"held back: the honest range puts his {side} at {ch:.0%} — and that range was "
+                return (f"held back: the honest range puts the {side} at {ch:.0%} — and that range was "
                         f"better calibrated than our chance on held-out picks")
     return None
 

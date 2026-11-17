@@ -185,7 +185,7 @@ def note(r: dict, c=None) -> str:
     """The sentence a marked card carries."""
     a = r.get("availability")
     if a == QUESTIONABLE:
-        return (f"{r.get('player')} is listed questionable — this read only holds if he plays; "
+        return (f"{r.get('player')} is listed questionable — this read only holds if the player plays; "
                 "check the injury report before you bet on this player")
     if a == MISSED:
         m = r.get("missed") or {}

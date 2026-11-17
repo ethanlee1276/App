@@ -198,7 +198,7 @@ def test_a_read_counts_the_defence_the_game_his_role_rest_and_the_blowout():
     assert r["pro"] == ["MIA allows the 2nd-most points a game (119.4)",
                         "MIA allows the 3rd-most assists a game (29.0)",
                         "BOS is expected to score 121.0 by the lines — +8.0 on the league's average",
-                        "Minutes up 20% over his last five (36.0 a game, 30.0 before)",
+                        "Minutes up 20% over the last five (36.0 a game, 30.0 before)",
                         "MIA is playing a third game in four nights"], r["pro"]
     assert r["con"] == ["MIA allows the 2nd-fewest rebounds a game (40.2)"], r["con"]
     assert r["read"] == "breakout" and r["label"] == "Breakout spot"
@@ -208,7 +208,7 @@ def test_a_read_counts_the_defence_the_game_his_role_rest_and_the_blowout():
     assert set(r) >= {"player", "team", "opp", "pos", "read", "label", "pro", "con", "notes", "lean",
                       "headshot", "usage"}
     assert r["usage"]["mpg"] == 33.0 and r["usage"]["min5"] == 36.0
-    assert any(n.startswith("28.0 points, 9.0 rebounds, 6.0 assists a game over his last five") for n in r["notes"])
+    assert any(n.startswith("28.0 points, 9.0 rebounds, 6.0 assists a game over the last five") for n in r["notes"])
 
 
 def test_a_breakout_needs_a_role_change():
@@ -224,7 +224,7 @@ def test_a_teammate_out_counts_only_when_the_logs_measured_it():
         "player": "Big Man", "enough": True, "n_out": 6,
         "beneficiaries": {"Wing Guy": {"with": 0.12, "without": 0.17, "delta": 0.05, "n_with": 20, "n_without": 6}}}}}
     r = S.read_player("Wing Guy", h, "BOS", "MIA", vacancy=measured)
-    assert "In the 6 games Big Man missed, he took 17% of BOS's points (12% with Big Man playing)" in r["pro"]
+    assert "In the 6 games Big Man missed, this player took 17% of BOS's points (12% with Big Man playing)" in r["pro"]
     thin = {"BOS": {"out": [("Big Man", 34.0)], "inherit": dict(measured["BOS"]["inherit"], enough=False)}}
     r2 = S.read_player("Wing Guy", h, "BOS", "MIA", vacancy=thin)
     assert not r2["pro"] and any(n.startswith("Big Man is out (34 minutes a game)") for n in r2["notes"])
@@ -256,7 +256,7 @@ def test_the_scan_rules_out_whom_the_build_rules_out():
 def test_his_own_listing_is_a_note_and_rides_the_read():
     h = _hist(mins=[30] * 12, pts=[18] * 12)
     r = S.read_player("Q Guy", h, "BOS", "MIA", status="questionable")
-    assert r["notes"][0] == "Q Guy is listed questionable himself — this read assumes he plays"
+    assert r["notes"][0] == "Q Guy is listed questionable — this read assumes Q Guy plays"
     assert r["own_status"] == "QUESTIONABLE"
 
 
@@ -274,7 +274,7 @@ def test_the_scan_reads_key_players_and_skips_the_ruled_out_and_the_pulled():
     star = next(r for r in out["reads"]["MIA@BOS"]["players"] if r["player"] == "Star")
     assert star["headshot"] == "https://x/star.png" and star["opp"] == "MIA"
     heat = next(r for r in out["reads"]["MIA@BOS"]["players"] if r["player"] == "Heat Man")
-    assert any("points a game in his last" in n and "against BOS" in n for n in heat["notes"]), heat["notes"]
+    assert any("points a game in the last" in n and "against BOS" in n for n in heat["notes"]), heat["notes"]
     order = [S.LABELS and list(S.LABELS).index(r["read"]) for r in out["reads"]["MIA@BOS"]["players"]]
     assert order == sorted(order)
     assert set(out["tapes"]) == {"MIA@BOS"} and out["tapes"]["MIA@BOS"]["rows"]
@@ -311,7 +311,7 @@ def test_the_nba_report_carries_the_tape_the_key_matchups_and_the_breakouts():
          "spread": -9.5, "total": 226.5}
     g["nba_tape"] = S.tape("BOS", "MIA", prof, env=S.environment(g, prof), rest={"MIA": "b2b_home"})
     brk = {"player": "Jay Star", "team": "BOS", "opp": "MIA", "pos": "", "read": "breakout",
-           "label": "Breakout spot", "pro": ["Minutes up 20% over his last five", "MIA allows the most points a game (119.4)",
+           "label": "Breakout spot", "pro": ["Minutes up 20% over the last five", "MIA allows the most points a game (119.4)",
                                              "MIA is on the second night of a back-to-back"], "con": [], "notes": []}
     bad = {"player": "Heat Man", "team": "MIA", "opp": "BOS", "pos": "", "read": "tough", "label": "Tough matchup",
            "pro": [], "con": ["BOS allows the fewest threes a game (10.1)"], "notes": []}

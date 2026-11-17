@@ -2,7 +2,7 @@
 
 Ethan, choosing between the board's estimate and the play-by-play's own
 count for the touchdown rule's red-zone share: "switch". The rule is 45%, or
-40% with 30% of his team's red-zone work (engine/likelyboard.td_rule). The
+40% with 30% of the team's red-zone work (engine/likelyboard.td_rule). The
 share was an estimate: his expected red-zone chances this week against his
 team's red-zone plays a game. The play-by-play has counted his real share of
 his team's red-zone touches over his last games since 15 November
@@ -13,7 +13,7 @@ first:
   * a measured share wins over the estimate, and the rule says "of his
     team's red-zone touches";
   * with none measured (a college scorer, a newcomer), the estimate stands,
-    "of his team's red-zone chances";
+    "of the team's red-zone chances";
   * the rule's bars are the same (45%; 40% with 30%);
   * it switches on after Sunday night's kickoff (Ethan: push it after today's
     games), by one constant, likelyboard.TD_RULE_MEASURED; off, the board is
@@ -68,7 +68,7 @@ def test_a_measured_share_wins_over_the_estimate():
     row = _board(measured=0.36)
     assert row["rz_share"] == 0.36 and row["rz_share_measured"] is True, row
     assert row["td_rule"]["meets"] is True, row["td_rule"]
-    assert row["td_rule"]["why"] == ("42%, 36% of his team's red-zone touches — meets our touchdown rule "
+    assert row["td_rule"]["why"] == ("42%, 36% of the team's red-zone touches — meets our touchdown rule "
                                      "(40% with a red-zone role)"), row["td_rule"]
 
 
@@ -77,7 +77,7 @@ def test_with_none_measured_the_estimate_stands():
     # 2.0 expected chances against 10 red-zone plays a game: 20%, under the 30%.
     assert row["rz_share"] == 0.2 and not row.get("rz_share_measured"), row
     assert row["td_rule"]["meets"] is False
-    assert row["td_rule"]["why"] == ("42%, 20% of his team's red-zone chances — our touchdown rule asks 45%, or "
+    assert row["td_rule"]["why"] == ("42%, 20% of the team's red-zone chances — our touchdown rule asks 45%, or "
                                      "40% with 30% of the red-zone work"), row["td_rule"]
 
 
@@ -97,7 +97,7 @@ def test_off_the_board_is_what_it_was():
         return                                           # switched on: the tests above are the board
     row = _board(measured=0.36, on=False)
     assert row["rz_share"] == 0.2 and not row.get("rz_share_measured"), row
-    assert row["td_rule"]["why"] == ("42%, 20% of his team's red-zone chances — our touchdown rule asks 45%, or "
+    assert row["td_rule"]["why"] == ("42%, 20% of the team's red-zone chances — our touchdown rule asks 45%, or "
                                      "40% with 30% of the red-zone chances"), row["td_rule"]
 
 

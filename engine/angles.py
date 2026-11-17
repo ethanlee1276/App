@@ -301,7 +301,7 @@ def for_game(c, tables: dict) -> list[dict]:
                                 "points_to": "yards",
                                 "text": (f"{r['player']} against {D.np}: {D.it} {D.v('holds', 'hold')} the top "
                                          f"receiver {D.it} {D.v('faces', 'face')} to {w['yds']:.0f} yards a game "
-                                         f"({_most(w['rank'], n)}) — a tough draw for his yards")})
+                                         f"({_most(w['rank'], n)}) — a tough draw for those yards")})
             # 2. The tight end against the tight-end funnel.
             tes = sorted((r for r in mine if str(r.get("pos") or "").upper() == "TE"), key=lambda r: -_share(r))
             t = (tables.get("te") or {}).get(d)

@@ -447,14 +447,14 @@ def usage_reason(prov) -> str:
         return ""
     kind, games, prior_games = prov
     if kind == "own":
-        return (f"Role from his own {games} game"
+        return (f"Role from the player's own {games} game"
                 f"{'s' if games != 1 else ''} this season")
     if kind == "prior":
         return (f"Role from last season's {prior_games} game"
                 f"{'s' if prior_games != 1 else ''} — none logged yet "
                 f"this year")
     w = games / (games + USAGE_PRIOR_GAMES) if games else 0.0
-    return (f"Role {w:.0%} from his {games} game"
+    return (f"Role {w:.0%} from the player's {games} game"
             f"{'s' if games != 1 else ''} this season, the rest from last")
 
 
@@ -746,7 +746,7 @@ def script_multiplier(spread_home, is_home: bool, pos: str
         elif pos in ("WR", "TE") and lead >= 21:
             why = " — a team this far ahead stops throwing"
         reasons.append(f"Game script: {side} by {abs(lead):.0f} — "
-                       f"{(mult - 1) * 100:+.0f}% of his team's TD equity "
+                       f"{(mult - 1) * 100:+.0f}% of the team's TD equity "
                        f"for a {pos}{why}")
     return mult, reasons
 

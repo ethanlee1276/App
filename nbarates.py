@@ -139,8 +139,8 @@ def verdict(res: dict, judge=None) -> tuple[bool, list]:
 
 def report(res: dict, judge=None) -> list:
     lines = ["NBA RATES READ PAST THE LAST TWENTY ON THIS BOX'S OWN SEASONS — the board's constants",
-             f"(every game of {MIN_MINUTES:.0f}+ minutes with {PRIOR_GAMES}+ earlier for his club; the rate times "
-             "the minutes he played; squared error the read takes off)", ""]
+             f"(every game of {MIN_MINUTES:.0f}+ minutes with {PRIOR_GAMES}+ earlier for the club; the rate times "
+             "the minutes played; squared error the read takes off)", ""]
     lines.append(f"{'season':<8}" + "".join(f"{s:>22}" for s in STATS))
     for season, by in sorted(res.items()):
         cells = []

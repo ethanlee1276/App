@@ -87,7 +87,7 @@ def attach_opportunity(slate, avg_pa: dict[str, dict]) -> int:
         if abs(factor - 1.0) >= NOTE_THRESHOLD:
             direction = "volume boost" if factor > 1.0 else "fewer chances"
             prop.pa_note = (f"Batting {prop.lineup_spot}{_ord(prop.lineup_spot)} "
-                            f"tonight (≈{exp:.1f} PA) vs his usual "
+                            f"tonight (≈{exp:.1f} PA) vs the usual "
                             f"{rec['avg_pa']:.1f} — {direction}")
         if factor != 1.0:
             attached += 1

@@ -545,7 +545,7 @@ def words(o: dict, home: str = "the home team") -> str:
     if rec.get("home_cover") is not None and lg.get("home_cover") is not None:
         bits.append(f"home teams covered {rec['home_cover'] * 100:.0f}% (league {lg['home_cover'] * 100:.0f}%)")
     thin = ", a thin sample" if n < MIN_GAMES else ""
-    body = (f" His {n} games since {since}{thin}: " + "; ".join(bits) + ".") if bits else f" {n} games in our record."
+    body = (f" In {n} games since {since}{thin}: " + "; ".join(bits) + ".") if bits else f" {n} games in our record."
     return head + body + " " + CAVEAT
 
 

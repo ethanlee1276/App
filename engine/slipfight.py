@@ -332,8 +332,8 @@ def _head(leg: dict, bout: dict, outs, corner, p: float) -> str:
             return (f"{who} wins {_pct(p)} by our model, held toward the market the way every UFC price on "
                     f"the board is" + (f" (the books, margin out: {_pct(theirs)})" if theirs is not None else ""))
         share = p / mine if mine > 0 else 0.0
-        return (f"{who} {WORDS[market]} {_pct(p)}: {_pct(share)} of his wins go that way in our model, on "
-                f"the board's own {_pct(mine)} that he wins")
+        return (f"{who} {WORDS[market]} {_pct(p)}: {_pct(share)} of the wins go that way in our model, on "
+                f"the board's own {_pct(mine)} to win")
     if market == "fight_distance":
         return (f"Ends inside the distance {_pct(p)} by our model" if leg.get("side") == "no" else
                 f"Goes the distance {_pct(p)} by our model")

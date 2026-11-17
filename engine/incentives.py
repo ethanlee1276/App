@@ -193,7 +193,7 @@ def decorate(recommendations: list[dict], entries: list[dict]) -> int:
         r.setdefault("reasons", []).append(
             f"Incentive watch: needs {e['need']:g} more {e['stat_label']} "
             f"in {e['games_left']} game(s) for a "
-            f"${e['bonus_usd']:,.0f} bonus — his sideline knows it too")
+            f"${e['bonus_usd']:,.0f} bonus — the sideline knows it too")
         r["incentive"] = {k: e[k] for k in
                           ("need", "games_left", "bonus_usd", "status")}
         n += 1

@@ -356,7 +356,7 @@ def td_rule(r: dict) -> dict:
     prob = float(r.get("model_prob") or 0.0)
     share = r.get("rz_share")
     what = "red-zone touches" if r.get("rz_share_measured") else "red-zone chances"
-    has = f", {float(share):.0%} of his team's {what}" if share is not None else ""
+    has = f", {float(share):.0%} of the team's {what}" if share is not None else ""
     if prob >= TD_RULE_PROB:
         return {"meets": True, "why": f"{prob:.0%}{has} — meets our touchdown rule (45%)"}
     if prob >= TD_RULE_FALLBACK and share is not None and float(share) >= TD_RULE_RZ_SHARE:

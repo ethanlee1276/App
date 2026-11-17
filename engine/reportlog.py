@@ -220,10 +220,10 @@ def diff(old: dict, new: dict, home: str, away: str) -> list:
             if p not in oi:
                 out.append(f"{name(p)} was listed {STATUS_WORDS.get(ni[p], ni[p])}")
             elif p not in ni:
-                out.append(f"{name(p)} came off the injury report; he was {STATUS_WORDS.get(oi[p], oi[p])}")
+                out.append(f"{name(p)} came off the injury report (listed {STATUS_WORDS.get(oi[p], oi[p])} before)")
             elif oi[p] != ni[p]:
-                out.append(f"{name(p)} is now {STATUS_WORDS.get(ni[p], ni[p])}; he was "
-                           f"{STATUS_WORDS.get(oi[p], oi[p])}")
+                out.append(f"{name(p)} is now {STATUS_WORDS.get(ni[p], ni[p])} (listed "
+                           f"{STATUS_WORDS.get(oi[p], oi[p])} before)")
     if "pulled" in old and "pulled" in new:
         op, np_ = set(old["pulled"]), set(new["pulled"])
         for p in sorted(np_ - op):

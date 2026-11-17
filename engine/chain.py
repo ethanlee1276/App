@@ -40,18 +40,18 @@ STEP_LABELS = {
     "usage": "Usage bridge",
     "matchup": "Matchup",
     "weather": "Weather",
-    "injury": "Injuries around him",
+    "injury": "Injuries around the player",
     "learned": "Learned model",
     "cap": "Combined-factor cap",
     "trend": "Recent-form shade",
     "context": "Team tendency",
     "player": "Player memory",
-    "lineup": "Who plays around him",
+    "lineup": "Who plays around the player",
     "park": "Ballpark",
     "statcast": "Contact quality",
     "ump": "Plate umpire",
     "rare": "Rare-event damping",
-    "coherence": "Kept possible with his other lines",
+    "coherence": "Kept possible with the player's other lines",
     "environment": "Scoring environment",
     "rest": "Rest and layoff",
     "power_play": "Power play",
@@ -61,7 +61,7 @@ STEP_LABELS = {
     "shooting": "Shooting, luck taken out",
     # Basketball's rates read past his last twenty games: his older games and
     # his role's league rate in them (engine/nba/rates, 2026-11-04).
-    "rates": "Rate, read past his last twenty",
+    "rates": "Rate, read past the last twenty",
 }
 
 #: Where the multiplying starts.

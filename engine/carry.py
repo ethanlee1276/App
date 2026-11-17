@@ -586,7 +586,7 @@ def decorate(recommendations: list[dict], report: dict) -> int:
             r["warnings"].append(
                 f"Offseason {kind}: {detail}. Last season's games are still "
                 f"in the average — there is nothing else yet — so treat this "
-                f"as describing the job he had, not the one he has")
+                f"as describing the old job, not the current one")
             r["carried"]["reset"] = {"kind": kind, "detail": detail}
             if not STAKE_ON_RESET and r.get("recommended"):
                 # Shown, not staked. See STAKE_ON_RESET for why those are

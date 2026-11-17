@@ -108,12 +108,12 @@ def attach_streaks(slate, factors_by_market: dict[str, dict]) -> int:
         delta = (f["factor"] - 1.0) * 100
         if state == "hot":
             prop.streak_note = (f"Hot stretch — last {WINDOW} games {recent:.2f} vs "
-                                f"his usual {base:.2f}. Measured league-wide, such "
+                                f"the usual {base:.2f}. Measured league-wide, such "
                                 f"streaks give back {abs(delta):.0f}% the next game "
                                 f"({f['n']:,} cases)")
         else:
             prop.streak_note = (f"Cold stretch — last {WINDOW} games {recent:.2f} vs "
-                                f"his usual {base:.2f}. Measured league-wide, such "
+                                f"the usual {base:.2f}. Measured league-wide, such "
                                 f"slumps bounce back {abs(delta):.0f}% the next game "
                                 f"({f['n']:,} cases)")
         stamped += 1

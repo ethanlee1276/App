@@ -181,7 +181,7 @@ def book_props(conn, kickoffs: dict, markets=MARKETS, funnel: Counter | None = N
         i = bisect.bisect_right([g[0] for g in games], t)
         if i >= len(games) or games[i][0] - t > LOOKAHEAD:
             continue
-        funnel["quotes before his next kickoff"] += 1
+        funnel["quotes before the next kickoff"] += 1
         k = (n, games[i][1], market, str(book or "").lower())
         if k not in last or t > last[k][0]:
             last[k] = (t, float(line), over, under)

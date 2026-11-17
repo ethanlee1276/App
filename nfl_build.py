@@ -857,7 +857,7 @@ def main() -> None:
                 # where he plays (nflverse.roster_teams). His price was
                 # refused rather than attached to the wrong card.
                 print(f"  Refused {res.wrong_game} price(s) from a game the "
-                      f"player is not in — filed under his old team?")
+                      f"player is not in — filed under an old team?")
             # Keep the spread and total we just paid for. Both were parsed,
             # attached and priced against, then dropped — which is why the
             # spread/total model has never had a stored close to be graded

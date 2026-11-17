@@ -182,17 +182,17 @@ def report(ledger_path, lookup=None) -> list:
                 word = "WON" if got["won"] else "LOST"
                 if mine:
                     bug.append(pnl)
-                    out.append(f"      ESPN now: he {word} (bout dated {got['date']}) — "
+                    out.append(f"      ESPN now: the fighter {word} (bout dated {got['date']}) — "
                                f"LOOKS LIKE THE BUG; it would have graded {status}, {_units(pnl)}")
                 else:
-                    out.append(f"      ESPN now: he {word} (bout dated {got['date']}) — the "
-                               f"results feed missed him then (a name or the timing), not the "
+                    out.append(f"      ESPN now: the fighter {word} (bout dated {got['date']}) — the "
+                               f"results feed missed the fighter then (a name or the timing), not the "
                                f"midnight bug; it would have graded {status}, {_units(pnl)}")
             elif found == "bout":
                 out.append(f"      ESPN now: no winner (bout dated {got['date']}): a draw or "
                            f"no contest — the void stands")
             elif found == "no bout":
-                out.append("      ESPN now: no bout for him near the card (scratched or moved) "
+                out.append("      ESPN now: no bout for that fighter near the card (scratched or moved) "
                            "— the void stands")
             elif found == "no fighter":
                 out.append("      ESPN has no fighter by that name — can't say")

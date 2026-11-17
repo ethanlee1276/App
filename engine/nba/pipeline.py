@@ -195,14 +195,14 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     context_notes = [n for n in (env_note, lay_note, prop.get("dvp_note"),
                                  shoot_note, rates_note, prop.get("lineup_note")) if n]
     if base_list is not minutes:
-        context_notes.append(f"Minutes read from his {len(base_list)} games this season, "
+        context_notes.append(f"Minutes read from the {len(base_list)} games this season, "
                              f"not last season's end (measured: they read closer)")
     # THE ROTATION'S NEWS, said where it moved his minutes (measured
     # 2026-11-04, `hoops.NBA`).
     if base != jumped_from:
         context_notes.append(
-            f"His minutes just jumped ({sum(minutes[:3]) / 3:.0f} a game over his last three) — "
-            f"his base reads {base:.1f}, not {jumped_from:.1f} (measured: a jump like that mostly holds)")
+            f"Minutes just jumped ({sum(minutes[:3]) / 3:.0f} a game over the last three) — "
+            f"the base reads {base:.1f}, not {jumped_from:.1f} (measured: a jump like that mostly holds)")
     _back = back_multiplier(prop.get("missed_games"), bool(prop.get("second_game_back")), tune)
     if _back != 1.0:
         _n = int(prop.get("missed_games") or 0)
@@ -213,7 +213,7 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
     if float(prop.get("return_minutes") or 0.0) > 0:
         context_notes.append(
             f"A regular is back tonight ({prop.get('return_names') or 'a teammate'}) — "
-            f"{float(prop['return_minutes']):.1f} of his minutes given back (measured)")
+            f"{float(prop['return_minutes']):.1f} of this player's minutes given back (measured)")
     _five_note = starter_note(prop.get("starts"), prop.get("five_out"), prop.get("five_back"), five_min)
     if _five_note:
         context_notes.append(_five_note)
@@ -224,8 +224,8 @@ def project(prop: dict, tune: LeagueTuning = NBA) -> dict:
                    "left_out": [float(minutes[i]) for i in left_out]}
     if left_out:
         context_notes.append(
-            f"{len(left_out)} older game{'s' if len(left_out) > 1 else ''} he left early "
-            f"({', '.join(f'{minutes[i]:.0f}' for i in left_out)} min) left out of his minutes — "
+            f"{len(left_out)} older game{'s' if len(left_out) > 1 else ''} left early "
+            f"({', '.join(f'{minutes[i]:.0f}' for i in left_out)} min) left out of the minutes — "
             f"measured, they only dragged the base down")
     elif early_exits["kept"]:
         recent = [i for i in _ex if i < _RECENT]

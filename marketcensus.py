@@ -386,14 +386,14 @@ def render() -> str:
     out += [f"- {f}" for f in got] or ["- none"]
     out += ["", "## Bought for its own board", "",
             "- **First touchdown** (NFL and college, since 2026-10-31): the Long Shots board. Priced "
-            "by its own model — the lines for the team, his share of its carries, targets and "
+            "by its own model — the lines for the team, the player's share of its carries, targets and "
             "touchdowns for the player, each league on its own fit (`engine/firsttd`, "
             "docs/FIRST_TD_RESEARCH.md) — and graded off the game's first scorer (the NFL's "
             "play-by-play; college's box score, from ESPN's scoring plays), not through the prop "
             "chain above.",
             "- **First basket** (NBA, since 2026-10-31): the NBA's Long Shots board. Priced by its "
             "own model — both teams' tip records for who takes the first shot, and for the player "
-            "his share among tonight's likely starting five by his shots in the first three minutes "
+            "the share among tonight's likely starting five by shots in the first three minutes "
             "a start (`engine/firstbasket`, the box study in docs/FIRST_TD_RESEARCH.md and "
             "docs/NBA_LAB.md) — and graded off the game's first made shot or free throw in the box's "
             "shots.", ""]

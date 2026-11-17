@@ -1381,7 +1381,7 @@ def read(boards: dict, leg: dict, conn=None) -> dict | None:
                         row[k] = None
                     row["refused"] = ("every book took the player's props down — the board treats that as out"
                                       if st == "pulled" else
-                                      f"he is listed {st.lower()} — the board takes a ruled-out player off")
+                                      f"the player is listed {st.lower()} — the board takes a ruled-out player off")
             return row
         row = _cached(key, build)
         return dict(row) if row else None

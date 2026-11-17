@@ -202,7 +202,7 @@ def report(sport: str, d: dict, limit: int = 40) -> list[str]:
         sc = x.get("scoring") or {}
         if sc.get("go_to"):
             out.append(f"        go-to scorer: {float(sc.get('prob') or 0):.0%} to score"
-                       + (f", his team expected to score {float(sc['implied']):.1f}" if _f(sc.get("implied")) else ""))
+                       + (f", the team expected to score {float(sc['implied']):.1f}" if _f(sc.get("implied")) else ""))
         if x.get("con"):
             out.append("        against: " + " | ".join(str(t) for t in x["con"]))
         if x.get("pro"):

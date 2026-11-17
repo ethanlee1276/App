@@ -493,7 +493,7 @@ def main(argv=None) -> int:
     per = " · ".join("%s: %s (n %s)" % (k, s["excess"], s["n"]) for k, s in u["by_season"].items())
     print(f"Attention — {a.sport.upper()}: {v['closes']} closes with views the day before; test seasons {v['test']}")
     print(f"  ratio ≥ {SPIKE}: the under against the close's fair chance {u['excess']} (t {u['t']}, n {u['n']}) {per}")
-    print(f"  the close minus his season average: spiked {v['line_minus_average']['spiked']}, "
+    print(f"  the close minus the season average: spiked {v['line_minus_average']['spiked']}, "
           f"not {v['line_minus_average']['not']}")
     print(f"  THE BAR: ≥ {MIN_EXCESS:+.2f}, t ≥ {MIN_T}, ≥ {MIN_CASES} closes, above zero each season — "
           f"{'HOLDS' if v['holds'] else 'does not hold'}")

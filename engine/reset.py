@@ -288,7 +288,7 @@ def decorate(recommendations: list[dict], report: dict) -> int:
                 f"Stale sample ({e['kind']}, week {e['week']}): {e['detail']}, "
                 f"but only {e['kept']} game(s) since — too few to project from, "
                 f"so the older games are still in the average. Treat this "
-                f"number as describing a role he may no longer have")
+                f"number as describing a role the player may no longer have")
             r["sample_reset"] = e
             n += 1
     return n

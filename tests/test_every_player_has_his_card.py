@@ -287,7 +287,7 @@ def test_the_box_check_asks_for_his_card_in_order_and_says_what_it_draws():
     assert "Connor McDavid" in text and "No Face" not in text, "only a regular with a face"
     assert "→ the cards draw: whole for 1 of 1" in text, "the action shot missing, his headshot"
     assert "→ the cards draw: card size for 1 of 1" in text, "the fighter's at the card's size"
-    assert "WNBA\n   no regular with a face on file: every card draws his initials" in text
+    assert "WNBA\n   no regular with a face on file: every card draws the player's initials" in text
     asked.clear()
     lines = PC.report(conn, ("nhl",), get=lambda u: (asked.append(u) or (True, "200 image/jpeg 1 b")))
     assert asked == [action, NHL_FACE] and "→ the cards draw: action for 1 of 1" in "\n".join(lines)

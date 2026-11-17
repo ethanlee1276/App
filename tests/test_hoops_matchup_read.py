@@ -72,7 +72,7 @@ def test_the_measured_transfer_moves_the_projection():
     assert all(0.0 < v <= 1.0 for lg in H.TRANSFER.values() for v in lg.values())
     rating = {"PHX": {"pts": {"pg": 90.0, "league": 80.0, "rank": 1, "of": 13, "games": 20, "factor": 1.10}}}
     m, note = H.projection_mult("nba", rating, "PHX", "pts")
-    assert m == 1.10 and "+10% on his projection" in note and "the whole" in note
+    assert m == 1.10 and "+10% on the projection" in note and "the whole" in note
     m, note = H.projection_mult("wnba", rating, "PHX", "pts")
     assert m == 1.079 and "79% of the" in note
     assert H.projection_mult("nba", rating, "LVA", "pts") == (1.0, "")

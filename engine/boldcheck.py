@@ -125,17 +125,17 @@ def flags(row: dict, side: str) -> list:
     carried = row.get("carried") or {}
     reset = carried.get("reset") if isinstance(carried, dict) else None
     if isinstance(reset, dict) and reset.get("kind") == "team change":
-        out.append(f"His history is from another team ({reset.get('detail') or 'an offseason move'}) — "
-                   f"the number is built on a role he no longer has.")
+        out.append(f"The player's history is from another team ({reset.get('detail') or 'an offseason move'}) — "
+                   f"the number is built on a role that is gone.")
     shift = _snap_shift(row)
     if shift:
         now, then = shift
         heavy = isinstance(carried, dict) and (carried.get("weight") or 0) >= 0.5
         if heavy and now <= then - ROLE_SHIFT and side == "over":
-            out.append(f"His role has shrunk — {now:.0%} of the snaps this season against {then:.0%} last — "
+            out.append(f"The role has shrunk — {now:.0%} of the snaps this season against {then:.0%} last — "
                        f"and our over still rests on last season.")
         elif heavy and now >= then + ROLE_SHIFT and side == "under":
-            out.append(f"His role has grown — {now:.0%} of the snaps this season against {then:.0%} last — "
+            out.append(f"The role has grown — {now:.0%} of the snaps this season against {then:.0%} last — "
                        f"and our under still rests on last season.")
     mv = row.get("line_move") or {}
     if isinstance(mv, dict) and mv.get("verdict") == "against" and (mv.get("steam") or abs(_f(mv.get("delta")) or 0) >= 1):
@@ -169,7 +169,7 @@ def step_reason(row: dict, side: str, line, shown: float, fair: float):
         return None, moved
     top = max(steps, key=lambda s: abs(_f(s.get("mult")) - 1.0))
     why = str(top.get("why") or top.get("label") or top.get("key") or "").strip()
-    return (f"{why} — from his own form ({p_base:.0%} on this number) to {p_final:.0%}.", moved)
+    return (f"{why} — from the player's own form ({p_base:.0%} on this number) to {p_final:.0%}.", moved)
 
 
 def own_games(row: dict, side: str, line, shown: float, fair: float):
@@ -183,8 +183,8 @@ def own_games(row: dict, side: str, line, shown: float, fair: float):
     rate = hits / n
     if rate >= fair + OWN_OVER_MARKET and rate >= shown - OWN_UNDER_SHOWN:
         word = "over" if side == "over" else "under"
-        return (f"His own games back it: {word} {float(line):g} {_word(row.get('market') or '')} "
-                f"in {hits} of his last {n} ({rate:.0%}) — the books say {fair:.0%}.", rate, n)
+        return (f"The player's own games back it: {word} {float(line):g} {_word(row.get('market') or '')} "
+                f"in {hits} of the last {n} ({rate:.0%}) — the books say {fair:.0%}.", rate, n)
     return None, rate, n
 
 
@@ -218,15 +218,15 @@ def check(row: dict, side, line, shown, fair, raw=None) -> dict | None:
     games, rate, n = own_games(row, side, line, shown, fair)
     why = [w for w in (step, games) if w]
     if gap > BIG_GAP and not games:
-        extra = (f" His own games clear it {rate:.0%} of the time over {n}." if rate is not None
-                 else f" Only {n} games of his to read.")
+        extra = (f" The player's own games clear it {rate:.0%} of the time over {n}." if rate is not None
+                 else f" Only {n} of the player's games to read.")
         return dict(out, verdict=UNEXPLAINED, label=LABEL[UNEXPLAINED],
                     why=[f"{gap:.0%} from the books is the size data errors come in, and a step alone "
                          f"does not carry a number that far.{extra}"] + ([step] if step else []))
     if why:
         return dict(out, verdict=FOUND, label=LABEL[FOUND], why=why)
-    tail = (f" His own games clear it {rate:.0%} of the time over {n} — near the books' {fair:.0%}."
-            if rate is not None else f" Only {n} games of his to read.")
+    tail = (f" The player's own games clear it {rate:.0%} of the time over {n} — near the books' {fair:.0%}."
+            if rate is not None else f" Only {n} of the player's games to read.")
     return dict(out, verdict=UNEXPLAINED, label=LABEL[UNEXPLAINED],
                 why=["Nothing in the circumstances moved our number this far — no teammate out, "
                      "no quarterback change, no matchup step that accounts for it." + tail])

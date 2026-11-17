@@ -261,7 +261,7 @@ def test_the_real_line_consensus_is_the_fields_and_only_before_the_start():
         conn.close()
     got = props[("amon ra st brown", "2025-09-07", "receptions")]
     assert got[0] == 4.5 and got[2] == 3, "each book's last quote before the kickoff; the in-play 6.5 never counts"
-    assert funnel["quotes read"] == 5 and funnel["quotes before his next kickoff"] == 4
+    assert funnel["quotes read"] == 5 and funnel["quotes before the next kickoff"] == 4
     assert funnel["props with a three-book consensus"] == 1
     # The kickoff comes from the schedule, not the row: 1 pm Eastern in September is 17:00 UTC.
     assert EL.kickoff_utc("2025-09-07", "13:00") == kick

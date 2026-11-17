@@ -90,7 +90,7 @@ def test_only_pregame_quotes_make_the_close():
         "an in-game quote alone is no close"
     assert by["Colston Loveland"]["new_line"] == 29.5 and by["Colston Loveland"]["new_odds"] == 100
     assert "Nobody Known" not in by and "SEA" not in by and "Open Guy" not in by
-    assert [r for _b, r in p["unplaced"]] == ["no stat log for him that week"]
+    assert [r for _b, r in p["unplaced"]] == ["no stat log for that player that week"]
     assert p["examined"] == 4 and p["placed"] == 3
 
 

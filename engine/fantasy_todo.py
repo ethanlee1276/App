@@ -113,7 +113,7 @@ def build(*, lineup: dict | None = None, h2h: dict | None = None, pickups: dict 
             out.append({"kind": "risk", "tone": "warn",
                         "title": f"{s['player']} is {str(wk.get('status') or 'listed').lower()}: "
                                  f"{round(float(p) * 100)}% to play",
-                        "detail": (f"His game kicks off {when}; " if when else "")
+                        "detail": (f"The game kicks off {when}; " if when else "")
                         + "have a bench player who plays later ready to swap in.",
                         "gain": None, "section": "lineup"})
     # 3. The week's matchup.

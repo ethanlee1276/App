@@ -252,7 +252,7 @@ KYREN_CONTEXT = {
     "alt_lines": [{"book": "DraftKings", "line": 59.5, "over_odds": -170, "under_odds": 135}],
     "ripples": [{"out": "Tutu Atwell", "measured": False, "delta": None, "text": "Tutu Atwell out — not measured"},
                 {"out": "Puka Nacua", "measured": True, "delta": 0.031,
-                 "text": "Puka Nacua out — over his 6 missed games, Williams's share of the carries rose 3.1%"}],
+                 "text": "Puka Nacua out — over the 6 missed games, Williams's share of the carries rose 3.1%"}],
 }
 # The market's own numbers, the way betting.Recommendation writes them: the
 # sharp book's de-vigged chance for the row's side, and the field's median
@@ -513,18 +513,18 @@ def _facts(leg):
 def test_every_leg_carries_the_boards_own_facts_defence_and_offence():
     f = _facts(_leg(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115))
     assert f["Projection"] == "We project 82 (likely range 41–123) against 69.5"
-    assert f["Recent games"] == "Cleared 69.5 in 5 of his last 5 (80, 75, 90, 85, 70, latest first)"
+    assert f["Recent games"] == "Cleared 69.5 in 5 of the last 5 (80, 75, 90, 85, 70, latest first)"
     assert f["Defense"].startswith("BUF allow 128 rushing yards to RBs") and f["Defense"].endswith("our number ×1.06 for it")
     assert f["Usage"] == "×1.08 — Takes 71% of the carries", "the projection step that moved him most"
     assert "Weather" not in f, "a step that moved nothing is not a reason"
     assert f["Game script"] == "LA by 3.5 at 54.5 — favored in a shootout"
     assert f["Matchup read"] == ("Good matchup · Takes 71% of the carries; BUF gives up the 4th-most rushing "
                                  "yards to RBs · against: <b>LA</b> trail late")
-    assert f["Around him"].startswith("Puka Nacua out") and f["Status"] == "Listed Questionable"
+    assert f["Around the player"].startswith("Puka Nacua out") and f["Status"] == "Listed Questionable"
     assert f["Watch"].startswith("Carried from 2025"), "the Edge board's grade notes stay off a parlay"
     assert f["The books"] == "Their own price, the margin taken out, says 53%"
     under = _facts(_leg(player="Kyren Williams", market="rush_yds", side="under", line=69.5, odds=-105))
-    assert under["Recent games"].startswith("Stayed under 69.5 in 0 of his last 5")
+    assert under["Recent games"].startswith("Stayed under 69.5 in 0 of the last 5")
     assert under["The books"].endswith("says 47%"), "the other side of the book's own number"
     alt = _facts(_leg(player="Kyren Williams", market="rush_yds", side="over", line=59.5))
     assert "The books" not in alt, "the book's price is for its own number, not an alternate"
@@ -543,8 +543,8 @@ def test_scorers_and_game_lines_carry_their_own_facts():
 
 def test_a_prop_carries_his_log_against_this_defence_and_the_teammates_out():
     f = _facts(_leg(player="Kyren Williams", market="rush_yds", side="over", line=69.5, odds=-115))
-    assert f["Against BUF"] == "88, 61 in his log against them (cleared 69.5 in 1 of 2)"
-    assert f["Lineup"].startswith("Puka Nacua out — over his 6 missed games"), "measured ripples only"
+    assert f["Against BUF"] == "88, 61 in the player's log against them (cleared 69.5 in 1 of 2)"
+    assert f["Lineup"].startswith("Puka Nacua out — over the 6 missed games"), "measured ripples only"
     assert "not measured" not in " ".join(f.values())
 
 

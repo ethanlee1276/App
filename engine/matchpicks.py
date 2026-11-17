@@ -380,10 +380,10 @@ def not_backed(prob: float, odds, side: str) -> str:
     from .odds import american_to_prob
     word = "over" if side == "over" else "under"
     if prob < 0.5:
-        return (f"our number disagrees with this read: his likeliest {word} is {prob:.0%}, "
+        return (f"our number disagrees with this read: the likeliest {word} is {prob:.0%}, "
                 f"so the {word} loses more often than not")
     if prob < READ_PICK_MIN:
-        return (f"our number on his {word} is {prob:.0%}, close to a coin flip — a pick needs "
+        return (f"our number on the {word} is {prob:.0%}, close to a coin flip — a pick needs "
                 f"{READ_PICK_MIN:.0%}, so the read alone is not a bet")
     try:
         implied = american_to_prob(int(odds))

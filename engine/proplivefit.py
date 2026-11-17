@@ -283,7 +283,7 @@ def report(scored: dict, title: str) -> str:
     for market in sorted(scored):
         stops = scored[market]
         n = max(v["n"] for v in stops.values())
-        lines.append(f"{market}  ({n:,} player-games; the line is his recent average rounded to the half below)")
+        lines.append(f"{market}  ({n:,} player-games; the line is the player's recent average rounded to the half below)")
         lines.append("  stop          n       over%   Brier: ours  pregame  pace    blend   log loss")
         for stop, v in stops.items():
             b = v["brier"]

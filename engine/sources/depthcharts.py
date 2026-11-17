@@ -364,8 +364,8 @@ def qb_dependency(rows: list[dict], week: int,
         status = status_of.get((team, normalize_name(qb)))
         if status in QB_CONCERN:
             notes[team] = (f"QB dependency: QB1 {qb} is {status} — every "
-                           f"pass-catcher number here rides on his "
-                           f"availability")
+                           f"pass-catcher number here rides on {qb} "
+                           f"playing")
     return notes
 
 

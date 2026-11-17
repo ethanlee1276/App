@@ -313,7 +313,7 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         if them.get("starter_sure") and sv is not None:
             gsax = them.get("gsax")
             reasons.append(f"Goalie impact: faces {them['starter']} (.{round(sv * 1000):03d} save rate, "
-                           f"regressed over his recent seasons"
+                           f"regressed over recent seasons"
                            + (f"; {gsax:+.1f} goals saved above expected lately" if gsax is not None else "")
                            + ")")
         else:
@@ -331,9 +331,9 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         if me.get("last10") and dressed < M.ROLE_MIN_GAMES:
             passes.append(f"dressed in only {dressed} of {prop.team}'s last 10 games")
         elif swing > M.ROLE_SWING:
-            passes.append(f"ice time moved {swing:.0%} over his last 5 games")
+            passes.append(f"ice time moved {swing:.0%} over the last 5 games")
         if proj.get("sh") is not None:
-            toward = (f"what his shots were worth ({proj['xsh']:.1%})" if proj.get("xsh") is not None
+            toward = (f"what the shots were worth ({proj['xsh']:.1%})" if proj.get("xsh") is not None
                       else "the league rate")
             reasons.append(f"Finishing regressed: {proj['sh']:.1%} shooting, pulled toward {toward} "
                            f"— volume over finishing")
@@ -349,7 +349,7 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
         if xp and xp.get("iff"):
             luck = xp["goals"] - xp["ixg"]
             reasons.append(f"Shot quality: {xp['ixg']:.1f} expected goals on {xp['iff']} unblocked attempts "
-                           f"over his last {xp['games']} games, {xp['goals']} scored"
+                           f"over the last {xp['games']} games, {xp['goals']} scored"
                            + (f" — running {'hot' if luck > 0 else 'cold'} by {abs(luck):.1f}"
                               if abs(luck) >= M.LUCK_GOALS else ""))
     if me.get("xg") is not None and them.get("xg") is not None:
@@ -364,7 +364,7 @@ def price_prop(prop, proj: dict, p: dict, opponent: str, assets: dict, date: str
     rf = proj.get("rest_factor") or 1.0
     if abs(rf - 1.0) >= 0.005:
         who = prop.team if proj.get("rest") == "tired" else opponent
-        reasons.append(f"Rest: {who} on the second night moves his {'saves' if goalie else 'number'} "
+        reasons.append(f"Rest: {who} on the second night moves the {'saves' if goalie else 'number'} "
                        f"{rf - 1:+.1%} (measured over two seasons of back-to-backs)")
     if flags or passes:
         reasons.append("Risk factors: " + "; ".join(flags + passes))

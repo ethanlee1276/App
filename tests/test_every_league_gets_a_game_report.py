@@ -342,7 +342,7 @@ def test_what_changed_sees_a_scratched_starter_a_confirmed_goalie_and_the_lineup
                                     for i in meta4["MIA@BOS"]["injuries"]]
     rep4, _ = _attach(board4, "nba", meta=meta4, out=out3, at="2026-10-22T17:45:00")
     items4 = next(b for s in rep4["sections"] if s["key"] == "changes" for b in s["blocks"] if b["type"] == "list")["items"]
-    assert items4 == ["Jaylen Brown (BOS) is now out; he was questionable."], items4
+    assert items4 == ["Jaylen Brown (BOS) is now out (listed questionable before)."], items4
 
 
 def test_every_build_hangs_it_last_of_the_game_hooks_and_the_paywall_takes_it():

@@ -51,7 +51,7 @@ def test_a_key_player_who_could_struggle_is_listed_with_his_reasons():
     assert [x["player"] for x in a["struggle"]] == ["Duke Back"], "a bench receiver is no key player"
     lines = "\n".join(A.report("cfb", _board()))
     assert "Duke Back (DUKE vs MIA, RB): \"Tough for yards — still the go-to scorer\" · 62% of the carries" in lines
-    assert "go-to scorer: 58% to score, his team expected to score 31.0" in lines
+    assert "go-to scorer: 58% to score, the team expected to score 31.0" in lines
     assert "against: Miami's run defense ranks 5th" in lines and "for: Duke is expected to score 31" in lines
 
 

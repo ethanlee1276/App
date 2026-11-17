@@ -35,16 +35,16 @@ def test_a_measured_step_up_is_a_real_find():
     v = _check("Kenyon Sadiq|rec_yds")
     assert v["verdict"] == B.FOUND and v["label"] == "Bolder than the books"
     assert "Mason Taylor just ruled out ahead of him at TE" in v["why"][0]
-    assert "from his own form (34% on this number) to 67%" in v["why"][0]
+    assert "from the player's own form (34% on this number) to 67%" in v["why"][0]
 
 
 def test_his_own_games_backing_it_is_a_real_find():
     v = _check("Omarion Hampton|receptions")
     assert v["verdict"] == B.FOUND
-    assert v["why"] == ["His own games back it: over 1.5 catches in 7 of his last 11 (64%) — the books say 57%."]
+    assert v["why"] == ["The player's own games back it: over 1.5 catches in 7 of the last 11 (64%) — the books say 57%."]
     v = _check("Ladd McConkey|receptions")
     assert v["verdict"] == B.FOUND and v["gap"] > B.BIG_GAP, "past 25 points only his own games can carry it"
-    assert "under 4.5 catches in 9 of his last 12 (75%)" in v["why"][0]
+    assert "under 4.5 catches in 9 of the last 12 (75%)" in v["why"][0]
 
 
 def test_another_teams_history_is_a_data_problem():
@@ -56,7 +56,7 @@ def test_another_teams_history_is_a_data_problem():
 def test_nothing_behind_it_is_unexplained_and_stays_off():
     v = _check("Garrett Wilson|rec_yds")
     assert v["verdict"] == B.UNEXPLAINED
-    assert "His own games clear it 44% of the time over 9" in v["why"][0]
+    assert "The player's own games clear it 44% of the time over 9" in v["why"][0]
 
 
 def test_inside_the_bar_there_is_nothing_to_check():
@@ -70,7 +70,7 @@ def test_the_role_and_the_tape_flags():
     r["logs"] = [{"week": 2, "value": 1, "snaps": 0.30}, {"week": 1, "value": 1, "snaps": 0.32},
                  {"week": 17, "value": 4, "snaps": 0.80}, {"week": 16, "value": 3, "snaps": 0.78},
                  {"week": 15, "value": 5, "snaps": 0.82}]
-    assert any("His role has shrunk — 31% of the snaps" in f for f in B.flags(r, "over"))
+    assert any("The role has shrunk — 31% of the snaps" in f for f in B.flags(r, "over"))
     assert not any("role" in f for f in B.flags(r, "under")), "a shrunken role backs an under"
     r = dict(ROWS["Omarion Hampton|receptions"], line_move={"verdict": "against", "delta": -1.0, "open": 2.5, "current": 1.5})
     assert any("moved the line away from our side" in f for f in B.flags(r, "over"))

@@ -121,19 +121,19 @@ def note(starts, five_out: int, five_back: int, shift: float) -> str:
     sign = f"{shift:+.1f} minutes"
     if bool(list(starts)[0]):
         if int(five_back or 0) >= 1:
-            return (f"A starter is back tonight and he started {k10} of his last {n10} — "
+            return (f"A starter is back tonight, and this player started {k10} of the last {n10} — "
                     f"{sign} (measured: the fill-in is the one who goes back to the bench)")
-        return (f"Starting lately after coming off the bench ({k10} of his last {n10}) — {sign} "
+        return (f"Starting lately after coming off the bench ({k10} of the last {n10}) — {sign} "
                 f"(measured: a new starter plays over a base made partly of bench games)")
     if int(five_out or 0) >= 1:
         one = int(five_out) == 1
         who = "one of the club's last starting five is" if one else \
-              f"{int(five_out)} of his club's last starting five are"
+              f"{int(five_out)} of the club's last starting five are"
         return (f"Off the bench, and {who} ruled out tonight — {sign} "
                 f"(measured: a bench man starts {'about a quarter' if one else 'nearly half'} "
                 f"of the time then)")
-    return (f"Back on the bench after starting {k10} of his last {n10} — {sign} "
-            f"(measured: his base still carries the starter's minutes)")
+    return (f"Back on the bench after starting {k10} of the last {n10} — {sign} "
+            f"(measured: the base still carries the starter's minutes)")
 
 
 def club_news(team: str, hist: dict, days: list, gone: dict, back: dict) -> tuple[list, list]:

@@ -131,12 +131,12 @@ def test_the_projection_carries_it_and_the_card_says_so():
     assert shift < 0 and abs(moved["proj_min"] - round(plain["proj_min"] + shift * 1.0, 1)) <= 0.11, \
         (plain["proj_min"], moved["proj_min"], shift)
     assert moved["projection"] < plain["projection"]
-    assert any("Back on the bench after starting 6 of his last 10" in c for c in moved["context"]), moved["context"]
+    assert any("Back on the bench after starting 6 of the last 10" in c for c in moved["context"]), moved["context"]
     out = pipeline.project(_prop(starts=[False] * 20, five_out=2), NBA)
     assert out["proj_min"] > plain["proj_min"]
-    assert any("2 of his club's last starting five are ruled out tonight" in c for c in out["context"])
+    assert any("2 of the club's last starting five are ruled out tonight" in c for c in out["context"])
     fill = pipeline.project(_prop(is_starter=True, starts=[True] * 2 + [False] * 18, five_back=1), NBA)
-    assert any("A starter is back tonight and he started 2 of his last 10" in c for c in fill["context"])
+    assert any("A starter is back tonight, and this player started 2 of the last 10" in c for c in fill["context"])
     # The vacancy's caps hold it: never past his recent high plus the cap.
     big = pipeline.project(_prop(starts=[False] * 20, five_out=4, vacancy_minutes=30.0), NBA)
     assert big["proj_min"] <= 24.0 + NBA.vacancy_cap_over_high + 1e-9

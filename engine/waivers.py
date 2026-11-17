@@ -133,7 +133,7 @@ def vacancies(injuries: list[dict], usage: list[dict],
                 "share": m.get("season"), "delta": m.get("delta"),
                 "fp_pg": m.get("fp_pg"), "headshot": m.get("headshot", ""),
                 "why": f"{hurt} is {status.title()} — that {pos} work has to "
-                       f"go somewhere, and he already holds "
+                       f"go somewhere, and this player already holds "
                        f"{(m.get('season') or 0):.0%} of it",
             })
     # The man already second in line inherits the job, so the share he
@@ -167,7 +167,7 @@ def rising(usage: list[dict], limit: int = LIMIT,
             "position": str(u.get("position") or "").upper(),
             "kind": "rising", "share": u.get("last"), "delta": delta,
             "fp_pg": u.get("fp_pg"), "headshot": u.get("headshot", ""),
-            "why": f"{metric} up {delta:+.0%} on his last four weeks — "
+            "why": f"{metric} up {delta:+.0%} on the last four weeks — "
                    f"now {(u.get('last') or 0):.0%}",
         })
     out.sort(key=lambda r: -(r.get("delta") or 0))

@@ -373,7 +373,7 @@ def test_the_injury_report_comes_first():
                                              "status": "OUT"}]}
     row = SR.read({"nfl": out}, ALLEN, conn=conn)
     assert row["injury_status"] == "Out" and row["projection"] is None and row["model_over"] is None
-    assert row["refused"] == "he is listed out — the board takes a ruled-out player off"
+    assert row["refused"] == "the player is listed out — the board takes a ruled-out player off"
     AB.HISTORY_DB = path
     try:
         at = SG.price_leg({"nfl": out}, dict(ALLEN))
@@ -382,7 +382,7 @@ def test_the_injury_report_comes_first():
         AB.HISTORY_DB = None
     assert at["found"] == "read" and at["prob"] is None and at["verdict"] == "unpriced"
     facts = {f["k"]: f["t"] for f in at["why"]}
-    assert facts["Status"] == "Listed Out" and facts["Our model"].startswith("Won't put a number on it: he is listed out")
+    assert facts["Status"] == "Listed Out" and facts["Our model"].startswith("Won't put a number on it: the player is listed out")
     assert "Josh Allen: listed Out" in SG.alerts([at])
     SR.clear_cache()
     q = _nfl_board()
@@ -403,7 +403,7 @@ def test_every_sports_injury_list_is_read():
     nhl["nhl"]["games"][0]["nhl_tape"] = {"sides": {"TOR": {"injuries": [{"player": "Fwd TOR", "status": "out"}]},
                                                      "MTL": {"injuries": []}}}
     leg = {"sport": "nhl", "player": "Fwd TOR", "market": "sog", "side": "over", "line": 2.5, "odds": -140}
-    assert SR.read(nhl, leg, conn=conn)["refused"].startswith("he is listed out")
+    assert SR.read(nhl, leg, conn=conn)["refused"].startswith("the player is listed out")
     SR.clear_cache()
     nhl["nhl"]["games"][0]["nhl_tape"]["sides"]["TOR"]["injuries"][0]["status"] = "day-to-day"
     dtd = SR.read(nhl, leg, conn=conn)
@@ -413,7 +413,7 @@ def test_every_sports_injury_list_is_read():
     mlb["mlb"]["injured_list"] = ["Slugger CHC"]
     il = SR.read(mlb, {"sport": "mlb", "player": "Slugger CHC", "market": "hits", "side": "over", "line": 0.5,
                        "odds": -200}, conn=conn)
-    assert il["projection"] is None and il["refused"] == "he is listed injured list — the board takes a ruled-out player off"
+    assert il["projection"] is None and il["refused"] == "the player is listed injured list — the board takes a ruled-out player off"
 
 
 def test_a_game_not_on_the_board_says_so():

@@ -241,7 +241,7 @@ def test_a_milestone_flags_only_in_its_band_and_names_the_chase():
     # 913 receiving yards in 13 games (70.2 a game), four games left: 87 to
     # go is easy — named on the card, not flagged.
     easy = SP.milestone("rec_yds", [913 / 13] * 13, 4)
-    assert easy and not easy["flag"] and "needs 87 more in his last 4 games for 1,000" in easy["note"]
+    assert easy and not easy["flag"] and "needs 87 more in the last 4 games for 1,000" in easy["note"]
     tight = SP.milestone("rec_yds", [60.0] * 13, 4)                    # needs 220 at 60 a game: ratio .92
     assert tight["flag"] and tight["need"] == 220
     far = SP.milestone("rec_yds", [40.0] * 13, 4)                      # needs 480 at 40: out of reach

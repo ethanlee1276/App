@@ -47,7 +47,7 @@ def test_every_soft_exit_says_what_changed():
     assert "under 55%" in K.lock_note("under the likelihood floor")
     assert "No book is quoting" in K.lock_note("no longer offered")
     assert K.lock_note("listed Questionable — held until inactives confirm") \
-        == "Now listed questionable — check his status before kickoff."
+        == "Now listed questionable — check the player's status before kickoff."
     assert K.lock_note("a likelier pick took its seat") == "", "outranked is not news to a reader"
 
 

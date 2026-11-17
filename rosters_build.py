@@ -61,7 +61,7 @@ LIVE_FEEDS = ("nhl", "nba", "wnba")
 GAME_MARKETS = {"nhl": ("toi",), "nba": ("min",), "wnba": ("min",), "cbb": ("min",)}
 NO_SOURCE = {
     "ufc": "MMA has fighters, not rosters. Each fighter's measured record "
-           "lives in his dossier on the UFC card itself.",
+           "lives in a dossier on the UFC card itself.",
 }
 
 #: What an appearance-built page cannot see, per sport. Said out loud on

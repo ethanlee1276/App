@@ -133,7 +133,7 @@ def report(conn, sports=LEAGUES, get=fetch, n: int = 3) -> list[str]:
             continue
         out.append(f"\n{sport.upper()}")
         if not who:
-            out.append("   no regular with a face on file: every card draws his initials")
+            out.append("   no regular with a face on file: every card draws the player's initials")
             continue
         drawn: dict = {}
         for name, face in who:

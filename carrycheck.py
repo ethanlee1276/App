@@ -154,7 +154,7 @@ def report(rows: list[dict], label: str) -> list[str]:
     for t in ("lead (14+)", "share (9-14)", "change of pace (<9)"):
         out.append(line(t, [r for r in rows if tier(r["projection"]) == t]))
     based = [r for r in rows if r.get("naive") is not None]
-    out.append("  the same games, scored against a plain average of his last three:")
+    out.append("  the same games, scored against a plain average of the last three:")
     out.append(line("  our projection", based))
     out.append(line("  last-three average", based, key="naive"))
     lead = [r for r in rows if r["projection"] >= LEAD]

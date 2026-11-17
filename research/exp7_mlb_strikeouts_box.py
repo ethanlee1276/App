@@ -328,7 +328,7 @@ def render(rep: dict) -> str:
     f = rep["fit"]
     lo, mid, hi = f["bf_resid"]
     out.append(f"  {rep['rows']:,} scored starts; fitted on {rep['labels'][0]} ({rep['train']:,} starts): batters "
-               f"faced against his weighted mean {lo:+.1f} / {mid:+.1f} / {hi:+.1f} (5th / 50th / 95th), "
+               f"faced against the weighted mean {lo:+.1f} / {mid:+.1f} / {hi:+.1f} (5th / 50th / 95th), "
                f"league {f['league_k_per_bf']} strikeouts a batter, shrink k {f['k']:g} batters")
     for name, label in (("validation", rep["labels"][1]), ("holdout", rep["labels"][2])):
         p = rep["periods"].get(name)

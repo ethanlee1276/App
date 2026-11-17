@@ -65,7 +65,7 @@ def test_a_measured_absence_is_said_with_its_number():
     assert n["measured"] and n["n_out"] == 4
     # 40% of the carries with him, 75% without: +35 points of share.
     assert abs(n["delta"] - 0.35) < 0.02, n
-    assert n["text"].startswith("RB One out — over his 4 missed games, Two absorbed +35% of the carries"), n["text"]
+    assert n["text"].startswith("RB One out — over the 4 missed games, Two absorbed +35% of the carries"), n["text"]
     assert n["with"] < n["without"]
 
 

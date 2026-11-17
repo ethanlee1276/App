@@ -140,7 +140,7 @@ def report(ledger_path, history_path=None) -> list:
             at = _dt.datetime.fromtimestamp(when, _dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
             who = (", ".join(posted) + " posted it") if posted else "no book posted it"
             had = (f"{b['book']} had {theirs:+d}" if theirs is not None
-                   else f"{b['book']} had no price on him")
+                   else f"{b['book']} had no price on that fighter")
             out.append(f"  {b['date']}  {b['player']} ({int(b['odds']):+d} at {b['book']}, "
                        f"{b['category']})  pull of {at}: {who}; {had}")
     out += ["", "Every grade stays as it is."]

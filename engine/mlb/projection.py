@@ -268,8 +268,8 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
             chain.step("matchup", matchup.multiplier, "; ".join(matchup.reasons)),
             chain.step("statcast", statcast_mult, "; ".join(statcast_reasons)),
             chain.step("ump", ump_mult,
-                       f"Plate umpire {game.plate_umpire}, measured over his "
-                       f"own games." if game.plate_umpire
+                       f"Plate umpire {game.plate_umpire}, measured over the "
+                       f"umpire's own games." if game.plate_umpire
                        else "No plate umpire announced yet."),
             chain.cap_step(raw_mult, total_mult, 0.78, 1.28),
         ]
@@ -318,13 +318,13 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
     if abs(player_mult - 1.0) >= 0.02:
         direction = "high" if player_mult < 1.0 else "low"
         reasons.append(f"Player memory: the record shows the blend runs "
-                       f"{direction} on him — corrected ×{player_mult:.2f}")
+                       f"{direction} on this player — corrected ×{player_mult:.2f}")
     reasons += statcast_reasons
     if abs(ump_mult - 1.0) >= 0.02 and game.plate_umpire:
         direction = "elevates" if ump_mult > 1 else "suppresses"
         what = "strikeouts" if prop.market == STRIKEOUTS else "scoring"
         reasons.append(f"Plate ump {game.plate_umpire} {direction} {what} "
-                       f"({(ump_mult - 1) * 100:+.0f}% measured over his games)")
+                       f"({(ump_mult - 1) * 100:+.0f}% measured over the umpire's games)")
     reasons += matchup.reasons
     reasons += park.reasons
     reasons += weather.reasons

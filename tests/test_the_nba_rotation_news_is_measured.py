@@ -95,7 +95,7 @@ def test_the_projection_carries_them_and_the_card_says_so():
     d = P.project(_prop(vacancy_minutes=3.0, return_minutes=1.0))
     assert d["proj_min"] == a["proj_min"] + 2.0, "a vacancy and a return share the one signed slot"
     e = P.project(_prop(minutes=[36.0, 35.0, 37.0] + [25.0] * 9))
-    assert any("His minutes just jumped" in n for n in e["context"]), e["context"]
+    assert any("Minutes just jumped" in n for n in e["context"]), e["context"]
     assert not any("jumped" in n or "game back" in n or "is back" in n for n in a["context"])
 
 

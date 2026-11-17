@@ -104,7 +104,7 @@ def main() -> None:
     said = sum(s.hit_prob for s in settled) / len(settled)
     actual = sum(1 for s in settled if s.actual > HR_HIT) / len(settled)
     print(f"\n  Overall: the model says a hitter homers {said:.1%} of the "
-          f"time.\n           He actually does {actual:.1%} of the time.")
+          f"time.\n           Hitters actually do {actual:.1%} of the time.")
     ratio = said / actual if actual else 0
     if ratio > 1.15:
         print(f"           It is {ratio:.1f}x too high. Every long shot it "

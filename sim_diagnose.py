@@ -217,7 +217,7 @@ def diagnose(label: str, cell: dict) -> dict:
     print(f"  {name}'s three markets: "
           + "  ".join(f"{m[:4]} {per[m]:+.3f}" for m in MARKETS if m in per)
           + f"   (spread {spread:.3f} vs {bar:.3f} allowed — "
-          + ("one rescale of his whole table)" if one_rescale
+          + ("one rescale of the whole table)" if one_rescale
              else "NOT a single rescale)"))
 
     # More trials in the fit, same rounds: isolates the fit's own noise.
@@ -259,11 +259,11 @@ def diagnose(label: str, cell: dict) -> dict:
                    "the cheaper of the two.")
     elif one_rescale:
         verdict = ("a real disagreement, and it is one rescale of the whole "
-                   "table — so the sim can reproduce his SHAPE but not his "
-                   "LEVEL. Look at whether his projected triple is "
-                   "reachable given his lineup spot's plate appearances.")
+                   "table — so the sim can reproduce the SHAPE but not the "
+                   "LEVEL. Look at whether the projected triple is "
+                   "reachable given the lineup spot's plate appearances.")
     else:
-        verdict = ("a real disagreement, and his three markets disagree by "
+        verdict = ("a real disagreement, and the three markets disagree by "
                    "DIFFERENT amounts — so no rescale fixes it. The "
                    "projected triple and the sim genuinely describe "
                    "different hitters; this belongs at the projection "

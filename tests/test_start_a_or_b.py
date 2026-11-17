@@ -125,7 +125,7 @@ def test_a_listed_player_who_plays_later_is_decided_on_the_chance():
     got = C.compare([_row("Back A", ppr=22.0, play=0.8, status="Questionable", ko="16:25"),
                      _row("Back B", team="DET", ppr=11.0, ko="13:00")])
     assert got["call"]["start"] == "Back A" and not got["call"]["conditional"]
-    assert any("only a bench player in a game at Sun 4:25 PM ET or later can replace him" in n
+    assert any("only a bench player in a game at Sun 4:25 PM ET or later can step in" in n
                for n in got["notes"])
 
 
@@ -133,7 +133,7 @@ def test_a_listed_player_who_loses_even_when_he_plays():
     got = C.compare([_row("Back A", ppr=9.0, play=0.6, status="Questionable", ko="13:00"),
                      _row("Back B", team="DET", ppr=14.0, ko="16:25")])
     assert got["call"]["start"] == "Back B" and not got["call"]["conditional"]
-    assert "Back A is questionable, 60% to play, and even if he plays Back B is the better start." in got["notes"]
+    assert "Back A is questionable, 60% to play, and even if they play, Back B is the better start." in got["notes"]
 
 
 def test_an_out_player_is_out_and_said_once():

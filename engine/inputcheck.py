@@ -215,7 +215,7 @@ def report(boards: dict) -> list[str]:
                          if not w["bad"] else f"    wiring: {len(w['bad'])} of {w['checked']} rows do not add up")
             if w.get("posted_off_board") or w.get("board_corrected"):
                 lines.append(f"    wiring: {w.get('posted_off_board', 0)} posted pick(s) carried as they went up "
-                             f"(his prop is off tonight's board); {w.get('board_corrected', 0)} row(s) show the "
+                             f"(the prop is off tonight's board); {w.get('board_corrected', 0)} row(s) show the "
                              f"one board's record-corrected chance")
             flagged += [f"{sport} wiring: {x}" for x in w["bad"][:12]]
     lines.append("")
@@ -300,11 +300,11 @@ def wiring(board: dict, fits=None) -> dict:
                 continue
             if src.get("projection") is not None and m.get("projection") != src.get("projection"):
                 bad.append(f"{m.get('player')} {market}: posted pick projects {m.get('projection')}, "
-                           f"his prop row {src.get('projection')}")
+                           f"the prop row {src.get('projection')}")
             want = _prob_at(src, market, m.get("side"), m.get("line"), fits, main_as_shown=True)
             if want is not None and abs(float(want) - float(m["model_prob"])) > TOL_PROB:
                 bad.append(f"{m.get('player')} {market}: posted pick shows {float(m['model_prob']):.3f}, "
-                           f"his prop row gives {float(want):.3f} at that number")
+                           f"the prop row gives {float(want):.3f} at that number")
             continue
         # BY TEAM AS WELL (box run, 2026-10-17: three college rows read
         # "projects 80.1, its prop row 32.1"). College carries namesakes, and

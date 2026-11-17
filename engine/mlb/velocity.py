@@ -145,11 +145,11 @@ def trend(history: list[dict], pitch_type: str | None = None,
         # Stated so a caller cannot mistake this for a diagnosis. §5 wants
         # it used to go READ something, not to move a number.
         "reading": (
-            f"down {abs(delta):.1f} mph on his {t} against his last "
+            f"down {abs(delta):.1f} mph on the {t} against the last "
             f"{len(prior)} start(s) — §5 calls this a red flag: check "
             f"injury and mechanics reporting before trusting a projection"
             if delta <= DROP_FLAG_MPH else
-            f"{t} within {abs(delta):.1f} mph of his last {len(prior)} "
+            f"{t} within {abs(delta):.1f} mph of the last {len(prior)} "
             f"start(s)"),
     }
 
