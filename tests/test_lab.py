@@ -128,9 +128,12 @@ def test_a_league_with_no_registered_variance_says_so():
     never registered, rather than quietly borrowing another league's — so
     the page reports a refusal, not an empty table."""
     out = lab.build(hconn=_seeded(), log=_quiet, nfl=False)
-    for sport in ("nba", "wnba"):
+    for sport in ("nba", "wnba", "nhl"):
         why = out["sports"][sport]["game_lines"]["unavailable"]
-        assert "scoring baseline" in why and sport in why
+        # In plain words since 2026-11-17 (the pricer's own: "no scoring
+        # baseline registered for 'nba'").
+        assert why == ("this league’s spreads and totals are priced by its own model, "
+                       "which this replay does not walk yet"), (sport, why)
 
 
 def test_the_sports_with_no_prop_harness_are_named_not_omitted():
@@ -277,7 +280,7 @@ _FULL_PAGE = {"sports": {
     # Every sport the Lab replays is on a real page; a sport the page does
     # not carry is owed (engine.lab.due_sports, 2026-11-03).
     **{sp: {"props": {"unavailable": "nothing yet"}, "game_lines": {"unavailable": "nothing yet"}}
-       for sp in ("nfl", "cfb", "nba", "cbb", "wnba", "ufc")}}}
+       for sp in ("nfl", "cfb", "nba", "cbb", "wnba", "nhl", "ufc")}}}
 
 
 def _page(doc, today):

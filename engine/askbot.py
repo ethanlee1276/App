@@ -194,7 +194,9 @@ SLATE_GAMES = 16
 PICK_KINDS = ("best_bets", "most_likely", "long_shots", "game_lines", "parlays", "pick_of_the_day",
               "top_pick_today")
 RECORD_WINDOWS = {"today": 0, "yesterday": 1, "last_7_days": 7, "last_30_days": 30, "season": None}
-LIVE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "mlb", "cbb")
+#: Every league with a live scoreboard file (web/data/live_<league>.json). Hockey's was
+#: written all along and Ask skipped it (2026-11-17).
+LIVE_LEAGUES = ("nfl", "cfb", "nba", "wnba", "mlb", "cbb", "nhl")
 #: Each league's race file (the Playoff race page, js/race.js).
 RACE_FILES = {"nfl": "nfl_race.json", "cfb": "cfp_race.json", "nba": "nba_cup.json", "cbb": "ncaa_race.json"}
 #: The season-long playoff races played off the Futures page's simulation
@@ -887,7 +889,9 @@ def _caps(question: str) -> set[str]:
 #: harvest from the books' spellings (engine/cfbteams), so it grows through
 #: the season and is re-read hourly; its shared mascots ("Tigers",
 #: "Bulldogs") name several schools and drop out like "New York" does.
-NAMED_LEAGUES = ("nfl", "mlb", "nba", "wnba", "cfb", "cbb")
+#: Hockey's table (teamdex.name_map) was there too; "Rangers vs Islanders" read as no team
+#: until 2026-11-17.
+NAMED_LEAGUES = ("nfl", "mlb", "nba", "wnba", "cfb", "cbb", "nhl")
 TEAM_WORDS_TTL_S = 3600
 #: Words a city's first half leaves that name nothing on their own
 #: ("green" of Green Bay).

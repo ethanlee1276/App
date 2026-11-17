@@ -49,7 +49,8 @@ class _Killed(BaseException):
 
 def _old_page():
     """The page on the box: stamped 29 September, before the hoops replay
-    joined the Lab — so it carries no NBA, WNBA or college basketball."""
+    joined the Lab — so it carries no NBA, WNBA or college basketball, and
+    no hockey (joined 2026-11-17)."""
     return {"generated_at": OLD, "sports": {
         "mlb": {"props": {"markets": [{"market": "total_bases", "n": 40}]},
                 "game_lines": {"markets": [{"market": "total"}]}},
@@ -103,19 +104,20 @@ def _quiet(*_a, **_k):
 
 def test_a_run_cut_off_part_way_keeps_every_sport_it_finished():
     tmp, public = _tree(_old_page())
-    build_one, calls = _stub(kill_at=4)
+    build_one, calls = _stub(kill_at=5)
     try:
         lab.run_if_due(hconn=object(), log=_quiet, path=public, today=TODAY, build_one=build_one)
         raise AssertionError("the stub was meant to cut the run off")
     except _Killed:
         pass
-    # The three sports the page lacked go first (owed, never tried), then
-    # the oldest — and the run was cut off in the fourth.
-    assert calls == ["nba", "cbb", "wnba", "mlb"], calls
+    # The four sports the page lacked go first (owed, never tried), then
+    # the oldest — and the run was cut off in the fifth.
+    assert calls == ["nba", "cbb", "wnba", "nhl", "mlb"], calls
     page = _private(tmp)
     assert page["sports"]["nba"]["props"]["markets"][0]["market"] == "nba-fresh"
     assert page["sports"]["cbb"]["props"]["markets"][0]["market"] == "cbb-fresh"
     assert page["sports"]["wnba"]["props"]["markets"][0]["market"] == "wnba-fresh"
+    assert page["sports"]["nhl"]["props"]["markets"][0]["market"] == "nhl-fresh"
     # The sport it was cut off in, and the ones it never reached, are as
     # they were — and dated as they were, not by the new page's stamp.
     assert page["sports"]["mlb"]["props"]["markets"][0]["market"] == "total_bases"
@@ -130,14 +132,14 @@ def test_a_run_cut_off_part_way_keeps_every_sport_it_finished():
 
 def test_the_sport_a_run_was_cut_off_in_goes_to_the_back_of_the_next_line():
     tmp, public = _tree(_old_page())
-    build_one, _calls = _stub(kill_at=4)
+    build_one, _calls = _stub(kill_at=5)
     try:
         lab.run_if_due(hconn=object(), log=_quiet, path=public, today=TODAY, build_one=build_one)
     except _Killed:
         pass
     attempts = json.loads((tmp / "data" / "cache" / "lab_attempts.json").read_text())
     assert attempts == {"nba": "2026-11-03", "cbb": "2026-11-03", "wnba": "2026-11-03",
-                        "mlb": "2026-11-03"}, attempts
+                        "nhl": "2026-11-03", "mlb": "2026-11-03"}, attempts
     tomorrow = TODAY + dt.timedelta(days=1)
     owed = lab.due_sports(_private(tmp), tomorrow, attempts)
     assert owed == ["nfl", "cfb", "ufc", "mlb"], owed
@@ -156,7 +158,7 @@ def test_a_sport_that_raises_is_skipped_and_the_run_goes_on():
     build_one, calls = _stub(raise_on=("nfl",))
     logs = []
     got = lab.run_if_due(hconn=object(), log=logs.append, path=public, today=TODAY, build_one=build_one)
-    assert got == "partial" and len(calls) == 7, (got, calls)
+    assert got == "partial" and len(calls) == len(lab.SPORT_ORDER) == 8, (got, calls)
     page = _private(tmp)
     assert page["sports"]["nfl"]["props"]["markets"][0]["market"] == "rec_yds", "last measurement kept"
     assert page["sports"]["cfb"]["props"]["markets"][0]["market"] == "cfb-fresh"

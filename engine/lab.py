@@ -61,7 +61,9 @@ LAB_EVERY_DAYS = 7
 #: 10-10; once the whole pass outgrew the chores' one-hour ceiling
 #: (engine.maintenance.WEEKLY_JOB_TIMEOUT_S) it was cut off every night
 #: with nothing written, and was due again the next night, from the start.
-SPORT_ORDER = ("mlb", "nfl", "cfb", "nba", "cbb", "wnba", "ufc")
+#: Hockey joined on 2026-11-17: its walk (engine/nhl/backtest) had measured the
+#: ranking fit since October while the page drew no NHL block.
+SPORT_ORDER = ("mlb", "nfl", "cfb", "nba", "cbb", "wnba", "nhl", "ufc")
 
 #: When the Lab last STARTED each sport, so a sport a run was cut off in
 #: goes to the back of the next run's line instead of blocking the rest.
@@ -289,6 +291,48 @@ def hoops_props(conn, sport: str, log=print, budget_s: float | None = None,
         return []
 
 
+def nhl_props(conn, log=print, budget_s: float | None = None,
+              missed: list | None = None) -> list[dict]:
+    """Hockey's skater and goalie props walked forward through the board's
+    own model (engine.nhl.backtest — the walk the ranking fit reads): each
+    game priced from only the games before it, neutral opponent, at a line
+    off the player's own trailing games (the "naive" basis). Hockey's board
+    applies no fitted calibration, so the raw chance is the posted one.
+
+    One load of this season's and last season's games serves every market
+    (rankfit's bound: about 100,000 pairs a market). With ``budget_s`` a
+    market starts only while the time left covers the one before it, the
+    hoops replay's rule; the ones not reached go into ``missed``."""
+    import time as _time
+    from .nhl import backtest as _bt, model as _m
+    from .seasons import recent_seasons
+    deadline = _time.monotonic() + budget_s if budget_s else None
+    markets = (*_m.SKATER_MARKETS, *_m.GOALIE_MARKETS)
+    try:
+        players = _bt._all_games(conn, seasons=recent_seasons("nhl", _dt.date.today().isoformat()))
+    except Exception as exc:                       # noqa: BLE001
+        log(f"  lab: nhl props skipped — {exc}")
+        return []
+    out: list = []
+    pace = None
+    for i, market in enumerate(markets if players else ()):
+        if deadline is not None and pace is not None and pace > deadline - _time.monotonic():
+            if missed is not None:
+                missed.extend(markets[i:])
+            break
+        t0 = _time.monotonic()
+        try:
+            rep = _bt.walk(conn, market, players=players)
+        except Exception as exc:                   # noqa: BLE001
+            log(f"  lab: nhl {market} skipped — {exc}")
+            continue
+        finally:
+            pace = _time.monotonic() - t0
+        if rep.total_priced:
+            out.append(report_to_dict(rep, market, _m.MARKET_LABELS.get(market, market)))
+    return out
+
+
 #: THE PUBLIC SUMMARY of the replay (audit B1-1): how well the models
 #: forecast stored history, beside the journal's own Brier on the Record
 #: page. Calibration numbers only — Brier, skill over the base rate, ECE,
@@ -411,6 +455,8 @@ LAB_NFL_PROPS_BUDGET_S = 30 * 60
 #: The NBA's and the WNBA's props: every market walks the same games, so the
 #: one before tells how long the next takes (`hoopsreplay.replay`).
 LAB_HOOPS_PROPS_BUDGET_S = 25 * 60
+#: Hockey's props: seven markets over one load of two seasons' games.
+LAB_NHL_PROPS_BUDGET_S = 20 * 60
 
 #: THE WHOLE RUN FITS THE HOUR (2026-11-05). The chores stop a weekly child
 #: at its hour, and a sport cut off mid-replay publishes nothing: on 4 and 5
@@ -647,6 +693,12 @@ def game_lines(conn, sport: str, log=print) -> dict:
     if out:
         return {"markets": out}
     if refusal:
+        # The pricer's words name its own registry; the page says what they
+        # mean (2026-11-17). Basketball's and hockey's game lines are priced
+        # by their leagues' own models, which this replay does not walk.
+        if refusal.startswith("no scoring baseline registered"):
+            refusal = ("this league’s spreads and totals are priced by its own model, "
+                       "which this replay does not walk yet")
         return {"unavailable": refusal}
     return {"unavailable": "no harvested closing lines stored for this sport"}
 
@@ -741,6 +793,15 @@ def build_sport(sport: str, hconn, log=print, nfl: bool = True,
             sec["not_reached"] = missed
             log(f"  lab: {sport} stopped at its time limit: {', '.join(missed)} not replayed this run")
         blob = {"props": sec, "game_lines": game_lines(hconn, sport, log=log)}
+    elif sport == "nhl":
+        missed = []
+        props = nhl_props(hconn, log=log, budget_s=cap(LAB_NHL_PROPS_BUDGET_S), missed=missed)
+        sec = ({"markets": props} if props else
+               {"unavailable": "no stored hockey games deep enough to replay yet"})
+        if props and missed:
+            sec["not_reached"] = missed
+            log(f"  lab: nhl stopped at its time limit: {', '.join(missed)} not replayed this run")
+        blob = {"props": sec, "game_lines": game_lines(hconn, "nhl", log=log)}
     elif sport == "ufc":
         blob = {"props": {"unavailable": NO_PROP_HARNESS["ufc"]},
                 "game_lines": {"unavailable": "a fight has no spread or total to "

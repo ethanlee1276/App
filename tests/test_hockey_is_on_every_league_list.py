@@ -13,7 +13,9 @@ hold:
   - the routers take hockey: /nhl, #nhl and the three-part entity links;
   - a nav list narrowed before hockey was offered keeps hockey in the nav
     (navLeagueOn), and the first tap afterwards writes the leagues that
-    were on, hockey included, with the list it was saved against.
+    were on, hockey included, with the list it was saved against;
+  - Ask reads hockey's live scoreboard and hockey's team names, which
+    its two lists (LIVE_LEAGUES, NAMED_LEAGUES) had left out.
 
     python3 tests/test_hockey_is_on_every_league_list.py
 """
@@ -144,6 +146,24 @@ def test_tonight_reads_hockeys_light_board():
     assert 'fallback: "data/nhl.json"' in meta, "lightNameFor makes nhl_picks.json of it"
     fn = _fn(APP, "tonightBoards") if "function tonightBoards(" in APP else APP[APP.index("async function tonightBoards("):]
     assert "SPORT_CODES.map(async (s) =>" in fn
+
+
+def test_ask_reads_hockeys_scores_and_team_names():
+    from engine import askbot as A
+    assert sorted(A.named_teams("who wins rangers vs islanders tonight", "nhl")) == ["NYI", "NYR"]
+    assert sorted(A.named_teams("oilers at flames", "nhl")) == ["CGY", "EDM"]
+    d = tempfile.mkdtemp()
+    with open(os.path.join(d, "live_nhl.json"), "w", encoding="utf-8") as fh:
+        json.dump({"generated_at": "2026-11-17T03:00:00Z", "games": [
+            {"home": "NYR", "away": "MTL", "home_name": "New York Rangers", "away_name": "Montreal Canadiens",
+             "live": {"state": "final", "home_score": 3, "away_score": 1, "period": "Final"}}]}, fh)
+    for args in (("nhl", ""), ("", "Canadiens")):
+        got = A.live_scores(*args, data_dir=d)
+        boards = got.get("scoreboards") or []
+        assert boards and boards[0]["sport"] == "nhl", (args, got)
+        assert boards[0]["games"][0]["score"] == "MTL 1, NYR 3"
+    # Every league Ask names in its tools has its scoreboard and its team words.
+    assert set(A.LIVE_LEAGUES) == set(A.LEAGUES) == set(A.NAMED_LEAGUES)
 
 
 if __name__ == "__main__":

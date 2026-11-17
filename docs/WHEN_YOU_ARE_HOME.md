@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VL. The Lab replays hockey, and Ask reads hockey's scores and team names** (step 696; 17 November). Nothing
+to run. The Lab's weekly run left the NHL out though hockey's walk-forward (engine/nhl/backtest) has measured the
+ranking fit since October and the Lab page already had a place for it: the next weekly run replays hockey first
+(seven markets, this season's and last season's games, inside its own 20 minutes), and the page shows its
+calibration beside the other leagues'. A league's game lines that the replay cannot price now say why in plain
+words ("priced by its own model, which this replay does not walk yet") instead of "no scoring baseline registered".
+Ask left hockey off two lists: it never read hockey's live scoreboard ("score of the Rangers game") and never knew
+a hockey team named in words ("Oilers at Flames"). Both read hockey now.
+
 **VK. Hockey has its own address and is on every league list** (step 695; 17 November). Nothing to run; the
 deploy installs the Caddyfile after checking it. The app's list of leagues never carried the NHL, so
 qellysbook.com/nhl opened the site on another league, a shared hockey player, game or pick was read as a player
