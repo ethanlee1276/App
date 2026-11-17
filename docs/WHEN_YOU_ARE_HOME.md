@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VP. A goal flashes on the live hockey score** (step 700; 17 November). Nothing to run. The touchdown flash
+you said yes to on 16 November, on the hockey page: when a side scores while the game's page is open and on screen,
+its score pulses gold with GOAL over it for a few seconds. Never on opening the game or coming back to it, never
+for a goal that came in while the tab was hidden, and never a shootout's deciding goal (an overtime winner does
+flash). With reduced motion on, it is a tint and a fade instead.
+
 **VO. College basketball's usage chart names its season like the rest of the page** (step 699; 17 November).
 Nothing to run. The role chart ("how much a player is used, game by game") labelled a college basketball season
 "2026" while the player page beside it says "2026–27"; it now reads two years, as the NBA's and the NHL's do.

@@ -396,22 +396,66 @@
     }
   }
 
+  /* ---------------- a goal, flashed ----------------
+     Football's touchdown flash (detail.js gpTouchdownSeen; Ethan, 16
+     November: "Yes"), on the hockey score (2026-11-17). When a side's score
+     rises while the game's page is open, live and on screen, that side's
+     score lights up with GOAL over it for a few seconds. Only a goal seen
+     happen: never on opening the page or coming back to it (a draw more than
+     two minutes after the last is a return), never one that came in while
+     the tab was hidden, and never a shootout's deciding goal, which settles
+     the game but is no goal in the run of play. It reads the score on the
+     screen, so a reader on a TV delay sees it when the TV does. Kept per
+     page visit only. */
+  const GOAL_MS = 4500;                                  // how long it shows
+  const GOAL_FRESH_MS = 120000;                          // a draw older than this: a return, not a moment
+  const GOAL = { key: "", away: null, home: null, at: 0, live: false, flash: null };
+  const goalKey = (d) => String(d.event_id || `${d.away}@${d.home}`);
+  function goalSeen(d, now) {
+    const lv = d.live || {}, t = now == null ? Date.now() : now, key = goalKey(d);
+    const a = num(lv.away_score), h = num(lv.home_score);
+    const per = Number(((d.rink || {}).clock || {}).period) || Number((/^P?(\d)/i.exec(String(lv.period || "")) || [])[1]) || 0;
+    const shootout = per >= 5 || /\bSO\b|shootout/i.test(`${lv.period || ""} ${lv.detail || ""}`);
+    const hidden = typeof document !== "undefined" && !!document.hidden;
+    if (GOAL.key !== key) {
+      GOAL.key = key; GOAL.flash = null;
+    } else if (GOAL.live && !hidden && !shootout && t - GOAL.at < GOAL_FRESH_MS && a != null && h != null
+               && GOAL.away != null && GOAL.home != null) {
+      const da = a - GOAL.away, dh = h - GOAL.home;
+      const rose = da >= 1 && da >= dh ? "away" : dh >= 1 ? "home" : null;
+      if (rose) GOAL.flash = { key, side: rose, start: t };
+    }
+    GOAL.away = a; GOAL.home = h; GOAL.at = t; GOAL.live = lv.state === "live";
+    return GOAL.flash;
+  }
+  /* How long this side's flash has run (ms), or null: the markup starts its
+     animation that far in, so a redraw mid-flash carries on. */
+  function goalFor(d, ha, now) {
+    const f = GOAL.flash, t = now == null ? Date.now() : now;
+    if (!f || f.side !== ha || f.key !== goalKey(d)) return null;
+    return t - f.start < GOAL_MS ? Math.max(0, t - f.start) : null;
+  }
+
   /* ---------------- the scoreboard ---------------- */
   function scoreboardHTML(d, k) {
     const lv = d.live || {}, r = d.rink || {}, c = r.clock || {};
     const table = typeof teamsIn === "function" ? (teamsIn("nhl") || {}) : {};
     const T = k.stats;
+    goalSeen(d);
     const side = (ha) => {
       const abbr = d[ha], t = table[abbr] || {};
       const score = ha === "home" ? lv.home_score : lv.away_score;
       const rec = (d.records || {})[abbr];
       const puck = lv.state === "live" && k.puck === ha
         ? `<span class="rc-puckmark" title="Puck — from the last play"></span>` : "";
-      return `<div class="rc-side ${ha}">
+      const nick = t.nick || teamNameIn("nhl", abbr) || abbr;
+      const goal = goalFor(d, ha);
+      return `<div class="rc-side ${ha}${goal != null ? " rc-goal" : ""}"${goal != null ? ` style="--td-t:-${Math.round(goal)}ms"` : ""}>
           <span class="rc-crest">${teamMarkIn("nhl", abbr, 56)}</span>
           <div class="rc-team"><span class="rc-loc">${ha === "home" ? "Home" : "Away"} · ${esc(t.loc || "")}</span>
-            <b class="rc-nick">${esc(t.nick || teamNameIn("nhl", abbr) || abbr)}</b>
-            ${rec ? `<span class="rc-rec">${esc(rec)}</span>` : ""}</div>
+            <b class="rc-nick">${esc(nick)}</b>
+            ${rec ? `<span class="rc-rec">${esc(rec)}</span>` : ""}${goal != null
+              ? `<span class="gp-td-word" role="status" aria-label="${esc(`Goal, ${nick}`)}">Goal</span>` : ""}</div>
           <b class="rc-pts">${puck}${score != null ? esc(score) : "–"}</b></div>`;
     };
     const per = Number(c.period) || (/^P?(\d)/i.exec(String(lv.period || "")) || [])[1] || 0;
@@ -1026,5 +1070,6 @@
     render,
     // The readers, for the tests and for Ask.
     events, sitOf, puckAfter, endOf, powerPlay, teamStats, flow, pressure, quiet, nowElapsed, toArt, colours, playWords, CP,
+    goalSeen, goalFor, GOAL_MS,
   };
 })();

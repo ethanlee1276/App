@@ -356,3 +356,14 @@
   .rc-replay { padding: 0 9px; }
   .rc-replay span { display: none; }
 }
+
+/* A goal, flashed (rinkcast.js goalSeen, 2026-11-17): football's touchdown
+   flash on the hockey score. The score pulses gold three times and GOAL sits
+   over the side's name (detail.css .gp-td-word, the shared keyframes in
+   styles.css); a redraw mid-flash carries on from --td-t. With reduced
+   motion it is a tint and a fade, no movement. */
+.rc-goal .rc-team { position: relative; }
+.rc-goal .rc-pts { animation: gp-td-pulse 1.5s ease-out 3 both; animation-delay: var(--td-t, 0ms); }
+@media (prefers-reduced-motion: reduce) {
+  .rc-goal .rc-pts { animation: gp-td-tint 4.5s linear both; animation-delay: var(--td-t, 0ms); }
+}
