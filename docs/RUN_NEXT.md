@@ -588,9 +588,10 @@ cd /srv/qellys && nice -n 19 bash tools/catchup.sh PA 2>&1 | tee /tmp/pa.txt
 
 ## 00j. Any time: the All-Star and exhibition games out of the basketball history (step VI)
 
-Seconds each. The WNBA's All-Star Game and an exhibition against Nigeria were
-stored as games of the season and counted in players' averages, form and hit
-rates. The first lists what was stored (writes nothing); paste it back. Then
+Seconds each. Every WNBA All-Star Game since 2023, the NBA's All-Star games
+(2025's tournament, 2026's World, Stars and Stripes) and preseason exhibitions
+against national teams (Nigeria, Puerto Rico) were stored as games of the season
+and counted in players' averages, form and hit rates. The first lists what was stored (writes nothing); paste it back. Then
 the second removes them, unless the list names a real club:
 
 ```

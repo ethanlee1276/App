@@ -9343,8 +9343,12 @@ November). Two commands, seconds each. Checking the live player pages, Caitlin C
 and a club called "SPO": ESPN files the WNBA's All-Star Game (25 July, "SPO" against "COOP", 129-122) and an
 exhibition against Nigeria's national team (2 May, 105-57) as games of the season, so the nightly kept their box
 scores, and every number read off a player's games counted them: the page's averages and league places, the
-boards' recent form and hit rates, the Game Log, and the Nigeria game as a win in Indiana's record. The nightly
-now stores a game only when both sides are the league's own clubs, and says what it leaves out. The first command
+boards' recent form and hit rates, the Game Log, and the Nigeria game as a win in Indiana's record. It is not one
+game: the live logs show every WNBA All-Star Game since 2023 (Team USA against Team WNBA in 2024) and exhibitions
+against Puerto Rico and Japan's Toyota Antelopes, and the NBA's too: 2025's All-Star tournament (Chuck's, Kenny's
+and Shaq's teams, the Rising Stars) and 2026's World, Stars and Stripes, mini-games of a few minutes that sit in the
+NBA's season-to-season rates. The nightly now stores a game only when both sides are the league's own clubs, and
+says what it leaves out. The first command
 lists what was stored before (each game's day, sides and how many players' lines) and writes nothing; paste it
 back. The second removes them:
 

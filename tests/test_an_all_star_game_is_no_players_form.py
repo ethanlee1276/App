@@ -60,8 +60,10 @@ def test_every_spelling_of_a_club_is_the_club():
     for league, home, away in (("wnba", "CONN", "WSH"), ("wnba", "LV", "NY"), ("wnba", "GS", "POR"), ("wnba", "TOR", "LA"),
                                ("nba", "GS", "NY"), ("nba", "GSW", "LAL"), ("nba", "UTAH", "SA"), ("nba", "PHO", "BRK")):
         assert HX.league_game(league, home, away), (league, home, away)
-    for league, home, away in (("wnba", "SPO", "COOP"), ("wnba", "IND", "NIGER"), ("nba", "LEB", "GIA"),
-                               ("nba", "BOS", "RMD")):
+    # Each as the live logs hold them: the WNBA's All-Star Games and exhibitions, the NBA's All-Star tournament.
+    for league, home, away in (("wnba", "SPO", "COOP"), ("wnba", "IND", "NIGER"), ("wnba", "USA", "WNBASTARS"),
+                               ("wnba", "LV", "PUERTORICO"), ("wnba", "NY", "TOY"), ("nba", "CHK", "KEN"),
+                               ("nba", "SHQ", "CAN"), ("nba", "WORLD", "STARS"), ("nba", "STRIPES", "STARS")):
         assert not HX.league_game(league, home, away), (league, home, away)
 
 

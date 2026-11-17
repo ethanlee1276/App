@@ -10,7 +10,11 @@ games and two clubs, and two of the games were no league's: the All-Star Game
 Nigeria's national team (2 May, 105-57). ESPN files both as games of the
 season, so the nightly kept their box scores, and every number read off a
 player's games counted them: the page's averages and places, the boards' form
-and hit rates, the Game Log.
+and hit rates, the Game Log. The live logs show every WNBA All-Star Game since
+2023 and exhibitions against Puerto Rico and Japan's Toyota Antelopes, and the
+NBA's All-Star games too (2025's tournament: CHK, KEN, SHQ and the Rising
+Stars' CAN; 2026's WORLD, STARS and STRIPES), mini-games that sit in the NBA's
+season-to-season rates.
 
 The writer is fixed where it writes (sources/espnhoops.ingest_day stores a
 pro league's game only when both sides are the league's own clubs, by the
