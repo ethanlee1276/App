@@ -3908,7 +3908,7 @@ function setTeamColours(s) {
   const mode = s.teamColors === "on" || s.teamColors === "site" ? s.teamColors : "off";
   const who = teamColorsWho(s);
   const name = who ? setTeamName(who) : "";
-  const sub = !who ? "Follow a team, or tap Wear these colours on a team’s page"
+  const sub = !who ? "Follow a team, or tap Wear these everywhere on a team’s page"
     : mode === "site" ? `Every page in ${name} colours, as a live game’s page wears its clubs’`
     : mode === "on" ? `${name} colours on the bar, the Live disc and the lit tab`
     : `${name} colours on the bar, or on every page`;
@@ -4188,7 +4188,7 @@ function setPageHTML(page) {
                 sub: escapeHtml(((typeof LEAGUE_LABEL !== "undefined" && LEAGUE_LABEL[t.split(":")[0]]) || t.split(":")[0]).toUpperCase()),
                 end: t === pin ? setCheck() : "",
                 attrs: `data-set-key="teamColorsTeam" data-set-val="${escapeAttr(t)}" aria-pressed="${t === pin}"` })),
-    ], "A game’s page still wears its two clubs’ colours, and a team’s or a player’s page its club’s band. Any team’s page can be worn: tap Wear these colours on it.");
+    ], "A game’s page still wears its two clubs’ colours, and a team’s or a player’s page its own club’s. Any team’s colours can go on every page: tap Wear these everywhere on its page.");
   }
   if (page === "password") {
     return head("Password") + `<div class="set-list">

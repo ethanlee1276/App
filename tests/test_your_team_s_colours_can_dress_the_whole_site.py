@@ -13,7 +13,7 @@ first from the left and the second from the right, falling to the page's own
 ground further down (styles.css "YOUR TEAM'S COLOURS ON THE WHOLE SITE"). The
 bar and the strip under the clock paint the same screen-sized picture pinned to
 the screen's corner, so nothing rules the top. Whose: the team picked in
-Settings or with a team page's "Wear these colours", any league's; else the one
+Settings or with a team page's "Wear these everywhere", any league's; else the one
 you follow in the league in view, else the first you follow.
 
 Run directly: `python3 tests/test_your_team_s_colours_can_dress_the_whole_site.py`
@@ -64,9 +64,10 @@ def _line(src, start):
 
 
 #: The colour arithmetic and the apply step, as the page runs them (okLab is teamLight's).
-HELPERS = ("".join(_fn(APP, n) for n in ("teamColorsWho", "applyTeamColors", "okLab", "okRgb", "twWash", "twSwatch",
-                                         "twPin"))
-           + "".join(_line(APP, s) for s in ("const rgbHex = ", "const TW_DEEP_L", "const twHex6 = ", "const TW_SWATCH_KEY"))
+HELPERS = ("".join(_fn(APP, n) for n in ("teamColorsWho", "applyTeamColors", "okLab", "okRgb", "twWash", "clubWash",
+                                         "twSwatch", "twPin"))
+           + "".join(_line(APP, s) for s in ("const rgbHex = ", "const TW_DEEP_L", "const twHex6 = ", "const TW_SWATCH_KEY",
+                                             "let _pageClub = "))
            + "let _twPinRO = null;\n")
 
 
@@ -103,7 +104,7 @@ def test_settings_offer_three_ways_and_whose_colours():
     assert 'data-set-open="teamcolors"' in rows, "a Whose colours row under it"
     tc = _fn(ACCT, "setTeamColours")
     assert "const who = teamColorsWho(s);" in tc, "the same rule the page wears"
-    assert "Follow a team, or tap Wear these colours on a team’s page" in tc, "with no team, the way to get one"
+    assert "Follow a team, or tap Wear these everywhere on a team’s page" in tc, "with no team, the way to get one"
     page = _fn(ACCT, "setPageHTML")
     sheet = page[page.index('if (page === "teamcolors") {'):page.index('if (page === "password") {')]
     assert 'data-set-key="teamColorsTeam" data-set-val=""' in sheet, "your team in each league, the default"
@@ -113,7 +114,7 @@ def test_settings_offer_three_ways_and_whose_colours():
 
 def test_the_whole_site_wears_the_team_s_two_colours():
     lions = _apply({"teamColors": "site", "teams": ["nfl:DET"]}, "nfl")
-    assert lions["classes"] == {"team-wash": True, "team-tint": True}, lions
+    assert lions["classes"] == {"team-wash": True, "club-page": False, "team-tint": True}, lions
     assert lions["props"]["--tw-1"] == "#005a8b", "the Lions' blue already reads under white type: kept"
     assert lions["props"]["--tw-2"] == "#6f7579", "their silver deepened until white reads on it"
     assert (lions["props"]["--tw-1-paper"], lions["props"]["--tw-2-paper"]) == ("#005a8b", "#b0b7bc"), "paper: as they are"
@@ -132,11 +133,11 @@ def test_the_pin_beats_the_follows_and_the_pair_is_the_club_s_own():
 
 def test_the_bar_alone_off_and_a_club_in_black_alone():
     bar = _apply({"teamColors": "on", "teams": ["nfl:DET"]}, "nfl")
-    assert bar["classes"] == {"team-wash": False, "team-tint": True} and "--tw-1" not in bar["props"], bar
+    assert bar["classes"] == {"team-wash": False, "club-page": False, "team-tint": True} and "--tw-1" not in bar["props"], bar
     off = _apply({"teamColors": "off", "teams": ["nfl:DET"]}, "nfl")
-    assert off["classes"] == {"team-wash": False, "team-tint": False} and not off["props"], off
+    assert off["classes"] == {"team-wash": False, "club-page": False, "team-tint": False} and not off["props"], off
     black = _apply({"teamColors": "site", "teams": ["nfl:LV"]}, "nfl")
-    assert black["classes"] == {"team-wash": False, "team-tint": True}, "no colour to wash with: the bar wears it"
+    assert black["classes"] == {"team-wash": False, "club-page": False, "team-tint": True}, "no colour to wash with: the bar wears it"
 
 
 def test_a_college_club_wears_its_colours_before_its_league_s_list_loads():
@@ -197,7 +198,7 @@ def test_every_team_page_offers_wear_these_colours():
     assert "function wearBtn(" not in APP and "function wearToggle(" not in APP
     btn = _fn(MORE, "wearBtn")
     assert "if (!t || !twWash(t)) return \"\";" in btn, "only a club with a colour to wash with offers it"
-    assert 'aria-pressed="${on}"' in btn and "Wearing these colours" in btn and "Wear these colours" in btn
+    assert 'aria-pressed="${on}"' in btn and "Wearing these everywhere" in btn and "Wear these everywhere" in btn
     toggle = _fn(MORE, "wearToggle")
     assert 'setSetting("teamColors", "site");' in toggle and 'setSetting("teamColorsTeam", key);' in toggle
     assert 'setSetting("teamColors", "off");' in toggle, "tapped again, the site's own gold"
@@ -270,7 +271,7 @@ def test_in_a_browser_the_site_wears_the_team_with_no_line_at_the_top():
                                    && css('.ambient').includes('linear-gradient(100deg'),
                                  wide: document.documentElement.scrollWidth - innerWidth }; }""")
                     seam = _seam(page.screenshot(clip={"x": 0, "y": 0, "width": 390, "height": 320}))
-                    # A team's page: Wear these colours, then back to the gold.
+                    # A team's page: Wear these everywhere, then back to the gold.
                     page.evaluate("openTeam('nfl', 'PIT')")
                     page.wait_for_function("() => document.querySelector('[data-wear]')", timeout=15000)
                     page.click("[data-wear]")
@@ -280,8 +281,13 @@ def test_in_a_browser_the_site_wears_the_team_with_no_line_at_the_top():
                         saved: JSON.parse(localStorage.getItem('qb_settings_v1')).teamColorsTeam })""")
                     page.click("[data-wear]")
                     page.wait_for_timeout(200)
+                    # Off again: the setting is, and this page still wears its own club (TEAMWASH1) until it is left.
+                    here = page.evaluate("document.documentElement.classList.contains('club-page')")
+                    page.evaluate("switchView('recommended')")
+                    page.wait_for_timeout(200)
                     back = page.evaluate("""() => ({ wash: document.documentElement.classList.contains('team-wash'),
                         mode: JSON.parse(localStorage.getItem('qb_settings_v1')).teamColors })""")
+                    back["here"] = here
                     found[theme] = {"look": look, "seam": seam, "worn": worn, "back": back, "errors": errors}
                     ctx.close()
             finally:
@@ -292,7 +298,7 @@ def test_in_a_browser_the_site_wears_the_team_with_no_line_at_the_top():
         assert f["look"] == {"wash": True, "same": True, "lions": True, "wide": 0}, (theme, f["look"])
         assert f["seam"][0] <= SEAM, f"{theme}: a line of {f['seam'][0]} levels at {f['seam'][1] / 2:.0f}px"
         assert f["worn"] == {"pressed": "true", "tw1": "#a56400", "saved": "nfl:PIT"}, (theme, f["worn"])
-        assert f["back"] == {"wash": False, "mode": "off"}, (theme, f["back"])
+        assert f["back"] == {"wash": False, "mode": "off", "here": True}, (theme, f["back"])
         assert not f["errors"], (theme, f["errors"])
 
 

@@ -63,6 +63,8 @@ FILES = ("js/app.js", "js/visuals.js", "css/styles.css", "index.html",
          "js/gamelog.js", "css/gamelog.css",
          # Every player's own page (2026-11-16).
          "js/playerpage.js", "css/playerpage.css",
+         # The colours' cross-fade (2026-11-17), fetched after the first paint.
+         "js/washfade.js", "css/washfade.css",
          "css/record.css", "css/detail.css", "css/account.css", "css/more.css",
          # The game chat (2026-10-25), a room like the others.
          "js/chat.js", "css/chat.css",

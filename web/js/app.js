@@ -655,7 +655,7 @@ function markMoreMenu() {
    further down, and the bar and the strip under the clock paint the same
    picture, so the top of the screen is one piece (styles.css "YOUR TEAM'S
    COLOURS ON THE WHOLE SITE"). Whose: the team picked in Settings or on a
-   team's page ("Wear these colours"), any league's; else the team you follow
+   team's page ("Wear these everywhere"), any league's; else the team you follow
    in the league in view, else the first you follow. */
 //: Whose colours: the team picked (Settings or a team's page), else the one you follow in the
 //: league in view, else the first you follow; "" with none. "sport:ABBR".
@@ -663,17 +663,32 @@ function teamColorsWho(s) {
   const pin = /^[a-z]+:[A-Za-z0-9]+$/.test(String(s.teamColorsTeam || "")) ? s.teamColorsTeam : "";
   return pin || s.teams.find((t) => t.startsWith(`${state.sport}:`)) || s.teams[0] || "";
 }
+/* A CLUB'S OWN PAGE WEARS THE CLUB (TEAMWASH1, 2026-11-17; Ethan: "team pages
+   should wear their club's colors"). While a team's page is open it names its
+   club here ("sport:ABBR", more.js renderTeam → pageClubOn) and the whole
+   screen sits on that club's two colours, as a player's page sits on its
+   club's: over your own colours if you wear some, and with the setting off
+   too. Leaving the page (_switchViewNow names no club) gives the screen back
+   to your colours, or the site's gold; the change fades (WASHFADE1, below). */
+let _pageClub = "";
+function pageClubOn(key) {
+  if (key === _pageClub) return;
+  _pageClub = key;
+  applyTeamColors();
+}
 function applyTeamColors() {
   const root = document.documentElement, s = settings();
   const mode = s.teamColors === "on" || s.teamColors === "site" ? s.teamColors : "off";
-  const mine = mode === "off" ? "" : teamColorsWho(s);
+  const mine = _pageClub || (mode === "off" ? "" : teamColorsWho(s));
   const [sport, abbr] = String(mine || "").split(":");
   const listed = abbr ? (teamsForSport(sport) || {})[abbr] : null;
   // College's team list comes with its board: until it lands, the colours last seen.
-  const t = listed || (mode === "site" && abbr ? twSwatch(mine) : null);
-  if (listed && mode === "site") twSwatch(mine, listed);
-  const wash = t && t.primary && mode === "site" ? twWash(t) : null;
+  const t = listed || (mode === "site" && !_pageClub && abbr ? twSwatch(mine) : null);
+  if (listed && mode === "site" && !_pageClub) twSwatch(mine, listed);
+  // The page's own club by its real colours (clubWash: a kit's white or silver trim steps aside).
+  const wash = !(t && t.primary) ? null : _pageClub ? clubWash(t) : mode === "site" ? twWash(t) : null;
   root.classList.toggle("team-wash", !!wash);
+  root.classList.toggle("club-page", !!(wash && _pageClub));
   root.classList.toggle("team-tint", !!(t && t.primary));
   if (t && t.primary) {
     root.style.setProperty("--team-1", t.primary);
@@ -715,6 +730,18 @@ function twWash(t) {
   const end = mate || rgbHex(okRgb([Math.min(TW_SHADE_L, L * 0.6), a, b]));
   return { deep: [deep(first), mate ? deep(mate) : end], paper: [first, end] };
 }
+/* The club's two colours for a page that is the club's own (a player's, a team's): twWash's pair, save
+   that white, silver and grey are a kit's trim beside a club's real colours. Deepened until white type
+   reads on them they turn a fog grey, so the Leafs' and Duke's blue washed into grey; they step aside
+   for the club's next colour, else twWash's deeper shade of the first. A club whose colours are all
+   trim and black (the Raiders, the Nets) keeps them: they are the club. */
+function clubWash(t) {
+  const cs = [t.primary, t.secondary, t.tertiary, t.alt].map(twHex6);
+  const chroma = (c) => { const [, a, b] = okLab(c); return Math.hypot(a, b); };
+  const trim = (c) => c && okLab(c)[0] > 0.6 && chroma(c) < TW_HUED;
+  const [primary, secondary, tertiary, alt] = cs.some((c) => c && chroma(c) >= TW_HUED) ? cs.map((c) => (trim(c) ? "" : c)) : cs;
+  return twWash({ primary, secondary, tertiary, alt });
+}
 //: A club's colours as this device last saw them, for a league whose team list has not
 //: loaded yet (college's comes with its board). One club: the one the site wears.
 const TW_SWATCH_KEY = "qb.teamSwatch";
@@ -746,6 +773,12 @@ function twPin() {
     window.addEventListener("resize", twPin);
   }
 }
+
+/* THE COLOURS CHANGE WITHOUT A SNAP (WASHFADE1; Ethan, 2026-11-17: "make transitions smooth ... not some
+   like quick, like glitchy switch"): js/washfade.js cross-fades every change of the screen's colours.
+   It has nothing to do while the app is first drawing itself, so no first visit waits on it: fetched
+   once the page has loaded. */
+window.addEventListener("load", () => setTimeout(() => window.QB_STALE || loadRoom("js/washfade.js", "css/washfade.css"), 900));
 
 function applySport() {
   // A sport with no metadata used to throw here and leave the previous
@@ -24857,6 +24890,8 @@ function _switchViewNow(name, push, dir) {
   if (name !== "pbp" && typeof gpWashOff === "function") gpWashOff();
   // And a player's page its club's (playerpage.js plrFrameOn/plrFrameOff).
   if (name !== "players" && typeof plrFrameOff === "function") plrFrameOff();
+  // And a team's page its own club's (pageClubOn, above): back to your colours, or the site's.
+  if (name !== "team") pageClubOn("");
   if (name !== "ask") document.body.classList.remove("ask-typing");
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   paneSplit(name, leaving);

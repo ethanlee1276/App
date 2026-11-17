@@ -2847,6 +2847,10 @@ function renderTeamPage() {
   const on = host.querySelector(".tm-tab.on");
   if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest", inline: "center" });
   if (["home", "injuries", "depth", "roster"].includes(tab)) teamNeedsBoards(d.sport);
+  // THE PAGE WEARS ITS CLUB (TEAMWASH1; Ethan: "team pages should wear their club's colors"): the whole
+  // screen on the club's two colours while this page is the one open (app.js pageClubOn; _switchViewNow
+  // hands the screen back). Named once the page is drawn, so one club's page fades straight to the next's.
+  if (state.view === "team") pageClubOn(`${d.sport}:${p.team}`);
 }
 
 /* The team page's tabs, in ESPN's order, then the two that are ours. */
@@ -2880,11 +2884,13 @@ function teamStanding(sport, team) {
   return null;
 }
 
-/* WEAR THESE COLOURS (MYCOLORS1; here, with the team page, and not in the first visit's
+/* WEAR THESE EVERYWHERE (MYCOLORS1; here, with the team page, and not in the first visit's
    app.js): on a team's page, the whole site in that
    club's colours in one tap, any league's club, followed or not; tapped
    again, the site's own gold. Settings → Team colours says the same and
-   changes it. Only a club with a colour to wash with offers it. */
+   changes it. Only a club with a colour to wash with offers it. "Everywhere"
+   since TEAMWASH1: the club's own page wears these colours already, so the
+   button says what it adds. */
 function wearingTeam(key) {
   const s = settings();
   return s.teamColors === "site" && teamColorsWho(s) === key;
@@ -2894,7 +2900,7 @@ function wearBtn(sport, abbr) {
   if (!t || !twWash(t)) return "";
   const key = `${sport}:${abbr}`, on = wearingTeam(key);
   return `<button type="button" class="btn ghost wear-btn${on ? " on" : ""}" data-wear="${escapeAttr(key)}"
-    aria-pressed="${on}">${icon("palette", 14)} ${on ? "Wearing these colours" : "Wear these colours"}</button>`;
+    aria-pressed="${on}">${icon("palette", 14)} ${on ? "Wearing these everywhere" : "Wear these everywhere"}</button>`;
 }
 function wearToggle(key) {
   const [sport, abbr] = String(key).split(":");
@@ -2920,7 +2926,7 @@ document.addEventListener("click", (e) => {
     const on = wearingTeam(x.dataset.wear);
     x.classList.toggle("on", on);
     x.setAttribute("aria-pressed", String(on));
-    x.innerHTML = `${icon("palette", 14)} ${on ? "Wearing these colours" : "Wear these colours"}`;
+    x.innerHTML = `${icon("palette", 14)} ${on ? "Wearing these everywhere" : "Wear these everywhere"}`;
   });
 });
 

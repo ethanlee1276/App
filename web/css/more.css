@@ -850,6 +850,10 @@
 .tm-head.tm-band {
   --tm-band: linear-gradient(118deg, color-mix(in oklab, var(--tm-c) 78%, var(--night-3)) 0%, color-mix(in oklab, var(--tm-c) 46%, var(--night-3)) 100%);
   margin-bottom: 12px; padding: 18px; border-radius: var(--radius-lg); background: var(--tm-band); color: var(--night-text); }
+/* THE PAGE WEARS ITS CLUB (TEAMWASH1): with the whole screen on the club's two colours (app.js
+   pageClubOn → html.club-page), the header lies on the colours themselves at night, as a player's page
+   and a live game's score do; a band of the same colour over them was a box. Paper keeps the band. */
+html.club-page:not([data-theme="light"]) .tm-head.tm-band { background: none; padding-left: 2px; padding-right: 2px; }
 .tm-band .tm-nick { color: var(--night-text); }
 .tm-band .tm-city, .tm-band .tm-rec { color: color-mix(in oklab, var(--night-text) 80%, transparent); }
 .tm-crest { flex: none; display: inline-flex; }
@@ -858,14 +862,14 @@
 .tm-nick { margin: 0; font-size: var(--fs-3xl); font-weight: 800; letter-spacing: -.3px; line-height: var(--lh-tight); text-transform: uppercase; }
 .tm-rec { margin-top: 4px; font-size: var(--fs-sm); color: var(--text-dim); font-weight: 600; }
 .tm-acts { flex: none; }
-/* Follow and Wear these colours (MYCOLORS1) stacked at the header's end; on a
+/* Follow and Wear these everywhere (MYCOLORS1) stacked at the header's end; on a
    phone, a row of their own under the name, so the nickname keeps its width. */
 .tm-acts { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 @media (max-width: 640px) {
   .tm-head { flex-wrap: wrap; }
   .tm-acts { flex-direction: row; flex-wrap: wrap; align-items: center; width: 100%; }
 }
-/* Wear these colours (MYCOLORS1, js/more.js wearBtn): on the band, the night's in either theme. */
+/* Wear these everywhere (MYCOLORS1, js/more.js wearBtn): on the band, the night's in either theme. */
 .wear-btn { display: inline-flex; align-items: center; gap: 6px; }
 .wear-btn.on { color: var(--brand); }
 .tm-band .wear-btn, .tm-band .wear-btn:hover { color: var(--night-text); background: color-mix(in oklab, var(--night-3) 40%, transparent); }

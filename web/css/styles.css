@@ -11248,7 +11248,7 @@ body.gp-on .ambient { display: none; }
    YOUR TEAM'S COLOURS ON THE WHOLE SITE (MYCOLORS1, 2026-11-17; Ethan: "add
    how users can use there team colors too make the whole websites colors
    change like how the background on live pages looks with the team
-   colors"). Settings, Team colours, Whole site, or Wear these colours on a
+   colors"). Settings, Team colours, Whole site, or Wear these everywhere on a
    team's page: app.js applyTeamColors puts html.team-wash on, with the
    team's two colours deepened until white type reads on them (--tw-1,
    --tw-2) and as they are (--tw-1-paper, --tw-2-paper). Every page then
@@ -11291,6 +11291,6 @@ html.team-wash .shelf-head {
   background: var(--tw-shade), var(--tw-wash), var(--bg);
   background-size: 100vw 100vh; background-repeat: no-repeat; background-attachment: fixed; }
 /* Follow on a team's band is the night's in either theme, as the band is (more.css .tm-band, where
-   Wear these colours beside it is styled): the light theme's deeper gold read dark on the club's colour. */
+   Wear these everywhere beside it is styled): the light theme's deeper gold read dark on the club's colour. */
 .tm-band .fav-btn, .tm-band .fav-btn:hover { color: var(--night-text); background: color-mix(in oklab, var(--night-3) 40%, transparent); }
 .tm-band .fav-btn.on { color: var(--night-gold); }

@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WM. A team's page wears its club's colours, and every colour change fades** (step 723; 17 November). Nothing to
+run. Your two answers: team pages should wear their club's colours, and the switch between your own colours and a
+team's should be smooth, not a quick glitchy switch. A team's page now puts the whole screen on that club's two
+colours while it is open, the way a player's page does: over your own colours if you wear some, and with the setting
+off too; at night the crest and name lie on the colours themselves. Leaving the page gives the screen back to your
+colours, or the site's gold, and one club's page goes straight to the next's. The pair is the club's real colours
+(the Leafs' blue with a deeper blue, not the fog grey their white trim turns into), the same pair a player's page
+uses. And every change of the screen's colours now cross-fades over about four tenths of a second: your colours to a
+club's and back, one player's page to the next, into and out of a game's page, the theme. It is done by laying a
+copy of the old look over the new one and fading the copy out, so the phone does it without repainting anything, and
+nothing fades for someone who asked their phone for less motion. The button on a team's page now reads "Wear these
+everywhere": the page wears them already, so the button says what it adds. The fade's code loads after the first
+paint, so the first visit is no heavier.
+
 **WL. A game that ends after its board has moved on is still fact-checked** (step 722; 17 November). Nothing to run.
 Building the welcome page's numbers showed How our reports did holding 14 NFL games, 12 of college basketball, 8 of
 the NBA, 2 of the NHL and none of college football. Two things made that zero. The fact checks began on 16 November

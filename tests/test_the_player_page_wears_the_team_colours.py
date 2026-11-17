@@ -83,7 +83,7 @@ def _node(body):
 
 
 #: The colour arithmetic as the page runs it (app.js), and the page's own wash (playerpage.js).
-COLOUR = ("".join(_fn(APP, n) for n in ("okLab", "okRgb", "twWash"))
+COLOUR = ("".join(_fn(APP, n) for n in ("okLab", "okRgb", "twWash", "clubWash"))
           + "".join(_line(APP, s) for s in ("const rgbHex = ", "const TW_DEEP_L", "const twHex6 = ")))
 WASH = ("".join(_line(PAGE, s) for s in ("const PLR_WASH_VARS = ", "let _plrWatch = "))
         + "".join(_fn(PAGE, n) for n in ("plrFrameOn", "plrWashPair", "plrWashOff", "plrFrameOff", "plrPin")))

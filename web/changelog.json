@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-17",
+      "kind": "ship",
+      "title": "A team’s page wears its colours, and colour changes fade",
+      "body": "Open any team’s page and the whole screen sits on that club’s two colours, as a player’s page does, whether or not you wear a team’s colours yourself; leave it and the screen is yours again. Every change of the screen’s colours now fades smoothly instead of snapping: your colours to a club’s and back, one page’s club to the next, into and out of a game. The button on a team’s page now reads “Wear these everywhere”."
+    },
+    {
+      "date": "2026-11-17",
       "kind": "fix",
       "title": "A game that ends after the board moves on is still fact-checked",
       "body": "A report was fact-checked only while its game was still on the board, and college football’s board moves to its next slate at midnight Eastern, with Saturday’s late games still being played. A game that finishes after that, or whose box score arrives late in any league, is now graded and kept from the report written before its start, with its picks and parlays."

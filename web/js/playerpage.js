@@ -608,18 +608,9 @@ function plrFrameOn(sport, team) {
     _plrWatch.observe(board, { childList: true });
   }
 }
-/* The club's two colours for its page: the whole-site wash's pair (app.js twWash), save that white,
-   silver and grey are a kit's trim beside a club's real colours. Deepened until white type reads on
-   them they turn a fog grey, so the Leafs' and Duke's blue washed into grey; they step aside for the
-   club's next colour, else twWash's deeper shade of the first. A club whose colours are all trim and
-   black (the Raiders, the Nets) keeps them: they are the club. */
-function plrWashPair(t) {
-  const cs = [t.primary, t.secondary, t.tertiary, t.alt].map(twHex6);
-  const chroma = (c) => { const [, a, b] = okLab(c); return Math.hypot(a, b); };
-  const trim = (c) => c && okLab(c)[0] > 0.6 && chroma(c) < TW_HUED;
-  const pick = cs.some((c) => c && chroma(c) >= TW_HUED) ? cs.map((c) => (trim(c) ? "" : c)) : cs;
-  return twWash({ primary: pick[0], secondary: pick[1], tertiary: pick[2], alt: pick[3] });
-}
+//: The club's two colours for its page: app.js clubWash, the pair every page that is one club's wears
+//: (a team's page too): the whole-site wash's, save that a kit's white or silver trim steps aside.
+function plrWashPair(t) { return clubWash(t); }
 function plrWashOff() {
   document.body.classList.remove("plr-on");
   PLR_WASH_VARS.forEach((k) => document.body.style.removeProperty(k));

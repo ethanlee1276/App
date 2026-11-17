@@ -5708,7 +5708,7 @@ function gpWashColours(league, d) {
 function gpWashOn(league, d) {
   const view = document.getElementById("view-pbp");
   if (!view) return;
-  if (!view.querySelector(":scope > .gp-wash")) view.insertAdjacentHTML("afterbegin", `<div class="gp-wash" aria-hidden="true"></div>`);
+  if (!view.querySelector(":scope > .gp-wash")) view.insertAdjacentHTML("afterbegin", `<div class="gp-wash" data-wash aria-hidden="true"></div>`);
   const { away, home } = gpWashColours(league, d);
   document.body.style.setProperty("--wa", away);
   document.body.style.setProperty("--wh", home);
