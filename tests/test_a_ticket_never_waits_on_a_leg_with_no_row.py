@@ -72,6 +72,82 @@ def test_a_leg_with_no_row_voids_once_its_ticket_s_other_legs_graded():
     assert again == {"fixed": [], "reopened": 0}, again
 
 
+def _receptions_leg(conn, player="Isaiah Likely"):
+    return conn.execute("SELECT * FROM parlay_legs WHERE player=? AND market='receptions' LIMIT 1",
+                        (player,)).fetchone()
+
+
+def _other_book(conn, b, leg, status, actual, line=None):
+    """The same prop in the Most Likely book, settled off the box."""
+    conn.execute("INSERT INTO bets (ts, sport, date, game_day, player, market, side, line, odds, stake_units, "
+                 "stake_dollars, status, category, team, actual) VALUES ('2099-11-12T12:00:00', 'nfl', ?, "
+                 "'2099-11-12', ?, ?, ?, ?, -150, 1, 10, ?, 'likely', ?, ?)",
+                 (b["date"], leg["player"], leg["market"], leg["side"],
+                  float(leg["line"]) if line is None else line, status, leg["team"], actual))
+    conn.commit()
+
+
+def _lost_on_its_line(leg):
+    """The box's number that loses this leg on its own line."""
+    up = str(leg["side"] or "").upper() in ("OVER", "YES")
+    return float(leg["line"]) - 0.5 if up else float(leg["line"]) + 0.5
+
+
+def test_a_leg_with_no_paper_row_grades_from_the_same_prop_in_another_book():
+    conn, b = _journaled()
+    leg = _receptions_leg(conn)
+    assert leg is not None, "the fixture has his catches on a ticket"
+    conn.execute("DELETE FROM bets WHERE player='Isaiah Likely'")
+    conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
+    conn.commit()
+    # Another book took a line a catch lower and won; on the leg's own line the box lost.
+    up = str(leg["side"] or "").upper() in ("OVER", "YES")
+    _other_book(conn, b, leg, "won", _lost_on_its_line(leg), line=float(leg["line"]) + (-1 if up else 1))
+    res = PL.settle(conn)
+    assert res["waiting"] == 0, res
+    hit = [r[0] for r in conn.execute("SELECT DISTINCT parlay_id FROM parlay_legs WHERE player='Isaiah Likely' "
+                                      "AND market='receptions'")]
+    assert hit
+    for pid in hit:
+        p = conn.execute("SELECT status, legs_lost FROM parlays WHERE id=?", (pid,)).fetchone()
+        assert (p["status"], p["legs_lost"]) == ("lost", 1), dict(p)
+        l = conn.execute("SELECT status FROM parlay_legs WHERE parlay_id=? AND player='Isaiah Likely' "
+                         "AND market='receptions'", (pid,)).fetchone()
+        assert l["status"] == "lost"
+    assert PL.resettle(conn) == {"fixed": [], "reopened": 0}
+
+
+def test_a_paper_row_still_open_reads_the_same_prop_settled_in_another_book():
+    conn, b = _journaled()
+    leg = _receptions_leg(conn)
+    conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99 "
+                 "WHERE NOT (player='Isaiah Likely' AND market='receptions')")
+    conn.commit()
+    assert PL.settle(conn)["waiting"] > 0, "its paper row is open: those tickets wait"
+    _other_book(conn, b, leg, "lost", _lost_on_its_line(leg))
+    res = PL.settle(conn)
+    assert res["waiting"] == 0, res
+    assert conn.execute("SELECT COUNT(*) FROM parlays WHERE status='open'").fetchone()[0] == 0
+
+
+def test_the_waiting_report_says_what_each_leg_waits_on():
+    conn, b = _journaled()
+    conn.execute("DELETE FROM bets WHERE player='Isaiah Likely'")
+    conn.commit()
+    late = PL.waiting(conn, days=2, today=dt.date(2099, 11, 20))
+    assert len(late) == 7, len(late)
+    assert all(t["day"] == "2099-11-12" and t["game"] for t in late), late[0]
+    states = {l["state"].split(":")[0] for t in late for l in t["legs"]}
+    assert states == {"open", "no row"}, states
+    assert PL.waiting(conn, days=2, today=dt.date(2099, 11, 13)) == [], "not two days on yet"
+    # Graded legs say so, and which book they came from.
+    leg = _receptions_leg(conn)
+    _other_book(conn, b, leg, "lost", _lost_on_its_line(leg))
+    said = [l["state"] for t in PL.waiting(conn, days=2, today=dt.date(2099, 11, 20)) for l in t["legs"]
+            if l["player"] == "Isaiah Likely" and l["market"] == "receptions"]
+    assert said and all(s == "graded: lost (from the likely book)" for s in said), said
+
+
 def _ml_ticket():
     """A first-week three-leg ticket (14-16 November) that took a club to win:
     two props on paper, and the club's moneyline, which no paper row holds."""

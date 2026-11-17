@@ -821,18 +821,88 @@ def _game_line_bet(conn, p, leg):
                         (p["sport"], p["date"], team)).fetchone()
 
 
+def _other_book_bet(conn, p, leg):
+    """THE SAME PROP IN ANOTHER BOOK, SETTLED (STUCKLEGS1). A game parlay's leg
+    grades from its own paper row; where that row was never written (the paper
+    journal refused a game already under way) or is still open, the player's
+    same market that day in any of our books, settled, holds the number the
+    box gave (`actual`), and `_own_verdict` grades the leg on its own side and
+    line from it, as it does any row taken at another line. The row at the
+    leg's own side and line first. Never a book graded on another path
+    (ledger.GRADED_ELSEWHERE: exchange tickers, fights), never a game line
+    (`_game_line_bet` reads those as they stand)."""
+    src = p["source"] if "source" in p.keys() else None
+    if src not in NO_ROW_VOID_SOURCES or str(leg["market"] or "").lower() == "moneyline":
+        return None
+    from .ledger import GRADED_ELSEWHERE
+    shut = (PARLAY_LEG_CATEGORY, *GRADED_ELSEWHERE)
+    marks = ",".join("?" * len(shut))
+    return conn.execute(
+        f"SELECT * FROM bets WHERE sport=? AND date=? AND player=? AND market=? AND status IN ('won','lost','void') "
+        f"AND COALESCE(category,'') NOT IN ({marks}) "
+        f"ORDER BY CASE WHEN UPPER(COALESCE(side,''))=? AND ABS(COALESCE(line,0)-?)<1e-6 THEN 0 ELSE 1 END, id",
+        (p["sport"], p["date"], leg["player"], leg["market"], *shut,
+         str(leg["side"] or "").upper(), float(leg["line"] or 0))).fetchone()
+
+
 def _resolve_leg(conn, p, leg) -> tuple:
     """(the row a leg grades from, its verdict): its own paper row (`_matching_bet`,
-    graded on its own side and line, `_own_verdict`), else a game line's own bet in
-    any book (`_game_line_bet`, that bet's verdict as it stands); (None, None) with
-    neither (`_no_row_verdict`). A verdict is None while the row is open."""
+    graded on its own side and line, `_own_verdict`); else, for a game parlay, a
+    game line's own bet in any book (`_game_line_bet`, that bet's verdict as it
+    stands) or the same prop settled in another book (`_other_book_bet`, graded
+    on the leg's own line); (None, None) with none of them (`_no_row_verdict`).
+    A paper row still open waits unless another book has settled the same prop.
+    The verdict is None while the row is open."""
     b = _matching_bet(conn, p, leg)
-    if b is not None:
-        return b, (_own_verdict(leg, b) if b["status"] != "open" else None)
-    g = _game_line_bet(conn, p, leg)
-    if g is not None:
-        return g, ({k: g[k] for k in g.keys()} if g["status"] != "open" else None)
-    return None, None
+    if b is not None and b["status"] != "open":
+        return b, _own_verdict(leg, b)
+    if b is None:
+        g = _game_line_bet(conn, p, leg)
+        if g is not None:
+            return g, ({k: g[k] for k in g.keys()} if g["status"] != "open" else None)
+    o = _other_book_bet(conn, p, leg)
+    if o is not None:
+        return o, _own_verdict(leg, o)
+    return b, None
+
+
+def waiting(conn, days: int = 2, today=None) -> list[dict]:
+    """GAME PARLAYS STILL OPEN `days` AFTER THEIR DATE, AND WHAT EACH LEG WAITS ON
+    (STUCKLEGS1). Read-only: each leg as the next settle reads it (`_resolve_leg`):
+    graded (and from which book), open (its row not graded yet), or no row in any
+    book. `python3 -m engine.parlayledger waiting`."""
+    ensure_schema(conn)
+    cut = ((today or datetime.date.today()) - datetime.timedelta(days=days)).isoformat()
+    marks = ",".join("?" * len(NO_ROW_VOID_SOURCES))
+    out = []
+    for p in conn.execute(f"SELECT * FROM parlays WHERE status='open' AND source IN ({marks}) "
+                          f"ORDER BY date, id", NO_ROW_VOID_SOURCES).fetchall():
+        legs, seen = [], []
+        for leg in conn.execute("SELECT * FROM parlay_legs WHERE parlay_id=? ORDER BY leg_no",
+                                (p["id"],)).fetchall():
+            own = _matching_bet(conn, p, leg)
+            row, verdict = _resolve_leg(conn, p, leg)
+            for r in (own, row):
+                if r is not None and "game_day" in r.keys() and r["game_day"]:
+                    seen.append(str(r["game_day"])[:10])
+            if verdict is not None:
+                mine = own is not None and own["id"] == row["id"]
+                state = f"graded: {verdict['status']}" + ("" if mine else f" (from the {row['category']} book)")
+            elif row is not None:
+                state = f"open: its row #{row['id']} ({row['category']}, {row['date']}) has not graded"
+            else:
+                state = "no row: nothing in any book to grade it from"
+            legs.append({"player": leg["player"], "market": leg["market"], "side": leg["side"] or "",
+                         "line": leg["line"], "state": state})
+        # The day it was played: a calendar date as filed; a football week's
+        # label ("2026-W11") by its legs' rows' game day, else the day journaled.
+        day = str(p["date"] or "")
+        if "-W" in day or len(day) != 10:
+            day = min(seen) if seen else str(p["ts"] or "")[:10]
+        if day and day <= cut:
+            out.append({"id": p["id"], "sport": p["sport"], "date": p["date"], "day": day,
+                        "game": p["grade"] or "", "source": p["source"], "legs": legs})
+    return out
 
 
 #: The tickets whose legs ride on their own paper bucket (engine/gameparlays): only
@@ -1601,12 +1671,29 @@ def _cli(argv: list[str]) -> int:
         print(__doc__.strip().splitlines()[0])
         print("\n  python3 -m engine.parlayledger open [--limit N]")
         print("      tickets with no recorded price, newest first\n")
+        print("  python3 -m engine.parlayledger waiting [--days N]")
+        print("      game parlays still open N days (2) after their date, and what each leg waits on\n")
         print("  python3 -m engine.parlayledger quote <id> <+340|-120> "
               "[--book dk]")
         print("      record what a book actually offered on one ticket\n")
         return 0
     cmd, rest = argv[0], argv[1:]
     conn = _ledger.connect()
+    if cmd == "waiting":
+        days = int(rest[rest.index("--days") + 1]) if "--days" in rest else 2
+        rows = waiting(conn, days)
+        if not rows:
+            print(f"\n  No game parlay is still open {days} day(s) after its date.\n")
+            return 0
+        print(f"\n  {len(rows)} game parlay(s) still open {days} day(s) after their date\n")
+        for t in rows:
+            print(f"    #{t['id']}  {t['sport']}  {t['day']}  {t['game']}  ({t['source']})")
+            for l in t["legs"]:
+                print(f"        {l['player']} {l['market']} {l['side']} {l['line']}: {l['state']}")
+        from collections import Counter
+        why = Counter(l["state"].split(":")[0] for t in rows for l in t["legs"])
+        print("\n  " + ", ".join(f"{n} {k}" for k, n in why.most_common()) + "\n")
+        return 0
     if cmd == "open":
         limit = int(rest[rest.index("--limit") + 1]) if "--limit" in rest else 40
         rows = awaiting_quote(conn, limit)
