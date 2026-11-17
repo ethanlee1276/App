@@ -1444,12 +1444,8 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .search-wrap input:focus { border-color: var(--brand-2); box-shadow: none; }
 .search-wrap .ico { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-mute); font-size: var(--fs-xl); }
 
-/* The cap note on an unsearched Players page. Spans the grid rather than
-   sitting in a column — it is about the whole list, not the first card. */
-.browse-note {
-  grid-column: 1 / -1; margin: 0 0 4px;
-  color: var(--text-mute); font-size: var(--fs-sm);
-}
+/* The cap note on an unsearched Players page, above its names. */
+.browse-note { margin: 0 0 8px; color: var(--text-mute); font-size: var(--fs-sm); }
 
 .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: 18px; }
 

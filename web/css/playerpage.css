@@ -2,8 +2,8 @@
    colours, then six menus. The header is a band of the club's colour darkened
    toward night in either theme, so its words are the night tokens' (as the
    arenas' banners are), and the club's mark sits large and faint behind him. */
-/* The Players board is a grid of cards (.player-grid); the page is the whole of it. */
-.plr { display: block; grid-column: 1 / -1; min-width: 0; }
+/* The page is the whole of the Players board (#players-board), in place of the search's list. */
+.plr { display: block; min-width: 0; }
 /* The band is defined on its own property, as every gradient here is (test_newlook). */
 .plr-hero {
   --plr-band: linear-gradient(118deg, color-mix(in oklab, var(--plr-c, var(--night-2)) 78%, var(--night-3)) 0%, color-mix(in oklab, var(--plr-c, var(--night-2)) 46%, var(--night-3)) 100%);
