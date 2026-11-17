@@ -66,8 +66,8 @@ def test_a_row_is_a_face_a_name_and_a_door_to_the_page():
     assert '<button type="button" class="psr-row" data-player-page="${escapeAttr(slugify(m.player))}"' in row
     assert "playerAvatar(m.player, m.team, { size: 44, headshot: m.headshot })" in row
     assert 'class="psr-go" aria-hidden="true"' in row
-    for sel in (".psr-list {", ".psr-row {", ".psr-row:hover {", ".psr-row:focus-visible {", ".psr-who {",
-                ".psr-nm {", ".psr-sub {", ".psr-go {"):
+    # The focus ring is the site's own (styles.css :where(… button …):focus-visible).
+    for sel in (".psr-list {", ".psr-row {", ".psr-row:hover {", ".psr-who {", ".psr-nm {", ".psr-sub {", ".psr-go {"):
         assert sel in CSS, sel
     assert ".psr-row::before {" in CSS and "background: var(--psr-c); }" in CSS, "the club's stripe"
     assert "\n  --psr-c: var(--brand);\n" in CSS, "a row with no club wears the brand's"

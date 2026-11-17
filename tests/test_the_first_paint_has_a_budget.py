@@ -371,7 +371,17 @@ APP_JS_BUDGET_KB = 290
 #: 393,466 -> 394,788 B, 548 over 385. It cannot load later: a reload's place
 #: is put back on the first page drawn, and every redraw on every page reopens
 #: its folds. Told to Ethan.
-BOOT_BUDGET_KB = 386
+#: 386 -> 387 on 2026-11-17, for Ethan, circling the pick page a search card
+#: had opened: "when you search a player it will just show there name and
+#: headshot then the user had too click on there name and it will pull them
+#: to the actual player page." A SEARCH LISTS NAMES (app.js searchListHTML,
+#: searchRowHTML; styles.css .psr-*), and the player page's market card has
+#: the pick page's Bet it and Ask (profileActsHTML, .prof-acts). The old
+#: Profile and Roster rows went with it. 264 B gz: 395,528 B, 264 over 386.
+#: It cannot load later: the list is drawn under the search box the moment a
+#: letter is typed, and a list in a room would wait for that room first.
+#: Told to Ethan.
+BOOT_BUDGET_KB = 387
 
 
 def _gz_trimmed(rel: str) -> int:
