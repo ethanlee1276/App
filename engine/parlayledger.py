@@ -838,7 +838,7 @@ def _other_book_bet(conn, p, leg):
     shut = (PARLAY_LEG_CATEGORY, *GRADED_ELSEWHERE)
     marks = ",".join("?" * len(shut))
     return conn.execute(
-        f"SELECT * FROM bets WHERE sport=? AND date=? AND player=? AND market=? AND status IN ('won','lost','void') "
+        f"SELECT * FROM bets WHERE sport=? AND date=? AND player=? AND market=? AND status IN ('won','lost','push','void') "
         f"AND COALESCE(category,'') NOT IN ({marks}) "
         f"ORDER BY CASE WHEN UPPER(COALESCE(side,''))=? AND ABS(COALESCE(line,0)-?)<1e-6 THEN 0 ELSE 1 END, id",
         (p["sport"], p["date"], leg["player"], leg["market"], *shut,

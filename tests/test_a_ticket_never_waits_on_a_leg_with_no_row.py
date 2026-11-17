@@ -148,6 +148,21 @@ def test_the_waiting_report_says_what_each_leg_waits_on():
     assert said and all(s == "graded: lost (from the likely book)" for s in said), said
 
 
+def test_a_push_in_another_book_still_holds_the_players_number():
+    conn, b = _journaled()
+    leg = _receptions_leg(conn)
+    conn.execute("DELETE FROM bets WHERE player='Isaiah Likely'")
+    conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
+    conn.commit()
+    # Another book's whole-number line pushed on the box's number; the leg's own line lost on it.
+    a = _lost_on_its_line(leg)
+    _other_book(conn, b, leg, "push", a, line=a)
+    assert PL.settle(conn)["waiting"] == 0
+    states = {r[0] for r in conn.execute("SELECT status FROM parlay_legs WHERE player='Isaiah Likely' "
+                                         "AND market='receptions'")}
+    assert states == {"lost"}, states
+
+
 def _ml_ticket():
     """A first-week three-leg ticket (14-16 November) that took a club to win:
     two props on paper, and the club's moneyline, which no paper row holds."""
