@@ -14,7 +14,7 @@ code, so neither quietly drifts back:
     and soccer), the banner and the composer over the feed, and the rail
     (Trending Picks, Top Bettors with Win % / Units / Followers, Popular
     Sports, Community Stats, the Discord);
-  - the banner is Ethan's own backdrop render (his crown and wordmark in
+  - the banner is Ethan's own backdrop render (their crown and wordmark in
     the art, no athlete's likeness), the profile cover is that arena
     without the logo, and the tagline promises no wins;
   - the composer's tools are Parlay, Poll and Link; there is no Image

@@ -443,7 +443,7 @@ def _tally(rows) -> dict:
 def combined(model: dict | None, zeno: dict | None) -> dict | None:
     """EVERYTHING WE'VE BET, with the split always beside it. Ethan,
     2026-09-26, asked for his own record to count in the page's ROI and
-    units; the answer he chose is a combined line that says what each
+    units; the answer they chose is a combined line that says what each
     side added — the model's picks (graded by us, in units) and his own
     tickets (graded by the book, at UNIT_DOLLARS a unit). Never folded
     into the model's own numbers: `overall` stays the model's alone, so a

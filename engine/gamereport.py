@@ -46,7 +46,7 @@ side beside the read (`read_pick`, 2026-11-14: "it would not make any sense
 to make players favoitable and breakout canidates and not give them
 props"), and each team's touchdown chances ranked with their prices
 (`td_chance_lines`, 2026-11-15: build his NFL Bet checking reports' way into
-these — his reports rank who can score, with the chance and the price, next
+these — their reports rank who can score, with the chance and the price, next
 to what the defense allows the position). The game
 lines and the drive simulator's shares are the game's, and the report
 says the simulator is a simulation, not a pick.

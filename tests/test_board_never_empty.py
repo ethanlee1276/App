@@ -26,7 +26,7 @@ this board is one of two kinds:
 Only the FLOOR moves, and the cap is deliberately left alone: the cap
 exists because of Ethan's own complaint on 2026-09-01 about "grabbing
 random -1200 props", so widening it to fill a quiet night would answer
-today's instruction by re-creating the bug he reported.
+today's instruction by re-creating the bug they reported.
 
 AND THE RESERVE IS PER SHELF, not per board (2026-09-08, later the same
 day). It first fired only when `build` returned nothing at all, and
@@ -524,7 +524,7 @@ def test_the_page_no_longer_claims_it_would_rather_sit_empty():
 
 
 def test_props_built_and_none_priced_says_the_prices_are_not_in():
-    """Ethan, 2026-10-30, the NBA's Most Likely on his Duo: "Nothing to rank
+    """Ethan, 2026-10-30, the NBA's Most Likely on their Duo: "Nothing to rank
     yet ... It fills in as the books post their menus" over a board that had
     built 4,358 props and bought no price for any of them. The books had
     posted; the prices had not been pulled. The page says which."""

@@ -158,7 +158,7 @@ def test_with_an_iphones_keyboard_up_the_box_rests_on_the_keys():
     before = out["before"]
     assert before["pos"] == "static" and not before["typing"]
     assert before["page"] >= before["screen"] and before["scroll"] == 0, \
-        f"the page must be a screen tall and not scroll — shorter, and his iPhone lifts the tab bar: {before}"
+        f"the page must be a screen tall and not scroll — shorter, and their iPhone lifts the tab bar: {before}"
     up = out["up"]
     assert up["typing"] and up["pos"] == "fixed" and up["tab"] == "none", up
     assert (up["top"], up["bottom"]) == (0, 508), f"the room is not the part the keys leave: {up}"

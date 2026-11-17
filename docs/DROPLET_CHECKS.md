@@ -323,7 +323,7 @@ number on the Dashboard is wrong. The "Recommended bets" tile is
 `staked + riding` (web/js/app.js renderStats, Ethan's 2026-09-03 call:
 "what am I on tonight"): NEW picks that clear the sliders PLUS the
 open bets the tracker is still riding at the price they were taken.
-The grid draws only the new ones. The day he saw 20 and 2 was 2 new
+The grid draws only the new ones. The day they saw 20 and 2 was 2 new
 and 18 riding, and the tile's own sub-line says so ("2 new · 18 riding
 at the price we took"). On the 5th it was 0 new and 11 riding. Product
 call, not a defect: keep the headline as the total with the split
@@ -1119,7 +1119,7 @@ name a different favourite and disagree by at most 0.118
 (docs/LIKELY_GAME_LINES.md). The census line is "the moneyline
 disagrees with this game's own spread by more than any book has".
 
-**Not refused, and this is the one to look at:** MIN -1.5 on his book
+**Not refused, and this is the one to look at:** MIN -1.5 on their book
 with MIN -125, our board showing MIN ML -220. Our spread and our
 moneyline agree with each other, so nothing is internally wrong — the
 price is simply not the price the book is showing. That is either a

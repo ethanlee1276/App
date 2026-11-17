@@ -1,9 +1,9 @@
 """Everything we've bet: the model and Zeno in one line, the split shown.
 
-Ethan, 2026-09-26: his own record (from Pikkit) should count in the
+Ethan, 2026-09-26: their own record (from Pikkit) should count in the
 page's ROI and units — "my own record is up 800 units". Folding it into
 the model's own number would make the picks look better than they have
-done, so he chose a combined line that always shows what each side added,
+done, so they chose a combined line that always shows what each side added,
 with the model's own record left beside it. 1 unit = $10.
 """
 import os

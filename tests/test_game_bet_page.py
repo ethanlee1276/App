@@ -5,7 +5,7 @@ what im saying. i should be able to click on this prop and it shows more
 info for the prop and it will show the bar graph too. you need to
 implement that now."
 
-HE WAS RIGHT AND I HAD BUILT HALF THE FEATURE. The pick he circled is a
+THEY WERE RIGHT AND I HAD BUILT HALF THE FEATURE. The pick they circled is a
 GAME bet, and `propOpenable` opens with `if (!r.player) return false` — a
 run line has no player, so it stayed inert while the props beside it
 opened. The gate was not wrong about props. It was answering "is this a

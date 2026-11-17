@@ -212,7 +212,7 @@ def test_voiding_nothing_is_allowed():
     assert ledger.void_unplayed(lconn, []) == 0
 
 
-# --- the message that sent him nowhere ---------------------------------------
+# --- the message that sent them nowhere -------------------------------------
 def test_the_repair_note_stops_prescribing_an_impossible_ingest():
     hconn, lconn = _world()
     row = list(hconn.execute(

@@ -5,7 +5,7 @@ Ethan, 2026-08-13, circling a run line on the dashboard: "i should be able
 to click on this prop and it shows more info for the prop and it will show
 the bar graph too."
 
-The pick he circled was MIL +1.5 — a GAME bet, not a player prop, and the
+The pick they circled was MIL +1.5 — a GAME bet, not a player prop, and the
 prop page could not open it for a straightforward reason: a run line has
 no player and therefore no player game log, so there was nothing to draw.
 That is a gap in the DATA the page was offered, not a reason the page

@@ -609,7 +609,7 @@ def settle(lconn, plays_for=None) -> int:
 
 
 # --- grading off ESPN, the night of the game ------------------------------------
-# Ethan, 2026-11-01, with Malik Washington's first touchdown at +1800 on his
+# Ethan, 2026-11-01, with Malik Washington's first touchdown at +1800 on their
 # phone: "are we tracking the record for the longshot for nfl ... bc we
 # already are 1/2 so out roi and units should be up." It was tracked and
 # could not move: `settle` above reads the nflverse play-by-play, which

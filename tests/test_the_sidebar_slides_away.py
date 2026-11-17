@@ -1,7 +1,7 @@
 """The sidebar slides away by its three dots, or by a finger (styles.css
 "THE SIDEBAR SLIDES AWAY", app.js initSidebarGrip, boot.js).
 
-Ethan, 2026-10-29, his open Duo upright with its sidebar circled: "put
+Ethan, 2026-10-29, their open Duo upright with its sidebar circled: "put
 like three dots on the right side of the menu. That gives you an option to
 click the three dots and it'll just swipe the bar to the left, or you can
 physically slide it yourself" (first asked as "an option to slide this menu

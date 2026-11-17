@@ -69,7 +69,7 @@ like from the inside.
 **The trade is real and it is steep.** Ethan's $70 floor costs about ten
 to fifteen points of hit rate against a $53 floor (-190), and no
 selector can buy them back — nobody sells a 65% outcome for 70 cents.
-That is his call and `potd.MIN_PAYOUT` is the one constant that reverses
+That is their call and `potd.MIN_PAYOUT` is the one constant that reverses
 it.
 
 **Nothing here is an edge.** Every row lands within one and a half

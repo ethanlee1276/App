@@ -1,6 +1,6 @@
 """The top of a game page is one picture: no black block, no seams.
 
-Ethan, 2026-11-02, his open Duo (703 by 1000, the installed app), the top of
+Ethan, 2026-11-02, their open Duo (703 by 1000, the installed app), the top of
 a live Chiefs-Broncos game circled: "fix how the colors glitch out here".
 Three things painted the top of the page over the clubs' wash, each its
 own way:

@@ -208,7 +208,7 @@ EVIDENCE = ("exchange", "sharp", "market", "model")
 
 #: STILL 2%, AND THE REASON IS ETHAN'S OWN TIEBREAKER.
 #:
-#: On 2026-09-16 he said "I don't care about the edge a bet has when it
+#: On 2026-09-16 they said "I don't care about the edge a bet has when it
 #: comes to the pick of the day … Who cares about ev and shit", and then,
 #: asked which of two conflicting specs should win: "whatever makes more
 #: sense and returns the most roi and wins and money in the long run."
@@ -289,7 +289,7 @@ from .gamebets import SHARP_SUSPECT_EV as MAX_EV                # noqa: E402
 #:    65%      5        8%      5     3-2  60.0%   -0.58  -11.7%   none
 #:
 #: WHAT CHANGED WAS THE QUESTION, NOT THE DATA. He picked 55% when the
-#: only column on the table was hit rate. Then he added two more
+#: only column on the table was hit rate. Then they added two more
 #: requirements, and 50% is the only floor that satisfies all three:
 #:
 #:   "i lowkey want bets shown more then not"   — 67% of days vs 38%
@@ -1425,7 +1425,7 @@ def carry(card: dict, prev: dict | None) -> dict:
     from whatever the slate had not yet swallowed, and a pick the morning
     board would have named is gone without ever being shown.
 
-    It is also the churn he reported on the NFL four days earlier —
+    It is also the churn they reported on the NFL four days earlier —
     *"it will be different picks every time"* — from the same cause: a
     pool that moves under the selector between builds.
 

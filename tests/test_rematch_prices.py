@@ -10,7 +10,7 @@ every one of them was an exact price from the SAME PAIR'S REMATCH:
     DAL @ NYG  board NYG -218 / DAL +180   the Jan 3  NYG @ DAL game
     SF  @ LA   board LA  +120 / SF  -130   the Dec 13 LA  @ SF game
 
-Three of the four show the WRONG TEAM FAVOURED, which is his report from
+Three of the four show the WRONG TEAM FAVOURED, which is their report from
 2026-09-03 word for word: "none of these teams are favored to win on any
 sports book."
 

@@ -1,6 +1,6 @@
 """Ethan's UFC render, 2026-08-25.
 
-He sent a picture of the page he wants: the card numbers in bordered
+They sent a picture of the page they want: the card numbers in bordered
 boxes with a gold mark on each, a call to action on the hero, the venue
 notice as a real callout instead of a grey footnote, and a RECORD
 BREAKDOWN panel — a ring with the graded total in the middle and a legend

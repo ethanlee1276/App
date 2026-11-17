@@ -1,7 +1,7 @@
 """The pinned layers come back to the screen on an iPhone (web/js/boot.js, THE
 PINNED LAYERS COME BACK TO THE SCREEN; web/js/chat.js chatLetGo).
 
-Ethan, 2026-11-15, his open iPhone Duo on NE @ DET's game page with the game
+Ethan, 2026-11-15, their open iPhone Duo on NE @ DET's game page with the game
 chat bar circled halfway up the screen, over "Where the money is going":
 "fix how this game chat bar gets stuck on the middle of the screen". Every
 pinned layer had moved as one: the top bar off the top, the sidebar's dots
@@ -241,7 +241,7 @@ def _game(eid):
 
 
 def test_in_a_browser_closing_the_chat_with_its_box_in_focus_settles_the_page():
-    """The flow behind his screenshot: the chat open, its box in focus (the
+    """The flow behind their screenshot: the chat open, its box in focus (the
     keyboard up), the chat closed. The box lets go first, so the page stops
     being marked as typing and is settled, and the chat bar is back."""
     if _skip():

@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VB. The last notes that called you "he" say "they"** (step 686; 17 November). Nothing to run. Step UW
+changed about two hundred comments and docs, and a search with more phrasings found about one hundred and
+ninety more it had missed, in the stylesheets, the page's markup, the tests and the engine: "his open Duo", "his
+iPhone", "his laptop", "his call", "his renders", "his research docs", "he asked for", "he chose", "he circled",
+"he reported". They say "they" and "their" now, and so do the notes about Zeno ("their bets are paid", "their
+record"). Two public pages had it too. The privacy policy said a fantasy alert carries "his name and his
+designation"; it now says "the player's name and designation". And the what's-new feed at the foot of the
+Methodology page called a player "he" in about seventy of its older entries ("his share of his team's carries",
+"the pass rush he faces"); they say "they" now, except where an entry names the player (Joe Burrow, Nate Sheppard).
+Your own words in quotation marks are untouched, and in the code's notes so is every "his" that is a player's.
+
 **VA. A player's page wears the club's colours, like the live page** (step 685; 17 November). Nothing to run.
 You sent the Panthers @ Saints live page with its top circled: "the player page should be colorful with there team
 colors like how the live page looks". A player's page now sits on the club's two colours the way a live game's

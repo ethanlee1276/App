@@ -468,7 +468,7 @@ MAX_GAME_PRICE_AGE = 6 * 3600.0
 #: "this could be our issue with not showing picks and shit bc we are
 #: pulling the wrong lines. Also that can make us give fake and false
 #: picks that can hurt us." A pick is a prop. A prop priced off a
-#: payload from days ago is the false pick he means, and an empty shelf
+#: payload from days ago is the false pick they mean, and an empty shelf
 #: is the honest state of a board with no current price. So props answer
 #: to a ceiling too — the same six hours by default, but a SEPARATE knob
 #: (QB_MAX_PROP_PRICE_AGE), because the two are bought differently: game
@@ -1735,7 +1735,7 @@ def best_h2h_books(event_json: dict, team_map: dict) -> dict[str, str]:
     `parse_event_h2h` keeps the best price per side across the books we
     request, which is the right number to publish and, until now, a
     number with no name on it. The card said "best", so a reader holding
-    his phone could not check our -125 against the book that is actually
+    their phone could not check our -125 against the book that is actually
     posting it. Ethan, 2026-09-08: "I don't want you too stop working
     until we display the right lines and prices the books show."
 

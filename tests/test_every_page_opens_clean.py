@@ -119,7 +119,7 @@ def test_a_second_switch_before_the_first_finishes_raises_nothing():
     to. Drive the two switches in one task instead. The spec is explicit
     that a `startViewTransition` with one already pending skips the
     pending one, so the overlap is guaranteed rather than raced for, and
-    the test reads the same on a loaded CI box and on his laptop."""
+    the test reads the same on a loaded CI box and on their laptop."""
     if os.environ.get("QB_BROWSER_TESTS") != "1":
         print("      (skipped: set QB_BROWSER_TESTS=1)")
         return

@@ -1620,7 +1620,7 @@ function safeHref(u) {
 /* BET IT (engine/betlinks). Ethan, 2026-10-06: "a box that shows all the
    different sports books and prediction markets we can link that bet to,
    so it doesn't just send someone to one specific sportsbook since they
-   might not have a certain one." And 2026-10-07, from his phone, at a
+   might not have a certain one." And 2026-10-07, from their phone, at a
    black panel with one price in it: "It should be showing a box with the
    Score Bets logo, FanDuel's logo, Kalshi's logo, DraftKings logo, all
    the sportsbooks logos that we offer. The click button to take you to
@@ -4236,7 +4236,7 @@ async function renderPickOfTheDay() {
 
    Ethan, 2026-09-15: "a model that picks one pick for the pick of the
    day, which is a guaranteed lock for the day." Singular, and for the
-   DAY — though NOT under the word he used. No bet is guaranteed, "lock
+   DAY — though NOT under the word they used. No bet is guaranteed, "lock
    of the day" is on the banned list tests/test_potd_card.py keeps, and
    the first draft of this feature was called that end to end. What the
    page says instead is a comparative the ranking can support: the
@@ -5201,7 +5201,7 @@ function haircutLine(sh) {
 
    THE FIX IS NOT A LOWER BAR. Loosening the gate to fill the page would
    put money on bets the model's own record says lose, which is the
-   opposite of what he asked for ("we wanna make the best bets
+   opposite of what they asked for ("we wanna make the best bets
    possible"). What was actually missing is the OTHER half of the
    answer: what the model's best available bet in each market IS, and
    why it did not make the cut. That is a different sentence from "bet
@@ -10001,7 +10001,7 @@ function likelyOwnReadTile(r) {
    started buying a fresh one when the old one expires — but the reader
    still had to take the number on trust, because the card said only
    which book and never WHEN. A price with a book's name and a clock on
-   it is one he can check against his phone in two seconds; without the
+   it is one they can check against their phone in two seconds; without the
    clock, a number that has drifted since the pull looks exactly like a
    number that is wrong.
 
@@ -10462,7 +10462,7 @@ function shelfByPosted(rows) {
    the performance panel (above the record), moved below the record in
    the picks-and-record consolidation ("a hallway of buttons between
    the claim and its evidence"), and then promoted to the TOP of the
-   page — his screenshot circled the four tiles: "We should show this
+   page — their screenshot circled the four tiles: "We should show this
    at the top of the page." An app opens with its launcher row. */
 /* THE FOUR DOORS (Ethan, 2026-09-26, a phone screenshot: "those four
    buttons ... should be at the top of the mobile page. But I guess that
@@ -12533,7 +12533,7 @@ function ridingAttrs(b) {
    get what im saying. i should be able to click on this prop and it shows
    more info for the prop and it will show the bar graph too."
 
-   He was right and I had built half the feature. The pick he circled is a
+   They were right and I had built half the feature. The pick they circled is a
    GAME bet, and `propOpenable` requires `r.player` — a run line has no
    player, so every card like it stayed inert while the props beside it
    opened. The gate was not wrong about props; it was answering the wrong
@@ -14368,7 +14368,7 @@ function playerBrowseCap() {
    went league-wide. A week of mixed lists later, Ethan, 2026-09-01: "i
    wanna switch that decicion … i wanna be able to search any player
    only on what sport tabe we are on. if im on mlb then i should only be
-   able to search mlb and so forth." So it is scoped again — his call,
+   able to search mlb and so forth." So it is scoped again — their call,
    made with both versions lived in. The difference from the original
    scoped box is that the EMPTY STATE now says the scope out loud, so
    "we have nothing on him" and "you are on the wrong tab" no longer
@@ -14750,7 +14750,7 @@ function ccKeep(host) {
    in it lands on the stored spelling.
 
    Every log-backed league, because the data is the same shape in all of
-   them — he asked for NFL and CFB, and MLB/NBA/WNBA cost nothing more. */
+   them — they asked for NFL and CFB, and MLB/NBA/WNBA cost nothing more. */
 const VS_SPORTS = ["nfl", "cfb", "mlb", "nba", "wnba", "cbb"];
 
 function vsBlockHTML(player, sport, opp = "") {
@@ -16380,7 +16380,7 @@ async function zenoTickets(force) {
   _zenoTixAt = Date.now();
   return _zenoTix;
 }
-/* What a visitor without a plan sees where his bets would be: how many
+/* What a visitor without a plan sees where Zeno's bets would be: how many
    are riding and settled — never which — and the way in. */
 function zenoLockedHTML(z) {
   const n = Number((z || {}).open_n) || 0;
@@ -21774,7 +21774,7 @@ function ffDossierHTML(info) {
     `<div class="ffd-sect"><div class="ffd-h">${title}</div>${body}</div>`;
   const stat = (k, v) => v == null || v === "" ? ""
     : `<span class="ffd-stat"><span class="k">${k}</span><b>${v}</b></span>`;
-  // FIRST, because it is the question he opened the panel with. Draft
+  // FIRST, because it is the question they opened the panel with. Draft
   // value and camp battles are context; "do I start him on Sunday" is
   // the decision.
   const parts = [ffThisWeekHTML(info)];
@@ -22345,10 +22345,10 @@ async function openTeam(sport, team, vs, tab) {
 
      Two separate things were doing that and both are here. This line
      used to set `data: null` unconditionally, which throws away the page
-     he is looking at — `renderTeamPage` then draws one line, "Reading
+     they are looking at — `renderTeamPage` then draws one line, "Reading
      the Rams' finals…", the document collapses to a single paragraph and
-     the browser clamps his scroll to the top because there is nothing
-     left to be scrolled past. And `_landScroll` sent him to y=0 anyway.
+     the browser clamps their scroll to the top because there is nothing
+     left to be scrolled past. And `_landScroll` sent them to y=0 anyway.
 
      So the SAME team with a different opponent keeps its data and its
      place; a DIFFERENT team is a real navigation and still starts at the
@@ -26972,7 +26972,7 @@ function verifyDrawer() {
 }
 
 /* THE SIDEBAR SLIDES AWAY (styles.css "THE SIDEBAR SLIDES AWAY"; Ethan,
-   2026-10-29, his open Duo upright with its sidebar: "put like three dots on
+   2026-10-29, their open Duo upright with its sidebar: "put like three dots on
    the right side of the menu ... click the three dots and it'll just swipe
    the bar to the left, or you can physically slide it yourself"). Where the
    sidebar stands beside the page, the dots slide it away and the page takes
@@ -27681,7 +27681,7 @@ watchNumbers();
    NEW LOOK (2026-08-11) — the shell around every page.
    Ethan approved the render: sidebar of destinations, slim top bar,
    dashboard home, right rail. Copied faithfully MINUS the balance chip
-   and the bet slip (his call, and the site's: no money is held here).
+   and the bet slip (their call, and the site's: no money is held here).
    The compact-nav experiment that lived in this spot is superseded —
    the sidebar IS the menu now, on every width.
    ================================================================== */
@@ -29663,7 +29663,7 @@ function pbpPhotoHTML(game) {
    render says "Blowing In". Same three facts, spelled the way a person
    would say them.
 
-   Note what is NOT here: his render also carries "From CF". We hold the
+   Note what is NOT here: their render also carries "From CF". We hold the
    wind's relation to the park, not the compass sector it comes from, so
    that line would have to be invented and it isn't drawn. */
 const PBP_WIND = {out: "blowing out", in: "blowing in", cross: "crosswind"};

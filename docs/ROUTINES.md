@@ -79,7 +79,7 @@ fresh clone does NOT have Ethan's real bet journal, stats, or built
 slates. doctor.py knows this and its data checks will report "no X on this
 machine". That is correct behaviour, NOT a finding. Never report on data
 you do not have, and never suggest he re-ingest or re-settle based on this
-session — the real-data check runs on his laptop inside `python3
+session — the real-data check runs on their laptop inside `python3
 launch.py`.
 
 Egress note: statsapi.mlb.com and the odds APIs are NOT reachable from
@@ -99,7 +99,7 @@ What you ARE checking is the code.
    someone for.
    Before assuming the code is wrong, check whether the TEST is: a test
    that reads a real store, a real database, or the network will pass here
-   and fail on his laptop, or the reverse. That class of bug has bitten
+   and fail on their laptop, or the reverse. That class of bug has bitten
    this repo three times — test_prose.py fell through to a paid API call,
    and test_doctor_learning.py read the live learning stores. If a test's
    verdict depends on machine state, isolate it.

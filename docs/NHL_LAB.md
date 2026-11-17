@@ -71,7 +71,7 @@ below:
 All three markets improved in both seasons. Home ice stays 1.04: 2024-25
 wanted 1.06 and 2025-26 wanted 1.02, and each season's choice did worse on
 the other. The overtime split (0.52) is flat. A slower early-season blend
-than Ethan's helped 2024-25 slightly and tied 2025-26, so his schedule
+than Ethan's helped 2024-25 slightly and tied 2025-26, so their schedule
 stays.
 
 One more number worth knowing: the moneyline's log loss is 0.666 and

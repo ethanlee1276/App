@@ -3,7 +3,7 @@
 Ethan, 2026-09-08: "I don't want you too stop working until we display
 the right lines and prices the books show."
 
-The moneyline was what he reported and what the Most Likely board ranks
+The moneyline was what they reported and what the Most Likely board ranks
 on, so it was named first (`tests/test_which_book.py`). The other two
 game markets were left publishing a shopped price under no name at all,
 which is the identical defect one market over: a reader holding his

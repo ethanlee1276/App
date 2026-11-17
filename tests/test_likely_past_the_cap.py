@@ -1,7 +1,7 @@
 """The likely legs the −250 cap keeps off are shown beside the board, labelled — never picks.
 
 Ethan, 2026-10-22, at Patriots–Bears: Luther Burden III went for 84 yards in
-the first quarter, all four of his research docs had him, and the board
+the first quarter, all four of their research docs had him, and the board
 showed nothing of his — "The app and you have to be better." Asked how the
 board should treat a leg our model rates likely but the cap keeps off, he
 chose to show it, labelled: legs at 70% or better priced −251 to −350

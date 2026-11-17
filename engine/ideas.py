@@ -1,7 +1,7 @@
 """The inventions, one file per board: what each build hands the pick page.
 
 Ethan, 2026-10-16: "add everything now. 1-13 and dont stop till
-everything is done." Thirteen ideas from the brainstorm he asked for —
+everything is done." Thirteen ideas from the brainstorm they asked for —
 ideas no betting app he could name was using. Each lives in its own
 module with its own measurement; this is only the carrier.
 

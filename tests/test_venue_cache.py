@@ -129,9 +129,9 @@ def test_a_live_game_shows_the_same_art_as_every_other_card():
     repeating them. So one card on the strip was a flat vector diagram
     beside photoreal stadiums, permanently, on every slate with a live
     game. That is a much bigger visual break than either the stale cache
-    or the mixed generations, and it is the one his screenshot showed.
+    or the mixed generations, and it is the one their screenshot showed.
 
-    Photo everywhere now, runners overlaid — his call, and the overlay is
+    Photo everywhere now, runners overlaid — their call, and the overlay is
     what makes it cost nothing.
     """
     assert "!isLive ? (() => {" not in APP, "live cards must not suppress the photo"

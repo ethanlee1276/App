@@ -4,7 +4,7 @@ _switchViewNow, obCardHTML).
 
 Ethan, 2026-10-27: "i feel like we can use more colors and shit throughout
 the site too to be more exciting and shit like that. animations and glowing
-shit." Gold stays the brand (his call, 2026-08-23); around it, each league
+shit." Gold stays the brand (their call, 2026-08-23); around it, each league
 has a colour, the page glows in the league in view, the open league's
 button and the night's best pick are lit, and a page rises in as it opens.
 

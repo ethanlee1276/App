@@ -197,7 +197,7 @@ def test_the_page_says_what_the_server_is_for():
 
 
 def test_the_units_claim_is_attributed_rather_than_asserted():
-    """+400 units is Ethan's own count of his own Instagram, not a figure
+    """+400 units is Ethan's own count of their own Instagram, not a figure
     this site graded. The Record page is what this site stands behind, and
     the difference has to be on the page — a performance number stated
     flatly in the site's own voice is a claim the site is making."""

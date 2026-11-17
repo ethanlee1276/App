@@ -5,7 +5,7 @@ displayed in the recommended section should have this same little chart
 like this next too the bet. The chart should Correlate to the prop being
 displayed obviously."
 
-TWO THINGS, and the second one was hiding in his screenshot.
+TWO THINGS, and the second one was hiding in their screenshot.
 
 The placement. A Recommended card already carried the full propAnalysis
 chart — axes, per-game values, opponents, a legend — but it sits below
@@ -14,7 +14,7 @@ the projection bar, three metrics and the confidence meter, which on a
 he been doing this lately" is asked while reading the bet, so it is now
 answered there, in the same bars at a fifth the height.
 
-The colours. The row he circled read `Lane Thomas · UNDER 1.5 Hits` with
+The colours. The row they circled read `Lane Thomas · UNDER 1.5 Hits` with
 `1/10 cleared 1.5` and exactly one green bar. `gamelogBars` coloured
 `v > line` green with no idea what side the bet was on, so on an UNDER
 the single green bar was the one game the bet LOST and the nine red ones

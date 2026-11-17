@@ -4,7 +4,7 @@ Ethan, 2026-10-23: "I don't understand why we recommend just the low -240
 40 yard line tho. If we know a player can do well we should be
 recommending the higher line bc obv it would have hit." Shown the history
 (receivers projected 50 to 60 yards cleared 40 in 64% of games, 60 in 42%,
-80 in 26%), he chose to keep the pick the likeliest line and show the
+80 in 26%), they chose to keep the pick the likeliest line and show the
 bigger ones beside it: each with the best bettable price, our chance and
 the price at which it is worth betting, marked where the price beats our
 chance (engine/likely.bigger_lines).

@@ -2,7 +2,7 @@
 
 Ethan, 2026-09-22, with three screenshots of their phone: "there's a lot
 of repeats … it still kinda looks like the same old website." The
-repeats he circled: the league crest said its code inside the circle
+repeats they circled: the league crest said its code inside the circle
 and again beneath it; the More sheet was thirty identical pills; Record
 sat in the sheet and on the tab bar as Results; the home's Riding
 section was the tray's rows over again. Each is pinned here as a rule,

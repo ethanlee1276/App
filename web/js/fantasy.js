@@ -1009,7 +1009,7 @@ function renderRankBoard() {
 
      They were lined up a certain way — `ffRankMerge` sorts on
      `r.consensus`, the median rank across every source — and the board
-     showed him no way to know it. Consensus was the SIXTH column on a
+     showed them no way to know it. Consensus was the SIXTH column on a
      seven-column table inside a horizontal scroller, so on a phone the
      four he could see were Player, Our board, Sleeper and Your draft:
      two columns that are not sorted, one that is empty, and no sign of

@@ -1,6 +1,6 @@
 """The light copy of a board: what the Home page draws first.
 
-Ethan, 2026-09-05: "faster first paint on mlb board" — from a list he
+Ethan, 2026-09-05: "faster first paint on mlb board" — from a list they
 asked for in full. Caddy compresses the boards, but a phone still parses
 the whole JSON file before it draws anything, and on the MLB tab that
 file is the first thing a reader waits for.

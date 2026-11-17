@@ -2,8 +2,8 @@
 
 Ethan, 2026-09-22: "the site feels so cluttered and confusing and you get
 lost and its hard for a new user to find everything the site offers."
-Asked how to proceed he chose **mock it in Figma before code**, and for
-the home screen's job he chose **live first**.
+Asked how to proceed they chose **mock it in Figma before code**, and for
+the home screen's job they chose **live first**.
 
 ## Where the mock lives
 
@@ -284,7 +284,7 @@ surface.
   model and for Zeno. A riding tray floats above the tab bar on phones
   while journaled bets are in play (hidden on the Live tab it points
   at). The Pick of the Day card is the home's hero, on the venue render
-  its team's colours pick, its headline in Bodoni by its own token, `--font-headline` (Ethan's render set `--font-display` to Archivo Narrow; he chose Bodoni for this headline on 2026-09-22). Everything drawn is
+  its team's colours pick, its headline in Bodoni by its own token, `--font-headline` (Ethan's render set `--font-display` to Archivo Narrow; they chose Bodoni for this headline on 2026-09-22). Everything drawn is
   a number the board already held; nothing is drawn otherwise. Pinned
   by `tests/test_v3_looks_like_a_book_and_like_us.py`. Two things the
   first render caught: Chromium resolves a `url()` that reaches CSS
@@ -293,7 +293,7 @@ surface.
   used to print the word "undefined" on the hero's sub-line.
 * **Slice 11 — v4, the shell (in progress, 2026-09-22).** Ethan, with
   three screenshots of their phone: "there's a lot of repeats … it still
-  kinda looks like the same old website." The repeats he circled, and
+  kinda looks like the same old website." The repeats they circled, and
   what each became:
   * *The crest said its code twice.* The circle now holds the sport's
     glyph (football, baseball, basketball, the cage — `LEAGUE_GLYPH`,

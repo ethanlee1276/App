@@ -643,7 +643,7 @@ def test_all_four_game_markets_are_in():
     because it is a whole team's scoring and meets the reason he gave —
     and because `ledger.GAME_MARKETS` is the one definition of a game
     row, so a second list here would be a second thing to keep in sync.
-    Cutting team totals is a one-line change if he wants it."""
+    Cutting team totals is a one-line change if they want it."""
     from engine.ledger import GAME_MARKETS
     assert set(GAME_MARKETS) == {"moneyline", "spread", "total", "team_total"}
     for market in sorted(GAME_MARKETS):

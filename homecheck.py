@@ -608,7 +608,7 @@ def grading() -> list:
                 # A BENCHED LEAGUE IS THE INTENDED CASE, NOT THE BUG.
                 # Ethan, 2026-09-21: "I don't want wnba Past bet or new
                 # bet on the record page." Every graded row being off
-                # the page is what he asked for, and a check that keeps
+                # the page is what they asked for, and a check that keeps
                 # shouting about a thing somebody decided on teaches
                 # whoever reads it to skip the line that matters.
                 try:
@@ -871,7 +871,7 @@ def bench() -> list:
 
     Ethan, 2026-09-21: "Are roi and record should be better now that
     wnba is removed" — and the honest answer was that nobody had
-    measured it. WNBA came off the record page because he asked for it,
+    measured it. WNBA came off the record page because they asked for it,
     not because it was shown to be losing. If it was winning, benching
     it made the headline WORSE, and there was no way to see that.
 

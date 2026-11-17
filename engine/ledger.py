@@ -7850,7 +7850,7 @@ def books_sql(cats, table: str = "bets") -> tuple[str, list]:
 #:
 #: PAPER IS NOT WHAT HE WANTED, and that is the whole reason this exists.
 #: `paper_mode` is one global switch, not a per-league one — and `BOOK`
-#: above is ("main", "paper"), because on 2026-08-13 he asked for the two
+#: above is ("main", "paper"), because on 2026-08-13 they asked for the two
 #: to be combined: "Combine our paper record and normal money record."
 #: So filing a league as paper stops the DOLLARS and leaves every unit,
 #: win, loss and ROI point of it sitting in the headline. It would not
@@ -9504,7 +9504,7 @@ def restated_performance(conn, sport: str | None = None,
     be read as one. Ethan, 2026-08-16: "our roi shows the right number
     ... it should get better with our changes." The record cannot get
     better from a code change — those bets were made at those stakes and
-    the money moved. What CAN answer his question is this: the same
+    the money moved. What CAN answer their question is this: the same
     nights, priced by the model we have now. If the changes are worth
     anything, the gap between this line and the record is where it shows
     up first — long before enough new bets settle to prove it forward.
@@ -11988,7 +11988,7 @@ def export_json(conn, path) -> None:
     # HIS TICKETS ARE THE PRODUCT, HIS TOTALS THE PROOF (Ethan,
     # 2026-09-26: "you only get access to the bets if you paid"). The
     # free half rides record.json; the bets go to their own paid board.
-    # The tickets Claude wrote from slips he sent (data/zeno_manual.json)
+    # The tickets Claude wrote from slips they sent (data/zeno_manual.json)
     # come in first — idempotent, and never fails the export.
     try:
         _zeno.import_manual()

@@ -395,7 +395,7 @@ def test_in_a_browser_the_slot_draws_switches_and_survives_a_redraw():
             page.evaluate(f"""(() => {{ const host = document.getElementById('host');
                 const keep = ccKeep(host); host.innerHTML = {json.dumps(slot)}; keep(host); }})()""")
             assert page.evaluate("document.querySelector('.cc-slot')._probe") == 1, "the same chart, handed back"
-            assert page.get_attribute(".cc-games .cc-chip.on", "data-gi") == "1", "the game he picked"
+            assert page.get_attribute(".cc-games .cc-chip.on", "data-gi") == "1", "the game they picked"
             assert page.evaluate("window.ASKED.length") == asked, "nothing asked again"
             page.click("[data-ck=carries]")
             page.wait_for_selector(".cc-slot .cc-stage .cc-run", timeout=5000)

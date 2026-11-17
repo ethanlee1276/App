@@ -91,7 +91,7 @@ before pricing is set.
 
 **Answered in part, 2026-08-15.** Ethan is in Michigan, which has legal
 online sports betting regulated by the **Michigan Gaming Control Board**
-(MGCB) under the Lawful Sports Betting Act. And, in his words: *"this
+(MGCB) under the Lawful Sports Betting Act. And, in their words: *"this
 isn't a website you make bets on, it's just a betting tool."* That
 distinction is the right one and it is the one the whole design already
 holds — no wagers accepted, no funds held, no bet slip.

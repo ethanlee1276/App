@@ -11,13 +11,13 @@ Commanders–Giants scan of 12 November held, set against his own reports:
     pass rushers, with no status — the weekly injury report never lists a
     man on IR, and the scan read only it;
   * Terry McLaurin, Dyami Brown and Jacory Croskey-Merritt on IR, and the
-    report silent about them, where his reports open the personnel section
+    report silent about them, where their reports open the personnel section
     on them ("McLaurin, IR — removes the WR1");
   * the Giants' nickel, "Dru Phillips" on the depth chart and "Andru
     Phillips" at PFR, read as never targeted;
   * the coverage table (man and zone, shells, a 30% blitz) last season's,
     said plain beside this season's charting of 40%;
-  * and the risk his report named: ESPN's board kept Skattebo and McCarthy
+  * and the risk their report named: ESPN's board kept Skattebo and McCarthy
     questionable after the Giants' final report listed only Malik Harrison.
 
     python3 tests/test_the_report_reads_this_seasons_facts.py

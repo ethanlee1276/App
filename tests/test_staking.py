@@ -162,7 +162,7 @@ def test_confidence_does_not_penalise_underdogs():
 def test_a_standard_prop_stakes_the_base_unit():
     """Ethan, 2026-08-12: "we should have our base line unit at 1 or
     something." A standard -110 prop is exactly one unit — at 1u = 1% of
-    a $1,000 bankroll, the $10 ticket he asked for."""
+    a $1,000 bankroll, the $10 ticket they asked for."""
     from engine import staking as S
     assert S.units_for_price(-110) == S.BASE_UNITS == 1.0
     assert _kelly_stake(0.57, -110, 0.25) == 1.0

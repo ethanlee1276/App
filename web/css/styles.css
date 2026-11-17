@@ -299,7 +299,7 @@
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   /* THE HERO'S HEADLINE. Ethan's August render set --font-display to
      Archivo Narrow (the NEW LOOK block below); the v3 prototype showed
-     the Pick of the Day's bet in Bodoni and he chose it (2026-09-22:
+     the Pick of the Day's bet in Bodoni and they chose it (2026-09-22:
      "Switch the hero headline to Bodoni"). Its own token, so nothing
      else that reads --font-display moves. Bodoni ships 700 and 900
      here, and the headline asks for 700. */
@@ -1050,7 +1050,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   position: relative; overflow: hidden;
   /* RE-DECIDED 2026-08-18. The flat card was a deliberate call ("a
      hairline and a flat field is what a printed table has") and Ethan
-     overruled it in his own words: "the website feels so flat and very
+     overruled it in their own words: "the website feels so flat and very
      AI looking … all the colors and graphics and shit are so flat."
      The owner picked the sportsbook look over the broadsheet look, so
      cards rejoin the violet system the rest of the render already
@@ -1103,7 +1103,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .pick { font-size: var(--fs-lg); font-weight: 700; color: var(--text); margin-top: 7px; }
 .pick .book { color: var(--text-mute); font-weight: 500; }
 /* How old the price is, beside whose price it is. Quieter than the book
-   name: a reader looks at it when the number surprises him, not every
+   name: a reader looks at it when the number surprises them, not every
    time. */
 .pick .price-age { color: var(--text-mute); font-weight: 500; opacity: .72;
                    margin-left: 4px; }
@@ -2434,7 +2434,7 @@ select.calc-in { width: auto; font-weight: 600; }
   .hero-games .game-card, .hero-games .skeleton-game { min-width: 300px; }
 }
 /* A HIGHLIGHT FADES OUT, NOT INTO A WALL (Ethan, 2026-10-28, a Home tile
-   held under his finger: "when something is highlighted make it look more
+   held under their finger: "when something is highlighted make it look more
    smooth, the highlight is cut off like it's in a box"). A sideways strip
    clips whatever leaves its box, and a lifted tile's glow (--glow: 30px
    soft, 8px low) left it on every side, so it stopped in straight lines.
@@ -2816,7 +2816,7 @@ select.calc-in { width: auto; font-weight: 600; }
 /* ---------------- The team page ---------------- */
 /* An opponent chip carries how many meetings there are, because "11" and
    "1" are very different pages behind the same word and the reader
-   should know which he is opening before he taps it. */
+   should know which they are opening before they tap it. */
 
 .tm-hit { display: inline-flex; align-items: center; gap: 7px; }
 .tm-hit-lg { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .06em; }
@@ -5988,7 +5988,7 @@ body.has-deck #rail-live { display: none; }
 .hd-quiet { display: flex; align-items: center; gap: 10px; padding: 14px;
   border: var(--hairline) solid transparent; border-radius: var(--radius-lg);
   background: var(--panel); color: var(--text-dim); font-size: var(--fs-sm); }
-/* "Verified on Pikkit" — his record's receipt, wherever it is (app.js
+/* "Verified on Pikkit" — their record's receipt, wherever it is (app.js
    pikkitBadgeHTML). */
 .pk-verified { display: inline-flex; align-items: center; gap: 5px; color: var(--good);
   font-weight: 700; font-size: var(--fs-sm); text-decoration: none; white-space: nowrap; }
@@ -6496,7 +6496,7 @@ body.has-deck #rail-live { display: none; }
   /* THE ROOM INDEX, TWO ABREAST. Ethan asked for every room named and
      described (2026-09-10) and the cards are that; one card per row on
      a phone put eight of them down a whole screen before the first
-     number (his 2026-09-22 screenshots). Two columns keep every word
+     number (their 2026-09-22 screenshots). Two columns keep every word
      and halve the wall. */
   .room-index { grid-template-columns: 1fr 1fr; gap: 6px; }
   .room-card { padding: 9px 10px; }
@@ -6575,7 +6575,7 @@ body.has-deck #rail-live { display: none; }
   #nav-search, #nav-bell, #theme-toggle { display: grid; }
   .crash-note { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   #home-deck .hd-sec[data-sec="riding"]:not([hidden]) { display: block; }
-  /* The game chat's bar comes down to the foot (Ethan, 2026-10-30, his open
+  /* The game chat's bar comes down to the foot (Ethan, 2026-10-30, their open
      Duo: "move the chat bar down more"): chat.css keeps 84px under it for a
      tab bar this layout does not draw, and ran it across the menu. Here it
      starts where the docked menu ends, or at the edge with the menu away. */
@@ -6590,7 +6590,7 @@ body.has-deck #rail-live { display: none; }
 @media (max-width: 999px) {
   #slate-date { display: none; }
 }
-/* THE SIDEBAR SLIDES AWAY (Ethan, 2026-10-29, his open Duo upright with
+/* THE SIDEBAR SLIDES AWAY (Ethan, 2026-10-29, their open Duo upright with
    its sidebar circled: "put like three dots on the right side of the menu
    ... click the three dots and it'll just swipe the bar to the left, or you
    can physically slide it yourself"; first asked for as "an option to
@@ -6636,7 +6636,7 @@ body.has-deck #rail-live { display: none; }
   html.sb-drag .sidebar { transform: translateX(var(--sb-drag)); opacity: 1; visibility: visible; }
   html.sb-drag .sb-grip { transform: translateX(max(var(--sb-drag), calc(14px - var(--sidebar-w)))); }
 }
-/* THE SIDEBAR COMES DOWN THE PAGE WITH YOU (Ethan, 2026-10-30, his open
+/* THE SIDEBAR COMES DOWN THE PAGE WITH YOU (Ethan, 2026-10-30, their open
    Duo with the sidebar circled: "this menu no matter swiped open or close,
    should follow you all the way down when you scroll down"). It was sticky,
    and a sticky box only holds inside its own grid cell: the shell ends where
@@ -7667,7 +7667,7 @@ button.rc-day b { font-size: var(--fs-sm); }
 /* IN-BODY LINKS. `.legal-back a` covered the "← Back" link at the foot
    and nothing covered the ones inside the prose, so the two cross-links
    to the Privacy Policy in §1 of the Terms rendered at #0000EE — on the
-   page Ethan was looking at when he reported the layout. Third time this
+   page Ethan was looking at when they reported the layout. Third time this
    default has surfaced; it surfaces wherever a new surface forgets, and
    the answer stays "name the surface" rather than a base rule (see
    tests/test_linkcolor.py for why). */
@@ -8211,7 +8211,7 @@ body.picks-withheld :is(#potd-zone, #best-bets, #top-picks, #cards, #likely-top,
    does not — invented member counts, an invented satisfaction rate, an
    invented star rating, and a "consistent profits" headline — is argued
    in app.js beside the code, because that is where somebody would put
-   them back. The layout, the rhythm and the three-tier shape are his. */
+   them back. The layout, the rhythm and the three-tier shape are theirs. */
 /* THE FREE TIER (2026-10-25): only the wall's own screens (app.js
    WALL_SCREENS — the plans, checkout, sign-up, a reset) are standalone;
    everywhere else a reader without a plan keeps the app around them. */
@@ -8627,7 +8627,7 @@ body.walled.on-wall .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)
    its own `overflow-x: auto` to be READABLE; this only stops it dragging
    the rest of the page sideways with it. */
 
-/* THE PARK CARD'S BRAND EDGE (Ethan's render, 2026-09-06): his card is
+/* THE PARK CARD'S BRAND EDGE (Ethan's render, 2026-09-06): their card is
    ringed in the gold the rest of the site already uses, which is what
    makes the photograph read as OURS rather than as a stock picture
    someone dropped in. `--brand` is that gold, so this follows the theme
@@ -8769,7 +8769,7 @@ body.walled.on-wall .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)
 .pbp-pf-head { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .07em;
   margin-bottom: 6px; }
 /* PARK FACTORS, THREE UP (Ethan's render, 2026-09-06). The number is the
-   headline and the name sits under it — his card leads with 0.92 and
+   headline and the name sits under it — their card leads with 0.92 and
    explains it second, which is the order you actually read a factor in.
    The baseline it is measured against is spelled out on every one of
    them: a bare 0.92 is meaningless without the 1.00 it is against. */
@@ -9058,7 +9058,7 @@ body.ask-open .footer { display: none; }
    screenshot from their phone: "when you're on this page it puts this weird
    black bar down at the bottom" — the tab bar standing 55px off the
    bottom edge with bare page under it. Measured: with the padding gone
-   the document was 760px on an 844px screen, and his iPhone set the fixed
+   the document was 760px on an 844px screen, and their iPhone set the fixed
    tab bar's bottom by the page's rather than the screen's — no other page
    is ever shorter than a screen, so no other page showed it. A page one
    screen tall puts the bar back on the edge and still does not scroll. */
@@ -9527,7 +9527,7 @@ a.ask-chip.web:hover { color: var(--text); border-color: transparent; }
 
 /* THE CASE FOR THIS BET (pickCaseHTML, 2026-10-04): the verdict, then what
    backs the side and what works against it, each marked in-our-number or
-   shown; then the corners he will see. */
+   shown; then the corners they will see. */
 
 
 /* Finished bets on the Live tab: one closed line under the list (2026-09-24). */
@@ -9577,7 +9577,7 @@ input.acct-age { width: 24px; height: 24px; min-width: 24px; }
      Ethan asked twice (2026-09-24): "fix how this bar follows when I
      scroll down", then "you didn't fix how this bar follows me when I
      scroll down the page". The first answer made it follow more neatly;
-     what he wants is for it not to follow. It sits under the team's
+     what they want is for it not to follow. It sits under the team's
      header and goes up with it; the tabs are one scroll away. Nothing
      under it to hide, so no ground of its own: a plain band of the page's
      colour lay across the club's light behind the page (MYCOLORS1). */
@@ -10514,7 +10514,7 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
    ========================================================================== */
 /* THE CAPSULE'S FOOT (Ethan, 2026-10-28, their iPhone with the bar circled:
    "this bar should be lower on the screen"). It stood 8px above the home
-   indicator's whole strip, 42pt off the bottom of his screen with the page
+   indicator's whole strip, 42pt off the bottom of their screen with the page
    showing under it. It comes down by as much of that strip as there is, up
    to 20px: its foot 22pt off the edge on a phone with a home indicator,
    the indicator itself still clear below it (it is drawn 8-13pt up), where
@@ -10535,7 +10535,7 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
 }
 /* THE SCREEN'S LAST STRIP (Ethan, 2026-10-28, from their iPhone: "Fix this
    black bar"). iOS 26 can open a Home Screen app with its page a status
-   bar shorter than the screen until it settles (62pt on his phone), and
+   bar shorter than the screen until it settles (62pt on their phone), and
    everything pinned to the bottom stopped that far up: the menu and its
    shade ended over a bare strip, and the tab bar floated a status bar too
    high. boot.js measures the shortfall as --vgap (0 anywhere else, so

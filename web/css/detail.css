@@ -378,7 +378,7 @@
   .pbp-sb-pts, .pbp-sb-side.home .pbp-sb-pts { font-size: var(--fs-2xl); }
   .pbp-sb-mid { min-width: 64px; max-width: 92px; }
 }
-/* THE PARK CARD'S BRAND EDGE (Ethan's render, 2026-09-06): his card is
+/* THE PARK CARD'S BRAND EDGE (Ethan's render, 2026-09-06): their card is
    ringed in the gold the rest of the site already uses, which is what
    makes the photograph read as OURS rather than as a stock picture
    someone dropped in. `--brand` is that gold, so this follows the theme
@@ -529,7 +529,7 @@
 .tp-num em { font-style: normal; font-size: var(--fs-xs); color: var(--text-mute); }
 /* THE CASE FOR THIS BET (pickCaseHTML, 2026-10-04): the verdict, then what
    backs the side and what works against it, each marked in-our-number or
-   shown; then the corners he will see. */
+   shown; then the corners they will see. */
 .pick-case { margin: 12px 0 4px; padding: 12px 14px; border-radius: var(--radius);
   border: var(--hairline) solid transparent; background: var(--panel-2); }
 .pc-head { font-size: var(--fs-sm); font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
@@ -1031,7 +1031,7 @@ body.gp-on { --wa: #3d3a36; --wh: #3d3a36;
 #view-pbp.gp-on > .gp-wash {
   display: block; position: fixed; inset: 0; z-index: -1; pointer-events: none;
 }
-/* ONE PICTURE ACROSS THE TOP (Ethan, 2026-11-02, his open Duo, the top of a
+/* ONE PICTURE ACROSS THE TOP (Ethan, 2026-11-02, their open Duo, the top of a
    live game circled: "fix how the colors glitch out here"). Three things
    paint the top of this page over the wash: the strip that holds the
    clock's place in the installed app (styles.css, html.ios-home

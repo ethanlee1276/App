@@ -620,7 +620,7 @@ function chatVotePath() {
   return CH.votePath || [];
 }
 
-/* A FIELD LETS GO BEFORE IT GOES (Ethan, 2026-11-15, his open Duo with the
+/* A FIELD LETS GO BEFORE IT GOES (Ethan, 2026-11-15, their open Duo with the
    chat bar circled halfway up NE @ DET's game page: "fix how this game chat
    bar gets stuck on the middle of the screen"). A box taken out of the page
    while it has the keyboard tells nobody, no focusout, so an iPhone's pinned

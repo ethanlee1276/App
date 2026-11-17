@@ -676,18 +676,18 @@ SPREAD_COHERENCE = 0.15
 HEAVIEST_PRICE = -250
 
 #: PAST THE CAP (Ethan, 2026-10-22). Luther Burden III, Patriots at Bears:
-#: all four of his research docs had him, his 4+ catches and 40+ yards were
+#: all four of their research docs had him, his 4+ catches and 40+ yards were
 #: priced about −260 — just past HEAVIEST_PRICE — and the board showed
 #: nothing of his. He had 84 yards before the first quarter was out: "The
 #: app and you have to be better." Asked how the board should treat a leg
-#: our model rates likely and the cap keeps off, he chose to SHOW it,
+#: our model rates likely and the cap keeps off, they chose to SHOW it,
 #: labelled. So legs at PAST_CAP_MIN_PROB or better, priced heavier than
 #: the cap and no heavier than PAST_CAP_HEAVIEST, are listed beside the
 #: board — every bar but the price asked exactly as the board asks it — and
 #: are NEVER a pick: not journalled, not staked, not the Pick of the Day,
 #: not a parlay leg. They ride on their own key (`likely_past_cap`) that
 #: only the page reads, so nothing that reads `most_likely` can take one
-#: for a pick. The cap stands: it is what he asked for on 09-01, and this
+#: for a pick. The cap stands: it is what they asked for on 09-01, and this
 #: is a view of what it hides.
 #:
 #: IT WOULD NOT HAVE NAMED BURDEN, and that is written here so nobody takes
@@ -750,7 +750,7 @@ LIMIT = 40
 #: WHAT IT COSTS, PUT TO ETHAN BEFORE IT SHIPPED AND ACCEPTED. The
 #: 45-60% band IS the game-lines shelf: spread (84 rows, said 55.0%),
 #: total (71, 55.1%) and team_total (35, 54.7%) are 190 rows against the
-#: band's 184. So this floor removes about half of the shelf he asked
+#: band's 184. So this floor removes about half of the shelf they asked
 #: for on 2026-09-02 — "I don't see spread bets, I don't see anything
 #: like that I just asked you to do" — and shipped as labelled leans.
 #: Those three are also exactly the markets `GAME_RANK_MEASURED` puts at
@@ -838,13 +838,13 @@ def lane_floors(sport: str) -> dict:
 #:     number we think is false.
 #:   * the bet is not ATTRACTIVE enough — this floor, and HEAVIEST_PRICE.
 #:     Those are product judgements, and a product judgement that empties
-#:     the page is his call to overrule.
+#:     the page is their call to overrule.
 #:
 #: HEAVIEST_PRICE IS NOT RELAXED EITHER, even though it is the second
 #: kind. The -250 cap exists because Ethan complained about exactly this
 #: on 2026-09-01 — "just grabbing random -1200 props" — so widening it to
 #: fill a quiet night would answer today's instruction by re-creating the
-#: bug he reported. The floor is what empties a board; the cap is what he
+#: bug they reported. The floor is what empties a board; the cap is what they
 #: asked for.
 #:
 #: 0.40 rather than lower: below it "most likely" is not a caveat away
@@ -2306,7 +2306,7 @@ def from_game_bet(row: dict, sport: str = "nfl",
         # number" because Ethan asked to see those (2026-09-02), and the
         # model there disagrees with the close by 30 points as a matter
         # of course. Feeding those to this bar would empty both shelves
-        # and silently reverse his call.
+        # and silently reverse their call.
         "engine_raw_prob": raw_claim if ranked else None,
         "side": side, "line": line,
         # THE BOOK POSTING THIS PRICE, or nothing at all.

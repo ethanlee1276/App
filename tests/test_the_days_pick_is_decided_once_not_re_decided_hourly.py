@@ -19,7 +19,7 @@ selector sees shrinks all day — and the card a reader meets in the
 evening is the last and worst reading of the day rather than the day's
 call.
 
-It is also the churn he reported on the NFL four days earlier — *"it
+It is also the churn they reported on the NFL four days earlier — *"it
 will be different picks every time"* — from the same cause.
 
 THE FIX IS NOT A BIGGER POOL OR A LOWER BAR. It is that a judgement

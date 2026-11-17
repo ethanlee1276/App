@@ -37,7 +37,7 @@ def test_the_cards_as_sent():
     assert (w["2026-09"]["profit"], w["2026-09"]["roi"], w["2026-09"]["wins"], w["2026-09"]["losses"],
             w["2026-09"]["pushes"]) == (571.53, 0.3494, 30, 150, 1)
     assert SNAP["source"] == "Pikkit" and SNAP["as_of"] == "2026-09-26T14:23:03"
-    # The months he sent next (June, July, August 2026) — each its own card.
+    # The months they sent next (June, July, August 2026) — each its own card.
     assert (w["2026-08"]["profit"], w["2026-08"]["roi"], w["2026-08"]["wins"], w["2026-08"]["losses"],
             w["2026-08"]["pushes"]) == (53.12, 0.4284, 2, 7, 1)
     assert (w["2026-07"]["profit"], w["2026-07"]["roi"], w["2026-07"]["wins"], w["2026-07"]["losses"],

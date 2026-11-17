@@ -3,10 +3,10 @@
 Ethan, 2026-09-08, two screenshots side by side — their sportsbook and our
 Most Likely page:
 
-    his book   DAL -3   ·  DAL -162 / NYG +136
+    their book DAL -3   ·  DAL -162 / NYG +136
     our board  NYG ML -218, 66% likely, "the likely side"
 
-    his book   MIN -1.5 ·  MIN -125 / GB +105
+    their book MIN -1.5 ·  MIN -125 / GB +105
     our board  MIN ML -220, 67% likely
 
 "Also the money lines we are showing on the most likley page is

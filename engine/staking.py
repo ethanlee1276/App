@@ -73,7 +73,7 @@ MIN_STAKE_UNITS = 0.1
 # THE FLOOR, AND THE ROUND TRIP IT TOOK. Ethan first asked for "nothing
 # under 10 dollars", which at 1u = 1% of bankroll puts the floor ON the
 # base unit and flattens the entire plus side to a flat unit. Shipped,
-# then reverted the same day on his read: "that might completely contradict
+# then reverted the same day on their read: "that might completely contradict
 # what you just did ... i just want it to where we make the most money and
 # the roi is at the lowest loss."
 #

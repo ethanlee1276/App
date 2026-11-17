@@ -6,7 +6,7 @@
 Ethan, 2026-10-28, with the new artwork attached: "here is the new app icon
 too use. Make it fit right."
 
-The artwork (brand/appicon-2026-10-28.png, committed as he sent it) is a
+The artwork (brand/appicon-2026-10-28.png, committed as they sent it) is a
 picture OF an app icon: a dark rounded tile with a thin gold rim, the crown
 and the QB on it, floating on a darker backdrop with a margin all round.
 Scaled whole, a phone would draw that tile inside its own: a small rounded

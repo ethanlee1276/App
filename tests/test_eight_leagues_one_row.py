@@ -3,7 +3,7 @@
 Ethan, 2026-11-14, the folded iPhone Duo's league strip circled: "fit this
 better". College basketball made the leagues eight, and at 48px a button
 the eighth (UFC) wrapped onto a line of its own on every phone — the same
-"one alone on a second row" he circled on 2026-09-22 with six. On a phone
+"one alone on a second row" they circled on 2026-09-22 with six. On a phone
 the eight share the row in equal eighths now, the crest never wider than
 its eighth; the strip still wraps rather than scrolls on anything narrower
 than a 320 phone (tests/test_league_strip).

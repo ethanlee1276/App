@@ -3,7 +3,7 @@
 Ethan, 2026-09-19, shown the paper record and asked whether +2.1% over
 586 was enough to go live: *"yeah id rather stake regardless."*
 
-It is his money and his call, made with the arithmetic in front of him.
+It is their money and their call, made with the arithmetic in front of them.
 What the arithmetic said, and what these tests exist to keep visible:
 
     586 settled, 407-179, claimed 66.4% -> hit 69.5%

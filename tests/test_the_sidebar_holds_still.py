@@ -1,12 +1,12 @@
 """The sidebar holds still and scrolls up and down only (styles.css .sidebar,
 app.js paneOwned, swipeOwned, the touch listeners).
 
-Ethan, 2026-10-29, his open iPhone Duo with the sidebar circled: "I'm able
+Ethan, 2026-10-29, their open iPhone Duo with the sidebar circled: "I'm able
 to move this bar around and it's weird so make it solid and only able to
 scroll up and down". The pane scrolled in both directions (overflow-y: auto
 makes the other axis auto too), its content rubber-banded past either end
 and sideways, and a pull down inside it was the page's pull to refresh
-("Release to refresh" on his screen). What these hold:
+("Release to refresh" on their screen). What these hold:
 
   * nothing in the sidebar scrolls sideways, there is no rubber band, and a
     finger can pan it up and down only (a pinch still zooms);

@@ -6,7 +6,7 @@ His artwork is a picture OF an app icon: a dark rounded tile with a thin
 gold rim, floating on a darker backdrop with a margin all round. Scaled
 whole, a phone would show that tile inside its own. What these hold:
 
-  * his file is committed as he sent it, and every icon is made from it;
+  * their file is committed as they sent it, and every icon is made from it;
   * the tile fills the square: the gold rim runs just inside every edge,
     with no backdrop margin and no second tile;
   * the rim sits inside the corner iOS cuts every icon to, so the phone

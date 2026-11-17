@@ -1,7 +1,7 @@
 """Tonight's opponent beside his chart: the matchup view (kind "matchup").
 
 Ethan, 2026-10-13: "Yes do all of them and don't stop till they are all
-done". The seventh thing on the list he said yes to: "Matchup view.
+done". The seventh thing on the list they said yes to: "Matchup view.
 Tonight's defense next to his chart: where they allow catches, which run
 gaps, which shot zones, or the pitcher's zone against the hitter's hot
 spots. This is context only."

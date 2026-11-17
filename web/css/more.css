@@ -12,7 +12,7 @@
 /* ---------------- The team page ---------------- */
 /* An opponent chip carries how many meetings there are, because "11" and
    "1" are very different pages behind the same word and the reader
-   should know which he is opening before he taps it. */
+   should know which they are opening before they tap it. */
 .tm-opp .tm-n { margin-left: 6px; opacity: .55; font-variant-numeric: tabular-nums; }
 .tm-more { opacity: .7; }
 .tm-l { color: var(--bad); }

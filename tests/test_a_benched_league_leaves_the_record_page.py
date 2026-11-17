@@ -6,10 +6,10 @@ not hurting us. Make it all paper."*
 
 PAPER WOULD NOT HAVE DONE IT, which is why this is not paper mode.
 `ledger.BOOK` is ("main", "paper") and `performance` counts both —
-because on 2026-08-13 he asked for exactly that: "Combine our paper
+because on 2026-08-13 they asked for exactly that: "Combine our paper
 record and normal money record." So filing WNBA as paper stops the
 DOLLARS and leaves every unit, win, loss and ROI point of it in the
-headline, which is the number he asked to stop it hurting. `paper_mode`
+headline, which is the number they asked to stop it hurting. `paper_mode`
 is also one global switch, not a per-league one.
 
 A benched league goes to a category OUTSIDE `BOOK`. That is what takes

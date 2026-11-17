@@ -11,7 +11,7 @@ none of them, on any board, in any market (probed on the box the same
 day): the site's shelves are built to show few touchdowns — Most Likely
 floors at 55% and seats the five likeliest scorers of the SLATE, the
 scenarios shelf takes eight, never a quarterback, and demands a soft
-defence; the value board wants an edge he said he does not care about.
+defence; the value board wants an edge they said they do not care about.
 
 So this goes game by game, the way that conversation did:
 

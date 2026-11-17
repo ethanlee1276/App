@@ -1,7 +1,7 @@
 """The home leads with the Pick of the Day, then what is live.
 
 Ethan, 2026-09-22, choosing the home screen's job for the redesign:
-"Live first." The Figma mock he approved orders the phone home Live now
+"Live first." The Figma mock they approved orders the phone home Live now
 → Riding → Tonight's picks → The record → Zeno's picks. This pins that
 order, the rules that keep every printed number an earned one, and the
 one cost rule — the strip reads the fast scoreboards, never the boards.
@@ -256,7 +256,7 @@ def test_the_pick_of_the_day_is_the_hero_in_the_prototypes_dress():
     CSS on the card's own pieces. The headline's inline size is gone,
     because an inline style beat the token's size and the hero read as a
     card. Bodoni rides its own token: Ethan's August render set the
-    display face to Archivo Narrow, and he chose Bodoni for this one
+    display face to Archivo Narrow, and they chose Bodoni for this one
     headline (2026-09-22), so nothing else that reads --font-display
     moves."""
     potd = APP[APP.index("async function renderPickOfTheDay("):]

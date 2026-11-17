@@ -3,7 +3,7 @@
 Ethan, 2026-10-15, with two renders (the Qellys rink, and the page laid out
 like ESPN's app: the scoreboard, the arena with Live / Shot Chart / Ice
 Tracker / Player Tracker / Game Flow, the plays down the right, then the
-team stats, the lineups and the odds) and his phone's screenshot of the old
+team stats, the lineups and the odds) and their phone's screenshot of the old
 page, a small rink in the corner of an empty box: "figure out what data we
 can use for the live play by play screen for nhl like live posetions and
 puck tracking".

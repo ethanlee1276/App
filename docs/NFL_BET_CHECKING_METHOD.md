@@ -3,7 +3,7 @@
 Ethan's Claude project "NFL Bet checking" (exported 2026-11-14) holds the
 master instructions ("NFL Prop Bot — Full Master Instructions", 27 rules),
 the slate log (the cards and post-mortems from 1 October to 12 November) and
-55 game chats from 9 September to 12 November. On 2026-11-15 he asked for
+55 game chats from 9 September to 12 November. On 2026-11-15 they asked for
 the project's reports and how they work to be built into the game reports,
 the website and how the Most Likely bets are selected. This page maps each
 part of the method to where the site does it. It also says what the site
@@ -51,7 +51,7 @@ Read across all 213 of his messages in the chats:
 | 15. Prop priority: volume floors first | Not adopted as a ranking. Our graded NFL Most Likely record has completions, attempts and carries as its weakest markets (52.5%, 49.5% and 51.2% hit) and passing yards as its best (67.7%), so the record's own market check decides | `likelyboard.record_check` |
 | 16. Hard filters: no RB receiving over without a route role; no needs-a-bomb yardage over; no unstable role | Flags `rb_route_over`, `boom_bust` (yardage overs), `role_down_over` and `role_up_under` cap a pick at Worth a look | `likelyboard.METHOD_AVOID` |
 | 16. His guardrails (no Lions unders; avoid Jets and Justin Fields; no CeeDee Lamb unless asked) | Kept for his own bets; the boards serve every member and don't follow them | — |
-| 17. Two-leg parlay builder (SAFE/BALANCED/POP) | Four three-leg parlays and three touchdown pairs a game, each with its joint chance, fair price, take-it-at price and backups. Built to win together, as his chats ask: no ticket needs the game to go the other way from another. A game that can't fill its tickets that way says which ticket wins in a different game | `engine/gameparlays.choose` |
+| 17. Two-leg parlay builder (SAFE/BALANCED/POP) | Four three-leg parlays and three touchdown pairs a game, each with its joint chance, fair price, take-it-at price and backups. Built to win together, as their chats ask: no ticket needs the game to go the other way from another. A game that can't fill its tickets that way says which ticket wins in a different game | `engine/gameparlays.choose` |
 | 18. TD module: 45%, or 40% with undeniable usage | Every touchdown pick on the board is checked: 45%, or 40% with 30% of his team's red-zone chances. One that falls short tops out at Worth a look. Each touchdown pair says whether both scorers are 40% or better (decision 1 under RUN_NEXT 00f) | `likelyboard.td_rule`, `gameparlays.card` |
 | 19–20. Live market; the "I checked" list | Line moves, the opener, prediction-market money, a total moving against the money | "The market" |
 | 21. Picks output: ranked, with the maximum playable price | The board ranks by tier, then how hard the matchup backs a pick, then our chance. Every pick line says the price to take it at | the board, `read_pick` |

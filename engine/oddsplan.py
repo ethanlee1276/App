@@ -135,7 +135,7 @@ FLOOR_SHARE = 0.5
 #: ETHAN'S CALL, 2026-10-28: "we still don't have edge bets or most likely
 #: bets for nba. We need that now". October's credits had run out for every
 #: league after the NFL and college (DK: 0 NBA props priced), and of the
-#: ways to pay for the month's last days he chose the NBA before college
+#: ways to pay for the month's last days they chose the NBA before college
 #: until the plan renews. Before this day the NBA is funded right after the
 #: NFL; from it, TIERS stands again by itself.
 NBA_FIRST_UNTIL = _dt.date(2026, 11, 1)

@@ -25,7 +25,7 @@ in, and the page already draws it — `oddsClockHTML` renders "last pulled
 BUILD's clock and reads like the price's when it sits beside a price,
 and the two are hours apart whenever a cycle rebuilds on `--cached-odds`
 without paying for a pull. College published no `odds_status` at all, so
-the clock had nothing to draw at all — and college is the board he named.
+the clock had nothing to draw at all — and college is the board they named.
 
 Run directly: `python3 tests/test_price_age.py`
 """
@@ -71,7 +71,7 @@ def _stamped(ts, board=None):
         oddsbudget.load = real
 
 
-# --- college, the board he named -------------------------------------------
+# --- college, the board they named -----------------------------------------
 def test_the_college_board_says_when_its_prices_were_pulled():
     """It published no odds_status at all, so the page's odds clock had
     nothing to read and every college price was undated."""

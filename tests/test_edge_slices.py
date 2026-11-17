@@ -1,6 +1,6 @@
 """Is the claimed edge noise everywhere, or only on average?
 
-Ethan, 2026-09-06: "lets do the edge test one next" — the line his
+Ethan, 2026-09-06: "lets do the edge test one next" — the line their
 settle pass prints in every block, `claimed-edge AUC 0.463 [0.414,
 0.512] -> edge_is_noise` on 562 settled bets.
 

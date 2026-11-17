@@ -66,7 +66,7 @@ def test_a_hypothesis_only_reaches_a_pick_when_its_action_is_close():
 
 
 def test_the_audit_reproduces_the_pages_it_is_auditing():
-    """Stores shaped like Ethan's screenshots in, his numbers out.
+    """Stores shaped like Ethan's screenshots in, their numbers out.
 
     Record page: 4 markets tuned, every projection dial and player memory
     fit kept the default, 4,095 rows mined over 103 slices, 1 pattern

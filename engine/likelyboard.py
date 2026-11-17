@@ -348,7 +348,7 @@ def method_fails(r: dict, sport: str) -> list:
 
 
 def td_rule(r: dict) -> dict:
-    """{"meets": bool, "why": str} — this touchdown pick against his rule:
+    """{"meets": bool, "why": str} — this touchdown pick against their rule:
     45%, or 40% with 30% of the red-zone work (``rz_share``: his measured
     share of his team's red-zone touches where the play-by-play counted it,
     ``rz_share_measured``; else the estimate, his expected chances against

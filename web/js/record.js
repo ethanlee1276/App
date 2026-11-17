@@ -2915,9 +2915,9 @@ function recordScopeHTML(d, scope) {
   const parts = [btn("all", "All bets",
                      journaled(jc.all || d.overall))];
   /* ZENO'S BETS (Ethan, 2026-09-26: "we should also have a button here for
-     'Zenos Bets'"). Not a scope of this page — his book is its own
-     record, graded by the books, not by us — so it opens his page, where
-     his record and (for members) his bets live. Counted like the others:
+     'Zenos Bets'"). Not a scope of this page — their book is its own
+     record, graded by the books, not by us — so it opens their page, where
+     their record and (for members) their bets live. Counted like the others:
      settled and riding together. */
   const zo = (d.zeno || {}).overall || {};
   const zn = (zo.settled || 0) + ((d.zeno || {}).open_n ?? zo.open ?? 0);

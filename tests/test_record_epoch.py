@@ -355,8 +355,8 @@ def test_every_surface_quoting_the_record_uses_the_same_window():
 # --- the command that makes the date a decision --------------------------
 
 def test_the_epoch_can_be_compared_against_the_eras_it_is_not():
-    """Ethan asked what he needs to decide. The date the public record
-    starts from is his call, and it should be made against the real
+    """Ethan asked what they need to decide. The date the public record
+    starts from is their call, and it should be made against the real
     numbers rather than against a feeling about them.
 
     The dates offered are MODEL_ERAS — the re-tunes this journal has

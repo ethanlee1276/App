@@ -11,7 +11,7 @@ THE FIRST HALF WAS ALREADY BUILT. `ffRosterCalendarHTML` shipped on
 to his roster. It drew inside `renderLeagueDesk`, which mounts into the
 "Around the league" subtab, under the camp report and the offseason moves
 and the draft kit. So a reader who opened Fantasy → Calendar got the
-LEAGUE-WIDE board and no sign his own existed, which is why he asked
+LEAGUE-WIDE board and no sign their own existed, which is why they asked
 again with "like I keep saying".
 
 Built, unreachable, asked for twice: the same shape as the touchdown

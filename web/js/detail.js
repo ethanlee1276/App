@@ -760,7 +760,7 @@ function renderPropPage() {
      Ethan: "when I click on them it just shows charts, it doesn't show
      the page we show when you click on edge bets"). The pick page led
      with the EDGE board's reading of the same prop — "Edge +0.0%", a
-     grade, a 66% that was not the 71% on the row he tapped — and the
+     grade, a 66% that was not the 71% on the row they tapped — and the
      first explanation sat under the charts, sixty percent of the way
      down, opening "No credible market edge". Now: the row's own side,
      line, book, price and chance head the page; "Why it’s likely" comes
@@ -4528,7 +4528,7 @@ function pbpBoardSVG(d, league = "mlb", boardGame = null) {
    of it ... Make sure it looks real and blended in"). Two things made the
    first draft a sticker. Its panels were cards of our own (a grey border,
    rounded corners, a code font's digits) laid over the photograph's
-   screens; and on his phone the picture's box came out 1.5:1, where every
+   screens; and on their phone the picture's box came out 1.5:1, where every
    drawing kept the picture's 1.6:1 and slid off it (all of them now cover
    and sit on the bottom, as the photograph does: preserveAspectRatio
    "xMidYMax slice", css/styles.css .pbp-photo says the same).

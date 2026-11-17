@@ -1,7 +1,7 @@
 """Every build checks the claims its board makes against its own data.
 
 Ethan, 2026-09-25: "what's next so we can keep working and making sure all
-that shit is good." Two wrong claims had reached his phone that day before
+that shit is good." Two wrong claims had reached their phone that day before
 anything caught them (a +700 longshot called McConkey's "likeliest over";
 prices read an hour late still "priced 4m ago"). engine/boardtruth reads
 each board after its build (launch._board_truth); the counts go to the

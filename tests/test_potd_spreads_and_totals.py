@@ -190,7 +190,7 @@ def test_the_market_tier_keeps_the_ranking_bar():
 
 
 def test_a_prop_is_still_refused_before_any_of_this():
-    """Game markets only — his call, and it is asked first."""
+    """Game markets only — their call, and it is asked first."""
     row = {**(_row("spread") or {}), "kind": "prop", "market": "rush_yds"}
     assert potd.disqualify(row).startswith("a player prop")
 

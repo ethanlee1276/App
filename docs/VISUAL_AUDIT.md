@@ -121,7 +121,7 @@ apps people call exciting (PrizePicks' neon More/Less, Underdog's yellow on
 black, Sleeper's multi-hue accents and glowing live dots, DraftKings' and
 Robinhood's green/red glows, Apple Sports' team colours) all do the same
 three things: a colour per thing you can tell apart, light on what is live or
-chosen, and motion when something arrives. Gold stays the brand (his call,
+chosen, and motion when something arrives. Gold stays the brand (their call,
 2026-08-23); around it:
 
 | # | What was flat | Now |
@@ -192,7 +192,7 @@ phone and a desktop width, both themes, and the iPhone app's capsule bar.
 Ethan, a screenshot of their phone with the top bar and the league row circled:
 "notice how sharp all the lines are on the whole site for everything ... Make
 everything smoother and more blended and just like feel more professional."
-His shot was the old build, but he was right about the lines: a probe of every
+Their shot was the old build, but they were right about the lines: a probe of every
 page (each element's borders, inset rings and thin bars, on the phone, the
 iPhone app with team colours on, and the desktop) found them everywhere —
 under the top bar, round every chip and field, a gold ring round whatever was

@@ -1,7 +1,7 @@
 """An expected starting quarterback, read off the headlines we already pull.
 
 Ethan, 2026-09-28: the site learned the Bears' quarterback from the depth
-chart and the injury report; his research had Case Keenum from Rapoport
+chart and the injury report; their research had Case Keenum from Rapoport
 hours earlier ("Keenum expected to start"). The ESPN feed the site already
 fetches (engine/sources/news) carries that headline — nothing new is
 pulled, it is read.

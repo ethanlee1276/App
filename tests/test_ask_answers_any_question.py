@@ -155,7 +155,7 @@ class Script:
         return types.SimpleNamespace(content=blocks, stop_reason="tool_use", usage=use)
 
 
-# --- his question -------------------------------------------------------------------
+# --- their question -----------------------------------------------------------------
 def test_the_lions_against_the_packers_with_the_lions_playing_the_jets_tonight():
     h = AB.team_history("Lions", "Packers", "nfl")
     assert (h["team"], h["opponent"], h["sport"]) == ("Detroit Lions", "Green Bay Packers", "nfl")
@@ -222,7 +222,7 @@ def test_tonight_on_any_league_s_board():
 # --- the whole league ------------------------------------------------------------------
 def test_who_has_the_worst_defense_in_the_league():
     """Ethan, 2026-09-23: "I can't even ask it who has the worst defense in
-    the league." It asked him to name two teams. 2025 in the fixture: the
+    the league." It asked them to name two teams. 2025 in the fixture: the
     Jets allowed 30 in their one game, the Packers 29 a game, the Lions 20,
     the Bears 17."""
     worst = AB.league_table("nfl", "points_allowed", "worst")

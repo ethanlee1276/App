@@ -1546,7 +1546,7 @@ function countStrip(live) {
    the bar graphs too look like. I want the player faces in it as it looks
    more professional. Match these renders exactly."
 
-   Everything in his render is drawn from data we already journal — the
+   Everything in their render is drawn from data we already journal — the
    per-game values, the line, the price, the model's EV and its grade. The
    two HIT RATE tiles are the same fact twice (a count and a percentage),
    which is how the render has it, so it is how this has it.
@@ -1809,7 +1809,7 @@ function propAnalysis(r, opts = {}) {
   // and it is structural, not a one-page slip: every card that renders
   // this block already draws the player in its own head — the props
   // card, the long shot card and the top-picks card all lead with
-  // `playerAvatar`. The 92px portrait his render asked for made sense as
+  // `playerAvatar`. The 92px portrait their render asked for made sense as
   // a standalone card; inside a card that has already introduced the
   // player it is the same photograph twice, forty pixels apart.
   //

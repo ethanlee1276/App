@@ -18,7 +18,7 @@ THE LEGS. Only numbers the board already prices for a reader: the game's
 Most Likely picks, its Edge picks, and every other prop it priced at a named
 book (engine/twoleg's legs and `priced_legs` — each a real price, none
 started, none held), at LEG_FLOOR or better
-(his reports' bar: "they sit under the 65% hit-rate floor, so they don't
+(their reports' bar: "they sit under the 65% hit-rate floor, so they don't
 qualify for the parlay"; ours is a little lower, and every leg shows its
 own chance). Never a past-the-cap row (Ethan, 09-01: "not a parlay leg"),
 never a man the board already dropped for an injury, and never a tackle,
@@ -35,7 +35,7 @@ scriptNeed): a quarterback's yards and a touchdown want points. Two legs
 that want opposite leads (a back's carries want his team ahead, a
 receiver's catches want it chasing) share a ticket the way his own reports
 pair them, priced as unrelated and said (OPPOSED_SCRIPT_RHO).
-One exception his reports make and the doctrine does not: two teammates'
+One exception their reports make and the doctrine does not: two teammates'
 catches may share a ticket (the doctrine's "possession pie") at their
 measured correlation, and the ticket says both need the same passing game.
 
@@ -159,7 +159,7 @@ SAME_TEAM_SCORER_RHO = 0.0
 #: receptions with Skattebo 12+ rush attempts (two Giants) and Daniels 25+
 #: rushing, "~32-33% with mildly positive correlation ... bet only at +210
 #: or better". The rule left the NFL's first board under it with 13
-#: three-leg tickets across 13 games, where he asked for four a game. The
+#: three-leg tickets across 13 games, where they asked for four a game. The
 #: script pulls the pair apart about as much as the shared pace ties it
 #: together (the measured run-game script, +0.36 between a back's carries
 #: and his team's lead, against the +0.10 every same-game pair of overs
@@ -338,7 +338,7 @@ def legs_for(board: dict, sport: str, now=None) -> list[dict]:
             if leg and (w or shift):
                 leg = legfit.apply(leg, sport, "three", w, shift)
             # Player props only: a game line's leg journals and grades on
-            # another path, and his reports' tickets are props.
+            # another path, and their reports' tickets are props.
             if not leg or leg.get("_game_leg") or float(leg.get("p") or 0) < LEG_FLOOR:
                 continue
             leg = _norm_side(leg)
@@ -397,7 +397,7 @@ def scorer_legs(board: dict, sport: str, now=None) -> list[dict]:
 #: on the points the lines expect and the share the player already has, so
 #: the pairs read like the shortest prices on the board. Now each football
 #: scorer is first read on the research the site already writes (the case
-#: his own words make: "where the lions do bad and bills do good ... figure
+#: their own words make: "where the lions do bad and bills do good ... figure
 #: out ... could have breakout games and get tds"):
 #:
 #:   the matchup   engine/matchpicks.td_matchup, the one the matchup picks and
@@ -921,7 +921,7 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
     # CAN A BOOK PAY IT? The most generous same-game price a book plausibly
     # quotes is the legs' product less the doctrine's best-case cut
     # (parlays.BEST_CASE_SGP_TAX); a ticket that needs more than that is
-    # read for its read, not bet — his reports' "below that, there is no
+    # read for its read, not bet — their reports' "below that, there is no
     # edge, so pass or play singles".
     playable = None
     if naive:

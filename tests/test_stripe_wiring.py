@@ -341,7 +341,7 @@ def test_a_null_paid_through_date_lets_a_cancelled_plan_run_on():
     future, and a null cut the customer the instant a renewal failed.
     Ethan has since asked for a failed payment to wall the account at
     once, so that grace is gone (reported to them as a changed pin); the
-    day of grace he asked for on 2026-11-02 runs from the failure itself
+    day of grace they asked for on 2026-11-02 runs from the failure itself
     (billing.GRACE_S) and never reads this date. The date now carries a
     different job: a plan cancelled from Stripe's
     portal runs to the end of the period paid for, and walls on the

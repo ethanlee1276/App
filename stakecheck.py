@@ -610,7 +610,7 @@ def report(rows: list[dict]) -> None:
         # NOT the longshot warning. A paper book is deliberate and its
         # numbers are the point; telling Ethan to "drop
         # --include-measurement" when he passed --paper would be the tool
-        # scolding him for doing exactly what he decided to do.
+        # scolding them for doing exactly what they decided to do.
         print("  ** THE PAPER BOOK — same picks, same settling, zero")
         print("  ** dollars. Every figure below is what the model WOULD")
         print("  ** have returned. None of it is money won or lost.")

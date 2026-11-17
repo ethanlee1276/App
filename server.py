@@ -2175,7 +2175,7 @@ class Handler(BaseHTTPRequestHandler):
             # WHO HE HAS GOT IN, carried through. Sleeper's `starters` is
             # the lineup he has actually set; without it the desk can
             # only ever score the best lineup and never say which of his
-            # choices to change, which is the question he opened the page
+            # choices to change, which is the question they opened the page
             # with. The array can contain "0" for an empty slot, which
             # matches no player id and quietly drops out.
             seated = {str(x) for x in ((roster or {}).get("starters") or [])}
@@ -2265,7 +2265,7 @@ class Handler(BaseHTTPRequestHandler):
         #
         # They were already here. `rivals` is built above out of the same
         # fetch, handed to the trade generator, and then dropped on the
-        # floor — so the one thing he asked for was a value this function
+        # floor — so the one thing they asked for was a value this function
         # computed and did not return. No extra call to Sleeper: the
         # rosters, the users and the player table are one read each and
         # they were all made before the first trade was scored.
@@ -3579,7 +3579,7 @@ class Handler(BaseHTTPRequestHandler):
         build — an import lands here the moment it is made."""
         from engine import zeno as Z
         try:
-            # The FREE half only: his bets are paid (engine/zeno.split).
+            # The FREE half only: their bets are paid (engine/zeno.split).
             return self._send(200, json.dumps(Z.split(Z.block_or_empty())[0]).encode(),
                               ".json")
         except Exception as exc:                             # noqa: BLE001
@@ -3589,7 +3589,7 @@ class Handler(BaseHTTPRequestHandler):
         """His bets, live from the store, FOR HIM: the owner token, the same
         door as the import. Members read the published board
         (/api/board/zeno.json); this is what lets him grade a bet he
-        posted from his page whether or not his account holds a plan."""
+        posted from their page whether or not their account holds a plan."""
         from engine import zeno as Z
         ok = Z.owner_token_ok(self.headers.get("X-Owner-Token")
                               or self.headers.get("Authorization", "")

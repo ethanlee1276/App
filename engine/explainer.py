@@ -2,7 +2,7 @@
 from the numbers already on the card — behind a tap, cached per build.
 
 Ethan, 2026-09-05: "a plain English explainer per pick" — from a list
-he asked for in full.
+they asked for in full.
 
 WHAT IT MAY SAY. Only what the row says. The prompt hands the model the
 card's own facts — the pick, the price, the projection and its range,

@@ -4,7 +4,7 @@ Ethan, 2026-09-06, with a park card and a play card: "Now that we got the
 actual park render done, I want you too match our page more too these
 renders."
 
-Four things his renders do that the page did not:
+Four things their renders do that the page did not:
 
   * the wall numbers carry their position ("336 / LF"), because three
     numbers in a row over a fence mean nothing until you know which is
@@ -15,7 +15,7 @@ Four things his renders do that the page did not:
   * the park factors lead with the number and name the baseline;
   * each batted-ball tile wears a glyph.
 
-Two things his renders show that we do not hold, and therefore do not
+Two things their renders show that we do not hold, and therefore do not
 draw: the LCF/RCF distances, and the compass sector the wind comes from.
 Those refusals are pinned in tests/test_park_shape.py.
 
@@ -198,7 +198,7 @@ def test_the_header_wears_our_mark_and_boxes_the_venue():
 
 def test_the_wind_is_spelled_the_way_a_person_says_it():
     """`wind_dir` ships "out" | "in" | "cross". "12 mph in" is not a
-    sentence; his render says "Blowing In"."""
+    sentence; their render says "Blowing In"."""
     assert "const PBP_WIND = {out:" in APP
     # RE-ANCHORED 2026-09-07: the lookup moved into pbpWindWord when
     # football arrived, because the two leagues ship different things in

@@ -241,7 +241,7 @@ app, when, and whether they open its alerts. Not their other apps (§2).
 ### The Privacy Policy wording to approve (it turns the switch on)
 
 **Approved by Ethan on 2026-10-29 ("approve all"), and in the policy as
-§2.10, word for word.** What is below is the record of what he approved.
+§2.10, word for word.** What is below is the record of what they approved.
 
 Paste as a new subsection of §2 in `web/privacy.html` (the `id` is the lock):
 

@@ -3,7 +3,7 @@
 Written 2026-08-16, at the end of the session that took the site live.
 Updated 2026-08-17, when the props build was fixed and the measurement it
 rested on turned out to be wrong.
-Ethan should not have to carry any of this in his head — a new session
+Ethan should not have to carry any of this in their head — a new session
 reads this file and picks up the top item.
 
 ---

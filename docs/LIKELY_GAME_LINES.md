@@ -326,7 +326,7 @@ untrustworthy still gets none, and says so.
 It exists because of Ethan's own complaint on 2026-09-01 about "grabbing
 random -1200 props", so widening it to fill an empty page would answer
 one instruction by re-creating the bug behind another. The floor is what
-empties a board; the cap is what he asked for.
+empties a board; the cap is what they asked for.
 
 **What the reserve does not do.** It cannot manufacture rows. If the
 board is empty because no current price could be read at all, the reserve
@@ -396,7 +396,7 @@ both leagues.
 
 Ethan, with two screenshots side by side — their sportsbook and our page:
 
-    his book   DAL -3   ·  DAL -162 / NYG +136
+    their book DAL -3   ·  DAL -162 / NYG +136
     our board  NYG ML -218, 66% likely, "the likely side"
 
 "Also the money lines we are showing on the most likley page is

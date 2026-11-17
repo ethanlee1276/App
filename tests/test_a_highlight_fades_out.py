@@ -1,12 +1,12 @@
 """A highlight fades out, it is not cut off (web/css/styles.css; Ethan,
-2026-10-28, a Home tile held under his finger with its bottom circled:
+2026-10-28, a Home tile held under their finger with its bottom circled:
 "when something is highlighted make it look more smooth, the highlight is
 cut off like it's in a box").
 
 A sideways strip clips whatever leaves its box. The Home strip held its
 tiles in 4px over and 6px under, and a lifted tile's glow (--glow: 0 8px
 30px) left that box on every side, so it ended in straight lines: the box
-he saw. The strip keeps room for it now (24px over, 40px under, the view's
+they saw. The strip keeps room for it now (24px over, 40px under, the view's
 gutter beside it), its margins give the room back so the tiles sit where
 they did, and nothing else on the page moves but the tiles' 16px of air
 under the sort row, whose buttons keep their whole tap.

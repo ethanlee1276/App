@@ -12,7 +12,7 @@ So a comped address was served unredacted boards by `_entitled` and told
 `entitled: false` by the status endpoint. The browser believed the
 endpoint, put the wall up, and drew a plans page on top of data the
 reader was already entitled to — asking somebody for money for something
-they had been given. The comp list is how Ethan gets into his own site
+they had been given. The comp list is how Ethan gets into their own site
 and how anyone is let in without a card, so this was live the whole time
 the wall has been up.
 

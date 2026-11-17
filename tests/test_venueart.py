@@ -263,7 +263,7 @@ def test_the_already_installed_sources_are_not_offered_as_work():
     fifteen times, three inches higher up the screen.
 
     The second version learned to say "4 of those are SHEETS" and then
-    told him "3 single render(s) ready" about the three `-neutral` files,
+    told them "3 single render(s) ready" about the three `-neutral` files,
     which ARE the steel references already installed. Right
     classification, same useless instruction. So it now checks the target
     slot instead of classifying the filename."""

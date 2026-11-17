@@ -2217,7 +2217,7 @@
 
   /* The slot names the player, the league, the market and his position.
      Drawn once per slot: a page redrawn around it hands the same element
-     back (app.js keeps it), so the game he picked and the folds he opened
+     back (app.js keeps it), so the game they picked and the folds they opened
      survive the minute's refresh.
 
      ASKED FOR AS THE PAGE OPENS (Ethan, 2026-10-14: "It should be snappy

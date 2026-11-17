@@ -1,10 +1,10 @@
 """The Most Likely board and the game reports follow Ethan's NFL Bet checking method (2026-11-15).
 
-Ethan, after his project's export was read again end to end: "Most
+Ethan, after their project's export was read again end to end: "Most
 importantly is scanning the zip files ... and implementing that too the game
 reports and the website and how the most likely bets are selected like how
 we talked about". His master instructions and slate log name the props to
-stay off; his own words in the chats add "I care more about what genuinely
+stay off; their own words in the chats add "I care more about what genuinely
 will hit not my rules". So (engine/likelyboard.METHOD_AVOID):
 
   * the scout raises his two post-mortem rules it lacked — quarterback

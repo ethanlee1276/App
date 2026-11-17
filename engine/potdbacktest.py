@@ -401,7 +401,7 @@ def sweep_ev(conn, sport: str = "mlb", sharp: str = "Pinnacle",
 
     Ethan, 2026-09-16, on a day the card led with NO BET: "we need to be
     confident in our pick, and if that's a good pick, then we need to say
-    to bet it." Lowering the bar is the change he asked for; this is the
+    to bet it." Lowering the bar is the change they asked for; this is the
     number it should be lowered TO, rather than a guess.
 
     WHAT THE TABLE IS FOR, and it is not only the ROI. A lower floor buys

@@ -130,7 +130,7 @@ def test_the_arc_animates_and_respects_reduced_motion():
     assert "PBP_TRAJ[hit.trajectory]" in body and "MPH" in body and "FT" in body
     # RE-ANCHORED 2026-09-06 (Ethan: "match our page more to these
     # renders"). The caption was one run-on `label` pinned at the arc's
-    # apex; his render titles it by what the ball was and puts the
+    # apex; their render titles it by what the ball was and puts the
     # numbers underneath, beside the landing mark. Two escaped strings
     # now, not one — the pin follows the markup rather than the old name.
     assert "escapeHtml(title)" in body and "escapeHtml(detail)" in body

@@ -1,6 +1,6 @@
 """The tab bar on the iPhone Duo's side strip (js/boot.js, styles.css).
 
-Ethan, 2026-10-29, his closed iPhone Duo, the tab bar circled and an arrow
+Ethan, 2026-10-29, their closed iPhone Duo, the tab bar circled and an arrow
 to the black strip beside the clock: "move this bar ... to the right side
 ... only for the iPhone Duo". On the closed Duo, an app built with the iOS
 27.1 SDK reaches the screen's edge, and the strip beside the clock and the

@@ -5,7 +5,7 @@
 #
 # TWO SOURCES SINCE 2026-10-28, committed in brand/ so nothing has to come
 # back out of a chat log:
-#   * brand/appicon-2026-10-28.png, the app icon he sent that day ("here is
+#   * brand/appicon-2026-10-28.png, the app icon they sent that day ("here is
 #     the new app icon too use. Make it fit right."): tools/appiconfit.py
 #     fits its tile to the square, redraws its gold rim inside the shape iOS
 #     cuts icons to, and writes the 1024 master (brand/appicon-1024.png, the

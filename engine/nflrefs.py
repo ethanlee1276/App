@@ -6,7 +6,7 @@
 
 Ethan, 2026-10-24: "yes build all of D" — D being the public betting
 percentages, the referee before kickoff and PFF grades, the three things
-his research docs had that our game report did not.
+their research docs had that our game report did not.
 
 WHAT IT SAYS AND WHAT IT DOES NOT. refcheck.py asked, on 7,340 games, the
 only question that would make a referee part of the read: does his past

@@ -113,7 +113,7 @@ try {
    back to the screen's foot. iPhone only: an Android keyboard does not carry
    the page's fixed layers up with it.
 
-   THE PINNED LAYERS COME BACK TO THE SCREEN (Ethan, 2026-11-15, his open Duo
+   THE PINNED LAYERS COME BACK TO THE SCREEN (Ethan, 2026-11-15, their open Duo
    on NE @ DET's game page, the game chat bar circled halfway up the screen
    over "Where the money is going": "fix how this game chat bar gets stuck on
    the middle of the screen"). Every pinned layer had moved as one: the top

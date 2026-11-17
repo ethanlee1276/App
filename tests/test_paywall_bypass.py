@@ -665,7 +665,7 @@ def test_a_code_can_still_be_redeemed_somewhere_a_walled_visitor_can_reach():
     """The half of the removal that would be a silent break. Somebody
     holding a comp code sees the wall, and if the only redeem box lived
     behind it they could never get in — and nobody would find out until a
-    friend of Ethan's could not use the code he gave them."""
+    friend of Ethan's could not use the code Ethan gave them."""
     app = app_js()
     fn = app[app.index("async function renderBilling("):]
     fn = fn[:fn.index("\n/* \"Have a code?\"")]

@@ -1,7 +1,7 @@
 """An expected starting quarterback is read off the headlines we already pull.
 
 Ethan, 2026-09-28: the site learned the Bears' quarterback from the depth
-chart; his research had "Keenum expected to start" from reporters hours
+chart; their research had "Keenum expected to start" from reporters hours
 earlier. engine/newsqb reads that from the ESPN feed the news build already
 fetches, and engine/qbchange.changes takes it behind the depth chart and
 ahead of "second quarterback by volume". The card says "per ESPN".

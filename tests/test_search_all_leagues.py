@@ -312,7 +312,7 @@ def test_the_ufc_tab_still_finds_fighters_under_the_scope():
 def test_a_failed_search_is_retried_not_cached_for_the_session():
     """Ethan, 2026-09-01: "it wont let me search any nfl player at all."
     He had opened the app in the exact minute the auto-updater was
-    restarting the service; every name he typed cached a permanent empty
+    restarting the service; every name they typed cached a permanent empty
     answer, and search stayed dead long after the server was back. A
     failure may be remembered for seconds — never for the session."""
     js = _js()

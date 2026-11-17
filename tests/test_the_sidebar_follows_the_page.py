@@ -1,7 +1,7 @@
 """The sidebar comes down the page with you, open or slid away (styles.css
 "THE SIDEBAR COMES DOWN THE PAGE WITH YOU").
 
-Ethan, 2026-10-30, his open Duo with the sidebar circled: "this menu no
+Ethan, 2026-10-30, their open Duo with the sidebar circled: "this menu no
 matter swiped open or close, should follow you all the way down when you
 scroll down". It was `position: sticky`, and a sticky box holds only inside
 its own grid cell: the shell ends where the footer starts (and, under 1280,

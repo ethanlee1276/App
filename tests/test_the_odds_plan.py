@@ -158,7 +158,7 @@ def _floor(lp) -> int:
 
 def test_the_order_is_ethans():
     """"NFL comes first, then college football, then NBA, then baseball";
-    hockey, UFC and the WNBA, which he did not place, after them at one fill;
+    hockey, UFC and the WNBA, which they did not place, after them at one fill;
     college basketball (2026-11-13), the newest, in a tier of its own after
     them all, so a new league is never funded out of a ranked one."""
     assert P.TIERS == (("nfl",), ("cfb",), ("nba",), ("mlb",), ("nhl", "ufc", "wnba"), ("cbb",))
@@ -266,7 +266,7 @@ def test_a_season_that_is_over_leaves_the_pool():
 def test_until_the_renewal_the_nba_is_funded_right_after_the_nfl():
     """Ethan, 2026-10-28: "we still don't have edge bets or most likely bets
     for nba. We need that now" — October's credits had run out after the
-    NFL and college, and he chose the NBA before college until Nov 1."""
+    NFL and college, and they chose the NBA before college until Nov 1."""
     oct28, end = dt.date(2026, 10, 28), dt.date(2026, 11, 1)
     assert P.tiers(oct28) == (("nfl",), ("nba",), ("cfb",), ("mlb",), ("nhl", "ufc", "wnba"), ("cbb",))
     assert sorted(lg for t in P.tiers(oct28) for lg in t) == sorted(P.PRIORITY), "nobody dropped"
@@ -707,7 +707,7 @@ def test_the_report_gives_each_sport_its_month():
 
 
 def test_the_report_run_by_hand_says_it_cannot_see_the_services_renewal_day():
-    """Ethan, 2026-10-30: he set QB_ODDS_RESET_DAY with setenv, restarted,
+    """Ethan, 2026-10-30: they set QB_ODDS_RESET_DAY with setenv, restarted,
     ran the plan by hand — and its line still read ASSUMED. The service
     reads /etc/qellys/env; `sudo -u qellys python3 -m engine.oddsplan` does
     not, and the report now says so under that line, with the command that

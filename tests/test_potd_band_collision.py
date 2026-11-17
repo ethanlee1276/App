@@ -18,7 +18,7 @@ second move happened. Raising it closed the plus side completely — net
 odds of 0.945 is a FAVOURITE, -106, not "+94"; I told Ethan +94 in chat
 by reading a sub-1.0 payout as a plus price. Once that was written down
 here, "the floor decides whether there are underdogs at all" became
-visible, and underdogs were something he wanted ("i prefer that since it
+visible, and underdogs were something they wanted ("i prefer that since it
 gives us under dogs"). The arithmetic lives in this file so it is never
 done from memory again.
 

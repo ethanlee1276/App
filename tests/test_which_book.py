@@ -11,8 +11,8 @@ price a reader can CHECK. His cards said
 
 and "best" is not a window anyone can walk up to. We publish the best
 number across the books we request, which is the right number and, until
-now, a number with nobody's name on it: holding his phone open on
-DraftKings he could not tell whether our -125 was DraftKings' -125, some
+now, a number with nobody's name on it: holding their phone open on
+DraftKings they could not tell whether our -125 was DraftKings' -125, some
 other book's, or ours.
 
 `oddsapi.best_h2h_books` names it, under exactly the rule that chose the

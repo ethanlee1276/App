@@ -58,7 +58,7 @@ def test_the_real_ticker_shape_this_repo_already_had_a_fixture_of():
 
 
 def test_ethans_actual_nfl_market_matches_his_actual_board():
-    """The two lines he pasted: exchange "Buffalo wins", board "DET @ BUF"."""
+    """The two lines they pasted: exchange "Buffalo wins", board "DET @ BUF"."""
     m = _market(ticker="KXNFLGAME-25SEP14DETBUF-BUF",
                 event_ticker="KXNFLGAME-25SEP14DETBUF",
                 title="Buffalo wins", subtitle="Buffalo")

@@ -1,7 +1,7 @@
 """A finished game's page is ESPN's page for it, and the chat bar sits at the
 foot of the open Duo.
 
-Ethan, 2026-10-30, two screenshots of yesterday's Panthers @ Packers on his
+Ethan, 2026-10-30, two screenshots of yesterday's Panthers @ Packers on their
 open Duo:
 
   * the field circled: "why do we have the game cast on this screen. It's

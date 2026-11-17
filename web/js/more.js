@@ -4019,7 +4019,7 @@ async function renderUFC() {
   const nWaiting = pl.filter((m) => m.reason_code === "no_price").length;
   // THE HERO IS ETHAN'S BRANDED RENDER (2026-09-07): the arena dressed
   // in Qellys Book boards, one picture for every card. It replaces the
-  // six-night octagon rotation of 2026-08-11 — he circled the old
+  // six-night octagon rotation of 2026-08-11 — they circled the old
   // banner and said "use exactly to replace this" — so no hash, no
   // variant, no dependence on the card's identity. The six rotation
   // files stay in variants/ as the ingest tool's contract and are not

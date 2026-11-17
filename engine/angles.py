@@ -48,7 +48,7 @@ from collections import defaultdict
 
 #: A rank this close to either end of the league is an angle (1 gives up the most).
 EDGE_RANKS = 8
-#: A WR1 game "topped" this many yards (his reports' "a receiver top 90 yards").
+#: A WR1 game "topped" this many yards (their reports' "a receiver top 90 yards").
 WR1_BIG = 90
 #: A quarterback whose legs are an angle: this many scrambles or rushing yards a game.
 QB_SCRAMBLES, QB_RUSH_YDS = 2.5, 20.0

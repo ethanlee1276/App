@@ -322,7 +322,7 @@ def test_the_stadiums_lead_then_the_likelihood_board_then_everything():
     # …and refined the same night: "We should have the performance
     # under the top picks." Picks, then the proof, then the edge
     # summary beside the cards it counts.
-    # …and once more, from his screenshot circling the four tool tiles:
+    # …and once more, from their screenshot circling the four tool tiles:
     # "We should show this at the top of the page." The launcher row
     # opens the page; the venues follow it.
     # …and on 2026-09-26, the edge half left: "the edge bets can be its own

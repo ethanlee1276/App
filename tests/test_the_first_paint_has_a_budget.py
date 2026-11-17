@@ -29,7 +29,7 @@ HTML = (WEB / "index.html").read_text()
 #: index.html is served without its comments now (29 -> 11 KB gz), and the
 #: budget keeps the saving rather than spending it.
 #: 472 -> 476 on 2026-10-04 by the pick page's case section (pickCaseHTML:
-#: the facts sorted for the bet, the corners he sees, the back-and-forth
+#: the facts sorted for the bet, the corners they see, the back-and-forth
 #: script — ~2.5 KB), the change Ethan asked for that day.
 #: 476 -> 477 on 2026-10-04 by Ethan's "do all of it" list: the research
 #: box, the price-move alert, the why line on Most Likely rows and the

@@ -475,7 +475,7 @@ def test_the_chip_that_was_pressed_lights_before_the_answer_lands():
     and the PREVIOUS opponent stays lit, which reads as the press having
     missed."""
     assert "${teamOppPickerHTML(d, _teamState.vs)}" in _app()
-    # The payload still says T0; T3 is the chip under his finger.
+    # The payload still says T0; T3 is the chip under their finger.
     out = _picker(6, picked="T0", pending="T3")
     assert out.count('aria-pressed="true"') == 1, "two chips claim to be on"
     i = out.index('aria-pressed="true"')
