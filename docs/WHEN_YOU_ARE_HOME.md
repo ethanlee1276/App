@@ -9338,6 +9338,25 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VQ. The game reports keep watch on the injury report and the news** (step 701; 17 November). Nothing to
+run: the watcher starts with the restart this deploy brings. You asked for the game reports to "keep a constant
+watch and update on nfl news and injuries". A report is written once a board sweep, about every half hour, so a
+starter ruled out between two sweeps waited for the next one. Now the launcher checks every five minutes, for every
+game in the next eight days in every league with reports (NFL, college football, NBA, college basketball, NHL,
+WNBA, MLB). It reads two things. The injury report: a status that moves ("questionable to out", "cleared to
+play") is written down with the time we saw it. The news: ESPN's newsroom stories tagged with either club or a
+player in the game, and the league's headlines, from the last three days, with injury and roster stories marked.
+Only the headline and the link are kept; the story stays on the newsroom's site. It all goes in
+web/data/report_watch.json, free like the injury report and the headlines it is made of.
+
+On the game page, until kickoff, whatever landed after the report was written shows as a card over the report,
+"Since this report was written", read again every two minutes while the page is open. With nothing new it says so,
+and when it last checked. The next report written folds the same into its own text, in a section called "Latest
+news and injury moves". The first check after the restart only notes each league's injury report as it stands (a
+status that was already true is not news), so moves start showing from the second check, five minutes later. To
+see it working after the deploy, open https://qellysbook.com/data/report_watch.json: `generated_at` should be
+within the last five minutes, and a game's `updates` fill as statuses move.
+
 **VP. A goal flashes on the live hockey score** (step 700; 17 November). Nothing to run. The touchdown flash
 you said yes to on 16 November, on the hockey page: when a side scores while the game's page is open and on screen,
 its score pulses gold with GOAL over it for a few seconds. Never on opening the game or coming back to it, never

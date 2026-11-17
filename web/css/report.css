@@ -186,3 +186,28 @@
 
 .gr-parlay-rule { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--text-mute); }
 .gr-parlay-rule.ok { color: var(--good); }
+
+/* THE WATCH BETWEEN BUILDS (js/report.js watchCardHTML; engine/reportwatch,
+   2026-11-17): what landed on the injury report and in the news since the
+   report was written, over the report, and the report's own news list. The
+   move's colour is its meaning: out red, questionable amber, cleared green. */
+.gr-watch { margin: 0 0 var(--sp-3); padding: var(--sp-3); border-left: 3px solid var(--warn); }
+.gr-watch-h { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2);
+  margin-bottom: var(--sp-2); }
+.gr-watch-h span { color: var(--text-mute); font-size: var(--fs-xs); white-space: nowrap; }
+.gr-watch-ups { margin: 0 0 var(--sp-2); padding-left: 1.1em; }
+.gr-watch-ups li { margin: 2px 0; }
+.gr-watch-ups li.down { color: var(--bad); }
+.gr-watch-ups li.warn { color: var(--warn); }
+.gr-watch-ups li.up { color: var(--good); }
+.gr-watch-ups .gr-name { color: inherit; font-weight: 700; }
+.gr-watch-team { color: var(--text-mute); font-size: var(--fs-xs); }
+.gr-watch-quiet { display: flex; align-items: center; gap: 6px; margin: 0 0 var(--sp-3);
+  color: var(--text-mute); font-size: var(--fs-xs); }
+.gr-news { margin: var(--sp-1) 0; padding-left: 1.1em; }
+.gr-news li { margin: 4px 0; }
+.gr-news a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.gr-news-src { display: block; color: var(--text-mute); font-size: var(--fs-xs); }
+.gr-news-flag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: var(--radius-sm);
+  font-size: var(--fs-xs); font-weight: 700; color: var(--warn); border: 1px solid currentColor; }
+.gr-news-flag.roster { color: var(--text-mute); }

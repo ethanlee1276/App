@@ -449,6 +449,9 @@
        section's kind of read, its record on finished games so far. */
     if (b.type === "track") return `<p class="gr-track">${escapeHtml(b.text)}</p>`;
     if (b.type === "h") return `<h4 class="gr-h">${escapeHtml(b.text)}</h4>`;
+    /* THE NEWS ABOUT THE TWO CLUBS (engine/gamereport.sec_news): each
+       headline as its publisher wrote it, opening on their site. */
+    if (b.type === "headlines") return newsListHTML(b.items || []);
     if (b.type === "note") return `<p class="gr-note">${named(b.text, b.names, b.marks)}</p>`;
     if (b.type === "list") {
       return `<ul class="gr-list">${(b.items || []).map((t, i) => `<li>${named(t, b.names, b.marks, true)}${
@@ -556,6 +559,7 @@
           if (r && r.chance != null) out.push(`Our ratings alone (unproven): ${r.even ? "an even game" : `${r.name || r.team} ${Math.round(Number(r.chance) * 100)}%`}`);
         }
         else if (b.type === "h") out.push("", b.text);
+        else if (b.type === "headlines") (b.items || []).forEach((n) => out.push(`• ${n.source ? `${n.source}: ` : ""}${n.headline}${n.href ? ` (${n.href})` : ""}`));
         else if (b.type === "list") (b.items || []).forEach((t) => out.push(`• ${t}`));
         else if (b.type === "table") {
           if (b.title) out.push(b.title);
@@ -666,6 +670,58 @@
 
   /* The report (r), or — for a reader without the paid key — what it
      holds. */
+  /* ---------------- the watch between builds ----------------
+     Ethan, 2026-11-17: "make sure the game reports keep a constant watch and
+     update on nfl news and injuries". engine/reportwatch looks at the injury
+     report and the news every five minutes; the report's own "Latest news
+     and injury moves" holds what it saw when the report was built
+     (`watch_at`), and this card, at the top, what has landed since. The game
+     page reads the watch again while it stays open (detail.js
+     reportWatchFor), so a player ruled out at noon is on the page at noon. */
+  const AGO = (t) => {
+    const s = Math.max(0, (Date.now() - t) / 1000);
+    return s < 90 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} hr ago`
+      : `${Math.round(s / 86400)} d ago`;
+  };
+  const FLAG = { injury: "Injury", roster: "Roster" };
+  function newsListHTML(items) {
+    return `<ul class="gr-news">${items.map((n) => {
+      const at = Date.parse(n.at || "");
+      const flag = FLAG[n.flag] ? `<span class="gr-news-flag ${escapeAttr(n.flag)}">${FLAG[n.flag]}</span>` : "";
+      const head = escapeHtml(n.headline || n.title || "");
+      const link = String(n.href || n.link || "");
+      return `<li>${flag}${/^https?:\/\//.test(link)
+        ? `<a href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer">${head}</a>` : head}
+        <span class="gr-news-src">${escapeHtml(n.source || "")}${Number.isFinite(at) ? ` · ${AGO(at)}` : ""}</span></li>`;
+    }).join("")}</ul>`;
+  }
+  function moveWords(u) {
+    const was = String(u.from || "").toLowerCase(), now = String(u.to || "").toLowerCase();
+    if (now === "active") return was ? `cleared to play (was ${was})` : "cleared to play";
+    return `${was ? `${was} to ${now}` : `newly listed ${now}`}${u.injury ? ` (${String(u.injury).toLowerCase()})` : ""}`;
+  }
+  function watchCardHTML(w, since) {
+    const t0 = Date.parse(since || "") || 0;
+    const fresh = (x) => (Date.parse(x.at || "") || 0) > t0;
+    const ups = (w.updates || []).filter(fresh).slice(0, 5);
+    const news = (w.news || []).filter(fresh).slice(0, 4);
+    const checked = Date.parse(w.checked_at || "");
+    const when = Number.isFinite(checked) ? `checked ${AGO(checked)}` : "";
+    if (!ups.length && !news.length) {
+      return `<p class="gr-watch-quiet">${icon("check", 13)} No new injury moves or headlines since this report was written${
+        when ? ` · ${when}` : ""}</p>`;
+    }
+    const tone = (u) => /out|reserve|ir\b|doubtful|suspend/i.test(u.to || "") ? "down"
+      : /active/i.test(u.to || "") ? "up" : "warn";
+    return `<div class="card gr-watch" role="status">
+      <div class="gr-watch-h"><b>Since this report was written</b>${when ? `<span>${escapeHtml(when)}</span>` : ""}</div>
+      ${ups.length ? `<ul class="gr-watch-ups">${ups.map((u) => `<li class="${tone(u)}"><span class="gr-name" data-open="player:${
+        escapeAttr(slugify(u.player || ""))}">${escapeHtml(u.player || "")}</span> <span class="gr-watch-team">${
+        escapeHtml(u.team || "")}</span> ${escapeHtml(moveWords(u))}</li>`).join("")}</ul>` : ""}
+      ${news.length ? newsListHTML(news) : ""}
+    </div>`;
+  }
+
   function html(r, extras) {
     // A UFC fight's report (engine/ufc/report, 2026-11-16; Ethan: "Yes" to a
     // written fight report), drawn inside its card on the UFC tab: several
@@ -728,7 +784,9 @@
       <button type="button" class="btn ghost" data-gr-copy="${escapeAttr(r.game)}">Copy the report</button>${
         solo ? "" : `<button type="button" class="btn ghost" data-gr-share="${escapeAttr(r.game)}">Share this game</button>`}${
         folded ? `<button type="button" class="btn ghost" data-gr-all="1">Open every section</button>` : ""}</div>`;
-    return `<div${solo ? "" : ' id="gp-sec-report"'} class="gr">${head}${tools}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
+    // The watch's newest, over the report, until the game is under way.
+    const watch = extras && extras.watch && !CLOSED && !solo ? watchCardHTML(extras.watch, r.watch_at) : "";
+    return `<div${solo ? "" : ' id="gp-sec-report"'} class="gr">${head}${tools}${watch}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
   }
 
   /* EACH GAME'S PARLAYS, AS THE REPORT'S OWN CARDS (gameTickets, drawn on the

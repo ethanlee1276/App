@@ -1811,6 +1811,35 @@ if (typeof window !== "undefined" && !window._rpkFactsBound) {
     if (a) window._rpWantFacts = true;
   });
 }
+/* EACH GAME'S WATCH BETWEEN ITS REPORT'S BUILDS (engine/reportwatch,
+   2026-11-17; Ethan: "make sure the game reports keep a constant watch and
+   update on nfl news and injuries"). The watcher writes a free file every
+   five minutes; the game page, redrawn each minute with the board, reads it
+   again at most every two, and redraws once more when it has moved. Its
+   game's entry is the report's "Since this report was written" card
+   (js/report.js watchCardHTML). */
+const _rwatch = { at: 0, doc: null, busy: false, sig: "" };
+const RWATCH_MS = 120000;
+function reportWatchFor(g, sport) {
+  if (Date.now() - _rwatch.at > RWATCH_MS && !_rwatch.busy) {
+    _rwatch.busy = true;
+    const id = state.gameId;
+    fetch("data/report_watch.json", { cache: "no-cache" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((doc) => {
+        const sig = doc ? String(doc.generated_at || "") : _rwatch.sig;
+        const moved = !!doc && sig !== _rwatch.sig;
+        if (doc) { _rwatch.doc = doc; _rwatch.sig = sig; }
+        _rwatch.at = Date.now();
+        if (moved && state.view === "game" && state.gameId === id) renderGamePage();
+      })
+      .catch(() => { _rwatch.at = Date.now(); })
+      .finally(() => { _rwatch.busy = false; });
+  }
+  const lg = (((_rwatch.doc || {}).leagues) || {})[sport];
+  const entry = lg && (lg.games || {})[`${g.away}@${g.home}`];
+  return entry ? Object.assign({ checked_at: lg.checked_at }, entry) : null;
+}
 function gameReportHTML(g, extras) {
   const d = state.data || {};
   const r = gameReportFor(g);
@@ -1826,6 +1855,9 @@ function gameReportHTML(g, extras) {
   // A finished game: the report grades its picks, reads, tickets and call (app.js reportResults).
   const results = reportResults(g);
   if (results) extras = Object.assign({}, extras, { results });
+  // What the watch has seen since the report was built (reportWatchFor).
+  const watch = r && !results ? reportWatchFor(g, state.sport) : null;
+  if (watch) extras = Object.assign({}, extras, { watch });
   if (window.QBReport) return window.QBReport.html(r, extras);
   const id = state.gameId;
   loadReport().then(() => { if (state.view === "game" && state.gameId === id) renderGamePage(); });

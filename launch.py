@@ -6178,6 +6178,21 @@ def _game_activity_watcher() -> None:
             print(f"  ⚠️  lock screens: {type(exc).__name__}: {exc}")
 
 
+def _report_watcher() -> None:
+    """Each game's report, kept watching between its builds (engine/
+    reportwatch; Ethan, 2026-11-17: "make sure the game reports keep a
+    constant watch and update on nfl news and injuries"): every
+    WATCH_EVERY_S, the injury report's moves and the headlines about each
+    game's two clubs, into web/data/report_watch.json. Never stops the site."""
+    from engine import reportwatch as _rw
+    while True:
+        try:
+            _rw.run()
+        except Exception as exc:      # noqa: BLE001 — never let this stop the site
+            print(f"  ⚠️  report watch: {type(exc).__name__}: {exc}")
+        time.sleep(_rw.WATCH_EVERY_S)
+
+
 def _live_ufc_refresher() -> None:
     """Poll the live fight feed fast while a bout is on, slowly otherwise."""
     import json as _json
@@ -12471,6 +12486,10 @@ def main() -> None:
         threading.Thread(target=_slip_watcher, daemon=True, name="slipwatch").start()
         print(f"  Saved slips: every {SLIP_WATCH_S}s, a slip down to its last leg "
               f"noted and emailed where a member asked.")
+        # Each game's report, watching the injury report and the news between builds.
+        threading.Thread(target=_report_watcher, daemon=True, name="reportwatch").start()
+        print("  Report watch: every 5 min, each game's injury moves and headlines about its "
+              "two clubs, on its report between builds.")
         # Games members put on their iPhone's lock screen.
         threading.Thread(target=_game_activity_watcher, daemon=True, name="gameactivity").start()
         print("  Lock-screen games: every 20s, the score and clock of each game a "

@@ -2695,6 +2695,79 @@ def sec_before(c: Ctx) -> dict | None:
     return _section("before", "Before kickoff", [_list(lines)])
 
 
+#: How many of each the report's own text lists (engine/reportwatch keeps
+#: more, and the page's live card shows what lands after the build).
+NEWS_IN_REPORT, UPDATES_IN_REPORT = 6, 8
+_WATCH: dict = {"mtime": None, "doc": {}}
+
+
+def _watch_doc() -> dict:
+    """The watch file (engine/reportwatch), read again only when it changes:
+    every game's report in a build reads the same look."""
+    from . import reportwatch
+    try:
+        mtime = reportwatch.WATCH_PATH.stat().st_mtime
+    except OSError:
+        return {}
+    if _WATCH["mtime"] != mtime:
+        _WATCH.update(mtime=mtime, doc=reportwatch.read())
+    return _WATCH["doc"]
+
+
+def update_words(c: Ctx, u: dict) -> str:
+    """One injury report move in words: "Rashee Rice, the Chiefs' wide
+    receiver: questionable to out (knee)"."""
+    team = u.get("team") or ""
+    club = c.name(team) if team else ""
+    own = (club + ("'" if club.endswith("s") else "'s")) if club else ""
+    pos = (POS_WORDS.get(c.sport) or {}).get(str(u.get("pos") or "").upper(), "")
+    who = f"{u.get('player')}" + (f", the {own} {pos}" if own and pos else f" ({club})" if club else "")
+    was, now = str(u.get("from") or "").lower(), str(u.get("to") or "").lower()
+    move = f"{was} to {now}" if was else f"newly listed as {now}"
+    if now == "active":
+        move = f"cleared to play (was {was})" if was else "cleared to play"
+    what = f" ({str(u['injury']).lower()})" if u.get("injury") and now != "active" else ""
+    seen = et_words(u.get("at"))
+    return f"{who}: {move}{what}" + (f", seen {seen} ET" if seen else "")
+
+
+def et_words(stamp) -> str:
+    """"Tue 2:15 PM" (Eastern) from a UTC stamp, or "" for none."""
+    from zoneinfo import ZoneInfo
+    try:
+        t = _dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return ""
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=_dt.timezone.utc)
+    t = t.astimezone(ZoneInfo("America/New_York"))
+    return f"{t.strftime('%a')} {(t.hour % 12) or 12}:{t.minute:02d} {'PM' if t.hour >= 12 else 'AM'}"
+
+
+def sec_news(c: Ctx) -> dict | None:
+    """LATEST NEWS AND INJURY MOVES (2026-11-17; Ethan: "make sure the game
+    reports keep a constant watch and update on nfl news and injuries"): what
+    the watch (engine/reportwatch, every five minutes) saw on the injury
+    report and in the news about the two clubs. The page's live card at the
+    top adds whatever lands after this build."""
+    from .reportwatch import for_game
+    w = for_game(_watch_doc(), c.sport, c.away, c.home)
+    updates = [u for u in w.get("updates") or [] if isinstance(u, dict)][:UPDATES_IN_REPORT]
+    news = [n for n in w.get("news") or [] if isinstance(n, dict) and n.get("title")][:NEWS_IN_REPORT]
+    if not updates and not news:
+        return None
+    blocks = []
+    if updates:
+        blocks += [_h("On the injury report"), _list([update_words(c, u) for u in updates])]
+    if news:
+        blocks += [_h("In the news"), {"type": "headlines", "items": [
+            {"headline": n["title"], "href": n.get("link") or "", "source": n.get("source") or "",
+             "at": n.get("at") or "", "flag": n.get("flag") or ""} for n in news]}]
+    blocks.append({"type": "note", "text": "Watched every five minutes: the injury report's moves and the news "
+                                           "about both teams, newest first. Headlines open on their publishers' sites"})
+    return _section("news", "Latest news and injury moves", blocks)
+
+
 def sec_changes(c: Ctx) -> dict | None:
     """What changed since the report was first written, newest first
     (engine/reportlog). Nothing on the report's first build; one line when
@@ -3870,6 +3943,8 @@ def build(g: dict, result: dict, *, allowed: dict | None = None, sched=None,
 PLAIN_SKIP = frozenset(("type", "kind", "key", "player", "team", "headshot", "pos", "verdict", "tone",
                         "status", "href", "url", "id", "logo", "color", "side", "market", "game", "slug",
                         "names", "marks", "rank_of", "rank_skip",
+                        # A publisher's headline is shown as the publisher wrote it (sec_news).
+                        "headline", "source", "at", "flag",
                         # What a finished game is graded by and on (engine/reportgrade,
                         # engine/reportfacts).
                         "lean", "claims", "claim", "grade", "grades", "graded", "kept", "expect", "sim"))
@@ -3913,7 +3988,7 @@ def plain_all(x, key: str = ""):
 _NOT_TEXT = frozenset(("type", "kind", "key", "headshot", "verdict", "tone", "status", "names", "marks",
                        "href", "url", "id", "logo", "color", "side", "market", "game", "slug", "rank_of",
                        "rank_skip", "lean", "claims", "claim", "grade", "grades", "graded", "kept", "expect",
-                       "sim"))
+                       "sim", "headline", "source", "at", "flag"))
 
 
 def _texts(x, key: str = "") -> list:
@@ -4297,6 +4372,12 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
             built[s["key"]] = s
     short = short_fn(c, built)
     moved = sec_changes(c)
+    # The watch's news and injury moves, under what changed (sec_news).
+    try:
+        latest = sec_news(c)
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the news not read for {c.away}@{c.home} ({exc})")
+        latest = None
     # The research's answer first (sec_card), then the short version.
     try:
         card = sec_card(c, built)
@@ -4310,7 +4391,7 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ who wins not built for {c.away}@{c.home} ({exc})")
         verdict = None
-    sections = plain_all([x for x in (card, verdict, short, moved) if x] + list(built.values()))
+    sections = plain_all([x for x in (card, verdict, short, moved, latest) if x] + list(built.values()))
     words = _words(sections)
     color_names(c, sections)
     mark_statuses(sections)
@@ -4333,6 +4414,8 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
             "when": kickoff_words(g.get("date") or "", g.get("kickoff") or ""),
             "line": line_words(c),
             "built_at": c.result.get("built_at") or "",
+            # The watch's look this report read (sec_news): the page's card shows what came after it.
+            "watch_at": (_watch_doc() or {}).get("generated_at") or "",
             "words": words, "minutes": max(1, round(words / WORDS_A_MINUTE)),
             # The league's size, for the page to colour a rank in a sentence
             # ("the Patriots' big plays (3rd in the league)") by its third.
