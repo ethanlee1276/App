@@ -59,13 +59,16 @@ def test_the_page_is_settled_by_one_helper_a_frame_apart_and_never_chasing_itsel
 def test_the_screens_own_viewport_is_the_net():
     b = _block()
     assert "if (!iphone && !/iPad/.test(ua) && !(/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return;" in b
-    for want in ('vv.addEventListener("resize", check);', 'vv.addEventListener("scroll", check);',
-                 'addEventListener("scroll", check, { passive: true });', 'addEventListener("pageshow", check);',
+    # Every move checks, and reads the hold (test_the_bar_stays_on_the_screens_foot).
+    assert "function moved() { check(); soon(); }" in b
+    for want in ('vv.addEventListener("resize", moved);', 'vv.addEventListener("scroll", moved);',
+                 'addEventListener("scroll", moved, { passive: true });', 'addEventListener("pageshow", moved);',
                  'document.addEventListener("visibilitychange"'):
         assert want in b, want
     assert "if (field(document.activeElement) || Math.abs(vv.scale - 1) > 0.01) return;" in b, \
         "a field up, or a pinch zoom, moves the screen over the page on purpose"
-    assert "if (stale || Math.abs(vv.offsetTop) >= 1) QB_SETTLE();" in b
+    assert "if (stale || (Math.abs(vv.offsetTop) >= 1 && innerHeight - vv.height < 40)) QB_SETTLE();" in b, \
+        "a screen still short by a keyboard is held to the screen, not nudged: the nudge cannot clear it"
 
 
 def test_the_chat_lets_go_of_its_box_before_it_goes():

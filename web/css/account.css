@@ -603,6 +603,10 @@
    gone once the plans themselves are on screen. Opacity and transform
    only, inside the motion budget. */
 .pw-dock { display: none; }
+/* Held to an iPhone's screen with every other pinned layer (styles.css, THE BAR
+   STAYS ON THE SCREEN'S FOOT), by the root's copy of the distance: the docks are
+   this room's, so the room moves them. */
+html.vv-held .pw-dock, html.vv-held .fsu-dock { translate: 0 var(--vv-y); }
 @media (max-width: 720px) {
   .pw-dock { position: fixed; left: 12px; right: 12px; z-index: 55;
     bottom: calc(74px + env(safe-area-inset-bottom, 0px) - var(--tb-drop));

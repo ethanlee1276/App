@@ -1042,6 +1042,10 @@ body.gp-on { --wa: #3d3a36; --wh: #3d3a36;
 #view-pbp.gp-on > .gp-wash {
   display: block; position: fixed; inset: 0; z-index: -1; pointer-events: none;
 }
+/* Held to an iPhone's screen with every other pinned layer (styles.css, THE BAR
+   STAYS ON THE SCREEN'S FOOT): the wash and the second screen are this room's,
+   so the room moves them, by the root's copy of the distance. */
+html.vv-held .gp-wash, html.vv-held .pbp-big { translate: 0 var(--vv-y); }
 /* ONE PICTURE ACROSS THE TOP (Ethan, 2026-11-02, their open Duo, the top of a
    live game circled: "fix how the colors glitch out here"). Three things
    paint the top of this page over the wash: the strip that holds the

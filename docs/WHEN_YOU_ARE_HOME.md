@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WG. The tab bar stays on the screen's foot as you scroll** (step 717; 17 November). Nothing to run.
+Your two screenshots from the Duo, the bar halfway up over the picks (beside DraftKings and on its own), had one
+more thing in them: the page's gold light stopped in a straight edge just under the bar. So the bar was not loose
+on its own; every pinned layer stood a keyboard's height up the screen. That is the iPhone still drawing the app
+above a keyboard that has gone (in Split View another app's keyboard counts: iOS gives every app on the screen
+the keyboard's place). The pinned layers then hold to the foot of that short screen while the page scrolls down,
+and come back as it scrolls up: the bar moving as you scroll. The nudge from step RK (the game chat bar, 15 November) could not clear it, because
+iOS still believes in the keyboard. Now the app reads how far the screen stands from the place the layers are
+pinned to, every frame the page moves, and moves every pinned layer back by exactly that much: the bar, the live
+pill, the game chat's button, the toasts, the gold light, the top bar, the strip under the clock, and the sheets
+and dialogs. It lets go the moment iOS puts things back, or a field of the app's own takes the keyboard (the bar
+steps aside for that as before), or you pinch to zoom. Only the installed app does this (the Home Screen app and
+the iOS build); a Safari tab and Android phones are untouched, and when nothing is wrong nothing moves at all. The
+nudge no longer moves the page when the screen is still short by a keyboard, where it could only jog the page under
+your thumb. If the bar ever stands up the screen again, a screenshot of it on the same page is all I need.
+
 **WF. A college quarterback has a passing chart** (step 716; 17 November). Nothing to run. A college
 passer's page and every college passing pick drew only the runs and the role: the chart said college had no
 passing chart. The college play file the logs are built from names the passer of every incompletion,

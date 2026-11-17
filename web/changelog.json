@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-17",
+      "kind": "fix",
+      "title": "The tab bar stays at the bottom of the screen as you scroll",
+      "body": "On an iPhone the app could go on drawing itself above a keyboard that had already gone (another app’s, beside it in Split View, counts), so the tab bar, the live pill and the page’s light stood halfway up the screen and slid with the page. The installed app now measures how far the screen stands from where those are pinned and moves them back by exactly that, every frame, letting go the moment the phone puts things right or one of the app’s own boxes takes the keyboard. When nothing is wrong, nothing moves."
+    },
+    {
+      "date": "2026-11-17",
       "kind": "ship",
       "title": "College quarterbacks get a passing chart",
       "body": "Every college throw and sack is now charted: each completion drawn to where the play ended, the misses, picks and sacks marked, a season shaded by how far the completions went, and splits by down and by receiver. The play file doesn’t record how far the ball travelled or to which side, so the chart says so. A college receiver’s season is drawn the same way, so a busy one’s targets no longer pile into one shape."

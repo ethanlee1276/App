@@ -488,6 +488,10 @@
   /* The width of the iPhone Duo's side strip when the tab bar stands in it
      (boot.js writes the measured width; "THE IPHONE DUO'S SIDE STRIP"). */
   --strip-w: 84px;
+  /* How far an iPhone's screen stands from the viewport the pinned layers
+     hold to, while boot.js holds them back to it ("THE BAR STAYS ON THE
+     SCREEN'S FOOT" below). 0 anywhere else. */
+  --vv-y: 0px;
 
   /* ---- FIXED COLOURS (audit #50): the same in both themes, which is why
      they are declared here only and never in the light block. Ink that
@@ -10625,6 +10629,29 @@ html.booting main::before { content: ""; display: block; height: min(70vh, 640px
      way the bar is drawn on a phone, in the strip beside the clock too. */
   html.field-up .tabbar, html.field-up .riding-tray { display: none !important; }
 }
+/* THE BAR STAYS ON THE SCREEN'S FOOT AS YOU SCROLL (TABBAR1; Ethan,
+   2026-11-17, their iPhone Duo with the tab bar circled halfway up over the
+   picks: "fix how this bar will move when I scroll"). The page's gold light
+   ended in a straight edge just under the bar: an iPhone was drawing every
+   pinned layer a keyboard's height up, above a keyboard that had gone, and
+   scrolling them with the page. boot.js ("THE BAR STAYS ON THE SCREEN'S
+   FOOT") reads how far the screen stands from the viewport these layers are
+   pinned to and, only while it stands away with no field up, moves each of
+   them back by it inline, every frame, with html.vv-held on. This rule is
+   the copy for a layer drawn after the hold began and the strip under the
+   clock: --vv-y is set on the root once the screen has been still for 300ms
+   (a root variable restyles the whole page, too dear for every frame). The
+   translate property, so each keeps its own transform (the top bar's tuck,
+   the pill's centring, a sheet's slide), and the top bar may take it because
+   it never leaves the top of the page. Keep the list boot.js's LAYERS; a
+   room's own layers are moved by its own sheet (detail.css, account.css). Not what a script places against the page under it (a chart's
+   tip, the scrubber, the Ask room over the keyboard), not the sticky heads
+   halfway down a page, and not the body, which a dialog's lock pins. The
+   rest of the time the class is off and nothing here applies. */
+html.vv-held :is(.tabbar, .riding-tray, .gch-fab, .gch-sheet, .kr-notes, .kr-up, .tf-toast, .crash-note,
+  [id="ptr"], .a2hs, .ambient, .amb-club, .topbar, .sidebar, .sb-grip, [id="scrim"], .more-scrim, .more-sheet,
+  .betit-sheet, [id="ffd-overlay"], [id="pk-overlay"], [id="tour-overlay"], [id="cc-overlay"], [id="gl-overlay"]),
+html.vv-held body::before { translate: 0 var(--vv-y); }
 
 /* YOUR TEAM'S COLOURS, THROUGH THE BAR AND OUT OF IT (Ethan, 2026-10-28,
    their phone's top bar and league row circled again: "the colors up here

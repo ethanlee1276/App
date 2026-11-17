@@ -129,7 +129,30 @@ try {
    moves the page a pixel and back a frame later, which hands every pinned
    layer to the screen again, at most once in 600ms so it can never chase
    itself. iPhones and iPads (an iPad says Macintosh, with a touch screen);
-   nothing anywhere else. */
+   nothing anywhere else.
+
+   THE BAR STAYS ON THE SCREEN'S FOOT AS YOU SCROLL (Ethan, 2026-11-17, two
+   screenshots from their iPhone Duo with the tab bar circled halfway up over
+   the picks, once beside DraftKings and once on its own: "fix how this bar
+   will move when I scroll"). The bar was not alone either time: the page's
+   gold light ended in a straight edge just under it, so every pinned layer
+   stood a keyboard's height up the screen. That is an iPhone still drawing
+   the page above a keyboard that has gone (another app's counts: in Split
+   View iOS hands every app on the screen the keyboard's place). Its pinned
+   layers then hold to the foot of that short screen while the page scrolls
+   down and come back to the real foot as it scrolls up, which is the bar
+   moving as you scroll; and a nudge cannot clear a keyboard iOS still
+   believes in. So the layers are held to the screen itself: with no field
+   of the page's up and no pinch zoom, every pinned layer is moved back by
+   however far the screen stands from the viewport they are pinned to
+   (visualViewport.offsetTop, 0 whenever all is well), with html.vv-held on
+   (styles.css, THE BAR STAYS ON THE SCREEN'S FOOT). It is read again every
+   frame the page or the screen moves, so it lets go the moment iOS puts
+   the viewport back. The nudge is kept for a
+   screen that stands away on its own; with the screen still short by a
+   keyboard it would only move the page under the reader's thumb. The
+   installed app only (the Home Screen app, the iOS build): a Safari tab's
+   own bars move its viewport on purpose. */
 var QB_SETTLE = function () {};
 try {
   (function () {
@@ -170,15 +193,55 @@ try {
         if (field(document.activeElement) || Math.abs(vv.scale - 1) > 0.01) return;
         var stale = root.classList.contains("field-up");
         root.classList.remove("field-up");
-        if (stale || Math.abs(vv.offsetTop) >= 1) QB_SETTLE();
+        if (stale || (Math.abs(vv.offsetTop) >= 1 && innerHeight - vv.height < 40)) QB_SETTLE();
       }, 250);
     }
+    /* The layers are moved one by one, inline, as the screen moves: a
+       variable on the page's root would restyle every element on the page
+       each frame (23ms a frame on a 6,000-element board, measured, against
+       2 for the layers). The root's copy (--vv-y, the stylesheet's rule)
+       catches up once the screen has been still for 300ms, for a layer drawn
+       after the hold began and the strip under the clock, which no inline
+       style reaches, and for a room's own layers (a game's wash and its
+       second screen, the plans' docks), which a room's sheet moves and
+       nothing outside the room may name (tests/test_a_rooms_styles_are_its_own.py).
+       Keep LAYERS the stylesheet's list. */
+    var LAYERS = ".tabbar, .riding-tray, .gch-fab, .gch-sheet, .kr-notes, .kr-up, .tf-toast, .crash-note, #ptr, " +
+      ".a2hs, .ambient, .amb-club, .topbar, .sidebar, .sb-grip, #scrim, .more-scrim, .more-sheet, .betit-sheet, " +
+      "#ffd-overlay, #pk-overlay, #tour-overlay, #cc-overlay, #gl-overlay";
+    var app = navigator.standalone === true || /QellysApp\/[\d.]+ \(ios\)/.test(ua);
+    var held = 0, kept = 0, frame = 0, rest = 0, layers = [];
+    function keep() {
+      if (kept === held) return;
+      kept = held;
+      if (held) root.style.setProperty("--vv-y", held + "px");
+      else root.style.removeProperty("--vv-y");
+    }
+    function hold() {
+      frame = 0;
+      var dy = field(document.activeElement) || Math.abs(vv.scale - 1) > 0.01 ? 0 : Math.round(vv.offsetTop);
+      if (dy === held) return;
+      if (!held) layers = document.querySelectorAll(LAYERS);
+      for (var i = 0, t = dy ? "0 " + dy + "px" : ""; i < layers.length; i++) layers[i].style.translate = t;
+      if (!held !== !dy) root.classList.toggle("vv-held", dy !== 0);
+      held = dy;
+      clearTimeout(rest);
+      rest = setTimeout(keep, 300);
+    }
+    function soon() { if (app && !frame) frame = requestAnimationFrame(hold); }
+    function moved() { check(); soon(); }
     if (vv) {
-      vv.addEventListener("resize", check);
-      vv.addEventListener("scroll", check);
-      addEventListener("scroll", check, { passive: true });
-      addEventListener("pageshow", check);
-      document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+      vv.addEventListener("resize", moved);
+      vv.addEventListener("scroll", moved);
+      addEventListener("scroll", moved, { passive: true });
+      addEventListener("pageshow", moved);
+      document.addEventListener("visibilitychange", function () { if (!document.hidden) moved(); });
+      // A field taking the keyboard lets go at once (the page's own keyboard is
+      // the field's to place things around); one letting go reads it again.
+      if (app) {
+        document.addEventListener("focusin", soon, true);
+        document.addEventListener("focusout", soon, true);
+      }
     }
   })();
 } catch (e) {}
