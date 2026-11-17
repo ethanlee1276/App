@@ -1888,7 +1888,12 @@ function propAnalysis(r, opts = {}) {
    the same fact in words. Colour is the third telling, not the first.  */
 function gamelogBars(values, opts = {}) {
   const w = opts.w || 260, h = opts.h || 46;
-  const padX = 2, padTop = 4, base = h - 11;      // room for the count line
+  /* FIT: the bars fill the box at the height CSS gives it, and the count
+     line is text under them. Without it the chart is a picture of its own
+     size scaled to the box — the player page's card is 1,020px wide on a
+     computer, which drew a 230px-tall chart and its 9px caption at 29px. */
+  const fit = !!opts.fit;
+  const padX = 2, padTop = 4, base = fit ? h : h - 11;   // room for the count line
   const line = opts.line;
   const raw = [...(values || [])];
   const rawLabs = opts.labels ? [...opts.labels] : null;
@@ -1953,7 +1958,8 @@ function gamelogBars(values, opts = {}) {
 
   const rule = line == null ? "" : `
     <line x1="0" y1="${by(line).toFixed(1)}" x2="${w}" y2="${by(line).toFixed(1)}"
-      stroke="var(--warn)" stroke-width="1" stroke-dasharray="4 3" opacity=".85"/>`;
+      stroke="var(--warn)" stroke-width="1" stroke-dasharray="4 3" opacity=".85"${
+      fit ? ' vector-effect="non-scaling-stroke"' : ""}/>`;
   // The label Ethan asked for. Text in a text token, never the series
   // colour, and it states the fact the colours encode so the chart does
   // not depend on telling green from red.
@@ -1962,11 +1968,12 @@ function gamelogBars(values, opts = {}) {
   const capt = side
     ? `${cleared}/${n} ${under ? "under" : "over"} ${line}`
     : `${cleared}/${n} cleared ${line}`;
-  const label = cleared == null ? "" : `
+  const label = cleared == null || fit ? "" : `
     <text x="0" y="${h - 1}" fill="var(--text-mute)" font-size="9"
       font-variant-numeric="tabular-nums">${capt}</text>`;
   return `
-  <svg class="glbars" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"
+  <svg class="glbars${fit ? " glbars-fit" : ""}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"${
+    fit ? ' preserveAspectRatio="none"' : ""}
        role="img" aria-label="${escapeAttr(
          cleared == null ? `last ${n} games`
            : side
@@ -1974,7 +1981,7 @@ function gamelogBars(values, opts = {}) {
                  ? "under" : "over"} ${line} — the side of this bet`
              : `${cleared} of the last ${n} games cleared ${line}`)}">
     ${rule}${bars}${label}
-  </svg>`;
+  </svg>${fit && cleared != null ? `<div class="glbars-cap">${capt}</div>` : ""}`;
 }
 
 /* ---------------- Sparkline (game-log trend) ----------------------------- */

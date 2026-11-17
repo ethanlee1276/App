@@ -98,6 +98,49 @@ def test_an_under_bet_is_not_painted_backwards():
     assert "over ? v > line : v < line" in PA
 
 
+def test_the_player_card_paints_its_own_side():
+    """The player page's market card coloured every log row and every bar
+    as "over the line", so an UNDER 26.5 points card showed its four wins
+    in red and read "4/8 cleared 26.5" — Ethan's 2026-08-25 complaint
+    ("The chart should Correlate to the prop being displayed obviously"),
+    fixed then in the compact chart and never in this card."""
+    i = APP.index("function pricedProfileHTML(")
+    fn = APP[i:APP.index("\n}\n", i)]
+    assert "const hit = under ? l.value < r.line : l.value > r.line;" in fn
+    assert "line: r.line, side: r.side, fit: true" in fn
+
+
+def test_a_fitted_chart_keeps_its_height_and_its_count_is_text():
+    """The card's chart was a 320x72 picture scaled to its box: 1,020px
+    wide on a computer drew it 230px tall with a 29px caption. Fitted, the
+    bars stretch to the box at the height CSS gives it and the count is a
+    line of text under them."""
+    import json
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        print("      (skipped: no node)")
+        return
+    prog = ("const escapeAttr = (s) => String(s);\n" + FN + "\n"
+            "process.stdout.write(JSON.stringify(gamelogBars([28, 22, 31, 19, 25, 27, 24, 30], "
+            "{line: 26.5, side: 'UNDER', fit: true, w: 320, h: 72})));")
+    got = subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=60)
+    assert got.returncode == 0, got.stderr[-600:]
+    html = json.loads(got.stdout)
+    assert 'class="glbars glbars-fit"' in html and 'preserveAspectRatio="none"' in html
+    assert '<div class="glbars-cap">4/8 under 26.5</div>' in html, html[-200:]
+    assert "<text" not in html, "a caption inside a stretched picture stretches with it"
+    fills = re.findall(r'fill="(var\(--(?:good|bad)\))"', html)
+    # Oldest first: 30, 24, 27, 25, 19, 31, 22, 28 — the under wins at 24, 25, 19, 22.
+    assert fills == ["var(--bad)", "var(--good)", "var(--bad)", "var(--good)", "var(--good)",
+                     "var(--bad)", "var(--good)", "var(--bad)"], fills
+    assert 'vector-effect="non-scaling-stroke"' in html, "the line keeps its 1px when stretched"
+    i = CSS.index(".profile-spark .glbars-fit {")
+    assert "height: clamp(" in CSS[i:CSS.index("}", i)]
+    assert ".glbars-cap {" in CSS
+
+
 def test_the_line_pill_has_its_own_gutter():
     """It sat inside the plot and covered the last bar's value label —
     caught by rendering it, like the zero-height bar before it."""

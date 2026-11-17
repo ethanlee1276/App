@@ -14961,8 +14961,10 @@ function pricedProfileHTML(r, chips, tail = "", deep = false, inPage = false) {
   const vals = (r.logs || []).map((l) => l.value);
   // MLB/NBA logs are one GAME per row (with a real date); NFL logs are weeks.
   const mlb = state.sport !== "nfl";
+  // A game is a hit when the PICK cashed: under the line for an under.
+  const under = String(r.side || "").toUpperCase() === "UNDER";
   const rows = (r.logs || []).map((l) => {
-    const hit = l.value > r.line;
+    const hit = under ? l.value < r.line : l.value > r.line;
     // "Wk" is football vocabulary — an MLB log without a stored date is
     // still a GAME index, not a week.
     const when = mlb ? (l.date ? formatGameDate(l.date) : `G ${l.week}`) : `Wk ${l.week}`;
@@ -14983,7 +14985,7 @@ function pricedProfileHTML(r, chips, tail = "", deep = false, inPage = false) {
       ${chips}
       <div class="form-tiles">${tiles}</div>
       <div class="profile-spark">${gamelogBars(vals, {
-        line: r.line, stroke: teamPrimary(r.team), w: 320, h: 72,
+        line: r.line, side: r.side, fit: true, stroke: teamPrimary(r.team), w: 320, h: 72,
         labels: (r.logs || []).map((l) =>
           `${mlb ? (l.date ? formatGameDate(l.date) : "G " + l.week) : "Wk " + l.week} ${l.home ? "vs" : "@"} ${l.opponent}`),
       })}</div>
@@ -15102,7 +15104,7 @@ function historyProfileHTML(r0, label, logs, chips, tail = "") {
       ${_profileHead(r0, "")}
       ${chips}
       <div class="profile-spark">${gamelogBars(vals, {
-        stroke: teamPrimaryIn(r0.sport, r0.team), w: 320, h: 72,
+        fit: true, stroke: teamPrimaryIn(r0.sport, r0.team), w: 320, h: 72,
         labels: logs.map((l) => `${when(l)} ${l.home ? "vs" : "@"} ${l.opponent}`),
       })}</div>
       <table class="log-table">

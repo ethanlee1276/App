@@ -1529,6 +1529,9 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 
 .profile-spark { padding: 0 14px 6px; }
 .profile-spark svg { width: 100%; height: auto; }
+/* A fitted chart keeps one height at every width; its count is text. */
+.profile-spark .glbars-fit { display: block; height: clamp(72px, 11vw, 112px); }
+.glbars-cap { color: var(--text-mute); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
 
 /* CHARTS ARE PICTURES. Ethan, 2026-08-17: holding a finger on a chart
    (the record curve especially) started iOS text selection of the page

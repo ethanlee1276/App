@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UX. The player card's chart follows an under pick** (step 682; 17 November). Nothing to run. The market card on
+a player's page (and in the search's cards) coloured every game "over the line" whatever the pick was: an UNDER
+26.5 points card showed its four winning games in red and read "4/8 cleared 26.5", the thing you flagged on the
+compact chart on 25 August ("The chart should correlate to the prop being displayed"), which was fixed there and
+never in this card. Now the games the pick won are green in the bars and the log, and the count says "4/8 under
+26.5". On a computer the chart also keeps a phone's proportions: it had grown to 230 pixels tall with a 29-pixel
+caption across a 1,020-pixel card.
+
 **UW. The code's notes say "they" for you and Zeno** (step 681; 17 November). Nothing to run. About two hundred
 comments, docstrings and docs quoted you as "he" ("from his phone", "the brainstorm he asked to have built",
 "he was right"); they say "they" and "their" now, and so does the one line of it on the page, Zeno's description
