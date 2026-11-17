@@ -1623,7 +1623,8 @@
        the table's filter, the selection and the tip. */
     if (P && P.page) {
       box.innerHTML = (kb ? `<div class="cc-bar">${kb}</div>` : "")
-        + P.page({ d, g, sport, view: S.view, tabs, note, inline: !!C.inline,
+        + P.page({ d, g, sport, view: S.view, tabs, note, inline: !!C.inline, own: !!C.own,
+                   same: !!(C.own && g && C.last && g.date === C.last),
                    ink: inkOf(sport, (g && g.team) || d.team) })
         + fold("note", "How it’s drawn", note);
       return settle(box);
@@ -1636,7 +1637,10 @@
     /* The game over its building; a fighter's fight over the arena (his
        module's own `hero`); tonight's matchup over his team's colours and
        the opponent's, where the charts he has named his team. */
-    const hero = P && P.hero ? P.hero(g, d, [count[1], count[2]])
+    // On the player's own page, the game in its Previous game card is not carded again under it
+    // (the picker's chip names it); another game picked gets its card (PLRDUP1).
+    const same = !!(C.own && g && C.last && g.date === C.last);
+    const hero = same ? "" : P && P.hero ? P.hero(g, d, [count[1], count[2]])
       : P && P.only ? (C.team ? heroHTML({ team: C.team, opp: d.opp, tonight: true, home: true,
                                            label: String(d.season_label || d.season || "") },
                                          Object.assign({}, d, { team: C.team }), sport, ["", ""]) : "")
@@ -1712,11 +1716,14 @@
     }
     const barRow = bar ? `<div class="cc-bar">${bar}</div>` : "";
     const main = C.inline ? `<div class="cc-split"><div class="cc-fig">${dist}</div><div class="cc-side">${stats}</div></div>` : dist + stats;
-    // His card first (the hit page's, every league's: `playerHero`), then
+    // The player's card first (the hit page's, every league's: `playerHero`), then
     // the game over its stadium, which says what the title line said; a
-    // chart with no team to draw (a fighter's) keeps its title.
-    const card = playerHero(d, sport, S.kind);
-    box.innerHTML = (C.inline ? barRow + card + hero : head + card + hero + barRow) + tabs + rows + (hero ? "" : title) + main + tail
+    // chart with no team to draw (a fighter's) keeps its title. On the
+    // player's own page (`own`) the page is that card: live on 17 November
+    // Josh Allen's Overview said his name, club and number three times and
+    // his season's totals twice (PLRDUP1).
+    const card = C.own ? "" : playerHero(d, sport, S.kind);
+    box.innerHTML = (C.inline ? barRow + card + hero : head + card + hero + barRow) + tabs + rows + (hero || same ? "" : title) + main + tail
       + fold("note", "How it’s drawn", note);
     settle(box);
   }
@@ -2371,7 +2378,10 @@
        his chart has zones to read it on (not a kick or a role alone). */
     if (d.opp && kinds.some((k) => MATCHED.has(k))) kinds.push("matchup");
     const key = [sport, d.cc, d.mkt].join("|");
-    const c = { root: el, inline: true, seq: 0, cand: kinds, kinds: null, key,
+    // `own`: the slot is on the player's own page (js/playerpage.js marks it), whose header already
+    // says who this is and what the season came to, so the chart draws no card of its own for that;
+    // `last` is the day of the game in that page's Previous game card, whose score is not drawn again.
+    const c = { root: el, inline: true, own: d.own === "1", last: d.last || "", seq: 0, cand: kinds, kinds: null, key,
                 S: fresh(sport, kinds[0], d.cc, { view: "game", hint: "", opp: d.opp || "", fam: kinds[0] }) };
     el._cc = use(c);
     el.innerHTML = `<div class="section-title minor cc-sec">${secHTML(c)}</div>

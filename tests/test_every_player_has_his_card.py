@@ -197,9 +197,11 @@ def test_a_name_is_sized_by_its_longest_word_never_broken():
 def test_every_chart_but_the_hit_page_leads_with_the_card():
     i = CC_JS.index("  function render() {")
     body = CC_JS[i:CC_JS.index("\n  function settle(box)", i)]
-    assert "const card = playerHero(d, sport, S.kind);" in body
+    # ...everywhere but the player's own page, whose header is that card
+    # (tests/test_the_player_page_says_each_thing_once.py).
+    assert 'const card = C.own ? "" : playerHero(d, sport, S.kind);' in body
     assert "(C.inline ? barRow + card + hero : head + card + hero + barRow)" in body
-    assert body.index("if (P && P.page) {") < body.index("const card = playerHero("), "the hit page keeps its own"
+    assert body.index("if (P && P.page) {") < body.index('const card = C.own ? "" : playerHero('), "the hit page keeps its own"
     for sel in (".mb-hero-face .cc-act.cut {", ".mb-hero-face .cc-act.cut .ph-mark {", "repeat(var(--n, 5), minmax(0, 1fr))"):
         assert sel in CC_CSS, sel
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", CC_CSS), "tokens only"

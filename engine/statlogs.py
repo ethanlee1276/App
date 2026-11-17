@@ -154,14 +154,28 @@ VOLUME = {"pass": ("pass_att", "pass_cmp", "pass_yds"), "rush": ("carries", "rus
           "rec": ("targets", "receptions", "rec_yds"), "kick": ("kick_pts", "fg_made"),
           "def": ("tackles_ast", "def_sacks")}
 ROLE_SPORTS = ("nfl", "cfb")
+#: ONE GAME IS NOT A ROLE (PLRDUP1, 2026-11-17). The first rule kept a family
+#: with any volume at all, and Josh Allen's card on the live board offered
+#: Receiving Yards, Receptions and Targets: one catch of a batted ball for a
+#: yard in Week 3, and nine games of zeros. A family is a role when the
+#: player had volume in it in two of the games kept (or in the only game of
+#: a player with one on file); a back who runs twice a game still has it.
+ROLE_GAMES = 2
+
+
+def _role(per: dict, vols) -> bool:
+    """Is this family (its volume markets) something the player does?"""
+    games = max((len(per.get(m, ())) for m in vols), default=0)
+    with_volume = max((sum(1 for g in per.get(m, ()) if g["value"]) for m in vols), default=0)
+    return with_volume >= max(1, min(ROLE_GAMES, games))
 
 
 def _kept(sport: str, markets, per: dict) -> dict:
     """A player's chips, in SPORT_MARKETS order: each market with MIN_GAMES
-    on file, a football one only in a family the player has volume in."""
+    on file, a football one only in a family that is a role of the player's
+    (`_role`)."""
     labels = dict(markets)
-    roles = ({f for f, vols in VOLUME.items() if any(g["value"] for m in vols for g in per.get(m, ()))}
-             if sport in ROLE_SPORTS else None)
+    roles = {f for f, vols in VOLUME.items() if _role(per, vols)} if sport in ROLE_SPORTS else None
     return {labels[m]: per[m] for m, _ in markets
             if len(per.get(m, [])) >= MIN_GAMES and (roles is None or m not in FAMILY or FAMILY[m] in roles)}
 

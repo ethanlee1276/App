@@ -104,6 +104,18 @@
 /* The market cards this page always drew, now his Overview's market section. */
 .plr-tonight:empty { display: none; }
 .plr-tonight { margin: 0 0 14px; }
+/* THE PAGE SAYS WHO ONCE (PLRDUP1, 2026-11-17). The market card was a page of its own before this one and
+   brought its header with it: a second name, club and position under the page's, with Copy link in the
+   middle of the page and doors to the charts and the game log the page already shows. Of its head only
+   the grade is kept; the club's door and the link are on the page's header (plrHeroHTML); the chart the
+   card's depth would draw again is the one in the Overview. */
+.plr-tonight .profile-head { display: flex; justify-content: flex-end; min-height: 0; padding: 0; margin: 0; }
+.plr-tonight .profile-head > :not(.grade) { display: none; }
+.plr-tonight .profile-head:has(.grade) { padding: 10px 14px 0; }
+.plr-tonight .prof-charts, .plr-tonight .prof-depth .cc-slot { display: none; }
+.plr-h span { margin-left: 6px; font-size: var(--fs-sm); font-weight: 500; opacity: .75; }
+.plr-share { margin-top: 8px; }
+.plr-share .btn { padding: 4px 10px; font-size: var(--fs-xs); }
 
 /* ==========================================================================
    THE PLAYER'S PAGE IN THE CLUB'S COLOURS (PLRWASH1, 2026-11-17; Ethan, with

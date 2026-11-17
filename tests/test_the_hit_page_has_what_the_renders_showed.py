@@ -629,7 +629,7 @@ def test_the_photo_steps_aside_for_the_headshot_when_it_fails():
     if got is None:
         return
     assert got == {"a1": ["on"], "s1": True, "gone": True, "s2": False, "src": "b", "fi": 1}
-    hero = MLB_JS[MLB_JS.index("  function hero(d, sport) {"):MLB_JS.index("  /* ---------------- the park")]
+    hero = MLB_JS[MLB_JS.index("  function hero(d, sport, own) {"):MLB_JS.index("  /* ---------------- the park")]
     assert 'class="cc-act${S && S.act ? " on" : ""}"' in hero and "!(S && S.act === false)" in hero
     assert ".mb-hero-face .cc-act.on + .cc-face { display: none; }" in CC_CSS
 

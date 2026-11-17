@@ -127,8 +127,13 @@ function plrHeroHTML(player, sport, team, pos, face, bio) {
   const first = parts.length > 1 ? parts[0] : "", rest = parts.length > 1 ? parts.slice(1).join(" ") : parts[0];
   const num = bio && bio.number !== "" && bio.number != null ? `#${bio.number}` : "";
   const ufc = sport === "ufc";
+  // The club's name is the door to the club's page, and the page's own link is here (PLRDUP1): both were on
+  // a second name card further down, which the page no longer draws.
+  const door = !ufc && team && club.name && typeof teamLinkHTML === "function" ? teamLinkHTML(sport, team, club.name) : "";
   const line = (ufc ? [(bio && bio.division) || pos, bio && bio.record]
-    : [club.name, num, (bio && bio.position) || pos]).filter(Boolean).map(escapeHtml).join(" · ");
+    : [door ? "" : club.name, num, (bio && bio.position) || pos]).filter(Boolean).map(escapeHtml);
+  if (door) line.unshift(door);
+  const share = typeof shareBtn === "function" && typeof slugify === "function" ? shareBtn("player", slugify(player)) : "";
   const age = bio ? plrAge(bio) : "";
   const body = bio ? (ufc ? [bio.nickname ? `“${bio.nickname}”` : "", bio.height, bio.reach ? `${bio.reach} reach` : "",
     age !== "" ? `Age ${age}` : ""] : [bio.height, bio.weight, age !== "" ? `Age ${age}` : ""])
@@ -141,9 +146,10 @@ function plrHeroHTML(player, sport, team, pos, face, bio) {
       <div class="plr-face">${playerAvatar(player, team, { size: 92, headshot: face, map: teamsIn(sport) })}</div>
       <div class="plr-who">
         <h2 class="plr-name">${first ? `<span>${escapeHtml(first)}</span> ` : ""}<b>${escapeHtml(rest)}</b></h2>
-        <p class="plr-club">${team ? teamMarkIn(sport, team, 18) : ""}<span>${line || escapeHtml(lgCode(sport))}</span></p>
+        <p class="plr-club">${team ? teamMarkIn(sport, team, 18) : ""}<span>${line.join(" · ") || escapeHtml(lgCode(sport))}</span></p>
         ${body ? `<p class="plr-body">${body}</p>` : ""}
         <div class="plr-flag">${typeof injTag === "function" ? injTag(sport, player) : ""}</div>
+        ${share ? `<div class="plr-share">${share}</div>` : ""}
       </div>
     </header>`;
 }
@@ -225,11 +231,14 @@ function plrSplitletHTML(d) {
   const cols = plrCols(sp.groups, group);
   if (!cols.length) return "";
   const rows = [];
-  if (!g.dnp && !g.pending && !g.no_line) rows.push({ label: "This game", gp: 1, values: g.values, avg: false });
+  // The row is the game in the card above, under the card's own name for it; and a season's only game
+  // against that club is the same row a second time, so the club's row waits for a second meeting (PLRDUP1).
+  const played = !g.dnp && !g.pending && !g.no_line;
+  if (played) rows.push({ label: "Previous game", gp: 1, values: g.values, avg: false });
   const month = g.date ? by.get(`m:${g.date.slice(0, 7)}`) : null;
   if (month) rows.push(month);
   const vs = by.get(`vs:${g.opponent}`);
-  if (vs) rows.push(vs);
+  if (vs && !(played && vs.gp === 1)) rows.push(vs);
   const where = by.get(g.home ? "home" : "away");
   if (where) rows.push(where);
   if (by.get("season")) rows.push(by.get("season"));
@@ -237,9 +246,12 @@ function plrSplitletHTML(d) {
     plrSplitTable(rows, cols, { avg: !sp.totals })}
     <button class="btn plr-go" type="button" data-plr-go="splits">Every split</button></section>`;
 }
-//: A priced card wears its grade; a card from his history has none.
+//: A priced card wears its grade and names tonight's opponent; a card from the player's history has neither.
 function plrTonightTitle(page) {
-  return page.querySelector(".plr-tonight .grade") ? "Tonight’s markets" : "By market";
+  if (!page.querySelector(".plr-tonight .grade")) return "By market";
+  const { player, sport } = page._plr || {};
+  const opp = (((typeof _profRows !== "undefined" && _profRows.get(player)) || []).find((r) => r && r.opponent) || {}).opponent;
+  return `Tonight’s markets${opp ? ` <span>vs ${escapeHtml(teamNameIn(sport, opp) || opp)}</span>` : ""}`;
 }
 async function plrRecentInto(slot, d) {
   if (!slot || typeof glFetch !== "function") return;
@@ -278,6 +290,13 @@ function plrChartsInto(page, d) {
   if (slot._html === html) return;
   slot._html = html;
   slot.innerHTML = html;
+  // The page's own slot: the chart draws no second header card under this page's, nor the score of the
+  // game in the Previous game card above it (carrychart.js `own`, `last`).
+  const el = slot.firstElementChild, g = d.last;
+  if (el) {
+    el.dataset.own = "1";
+    el.dataset.last = g && !g.dnp && !g.pending ? g.date || "" : "";
+  }
   if (html) mountCharts(slot);
 }
 

@@ -200,7 +200,7 @@ def test_a_newest_game_whose_box_score_is_not_in_yet_says_so():
     assert d["career"]["rows"][0]["gp"] == 3 and d["career"]["total"]["gp"] == 4 and d["bio"]["games"] == 4
     assert {x["key"]: x["value"] for x in d["headline"]}["yds"] == 803
     assert 'g.pending ? `<p class="plr-dnp">The box score isn’t in yet.</p>`' in PAGE
-    assert "if (!g.dnp && !g.pending && !g.no_line) rows.push(" in PAGE
+    assert "const played = !g.dnp && !g.pending && !g.no_line;" in PAGE and "if (played) rows.push(" in PAGE
 
 
 def test_a_season_with_games_on_file_and_none_played_shows_the_last_one_played():
@@ -499,10 +499,14 @@ process.stdout.write(JSON.stringify({{
     assert "Previous game <span>Week 11 · " in p and " · away</span>" in p and '<span class="gl-w">Won</span> · Final' in p
     assert "<small>2-1</small>" in p and "<small>0-1</small>" in p and '<span class="plr-pts plr-won">31</span>' in p
     assert '<span class="plr-k">RTG</span><b>125.9</b>' in p and '<span class="plr-k">CMP%</span><b>75.0</b>' in p
+    # The game above under the card's own name for it; the season's one game against the Jets is that
+    # game, so the club's row waits for a second meeting
+    # (tests/test_the_player_page_says_each_thing_once.py).
     sl = got["splitlet"]
-    for label in ("This game", "November", "vs NYJ", "Away", "Season"):
+    for label in ("Previous game", "November", "Away", "Season"):
         assert f'<td class="gl-fix">{label}</td>' in sl, label
-    assert sl.index("This game") < sl.index("November") < sl.index("vs NYJ") < sl.index("Away") < sl.index(">Season<")
+    assert "This game" not in sl and "vs NYJ" not in sl, sl
+    assert sl.index("Previous game") < sl.index("November") < sl.index("Away") < sl.index(">Season<")
     assert 'data-plr-go="splits">Every split</button>' in sl
     st = got["stats"]
     assert '<td class="gl-fix">2026 · BUF</td>' in st and '<tr class="gl-sum"><td class="gl-fix">Career</td>' in st
@@ -625,7 +629,7 @@ def test_in_a_browser_the_players_page_becomes_the_players_own():
     assert got["tabs"] == ["Overview", "News", "Stats", "Bio", "Splits", "Game Log"], got["tabs"]
     assert len(got["nums"]) == 4 and "YDS 803 2nd" in got["nums"][0], got["nums"]
     assert got["card"], "the market card the page always drew, kept in Overview"
-    assert got["splitlet"][:2] == ["This game", "November"], got["splitlet"]
+    assert got["splitlet"][:2] == ["Previous game", "November"], got["splitlet"]
     assert got["splits"][0] is False and got["splits"][1] is True and got["splits"][2] >= 9, got["splits"]
     assert got["redraw"] == [True, "log", True, True], ("the redraw rebuilt the page", got["redraw"])
     assert not got["errors"], got["errors"]

@@ -185,7 +185,7 @@
      to pick, his face, his name with his position and number, and his
      season in five numbers. A season the play-by-play is still being read
      for says how far it has got, so it never passes for his whole year. */
-  function hero(d, sport) {
+  function hero(d, sport, own) {
     const S = state(), team = d.team || "", t = Q.h.team(sport, team);
     /* HIS ACTION PHOTO (MLB's own) in front of his headshot: it takes the
        headshot's place once it has loaded, and a man with none keeps his
@@ -209,6 +209,8 @@
     const n = d.games.length, logged = Number(d.logged) || 0;
     const cover = logged > n
       ? `<p class="mb-cover">${n} of ${logged} games this season are charted so far: the rest are read from MLB’s play-by-play a few hundred games a night, newest first.</p>` : "";
+    // On the player's own page (carrychart.js `own`) the page's header is the card: the season switch and the note stay.
+    if (own) return (d.seasons.length > 1 ? `<div class="cc-bar">${pick}</div>` : "") + cover;
     return `<div class="cc-hero mb-hero"${ink ? ` style="--ta:${ink};--tb:${ink}"` : ""}>${art}
       <div class="mb-hero-in">
         <div class="mb-hero-top">${pick}</div>
@@ -680,8 +682,8 @@
   /* THE PAGE: the hero and the tabs over each view's cards. */
   function page(c) {
     const { d, g, sport, view, tabs, note, ink } = c;
-    const top = hero(d, sport) + tabs;
-    if (view === "game" && g) return top + recent(d, sport) + gameCard(d, g, sport) + summaryCard(g) + hitCard(d, g, sport, note, ink);
+    const top = hero(d, sport, c.own) + tabs;
+    if (view === "game" && g) return top + recent(d, sport) + (c.same ? "" : gameCard(d, g, sport)) + summaryCard(g) + hitCard(d, g, sport, note, ink);
     const splits = Q.h.splits(SPLITS, sprayTables(d));
     if (view === "season") return top + hitCard(d, null, sport, note, ink) + seasonStats(d, sport) + fencesCard(d) + splits;
     return `${top}<section class="cc-card cc-dist"><header class="cc-card-h"><h3 class="cc-card-t">${esc(SPRAY_TITLE[view] || "")}</h3></header>${sprayBars(d, view)}</section>`
