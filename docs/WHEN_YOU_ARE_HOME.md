@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WJ. A game with fewer than four parlays says why under them** (step 720; 17 November). Nothing to run. Since step
+WH a game's three-leg parlays are made of its report's own picks only, so a report with five picks that fit together
+into two tickets posts two. The reason was written down but shown only when a game made none; a game with one to
+three showed them with no word on the rest. Now the game page and Report Picks say it under the tickets, for example
+"2 of 4: the parlays use only this report's own picks, and the 5 that clear 60% make no more tickets without a
+conflict or a leg on too many".
+
 **WI. A parlay that took a team to win is graded on the game** (step 719; 17 November). Nothing to run; RUN_NEXT 00n
 is an optional check. Once step WH was live, a re-read of every NFL ticket found one graded wrong: a three-leg
 ticket on Chargers at Ravens (Monday night) that took the Ravens to win beside two props read won, though the Ravens

@@ -115,6 +115,21 @@ def test_too_few_picks_make_no_ticket_and_say_why():
     # Three that fit make a ticket, and the note says why there are not four.
     three = GP.from_report(_built(), "nfl", GAME, PICKS[:3])
     assert len(three["threes"]) == 1 and three["threes_note"].startswith("1 of 4: "), three["threes_note"]
+    # ...and the report says it under the ticket it made, on the page and in the report's section.
+    import types
+    was = GR._game_parlays
+    GR._game_parlays = lambda c: three
+    try:
+        sec = GR.sec_parlays(types.SimpleNamespace(sport="nfl", result={}))
+    finally:
+        GR._game_parlays = was
+    texts = [b.get("text") for b in sec["blocks"] if isinstance(b, dict)]
+    kinds = [b.get("type") for b in sec["blocks"] if isinstance(b, dict)]
+    said = GR._p(three["threes_note"])["text"]
+    assert said in texts and kinds.index("parlays") < texts.index(said), sec
+    js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
+    body = js[js.index("function gameTickets("):js.index("finally { RESULTS = was;")]
+    assert '+ (g.threes_note ? `<p class="gr-note">${escapeHtml(g.threes_note)}</p>` : "")' in body
 
 
 def test_a_league_on_paper_keeps_the_report_built_tickets_on_paper():

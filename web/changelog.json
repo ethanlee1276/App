@@ -4,6 +4,12 @@
     {
       "date": "2026-11-17",
       "kind": "fix",
+      "title": "A game with fewer than four parlays says why",
+      "body": "A game’s parlays are made only of its report’s own picks, so a report whose picks fit together into one to three tickets posts just those. The game page and Report Picks now say why under them, instead of only when a game has none."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "fix",
       "title": "A parlay that takes a team to win is graded on the game",
       "body": "Some of the first week’s three-leg parlays took a team to win beside two player props. That leg had nothing of its own to grade from, so it was voided, and a ticket whose team lost could read won on its props (Monday night’s Ravens ticket did). It is now graded on the game’s final score, and every ticket graded the old way is put right on the next nightly check. Any parlay leg with nothing of its own to grade from now grades from the same bet in our other pick lists, so the parlays still waiting days after their game settle too."
     },

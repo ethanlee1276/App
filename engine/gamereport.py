@@ -3868,6 +3868,9 @@ def sec_parlays(c: Ctx) -> dict | None:
     threes = [card(t, i, "three", c.sport) for i, t in enumerate(gp.get("threes") or [], 1)]
     if threes:
         blocks += [_h("Three-leg parlays"), {"type": "parlays", "kind": "three", "items": threes}]
+        if gp.get("threes_note"):
+            # Fewer than four: why, under the ones it made (gameparlays._report_note).
+            blocks.append(_p(gp["threes_note"]))
     elif gp.get("threes_paper"):
         # On paper while the league's three-leg record is under 25% (engine/parlayhold).
         blocks += [_h("Three-leg parlays"), _p(gp.get("threes_note") or "")]
