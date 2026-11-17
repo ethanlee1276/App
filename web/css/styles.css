@@ -11231,11 +11231,7 @@ html.team-wash .amb-club { display: none; }
 html.team-wash .shelf-head {
   background: var(--tw-shade), var(--tw-wash), var(--bg);
   background-size: 100vw 100vh; background-repeat: no-repeat; background-attachment: fixed; }
-/* The button on a team's page. On its band, it and Follow are the night's in either theme, as the
-   band is (more.css .tm-band): the light theme's deeper gold read dark on the club's colour. */
-.wear-btn { display: inline-flex; align-items: center; gap: 6px; }
-.wear-btn.on { color: var(--brand); }
-.tm-band .wear-btn, .tm-band .fav-btn, .tm-band .wear-btn:hover, .tm-band .fav-btn:hover {
-  color: var(--night-text); background: color-mix(in oklab, var(--night-3) 40%, transparent); }
+/* Follow on a team's band is the night's in either theme, as the band is (more.css .tm-band, where
+   Wear these colours beside it is styled): the light theme's deeper gold read dark on the club's colour. */
+.tm-band .fav-btn, .tm-band .fav-btn:hover { color: var(--night-text); background: color-mix(in oklab, var(--night-3) 40%, transparent); }
 .tm-band .fav-btn.on { color: var(--night-gold); }
-.tm-band .wear-btn.on { background: color-mix(in oklab, var(--night-text) 20%, transparent); }

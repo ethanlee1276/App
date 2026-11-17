@@ -865,6 +865,11 @@
   .tm-head { flex-wrap: wrap; }
   .tm-acts { flex-direction: row; flex-wrap: wrap; align-items: center; width: 100%; }
 }
+/* Wear these colours (MYCOLORS1, js/more.js wearBtn): on the band, the night's in either theme. */
+.wear-btn { display: inline-flex; align-items: center; gap: 6px; }
+.wear-btn.on { color: var(--brand); }
+.tm-band .wear-btn, .tm-band .wear-btn:hover { color: var(--night-text); background: color-mix(in oklab, var(--night-3) 40%, transparent); }
+.tm-band .wear-btn.on { background: color-mix(in oklab, var(--night-text) 20%, transparent); }
 .tm-tab {
   flex: none; min-height: 44px; padding: 0 12px; cursor: pointer;
   background: none; border: 0; border-bottom-style: solid; border-bottom-width: 3px; border-bottom-color: transparent;

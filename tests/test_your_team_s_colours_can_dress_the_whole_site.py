@@ -58,11 +58,16 @@ def _node(body):
     return json.loads(out.stdout)
 
 
-#: The colour arithmetic and the apply step, as the page runs them.
-HELPERS = ("".join(_fn(APP, n) for n in ("teamColorsWho", "applyTeamColors", "twRgb", "twLab", "twHex", "twWash",
-                                         "twSwatch", "twPin"))
-           + APP[APP.index("const TW_DEEP_L"):APP.index("\n", APP.index("const TW_DEEP_L"))] + "\n"
-           + 'const TW_SWATCH_KEY = "qb.teamSwatch";\nlet _twPinRO = null;\n')
+def _line(src, start):
+    at = src.index(start)
+    return src[at:src.index("\n", at) + 1]
+
+
+#: The colour arithmetic and the apply step, as the page runs them (okLab is teamLight's).
+HELPERS = ("".join(_fn(APP, n) for n in ("teamColorsWho", "applyTeamColors", "okLab", "okRgb", "twWash", "twSwatch",
+                                         "twPin"))
+           + "".join(_line(APP, s) for s in ("const rgbHex = ", "const TW_DEEP_L", "const twHex6 = ", "const TW_SWATCH_KEY"))
+           + "let _twPinRO = null;\n")
 
 
 def _apply(settings, sport, tables=None, swatch=None):
@@ -110,7 +115,7 @@ def test_the_whole_site_wears_the_team_s_two_colours():
     lions = _apply({"teamColors": "site", "teams": ["nfl:DET"]}, "nfl")
     assert lions["classes"] == {"team-wash": True, "team-tint": True}, lions
     assert lions["props"]["--tw-1"] == "#005a8b", "the Lions' blue already reads under white type: kept"
-    assert lions["props"]["--tw-2"] == "#6f757a", "their silver deepened until white reads on it"
+    assert lions["props"]["--tw-2"] == "#6f7579", "their silver deepened until white reads on it"
     assert (lions["props"]["--tw-1-paper"], lions["props"]["--tw-2-paper"]) == ("#005a8b", "#b0b7bc"), "paper: as they are"
     assert lions["props"]["--team-1"] == "#005a8b", "and the bar's tint, as before"
     assert lions["barX"] == "0px", "the bar told where it starts across the screen"
@@ -118,7 +123,7 @@ def test_the_whole_site_wears_the_team_s_two_colours():
 
 def test_the_pin_beats_the_follows_and_the_pair_is_the_club_s_own():
     steelers = _apply({"teamColors": "site", "teams": ["nfl:DET"], "teamColorsTeam": "nfl:PIT"}, "nfl")
-    assert (steelers["props"]["--tw-1"], steelers["props"]["--tw-2"]) == ("#a86300", "#000000"), \
+    assert (steelers["props"]["--tw-1"], steelers["props"]["--tw-2"]) == ("#a56400", "#000000"), \
         "their gold, deepened, into their black: not the red of their mark"
     other = _apply({"teamColors": "site", "teams": ["nfl:DET", "nba:BOS"]}, "nba")
     assert other["props"]["--tw-1"] == "#007a33", "on the NBA, the team you follow there"
@@ -150,7 +155,7 @@ def test_white_type_reads_on_every_nfl_club_s_dark_wash():
 const out = {};
 for (const [k, t] of Object.entries(TEAMS)) {
   const w = twWash(t);
-  if (w) out[k] = w.deep.map((h) => twLab(twRgb(h))[0]);
+  if (w) out[k] = w.deep.map((h) => okLab(h)[0]);
 }
 console.log(JSON.stringify(out));
 """
@@ -188,17 +193,22 @@ def test_one_picture_from_the_bar_down():
 def test_every_team_page_offers_wear_these_colours():
     head = _fn(MORE, "teamHeaderHTML")
     assert 'typeof wearBtn === "function" ? wearBtn(d.sport, p.team) : ""' in head
-    btn = _fn(APP, "wearBtn")
+    # With the team page (more.js), not in the first visit's app.js (tests/test_the_first_paint_has_a_budget.py).
+    assert "function wearBtn(" not in APP and "function wearToggle(" not in APP
+    btn = _fn(MORE, "wearBtn")
     assert "if (!t || !twWash(t)) return \"\";" in btn, "only a club with a colour to wash with offers it"
     assert 'aria-pressed="${on}"' in btn and "Wearing these colours" in btn and "Wear these colours" in btn
-    toggle = _fn(APP, "wearToggle")
+    toggle = _fn(MORE, "wearToggle")
     assert 'setSetting("teamColors", "site");' in toggle and 'setSetting("teamColorsTeam", key);' in toggle
     assert 'setSetting("teamColors", "off");' in toggle, "tapped again, the site's own gold"
-    assert "teamColorsWho(s) === key" in _fn(APP, "wearingTeam"), "worn through your follows counts as worn"
+    assert "teamColorsWho(s) === key" in _fn(MORE, "wearingTeam"), "worn through your follows counts as worn"
 
 
 def _seam(png, start=0):
-    from PIL import Image
+    try:
+        from PIL import Image
+    except ImportError:                  # the browser test asks for Pillow first
+        return (0, 0)
     im = Image.open(io.BytesIO(png)).convert("RGB")
     pix, (w, h) = im.load(), im.size
     worst = (0, 0)
@@ -281,7 +291,7 @@ def test_in_a_browser_the_site_wears_the_team_with_no_line_at_the_top():
     for theme, f in found.items():
         assert f["look"] == {"wash": True, "same": True, "lions": True, "wide": 0}, (theme, f["look"])
         assert f["seam"][0] <= SEAM, f"{theme}: a line of {f['seam'][0]} levels at {f['seam'][1] / 2:.0f}px"
-        assert f["worn"] == {"pressed": "true", "tw1": "#a86300", "saved": "nfl:PIT"}, (theme, f["worn"])
+        assert f["worn"] == {"pressed": "true", "tw1": "#a56400", "saved": "nfl:PIT"}, (theme, f["worn"])
         assert f["back"] == {"wash": False, "mode": "off"}, (theme, f["back"])
         assert not f["errors"], (theme, f["errors"])
 

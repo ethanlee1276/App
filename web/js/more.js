@@ -2871,6 +2871,50 @@ function teamStanding(sport, team) {
   return null;
 }
 
+/* WEAR THESE COLOURS (MYCOLORS1; here, with the team page, and not in the first visit's
+   app.js): on a team's page, the whole site in that
+   club's colours in one tap, any league's club, followed or not; tapped
+   again, the site's own gold. Settings → Team colours says the same and
+   changes it. Only a club with a colour to wash with offers it. */
+function wearingTeam(key) {
+  const s = settings();
+  return s.teamColors === "site" && teamColorsWho(s) === key;
+}
+function wearBtn(sport, abbr) {
+  const t = sport && abbr ? (teamsForSport(sport) || {})[abbr] : null;
+  if (!t || !twWash(t)) return "";
+  const key = `${sport}:${abbr}`, on = wearingTeam(key);
+  return `<button type="button" class="btn ghost wear-btn${on ? " on" : ""}" data-wear="${escapeAttr(key)}"
+    aria-pressed="${on}">${icon("palette", 14)} ${on ? "Wearing these colours" : "Wear these colours"}</button>`;
+}
+function wearToggle(key) {
+  const [sport, abbr] = String(key).split(":");
+  const name = teamNameIn(sport, abbr) || abbr;
+  if (wearingTeam(key)) {
+    setSetting("teamColors", "off");
+    setSetting("teamColorsTeam", "");
+    tfToast("Back to the site’s own gold.");
+  } else {
+    setSetting("teamColors", "site");
+    setSetting("teamColorsTeam", key);
+    tfToast(`The whole site in ${name} colours. Settings → Team colours changes it.`);
+  }
+  applyTeamColors();
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-wear]");
+  if (!b) return;
+  e.preventDefault();
+  wearToggle(b.dataset.wear);
+  // The button says which it is now, wherever it is drawn.
+  document.querySelectorAll("[data-wear]").forEach((x) => {
+    const on = wearingTeam(x.dataset.wear);
+    x.classList.toggle("on", on);
+    x.setAttribute("aria-pressed", String(on));
+    x.innerHTML = `${icon("palette", 14)} ${on ? "Wearing these colours" : "Wear these colours"}`;
+  });
+});
+
 /* Crest, "GREEN BAY" over "PACKERS", the season's record and standing. */
 function teamHeaderHTML(d, p) {
   const full = p.name || d.name || p.team;

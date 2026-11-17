@@ -687,51 +687,27 @@ function applyTeamColors() {
    then their black); a pair too alike gives way to another colour of theirs
    with some hue, and a club with one colour to a deeper shade of it. For the
    dark theme each is deepened until white type reads on it (OKLab lightness
-   at most 0.56, the game page's GP_DEEP_L; detail.js holds the same OKLab
-   arithmetic, but loads only with a game's page); paper wears them as they
-   are, thinned into the page (styles.css). A club in black alone keeps the
-   site's own light under the tinted bar. */
+   at most 0.56, the game page's GP_DEEP_L; okLab, teamLight's arithmetic);
+   paper wears them as they are, thinned into the page (styles.css). A club
+   in black alone keeps the site's own light under the tinted bar. */
 const TW_DEEP_L = 0.56, TW_SHADE_L = 0.32, TW_HUED = 0.04, TW_APART = 0.1;
-function twRgb(hex) {
-  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
-  if (!m) return null;
-  const n = parseInt(m[1], 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function twLab(c) {
-  const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
-          0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
-}
-function twHex([L, a, b]) {
-  const l = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3);
-  const m = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3);
-  const s = Math.pow(L - 0.0894841775 * a - 1.291485548 * b, 3);
-  const byte = (v) => Math.round(Math.max(0, Math.min(1, v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)) * 255);
-  return "#" + [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-                -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s].map((v) => byte(v).toString(16).padStart(2, "0")).join("");
-}
+//: A club's colour as "#rrggbb" (a feed may write it without its hash), or "".
+const twHex6 = (c) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(c || "").trim()); return m ? `#${m[1]}` : ""; };
 function twWash(t) {
-  const P = twRgb(t.primary), S = twRgb(t.secondary);
-  const extra = [t.tertiary, t.alt].map(twRgb).filter(Boolean);
-  const hued = (c) => { const [, a, b] = twLab(c); return Math.hypot(a, b) >= TW_HUED; };
-  const black = (c) => twLab(c)[0] < 0.2 && !hued(c);
+  const [P, S, ...more] = [t.primary, t.secondary, t.tertiary, t.alt].map(twHex6);
+  const extra = more.filter(Boolean);
+  const black = (c) => { const [L, a, b] = okLab(c); return L < 0.2 && Math.hypot(a, b) < TW_HUED; };
   const first = [P, S, ...extra].find((c) => c && !black(c));
   // A club in black alone has no colour to wash with: the bar wears it, the page keeps the site's light.
   if (!first) return null;
-  const far = (c) => { const p = twLab(c), q = twLab(first); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) >= TW_APART; };
+  const [L, a, b] = okLab(first);
+  const far = (c) => { const p = okLab(c); return Math.hypot(p[0] - L, p[1] - a, p[2] - b) >= TW_APART; };
   // The club's own pair leads, black and all (the Steelers' black beside their gold, not the red of
   // their mark); a pair too alike gives way to another colour of theirs with some hue.
   const mate = [P, S].find((c) => c && c !== first && far(c)) || extra.find((c) => !black(c) && far(c));
-  const fmt = (c) => "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
-  const deep = (c) => { const [L, a, b] = twLab(c); return twHex([Math.min(L, TW_DEEP_L), a, b]); };
-  if (mate) return { deep: [deep(first), deep(mate)], paper: [fmt(first), fmt(mate)] };
-  const [L, a, b] = twLab(first);
-  const shade = twHex([Math.min(TW_SHADE_L, L * 0.6), a, b]);
-  return { deep: [deep(first), shade], paper: [fmt(first), shade] };
+  const deep = (c) => { const p = okLab(c); return p[0] > TW_DEEP_L ? rgbHex(okRgb([TW_DEEP_L, p[1], p[2]])) : c; };
+  const end = mate || rgbHex(okRgb([Math.min(TW_SHADE_L, L * 0.6), a, b]));
+  return { deep: [deep(first), mate ? deep(mate) : end], paper: [first, end] };
 }
 //: A club's colours as this device last saw them, for a league whose team list has not
 //: loaded yet (college's comes with its board). One club: the one the site wears.
@@ -746,49 +722,6 @@ function twSwatch(key, t) {
   }
   return keep;
 }
-
-/* WEAR THESE COLOURS (MYCOLORS1): on a team's page, the whole site in that
-   club's colours in one tap, any league's club, followed or not; tapped
-   again, the site's own gold. Settings → Team colours says the same and
-   changes it. Only a club with a colour to wash with offers it. */
-function wearingTeam(key) {
-  const s = settings();
-  return s.teamColors === "site" && teamColorsWho(s) === key;
-}
-function wearBtn(sport, abbr) {
-  const t = sport && abbr ? (teamsForSport(sport) || {})[abbr] : null;
-  if (!t || !twWash(t)) return "";
-  const key = `${sport}:${abbr}`, on = wearingTeam(key);
-  return `<button type="button" class="btn ghost wear-btn${on ? " on" : ""}" data-wear="${escapeAttr(key)}"
-    aria-pressed="${on}">${icon("palette", 14)} ${on ? "Wearing these colours" : "Wear these colours"}</button>`;
-}
-function wearToggle(key) {
-  const [sport, abbr] = String(key).split(":");
-  const name = teamNameIn(sport, abbr) || abbr;
-  if (wearingTeam(key)) {
-    setSetting("teamColors", "off");
-    setSetting("teamColorsTeam", "");
-    tfToast("Back to the site’s own gold.");
-  } else {
-    setSetting("teamColors", "site");
-    setSetting("teamColorsTeam", key);
-    tfToast(`The whole site in ${name} colours. Settings → Team colours changes it.`);
-  }
-  applyTeamColors();
-}
-document.addEventListener("click", (e) => {
-  const b = e.target.closest && e.target.closest("[data-wear]");
-  if (!b) return;
-  e.preventDefault();
-  wearToggle(b.dataset.wear);
-  // The button says which it is now, wherever it is drawn.
-  document.querySelectorAll("[data-wear]").forEach((x) => {
-    const on = wearingTeam(x.dataset.wear);
-    x.classList.toggle("on", on);
-    x.setAttribute("aria-pressed", String(on));
-    x.innerHTML = `${icon("palette", 14)} ${on ? "Wearing these colours" : "Wear these colours"}`;
-  });
-});
 
 /* The bar paints the wash's own screen-sized picture, pinned to the screen's
    corner (styles.css), so it needs to know how far across the screen it
@@ -1173,22 +1106,29 @@ function teamVivid(a) {
 function teamLight(a) {
   const hex = teamVivid(a);
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
-  const v = [1, 3, 5].map((i) => (parseInt(hex.slice(i, i + 2), 16) / 255) ** 2.2);
-  const [l, m, s] = [[.4122, .5363, .0514], [.2119, .6807, .1074], [.0883, .2817, .63]]
-    .map((w) => Math.cbrt(w[0] * v[0] + w[1] * v[1] + w[2] * v[2]));
-  const L = Math.max(.62, .2105 * l + .7936 * m - .0041 * s);
-  const A = 1.978 * l - 2.4286 * m + .4506 * s, B = .0259 * l + .7828 * m - .8087 * s, C = Math.hypot(A, B);
+  const [L0, A, B] = okLab(hex), L = Math.max(.62, L0), C = Math.hypot(A, B);
   // The lighter colour may not exist at full strength on a screen: ease
   // the strength until it does. A muted one starts at the least a light
   // needs to read as itself (the Packers' green, lifted, was a sage); a
   // grey with a tint stays a grey (the White Sox' black).
   for (let k = C > .02 ? Math.max(1, .08 / C) : 1; ; k -= .05) {
-    const [p, q, r] = [[.3963, .2158], [-.1056, -.0639], [-.0895, -1.2915]].map(([x, y]) => (L + x * A * k + y * B * k) ** 3);
-    const rgb = [4.0767 * p - 3.3077 * q + .231 * r, -1.2684 * p + 2.6098 * q - .3413 * r, -.0042 * p - .7034 * q + 1.7076 * r];
-    if (k < .05 || rgb.every((c) => c >= 0 && c <= 1))
-      return "#" + rgb.map((c) => Math.round(255 * Math.min(1, Math.max(0, c)) ** (1 / 2.2)).toString(16).padStart(2, "0")).join("");
+    const rgb = okRgb([L, A * k, B * k]);
+    if (k < .05 || rgb.every((c) => c >= 0 && c <= 1)) return rgbHex(rgb);
   }
 }
+//: A "#rrggbb" colour in OKLab, and OKLab back to linear light and to "#rrggbb", at the
+//: precision a screen needs (gamma 2.2, four places): teamLight's, and the site's team wash's.
+function okLab(hex) {
+  const v = [1, 3, 5].map((i) => (parseInt(hex.slice(i, i + 2), 16) / 255) ** 2.2);
+  const [l, m, s] = [[.4122, .5363, .0514], [.2119, .6807, .1074], [.0883, .2817, .63]]
+    .map((w) => Math.cbrt(w[0] * v[0] + w[1] * v[1] + w[2] * v[2]));
+  return [.2105 * l + .7936 * m - .0041 * s, 1.978 * l - 2.4286 * m + .4506 * s, .0259 * l + .7828 * m - .8087 * s];
+}
+function okRgb([L, A, B]) {
+  const [p, q, r] = [[.3963, .2158], [-.1056, -.0639], [-.0895, -1.2915]].map(([x, y]) => (L + x * A + y * B) ** 3);
+  return [4.0767 * p - 3.3077 * q + .231 * r, -1.2684 * p + 2.6098 * q - .3413 * r, -.0042 * p - .7034 * q + 1.7076 * r];
+}
+const rgbHex = (rgb) => "#" + rgb.map((c) => Math.round(255 * Math.min(1, Math.max(0, c)) ** (1 / 2.2)).toString(16).padStart(2, "0")).join("");
 
 /* THE SAME ABBREVIATION IS FOUR DIFFERENT CLUBS. CIN, ATL, SF and TB all
    exist in more than one league, and `activeTeams()` is whichever tab the

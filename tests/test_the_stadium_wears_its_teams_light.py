@@ -104,6 +104,9 @@ def test_a_teams_light_is_its_colour_lifted_not_changed():
     table = {k: {"primary": p, "secondary": s} for k, (p, s) in kits.items()}
     prog = (f"const T = {json.dumps(table)};\nconst activeTeams = () => T;\n"
             + _fn(APP, "function teamVivid(a) {") + _fn(APP, "function teamLight(a) {")
+            # Its OKLab steps, shared with the site's team wash since 2026-11-17 (MYCOLORS1).
+            + _fn(APP, "function okLab(hex) {") + _fn(APP, "function okRgb([L, A, B]) {")
+            + APP[APP.index("const rgbHex = "):APP.index("\n", APP.index("const rgbHex = ")) + 1]
             + f"\nconsole.log(JSON.stringify(Object.fromEntries({json.dumps(list(kits) + ['XX'])}"
               ".map((k) => [k, [teamVivid(k), teamLight(k)]]))));")
     got = json.loads(_node(prog))
