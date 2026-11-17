@@ -34,7 +34,17 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from engine import gate                                       # noqa: E402
-import test_the_race_pages as T                               # noqa: E402
+
+
+class _Races:
+    """The race pages' own fixtures and node render (tests/test_the_race_pages.py), loaded when first
+    used: a sibling test module is not imported at module scope (test_doctor)."""
+    def __getattr__(self, name):
+        import test_the_race_pages
+        return getattr(test_the_race_pages, name)
+
+
+T = _Races()
 
 CSS = (ROOT / "web" / "css" / "race.css").read_text()
 RACE = (ROOT / "web" / "js" / "race.js").read_text()
@@ -116,9 +126,10 @@ def test_the_nfc_turns_right_to_left_only_where_the_whole_bracket_fits():
     assert CSS.count(".rc-bk-mirror { direction: rtl; }") == 1
     assert CSS.index(".rc-bk-mirror { direction: rtl; }") > q
     assert ".rc-bk-side {" in CSS and "direction: ltr;" in CSS[CSS.index(".rc-bk-side {"):]
-    # The lines are bars placed on the inline axis, so they turn with the mirror; never borders.
+    # The lines are bars placed on the inline axis, so they turn with the mirror; never side borders,
+    # which would stay put when the NFC turns.
     sect = CSS[CSS.index("/* A BRACKET, DRAWN AS ONE"):]
-    assert "border-left" not in sect and "border-right" not in sect and "border-top" not in sect
+    assert "border-left" not in sect and "border-right" not in sect and "border-inline" not in sect
     assert "inset-inline-start" in sect and "inset-inline-end" in sect
 
 

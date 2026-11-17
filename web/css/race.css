@@ -127,7 +127,7 @@
 .rc-bk-game { position: relative; margin: 5px 0; padding: 3px 0; border-radius: var(--radius-sm); background: var(--panel); }
 .rc-bk-side { display: grid; grid-template-columns: 20px minmax(0, 1fr); column-gap: 7px; align-items: center;
   min-height: 38px; padding: 3px 8px; direction: ltr; }
-.rc-bk-side + .rc-bk-side { box-shadow: inset 0 1px 0 color-mix(in oklab, var(--text) 7%, transparent); }
+.rc-bk-side + .rc-bk-side { border-top: 1px solid var(--border-soft); }
 .rc-bk-who { display: grid; min-width: 0; }
 .rc-bk-who b { overflow: hidden; color: var(--text); font-size: var(--fs-sm); text-overflow: ellipsis; white-space: nowrap; }
 .rc-bk-who small { overflow: hidden; color: var(--text-mute); font-size: var(--fs-2xs); text-overflow: ellipsis; white-space: nowrap; }
