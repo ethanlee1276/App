@@ -9338,6 +9338,10 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VO. College basketball's usage chart names its season like the rest of the page** (step 699; 17 November).
+Nothing to run. The role chart ("how much a player is used, game by game") labelled a college basketball season
+"2026" while the player page beside it says "2026–27"; it now reads two years, as the NBA's and the NHL's do.
+
 **VN. Hockey's open bets follow the live scoreboard, and hockey joins the streak game** (step 698; 17 November).
 Nothing to run. Three more lists that left the NHL out: the Live tab's open bets took a hockey game's phase only
 from the hockey build, minutes behind the twelve-second scoreboard beside them, so a bet could read UPCOMING into

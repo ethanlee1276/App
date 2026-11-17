@@ -142,6 +142,9 @@ def test_basketball_minutes_starts_and_the_shots_he_tried():
     assert split["start"]["avg"]["min"] == 35.25 and split["bench"]["name"] == "Off the bench"
     w = R.chart(conn, "wnba", "Caitlin Clark")
     assert [m["key"] for m in w["metrics"]] == ["min"] and w["season_label"] == "2025"
+    # College basketball's season runs across two years like the NBA's (2026-11-17: it read "2026").
+    assert [R.season_label(sp, 2026) for sp in ("cbb", "nba", "nhl", "wnba", "nfl")] == \
+        ["2026-27", "2026-27", "2026-27", "2026", "2026"]
 
 
 def _mlb():

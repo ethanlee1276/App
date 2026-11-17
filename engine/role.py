@@ -103,8 +103,13 @@ PASSER_AT = 10.0
 STRETCHES = (3, 5)
 
 
+#: Leagues whose season runs across two years ("2026-27"): college
+#: basketball's too (2026-11-17; it read "2026", as the player page did not).
+TWO_YEAR = ("nba", "nhl", "cbb")
+
+
 def season_label(sport: str, season: int) -> str:
-    if sport in ("nba", "nhl"):
+    if sport in TWO_YEAR:
         return f"{int(season)}-{(int(season) + 1) % 100:02d}"
     return str(int(season))
 
