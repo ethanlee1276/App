@@ -50,6 +50,12 @@ def league_game(league: str, home: str, away: str) -> bool:
     return is_club(league, home) and is_club(league, away)
 
 
+def no_league_side(league: str, *sides: str) -> bool:
+    """A side that is named and is no club of the league. A blank side is not known to be anyone's, so a stored
+    line whose opponent was never filled is not taken for an exhibition (and never removed for it)."""
+    return any(str(t or "").strip() and not is_club(league, t) for t in sides)
+
+
 def found(conn, league: str) -> dict:
     """{"games": [{game_id, day, home, away, players, rows}], "rows": n, "game_rows": n} for one league:
     every stored game with a side that is not one of its clubs, newest first."""
@@ -57,7 +63,7 @@ def found(conn, league: str) -> dict:
     for gid, day, team, opp, players, rows in conn.execute(
             "SELECT game_id, MIN(period), team, opponent, COUNT(DISTINCT player), COUNT(*) FROM player_game_logs "
             "WHERE sport=? GROUP BY game_id, team, opponent", (league,)):
-        if is_club(league, team) and is_club(league, opp):
+        if not no_league_side(league, team, opp):
             continue
         g = seen.setdefault(str(gid), {"game_id": str(gid), "day": str(day), "sides": set(), "players": 0, "rows": 0})
         g["sides"].update(x for x in (team, opp) if x)
@@ -66,7 +72,7 @@ def found(conn, league: str) -> dict:
     game_rows = 0
     for gid, day, home, away in conn.execute(
             "SELECT game_id, period, home, away FROM games WHERE sport=?", (league,)):
-        if league_game(league, home, away):
+        if not no_league_side(league, home, away):
             continue
         game_rows += 1
         g = seen.setdefault(str(gid), {"game_id": str(gid), "day": str(day), "sides": set(), "players": 0, "rows": 0})

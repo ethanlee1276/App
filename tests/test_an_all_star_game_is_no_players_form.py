@@ -81,6 +81,9 @@ def test_the_cleanup_lists_what_was_stored_and_removes_it_only_when_asked():
                              (league, day, gid, who, team, opp, market, val))
         conn.execute("INSERT INTO games (sport, season, period, game_id, home, away, home_score, away_score, date) "
                      "VALUES (?, 2026, ?, ?, ?, ?, 100, 90, ?)", (league, day, gid, team, opp, day))
+    # A real game's line whose opponent was never filled is no exhibition, and stays.
+    conn.execute("INSERT INTO player_game_logs (sport, season, period, game_id, player, team, opponent, position, home, "
+                 "market, value) VALUES ('wnba', 2026, '2026-06-01', 'w4', 'Caitlin Clark', 'IND', '', 'G', 1, 'pts', 20)")
     conn.commit()
     rep = HX.found(conn, "wnba")
     assert [(g["day"], g["sides"], g["players"]) for g in rep["games"]] == [
@@ -92,12 +95,13 @@ def test_the_cleanup_lists_what_was_stored_and_removes_it_only_when_asked():
     HX._db.connect = lambda *a, **k: real(path)
     try:
         assert HX.main([]) == 0
-        assert real(path).execute("SELECT COUNT(*) FROM player_game_logs WHERE sport='wnba'").fetchone()[0] == 12
+        assert real(path).execute("SELECT COUNT(*) FROM player_game_logs WHERE sport='wnba'").fetchone()[0] == 13
         assert HX.main(["--league", "wnba", "--apply"]) == 0
     finally:
         HX._db.connect = real
     after = D.connect(path)
-    assert [r[0] for r in after.execute("SELECT DISTINCT game_id FROM player_game_logs WHERE sport='wnba'")] == ["w1"]
+    assert sorted(r[0] for r in after.execute("SELECT DISTINCT game_id FROM player_game_logs WHERE sport='wnba'")) == \
+        ["w1", "w4"], "the league game and the line with no opponent stay"
     assert [r[0] for r in after.execute("SELECT game_id FROM games WHERE sport='wnba'")] == ["w1"]
     assert after.execute("SELECT COUNT(*) FROM player_game_logs WHERE sport='nba'").fetchone()[0] == 4
 
