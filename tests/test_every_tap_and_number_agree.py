@@ -17,7 +17,9 @@ every door to a pick is read and tapped:
 
   * the row or card shows the pick's own price, chance and number;
   * the page the tap opens is that pick — its side, number, stat, price,
-    chance — on the Most Likely board, never another of the player's.
+    chance — on the Most Likely board, never another of the player's. Since
+    2026-11-17 that page is the player's own, the pick heading it (Ethan:
+    "always send too the new player page"; js/detail.js pickOnPlayerHTML).
 
 RUNS WHEREVER A BROWSER DOES: Node's Playwright (the global install) and a
 Chromium. Where either is missing — the droplet — it says so and skips, as
@@ -200,21 +202,20 @@ const SURFACES = {
         const T = eval(txt);
         const el = [...document.querySelectorAll(sel)][i];
         if (!el) return null;
-        // The pick page paints inside a view transition, so on a busy
-        // host a fixed wait can read it half-drawn (gate 67: the view was
-        // "prop" and its pick line still empty). Mark the card on screen,
-        // tap, then wait for a NEW card with its pick line — the page is
-        // rebuilt whole (host.innerHTML), so the mark never survives.
-        const old = document.querySelector("#prop-body .pp-card");
-        if (old) old.dataset.tapStale = "1";
+        // THE PLAYER'S PAGE, THE PICK HEADING IT (js/playerpage.js
+        // plrTappedInto). The page paints after its room and the pick's
+        // code load, so a fixed wait could read it half-drawn: empty the
+        // slot (a page kept for the same player keeps its last pick until
+        // the new one is drawn), tap, then wait for the card's pick line.
+        document.querySelectorAll(".plr-tapped").forEach((s) => { s._html = ""; s.replaceChildren(); });
         el.click();
-        const fresh = () => { const c = document.querySelector("#prop-body .pp-card");
-          return c && !c.dataset.tapStale && T(c.querySelector(".pick") || c).trim(); };
+        const fresh = () => { const c = document.querySelector(".plr-tapped .pp-tapped");
+          return c && T(c.querySelector(".pick") || c).trim(); };
         for (let t = 0; t < 50 && !fresh(); t++) await new Promise((r) => setTimeout(r, 100));
         await new Promise((r) => setTimeout(r, 100));
         const q = (s) => { const e = document.querySelector(s); return e ? T(e) : ""; };
-        return { view: state.view, pick: q("#prop-body .pp-card .pick"), player: q("#prop-body .pp-card .player"),
-                 board: q("#prop-body .pp-board"), body: q("#prop-body").slice(0, 4000) };
+        return { view: state.view, pick: q(".plr-tapped .pp-tapped .pick"), player: q(".plr .plr-name"),
+                 board: q(".plr-tapped .pp-tapped-k"), body: q(".plr-tapped").slice(0, 4000) };
       }, [DOORS, i, TXT]);
     }
     out[name] = doors;
@@ -340,14 +341,15 @@ def test_every_tap_opens_that_pick():
         for d in doors:
             r, o = rows[d["id"]], d["opened"] or {}
             where = (name, d["id"])
-            assert o.get("view") == "prop", (where, "did not open the pick page", o)
+            assert o.get("view") == "players", (where, "did not open the player's page", o)
+            assert r["player"].split()[-1].lower() in o["player"].lower(), (where, "another player's page", o["player"])
             pick = o["pick"].lower()
             if r["line"] is None:
                 assert "anytime td · yes" in pick, (where, o["pick"])
             else:
                 assert f"{r['side'].lower()} {r['line']} {r['market_label'].lower()}" in pick, (where, o["pick"])
-            assert _odds(_shown_odds(r)) in _minus(o["player"]), (where, "price", o["player"])
-            assert o["board"].startswith("Most Likely"), (where, o["board"])
+            assert _odds(_shown_odds(r)) in _minus(o["pick"]), (where, "price", o["pick"])
+            assert "THE PICK YOU TAPPED · MOST LIKELY" in o["board"].upper(), (where, o["board"])
             assert _pct(r["model_prob"]).search(o["body"]), (where, "chance")
 
 

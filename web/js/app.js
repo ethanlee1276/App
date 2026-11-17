@@ -12839,6 +12839,10 @@ function openPick(id, o = {}) {
   const lk = o.likely && findLikelyProp(id), r = (lk && likelyTarget(lk)) || findProp(id) || lk;
   if (!r || !r.player || !PLR_LG.test(r.sport || state.sport)) return openProp(id, o);
   if (r.market_label) _profTab[r.player] = r.market_label;
+  // Who the player is, as a search hands it over (`_searchListed`): a pick off
+  // the Edge board's list draws the page without asking the league first.
+  _searchListed.set(slugify(r.player), { player: r.player, team: r.team || "", position: r.position || "",
+    headshot: r.headshot || "", sport: r.sport || state.sport });
   let bet = null;
   try { bet = o.bet && !o.likely ? JSON.parse(o.bet) : null; } catch (_) { bet = null; }
   openPlayerRoute(slugify(r.player), r.player, { id: pickSlug(r) || id, likely: !!o.likely, likelyId: lk ? propId(lk) : null, bet });
