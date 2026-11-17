@@ -137,6 +137,29 @@ def test_a_fighter_with_no_tracked_fight_takes_the_id_from_the_kept_search():
     assert espnmma.cached_athlete_id("Someone Unsearched", d / "cache") is None, "nothing kept, nothing fetched"
 
 
+def test_a_dossier_keeps_the_id_and_the_facts_so_no_cache_is_needed():
+    """Kept at the draft since 2026-11-17 (espnmma.fetch_dossier): the cache the page used to read is pruned after
+    a month, and a fighter not on a recent card lost the face and the facts with it."""
+    from engine.sources import espnmma
+    d = _world(with_next=False)
+    for f in (d / "cache").iterdir():
+        f.unlink()
+    name = "Merab Dvalishvili"
+    dossiers = json.loads((d / "dossiers.json").read_text())
+    dossiers[name] = {"name": name, "age": 35, "division": "bantamweight", "record": "21-4-0", "espn_id": "3155424",
+                      "facts": espnmma.bio_facts({"nickname": "The Machine", "displayHeight": "5' 6\"",
+                                                  "reach": 68, "stance": {"text": "Orthodox"},
+                                                  "citizenship": "Georgia"})}
+    (d / "dossiers.json").write_text(json.dumps(dossiers))
+    p = _page(d, name)
+    assert p["face"].endswith("/full/3155424.png"), p["face"]
+    assert (p["bio"]["nickname"], p["bio"]["height"], p["bio"]["reach"], p["bio"]["stance"], p["bio"]["country"]) == (
+        "The Machine", "5' 6\"", '68"', "Orthodox", "Georgia"), p["bio"]
+    src = (ROOT / "engine" / "sources" / "espnmma.py").read_text(encoding="utf-8")
+    draft = src[src.index("def fetch_dossier("):]
+    assert 'out["espn_id"] = str(aid)' in draft and 'out["facts"] = facts' in draft
+
+
 def test_the_page_endpoint_answers_for_a_fighter():
     assert 'if sport not in playerpage.SPORTS and sport != "ufc":' in SERVER
     assert "from engine.ufc import fighterpage\n                made = fighterpage.page(player)" in SERVER

@@ -29,7 +29,6 @@ the picks (engine/ufc/fighters' own line). Standard library only.
 """
 from __future__ import annotations
 
-import datetime as _dt
 import json
 import os
 import re
@@ -103,16 +102,11 @@ def rates(d: dict) -> list[dict]:
     return out
 
 
-def _txt(v) -> str:
-    if isinstance(v, dict):
-        v = v.get("text") or v.get("displayName") or v.get("name") or v.get("abbreviation") or ""
-    return str(v or "").strip()
-
-
 def espn_bio(aid: str, cache_dir=None) -> dict:
     """The facts ESPN's athlete page publishes, from the copy the dossier's
     draft cached (engine/sources/espnmma); {} when there is none. Never
     fetches: the page answers from what is kept."""
+    from ..sources.espnmma import bio_facts
     if not str(aid or "").isdigit():
         return {}
     p = Path(cache_dir or CACHE) / f"espn_mma_ath_{aid}.json"
@@ -120,24 +114,7 @@ def espn_bio(aid: str, cache_dir=None) -> dict:
         raw = json.loads(p.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    if not isinstance(raw, dict):
-        return {}
-    born = ""
-    try:
-        born = _dt.datetime.fromisoformat(str(raw.get("dateOfBirth") or "").replace("Z", "+00:00")).date().isoformat()
-    except ValueError:
-        born = ""
-    place = raw.get("birthPlace") if isinstance(raw.get("birthPlace"), dict) else {}
-    country = _txt(raw.get("citizenshipCountry")) or _txt(raw.get("citizenship")) or _txt(place.get("country"))
-    reach = _txt(raw.get("displayReach"))
-    if not reach and isinstance(raw.get("reach"), (int, float)) and raw["reach"] > 0:
-        reach = f"{raw['reach']:g}\""
-    out = {"nickname": _txt(raw.get("nickname")), "height": _txt(raw.get("displayHeight")),
-           "weight": _txt(raw.get("displayWeight")), "reach": reach, "stance": _txt(raw.get("stance")),
-           "country": country, "born": born,
-           "birthplace": ", ".join(x for x in (_txt(place.get("city")), _txt(place.get("state")),
-                                               _txt(place.get("country"))) if x)}
-    return {k: v for k, v in out.items() if v}
+    return bio_facts(raw)
 
 
 def next_bout(name: str, board_path=None) -> dict | None:
@@ -190,11 +167,14 @@ def page(fighter: str, db_path=None, dossier_path=None, cache_dir=None, board_pa
     if not name:
         return {}
     games = hist.get("games") or []
-    aid = ""
+    # ESPN's id and the facts its athlete page publishes, kept in the dossier
+    # since 2026-11-17 (engine/sources/espnmma.fetch_dossier), so a page needs
+    # no cache the nightly prunes after a month; older dossiers read the cache.
+    aid = str(d.get("espn_id") or "")
     m = re.search(r"/full/(\d+)\.png", str(hist.get("face") or ""))
-    if m:
+    if m and not aid:
         aid = m.group(1)
-    face = hist.get("face") or ""
+    face = hist.get("face") or (_history.FACE.format(aid=aid) if aid else "")
     if not aid:
         # No fight on the history table yet (seen live 2026-11-17: Islam Makhachev's page had his record and
         # rates and no face, no height, no reach): ESPN's id from the name search the dossier's draft kept.
@@ -202,7 +182,7 @@ def page(fighter: str, db_path=None, dossier_path=None, cache_dir=None, board_pa
         aid = espnmma.cached_athlete_id(name, cache_dir or CACHE) or ""
         if aid:
             face = _history.FACE.format(aid=aid)   # the fight history chart's own
-    facts = espn_bio(aid, cache_dir)
+    facts = d.get("facts") if isinstance(d.get("facts"), dict) and d.get("facts") else espn_bio(aid, cache_dir)
     bio = {"record": d.get("record") or "", "division": division_words(d.get("division") or hist.get("position")),
            "age": d.get("age"), "team": str(d.get("gym") or "").strip(),
            "first_fight": d.get("first_fight") or (games[-1]["date"] if games else ""),

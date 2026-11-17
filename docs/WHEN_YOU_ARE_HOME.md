@@ -9338,6 +9338,11 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WD. A fighter's face and facts are kept with the fighter** (step 714; 17 November). Nothing to run. The
+fighter page read ESPN's id and facts (height, reach, stance) from cached copies the nightly prunes after a month,
+so a fighter not on a recent card would lose them. Each dossier drafted from now on keeps ESPN's id and those facts
+itself; dossiers drafted before still read the cache until their next draft.
+
 **WC. The 2026 MLB season fills its whole lines by itself** (step 713; 17 November). Nothing to run; RUN_NEXT
 00l is optional now. The nightly chores read this season's final games whose box scores are not in the history
 yet, about 200 a night, newest first (about three minutes of requests), the way the hit tracker's charts already

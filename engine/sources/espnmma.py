@@ -87,6 +87,37 @@ def _norm(s: str) -> str:
     return normalize_name(s.translate(_STROKES))
 
 
+def _txt(v) -> str:
+    if isinstance(v, dict):
+        v = v.get("text") or v.get("displayName") or v.get("name") or v.get("abbreviation") or ""
+    return str(v or "").strip()
+
+
+def bio_facts(raw: dict) -> dict:
+    """The facts ESPN's athlete page publishes, off its athlete payload: the
+    nickname, height, weight, reach, stance, country, the day born and
+    where; only those it gives. Kept in the dossier at the draft and read
+    by the fighter's page (engine/ufc/fighterpage)."""
+    if not isinstance(raw, dict):
+        return {}
+    born = ""
+    try:
+        born = _dt.datetime.fromisoformat(str(raw.get("dateOfBirth") or "").replace("Z", "+00:00")).date().isoformat()
+    except ValueError:
+        born = ""
+    place = raw.get("birthPlace") if isinstance(raw.get("birthPlace"), dict) else {}
+    country = _txt(raw.get("citizenshipCountry")) or _txt(raw.get("citizenship")) or _txt(place.get("country"))
+    reach = _txt(raw.get("displayReach"))
+    if not reach and isinstance(raw.get("reach"), (int, float)) and raw["reach"] > 0:
+        reach = f"{raw['reach']:g}\""
+    out = {"nickname": _txt(raw.get("nickname")), "height": _txt(raw.get("displayHeight")),
+           "weight": _txt(raw.get("displayWeight")), "reach": reach, "stance": _txt(raw.get("stance")),
+           "country": country, "born": born,
+           "birthplace": ", ".join(x for x in (_txt(place.get("city")), _txt(place.get("state")),
+                                               _txt(place.get("country"))) if x)}
+    return {k: v for k, v in out.items() if v}
+
+
 # --- athlete lookup ---------------------------------------------------------
 def _search_name(query: str) -> str:
     """The cache file a name search is kept in."""
@@ -683,10 +714,17 @@ def fetch_dossier(name: str, today: _dt.date | None = None,
     if not fights:
         return None
     fights.sort(key=lambda f: f["date"] or _dt.date.min, reverse=True)
-    return build_dossier(name, gym=gym_name,
-                         bio=bio, record=record, own_rows=own_rows,
-                         fights=fights, total_ufc_fights=total_fights,
-                         style_hint=style_hint, today=today)
+    out = build_dossier(name, gym=gym_name,
+                        bio=bio, record=record, own_rows=own_rows,
+                        fights=fights, total_ufc_fights=total_fights,
+                        style_hint=style_hint, today=today)
+    # The fighter's page reads these from here (engine/ufc/fighterpage), not
+    # from a cache the nightly prunes after a month: the face and the facts.
+    out["espn_id"] = str(aid)
+    facts = bio_facts(bio_raw)
+    if facts:
+        out["facts"] = facts
+    return out
 
 
 #: A RESULT IS READ FRESH NEAR THE BELL (2026-10-13). A bout's record is
