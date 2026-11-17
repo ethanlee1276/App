@@ -827,7 +827,7 @@ function applyNavLeagues() {
  * because no weather feed covers college venues. One sentence for both
  * would have to be vague enough to be useless. These mirror the comments
  * already sitting on HIDDEN_VIEWS above. */
-const RACE_WHY = "the race pages are the NFL’s and college football’s playoffs, the NBA Cup and the NCAA tournament";
+const RACE_WHY = "the race pages are the NFL’s, the NBA’s, the NHL’s and college football’s playoffs, the NBA Cup and the NCAA tournament";
 const HIDDEN_WHY = {
   // The "likely" reasons LEFT both hoops entries 2026-08-31 — the claim
   // "basketball prices neither" went stale when nba_build started
@@ -837,8 +837,7 @@ const HIDDEN_WHY = {
           futures: "no outrights market is published for the league",
           weather: "played indoors", race: RACE_WHY },
   nhl: { longshots: "the anytime goal scorer rides the props and Most Likely instead",
-         futures: "no hockey outrights are pulled yet",
-         weather: "played indoors", race: RACE_WHY },
+         weather: "played indoors" },
   cbb: { longshots: "no first-basket market is bought for college games",
          weather: "played indoors" },
   ufc: { reportpicks: "each fight’s written report sits under its card on the UFC tab",
