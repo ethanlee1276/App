@@ -318,17 +318,17 @@ def test_searching_still_reaches_every_player():
     assert body.index("recs = picked.rows") < body.index("_profRows = new Map()")
 
 
-def test_the_browse_cap_is_smaller_where_the_grid_is_one_column():
-    """MEASURED AT 390x844 after the first cap shipped: `.player-grid` is
-    `auto-fill, minmax(420px, 1fr)` — three columns on a laptop, ONE on a
-    phone — so twelve cards stacked single-file came to 10,919px. Twelve
-    point nine screens, which is the original complaint again on the device
-    least able to afford it."""
+def test_the_browse_cap_is_smaller_where_the_list_is_one_column():
+    """MEASURED AT 390x844 when the cap was on profile cards: twelve stacked
+    single-file came to 10,919px. Since 2026-11-17 the page lists names, a
+    64px row each, in `auto-fill, minmax(300px, 1fr)` columns: twelve rows
+    are about a phone screen under the search box, thirty fill a laptop's
+    columns ten deep."""
     js = _js()
     body = _fn(js, "function playerBrowseCap(")
     assert "max-width: 760px" in body, body
     ns = re.findall(r"\b(\d+)\b", body.split("return")[1])
-    assert "4" in ns and "12" in ns, ns
+    assert "12" in ns and "30" in ns, ns
 
 
 def test_the_cap_is_read_at_render_not_captured_once():
@@ -340,15 +340,16 @@ def test_the_cap_is_read_at_render_not_captured_once():
 
 
 def test_a_browser_without_matchmedia_gets_the_desktop_cap():
-    """Failing open to FOUR would quietly halve a laptop's browse list."""
+    """Failing open to the phone's twelve would quietly cut a laptop's
+    list by more than half."""
     js = _js()
     body = _fn(js, "function playerBrowseCap(")
     assert "window.matchMedia" in body and "typeof window" in body
-    # The ELSE branch is the desktop number. Verified in node across all
-    # three shapes: no matchMedia -> 12, desktop -> 12, phone -> 4. The
-    # first version of this asserted the slice ended in a brace, which is
-    # true of nothing in particular and proved no property at all.
-    assert re.search(r"\?\s*4\s*:\s*12", body), body
+    # The ELSE branch is the desktop number: no matchMedia -> 30, desktop
+    # -> 30, phone -> 12 (rows of names since 2026-11-17). The first version
+    # of this asserted the slice ended in a brace, which is true of nothing
+    # in particular and proved no property at all.
+    assert re.search(r"\?\s*12\s*:\s*30", body), body
 
 
 # --- hierarchy ---------------------------------------------------------------

@@ -317,14 +317,18 @@ def test_the_server_serves_it_free_and_the_players_page_becomes_it():
     assert "PLAYER_PAGE_TTL = 300" in srv and "PLAYER_PAGE_KEEP = 400" in srv
     assert ('function renderPlayerPage(...a) { return roomCall(renderPlayerPage, "renderPlayerPage", '
             '"js/playerpage.js", "css/playerpage.css", a); }') in APP
-    assert ('        const own = drawn.find((m) => searchNorm(m.player) === searchNorm(state.search)) || '
-            '(drawn.length === 1 && drawn[0])\n          || rest.find((m) => searchNorm(m.player) === searchNorm(state.search));'
-            '\n        if (own && own.sport !== "ufc") renderPlayerPage(host, own.player, own.sport);\n        return;') in APP, \
-        "a league search that finds the player asked for (on a roster, no game yet, too), or just one"
-    assert ("  revealChildren(host);\n  const own = q && (shown.find((p) => searchNorm(p) === searchNorm(state.search)) "
-            "|| (shown.length === 1 && shown[0]));\n  if (own) renderPlayerPage(host, own, state.sport);\n}") in APP, \
-        "a board search too: the name asked for, even beside a near name"
-    assert "if (who && who !== player) el.remove();" in PAGE, "a near name's card is not on the page"
+    # A search lists names (2026-11-17); the address #player/<name> is what draws the page.
+    assert "  const routed = !!(q && state.playerSlug);\n" in APP
+    assert ('      const m = routed && (hits.find((h) => searchNorm(h.player) === searchNorm(state.search))\n'
+            '        || (hits.length === 1 && hits[0]));\n') in APP, \
+        "the league's player the address names (on a roster, no game yet, too), or the one hit"
+    assert "        renderPlayerPage(host, m.player, m.sport);\n        return;\n" in APP
+    assert ("  const own = routed && (players.find((p) => searchNorm(p) === searchNorm(state.search))\n"
+            "    || (players.length === 1 && players[0]));\n") in APP, \
+        "on tonight's board too: the name the address names, even beside a near name"
+    assert "    renderPlayerPage(host, own, state.sport);\n    return;\n" in APP
+    assert "      renderPlayerPage(host, mine.player, state.sport);\n" in APP, "known only to a roster"
+    assert "plrCardOf" not in PAGE, "the page is handed one player's card; nothing to sort out"
     assert ("  let toLeague = !players.length;\n  if (!toLeague && boardGuess) {\n"
             "    const asked = await leagueSearchAfterPause(q, seq, host);\n") in APP, \
         "a guess on tonight's board does not stop the league being asked"
@@ -564,7 +568,7 @@ def test_in_a_browser_a_player_on_a_roster_with_no_game_yet_has_a_page_too():
         page.goto(f"{local}index.html?sport=nfl#player/rookie-nobody", wait_until="load")
         page.wait_for_selector(".plr .plr-season .plr-quiet", timeout=30000)
         out = {"hero": page.inner_text(".plr-hero"), "season": page.inner_text(".plr-season"),
-               "own_row": page.evaluate("!!document.querySelector('.plr .roster-hit [data-lookup=\"Rookie Nobody\"]')")}
+               "own_row": page.evaluate("!!document.querySelector('.plr .psr-row')")}
         page.click('.plr-tab[data-plr-tab="bio"]')
         out["bio"] = page.inner_text('[data-plr-panel="bio"]')
         out["errors"] = errors
@@ -575,7 +579,7 @@ def test_in_a_browser_a_player_on_a_roster_with_no_game_yet_has_a_page_too():
         return
     assert "Rookie" in got["hero"] and "Nobody" in got["hero"] and "#88" in got["hero"], got["hero"]
     assert "No games on file for this player yet." in got["season"], got["season"]
-    assert got["own_row"] is False, "no Profile door to the page already open"
+    assert got["own_row"] is False, "no name row on the page that is already open"
     assert "Rookie" in got["bio"] and "#88" in got["bio"], got["bio"]
     assert not got["errors"], got["errors"]
 
@@ -625,10 +629,17 @@ def _near_name_page(typed, hits):
         out = {"guess": page.evaluate(
             "(q) => searchPick(state.data.recommendations, q, (r) => r.player).guessed", typed)}
         page.fill("#player-search", typed)
-        page.wait_for_selector(".plr .plr-hero", timeout=30000)
+        # A search answers with names (2026-11-17); the first is the one a tap opens.
+        page.wait_for_selector("#players-board .psr-row", timeout=30000)
         page.wait_for_timeout(600)
-        out["hero"] = page.inner_text(".plr-hero")
+        out["rows"] = page.eval_on_selector_all("#players-board .psr-row .psr-nm",
+                                                "els => els.map((e) => e.textContent.trim())")
         out["near"] = page.evaluate("document.getElementById('players-board').innerText.includes('Rodriguez')")
+        page.click("#players-board .psr-row")
+        page.wait_for_selector(".plr .plr-hero", timeout=30000)
+        page.wait_for_timeout(400)
+        out["hero"] = page.inner_text(".plr-hero")
+        out["hash"] = page.evaluate("location.hash")
         out["errors"] = errors
         ctx.close()
         return out
@@ -646,8 +657,10 @@ def test_in_a_browser_a_name_typed_wins_over_a_near_name_on_tonights_board():
     if got is None:
         return
     assert got["guess"] is True, ("the board can only guess at the name typed, as in Ethan's screenshot", got)
+    assert got["rows"] == ["Jacoby Brissett"], got["rows"]
+    assert got["near"] is False, "the near name priced tonight is not offered for the name typed"
     assert "Jacoby" in got["hero"] and "Brissett" in got["hero"], got["hero"]
-    assert got["near"] is False, "the near name priced tonight is not on the page of the player asked for"
+    assert got["hash"] == "#player/jacoby-brissett", got["hash"]
     assert not got["errors"], got["errors"]
 
 
@@ -660,6 +673,7 @@ def test_in_a_browser_a_misspelling_finds_the_nearer_name_wherever_it_is():
     if got is None:
         return
     assert got["guess"] is True, got
+    assert got["rows"][0] == "Jacoby Brissett", got["rows"]
     assert "Jacoby" in got["hero"] and "Brissett" in got["hero"], got["hero"]
     assert not got["errors"], got["errors"]
 

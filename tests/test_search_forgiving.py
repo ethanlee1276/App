@@ -157,7 +157,8 @@ def test_recent_chips_show_while_the_box_is_empty_and_read_the_existing_log():
     assert "renderSearchScope();\n  renderSearchRecent();" in APP[i:i + 400]
     j = APP.index('e.target.closest(".sr-chip")')
     seg = APP[j:j + 200]
-    assert "acctSearchLog(chip.dataset.q);" in seg and "openPlayer(chip.dataset.q);" in seg
+    # A chip is a search (its list of names), not a player's page (2026-11-17).
+    assert "acctSearchLog(chip.dataset.q);" in seg and "searchFor(chip.dataset.q);" in seg
     assert ".search-recent .sr-label" in CSS
 
 

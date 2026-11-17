@@ -231,7 +231,10 @@ def test_a_fighter_card_is_never_asked_for_game_logs():
     as "we know nothing about him"."""
     js = _js()
     body = _fn(js, "async function renderPlayers(")
-    assert 'if (m.sport === "ufc") return;' in body
+    # A fighter's page is the card of career rates, drawn before any log is asked for.
+    i = body.index('if (m.sport === "ufc") {')
+    assert "ufcProfileHTML(m)" in body[i:i + 200]
+    assert i < body.index("leagueLogs(m.player, m.sport)")
 
 
 def test_the_fighter_card_says_the_numbers_are_career_rates():
@@ -243,7 +246,7 @@ def test_the_fighter_card_says_the_numbers_are_career_rates():
     assert "career" in body.lower()
     assert "gamelogBars" not in body, "a fighter card grew an invented chart"
     # And a fighter with no tracked stats says so rather than showing dashes.
-    assert "no tracked fight stats for him yet" in body
+    assert "no tracked fight stats for this fighter yet" in body
 
 
 def test_the_corner_block_has_exactly_one_implementation():
@@ -277,10 +280,12 @@ def test_the_corner_block_reads_both_payload_shapes():
 
 def test_a_row_with_no_club_draws_no_team_chip():
     js = _js()
-    body = _fn(js, "async function renderPlayers(")
-    assert "${m.team ? `${teamMarkIn(" in body
-    # "fight(s)" became a real plural on 2026-09-09; the chip is the same chip.
-    assert 'tracked ${pluralWord(m.games, "fight")}' in body
+    # The search's name rows since 2026-11-17 (searchRowHTML).
+    body = _fn(js, "function searchRowHTML(")
+    assert "m.team ? `${teamMarkIn(lg, m.team, 14)}" in body
+    # "fight(s)" became a real plural on 2026-09-09, and the count is printed
+    # with it (plural, not pluralWord: "tracked fights" said no number).
+    assert 'tracked ${plural(m.games, "fight")}' in body
 
 
 # --- the grade-evidence false alarm --------------------------------------

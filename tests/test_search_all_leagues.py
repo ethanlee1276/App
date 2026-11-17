@@ -353,7 +353,8 @@ def test_a_searched_row_carries_its_league_into_the_profile_card():
 def test_the_row_says_which_league_it_is_from():
     js = _js()
     assert "function leagueBadge(" in js
-    assert "leagueBadge(m.sport)" in _fn(js, "async function renderPlayers(")
+    # A search answers with name rows since 2026-11-17 (searchRowHTML).
+    assert "leagueBadge(m.sport)" in _fn(js, "function searchRowHTML(")
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),
                encoding="utf-8").read()
     assert ".lg-badge" in css, "the badge has no styling at all"

@@ -509,10 +509,16 @@ def test_opening_a_player_cannot_throw_out_of_a_delegated_handler():
     """It is reached from a document-level listener now. A throw there
     kills the handler for every OTHER door on the page, not just this
     one."""
+    # A name opens the player's page (2026-11-17), so both funnels a
+    # delegated door reaches are checked: the page's route and a search.
     fn = APP[APP.index("function openPlayer("):]
     fn = fn[:fn.index("\n}") + 2]
-    assert "if (box)" in fn or "box &&" in fn, \
-        "a missing search box would throw and take the listener with it"
+    assert "openPlayerRoute(slugify(name), name)" in fn
+    for head, var in (("function openPlayerRoute(", "inp"), ("function searchFor(", "box")):
+        body = APP[APP.index(head):]
+        body = body[:body.index("\n}") + 2]
+        assert f"if ({var})" in body or f"{var} &&" in body, \
+            f"a missing search box would throw and take the listener with it ({head})"
 
 
 def test_the_bets_tile_counts_the_riding_ones_too():

@@ -1,10 +1,10 @@
 /* PLAYER PAGES (js/playerpage.js, loaded the first time one opens).
 
    Ethan, 2026-11-16, with ESPN's page for Josh Allen: "The page should look
-   just like this and have each menu for all players in all sports." When the
-   Players page shows one player (the address #player/<name>, or a search that
-   finds just one), app.js renderPlayers hands the page here and it becomes
-   that player's page: a header in the club's colours with the face, the name,
+   just like this and have each menu for all players in all sports." The
+   address #player/<name> (a name tapped in the search's list, which shows only
+   names and faces since 2026-11-17, or any other door to a player) makes
+   app.js renderPlayers hand the page here, and it becomes that player's page: a header in the club's colours with the face, the name,
    "Club · #N · POS" and height, weight and age, then six menus.
 
      Overview  the season's four numbers with their places in the league, the
@@ -396,8 +396,8 @@ function plrShow(page, tab) {
   if (tab === "log") loadRoom("js/gamelog.js", "css/gamelog.css").then((ok) => ok && plrLogInto(page));
 }
 
-/* THE PLAYER'S PAGE, in place of the cards renderPlayers drew (they become the
-   Overview's market section). The Players page redraws every 30 seconds while it
+/* THE PLAYER'S PAGE, in place of the card renderPlayers drew (it becomes the
+   Overview's market section, with no door out to the pick page). The Players page redraws every 30 seconds while it
    is open: the same player's page is then put back as it was (the open menu, the
    seasons picked, every panel drawn) with only the market cards swapped for the
    fresh ones, since a price can move between two redraws. A first visit draws
@@ -407,38 +407,15 @@ function plrMarkets(page, kept) {
   const tonight = page.querySelector(".plr-tonight");
   if (!tonight) return;
   tonight.replaceChildren(kept);
-  // A searched-up player's cards come with their own heading ("Found in …",
-  // "Closest matches"); a priced card has none, and gets one.
-  const lead = tonight.firstElementChild;
-  if (lead && !lead.classList.contains("section-title")) {
-    tonight.insertAdjacentHTML("afterbegin", `<h3 class="plr-h">${plrTonightTitle(page)}</h3>`);
-  }
+  if (tonight.firstElementChild) tonight.insertAdjacentHTML("afterbegin", `<h3 class="plr-h">${plrTonightTitle(page)}</h3>`);
 }
-//: Whose card an element is, by the doors every card carries (its charts, its game log, its market chips).
-function plrCardOf(el) {
-  const door = el.querySelector && el.querySelector("[data-gl], [data-carry], .prof-tab[data-player]");
-  return door ? door.dataset.gl || door.dataset.carry || door.dataset.player || "" : "";
-}
+//: renderPlayers hands over this player's card alone (the search lists names; only the address draws a card).
 function renderPlayerPage(host, player, sport) {
   if (!host || !player || !PLR_SPORTS.includes(sport)) return;
   const r0 = ((typeof _profRows !== "undefined" && _profRows.get(player)) || [])[0] || {};
   const team = r0.team || "", key = `${sport}|${player}`;
   const kept = document.createDocumentFragment();
   while (host.firstChild) kept.appendChild(host.firstChild);
-  // The address named this player: a near name the search drew beside them is another player's card, not
-  // this page's; and a roster row's "Profile" door to the player whose page this already is goes nowhere.
-  // Asked for by name, the page is that player's alone: the near names the search listed go with it.
-  [...kept.children].forEach((el) => { const who = plrCardOf(el); if (who && who !== player) el.remove(); });
-  const asked = typeof searchNorm === "function" && searchNorm(player) === searchNorm(state.search || "");
-  kept.querySelectorAll(".roster-hit").forEach((row) => {
-    const b = row.querySelector("[data-lookup]");
-    if (asked || (b && b.dataset.lookup === player)) row.remove();
-  });
-  if (asked) {
-    [...kept.querySelectorAll(".section-title")].forEach((t) => {
-      if (t.textContent.trim() === "Also matching") t.remove();
-    });
-  }
   const same = _plrLive && _plrLive.key === key ? _plrLive.page : null;
   if (same) {
     plrMarkets(same, kept);

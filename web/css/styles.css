@@ -1452,6 +1452,27 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 }
 
 .player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: 18px; }
+
+/* THE SEARCH'S ANSWER (2026-11-17, Ethan: "when you search a player it will
+   just show there name and headshot"): a row a name, each the door to the
+   player's page, a stripe of the club's colour down its edge. One column on
+   a phone, as many as fit on a wide screen. */
+.psr-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 8px; }
+.psr-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; margin: 0;
+  padding: 10px 12px 10px 16px; border: var(--hairline) solid transparent; border-radius: var(--radius-sm);
+  background: var(--panel-2); box-shadow: inset 3px 0 0 var(--psr-c, var(--brand));
+  color: var(--text); font: inherit; text-align: left; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.psr-row:hover { background: var(--fill-hover); }
+.psr-row:active { transform: scale(.99); }
+.psr-row:focus-visible { outline: var(--focus-w) solid var(--brand); outline-offset: 2px; }
+.psr-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.psr-nm { font-size: var(--fs-lg); font-weight: 700; line-height: var(--lh-tight);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.psr-sub { color: var(--text-mute); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.psr-sub .team-mark-wrap { display: inline-block; vertical-align: -3px; margin-right: 2px; }
+.psr-go { flex: none; color: var(--text-mute); font-size: var(--fs-2xl); line-height: 1; }
+.psr-row:hover .psr-go { color: var(--brand); }
 .profile {
   background: var(--panel-2);
   border: var(--hairline) solid transparent; border-radius: 0; box-shadow: none;
@@ -1499,11 +1520,16 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    and five uneven tracks pushed the last tile out of the card at 320px.
    With the floor at 0 the five columns are genuinely equal and the label
    wraps inside its tile. */
-.form-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 0 18px 14px; }
-.form-tile .k, .form-tile .v { overflow-wrap: break-word; }
-.form-tile { background: var(--fill-subtle); border: var(--hairline) solid transparent; border-radius: var(--radius-sm); padding: 8px 6px; text-align: center; }
+/* Five tiles across a card a phone wide: the figure is sized to the row
+   (cqi), so "250.3" and "SEASON" stay whole. They broke mid-number at 390px
+   on the player page's markets (2026-11-17), where the card sits inside the
+   page's own gutters. */
+.form-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 0 18px 14px;
+  container-type: inline-size; }
+.form-tile .k, .form-tile .v { white-space: nowrap; overflow: hidden; }
+.form-tile { min-width: 0; background: var(--fill-subtle); border: var(--hairline) solid transparent; border-radius: var(--radius-sm); padding: 8px 3px; text-align: center; }
 .form-tile .k { font-size: var(--fs-2xs); color: var(--text-mute); text-transform: uppercase; letter-spacing: .4px; }
-.form-tile .v { font-size: var(--fs-xl); font-weight: 800; margin-top: 2px; }
+.form-tile .v { font-size: min(var(--fs-xl), 4.6cqi); font-weight: 800; margin-top: 2px; }
 
 .profile-spark { padding: 0 14px 6px; }
 .profile-spark svg { width: 100%; height: auto; }
@@ -1531,6 +1557,12 @@ svg[data-scrub] { touch-action: pan-y; }
 .profile-pick { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 18px; border-top: var(--hairline) solid var(--border-soft); background: var(--fill-subtle); }
 .profile-pick .lbl { font-size: var(--fs-md); font-weight: 700; }
 .profile-pick .lbl small { color: var(--text-mute); font-weight: 500; display: block; }
+/* On the player's page the pick opens nothing; the pick page's two actions sit
+   under it instead (app.js profileActsHTML): the books, and a question. */
+.prof-acts { display: flex; gap: 8px; padding: 0 18px 14px; background: var(--fill-subtle); }
+.prof-acts > * { flex: 1 1 0; min-height: 44px; margin: 0; display: flex; align-items: center; justify-content: center; }
+/* The gold bar is the button: the word's own pill would light as a patch inside it. */
+.prof-acts .betit-box .betit { background: none; box-shadow: none; font-size: var(--fs-md); }
 
 /* A SEARCHED PLAYER'S CARD AND THE PROP PAGE'S OWN SECTIONS, one unit.
    The wrapper is structural rather than decorative: the market chips

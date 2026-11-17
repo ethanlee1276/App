@@ -13944,7 +13944,17 @@ async function renderPlayers() {
   renderSearchRecent();
   renderTeamHits();
   const q = state.search.trim().toLowerCase();
-  // Cached after the first call; every profile header tags a current
+  /* A NAME, THEN THE PAGE. Ethan, 2026-11-17, circling the pick page a search
+     card had opened: "let's get rid of this page … and replace it with the
+     actual player page we just added … when you search a player it will just
+     show there name and headshot then the user had too click on there name
+     and it will pull them to the actual player page." So a search answers
+     with names and faces (searchListHTML), each a door to #player/<name>; that
+     address (openPlayerRoute sets state.playerSlug) is the one place this view
+     draws a player's cards, and it draws them as the markets on the player's
+     own page, with no door out to the pick page. */
+  const routed = !!(q && state.playerSlug);
+  // Cached after the first call; every row and card tags a current
   // designation from it, whatever the sport.
   await loadInjuryBoard();
   if (seq !== _playersSeq) return;
@@ -13956,7 +13966,7 @@ async function renderPlayers() {
      a live page-error listener, on the page Ethan was searching from.
 
      Not fatal either: search reads the history DB, so it works with no
-     board at all. An absent board costs you tonight's priced cards, not
+     board at all. An absent board costs you tonight's priced markets, not
      the page. */
   const board = state.data || {};
   let recs = board.recommendations || [];
@@ -13966,11 +13976,11 @@ async function renderPlayers() {
     recs = picked.rows;
     boardGuess = picked.guessed;
   }
-  // One CARD per player, every market kept. The old dedupe ("first
+  // One entry per player, every market kept. The old dedupe ("first
   // market listed") threw the rest of a player's rows away — Ethan,
   // 2026-08-17: "when i search an nfl player it will only display yard
   // props … i also wanna be able to maybe see reception props with the
-  // chart". The card's chips carry tonight's other priced markets AND
+  // chart". The page's market card chips tonight's other priced markets AND
   // the build's player_stats history (engine/statlogs.py).
   _profRows = new Map();
   recs.forEach((r) => {
@@ -14003,52 +14013,58 @@ async function renderPlayers() {
        players isn't working still. You should be able too look up any
        player in the league too that specific sport." The board only
        knows tonight's priced players; /api/players/search reads the
-       history DB — everyone who has ever appeared in an ingested game —
-       and /api/players/logs returns the same multi-market shape the
-       board's player_stats ships, so a searched-up bench bat gets the
-       exact profile card a priced star gets. The roster directory stays
-       as the offline fallback: a static host has no /api. */
+       history DB — everyone who has ever appeared in an ingested game,
+       and the rosters — and /api/players/logs returns the same
+       multi-market shape the board's player_stats ships, so a looked-up
+       bench bat's page gets the exact market card a priced star's gets.
+       The roster directory stays as the offline fallback: a static host
+       has no /api. */
     if (q) {
-      const hits = await leagueSearchAfterPause(q, seq, host);
+      // A name tapped in the list is already known: its page needs no second search.
+      const tapped = routed ? _searchListed.get(state.playerSlug) : null;
+      const hits = tapped ? [tapped] : await leagueSearchAfterPause(q, seq, host);
       if (hits === null || seq !== _playersSeq) return;    // a newer letter, or the board landed
       if (state.search.trim().toLowerCase() !== q) return;  // stale keystroke
+      const m = routed && (hits.find((h) => searchNorm(h.player) === searchNorm(state.search))
+        || (hits.length === 1 && hits[0]));
+      if (m) {
+        // A fighter has no game logs to fetch (a request that can only come
+        // back empty, and the empty answer would read as "we know nothing
+        // about this fighter") and no page beyond the card of career rates.
+        if (m.sport === "ufc") {
+          host.innerHTML = `<div class="player-grid">${ufcProfileHTML(m)}</div>`;
+          return;
+        }
+        if (!playerStats(m.player)) {
+          const st = await leagueLogs(m.player, m.sport);
+          if (seq !== _playersSeq) return;
+          if (st && Object.keys(st).length) _searchStats[m.player] = st;
+        }
+        // A head-only row: profileHTML draws the history card from it plus
+        // the stats above. No market_label, so it can never masquerade as a
+        // priced market. It DOES carry the league — every colour, logo and
+        // injury lookup on the card is keyed by an abbreviation that means
+        // nothing without one.
+        _profRows = new Map([[m.player, [{ player: m.player, team: m.team,
+                                           position: m.position, opponent: "",
+                                           headshot: m.headshot,
+                                           sport: m.sport }]]]);
+        host.innerHTML = profileHTML(m.player, { deep: true, inPage: true });
+        renderPlayerPage(host, m.player, m.sport);
+        return;
+      }
       if (hits.length) {
-        const full = hits.slice(0, 4);
-        await Promise.all(full.map(async (m) => {
-          // A fighter has no game logs to fetch — asking for them would
-          // be a request that can only ever come back empty, and the
-          // empty answer would read as "we know nothing about him".
-          if (m.sport === "ufc") return;
-          if (!playerStats(m.player)) {
-            const st = await leagueLogs(m.player, m.sport);
-            if (st && Object.keys(st).length) _searchStats[m.player] = st;
-          }
-          // A head-only row: profileHTML draws the history card from it
-          // plus the injected stats. No market_label, so it can never
-          // masquerade as a priced market. It DOES carry the league —
-          // every colour, logo and injury lookup on the card is keyed by
-          // an abbreviation that means nothing without one.
-          _profRows.set(m.player, [{ player: m.player, team: m.team,
-                                     position: m.position, opponent: "",
-                                     headshot: m.headshot,
-                                     sport: m.sport }]);
-        }));
-        if (seq !== _playersSeq) return;
-        if (state.search.trim().toLowerCase() !== q) return;
-        const drawn = full.filter((m) =>
-          m.sport === "ufc" ? m.fighter : playerStats(m.player));
-        const rest = hits.filter((m) => !drawn.some((d) => d.player === m.player));
         /* SAY WHEN THESE ARE GUESSES. The search reaches past an exact
-           spelling now — swapped first and last name, a missing accent,
-           a wrong letter — which is what stops an empty page for a name
-           typed from memory. But a corrected spelling presented as though
-           it were what you asked for is its own kind of lying, and the
-           heading has to say which it is.
+           spelling — swapped first and last name, a missing accent, a wrong
+           letter — which is what stops an empty page for a name typed from
+           memory. But a corrected spelling presented as though it were what
+           you asked for is its own kind of lying, and the heading has to say
+           which it is.
 
            RANK 3 ONLY. Rank 2 is every word you typed starting a word of
            the name — "ramirez jose" for José Ramírez — and that is not a
-           guess, it is his name typed backwards. Calling that a "closest
-           match" would apologise for finding exactly the right man. */
+           guess, it is the name typed backwards. Calling that a "closest
+           match" would apologise for finding exactly the right player. */
         const guessed = hits.length && hits.every((m) => (m.rank || 0) >= 3);
         const lgName = lgCode(state.sport);
         host.innerHTML = `
@@ -14057,36 +14073,11 @@ async function renderPlayers() {
             <span class="sub">— ${guessed
               ? `no ${escapeHtml(lgName)} name we hold is spelled exactly
                  “${escapeHtml(state.search)}”,
-                 so ${drawn.length + rest.length > 1 ? "these are the nearest names"
-                                                     : "this is the nearest name"}`
-              : `nothing priced on tonight’s
-                 ${escapeHtml(lgCode(state.sport))} board for
-                 “${escapeHtml(state.search)}”, so this is what we store on
-                 ${drawn.length + rest.length > 1 ? "them" : "him"}`}</span></div>
-          <div class="player-grid">${drawn.map((m) => m.sport === "ufc"
-            ? ufcProfileHTML(m) : profileHTML(m.player)).join("")}</div>
-          ${rest.length ? `<div class="section-title minor">Also matching</div>` : ""}
-          ${rest.map((m) => `
-            <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
-              ${playerAvatar(m.player, m.team, { size: 40, headshot: m.headshot })}
-              <div style="flex:1;min-width:0">
-                <strong>${escapeHtml(m.player)}</strong>${leagueBadge(m.sport)}${injTag(m.sport || state.sport || "nfl", m.player)}
-                <div style="font-size:.85em;color:var(--text-mute)">
-                  ${m.team ? `${teamMarkIn(m.sport, m.team, 14)} ${escapeHtml(teamNameIn(m.sport, m.team))} · ` : ""}${escapeHtml(m.position || "—")}
-                  · ${m.sport === "ufc" ? `tracked ${pluralWord(m.games, "fight")}` : `${pluralWord(m.games, "game")} logged`}</div>
-              </div>
-              <button class="btn" data-lookup="${escapeAttr(m.player)}">Profile</button>
-            </div>`).join("")}`;
-        host.querySelectorAll("[data-lookup]").forEach((b) =>
-          b.addEventListener("click", () => {
-            const inp = document.getElementById("player-search");
-            state.search = b.dataset.lookup;
-            if (inp) inp.value = b.dataset.lookup;
-            renderPlayers();
-          }));
-        const own = drawn.find((m) => searchNorm(m.player) === searchNorm(state.search)) || (drawn.length === 1 && drawn[0])
-          || rest.find((m) => searchNorm(m.player) === searchNorm(state.search));
-        if (own && own.sport !== "ufc") renderPlayerPage(host, own.player, own.sport);
+                 so ${hits.length > 1 ? "these are the nearest names" : "this is the nearest name"}`
+              : `no prop on tonight’s ${escapeHtml(lgName)} board for
+                 “${escapeHtml(state.search)}”`}</span></div>
+          ${searchListHTML(hits)}`;
+        revealChildren(host.querySelector(".psr-list"));
         return;
       }
     }
@@ -14095,26 +14086,24 @@ async function renderPlayers() {
     const found = q ? await rosterMatches(state.search) : { rows: [], guessed: false };
     const misses = found.rows;
     if (seq !== _playersSeq) return;
+    const mine = routed && misses.find((m) => searchNorm(m.player) === searchNorm(state.search));
+    if (mine) {
+      // Known only to a roster: the page's header and Bio come from it.
+      _profRows = new Map([[mine.player, [{ player: mine.player, team: mine.team,
+        position: mine.position, opponent: "", headshot: mine.headshot, sport: state.sport }]]]);
+      host.innerHTML = "";
+      renderPlayerPage(host, mine.player, state.sport);
+      return;
+    }
     if (misses.length) {
       host.innerHTML = `
         <div class="empty" style="margin-bottom:12px">No prop on tonight’s board for
-          “${escapeHtml(state.search)}” — profiles here are prop cards.
+          “${escapeHtml(state.search)}”.
           ${found.guessed
             ? `No roster name is spelled exactly that way; the nearest${misses.length > 1 ? " are" : " is"}:`
             : `On the roster${misses.length > 1 ? "s" : ""}:`}</div>
-        ${misses.map((m) => `
-          <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
-            ${playerAvatar(m.player, m.team, { size: 40, headshot: m.headshot })}
-            <div style="flex:1;min-width:0">
-              <strong>${escapeHtml(m.player)}</strong>${injTag(state.sport || "nfl", m.player)}
-              <div style="font-size:.85em;color:var(--text-mute)">
-                ${teamMark(m.team, 14)} ${escapeHtml(teamName(m.team))}
-                · ${escapeHtml(m.position || "—")}
-                ${m.games ? `· ${plural(m.games, "game")} logged` : ""}
-                ${m.status ? `· ${escapeHtml(m.status)}` : ""}</div>
-            </div>
-            <button class="btn" data-act="openRoster" data-arg="${escapeAttr(m.team)}">Roster</button>
-          </div>`).join("")}`;
+        ${searchListHTML(misses.map((m) => ({ ...m, sport: state.sport })))}`;
+      revealChildren(host.querySelector(".psr-list"));
       return;
     }
     if (!q) {
@@ -14122,18 +14111,18 @@ async function renderPlayers() {
          or a slate not yet priced). Ethan's render sweep, 2026-08-18:
          NBA Players drew 20 characters — the failed-search apology with
          an empty quote in it, on a page nobody had searched. Say the
-         true thing instead: profiles are prop cards, and this league
-         has none priced tonight. */
+         true thing instead: this league has nobody priced tonight, and
+         the box still finds anyone. */
       host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("search", 30)}</div>
         <div class="es-title">No priced props on the ${escapeHtml(lgCode(state.sport))} board tonight</div>
-        <div class="es-sub">Player profiles are built from the board’s prop cards, so there
-        are none to draw until a slate prices. The page fills as soon as one does.</div></div>`;
+        <div class="es-sub">Nobody has a prop to list until a slate prices. Type a name above
+        to open any player’s page.</div></div>`;
       return;
     }
     /* SAY THE SCOPE. The search looks only at the league whose tab is
        lit (Ethan, 2026-09-01: "if im on mlb then i should only be able
        to search mlb and so forth") — so an empty answer must name the
-       league it looked in, or "we have nothing on him" and "you are on
+       league it looked in, or "we have nothing on them" and "you are on
        the wrong tab" become indistinguishable again, which was the
        whole 08-23 complaint about the last scoped box. */
     host.innerHTML = `<div class="empty">No
@@ -14143,40 +14132,75 @@ async function renderPlayers() {
       another one.</div>`;
     return;
   }
+  const own = routed && (players.find((p) => searchNorm(p) === searchNorm(state.search))
+    || (players.length === 1 && players[0]));
+  if (own) {
+    /* PRICED TONIGHT: the page's markets are the player's cards at full
+       depth — the books, the line's moves, the script, the checks, the sim
+       lab — every one of the pick page's sections, on the player's own page. */
+    _profRows = new Map([[own, _profRows.get(own)]]);
+    const keep = ccKeep(host);
+    host.innerHTML = profileHTML(own, { deep: true, inPage: true });
+    keep(host);
+    fillMeters(host);
+    renderPlayerPage(host, own, state.sport);
+    return;
+  }
   // MEASURED IN CHROMIUM, 2026-08-08: with no query this rendered 293 full
   // profiles — 4,315 table rows and 139,451px of page. A hundred and
   // fifty-five screens, on the page whose own tab hint is "search a
   // player". The search box was filtering a DOM that had already been
   // built in full.
   //
-  // So an unsearched visit shows a browsable handful and says how many
-  // there are. Searching still reaches every one of them: the filter runs
-  // over the whole list above and only the DISPLAY is capped.
+  // A row a name is a fraction of a card, and a browse still shows a
+  // handful and says how many there are. Searching reaches every one of
+  // them: the filter runs over the whole list above and only the DISPLAY
+  // is capped.
   const cap = playerBrowseCap();
   const capped = !q && players.length > cap;
   const shown = capped ? players.slice(0, cap) : players;
   // SAY WHEN THIS IS A GUESS, the way the league search does: a corrected
   // spelling presented as what was asked for is its own kind of lying.
   const lgWord = lgCode(state.sport);
-  const keep = ccKeep(host);
-  host.innerHTML = (capped ? `<p class="browse-note">Showing ${shown.length}
-      of ${players.length} players with a prop on tonight’s board —
-      type a name to find anyone else.</p>` : "")
+  host.innerHTML = (q ? "" : `<div class="section-title minor">Tonight’s players
+        <span class="sub">— everyone with a prop on tonight’s ${escapeHtml(lgWord)} board</span></div>`)
+    + (capped ? `<p class="browse-note">Showing ${shown.length} of ${players.length}.
+        Type a name to find anyone else.</p>` : "")
     + (boardGuess ? `<div class="section-title minor">Closest match on tonight’s board
         <span class="sub">— no priced ${escapeHtml(lgWord)} player is spelled exactly
         “${escapeHtml(state.search)}”, so ${players.length > 1
           ? "these are the nearest names" : "this is the nearest name"}</span></div>` : "")
-    /* NOT `shown.map(profileHTML)`. `map` hands its callback the INDEX
-       as a second argument, so the bare reference would pass 0, 1, 2…
-       where the options object goes — and `{deep}` off a number is
-       undefined, which is the shallow card. It would have looked like
-       the flag simply did not work. */
-    + shown.map((p) => profileHTML(p, { deep: !!q })).join("");
-  keep(host);
-  fillMeters(host);
-  revealChildren(host);
-  const own = q && (shown.find((p) => searchNorm(p) === searchNorm(state.search)) || (shown.length === 1 && shown[0]));
-  if (own) renderPlayerPage(host, own, state.sport);
+    + searchListHTML(shown.map((p) => _profRows.get(p)[0]));
+  revealChildren(host.querySelector(".psr-list"));
+}
+
+/* THE SEARCH'S ANSWER: a face and a name a row, the club and position under
+   it for the two players who share a name, and nothing else. Each row is a
+   door to the player's page (the [data-player-page] listener,
+   openPlayerRoute), so the back bar names the search and brings its words
+   back. A fighter has no club: the division stands in its place. */
+//: Who each listed row was, by the slug its door carries: a tap needs no second search.
+const _searchListed = new Map();
+function searchListHTML(rows) {
+  _searchListed.clear();
+  return `<div class="psr-list">${rows.map((m) => {
+    _searchListed.set(slugify(m.player), m);
+    return searchRowHTML(m);
+  }).join("")}</div>`;
+}
+function searchRowHTML(m) {
+  const lg = m.sport || state.sport;
+  const f = m.fighter || {};
+  const where = lg === "ufc"
+    ? [String(f.division || "").replace(/_/g, " "), m.games != null ? `tracked ${plural(m.games, "fight")}` : ""]
+    : [m.team ? `${teamMarkIn(lg, m.team, 14)} ${escapeHtml(teamNameIn(lg, m.team))}` : "", escapeHtml(m.position || "")];
+  return `<button type="button" class="psr-row" data-player-page="${escapeAttr(slugify(m.player))}"
+      style="--psr-c:${escapeAttr(m.team ? teamPrimaryIn(lg, m.team) : "var(--brand)")}">
+    ${playerAvatar(m.player, m.team, { size: 44, headshot: m.headshot })}
+    <span class="psr-who"><span class="psr-nm">${escapeHtml(m.player)}${
+      lg !== state.sport ? leagueBadge(m.sport) : ""}${injTag(m.sport || state.sport, m.player)}</span>
+      <span class="psr-sub">${where.filter(Boolean).map((w) => lg === "ufc" ? escapeHtml(w) : w).join(" · ")}</span></span>
+    <span class="psr-go" aria-hidden="true">›</span></button>`;
 }
 
 /* The UFC hero's "view upcoming fights".
@@ -14228,8 +14252,9 @@ document.addEventListener("click", (e) => {
   const card = chip.closest(".profile-deep") || chip.closest(".profile");
   if (!card) return;
   const tmp = document.createElement("div");
+  // On the player's page, still the page's card: no door out to the pick page.
   tmp.innerHTML = profileHTML(chip.dataset.player,
-                              { deep: card.classList.contains("profile-deep") });
+                              { deep: card.classList.contains("profile-deep"), inPage: !!card.closest(".plr") });
   const fresh = tmp.firstElementChild;
   if (!fresh) return;
   fresh.classList.add("reveal", "in");     // already on screen — no re-entrance
@@ -14262,8 +14287,8 @@ function ufcProfileHTML(m) {
       ${fighterColHTML(f)}
       <div class="profile-pick"><div class="lbl">Career rates
         <small>${known
-          ? "a fight has no per-game log to chart — these are per-minute and per-15 rates over his tracked fights"
-          : "no tracked fight stats for him yet, so there is nothing to rate"}</small></div></div>
+          ? "a fight has no per-game log to chart — these are per-minute and per-15 rates over the fighter’s tracked fights"
+          : "no tracked fight stats for this fighter yet, so there is nothing to rate"}</small></div></div>
     </article>`;
 }
 
@@ -14286,21 +14311,21 @@ const _profTab = {};
 //: Tonight's rec rows per player, rebuilt by every renderPlayers pass.
 let _profRows = new Map();
 
-//: How many profiles an unsearched Players page draws.
+//: How many names an unsearched Players page lists.
 //:
-//: TWO NUMBERS, BECAUSE THE GRID IS NOT ONE LAYOUT. A profile is a tall
-//: card — chart, form table, meters — and `.player-grid` is
-//: `auto-fill, minmax(420px, 1fr)`: three columns on a laptop, ONE on a
-//: phone. Measured at 390x844 after the first cap shipped, twelve cards
-//: stacked single-file came to 10,919px — 12.9 screens, which is the
-//: original complaint again on the device least able to afford it.
+//: TWO NUMBERS, BECAUSE THE LIST IS NOT ONE LAYOUT. It was a cap on tall
+//: profile cards (4 on a phone, where twelve stacked single-file measured
+//: 10,919px); since 2026-11-17 the page lists names, a 64px row each, and
+//: `.psr-list` is `auto-fill, minmax(300px, 1fr)`: one column on a phone,
+//: three or four on a laptop. Twelve rows are about one phone screen under
+//: the search box; thirty fill a laptop's columns ten deep.
 //:
 //: Read at render rather than at load: a rotated phone or a resized window
 //: is the same visitor, and a constant captured once would leave them with
 //: whichever layout they happened to start in.
 function playerBrowseCap() {
   return (typeof window !== "undefined" && window.matchMedia
-    && window.matchMedia("(max-width: 760px)").matches) ? 4 : 12;
+    && window.matchMedia("(max-width: 760px)").matches) ? 12 : 30;
 }
 
 /* The search pair — scoped to the tab you are standing on.
@@ -14515,7 +14540,7 @@ document.addEventListener("click", (e) => {
   const chip = e.target.closest && e.target.closest(".sr-chip");
   if (!chip) return;
   acctSearchLog(chip.dataset.q);
-  openPlayer(chip.dataset.q);
+  searchFor(chip.dataset.q);
 });
 
 /* The roster directory's answer, the same four tiers, best first and
@@ -14534,15 +14559,6 @@ async function rosterMatches(q) {
     || String(x.p.player).localeCompare(String(y.p.player)));
   return { rows: hits.slice(0, 12).map((h) => h.p),
            guessed: hits.length > 0 && hits.every((h) => h.rank >= 3) };
-}
-
-function openRoster(team) {
-  switchView("rosters");
-  const search = document.getElementById("roster-search");
-  if (search) {
-    search.value = team;
-    search.dispatchEvent(new Event("input", { bubbles: true }));
-  }
 }
 
 /* One card, many markets. The chips list every market we can say
@@ -14573,7 +14589,7 @@ function openRoster(team) {
    search box before it renders, so the addressable player page is always
    the deep one. */
 function profileHTML(player, opts) {
-  const deep = !!(opts && opts.deep);
+  const deep = !!(opts && opts.deep), inPage = !!(opts && opts.inPage);
   const rows = _profRows.get(player) || [];
   const stats = playerStats(player) || {};
   // A searched-up league player rides in on a HEAD-ONLY row (no
@@ -14599,7 +14615,7 @@ function profileHTML(player, opts) {
   const r0 = rows[0] || {};
   const vsTail = vsBlockHTML(player, lg, r0.opponent || "") + chartDoor(player, lg, priced.get(mkt) || r0);
   return priced.has(mkt)
-    ? pricedProfileHTML(priced.get(mkt), chips, vsTail, deep)
+    ? pricedProfileHTML(priced.get(mkt), chips, vsTail, deep, inPage)
     : historyProfileHTML(rows[0], mkt, stats[mkt] || [], chips, vsTail);
 }
 
@@ -14615,7 +14631,7 @@ function profileHTML(player, opts) {
    door carries the face this page is showing, so the chart has one even
    where its own lookup finds none. */
 function chartDoor(player, lg, r) {
-  return /^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/.test(lg) ? `<div class="prof-vs prof-charts">${ccDoor(player, lg, "auto", "His charts", r.headshot, r)}<button class="btn gl-open" type="button" data-gl="${escapeAttr(player)}" data-lg="${lg}">Game log</button></div>` : "";
+  return /^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/.test(lg) ? `<div class="prof-vs prof-charts">${ccDoor(player, lg, "auto", "Charts", r.headshot, r)}<button class="btn gl-open" type="button" data-gl="${escapeAttr(player)}" data-lg="${lg}">Game log</button></div>` : "";
 }
 /* HIS GAME LOG (js/gamelog.js; Ethan, 2026-11-16: "we should have game logs for
    every player too that you can look up and see for each player"): his season
@@ -14717,7 +14733,7 @@ function vsBlockHTML(player, sport, opp = "") {
   return `<div class="prof-vs" data-player="${escapeAttr(player)}"
       data-sport="${escapeAttr(lg)}"${opp ? ` data-opp="${escapeAttr(opp)}"` : ""}>
     <button class="btn vs-open" type="button">${opp
-      ? `How he’s done vs ${escapeHtml(teamNameIn(lg, opp))}…`
+      ? `History vs ${escapeHtml(teamNameIn(lg, opp))}…`
       : "History vs a team…"}</button>
   </div>`;
 }
@@ -14731,7 +14747,7 @@ document.addEventListener("click", async (e) => {
   const box = b.closest(".prof-vs");
   if (!box) return;
   b.disabled = true;
-  b.textContent = "Loading his opponents…";
+  b.textContent = "Loading opponents…";
   const { player, sport } = box.dataset;
   let got = null;
   try {
@@ -14911,8 +14927,11 @@ function _profileHead(r, right, door = "") {
       </div>`;
 }
 
-function pricedProfileHTML(r, chips, tail = "", deep = false) {
+function pricedProfileHTML(r, chips, tail = "", deep = false, inPage = false) {
   const f = r.form || {};
+  // On the player's own page the card opens nothing (Ethan, 2026-11-17: the
+  // pick page left the player's flow); everywhere else the pick is a door.
+  const door = inPage ? "" : propAttrs(r);
   const tiles = [["L1", f.last1], ["L3", f.last3], ["L5", f.last5], ["L10", f.last10], ["Season", f.season]]
     .map(([k, v]) => `<div class="form-tile"><div class="k">${k}</div><div class="v">${v == null ? "—" : v}</div></div>`).join("");
   const vals = (r.logs || []).map((l) => l.value);
@@ -14936,7 +14955,7 @@ function pricedProfileHTML(r, chips, tail = "", deep = false) {
   const art = `
     <article class="profile" style="--profile-grad:${grad}">
       ${_profileHead(r, `<span class="grade ${gradeClass(r.grade)}">${
-        escapeHtml(r.grade)}</span>`, propAttrs(r))}
+        escapeHtml(r.grade)}</span>`, door)}
       ${chips}
       <div class="form-tiles">${tiles}</div>
       <div class="profile-spark">${gamelogBars(vals, {
@@ -14973,21 +14992,39 @@ function pricedProfileHTML(r, chips, tail = "", deep = false) {
             (three logged games, or the page's centrepiece is missing),
             so a row with nothing behind it simply is not clickable —
             the affordance appears exactly where there is something to
-            open. */""}
-      <div class="profile-pick"${propAttrs(r)}>
+            open.
+
+            NOT ON THE PLAYER'S PAGE (2026-11-17). Ethan circled the pick
+            page this door opened from a search and asked for the player's
+            page in its place: a search now lists names, a name opens the
+            page, and the page's card is the end of the road, with Bet it
+            and Ask on it (profileActsHTML). The peek keeps the door. */""}
+      <div class="profile-pick"${door}>
         <div class="lbl">${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}
           <small>${escapeHtml(r.book)} ${american(r.odds)} · proj ${r.projection}
             · <span title="Probability the ${escapeHtml(r.side)} hits. Can side against the raw projection: baseball stats are right-skewed, so a few big games pull the AVERAGE above the line while MOST games still land under it.">${pct(shrinkArtefact(r) ? r.raw_prob : r.hit_prob)} to hit${
               shrinkArtefact(r) ? " (before the shrink)" : ""}</span>
             · edge ${signedPct(r.edge)}</small></div>
         <div style="min-width:120px">${confMeter(r)}</div>
-        ${propOpenable(r) ? `<span class="pp-go" aria-hidden="true">→</span>` : ""}
+        ${door ? `<span class="pp-go" aria-hidden="true">→</span>` : ""}
       </div>
+      ${inPage ? profileActsHTML(r) : ""}
       ${tail}
     </article>`;
   return deep
     ? `<div class="profile-deep">${art}${propDepthHTML(r)}</div>`
     : art;
+}
+
+/* THE PICK PAGE'S ACTIONS, ON THE PLAYER'S PAGE. The card there opens
+   nothing, so what the pick page offered the bet comes to the card: the books
+   (Bet it) and a question about it (Ask, with the pick attached). */
+function profileActsHTML(r) {
+  const label = `${r.player || ""} ${r.side || ""} ${r.line ?? ""} ${r.market_label || ""}`
+    .replace(/\s+/g, " ").trim();
+  return `<div class="prof-acts">${betItHTML(r, "btn primary")}
+    <button class="btn ghost" type="button" data-ask-pick="${escapeAttr(propId(r))}"
+      data-ask-label="${escapeAttr(label)}">Ask</button></div>`;
 }
 
 /* THE PROP PAGE'S OWN SECTIONS, drawn under the profile card.
@@ -15160,13 +15197,21 @@ function closePeek() {
   lockScroll(false);
 }
 
+//: A name is a door to the player's page (Trending's rows): the search lists names now, so a name typed into it would stop at the list.
 function openPlayer(name) {
-  state.search = name;
+  if (name) openPlayerRoute(slugify(name), name);
+}
+
+/* A search typed on the reader's behalf (a recent chip): the words in the box
+   and the list of names they find. */
+function searchFor(q) {
+  state.playerSlug = "";
+  state.search = q;
   // The input is in index.html and has always been there, but this is
-  // now reached from a delegated click handler: a throw here would kill
-  // the listener for every OTHER door on the page, not just this one.
+  // reached from a delegated click handler: a throw here would kill the
+  // listener for every OTHER door on the page, not just this one.
   const box = document.getElementById("player-search");
-  if (box) box.value = name;
+  if (box) box.value = q;
   switchView("players");
   renderPlayers();
 }
@@ -26125,8 +26170,9 @@ function entityRoute(h) {
    entire gap: `renderPlayers` searches the board first and the league
    history second, so a de-slugged name reaches a bench bat nobody priced
    as readily as it reaches a star. */
-function openPlayerRoute(slug) {
-  const name = deslug(slug);
+function openPlayerRoute(slug, shown) {
+  // Spelled as the list or the door showed it ("Ja'Marr Chase", not "ja marr chase") where one did.
+  const name = shown || (_searchListed.get(slugify(slug)) || {}).player || deslug(slug);
   if (!name) return false;
   // Remembered so the address stays HIS rather than collapsing to
   // #players the moment the view switches — the same flattening the
@@ -32255,7 +32301,6 @@ const ACTS = {
   },
   welcomeDismiss: () => window._welcomeDismiss(),
   openPlayer: (el, a) => openPlayer(a),
-  openRoster: (el, a) => openRoster(a),
   recSetSplit: (el, a) => window._recSetSplit(a),
   recShowPicks: () => window._recShowPicks(),
   recCalSetMonth: (el, a) => window._recCalSetMonth(a),

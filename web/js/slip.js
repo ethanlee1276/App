@@ -260,7 +260,7 @@
   function chartsHTML(l) {
     const lg = String(l.sport || "").toLowerCase();
     return l.player && /^(nfl|cfb|nba|wnba|nhl|mlb|cbb)$/.test(lg)
-      ? `<div class="pgr-charts"><button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="auto" data-mkt="${esc(l.market || "")}" data-opp="${esc(l.opponent || "")}">His charts</button></div>` : "";
+      ? `<div class="pgr-charts"><button type="button" class="pgr-chart cc-open" data-carry="${esc(l.player)}" data-lg="${lg}" data-kind="auto" data-mkt="${esc(l.market || "")}" data-opp="${esc(l.opponent || "")}">Charts</button></div>` : "";
   }
 
   /* AN OFF-BOARD READ (engine/slipread, Ethan 2026-10-13: "We can't just not

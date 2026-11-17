@@ -291,12 +291,12 @@ def test_a_football_leg_in_the_parlay_checker_carries_his_chart_doors():
     # like nfl"), handing over its bet and tonight's opponent.
     doors = re.findall(r'class="pgr-chart cc-open" data-carry="([^"]*)" data-lg="(\w+)" data-kind="(\w+)" '
                        r'data-mkt="([^"]*)" data-opp="([^"]*)">([^<]+)<', html)
-    assert doors == [("Puka Nacua", "nfl", "auto", "receptions", "SF", "His charts"),
-                     ("Kyren Williams", "nfl", "auto", "anytime_td", "SF", "His charts"),
-                     ("Nate Frazier", "cfb", "auto", "rush_yds", "SF", "His charts"),
-                     ("College Receiver", "cfb", "auto", "receptions", "SF", "His charts"),
-                     ("Josh Hart", "nba", "auto", "reb", "SF", "His charts"),
-                     ("&lt;img src=x&gt;", "nfl", "auto", "receptions", "SF", "His charts")], doors
+    assert doors == [("Puka Nacua", "nfl", "auto", "receptions", "SF", "Charts"),
+                     ("Kyren Williams", "nfl", "auto", "anytime_td", "SF", "Charts"),
+                     ("Nate Frazier", "cfb", "auto", "rush_yds", "SF", "Charts"),
+                     ("College Receiver", "cfb", "auto", "receptions", "SF", "Charts"),
+                     ("Josh Hart", "nba", "auto", "reb", "SF", "Charts"),
+                     ("&lt;img src=x&gt;", "nfl", "auto", "receptions", "SF", "Charts")], doors
     assert "<img src=x>" not in html
 
 

@@ -441,7 +441,7 @@ def test_the_page_draws_every_target_and_lists_it():
 def test_the_door_and_the_styles():
     # The player page's one door to his charts (2026-10-14); a receiver's
     # targets lead it (kindsFor, pinned in test_the_pick_page_draws_his_chart).
-    assert 'ccDoor(player, lg, "auto", "His charts", r.headshot, r)' in APP_JS and 'data-kind="${kind}"' in APP_JS
+    assert 'ccDoor(player, lg, "auto", "Charts", r.headshot, r)' in APP_JS and 'data-kind="${kind}"' in APP_JS
     assert 'data-pos="${escapeAttr(r.position || "")}"' in APP_JS, "his position goes with him"
     assert "/api/players/routes" in CC_JS and 'S.kind === "routes"' in CC_JS
     for cls in (".rc-route", ".rc-throw", ".rc-route.miss", ".rc-yac", ".rc-catch", ".rc-miss", ".rc-int",

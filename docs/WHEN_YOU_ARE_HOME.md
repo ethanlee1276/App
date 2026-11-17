@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UQ. A search lists names, and a name opens the player's page** (step 675; 17 November). Nothing to run. Your
+two screenshots: the Players search now answers with a face and a name on each row (the club and position under
+it), and so does the page before you type anything, which lists everyone with a prop on tonight's board. Tapping a
+name opens that player's page, the one with the header, the six menus and the "Tonight's markets" chart, and Back
+returns to the search with your words still in the box. The pick page you circled is out of that path: the market
+card on a player's page no longer opens it, and has the pick page's Bet it and Ask on it instead. A pick tapped on
+the Edge or Most Likely boards still opens its own pick page, which still links to the player's page. A Trending
+row opens the player's page too, and a Recent chip runs its search again. A fighter on the UFC tab opens the card
+of career rates, which is all a fighter's page has. Also on the card: the five form numbers no longer break in the
+middle on a phone ("250.3" had wrapped to "250." over "3"), the buttons read "Charts" and "History vs Dolphins…"
+instead of "His charts" and "How he's done vs…", and a fighter's row says how many fights we track (it said
+"tracked fights", with no number).
+
 **UP. Every player page is the right player, or says why it is empty** (step 674; 17 November). Nothing to
 run. I swept the live player pages (four a club in the NFL and the NHL, and a sample of college schools) and fixed
 what turned up. A name on a roster now only ever opens the same name: written another way ("D.J. Moore" and "DJ

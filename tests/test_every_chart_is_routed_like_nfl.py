@@ -129,7 +129,7 @@ def test_the_player_page_has_one_door_to_his_charts_in_every_league():
     if got is None:
         return
     for lg, html in zip(LEAGUES, got):
-        assert html.count('class="btn cc-open"') == 1 and ">His charts</button>" in html, lg
+        assert html.count('class="btn cc-open"') == 1 and ">Charts</button>" in html, lg
         for attr in (f'data-lg="{lg}"', 'data-kind="auto"', 'data-carry="A &lt;Player&gt;"', 'data-mkt="pts"',
                      'data-pos="G"', 'data-opp="BOS"', 'data-face="https://img.example/x.png"'):
             assert attr in html, (lg, attr)
@@ -159,7 +159,7 @@ def test_every_players_leg_in_the_parlay_checker_carries_the_same_door():
     out = subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr[-1200:]
     doors = re.findall(r'class="pgr-chart cc-open" data-carry="([^"]*)" data-lg="(\w+)" data-kind="(\w+)" '
-                       r'data-mkt="([^"]*)" data-opp="([^"]*)">His charts<', out.stdout)
+                       r'data-mkt="([^"]*)" data-opp="([^"]*)">Charts<', out.stdout)
     assert doors == [("Back", "nfl", "auto", "rush_yds", "BBB"), ("Wideout", "cfb", "auto", "receptions", "BBB"),
                      ("Guard", "nba", "auto", "pts", "BBB"), ("Forward", "wnba", "auto", "reb", "BBB"),
                      ("Goalie", "nhl", "auto", "saves", "BBB"), ("Starter", "mlb", "auto", "strikeouts", "BBB")], doors

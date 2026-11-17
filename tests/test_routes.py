@@ -447,7 +447,7 @@ def test_every_prop_reaches_the_player_page():
 def test_a_player_page_is_the_players_view_with_his_name_in_it():
     """Not a new page: the profile card already draws the headshot, the
     game logs and the form windows. What it never had was an address."""
-    fn = APP[APP.index("function openPlayerRoute(slug)"):]
+    fn = APP[APP.index("function openPlayerRoute(slug, shown)"):]
     fn = fn[:fn.index("\n}")]
     assert "state.search = name" in fn
     assert 'switchView("players")' in fn

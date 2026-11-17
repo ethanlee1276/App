@@ -295,7 +295,10 @@ def test_the_player_search_falls_back_to_the_roster_directory():
     flat = " ".join(body.split()).replace("\u2019", "'")
     assert "No prop on tonight's board" in flat
     assert "async function rosterMatches" in app
-    assert "function openRoster" in app
+    # A roster's answer is a row of names like any other since 2026-11-17,
+    # each opening the player's page (the old Roster button went with it).
+    assert "${searchListHTML(misses.map((m) => ({ ...m, sport: state.sport })))}" in body
+    assert "function openRoster" not in app, "a door nothing opens any more"
 
 
 def test_the_feed_parser_accepts_both_roster_shapes():

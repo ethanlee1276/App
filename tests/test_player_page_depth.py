@@ -97,7 +97,7 @@ def test_the_priced_card_is_the_only_one_that_grows_it():
     """A market nobody priced tonight has no book table, no tape, no
     checks and no sim — the history card would draw eight empty strings
     and a wrapper."""
-    assert "pricedProfileHTML(priced.get(mkt), chips, vsTail, deep)" in APP
+    assert "pricedProfileHTML(priced.get(mkt), chips, vsTail, deep, inPage)" in APP
     hist = _fn("historyProfileHTML")
     assert "propDepthHTML" not in hist
 
@@ -122,26 +122,30 @@ def test_switching_markets_replaces_the_whole_unit_and_keeps_its_depth():
     assert 'deep: card.classList.contains("profile-deep")' in fn
 
 
-# --- a search is deep, a browse is not --------------------------------------
-def test_the_search_render_passes_an_options_object_not_the_map_index():
-    """`shown.map(profileHTML)` passes the INDEX where the options go.
-    `{deep}` off a number is undefined, which is the shallow card — the
-    flag would have looked simply broken."""
-    assert "shown.map((p) => profileHTML(p, { deep: !!q })).join" in APP
-    # `.join` on the end, because the comment beside the call quotes the
-    # bare form to explain what it must not be — matching that would fail
-    # against the very note that documents the trap.
+# --- the page is deep, a search and a browse draw no card -------------------
+def test_the_players_page_draws_its_card_deep_and_as_the_pages_own():
+    """Ethan, 2026-11-17: a search lists names, and a name opens the
+    player's page. The address is the one place the view draws a card, at
+    full depth and as the page's own (no door out to the pick page), by an
+    options object: `shown.map(profileHTML)` would pass the INDEX where the
+    options go, and the flags would look simply broken."""
+    i = APP.index("async function renderPlayers(")
+    body = APP[i:APP.index("\n/* The UFC hero", i)]
+    assert body.count("profileHTML(") == 2, "a card only for the page's own player"
+    assert "host.innerHTML = profileHTML(own, { deep: true, inPage: true });" in body, "priced tonight"
+    assert "host.innerHTML = profileHTML(m.player, { deep: true, inPage: true });" in body, "from the league's logs"
     assert "shown.map(profileHTML).join" not in APP
 
 
-def test_an_unsearched_browse_stays_shallow():
-    """The measurement this defers to is forty lines above it in the same
-    function: 293 profiles, 139,451px. `!!q` is what keeps the depth on
-    the one player who was asked about."""
+def test_a_search_and_a_browse_list_names_and_no_cards():
+    """The measurement this defers to is in the same function: 293
+    profiles, 139,451px, on a page nobody had searched. A search and a
+    browse are a list of names now, a 64px row each, still capped."""
     i = APP.index("async function renderPlayers(")
     body = APP[i:APP.index("\n/* The UFC hero", i)]
-    assert "deep: !!q" in body
-    assert "139,451px" in body, "the measurement that justifies the flag is gone"
+    assert "searchListHTML(shown.map((p) => _profRows.get(p)[0]))" in body, "the board's names"
+    assert "${searchListHTML(hits)}" in body, "the league's names"
+    assert "139,451px" in body, "the measurement that justifies the cap is gone"
 
 
 def test_the_addressable_player_page_is_always_the_deep_one():
@@ -213,12 +217,33 @@ def test_the_pick_block_opens_the_props_own_page():
     chart with the line through it and the hit-rate/EV/confidence strip,
     which is what he screenshotted."""
     fn = _fn("pricedProfileHTML")
-    assert '<div class="profile-pick"${propAttrs(r)}>' in fn, \
-        "the pick block is not a door"
+    assert '<div class="profile-pick"${door}>' in fn, "the pick block is not a door"
     # THE SITE'S ONE DEFINITION OF AN OPENABLE PROP, not a second copy of
     # the rule — a row with fewer than three logged games opens a page
     # whose centrepiece is missing, and `propAttrs` is what knows that.
-    assert "propOpenable(r)" in fn, "the arrow appears on rows with no page"
+    # Off the player's own page only (2026-11-17): there the card opens nothing.
+    assert 'const door = inPage ? "" : propAttrs(r);' in fn
+    assert '${door ? `<span class="pp-go" aria-hidden="true">→</span>` : ""}' in fn, \
+        "the arrow appears on rows with no page"
+
+
+def test_on_the_players_page_the_card_opens_nothing_and_carries_bet_it_and_ask():
+    """Ethan, 2026-11-17, circling the pick page a search card had opened:
+    "let's get rid of this page … and replace it with the actual player
+    page". The card on the page has no door to it, so the pick page's two
+    actions come to the card: the books, and a question with the pick
+    attached. A market chip keeps the card the page's own."""
+    fn = _fn("pricedProfileHTML")
+    assert '${inPage ? profileActsHTML(r) : ""}' in fn
+    acts = _fn("profileActsHTML")
+    assert 'betItHTML(r, "btn primary")' in acts
+    assert 'data-ask-pick="${escapeAttr(propId(r))}"' in acts and "data-ask-label=" in acts
+    prof = _fn("profileHTML")
+    assert "pricedProfileHTML(priced.get(mkt), chips, vsTail, deep, inPage)" in prof
+    i = APP.index('e.target.closest(".prof-tab")')
+    chip = APP[i:i + 1600]
+    assert 'inPage: !!card.closest(".plr")' in chip, "a chip on the page drew the door back"
+    assert ".prof-acts {" in CSS and ".prof-acts .betit-box .betit {" in CSS
 
 
 def test_clicking_the_player_himself_opens_the_page():
@@ -231,7 +256,7 @@ def test_clicking_the_player_himself_opens_the_page():
     now runs a screen and a half on a phone. "Click on THEM" is the face
     and the name at the top, and that was still inert."""
     fn = _fn("pricedProfileHTML")
-    assert "propAttrs(r))}" in fn, "the head is not handed a door"
+    assert "escapeHtml(r.grade)}</span>`, door)}" in fn, "the head is not handed the pick's door"
     head = _fn("_profileHead")
     assert '<div class="profile-head"${door}>' in head
 

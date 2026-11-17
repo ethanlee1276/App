@@ -520,6 +520,9 @@ def test_in_a_browser_a_name_typed_letter_by_letter_is_one_search():
         page.wait_for_function("() => typeof state !== 'undefined' && state.view === 'players'", timeout=30000)
         page.type("#player-search", "arch manning", delay=60)
         waiting = page.evaluate("document.getElementById('players-board').innerText")
+        # The answer is a name (2026-11-17); a tap on it is the page, with no second search.
+        page.wait_for_selector("#players-board .psr-row[data-player-page='arch-manning']", timeout=30000)
+        page.click("#players-board .psr-row[data-player-page='arch-manning']")
         page.wait_for_selector(".plr .plr-hero", timeout=30000)
         out = {"asked": asked, "waiting": waiting, "hero": page.inner_text(".plr-hero"), "errors": errors}
         ctx.close()
