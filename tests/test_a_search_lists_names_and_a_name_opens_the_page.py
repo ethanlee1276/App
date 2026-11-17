@@ -109,6 +109,18 @@ def test_the_page_is_handed_one_players_card_and_heads_it():
             '`<h3 class="plr-h">${plrTonightTitle(page)}</h3>`);') in markets
 
 
+def test_the_box_gives_an_example_from_its_own_league():
+    """The box asked for "Amon-Ra, Rams" on every league's tab: an NFL name
+    on the NBA's search is an example of nothing you can find there."""
+    eg = APP[APP.index("const PLAYER_SEARCH_EG"):APP.index("async function renderPlayers(")]
+    for lg in ("nfl", "cfb", "mlb", "nba", "wnba", "cbb", "nhl"):
+        assert f"{lg}: " in eg, lg
+    i = APP.index("async function renderPlayers(")
+    head = APP[i:APP.index("const q = state.search", i)]
+    assert 'box.placeholder = state.sport === "ufc" ? "Search a fighter' in head
+    assert "PLAYER_SEARCH_EG[state.sport] || PLAYER_SEARCH_EG.nfl" in head
+
+
 def test_the_browse_shows_rows_enough_to_fill_a_screen():
     cap = decl("playerBrowseCap")
     assert '"(max-width: 760px)").matches) ? 12 : 30;' in cap

@@ -13957,11 +13957,19 @@ document.addEventListener("click", (e) => {
   renderPlayers();
 });
 
+/* The box speaks the league it searches: it asked for "Amon-Ra, Rams" on
+   every tab, the rosters page's box having learned this long ago. */
+const PLAYER_SEARCH_EG = { nfl: "Amon-Ra, Rams", cfb: "Arch Manning, Texas", mlb: "Judge, Yankees",
+  nba: "Tatum, Celtics", wnba: "Stewart, Liberty", cbb: "Flagg, Duke", nhl: "McDavid, Oilers" };
+
 async function renderPlayers() {
   const seq = ++_playersSeq;
   renderSearchScope();
   renderSearchRecent();
   renderTeamHits();
+  const box = document.getElementById("player-search");
+  if (box) box.placeholder = state.sport === "ufc" ? "Search a fighter… (e.g. Topuria)"
+    : `Search a player or a team… (e.g. ${PLAYER_SEARCH_EG[state.sport] || PLAYER_SEARCH_EG.nfl})`;
   const q = state.search.trim().toLowerCase();
   /* A NAME, THEN THE PAGE. Ethan, 2026-11-17, circling the pick page a search
      card had opened: "let's get rid of this page … and replace it with the

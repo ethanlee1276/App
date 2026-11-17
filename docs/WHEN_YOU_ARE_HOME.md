@@ -9338,6 +9338,11 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**UZ. The Players search box gives an example from its own league** (step 684; 17 November). Nothing to run.
+The box asked for "Amon-Ra, Rams" on every league's tab. It now offers an example you can find there: "Tatum,
+Celtics" on the NBA, "McDavid, Oilers" on the NHL, "Flagg, Duke" on college basketball, and "Search a fighter…"
+on UFC.
+
 **UY. A player page with no numbers says why on its Overview** (step 683; 17 November). Nothing to run. A
 punter's or a lineman's page opened on an empty Overview: its first block is the season's numbers, and the reason
 there are none ("Our NFL stats feed doesn't include punting") was shown only on the Stats and Game Log menus. The
