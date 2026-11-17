@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VG. An NFL playoff game is named by its round** (step 691; 17 November). Nothing to run. Justin Tucker's page
+led with "Previous game Week 20" (the 2024 Divisional round at Buffalo), and every player's Game Log listed
+playoff games as "Wk 19" to "Wk 22", the week numbers the NFL's own files give them. The page now says
+"Divisional" (or Wild Card, Conference title game, Super Bowl), and the Game Log tags them WC, DIV, CONF and SB,
+as the team pages and the carry chart already did.
+
 **VF. A WNBA player's page heads with minutes where it had an empty FG%** (step 690; 17 November). Nothing to
 run. The WNBA box scores we hold carry minutes, points, rebounds and assists and no shots, so every WNBA page's
 four headline numbers ended in "FG% —" (Caitlin Clark, Breanna Stewart, Napheesa Collier, Paige Bueckers, all

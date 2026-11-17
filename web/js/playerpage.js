@@ -165,7 +165,10 @@ function plrSeasonHTML(d) {
 function plrPrevHTML(d) {
   const g = d.last;
   if (!g) return "";
-  const when = [g.week ? `Week ${g.week}` : "", plrDay(g.date)].filter(Boolean).join(" · ");
+  // An NFL playoff game by its round ("Divisional"), not "Week 20" (gamelog.js glRound, loaded with the page's
+  // Overview; the week number until it is).
+  const round = typeof glRound === "function" ? glRound(d.sport, d.season, g.week) : "";
+  const when = [round || (g.week ? `Week ${g.week}` : ""), plrDay(g.date)].filter(Boolean).join(" · ");
   const [mine, theirs] = String(g.score || "").split("-");
   const side = (team, rec, pts, won) => `<div class="plr-side">${teamMarkIn(d.sport, team, 34)}<div><b>${
     escapeHtml(teamNameIn(d.sport, team) || team)}</b>${rec ? `<small>${escapeHtml(rec)}</small>` : ""}</div>${
@@ -381,6 +384,7 @@ function plrFill(page, d) {
   });
   loadRoom("js/gamelog.js", "css/gamelog.css").then((ok) => {
     if (!ok || !page.isConnected) return;
+    if (glRound(d.sport, d.season, (d.last || {}).week)) set(".plr-prev", plrPrevHTML(d));   // "Week 20" was drawn first
     plrRecentInto(at(".plr-recent"), d);
     if (PLR_TAB[page._plr.key] === "log") plrLogInto(page);
   });

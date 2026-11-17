@@ -61,13 +61,22 @@ function glMark(sport, team, size) {
 }
 //: The game, held at the left while the stats scroll: the week (football) or the day,
 //: and under it the other club's mark, the opponent and where, with the day in football.
-function glGame(g, sport) {
+function glGame(g, sport, season) {
   const d = g.date ? new Date(`${g.date}T12:00:00`) : null;
   const day = d && !isNaN(d) ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
   const mark = glMark(sport, g.opponent, 16);
   const opp = `${g.home ? "vs" : "@"} ${mark ? `<i class="gl-opp">${mark}</i>` : ""}${escapeHtml(g.opponent || "")}`;
-  return g.week ? `<b>Wk ${g.week}</b><span>${opp}${day ? ` · ${escapeHtml(day)}` : ""}</span>`
+  const round = glRound(sport, season, g.week, true);
+  return g.week ? `<b>${round || `Wk ${g.week}`}</b><span>${opp}${day ? ` · ${escapeHtml(day)}` : ""}</span>`
     : `<b>${escapeHtml(day || g.date || "")}</b><span>${opp}</span>`;
+}
+//: An NFL playoff game by its round, not its week number (nflverse files the 18-week seasons' playoffs, 2021
+//: on, as weeks 19 to 22): "Divisional", or "DIV" where a row has room for a tag. "" for any other game.
+function glRound(sport, season, week, short) {
+  const w = Number(week);
+  if (sport !== "nfl" || !(Number(season) >= 2021) || !(w >= 19 && w <= 22)) return "";
+  return (short ? { 19: "WC", 20: "DIV", 21: "CONF", 22: "SB" } : { 19: "Wild Card", 20: "Divisional",
+    21: "Conference title game", 22: "Super Bowl" })[w];
 }
 //: The result as a pill, green for a win and red for a loss: "W 35-10".
 function glResult(g) {
@@ -89,7 +98,7 @@ function glTableHTML(d) {
     const cells = g.dnp ? `<td class="gl-dnp" colspan="${cols.length}">Did not play</td>`
       : g.pending ? `<td class="gl-dnp" colspan="${cols.length}">Box score not in yet</td>`
       : cols.map((c) => `<td class="num">${escapeHtml(glCell((g.values || {})[c.id], c.label))}</td>`).join("");
-    return `<tr><td class="gl-fix gl-day">${glGame(g, d.sport)}</td><td class="gl-res">${res}</td>${cells}</tr>`;
+    return `<tr><td class="gl-fix gl-day">${glGame(g, d.sport, d.season)}</td><td class="gl-res">${res}</td>${cells}</tr>`;
   }).join("");
   const sumRow = (label, vals) => `<tr class="gl-sum"><td class="gl-fix gl-day">${escapeHtml(label)}</td><td></td>${cols.map((c) =>
     `<td class="num">${escapeHtml(glCell((vals || {})[c.id], c.label))}</td>`).join("")}</tr>`;

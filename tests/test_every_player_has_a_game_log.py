@@ -241,6 +241,28 @@ def test_the_server_serves_it_free_and_the_page_has_its_door():
         assert sel in css, sel
 
 
+def test_an_nfl_playoff_game_is_named_by_its_round():
+    """Live, 17 Nov: Justin Tucker's page led with "Previous game Week 20", the 2024 Divisional round at
+    Buffalo, and his log read "Wk 20" (nflverse files the 18-week seasons' playoffs, 2021 on, as weeks 19 to
+    22). The log tags the round, the page names it; any other week, league or older season is untouched."""
+    node = shutil.which("node") or "/opt/node22/bin/node"
+    if not Path(node).exists():
+        return
+    i = PAGE.index("function glRound(")
+    fn = PAGE[i:PAGE.index("\n}\n", i) + 3]
+    js = fn + ("process.stdout.write(JSON.stringify([glRound('nfl', 2024, 20), glRound('nfl', 2024, 20, true), "
+               "glRound('nfl', 2025, '22'), glRound('nfl', 2026, 18), glRound('cfb', 2026, 20), glRound('nfl', 2019, 20), "
+               "glRound('nfl', 2024, undefined)]));")
+    out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr[-800:]
+    assert json.loads(out.stdout) == ["Divisional", "DIV", "Super Bowl", "", "", "", ""], out.stdout
+    assert "<b>${round || `Wk ${g.week}`}</b>" in PAGE and "glGame(g, d.sport, d.season)" in PAGE
+    page = (ROOT / "web" / "js" / "playerpage.js").read_text(encoding="utf-8")
+    assert 'const when = [round || (g.week ? `Week ${g.week}` : ""), plrDay(g.date)]' in page
+    assert 'if (glRound(d.sport, d.season, (d.last || {}).week)) set(".plr-prev", plrPrevHTML(d));' in page, \
+        "the card drawn before the log's script arrived is drawn again with the round"
+
+
 def test_the_sheet_draws_the_log_like_a_box_score():
     node = shutil.which("node") or "/opt/node22/bin/node"
     if not Path(node).exists():
