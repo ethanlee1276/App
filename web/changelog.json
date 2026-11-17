@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-17",
+      "kind": "fix",
+      "title": "Season projections and playoff brackets follow the night’s results",
+      "body": "Every feed on the site was timed: boards, standings, injuries and news were minutes old and live scores seconds old. One was behind. The season projections and the NBA’s and NHL’s playoff brackets were rebuilt once a day, so after a night’s games they could read up to a day behind the standings beside them. A league whose results have changed is now rebuilt within about 45 minutes. And a standings page waiting on a season says when the league opens (“It opens in late March 2027”) instead of the first day of its calendar window."
+    },
+    {
+      "date": "2026-11-17",
       "kind": "ship",
       "title": "A team’s page wears its colours, and colour changes fade",
       "body": "Open any team’s page and the whole screen sits on that club’s two colours, as a player’s page does, whether or not you wear a team’s colours yourself; leave it and the screen is yours again. Every change of the screen’s colours now fades smoothly instead of snapping: your colours to a club’s and back, one page’s club to the next, into and out of a game. The button on a team’s page now reads “Wear these everywhere”."

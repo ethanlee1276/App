@@ -2331,9 +2331,12 @@ function unitRankingsWaitHTML(d) {
   // built before the season field landed. Say "this season" instead.
   const who = season ? String(season) : "this season";
   const Who = season ? String(season) : "This season";
+  // `opens` ("early September 2027") is when the league opens; `first_games`, on a file built
+  // before it, is the season window's first day, a bound that reads as a date nobody plays on.
   const why = d.season_wait
     ? `The ${season ? `${season} ` : ""}season hasn’t kicked off${
-        d.first_games ? ` — first games ${escapeHtml(d.first_games)}` : ""}.
+        d.opens ? `. It opens in ${escapeHtml(d.opens)}`
+        : d.first_games ? ` — first games ${escapeHtml(d.first_games)}` : ""}.
         Scoring rankings start with the first finals.`
     : d.feed_error
       ? `${Who} has no scoring rankings of its own yet — the league feed
@@ -2416,7 +2419,7 @@ async function renderStandings() {
     // feed for a season that has not kicked off (2026-08-24).
     sub.textContent = d.season_wait
       ? `— waiting on the ${d.season} season${
-          d.first_games ? ` · first games ${d.first_games}` : ""}`
+          d.opens ? ` · opens ${d.opens}` : d.first_games ? ` · first games ${d.first_games}` : ""}`
       : d.season
       ? `— ${d.season} regular season · `
         + (live

@@ -3138,7 +3138,11 @@ def standings(sport: str = "", team: str = "", group: str = "", data_dir=None, p
     groups = [g for g in t.get("groups") or [] if isinstance(g, dict) and g.get("teams")]
     if not groups:
         out = {"found": False, "note": t.get("note") or f"no {s.upper()} standings on file"}
-        if t.get("first_games"):
+        # When the season opens, in the league's own words; the window's first day only on a file
+        # built before that (a bound, which Ask would repeat as an opening day).
+        if t.get("opens"):
+            out["opens"] = t["opens"]
+        elif t.get("first_games"):
             out["first_games"] = t["first_games"]
         return out
     codes = _codes_for(team, s) if team else set()

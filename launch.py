@@ -2931,10 +2931,32 @@ FUTURES_EVERY_HOURS = 24
 #: league had started each club at 0-0 since August), plays each league's
 #: own playoff format, and writes the NBA's and the NHL's races with it.
 FUTURES_VERSION = "futures-v2-banked-records"
+#: A LEAGUE WHOSE RESULTS HAVE MOVED IS NOT A DAY BEHIND THEM (FRESH1,
+#: 2026-11-17; Ethan: "make sure we're getting the most up-to-date
+#: information that's updating consistently on the website"). The rebuild
+#: was once a day, whenever the last one happened to fall (01:15 Eastern on
+#: the box that day): the NBA's and the NHL's playoff brackets, and every
+#: league's season projection, read up to a day behind the standings page
+#: beside them, which is rebuilt every pass. Between the daily rebuilds, a
+#: league whose count of finals has changed since its own last build is
+#: built again: one league a pass, and no league more often than this, so a
+#: night of finals is a handful of builds and never one a final.
+FUTURES_AFTER_FINALS_MIN = 45
+
+
+def _futures_finals(conn, sport: str) -> int:
+    """How many finished games the history holds for a league: the number
+    whose change says its table has moved."""
+    try:
+        return int(conn.execute("SELECT COUNT(*) FROM games WHERE sport=? AND home_score IS NOT NULL",
+                                (sport,)).fetchone()[0] or 0)
+    except Exception:                               # noqa: BLE001
+        return -1
 
 
 def _run_futures(quiet: bool = False) -> None:
-    """Rebuild the futures boards, at most once a day.
+    """Rebuild the futures boards: every league once a day, and between
+    those a league whose results have moved (FUTURES_AFTER_FINALS_MIN).
 
     Free: the simulation reads the history DB and the schedule feeds, all
     of them keyless. Prices are NOT pulled here — futures_build.py --odds
@@ -2943,23 +2965,39 @@ def _run_futures(quiet: bool = False) -> None:
     """
     import time
     stamp = ROOT / "web" / "data" / ".futures_built"
+    seen_path = ROOT / "data" / "futures_finals.json"
     try:
         # A day-old stamp is only fresh if it was written by THIS code: a
         # fix to what the projection says rebuilds on the first pass after
         # its deploy, not up to a day later (FUTURES_VERSION).
-        if stamp.exists() and (time.time() - stamp.stat().st_mtime) < \
-                FUTURES_EVERY_HOURS * 3600 and \
-                stamp.read_text().endswith(FUTURES_VERSION):
-            return
+        daily = not (stamp.exists() and (time.time() - stamp.stat().st_mtime) <
+                     FUTURES_EVERY_HOURS * 3600 and
+                     stamp.read_text().endswith(FUTURES_VERSION))
+        try:
+            seen = json.loads(seen_path.read_text(encoding="utf-8"))
+            seen = seen if isinstance(seen, dict) else {}
+        except (OSError, ValueError):
+            seen = {}
         import futures_build
         from engine import db as _hdb
         conn = _hdb.connect()
         try:
-            for sport in futures_build.SPORTS:
+            now = time.time()
+            if daily:
+                todo = list(futures_build.SPORTS)
+            else:
+                # The first league whose finals have moved since its own build, if it is due.
+                todo = [sp for sp in futures_build.SPORTS
+                        if _futures_finals(conn, sp) != (seen.get(sp) or {}).get("finals")
+                        and now - float((seen.get(sp) or {}).get("at") or 0) >= FUTURES_AFTER_FINALS_MIN * 60][:1]
+                if not todo:
+                    return
+            for sport in todo:
                 try:
                     data = futures_build.build(sport, conn, live_odds=False)
                 except Exception:                   # noqa: BLE001
                     continue
+                seen[sport] = {"finals": _futures_finals(conn, sport), "at": now}
                 # THROUGH THE ONE DOOR (2026-11-17). This wrote the full
                 # projection straight onto the public path, atomically but
                 # around the gate: every day the paid futures sat unsealed
@@ -2971,10 +3009,17 @@ def _run_futures(quiet: bool = False) -> None:
                 futures_build.publish(sport, data, conn)
         finally:
             conn.close()
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {FUTURES_VERSION}")
+        try:
+            seen_path.parent.mkdir(parents=True, exist_ok=True)
+            seen_path.write_text(json.dumps(seen), encoding="utf-8")
+        except OSError:
+            pass                        # unkept, a league is built again next pass: never wrong, only early
+        if daily:
+            stamp.parent.mkdir(parents=True, exist_ok=True)
+            stamp.write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {FUTURES_VERSION}")
         if not quiet:
-            print("  Futures: season projections rebuilt (free).")
+            print("  Futures: season projections rebuilt (free)." if daily
+                  else f"  Futures: {todo[0].upper()}'s results moved — its projection rebuilt (free).")
     except Exception as exc:  # noqa: BLE001 — never take the site down
         if not quiet:
             print(f"  ⚠️  futures rebuild skipped: {exc}")

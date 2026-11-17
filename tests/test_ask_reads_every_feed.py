@@ -226,6 +226,12 @@ def test_the_league_s_own_standings_by_division_with_seeds_and_clutch():
     assert one["under_pressure"]["clutch"] == 0.8 and one["under_pressure"]["season"] == 2025
     wait = _run("standings", sport="nba")
     assert wait["found"] is False and wait["first_games"] == "2026-10-20" and "Waiting" in wait["note"]
+    # A file that says when the league opens: that, and never the window's first day beside it
+    # (a bound Ask would repeat as an opening day, FRESH1).
+    _put(DATA, "standings_nba.json", {"groups": [], "note": "Waiting on the 2026-27 season.",
+                                      "first_games": "2026-10-01", "opens": "late October 2026"})
+    opens = _run("standings", sport="nba")
+    assert opens["opens"] == "late October 2026" and "first_games" not in opens, opens
 
 
 def test_the_roster_as_a_depth_chart_and_the_team_a_player_is_on():

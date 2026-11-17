@@ -84,6 +84,32 @@ def test_the_offseason_gap_waits_on_the_upcoming_season():
             "the note stopped answering the thing Ethan asked about"
 
 
+def test_the_wait_says_when_the_league_opens_not_the_windows_first_day():
+    """17 November 2026, live: "The 2027 MLB season has not started yet —
+    first games 2027-03-01", and the WNBA's "first games 2027-04-25". A
+    season window opens early on purpose (spring training, the preseason),
+    so its first day is a bound: nobody plays a game that counts on it, and
+    it was printed as a date off a file. The page says the part of the month
+    the league opens in, and keeps the bound as data."""
+    want = {"mlb": "late March 2027", "wnba": "May 2027", "nfl": "early September 2027",
+            "nba": "late October 2027", "nhl": "early October 2027", "cfb": "late August 2027",
+            "cbb": "early November 2027"}
+    days = {"mlb": "2026-11-17", "wnba": "2026-11-17", "nfl": "2027-03-01", "nba": "2027-07-15",
+            "nhl": "2027-07-15", "cfb": "2027-02-01", "cbb": "2027-05-01"}
+    assert set(want) == set(SB.OPENS), "every league the page waits on says when it opens"
+    for sport, opens in want.items():
+        b, _ = _build(sport, today=days[sport])
+        assert b["season_wait"] is True and b["season"] == 2027, (sport, b["season"])
+        assert b["opens"] == opens, (sport, b["opens"])
+        assert f"has not started yet. It opens in {opens}. Standings and the playoff picture" in b["note"], b["note"]
+        assert b["first_games"] not in b["note"], "the window's first day is not said as a date"
+    live, _ = _build("nfl", today="2026-09-15")
+    assert live["opens"] == "", "a season being played opens nothing"
+    # The page: the header and the rankings wait both say it, and fall back for a file built before.
+    assert "d.opens ? ` · opens ${d.opens}` : d.first_games ? ` · first games ${d.first_games}` : \"\"" in APP
+    assert "d.opens ? `. It opens in ${escapeHtml(d.opens)}`" in APP
+
+
 def test_a_date_inside_the_window_is_that_season():
     """January 2026 is the 2025 NFL season, mid-playoffs. Nothing waits."""
     b, _ = _build("nfl", today="2026-01-10")

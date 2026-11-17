@@ -222,6 +222,7 @@ def build(sport: str, season: int | None = None,
     # instead of announcing "2026 regular season" over an empty table.
     table["season_wait"] = bool(waiting and not teams)
     table["first_games"] = start if waiting else ""
+    table["opens"] = _opens(sport, season) if waiting else ""
     if teams and table.get("source") == "computed":
         # Said on the page, not just in the log: these are OUR counted
         # games, which is a weaker claim than the league's own table.
@@ -245,6 +246,22 @@ def build(sport: str, season: int | None = None,
     return table
 
 
+#: WHEN EACH LEAGUE'S SEASON OPENS, the way a person says it (FRESH1,
+#: 2026-11-17). A season window (engine/seasons) opens early on purpose, to
+#: take in spring training and the preseason, so its first day is a bound
+#: and never an opening day: the MLB page read "first games 2027-03-01" and
+#: the WNBA's "first games 2027-04-25", dates on which no game that counts
+#: is played, printed as a date off a file. The part of the month each
+#: league has opened in for years is what the page can stand behind.
+OPENS = {"mlb": "late March", "nba": "late October", "wnba": "May", "cfb": "late August",
+         "nfl": "early September", "nhl": "early October", "cbb": "early November"}
+
+
+def _opens(sport: str, season: int) -> str:
+    """"late March 2027": when the waited-on season opens ("" for a league with no usual time)."""
+    return f"{OPENS[sport]} {season}" if sport in OPENS else ""
+
+
 def _empty_note(sport: str, season: int, day: str) -> str:
     """Why the table is empty — and only offer an ingest that can work.
 
@@ -258,9 +275,10 @@ def _empty_note(sport: str, season: int, day: str) -> str:
     except ValueError:
         start = ""
     if start and day < start:
-        return (f"The {season} {sport.upper()} season has not started yet — "
-                f"first games {start}. Standings and the playoff picture "
-                f"fill in here as the season is played.")
+        opens = _opens(sport, season)
+        return (f"The {season} {sport.upper()} season has not started yet"
+                + (f". It opens in {opens}. " if opens else f" — first games {start}. ")
+                + "Standings and the playoff picture fill in here as the season is played.")
     return (f"No finished {sport.upper()} games on file for {season}. "
             f"Standings are counted from our own results: "
             f"python3 ingest.py {sport} --seasons {season}")

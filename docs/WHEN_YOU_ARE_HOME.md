@@ -9338,6 +9338,25 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WN. A league's projections follow its results, and a waiting season says when it opens** (step 724; 17 November).
+Nothing to run. You asked that the site always carries the most up-to-date information, so every public feed on the
+live site was read and timed. All seven league boards were 5 to 13 minutes old with no failed step; standings,
+rosters, injuries and news were at most 18 minutes old; the live scoreboards were seconds old. An open page asks
+again every 30 seconds while a game is live, every two minutes otherwise, and whenever you come back to it. The NFL
+playoff race, the NBA Cup, the playoff committee's race and the NCAA tournament race are played out again whenever a
+score, a game left or a rating moves. One feed was behind: the season projections (Futures) and the NBA's and NHL's
+playoff brackets were rebuilt once every 24 hours, at whatever hour the last rebuild fell, so after a night's games
+they could read up to a day behind the standings beside them. Now a league whose finals have changed since its own
+last build is built again: one league a pass, no league more than once in 45 minutes, and never pulling odds, so a
+night of games is a handful of builds. The daily rebuild of every league is unchanged. Second, a standings page
+waiting on a season (MLB and the WNBA today) said "first games 2027-03-01" and "first games 2027-04-25": the first
+day of the season's window, which opens early on purpose to take in spring training and the preseason, so nobody
+plays a game that counts on it. The page and Ask now say when the league opens ("It opens in late March 2027", May
+for the WNBA). The page still waits on the next season in an offseason, as you asked in August; whether it should
+also show the final table of the season just ended, under the wait, is yours to say. And the front door's file now
+lists the colour fade's two files among the trimmed copies it serves, which rides along with 00k whenever you run
+it; until then the full copies are served and nothing is missing.
+
 **WM. A team's page wears its club's colours, and every colour change fades** (step 723; 17 November). Nothing to
 run. Your two answers: team pages should wear their club's colours, and the switch between your own colours and a
 team's should be smooth, not a quick glitchy switch. A team's page now puts the whole screen on that club's two
