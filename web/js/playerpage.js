@@ -26,9 +26,12 @@
    the page's own redraw every minute never moves the reader. Its words never
    assume who the player is: the WNBA's players have pages too. */
 
-const PLR_SPORTS = ["nfl", "cfb", "nba", "wnba", "cbb", "nhl", "mlb"];
+const PLR_SPORTS = ["nfl", "cfb", "nba", "wnba", "cbb", "nhl", "mlb", "ufc"];
 const PLR_TABS = [["overview", "Overview"], ["news", "News"], ["stats", "Stats"], ["bio", "Bio"],
   ["splits", "Splits"], ["log", "Game Log"]];
+//: A fighter's menus (engine/ufc/fighterpage): a fight has no season or game log, so its history is Fights.
+const PLR_TABS_UFC = [["overview", "Overview"], ["fights", "Fights"], ["stats", "Stats"], ["bio", "Bio"], ["news", "News"]];
+const plrTabsOf = (sport) => (sport === "ufc" ? PLR_TABS_UFC : PLR_TABS);
 const PLR_CACHE = new Map();
 const PLR_TAB = {};
 //: Rates print to a tenth (goals against to a hundredth), counts whole.
@@ -122,9 +125,13 @@ function plrHeroHTML(player, sport, team, pos, face, bio) {
   const parts = String(player).trim().split(/\s+/);
   const first = parts.length > 1 ? parts[0] : "", rest = parts.length > 1 ? parts.slice(1).join(" ") : parts[0];
   const num = bio && bio.number !== "" && bio.number != null ? `#${bio.number}` : "";
-  const line = [club.name, num, (bio && bio.position) || pos].filter(Boolean).map(escapeHtml).join(" · ");
+  const ufc = sport === "ufc";
+  const line = (ufc ? [(bio && bio.division) || pos, bio && bio.record]
+    : [club.name, num, (bio && bio.position) || pos]).filter(Boolean).map(escapeHtml).join(" · ");
   const age = bio ? plrAge(bio) : "";
-  const body = bio ? [bio.height, bio.weight, age !== "" ? `Age ${age}` : ""].filter(Boolean).map(escapeHtml).join(" · ") : "";
+  const body = bio ? (ufc ? [bio.nickname ? `“${bio.nickname}”` : "", bio.height, bio.reach ? `${bio.reach} reach` : "",
+    age !== "" ? `Age ${age}` : ""] : [bio.height, bio.weight, age !== "" ? `Age ${age}` : ""])
+    .filter(Boolean).map(escapeHtml).join(" · ") : "";
   // THE CLUB'S LIGHT BEHIND THE WHOLE PAGE (styles.css .amb-club, SITEBG1),
   // inside the header so a redrawn header brings its own and leaves none.
   return `<header class="plr-hero"${club.color ? ` style="--plr-c:${escapeAttr(club.color)}"` : ""}>
@@ -139,14 +146,15 @@ function plrHeroHTML(player, sport, team, pos, face, bio) {
       </div>
     </header>`;
 }
-function plrTabsHTML(open) {
-  return `<div class="plr-tabs" role="tablist" aria-label="Player page">${PLR_TABS.map(([k, label]) =>
+function plrTabsHTML(open, sport) {
+  return `<div class="plr-tabs" role="tablist" aria-label="Player page">${plrTabsOf(sport).map(([k, label]) =>
     `<button type="button" role="tab" class="plr-tab${k === open ? " on" : ""}" data-plr-tab="${k}" aria-selected="${
       k === open}">${label}</button>`).join("")}</div>`;
 }
-function plrPanelsHTML(open) {
-  return PLR_TABS.map(([k]) => `<div class="plr-panel" data-plr-panel="${k}" role="tabpanel"${k === open ? "" : " hidden"}>${
-    k === "overview" ? `<div class="plr-tapped"></div><div class="plr-season"></div><div class="plr-prev"></div><div class="plr-splitlet"></div>
+function plrPanelsHTML(open, sport) {
+  return plrTabsOf(sport).map(([k]) => `<div class="plr-panel" data-plr-panel="${k}" role="tabpanel"${k === open ? "" : " hidden"}>${
+    k === "overview" ? `<div class="plr-tapped"></div><div class="plr-season"></div>${sport === "ufc" ? `<div class="plr-next"></div>`
+      : `<div class="plr-prev"></div><div class="plr-splitlet"></div>`}
       <div class="plr-recent"></div><div class="plr-latest"></div><div class="plr-tonight"></div>`
       : `<p class="plr-wait">Loading…</p>`}</div>`).join("");
 }
@@ -352,7 +360,120 @@ function plrSplitsHTML(d) {
 }
 
 /* ---------------- drawing ---------------- */
+/* ---------------- A fighter (engine/ufc/fighterpage; Ethan, 2026-11-17: "yes full fighter page") ---------------- */
+//: A rate as its tile says it: a share as a percent, a rate to two places.
+const plrRate = (r) => (r.pct ? `${Number(r.value).toFixed(0)}%` : Number(r.value).toFixed(2));
+//: "KO/TKO", "Submission" or "Decision", as a fight site says how it ended.
+const PLR_HOW = { "KO/TKO": "KO/TKO", SUB: "Submission", DEC: "Decision" };
+function plrUfcRatesHTML(d) {
+  const lead = (d.rates || []).filter((r) => r.lead);
+  const rec = (d.bio || {}).record;
+  if (!lead.length && !rec) return "";
+  const tile = (k, v, t) => `<div class="plr-num"${t ? ` title="${escapeAttr(t)}"` : ""}><span class="plr-k">${escapeHtml(k)}</span><b>${
+    escapeHtml(v)}</b></div>`;
+  return `<section class="plr-card plr-strip"><h3>Career <span>${d.tracked ? `Rates over ${plural(d.tracked, "tracked fight")}`
+      : "The fighter’s measured rates"}</span></h3>
+    <div class="plr-nums">${rec ? tile("Record", rec, "Wins, losses and draws") : ""}${lead.slice(0, rec ? 3 : 4)
+      .map((r) => tile(r.label, plrRate(r), r.title)).join("")}</div></section>`;
+}
+function plrUfcNextHTML(d) {
+  const n = d.next;
+  if (!n || !n.opponent) return "";
+  // The card's date as the site says a day ("Sat, Dec 12"); a label the board wrote otherwise, as written.
+  const day = /^\d{4}-\d{2}-\d{2}/.test(n.date || "") ? plrDay(n.date, { weekday: "short", month: "short", day: "numeric" }) : n.date;
+  return `<section class="plr-card"><h3>Next fight</h3><p class="plr-ufc-next">vs <b>${escapeHtml(n.opponent)}</b>${
+    day ? ` · ${escapeHtml(day)}` : ""}${n.division ? ` · ${escapeHtml(n.division)}` : ""}</p>
+    <button class="btn plr-go" type="button" data-plr-card="ufc">The fight card</button></section>`;
+}
+//: A fight's numbers as "landed of thrown", his and the opponent's.
+function plrUfcStat(f, key) {
+  const s = (f.stats || []).find((x) => x.key === key);
+  if (!s || s.me == null) return "—";
+  return s.me_att != null ? `${s.me} of ${s.me_att}` : String(s.me);
+}
+function plrUfcFightsHTML(d, n) {
+  const all = d.fights || [];
+  if (!all.length) return `<p class="plr-quiet">No tracked fights on file for this fighter yet.</p>`;
+  const rows = n ? all.slice(0, n) : all;
+  const res = (r) => (r === "W" ? "plr-w" : r === "L" ? "plr-l" : "");
+  const body = rows.map((f) => `<tr><td class="gl-fix">${escapeHtml(plrDay(f.date, { year: "numeric", month: "short", day: "numeric" }))}</td>
+    <td>${escapeHtml(f.opp || "")}</td><td class="plr-res ${res(f.result)}">${escapeHtml(f.result === "W" ? "Win" : f.result === "L" ? "Loss"
+      : "Draw / NC")}</td><td>${escapeHtml(PLR_HOW[f.method] || f.method || "")}</td><td class="num">${f.rnd ? escapeHtml(String(f.rnd)) : ""}</td>
+    <td class="num">${escapeHtml(f.clock || "")}</td><td class="num">${escapeHtml(plrUfcStat(f, "ssl"))}</td>
+    <td class="num">${escapeHtml(plrUfcStat(f, "tdl"))}</td><td class="num">${escapeHtml(plrUfcStat(f, "kd"))}</td></tr>`).join("");
+  const table = `<div class="gl-scroll"><table class="agate gl-table plr-table"><thead><tr><th class="gl-fix">Date</th><th>Opponent</th>
+    <th>Result</th><th>Method</th><th class="num">Rnd</th><th class="num">Time</th><th class="num" title="Significant strikes landed of thrown">Sig. str.</th>
+    <th class="num" title="Takedowns landed of tried">TD</th><th class="num" title="Knockdowns">KD</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  return n ? `<section class="plr-card"><h3>Recent fights</h3>${table}
+      ${all.length > n ? `<button class="btn plr-go" type="button" data-plr-go="fights">Every fight</button>` : ""}</section>`
+    : `<section class="plr-card"><h3>Every tracked fight <span>Newest first</span></h3>${table}
+      <div class="plr-ufc-acts">${typeof ccDoor === "function" ? ccDoor(d.player, "ufc", "fights", "Fight history chart", d.face) : ""}</div>
+      <p class="plr-fine">The fights ESPN tracked, with both fighters’ numbers where it kept them.</p></section>`;
+}
+function plrUfcStatsHTML(d) {
+  const by = (keys) => (d.rates || []).filter((r) => keys.includes(r.key));
+  const card = (title, rows) => rows.length ? `<section class="plr-card"><h3>${title}</h3><dl class="plr-bio">${rows.map((r) =>
+    `<div title="${escapeAttr(r.title)}"><dt>${escapeHtml(r.label)}</dt><dd>${escapeHtml(plrRate(r))}</dd></div>`).join("")}</dl>
+    <p class="plr-fine">${rows.map((r) => `${escapeHtml(r.label)}: ${escapeHtml(r.title.toLowerCase())}`).join(" · ")}.</p></section>` : "";
+  const ln = d.line || {};
+  const how = (d.by_method || []).filter((m) => m.w || m.l);
+  const ended = how.length ? `<section class="plr-card"><h3>How the fights ended <span>${plural(ln.n || 0, "tracked fight")}</span></h3>
+    <dl class="plr-bio">${how.map((m) => `<div><dt>${escapeHtml(m.name)}</dt><dd>${m.w} won · ${m.l} lost</dd></div>`).join("")}${
+      ln.finish_w != null ? `<div><dt>Wins by finish</dt><dd>${Math.round(ln.finish_w * 100)}%</dd></div>` : ""}${
+      ln.distance != null ? `<div><dt>Went the distance</dt><dd>${Math.round(ln.distance * 100)}%</dd></div>` : ""}${
+      ln.avg_secs ? `<div><dt>Average fight</dt><dd>${Math.floor(ln.avg_secs / 60)}:${String(Math.round(ln.avg_secs % 60)).padStart(2, "0")}</dd></div>` : ""}${
+      ln.r1 ? `<div><dt>First-round finishes</dt><dd>${ln.r1}</dd></div>` : ""}</dl></section>` : "";
+  const rounds = (d.by_rounds || []).map((r) => `<div><dt>${r.rounds}-round fights</dt><dd>${r.w}-${r.l}${r.d ? `-${r.d}` : ""}${
+    r.finish_w != null ? ` · ${Math.round(r.finish_w * 100)}% of wins by finish` : ""}</dd></div>`).join("");
+  const fin = (d.by_finish || []).map((x) => `<div><dt>${escapeHtml(x.name)}</dt><dd>${plural(x.n, "fight")}</dd></div>`).join("");
+  return (card("Striking", by(["slpm", "sapm", "str_def", "kd_per100"])) + card("Grappling", by(["td_per15", "td_acc", "tdd", "sub_att_per15"]))
+    + ended + (rounds ? `<section class="plr-card"><h3>By rounds scheduled</h3><dl class="plr-bio">${rounds}</dl></section>` : "")
+    + (fin ? `<section class="plr-card"><h3>When the fights ended</h3><dl class="plr-bio">${fin}</dl></section>` : ""))
+    || `<p class="plr-quiet">No measured rates for this fighter yet: they come from tracked fights.</p>`;
+}
+function plrUfcBioHTML(d) {
+  const b = d.bio || {};
+  const born = b.born ? `${plrDay(b.born, { year: "numeric", month: "long", day: "numeric" })}${plrAge(b) !== "" ? ` (age ${plrAge(b)})` : ""}`
+    : b.age ? `Age ${b.age}` : "";
+  const facts = [["Record", b.record], ["Division", b.division], ["Nickname", b.nickname], ["Height", b.height], ["Weight", b.weight],
+    ["Reach", b.reach], ["Stance", b.stance], ["Born", born], ["Birthplace", b.birthplace], ["Country", b.country], ["Team", b.team],
+    ["Fights on file", d.tracked ? `${plural(d.tracked, "tracked fight")}${b.first_fight ? ` since ${plrDay(b.first_fight, { year: "numeric", month: "short" })}` : ""}` : ""],
+    ["Last fight", b.last_fight ? plrDay(b.last_fight, { year: "numeric", month: "long", day: "numeric" }) : ""]].filter(([, v]) => v);
+  return `<section class="plr-card"><h3>Bio</h3><dl class="plr-bio">${facts.map(([k, v]) =>
+    `<div><dt>${k}</dt><dd>${escapeHtml(String(v))}</dd></div>`).join("")}</dl>
+    <p class="plr-fine">From the fighter’s published record and ESPN’s fighter page. A fact neither lists is left out.</p></section>`;
+}
+function plrFillUfc(page, d) {
+  const at = (sel) => page.querySelector(sel);
+  const set = (sel, html) => { const el = at(sel); if (el) el.innerHTML = html; };
+  if (!d || !d.player) {
+    const msg = `<p class="plr-quiet">${d ? `We have no UFC fighter named ${escapeHtml(page._plr.player)}: no dossier or tracked fight lists them.`
+      : "This page could not load. Open it again in a minute."}</p>`;
+    page.querySelectorAll(".plr-panel[data-plr-panel]:not([data-plr-panel=\"overview\"]), .plr-season").forEach((p) => { p.innerHTML = msg; });
+    return;
+  }
+  const hero = at(".plr-hero");
+  if (hero) hero.outerHTML = plrHeroHTML(d.player, "ufc", "", (d.bio || {}).division || "", d.face || page._plr.face, d.bio || {});
+  set(".plr-season", plrUfcRatesHTML(d));
+  set(".plr-next", plrUfcNextHTML(d));
+  set(".plr-recent", plrUfcFightsHTML(d, 5));
+  set("[data-plr-panel=\"fights\"]", plrUfcFightsHTML(d));
+  set("[data-plr-panel=\"stats\"]", plrUfcStatsHTML(d));
+  set("[data-plr-panel=\"bio\"]", plrUfcBioHTML(d));
+  plrHeadlines().then((news) => {
+    if (!page.isConnected) return;
+    set("[data-plr-panel=\"news\"]", plrNewsHTML(d, news));
+    set(".plr-latest", plrLatestHTML(d, news));
+  });
+}
+//: The next fight's card: the UFC tab, where its pick and its report are.
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-plr-card]");
+  if (b && typeof switchView === "function") switchView(b.dataset.plrCard);
+});
+
 function plrFill(page, d) {
+  if (page._plr.sport === "ufc") return plrFillUfc(page, d);
   page._plr.noStats = (d && d.no_stats) || "";
   const host = page.querySelector(".plr-hero");
   if (host && d && d.bio) host.outerHTML = plrHeroHTML(d.player, d.sport, d.team, d.position,
@@ -546,7 +667,7 @@ function renderPlayerPage(host, player, sport) {
   const open = state.playerPick ? "overview" : PLR_TAB[key] || "overview";
   const cached = PLR_CACHE.get(`${sport}|${player}|${team}|`);
   host.innerHTML = `<section class="plr">${plrHeroHTML(player, sport, team, r0.position || "", r0.headshot,
-    cached && cached.bio)}${plrTabsHTML(open)}${plrPanelsHTML(open)}</section>`;
+    cached && cached.bio)}${plrTabsHTML(open, sport)}${plrPanelsHTML(open, sport)}</section>`;
   const page = host.querySelector(".plr");
   page._plr = { key, player, sport, team, face: r0.headshot || "" };
   _plrLive = { key, page };

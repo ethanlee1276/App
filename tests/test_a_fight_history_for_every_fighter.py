@@ -47,6 +47,7 @@ CC_JS = (ROOT / "web" / "js" / "carrychart.js").read_text(encoding="utf-8")
 UF_JS = (ROOT / "web" / "js" / "chart-ufc.js").read_text(encoding="utf-8")
 CC_CSS = (ROOT / "web" / "css" / "carrychart.css").read_text(encoding="utf-8")
 APP_JS = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+PAGE_JS = (ROOT / "web" / "js" / "playerpage.js").read_text(encoding="utf-8")
 
 
 def _fight(cid, date, winner, method, period, clock, secs, rounds=3, opp="Opponent", own=None, opp_row=None):
@@ -292,7 +293,9 @@ def test_the_page_draws_every_fight():
 def test_every_fighter_block_has_the_door_and_the_module_is_clean():
     i = APP_JS.index("function fighterColHTML(")
     assert 'ccDoor(f.name, "ufc", "fights", "Fight history")' in APP_JS[i:i + 2400]
-    assert "${fighterColHTML(f)}" in APP_JS, "the searched fighter's card draws the same block"
+    # A searched fighter opens the fighter's own page (js/playerpage.js), whose Fights menu has the door.
+    assert 'ccDoor(d.player, "ufc", "fights", "Fight history chart", d.face)' in PAGE_JS, \
+        "the fighter's page carries the door to the fight history"
     assert 'fights: "ufc"' in CC_JS and 'Q.draw("fights"' in UF_JS
     assert "onclick" not in UF_JS and "onerror" not in UF_JS and not re.search(r"on(error|load)\s*=", UF_JS)
     for cls in (".uf-svg", ".uf-track", ".uf-fill.gain", ".uf-fill.loss", ".uf-end", ".uf-bar.me", ".uf-bar.opp", ".dt.uf-d"):

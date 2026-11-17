@@ -1447,7 +1447,6 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 /* The cap note on an unsearched Players page, above its names. */
 .browse-note { margin: 0 0 8px; color: var(--text-mute); font-size: var(--fs-sm); }
 
-.player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: 18px; }
 
 /* THE SEARCH'S ANSWER (2026-11-17, Ethan: "when you search a player it will
    just show there name and headshot"): a row a name, each the door to the
@@ -1651,7 +1650,7 @@ svg[data-scrub] { touch-action: pan-y; }
   /* minmax(0, 1fr), not 1fr: a bare 1fr track still refuses to shrink
      below its content's min-content width, so one wide row inside pushed
      the column past a 320px phone and scrolled the whole page sideways. */
-  .player-grid, .trend-grid { grid-template-columns: minmax(0, 1fr); }
+  .trend-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ============================================================

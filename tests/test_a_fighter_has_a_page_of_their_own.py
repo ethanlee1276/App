@@ -1,0 +1,223 @@
+"""A fighter has a page of their own (2026-11-17).
+
+Ethan, asked whether UFC should have a full fighter page like every other
+league's player page: "yes full fighter page". What these hold:
+
+  * the server builds it from what is kept (engine/ufc/fighterpage): the
+    dossier's record, age, division and team, ESPN's published facts from the
+    copy the dossier's draft cached (never fetched), the measured career rates
+    each in words (shares as percents; control time, which ESPN does not
+    publish, left out), every tracked fight newest first with how it ended and
+    both fighters' numbers, the record by method, by rounds and by the round it
+    ended, and the next bout on the card (a fact, from the full board);
+  * /api/players/page answers for sport=ufc, free like every page;
+  * the page is the player page's frame with a fighter's menus (Overview,
+    Fights, Stats, Bio, News), a fighter's hero line (division and record;
+    nickname, height, reach and age), and our read of a fighter (archetype,
+    red flags) nowhere on it;
+  * a searched fighter opens it, and in a browser it draws every menu.
+
+Run directly: `python3 tests/test_a_fighter_has_a_page_of_their_own.py`
+(the browser check with QB_BROWSER_TESTS=1 and /usr/bin/python3).
+"""
+import json
+import os
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from engine import db as DB  # noqa: E402
+from engine.ufc import fighterpage as FP  # noqa: E402
+from engine.ufc import history as H  # noqa: E402
+
+PAGE = (ROOT / "web" / "js" / "playerpage.js").read_text(encoding="utf-8")
+APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+SERVER = (ROOT / "server.py").read_text(encoding="utf-8")
+CSS = (ROOT / "web" / "css" / "playerpage.css").read_text(encoding="utf-8")
+
+NAME = "Ilia Topuria"
+DOSSIER = {NAME: {"name": NAME, "age": 29, "division": "featherweight", "record": "16-0-0", "slpm": 4.4,
+                  "sapm": 3.1, "str_def": 0.62, "kd_per100": 2.1, "td_per15": 1.9, "td_acc": 0.6, "tdd": 0.92,
+                  "ctrl_per15": 2.0, "sub_att_per15": 0.8, "archetype": "pressure_striker",
+                  "red_flags": ["a flag only the model reads"], "ufc_fights": 8, "career_fights": 16,
+                  "gym": "Climent Club", "first_fight": "2020-10-10", "last_fight": "2026-06-28"}}
+BIO = {"nickname": "El Matador", "displayHeight": "5' 7\"", "displayWeight": "145 lbs", "reach": 69,
+       "stance": {"text": "Orthodox"}, "citizenship": "Spain", "dateOfBirth": "1997-01-21T08:00Z",
+       "birthPlace": {"city": "Halle", "country": "Germany"}}
+
+
+def _fight(comp, date, opp, result, method, rnd, clock, secs, rounds, ssl, ssa, tdl, tda, kd):
+    return (NAME, "4096", comp, "e" + comp, date, opp, "o" + comp, result, method, rnd, clock, secs, rounds,
+            "featherweight", ssl, ssa, tdl, tda, kd, 0, 30, 70, 0, 3, 0, 0)
+
+
+FIGHTS = [_fight("c1", "2026-06-28", "Max Holloway", "W", "KO/TKO", 3, "2:44", 744, 5, 52, 98, 1, 2, 2),
+          _fight("c2", "2025-10-26", "Alexander Volkanovski", "W", "KO/TKO", 2, "3:32", 512, 5, 31, 60, 0, 0, 1),
+          _fight("c3", "2025-02-17", "Josh Emmett", "W", "DEC", 3, "5:00", 900, 3, 98, 190, 2, 5, 0)]
+
+
+def _world(with_next=True):
+    d = Path(tempfile.mkdtemp())
+    conn = DB.connect(d / "h.db")
+    conn.executemany(f"INSERT INTO ufc_fights ({', '.join(H.COLS)}) VALUES ({', '.join('?' * len(H.COLS))})", FIGHTS)
+    conn.commit()
+    conn.close()
+    (d / "dossiers.json").write_text(json.dumps(DOSSIER))
+    cache = d / "cache"
+    cache.mkdir()
+    (cache / "espn_mma_ath_4096.json").write_text(json.dumps(BIO))
+    board = {"status": "card", "event_date": "2026-12-12",
+             "picks": [{"fight": "Max Holloway vs Ilia Topuria", "division": "featherweight"}] if with_next else [],
+             "pass_list": []}
+    (d / "ufc.json").write_text(json.dumps(board))
+    return d
+
+
+def _page(d, name=NAME):
+    return FP.page(name, db_path=d / "h.db", dossier_path=str(d / "dossiers.json"), cache_dir=d / "cache",
+                   board_path=d / "ufc.json")
+
+
+def test_the_server_builds_it_from_what_is_kept():
+    d = _world()
+    p = _page(d, "ilia topuria")
+    assert p["player"] == NAME and p["sport"] == "ufc" and p["face"].endswith("/full/4096.png")
+    b = p["bio"]
+    assert (b["record"], b["division"], b["age"], b["team"]) == ("16-0-0", "Featherweight", 29, "Climent Club")
+    assert FP.division_words("women's_strawweight") == "Women's Strawweight"
+    assert FP.division_words("light_heavyweight") == "Light Heavyweight"
+    assert (b["nickname"], b["height"], b["weight"], b["reach"], b["stance"], b["country"], b["born"]) == \
+        ("El Matador", "5' 7\"", "145 lbs", "69\"", "Orthodox", "Spain", "1997-01-21"), b
+    assert b["birthplace"] == "Halle, Germany"
+    assert "archetype" not in json.dumps(p) and "red_flags" not in json.dumps(p) and "a flag only" not in json.dumps(p), \
+        "our read of a fighter stays with the picks"
+    rates = {r["key"]: r for r in p["rates"]}
+    assert "ctrl_per15" not in rates, "a stand-in, not a measure"
+    assert rates["str_def"]["value"] == 62.0 and rates["str_def"]["pct"] and rates["slpm"]["value"] == 4.4
+    assert [r["key"] for r in p["rates"] if r["lead"]] == ["slpm", "str_def", "td_per15", "tdd"]
+    assert [f["opp"] for f in p["fights"]] == ["Max Holloway", "Alexander Volkanovski", "Josh Emmett"], "newest first"
+    assert p["tracked"] == 3 and p["line"]["w"] == 3 and p["line"]["ko_w"] == 2
+    assert {m["key"]: m["w"] for m in p["by_method"]} == {"KO/TKO": 2, "SUB": 0, "DEC": 1}
+    assert p["next"] == {"opponent": "Max Holloway", "date": "2026-12-12", "division": "Featherweight"}
+
+
+def test_a_name_nobody_keeps_is_no_page_and_no_card_is_no_next_fight():
+    d = _world(with_next=False)
+    assert _page(d, "Nobody At All") == {}
+    assert _page(d)["next"] is None
+    (d / "cache" / "espn_mma_ath_4096.json").unlink()
+    assert "height" not in _page(d)["bio"], "no cached page, no facts invented"
+
+
+def test_the_page_endpoint_answers_for_a_fighter():
+    assert 'if sport not in playerpage.SPORTS and sport != "ufc":' in SERVER
+    assert "from engine.ufc import fighterpage\n                made = fighterpage.page(player)" in SERVER
+
+
+def test_the_page_is_the_player_pages_frame_with_a_fighters_menus():
+    assert 'const PLR_SPORTS = ["nfl", "cfb", "nba", "wnba", "cbb", "nhl", "mlb", "ufc"];' in PAGE
+    assert ('const PLR_TABS_UFC = [["overview", "Overview"], ["fights", "Fights"], ["stats", "Stats"], ["bio", "Bio"], '
+            '["news", "News"]];') in PAGE
+    assert 'if (page._plr.sport === "ufc") return plrFillUfc(page, d);' in PAGE
+    hero = PAGE[PAGE.index("function plrHeroHTML("):PAGE.index("function plrTabsHTML(")]
+    assert "const line = (ufc ? [(bio && bio.division) || pos, bio && bio.record]" in hero
+    assert 'bio.nickname ? `“${bio.nickname}”` : "", bio.height, bio.reach ? `${bio.reach} reach` : ""' in hero
+    fill = PAGE[PAGE.index("function plrFillUfc("):]
+    fill = fill[:fill.index("\n}\n")]
+    for sel in ('set(".plr-season", plrUfcRatesHTML(d));', 'set(".plr-next", plrUfcNextHTML(d));',
+                'set(".plr-recent", plrUfcFightsHTML(d, 5));', 'set("[data-plr-panel=\\"fights\\"]", plrUfcFightsHTML(d));',
+                'set("[data-plr-panel=\\"stats\\"]", plrUfcStatsHTML(d));', 'set("[data-plr-panel=\\"bio\\"]", plrUfcBioHTML(d));'):
+        assert sel in fill, sel
+    assert "archetype" not in PAGE and "red_flags" not in PAGE, "no read of ours on a free page"
+    i = APP.index('if (m.sport === "ufc") {')
+    assert 'renderPlayerPage(host, m.player, "ufc");' in APP[i:i + 160], "a searched fighter opens the page"
+    assert "function ufcProfileHTML(" not in APP, "the card it replaces is gone"
+    for sel in (".plr-res {", ".plr-w {", ".plr-l {", ".plr-ufc-next {"):
+        assert sel in CSS, sel
+
+
+def test_in_a_browser_the_fighters_page_draws_every_menu():
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1)")
+        return
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("      (skipped: no Playwright)")
+        return
+    import rendercheck
+    d = _world()
+    page_json = json.dumps(_page(d))
+    hit = json.dumps({"players": [{"player": NAME, "sport": "ufc", "team": "", "position": "featherweight",
+                                   "games": 3, "fighter": {"record": "16-0-0", "division": "featherweight"}}]})
+    srv, port = rendercheck._serve()
+    got = {}
+    try:
+        with sync_playwright() as pw:
+            kw = {"args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]}
+            if os.path.exists("/opt/pw-browsers/chromium"):
+                kw["executable_path"] = "/opt/pw-browsers/chromium"
+            browser = pw.chromium.launch(**kw)
+            try:
+                ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True,
+                                          service_workers="block")
+                page = ctx.new_page()
+                errs = []
+                page.on("pageerror", lambda e: errs.append(str(e)))
+                page.add_init_script("try { localStorage.setItem('qb-seen-intro', '1'); localStorage.setItem('qb_intro_v1', '1');"
+                                     " localStorage.setItem('qb.tour', 'done'); } catch (e) {}")
+                page.route(lambda u: not u.startswith(f"http://127.0.0.1:{port}/"), lambda r: r.abort())
+                page.route("**/api/**", lambda r: r.fulfill(status=200, content_type="application/json", body="{}"))
+                page.route("**/api/players/page*", lambda r: r.fulfill(status=200, content_type="application/json",
+                                                                       body=page_json))
+                page.route("**/api/players/search*", lambda r: r.fulfill(status=200, content_type="application/json",
+                                                                         body=hit))
+                page.goto(f"http://127.0.0.1:{port}/index.html#player/ufc/ilia-topuria", wait_until="load")
+                page.wait_for_selector(".plr .plr-fight, .plr [data-plr-panel=\"fights\"] table", state="attached",
+                                       timeout=20000)
+                page.wait_for_timeout(300)
+                got["tabs"] = page.locator(".plr-tab").all_inner_texts()
+                got["hero"] = page.locator(".plr-hero").inner_text()
+                got["season"] = page.locator(".plr-season").inner_text()
+                got["next"] = page.locator(".plr-next").inner_text()
+                got["recent_rows"] = page.locator(".plr-recent tbody tr").count()
+                got["fight_rows"] = page.locator("[data-plr-panel=\"fights\"] tbody tr").count()
+                got["first_win"] = page.locator("[data-plr-panel=\"fights\"] tbody tr .plr-w").count()
+                got["stats"] = page.locator("[data-plr-panel=\"stats\"]").inner_html()
+                got["bio"] = page.locator("[data-plr-panel=\"bio\"]").inner_html()
+                got["errs"] = list(errs)
+            finally:
+                browser.close()
+    finally:
+        srv.shutdown()
+    assert [t.strip() for t in got["tabs"]] == ["Overview", "Fights", "Stats", "Bio", "News"], got["tabs"]
+    hero = got["hero"]
+    assert "Topuria" in hero and "featherweight · 16-0-0" in hero.lower() and "El Matador" in hero and "69\" reach" in hero, hero
+    season = got["season"].upper()
+    assert "RECORD" in season and "16-0-0" in season and "SLPM" in season and "62%" in season, got["season"]
+    assert "Max Holloway" in got["next"] and "Dec 12" in got["next"] and "Featherweight" in got["next"], got["next"]
+    assert got["recent_rows"] == 3 and got["fight_rows"] == 3 and got["first_win"] == 3
+    assert "Striking" in got["stats"] and "Grappling" in got["stats"] and "How the fights ended" in got["stats"]
+    assert "Orthodox" in got["bio"] and "Climent Club" in got["bio"] and "5' 7" in got["bio"]
+    assert not got["errs"], got["errs"]
+
+
+if __name__ == "__main__":
+    import traceback
+    fails = 0
+    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
+    for name, fn in tests:
+        try:
+            fn()
+            print(f"  ok  {name}")
+        except Exception:
+            fails += 1
+            print(f"FAIL {name}")
+            traceback.print_exc()
+    print(f"\n{len(tests) - fails} tests passed." if not fails else f"\n{fails} FAILED")
+    sys.exit(1 if fails else 0)

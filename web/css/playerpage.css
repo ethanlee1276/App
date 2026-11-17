@@ -77,6 +77,12 @@
 .plr-tapped { margin: 0 0 18px; }
 .plr-tapped > .plr-quiet { padding: 0 16px; }
 .plr-tapped-go { margin: 10px 16px 0; }
+/* A fighter's page (plrFillUfc): a fight's result in its colour, the next bout, the chart door. */
+.plr-res { font-weight: 700; }
+.plr-w { color: var(--good); }
+.plr-l { color: var(--bad); }
+.plr-ufc-next { margin: 0 0 10px; font-size: var(--fs-md); }
+.plr-ufc-acts { margin-top: 12px; }
 .plr-pick { margin: 0 0 12px; }
 
 /* News: his note first, then the headlines that name him or his club. */

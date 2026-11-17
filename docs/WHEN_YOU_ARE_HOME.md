@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**VT. Every fighter has a full page** (step 704; 17 November). Nothing to run. You said yes to a full UFC
+fighter page. Searching a fighter on the UFC tab now opens the fighter's own page, in the same frame as every
+other league's player page, where it used to open one card of career rates. The header carries the face, the
+name, the division and the record, the nickname, height, reach and age. Five menus: Overview (the career
+rates, the next fight on the card with a button to it, the last five fights), Fights (every tracked fight
+newest first: the opponent, win or loss, how and when it ended, significant strikes, takedowns and knockdowns,
+and the fight history chart), Stats (striking and grappling rates in words, how the fights ended, three-round
+against five-round fights, and when they ended), Bio and News. It is built from what we already keep: the
+fighter's dossier, the fight history table, and ESPN's own fighter page as cached when the dossier was drafted
+(nothing new is fetched). It is free like every player page, and our read of a fighter (the archetype and the
+red flags) stays off it, on the UFC tab with the picks.
+
 **VS. The NFL's three-leg parlays are on paper while they hit under 25%** (step 703; 17 November). Nothing to
 run. You said "ok" to tracking the NFL's three-leg parlays without posting them while they hit under 25% (they
 had hit 30 of 175, 17%). From the first NFL build after this deploy, each game's three-leg parlays are still

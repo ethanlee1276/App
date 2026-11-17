@@ -56,7 +56,7 @@ def test_a_search_and_the_page_before_it_list_names_not_cards():
     assert "${searchListHTML(misses.map((m) => ({ ...m, sport: state.sport })))}" in body
     # And a card only where the address names the player.
     assert body.count("profileHTML(") == 2 and body.count("{ deep: true, inPage: true }") == 2
-    assert body.count("renderPlayerPage(") == 3, "priced tonight, from the league, known only to a roster"
+    assert body.count("renderPlayerPage(") == 4, "priced tonight, from the league, known only to a roster, a fighter"
     assert "Tonight’s players" in body and "everyone with a prop on tonight’s" in body, "the page before a search says what it lists"
     assert "data-lookup" not in body and "roster-hit" not in body, "the old Profile and Roster buttons"
 
@@ -92,10 +92,10 @@ def test_trending_opens_the_page_and_a_recent_chip_searches():
     assert "searchFor(chip.dataset.q);" in APP[i:i + 200]
 
 
-def test_a_fighters_page_is_the_card_of_career_rates():
+def test_a_fighters_page_is_the_fighters_own():
     body = decl("renderPlayers")
     i = body.index('if (m.sport === "ufc") {')
-    assert 'host.innerHTML = `<div class="player-grid">${ufcProfileHTML(m)}</div>`;' in body[i:i + 160]
+    assert 'host.replaceChildren();\n          renderPlayerPage(host, m.player, "ufc");' in body[i:i + 160]
     assert i < body.index("leagueLogs(m.player, m.sport)"), "a fighter has no game logs to ask for"
 
 

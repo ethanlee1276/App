@@ -231,22 +231,25 @@ def test_a_fighter_card_is_never_asked_for_game_logs():
     as "we know nothing about him"."""
     js = _js()
     body = _fn(js, "async function renderPlayers(")
-    # A fighter's page is the card of career rates, drawn before any log is asked for.
+    # A fighter's own page (js/playerpage.js plrFillUfc), drawn before any log is asked for.
     i = body.index('if (m.sport === "ufc") {')
-    assert "ufcProfileHTML(m)" in body[i:i + 200]
+    assert 'renderPlayerPage(host, m.player, "ufc");' in body[i:i + 200]
     assert i < body.index("leagueLogs(m.player, m.sport)")
 
 
 def test_the_fighter_card_says_the_numbers_are_career_rates():
     """No per-fight series exists to chart. Drawing one out of a rate
     would be inventing a series, which is worse than the blank space."""
-    js = _js()
-    i = js.index("function ufcProfileHTML(")
-    body = js[i:i + 1800]
-    assert "career" in body.lower()
-    assert "gamelogBars" not in body, "a fighter card grew an invented chart"
+    with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web", "js", "playerpage.js"),
+              encoding="utf-8") as fh:
+        page = fh.read()
+    i = page.index("function plrUfcRatesHTML(")
+    body = page[i:page.index("function plrFillUfc(", i)]
+    assert "<h3>Career <span>" in body and "Rates over ${plural(d.tracked, \"tracked fight\")}" in body
+    assert "gamelogBars" not in body, "a fighter's page grew an invented chart"
     # And a fighter with no tracked stats says so rather than showing dashes.
-    assert "no tracked fight stats for this fighter yet" in body
+    assert "No measured rates for this fighter yet: they come from tracked fights." in body
+    assert "No tracked fights on file for this fighter yet." in body
 
 
 def test_the_corner_block_has_exactly_one_implementation():

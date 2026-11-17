@@ -276,8 +276,12 @@ def test_a_page_that_finds_nobody_says_so_and_one_that_failed_says_that():
     read off null)."""
     i = PAGE_JS.index("function plrFill(")
     fn = PAGE_JS[i:PAGE_JS.index("\n}\n", i)]
-    assert fn.startswith('function plrFill(page, d) {\n  page._plr.noStats = (d && d.no_stats) || "";'), \
-        "a failed load reaches its message"
+    # A fighter's page has its own filler (plrFillUfc), which says the same two things in a fighter's words.
+    assert fn.startswith('function plrFill(page, d) {\n  if (page._plr.sport === "ufc") return plrFillUfc(page, d);\n'
+                         '  page._plr.noStats = (d && d.no_stats) || "";'), "a failed load reaches its message"
+    ufc = PAGE_JS[PAGE_JS.index("function plrFillUfc("):]
+    assert "We have no UFC fighter named ${escapeHtml(page._plr.player)}: no dossier or tracked fight lists them." in ufc
+    assert ': "This page could not load. Open it again in a minute."}</p>`;' in ufc[:ufc.index("\n}\n")]
     assert "We have no ${escapeHtml(lgCode(sport))} player named ${escapeHtml(player)}: no box" in fn
     assert ': "This page could not load. Open it again in a minute."}</p>`;' in fn
     assert 'page.querySelectorAll(".plr-panel[data-plr-panel]:not([data-plr-panel=\\"overview\\"]), .plr-season")' in fn, \

@@ -4946,15 +4946,21 @@ class Handler(BaseHTTPRequestHandler):
         player = (q.get("player") or [""])[0][:60]
         team = (q.get("team") or [""])[0][:8].upper()
         season = (q.get("season") or [""])[0][:4]
-        if sport not in playerpage.SPORTS:
+        # A fighter's page is the fighter's own shape (engine/ufc/fighterpage; Ethan, 2026-11-17: "yes full
+        # fighter page"): the record, the career rates and every tracked fight, free like the rest.
+        if sport not in playerpage.SPORTS and sport != "ufc":
             return self._send(400, b'{"error":"no player page for this sport"}', ".json")
         key = (sport, player.lower(), team, season)
         hit = _PLAYER_PAGES.get(key)
         if hit and time.time() - hit[0] < PLAYER_PAGE_TTL:
             return self._send(200, hit[1], ".json")
         try:
-            body = json.dumps(playerpage.page(sport, player, team=team,
-                                              season=int(season) if season.isdigit() else None) or {}).encode()
+            if sport == "ufc":
+                from engine.ufc import fighterpage
+                made = fighterpage.page(player)
+            else:
+                made = playerpage.page(sport, player, team=team, season=int(season) if season.isdigit() else None)
+            body = json.dumps(made or {}).encode()
         except Exception:                                # noqa: BLE001
             return self._send(503, b'{"error":"the player page could not be read"}', ".json")
         if len(_PLAYER_PAGES) >= PLAYER_PAGE_KEEP:

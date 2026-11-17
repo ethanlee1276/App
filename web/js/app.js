@@ -14083,11 +14083,12 @@ async function renderPlayers() {
       const m = routed && (hits.find((h) => searchNorm(h.player) === searchNorm(state.search))
         || (hits.length === 1 && hits[0]));
       if (m) {
-        // A fighter has no game logs to fetch (a request that can only come
-        // back empty, and the empty answer would read as "we know nothing
-        // about this fighter") and no page beyond the card of career rates.
+        // A fighter has no game logs to fetch: the fighter's own page draws
+        // the record, the rates and every tracked fight (js/playerpage.js;
+        // Ethan, 2026-11-17: "yes full fighter page").
         if (m.sport === "ufc") {
-          host.innerHTML = `<div class="player-grid">${ufcProfileHTML(m)}</div>`;
+          host.replaceChildren();
+          renderPlayerPage(host, m.player, "ufc");
           return;
         }
         if (!playerStats(m.player)) {
@@ -14323,34 +14324,6 @@ document.addEventListener("click", (e) => {
   if (typeof mountEChartsPanels === "function")
     mountEChartsPanels(fresh.parentElement || fresh);
 });
-
-/* A FIGHTER'S CARD, and the one thing it deliberately does not have.
-
-   Every other search result draws a bar chart of the last ten games,
-   because a per-game value exists to chart. A fight has no such series
-   here: the promotion's numbers are career RATES — strikes landed per
-   minute, takedown defence — and that is what our dossiers hold. So this
-   card shows the rates and SAYS they are career numbers. Drawing a chart
-   out of a rate would be inventing a series, which is worse than the
-   blank space it would fill. */
-function ufcProfileHTML(m) {
-  const f = Object.assign({ name: m.player }, m.fighter || {});
-  const div = String(f.division || "").replace(/_/g, " ");
-  const known = f.slpm != null || f.sapm != null || f.tdd != null;
-  return `
-    <article class="profile" style="--profile-grad:linear-gradient(135deg, var(--plum), transparent)">
-      <div class="profile-head">
-        ${playerAvatar(m.player, "", { size: 60 })}
-        <div class="meta"><div class="nm">${escapeHtml(m.player)}${leagueBadge("ufc")}</div>
-          <div class="sub">${escapeHtml(div || "division n/a")}</div></div>
-      </div>
-      ${fighterColHTML(f)}
-      <div class="profile-pick"><div class="lbl">Career rates
-        <small>${known
-          ? "a fight has no per-game log to chart — these are per-minute and per-15 rates over the fighter’s tracked fights"
-          : "no tracked fight stats for this fighter yet, so there is nothing to rate"}</small></div></div>
-    </article>`;
-}
 
 //: Logs fetched for a SEARCHED player, held outside the board payload.
 //:
