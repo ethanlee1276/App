@@ -133,8 +133,16 @@ def _render(fn, payload):
     """
     # On stdin: a season of college basketball is more than a command
     # line holds.
-    out = subprocess.run(["node", "-"], input=js, capture_output=True, text=True)
-    assert out.returncode == 0, out.stderr
+    # ONCE MORE IF NODE WAS KILLED (2026-11-18): GitHub's runner failed this
+    # file once with a bare AssertionError() on the college page, the largest
+    # payload here, and passed it on the same commit minutes later. A process
+    # killed by a signal exits negative with nothing on stderr; a real error
+    # exits positive and says why, and is never retried.
+    for _ in range(2):
+        out = subprocess.run(["node", "-"], input=js, capture_output=True, text=True, timeout=180)
+        if out.returncode >= 0:
+            break
+    assert out.returncode == 0, f"node exited {out.returncode}: {out.stderr[-2000:]}"
     return json.loads(out.stdout)
 
 
@@ -190,17 +198,21 @@ def test_the_ncaa_tournament_for_a_member_and_for_a_reader_without_a_plan():
     for part in ("If the season ended today", "The bubble", "Last four in", "First four out", "The contenders",
                  "The conference races", "’s region", ">First Four<", "Selection Sunday", ">auto<"):
         assert part in html, part
-    assert "member-lock" not in html and "School T000" in html
+    assert "member-lock" not in html, "a member sees no lock"
+    assert "School T000" in html, "the schools by name"
     top = d["teams"][0]["team"]
     c = d["chances"][top]["title"]
-    assert (f"{round(c * 100)}%" if 0.005 <= c <= 0.995 else ">99%") in html
+    said = f"{round(c * 100)}%" if 0.005 <= c <= 0.995 else ">99%"
+    assert said in html, (said, c)
     if d["swing"]:
-        assert "The games that swing it" in html
+        assert "The games that swing it" in html, "the swing games, when there are some"
     pub = gate.redact(d, "ncaa_race.json")
     html = _render("ncaaHTML", pub)
-    assert "If the season ended today" in html and "The bubble" in html and "The conference races" in html
-    assert "member-lock" in html and "Our chances are for members" in html
-    assert "The contenders" not in html and "The games that swing it" not in html and "<span>Bid</span>" not in html
+    for part in ("If the season ended today", "The bubble", "The conference races", "member-lock",
+                 "Our chances are for members"):
+        assert part in html, f"a reader without a plan: {part}"
+    for part in ("The contenders", "The games that swing it", "<span>Bid</span>"):
+        assert part not in html, f"a member's only: {part}"
 
 
 def test_from_selection_sunday_the_college_page_is_the_bracket():
