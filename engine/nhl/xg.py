@@ -185,13 +185,23 @@ def summaries(rows: list[dict], window: int = 20) -> dict:
                 elif r["strength"] == "PP" and not r["empty_net"]:
                     acc[f"xg{side}_pp"] += r["xg"]
                 acc[f"g{side}"] += r["is_goal"]
-        if r.get("goalie") and not r["empty_net"] and r["kind"] in ("goal", "sog"):
+        # EVERY UNBLOCKED ATTEMPT THE GOALIE FACED, MISSES INCLUDED (18 November
+        # 2026). The model is fitted on unblocked attempts — a cell's rate is
+        # goals over goals, shots and misses — so its expected goals add up to
+        # the goals only over all three. Summed over the shots on goal alone, a
+        # goalie was charged with about three-quarters of what was faced, and
+        # every starter read 20 to 60 goals "below expected" (Kuemper −47.8,
+        # Vasilevskiy −28.6, all 22 of the night's starters below zero); the
+        # same ratio set goalie_skill near 1.3, which the goal markets' ±20% cap
+        # turned into a fifth more goals against every confirmed starter. The
+        # shot count stays shots on goal.
+        if r.get("goalie") and not r["empty_net"] and r["kind"] in UNBLOCKED:
             gk = by_goalie.setdefault(r["goalie"], {})
             if r["game_id"] in gk or len(gk) < window:
                 acc = gk.setdefault(r["game_id"], [0.0, 0, 0])
                 acc[0] += r["xg"]
                 acc[1] += r["is_goal"]
-                acc[2] += 1
+                acc[2] += r["kind"] != "miss"
     players = {n: {"ixg": round(sum(v[0] for v in g.values()), 3), "iff": sum(v[1] for v in g.values()),
                    "sog": sum(v[3] for v in g.values()), "goals": sum(v[2] for v in g.values()), "games": len(g)}
                for n, g in by_player.items()}
@@ -273,7 +283,8 @@ def power_play(rows: list[dict], window: int = PP_WINDOW) -> dict:
 #: refits, so a build reuses them while that key holds.
 BOARD_FILE = "nhl_xg_board.json"
 #: Raised whenever the summaries' shape changes, so a kept copy is rebuilt.
-BOARD_VERSION = 2
+#: 3 (18 November 2026): a goalie's expected goals against count his misses.
+BOARD_VERSION = 3
 
 
 def board_summaries(conn, seasons=None, window: int = 40) -> dict | None:

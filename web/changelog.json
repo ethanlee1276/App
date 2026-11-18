@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-11-18",
+      "kind": "model",
+      "title": "Hockey goalies measured on every chance they faced",
+      "body": "A goalie’s goals saved above expected now count missed shots, as the expected-goals model is built on them, so tonight’s starters no longer all read far below expected. Shooters’ goals, points and assists against a confirmed starter had been priced up to a fifth too likely; those chances come down. Hockey’s game lines do not move."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
+      "title": "Futures say when they are for members",
+      "body": "The Futures page told visitors there was no season to project when the board was there and kept for members; it now says so. A college basketball team’s page is headed by the school’s name, and a team search that finds nothing gives an example from its own league."
+    },
+    {
+      "date": "2026-11-18",
       "kind": "fix",
       "title": "Small words put right across the site",
       "body": "The Streak counts from zero and locks each pick when its own game starts; hockey says puck drop; the plans page names a school without “the” and says what its closing-line number measures; the Record page calls college basketball NCAAB everywhere and stops repeating a ribbon and a note; Zeno’s page names a past week by its dates."

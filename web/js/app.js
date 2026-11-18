@@ -4828,7 +4828,10 @@ async function renderFutures() {
 
   const teams = (d && d.teams) || [];
   if (!teams.length) {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
+    // A board the paywall kept is a board, not "no season" (18 November 2026).
+    host.innerHTML = ((d || {}).locked || {}).whole_board ? memberLockHTML("The season’s projections are for members",
+      "Every team’s chances from the rest of the season played out thousands of times, beside the books’ prices.")
+      : `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <div class="es-title">No season to project</div>
       <div class="es-sub">${escapeHtml((d && d.note)
         || "This sport has no futures board yet. It fills once a season is "

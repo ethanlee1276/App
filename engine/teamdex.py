@@ -233,7 +233,31 @@ def label(abbr: str, sport: str) -> str:
     for full, a in name_map(sport).items():
         if a == abbr and len(full) > len(best):
             best = full
+    if not best and sport == "cbb":
+        best = _cbb_card_name(abbr)
     return best or abbr
+
+
+#: College basketball's kept cards' names, read once per change of the file.
+_CBB_CARD_NAMES: dict = {}
+
+
+def _cbb_card_name(abbr: str) -> str:
+    """A school's name off its kept card (`cbbteams.cards`), for a school no book has
+    priced yet. 18 November 2026: Tennessee's page was headed "TENN", because the
+    names above are the books' spellings and only the schools they priced are in it."""
+    import os
+    try:
+        from . import cbbteams
+        path = cbbteams.CARDS_PATH
+        stamp = os.path.getmtime(path)
+    except Exception:                                         # noqa: BLE001
+        return ""
+    if _CBB_CARD_NAMES.get("stamp") != (str(path), stamp):
+        names = {k: str(v.get("name") or "") for k, v in cbbteams.cards(path).items()}
+        _CBB_CARD_NAMES.clear()
+        _CBB_CARD_NAMES.update(stamp=(str(path), stamp), names=names)
+    return _CBB_CARD_NAMES["names"].get(abbr, "")
 
 
 # --------------------------------------------------------------- record

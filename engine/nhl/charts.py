@@ -142,7 +142,10 @@ def _skater_line(shots: list) -> dict:
 def _goalie_line(shots: list) -> dict:
     faced = [s for s in shots if s["k"] in ("sog", "goal") and not s["en"]]
     ga = sum(s["g"] for s in faced)
-    xga = [s["xg"] for s in faced if "xg" in s]
+    # Expected goals over every unblocked attempt the goalie faced, misses included —
+    # what the model's rates add up over (engine/nhl/xg.summaries, 18 November
+    # 2026); the shots, saves and save rate stay on the shots on goal.
+    xga = [s["xg"] for s in shots if s["k"] in ("sog", "goal", "miss") and not s["en"] and "xg" in s]
     return {"n": len(faced), "shots": len(faced), "saves": len(faced) - ga, "ga": ga,
             "sv_pct": round((len(faced) - ga) / len(faced), 3) if faced else None,
             "xga": round(sum(xga), 2) if xga else None,
@@ -181,8 +184,10 @@ def _chart(conn, player: str, season, who: str) -> dict:
     cols = [c[0] for c in cur.description]
     rows = [dict(zip(cols, r)) for r in cur]
     if who == "goalie":
-        # His shots: on goal, never into an empty net (xg.summaries' rule).
-        rows = [r for r in rows if r["kind"] in ("sog", "goal") and not r["empty_net"]]
+        # The goalie's shots: never into an empty net. The misses stay for the
+        # expected goals faced (xg.summaries' rule since 18 November 2026: the
+        # model's rates add up over unblocked attempts) and leave before the map draws.
+        rows = [r for r in rows if r["kind"] in ("sog", "goal", "miss") and not r["empty_net"]]
     if not rows:
         return {}
     model = _model()
@@ -192,11 +197,14 @@ def _chart(conn, player: str, season, who: str) -> dict:
     from ..carries import scoreboard
     scoreboard(conn, "nhl", pick, games)
     line = _skater_line if who == "shooter" else _goalie_line
-    every = []
+    every, faced = [], []
     for g in games:
         g["line"] = line(g["shots"])
+        faced += g["shots"]
+        if who == "goalie":
+            g["shots"] = [s for s in g["shots"] if s["k"] != "miss"]
         every += g["shots"]
-    total = line(every)
+    total = line(faced)
     n = len(games)
     total["games"] = n
     if who == "shooter":

@@ -2788,10 +2788,17 @@ function renderTeamPage() {
     return;
   }
   if (!d.profile) {
+    // The example in the league being searched (18 November 2026: a college basketball
+    // school that did not match was told to try "Los Angeles Rams").
+    const sp = d.sport || st.sport;
+    const eg = { nba: "“Boston Celtics”, “Celtics” or “BOS”", wnba: "“New York Liberty”, “Liberty” or “NY”",
+                 nhl: "“Boston Bruins”, “Bruins” or “BOS”", mlb: "“New York Yankees”, “Yankees” or “NYY”" }[sp]
+      || "“Los Angeles Rams”, “Rams” or “LA”";
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
       <div class="es-title">No team matched “${escapeHtml(st.team)}”</div>
-      <div class="es-sub">Try the city, the nickname or the abbreviation —
-        “Los Angeles Rams”, “Rams” or “LA”.</div></div>`;
+      <div class="es-sub">${sp === "cbb" || sp === "cfb"
+        ? "Try the school or its abbreviation — “Tennessee” or “TENN”."
+        : `Try the city, the nickname or the abbreviation — ${eg}.`}</div></div>`;
     return;
   }
   const p = d.profile;

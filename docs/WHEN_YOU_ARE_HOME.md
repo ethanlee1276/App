@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XG. A hockey goalie is measured on every chance faced; a locked futures board and a school say what they are**
+(step 743; 18 November). Nothing to run: the kept shot summaries rebuild on the next NHL board by themselves. A
+hockey game page said "Darcy Kuemper · .892 save rate · −47.8 saved above expected", and every one of the night's 22
+starters read below zero (Vasilevskiy −28.6, Sorokin −23.9). The expected-goals model is fitted on unblocked
+attempts (goals, shots on goal and misses), but a goalie's expected goals against were summed over the shots on goal
+alone, about three-quarters of what was faced. The same ratio is the goalie skill that the goal markets (goals, the
+anytime goal, points, assists) multiply a skater's chance by against a confirmed starter, capped at 20%: for an
+average goalie it sat at the cap, so those props were priced as much as a fifth too likely against every confirmed
+starter. Misses now count (engine/nhl/xg and the save map's line; the map still draws only what reached the net).
+The NHL board's goal, point and assist chances against a confirmed starter come down; its game lines do not move
+(they read the starter against the team's own goaltending, where the error cancelled). The same walk found college
+basketball's Futures saying "No season to project" to visitors over a board the paywall had kept (every league's
+futures said it): a kept board now shows the members' card. Tennessee's team page was headed "TENN": a school no
+book has priced takes its name off its kept card. A team search that matched nothing gave a football example in
+every league; each league gives its own.
+
 **XF. What a reader saw on the walk reads right** (step 742; 18 November). Nothing to run. Walking the paywall, the
 Streak, hockey's Tonight, college basketball's Record page and Zeno's page: the Streak said "undefined day streak"
 when an account's streak came back empty and "Picks lock at first pitch" over a slate of college football receptions

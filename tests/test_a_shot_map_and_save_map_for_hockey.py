@@ -114,10 +114,14 @@ def test_the_save_map_counts_shots_on_goal_he_faced():
     assert d["role"] == "goalie" and d["team"] == "NYR" and d["games"][0]["opp"] == "TOR"
     L = d["season_line"]
     # The goal (9.8 ft), the power-play shot on goal (21.5 ft); never the
-    # miss, the block or the empty net.
+    # block or the empty net. The miss (16.1 ft) is no shot or save, but its
+    # chance is in what the goalie faced: the model's rates add up over
+    # unblocked attempts (18 November 2026 — over the shots on goal alone every
+    # starter read 20 to 60 goals below expected).
     assert (L["shots"], L["saves"], L["ga"]) == (2, 1, 1) and L["sv_pct"] == 0.5
-    assert L["xga"] == round(0.25 + 0.06, 2) and L["gsax"] == round(0.31 - 1, 2)
+    assert L["xga"] == round(0.25 + 0.06 + 0.12, 2) and L["gsax"] == round(0.43 - 1, 2)
     assert {s["by"] for s in d["games"][0]["shots"]} == {"Auston Matthews"}
+    assert all(s["k"] != "miss" for g in d["games"] for s in g["shots"]), "the map draws what reached the net"
     assert HC.save_map(conn, "Auston Matthews") == {}, "a skater has no save map"
     assert HC.shot_map(conn, "Nobody") == {}
 
