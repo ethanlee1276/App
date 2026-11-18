@@ -3065,7 +3065,7 @@ function teamHomeHTML(d, p) {
       </button>`).join("")}</div>` : "";
   const g = teamOnBoard(d, p);
   const tonight = g ? `<button type="button" class="card tm-next" data-team-game="${escapeAttr(gameId(g))}">
-      <span class="tm-next-k">On tonight’s board</span>
+      <span class="tm-next-k">On ${["nfl", "cfb"].includes(d.sport) ? "this week’s" : "tonight’s"} board</span>
       <span class="tm-next-g">${teamMarkIn(d.sport, g.away, 22)} ${escapeHtml(teamNameIn(d.sport, g.away))}
         <span class="gp-at">@</span> ${teamMarkIn(d.sport, g.home, 22)} ${escapeHtml(teamNameIn(d.sport, g.home))}</span>
       <span class="tm-next-m">${escapeHtml([whenLabel(g.date, g.kickoff),
@@ -3183,7 +3183,9 @@ function teamLiveRosterHTML(d) {
   const cols = TEAM_ROSTER_COLS.filter(([k]) => players.some((p) => p[k] != null && p[k] !== ""));
   const groups = [];
   for (const p of players) {
-    const pos = p.position || "—";
+    // A roster with no positions (college basketball's) groups by the box score's starter flag in
+    // words, Starters and Bench (engine/rosters.flag_group); the headings read "B" and "S".
+    const pos = p.position || p.depth_pos || "—";
     let g = groups.find((x) => x.pos === pos);
     if (!g) groups.push(g = { pos, rows: [] });
     g.rows.push(p);
@@ -3216,7 +3218,8 @@ function teamDepthHTML(d) {
     : (((d.squad || {}).positions) || []).map((x) => ({ position: x.position,
         names: (x.players || []).map((w) => w.player) }));
   if (!rows.length) return teamEmptyTab("No depth chart yet", "No depth chart on file for this team yet.");
-  const cols = Math.min(4, Math.max(...rows.map((r) => r.names.length)));
+  // Four deep, and five where the row is a basketball club's starters (the fifth was cut off).
+  const cols = Math.min(rows.some((r) => r.position === "Starters") ? 5 : 4, Math.max(...rows.map((r) => r.names.length)));
   return `<div class="section-title">Depth chart
       <span class="sub">— ${pub && pub.source === "usage"
         ? `today’s roster, ordered by ${pub.market === "toi" ? "ice time" : "minutes"} a game over each player’s last ${
@@ -3312,8 +3315,13 @@ function teamInjuryRowHTML(r) {
   return `<button type="button" class="tm-row" data-player-page="${escapeAttr(slugify(r.player || ""))}">
     <span class="tm-row-o">${escapeHtml(r.player || "")}<small>${escapeHtml(r.pos || r.position || "")}</small></span>
     <span class="tm-row-r"><b style="color:${injTone(r.status)}">${escapeHtml(r.status || "")}</b>
-      <small>${escapeHtml([r.injury, r.return_date ? `return ${r.return_date}` : ""].filter(Boolean).join(" · "))}</small></span>
+      <small>${escapeHtml([r.injury, r.return_date ? `back ${teamDayWords(r.return_date)}` : ""].filter(Boolean).join(" · "))}</small></span>
   </button>`;
+}
+//: "Nov 22" for 2026-11-22: a day as a person writes it (the card read "return 2026-11-22").
+function teamDayWords(iso) {
+  const t = Date.parse(`${String(iso).slice(0, 10)}T12:00:00`);
+  return isNaN(t) ? String(iso) : new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 function teamInjuriesHTML(d, p) {
   if (!_injBoard) return `<p class="loading">Reading the injury report…</p>`;

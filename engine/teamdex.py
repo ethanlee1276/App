@@ -60,6 +60,23 @@ def _ats(home_margin: float, spread) -> str | None:
     return "home" if edge > 0 else "away"
 
 
+def _spread(g) -> float | None:
+    """The home side's number for a game, or ``None`` where no line is on file.
+
+    NO LINE, NOT A PICK'EM (TEAMFIX1, 2026-11-17). Every feed writes 0.0
+    where a spread would go (engine/sources/espnhoops, nbadata, nhldata; the
+    NFL schedule's blank spread_line), and only college football's and the
+    NFL's closes are ever written over it. Read as a line, that zero made
+    every other final "0 covered" or "0 missed" on a club's page and its
+    record against the spread its record: the Nuggets 6-5 against the spread
+    on eleven games no line was stored for, Duke 3-1 on four. A real pick'em
+    has a total beside it; a zero alone is nothing."""
+    s = _num(g["spread"])
+    if s is None or (s == 0 and _num(g["total"]) is None):
+        return None
+    return s
+
+
 def _ou(points: float, total) -> str | None:
     t = _num(total)
     if t is None:
@@ -235,7 +252,7 @@ def _add(acc: dict, mine: float, theirs: float, at_home: bool, g: dict):
         acc["losses"] += 1
     else:
         acc["ties"] += 1
-    cover = _ats(_num(g["home_score"]) - _num(g["away_score"]), g["spread"])
+    cover = _ats(_num(g["home_score"]) - _num(g["away_score"]), _spread(g))
     if cover == "push":
         acc["ats_p"] += 1
     elif cover is not None:
@@ -341,7 +358,8 @@ def _game_row(g: dict, team: str) -> dict:
     h, a = _num(g["home_score"]), _num(g["away_score"])
     at_home = g["home"] == team
     mine, theirs = (h, a) if at_home else (a, h)
-    cover = _ats(h - a, g["spread"])
+    line = _spread(g)
+    cover = _ats(h - a, line)
     return {
         "season": g["season"], "period": g["period"], "date": g["date"],
         "home": g["home"], "away": g["away"],
@@ -352,13 +370,11 @@ def _game_row(g: dict, team: str) -> dict:
         "at_home": at_home, "points_for": mine, "points_against": theirs,
         "margin": round(mine - theirs, 1),
         "result": "W" if mine > theirs else "L" if mine < theirs else "T",
-        "spread": _num(g["spread"]), "total": _num(g["total"]),
+        "spread": line, "total": _num(g["total"]),
         # SIGNED FOR THE TEAM BEING LOOKED UP, not for the home side.
         # A page that shows the Rams and prints Seattle's number is
         # correct arithmetic answering somebody else's question.
-        "line": (None if _num(g["spread"]) is None
-                 else (_num(g["spread"]) if at_home
-                       else -_num(g["spread"]))),
+        "line": None if line is None else (line if at_home else -line) + 0.0,
         "covered": (None if cover is None else "push" if cover == "push"
                     else ((cover == "home") == at_home)),
         "ou": _ou(h + a, g["total"]),
@@ -570,6 +586,7 @@ def _roster(conn, sport: str, team: str, season: int) -> dict:
     roster position needs.
     """
     from .fantasy import _fold, _short_key
+    from .rosters import shown_position           # a basketball log's starter flag is no position
     rows = conn.execute(
         "SELECT player, position, market, COUNT(*) n, SUM(value) total, "
         "COUNT(DISTINCT game_id) games FROM player_game_logs "
@@ -601,6 +618,10 @@ def _roster(conn, sport: str, team: str, season: int) -> dict:
             {"player": name, "position": str(r["position"] or ""),
              "games": 0, "stats": {}})
         _absorb(who, r)
+    # A basketball log's "S" or "B" is the box score's starter flag, not a
+    # position: nothing is printed for it (engine/rosters.shown_position).
+    for who in by_player.values():
+        who["position"] = shown_position(sport, who["position"])
     return by_player
 
 
@@ -772,6 +793,7 @@ STAT_SECTIONS = {
 # a goalie. No column is estimated from one the feed does not carry.
 STAT_SECTIONS["hockey"] = (
     {"key": "skaters", "title": "Skaters", "sort": "points", "rows": 20,
+     "leaders": (("Most", "goals"), ("Most", "assists"), ("Most", "points")),
      "columns": (("GP", "gp", None, None),
                  ("G", "sum", "goals", None),
                  ("A", "sum", "assists", None),
@@ -781,7 +803,7 @@ STAT_SECTIONS["hockey"] = (
                  ("BLK", "sum", "blocks", None),
                  ("HIT", "sum", "hits", None),
                  ("TOI/G", "per_game", "toi", None))},
-    {"key": "goalies", "title": "Goalies", "sort": "saves",
+    {"key": "goalies", "title": "Goalies", "sort": "saves", "leaders": (("Most", "saves"),),
      "columns": (("GP", "gp", None, None),
                  ("GS", "sum", "started", None),
                  ("SV", "sum", "saves", None),
@@ -792,6 +814,7 @@ STAT_SECTIONS["hockey"] = (
 )
 STAT_SECTIONS["basketball"] = (
     {"key": "scoring", "title": "Players", "sort": "pts", "rows": 15,
+     "leaders": (("Most", "pts"), ("Most", "reb"), ("Most", "ast")),
      "columns": (("GP", "gp", None, None),
                  ("MIN", "per_game", "min", None),
                  ("PTS", "per_game", "pts", None),
@@ -802,13 +825,14 @@ STAT_SECTIONS["basketball"] = (
 )
 STAT_SECTIONS["baseball"] = (
     {"key": "batting", "title": "Batting", "sort": "pa", "rows": 15,
+     "leaders": (("Most", "hits"), ("Most", "home_runs")),
      "columns": (("GP", "gp", None, None),
                  ("PA", "sum", "pa", None),
                  ("H", "sum", "hits", None),
                  ("TB", "sum", "total_bases", None),
                  ("HR", "sum", "home_runs", None),
                  ("H/G", "per_game", "hits", None))},
-    {"key": "pitching", "title": "Pitching", "sort": "outs", "rows": 15,
+    {"key": "pitching", "title": "Pitching", "sort": "outs", "rows": 15, "leaders": (("Most", "strikeouts"),),
      "columns": (("GP", "gp", None, None),
                  ("IP", "ip", "outs", None),
                  ("K", "sum", "strikeouts", None),
@@ -900,10 +924,17 @@ def stat_tables(conn, sport: str, team: str, season: int | None = None,
             "rows": [{"player": w["player"], "position": w["position"],
                       "cells": [cells[n][i] for i in keep]}
                      for n, w in enumerate(here)]})
-        leaders.append({"title": spec["title"], "player": here[0]["player"],
-                        "position": here[0]["position"],
-                        "market": spec["sort"],
-                        "value": here[0]["stats"][spec["sort"]]["total"]})
+        # A football section's leader is its sorting stat's ("Passing yards").
+        # A section that holds every kind of number names its own leaders
+        # (`leaders`): basketball's one table led the page with a single tile
+        # that read "PLAYERS PTS" (TEAMFIX1, 2026-11-17).
+        for title, market in spec.get("leaders") or ((spec["title"], spec["sort"]),):
+            got = [w for w in people.values() if ((w.get("stats") or {}).get(market) or {}).get("total")]
+            if not got:
+                continue
+            top = max(got, key=lambda w: (w["stats"][market]["total"], w["games"], w["player"]))
+            leaders.append({"title": title, "player": top["player"], "position": top["position"],
+                            "market": market, "value": top["stats"][market]["total"]})
     return {"season": season, "sections": sections, "leaders": leaders}
 
 
@@ -944,7 +975,7 @@ def usage_depth(conn, sport: str, roster: list[dict], window: int = USAGE_WINDOW
         got = per.setdefault(k, [])
         if len(got) < window:
             got.append(float(r["value"] or 0.0))
-    order = HOCKEY_POSITION_ORDER if sport == "nhl" else {}
+    order = HOCKEY_POSITION_ORDER if sport == "nhl" else {"Starters": 0, "Bench": 1}
     groups: dict = {}
     for p in roster:
         name = p.get("player") or ""
@@ -952,7 +983,9 @@ def usage_depth(conn, sport: str, roster: list[dict], window: int = USAGE_WINDOW
             continue
         vals = [v for v in per.get(_norm_key(name), []) if v > 0]
         avg = sum(vals) / len(vals) if vals else 0.0
-        groups.setdefault(p.get("position") or "—", []).append((avg, len(vals), name))
+        # A roster with no positions (college basketball's, built from who played) groups by its
+        # starter flag in words (engine/rosters.flag_group): Starters and Bench.
+        groups.setdefault(p.get("position") or p.get("depth_pos") or "—", []).append((avg, len(vals), name))
     positions = []
     for pos, people in groups.items():
         people.sort(key=lambda x: (-x[0], -x[1], x[2]))

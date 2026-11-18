@@ -4,6 +4,12 @@
     {
       "date": "2026-11-17",
       "kind": "fix",
+      "title": "A team’s page stops counting games with no betting line",
+      "body": "A game with no line on file read “0 covered” or “0 missed” on a team’s schedule, and the record against the spread beside it was just the win-loss record. Those games now say nothing about the spread, and the tile shows only a real record. On basketball pages the box score’s starter mark (S or B) is no longer printed as a position: rosters read Starters and Bench, and the leaders are most points, rebounds and assists. An injury says its word once (“Concussion”, not twice) with the return day as a day."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "fix",
       "title": "The Record page says each thing once",
       "body": "The week’s card printed codes for markets (“fg3m”, “pts reb”, “stl”) and a book name no page uses; it now says 3-Pointers Made, Pts+Reb and Steals, and names its books as their sections do. A league’s record listed its report picks and tickets twice, in flat lists and again game by game; the flat lists now give way to one line that links to each game’s. A one-row “By kind” that repeated the tile above it is gone."
     },

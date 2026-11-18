@@ -801,6 +801,33 @@ def _faces(conn, sport: str, offline: bool = False) -> dict:
     return out
 
 
+#: THE BOX SCORE'S STARTER FLAG IS NOT A POSITION (TEAMFIX1, 2026-11-17). A
+#: basketball log stores "S" or "B" where a position goes (engine/sources/
+#: espnhoops, nbadata): who started that game and who came off the bench,
+#: which the minutes model reads (nba_build, engine/hoopsreplay). Printed as
+#: a position it reached every page a college player is on: "Duke Blue
+#: Devils · S" on a player's header, "Patrick Ngongba II S" on the club's
+#: leaders, a roster under the headings "B" and "S". A page prints no
+#: position for it (`shown_position`); a roster with nothing else to group
+#: by reads Starters and Bench, the flag in words (`flag_group`).
+STARTER_FLAG_SPORTS = ("nba", "wnba", "cbb")
+STARTER_WORDS = {"S": "Starters", "B": "Bench"}
+
+
+def shown_position(sport: str, position) -> str:
+    """The position a page may print beside a name: the stored one, but
+    never a basketball box score's starter flag or its words."""
+    pos = str(position or "").strip().upper()
+    if sport in STARTER_FLAG_SPORTS and (pos in STARTER_WORDS or pos in ("STARTERS", "BENCH")):
+        return ""
+    return pos
+
+
+def flag_group(sport: str, position) -> str:
+    """"Starters" or "Bench" for a basketball log's flag, else ""."""
+    return STARTER_WORDS.get(str(position or "").strip().upper(), "") if sport in STARTER_FLAG_SPORTS else ""
+
+
 def from_game_logs(conn, sport: str, seasons: list[int] | None = None,
                    today: str | None = None) -> dict:
     """Rosters for one sport, built from who actually appeared.
@@ -862,8 +889,10 @@ def from_game_logs(conn, sport: str, seasons: list[int] | None = None,
         teams.setdefault(r["team"], []).append({
             "player": r["player"],
             "team": r["team"],
-            "position": (r["position"] or "").upper(),
-            "depth_pos": (r["position"] or "").upper(),
+            # No position where the log holds a starter flag; the flag in
+            # words is what the club's roster and depth chart group by.
+            "position": shown_position(sport, r["position"]),
+            "depth_pos": flag_group(sport, r["position"]) or (r["position"] or "").upper(),
             "depth_order": None,
             "status": f"not in a game since {last}" if cold else "",
             "unavailable": cold,
@@ -882,7 +911,7 @@ def from_game_logs(conn, sport: str, seasons: list[int] | None = None,
         # Most games played first: on a roster with no published depth
         # chart, playing time IS the depth chart, and it is measured
         # rather than claimed.
-        players.sort(key=lambda p: (p["unavailable"], -p["games"], p["player"]))
+        players.sort(key=lambda p: (p["unavailable"], p["depth_pos"] == "Bench", -p["games"], p["player"]))
         out[team] = {
             "players": players,
             "count": len(players),

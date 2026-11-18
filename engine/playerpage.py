@@ -44,6 +44,7 @@ import time
 
 from . import db as _db
 from . import gamelog as GL
+from . import rosters
 
 SPORTS = tuple(GL.LAYOUTS)
 HOOPS = ("nba", "wnba", "cbb")
@@ -813,8 +814,11 @@ def page(sport: str, player: str, team: str = "", season=None, db_path=None, dat
                      for yr, gs in by_season.items()}
         newest = max((g for gs in by_season.values() for g in gs.values()), key=lambda g: g["period"], default=None)
         my_team = team or ((newest or {}).get("team") or "")
-        row = roster_row(sport, player, my_team, data_dir, position=(newest or {}).get("position") or "")
-        position = str(row.get("position") or (newest or {}).get("position") or "")
+        # What the logs say the player plays, never a basketball box score's starter flag
+        # (engine/rosters.shown_position): "Duke Blue Devils · S" was that flag.
+        logged = rosters.shown_position(sport, (newest or {}).get("position"))
+        row = roster_row(sport, player, my_team, data_dir, position=logged)
+        position = rosters.shown_position(sport, row.get("position")) or logged
         out = {"sport": sport, "player": player, "team": row.get("team") or my_team, "position": position,
                "bio": bio(sport, player, row, position), "notes": notes(sport, player, row, data_dir),
                "seasons": seasons}

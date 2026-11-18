@@ -191,9 +191,14 @@ def parse_injuries(payload) -> list[dict]:
             if not player or not status:
                 continue
             details = inj.get("details") or {}
-            what = " ".join(s for s in (details.get("type"),
-                                        details.get("detail"))
-                            if s and s != "Not Specified") or None
+            # The type and its detail, the detail only where it adds a word: the
+            # feed files a concussion as type "Concussion", detail "Concussion",
+            # and sixteen NFL players read "Concussion Concussion" (2026-11-17).
+            kind = details.get("type") if details.get("type") != "Not Specified" else None
+            more = details.get("detail") if details.get("detail") != "Not Specified" else None
+            if kind and more and str(more).strip().lower() in str(kind).strip().lower():
+                more = None
+            what = " ".join(str(s) for s in (kind, more) if s) or None
             rows.append({
                 "team": team_name,
                 "player": player,

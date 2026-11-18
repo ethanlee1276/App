@@ -9338,6 +9338,25 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WR. A team's page says only what is true, and in words** (step 728; 17 November). Nothing to run. Three team pages
+read the same way, on the live site's own data: Duke's, the Nuggets' and the Bills'. Every final with no betting
+line on file read "0 covered" or "0 missed", and the record against the spread beside it was the club's win-loss
+record under another name (the Nuggets 6-5, Duke 3-1): every feed writes a zero where a spread would go, and only
+the NFL's and college football's closing lines are ever written over it. A zero with no total beside it is now no
+line, so those finals say nothing about the spread and the tile shows only where there is a real record; the NBA,
+WNBA, NHL, college basketball and MLB lose a number that was never true. A basketball log keeps the box score's
+starter flag, S or B, where a position goes, because the minutes model reads it, and it was printed as a position
+everywhere: "Patrick Ngongba II S" on the leaders and the stat rows, a roster under the headings "B" and "S", a
+depth chart of the same two rows that cut the fifth starter off, and "Duke Blue Devils · S" on a college player's
+own page. The flag is still stored; a page prints no position for it, a roster with nothing else to group by reads
+Starters and Bench, and the starters' row holds all five. Basketball's one leader tile, "PLAYERS PTS", is three:
+most points, most rebounds, most assists; hockey's and baseball's tables name theirs too. Sixteen NFL players'
+injury read "Concussion Concussion" (the feed's type and its detail, the same word) with the return day as a file's
+date; it reads "Concussion · back Nov 22" from the next injuries pull. And an NFL game on Sunday is on this week's
+board, not tonight's. Two things this walk found that are not fixed here: college players have no real position on
+file (guard, forward, centre), which their box scores carry and could be kept; and the Nuggets' page is one final
+short of the standings (a 30 October game at Phoenix never got its score), which I am looking into next.
+
 **WQ. The Record page says each thing once, in words** (step 727; 17 November). Nothing to run. The same walk, on
 the NBA's record, about twenty phone screens long. The week's card printed the journal's market codes ("under 2.5
 fg3m", "over 13.5 pts reb", "under 1.5 stl") and called one of its books "The one board", a name no page uses: it
