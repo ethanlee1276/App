@@ -51,15 +51,30 @@ def test_every_named_action_is_registered():
 
 def test_every_registered_action_calls_something_that_exists():
     body, names = _table(APP, "ACTS")
-    called = set()
+    called, acts_of = set(), {}
     for line in body.splitlines():
-        for fn in re.findall(r"(?<![.\w])(\w+)\(", line):
-            if fn not in {"if", "return", "e", "el"}:
-                called.add(fn)
-        called |= set(re.findall(r"window\.(\w+)\(", line))
+        act = re.match(r"^  (\w+): ", line)
+        here = {fn for fn in re.findall(r"(?<![.\w])(\w+)\(", line) if fn not in {"if", "return", "e", "el"}}
+        here |= set(re.findall(r"window\.(\w+)\(", line))
+        called |= here
+        for fn in here:
+            if act:
+                acts_of.setdefault(fn, set()).add(act.group(1))
+    files = {f.name: f.read_text(encoding="utf-8") for f in sorted((ROOT / "web" / "js").glob("*.js"))
+             if f.name not in ("app.js", "visuals.js")}
     for fn in sorted(called):
-        defined = re.search(rf"(?:function {fn}\(|window\.{fn} = |const {fn} = |let {fn} = )", APP + VIS + LAZY)
-        assert defined, f"ACTS calls {fn}, which is defined nowhere"
+        pat = rf"(?:function {fn}\(|window\.{fn} = |const {fn} = |let {fn} = )"
+        if re.search(pat, APP + VIS + LAZY):
+            continue
+        # A page's own file may hold an action's function (2026-11-18: the profit calendar moved to
+        # js/record.js) when only that file draws the controls that name it: the function is there
+        # whenever its button is.
+        homes = {name for name, src in files.items() if re.search(pat, src)}
+        assert homes, f"ACTS calls {fn}, which is defined nowhere"
+        for act in acts_of.get(fn, ()):
+            drawn = {name for name, src in files.items() if f'data-act="{act}"' in src}
+            assert f'data-act="{act}"' not in PAGES and drawn <= homes, \
+                f"{act} is drawn by {sorted(drawn - homes) or 'app.js'}, but {fn} lives in {sorted(homes)}"
 
 
 def test_one_listener_per_event_and_the_images_are_caught_in_capture():
