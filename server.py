@@ -6359,6 +6359,7 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                     return fn()
                 finally:
                     took.append((part, (time.perf_counter() - t0) * 1000.0))
+            teamdex.trace_start()
             try:
                 known = timed("teams", lambda: teamdex.teams(conn, sport))
                 if not known:
@@ -6426,10 +6427,15 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                             conn, sport, team, rivals[0])
                     else:
                         out["vs_unknown"] = opp
-                timing = ", ".join(f"{part};dur={ms:.0f}" for part, ms in took)
+                # …and each team-data read under them, in order, with how it was
+                # answered (engine/teamdex: its game keys, its days, or a scan).
+                inner = [f'td{i}_{step};dur={ms:.0f};desc="{how}"'
+                         for i, (step, ms, how) in enumerate(teamdex.trace_take()[:24])]
+                timing = ", ".join([f"{part};dur={ms:.0f}" for part, ms in took] + inner)
                 return self._send(200, json.dumps(out).encode(), ".json",
                                   headers=[("Server-Timing", timing)] if timing else None)
             finally:
+                teamdex.trace_take()
                 conn.close()
         except Exception:                                    # noqa: BLE001
             return self._send(503, b'{"error":"team history unavailable"}',

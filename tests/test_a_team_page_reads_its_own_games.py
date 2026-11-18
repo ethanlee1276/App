@@ -217,6 +217,25 @@ def test_the_depth_chart_reads_the_rosters_own_rows():
     assert "SCAN" not in plan and "USING INDEX" in plan, plan
 
 
+
+def test_each_read_says_how_it_was_answered():
+    # The team endpoint's Server-Timing header carries these (2026-11-18): a cold college page
+    # spent 25 of its 30 seconds in the squad, and only the box can say which read.
+    conn = _history()
+    teamdex.trace_start()
+    teamdex.squad(conn, "cbb", "DUKE")
+    steps = teamdex.trace_take()
+    assert [s for s, _ms, _how in steps] == ["games", "keyed", "games", "keyed"], steps
+    assert steps[1][2].startswith("2026 keys"), "the newest season, off the team's own game keys"
+    assert all(ms >= 0 for _s, ms, _h in steps) and teamdex.trace_take() == [], "taken once"
+    teamdex._note("keyed", 0.0, "x")
+    assert teamdex.trace_take() == [], "nothing is kept while no one is recording"
+    conn = _history(with_games=False)
+    teamdex.trace_start()
+    teamdex.squad(conn, "cbb", "DUKE")
+    assert [s for s, _ms, _how in teamdex.trace_take()] == ["games", "season_scan", "games", "rows_scan"], \
+        "with no games on file, the scans are named"
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

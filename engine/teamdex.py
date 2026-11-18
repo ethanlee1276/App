@@ -34,6 +34,33 @@ Read-only, and everything is handed a connection. No network, no clock.
 from __future__ import annotations
 
 import re
+import threading
+import time as _time
+
+#: WHERE A TEAM PAGE'S READS SPEND THEIR TIME (2026-11-18). The team endpoint's
+#: Server-Timing header said the squad took 25 of a cold college page's 30
+#: seconds, and the squad is three reads deep: this records each read's time
+#: and how it was answered (the team's own game keys, its game days, or the
+#: whole-season scan), per request thread, for the header to carry.
+_TRACE = threading.local()
+
+
+def trace_start() -> None:
+    """Start recording this thread's reads."""
+    _TRACE.rows = []
+
+
+def trace_take() -> list:
+    """``[(step, ms, how)]`` recorded since `trace_start`, and stop recording."""
+    rows = getattr(_TRACE, "rows", None) or []
+    _TRACE.rows = None
+    return rows
+
+
+def _note(step: str, t0: float, how: str = "") -> None:
+    rows = getattr(_TRACE, "rows", None)
+    if rows is not None:
+        rows.append((step, (_time.perf_counter() - t0) * 1000.0, how))
 
 
 def _num(v):
@@ -554,8 +581,11 @@ def _team_games(conn, sport: str, team: str, season: int | None = None) -> list:
     q = ("SELECT DISTINCT season, period, game_id FROM games WHERE sport=? AND (home=? OR away=?)"
          + (" AND season=?" if season is not None else "") + " ORDER BY season DESC, period DESC")
     args = (sport, team, team) + ((season,) if season is not None else ())
-    return [(r[0], str(r[1]), str(r[2])) for r in conn.execute(q, args).fetchall()
-            if r[0] is not None and r[1] is not None and r[2] is not None]
+    t0 = _time.perf_counter()
+    out = [(r[0], str(r[1]), str(r[2])) for r in conn.execute(q, args).fetchall()
+           if r[0] is not None and r[1] is not None and r[2] is not None]
+    _note("games", t0, f"{len(out)} games")
+    return out
 
 
 #: THE TEAM'S OWN GAMES, NOT THE SPORT'S EVERY ROW (2026-11-18: a college
@@ -616,17 +646,21 @@ def _keyed(conn, sport: str, team: str, season: int, games: list, head: str, tai
     """``head`` over the team's rows through `_log_keys`, then through its
     game days; the first read that answers, or None. ``head`` selects from
     ``l``; ``tail`` follows the team's condition."""
+    t0 = _time.perf_counter()
     keys = _log_keys(sport, team, games)
     if keys and 2 * len(keys) + 3 <= _MAX_KEYS:
         rows = conn.execute(_by_keys_sql(head, len(keys), tail),
                             tuple(x for k in keys for x in k) + (sport, season, team)).fetchall()
         if rows:
+            _note("keyed", t0, f"{season} keys {len(rows)}")
             return rows
     days = sorted({p for _s, p, _g in games})
     if sport not in _WIDE_PERIODS and days and len(days) + 3 <= _MAX_KEYS:
         rows = conn.execute(_by_days_sql(head, len(days), tail), tuple(days) + (sport, season, team)).fetchall()
         if rows:
+            _note("keyed", t0, f"{season} days {len(rows)}")
             return rows
+    _note("keyed", t0, f"{season} missed {len(keys)} keys")
     return None
 
 
@@ -637,9 +671,11 @@ def _latest_season(conn, sport: str, team: str) -> int | None:
     for season in sorted(by_season, reverse=True):
         if _keyed(conn, sport, team, season, by_season[season], "SELECT 1", " LIMIT 1"):
             return season
+    t0 = _time.perf_counter()
     row = conn.execute(
         "SELECT MAX(season) FROM player_game_logs WHERE sport=? AND team=?",
         (sport, team)).fetchone()
+    _note("season_scan", t0, "every season")
     return row[0] if row and row[0] is not None else None
 
 
@@ -653,11 +689,13 @@ def _season_rows(conn, sport: str, team: str, season: int) -> list:
     rows = _keyed(conn, sport, team, season, games, _SUMS,
                   " AND l.player<>'' GROUP BY l.player, l.position, l.market") if games else None
     if not rows:
+        t0 = _time.perf_counter()
         rows = conn.execute(
             "SELECT player, position, market, COUNT(*) n, SUM(value) total, "
             "COUNT(DISTINCT game_id) games FROM player_game_logs "
             "WHERE sport=? AND team=? AND season=? AND player<>'' "
             "GROUP BY player, position, market", (sport, team, season)).fetchall()
+        _note("rows_scan", t0, f"{season} whole season")
     return rows
 
 

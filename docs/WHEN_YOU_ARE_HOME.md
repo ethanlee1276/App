@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XU. The team page's slow read, named** (step 757; 18 November). Nothing to run. XT's timing header, read live: a
+cold Purdue page spent 25.4 of its 30 seconds building the squad (1.5 warm), Detroit's 11.1 and Ohio's 5.7; every
+other part was under 2.1. The squad is three reads deep (the team's games, the newest season with its rows, that
+season's rows), each answered by the team's own game keys, by its game days, or by a scan of the sport's whole
+season. The header now lists each read with its time and which way it was answered (td0_games, td1_keyed and so on),
+so the next step fixes the read the box names instead of a guess.
+
 **XT. A slow team page says so, and says where its time goes** (step 756; 18 November). Nothing to run. After XN,
 team pages answer in 2 to 4 seconds once warm (Tennessee had taken 25 to 50), but a cold college basketball page
 still took 22 to 56 seconds, and a page that waited too long read "No team matched TENN" for a school the site has.
