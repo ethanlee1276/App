@@ -197,7 +197,9 @@ function plrSeasonPills(d, nums) {
     const v = (row.values || {})[`${group.key}.${col.key}`];
     if (pills.length >= 4 || v == null || !Number.isInteger(Number(v)) || shown.has(String(col.key).toLowerCase())
         || PLR_PILL_SKIP.test(col.key)) continue;
-    pills.push(`${Number(v).toLocaleString()} ${String(col.title || col.label || col.key).toLowerCase()}`);
+    // A plus-minus is said with its sign, "+28" (McDavid's pill read "28 plus-minus"), and a true minus.
+    const num = `${col.label === "+/-" && Number(v) > 0 ? "+" : ""}${Number(v).toLocaleString()}`;
+    pills.push(`${typeof trueMinus === "function" ? trueMinus(num) : num} ${String(col.title || col.label || col.key).toLowerCase()}`);
   }
   return pills.length ? `<div class="plr-pills">${pills.map((x) => `<span class="plr-pill">${escapeHtml(x)}</span>`)
     .join("")}</div>` : "";

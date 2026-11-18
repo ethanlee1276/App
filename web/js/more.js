@@ -4076,7 +4076,7 @@ async function renderUFC() {
     </div>
     ${potdHeroHTML(d)}
     <div class="stat-cards">
-      ${statCardHTML("calendar", "Card", escapeHtml(d.event_date || "—"),
+      ${statCardHTML("calendar", "Card", escapeHtml(formatGameDate(d.event_date) || d.event_date || "—"),
                      `${c.fights || 0} bout${(c.fights || 0) === 1 ? "" : "s"}`)}
       ${statCardHTML("gem", "Modeled", nModeled,
                      "priced &amp; run through the model")}
@@ -4150,9 +4150,12 @@ async function renderUFC() {
           <div class="stat-cards">
             ${statCardHTML("trophy", "Record", `${wins}-${losses}`,
                            `${u.open ? `${u.open} open · ` : ""}judge after 50+, not 5`)}
-            ${statCardHTML("chart", "Flat ROI",
+            ${/* The return on what was staked: the stakes are not flat (2026-11-18, the
+                 tile said "Flat ROI +22.2%, +2.35u return on investment" over 10.59u staked). */ ""}
+            ${statCardHTML("chart", "ROI",
                            fmtRoi(u.roi),
-                           `${(u.net_units || 0) >= 0 ? "+" : ""}${(u.net_units || 0).toFixed(2)}u return on investment`,
+                           `${trueMinus(`${(u.net_units || 0) >= 0 ? "+" : ""}${(u.net_units || 0).toFixed(2)}u`)} on ${
+                             (u.units_staked || 0).toFixed(2)}u staked`,
                            u.roi == null ? "" : (u.roi >= 0 ? "pos" : "neg"))}
             ${"" /* How many graded is the ring's own centre below: said once. */}
           </div>

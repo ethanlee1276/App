@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-11-18",
+      "kind": "fix",
+      "title": "College rankings are this week’s poll",
+      "body": "The tournament race showed some schools with last week’s poll rank beside others with this week’s, so two schools could share a number while others were missing. It reads the current AP Top 25 now and says so."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
+      "title": "Dates, signs and labels put right",
+      "body": "Injury return dates read as days, a hockey player’s plus-minus carries its sign, the UFC record’s return is labelled against what was staked, and a board whose picks are for members says so instead of calling the slate empty."
+    },
+    {
+      "date": "2026-11-18",
       "kind": "model",
       "title": "Hockey goalies measured on every chance they faced",
       "body": "A goalie’s goals saved above expected now count missed shots, as the expected-goals model is built on them, so tonight’s starters no longer all read far below expected. Shooters’ goals, points and assists against a confirmed starter had been priced up to a fifth too likely; those chances come down. Hockey’s game lines do not move."

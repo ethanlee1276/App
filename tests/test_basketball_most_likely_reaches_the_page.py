@@ -267,7 +267,7 @@ def test_in_a_browser_the_nba_page_and_most_likely_show_the_picks():
     for view in ("likely", "home"):
         g = got[("under way", view)]
         assert g["cards"] == 0 and "under way" in g["text"] and "Live tab" in g["text"], (view, g)
-        assert "no row could be priced" not in g["text"], "a board with picks does not blame the slate"
+        assert "No row made the board" not in g["text"], "a board with picks does not blame the slate"
 
 
 if __name__ == "__main__":

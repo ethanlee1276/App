@@ -960,8 +960,11 @@ function ncFieldHTML(d) {
   const fr = (d.format || {}).first_round || [[1, 16], [8, 9], [5, 12], [4, 13], [6, 11], [3, 14], [7, 10], [2, 15]];
   const tops = t.region_tops || [];
   const auto = (d.format || {}).auto || 0;
+  // Whose "#7" it is: ESPN's poll when the build read it (engine/ncaarace `poll`).
+  const pn = (d.poll || {}).name;
+  const poll = pn && pn !== "the scoreboard's" ? `; the # beside a school is its place in the ${escapeHtml(pn)}` : "";
   return `<div class="section-title">If the season ended today
-      <span class="sub">— ${auto} conference leaders as the automatic bids (“auto”), the rest at large by our selection score, seeded on the S-curve.</span></div>
+      <span class="sub">— ${auto} conference leaders as the automatic bids (“auto”), the rest at large by our selection score, seeded on the S-curve${poll}.</span></div>
     <div class="rc-grid">${[0, 1, 2, 3].map((i) => `<div class="rc-card rc-flush">
       <div class="rc-conf-h">${tops[i] ? `${escapeHtml(ncNm(d, tops[i]))}’s region` : `Region ${i + 1}`}</div>
       <div class="rc-reg">${fr.map(([a, b]) => `<div class="rc-reg-m">${ncLine(d, by[i][a], a)}${ncLine(d, by[i][b], b)}</div>`).join("")}</div>

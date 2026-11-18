@@ -7429,9 +7429,6 @@ function renderSlateHorizon() {
                       .sort((a, b) => a - b);
   const left = starts.length ? starts[0] - Date.now() : 0;
   const cd = countdownText(left);
-  // The pointer that used to sit here ("Preseason is what is being
-  // played now →") retired with the preseason block, 2026-08-25. The
-  // strip's own sentence is complete without something else to point at.
   host.innerHTML = `
     <p class="slate-horizon">${icon("clock", 14)}<span>This board is <b>${escapeHtml(formatGameDate(first))}</b> — ${
         cd ? `first one starts in <b>${escapeHtml(cd)}</b>`
@@ -10733,18 +10730,15 @@ function likelyEmptyWhy(census, d) {
       that the model actually ranks it. That measurement runs on the
       server and each market switches itself on the moment it passes.`;
   }
-  const parts = Object.entries(c).map(([k, n]) => `${n} ${escapeHtml(k)}`);
+  const parts = Object.entries(c).map(([k, n]) => `${n} ${trueMinus(escapeHtml(k))}`);
   if (parts.length) {
-    /* THIS SENTENCE USED TO END "the board would rather sit empty than
-       lower it", which stopped being true on 2026-09-08. It now lowers
-       the FLOOR — and only the floor — rather than show nothing, so the
-       page reaching this state at all means even that found no row: the
-       prices are missing or every one of them failed a check about
-       whether the number is right. Saying "nothing cleared the bar"
-       here would now be the wrong half of the story. */
-    return `Tonight’s slate was checked and no row could be priced from a
-      current, credible book number — ${parts.join(" · ")}. Rows below the
-      usual bar are shown when there are any; there were none.`;
+    /* The board lowers its FLOOR, and only the floor, rather than show
+       nothing (2026-09-08), so reaching here means even that found no row.
+       It said "Tonight's slate ... no row could be priced from a current,
+       credible book number" until 2026-11-18, over a Tuesday's NFL board
+       whose first game was Thursday and whose 904 refusals of 971 were
+       priced rows under the likelihood floor: it names neither now. */
+    return `No row made the board — ${parts.join(" · ")}; none came close enough to show below the bar.`;
   }
   // BUILT, NOT PRICED (2026-10-30, Ethan's NBA board: 4,358 props, none with
   // a price): the books had posted; tonight's prices were not bought yet.
@@ -10881,8 +10875,7 @@ function renderScanTop() {
     </div>` : "";
   host.innerHTML = `<div class="section-title">Who could shine, who could struggle
       <span class="sub">— every game’s key players, read against the defense they face</span></div>
-    ${locked ? `<div class="card ms-locked"><b>Who could shine and who could struggle, in every game</b> —
-        a read on every key player with the reasons for and against — is part of the subscription.</div>`
+    ${locked ? `<div class="card ms-locked"><b>A read on every key player</b>, with the reasons for and against, is for members.</div>`
       : `<div class="sct-grid">${list("Could shine", shine, true)}${list("Could struggle", struggle, false)}</div>
     <p class="ms-note">A player who could shine gets the likeliest over on Most Likely, one who could
       struggle the likeliest under — when one clears the board’s bars (55% or better, −250 or better).
@@ -10912,11 +10905,15 @@ function renderLikelyTop() {
       host.innerHTML = "";
       return;
     }
+    // Picks the paywall kept are for members, not "no row made the board"
+    // (2026-11-18: the NFL board kept twelve and the page blamed the slate).
+    const lk = (state.data.locked || {}).most_likely;
     host.innerHTML = `
       <div class="section-title">Qellys’ top picks
         <span class="sub">— who’s most likely to hit</span>
       </div>
-      <div class="ls-note">${likelyHiddenWhy(state.data) || likelyEmptyWhy(state.data.likely_census, state.data)}</div>`;
+      ${lk ? memberLockHTML(`${plural(lk, "pick")} for members`, "The likeliest to hit.")
+        : `<div class="ls-note">${likelyHiddenWhy(state.data) || likelyEmptyWhy(state.data.likely_census, state.data)}</div>`}`;
     revealChildren(host);
     return;
   }
@@ -20872,43 +20869,39 @@ function injFind(sport, player) {
 function injTag(sport, player) {
   const r = injFind(sport, player);
   if (!r) return "";
-  const detail = [r.injury, r.return_date ? `return ${r.return_date}` : ""]
-    .filter(Boolean).join(" · ");
+  const detail = [r.injury, injRet(r)].filter(Boolean).join(" · ");
   return ` <span class="inj-tag" style="color:${injTone(r.status)}"
     title="${escapeAttr([r.status, detail].filter(Boolean).join(" — "))}"
     >${escapeHtml(injShort(r.status))}</span>`;
 }
 
+// "return Thu, Nov 19", not the feed's "2026-11-19" (the NHL injuries page, 2026-11-18).
+const injRet = (r) => r.return_date ? `return ${formatGameDate(r.return_date) || r.return_date}` : "";
+
 /* The dossier and full profile get the whole sentence, not the tag. */
 function injLineHTML(r) {
   if (!r) return "";
-  const bits = [r.injury, r.return_date ? `return ${r.return_date}` : ""]
-    .filter(Boolean).join(", ");
+  const bits = [r.injury, injRet(r)].filter(Boolean).join(", ");
   return `<div class="ffd-injline" style="color:${injTone(r.status)}">
     ${escapeHtml(r.status)}${bits ? ` — ${escapeHtml(bits)}` : ""}</div>`;
 }
 
-/* ---------------- Next man up ----------------
-   Ethan, 2026-09-05: "next man up on injurie page". Beside a man who is
-   Out, Doubtful or on IR: who holds his work now, with the share each
-   already holds — the same join the waiver board makes, turned to face
-   the injured man (engine/waivers.next_up), read off fantasy.json's
-   free `waivers` key. NFL only, because the usage shares behind it are
-   measured for the NFL only; a row with no entry draws nothing. */
+/* NEXT MAN UP (Ethan, 2026-09-05: "next man up on injurie page"): beside a
+   player out, doubtful or on IR, who holds the work now and the share each
+   held (engine/waivers.next_up, fantasy.json's free `waivers`). NFL only. */
 let _nextUp = new Map();
 
 const nextUpKey = (r) => `${String((r || {}).player || "").toLowerCase().trim()}|${String((r || {}).team || "").toLowerCase().trim()}`;
 
-/* The line under an injured man: his heirs and the share each holds,
-   most first, three at most. */
+// The line under an injured player: the heirs and their shares, three at most.
 function nextUpLine(entry) {
   const heirs = ((entry || {}).heirs || []).slice(0, 3);
   if (!heirs.length) return "";
   const pct = (v) => v == null ? "—" : `${Math.round(Number(v) * 100)}%`;
   return `<span class="inj-next" title="Who holds the ${escapeAttr(entry.position || "")} work while ${
       escapeAttr(entry.hurt || "")} is ${escapeAttr(entry.status || "out")} — the share each already held, from the usage board">${
-      icon("rising", 11)} Next man up: ${heirs.map((h, i) =>
-        `${i ? "<b>" : "<b>"}${escapeHtml(h.player || "")}</b> ${pct(h.share)}`).join(" · ")}</span>`;
+      icon("rising", 11)} Next man up: ${heirs.map((h) =>
+        `<b>${escapeHtml(h.player || "")}</b> ${pct(h.share)}`).join(" · ")}</span>`;
 }
 
 function injRow(r, withTeam) {
@@ -20930,7 +20923,7 @@ function injRow(r, withTeam) {
     </span>
     <span class="inj-line-right">
       <b style="color:${injTone(r.status)}">${escapeHtml(r.status)}</b>
-      ${r.return_date ? `<span class="inj-line-ret">return ${escapeHtml(r.return_date)}</span>` : ""}
+      ${r.return_date ? `<span class="inj-line-ret">${escapeHtml(injRet(r))}</span>` : ""}
     </span>
   </div>`;
 }

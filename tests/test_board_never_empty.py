@@ -468,6 +468,7 @@ def _node(js, *fns):
     prog = """
       var escapeHtml = (s) => String(s == null ? "" : s);
       var escapeAttr = (s) => String(s == null ? "" : s);
+      var trueMinus = (s) => String(s).replace(/(^|[^\\w])-(?=[\\d.])/g, "$1\\u2212");
       %s
       console.log(JSON.stringify((() => { %s })()));
     """ % ("\n".join(src), js)
@@ -515,10 +516,15 @@ def test_the_page_no_longer_claims_it_would_rather_sit_empty():
         return
     assert "would rather sit empty" not in got["some"], got["some"]
     # The state that reaches this copy at all is now the one the reserve
-    # could not fill — so it names what is actually wrong, the prices,
-    # rather than blaming a bar the board has already stepped below.
-    assert "no row could be priced" in got["some"], got["some"]
+    # could not fill, so it says no row made the board and lists what the
+    # bar turned away. It used to blame the prices and say "Tonight's
+    # slate": 18 November 2026, a Tuesday's NFL board, its first game on
+    # Thursday, read "no row could be priced from a current, credible book
+    # number — 904 under the likelihood floor · 39 no real book price", when
+    # 904 of the 971 rows were priced and simply too unlikely.
+    assert "No row made the board" in got["some"], got["some"]
     assert "3 under the likelihood floor" in got["some"], got["some"]
+    assert "Tonight" not in got["some"] and "could be priced" not in got["some"], got["some"]
     # An empty census is a different sentence: nothing was checked at all.
     assert "books post their menus" in got["none"], got["none"]
 
@@ -541,7 +547,7 @@ def test_props_built_and_none_priced_says_the_prices_are_not_in():
     assert "books post their menus" not in got["unpriced"], "the books had posted"
     # Some priced: not this sentence. None built: the old one. A census: its own.
     assert "books post their menus" in got["some"] and "books post their menus" in got["nothing"]
-    assert "no row could be priced" in got["census"], got["census"]
+    assert "No row made the board" in got["census"], got["census"]
 
 
 if __name__ == "__main__":

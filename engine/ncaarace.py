@@ -822,21 +822,43 @@ def bracket_odds(regions: list, semis: tuple, ratings: dict, results: dict, sims
 
 
 # --- the payload -----------------------------------------------------------------------------
-def poll_ranks(games: list, today: str) -> dict:
-    """Each school's poll rank on its latest game to date (the scoreboard
-    carries the AP top 25 as each side's rank before the tournament)."""
-    latest: dict = {}
-    for g in games:
-        d = g.get("date", "")
-        if d > today or g.get("st") == 3:
-            continue
-        for side, key in (("home", "hseed"), ("away", "aseed")):
-            t = g[side]
-            if t not in latest or d >= latest[t][0]:
-                latest[t] = (d, g.get(key))
+def _top25(r) -> bool:
     # The poll is a top 25; a feed that marks the rest unranked with a 99
     # (hoopR's files do) is read as unranked.
-    return {t: r for t, (_d, r) in latest.items() if r and 1 <= int(r) <= 25}
+    try:
+        return 1 <= int(r) <= 25
+    except (TypeError, ValueError):
+        return False
+
+
+def poll_ranks(games: list, today: str, poll: dict | None = None) -> dict:
+    """Each school's rank in this week's poll.
+
+    ``poll`` is ESPN's own (`cbbespn.parse_rankings`'s ``ranks``), read by
+    the build. Without it, the scoreboard, which carries the AP top 25 as each
+    side's rank before the tournament: each school's rank on its NEXT game
+    from today on, which ESPN prints from the current poll, and on its latest
+    one only when it has none left. The latest game alone mixed two polls
+    (18 November 2026: Texas and UCLA both #7, no #3, #6 or #9): the poll
+    comes out on Monday, and a school that last played on Sunday still
+    carried the week before's rank. A next game that shows a school unranked
+    says it has dropped out."""
+    if poll:
+        return {str(t): int(r) for t, r in poll.items() if t and _top25(r)}
+    nxt: dict = {}
+    last: dict = {}
+    for g in sorted(games, key=lambda x: x.get("date", "")):
+        if g.get("st") == 3:
+            continue
+        d = g.get("date", "")
+        for side, key in (("home", "hseed"), ("away", "aseed")):
+            t, r = g[side], g.get(key)
+            if d >= today:
+                nxt.setdefault(t, r)
+            else:
+                last[t] = r
+    out = {**last, **nxt}
+    return {t: int(r) for t, r in out.items() if _top25(r)}
 
 
 def _top_seed(region: dict) -> str:
@@ -845,7 +867,7 @@ def _top_seed(region: dict) -> str:
 
 
 def build(games: list, ratings: dict, today: str, names: dict | None = None, sims: int | None = None,
-          seed: int | None = None) -> dict:
+          seed: int | None = None, poll: dict | None = None) -> dict:
     """The page: the field if the season ended today, the bubble, each
     conference's race, our chances, the games that swing the field — and
     from selection Sunday, the bracket."""
@@ -866,7 +888,7 @@ def build(games: list, ratings: dict, today: str, names: dict | None = None, sim
     crowned = conf_state(played)
     lead = leaders(recs, conf, full, crowned)
     picked = select(lead, score, recs)
-    ranks = poll_ranks(games, today)
+    ranks = poll_ranks(games, today, (poll or {}).get("ranks"))
 
     def nm(t):
         return names.get(t) or t
@@ -972,6 +994,10 @@ def build(games: list, ratings: dict, today: str, names: dict | None = None, sim
         "nights": nights(season), "calendar": "announced" if season in NIGHTS else "estimated",
         "site": FINAL_FOUR_SITE.get(season, ""),
         "played": len(played), "games_left": len(left),
+        # Whose ranks the "#7" beside a name is: ESPN's poll, or the
+        # scoreboard's when the build could not read the poll.
+        "poll": ({"name": poll.get("name") or "", "date": poll.get("date") or ""} if (poll or {}).get("ranks")
+                 else {"name": "the scoreboard's", "date": ""}),
         "teams": [row(t) for t in shown],
         "conferences": conferences,
         "names": {t: names[t] for t in sorted(names) if names.get(t) and names[t] != t
@@ -1159,12 +1185,21 @@ def publish(conn, day: _dt.date, out_path: str = "web/data/ncaa_race.json", fetc
     prior = prior_ratings(conn, season) if conn is not None else {}
     done = [g for g in games if _played(g) and g.get("date", "") <= day.isoformat()]
     ratings = CR.adjusted(done, prior=prior)
-    inputs = racecache.key("ncaa_race", SIMS, day.isoformat(), games, ratings, racecache.source_of(__file__),
-                           racecache.source_of(CR.__file__))
+    # This week's poll, ESPN's own (a build handed its own reader, a test's,
+    # never reaches for it); the scoreboard's ranks stand in without it.
+    poll: dict = {}
+    if fetch is None:
+        try:
+            from .sources import cbbespn
+            poll = cbbespn.parse_rankings(cbbespn.fetch_rankings())
+        except Exception:                                          # noqa: BLE001
+            poll = {}
+    inputs = racecache.key("ncaa_race", SIMS, day.isoformat(), games, ratings, poll,
+                           racecache.source_of(__file__), racecache.source_of(CR.__file__))
     if racecache.kept(p, inputs):
         return "NCAA race: no score or game has moved since its last build — kept"
     names = {c: (card.get("short") or card.get("name") or c) for c, card in cbbteams.cards().items()}
-    out = build(games, ratings, day.isoformat(), names=names)
+    out = build(games, ratings, day.isoformat(), names=names, poll=poll)
     out["inputs"] = inputs
     out["schedule"] = "whole"
     out["days_unread"] = ahead

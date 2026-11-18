@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XI. What a visitor saw on the seventh walk reads right** (step 745; 18 November). Nothing to run. The college
+tournament race put #7 beside both Texas and UCLA, #4 beside Virginia and UConn and #16 beside Alabama and Texas
+Tech, with nobody at #3, #6 or #9: each school's rank was read off its latest game, and a school that last played
+before Monday's poll still carried the week before's. The race now reads ESPN's own poll (the AP Top 25, keyless, as
+college football's race does, kept three hours) and, when it cannot, each school's rank on its next game; the page
+names the poll its # comes from. The NFL dashboard told a signed-out visitor "Tonight's slate was checked and no row
+could be priced" on a Tuesday whose board kept twelve Most Likely picks for members: a kept board now shows the
+members' card with the count, and the empty note says no row made the board (904 of the 971 refusals were priced
+rows under the likelihood floor, not missing prices). Smaller: Connor McDavid's pill read "28 plus-minus" (now
+"+28"); injury rows said "return 2026-11-19" (now "return Thu, Nov 19"); the UFC tab's card tile said "2026-11-20"
+and its record tile "Flat ROI +22.2% · +2.35u return on investment" over stakes that are not flat (now "ROI +22.2% ·
++2.35u on 10.59u staked"); the shine-and-struggle members' card no longer repeats its heading.
+
 **XH. A sentence names college basketball in words** (step 744; 18 November). Nothing to run. The Record page's
 chips came to say NCAAB in step XF, but sentences built on the server still upper-cased the league's code: a college
 game's pressure card said "No closing lines on file for CBB games", a college Most Likely game line "the book's de-

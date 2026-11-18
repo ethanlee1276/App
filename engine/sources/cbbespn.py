@@ -43,6 +43,55 @@ def fetch_summary(game_id: str, ttl: int = 30 * 24 * 3600) -> dict:
     return _h.fetch_summary(game_id, ttl=ttl, league=LEAGUE)
 
 
+RANKINGS = f"{LEAGUES[LEAGUE]}/rankings"
+
+
+def fetch_rankings(ttl: int = 3 * 3600) -> dict:
+    """This week's polls, keyless, off the same API as the scoreboard
+    (college football's twin is `cfbdata.fetch_rankings`)."""
+    return _h.fetch_json(RANKINGS, "espn_cbb_rankings.json", ttl=ttl, user_agent=_h.DEFAULT_AGENT)
+
+
+def parse_rankings(payload: dict) -> dict:
+    """This week's AP Top 25 (the coaches' poll when the AP's is missing):
+    ``{"name", "date", "ranks": {code: n}}``, ``{}`` with neither.
+
+    THE TOURNAMENT RACE READ THE POLL OFF EACH SCHOOL'S LATEST GAME, and that
+    mixed two polls (18 November 2026: Texas and UCLA both #7, Virginia and
+    UConn both #4, and no #3, #6 or #9). The poll comes out on Monday, and a
+    school that last played on Sunday still carried the week before's rank.
+    Codes are the scoreboard's own (`espnhoops.team_key`), so a rank joins the
+    school it is printed beside; a ranked school is a Division I one, so an
+    id no scoreboard has placed yet keeps ESPN's abbreviation. A tie in the
+    voting is two schools at one number, as the poll prints it."""
+    def order(poll: dict):
+        t = str(poll.get("type") or "").lower()
+        nm = str(poll.get("name") or poll.get("shortName") or "").lower()
+        if t == "ap" or nm.startswith("ap "):
+            return 0
+        if t == "usa" or "coaches" in nm:
+            return 1
+        return None
+    polls = [p for p in (payload or {}).get("rankings") or [] if isinstance(p, dict) and order(p) is not None]
+    for poll in sorted(polls, key=order):
+        ranks: dict = {}
+        for row in poll.get("ranks") or []:
+            try:
+                cur = int((row or {}).get("current"))
+            except (TypeError, ValueError):
+                continue
+            team = (row or {}).get("team") or {}
+            code = _h.team_key(team, LEAGUE)
+            if code.startswith("espn:"):
+                code = str(team.get("abbreviation") or "").strip() or code
+            if code and 1 <= cur <= 25 and code not in ranks:
+                ranks[code] = cur
+        if ranks:
+            return {"name": str(poll.get("name") or ("AP Top 25" if order(poll) == 0 else "Coaches Poll")),
+                    "date": str(poll.get("date") or "")[:10], "ranks": ranks}
+    return {}
+
+
 def load_day(date: str, ttl: int | None = None) -> list[dict]:
     return _h.load_day(date, ttl=ttl, league=LEAGUE)
 
