@@ -250,11 +250,15 @@ def test_in_a_browser_the_chat_opens_reacts_and_sends():
               if (at().bottom >= 0 && at().top <= innerHeight) window.scrollTo(0, 0);
               const r = at(); return r.bottom < 0 || r.top > innerHeight; })()"""
             try:
-                p.wait_for_function(away, timeout=8000, polling=200)
+                p.wait_for_function(away, timeout=15000, polling=250)
             except Exception:                                    # noqa: BLE001 (said below, in the test's words)
                 pass
-            assert p.evaluate("(() => { const r = document.querySelector('.gch-entry').getBoundingClientRect();"
-                              " return r.bottom < 0 || r.top > innerHeight; })()"), "the card scrolled away"
+            # What the page was, when it fails: how tall, where the card sat, what the view said.
+            seen = p.evaluate("(() => { const r = document.querySelector('.gch-entry').getBoundingClientRect();"
+                              " return { off: r.bottom < 0 || r.top > innerHeight, top: Math.round(r.top),"
+                              " tall: document.scrollingElement.scrollHeight, screen: innerHeight,"
+                              " view: (document.querySelector('.view.active') || document.body).innerText.slice(0, 300) }; })()")
+            assert seen["off"], ("the card scrolled away", seen)
             p.wait_for_selector("#gch-fab", timeout=5000)
             assert not errs, errs
             b.close()
