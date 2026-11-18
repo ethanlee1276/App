@@ -306,6 +306,8 @@ const escapeAttr = escapeHtml;
 // glyph beside the title.
 const icon = () => "";
 const toneOf = (v) => (v > 0 ? "good" : v < 0 ? "bad" : "");
+// The slate's date in words (record.js `recDay`, 2026-11-18): read as it comes here.
+const recDay = (s) => String(s || "");
 const F = (m) => { console.error(m); process.exit(1); };
 const curve = []; let cum = 0;
 for (let i = 0; i < 40; i++) {

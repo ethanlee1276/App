@@ -1132,7 +1132,7 @@ function deskSectionHTML(k) {
     </div>`;
   const rows = [
     ...sports.map((r) => row(r, `our model ${(r.model_p * 100).toFixed(0)}% vs the exchange&rsquo;s ${(r.prob * 100).toFixed(0)}¢`)),
-    ...wx.map((r) => row(r, `NWS high ${r.forecast_f}&deg; &plusmn;${r.sigma_f}&deg; for ${escapeHtml(r.city)} ${escapeHtml(r.date)}`)),
+    ...wx.map((r) => row(r, `NWS high ${r.forecast_f}&deg; &plusmn;${r.sigma_f}&deg; for ${escapeHtml(r.city)} on ${escapeHtml((typeof formatGameDate === "function" && formatGameDate(r.date)) || r.date)}`)),
   ].join("");
   const graded = paper.settled || 0;
   const paperLine = graded
@@ -1931,7 +1931,7 @@ function transactionsHTML(tx) {
     ${moves.slice(0, 40).map((m) => `<div class="ros-move">
       <span class="ros-move-name">${escapeHtml(m.player)}</span>
       <span class="ros-move-teams">${escapeHtml(m.from)} → <b>${escapeHtml(m.to)}</b></span>
-      <span class="ros-move-date">${escapeHtml(m.date)}</span>
+      <span class="ros-move-date">${escapeHtml((typeof formatGameDate === "function" && formatGameDate(m.date)) || m.date)}</span>
     </div>`).join("")}</div>`;
 }
 

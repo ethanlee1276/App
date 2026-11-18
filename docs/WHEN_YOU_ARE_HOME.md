@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XK. The record's curve ends on its last day, and dates read as days** (step 747; 18 November). Nothing to run. The
+Record page's curve said "2026-08-06 → 2026-W01": eleven NFL rows from Week 1 that the game-day backfill could not
+place (the NFL's settle key is the week, and an unplaced row keeps the week's label on purpose) sorted after every
+November day, because "W" outranks every digit, so Week 1's units were drawn last on the overall and NFL curves. The
+curve now orders a week label at the Thursday its week opens (ledger.week_label_day), keeps the label, and the page
+says dates in words ("Thu, Aug 6 → Tue, Nov 17", an unplaced week as "NFL week 1"). The same pass put the plans
+page's last graded pick, the weather market's line and the roster moves on days ("Tue, Nov 17") instead of the
+stored "2026-11-17". If you want those eleven rows placed for good, `cd /srv/qellys && sudo -u qellys python3
+launch.py --backfill-days` (a dry run; it writes nothing) says why each could not be.
+
 **XJ. The injuries page speaks each league's words, and its headlines are news** (step 746; 18 November). Nothing to
 run: the next news build (every half hour) drops what is not news. The NHL's injuries page said its out tier was
 "out, IR, long-term IL" (baseball's injured list), pointed hockey readers at "the NFL's practice-level detail", and

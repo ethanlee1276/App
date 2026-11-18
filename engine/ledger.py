@@ -4528,6 +4528,23 @@ class _GroupCopies:
 _NFL_WEEK_DATE = re.compile(r"^(\d{4})-W(\d{1,2})$")
 
 
+def week_label_day(label) -> str:
+    """The Thursday an NFL week label's week opens ("2026-W01" → "2026-09-10"),
+    "" for anything else. For ORDERING a row that `backfill_game_days` could not
+    place, never for filing one: the season opens the Thursday after Labor Day.
+
+    A text sort put "2026-W01" after every November day, so the Record page's
+    curve ran "2026-08-06 → 2026-W01" with Week 1's units drawn last (11 rows
+    still on the label, 18 November 2026)."""
+    m = _NFL_WEEK_DATE.match(str(label or ""))
+    if not m:
+        return ""
+    import datetime as _dt
+    sept1 = _dt.date(int(m.group(1)), 9, 1)
+    labor = sept1 + _dt.timedelta(days=(7 - sept1.weekday()) % 7)
+    return (labor + _dt.timedelta(days=3 + 7 * (int(m.group(2)) - 1))).isoformat()
+
+
 def _hist_where(b) -> tuple[str, list]:
     """SQL fragment + args locating this bet's results in the history DB.
 
@@ -8544,7 +8561,9 @@ def pnl_curve(conn, sport: str | None = None,
     q += _only_ids_sql(only_ids)
     q += f" GROUP BY {day} ORDER BY {day}"
     out, cum = [], 0.0
-    for r in conn.execute(q, args):
+    # A week label sits at its week, not after every dated day (`week_label_day`).
+    rows = sorted(conn.execute(q, args), key=lambda r: week_label_day(r["date"]) or str(r["date"] or ""))
+    for r in rows:
         cum += r["day_u"] or 0.0
         # w/l/staked ride along so the site can compute an HONEST stat
         # block for any date range (Ethan's analytics render, 2026-08-11)

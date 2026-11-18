@@ -3026,7 +3026,7 @@ function flLastHTML(fl) {
   return `<section class="fl-last" aria-labelledby="fl-last-h">
     <h3 class="fl-h3" id="fl-last-h">The last pick we graded</h3>
     <div class="fl-pick ${push ? "push" : won ? "won" : "lost"}">
-      <div class="fl-pick-top"><span>${escapeHtml(String(b.sport || "").toUpperCase())}${b.date ? ` · ${escapeHtml(b.date)}` : ""}</span>
+      <div class="fl-pick-top"><span>${escapeHtml(String(b.sport || "").toUpperCase())}${b.date ? ` · ${escapeHtml((typeof formatGameDate === "function" && formatGameDate(b.date)) || b.date)}` : ""}</span>
         <b class="fl-res">${push ? "Push" : won ? "Won" : "Lost"} ${pnl >= 0 ? "+" : "−"}${Math.abs(pnl).toFixed(2)}u</b></div>
       <b class="fl-pick-who">${escapeHtml(b.player)}</b>
       <span class="fl-pick-bet">${escapeHtml(b.side || "")} ${escapeHtml(line)}${escapeHtml(marketWord(b.market))} · ${escapeHtml(american(b.odds))}</span>

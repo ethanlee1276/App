@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "The record’s curve ends on its last day",
+      "body": "A handful of Week 1 football bets kept their week’s label and were drawn after November on the Record page’s curve. They sit in their own week now, and the curve’s dates read as days."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "Headlines are news, not offers",
       "body": "Each league’s headlines no longer carry sportsbook sign-up offers or a publisher’s every-sport betting roundup. The injuries page uses each league’s own words for who is out, and says each team’s count once, and the UFC card counts every bout."
     },

@@ -172,7 +172,7 @@ function recCurveChart(curve, opts = {}) {
   // finger or cursor position, one label, no 10px targets to hunt for.
   const scrub = escapeAttr(JSON.stringify({
     padL, padR,
-    l: curve.map((p) => `${p.date} · ${p.n} bet${p.n === 1 ? "" : "s"}`),
+    l: curve.map((p) => `${recDay(p.date)} · ${p.n} bet${p.n === 1 ? "" : "s"}`),
     v: curve.map((p, i) => {
       const dayU = dayOf(p, i);
       return `running ${p.cum_u >= 0 ? "+" : ""}${p.cum_u.toFixed(2)}u · day ${
@@ -227,7 +227,7 @@ function recCurveChart(curve, opts = {}) {
     <div class="card rec-chart">
       <div class="rc-head">
         <div class="rc-net ${toneOf(net)}">${net >= 0 ? "+" : ""}${net.toFixed(2)}u</div>
-        <div class="rc-span">${escapeHtml(curve[0].date)} → ${escapeHtml(last.date)}
+        <div class="rc-span">${escapeHtml(recDay(curve[0].date))} → ${escapeHtml(recDay(last.date))}
           · ${curve.length} slate${curve.length === 1 ? "" : "s"}</div>
       </div>
       <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block" role="img"
@@ -243,8 +243,8 @@ function recCurveChart(curve, opts = {}) {
               stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
         ${Math.abs(y(0) - y(hi)) > 14 ? yLabel(hi) : ""}${yLabel(0)}${
           lo < 0 && Math.abs(y(lo) - y(0)) > 14 ? yLabel(lo) : ""}
-        <text x="${padL}" y="${h - 8}" font-size="10" fill="currentColor" opacity="0.45">${escapeHtml(curve[0].date)}</text>
-        <text x="${w - padR}" y="${h - 8}" text-anchor="end" font-size="10" fill="currentColor" opacity="0.45">${escapeHtml(last.date)}</text>
+        <text x="${padL}" y="${h - 8}" font-size="10" fill="currentColor" opacity="0.45">${escapeHtml(recDay(curve[0].date))}</text>
+        <text x="${w - padR}" y="${h - 8}" text-anchor="end" font-size="10" fill="currentColor" opacity="0.45">${escapeHtml(recDay(last.date))}</text>
         <path d="M${path}" fill="none" stroke="${color}" stroke-width="2.2"
               stroke-linejoin="round" stroke-linecap="round"/>
         ${dots}
@@ -1195,6 +1195,12 @@ function rpPickWords(r) {
 /* A league as the app's strip names it (college basketball is NCAAB). SPORT_META carries no names,
    so every label here that read `SPORT_META[sp].name` or upper-cased the code said "CBB", the
    Record page's word alone (18 November 2026). */
+/* A slate's date as the site says dates ("Thu, Sep 10"), and an NFL week label that
+   could not be placed on its game day as its week ("NFL week 1", not "2026-W01"). */
+function recDay(s) {
+  const t = String(s || "");
+  return (typeof formatGameDate === "function" && formatGameDate(t)) || t.replace(/^\d{4}-W0?(\d+)$/, "NFL week $1");
+}
 function recLg(sp) {
   return typeof lgCode === "function" ? lgCode(sp) : String(sp || "").toUpperCase();
 }
