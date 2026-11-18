@@ -9352,8 +9352,9 @@ fixed where it writes (engine/cfbdedupe names them), and the copies already stor
 --apply. Until then, and after, the standings count one pair of schools' rows a day or less apart as one game,
 keeping the schedule's away@home row and never a provisional box copy (cfbdedupe's own choices); a real rematch
 weeks later, a conference title game, is still a second game. The table, its offense and defense rankings, the
-pressure ranks beside them and the season simulation all count each game once now; every other league's rows are as
-they were. The next standings build after the deploy shows the real records.
+pressure ranks beside them, the season simulation and each college team's page (its record and its schedule) all
+count each game once now; every other league's rows are as they were. The next standings build after the deploy
+shows the real records.
 
 **XA. The UFC tab tells a visitor what is locked** (step 737; 18 November). Nothing to run. As a visitor the UFC
 tab's Picks tile read "[object Object]": the paywall empties every key named like a paid board at every depth

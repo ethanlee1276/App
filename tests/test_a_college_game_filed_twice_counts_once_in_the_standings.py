@@ -13,8 +13,9 @@ it counted every copy. What these hold:
     schedule's away@home row kept (cfbdedupe's choice), whatever the copies'
     ids, days or a provisional copy's partial score;
   * a real rematch weeks later (a conference title game) is a second game;
-  * the table, the season simulation's games and the pressure ranks all read
-    the games once; every other league's rows are as they were.
+  * the table, the season simulation's games, the pressure ranks and a
+    team's page all read the games once; every other league's rows are as
+    they were.
 
     python3 tests/test_a_college_game_filed_twice_counts_once_in_the_standings.py
 """
@@ -74,6 +75,14 @@ def test_the_table_the_simulation_and_the_pressure_ranks_count_it_once():
     assert len(pressure._rows(c, "cfb", 2026)) == 3
     src = (ROOT / "engine" / "pressure.py").read_text(encoding="utf-8")
     assert "return once(sport, conn.execute(" in src
+
+
+def test_the_team_page_lists_each_game_once():
+    from engine import teamdex
+    c = _conn(ROWS)
+    assert len(teamdex._finals(c, "cfb")) == 3
+    sched = teamdex.season_schedule(c, "cfb", "UTAH", 2026)
+    assert [g.get("game_id") for g in sched["games"]] == ["ASU@UTAH", "BYU@UTAH", "BYU@UTAH-ccg"], sched["games"]
 
 
 if __name__ == "__main__":

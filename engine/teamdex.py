@@ -114,7 +114,10 @@ def _finals(conn, sport: str, where: str = "", args=()) -> list[dict]:
         if _num(g.get("home_score")) is None or _num(g.get("away_score")) is None:
             continue
         out.append(g)
-    return out
+    # A college football game filed more than once is one game (standings.once,
+    # as the standings count it).
+    from .standings import once
+    return once(sport, out)
 
 
 def teams(conn, sport: str) -> list[str]:
@@ -445,6 +448,8 @@ def season_schedule(conn, sport: str, team: str, season: int | None = None) -> d
             "SELECT season, period, date, home, away, home_score, away_score, "
             "spread, total, game_id FROM games WHERE sport=? AND season=? AND (home=? OR away=?)",
             (sport, season, team, team)).fetchall()
+        from .standings import once
+        rows = once(sport, [dict(r) for r in rows])
     except Exception:                                         # noqa: BLE001
         return {"season": season, "seasons": seasons, "games": []}
     games = []
