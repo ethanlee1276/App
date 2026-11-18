@@ -367,8 +367,10 @@ def still_to_play(legs: list, board: dict, now=None) -> list:
         return list(legs or [])
     out = []
     for leg in legs or []:
-        g = _game_of(leg, games)
-        if g is not None and game_started(g, now):
+        # A doubleheader is two games of one pair: the leg stands while either
+        # is still to play, and its own row's kickoff tells game one's apart.
+        mine = _games_of(leg, games)
+        if mine and all(game_started(g, now) for g in mine):
             continue
         out.append(leg)
     return out
@@ -734,12 +736,15 @@ def enrich(legs: list[dict], board: dict) -> list[dict]:
     return legs
 
 
-def _game_of(leg: dict, games: list) -> dict | None:
+def _games_of(leg: dict, games: list) -> list:
+    """Every game of the leg's pair (two on a doubleheader)."""
     pair = {leg.get("home"), leg.get("away")} - {"", None} or {leg.get("team"), leg.get("opponent")} - {"", None}
-    for g in games or []:
-        if isinstance(g, dict) and {g.get("home"), g.get("away")} == pair:
-            return g
-    return None
+    return [g for g in games or [] if isinstance(g, dict) and {g.get("home"), g.get("away")} == pair]
+
+
+def _game_of(leg: dict, games: list) -> dict | None:
+    mine = _games_of(leg, games)
+    return mine[0] if mine else None
 
 
 # --- the game script (js/app.js scriptNeed, the board's own view) --------------------------

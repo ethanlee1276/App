@@ -58,6 +58,16 @@ def test_a_leg_of_a_started_game_is_no_leg_whatever_its_row_says():
     assert GP.still_to_play(legs, {}, now=NOW) == legs, "a board with no games list leaves every leg to its row"
 
 
+def test_a_doubleheader_s_second_game_keeps_its_legs_while_the_first_is_played():
+    games = [{"home": "NYY", "away": "BOS", "date": "2026-07-04", "kickoff": "2026-07-04T17:05:00Z",
+              "live": {"state": "live"}},
+             {"home": "NYY", "away": "BOS", "date": "2026-07-04", "kickoff": "2026-07-04T23:05:00Z", "live": None}]
+    leg = {"player": "Aaron Judge", "team": "NYY", "opponent": "BOS"}
+    at = dt.datetime(2026, 7, 4, 18, 0)
+    assert GP.still_to_play([leg], {"games": games}, now=at) == [leg], "game two is still to play"
+    assert GP.still_to_play([leg], {"games": [dict(g, live={"state": "final"}) for g in games]}, now=at) == []
+
+
 def test_hockey_s_scorer_legs_of_a_started_game_are_dropped():
     # The rows as hockey's board carried them: no kickoff, no live, no started.
     board = {"date": "2026-11-17", "games": GAMES, "recommendations": [

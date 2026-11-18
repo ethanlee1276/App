@@ -64,7 +64,7 @@ always because it was measured and found flat (the module's own notes say which)
 
 ### The wiring
 
-| Market | Positions | Base | Distribution | Defence (matchup step) | Weather | Team tendency | Usage bridge | Lineup | Injury knock-ons | Self-tuning stores | Most Likely |
+| Market | Positions | Base | Distribution | Defense (matchup step) | Weather | Team tendency | Usage bridge | Lineup | Injury knock-ons | Self-tuning stores | Most Likely |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | pass_yds | QB | form blend + usage bridge | normal | QB ×0.73 on qb_pass_yds | measured wind/rain/cold (QB) | pace + PROE (pass) | yes | — | — | calibration, form weights, player memory | yes — 0.691 (constant, measured) |
 | pass_td | QB | form blend | Poisson (engine/passtd.at_least) | QB shown (qb_pass_td), not in the number | measured wind/rain/cold (QB) | pace only | — | — | — | — | yes — 0.687 (constant, measured) |
@@ -125,7 +125,7 @@ always because it was measured and found flat (the module's own notes say which)
 
 ### The wiring
 
-| Market | Positions | Base | Distribution | Defence (matchup step) | Weather | Team tendency | Usage bridge | Lineup | Injury knock-ons | Self-tuning stores | Most Likely |
+| Market | Positions | Base | Distribution | Defense (matchup step) | Weather | Team tendency | Usage bridge | Lineup | Injury knock-ons | Self-tuning stores | Most Likely |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | pass_yds | QB | form blend | normal | QB ×0.82 on qb_pass_yds | measured wind/rain/cold (QB) | — (college does not price it) | — | — | — | calibration, form weights, player memory | the box's walk decides (engine/rankfit store, floor 0.60) |
 | rush_yds | QB, RB | form blend | normal | QB ×0.16 on rb_rush_yds; RB ×0.87 on rb_rush_yds | measured wind/rain/cold | — (college does not price it) | — | QB change, teammate out (college's own fit; the box's store decides) | dl_out_rb | calibration, form weights, player memory | the box's walk decides (engine/rankfit store, floor 0.60) |

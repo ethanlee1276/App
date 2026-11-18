@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XS. A doubleheader keeps its second game's parlays** (step 755; 18 November). Nothing to run. The check XR added
+(engine/gameparlays.still_to_play) matched a leg to the first board game of its pair, so on a baseball doubleheader
+game two's legs would have gone with game one's start. A leg now stands while any game of its pair is still to play;
+game one's legs are already dropped by their own rows' start time. No baseball until spring, so nothing was lost.
+The market census (docs/MARKET_CENSUS.md, written from the code's tables) is rewritten for XQ's spelling: its column
+now reads Defense.
+
 **XR. A benched parlay is said benched, and a started game builds none** (step 754; 18 November). Nothing to run.
 The 07:30 check of 17 November's games: the report picks hit 16 of 21 in the NBA, 36 of 48 in the NHL, 17 of 26 in
 college football and 4 of 4 in college basketball. The hockey three-leg parlays built from those picks hit 4 of 8.
