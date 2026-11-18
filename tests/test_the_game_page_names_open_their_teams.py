@@ -86,7 +86,9 @@ def test_the_header_carries_the_cards_lines():
     head = page[page.index('<div class="gp-sub">'):page.index('<div class="chips gp-chips">')]
     assert "gpLines}" in head, "under the date, above the chips"
     chips = page[page.index('<div class="chips gp-chips">'):][:900]
-    assert '${gpLines ? "" : `<span class="chip">O/U' in chips, "the O/U chip only when the grid is absent"
+    # And only with a total: a lone "O/U —" said nothing (2026-11-18, step XZ).
+    assert '${gpLines || g.total == null ? "" : `<span class="chip">O/U' in chips, \
+        "the O/U chip only when the grid is absent and there is a total"
     assert "${gpLines ? \"\" : g.favorite ?" in chips
     assert ".gp-meta .gc-mkts {" in CSS
 

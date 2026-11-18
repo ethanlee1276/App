@@ -183,8 +183,13 @@ def test_a_league_ranks_only_its_own_clubs():
     assert set(nba["teams"]) == {"BOS", "NYK", "TOR"} and nba["n"] == 3, sorted(nba["teams"])
     wnba = T.build(nights([("LV", "NY")]), [], "wnba")
     assert set(wnba["teams"]) == {"LV", "NY"}, sorted(wnba["teams"])
-    cbb = T.build(nights([("DUKE", "UNC")]), [], "cbb")
-    assert set(cbb["teams"]) == {"DUKE", "UNC"}, "a league with no table here ranks everyone"
+    # College ranks Division I's own: "Rank of 407" in a 365-school division
+    # (2026-11-18). A small school (ESPN's id for a code) keeps its numbers, unranked.
+    cbb = T.build(nights([("DUKE", "UNC"), ("BAY", "espn:2918")]), [], "cbb")
+    assert set(cbb["teams"]) == {"DUKE", "UNC", "BAY", "espn:2918"}, sorted(cbb["teams"])
+    assert cbb["n"] == 3, "ranked among Division I's schools only"
+    assert cbb["teams"]["espn:2918"]["ranks"] == {} and cbb["teams"]["espn:2918"].get("pts") is not None
+    assert max(r for t in ("DUKE", "UNC", "BAY") for r in cbb["teams"][t]["ranks"].values()) <= 3
 
 
 if __name__ == "__main__":

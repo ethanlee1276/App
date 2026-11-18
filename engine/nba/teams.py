@@ -244,16 +244,25 @@ def build(now_rows, last_rows, sport: str = "nba", before: str | None = None) ->
     # ONLY THE LEAGUE'S OWN CLUBS (2026-11-18: the NBA's matchup scan read "Rank
     # of 31"). A side outside the league with three nights on file (a visiting
     # club, an exhibition team) was rated and ranked, a 31st in a 30-team
-    # table. A league with a full table here (engine/divisions) ranks only its
-    # own; college basketball, which has none, ranks everyone it has.
+    # table. A league with a full table here (engine/divisions) keeps only its
+    # own.
     from .. import divisions
     league = divisions.MAPS.get(sport) or {}
     if league:
         prof = {t: p for t, p in prof.items() if divisions.canonical(sport, t) in league}
-    rk = ranks(prof)
+    # College basketball has no such table: its ranks are Division I's
+    # (cbbteams.is_division_one, the scoreboard's own codes), and a small
+    # school keeps its numbers, unranked, for the night it plays one. Ranked
+    # with everyone it had, the scan read "Rank of 407" in a 365-school
+    # division and every school sat lower than it is (2026-11-18).
+    ranked = prof
+    if sport == "cbb":
+        from .. import cbbteams
+        ranked = {t: p for t, p in prof.items() if cbbteams.is_division_one(t)}
+    rk = ranks(ranked)
     for t, p in prof.items():
         p["ranks"] = rk.get(t, {})
-    return {"teams": prof, "league": league_means(prof), "n": len(prof), "minutes": game_minutes(sport),
+    return {"teams": prof, "league": league_means(ranked), "n": len(ranked), "minutes": game_minutes(sport),
             "per100": any("ortg" in p for p in prof.values()), "nights": {**last_g, **now_g}}
 
 

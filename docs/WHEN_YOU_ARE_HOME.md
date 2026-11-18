@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XZ. College ranks among Division I; two chips** (step 762; 18 November). Nothing to run. The college game page's
+matchup scan ranked each school "of 407" in a 365-school division: with no team table for college (the NBA's has
+one, step XN), every side with three nights on file was ranked, small schools that played a few Division I teams
+included, so every school sat lower than it is. Ranks are now Division I's own (the scoreboard's codes,
+cbbteams.is_division_one), and a small school keeps its numbers, unranked, for the night it plays one. Also on the
+game page: a hockey game with no total posted showed a lone "O/U —" chip, now gone until there is a total, and the
+back-to-back chip was the one chip starting in lower case.
+
 **XY. A game's page says what it has, once** (step 761; 18 November). Nothing to run. Walking tonight's NBA, NHL and
 college game pages as a reader: with no prop prices posted yet, the props section read "No player props clear the
 filters in this game" over "Books haven't posted prop prices for this game yet", the same nothing twice and the

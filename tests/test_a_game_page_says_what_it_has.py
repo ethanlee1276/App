@@ -10,7 +10,9 @@ Walking tonight's NBA, NHL and college game pages as a reader:
   - "Under pressure" drew four columns for leagues whose games carry no
     closing line (basketball and baseball as stored): clutch, then three
     columns of dashes beside a note saying why they were empty. A table
-    shows the rates either side has a number for; the note stays.
+    shows the rates either side has a number for; the note stays;
+  - a hockey page with no total posted showed a lone "O/U —" chip, and its
+    back-to-back chip was the one chip starting in lower case.
 
     python3 tests/test_a_game_page_says_what_it_has.py
 """
@@ -38,6 +40,12 @@ def test_no_prices_is_said_once_and_rightly():
             '            : "No prop prices for this game yet"}</div>') in block
     assert "Books usually post them on game day; the ones that clear the edge bar land here." in block
     assert "Books haven’t posted prop prices for this game yet." not in block, "said once"
+
+
+def test_no_total_is_no_chip_and_a_chip_starts_with_a_capital():
+    assert '${gpLines || g.total == null ? "" : `<span class="chip">O/U ${g.total.toFixed(1)}</span>`}' in DETAIL
+    assert 'O/U ${g.total != null ? g.total.toFixed(1) : "—"}' not in DETAIL, "a lone \"O/U —\" said nothing"
+    assert '<span class="chip down">Second night of a back-to-back</span>' in DETAIL
 
 
 def test_both_pressure_tables_show_the_rates_that_have_numbers():

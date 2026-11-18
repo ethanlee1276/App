@@ -2101,7 +2101,7 @@ function nhlScanHTML(g) {
       <div class="mlb-tape-row">Shots a game ${num(s.sog_for, 1)}${rk(r.sog_for)} · allowed ${num(s.sog_against, 1)}${rk(r.sog_against)}</div>
       ${s.xgf_ev != null ? `<div class="mlb-tape-row">5-on-5 expected goals ${num(s.xgf_ev)}${rk(r.xgf_ev)} · allowed ${num(s.xga_ev)}${rk(r.xga_ev)}</div>` : ""}
       ${s.xg != null ? `<div class="mlb-tape-row">Expected tonight: ${num(s.xg)} regulation goals</div>` : ""}
-      ${s.b2b ? `<div class="mlb-tape-row"><span class="chip down">second night of a back-to-back</span></div>` : ""}
+      ${s.b2b ? `<div class="mlb-tape-row"><span class="chip down">Second night of a back-to-back</span></div>` : ""}
       ${inj.length ? `<div class="mlb-tape-row mini">Injury report: ${inj.map((i) => `${escapeHtml(i.player)} (${escapeHtml(String(i.status || "").toLowerCase())})`).join(", ")}</div>` : ""}
     </div>`;
   };
@@ -2503,7 +2503,8 @@ function renderGamePage() {
         ${gpMoney}
         <div class="chips gp-chips">
           ${g.doubleheader ? `<span class="chip up">${icon("calendar", 11)} Doubleheader · Game ${g.game_number || 1}</span>` : ""}
-          ${gpLines ? "" : `<span class="chip">O/U ${g.total != null ? g.total.toFixed(1) : "—"}</span>`}
+          ${/* No total posted, no chip: a lone "O/U —" said nothing (2026-11-18). */""}
+          ${gpLines || g.total == null ? "" : `<span class="chip">O/U ${g.total.toFixed(1)}</span>`}
           ${gpLines ? "" : g.favorite ? `<span class="chip">${escapeHtml(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}</span>`
             : nba && g.spread ? `<span class="chip">${escapeHtml(teamName(g.spread < 0 ? g.home : g.away))} −${Math.abs(g.spread).toFixed(1)}</span>` : ""}
           <span class="chip">${escapeHtml(cond)}</span>
