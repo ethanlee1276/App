@@ -242,10 +242,17 @@ def test_in_a_browser_the_chat_opens_reacts_and_sends():
             # Off the screen, the card's place is the bar at the bottom: scrolled
             # past it, or on a game being played, whose play right now sits above
             # the card (2026-11-15), not yet scrolled down to it.
-            p.evaluate("""(() => { window.scrollTo(0, document.scrollingElement.scrollHeight);
-              const r = document.querySelector('.gch-entry').getBoundingClientRect();
-              if (r.bottom >= 0 && r.top <= innerHeight) window.scrollTo(0, 0); })()""")
-            p.wait_for_timeout(400)
+            # Asked until it holds (8 s): on a busy box the page below the card
+            # can still be drawing when this is reached, and a page not yet
+            # tall enough to scroll has the card on screen at both ends.
+            away = """(() => { window.scrollTo(0, document.scrollingElement.scrollHeight);
+              const at = () => document.querySelector('.gch-entry').getBoundingClientRect();
+              if (at().bottom >= 0 && at().top <= innerHeight) window.scrollTo(0, 0);
+              const r = at(); return r.bottom < 0 || r.top > innerHeight; })()"""
+            try:
+                p.wait_for_function(away, timeout=8000, polling=200)
+            except Exception:                                    # noqa: BLE001 (said below, in the test's words)
+                pass
             assert p.evaluate("(() => { const r = document.querySelector('.gch-entry').getBoundingClientRect();"
                               " return r.bottom < 0 || r.top > innerHeight; })()"), "the card scrolled away"
             p.wait_for_selector("#gch-fab", timeout=5000)
