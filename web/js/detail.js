@@ -43,15 +43,18 @@ function crowdLinesHTML(g, c) {
       const homeGives = hl < 0;
       const fav = homeGives ? g.home : g.away;
       const p = homeGives ? c[cover] : 1 - c[cover];
-      rows.push(`<li><b>${escapeHtml(teamName(fav))} ${MINUS}${Math.abs(hl).toFixed(1)}</b> covers ${pct(p)}
-        <span class="mini">on ${venue}</span></li>`);
+      rows.push({ bet: `<b>${escapeHtml(teamName(fav))} ${MINUS}${Math.abs(hl).toFixed(1)}</b> covers ${pct(p)}`, venue });
     }
     if (c[over] != null && c.total_line != null) {
-      rows.push(`<li><b>Over ${Number(c.total_line).toFixed(1)}</b> ${pct(c[over])}
-        <span class="mini">on ${venue}</span></li>`);
+      rows.push({ bet: `<b>Over ${Number(c.total_line).toFixed(1)}</b> ${pct(c[over])}`, venue });
     }
   }
-  return rows.length ? `<ul class="gp-crowd-lines">${rows.join("")}</ul>` : "";
+  /* THE SAME LINE AT THE SAME PRICE ON BOTH IS ONE LINE (walk 14, 2026-11-18): the Colts–Texans page read "Over
+     44.5 49% (+106) on Polymarket" and then the same words "on Kalshi". Said once, naming both. */
+  const seen = new Map();
+  rows.forEach((r) => (seen.has(r.bet) ? seen.get(r.bet).push(r.venue) : seen.set(r.bet, [r.venue])));
+  return seen.size ? `<ul class="gp-crowd-lines">${[...seen].map(([bet, venues]) => `<li>${bet}
+        <span class="mini">on ${venues.join(" and ")}</span></li>`).join("")}</ul>` : "";
 }
 
 /* WHERE THE MONEY IS GOING (engine/moneysplit). Ethan, 2026-09-28, with
@@ -1062,28 +1065,46 @@ function parkPanel(g) {
   </div>`;
 }
 
+/* What an indoor venue's note says beyond its roof and its surface, which the page says elsewhere: "Fixed dome,
+   fast turf, historically one of the highest-scoring environments in the league." → "Historically one of the
+   highest-scoring environments in the league."; NRG's "Retractable roof, usually closed against Gulf heat and
+   humidity." → nothing. */
+const ROOF_SAID = /\b(roof|dome|indoors|indoor game|weather|wind|rain|heat|humid\w*|temperatures?|conditions)\b|^(fast |slow )?(turf|grass)$/i;
+function venueNoteBeyondRoof(note) {
+  const kept = String(note || "").split(/\s*[.;:—,]\s*/)
+    .map((c) => c.trim().replace(/^(and|so|but)\s+/i, ""))
+    .filter((c) => c && !ROOF_SAID.test(c));
+  if (!kept.length) return "";
+  const said = kept.join(", ");
+  return said[0].toUpperCase() + said.slice(1) + ".";
+}
+
 function stadiumPanel(g) {
   const s = g.stadium;
   if (!s || !s.name) return "";
   const indoors = s.roof === "dome" || s.roof === "retractable";
+  /* EACH FACT ONCE (walk 14, 2026-11-18). NRG Stadium's panel said the roof four times — the conditions chip
+     above it ("Retractable roof · expected closed"), its own chip, its note ("Retractable roof, usually closed
+     against Gulf heat and humidity") and the weather card ("Retractable roof — read as closed: …") — and the turf
+     twice, in the facts line and a chip. The surface is its chip; a roof is the conditions chip's and the weather
+     card's, which says how the model read it; an indoor venue's note keeps what it says beyond the two. */
   const facts = [
     s.opened ? `Opened ${s.opened}` : "",
     s.capacity ? `${s.capacity.toLocaleString()} seats` : "",
-    s.surface === "turf" ? "turf" : "grass",
   ].filter(Boolean).join(" · ");
+  const tonight = stadiumTonightHTML(g);
+  const plays = indoors && /roof|dome|indoor/i.test(tonight) ? venueNoteBeyondRoof(s.plays) : s.plays || "";
   return `<div class="pk-panel">
-    <div class="pk-head">${escapeHtml(s.name)}<span class="pk-facts">${escapeHtml(facts)}</span></div>
+    <div class="pk-head">${escapeHtml(s.name)}${facts ? `<span class="pk-facts">${escapeHtml(facts)}</span>` : ""}</div>
     <div class="chips" style="margin-top:8px">
-      <span class="chip ${indoors ? "books" : ""}">${indoors
-        ? (s.roof === "dome" ? `${icon('stadium')} Fixed dome` : `${icon('stadium')} Retractable roof`)
-        : `${icon('cloud')} Open air`}</span>
+      ${indoors ? "" : `<span class="chip">${icon('cloud')} Open air</span>`}
       ${s.altitude_ft >= 2000
         ? `<span class="chip up" title="Thin air adds kicking range and lets the ball carry">${icon('mountain')} ${s.altitude_ft.toLocaleString()} ft</span>`
         : ""}
       <span class="chip">${s.surface === "turf" ? "Turf" : "Grass"}</span>
     </div>
-    ${s.plays ? `<p class="pk-plays">${escapeHtml(s.plays)}</p>` : ""}
-    ${stadiumTonightHTML(g)}
+    ${plays ? `<p class="pk-plays">${escapeHtml(plays)}</p>` : ""}
+    ${tonight}
   </div>`;
 }
 

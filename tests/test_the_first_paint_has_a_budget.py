@@ -394,7 +394,12 @@ APP_JS_BUDGET_KB = 290
 #: (355 lines). That paid for a pick card's injury return said as a day
 #: ("est. return Sun, Nov 29", not "expected back 2026-11-29") and left the
 #: first visit 397,299 -> 393,654 B; the budget keeps the saving.
-BOOT_BUDGET_KB = 385
+#: 385 -> 384 on 2026-11-18, DOWN, in walk 14: the profit calendar (its month
+#: grid, its two books and their switch) moved to js/record.js, the only file
+#: that draws it, with the fix that opens it on the book that has settled days.
+#: The first visit went 393,732 -> 392,085 B; the budget keeps the saving,
+#: rounded up to the kilobyte as the last one was.
+BOOT_BUDGET_KB = 384
 
 
 def _gz_trimmed(rel: str) -> int:

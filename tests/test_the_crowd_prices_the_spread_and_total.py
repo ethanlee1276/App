@@ -100,7 +100,7 @@ def test_the_board_hangs_them_and_records_them(tmp=None):
 
 def test_the_game_page_shows_them_and_never_our_number():
     fn = APP[APP.index("function crowdLinesHTML("):APP.index("function crowdStripHTML(")]
-    assert '["poly_home_cover", "poly_over", "Polymarket"]' in fn and "on ${venue}" in fn
+    assert '["poly_home_cover", "poly_over", "Polymarket"]' in fn and 'on ${venues.join(" and ")}' in fn
     assert '["kalshi_home_cover", "kalshi_over", "Kalshi"]' in fn
     assert "win_prob" not in fn and "model" not in fn
     strip = APP[APP.index("function crowdStripHTML("):APP.index("function obGameHTML(")]

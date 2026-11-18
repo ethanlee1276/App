@@ -47,7 +47,7 @@ def test_no_venue_note_says_what_the_weather_will_be():
 
 def test_the_page_prints_the_models_read_under_its_own_heading():
     panel = _fn("stadiumPanel")
-    assert "${stadiumTonightHTML(g)}" in panel
+    assert "const tonight = stadiumTonightHTML(g);" in panel and "${tonight}" in panel
     assert "The live weather above is the number that moves a total" not in panel
     tonight = _fn("stadiumTonightHTML")
     assert "(g.conditions || {}).why" in tonight, "the same read the props were priced with"

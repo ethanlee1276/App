@@ -3782,7 +3782,7 @@ async function renderRecord() {
   // last render (a range chip, a month arrow) is reopened.
   // The Most Likely calendar's taps ask for its own book; the rows this
   // page holds (`src.recent`) are the edge picks, so it has no fallback.
-  const onLikely = _recCalBook === "likely" && !!(likelyCal && Array.isArray(likelyCal.days));
+  const onLikely = recCalBookIn(src, likelyCal) === "likely";
   const calCurve = onLikely ? likelyCal.days : src.curve;
   const calRecent = onLikely ? [] : src.recent || [];
   const calBook = onLikely ? "likely" : "edge";
@@ -4503,4 +4503,140 @@ function verdictBooksHTML(edge, lk, chart, lines, o, opts) {
       <div class="rv-book-line">${lk ? line(lk) : "nothing staked yet — its paper picks are under Records by book"}</div>${likelyChart}
       <div class="rv-says">${lk && lk.verdict && !opts.likelySaid ? `<p>${escapeHtml(String(lk.verdict))}</p>` : ""}</div></div>
   </div>`;
+}
+
+/* ---------------- The profit calendar ----------------
+   (In js/record.js since 2026-11-18, walk 14: the Record page is the only page that draws it.)
+   Ethan, 2026-09-05: "a profit calendar on record page". A month grid
+   with the units won or lost each day — green or red by sign, deeper by
+   size — and a tap on a day for the bets behind it. THE EDGE BOOK ONLY:
+   the cells are the curve's own days (`pnl_curve`: main + paper, with a
+   stake), and the Most Likely book keeps its own record above. The two
+   never share a cell, for the reason they never share a headline. */
+/* Its state is declared in app.js (`_recCalMonth`, `_recCalDay`, `_recCalBook`): a `let` declared again here would
+   stop this file loading beside an app.js from before the move. */
+window._recCalSetMonth = (ym) => { _recCalMonth = ym; _recCalDay = null; renderRecord(); };
+window._recCalSetBook = (b) => {
+  _recCalBook = b === "likely" ? "likely" : "edge"; _recCalMonth = null; _recCalDay = null; renderRecord();
+};
+
+/* The months the curve has a settled day in, oldest first. */
+function recCalMonths(curve) {
+  const seen = new Set();
+  (curve || []).forEach((p) => {
+    if (p && /^\d{4}-\d{2}-\d{2}/.test(p.date || "")) seen.add(p.date.slice(0, 7));
+  });
+  return [...seen].sort();
+}
+
+/* Units for a cell: "+0.9", "−1.0", "0.0"; whole numbers past ten. */
+function recCalU(v) {
+  const n = Number(v) || 0, m = Math.abs(n);
+  return `${n > 0 ? "+" : n < 0 ? "−" : ""}${m >= 10 ? m.toFixed(0) : m.toFixed(1)}`;
+}
+
+/* One month: a Sunday-first grid, a cell per day, the month's line under it.
+   `empty` is the line a month with nothing settled says instead. */
+function recCalMonthHTML(curve, ym, empty) {
+  const [y, m] = String(ym).split("-").map(Number);
+  const byDay = new Map((curve || []).filter((p) => String(p.date || "").startsWith(ym + "-"))
+    .map((p) => [p.date, p]));
+  const first = new Date(y, m - 1, 1);
+  const days = new Date(y, m, 0).getDate();
+  const lead = first.getDay();
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push(`<span class="rc-day blank"></span>`);
+  for (let d = 1; d <= days; d++) {
+    const date = `${ym}-${String(d).padStart(2, "0")}`;
+    const p = byDay.get(date);
+    if (!p) { cells.push(`<span class="rc-day off">${d}</span>`); continue; }
+    const u = Number(p.day_u) || 0;
+    const depth = Math.abs(u) < 0.5 ? 1 : Math.abs(u) < 2 ? 2 : 3;
+    cells.push(`<button type="button" class="rc-day ${toneOf(u) || "flat"} rc-${depth}${
+      date === _recCalDay ? " open" : ""}" data-date="${date}"
+      aria-label="${date}: ${recCalU(u)} units, ${p.w || 0}-${p.l || 0}">${d}<b>${recCalU(u)}</b></button>`);
+  }
+  const rows = [...byDay.values()];
+  const net = rows.reduce((a, p) => a + (Number(p.day_u) || 0), 0);
+  const w = rows.reduce((a, p) => a + (p.w || 0), 0);
+  const l = rows.reduce((a, p) => a + (p.l || 0), 0);
+  const label = first.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const foot = !rows.length && empty ? escapeHtml(empty)
+    : `${rows.length} day${rows.length === 1 ? "" : "s"} bet
+      · <b>${w}-${l}</b> · net <b class="${toneOf(net)}">${recCalU(net)}u</b>`;
+  return `<div class="rc-month" data-month="${ym}">
+    <div class="rc-grid">${["S", "M", "T", "W", "T", "F", "S"].map((h) =>
+      `<span class="rc-h">${h}</span>`).join("")}${cells.join("")}</div>
+    <p class="rc-foot"><b>${escapeHtml(label)}</b> · ${foot}</p></div>`;
+}
+
+/* The section: the month in view (this month unless one was chosen), an
+   arrow only where there is a month to go to, and the day panel the tap
+   fills. Nothing when the curve has no settled day.
+
+   THIS MONTH, EVEN BEFORE ANYTHING IN IT HAS SETTLED. Ethan, 2026-10-13:
+   "the mlb profit calander isn't updating, it's stuck on September". It
+   opened on the latest month with a settled bet, so a league whose bets
+   stopped settling (or stopped being placed) looked like a calendar that
+   had frozen. It opens on the month we are in now, and a month with
+   nothing settled says why, from `state` (ledger.edge_state): how many
+   bets are still waiting on a result and since when, or the day the last
+   one was placed. `now` is for the tests; the page passes nothing. */
+function recCalendarHTML(curve, state, now, opts) {
+  const o = opts || {};
+  const ml = o.book === "likely";
+  const months = recCalMonths(curve);
+  if (!months.length) return "";
+  const at = now || new Date();
+  const cur = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}`;
+  const settledHere = months.includes(cur);
+  if (cur > months[months.length - 1]) months.push(cur);
+  const ym = months.includes(_recCalMonth) ? _recCalMonth : months[months.length - 1];
+  const short = (iso) => new Date(`${iso}T12:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const st = state || {};
+  const open = Number(st.open) || 0;
+  const empty = ym === cur && !settledHere
+    ? `No ${ml ? "Most Likely pick" : "edge bet"} has settled in ${at.toLocaleDateString(undefined, { month: "long" })} yet.${open
+      ? ` ${open} ${open === 1 ? "is" : "are"} still waiting on a result${st.oldest_open ? `, the oldest from ${short(st.oldest_open)}` : ""}.`
+      : st.last_placed ? ` The last one was placed ${short(st.last_placed)}.` : ""}`
+    : "";
+  const i = months.indexOf(ym);
+  const arrow = (to, glyph, label) => to == null ? "" :
+    `<button class="ra-range" data-act="recCalSetMonth" data-arg="${to}" aria-label="${label}">${glyph}</button>`;
+  const nav = months.length > 1 ? `<span class="ra-ranges">${
+    arrow(i > 0 ? months[i - 1] : null, "‹", "Earlier month")}${
+    arrow(i < months.length - 1 ? months[i + 1] : null, "›", "Later month")}</span>` : "";
+  return `
+    <div class="section-title"><span class="st-ico">${icon("calendar", 15)}</span>Profit calendar
+      <span class="sub">— units by day, ${ml ? "Most Likely picks, each counted once" : "edge book only"}; tap a day for its bets</span>${nav}</div>${o.extra || ""}
+    <div class="card rc-card">${recCalMonthHTML(curve, ym, empty)}<div id="rc-day"></div></div>`;
+}
+
+/* BOTH BOOKS, ONE CALENDAR. Ethan, 2026-10-13: "There should be a profit
+   calendar for both edge bets and most likely bets for all sports". A
+   switch picks the book; each keeps its own days, its own month line and
+   its own day list. `likely` is this scope's Most Likely calendar
+   (ledger.likely_calendar: the Most Likely half, each pick once, the
+   numbers its record prints); a record without one keeps the edge
+   calendar alone. Nothing when neither book has a settled day. */
+/* The book the calendar shows: the reader's pick, else the edge book unless it has no settled day and the Most
+   Likely book has (walk 14, 2026-11-18: college's Record page opened on "No edge bet has settled here yet" above a
+   Most Likely calendar with days in it, behind a switch). The page's taps ask the same question. */
+function recCalBookIn(src, likely) {
+  if (!(likely && Array.isArray(likely.days))) return "edge";
+  if (_recCalBook) return _recCalBook;
+  return !recCalMonths(src.curve).length && recCalMonths(likely.days).length ? "likely" : "edge";
+}
+
+function recCalendarsHTML(src, likely) {
+  const both = !!(likely && Array.isArray(likely.days));
+  const book = recCalBookIn(src, likely);
+  if (!recCalMonths(src.curve).length && !(both && recCalMonths(likely.days).length)) return "";
+  const extra = both ? `<div class="rc-books" role="group" aria-label="Which picks">${
+    [["edge", "Edge bets"], ["likely", "Most Likely"]].map(([k, w]) => `<button type="button" class="ra-range${
+      k === book ? " active" : ""}" data-act="recCalSetBook" data-arg="${k}" aria-pressed="${k === book}">${w}</button>`).join("")}</div>` : "";
+  const html = book === "likely" ? recCalendarHTML(likely.days, likely.state, null, { book, extra })
+    : recCalendarHTML(src.curve, src.edge_state, null, { book, extra });
+  return html || `<div class="section-title"><span class="st-ico">${icon("calendar", 15)}</span>Profit calendar</div>${extra}
+    <div class="card rc-card"><p class="rc-foot">No ${book === "likely" ? "Most Likely pick" : "edge bet"} has settled here yet.</p></div>`;
 }

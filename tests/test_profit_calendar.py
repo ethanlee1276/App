@@ -156,7 +156,7 @@ def _node(js):
     if not node:
         return None
     src = "\n".join(_fn(n) for n in ("escapeHtml", "recCalMonths", "recCalU", "recCalMonthHTML", "recCalendarHTML",
-                                       "recCalendarsHTML"))
+                                       "recCalBookIn", "recCalendarsHTML"))
     prog = f"""
       const toneOf = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
       const icon = (n) => `<i data-icon="${{n}}"></i>`;
@@ -437,6 +437,44 @@ def test_the_calendar_switches_between_the_two_books():
     assert got["edgeEmpty"] == "No edge bet has settled here yet."
     assert "recCalSetBook: (el, a) => window._recCalSetBook(a)," in APP
     assert 'window._recCalSetBook = (b) => {' in APP
+
+
+def test_an_unchosen_calendar_opens_on_the_book_with_days():
+    """Walk 14 (2026-11-18): college's Record page opened on "No edge bet has
+    settled here yet." with the Most Likely book's month one tap away. Until a
+    reader picks a book, the calendar shows the one that has settled days;
+    a pick is kept, and the taps on the days ask the same question."""
+    likely = """{days: [{date: "2026-11-05", day_u: 1.8, n: 3, w: 2, l: 1}], state: {}}"""
+    got = _node(f"""
+      const L = {likely};
+      const pressed = (h) => ((h.match(/data-arg="(edge|likely)" aria-pressed="true"/) || [])[1]);
+      const realDate = Date; Date = class extends realDate {{ constructor(...a) {{ super(...(a.length ? a : [2026, 10, 18])); }} }};
+      _recCalBook = null;
+      const noEdge = recCalendarsHTML({{curve: []}}, L);
+      const both = recCalendarsHTML({{curve: {CURVE}}}, L);
+      const noLikely = recCalBookIn({{curve: []}}, undefined);
+      _recCalBook = "edge";
+      const chosen = recCalendarsHTML({{curve: []}}, L);
+      Date = realDate;
+      return {{noEdge: pressed(noEdge), noEdgeSub: /Most Likely picks, each counted once/.test(noEdge),
+               both: pressed(both), noLikely, chosen: pressed(chosen),
+               chosenSays: /No edge bet has settled here yet/.test(chosen)}};""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["noEdge"] == "likely" and got["noEdgeSub"], got
+    assert got["both"] == "edge", "both books have days: the edge book, as before"
+    assert got["noLikely"] == "edge", "a record without a Most Likely calendar keeps the edge one"
+    assert got["chosen"] == "edge" and got["chosenSays"], "a reader's pick stands"
+    assert "let _recCalMonth = null, _recCalDay = null, _recCalBook = null;" in \
+        (ROOT / "web" / "js" / "app.js").read_text(), "declared where an older record.js still finds it"
+    rec = (ROOT / "web" / "js" / "record.js").read_text()
+    assert not any(f"let {v}" in rec for v in ("_recCalMonth", "_recCalDay", "_recCalBook")), "declared once"
+    i = APP.index("async function renderRecord()")
+    body = APP[i:APP.index("\nfunction _recordRooms(", i)]
+    assert 'const onLikely = recCalBookIn(src, likelyCal) === "likely";' in body
+    app = (ROOT / "web" / "js" / "app.js").read_text()
+    assert "function recCalendarHTML(" not in app and "function recCalendarHTML(" in \
+        (ROOT / "web" / "js" / "record.js").read_text(), "the calendar lives with the only page that draws it"
 
 
 def test_the_record_page_draws_it_first_and_scopes_the_tap():

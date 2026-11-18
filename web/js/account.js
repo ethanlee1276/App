@@ -902,7 +902,12 @@ async function stkLeaders(force) {
   return _stkLeaders || [];
 }
 
-function stkQuestionRow(q, myPick, locked, signedIn) {
+/* THE LEAGUE IS SAID (walk 14, 2026-11-18): the Streak opened from the NBA tab showed Charlie McAvoy's shots on
+   goal and named no league. Once in the heading when a night is one league's, on each row when it mixes them. */
+function stkLeagues(qs) { return [...new Set(qs.map((q) => q.sport).filter(Boolean))]; }
+function stkLeagueWord(sport) { return WF_LEAGUE[sport] || String(sport || "").toUpperCase(); }
+
+function stkQuestionRow(q, myPick, locked, signedIn, mixed) {
   const line = q.line != null ? String(q.line) : "";
   const graded = q.result === "over" || q.result === "under";
   const verdict = graded && myPick
@@ -933,7 +938,8 @@ function stkQuestionRow(q, myPick, locked, signedIn) {
   return `<div class="stk-q ${verdict}">
     <div class="stk-who">
       <b>${escapeHtml(q.player)}</b>
-      <span>${escapeHtml(q.label || q.market)} · ${escapeHtml(q.game || "")}</span>
+      <span>${escapeHtml(q.label || q.market)} · ${escapeHtml(q.game || "")}${
+        mixed && q.sport ? ` · ${escapeHtml(stkLeagueWord(q.sport))}` : ""}</span>
     </div>
     <div class="stk-sides">${side("over", "Over")}${side("under", "Under")}</div>
     ${status}
@@ -1004,9 +1010,11 @@ async function renderStreak() {
   // The flame strip — or the invitation to light one.
   let head;
   if (signedIn && me) {
+    // A day in words, as every other page says one ("Survived 2026-11-17." read like a log line).
+    const lastDay = escapeHtml(formatGameDate(me.last_day) || me.last_day || "");
     const last = me.last_result === "survived"
-      ? `Survived ${escapeHtml(me.last_day)}.`
-      : me.last_result === "lost" ? `Lost ${escapeHtml(me.last_day)} — new fire tonight.` : "";
+      ? `Survived ${lastDay}.`
+      : me.last_result === "lost" ? `Lost ${lastDay} — new fire tonight.` : "";
     head = `<div class="stk-head">
       <div class="stk-flame">${icon("hot", 20)}<b>${me.current || 0}</b><span>day streak</span></div>
       <div class="stk-best">${icon("trophy")} best ${me.best || 0}</div>
@@ -1025,13 +1033,14 @@ async function renderStreak() {
     card = emptySlate("calendar", "No slate yet today",
       "Questions freeze when tonight’s board stands — check back soon.");
   } else {
+    const leagues = stkLeagues(questions);
     card = `<div class="stk-card">
-      <div class="stk-card-head">Tonight — ${signedIn
+      <div class="stk-card-head">Tonight${leagues.length === 1 ? ` in ${escapeHtml(sportLabel(leagues[0]))}` : ""} — ${signedIn
         ? `${nPicked} of ${need} picked`
         : `pick ${need} to play`}</div>
       ${questions.map((q) => {
         const locked = !q.result && q.lock && Date.parse(q.lock) <= now;
-        return stkQuestionRow(q, myToday[q.qid], locked, signedIn);
+        return stkQuestionRow(q, myToday[q.qid], locked, signedIn, leagues.length > 1);
       }).join("")}
       <div class="stk-note${signedIn && nPicked >= need ? " in" : ""}" id="stk-note">${
         signedIn && nPicked >= need
@@ -1053,9 +1062,11 @@ async function renderStreak() {
     const mine = (me && me.picks && me.picks[d]) || {};
     const qs = (days[d].questions || []).filter((q) => !signedIn || mine[q.qid]);
     if (!qs.length) return "";
+    const leagues = stkLeagues(qs);
     return `<div class="stk-day">
-      <div class="stk-day-head">${escapeHtml(d)}${days[d].final ? "" : " — still grading"}</div>
-      ${qs.map((q) => stkQuestionRow(q, mine[q.qid], true, signedIn)).join("")}
+      <div class="stk-day-head">${escapeHtml(formatGameDate(d) || d)}${leagues.length === 1 ? ` · ${escapeHtml(stkLeagueWord(leagues[0]))}` : ""}${
+        days[d].final ? "" : " — still grading"}</div>
+      ${qs.map((q) => stkQuestionRow(q, mine[q.qid], true, signedIn, leagues.length > 1)).join("")}
     </div>`;
   }).filter(Boolean).join("");
 

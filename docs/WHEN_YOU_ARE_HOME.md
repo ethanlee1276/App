@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YD. The fourteenth walk: a stadium said once, one line for one price, the Streak's league** (step 766; 18
+November). Nothing to run. The Colts at the Texans' game page said NRG Stadium's roof four times: the conditions
+chip ("Retractable roof · expected closed"), the venue panel's own chip, its note ("Retractable roof, usually closed
+against Gulf heat and humidity") and the weather card ("Retractable roof — read as closed: …"), and the turf twice,
+in the facts line and a chip. The surface is its chip now, the roof is the conditions chip's and the weather card's,
+which says how the model read it, and an indoor venue's note keeps only what it says beyond the two: the Superdome's
+"historically one of the highest-scoring environments" and U.S. Bank Stadium's noise stay; the other nine indoor
+notes were their roof and surface. The exchanges' lines read "Over 44.5 49% (+106) on Polymarket" and the same words
+"on Kalshi"; one line at one price is said once now, "on Polymarket and Kalshi". The Streak, opened from the NBA
+tab, showed Charlie McAvoy's shots on goal with no league named: a night that is one league's names it in its
+heading ("Tonight in the NHL"), a night that mixes them names each row's, and its days read in words ("Survived Tue,
+Nov 17.", not 2026-11-17). A league's Record page opened its profit calendar on "No edge bet has settled here yet."
+with the Most Likely book's days behind the switch; until a reader picks a book it opens on the one with settled
+days. The calendar moved to the Record page's own file, the only one that draws it, and the first visit is 1,647
+bytes lighter (393,732 to 392,085); its budget comes down from 385 to 384 KB to keep the saving.
+
 **YC. The thirteenth walk: college ranks, one name for a season, playoff weeks by their round** (step 765; 18
 November). Nothing to run. Duke's team page ranked it "62nd of 564": every small school that played a Division I one
 was counted in the field, as the game page's scan did until step XZ. College ranks among Division I now, and a small
