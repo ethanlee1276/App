@@ -166,7 +166,10 @@ body.gch-on { overflow: hidden; }
 .gch-msg { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; align-items: start;
   padding: 6px 14px 4px; margin-top: 6px; }
 .gch-msg.cont { margin-top: 0; padding-top: 1px; }
-.gch-msg:hover, .gch-msg.sel { background: var(--fill-hover); }
+/* The hover tint with a mouse only: a phone's tap leaves :hover stuck on the
+   last message touched, so a message put away still looked picked. */
+.gch-msg.sel { background: var(--fill-hover); }
+@media (hover: hover) and (pointer: fine) { .gch-msg:hover { background: var(--fill-hover); } }
 .gch-msg.own::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 2px;
   background: color-mix(in oklab, var(--brand) 70%, transparent); }
 .gch-msg.own.cont::before { top: 0; }
@@ -176,7 +179,8 @@ body.gch-on { overflow: hidden; }
 .gch-house { background: var(--panel-2); outline: var(--hairline) solid color-mix(in oklab, var(--brand) 60%, var(--border)); }
 .gch-gutter { visibility: hidden; padding-top: 3px; text-align: right; font-size: var(--fs-2xs); color: var(--text-mute);
   font-variant-numeric: tabular-nums; }
-.gch-msg.cont:hover .gch-gutter, .gch-msg.cont.sel .gch-gutter { visibility: visible; }
+.gch-msg.cont.sel .gch-gutter { visibility: visible; }
+@media (hover: hover) and (pointer: fine) { .gch-msg.cont:hover .gch-gutter { visibility: visible; } }
 .gch-av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
   background: color-mix(in oklab, var(--gch-tint, var(--brand)) 24%, var(--panel-2));
   color: var(--gch-tint, var(--brand)); font-size: var(--fs-xs); font-weight: 900; }
@@ -253,6 +257,18 @@ body.gch-on { overflow: hidden; }
 .gch-msg.sel .gch-tools { display: flex; }
 @media (hover: hover) and (pointer: fine) { .gch-msg:hover .gch-tools { display: flex; } }
 .gch-msg:first-child .gch-tools, .gch-older + .gch-msg .gch-tools { top: 2px; }
+/* A phone has no hover, so each message keeps a small face at its right to
+   tap for the tools: the four faces, Reply and ⋯ (2026-11-18, Ethan: the
+   chat "doesn't show the reactions" — they were behind a tap on the
+   message, and nothing said so). A mouse has them on hover. */
+.gch-addface { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .gch-msg { grid-template-columns: 36px minmax(0, 1fr) 30px; column-gap: 8px; }
+  .gch-addface { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%;
+    background: transparent; color: var(--text-mute); cursor: pointer; }
+  /* Open, the tools sit where the face was. */
+  .gch-msg.sel .gch-addface { visibility: hidden; }
+}
 .gch-pick { display: inline-flex; gap: 1px; }
 .gch-pk { width: 30px; height: 28px; border: 0; border-radius: var(--radius-sm); background: transparent; font-size: var(--fs-md); cursor: pointer; }
 .gch-pk:hover, .gch-pk.mine { background: var(--fill-hover); }

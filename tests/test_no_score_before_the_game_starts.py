@@ -167,8 +167,9 @@ def test_the_second_screen_and_the_chat_wait_for_a_score_too():
     assert "side(d.home, scoreShown(lv) ? lv.home_score : null)" in big
     # The chat loads on its own, so it writes the rule out.
     assert 'const on = lv.state === "live" || lv.state === "final";' in CHAT
-    assert "side(d.away, on ? lv.away_score : null, false)" in CHAT
-    assert "side(d.home, on ? lv.home_score : null, true)" in CHAT
+    # Written only when it changes (chatPut, 2026-11-18: tests/test_the_chat_holds_still_and_shows_its_faces.py).
+    assert 'const score = (n) => (on && n != null ? chEsc(n) : "");' in CHAT
+    assert "chatPut(away, score(lv.away_score));" in CHAT and "chatPut(home, score(lv.home_score));" in CHAT
     # And the game cards keep asking, as they did.
     assert "(live.home_score != null && (isLive || isFinal))" in APP
 

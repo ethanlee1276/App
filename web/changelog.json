@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "The game chat holds still, and reactions show on a phone",
+      "body": "The chat redrew its scoreboard, buttons and tabs every three seconds, so taps could miss. Now it only changes what changed. On a phone each message has a small face to tap for reactions and Reply. Message times keep up, sending keeps your keyboard open, and a reaction that doesn’t go through says so."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "Team pages load in seconds, not half a minute",
       "body": "A team page could take up to half a minute the first time it opened. It now reads only that team’s games, so it opens in a few seconds."
     },

@@ -81,7 +81,9 @@ def test_the_chat_lets_go_of_its_box_before_it_goes():
         assert f.index("chatLetGo(s);") < f.index("if (s) s.remove();"), fn
     j = CHAT.index("async function chatSend(form) {")
     f = CHAT[j:CHAT.index("\n}\n", j)]
-    assert f.count("chatLetGo(form);\n") == 2, "after a send and after a failed one: the box is redrawn both times"
+    # A send keeps its box unless a chip above it has to go (2026-11-18, the keyboard stays up);
+    # whenever the box is drawn again, it lets go first.
+    assert f.count("chatLetGo(form);\n") == 2, "after a send that clears a chip, and after a failed one"
     for at in [k for k in range(len(f)) if f.startswith("chatLetGo(form);", k)]:
         assert f[at + len("chatLetGo(form);"):].lstrip().startswith("chatDrawFoot();"), "right before the redraw"
 

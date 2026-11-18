@@ -146,7 +146,7 @@ def test_a_vote_pays_once_and_goes_with_the_account():
 def test_the_chat_the_server_and_the_policy():
     js = Path(ROOT, "web", "js", "chat.js").read_text(encoding="utf-8")
     for want in ("function chatPotgHTML(p)", 'data-gch="potg"', "CH.potg = v.potg || CH.potg || null;",
-                 "if (!v.open && CH.potg && (CH.potg.options || []).length) { box.innerHTML = chatPotgHTML(CH.potg); return; }",
+                 "if (!v.open && CH.potg && (CH.potg.options || []).length) { chatPut(box, chatPotgHTML(CH.potg)); return; }",
                  'chatPost("potg", { pick: Number(t.dataset.i) })'):
         assert want in js, want
     srv = Path(ROOT, "server.py").read_text(encoding="utf-8")

@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XW. The game chat holds still and shows its faces** (step 759; 18 November). Nothing to run. Ethan's NYK at TOR
+screenshot: "glitchy and doesn't show the reactions". Driven on a phone-sized browser against the real server, every
+three-second ask rewrote the scoreboard, the close button, Who wins?, the heat, the tickets and the tabs whether
+anything moved or not (the header 15 times in 9.5 s of a quiet room), so a tap could land on a button swapped out
+under the thumb and the live dot restarted. Each part is now written only when it changes. On a phone the four faces
+sat behind a tap on the message and nothing said so; each message now keeps a small face at its right that opens
+them (a mouse keeps them on hover). Also fixed: a stuck tint after a tap, "now" that never aged, a send made during
+an ask that took up to a poll to show, Load earlier doing nothing then, refused faces and votes saying nothing, the
+keyboard dropping after every message, a late ask putting an old face count back for a beat, and a finished game
+nobody voted on reading "The room picked" over two dead buttons. The live NYK at TOR room holds one message and no
+face: none had ever gone through.
+
 **XV. The team page reads its games by key** (step 758; 18 November). Nothing to run. XU's header named the read:
 the squad's season totals, off the team's own game keys, took 28 seconds cold for Kansas (8 keys, 266 rows) and 9.7
 for Ohio State. With no planner statistics on the file, SQLite drove that read from the per-player index over the

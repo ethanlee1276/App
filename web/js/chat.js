@@ -27,6 +27,10 @@ const CHAT_POLL_MS = 3000;          // while the sheet is open
 const CHAT_IDLE_MS = 12000;         // while it is closed: the badge and the play bubbles
 const CHAT_RULES_KEY = "qb_chat_rules_v1";
 const CHAT_FACES = [["fire", "\u{1F525}"], ["wow", "\u{1F62E}"], ["lol", "\u{1F602}"], ["ugh", "\u{1F629}"]];
+// The face with a plus a phone taps for a message's tools (Discord's and Slack's "add reaction").
+const CHAT_SMILE = `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">`
+  + `<path d="M16.4 9.3A7 7 0 1 1 10.7 3.6"/><path d="M6.8 12.4q2.7 2.6 5.4 0"/><path d="M7 8.6v.01M12 8.6v.01" stroke-width="2.2"/>`
+  + `<path d="M16 1.6v4.8M13.6 4h4.8"/></svg>`;
 const CHAT_FACE = Object.fromEntries(CHAT_FACES);
 const CHAT_REASONS = [["spam", "Spam"], ["abuse", "Abuse"], ["hate", "Hate"], ["scam", "Selling picks or a scam"], ["other", "Something else"]];
 
@@ -35,7 +39,10 @@ const CH = {
   msgs: [], byId: new Map(), lastId: 0, firstId: 0, older: false, since: 0,
   plays: {}, threads: {}, minePlays: {}, votes: null, potg: null, remind: null, votePath: [], here: 0, me: null, friends: [],
   open: false, tab: "all", thread: "", replyTo: 0, bet: null, betOpen: false,
-  unread: 0, timer: 0, busy: false, loaded: false, err: "", menu: 0,
+  unread: 0, timer: 0, busy: false, loaded: false, err: "", menu: 0, sel: 0,
+  // When this reader last changed a face on a message, by id: an ask that
+  // left before it cannot put the old count back (chatPull).
+  reactedAt: new Map(),
   // A watch party (engine/gamechat): the reader's parties in this game, the
   // one on the Party tab, its messages (kept apart from the room's), and an
   // invite read off the address waiting for an account.
@@ -638,7 +645,7 @@ function chatReset() {
   Object.assign(CH, { room: "", league: "", event: "", d: null, msgs: [], byId: new Map(), lastId: 0,
     firstId: 0, older: false, since: 0, plays: {}, threads: {}, minePlays: {}, votes: null, potg: null, remind: null, votePath: [], here: 0, friends: [],
     open: false, tab: "all", thread: "", replyTo: 0, bet: null, betOpen: false, unread: 0, timer: 0,
-    loaded: false, err: "", menu: 0, parties: [], party: null, pmsgs: [], pLastId: 0, invite: "",
+    loaded: false, err: "", menu: 0, sel: 0, reactedAt: new Map(), parties: [], party: null, pmsgs: [], pLastId: 0, invite: "",
     hype: null, wtimer: 0, wfirst: false });
   const s = document.getElementById("gch-sheet");
   chatLetGo(s);
@@ -687,13 +694,19 @@ async function chatTick() {
   if (chatGone()) { chatTeardown(); return; }
   if (!CH.room) return;
   if (document.hidden) { chatSchedule(CHAT_IDLE_MS); return; }
-  await chatPull();
+  // A send's own ask is out: this beat has nothing to add to it.
+  if (!CH.busy) await chatPull();
   chatSchedule(CH.open ? CHAT_POLL_MS : CHAT_IDLE_MS);
 }
 
 async function chatPull(older) {
-  if (CH.busy) return;
+  // One ask at a time. A send, or Load earlier, that comes while the poll's
+  // ask is out waits for it and then asks: it was dropped, so a message just
+  // sent could take a whole poll to show and Load earlier did nothing
+  // (2026-11-18, Ethan: "it's glitchy").
+  while (CH.busy) await new Promise((r) => setTimeout(r, 50));
   CH.busy = true;
+  const askedAt = Date.now();
   const q = new URLSearchParams({ room: CH.room });
   const asked = CH.party ? CH.party.id : 0;
   if (older) q.set("before", String(CH.firstId));
@@ -726,9 +739,11 @@ async function chatPull(older) {
   // Faces that moved on messages already on screen since the last ask —
   // to zero too, which is why the server reports a taken-back face as an
   // emptied row rather than a deleted one.
+  // Not over a face this reader changed after the ask left: the server
+  // answered before it, and the next ask carries it.
   for (const [id, faces] of Object.entries(v.reacts || {})) {
     const m = CH.byId.get(Number(id));
-    if (m) m.reacts = faces;
+    if (m && !((CH.reactedAt.get(Number(id)) || 0) > askedAt)) m.reacts = faces;
   }
   Object.assign(CH.plays, v.plays || {});
   Object.assign(CH.threads, v.threads || {});
@@ -775,7 +790,32 @@ async function chatPull(older) {
     else chatAppend(fresh, v);
     chatDrawHead();
     chatDrawTabs();
+    chatTimes();
   }
+}
+
+/* A part of the room written only when what it says has changed. Every
+   three-second ask rewrote the scoreboard, the close button, Who wins?,
+   the heat, the tickets and the tabs whether or not anything moved, so a
+   tap could land on a button swapped out under the thumb and the live dot's
+   pulse began again each time (2026-11-18, Ethan: "it's glitchy"); the
+   card on the game page had the same fix (chatEntryPaint). */
+function chatPut(el, html) {
+  if (!el || el._html === html) return;
+  el._html = html;
+  el.innerHTML = html;
+}
+/* Shown or hidden, touched only when that changes (as chatPut). */
+function chatShow(el, on) {
+  if (el && el.hidden === !!on) el.hidden = !on;
+}
+
+/* "now" turns into "1m", "2m"… while the room is open; it stayed "now". */
+function chatTimes() {
+  document.querySelectorAll("#gch-sheet .gch-meta time[data-at]").forEach((t) => {
+    const w = chatAgo(t.dataset.at);
+    if (t.textContent !== w) t.textContent = w;
+  });
 }
 
 function chatShareCounts() {
@@ -813,6 +853,12 @@ async function chatPost(path, body) {
   } catch (e) {
     return { status: 0, error: "No connection — try again." };
   }
+}
+
+/* A write the server turned down, said in a toast (app.js tfToast) rather
+   than nothing: a face, a vote or a play's face that did not take. */
+function chatSay(msg) {
+  if (typeof tfToast === "function") tfToast(msg || "That didn’t go through — try again.");
 }
 
 /* ---------------- the floating button ---------------- */
@@ -954,6 +1000,9 @@ function chatSheet() {
       <footer class="gch-foot"></footer>`;
     document.body.appendChild(s);
     s.addEventListener("click", chatClick);
+    // A tap on Send leaves the focus in the box, so a phone's keyboard stays
+    // up for the next message, as in every messaging app.
+    s.addEventListener("mousedown", (e) => { if (e.target.closest(".gch-send")) e.preventDefault(); });
     s.addEventListener("keydown", (e) => { if (e.key === "Escape") chatClose(); });
     s.querySelector(".gch-body").addEventListener("scroll", chatScrolled, { passive: true });
   }
@@ -971,6 +1020,7 @@ function chatClose() {
   CH.open = false;
   CH.thread = "";
   CH.menu = 0;
+  CH.sel = 0;
   const s = document.getElementById("gch-sheet");
   chatLetGo(s);
   if (s) s.remove();
@@ -979,30 +1029,47 @@ function chatClose() {
   chatSchedule(CHAT_IDLE_MS);
 }
 
-/* The scoreboard, pinned (theScore): both sides, the score, the clock. */
+/* The scoreboard, pinned (theScore): both sides, the score, the clock. The
+   frame (the title, the close button, the two sides' marks) is drawn once
+   for the game; after that only what moved is written (chatPut): who is
+   here, a score, the clock. */
 function chatDrawHead() {
   const s = document.getElementById("gch-sheet");
   if (!s) return;
   const d = CH.d || {};
   const lv = d.live || {};
   const lg = CH.league;
-  const side = (abbr, score, home) => `<div class="gch-side${home ? " home" : ""}">${
-    typeof teamMarkIn === "function" && abbr ? teamMarkIn(lg, abbr, 26) : ""}<b>${chEsc(abbr || "")}</b><span class="gch-score">${
-    score != null ? chEsc(score) : ""}</span></div>`;
+  const head = s.querySelector(".gch-head");
+  // Compared whole, not by the teams' codes: a college club's logo can come
+  // in after the room first draws (app.js teamsForSport), and the frame
+  // takes it then.
+  const side = (abbr, home) => `<div class="gch-side${home ? " home" : ""}">${
+    typeof teamMarkIn === "function" && abbr ? teamMarkIn(lg, abbr, 26) : ""}<b>${chEsc(abbr || "")}</b><span class="gch-score"></span></div>`;
+  const frame = `
+    <div class="gch-headrow"><span class="gch-title">${chatIcon()}Game chat</span><span class="gch-here"></span>
+      <button type="button" class="gch-x" data-gch="close" aria-label="Close the chat">${typeof icon === "function" ? icon("cross", 16) : "×"}</button></div>
+    <div class="gch-board">${side(d.away, false)}<div class="gch-mid"></div>${side(d.home, true)}</div>`;
+  // The fallback badge names its gradient at random each time it is drawn
+  // (visuals.js teamMark), so those names are set aside for the comparison.
+  const key = frame.replace(/(id="|url\(#)[a-z]{2}[a-z0-9]{0,5}/g, "$1");
+  if (head._frame !== key) {
+    head._frame = key;
+    head.innerHTML = frame;
+  }
   // A score once the game has one: "Pregame" beside 0 and 0 read as a
   // score (Ethan, 2026-11-15; app.js scoreShown, written out here because
   // the chat loads on its own).
   const on = lv.state === "live" || lv.state === "final";
+  const score = (n) => (on && n != null ? chEsc(n) : "");
   const mid = lv.state === "live"
     ? `<span class="gch-live"><i></i>LIVE</span><span class="gch-clock">${chEsc(lv.detail || [lv.period, lv.clock].filter(Boolean).join(" "))}</span>`
     : lv.state === "final" ? `<span class="gch-clock">FINAL</span>`
     : `<span class="gch-clock">${chEsc(lv.detail || "Pregame")}</span>`;
-  s.querySelector(".gch-head").innerHTML = `
-    <div class="gch-headrow"><span class="gch-title">${chatIcon()}Game chat</span><span class="gch-here">${
-      CH.here ? `<i></i>${CH.here} watching` : ""}${chatFriendsHere()}</span>
-      <button type="button" class="gch-x" data-gch="close" aria-label="Close the chat">${typeof icon === "function" ? icon("cross", 16) : "×"}</button></div>
-    <div class="gch-board">${side(d.away, on ? lv.away_score : null, false)}<div class="gch-mid">${mid}</div>${
-      side(d.home, on ? lv.home_score : null, true)}</div>`;
+  const [away, home] = head.querySelectorAll(".gch-score");
+  chatPut(away, score(lv.away_score));
+  chatPut(home, score(lv.home_score));
+  chatPut(head.querySelector(".gch-mid"), mid);
+  chatPut(head.querySelector(".gch-here"), `${CH.here ? `<i></i>${CH.here} watching` : ""}${chatFriendsHere()}`);
   chatDrawPoll();
   chatDrawHeat();
   chatDrawTix();
@@ -1025,13 +1092,13 @@ function chatDrawHeat() {
   const box = s && s.querySelector(".gch-heat");
   if (!box) return;
   const h = CH.hype;
-  if (!h || CH.thread || !(h.level || h.n)) { box.hidden = true; box.innerHTML = ""; return; }
-  box.hidden = false;
+  if (!h || CH.thread || !(h.level || h.n)) { chatShow(box, false); chatPut(box, ""); return; }
+  chatShow(box, true);
   const lvl = Math.min(5, Number(h.level) || 0);
   const pct = lvl >= 5 ? 100 : Math.round(Math.max(0, Math.min(1, Number(h.progress) || 0)) * 100);
-  box.innerHTML = `<span class="gch-heat-l">${lvl ? "🔥".repeat(lvl) : "🔥"} Room heat${lvl ? ` · level ${lvl}` : ""}</span>
+  chatPut(box, `<span class="gch-heat-l">${lvl ? "🔥".repeat(lvl) : "🔥"} Room heat${lvl ? ` · level ${lvl}` : ""}</span>
     <span class="gch-heat-bar lv${lvl}"><i style="--p:${pct}%"></i></span>
-    <span class="gch-heat-n">${lvl >= 5 ? "On fire" : lvl ? "Keep it going" : "Three of you talking lights it"}</span>`;
+    <span class="gch-heat-n">${lvl >= 5 ? "On fire" : lvl ? "Keep it going" : "Three of you talking lights it"}</span>`);
 }
 
 /* KARMA FOR WATCHING (engine/karma, 2026-10-28: Real's karma for a live
@@ -1099,15 +1166,15 @@ async function chatDrawTix() {
   const box = s && s.querySelector(".gch-tix");
   if (!box) return;
   const mine = chatTixMine();
-  if (!mine.length || CH.thread) { box.hidden = true; return; }
+  if (!mine.length || CH.thread) { chatShow(box, false); return; }
   const paint = () => {
     const t = (CH.tix && CH.tix.room === CH.room && CH.tix.list) || [];
-    box.hidden = !t.length;
-    box.innerHTML = !t.length ? "" : `<div class="gch-tix-h">Your ${t.length === 1 ? "ticket" : "tickets"} in this game</div>${
+    chatShow(box, t.length);
+    chatPut(box, !t.length ? "" : `<div class="gch-tix-h">Your ${t.length === 1 ? "ticket" : "tickets"} in this game</div>${
       t.map((k) => `<div class="gch-tik"><div class="gch-tik-top"><span>${chEsc(String(k.desc || "").slice(0, 70))}</span>
         ${(CH.me || {}).signed_in ? `<button type="button" class="gch-tik-share" data-gch="tikshare" data-tik="${chEsc(k.id)}">Share</button>` : ""}</div>
         <ul>${k.legs.map(chatTixLegHTML).join("")}</ul>${k.of > k.legs.length
-          ? `<span class="gch-tik-more">${k.of - k.legs.length} more leg${k.of - k.legs.length === 1 ? "" : "s"} in other games</span>` : ""}</div>`).join("")}`;
+          ? `<span class="gch-tik-more">${k.of - k.legs.length} more leg${k.of - k.legs.length === 1 ? "" : "s"} in other games</span>` : ""}</div>`).join("")}`);
   };
   paint();
   if (CH.tixAt && Date.now() - CH.tixAt < 30000 && CH.tix && CH.tix.room === CH.room) return;
@@ -1129,17 +1196,20 @@ function chatDrawPoll() {
   const v = CH.votes;
   const d = CH.d || {};
   const box = s.querySelector(".gch-poll");
-  if (!v || !d.home || !d.away || CH.thread) { box.innerHTML = ""; box.hidden = true; return; }
-  box.hidden = false;
-  if (!v.open && CH.potg && (CH.potg.options || []).length) { box.innerHTML = chatPotgHTML(CH.potg); return; }
+  if (!v || !d.home || !d.away || CH.thread) { chatPut(box, ""); chatShow(box, false); return; }
+  chatShow(box, true);
+  if (!v.open && CH.potg && (CH.potg.options || []).length) { chatPut(box, chatPotgHTML(CH.potg)); return; }
   const total = (v.away || 0) + (v.home || 0);
+  // Over with nobody's vote in it: "The room picked" over two dead buttons
+  // said a thing that never happened, so the row goes.
+  if (!v.open && !total) { chatPut(box, ""); chatShow(box, false); return; }
   const pct = (n) => (total ? Math.round((100 * n) / total) : 0);
   const btn = (key, abbr) => `<button type="button" class="gch-vote${v.mine === key ? " mine" : ""}" data-gch="vote" data-side="${key}"
       ${v.open ? "" : "disabled"}><b>${chEsc(abbr)}</b>${total ? `<span>${pct(v[key] || 0)}%</span>` : ""}</button>`;
-  box.innerHTML = `<span class="gch-poll-q">${v.open ? "Who wins?" : "The room picked"}</span>
+  chatPut(box, `<span class="gch-poll-q">${v.open ? "Who wins?" : "The room picked"}</span>
     ${btn("away", d.away)}${btn("home", d.home)}
     <span class="gch-poll-n">${total ? `${total} vote${total === 1 ? "" : "s"}` : v.open ? "Be the first" : ""}</span>
-    ${total ? `<span class="gch-poll-bar" style="--gch-away:${pct(v.away || 0)}%"></span>` : ""}`;
+    ${total ? `<span class="gch-poll-bar" style="--gch-away:${pct(v.away || 0)}%"></span>` : ""}`);
 }
 
 /* THE FANS' PLAYER OF THE GAME (theScore's and ESPN's fan vote): once the
@@ -1162,12 +1232,12 @@ function chatDrawTabs() {
   const s = document.getElementById("gch-sheet");
   if (!s) return;
   const nav = s.querySelector(".gch-tabs");
-  if (CH.thread) { nav.innerHTML = ""; nav.hidden = true; return; }
-  nav.hidden = false;
+  if (CH.thread) { chatPut(nav, ""); chatShow(nav, false); return; }
+  chatShow(nav, true);
   const tabs = [["all", "All"], ["plays", "Big plays"], ["game", "Game talk"],
     ["party", CH.party ? `Party · ${CH.party.name}` : "Watch party"]];
-  nav.innerHTML = tabs.map(([k, l]) => `<button type="button" role="tab" aria-selected="${CH.tab === k}"
-    class="gch-tab${CH.tab === k ? " on" : ""}" data-gch="tab" data-tab="${k}">${chEsc(l)}</button>`).join("");
+  chatPut(nav, tabs.map(([k, l]) => `<button type="button" role="tab" aria-selected="${CH.tab === k}"
+    class="gch-tab${CH.tab === k ? " on" : ""}" data-gch="tab" data-tab="${k}">${chEsc(l)}</button>`).join(""));
 }
 
 /* ---------------- what the body shows ---------------- */
@@ -1215,8 +1285,7 @@ function chatAppend(fresh, v) {
   }
   for (const id of Object.keys(v.reacts || {})) {
     const m = CH.byId.get(Number(id));
-    const el = body.querySelector(`.gch-msg[data-id="${Number(id)}"] .gch-faces`);
-    if (m && el) el.outerHTML = chatFacesHTML(m);
+    if (m) chatPut(body.querySelector(`.gch-msg[data-id="${Number(id)}"] .gch-faces`), chatFacesIn(m));
   }
   if (CH.thread && v.plays && v.plays[CH.thread]) {
     const top = body.querySelector(".gch-playcard .gch-faces");
@@ -1302,16 +1371,20 @@ function chatBetHTML(b) {
 
 /* A message's faces, as the chat apps draw them (Discord, Slack, iMessage's
    tapbacks): only the ones somebody used, each with its count. The four to
-   choose from live in the message's tools, shown on hover with a mouse and
-   on a tap on a phone (chatSel), so a quiet room is a list of words, not a
-   wall of emoji. */
+   choose from live in the message's tools: on hover with a mouse; on a
+   phone, behind the small face at the message's right (and a tap on the
+   message), chatSel. A quiet room is a list of words, not a wall of emoji. */
 function chatFacesHTML(m) {
+  return `<span class="gch-faces">${chatFacesIn(m)}</span>`;
+}
+/* The faces themselves: a change rewrites the row in place (chatPut). */
+function chatFacesIn(m) {
   const faces = m.reacts || {};
-  return `<span class="gch-faces">${CHAT_FACES.filter(([k]) => (faces[k] || 0) > 0).map(([k, e]) => {
+  return CHAT_FACES.filter(([k]) => (faces[k] || 0) > 0).map(([k, e]) => {
     const n = faces[k];
     return `<button type="button" class="gch-face${m.mine === k ? " mine" : ""}" data-gch="react" data-id="${m.id}" data-kind="${k}"
       aria-label="${k} ${n}">${e}<span>${n}</span></button>`;
-  }).join("")}</span>`;
+  }).join("");
 }
 const chatPickHTML = (m) => `<span class="gch-pick" role="group" aria-label="React">${CHAT_FACES.map(([k, e]) =>
   `<button type="button" class="gch-pk${m.mine === k ? " mine" : ""}" data-gch="react" data-id="${m.id}" data-kind="${k}" aria-label="${k}">${e}</button>`).join("")}</span>`;
@@ -1367,7 +1440,7 @@ function chatMsgHTML(m, prev) {
       : `<span class="gch-av gch-c${c}${p.founder ? " gold" : ""}${Number(p.lv) >= 20 ? ` kr-glow kr-${chEsc(p.cls || "t5")}` : ""}" aria-hidden="true">${chEsc(chatInitials(p))}</span>`}
     <div class="gch-bub">
       ${cont ? "" : `<div class="gch-meta"><b class="gch-name gch-c${c}">@${chEsc(p.handle || "")}</b>${badge}${
-        p.team ? `<span class="gch-team">${chEsc(p.team)}</span>` : ""}<time>${chatAgo(m.at)}</time></div>`}
+        p.team ? `<span class="gch-team">${chEsc(p.team)}</span>` : ""}<time data-at="${Number(m.at) || 0}">${chatAgo(m.at)}</time></div>`}
       ${reply ? `<div class="gch-quote"><span>↪ @${chEsc((reply.by || {}).handle || "")}</span> ${chEsc(String(reply.body || "").slice(0, 90))}</div>` : ""}
       ${play ? `<button type="button" class="gch-on-play" data-gch="thread" data-play="${chEsc(m.play)}">on ${chEsc(chatPlayTitle(play))}</button>` : ""}
       ${m.body ? `<p class="gch-text">${chatText(m.body)}</p>` : ""}
@@ -1377,7 +1450,7 @@ function chatMsgHTML(m, prev) {
         <button type="button" class="gch-act" data-gch="reply" data-id="${m.id}">Reply</button>
         <button type="button" class="gch-act" data-gch="menu" data-id="${m.id}" aria-label="More">⋯</button></div>
       ${menu}
-    </div></article>`;
+    </div><button type="button" class="gch-addface" data-gch="faces" data-id="${m.id}" aria-label="React or reply">${CHAT_SMILE}</button></article>`;
 }
 
 function chatMenuHTML(m) {
@@ -1527,13 +1600,19 @@ async function chatSend(form) {
   const out = await chatPost("send", { body: text, play: CH.thread || "", reply_to: CH.replyTo || 0, bet: CH.bet || undefined, party });
   btn.disabled = false;
   if (out.status === 200) {
+    // The box stays, and a phone's keyboard with it, unless something above
+    // it has to go (a reply, a bet, the bet form, a line in red): redrawn
+    // after every send, the keyboard dropped each time (2026-11-18).
+    const chips = CH.replyTo || CH.bet || CH.betOpen || CH.err;
     box.value = "";
     CH.err = "";
     CH.replyTo = 0;
     CH.bet = null;
     CH.betOpen = false;
-    chatLetGo(form);
-    chatDrawFoot();
+    if (chips) {
+      chatLetGo(form);
+      chatDrawFoot();
+    }
     await chatPull();
     const b = chatBody();
     if (b) b.scrollTop = b.scrollHeight;
@@ -1563,10 +1642,13 @@ async function chatClick(e) {
     // tap on another, moves them (chatSel).
     const msg = e.target.closest(".gch-msg");
     if (msg && !e.target.closest("a, button, input, textarea, select")) chatSel(Number(msg.dataset.id));
+    // A tap anywhere else puts the tools away.
+    else if (!msg && CH.sel) chatSel(0);
     return;
   }
   const act = t.dataset.gch;
   if (act === "close") return chatClose();
+  if (act === "faces") return chatSel(Number(t.dataset.id));
   if (act === "at") return chatAtPut(t.dataset.handle);
   if (act === "tab") { CH.tab = t.dataset.tab; CH.menu = 0; chatDrawTabs(); chatDrawBody(); chatDrawFoot(); return; }
   if (act === "thread") { CH.thread = t.dataset.play; CH.menu = 0; chatDrawPoll(); chatDrawTabs(); chatDrawBody(); chatDrawFoot(); return; }
@@ -1603,7 +1685,7 @@ async function chatClick(e) {
     chatDrawTabs(); chatDrawBody(); chatDrawFoot();
     return;
   }
-  if (act === "reply") { CH.replyTo = Number(t.dataset.id); chatDrawFoot(); const b = document.querySelector("#gch-sheet .gch-input"); if (b) b.focus(); return; }
+  if (act === "reply") { CH.replyTo = Number(t.dataset.id); chatSel(0); chatDrawFoot(); const b = document.querySelector("#gch-sheet .gch-input"); if (b) b.focus(); return; }
   if (act === "unreply") { CH.replyTo = 0; chatDrawFoot(); return; }
   if (act === "bet") { CH.betOpen = !CH.betOpen; chatDrawFoot(); return; }
   if (act === "unbet") { CH.bet = null; chatDrawFoot(); return; }
@@ -1637,16 +1719,24 @@ async function chatClick(e) {
     const id = Number(t.dataset.id);
     const out = await chatPost("react", { id, kind: t.dataset.kind });
     if (out.status === 401) return chatNeedAccount();
+    // Said, not swallowed: a face the server turned down (too fast, a
+    // message just taken down, no connection) used to do nothing at all.
+    if (out.status !== 200) return chatSay(out.error);
     const m = CH.byId.get(id);
-    if (out.status === 200 && m) {
+    if (m) {
       const faces = { ...(m.reacts || {}) };
       if (m.mine) faces[m.mine] = Math.max(0, (faces[m.mine] || 1) - 1);
       if (out.mine) faces[out.mine] = (faces[out.mine] || 0) + 1;
       m.reacts = faces;
       m.mine = out.mine;
+      CH.reactedAt.set(id, Date.now());
       if (CH.sel === id) chatSel(id);
-      const el = document.querySelector(`#gch-sheet .gch-msg[data-id="${id}"] .gch-faces`);
-      if (el) el.outerHTML = chatFacesHTML(m);
+      const msg = document.querySelector(`#gch-sheet .gch-msg[data-id="${id}"]`);
+      if (msg) {
+        chatPut(msg.querySelector(".gch-faces"), chatFacesIn(m));
+        // The four in the tools mark the reader's own face from now on, too.
+        msg.querySelectorAll(".gch-pk").forEach((b) => b.classList.toggle("mine", b.dataset.kind === out.mine));
+      }
     }
     return;
   }
@@ -1654,16 +1744,15 @@ async function chatClick(e) {
     const key = t.dataset.play;
     const out = await chatPost("play", { play: key, kind: t.dataset.kind });
     if (out.status === 401) return chatNeedAccount();
-    if (out.status === 200) {
-      const faces = { ...(CH.plays[key] || {}) };
-      const was = CH.minePlays[key];
-      if (was) faces[was] = Math.max(0, (faces[was] || 1) - 1);
-      if (out.mine) faces[out.mine] = (faces[out.mine] || 0) + 1;
-      CH.plays[key] = faces;
-      CH.minePlays[key] = out.mine;
-      chatShareCounts();
-      document.querySelectorAll(`#gch-sheet .gch-playcard[data-play="${CSS.escape(key)}"] .gch-faces`).forEach((el) => { el.outerHTML = chatPlayFacesHTML(key); });
-    }
+    if (out.status !== 200) return chatSay(out.error);
+    const faces = { ...(CH.plays[key] || {}) };
+    const was = CH.minePlays[key];
+    if (was) faces[was] = Math.max(0, (faces[was] || 1) - 1);
+    if (out.mine) faces[out.mine] = (faces[out.mine] || 0) + 1;
+    CH.plays[key] = faces;
+    CH.minePlays[key] = out.mine;
+    chatShareCounts();
+    document.querySelectorAll(`#gch-sheet .gch-playcard[data-play="${CSS.escape(key)}"] .gch-faces`).forEach((el) => { el.outerHTML = chatPlayFacesHTML(key); });
     return;
   }
   if (act === "potg") {
@@ -1676,7 +1765,8 @@ async function chatClick(e) {
   if (act === "vote") {
     const out = await chatPost("vote", { side: t.dataset.side });
     if (out.status === 401) return chatNeedAccount();
-    if (out.status === 200 && CH.votes) {
+    if (out.status !== 200) return chatSay(out.error);
+    if (CH.votes) {
       const v = CH.votes;
       if (v.mine) v[v.mine] = Math.max(0, (v[v.mine] || 1) - 1);
       v[out.mine] = (v[out.mine] || 0) + 1;
