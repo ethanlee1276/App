@@ -52,7 +52,10 @@ def test_a_whole_number_under_a_paid_name_passes_and_a_board_does_not():
 def test_the_ufc_board_counts_what_it_modeled_and_what_waits_on_a_price():
     src = (ROOT / "engine" / "ufc" / "model.py").read_text(encoding="utf-8")
     assert '"modeled": len(picks) + sum(p.get("reason_code") in ("gate", "clamp_kill") for p in passes),' in src
-    assert '"waiting": sum(p.get("reason_code") == "no_price" for p in passes)}}' in src
+    assert '"waiting": sum(p.get("reason_code") == "no_price" for p in passes),' in src
+    # And the rest of the card, so the tiles add up (18 November 2026: 21 bouts, 0 modeled, 10 waiting).
+    assert '"thin": sum(p.get("reason_code") in ("no_dossier", "no_data") for p in passes)}}' in src
+    assert "c.thin ? ` · ${c.thin} with too little on file to model` : \"\"" in MORE
     assert "const nModeled = c.modeled != null ? c.modeled" in MORE
     assert "const nWaiting = c.waiting != null ? c.waiting" in MORE
     assert 'statCardHTML("target", "Picks", Number(c.picks) || 0,' in MORE

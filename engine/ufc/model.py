@@ -348,8 +348,8 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
     if w is None:
         # Distinguish "we have no data" from "this fighter is new". A
         # 19-3 regional veteran isn't a debutant — the honest statement
-        # is that nobody tracks his fights stat-by-stat, so we can't
-        # model him. Same verdict, accurate reason.
+        # is that nobody tracks that fighter's bouts stat-by-stat, so we
+        # cannot model them. Same verdict, accurate reason.
         thin = [br["name"] for br in briefs if not br["covered"]]
         why = ("no fight-by-fight stats for " + " or ".join(thin)
                + " — record is regional/uncovered, so the model has nothing "
@@ -569,4 +569,8 @@ def run_card(fights: list[dict]) -> dict:
             "counts": {"fights": len(fights), "picks": len(picks),
                        "passes": len(passes),
                        "modeled": len(picks) + sum(p.get("reason_code") in ("gate", "clamp_kill") for p in passes),
-                       "waiting": sum(p.get("reason_code") == "no_price" for p in passes)}}
+                       "waiting": sum(p.get("reason_code") == "no_price" for p in passes),
+                       # The rest of the card, so the tiles add up: a fighter with no dossier
+                       # or too few tracked fights (21 bouts read "0 modeled, 10 awaiting
+                       # prices" on 18 November 2026, and the other 11 were nowhere).
+                       "thin": sum(p.get("reason_code") in ("no_dossier", "no_data") for p in passes)}}

@@ -2156,7 +2156,11 @@ async function renderInjuries() {
     <div class="stats">
       ${tile("Players listed", parsed.filter((r) => !isReturnRow(r)).length,
              "carrying a designation")}
-      ${tile("Out tier", outTier.length, "out, IR, long-term IL")}
+      ${/* Each league's own words for the out tier (the NHL's page said "long-term IL",
+           baseball's injured list, 2026-11-18). */ ""}
+      ${tile("Out tier", outTier.length,
+             { nfl: "out, IR, PUP", cfb: "out, out for the season", mlb: "out, the injured list",
+               nhl: "out, IR, long-term IR" }[sport] || "out, out for the season")}
       ${tile("Questionable tier", maybeTier.length, "doubtful through day-to-day")}
       ${tile("Teams affected", teams.length, "of the whole league")}
     </div>
@@ -2174,9 +2178,9 @@ async function renderInjuries() {
       site on a 30-minute cache, one row per player — the newest filing.${
       _nextUp.size ? ` <b>Next man up</b> names who holds an injured player’s work and the
       share each already held, from the usage board — a measured role, never a
-      claim about who is on your league’s wire.` : ""} The NFL’s
+      claim about who is on your league’s wire.` : ""}${sport === "nfl" ? ` The NFL’s
       practice-level detail (limited/DNP, the usage model’s injury inputs) lives on the
-      Fantasy page — this board is availability, league-wide.
+      Fantasy page — this board is availability, league-wide.` : ""}
       ${ageS != null
         ? `Designations collected ${escapeHtml(ageText(ageS))} ago.`
         : `Page built ${escapeHtml(formatStamp((d || {}).generated_at, "time"))}.`}</p>`
@@ -2215,9 +2219,12 @@ function injTeamBlock(team, rows, sev) {
     ? `${out ? `<span class="it-tier bad">${out} out</span>` : ""}${
         maybe ? `<span class="it-tier warn">${maybe} questionable</span>` : ""}`
     : `<span class="it-tier quiet">no designations</span>`;
+  // The row count only where it adds to the tiers: "9 out 9" said it twice
+  // (the NHL's page, 2026-11-18); a team with return filings still shows it.
+  const n = rows.length !== out + maybe ? `<span class="inj-team-n">${rows.length}</span>` : "";
   return `<details class="inj-team">
     <summary class="inj-team-head">${escapeHtml(team)}
-      ${tiers}<span class="inj-team-n">${rows.length}</span></summary>
+      ${tiers}${n}</summary>
     <div class="card inj-list">${rows.map((r) => injRow(r, false)).join("")}</div>
   </details>`;
 }
@@ -4077,7 +4084,8 @@ async function renderUFC() {
     ${potdHeroHTML(d)}
     <div class="stat-cards">
       ${statCardHTML("calendar", "Card", escapeHtml(formatGameDate(d.event_date) || d.event_date || "—"),
-                     `${c.fights || 0} bout${(c.fights || 0) === 1 ? "" : "s"}`)}
+                     `${c.fights || 0} bout${(c.fights || 0) === 1 ? "" : "s"}${
+                       c.thin ? ` · ${c.thin} with too little on file to model` : ""}`)}
       ${statCardHTML("gem", "Modeled", nModeled,
                      "priced &amp; run through the model")}
       ${statCardHTML("clock", "Awaiting prices", nWaiting,

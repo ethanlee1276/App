@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Headlines are news, not offers",
+      "body": "Each league’s headlines no longer carry sportsbook sign-up offers or a publisher’s every-sport betting roundup. The injuries page uses each league’s own words for who is out, and says each team’s count once, and the UFC card counts every bout."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "College rankings are this week’s poll",
       "body": "The tournament race showed some schools with last week’s poll rank beside others with this week’s, so two schools could share a number while others were missing. It reads the current AP Top 25 now and says so."
     },

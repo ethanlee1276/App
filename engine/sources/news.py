@@ -33,6 +33,7 @@ scoreboard), each league failing independently, standard library only.
 from __future__ import annotations
 
 import email.utils as _eut
+import re as _re
 import xml.etree.ElementTree as _ET
 
 from .fetch import DEFAULT_AGENT, fetch_text
@@ -60,6 +61,20 @@ FEEDS: dict[str, list[tuple[str, str]]] = {
 
 TTL = 1800
 PER_SPORT = 12
+
+#: WHAT IS NOT NEWS (2026-11-18, the NHL injuries page's "Around the league"):
+#: a sportsbook's sign-up offer filed as a headline ("Use BetMGM bonus code
+#: CBSSPORTS to get $1,500 bonus bets for Pistons-Spurs, Duke-Illinois, NBA
+#: on Tuesday", in four leagues' feeds at once), and the publisher's
+#: every-sport betting roundup ("Today's top games to watch, best bets, odds:
+#: Jazz vs. Clippers, Illinois vs. Duke and more"), which CBS files under
+#: every league, hockey's included, whether it names the league or not.
+_NOT_NEWS = _re.compile(r"\b(?:promo|bonus) code\b|\bbonus bets?\b|^today[’']?s top games to watch\b", _re.I)
+
+
+def is_news(title: str) -> bool:
+    """False for an advertisement or a roundup of every sport (`_NOT_NEWS`)."""
+    return not _NOT_NEWS.search(str(title or "").strip())
 
 
 def parse_rss(text: str, source: str) -> list[dict]:
@@ -114,7 +129,7 @@ def fetch_sport(sport: str, errors: dict | None = None) -> list[dict]:
         got = parse_rss(text, source) if text else []
         if not got and errors is not None:
             errors.setdefault(sport, {})[source] = "the feed answered with no headlines"
-        rows.extend(got)
+        rows.extend(r for r in got if is_news(r["title"]))
     rows.sort(key=lambda r: -r["epoch"])
     return rows[:PER_SPORT]
 

@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XJ. The injuries page speaks each league's words, and its headlines are news** (step 746; 18 November). Nothing to
+run: the next news build (every half hour) drops what is not news. The NHL's injuries page said its out tier was
+"out, IR, long-term IL" (baseball's injured list), pointed hockey readers at "the NFL's practice-level detail", and
+said each team's count twice ("9 out · 9"). Under it, "Around the league" opened with CBS's every-sport betting
+roundup ("Today's top games to watch, best bets, odds: Jazz vs. Clippers, Illinois vs. Duke and more"), filed under
+hockey, and the NFL's, NBA's and college basketball's lists carried sportsbook sign-up offers as headlines ("Use
+BetMGM bonus code CBSSPORTS to get $1,500 bonus bets ..."). Each league's out tier is in its own words now, the
+NFL's note is on the NFL's page only, a team's count shows only where it adds to its tiers, and engine/sources/news
+keeps a promo code, a bonus-bets offer and the every-sport roundup out of every league's headlines. The UFC tab's
+tiles did not add up for a visitor either: "21 bouts · Modeled 0 · Awaiting prices 10", the other eleven (a fighter
+with no dossier or too few tracked fights) counted nowhere. The card's tile says them now ("21 bouts · 11 with too
+little on file to model").
+
 **XI. What a visitor saw on the seventh walk reads right** (step 745; 18 November). Nothing to run. The college
 tournament race put #7 beside both Texas and UCLA, #4 beside Virginia and UConn and #16 beside Alabama and Texas
 Tech, with nobody at #3, #6 or #9: each school's rank was read off its latest game, and a school that last played
