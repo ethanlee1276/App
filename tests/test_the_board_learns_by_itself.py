@@ -147,7 +147,9 @@ def test_the_settle_pass_runs_it_and_the_record_page_draws_it():
                                             "said": 0.75, "z": -4.1, "verdict": "over-claims"}]},
                       "calibration": {"passed": True, "groups": {"bold|over": {"k": 0.2, "n": 20, "hit": 0.35,
                                                                                "claimed": 0.75}}}}}
-    prog = ("const escapeHtml = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');\n" + fn +
+    k = app.index("function recLg(")
+    prog = ("const escapeHtml = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');\n"
+            + app[k:app.index("\n}\n", k) + 3] + fn +
             f"\nconsole.log(recBoardLearningSection({json.dumps(sample)}, 'nfl'));"
             f"\nconsole.log('MLB:' + recBoardLearningSection({json.dumps(sample)}, 'mlb').length);")
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:

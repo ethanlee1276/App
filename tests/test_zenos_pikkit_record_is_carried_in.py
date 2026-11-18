@@ -181,7 +181,9 @@ def test_the_record_page_has_a_zenos_bets_button_that_opens_his_page():
         return
     j = APP.index("function leagueChipsHTML(")       # the one league-row builder (#46)
     chips = APP[j:APP.index("\n}\n", j) + 2]
-    prog = ("const escapeHtml=(x)=>String(x==null?'':x); const SPORT_META={nfl:{name:'NFL'}};\n" + chips + fn +
+    k = APP.index("function recLg(")
+    prog = ("const escapeHtml=(x)=>String(x==null?'':x); const SPORT_META={nfl:{name:'NFL'}};\n" + chips
+            + APP[k:APP.index("\n}\n", k) + 3] + fn +
             "\nconst d={tracked_sports:['nfl'], journaled:{all:{settled:10,open:1}},"
             " zeno:{overall:{settled:1389,open:0}, open_n:2}};\n"
             "console.log(JSON.stringify([recordScopeHTML(d,'all'), recordScopeHTML({tracked_sports:[]},'all')]));")

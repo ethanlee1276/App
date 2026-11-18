@@ -31288,7 +31288,7 @@ function deckRidingRows(rows) {
 }
 
 function deckFirstWord(sport) {
-  return { mlb: "First pitch", nba: "Tip-off", wnba: "Tip-off", cbb: "Tip-off", ufc: "First bout" }[sport]
+  return { mlb: "First pitch", nba: "Tip-off", wnba: "Tip-off", cbb: "Tip-off", nhl: "Puck drop", ufc: "First bout" }[sport]
     || "Kickoff";
 }
 
@@ -31580,7 +31580,7 @@ function recordRibbonsHTML(rec, ov, recent, opts) {
     const roi = po.roi == null ? null : Number(po.roi), u = Number(po.net_units || 0);
     tiles.push(tile("As placed · before the Oct 31 stake rule", wl(po), roiBig(roi), tone(roi),
                     `${units(u)} · ${po.settled} settled · every pick at the stake it carried`, "", rate(po)));
-  } else if (po && po.settled && !staked && !sameTally(po, ov)) {
+  } else if (po && po.settled && !staked && !sameTally(po, ov) && !(parts && sameTally(po, lo))) {
     const f = recFloor(rec, po);
     const roi = po.roi == null ? null : Number(po.roi), u = Number(po.net_units || 0);
     const k = "Combined · edge + Most Likely boards";

@@ -317,6 +317,8 @@ def test_the_record_page_prints_the_count_for_everyone():
     rec = (ROOT / "web" / "js" / "record.js").read_text()
     i = rec.index("function recPotdSection(")
     fn = rec[i:rec.index("\n}\n", i) + 3]
+    j = rec.index("function recLg(")
+    fn = rec[j:rec.index("\n}\n", j) + 3] + fn
     js = f"""
     const POTD_MIN_N = 20, MINUS = "\\u2212";
     const SPORT_META = {{ nba: {{ name: "NBA" }} }};

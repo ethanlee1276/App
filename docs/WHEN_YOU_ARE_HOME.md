@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XF. What a reader saw on the walk reads right** (step 742; 18 November). Nothing to run. Walking the paywall, the
+Streak, hockey's Tonight, college basketball's Record page and Zeno's page: the Streak said "undefined day streak"
+when an account's streak came back empty and "Picks lock at first pitch" over a slate of college football receptions
+(it counts from 0, and each pick locks when its own game starts); hockey's empty Tonight said "Kickoff" (it says
+puck drop); the paywall's newest fact-check said "We called the Villanova" (a school or a fighter is called by name,
+a club keeps its article), the plan card said its billing line twice, and "+0.40 average closing-line value" never
+said +0.40 of what (line points the close moved our way); the Record page called college basketball "CBB" in its
+tabs, its week and every chip where the rest of the site says NCAAB, drew a Combined ribbon that was the Most Likely
+ribbon again for a league with no Edge bet settled, and said "graded once their games are final" under two tiles
+side by side; Zeno's page called Sep 21–27 "This week" in November (a carried-in week is "Week of" once the week is
+past).
+
 **XE. Every page that lists the leagues lists all eight** (step 741; 18 November). Nothing to run. Walking the rest
 of the pages as a reader: About said "Six leagues priced nightly" over cards for six, with no NHL and no college
 basketball, and its disclaimer named every league but the NHL; the shop's row of leagues, the plan's "Every sport:"

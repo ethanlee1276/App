@@ -295,7 +295,7 @@ def test_the_staked_section_splits_the_scorer_row_and_stops_asking_for_a_verdict
                                                            "roi": 0.55, "enough": False},
                                                  "OVER": {"n": 1, "w": 0, "claimed": 0.45, "actual": 0.0,
                                                           "roi": -1.0, "enough": False}}}}}
-    got = _node(_fn("recLikelySection"), "recLikelySection(a, 'nfl')", lk)
+    got = _node(_fn("recLg") + _fn("recLikelySection"), "recLikelySection(a, 'nfl')", lk)
     if got is None:
         return
     t = _text(got)
@@ -317,7 +317,7 @@ def test_the_working_tables_sit_behind_one_tap():
           "by_market": {"rec_yds": {"n": 200, "w": 130, "claimed": 0.64, "actual": 0.65, "roi": 0.01,
                                     "enough": True, "needed": 40}},
           "staked": False, "staked_sports": []}
-    got = _node(_fn("recLikelySection"), "recLikelySection(a, 'nfl')", lk)
+    got = _node(_fn("recLg") + _fn("recLikelySection"), "recLikelySection(a, 'nfl')", lk)
     if got is None:
         return
     i = got.index('<details class="rec-fold rec-ml-more">')

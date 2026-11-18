@@ -594,7 +594,7 @@ def _render(kind, z, scope=""):
         "zenoLockedHTML", "recZenoSection", "zenoDay", "zenoSnapshotHTML", "zenoCalMoney", "zenoCalMonthHTML",
         "_zenoCalMonth", "zenoCalendarHTML", "ZENO_POST_BOOKS", "ZENO_POST_SPORTS", "zenoPost",
         "zenoGradePayload", "zenoGradeHTML", "zenoOwnerHTML", "researchBoxHTML", "bindResearchBox",
-        "bindZenoOwner", "renderZeno"))
+        "bindZenoOwner", "renderZeno", "recLg"))
     # v5: the page opens with the ribbon, which lives with the deck; the
     # sweep is a browser's business.
     r = src.index("function recordRibbonsHTML(")

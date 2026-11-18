@@ -59,7 +59,7 @@ def test_the_small_sample_note_speaks_only_where_the_verdict_does_not():
     rr = _fn("renderRecord")
     assert "const small = o.settled >= (src.min_graded || _recMinGraded) && o.settled < 100" in rr
     assert "${o.settled} settled pick(s)" not in rr, "the note prints a count of picks, plural"
-    assert "|| scope.toUpperCase())" in rr, "NFL, not nfl"
+    assert "recLg(scope)" in rr, "NFL, not nfl (and NCAAB, not CBB: the strip's own code)"
 
 
 def test_the_splits_do_not_redraw_the_edge_table_on_a_sport_scope():

@@ -298,6 +298,7 @@ const marketWord = (m) => m;
 const recDisclosure = (t, b) => `<disclosure>${t}|${b}</disclosure>`;
 const recTile = (label, value, sub) => `<tile>${label}|${value}|${sub}</tile>`;
 const recLikelyGameLines = () => "";
+const recLg = (s) => String(s || "").toUpperCase();
 """ + body + """
 process.stdout.write(recLikelySection(JSON.parse(process.argv[2]), "all"));
 """

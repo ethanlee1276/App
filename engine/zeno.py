@@ -120,7 +120,16 @@ def load_snapshot(path=None) -> dict | None:
         return None
     snap = json.loads(p.read_text(encoding="utf-8"))
     unit = unit_dollars()
+    # A WEEK IS ONLY "THIS WEEK" WHILE IT IS (18 November 2026): the cards
+    # were read on 26 September, and Zeno's page still said "This week ·
+    # Sep 21–27" in November. Past the week, the window says which week.
+    try:
+        stale = (_dt.datetime.now() - _dt.datetime.fromisoformat(str(snap.get("as_of")))).days >= 7
+    except (TypeError, ValueError):
+        stale = False
     for w in snap.get("windows") or []:
+        if stale and str(w.get("label") or "").startswith("This week · "):
+            w["label"] = "Week of " + w["label"][len("This week · "):]
         profit, roi = float(w["profit"]), float(w.get("roi") or 0)
         # Pikkit's ROI is profit over the dollars risked, so the stake is
         # read back from it (to the cent Pikkit rounds the ROI to).

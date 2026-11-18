@@ -484,7 +484,7 @@ function recStaleLadder(sv, scope) {
     return `<div class="rl-row ${up ? "won" : ""}">
       <span class="rl-icon">${icon(up ? "check" : "dash")}</span>
       <span class="rl-date">${escapeHtml(
-        (SPORT_META[sp] || {}).name || String(sp).toUpperCase())}</span>
+        recLg(sp))}</span>
       <span class="rl-main">${up
         ? "Promoted — these flags are edge bets"
         : escapeHtml(v.why || "")}</span>
@@ -870,7 +870,7 @@ function recCalDayBodyHTML(rows) {
   if (rows.length <= REC_DAY_OPEN_MAX) return `<div class="rec-list">${list.join("")}</div>`;
   const groups = new Map();
   rows.forEach((r) => {
-    const k = `${String(r.sport || "").toUpperCase()} · ${marketWord(r.market)}`;
+    const k = `${recLg(r.sport)} · ${marketWord(r.market)}`;
     const g = groups.get(k) || { k, w: 0, l: 0, p: 0, u: 0 };
     if (r.status === "won") g.w += 1; else if (r.status === "lost") g.l += 1; else g.p += 1;
     g.u += Number(r.pnl_units) || 0;
@@ -931,7 +931,7 @@ function recEraSection(er) {
         })()
       : "";
     const sports = Object.entries(e.by_sport || {}).map(([s, d]) =>
-      `${s.toUpperCase()} ${d.w}-${d.l} (${d.net_u >= 0 ? "+" : ""}${d.net_u.toFixed(2)}u)`)
+      `${recLg(s)} ${d.w}-${d.l} (${d.net_u >= 0 ? "+" : ""}${d.net_u.toFixed(2)}u)`)
       .join(" · ");
     return `
       <div class="rec-row mid tall${isCurrent ? "" : " dim"}">
@@ -1192,6 +1192,12 @@ function rpPickWords(r) {
   return `${r.player || ""} ${String(r.side || "").toLowerCase()} ${r.line ?? ""} ${marketWord(m)}`
     .replace(/\s+/g, " ").trim();
 }
+/* A league as the app's strip names it (college basketball is NCAAB). SPORT_META carries no names,
+   so every label here that read `SPORT_META[sp].name` or upper-cased the code said "CBB", the
+   Record page's word alone (18 November 2026). */
+function recLg(sp) {
+  return typeof lgCode === "function" ? lgCode(sp) : String(sp || "").toUpperCase();
+}
 function rpPicksHTML(rep, scope, recent) {
   const n = (rep && rep.settled) || 0;
   const open = (rep && rep.open) || 0;
@@ -1199,7 +1205,9 @@ function rpPicksHTML(rep, scope, recent) {
   const graded = (rep.wins || 0) + (rep.losses || 0);
   const tiles = recTile("Picks that hit", graded ? `${rep.wins} of ${graded}` : "none yet",
       graded ? `${Math.round((100 * rep.wins) / graded)}% · ${tlUnits(rep.net_units)} at 0.1 unit a pick${
-        rep.pushes ? ` · ${plural(rep.pushes, "push", "pushes")}` : ""}` : "graded once their games are final",
+        rep.pushes ? ` · ${plural(rep.pushes, "push", "pushes")}` : ""}`
+        // The tile beside it says so when picks are riding (said twice on 18 November 2026).
+        : open ? "" : "graded once their games are final",
       { tone: graded >= PARLAY_RATE_FLOOR ? toneOf(rep.net_units) : "" })
     + (open ? recTile("Still riding", String(open), "graded once their games are final") : "");
   const kinds = rpKinds(rep);
@@ -1260,7 +1268,7 @@ function recReportBook(x, scope) {
   const leagues = scope ? "" : rpLeaguePicksHTML(o.bySport);
   const parlays = gpParlaysHTML(o.parlays, scope);
   if (!picks && !parlays) return "";
-  const name = scope ? escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase()) : "";
+  const name = scope ? escapeHtml(recLg(scope)) : "";
   return `<div class="section-title"><span class="st-ico">${icon("ticket", 15)}</span>The Game Report Picks and Parlays
       <span class="sub">— ${scope ? `every pick and parlay our ${name} game reports posted, graded pick by pick, ticket by
         ticket and leg by leg` : "every pick and parlay our game reports posted, in every league; pick a league above for its own"}</span></div>
@@ -1379,7 +1387,7 @@ function recLikelySection(lk, scope) {
   // the REPORT rather than the page's scope, so a mislabelled section is
   // impossible: `ledger.likely_report` stamps the sport it filtered on.
   const sp = String((lk || {}).sport || "");
-  const spName = sp ? ((SPORT_META[sp] || {}).name || sp.toUpperCase()) : "";
+  const spName = sp ? recLg(sp) : "";
   const cal = lk.calibration || {};
   const pct = (x) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
   const bands = (lk.bands || []).map((b) => `
@@ -1427,7 +1435,7 @@ function recLikelySection(lk, scope) {
   const money = lk.staked || (!spName && live.length > 0);
   const stake = lk.stake_units || 0.25;
   const whose = spName ? escapeHtml(spName)
-                       : live.map((x) => x.toUpperCase()).join(", ");
+                       : live.map(recLg).join(", ");
   /* WHICH ROWS HAD MONEY ON THEM (ledger likely_report). The title said
      "staked" over a book whose first weeks were paper (Ethan, 2026-10-02:
      "we are not telling the truth"); the count of each, and the day the
@@ -1537,7 +1545,7 @@ function recLikelyGameLines(lk, sp) {
     return Object.keys(markets).sort().map((m) => {
       const d = markets[m] || {};
       return `<div class="rl-row rl-cal ${d.actual >= d.claimed ? "won" : "lost"}">
-        <span class="rl-date">${escapeHtml(sp.toUpperCase())}</span>
+        <span class="rl-date">${escapeHtml(recLg(sp))}</span>
         <span class="rl-main">${escapeHtml(marketWord(m))} — said ${pct1(d.claimed)}
           · hit <strong>${pct1(d.actual)}</strong></span>
         <span class="rl-proc">${d.w}/${d.n}</span>
@@ -1652,7 +1660,7 @@ function recLongshotSection(ls) {
     ${recLongshotMarkets(ls.by_market)}
     ${Object.keys(ls.by_sport || {}).length > 1 ? `<div style="margin-top:8px">
       ${Object.entries(ls.by_sport).map(([s, d]) =>
-        `<span class="chip">${escapeHtml(s.toUpperCase())} ${d.w}/${d.n}
+        `<span class="chip">${escapeHtml(recLg(s))} ${d.w}/${d.n}
            (${d.net_u >= 0 ? "+" : ""}${d.net_u.toFixed(2)}u)</span>`).join(" ")}</div>` : ""}
     <div class="card" style="padding:0;margin-top:12px">${calib}${rows ||
       `${panelEmpty("Nothing settled yet — accrues from tonight’s board.")}`}${watch}</div>`;
@@ -1967,7 +1975,7 @@ function recProseSection(pz, sport) {
           <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
             ${Object.entries(e.by_sport).map(([sp, n]) => `
               <div style="font-size:.85em;color:var(--text-mute)">
-                <span class="chip">${escapeHtml(sp.toUpperCase())}</span> ${escapeHtml(n)}</div>`).join("")}
+                <span class="chip">${escapeHtml(recLg(sp))}</span> ${escapeHtml(n)}</div>`).join("")}
           </div>` : ""}
       </div>`;
   };
@@ -1984,8 +1992,8 @@ function recProseSection(pz, sport) {
       own numbers, never setting one. Capped spend, every call on the
       ledger.</span></div>
     <div class="card" style="padding:0">
-      ${para(pz.postmortem, `No ${escapeHtml((sport || "").toUpperCase())} picks graded that night.`)}
-      ${para(pz.brief, `Quiet week for ${escapeHtml((sport || "").toUpperCase())}.`)}
+      ${para(pz.postmortem, `No ${escapeHtml(recLg(sport))} picks graded that night.`)}
+      ${para(pz.brief, `Quiet week for ${escapeHtml(recLg(sport))}.`)}
       ${capNote}
     </div>`;
 }
@@ -2003,7 +2011,7 @@ function learningCoverageHTML(cov, sport) {
     const c = cov[s] || {};
     const pending = Object.entries(c.markets || {}).filter(([, m]) => m.state !== "tuned");
     if (!pending.length && (c.tuned || 0) > 0) return;
-    const head = `${escapeHtml(s.toUpperCase())} — ${(c.settled || 0).toLocaleString()} graded ${pluralWord(c.settled || 0, "bet")} on the journal, ${c.tuned || 0} market${c.tuned === 1 ? "" : "s"} tuned`;
+    const head = `${escapeHtml(recLg(s))} — ${(c.settled || 0).toLocaleString()} graded ${pluralWord(c.settled || 0, "bet")} on the journal, ${c.tuned || 0} market${c.tuned === 1 ? "" : "s"} tuned`;
     const body = pending.length
       ? pending.map(([mk, m]) => `<div style="padding:2px 0 2px 12px">${escapeHtml(mk)} · ${escapeHtml(m.note || m.state || "")}</div>`).join("")
       : `<div style="padding:2px 0 2px 12px">no graded bets with a stated probability yet — the ladder starts with its first settled pick</div>`;
@@ -2034,7 +2042,7 @@ function recSelfTuningSection(st, sport) {
     <div class="section-title">The model tunes itself
       <span class="sub">— settled bets fit the dials; nobody turns one by hand.</span></div>
     <div class="card"><p style="margin:0;padding:12px 14px;font-size:.87em;color:var(--text-mute)">
-      Nothing tuned for ${escapeHtml(sport.toUpperCase())} yet. The fitters run
+      Nothing tuned for ${escapeHtml(recLg(sport))} yet. The fitters run
       on every settle pass, on this sport’s own settled bets only, and adopt
       a correction only when it beats the spec in a walk-forward test — so this
       fills in as its journal deepens.</p>${learningCoverageHTML(st.coverage, sport)}</div>`;
@@ -2043,7 +2051,7 @@ function recSelfTuningSection(st, sport) {
     : Math.abs(m.temperature - 1) > 0.05 ? "var(--warn)" : "var(--good)";
   const rows = markets.map((m) => `
     <div class="rec-row">
-      <span class="chip">${escapeHtml((m.sport || "").toUpperCase())}</span>
+      <span class="chip">${escapeHtml(recLg(m.sport))}</span>
       <span style="flex:1;min-width:120px">${escapeHtml(String(m.market || "").replace(/@ladder$/, " · alternate lines"))}</span>
       <span style="font-variant-numeric:tabular-nums" title="Temperature: >1 pulls probabilities toward 50% (the model ran hot), <1 pushes them out (it ran shy)">T ${(m.temperature ?? 1).toFixed(2)}</span>
       <span style="color:${tone(m)}">${escapeHtml(m.reading || "")}</span>
@@ -2078,7 +2086,7 @@ function recSelfTuningSection(st, sport) {
   };
   const weightRows = weights.map((w) => `
     <div class="rec-row">
-      <span class="chip">${escapeHtml((w.sport || "").toUpperCase())}</span>
+      <span class="chip">${escapeHtml(recLg(w.sport))}</span>
       <span style="flex:1;min-width:120px">${escapeHtml(w.market || "")}</span>
       <span style="font-variant-numeric:tabular-nums" title="The recency dial: 0 is the hand-tuned spec curve, positive leans on recent form, negative on the long run. ±1.0 is the end of the family, not the end of a search range. Moves only when the record beats the spec by a real margin.">dial ${(w.r ?? 0) >= 0 ? "+" : ""}${(w.r ?? 0).toFixed(1)}</span>
       <span style="color:${dialTone(w)}">${escapeHtml(w.reading || "")}</span>
@@ -2118,7 +2126,7 @@ function recSelfTuningSection(st, sport) {
   };
   const playerRows = players.map((p) => `
     <div class="rec-row">
-      <span class="chip">${escapeHtml((p.sport || "").toUpperCase())}</span>
+      <span class="chip">${escapeHtml(recLg(p.sport))}</span>
       <span style="min-width:100px">${escapeHtml(p.market || "")}</span>
       <span style="flex:1;min-width:140px;color:${p.adopted ? "var(--warn)" : "var(--good)"}">${escapeHtml(p.reading || "")}</span>
       ${(p.top || []).length ? `<span style="opacity:.75">${(p.top || [])
@@ -2137,7 +2145,7 @@ function recSelfTuningSection(st, sport) {
   const trendRows = trendEntries.flatMap(([sp, mkts]) =>
     Object.entries(mkts).map(([mk, t]) => `
       <div class="rec-row">
-        <span class="chip">${escapeHtml(sp.toUpperCase())}</span>
+        <span class="chip">${escapeHtml(recLg(sp))}</span>
         <span style="flex:1;min-width:120px">${escapeHtml(mk)}</span>
         <span style="font-variant-numeric:tabular-nums">ECE ${((t.first || {}).ece ?? 0).toFixed(3)}
           → <span style="color:var(--${t.improved ? "good" : "warn"})">${((t.last || {}).ece ?? 0).toFixed(3)}</span></span>
@@ -2244,7 +2252,7 @@ function recBoardLearningSection(bl, sport) {
       ${rows.map(sliceRow).join("")}`).join("");
     return `
       <div class="card" style="padding:0;margin-bottom:12px">
-        <div class="rec-row tall"><b style="flex:1">${escapeHtml(sp.toUpperCase())} — ${r.won ?? 0}-${(r.n ?? 0) - (r.won ?? 0)} on ${(r.n ?? 0).toLocaleString()} graded picks</b>
+        <div class="rec-row tall"><b style="flex:1">${escapeHtml(recLg(sp))} — ${r.won ?? 0}-${(r.n ?? 0) - (r.won ?? 0)} on ${(r.n ?? 0).toLocaleString()} graded picks</b>
           <span>hit ${pct(r.hit)} · said ${pct(r.said)}</span>
           <span style="color:${tone(r.verdict)}">${escapeHtml(r.verdict || "")}</span></div>
         ${cuts}${scout}${held}
@@ -2274,7 +2282,7 @@ function recLossPatternsSection(lp, sport) {
     : (f.gap_pts ?? 0) > 0 ? "var(--warn)" : "var(--text-mute)";
   const rows = findings.map((f) => `
     <div class="rec-row">
-      <span class="chip">${escapeHtml((f.sport || "").toUpperCase())}</span>
+      <span class="chip">${escapeHtml(recLg(f.sport))}</span>
       <span style="min-width:100px">${escapeHtml(f.market || "all markets")}</span>
       <span style="flex:1;min-width:140px;font-weight:600">${escapeHtml(f.value || "")}</span>
       <span style="color:${tone(f)}">${escapeHtml(f.reading || "")}</span>
@@ -2283,7 +2291,7 @@ function recLossPatternsSection(lp, sport) {
     </div>`).join("");
   const empty = (sport && (lp.findings || []).length) ? `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
-      No pattern involves ${escapeHtml(sport.toUpperCase())} — its graded bets
+      No pattern involves ${escapeHtml(recLg(sport))} — its graded bets
       are in every night’s sweep, and a clean sheet here is the sweep’s
       verdict, not its absence.</p>` : (lp.tested ?? 0) > 0 ? `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
@@ -2308,7 +2316,7 @@ function recLossPatternsSection(lp, sport) {
       <div class="tile"><div class="k">Slices tested</div><div class="v">${lp.tested ?? 0}</div>
         ${sport ? `<div class="tile-sub">whole journal, one sweep</div>` : ""}</div>
       <div class="tile"><div class="k">Patterns found</div><div class="v">${findings.length}</div>
-        <div class="tile-sub">survivors of false-discovery control${sport ? `, ${escapeHtml(sport.toUpperCase())}` : ""}</div></div>
+        <div class="tile-sub">survivors of false-discovery control${sport ? `, ${escapeHtml(recLg(sport))}` : ""}</div></div>
       <div class="tile"><div class="k">Self-closed</div><div class="v">${closed.length}</div>
         <div class="tile-sub">slices now vetoing new picks</div></div>
     </div>
@@ -2383,7 +2391,7 @@ function recHypothesisLab(hl, sport) {
   const rows = hyps.map((h) => `
     <div class="rec-row">
       <span style="color:${tone(h)}">${glyph(h)}</span>
-      <span class="chip">${escapeHtml((h.sport || "").toUpperCase())}</span>
+      <span class="chip">${escapeHtml(recLg(h.sport))}</span>
       <span style="min-width:90px">${escapeHtml(h.market || "all markets")}</span>
       <span style="flex:1;min-width:160px">${escapeHtml(h.claim || "")}
         <span style="opacity:.55;display:block;font-size:.92em">${
@@ -2408,7 +2416,7 @@ function recHypothesisLab(hl, sport) {
       pass as every other sport.`;
   const empty = (sport && (hl.hypotheses || []).length) ? `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
-      No hypothesis touches ${escapeHtml(sport.toUpperCase())} yet. The lab
+      No hypothesis touches ${escapeHtml(recLg(sport))} yet. The lab
       reads every sport’s record — including this one — and proposes
       wherever the evidence points.${standing}</p>` : `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
@@ -2515,7 +2523,7 @@ function recSelectionHaircut(sh, scope) {
   // here so the "every probability" sentence below stays true.
   const refused = keys.filter((s) => (sh.not_borrowing || {})[s]);
   const except = !refused.length ? "" : ` outside ${refused.map(
-    (s) => escapeHtml(s.toUpperCase())).join(", ")}`;
+    (s) => escapeHtml(recLg(s))).join(", ")}`;
   const effect = !live ? "" : `
     <p style="margin:10px 0 0;font-size:var(--fs-sm);color:var(--text-body)">
       Every probability on the board${except} is moved by this before anything
@@ -2539,7 +2547,7 @@ function recSelectionHaircut(sh, scope) {
   const borrowed = keys.filter((s) => (sh.using || {})[s] === "pooled");
   const borrowNote = !borrowed.length ? "" : `
     <p style="margin:8px 0 0;font-size:var(--fs-sm);color:var(--text-mute)">
-      ${borrowed.map((s) => escapeHtml(s.toUpperCase())).join(", ")} ${
+      ${borrowed.map((s) => escapeHtml(recLg(s))).join(", ")} ${
       borrowed.length > 1 ? "have" : "has"} no fit of ${
       borrowed.length > 1 ? "their" : "its"} own that cleared the bar, so ${
       borrowed.length > 1 ? "they are" : "it is"} borrowing the pooled number.
@@ -2555,7 +2563,7 @@ function recSelectionHaircut(sh, scope) {
      a bug on the one row the reader most wants to trust. */
   const refusedNote = !refused.length ? "" : `
     <p style="margin:8px 0 0;font-size:var(--fs-sm);color:var(--text-mute)">
-      ${refused.map((s) => escapeHtml(s.toUpperCase())).join(", ")} ${
+      ${refused.map((s) => escapeHtml(recLg(s))).join(", ")} ${
       refused.length > 1 ? "do" : "does"} not borrow it — ${refused.map(
       (s) => escapeHtml(sh.not_borrowing[s])).join(" · ")}. A pooled fit that
       is mostly one sport’s own refused bets is not a second opinion about
@@ -2950,7 +2958,7 @@ function recordScopeHTML(d, scope) {
     const r = (d.by_sport || {})[sp] || {};
     // A sport with nothing journaled is still listed. Hiding it would
     // make "no bets yet" and "no such board" look identical.
-    parts.push(btn(sp, (SPORT_META[sp] || {}).name || sp.toUpperCase(),
+    parts.push(btn(sp, recLg(sp),
                    journaled((jc.by_sport || {})[sp] || r.overall)));
   }
   return leagueChipsHTML(parts, { group: "rec-scopes", chip: "rec-scope", attr: "data-scope",
@@ -3161,7 +3169,7 @@ function recZenoSection(z, scope, tix) {
   return `
     <div class="section-title"><span class="st-ico">${icon("star", 15)}</span>Zeno’s Record
       <span class="sub">— Zeno’s own tickets at FanDuel, DraftKings and theScore Bet, settled by
-        the book, not by our model. ${scope ? escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase()) : "All sports"}
+        the book, not by our model. ${scope ? escapeHtml(recLg(scope)) : "All sports"}
         · <a href="#zeno" data-view="zeno">what’s riding now →</a></span></div>
     <div class="card" style="--tone:var(--brand)">
       <div>${zenoTallyLine(t)}</div>
@@ -3271,7 +3279,7 @@ function recNumberSection(x, scope) {
       <span class="rr-what">${escapeHtml(marketWord(m))}</span>
       <span><b>${v[0]} of ${v[1]}</b> nearer · ${pct(v[0], v[1])}</span></div>`).join("");
   return `<div class="section-title"><span class="st-ico">${icon("scale", 15)}</span>Our number against the line
-      <span class="sub">— on every finished pick${scope ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase())}`
+      <span class="sub">— on every finished pick${scope ? ` for ${escapeHtml(recLg(scope))}`
         : ""}, was our projection nearer what happened than the book’s line?</span></div>
     <div class="card rec-report">
       <div><b class="rr-big">${pct(x.closer, x.picks)}</b>
@@ -3295,7 +3303,7 @@ function recPotdSection(rep, scope, recent, sit) {
      WNBA, on the bench) draws nothing; pooled, nothing still draws
      nothing. The fight card names one since 2026-10-14. */
   if (!rep || (!scope && !rep.settled && !rep.open)) return "";
-  const where = scope ? ((SPORT_META[scope] || {}).name || scope.toUpperCase()) : "All sports";
+  const where = scope ? recLg(scope) : "All sports";
   const n = rep.settled || 0;
   const units = Number(rep.net_units || 0);
   const rows = (recent || []).filter((r) => !scope || r.sport === scope).slice(0, 10);
@@ -3364,7 +3372,7 @@ function weekRecapHTML(w, scope) {
   if (scoped && !(w || {}).by_sport) return "";
   const src = scoped ? ((w || {}).by_sport || {})[scope] : w;
   const books = ((src || {}).books || []).filter((b) => b.w + b.l + b.p);
-  const name = scoped ? ((SPORT_META[scope] || {}).name || String(scope).toUpperCase()) : "";
+  const name = scoped ? recLg(scope) : "";
   const head = (w && w.from) ? `<div class="section-title">${icon("calendar", 15)} This week${
     scoped ? ` · ${escapeHtml(name)}` : ""} <span class="sub">— ${escapeHtml(recWinDate(w.from))} to ${escapeHtml(recWinDate(w.to))}</span></div>` : "";
   if (!books.length) {
@@ -3487,7 +3495,7 @@ async function renderRecord() {
     // with a journal, and on "All bets".
     host.innerHTML = scopeBar + `<div class="empty-slate"><div class="es-icon">${icon("book", 30)}</div>
       <div class="es-title">Nothing journaled for ${escapeHtml(
-        (SPORT_META[scope] || {}).name || scope.toUpperCase())} yet</div>
+        recLg(scope))} yet</div>
       <div class="es-sub">This board has not recommended a bet that reached a
       result. It fills itself in — every pick is journaled at its real price
       the moment it is made, and grades when the games settle. The whole
@@ -3507,7 +3515,7 @@ async function renderRecord() {
   // pick(s) for nfl". It speaks only in the band the verdict does not.
   const small = o.settled >= (src.min_graded || _recMinGraded) && o.settled < 100
     ? `<p class="list-note" style="margin-top:10px">${icon('warn')} ${o.settled} settled picks${
-       scoped ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase())}` : ""} —
+       scoped ? ` for ${escapeHtml(recLg(scope))}` : ""} —
        results this small are mostly luck. Judge the model after 100+, and judge
        the process by CLV before that.</p>` : "";
   const pr = o.process || {};
@@ -3543,7 +3551,7 @@ async function renderRecord() {
   const lkHere = scoped ? (d.likely_by_sport || {})[scope] : d.likely;
   const winAvail = recRangesFor(src.curve), winFrom = recRangeFrom(winAvail, recRangeKey(winAvail));
   const verdict = recordVerdictHTML(src, scope === "all"
-    ? "all sports" : ((SPORT_META[scope] || {}).name || scope.toUpperCase()),
+    ? "all sports" : recLg(scope),
     lkHere, { combinedShown: !(winFrom && recRangeTotals(src.curve, winFrom)),
               likelySaid: !!(lkHere && (lkHere.settled || lkHere.open)) });
   // The page's lead — what happened, in units. Built as a string so it can
@@ -3590,7 +3598,7 @@ async function renderRecord() {
      everything else under one line that says why it is folded. */
   const recNeed = src.min_graded || _recMinGraded;
   const underFloor = (o.settled || 0) < recNeed;
-  const scopeName = scope === "all" ? "all sports" : ((SPORT_META[scope] || {}).name || scope.toUpperCase());
+  const scopeName = scope === "all" ? "all sports" : recLg(scope);
   const foldOpen = (what) => !underFloor ? "" : `<details class="rec-fold"><summary>${what} — too early
       to read (${o.settled || 0} of the ${recNeed} settled bets the record needs)</summary>`;
   const foldClose = underFloor ? "</details>" : "";
@@ -3726,7 +3734,7 @@ async function renderRecord() {
   /* A LEAGUE WITH A BOOK OF ITS OWN (ledger.OWN_BOOK_SPORTS: UFC's fight
      picks) says once, under its headline, that "All bets" leaves it out. */
   const ownNote = scoped && src.own_book
-    ? `<p class="rec-win-note">${escapeHtml((SPORT_META[scope] || {}).name || String(scope).toUpperCase())}’s
+    ? `<p class="rec-win-note">${escapeHtml(recLg(scope))}’s
         picks keep a record of their own. They aren’t counted in All bets until a real sample says they belong there.</p>`
     : "";
   host.innerHTML = scopeBar + winBar
@@ -3906,7 +3914,7 @@ function recClvBoard(cb) {
            title="Shown, not called — under ${cb.min_n} graded closes this
                   average is not yet evidence">${clv(r.avg_clv)} thin</span>`;
   const line = (r) => `<div class="mvm-row">
-      <span class="mvm-name">${escapeHtml(String(r.sport || "").toUpperCase())}
+      <span class="mvm-name">${escapeHtml(recLg(r.sport))}
         · ${escapeHtml(r.market_label || r.market || "")}</span>
       <span class="mvm-n">${r.with_close}/${r.settled}${
         r.with_close ? ` · ${pct(r.beat_rate)} beat` : ""}</span>

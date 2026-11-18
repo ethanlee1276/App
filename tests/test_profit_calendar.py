@@ -113,7 +113,7 @@ def test_a_busy_day_reads_as_a_summary_with_its_bets_folded():
     page" (Ethan, 2026-09-28)."""
     body = _fn("recCalDayBodyHTML")
     assert "if (rows.length <= REC_DAY_OPEN_MAX) return" in body, "a handful shows as they are"
-    assert "${String(r.sport || \"\").toUpperCase()} · ${marketWord(r.market)}" in body
+    assert "${recLg(r.sport)} · ${marketWord(r.market)}" in body, "the league as the strip names it (NCAAB)"
     assert "sort((a, b) => Math.abs(b.u) - Math.abs(a.u))" in body, "the biggest swing first"
     assert '<details class="row-fold rc-bets">' in body and "Show the day’s ${rows.length} bets" in body
     for sel in (".rc-sum-row", ".rc-sum-u", ".rc-bets"):

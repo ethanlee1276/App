@@ -1008,8 +1008,8 @@ async function renderStreak() {
       ? `Survived ${escapeHtml(me.last_day)}.`
       : me.last_result === "lost" ? `Lost ${escapeHtml(me.last_day)} — new fire tonight.` : "";
     head = `<div class="stk-head">
-      <div class="stk-flame">${icon("hot", 20)}<b>${me.current}</b><span>day streak</span></div>
-      <div class="stk-best">${icon("trophy")} best ${me.best}</div>
+      <div class="stk-flame">${icon("hot", 20)}<b>${me.current || 0}</b><span>day streak</span></div>
+      <div class="stk-best">${icon("trophy")} best ${me.best || 0}</div>
       ${last ? `<div class="stk-last">${last}</div>` : ""}
     </div>`;
   } else {
@@ -1040,7 +1040,7 @@ async function renderStreak() {
           // silence reads as a failed save.
           ? `You’re in for tonight — all ${need} picks are down. You can change any of them until its game starts; results grade overnight, and the flame moves in the morning.`
           : signedIn && questions.length
-            ? "Tap a side to pick it; tap again to clear. Picks lock at first pitch."
+            ? "Tap a side to pick it; tap again to clear. Each pick locks when its game starts."
             : ""}</div>
     </div>`;
   }
@@ -1356,7 +1356,7 @@ function paywallProofHTML(rec) {
     ? `<div class="pw-stats">
         <div class="pw-stat"><b class="${clv >= 0 ? "pos" : "neg"}">${
           clv >= 0 ? "+" : "−"}${Math.abs(clv).toFixed(2)}</b>
-          <span>average closing-line value, ${o.clv_n} bets</span></div>
+          <span>line points the close moved our way, on average, over ${o.clv_n} bets</span></div>
         ${priced ? `<div class="pw-stat"><b>${pr.good || 0}–${pr.bad || 0}</b>
           <span>bets that beat the close, against those that did not</span>
           </div>` : ""}
@@ -1633,16 +1633,18 @@ function paywallHTML(rec, status) {
              trial ? `Start ${trialDays} days free` : "Get started"}</button>`
         : `<button class="btn pw-buy" disabled
              title="This plan is not switched on yet">Not available yet</button>`}
-      <div class="pw-fine">${trial
+      ${trial
         // SAID PLAINLY, on the card, before the click. A trial that
         // collects a card and converts silently is the most complained
         // about pattern in subscriptions and several states legislate
-        // against it. Terms §5.3 says the same thing at length.
-        ? `Card required. Becomes $${pl.price} a month on day ${
+        // against it. Terms §5.3 says the same thing at length. Without a
+        // trial the billing line is the one under the price (18 November
+        // 2026: it was said again here, word for word).
+        ? `<div class="pw-fine">Card required. Becomes $${pl.price} a month on day ${
             trialDays + 1} unless you cancel before then — one button on
             your account page, which ends the trial’s access at once. One
-            free trial per person: a card or email that has had one can’t start another.`
-        : escapeHtml(pl.cadence)}</div>
+            free trial per person: a card or email that has had one can’t start another.</div>`
+        : ""}
     </article>`;
   };
   // The longer plans as rows: the length, the price, what it comes to a
@@ -3176,7 +3178,7 @@ function flSampleHTML(g) {
     <div class="wf-score"><span>${nm(g.away)}</span><b>${pts(g.final.away)}</b>
       <span>${nm(g.home)}</span><b>${pts(g.final.home)}</b></div>
     ${call.team ? `<p class="wf-call${right ? " won" : wrong ? " lost" : ""}">${right ? iconMark("check", 13)
-      : wrong ? iconMark("cross", 13) : ""}<span>We called the ${nm(call.team)}${call.chance ? ` at ${
+      : wrong ? iconMark("cross", 13) : ""}<span>We called ${/^(cfb|cbb|ufc)$/.test(g.league) ? "" : "the "}${nm(call.team)}${call.chance ? ` at ${
       Math.round(Number(call.chance) * 100)}%` : ""}${right ? " — right" : wrong ? " — wrong" : ""}</span></p>` : ""}
     ${bits.length ? `<p class="wf-sample-sub">${escapeHtml(bits.join(" · "))}</p>` : ""}
   </div>`;

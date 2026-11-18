@@ -59,7 +59,9 @@ def test_the_combined_lines_draw_only_when_they_add_something():
     # labelled tile on the Record page; a record from before the rule still
     # draws the Combined tile, only when it adds something.
     assert "if (po && po.settled && staked && parts && !sameTally(po, ov))" in ribbons
-    assert "} else if (po && po.settled && !staked && !sameTally(po, ov)) {" in ribbons
+    # …nor when it is the Most Likely tile again: a league with no Edge bet
+    # settled read "0-1" twice, as Most Likely and as Combined (18 November).
+    assert "} else if (po && po.settled && !staked && !sameTally(po, ov) && !(parts && sameTally(po, lo))) {" in ribbons
     combined = _fn(APP, "combinedLineHTML")
     assert "sameTally(po, o)" in combined
     assert '${opts.combinedShown ? "" : combinedLineHTML(src.pooled_overall, need, o)}' in _fn(APP, "recordVerdictHTML")

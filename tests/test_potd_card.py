@@ -56,6 +56,7 @@ def _run_section(rep, scope, recent=None):
     const icon = () => "";
     const american = (o) => (o > 0 ? `+${{o}}` : `\\u2212${{Math.abs(o)}}`);
     const plural = (n, one) => `${{n}} ${{one}}${{n === 1 ? "" : "s"}}`;
+    {_fn("recLg")}
     {_fn("recPotdSection")}
     console.log(JSON.stringify(recPotdSection(
         {json.dumps(rep)}, {json.dumps(scope)}, {json.dumps(recent or [])})));
