@@ -1984,6 +1984,90 @@ def _catch_up_start(hconn, sport: str, yesterday: _dt.date) -> _dt.date:
     return max(last or floor, cap)
 
 
+#: A PAST GAME WITH NO FINAL IS READ AGAIN (FINALS1, 2026-11-18). The Nuggets'
+#: team page said 7-5 from the standings and 6-5 from the finals on file: their
+#: game at Phoenix on 30 October, a late West Coast tip, had a row and no score,
+#: and so did the Lakers at the Warriors that night and the Bruins at Anaheim on
+#: 16 October. A league's night resumes from its newest day with a final
+#: (`_catch_up_start`), and the settle pass files finals during the day for the
+#: games bets ride on, so by the next night a later day already had finals and
+#: the day with the late game was never read again. Now each night also reads
+#: again, oldest first, the days of the last REREAD_WINDOW_DAYS before its own
+#: start on which a stored game has no final: at most REREAD_DAYS_PER_NIGHT
+#: days a league, and a day REREAD_TRIES times at most (a postponed game keeps
+#: its row and never gets a score; it is not read for ever).
+REREAD_WINDOW_DAYS = 60
+REREAD_DAYS_PER_NIGHT = 4
+REREAD_TRIES = 3
+
+
+def days_without_final(hconn, sport: str, before: _dt.date, today: _dt.date, tries: dict) -> list:
+    """The days, oldest first, before ``before`` and inside REREAD_WINDOW_DAYS
+    of ``today``, on which a stored game of ``sport`` has no final; a day read
+    REREAD_TRIES times already is left out, and REREAD_DAYS_PER_NIGHT at most.
+    A league whose games are filed by week (the NFL's) has none."""
+    if hconn is None:
+        return []
+    lo = (today - _dt.timedelta(days=REREAD_WINDOW_DAYS)).isoformat()
+    try:
+        rows = hconn.execute(
+            "SELECT DISTINCT period FROM games WHERE sport=? AND home_score IS NULL "
+            "AND period >= ? AND period < ? ORDER BY period", (sport, lo, before.isoformat())).fetchall()
+    except Exception:                                         # noqa: BLE001
+        return []
+    out = []
+    for (period,) in rows:
+        try:
+            d = _dt.date.fromisoformat(str(period)[:10])
+        except ValueError:
+            continue
+        if int(tries.get(f"{sport}:{d.isoformat()}", 0) or 0) >= REREAD_TRIES:
+            continue
+        out.append(d)
+        if len(out) >= REREAD_DAYS_PER_NIGHT:
+            break
+    return out
+
+
+def reread_days_without_final(state: dict, hconn, sport: str, before: _dt.date, today: _dt.date,
+                              ingest, log=print, owed=()) -> int:
+    """Read again each day `days_without_final` names, with the league's own
+    ``ingest(iso_day)``, and each day in ``owed`` (the league's own schedule
+    says a game there finished and none is on file: nhldata.days_owed), on
+    the same terms: inside the window, before the night's start, a few a
+    night, each a few times at most; count each read in ``state``
+    ("final_rereads", days out of the window forgotten). Returns the games the
+    reads stored."""
+    tries = state.setdefault("final_rereads", {})
+    lo = (today - _dt.timedelta(days=REREAD_WINDOW_DAYS)).isoformat()
+    for k in [k for k in tries if k.split(":", 1)[-1] < lo]:
+        tries.pop(k, None)
+    days = days_without_final(hconn, sport, before, today, tries)
+    for raw in owed or ():
+        try:
+            d = _dt.date.fromisoformat(str(raw)[:10])
+        except ValueError:
+            continue
+        if (lo <= d.isoformat() < before.isoformat() and d not in days
+                and int(tries.get(f"{sport}:{d.isoformat()}", 0) or 0) < REREAD_TRIES):
+            days.append(d)
+    days = sorted(days)[:REREAD_DAYS_PER_NIGHT]
+    got = 0
+    for d in days:
+        key = f"{sport}:{d.isoformat()}"
+        tries[key] = int(tries.get(key, 0) or 0) + 1
+        try:
+            res = ingest(d.isoformat()) or {}
+        except Exception as exc:                              # noqa: BLE001
+            log(f"  ⚠️  {sport} results: {d} read again (a game there had no final) and failed: {exc}")
+            continue
+        got += int(res.get("games") or 0)
+    if days:
+        log(f"  {sport} results: read again {', '.join(d.isoformat() for d in days)} (a game there had no "
+            f"final): {got} game(s)")
+    return got
+
+
 #: How long a weekly fitter may run before it is cut off. The deep refit
 #: was measured in minutes per season on the droplet; an hour is room,
 #: not a target, and a job that needs more than that is a job to split.
@@ -2779,6 +2863,14 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
         + (", closing odds" if harvest else "") + "…")
 
     ingest_ok = True
+    if today.month >= 3:
+        try:
+            from . import db as _rdb_mlb, ingest as _ing_mlb
+            _mconn = _rdb_mlb.connect()
+            reread_days_without_final(state, _hconn, "mlb", min(start, today), today,
+                                      lambda day: _ing_mlb.ingest_mlb_results(_mconn, day, day, with_logs=True), log)
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  mlb results: reading again the days with no final failed: {exc}")
     if start <= yesterday:
         try:
             from . import db, ingest
@@ -2930,6 +3022,8 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             from . import db as _ndb
             from .sources.nbaespn import ingest_day as ingest_nba_date
             nconn = _ndb.connect()
+            reread_days_without_final(state, _hconn, "nba", nstart, today,
+                                      lambda day: ingest_nba_date(nconn, day), log)
             tot_g = tot_l = 0
             d = nstart
             while d <= yesterday:
@@ -2984,6 +3078,8 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             try:
                 from . import db as _wdb
                 wconn = _wdb.connect()
+                reread_days_without_final(state, _hconn, "wnba", wstart, today,
+                                          lambda day: _wnba_day(wconn, day), log)
                 tot_g = tot_l = 0
                 d = wstart
                 while d <= yesterday:
@@ -3012,6 +3108,8 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
             try:
                 from . import db as _cdb
                 cconn = _cdb.connect()
+                reread_days_without_final(state, _hconn, "cbb", cstart, today,
+                                          lambda day: _cbb_day(cconn, day), log)
                 tot_g = tot_l = 0
                 d = cstart
                 while d <= yesterday:
@@ -3056,6 +3154,16 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
                 from . import db as _hdb
                 from .sources import nhldata as _nhl
                 hconn2 = _hdb.connect()
+                # And the days the league's own club pages say a game finished
+                # that has no row at all (nhldata.days_owed).
+                try:
+                    from .seasons import season_of as _nhl_season
+                    _owed = _nhl.days_owed(hconn2, _nhl_season("nhl", today.isoformat()), today.isoformat())
+                except Exception as exc:  # noqa: BLE001
+                    _owed = []
+                    log(f"  ⚠️  nhl results: the club pages could not say which days owe a final: {exc}")
+                reread_days_without_final(state, _hconn, "nhl", hstart, today,
+                                          lambda day: _nhl.ingest_day(hconn2, day), log, owed=_owed)
                 tot_g, tot_l, _stopped = nhl_catch_up(
                     lambda day: _nhl.ingest_day(hconn2, day), hstart, yesterday, log)
                 if tot_g or tot_l:

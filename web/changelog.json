@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Every finished game gets its final score",
+      "body": "A few late games never got their final on file (the Nuggets at Phoenix and the Lakers at Golden State on 30 October, the Bruins at Anaheim on 16 October, and some hockey games with no row at all), so a team page’s record could be a game behind its standings. Each night now reads again any recent day where a game has no final, and hockey also checks each club’s own schedule for a finished game we do not have."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "A search names each team once, with bigger team chips",
       "body": "Searching a team’s name showed it twice: as a team chip and again as a “player” (the feeds list a club’s defence under the club’s own name). It is the team chip alone now, and the chips are bigger. On a player’s page the season card carries the games played and the other counts (targets, attempts) as small pills, where the big season box under the chart used to repeat them."
     },

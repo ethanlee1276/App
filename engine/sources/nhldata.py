@@ -584,6 +584,38 @@ def remaining_fixtures(season: int, teams, fetch=None) -> list[tuple[str, str]]:
     return list(seen.values())
 
 
+def days_owed(conn, season: int, today: str, teams=TEAMS, fetch=None) -> list[str]:
+    """THE GAMES WITH NO ROW AT ALL (FINALS1, 2026-11-18). Fourteen clubs read
+    one final short of the standings on 17 November with no open row on their
+    schedule: the game was never stored, so nothing said a day owed a final.
+    Each club's season page (`fetch_club_season`, cached a day, read every day
+    already by the futures) lists every game it has played; a finished game
+    with no final on file names its day. The days, oldest first, before
+    ``today``. A club whose page will not load is skipped (its games still
+    arrive from its opponents' pages)."""
+    fetch = fetch or fetch_club_season
+    done: dict = {}
+    for team in sorted(teams):
+        try:
+            payload = fetch(team, season)
+        except DataUnavailable:
+            continue
+        for g in (payload or {}).get("games") or []:
+            if int(g.get("gameType") or 0) not in KEEP_TYPES or str(g.get("gameState") or "") not in FINAL_STATES:
+                continue
+            day = str(g.get("gameDate") or "")[:10]
+            home = str(((g.get("homeTeam") or {}).get("abbrev")) or "")
+            away = str(((g.get("awayTeam") or {}).get("abbrev")) or "")
+            if day and day < today and home and away:
+                done[(day, home, away)] = True
+    if not done:
+        return []
+    have = {(str(p), str(h), str(a)) for p, h, a in conn.execute(
+        "SELECT period, home, away FROM games WHERE sport='nhl' AND home_score IS NOT NULL AND period >= ?",
+        (min(d for d, _h, _a in done),)).fetchall()}
+    return sorted({d for (d, h, a) in done if (d, h, a) not in have})
+
+
 def fetch_pp_toi(date: str, ttl: int = 86400) -> dict:
     """Every skater's ice time by strength for one date's games, from the
     league's stats host (probe-only until its shape is confirmed on the box)."""

@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WV. A finished game always gets its final** (step 732; 18 November). Nothing to run. The Nuggets' team page said
+7-5 from the standings and 6-5 from the finals on file: their game at Phoenix on 30 October, a late West Coast tip,
+had a row and no score, and so did the Lakers at the Warriors that night and the Bruins at Anaheim on 16 October. A
+league's night resumes from its newest day with a final, and the settle pass files finals during the day for the
+games bets ride on, so by the next night a later day already had finals and the day with the late game was never
+read again. Now every daily league's night (MLB, the NBA, the WNBA, college basketball, the NHL) also reads again,
+oldest first, the days of the last 60 on which a stored game has no final, up to four a night and each day three
+times at most, so a postponed game is not read for ever; its line in the night's log reads `nba results: read again
+2026-10-30 (a game there had no final): 2 game(s)`. Hockey had a second hole: fourteen clubs one final short of the
+standings with no row at all for the game. The NHL's own club pages (read every day already, for the futures) list
+every game each club has played, so a finished game with no final on file now names its day, and that day is read
+again on the same terms. The first night after the deploy fills these in; the team pages' records and the standings
+then agree.
+
 **WU. A search names each thing once, and the season's other counts are small pills** (step 731; 18 November).
 Nothing to run. Two of your screenshots. The search for "Lions" offered the Detroit Lions as a team chip and again
 under "Found in NFL" as a player ("Lions · DEF"): the players feed and the logs both file a club's defence under the
