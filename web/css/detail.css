@@ -111,7 +111,7 @@
 .gp-jump .chip { cursor: pointer; font: inherit; }
 @media (min-width: 900px) { .gp-row { grid-template-columns: 1fr 1fr; } }
 .gp-lines .lb-table { border-top: none; padding-top: 0; }
-.pr-table { display: grid; grid-template-columns: 1fr repeat(4, auto); gap: 6px 12px;
+.pr-table { display: grid; grid-template-columns: 1fr repeat(var(--pr-n, 4), auto); gap: 6px 12px;
   align-items: center; }
 .pr-table .lb-th { color: var(--text-mute); font-size: var(--fs-xs); text-align: right; }
 .pr-table .lb-th:first-child { text-align: left; }

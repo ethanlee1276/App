@@ -2603,11 +2603,15 @@ function renderGamePage() {
           <span class="sub">— ${plural(shown.length, "prop", "props")} that clear the edge bar; tap one for the full card</span></div>
         <div class="card" style="padding:0">${shown.map(edgePropRow).sort((a, b) => b.ev - a.ev).map(edgeRowHTML).join("")}</div>`
       : `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
-          <div class="es-title">No player props clear the filters in this game</div>
+          ${/* One thing said once (2026-11-18): with no prices posted there was
+                nothing to filter, so "no props clear the filters" over "books
+                haven't posted prices" said the same nothing twice, the first wrongly. */""}
+          <div class="es-title">${props.length ? "No player props clear the filters in this game"
+            : "No prop prices for this game yet"}</div>
           <div class="es-sub">${props.length
             ? `${plural(props.length, "prop was", "props were")} analyzed here and held — the edge under
                the bar, no real price, or the lineup not confirmed yet.`
-            : "Books haven’t posted prop prices for this game yet."}</div>
+            : "Books usually post them on game day; the ones that clear the edge bar land here."}</div>
           ${props.length ? `<button class="btn ghost" id="gp-showall" style="margin-top:12px">
             Show all ${props.length} analyzed ${pluralWord(props.length, "prop")} anyway</button>` : ""}</div>`}</div>
 
@@ -2702,21 +2706,30 @@ function pressurePairHTML(sport, g) {
   if (!pr) return "";
   const rows = [g.away, g.home].map((t) => [t, pr.teams[t]]).filter(([, r]) => r);
   if (!rows.length) return "";
+  const rates = pressureRatesOf(rows);
   return `
     <div class="card gp-pressure" id="gp-pressure"><div class="gp-panel-title">Under pressure</div>
       <p class="pbp-pr-sub">${escapeHtml(pressureSpan(pr))} · one-score means within ${
         escapeHtml(pressureUnit(pr))}</p>
-      <div class="pr-table">
-        <span class="lb-th"></span>${PRESSURE_RATES.map(([, t]) =>
+      <div class="pr-table" style="--pr-n:${rates.length}">
+        <span class="lb-th"></span>${rates.map(([, t]) =>
           `<span class="lb-th">${t}</span>`).join("")}
         ${rows.map(([t, r]) => `<span class="lb-tm">${teamMark(t, 20)}<span class="pr-tm">${
             escapeHtml(t)}<span class="k">${escapeHtml(r.span_record || r.record)}</span></span></span>${
-          PRESSURE_RATES.map(([k]) => pressureCell(r, k)).join("")}`).join("")}
+          rates.map(([k]) => pressureCell(r, k)).join("")}`).join("")}
       </div>
       ${pr.note ? `<div class="pr-defs">${escapeHtml(pr.note)}</div>` : ""}
-      <div class="pr-defs">${PRESSURE_RATES.map(([, t, n]) =>
+      <div class="pr-defs">${rates.map(([, t, n]) =>
         `<span><b>${t}</b> ${escapeHtml(n)}</span>`).join("")}</div>
     </div>`;
+}
+
+/* The rates either side has a number for. A league with no closing lines
+   on file (basketball and baseball as stored) has only clutch: the other
+   three were columns of dashes beside the note saying why (2026-11-18). */
+function pressureRatesOf(rows) {
+  const have = PRESSURE_RATES.filter(([k]) => rows.some(([, r]) => r && r[k] != null));
+  return have.length ? have : PRESSURE_RATES;
 }
 
 /* ---- Under pressure, live, on the play-by-play page --------------------
@@ -3044,6 +3057,7 @@ function pbpPressureHTML(d, league, boardGame) {
      was full size and spoke of the fast loop. The title and LIVE share the
      head, the note is a quiet line under it, the state leads the sentence,
      and the footnote says only what the gold marks. */
+  const rates = pressureRatesOf(rows);
   return `<div class="card pbp-pressure">
     <div class="pbp-rail-head">Under pressure${
       m.live ? `<span class="lb-live">${icon("dot", 10)} LIVE</span>` : ""}</div>
@@ -3053,14 +3067,14 @@ function pbpPressureHTML(d, league, boardGame) {
     ${m.market ? `<p class="pbp-pr-market">Live market: <b>${escapeHtml(d.home_abbr || d.home)} ${
       Number(m.market.now).toFixed(0)}%</b> to win, from ${
       Number(m.market.opened).toFixed(0)}% at the open — the market’s number, not ours.</p>` : ""}
-    <div class="pr-table">
-      <span class="lb-th"></span>${PRESSURE_RATES.map(([, t]) =>
+    <div class="pr-table" style="--pr-n:${rates.length}">
+      <span class="lb-th"></span>${rates.map(([, t]) =>
         `<span class="lb-th">${t}</span>`).join("")}
       ${rows.map(([t, r]) => `<span class="lb-tm">${teamMarkIn(league, t, 20)}<span class="pr-tm">${
           escapeHtml(t)}<span class="k">${escapeHtml(r.span_record || r.record || "")}</span></span></span>${
-        PRESSURE_RATES.map(([k]) => pressureCell(r, k, asked(t, k) ? "pbp-pr-asked" : "")).join("")}`).join("")}
+        rates.map(([k]) => pressureCell(r, k, asked(t, k) ? "pbp-pr-asked" : "")).join("")}`).join("")}
     </div>
-    <div class="pr-defs">${PRESSURE_RATES.map(([, t, n]) =>
+    <div class="pr-defs">${rates.map(([, t, n]) =>
       `<span><b>${t}</b> ${escapeHtml(n)}</span>`).join("")}</div>
     <p class="pbp-pr-foot">From the finished games of the ${escapeHtml(pressureSpan(pr))}${
       m.asks.length ? " · gold is what the score is testing" : ""}.</p>

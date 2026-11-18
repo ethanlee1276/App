@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Game pages say what they have, once",
+      "body": "Before a game’s props are priced, its page now says so plainly instead of saying the same nothing twice. The Under pressure table shows only the numbers that exist for that league, without empty columns."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "The chat’s Big plays tab keeps your place",
       "body": "A reaction on any play, or the game’s own refresh every few seconds, sent the Big plays tab back to the top and a play’s thread back to its end. Counts now change on their own card, and you stay where you were."
     },

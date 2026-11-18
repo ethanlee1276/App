@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XY. A game's page says what it has, once** (step 761; 18 November). Nothing to run. Walking tonight's NBA, NHL and
+college game pages as a reader: with no prop prices posted yet, the props section read "No player props clear the
+filters in this game" over "Books haven't posted prop prices for this game yet", the same nothing twice and the
+first wrongly, as nothing had been filtered. It now says there are no prices yet and when they usually come. And
+"Under pressure" drew four columns for leagues whose stored games carry no closing line (basketball and baseball):
+clutch, then three columns of dashes beside a note saying why. Both of its tables (the game page's and the live
+page's) now show only the rates either side has a number for, and keep the note.
+
 **XX. The Big plays tab keeps your place** (step 760; 18 November). Nothing to run. Found while auditing the chat
 (XW): on the Big plays tab, a face or a reply on any play drew the whole list again and sent the reader back to its
 top, and so did every refresh of the game's own file (every few seconds while it is on), which also threw a play's
