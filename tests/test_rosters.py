@@ -137,6 +137,21 @@ def test_both_legs_of_a_double_move_are_kept():
     assert [(m["from"], m["to"]) for m in moves] == [("KC", "BUF"), ("SF", "KC")]
 
 
+def test_a_move_the_feed_takes_back_is_no_move():
+    """The rosters page, 18 November 2026: "Daiyan Henley DEN -> LAC" over
+    "LAC -> DEN", the players feed carrying the wrong club for a few days."""
+    store = {"2026-11-10": {"Daiyan Henley": "LAC", "Journeyman": "SF"},
+             "2026-11-11": {"Daiyan Henley": "DEN", "Journeyman": "KC"},
+             "2026-11-14": {"Daiyan Henley": "LAC", "Journeyman": "SF"},
+             "2026-11-15": {"Daiyan Henley": "LAC", "Journeyman": "BUF"}}
+    moves = rosters.transactions(store)["moves"]
+    assert [(m["player"], m["from"], m["to"]) for m in moves] == [("Journeyman", "SF", "BUF")], moves
+    # Taken back and then made again: the last move stands.
+    store["2026-11-16"] = {"Daiyan Henley": "DEN", "Journeyman": "BUF"}
+    moves = rosters.transactions(store)["moves"]
+    assert ("Daiyan Henley", "LAC", "DEN", "2026-11-16") in [(m["player"], m["from"], m["to"], m["date"]) for m in moves]
+
+
 def test_one_snapshot_has_nothing_to_diff():
     assert rosters.transactions({"2026-07-31": {"A": "SF"}})["moves"] == []
     assert rosters.transactions({})["moves"] == []

@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XC. A roster move the feed takes back is no move** (step 739; 18 November). Nothing to run. The NFL rosters page's
+recent team changes listed "Daiyan Henley DEN → LAC" and, below it, "LAC → DEN": the list diffs our own daily
+snapshots of the players feed, and the feed carried the wrong club for a few days. A move straight back the way it
+came now cancels the one before it; a real double move (San Francisco to Kansas City to Buffalo) still shows both
+legs, and a move taken back and then made again shows the last one.
+
 **XB. A college football game filed twice counts once in the standings** (step 738; 18 November). Nothing to run,
 and 00h still worth running. The live college football standings, counted from our own games because the league's
 feed answered with no teams, read Utah 19-0 and Ohio State 16-7 in the middle of November: 1,122 finished games

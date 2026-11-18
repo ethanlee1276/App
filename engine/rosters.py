@@ -1003,7 +1003,8 @@ def transactions(store: dict, days: int = 14) -> dict:
     """Team changes across the stored snapshots, newest first.
 
     Compares each stored day against the one before it, so a player who
-    moved twice shows both moves rather than only the net result. A player
+    moved twice shows both moves rather than only the net result, unless the
+    second is the first taken back (the feed's wrong club for a day). A player
     who appears for the first time is NOT a transaction — he could be a
     signing, but he could equally be the feed adding a player it didn't
     carry yesterday, and we can't tell the two apart.
@@ -1022,6 +1023,19 @@ def transactions(store: dict, days: int = 14) -> dict:
             if was and was != team:
                 moves.append({"player": player, "from": was, "to": team,
                               "date": newer})
+    # A MOVE THE FEED TAKES BACK IS NO MOVE (18 November 2026): the rosters
+    # page listed "Daiyan Henley DEN -> LAC" over "LAC -> DEN", the players
+    # feed carrying the wrong club for a few days. A move straight back the
+    # way it came cancels the one before it; a real double move (SF -> KC ->
+    # BUF) keeps both legs.
+    kept: dict = {}
+    for m in sorted(moves, key=lambda m: m["date"]):
+        legs = kept.setdefault(m["player"], [])
+        if legs and legs[-1]["from"] == m["to"] and legs[-1]["to"] == m["from"]:
+            legs.pop()
+        else:
+            legs.append(m)
+    moves = [m for legs in kept.values() for m in legs]
     moves.sort(key=lambda m: (m["date"], m["player"]), reverse=True)
     return {"moves": moves, "days": len(window),
             "from": window[0], "to": window[-1]}

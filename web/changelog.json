@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Recent team changes show real moves only",
+      "body": "The rosters page could list a player moving to a team and straight back when the players feed had the wrong club for a few days. A move that is taken back now drops off; real moves, including a player who moved twice, still show."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "College football standings count each game once",
       "body": "The college football standings counted some games two or three times, so records like Utah 19-0 showed in November. Each game now counts once in the table, the offense and defense rankings, the pressure numbers and the season simulation."
     },
