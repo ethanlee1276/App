@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "A slow team page no longer says the team doesn’t exist",
+      "body": "When a team page took too long to load, it could say no team matched. Now it says the page couldn’t load and to try again."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "Benched parlays are labeled benched",
       "body": "When a league’s parlays are benched for losing, the report posts none. How our reports did listed every benched version as the report’s own anyway. Now they sit apart, marked never posted."
     },

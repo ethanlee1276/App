@@ -60,7 +60,7 @@ class _Fake:
     def __init__(self):
         self.sent = None
 
-    def _send(self, code, body, kind):
+    def _send(self, code, body, kind, mtime=None, headers=None):
         self.sent = (code, body, kind)
 
 

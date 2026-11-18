@@ -6346,8 +6346,21 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             from engine import teamdex
             from engine.db import connect
             conn = connect()
+            # WHERE A SLOW PAGE SPENDS ITS TIME (2026-11-18): a college team's
+            # page answered in 4 seconds warm and 22 to 56 cold, and the box's
+            # data cannot be timed from anywhere else. Each part is timed into a
+            # Server-Timing header (names and milliseconds, nothing else), which
+            # any request can read and the page ignores.
+            took: list = []
+
+            def timed(part, fn):
+                t0 = time.perf_counter()
+                try:
+                    return fn()
+                finally:
+                    took.append((part, (time.perf_counter() - t0) * 1000.0))
             try:
-                known = teamdex.teams(conn, sport)
+                known = timed("teams", lambda: teamdex.teams(conn, sport))
                 if not known:
                     # A SPORT WITH NO FINALS ON THIS BOX is a real state,
                     # not an error: baseball's history has not been
@@ -6380,8 +6393,8 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                     }).encode(), ".json")
                 out = {"sport": sport, "team": team,
                        "name": teamdex.label(team, sport),
-                       "profile": teamdex.profile(conn, sport, team),
-                       "opponents": teamdex.opponents(conn, sport, team),
+                       "profile": timed("profile", lambda: teamdex.profile(conn, sport, team)),
+                       "opponents": timed("opponents", lambda: teamdex.opponents(conn, sport, team)),
                        # WHO PLAYS FOR IT. Ethan, 2026-09-10: "We should
                        # be showing more info too when you look up a team
                        # on the search page. We should show a depth chart
@@ -6390,22 +6403,22 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                        # and the record below it has been right since
                        # 09-09 — one bad read of `player_game_logs` must
                        # not take a working page down with it.
-                       "squad": _squad_or_empty(teamdex, conn, sport, team),
+                       "squad": timed("squad", lambda: _squad_or_empty(teamdex, conn, sport, team)),
                        # The stat page ESPN's own team tab draws —
                        # leaders, then Passing/Rushing/Receiving. Same
                        # guard, same reason (Ethan, 2026-09-10: "ESPN
                        # uses theirs as an example of how we should make
                        # ours work and the data we could show").
-                       "stats": _stats_or_empty(teamdex, conn, sport, team),
+                       "stats": timed("stats", lambda: _stats_or_empty(teamdex, conn, sport, team)),
                        # The Schedule and Depth Chart tabs (Ethan,
                        # 2026-09-24, beside ESPN's Packers page). Same
                        # guard: either failing costs its own tab.
-                       "schedule": _schedule_or_empty(teamdex, conn, sport, team),
+                       "schedule": timed("schedule", lambda: _schedule_or_empty(teamdex, conn, sport, team)),
                        # WHO IS ON IT TODAY (Ethan, 2026-10-03: "make sure
                        # our rosters are good ... every single sport"):
                        # the league's live roster board where there is one.
-                       "roster": _live_roster(sport, team)}
-                out["depth"] = _depth_chart(sport, team, conn, out["roster"])
+                       "roster": timed("roster", lambda: _live_roster(sport, team))}
+                out["depth"] = timed("depth", lambda: _depth_chart(sport, team, conn, out["roster"]))
                 if opp.strip():
                     rivals = teamdex.resolve(opp, sport, known)
                     if rivals:
@@ -6413,7 +6426,9 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                             conn, sport, team, rivals[0])
                     else:
                         out["vs_unknown"] = opp
-                return self._send(200, json.dumps(out).encode(), ".json")
+                timing = ", ".join(f"{part};dur={ms:.0f}" for part, ms in took)
+                return self._send(200, json.dumps(out).encode(), ".json",
+                                  headers=[("Server-Timing", timing)] if timing else None)
             finally:
                 conn.close()
         except Exception:                                    # noqa: BLE001

@@ -68,6 +68,15 @@ def test_a_team_that_matched_nothing_gets_an_example_in_its_own_league():
     assert "“Los Angeles Rams”, “Rams” or “LA”" in block, "football keeps its example"
 
 
+
+def test_a_page_that_could_not_be_read_is_not_called_a_name_that_matched_nothing():
+    # 18 November 2026: an answer cut short ("{}") read "No team matched “TENN”" for a school the site has.
+    i = MORE.index("This team’s page could not be read just now.")
+    assert "if (!d.profile && !Array.isArray(d.resolved)) {" in MORE[i - 300:i]
+    assert i < MORE.index("No team matched “${escapeHtml(st.team)}”"), "asked before the no-match words"
+    srv = (ROOT / "server.py").read_text(encoding="utf-8")
+    assert '"sport": sport, "query": name, "resolved": [],' in srv, "the server's no-match answer carries its list"
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

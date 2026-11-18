@@ -172,7 +172,7 @@ def test_the_positions_read_in_the_roster_pages_own_order():
 def test_the_endpoint_hands_the_squad_over():
     i = SRV.index("def _team(self, q):")
     block = SRV[i:SRV.index("\n    def ", i + 1)]
-    assert '"squad": _squad_or_empty' in block
+    assert '"squad": timed("squad", lambda: _squad_or_empty' in block
 
 
 def test_a_bad_squad_read_cannot_take_the_record_down_with_it():

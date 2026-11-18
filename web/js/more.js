@@ -2794,6 +2794,14 @@ function renderTeamPage() {
         ${escapeHtml(r.name || r.team)}</button>`).join("")}</div>`;
     return;
   }
+  // An answer that is neither a team nor the server's "nothing matched"
+  // (its `resolved` list) is a page that could not be read, not a name that
+  // matched nothing (18 November 2026: a slow answer cut short read "No team
+  // matched “TENN”" for a school the site has).
+  if (!d.profile && !Array.isArray(d.resolved)) {
+    host.innerHTML = `<div class="warning">${icon("warn")} This team’s page could not be read just now. Try again in a moment.</div>`;
+    return;
+  }
   if (!d.profile) {
     // The example in the league being searched (18 November 2026: a college basketball
     // school that did not match was told to try "Los Angeles Rams").

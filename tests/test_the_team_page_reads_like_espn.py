@@ -99,8 +99,10 @@ def test_the_build_writes_it_and_the_server_serves_it():
     finally:
         server.ROOT = was
     body = (ROOT / "server.py").read_text(encoding="utf-8")
-    assert '"schedule": _schedule_or_empty(teamdex, conn, sport, team),' in body
-    assert 'out["depth"] = _depth_chart(sport, team, conn, out["roster"])' in body
+    assert '"schedule": timed("schedule", lambda: _schedule_or_empty(teamdex, conn, sport, team)),' in body
+    assert 'out["depth"] = timed("depth", lambda: _depth_chart(sport, team, conn, out["roster"]))' in body
+    # Each part's time rides out in a Server-Timing header (2026-11-18: a cold college page took 22-56 s).
+    assert 'headers=[("Server-Timing", timing)] if timing else None' in body
 
 
 # --- the page -----------------------------------------------------------------

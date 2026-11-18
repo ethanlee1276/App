@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XT. A slow team page says so, and says where its time goes** (step 756; 18 November). Nothing to run. After XN,
+team pages answer in 2 to 4 seconds once warm (Tennessee had taken 25 to 50), but a cold college basketball page
+still took 22 to 56 seconds, and a page that waited too long read "No team matched TENN" for a school the site has.
+The page now says that only when the server answers that nothing matched; any other empty answer reads "This team's
+page could not be read just now". The team endpoint also sends a Server-Timing header with the milliseconds of each
+part (the team list, profile, opponents, squad, stats, schedule, roster, depth chart), so the slow part can be read
+from outside the box and fixed next.
+
 **XS. A doubleheader keeps its second game's parlays** (step 755; 18 November). Nothing to run. The check XR added
 (engine/gameparlays.still_to_play) matched a leg to the first board game of its pair, so on a baseball doubleheader
 game two's legs would have gone with game one's start. A leg now stands while any game of its pair is still to play;

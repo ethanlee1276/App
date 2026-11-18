@@ -206,7 +206,7 @@ def test_the_endpoint_publishes_the_tables_behind_its_own_guard():
     assert "def _stats_or_empty(" in SRV
     i = SRV.index("def _stats_or_empty(")
     assert "except Exception" in SRV[i:i + 900]
-    assert '"stats": _stats_or_empty(teamdex, conn, sport, team)' in SRV
+    assert '"stats": timed("stats", lambda: _stats_or_empty(teamdex, conn, sport, team))' in SRV
 
 
 def test_the_page_draws_them_above_the_squad():
