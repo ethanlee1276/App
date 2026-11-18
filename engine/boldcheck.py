@@ -66,6 +66,8 @@ OWN_UNDER_SHOWN = 0.05
 ROLE_SHIFT = 0.20
 #: A price older than this is not today's market.
 STALE_PRICE_S = 6 * 3600
+#: A shown chance this high is never a find (`check`): no prop is certain.
+CERTAIN = 0.99
 
 FOUND, SUSPECT, UNEXPLAINED = "found", "suspect", "unexplained"
 LABEL = {FOUND: "Bolder than the books", SUSPECT: "Likely a data problem",
@@ -206,6 +208,16 @@ def check(row: dict, side, line, shown, fair, raw=None) -> dict | None:
         return None
     out = {"gap": round(gap, 4), "shown": round(shown, 4), "fair": round(fair, 4),
            "raw": None if raw is None else round(raw, 4)}
+    # A NUMBER THAT SAYS CERTAIN IS THE MODEL'S ARITHMETIC, NOT A FIND
+    # (2026-11-18). Emmett Johnson under 17.5 carries at −129 went on the
+    # board at 100%: his own twelve games were all under, so "his own games
+    # back it" passed, and the week's record printed "Toughest miss … at
+    # 100%" when his role grew. Twelve of twelve is not certainty, and no
+    # prop is certain; a spread that narrow is the thing to distrust.
+    if shown >= CERTAIN:
+        return dict(out, verdict=SUSPECT, label=LABEL[SUSPECT],
+                    why=[f"Our number says {shown:.0%}: no prop is that certain — the model's spread on it "
+                         f"is too narrow to trust."])
     bad = flags(row, side)
     if bad:
         return dict(out, verdict=SUSPECT, label=LABEL[SUSPECT], why=bad)

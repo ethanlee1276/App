@@ -47,6 +47,16 @@ def test_his_own_games_backing_it_is_a_real_find():
     assert "under 4.5 catches in 9 of the last 12 (75%)" in v["why"][0]
 
 
+def test_a_number_that_says_certain_is_never_a_find():
+    # Emmett Johnson under 17.5 carries at −129 went on the board at 100%
+    # (2026-11-18): twelve of twelve of his own games under is not certainty.
+    row = {"market": "rush_att", "recent_values": [9, 11, 8, 12, 10, 7, 13, 9, 11, 10, 8, 12]}
+    got = B.check(row, "UNDER", 17.5, 1.0, 0.54, 1.0)
+    assert got["verdict"] == B.SUSPECT and "no prop is that certain" in got["why"][0], got
+    almost = B.check(row, "UNDER", 17.5, 0.985, 0.54, 0.985)
+    assert almost["verdict"] != B.SUSPECT or "certain" not in almost["why"][0], almost
+
+
 def test_another_teams_history_is_a_data_problem():
     v = _check("DJ Moore|receptions")
     assert v["verdict"] == B.SUSPECT and v["label"] == "Likely a data problem"

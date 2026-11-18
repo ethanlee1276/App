@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "No pick says it’s certain",
+      "body": "A Most Likely pick went up at 100% because every one of the player’s recent games went its way. A chance that high now keeps a pick off the board: no bet is certain."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "Hockey’s playoff race counts each game once",
       "body": "The race could replay games already won and lost, because the schedule it read was a day old. A game from before today is never simulated again."
     },

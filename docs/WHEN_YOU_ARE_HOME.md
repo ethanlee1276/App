@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XP. No pick says certain** (step 752; 18 November). Nothing to run. The NFL Record page's week card read "Toughest
+miss: Emmett Johnson under 17.5 Carries (−129) at 100%": the Most Likely board logged that under at a 100% chance
+against a price that said 54%. A number that far from the books gets on the board only through the bold check
+(engine/boldcheck), and it passed there because all twelve of his recent games were under 17.5 carries, so "his own
+games back it". Twelve of twelve is not certainty: his role grew and the under lost. A shown chance of 99% or more
+is now "Likely a data problem" in that check (a spread too narrow to trust), so it stays off the board; nothing else
+in the check moved. The week card still says 100% for that pick, because that is what we claimed.
+
 **XO. Hockey's race plays each game once, and one spelling of favorite** (step 751; 18 November). Nothing to run.
 The NHL playoff race read "330 games played, 1005 left" of a 1,312-game season: each club's season page is cached a
 day, so a page read the morning before still listed that night's games as to come, and the 23 played since were
