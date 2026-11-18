@@ -363,7 +363,8 @@ def test_in_a_browser_the_fighters_page_draws_every_menu():
     hero = got["hero"]
     assert "Topuria" in hero and "featherweight · 16-0-0" in hero.lower() and "El Matador" in hero and "69\" reach" in hero, hero
     season = got["season"].upper()
-    assert "RECORD" in season and "16-0-0" in season and "SLPM" in season and "62%" in season, got["season"]
+    # The record is the hero's, above (walk 15, 2026-11-18: it was said again as the strip's first tile).
+    assert "SLPM" in season and "62%" in season and "16-0-0" not in season and "RECORD" not in season, got["season"]
     assert "Max Holloway" in got["next"] and "Dec 12" in got["next"] and "Featherweight" in got["next"], got["next"]
     assert got["recent_rows"] == 3 and got["fight_rows"] == 3 and got["first_win"] == 3
     assert "Striking" in got["stats"] and "Grappling" in got["stats"] and "How the fights ended" in got["stats"]
