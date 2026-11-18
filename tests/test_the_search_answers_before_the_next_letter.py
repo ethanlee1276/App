@@ -276,7 +276,7 @@ def test_the_all_league_box_drops_guesses_beside_an_answer():
     assert [h["player"] for h in ps.no_guess_beside_an_answer(hits)] == ["A", "C"]
     only = [{"player": "B", "rank": 3}, {"player": "D", "rank": 3}]
     assert ps.no_guess_beside_an_answer(only) == only
-    assert "return no_guess_beside_an_answer(merge(per, q, limit, order, prefer=prefer))" in open(
+    assert "return drop_clubs(no_guess_beside_an_answer(merge(per, q, limit, order, prefer=prefer)))" in open(
         os.path.join(ROOT, "engine", "playersearch.py"), encoding="utf-8").read()
 
 

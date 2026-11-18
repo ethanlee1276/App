@@ -132,7 +132,7 @@ def test_every_league_is_searched_and_each_chip_carries_its_own():
     assert _hits("rams", pre)[0]["sport"] == "nfl"
     body = _fn("renderTeamHits")
     assert 'data-team-sport="${escapeAttr(t.sport)}"' in body
-    assert "teamMark(t.abbr, 16, teamsForSport(t.sport), t.sport)" in body
+    assert "teamMark(t.abbr, 26, teamsForSport(t.sport), t.sport)" in body, "the bigger chip, SEARCHDUP1"
     assert "nflMap()" not in _fn("teamSearchHits") + body
 
 
