@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XB. A college football game filed twice counts once in the standings** (step 738; 18 November). Nothing to run,
+and 00h still worth running. The live college football standings, counted from our own games because the league's
+feed answered with no teams, read Utah 19-0 and Ohio State 16-7 in the middle of November: 1,122 finished games
+counted where about 700 have been played. College's games table holds copies of one game from three writers, each
+fixed where it writes (engine/cfbdedupe names them), and the copies already stored go when 00h's cleanup runs with
+--apply. Until then, and after, the standings count one pair of schools' rows a day or less apart as one game,
+keeping the schedule's away@home row and never a provisional box copy (cfbdedupe's own choices); a real rematch
+weeks later, a conference title game, is still a second game. The table, its offense and defense rankings, the
+pressure ranks beside them and the season simulation all count each game once now; every other league's rows are as
+they were. The next standings build after the deploy shows the real records.
+
 **XA. The UFC tab tells a visitor what is locked** (step 737; 18 November). Nothing to run. As a visitor the UFC
 tab's Picks tile read "[object Object]": the paywall empties every key named like a paid board at every depth
 (engine/gate._strip), and the card's `counts` holds `"picks": 3`, the number that tile prints, which went out as

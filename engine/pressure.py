@@ -122,11 +122,14 @@ def favourite(spread, extra) -> str | None:
 
 
 def _rows(conn, sport: str, season: int) -> list:
-    return conn.execute(
-        "SELECT period, home, away, home_score, away_score, spread, extra "
+    """The season's finished rows, a game filed more than once counted once
+    (engine/standings.once, as the table beside these rates counts it)."""
+    from .standings import once
+    return once(sport, conn.execute(
+        "SELECT period, home, away, home_score, away_score, spread, extra, game_id "
         "FROM games WHERE sport=? AND season=? AND home_score IS NOT NULL "
         "AND away_score IS NOT NULL ORDER BY period",
-        (sport, season)).fetchall()
+        (sport, season)).fetchall())
 
 
 def _pct(num: int, den: int):

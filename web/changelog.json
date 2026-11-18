@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "College football standings count each game once",
+      "body": "The college football standings counted some games two or three times, so records like Utah 19-0 showed in November. Each game now counts once in the table, the offense and defense rankings, the pressure numbers and the season simulation."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "The UFC tab’s numbers are right for everyone",
       "body": "The UFC tab’s Picks count showed “[object Object]” to visitors, and its modeled and waiting counts read 0 on a full card. Both are right now, a locked pass list says it is for members instead of “Nothing to pass on”, and the record is said once."
     },

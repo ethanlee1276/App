@@ -102,15 +102,69 @@ class Record:
         return round(self.points_for - self.points_against, 1)
 
 
+#: Leagues whose games table can hold one game more than once: college
+#: football's three writers (engine/cfbdedupe, each fixed where it writes; its
+#: --apply removes the copies they left). A pair of schools never plays twice
+#: in two days, so until it has run, one pair's rows a day or less apart are
+#: one game. Live, 18 November 2026: Utah 19-0 and Ohio State 16-7 in
+#: November, 1,122 games counted where about 700 were played.
+COPIES = ("cfb",)
+
+
+def _day(period):
+    try:
+        return _dt.date.fromisoformat(str(period)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def once(sport: str, rows, name=None) -> list:
+    """``rows`` with a game filed more than once counted once, in a COPIES
+    league (any other league's rows come back as they are). Each row reads
+    by name: period, home, away and, when the query has it, game_id. The copy
+    kept is never a provisional box copy ("-box"), then the schedule's
+    away@home row, then the earliest (cfbdedupe's choices). ``name`` turns a
+    stored team into its canonical code."""
+    rows = list(rows)
+    if sport not in COPIES:
+        return rows
+    canon = name or (lambda t: divisions.canonical(sport, t))
+
+    def gid(r):
+        try:
+            return str(r["game_id"] or "")
+        except (IndexError, KeyError):
+            return ""
+    pairs: dict = {}
+    for i, r in enumerate(rows):
+        pairs.setdefault(frozenset((canon(r["home"]), canon(r["away"]))), []).append(i)
+    keep = set()
+    for idx in pairs.values():
+        idx.sort(key=lambda i: str(rows[i]["period"] or ""))
+        group, start = [], None
+        for i in idx + [None]:
+            d = _day(rows[i]["period"]) if i is not None else None
+            if group and (i is None or d is None or start is None or (d - start).days > 1):
+                keep.add(min(group, key=lambda j: (gid(rows[j]).endswith("-box"), "@" not in gid(rows[j]),
+                                                   str(rows[j]["period"] or ""))))
+                group = []
+            if i is None:
+                break
+            if not group:
+                start = d
+            group.append(i)
+    return [r for i, r in enumerate(rows) if i in keep]
+
+
 def _finished(conn, sport: str, seasons: list[int] | None):
-    q = ("SELECT season, period, home, away, home_score, away_score, extra "
+    q = ("SELECT season, period, home, away, home_score, away_score, extra, game_id "
          "FROM games WHERE sport=? AND home_score IS NOT NULL "
          "AND away_score IS NOT NULL")
     args: list = [sport]
     if seasons:
         q += " AND season IN (%s)" % ",".join("?" * len(seasons))
         args += list(seasons)
-    return conn.execute(q + " ORDER BY period", args).fetchall()
+    return once(sport, conn.execute(q + " ORDER BY period", args).fetchall())
 
 
 #: How a hockey game ended (engine/sources/nhldata stores the API's

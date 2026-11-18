@@ -168,7 +168,10 @@ def test_a_sport_with_no_closing_lines_keeps_clutch_and_says_why_the_rest_are_mi
 
 def test_college_rows_still_keyed_by_espn_id_are_read_under_the_board_abbreviation():
     conn = _conn()
-    rows = [("2025-09-%02d" % (i + 1), h, a, hs, as_, sp, None) for i, (h, a, hs, as_, sp) in enumerate([
+    # A week apart, as college plays: one pair's rows a day apart are one game filed twice (standings.once).
+    import datetime as _d
+    rows = [(str(_d.date(2025, 9, 1) + _d.timedelta(days=7 * i)), h, a, hs, as_, sp, None)
+            for i, (h, a, hs, as_, sp) in enumerate([
         ("espn:61", "espn:228", 24, 21, -7.0), ("espn:228", "espn:61", 10, 31, 3.0),
         ("espn:61", "espn:99", 42, 7, -20.0), ("espn:99", "espn:61", 20, 27, 6.5),
         ("espn:228", "espn:99", 14, 13, -1.0), ("espn:99", "espn:228", 30, 10, -3.0),
