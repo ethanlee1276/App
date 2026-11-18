@@ -568,42 +568,90 @@ def _team_games(conn, sport: str, team: str, season: int | None = None) -> list:
 #: go to those games through the key, one game at a time — and fall back to
 #: the old reads when the games table holds none (a team filed under another
 #: code there), so nothing that read before reads less now.
-_BY_GAMES = ("WITH g(period, game_id) AS (VALUES {pairs}) "
-             "SELECT l.player AS player, l.position AS position, l.market AS market, COUNT(*) n, SUM(l.value) total, "
-             "COUNT(DISTINCT l.game_id) games FROM g JOIN player_game_logs l "
-             "ON l.sport=? AND l.season=? AND l.period=g.period AND l.game_id=g.game_id "
-             "WHERE l.team=? AND l.player<>'' GROUP BY l.player, l.position, l.market")
+#:
+#: …UNDER THE KEY EACH LEAGUE FILES THEM BY (2026-11-18, the same day: the
+#: live pages still took 22 to 50 seconds). Only basketball's ESPN rows and
+#: college football's carry the schedule's own id. The NFL files a team's
+#: week as "DET-010" (nflverse's rows, and the same-night box score's
+#: "DET-010-box"), never the schedule's "LAC@BAL", so the join found nothing
+#: and every NFL page fell back to the old scan; hockey, baseball and the
+#: NBA's own feed file a row per player and day ("Name-2026-11-17"), which
+#: shares only the day. So: the league's own key first (`_log_keys`), then
+#: the team's game days, one night's rows at a time, and the old read last.
+#: A same-night box score's copy of a game's rows (engine/boxsettle.BOX_SUFFIX).
+_BOX = "-box"
+#: Bound parameters a read takes at once, well under SQLite's oldest limit.
+_MAX_KEYS = 800
+#: Leagues whose period holds too many games for a read by day to be cheap:
+#: an NFL week is the league's, a college Saturday or winter night 60 to 150
+#: games. Their rows carry the key (`_log_keys`), so they are read by it only.
+_WIDE_PERIODS = frozenset({"nfl", "cfb", "cbb"})
+
+
+def _log_keys(sport: str, team: str, games: list) -> list:
+    """``[(period, game_id)]`` the team's rows are filed under for these
+    schedule games: the NFL's team week, everyone else's schedule id, each
+    with its box score copy."""
+    keys = []
+    for _s, p, gid in games:
+        base = f"{team}-{p}" if sport == "nfl" else gid
+        keys += [(p, base), (p, base + _BOX)]
+    return keys
+
+
+def _by_keys_sql(head: str, n: int, tail: str = "") -> str:
+    """``head`` over the team's rows at ``n`` (period, game_id) keys."""
+    return (f"WITH g(period, game_id) AS (VALUES {','.join('(?,?)' for _ in range(n))}) {head} FROM g "
+            "JOIN player_game_logs l ON l.sport=? AND l.season=? AND l.period=g.period "
+            f"AND l.game_id=g.game_id WHERE l.team=?{tail}")
+
+
+def _by_days_sql(head: str, n: int, tail: str = "") -> str:
+    """``head`` over the team's rows on ``n`` game days."""
+    return (f"WITH g(period) AS (VALUES {','.join('(?)' for _ in range(n))}) {head} FROM g "
+            f"JOIN player_game_logs l ON l.sport=? AND l.season=? AND l.period=g.period WHERE l.team=?{tail}")
+
+
+def _keyed(conn, sport: str, team: str, season: int, games: list, head: str, tail: str = ""):
+    """``head`` over the team's rows through `_log_keys`, then through its
+    game days; the first read that answers, or None. ``head`` selects from
+    ``l``; ``tail`` follows the team's condition."""
+    keys = _log_keys(sport, team, games)
+    if keys and 2 * len(keys) + 3 <= _MAX_KEYS:
+        rows = conn.execute(_by_keys_sql(head, len(keys), tail),
+                            tuple(x for k in keys for x in k) + (sport, season, team)).fetchall()
+        if rows:
+            return rows
+    days = sorted({p for _s, p, _g in games})
+    if sport not in _WIDE_PERIODS and days and len(days) + 3 <= _MAX_KEYS:
+        rows = conn.execute(_by_days_sql(head, len(days), tail), tuple(days) + (sport, season, team)).fetchall()
+        if rows:
+            return rows
+    return None
 
 
 def _latest_season(conn, sport: str, team: str) -> int | None:
     by_season: dict = {}
-    for season, period, gid in _team_games(conn, sport, team):
-        by_season.setdefault(season, []).append((period, gid))
+    for g in _team_games(conn, sport, team):
+        by_season.setdefault(g[0], []).append(g)
     for season in sorted(by_season, reverse=True):
-        pairs = by_season[season]
-        for i in range(0, len(pairs), 200):
-            chunk = pairs[i:i + 200]
-            hit = conn.execute(
-                "WITH g(period, game_id) AS (VALUES " + ",".join("(?,?)" for _ in chunk) + ") "
-                "SELECT 1 FROM g JOIN player_game_logs l ON l.sport=? AND l.season=? "
-                "AND l.period=g.period AND l.game_id=g.game_id WHERE l.team=? LIMIT 1",
-                tuple(x for p in chunk for x in p) + (sport, season, team)).fetchone()
-            if hit:
-                return season
+        if _keyed(conn, sport, team, season, by_season[season], "SELECT 1", " LIMIT 1"):
+            return season
     row = conn.execute(
         "SELECT MAX(season) FROM player_game_logs WHERE sport=? AND team=?",
         (sport, team)).fetchone()
     return row[0] if row and row[0] is not None else None
 
 
+_SUMS = ("SELECT l.player AS player, l.position AS position, l.market AS market, COUNT(*) n, "
+         "SUM(l.value) total, COUNT(DISTINCT l.game_id) games")
+
+
 def _season_rows(conn, sport: str, team: str, season: int) -> list:
-    """The team's (player, position, market) sums for one season (`_BY_GAMES`)."""
-    pairs = [(p, g) for _s, p, g in _team_games(conn, sport, team, season)]
-    rows: list = []
-    if pairs and len(pairs) <= 400:
-        rows = conn.execute(
-            _BY_GAMES.format(pairs=",".join("(?,?)" for _ in pairs)),
-            tuple(x for p in pairs for x in p) + (sport, season, team)).fetchall()
+    """The team's (player, position, market) sums for one season (`_keyed`)."""
+    games = _team_games(conn, sport, team, season)
+    rows = _keyed(conn, sport, team, season, games, _SUMS,
+                  " AND l.player<>'' GROUP BY l.player, l.position, l.market") if games else None
     if not rows:
         rows = conn.execute(
             "SELECT player, position, market, COUNT(*) n, SUM(value) total, "
@@ -1047,6 +1095,26 @@ USAGE_MARKET = {"nhl": "toi", "nba": "min", "wnba": "min", "cbb": "min"}
 USAGE_WINDOW = 20
 
 
+_NAME_SUFFIX = re.compile(r",?\s+(jr|sr|ii|iii|iv|v)\.?$", re.I)
+
+
+def _name_prefixes(name: str) -> set:
+    """Where a name's rows start in the (sport, market, player) index: its
+    first word and its last word's first letter, as written, with accents
+    folded and with either apostrophe ("Nikola J" reaches Jokic and Jokić,
+    "Nolan S" reaches "Nolan Smith Jr.", "De'Aaron F" reaches "De’Aaron
+    Fox"). The caller keeps the rows whose shared name key matches."""
+    import unicodedata
+    words = _NAME_SUFFIX.sub("", (name or "").strip()).split()
+    if not words:
+        return set()
+    head = words[0] + (" " + words[-1][0] if len(words) > 1 else "")
+    out = set()
+    for h in (head, "".join(c for c in unicodedata.normalize("NFKD", head) if not unicodedata.combining(c))):
+        out |= {h, h.replace("'", "’"), h.replace("’", "'")}
+    return out
+
+
 def usage_depth(conn, sport: str, roster: list[dict], window: int = USAGE_WINDOW) -> dict | None:
     """THE DEPTH CHART THE COACH ACTUALLY USES, for leagues with no
     published one (Ethan, 2026-10-03: "make sure ... all the depth charts
@@ -1068,9 +1136,21 @@ def usage_depth(conn, sport: str, roster: list[dict], window: int = USAGE_WINDOW
         top = (0,)
     # This season and last: enough for a twenty-game window, and a page
     # request should not read three seasons of minutes to draw one club.
-    rows = conn.execute(
-        "SELECT player, period, value FROM player_game_logs WHERE sport=? AND market=? "
-        "AND season>=? ORDER BY period DESC", (sport, market, int(top[0]) - 1)).fetchall()
+    # THE ROSTER'S OWN ROWS (2026-11-18). This read every player's minutes in
+    # the sport, two seasons of them in date order, to keep the fifteen on the
+    # roster: a college basketball page waited 25 to 50 seconds on it. Each
+    # name's rows sit together in the (sport, market, player) index, so the
+    # read starts where the name does (`_name_prefixes`) and keeps the rows
+    # whose shared name key is the roster's, as the whole-sport read did.
+    want = {_norm_key(p.get("player") or "") for p in roster} - {""}
+    rows = []
+    for start in sorted({s for p in roster for s in _name_prefixes(p.get("player") or "")}):
+        rows += [r for r in conn.execute(
+            "SELECT player, period, value FROM player_game_logs WHERE sport=? AND market=? "
+            "AND player>=? AND player<? AND season>=?",
+            (sport, market, start, start + "￿", int(top[0]) - 1)).fetchall()
+            if _norm_key(r["player"]) in want]
+    rows.sort(key=lambda r: str(r["period"]), reverse=True)
     per: dict = {}
     for r in rows:
         k = _norm_key(r["player"])

@@ -9338,6 +9338,28 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XN. Each count on a page counts what it says** (step 750; 18 November). Nothing to run. From the eighth walk. A
+game page's matchup scan said "9 games" at the top, "10 games" over the raw numbers and "After 9 games" under them
+on IND@HOU (the Colts have played 10, the Texans 9): it says one count when the two teams' match and each team's
+when they do not, the same way in all three places and in hockey's note, and the season split once, at the top.
+Under it, rushing yards and sacks allowed a game added the play-by-play's games and divided by the final scores': a
+Monday night score is filed that night and its plays a night or two later, so both Monday teams read low until then
+(BAL and LAC, 9 games of plays over 10). Each sum now goes over its own games. College football's card said "8
+games" for schools that had played 11 (its count is plays over 70, a weight, not games): it says the split alone.
+The team shapes line read "9 undefined" (a local plural that needed both words). Team pages still took 22 to 50
+seconds live after XM: only basketball's and college football's rows carry the schedule's own game id. The NFL files
+a team's week as "DET-010", and hockey, the NBA's own feed and baseball a row per player and day, so the NFL fell
+back to the old scan every time; the reads now go by each league's key, then by the team's game days, and the depth
+chart reads the roster's own names instead of every minutes row in the sport. College football: one game filed under
+two codes for one side (Western Michigan at "BUF" and at "BUFF", the same 20-17; Air Force as "AF" and "AFA", Albany
+as "ALB" and "UALB") counts once, so Western Michigan reads 8-3, not 9-3; and the standings, which counted our own
+games all season because ESPN's bare table answered with no teams, ask for Division I-FBS by number when it does.
+The NBA's scan ranked 31 teams (a side outside the league with three nights on file): it ranks the league's own 30.
+Hockey's empty Most Likely note read "164 Scalpy pass — 164 prop(s): unstable role or blowout risk": "164 kept off
+for an unsteady role or a lopsided game". The Record page's game-by-game pointer is said once and names picks and
+tickets right; an exchange price says "7 min ago", not "7m"; a team schedule's college and day-league rows read as a
+weekday and a date, not "2026-09-05" or nothing.
+
 **XM. A team page reads its own games** (step 749; 18 November). Nothing to run. A college basketball team page
 answered in 16 to 40 seconds (measured from here on Tennessee's). The squad and the stat page read the player logs
 by team, and nothing on that table leads with the team (its key is sport, season, period, game, player, market):

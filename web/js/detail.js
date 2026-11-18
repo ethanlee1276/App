@@ -27,7 +27,9 @@ function pulledAgo(iso) {
   const t = Date.parse(iso || "");
   if (!isFinite(t)) return "";
   const m = Math.max(0, Math.round((Date.now() - t) / 60000));
-  return m < 1 ? "just now" : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`;
+  // Units in words: the head is set in capitals, and "44m ago" read as "44M AGO" (walk 8, 2026-11-18).
+  const d = Math.round(m / 1440);
+  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : `${d} day${d === 1 ? "" : "s"} ago`;
 }
 
 function crowdLinesHTML(g, c) {
@@ -1286,16 +1288,36 @@ function tapeVerdict(scan, a, b, side) {
    so. This line says the split — since 2026-09-27 the measured one,
    growing with this season's games (engine/gamescan.unit_share,
    scanblendfit.py), last season still in — Ethan, 2026-09-25: "2025 data
-   should def be used". */
+   should def be used".
+
+   EACH TEAM'S OWN COUNT (2026-11-18). A bye leaves one side a game short,
+   and this line said the smaller count, the raw table the larger and the
+   note under it the home side's: IND@HOU read "9 games", "10 games" and
+   "After 9 games" on one card. `gamesEach` says one count when the two
+   match and each team's when they do not, and the split says its range. */
+function gamesEach(away, home, ga, gh, prose = false) {
+  const pl = (n) => `${n} game${n === 1 ? "" : "s"}`;
+  if (ga === gh) return ga ? pl(ga) : "";
+  return prose ? `${pl(ga)} for the ${teamName(away)} and ${gh} for the ${teamName(home)}`
+    : `${teamName(away)} ${pl(ga)}, ${teamName(home)} ${gh}`;
+}
+
+function pctRange(xs) {
+  const lo = Math.min(...xs), hi = Math.max(...xs);
+  return lo === hi ? `${hi}%` : `${lo}–${hi}%`;
+}
+
 function tapeBasis(scan, away, home) {
   const u = (t) => ((scan.units || {})[t]) || {};
-  const games = Math.min(...[away, home].map((t) => Number(u(t).games) || 0));
-  const last = Math.max(...[away, home].map((t) => 1 - (u(t).blend ?? 1)));
-  if (!games) return "Last season’s numbers — no games yet this season";
-  const g = `${games} game${games === 1 ? "" : "s"}`;
-  return last > 0.005
-    ? `This season (${g}) with last season filling in — ${Math.round(last * 100)}% of each rank is last season`
-    : `This season only · ${g} each`;
+  const [ga, gh] = [away, home].map((t) => Number(u(t).games) || 0);
+  const last = [away, home].map((t) => Math.round((1 - (u(t).blend ?? 1)) * 100));
+  if (!ga && !gh) return "Last season’s numbers — no games yet this season";
+  // College's `games` is plays over 70, not a count (engine/gamescan.
+  // cfb_ratings, `basis: "plays"`): its card says the split alone.
+  const g = [away, home].some((t) => u(t).basis === "plays") ? "" : gamesEach(away, home, ga, gh);
+  return Math.max(...last) > 0
+    ? `This season${g ? ` (${g})` : ""} with last season filling in — ${pctRange(last)} of each rank is last season`
+    : !g ? "This season only" : ga === gh ? `This season only · ${g} each` : `This season only (${g})`;
 }
 
 /* …AND WHAT CHANGED ON EACH TEAM (2026-09-27). The engine names every
@@ -1345,8 +1367,8 @@ function seasonNumbersHTML(scan, away, home, drawn = new Set()) {
   const rows = SEASON_NUMBER_ROWS.filter(([k]) => !drawn.has(k) && ((nums[away] || {})[k] || (nums[home] || {})[k]))
     .map(([k, label, kind]) => `<div class="tp-row"><span class="tp-k">${escapeHtml(label)}</span>${cellOf(away, k, kind)}${cellOf(home, k, kind)}</div>`).join("");
   if (!rows) return "";
-  const g = Math.max((nums[away] || {}).games || 0, (nums[home] || {}).games || 0);
-  return `<div class="tp-group">This season, as played${g ? ` (${g} game${g === 1 ? "" : "s"})` : ""} — raw numbers, league rank</div>${rows}`;
+  const g = gamesEach(away, home, Number((nums[away] || {}).games) || 0, Number((nums[home] || {}).games) || 0);
+  return `<div class="tp-group">This season, as played${g ? ` (${g})` : ""} — raw numbers, league rank</div>${rows}`;
 }
 
 function scanTapeHTML(scan, away, home) {
@@ -1933,7 +1955,8 @@ function matchupScanHTML(g) {
   const reads = (d.scan_reads || {})[`${away}@${home}`];
   const locked = !reads && d.locked && d.locked.scan_reads;
   const u0 = (scan.units || {})[home] || (scan.units || {})[away] || {};
-  const blend = u0.blend != null && u0.games ? `After ${u0.games} game${u0.games === 1 ? "" : "s"}, the big number is ${Math.round(u0.blend * 100)}% this season and ${100 - Math.round(u0.blend * 100)}% last season — the mix that best predicted the rest of a season when we tested it. “This season” under it is this season on its own.` : "";
+  // The split itself is the card's top line (tapeBasis): said once.
+  const blend = u0.blend != null && u0.games ? "The big number mixes in last season by the share above — the mix that best predicted the rest of a season when we tested it. “This season” under it is this season on its own." : "";
   /* ONE LIST OF MISMATCHES. The game plan's "The matchup" step says the
      scan's top three edges (engine/gameplan.matchup_lines); with a plan on
      the page this box keeps only the ones after them — Ethan, 2026-09-28:
@@ -2082,9 +2105,13 @@ function nhlScanHTML(g) {
       ${inj.length ? `<div class="mlb-tape-row mini">Injury report: ${inj.map((i) => `${escapeHtml(i.player)} (${escapeHtml(String(i.status || "").toLowerCase())})`).join(", ")}</div>` : ""}
     </div>`;
   };
-  const s0 = t.sides[g.home] || t.sides[g.away] || {};
-  const blend = s0.season_weight != null && s0.gp_season
-    ? `After ${s0.gp_season} game${s0.gp_season === 1 ? "" : "s"} this season, team strength is ${Math.round(s0.season_weight * 100)}% this season and ${100 - Math.round(s0.season_weight * 100)}% last season — early nights lean on the bigger sample.` : "";
+  // Each side's own games and split (gamesEach): LAK@BOS is 18 and 19.
+  const both = [g.away, g.home].map((tm) => t.sides[tm] || {}).filter((s) => s.season_weight != null);
+  const gpOf = (tm) => Number((t.sides[tm] || {}).gp_season) || 0;
+  const gpSaid = gamesEach(g.away, g.home, gpOf(g.away), gpOf(g.home), true);
+  const now = both.map((s) => Math.round(s.season_weight * 100));
+  const blend = both.length && gpSaid
+    ? `After ${gpSaid} this season, team strength is ${pctRange(now)} this season and ${pctRange(now.map((x) => 100 - x))} last season — early nights lean on the bigger sample.` : "";
   return `<div id="gp-sec-scan" class="ms">
     <div class="section-title">Matchup scan
       <span class="sub">— the starters, each side’s goals and shots, and who could shine or struggle</span></div>
@@ -2240,7 +2267,9 @@ function renderGamePage() {
   const score = (side) => (live.home_score != null && (isLive || isFinal))
     ? `<b class="score">${side === "home" ? live.home_score : live.away_score}</b>` : "";
 
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  // `plural` is app.js's (it forms "games" from "game" itself): a copy
+  // here that needed both words printed "HOU 60% this season (9
+  // undefined)" on the team shapes card (2026-11-18).
 
   // The hero wears the same venue art chain as the strip card (Ethan's
   // desktop event-page render, 2026-08-11): team photo, else the

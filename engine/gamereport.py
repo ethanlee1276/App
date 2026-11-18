@@ -2677,8 +2677,12 @@ def sec_before(c: Ctx) -> dict | None:
     if w.get("forecast") and not w.get("dome"):
         lines.append("The forecast can still change; we use the forecast for kickoff, not today's weather")
     games = [((c.units.get(t) or {}).get("games")) for t in c.teams]
+    # College's `games` is plays over 70 (gamescan.cfb_ratings, `basis`),
+    # so it is said as plays on file, never as games played.
+    by_plays = any((c.units.get(t) or {}).get("basis") == "plays" for t in c.teams)
     if any(n is not None and n < 4 for n in games):
-        lines.append("Small sample: " + _join(f"{t} has played {_plural(n, 'game')}"
+        lines.append("Small sample: " + _join((f"{t} has about {_plural(n, 'game')} of plays on file" if by_plays
+                                                else f"{t} has played {_plural(n, 'game')}")
                                                for t, n in zip(c.teams, games) if n is not None)
                      + " this season, so last season counts for more in every rank")
     if g.get("price_stale"):

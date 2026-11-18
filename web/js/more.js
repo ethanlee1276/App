@@ -2987,7 +2987,7 @@ function teamGameResult(g) {
    (the 18-week seasons, 2021 on). */
 const NFL_ROUNDS = { 19: "Wild Card", 20: "Divisional", 21: "Conference", 22: "Super Bowl" };
 function teamGameWhen(d, g) {
-  if (d.sport === "nfl" || d.sport === "cfb") {
+  if (d.sport === "nfl" || (d.sport === "cfb" && Number.isFinite(Number(g.period)))) {
     // Stored as "001" so text sorts as numbers; read as "Wk 1".
     const wk = Number(g.period);
     if (!g.period) return "";
@@ -2995,10 +2995,20 @@ function teamGameWhen(d, g) {
     if (d.sport === "nfl" && Number(g.season) >= 2021 && NFL_ROUNDS[wk]) return NFL_ROUNDS[wk];
     return `Wk ${wk}`;
   }
-  return g.date ? String(g.date).slice(5).replace("-", "/") : "";
+  /* A DAY'S LEAGUE, and college football, whose period is the game's day
+     ("2026-09-05"): the weekday, the date under it (teamGameDate). A row
+     printed "11/02" over "11/2", a college one its raw "2026-09-05", and a
+     college basketball one nothing, its date being the period (2026-11-18). */
+  const day = teamGameDay(g);
+  return day ? new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }) : "";
+}
+function teamGameDay(g) {
+  const p = String(g.period || "");
+  return String(g.date || (/^\d{4}-\d{2}-\d{2}$/.test(p) ? p : "")).slice(0, 10);
 }
 function teamGameDate(g) {
-  return g.date ? String(g.date).slice(5).replace(/^0/, "").replace("-", "/").replace("/0", "/") : "";
+  const day = teamGameDay(g);
+  return day ? day.slice(5).replace(/^0/, "").replace("-", "/").replace("/0", "/") : "";
 }
 
 /* Tonight's game on the board, if this team is on it. */

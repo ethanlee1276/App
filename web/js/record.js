@@ -3237,8 +3237,14 @@ function recFactsMount(host) {
    Report Picks page's own record do. */
 function recReceiptsOnce(host, facts, games) {
   if (!games || !facts.isConnected) return;
-  host.querySelectorAll("[data-rec-flat]").forEach((el) => {
-    el.innerHTML = `<p class="rec-gp-close">Each game’s ${el.dataset.recFlat === "picks" ? "picks" : "tickets"}, hit or missed, are listed game
+  // The pointer once, after the last block (walk 8, 2026-11-18: the NFL tab said it three times running, under
+  // the picks, the three-leg parlays and the touchdown pairs), naming what the blocks above it held.
+  const flats = [...host.querySelectorAll("[data-rec-flat]")];
+  const picks = flats.some((el) => el.dataset.recFlat === "picks");
+  const tickets = flats.some((el) => el.dataset.recFlat !== "picks");
+  const what = picks && tickets ? "picks and tickets" : picks ? "picks" : "tickets";
+  flats.forEach((el, i) => {
+    el.innerHTML = i < flats.length - 1 ? "" : `<p class="rec-gp-close">Each game’s ${what}, hit or missed, are listed game
       by game under <button type="button" class="rec-to-facts" data-rec-to-facts>How our reports did</button>, below.</p>`;
   });
 }

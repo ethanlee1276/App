@@ -153,7 +153,45 @@ def once(sport: str, rows, name=None) -> list:
             if not group:
                 start = d
             group.append(i)
-    return [r for i, r in enumerate(rows) if i in keep]
+    return _one_side_once([r for i, r in enumerate(rows) if i in keep], canon, gid)
+
+
+def _one_side_once(rows: list, canon, gid) -> list:
+    """…AND ONE GAME FILED UNDER TWO CODES FOR ONE SIDE (2026-11-18).
+    Western Michigan at Buffalo on 3 October sat as "WMU@BUF" and
+    "WMU@BUFF", the same 20-17: the pair above never met, and Western
+    Michigan's page said 9-3 for 8-3 (Air Force sits as "AF" and "AFA",
+    Albany as "ALB" and "UALB"). A football team plays once in two days, so
+    two finals with the same team on the same side, a day or less apart and
+    the same score, are one game; the copy kept is chosen as above. Rows
+    without both scores are left as they are."""
+    def score(r, k):
+        try:
+            v = r[k]
+        except (IndexError, KeyError):
+            return None
+        try:
+            return None if v is None or v == "" else float(v)
+        except (TypeError, ValueError):
+            return None
+
+    rank = lambda j: (gid(rows[j]).endswith("-box"), "@" not in gid(rows[j]),   # noqa: E731
+                      str(rows[j]["period"] or ""))
+    drop: set = set()
+    seen: dict = {}
+    for i in sorted(range(len(rows)), key=lambda k: str(rows[k]["period"] or "")):
+        d = _day(rows[i]["period"])
+        hs, aw = score(rows[i], "home_score"), score(rows[i], "away_score")
+        if d is None or hs is None or aw is None:
+            continue
+        for side in ("home", "away"):
+            key = (side, canon(rows[i][side]), hs, aw)
+            prev = seen.get(key)
+            if prev and prev[0] not in drop and i not in drop and (d - prev[1]).days <= 1:
+                drop.add(max(prev[0], i, key=rank))
+            if i not in drop:
+                seen[key] = (i, d)
+    return [r for k, r in enumerate(rows) if k not in drop]
 
 
 def _finished(conn, sport: str, seasons: list[int] | None):

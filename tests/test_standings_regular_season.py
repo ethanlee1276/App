@@ -23,13 +23,17 @@ def test_the_url_names_the_regular_season_and_the_cache_carries_it():
     seen = {}
 
     def fake(url, cache_name, **kw):
-        seen["url"], seen["name"] = url, cache_name
+        # The first ask: college football asks again for Division I-FBS when
+        # this one answers empty (test_one_game_under_two_codes_counts_once).
+        seen.setdefault("url", url)
+        seen.setdefault("name", cache_name)
         return {"children": []}
 
     real = LS.fetch_json
     LS.fetch_json = fake
     try:
         for sport in ("nfl", "cfb", "wnba"):
+            seen.clear()
             LS.fetch(sport, 2026)
             assert "seasontype=2" in seen["url"], (sport, seen["url"])
             assert "season=2026" in seen["url"]

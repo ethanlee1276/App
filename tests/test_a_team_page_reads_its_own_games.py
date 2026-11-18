@@ -111,12 +111,110 @@ def test_the_team_list_reads_two_names_off_each_final():
 
 def test_the_read_is_a_lookup_per_game():
     conn = _history()
-    pairs = [(p, g) for _s, p, g in teamdex._team_games(conn, "cbb", "DUKE", 2026)]
-    sql = teamdex._BY_GAMES.format(pairs=",".join("(?,?)" for _ in pairs))
+    keys = teamdex._log_keys("cbb", "DUKE", teamdex._team_games(conn, "cbb", "DUKE", 2026))
+    sql = teamdex._by_keys_sql(teamdex._SUMS, len(keys), " AND l.player<>'' GROUP BY l.player, l.position, l.market")
     plan = " ".join(str(tuple(r)) for r in conn.execute(
-        "EXPLAIN QUERY PLAN " + sql, tuple(x for p in pairs for x in p) + ("cbb", 2026, "DUKE")))
+        "EXPLAIN QUERY PLAN " + sql, tuple(x for k in keys for x in k) + ("cbb", 2026, "DUKE")))
     assert "SCAN l" not in plan and "SCAN player_game_logs" not in plan, plan
     assert "USING INDEX" in plan or "USING PRIMARY KEY" in plan, plan
+    days = sorted({p for _s, p, _g in teamdex._team_games(conn, "cbb", "DUKE", 2026)})
+    plan = " ".join(str(tuple(r)) for r in conn.execute(
+        "EXPLAIN QUERY PLAN " + teamdex._by_days_sql("SELECT 1", len(days)), tuple(days) + ("cbb", 2026, "DUKE")))
+    assert "SCAN l" not in plan and "SCAN player_game_logs" not in plan, plan
+
+
+def _nfl_history():
+    """The NFL as it is filed: the schedule's "AWAY@HOME", the rows' team
+    week ("DET-010"), and a same-night box score's "-box" copy."""
+    conn = db.connect(":memory:")
+    games, logs = [], []
+    for wk in range(1, 6):
+        p = f"{wk:03d}"
+        home, away = ("DET", "CHI") if wk % 2 else ("CHI", "DET")
+        games.append({"sport": "nfl", "season": 2026, "period": p, "game_id": f"{away}@{home}",
+                      "date": f"2026-09-{6 + 7 * wk:02d}", "home": home, "away": away,
+                      "home_score": 20 + wk, "away_score": 17})
+        for team, opp in ((home, away), (away, home)):
+            gid = f"{team}-{p}" + ("-box" if wk == 5 else "")
+            for j, (name, pos) in enumerate(((f"{team} QB", "QB"), (f"{team} WR", "WR"))):
+                for market, v in (("pass_yds" if pos == "QB" else "rec_yds", 200 + wk + j), ("rush_yds", 10 + wk)):
+                    logs.append({"sport": "nfl", "season": 2026, "period": p, "game_id": gid, "player": name,
+                                 "team": team, "opponent": opp, "position": pos, "home": int(team == home),
+                                 "market": market, "value": v})
+    db.upsert_games(conn, games)
+    db.upsert_player_logs(conn, logs)
+    conn.commit()
+    return conn
+
+
+def test_the_nfl_is_read_by_its_team_weeks():
+    conn = _nfl_history()
+    assert teamdex._log_keys("nfl", "DET", [(2026, "003", "DET@CHI")]) == [("003", "DET-003"), ("003", "DET-003-box")]
+    new = teamdex._season_rows(conn, "nfl", "DET", 2026)
+    old = conn.execute(OLD, ("nfl", "DET", 2026)).fetchall()
+    assert new and _key(new) == _key(old), (_key(new), _key(old))
+    assert {r["games"] for r in new} == {5}, "the box score's week counts with the rest"
+    assert teamdex._latest_season(conn, "nfl", "DET") == 2026
+    # Read by the team week, not by the old scan: no row of the answer is
+    # left out when the old read is taken away.
+    src = teamdex._keyed(conn, "nfl", "DET", 2026, teamdex._team_games(conn, "nfl", "DET", 2026),
+                         teamdex._SUMS, " AND l.player<>'' GROUP BY l.player, l.position, l.market")
+    assert src and _key(src) == _key(old)
+
+
+def test_hockey_is_read_by_its_game_days():
+    # A row per player and day ("Name-2026-11-17"): only the day is shared.
+    conn = db.connect(":memory:")
+    games, logs = [], []
+    for k in range(4):
+        day = f"2026-11-{10 + k:02d}"
+        games.append({"sport": "nhl", "season": 2026, "period": day, "game_id": f"BOS@TOR{k}", "date": day,
+                      "home": "TOR", "away": "BOS", "home_score": 3, "away_score": 2})
+        games.append({"sport": "nhl", "season": 2026, "period": day, "game_id": f"NYR@MTL{k}", "date": day,
+                      "home": "MTL", "away": "NYR", "home_score": 1, "away_score": 4})
+        for team in ("TOR", "BOS", "MTL", "NYR"):
+            for name in (f"{team} C", f"{team} D"):
+                for market, v in (("shots", 2 + k), ("toi", 18.5)):
+                    logs.append({"sport": "nhl", "season": 2026, "period": day, "game_id": f"{name}-{day}",
+                                 "player": name, "team": team, "opponent": "x", "position": name[-1],
+                                 "home": 0, "market": market, "value": v})
+    db.upsert_games(conn, games)
+    db.upsert_player_logs(conn, logs)
+    conn.commit()
+    new = teamdex._season_rows(conn, "nhl", "TOR", 2026)
+    old = conn.execute(OLD, ("nhl", "TOR", 2026)).fetchall()
+    assert new and _key(new) == _key(old)
+    assert teamdex._latest_season(conn, "nhl", "TOR") == 2026
+    # College's nights are too wide to read by day: its rows carry the key.
+    assert "cbb" in teamdex._WIDE_PERIODS and "nfl" in teamdex._WIDE_PERIODS and "nhl" not in teamdex._WIDE_PERIODS
+
+
+def test_the_depth_chart_reads_the_rosters_own_rows():
+    conn = db.connect(":memory:")
+    logs = []
+    names = ("Nolan Smith Jr.", "Nikola Jokić", "De’Aaron Fox", "Someone Else", "Nolan Smithson")
+    for k in range(25):
+        day = f"2026-{10 + k // 20:02d}-{1 + k % 20:02d}"
+        for i, name in enumerate(names):
+            logs.append({"sport": "nba", "season": 2026, "period": day, "game_id": f"{name}-{day}",
+                         "player": name, "team": "DEN", "opponent": "x", "position": "G", "home": 0,
+                         "market": "min", "value": 30 - i + (k % 3)})
+    db.upsert_player_logs(conn, logs)
+    conn.commit()
+    roster = [{"player": "Nolan Smith", "position": "G"}, {"player": "Nikola Jokic", "position": "C"},
+              {"player": "De'Aaron Fox", "position": "G"}, {"player": "Nobody Here", "position": "F"}]
+    depth = teamdex.usage_depth(conn, "nba", roster)
+    by = {pos["position"]: dict(zip(pos["players"], pos["usage"])) for pos in depth["positions"]}
+    # The newest twenty games of each, whichever spelling the logs use;
+    # a name with none sits at the bottom of the chart, as it always has.
+    assert by["G"]["Nolan Smith"] > 0 and by["G"]["De'Aaron Fox"] > 0, by
+    assert by["C"]["Nikola Jokic"] > 0 and by["F"]["Nobody Here"] == 0, by
+    assert teamdex._name_prefixes("Nolan Smith Jr.") == {"Nolan S"}
+    assert {"Dario Š", "Dario S"} <= teamdex._name_prefixes("Dario Šarić")
+    plan = " ".join(str(tuple(r)) for r in conn.execute(
+        "EXPLAIN QUERY PLAN SELECT player, period, value FROM player_game_logs WHERE sport=? AND market=? "
+        "AND player>=? AND player<? AND season>=?", ("nba", "min", "Nolan S", "Nolan S￿", 2025)))
+    assert "SCAN" not in plan and "USING INDEX" in plan, plan
 
 
 if __name__ == "__main__":

@@ -138,9 +138,12 @@ const host = { querySelectorAll: (s) => (s === '[data-rec-flat]' ? flats : []) }
     for k in ("none", "gone", "failed"):
         assert got[k] == ["ten rows", "ten tickets"], (k, "no finished game listed: the flat lists are the receipts")
     picks, tickets = got["listed"]
-    assert "Each game’s picks, hit or missed, are listed game by game under" in picks and "ten rows" not in picks
-    assert "Each game’s tickets, hit or missed, are listed game by game under" in tickets and "ten tickets" not in tickets
-    assert 'data-rec-to-facts>How our reports did</button>, below.' in picks
+    # Said once, after the last block (walk 8, 2026-11-18: the NFL tab said it three times running), naming
+    # what the blocks above it held.
+    assert picks == "", picks
+    assert "Each game’s picks and tickets, hit or missed, are listed game by game under" in tickets
+    assert "ten tickets" not in tickets
+    assert 'data-rec-to-facts>How our reports did</button>, below.' in tickets
     # Wired: the fact checks answer with how many games they listed, and the mount passes it on.
     assert ('rpFactsInto(el, el.dataset.recFacts).then((games) => recReceiptsOnce(host, el, games));' in REC)
     into = _fn(RP, "rpFactsInto")

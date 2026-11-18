@@ -4,6 +4,30 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Each team’s own game count",
+      "body": "A game page’s matchup scan could say 9 games at the top and 10 below when one team had a bye. It gives each team’s count now, and says the season split once."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
+      "title": "Per-game numbers after Monday night",
+      "body": "Rushing yards and sacks allowed a game read low for the Monday night teams until that game’s plays came in. Each now divides by the games it has."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
+      "title": "College football counts each game once",
+      "body": "Western Michigan read 9-3 with one game at Buffalo counted twice. A game filed under two names for one team counts once now, and the college standings ask for the right table."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
+      "title": "Team pages open faster in every league",
+      "body": "NFL, hockey and NBA team pages still read far more than their own team. They read only the team’s own games and roster now."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "Team pages open faster",
       "body": "A college basketball team’s page could take half a minute to open, reading every season’s box scores to find one team’s. It reads that team’s own games now."
     },

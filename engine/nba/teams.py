@@ -241,6 +241,15 @@ def build(now_rows, last_rows, sport: str = "nba", before: str | None = None) ->
     it; it is the build's, never the page's."""
     now_g, last_g = team_games(now_rows, sport), team_games(last_rows, sport)
     prof = blend(season_profiles(now_g, before=before), season_profiles(last_g))
+    # ONLY THE LEAGUE'S OWN CLUBS (2026-11-18: the NBA's matchup scan read "Rank
+    # of 31"). A side outside the league with three nights on file (a visiting
+    # club, an exhibition team) was rated and ranked, a 31st in a 30-team
+    # table. A league with a full table here (engine/divisions) ranks only its
+    # own; college basketball, which has none, ranks everyone it has.
+    from .. import divisions
+    league = divisions.MAPS.get(sport) or {}
+    if league:
+        prof = {t: p for t, p in prof.items() if divisions.canonical(sport, t) in league}
     rk = ranks(prof)
     for t, p in prof.items():
         p["ranks"] = rk.get(t, {})

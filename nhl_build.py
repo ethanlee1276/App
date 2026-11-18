@@ -1092,7 +1092,10 @@ def attach_most_likely(out: dict, out_path: str, date: str) -> None:
     # role, a blowout risk on saves); the Edge board still prices it.
     passed = [r for r in recs if r.get("scalpy_pass")]
     if passed:
-        census[f"Scalpy pass — {len(passed)} prop(s): unstable role or blowout risk"] = len(passed)
+        # The page puts the count before the words (likelyEmptyWhy): the old
+        # key carried its own, and the method's name, and read "164 Scalpy
+        # pass — 164 prop(s): unstable role or blowout risk" (2026-11-18).
+        census["kept off for an unsteady role or a lopsided game"] = len(passed)
     from engine.gamescan import leans_from_reads, stamp_picks
     lean_report: dict = {}
     past_cap: list = []      # the likely legs the −250 cap keeps off — see cfb_build

@@ -301,14 +301,19 @@ NUMBER_SPECS = (
     # key, label, value(team_sums, games), higher is better
     ("pts_for", "Points scored a game", lambda c, g: c["pf"] / g if g else None, True),
     ("pts_against", "Points allowed a game", lambda c, g: c["pa"] / g if g else None, False),
-    ("rush_allowed", "Rushing yards allowed a game", lambda c, g: c["d_rush_yds"] / g if g else None, False),
+    # The play-by-play's sums go over the play-by-play's own games (`d_g`),
+    # not the final scores': a Monday night score is filed that night and
+    # its plays a night or two later, and 9 games of rushing yards over 10
+    # games understated both Monday teams (BAL and LAC, 2026-11-18).
+    ("rush_allowed", "Rushing yards allowed a game",
+     lambda c, g: c["d_rush_yds"] / c["d_g"] if c["d_g"] else None, False),
     ("ypc_allowed", "Yards a carry allowed", lambda c, g: c["d_rush_yds"] / c["d_rushes"] if c["d_rushes"] else None, False),
     ("third_off", "Third-down conversion rate", lambda c, g: c["o_3c"] / c["o_3a"] if c["o_3a"] else None, True),
     ("third_def", "Third-down rate allowed", lambda c, g: c["d_3c"] / c["d_3a"] if c["d_3a"] else None, False),
     ("rz_off", "Red-zone TD rate", lambda c, g: c["o_rzt"] / c["o_rzd"] if c["o_rzd"] else None, True),
     ("rz_def", "Red-zone TD rate allowed", lambda c, g: c["d_rzt"] / c["d_rzd"] if c["d_rzd"] else None, False),
     ("run_rate", "Run rate (runs per play)", lambda c, g: c["o_rush"] / c["o_plays"] if c["o_plays"] else None, None),
-    ("sacks", "Sacks a game", lambda c, g: c["d_sacks"] / g if g else None, True),
+    ("sacks", "Sacks a game", lambda c, g: c["d_sacks"] / c["d_g"] if c["d_g"] else None, True),
     # From team_weeks (engine/sources/nflpbp, 2026-10-20): the tempo, the
     # turnovers and the coaching calls the game report writes out. "1st"
     # is the most plays, the quickest snap, the most passing over
@@ -349,7 +354,7 @@ def season_numbers(conn, season: int, before_week: int | None = None) -> dict:
     cells: dict = {}
 
     def cell(t):
-        return cells.setdefault(t, {"pf": 0.0, "pa": 0.0, "g": 0, "d_rush_yds": 0.0, "d_rushes": 0,
+        return cells.setdefault(t, {"pf": 0.0, "pa": 0.0, "g": 0, "d_g": 0, "d_rush_yds": 0.0, "d_rushes": 0,
                                     "o_3a": 0, "o_3c": 0, "d_3a": 0, "d_3c": 0, "o_rzd": 0, "o_rzt": 0,
                                     "d_rzd": 0, "d_rzt": 0, "o_rush": 0, "o_plays": 0, "d_sacks": 0,
                                     "w_g": 0, "w_plays": 0, "w_pace": [0.0, 0], "w_proe": [0.0, 0],
@@ -370,6 +375,7 @@ def season_numbers(conn, season: int, before_week: int | None = None) -> dict:
                 c["o_rzd"] += v("rz_drives"); c["o_rzt"] += v("rz_tds")
                 c["o_rush"] += v("rushes"); c["o_plays"] += v("plays")
             else:
+                c["d_g"] += 1
                 c["d_rush_yds"] += v("rush_yds"); c["d_rushes"] += v("rushes")
                 c["d_3a"] += v("third_att"); c["d_3c"] += v("third_conv")
                 c["d_rzd"] += v("rz_drives"); c["d_rzt"] += v("rz_tds"); c["d_sacks"] += v("sacks")
@@ -2685,7 +2691,12 @@ def cfb_ratings(current: dict, prior: dict | None = None) -> dict:
         # CURRENT_LEADS_GAMES and CURRENT_SHARE, in plays.
         w = season_share(plays, bool(p), leads_at=CURRENT_LEADS_GAMES * CFB_PLAYS_PER_GAME,
                          prior_n=CFB_PRIOR_PLAYS)
-        out[t] = {"games": round(plays / CFB_PLAYS_PER_GAME) if plays else 0, "blend": round(w, 2)}
+        # `games` here is plays over 70, a weight's yardstick and not a
+        # count: said as one it read "8 games" for Ball State, Ohio, Kent
+        # State and Miami (OH), who had played 11, 11, 11 and 12
+        # (2026-11-18). `basis` tells the card to say the split, not it.
+        out[t] = {"games": round(plays / CFB_PLAYS_PER_GAME) if plays else 0, "blend": round(w, 2),
+                  "basis": "plays"}
         for side in ("off", "def"):
             vals = {}
             for u in CFB_UNITS:

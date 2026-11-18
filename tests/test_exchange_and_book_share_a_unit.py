@@ -50,7 +50,7 @@ def test_the_crowd_table_has_prices_a_pull_time_and_always_a_gap():
     html = _run("crowdStripHTML({away:'NYJ',home:'BUF',crowd:{kalshi:0.62,polymarket:0.6,books:0.6,"
                 f"gap_pts:1.0,at:{recent}}}}})")
     assert "(\u2212163)" in html and "(\u2212150)" in html, "each market's % with its price"
-    assert "exchange prices pulled 7m ago" in html
+    assert "exchange prices pulled 7 min ago" in html, "units in words: the head is in capitals"
     assert "1.0 points higher than the books" in html, "a 1-point gap is said, not hidden"
     agree = _run("crowdStripHTML({away:'NYJ',home:'BUF',crowd:{kalshi:0.6,books:0.6,gap_pts:0.2}})")
     assert "agree on this one" in agree

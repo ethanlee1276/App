@@ -321,10 +321,31 @@ def fetch(sport: str, season: int) -> list[dict]:
     espn_season = season + ESPN_SEASON_SHIFT.get(sport, 0)
     url = (f"https://site.api.espn.com/apis/v2/sports/{path}/standings"
            f"?season={espn_season}&seasontype=2")
-    return parse_espn(fetch_json(url, f"standings_{sport}_espn{espn_season}_t2.json",
-                                 ttl=STANDINGS_TTL,
-                                 user_agent=DEFAULT_AGENT),
-                      groups=sport in GROUPED_BY_FEED)
+    # COLLEGE FOOTBALL ASKS FOR DIVISION I-FBS BY NUMBER (2026-11-18). The bare
+    # table answered with no teams all season, so the page counted our own
+    # games: Western Michigan 9-3 with one Buffalo game filed as "BUF" and as
+    # "BUFF" counted twice, and Buffalo listed twice. ESPN files the
+    # conference tables under group 80, which the scoreboard and the groups
+    # list already ask for by number in both spellings (engine/sources/
+    # cfbdata); each try is cached under its own name.
+    tries = [("", "")] + ([("&group=80", "_g80"), ("&groups=80", "_gs80")] if sport == "cfb" else [])
+    rows: list = []
+    errors: list = []
+    for q, tag in tries:
+        try:
+            rows = parse_espn(fetch_json(url + q, f"standings_{sport}_espn{espn_season}_t2{tag}.json",
+                                         ttl=STANDINGS_TTL, user_agent=DEFAULT_AGENT),
+                              groups=sport in GROUPED_BY_FEED)
+        except DataUnavailable as exc:
+            if len(tries) == 1:
+                raise
+            errors.append(str(exc))
+            rows = []
+        if rows:
+            break
+    if not rows and errors:
+        raise DataUnavailable("; ".join(errors))
+    return rows
 
 
 def parse_nhl(payload, season: int | None = None) -> list[dict]:
