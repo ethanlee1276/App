@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XV. The team page reads its games by key** (step 758; 18 November). Nothing to run. XU's header named the read:
+the squad's season totals, off the team's own game keys, took 28 seconds cold for Kansas (8 keys, 266 rows) and 9.7
+for Ohio State. With no planner statistics on the file, SQLite drove that read from the per-player index over the
+sport's every row and tested each against the keys. The read now puts the key list outside and looks each game up by
+its primary key (a CROSS JOIN, SQLite's own way to fix the loop order): on 3.4 million rows with no statistics, 289
+ms became 1.1 ms. The test that let the slow plan through now asks for the lookup on all four key columns, driven by
+the key list.
+
 **XU. The team page's slow read, named** (step 757; 18 November). Nothing to run. XT's timing header, read live: a
 cold Purdue page spent 25.4 of its 30 seconds building the squad (1.5 warm), Detroit's 11.1 and Ohio's 5.7; every
 other part was under 2.1. The squad is three reads deep (the team's games, the newest season with its rows, that

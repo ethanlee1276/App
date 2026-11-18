@@ -629,17 +629,24 @@ def _log_keys(sport: str, team: str, games: list) -> list:
     return keys
 
 
+#: THE KEYS DRIVE THE READ (2026-11-18, XU's header, read live: Kansas's squad,
+#: 8 keys and 266 rows, took 28 seconds cold). With no planner statistics on
+#: the file, SQLite chose to walk `idx_logs_player` over the sport's every row
+#: and test each against the keys (a GROUP BY by player invites it), where the
+#: keys want one primary-key lookup each. A CROSS JOIN is SQLite's own way to
+#: fix the loop order: the key list outside, the logs looked up inside. 3.4
+#: million rows, no statistics: 289 ms the planner's way, 1.1 ms this way.
 def _by_keys_sql(head: str, n: int, tail: str = "") -> str:
     """``head`` over the team's rows at ``n`` (period, game_id) keys."""
     return (f"WITH g(period, game_id) AS (VALUES {','.join('(?,?)' for _ in range(n))}) {head} FROM g "
-            "JOIN player_game_logs l ON l.sport=? AND l.season=? AND l.period=g.period "
+            "CROSS JOIN player_game_logs l ON l.sport=? AND l.season=? AND l.period=g.period "
             f"AND l.game_id=g.game_id WHERE l.team=?{tail}")
 
 
 def _by_days_sql(head: str, n: int, tail: str = "") -> str:
     """``head`` over the team's rows on ``n`` game days."""
     return (f"WITH g(period) AS (VALUES {','.join('(?)' for _ in range(n))}) {head} FROM g "
-            f"JOIN player_game_logs l ON l.sport=? AND l.season=? AND l.period=g.period WHERE l.team=?{tail}")
+            f"CROSS JOIN player_game_logs l ON l.sport=? AND l.season=? AND l.period=g.period WHERE l.team=?{tail}")
 
 
 def _keyed(conn, sport: str, team: str, season: int, games: list, head: str, tail: str = ""):

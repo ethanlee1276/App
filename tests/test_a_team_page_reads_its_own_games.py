@@ -116,11 +116,16 @@ def test_the_read_is_a_lookup_per_game():
     plan = " ".join(str(tuple(r)) for r in conn.execute(
         "EXPLAIN QUERY PLAN " + sql, tuple(x for k in keys for x in k) + ("cbb", 2026, "DUKE")))
     assert "SCAN l" not in plan and "SCAN player_game_logs" not in plan, plan
-    assert "USING INDEX" in plan or "USING PRIMARY KEY" in plan, plan
+    # A LOOKUP ON THE WHOLE KEY, THE KEYS OUTSIDE (2026-11-18): "SEARCH l USING INDEX
+    # idx_logs_player (sport=?)" passed the two checks above and walked the sport's every row,
+    # 28 seconds on the box. The search must name all four key columns, after the key list.
+    assert "(sport=? AND season=? AND period=? AND game_id=?)" in plan, plan
+    assert plan.index("SCAN g") < plan.index("SEARCH l"), plan
     days = sorted({p for _s, p, _g in teamdex._team_games(conn, "cbb", "DUKE", 2026)})
     plan = " ".join(str(tuple(r)) for r in conn.execute(
         "EXPLAIN QUERY PLAN " + teamdex._by_days_sql("SELECT 1", len(days)), tuple(days) + ("cbb", 2026, "DUKE")))
     assert "SCAN l" not in plan and "SCAN player_game_logs" not in plan, plan
+    assert "(sport=? AND season=? AND period=?)" in plan and plan.index("SCAN g") < plan.index("SEARCH l"), plan
 
 
 def _nfl_history():

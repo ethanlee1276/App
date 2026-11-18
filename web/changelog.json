@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Team pages load in seconds, not half a minute",
+      "body": "A team page could take up to half a minute the first time it opened. It now reads only that team’s games, so it opens in a few seconds."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "A slow team page no longer says the team doesn’t exist",
       "body": "When a team page took too long to load, it could say no team matched. Now it says the page couldn’t load and to try again."
     },
