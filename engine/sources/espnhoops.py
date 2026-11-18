@@ -28,6 +28,7 @@ confident nonsense. Mapping by name costs nothing and cannot drift.
 from __future__ import annotations
 
 from .fetch import DEFAULT_AGENT, fetch_json, DataUnavailable
+from .names import tidy_team_name
 from .. import divisions as _divisions
 
 ROOT = "https://site.api.espn.com/apis/site/v2/sports"
@@ -201,7 +202,7 @@ def parse_scoreboard(payload: dict, league: str = "") -> list[dict]:
             # NBA Cup's third tiebreaker leaves overtime out (engine/nbacup).
             per = [_num((x or {}).get("value")) for x in (c.get("linescores") or [])]
             side = {"abbr": team_key(t, league) if league == "cbb" else (t.get("abbreviation") or "").strip(),
-                    "name": (t.get("displayName") or t.get("name") or "").strip(),
+                    "name": tidy_team_name(t.get("displayName") or t.get("name") or "", t.get("location")),
                     "score": _num(c.get("score")),
                     "reg": (sum(per[:reg_n]) if len(per) >= reg_n and None not in per[:reg_n] else None),
                     # Who the side is beyond its code: ESPN's id, the poll
@@ -211,7 +212,7 @@ def parse_scoreboard(payload: dict, league: str = "") -> list[dict]:
                     "id": str(t.get("id") or "").strip(),
                     "rank": _rank(c),
                     "conf": str(t.get("conferenceId") or "").strip(),
-                    "info": {"name": (t.get("displayName") or "").strip(),
+                    "info": {"name": tidy_team_name(t.get("displayName") or "", t.get("location")),
                              "short": (t.get("shortDisplayName") or "").strip(),
                              "loc": (t.get("location") or "").strip(),
                              "nick": (t.get("name") or "").strip(),

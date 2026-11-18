@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XL. A small school's name reads once** (step 748; 18 November). Nothing to run: the next college scoreboard read
+renames the kept cards. ESPN's own records for some schools below Division I repeat a word or tack an all-caps code
+onto the end, and the college boards carried them as they came: "Regent Regent Royals", "Oklahoma Panhandle
+PANHANDLE ST", "Midland MIDLAND LUTHERAN", "Sterling STERLING KS", "University of Mexico MEXICO U" — the names a
+November buy game's card would print. Both college parsers read a name through engine/sources/names now: an all-caps
+tail repeating a word already in the name is dropped and a word said twice in a row is said once, unless the
+school's location is named that way ("Walla Walla"). One ESPN record stays as ESPN has it: UCCS is "Colorado
+Colorado Springs" in ESPN's own location field, and the rule leaves a place's own name alone.
+
 **XK. The record's curve ends on its last day, and dates read as days** (step 747; 18 November). Nothing to run. The
 Record page's curve said "2026-08-06 → 2026-W01": eleven NFL rows from Week 1 that the game-day backfill could not
 place (the NFL's settle key is the week, and an unplaced row keeps the week's label on purpose) sorted after every
@@ -9345,8 +9354,10 @@ November day, because "W" outranks every digit, so Week 1's units were drawn las
 curve now orders a week label at the Thursday its week opens (ledger.week_label_day), keeps the label, and the page
 says dates in words ("Thu, Aug 6 → Tue, Nov 17", an unplaced week as "NFL week 1"). The same pass put the plans
 page's last graded pick, the weather market's line and the roster moves on days ("Tue, Nov 17") instead of the
-stored "2026-11-17". If you want those eleven rows placed for good, `cd /srv/qellys && sudo -u qellys python3
-launch.py --backfill-days` (a dry run; it writes nothing) says why each could not be.
+stored "2026-11-17". If you want those eleven rows placed for good, this dry run
+(it writes nothing) says why each could not be:
+
+    cd /srv/qellys && sudo -u qellys python3 launch.py --backfill-days
 
 **XJ. The injuries page speaks each league's words, and its headlines are news** (step 746; 18 November). Nothing to
 run: the next news build (every half hour) drops what is not news. The NHL's injuries page said its out tier was

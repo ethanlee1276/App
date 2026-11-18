@@ -41,6 +41,7 @@ import re
 import unicodedata
 
 from .fetch import DEFAULT_AGENT, fetch_json, DataUnavailable
+from .names import tidy_team_name
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/football/college-football"
 SCOREBOARD = BASE + "/scoreboard"
@@ -397,7 +398,7 @@ def parse_teams(payload: dict) -> dict[str, dict]:
         # browser, is not worth keeping for the day it might be true.
         out[abbr] = {
             "id": str(t.get("id") or ""),
-            "name": t.get("displayName") or t.get("location") or abbr,
+            "name": tidy_team_name(t.get("displayName"), t.get("location")) or t.get("location") or abbr,
             "nick": t.get("shortDisplayName") or t.get("location") or abbr,
             "primary": f"#{color}" if color else "",
             "alt": f"#{alt}" if alt else "",
@@ -514,7 +515,7 @@ def parse_scoreboard(payload: dict,
             team = c.get("team") or {}
             side = {
                 "abbr": _team_key(team),
-                "name": team.get("displayName") or "",
+                "name": tidy_team_name(team.get("displayName"), team.get("location")),
                 "conference": conference_name(
                     confs.get(str(team.get("conferenceId") or ""), "")),
                 "rank": _rank(c),
