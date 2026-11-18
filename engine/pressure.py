@@ -42,9 +42,12 @@ a number on a thin base says so on the page. A team needs MIN_GAMES
 finished games before its rates are ranked, and MIN_RATE_N of the
 rate's own kind. `seasons` says which seasons had games and `span` how
 the page names them ("2024–2026"); each team's `record` is still this
-season's, the one beside its name. A sport whose rows carry no closing
-line (baseball and basketball as ingested today) keeps its clutch rate
-and says why the other three are missing rather than showing 0% chokers.
+season's, the one beside its name. Basketball's and baseball's rows are
+filed without a line, so their favourite is the board's own last price
+before the start (`board_closes`, engine/lineopen; 2026-11-18), from the
+day the board began keeping it; a sport with no line anywhere keeps its
+clutch rate and says why the other three are missing rather than
+showing 0% chokers.
 
 Regular season only, like the standings: a playoff loss is not the same
 kind of fact as a September one, and the bracket page owns those rows.
@@ -53,6 +56,7 @@ kind of fact as a September one, and the bracket page owns those rows.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from . import divisions
 from .ingest import ESPN_KEY_PREFIX
@@ -60,6 +64,10 @@ from .playoffs import is_postseason
 
 #: The margin, inclusive, that makes a game "one-score" for the sport.
 ONE_SCORE = {"nfl": 8, "cfb": 8, "nba": 5, "wnba": 5, "mlb": 1, "cbb": 5}
+#: The sports whose game rows are filed without a line (engine/sources/espnhoops
+#: writes 0.0; baseball's rows carry none): their favourite comes from the
+#: board's own last price before the start (`board_closes`).
+UNLINED = ("nba", "wnba", "cbb", "mlb")
 
 #: Seasons pooled: this one and the two before it (see the docstring).
 SPAN = 3
@@ -132,12 +140,40 @@ def _rows(conn, sport: str, season: int) -> list:
         (sport, season)).fetchall())
 
 
+def board_closes(sport: str) -> dict:
+    """``{(date, away, home): (home spread, home ml, away ml)}`` — the last
+    price the board saw for each game before it started (engine/lineopen
+    `now_*`, which a started game never moves), for the sports whose game
+    rows carry no line of their own. Basketball's three market rates were
+    dashes "until a line is on file" (2026-11-18): the board had priced
+    every game all along. Read-only; {} when the journal is not there."""
+    import sqlite3
+    try:
+        from . import crowd
+        path = Path(crowd.DB_PATH)
+        if not path.exists():
+            return {}
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30)
+    except Exception:                                          # noqa: BLE001
+        return {}
+    try:
+        rows = conn.execute("SELECT date, away, home, now_spread, now_home_ml, now_away_ml FROM line_opens "
+                            "WHERE sport=? AND (now_spread IS NOT NULL OR now_home_ml IS NOT NULL)",
+                            (sport,)).fetchall()
+    except sqlite3.Error:
+        rows = []
+    finally:
+        conn.close()
+    return {(str(d)[:10], divisions.canonical(sport, str(a)), divisions.canonical(sport, str(h))): (sp, hm, am)
+            for d, a, h, sp, hm, am in rows}
+
+
 def _pct(num: int, den: int):
     return round(100.0 * num / den, 1) if den else None
 
 
-def count(rows, sport: str, season: int, id_to_abbr: dict | None = None
-          ) -> tuple[dict, bool]:
+def count(rows, sport: str, season: int, id_to_abbr: dict | None = None,
+          closes: dict | None = None) -> tuple[dict, bool]:
     """Per-team counters from finished rows → ``({team: counters}, lined)``.
 
     ``lined`` says whether ANY row carried a favourite; without one the
@@ -162,6 +198,13 @@ def count(rows, sport: str, season: int, id_to_abbr: dict | None = None
         margin = abs(hs - as_)
         one_score = margin <= limit
         fav = favourite(spread, extra)
+        if fav is None and closes:
+            # No line on the row (basketball's and baseball's are filed
+            # without one): the board's last price before the start
+            # (`board_closes`), when it priced the game.
+            c = closes.get((str(period)[:10], key(away), key(home)))
+            if c:
+                fav = favourite(c[0], {"ml": [c[1], c[2]]})
         lined = lined or fav is not None
         for side, name, mine, theirs in (("home", home, hs, as_),
                                          ("away", away, as_, hs)):
@@ -223,8 +266,9 @@ def team_pressure(conn, sport: str, season: int,
     teams: dict = {}
     this: dict = {}
     lined, used = False, []
+    closes = board_closes(sport) if sport in UNLINED else None
     for s in range(season - max(1, span) + 1, season + 1):
-        counted, has_line = count(_rows(conn, sport, s), sport, s, id_to_abbr)
+        counted, has_line = count(_rows(conn, sport, s), sport, s, id_to_abbr, closes)
         if not counted:
             continue
         used.append(s)

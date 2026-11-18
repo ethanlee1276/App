@@ -28,6 +28,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("QB_FEEDSTATE_DIR", tempfile.mkdtemp())
+# The board's price journal (engine/crowd), never the box's own: each test that
+# wants one writes it (test_basketball_reads_its_favourite_off_the_boards_last_price).
+os.environ["QB_CROWD_DB"] = os.path.join(tempfile.mkdtemp(), "crowd.db")
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 from engine import db, pressure
@@ -164,6 +167,48 @@ def test_a_sport_with_no_closing_lines_keeps_clutch_and_says_why_the_rest_are_mi
     assert bal["reliability"] is None and bal["comeback"] is None and bal["choke"] is None
     assert got["ranked"]["clutch"][0]["team"] == "BAL"
     assert got["ranked"]["reliability"] == [] and got["ranked"]["choke"] == []
+
+
+def test_basketball_reads_its_favourite_off_the_boards_last_price():
+    """2026-11-18: basketball's rows are filed with a 0.0 spread, so its three
+    market rates were dashes "until a line is on file" while the board had
+    priced every game. The last price before the start (engine/lineopen
+    `now_*`) names the favourite; a row the board never priced stays unlined."""
+    from engine import crowd, lineopen
+    db_path = Path(os.environ["QB_CROWD_DB"])
+    if db_path.exists():
+        db_path.unlink()
+    cconn = crowd.connect(db_path)
+    lineopen.ensure_tables(cconn)
+    games = [  # date, home, away, home pts, away pts, the board's home spread, home ml, away ml
+        ("2026-11-01", "BOS", "NYK", 110, 104, -6.5, -260, 210),   # BOS favoured, won by 6
+        ("2026-11-02", "NYK", "BOS", 99, 101, 2.5, 120, -140),     # BOS favoured away, won by 2
+        ("2026-11-03", "BOS", "TOR", 98, 100, -9.0, -400, 310),    # BOS favoured, lost by 2: a choke
+        ("2026-11-04", "TOR", "BOS", 120, 90, None, 150, -170),    # no spread: BOS the shorter price, lost by 30
+        ("2026-11-05", "BOS", "MIA", 105, 101, -3.0, -150, 130),   # BOS favoured, won by 4
+        ("2026-11-06", "MIA", "BOS", 100, 112, 1.5, 105, -125),    # BOS favoured, won by 12
+        ("2026-11-07", "NYK", "TOR", 101, 99, -1.0, -115, -105),
+        ("2026-11-08", "TOR", "MIA", 95, 97, 2.0, 110, -130),
+        ("2026-11-09", "MIA", "NYK", 100, 96, -2.5, -140, 120),
+        ("2026-11-10", "NYK", "MIA", 104, 100, -4.0, -170, 150),
+    ]
+    for d, h, a, _hs, _as, sp, hm, am in games:
+        cconn.execute("INSERT INTO line_opens VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                      ("nba", d, a, h, 1, sp, 220.5, hm, am, 2, sp, 220.5, hm, am))
+    cconn.commit()
+    cconn.close()
+    conn = _conn()
+    _insert(conn, "nba", 2026, [(d, h, a, hs, as_, 0.0, None) for d, h, a, hs, as_, *_ in games]
+            + [("2026-11-11", "BOS", "TOR", 100, 99, 0.0, None)])   # never priced
+    got = pressure.team_pressure(conn, "nba", 2026)
+    assert got["lined"] is True and not got["note"], got["note"]
+    bos = got["teams"]["BOS"]
+    assert bos["of"]["reliability"] == [4, 6], bos["of"]       # favoured six times, won four
+    assert bos["of"]["choke"] == [1, 6] and bos["of"]["comeback"] == [0, 0]
+    assert bos["of"]["clutch"] == [3, 4], "the unpriced one-point win counts for clutch"
+    assert bos["games"] == 7, "the unpriced game still counts for clutch and the record"
+    assert pressure.board_closes("nfl") == {}, "football's rows carry their own line"
+    assert "nfl" not in pressure.UNLINED and "nba" in pressure.UNLINED
 
 
 def test_college_rows_still_keyed_by_espn_id_are_read_under_the_board_abbreviation():

@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-18",
+      "kind": "ship",
+      "title": "Under pressure for basketball: reliability, comeback and choke",
+      "body": "Those three need to know who the market favored, and basketball games were stored without a line. They now use the last price our board saw before each game, so they fill in through this season as teams play enough games."
+    },
+    {
+      "date": "2026-11-18",
       "kind": "fix",
       "title": "College ranks are out of Division I",
       "body": "A college game’s matchup scan ranked schools out of 407, counting small schools that played a few Division I teams, so every school looked lower than it is. Ranks are now out of Division I’s 365, and a small school still shows its numbers."

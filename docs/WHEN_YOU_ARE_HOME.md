@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YA. Basketball's Under pressure gets its favourites** (step 763; 18 November). Nothing to run. Reliability,
+comeback and choke need to know who the market favoured, and basketball's and baseball's games are filed without a
+line (the basketball scoreboard ingest writes a 0.0 spread), so for the NBA, college basketball, the WNBA and MLB
+those three were dashes "until a line is on file", while the board had priced every game all along. The board's
+price journal (engine/lineopen, in the crowd database) keeps each game's last price before it starts; the table now
+reads its favourite from there when the game's row has no line of its own. It counts from the day the journal began,
+so the three rates grow in through this season as teams pass the five-game floor; clutch, which needs only the
+score, is unchanged.
+
 **XZ. College ranks among Division I; two chips** (step 762; 18 November). Nothing to run. The college game page's
 matchup scan ranked each school "of 407" in a 365-school division: with no team table for college (the NBA's has
 one, step XN), every side with three nights on file was ranked, small schools that played a few Division I teams
