@@ -74,7 +74,8 @@ def teams_from_games(games: list[dict]) -> dict:
             info = dict(g.get(f"{side}_info") or {})
             row = {
                 "name": info.get("name") or g.get(f"{side}_name") or code,
-                "nick": info.get("nick") or "",
+                # The school, as college football's table says it (cbbteams.school_named).
+                "nick": info.get("short") or info.get("loc") or info.get("nick") or "",
                 "loc": info.get("loc") or "",
                 "short": info.get("short") or "",
                 "abbr": info.get("abbr") or (code if not str(code).startswith("espn:") else ""),

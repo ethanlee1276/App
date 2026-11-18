@@ -5070,13 +5070,14 @@ function pbpSideNames(league, t, full) {
   // The city is the full name before the nickname: the table's "NY Jets"
   // and "LA Rams" would say the nickname twice.
   const name = String(t.name || "");
-  if (league !== "cfb") {
+  // College basketball names its school as college football does (engine/cbbteams.school_named).
+  if (league !== "cfb" && league !== "cbb") {
     return { big: t.nick || full,
              small: t.nick && name.endsWith(` ${t.nick}`) ? name.slice(0, -t.nick.length - 1) : (t.loc || "") };
   }
-  const school = t.nick || "";
+  const school = t.nick || "", base = name.startsWith(`${t.loc} `) ? t.loc : school;
   return { big: school || full,
-           small: school && name.startsWith(`${school} `) ? name.slice(school.length + 1) : "" };
+           small: base && name.startsWith(`${base} `) ? name.slice(base.length + 1) : "" };
 }
 /* College's 134 identities ride in its board file, not a checked-in table
    (app.js _cfbTeams). A game page opened straight from a link or an alert,

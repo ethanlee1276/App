@@ -207,7 +207,7 @@ def test_a_board_with_no_game_line_says_so():
     card = potd.build([_prop(), _prop(player="B Player")], "nba", "2026-10-21")
     assert card["pick"] is None
     assert "no game line on this board" in card["note"], card["note"]
-    assert potd.build([], "nba", "2026-10-21")["note"] == "No pick today: the board had no rows"
+    assert potd.build([], "nba", "2026-10-21")["note"] == "No pick today: nothing is on the board yet"
     priced_out = potd.build([_moneyline(odds=-400)], "cfb", "2026-10-17")
     assert "nothing on the board is in the band" in priced_out["note"], priced_out["note"]
 

@@ -337,6 +337,12 @@
   }
 
   /* ---------------- the scoreboard ---------------- */
+  // A college side's mascot, over its school (the big name, `nick`, since
+  // 18 November): the full name past the school ("Houston Cougars" → "Cougars").
+  const mascot = (t) => {
+    const name = String(t.name || ""), base = [t.loc, t.nick].find((x) => x && name.startsWith(`${x} `));
+    return base ? name.slice(base.length + 1) : "";
+  };
   function scoreboardHTML(d, league, k) {
     const lv = d.live || {}, sit = d.situation || {};
     const ball = sit.possession || k.ball;
@@ -354,7 +360,7 @@
         ? `<span class="hc-ball" title="${sit.possession ? "Ball" : "Ball — from the last play"}">${icon("basketball", 14)}</span>` : "";
       return `<div class="hc-side ${ha}">
           <span class="hc-crest">${teamMarkIn(league, abbr, 56)}</span>
-          <div class="hc-team"><span class="hc-loc">${esc(t.loc || "")}</span>
+          <div class="hc-team"><span class="hc-loc">${esc(league === "cbb" ? mascot(t) : t.loc || "")}</span>
             <b class="hc-nick">${esc(t.nick || d[`${ha}_abbr`] || teamNameIn(league, abbr) || abbr)}</b>
             ${rec ? `<span class="hc-rec">${esc(rec)}</span>` : ""}${marks ? `<span class="hc-marks-row">${marks}</span>` : ""}</div>
           <b class="hc-pts">${has}${score != null ? esc(score) : "–"}</b></div>`;

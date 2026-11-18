@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WY. A college basketball team goes by its school** (step 735; 18 November). Nothing to run. A finished college
+basketball game's header said "Scarlet Knights 73 @ Cougars 85" while its report said Rutgers and Houston, and the
+Pick of the Day read "Wildcats -1.5 Spread · Wildcats vs Panthers", a bet nobody could place without knowing which
+of a dozen Wildcats it meant. College football's team table names the school (ESPN's short name), and the basketball
+report and the record already did; college basketball's table carried ESPN's mascot, which every page prints. It now
+carries the school, for tonight's schools and every school kept from before (engine/cbbteams.school_named), so the
+cards, the headers, the games strip, the standings and the Pick of the Day say "Houston"; the two scoreboards that
+show two names (the play-by-play page's and the live basketball page's) put the mascot over the school, as college
+football's does. The Pick of the Day's empty-board note now reads "nothing is on the board yet" instead of "the
+board had no rows". The first college build after the deploy carries the names.
+
 **WX. College and WNBA pace is said per 40 minutes** (step 734; 18 November). Nothing to run. A college game's tale
 of the tape and its report said pace as "81.6 possessions per 48 minutes", a number for a game college does not
 play: college's games and the WNBA's are 40 minutes. The model still reads pace per 48 in every league (48 ×

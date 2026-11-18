@@ -202,8 +202,20 @@ CARD_KEYS = ("name", "nick", "loc", "short", "abbr", "primary", "secondary",
              "logo", "conf", "id")
 
 
+def school_named(card: dict) -> dict:
+    """A card whose ``nick`` is its school, as college football's table has it
+    (cfbdata: ESPN's short name): "Houston 85", not "Cougars 85". The page
+    prints ``nick``; ESPN's own ``name`` is the mascot, which says nothing
+    among five Cougars and a dozen Wildcats, while the report and the record
+    beside it said the school (18 November 2026). The full name keeps the
+    mascot ("Houston Cougars") for the scoreboards that show both."""
+    school = (card or {}).get("short") or (card or {}).get("loc")
+    return dict(card, nick=school) if school else card
+
+
 def cards(path: str | None = None) -> dict:
-    """``{code: card}`` — every school a build has seen; ``{}`` if none."""
+    """``{code: card}`` — every school a build has seen; ``{}`` if none.
+    Each named by its school (`school_named`), a card kept before that too."""
     import json
     try:
         with open(path or CARDS_PATH, encoding="utf-8") as fh:
@@ -211,7 +223,7 @@ def cards(path: str | None = None) -> dict:
     except (OSError, ValueError):
         return {}
     got = (data or {}).get("teams") if isinstance(data, dict) else None
-    return {str(k): {kk: v.get(kk) for kk in CARD_KEYS if v.get(kk)}
+    return {str(k): school_named({kk: v.get(kk) for kk in CARD_KEYS if v.get(kk)})
             for k, v in (got or {}).items() if k and isinstance(v, dict)}
 
 

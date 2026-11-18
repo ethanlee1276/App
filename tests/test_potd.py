@@ -533,7 +533,7 @@ def test_a_qualifying_pick_always_beats_a_near_miss():
 def test_an_empty_board_is_a_sentence_not_an_exception():
     for rows in ([], None):
         got = potd.build(rows, "nfl", "2026-W02")
-        assert got["pick"] is None and "no rows" in got["note"], got
+        assert got["pick"] is None and "nothing is on the board yet" in got["note"], got
     # And a board of nothing but chalk says something different.
     got = potd.build([_row(odds=-400, implied_prob=0.8)], "nfl", "2026-W02")
     assert got["pick"] is None and "in the band" in got["note"], got

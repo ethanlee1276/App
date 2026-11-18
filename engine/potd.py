@@ -1392,7 +1392,7 @@ def build(most_likely, sport: str, date: str, now=None) -> dict:
         from .ledger import is_game_row
         out["pick"] = None
         out["note"] = ("No pick today: " + (
-            "the board had no rows" if not rows
+            "nothing is on the board yet" if not rows
             else "no game line on this board — the day’s pick is a "
                  "moneyline, spread or total" if not any(map(is_game_row, rows))
             else "nothing on the board is in the band at a real price"))
