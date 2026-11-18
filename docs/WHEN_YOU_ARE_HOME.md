@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XR. A benched parlay is said benched, and a started game builds none** (step 754; 18 November). Nothing to run.
+The 07:30 check of 17 November's games: the report picks hit 16 of 21 in the NBA, 36 of 48 in the NHL, 17 of 26 in
+college football and 4 of 4 in college basketball. The hockey three-leg parlays built from those picks hit 4 of 8.
+The NBA rows on How our reports did read 2 of 19, and that was wrong twice over. The NBA's three-leg parlays have
+been on paper since 17 November (9 of their last 100 hit), so its reports posted none that night; the results list
+read the kept set's posted tickets only, found none, and fell back to listing every version the board had built that
+day as the report's, 18 of them from before the report's picks made the parlays (each POR at MIN ticket carried
+Donovan Clingan over 0.5 threes, no pick of the report's). A kind on paper now stands apart on that list, said never
+posted, and a kept set with no ticket in it means the report carried none (engine/reportoutcome._own_tickets; Ask
+says the same). Second, hockey's two-leg tickets for Tuesday's 7 pm games were made after the puck dropped: the
+feature went live at 8:17 pm Eastern. Hockey's prop rows carried no start time and no live or started flag, and the
+parlay builder drops a leg by its row's start time, so a started game's tickets were built again from its pre-game
+legs and journaled. Hockey's rows are now told (nhl_build.stamp_started; a started game's prop is off the Edge
+board, as basketball's is), and the builder checks the board's own game list whatever a row says
+(engine/gameparlays.still_to_play). The singles journal was never affected: it already read the board's game list.
+Tickets built after a start are still on the record as earlier versions; they fall under the decision on counting
+only the set standing at the start.
+
 **XQ. Defense and offense, one spelling** (step 753; 18 November). Nothing to run. One game page said "Better
 defense" in the matchup scan and "the defence" in the report under it: the reports, the game plan, Ask's tools, the
 touchdown reasons and the scan's notes wrote defence and offence, the scan and most of the site defense and offense.

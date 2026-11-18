@@ -148,6 +148,22 @@ def test_a_finished_game_s_report_says_how_it_did_and_marks_each_pick_and_leg():
     assert AB.game_report({"nfl": {}}, "Packers", "nfl").get("found") is False
 
 
+def test_a_finished_game_s_parlays_on_paper_are_said_never_posted():
+    # GPWIN2: the same set, its league's three-leg tickets on paper at the start.
+    where = _kept_archive()
+    doc = RA.load("nfl", "2026-11-15", "NE", "DET", where)
+    doc["parlays"] = dict(MARKS.KEPT, threes=[], paper_threes=MARKS.KEPT["threes"], threes_paper=True)
+    RA.write(RA.path_for(where, "nfl", "2026-11-15", "NE", "DET"), doc)
+    _with_archive(where, MARKS._journal())
+    out = AB.game_report({"nfl": {}}, "Patriots", "nfl")
+    assert not any(t["ticket"] == "three-leg parlay" for t in out.get("report_parlays") or []), "never posted"
+    paper = out["parlays_on_paper_never_posted"]
+    assert paper[0]["ticket"] == "three-leg parlay" and paper[0]["result"] == "lost"
+    assert out["on_paper"] == ["the league's three-leg parlays were on paper at the start: built and graded "
+                               "to learn from, never posted"]
+    assert out["earlier_versions"] == {"three-leg parlay": "1 of 1 hit"}
+
+
 def test_the_reports_record_totals_every_finished_game():
     _with_archive(_kept_archive(), MARKS._journal())
     out = AB.report_record("nfl")["leagues"]["nfl"]

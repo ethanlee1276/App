@@ -233,7 +233,9 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
     engine/reportkeep), so those are the game's tickets here, in the report's
     order, and the earlier versions are counted beside them ("earlier":
     {kind: [hit, graded]}); a game kept before the start was (16 November)
-    lists every version, said so ("versions").
+    lists every version, said so ("versions"). A kind the league had on paper
+    at the start was never posted: its kept tickets are under "paper" ({kind:
+    [...]}) and the kinds are named in "on_paper" (`_own_tickets`).
 
     What has settled is public, as every settled row is (server._record_day:
     "the evidence the subscription is sold on"); a pick or ticket still
@@ -272,6 +274,12 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
                     keep = [x for x in game.get(part) or [] if x.get("status") in SETTLED]
                     held += len(game.get(part) or []) - len(keep)
                     game[part] = keep
+                for kind, lst in list((game.get("paper") or {}).items()):
+                    keep = [x for x in lst if x.get("status") in SETTLED]
+                    held += len(lst) - len(keep)
+                    game["paper"][kind] = keep
+                if game.get("paper"):
+                    game["paper"] = {k: v for k, v in game["paper"].items() if v}
                 game["held"] = held
             out[key] = {k: v for k, v in game.items() if v}
     finally:
@@ -279,19 +287,39 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
     return out
 
 
+#: Where a kept set holds a kind its league had on paper (engine/parlayhold, gameparlays.build).
+PAPER_OF = {"threes": "paper_threes", "twos": "paper_twos"}
+
+
 def _own_tickets(ts: dict, kept) -> tuple[dict, dict]:
     """The game's tickets as the report carried them at the start, in its order,
     and the earlier versions' count by kind ({kind: [hit, graded]}). With no kept
-    set, or none of it on the record, every version, marked "versions"."""
+    set, or none of its tickets on the record, every version, marked "versions".
+
+    A KIND ITS LEAGUE HAD ON PAPER WAS NEVER POSTED (GPWIN2, 2026-11-18). The
+    NBA's three-leg tickets went on paper on 17 November (9 of their last 100
+    hit): built and graded, posted nowhere, and kept at the start under
+    ``paper_threes``. Read only from ``threes``, that night's kept sets held
+    nothing, so each game fell to "every version" and listed every ticket the
+    board had built that day, the ones before the report's picks made them
+    too, as the report's: 2 of 19 beside picks that hit 16 of 21. The kept
+    set's paper tickets are its own here, under "paper", and the kinds it held
+    on paper are named ("on_paper"), so the page can say they were never posted."""
     from .parlayledger import legs_key
     strip = lambda t: {k: v for k, v in t.items() if k != "key"}       # noqa: E731
+    keys = lambda lst: [legs_key(t.get("legs") or []) for t in lst or []    # noqa: E731
+                        if isinstance(t, dict) and len(t.get("legs") or []) >= 2]
     out: dict = {}
     earlier: dict = {}
     kept = kept if isinstance(kept, dict) else {}
-    wanted = {kind: [legs_key(t.get("legs") or []) for t in kept.get(kind) or []
-                     if isinstance(t, dict) and len(t.get("legs") or []) >= 2] for kind in TICKETS}
-    every = not any(wanted.values()) or not any(t.get("key") in set(wanted[kind])
-                                                 for kind in TICKETS for t in ts.get(kind) or [])
+    wanted = {kind: keys(kept.get(kind)) for kind in TICKETS}
+    paper = {kind: keys(kept.get(PAPER_OF[kind])) for kind in PAPER_OF}
+    named = {k for ks in (*wanted.values(), *paper.values()) for k in ks}
+    on_record = {t.get("key") for kind in TICKETS for t in ts.get(kind) or []}
+    # No set kept at the start (before 16 November), or one the record never
+    # journaled: every version. A kept set that held no ticket held none.
+    every = not kept or (bool(named) and not named & on_record)
+    held: dict = {}
     for kind in TICKETS:
         allk = ts.get(kind) or []
         if every:
@@ -300,11 +328,21 @@ def _own_tickets(ts: dict, kept) -> tuple[dict, dict]:
         order = {k: i for i, k in enumerate(wanted[kind])}
         out[kind] = [strip(t) for t in sorted((t for t in allk if t.get("key") in order),
                                               key=lambda t: order[t["key"]])]
-        rest = [t for t in allk if t.get("key") not in order and t.get("status") in ("won", "lost")]
+        pk = {k: i for i, k in enumerate(paper.get(kind) or [])}
+        mine = [strip(t) for t in sorted((t for t in allk if t.get("key") in pk), key=lambda t: pk[t["key"]])]
+        if mine:
+            held[kind] = mine
+        rest = [t for t in allk if t.get("key") not in order and t.get("key") not in pk
+                and t.get("status") in ("won", "lost")]
         if rest:
             earlier[kind] = [sum(t["status"] == "won" for t in rest), len(rest)]
     if every and any(out.values()):
         out["versions"] = True
+    if held:
+        out["paper"] = held
+    on_paper = [kind for kind in PAPER_OF if kept.get(f"{kind}_paper")]
+    if on_paper and not every:
+        out["on_paper"] = on_paper
     return out, earlier
 
 

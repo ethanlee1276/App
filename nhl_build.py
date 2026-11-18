@@ -1001,6 +1001,7 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
             r["injury_status"] = inj["status"]
             r.setdefault("warnings", []).append(f"Listed {inj['status']} — held until the lineup confirms")
             _edge_pass(r, f"listed {inj['status']} — lineup uncertain")
+    stamp_started(recs, out["games"], date)
     # EVERY BOOK TOOK HIM DOWN (engine/pricedplayers, the NFL's Zay Flowers
     # rule): priced in an earlier pull, on no book now, before puck drop.
     from engine.sources.oddsapi import normalize_name
@@ -1053,6 +1054,46 @@ def build(date: str, games: list[dict], conn, attach_odds=None, injuries: dict |
                      "game_bets": sum(1 for b in bets if b.get("grade") != "Pass")}
     _clock.lap("board", "game bets + market scan", _pt)
     return out, slate
+
+
+#: Why a started game's prop is off the Edge board (`stamp_started`).
+STARTED_PASS = "the game has started — a pre-game price cannot be taken in play"
+
+
+def stamp_started(recs: list, games: list, date: str, now=None) -> int:
+    """Each row told when its game starts and whether it has (GPWIN2,
+    2026-11-18): ``kickoff`` from the board's games list, ``live`` and
+    ``started`` from the game's live block or its own clock
+    (rules.clock_says_started), as the basketball rows are told
+    (engine/pipeline: "live", "started"). A started game's prop is off the
+    Edge board. Returns the rows of started games.
+
+    Hockey's rows carried none of the three, so once the puck dropped
+    nothing downstream could tell. The Most Likely board refuses a row by
+    its flags; the game parlays drop a leg by its kickoff (engine/twoleg
+    `_started`), so a started game's tickets were built again from its
+    pre-game legs and journaled: Tuesday's 7 pm games have two-leg tickets
+    the board only began making at 8:17 pm Eastern. The singles journal was
+    safe all along: it reads the board's own games list
+    (engine/ledger._kickoff_map)."""
+    from engine.rules import clock_says_started
+    when: dict = {}
+    for g in games or []:
+        state = str(((g or {}).get("live") or {}).get("state") or "")
+        for team in ((g or {}).get("home"), (g or {}).get("away")):
+            if team:
+                when[team] = (str(g.get("kickoff") or ""), state)
+    n = 0
+    for r in recs or []:
+        kick, state = when.get(r.get("team"), ("", ""))
+        if kick and not r.get("kickoff"):
+            r["kickoff"] = kick
+        r["live"] = state == "live"
+        r["started"] = state in ("live", "final") or clock_says_started(date, kick, now=now)
+        if r["started"]:
+            n += 1
+            _edge_pass(r, STARTED_PASS)
+    return n
 
 
 def _edge_pass(r: dict, why: str) -> None:

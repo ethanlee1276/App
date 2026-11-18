@@ -2834,6 +2834,14 @@ def _report_finished(league: str, wanted) -> dict | None:
            for key, pool in TICKET_POOLS for t in marks.get(key) or []]
     if tix:
         out["report_parlays"] = tix[:REPORT_TICKETS_SHOWN]
+    # A size the league had on paper was never posted (reportoutcome._own_tickets, GPWIN2).
+    paper = [{"ticket": pool, "result": t.get("status") or "waiting", "legs": [_graded(x) for x in t.get("legs") or []]}
+             for key, pool in TICKET_POOLS for t in (marks.get("paper") or {}).get(key) or []]
+    if paper:
+        out["parlays_on_paper_never_posted"] = paper[:REPORT_TICKETS_SHOWN]
+    if marks.get("on_paper"):
+        out["on_paper"] = [f"the league's {dict(TICKET_POOLS).get(k, k)}s were on paper at the start: built and graded "
+                           f"to learn from, never posted" for k in marks["on_paper"]]
     for kind, (hit, n) in (marks.get("earlier") or {}).items():
         out.setdefault("earlier_versions", {})[dict(TICKET_POOLS).get(kind, kind)] = f"{hit} of {n} hit"
     if marks.get("versions"):

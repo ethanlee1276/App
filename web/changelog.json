@@ -4,6 +4,18 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Benched parlays are labeled benched",
+      "body": "When a league’s parlays are benched for losing, the report posts none. How our reports did listed every benched version as the report’s own anyway. Now they sit apart, marked never posted."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
+      "title": "No parlays once a hockey game starts",
+      "body": "Hockey’s picks did not carry their game’s start time, so parlays kept being built after the puck dropped. They now stop at the start, and so do the game’s Edge picks, as in basketball."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "No pick says it’s certain",
       "body": "A Most Likely pick went up at 100% because every one of the player’s recent games went its way. A chance that high now keeps a pick off the board: no bet is certain."
     },

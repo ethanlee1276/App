@@ -392,11 +392,16 @@ const RP_STRIP_MAX = 12;
    a game's parlays afresh as lines and news move, and the record grades every
    version; the list is the set the report carried at the start, and a line
    under it counts the earlier versions. A game kept before the start was (16
-   November) lists every version the board posted, and says so. */
+   November) lists every version the board posted, and says so. A size the
+   league had on paper at the start was never posted (GPWIN2): its tickets
+   stand apart, said so, and a game with none says why it posted none. */
+//: A size of ticket on paper: its words and the hit rate that brings it back (engine/parlayhold.SIZES).
+const RP_PAPER = { threes: ["three-leg parlays", "25%"], twos: ["two-leg parlays", "36%"] };
 function rpEarlierHTML(x, kind, word) {
   const e = (x.earlier || {})[kind];
   if (e && e[1]) {
-    return `<p class="mini rpk-bets-note">Before the start the board also posted ${escapeHtml(plural(e[1], `earlier version of its ${word}`,
+    const did = (x.on_paper || []).includes(kind) ? "built on paper" : "posted";
+    return `<p class="mini rpk-bets-note">Before the start the board also ${did} ${escapeHtml(plural(e[1], `earlier version of its ${word}`,
       `earlier versions of its ${word}`))}; ${e[0]} of them hit. Every one counts on the Record.</p>`;
   }
   return x.versions ? `<p class="mini rpk-bets-note">Every version of this game’s ${escapeHtml(word)} the board posted before
@@ -405,13 +410,24 @@ function rpEarlierHTML(x, kind, word) {
 //: The game's picks and tickets: a strip of marks a kind, opening to every one by name.
 function rpBetsHTML(x, sport, open) {
   const picks = x.picks || [], twos = x.twos || [], threes = x.threes || [], pairs = x.scorers || [];
+  const paper = x.paper || {}, pTwos = paper.twos || [], pThrees = paper.threes || [];
   const pairWord = ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
   // The two sizes apart, the easier one first (two picks hit together far more often than three).
   const parts = [["Picks", picks], ["Two-leg parlays", twos], [twos.length ? "Three-leg parlays" : "Parlays", threes],
+                 ["Two-leg on paper", pTwos], ["Three-leg on paper", pThrees],
                  [pairWord, pairs]].filter(([, l]) => l.length);
+  // A size on paper at the start, said once: its tickets were never posted, or there were none.
+  const paperNote = (x.on_paper || []).map((k) => {
+    const [w, bar] = RP_PAPER[k] || [];
+    if (!w) return "";
+    const had = (paper[k] || []).length;
+    return `<p class="mini rpk-bets-note">${had ? `These ${w} were on paper, never posted`
+      : `No ${w} were posted for this game`}: the league’s were on paper at the start, built and graded only to
+      learn from while they hit under ${bar}.</p>`;
+  }).join("");
   const held = x.held ? `<p class="mini rpk-bets-held">${escapeHtml(plural(x.held, "more pick or ticket", "more picks and tickets"))
     } waiting on the box score: members see ${x.held === 1 ? "it" : "them"} now.</p>` : "";
-  if (!parts.length) return held;
+  if (!parts.length) return paperNote + held;
   const strip = parts.map(([w, l]) => {
     const h = rpHit(l);
     const more = l.length > RP_STRIP_MAX ? `<span class="rpk-marks-more">+${l.length - RP_STRIP_MAX}</span>` : "";
@@ -428,6 +444,11 @@ function rpBetsHTML(x, sport, open) {
           + rpEarlierHTML(x, "twos", "two-leg parlays") : ""}
         ${threes.length ? sec(twos.length ? "The three-leg parlays" : "The parlays", rpTicketsHTML(threes, "threes", sport))
           + rpEarlierHTML(x, "threes", "parlays") : ""}
+        ${pTwos.length ? sec("The two-leg parlays on paper", rpTicketsHTML(pTwos, "twos", sport))
+          + (twos.length ? "" : rpEarlierHTML(x, "twos", "two-leg parlays")) : ""}
+        ${pThrees.length ? sec("The three-leg parlays on paper", rpTicketsHTML(pThrees, "threes", sport))
+          + (threes.length ? "" : rpEarlierHTML(x, "threes", "parlays")) : ""}
+        ${paperNote}
         ${pairs.length ? sec(`The ${pairWord.toLowerCase()}`, rpTicketsHTML(pairs, "scorers", sport))
           + rpEarlierHTML(x, "scorers", pairWord.toLowerCase()) : ""}
       </div>

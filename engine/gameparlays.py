@@ -340,12 +340,47 @@ def pool_legs(board: dict, sport: str, now=None) -> list[dict]:
     return out
 
 
+def game_started(g: dict, now=None) -> bool:
+    """A game of the board's own list under way or over: its live block (or
+    flag) says so, or its own kickoff by the clock (rules.clock_says_started)."""
+    from .rules import clock_says_started
+    g = g if isinstance(g, dict) else {}
+    live = g.get("live")
+    state = str(live.get("state") or "") if isinstance(live, dict) else ("live" if live is True else "")
+    if state in ("live", "final") or g.get("final") is True or g.get("started") is True:
+        return True
+    return clock_says_started(g.get("date") or "", g.get("kickoff") or g.get("commence_time") or "", now=now)
+
+
+def still_to_play(legs: list, board: dict, now=None) -> list:
+    """THE BOARD'S OWN GAMES SAY WHICH LEGS ARE STILL TO PLAY (GPWIN2,
+    2026-11-18). Each source drops a leg by the kickoff on its row
+    (engine/twoleg `_started`), and a row with no kickoff never starts:
+    hockey's rows carried none, so a started game's tickets were built again
+    from its pre-game legs and journaled as versions (Tuesday's 7 pm games
+    have two-leg tickets the board only began making at 8:17 pm Eastern).
+    The board's games list carries every game's kickoff and live state, as
+    the singles journal reads it (engine/ledger._kickoff_map), so a leg of a
+    game it says has started is no leg, whatever its row says."""
+    games = [g for g in (board or {}).get("games") or [] if isinstance(g, dict)]
+    if not games:
+        return list(legs or [])
+    out = []
+    for leg in legs or []:
+        g = _game_of(leg, games)
+        if g is not None and game_started(g, now):
+            continue
+        out.append(leg)
+    return out
+
+
 def legs_for(board: dict, sport: str, now=None) -> list[dict]:
     """The board's priced picks as legs — Most Likely, Edge, the Most Likely
     rows its seat caps dropped (`pool_legs`) and every other prop it priced
     at a named book whose number the Edge path stands behind (`priced_legs`,
     `credible_row`), one copy of a pick kept, the most trusted source's
-    (`SOURCE_RANK`) — at LEG_FLOOR or better."""
+    (`SOURCE_RANK`) — at LEG_FLOOR or better, of a game still to play
+    (`still_to_play`)."""
     from . import legfit
     from . import twoleg as T
     got: dict = {}
@@ -374,7 +409,7 @@ def legs_for(board: dict, sport: str, now=None) -> list[dict]:
             k = (leg.get("player"), leg.get("market"), str(leg.get("side") or "").upper(), leg.get("line"))
             if k not in got or _speaks_first(leg, got[k]):
                 got[k] = leg
-    return list(got.values())
+    return still_to_play(list(got.values()), board, now)
 
 
 def scorer_legs(board: dict, sport: str, now=None) -> list[dict]:
@@ -414,7 +449,7 @@ def scorer_legs(board: dict, sport: str, now=None) -> list[dict]:
             continue
         seen.add(k)
         out.append(leg)
-    return out
+    return still_to_play(out, board, now)
 
 
 # --- the touchdown pairs' research ------------------------------------------------------------

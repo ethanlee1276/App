@@ -212,6 +212,7 @@ def _render(game, sport="nfl", open_=True, words=None):
     helpers = "".join(_fn(n) for n in ("rpMk", "rpHit", "rpBetWords", "rpPickLI", "rpTicketWords", "rpTicketsHTML",
                                        "rpEarlierHTML", "rpBetsHTML"))
     helpers += RP[RP.index("const RP_STRIP_MAX = "):RP.index("\n", RP.index("const RP_STRIP_MAX = ")) + 1]
+    helpers += RP[RP.index("const RP_PAPER = "):RP.index("\n", RP.index("const RP_PAPER = ")) + 1]
     score = RP[RP.index("const RP_SCORE = "):RP.index("};", RP.index("const RP_SCORE = ")) + 3]
     score += "\nconst RP_WORDS = %s;\n" % json.dumps(words or {})
     js = """
@@ -268,6 +269,52 @@ def test_the_earlier_versions_and_a_long_strip_are_said_once():
     strip = strip[:strip.index("</summary>")]
     assert strip.count('class="rpk-mk lost"') == 12 and '<span class="rpk-marks-more">+3</span>' in strip, \
         "a week of versions does not swamp a phone: the list under it has every one"
+
+
+#: Boston at New York's ticket on the record (`_journal`), as a kept set holds a ticket.
+BOS_NYK = {"legs": [{"player": "Jalen Brunson", "market": "points", "side": "OVER", "line": 26.5},
+                    {"player": "Jayson Tatum", "market": "points", "side": "OVER", "line": 24.5}]}
+
+
+def _archive_nba(kept):
+    where = Path(tempfile.mkdtemp())
+    doc = {"sport": "nba", "date": "2026-11-16", "label": "2026-11-16", "away": "BOS", "home": "NYK",
+           "game": "BOS@NYK", "final": {"away": 101, "home": 110},
+           "report": {"away": "BOS", "home": "NYK", "sections": []}, "results": {}, "parlays": kept}
+    RA.write(RA.path_for(where, "nba", "2026-11-16", "BOS", "NYK"), doc)
+    return where
+
+
+def test_a_size_on_paper_was_never_posted_and_says_so():
+    # GPWIN2, 2026-11-18: the NBA's three-leg tickets went on paper on 17 November, so that
+    # night's kept sets held them under `paper_threes` and nothing under `threes`; each game fell
+    # to "every version" and listed all 19 the board built that day as the report's (2 hit).
+    path, key = _journal(), ("2026-11-16", "BOS", "NYK")
+    kept = {"away": "BOS", "home": "NYK", "threes": [], "paper_threes": [BOS_NYK], "threes_paper": True}
+    game = O.for_games("nba", [key], path=path, where=_archive_nba(kept))["2026-11-16|BOS|NYK"]
+    assert "threes" not in game and "versions" not in game, "never posted: not the report's parlays, nor every version"
+    assert [t["status"] for t in game["paper"]["threes"]] == ["lost"] and game["on_paper"] == ["threes"], game
+    html = _render(game, sport="nba")
+    strip = html[:html.index("</summary>")]
+    assert re.findall(r'class="rpk-bets-k">([^<]+)<', strip) == ["Picks", "Three-leg on paper"]
+    assert "The three-leg parlays on paper" in html and "These three-leg parlays were on paper, never posted" in html
+    assert "while they hit under 25%" in html
+    free = O.for_games("nba", [key], member=False, path=path, where=_archive_nba(kept))["2026-11-16|BOS|NYK"]
+    assert len(free["paper"]["threes"]) == 1 and not free.get("held"), "a settled paper ticket is everyone's"
+    # A kept set on paper with no ticket of its own: none posted, and the day's versions are only counted.
+    none = O.for_games("nba", [key], path=path, where=_archive_nba(dict(kept, paper_threes=[])))["2026-11-16|BOS|NYK"]
+    assert "paper" not in none and "versions" not in none and none["earlier"] == {"threes": [0, 1]}, none
+    assert "No three-leg parlays were posted for this game" in _render(none, sport="nba")
+
+
+def test_a_report_that_carried_no_parlay_carried_none():
+    # A kept set with no ticket in it (the report's picks made none) is the report's answer, not a gap
+    # to fill with every version the board built that day.
+    path = _journal()
+    kept = {"away": "BOS", "home": "NYK", "threes": [], "scorers": []}
+    game = O.for_games("nba", [("2026-11-16", "BOS", "NYK")], path=path, where=_archive_nba(kept))["2026-11-16|BOS|NYK"]
+    assert "threes" not in game and "versions" not in game and "on_paper" not in game
+    assert game["earlier"] == {"threes": [0, 1]}, "the day's version still counts, on the Record"
 
 
 def test_a_reader_without_the_subscription_is_told_what_waits():
