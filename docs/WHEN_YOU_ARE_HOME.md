@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XA. The UFC tab tells a visitor what is locked** (step 737; 18 November). Nothing to run. As a visitor the UFC
+tab's Picks tile read "[object Object]": the paywall empties every key named like a paid board at every depth
+(engine/gate._strip), and the card's `counts` holds `"picks": 3`, the number that tile prints, which went out as
+`{}`. A whole number under a paid name now passes; a list, a dict, a string or a float under one is emptied and
+counted locked as before. The same page counted "Modeled 0, Awaiting prices 0" on a card of twenty-one bouts (from
+the pass list, which a visitor's copy no longer has): the card now counts both itself, free. A locked pass list said
+"Nothing to pass on"; it now says why each fight was passed is for members, and how many fights that is. The record
+said its numbers in two tiles and again in the ring under them: the Graded tile is gone (the ring's centre says it),
+and "0 open · units" reads "judge after 50+, not 5". "40 weigh-in(s)" reads "40 weigh-ins". The next UFC build after
+the deploy carries the counts.
+
 **WZ. Three pages stop saying what is not so** (step 736; 18 November). Nothing to run. Walking the boards as a user
 found three more. The Report Picks page, locked, said what it was four times: its heading's line, a sentence under
 it, then a card titled "Report Picks" saying it again; the sentence is gone and the card now says "Today's picks are

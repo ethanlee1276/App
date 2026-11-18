@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "The UFC tab’s numbers are right for everyone",
+      "body": "The UFC tab’s Picks count showed “[object Object]” to visitors, and its modeled and waiting counts read 0 on a full card. Both are right now, a locked pass list says it is for members instead of “Nothing to pass on”, and the record is said once."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "Report Picks, Edge and quiet boards say it once and say it right",
       "body": "The locked Report Picks page no longer repeats what it is four times. The Edge page with nothing on shows a dash for the average edge instead of a green “+0.0%”, and no “0 props · 0 game bets — all journaled”. A board waiting on props no longer says “MLB” on other leagues, and a day with no games says so."
     },

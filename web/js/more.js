@@ -4040,9 +4040,11 @@ async function renderUFC() {
 
   const c = d.counts || {};
   const pl = d.pass_list || [];
-  const nModeled = pl.filter((m) => ["gate", "clamp_kill"].includes(m.reason_code)).length
-    + (d.picks || []).length;
-  const nWaiting = pl.filter((m) => m.reason_code === "no_price").length;
+  // The board's own counts first: a visitor's pass list is locked, and counting
+  // it said "Modeled 0, Awaiting prices 0" on a card of twenty (engine/ufc/model counts).
+  const nModeled = c.modeled != null ? c.modeled
+    : pl.filter((m) => ["gate", "clamp_kill"].includes(m.reason_code)).length + (d.picks || []).length;
+  const nWaiting = c.waiting != null ? c.waiting : pl.filter((m) => m.reason_code === "no_price").length;
   // THE HERO IS ETHAN'S BRANDED RENDER (2026-09-07): the arena dressed
   // in Qellys Book boards, one picture for every card. It replaces the
   // six-night octagon rotation of 2026-08-11 — they circled the old
@@ -4074,7 +4076,7 @@ async function renderUFC() {
                      "priced &amp; run through the model")}
       ${statCardHTML("clock", "Awaiting prices", nWaiting,
                      "books post MMA lines late")}
-      ${statCardHTML("target", "Picks", c.picks || 0,
+      ${statCardHTML("target", "Picks", Number(c.picks) || 0,
                      "every fight that clears the bar")}
       ${statCardHTML("shield", "Card exposure",
                      `${((d.exposure || 0) * 100).toFixed(1)}%`,
@@ -4141,12 +4143,12 @@ async function renderUFC() {
         <div class="ufc-record">
           <div class="stat-cards">
             ${statCardHTML("trophy", "Record", `${wins}-${losses}`,
-                           `${u.open || 0} open · units`)}
+                           `${u.open ? `${u.open} open · ` : ""}judge after 50+, not 5`)}
             ${statCardHTML("chart", "Flat ROI",
                            fmtRoi(u.roi),
                            `${(u.net_units || 0) >= 0 ? "+" : ""}${(u.net_units || 0).toFixed(2)}u return on investment`,
                            u.roi == null ? "" : (u.roi >= 0 ? "pos" : "neg"))}
-            ${statCardHTML("star", "Graded", graded, "judge after 50+, not 5")}
+            ${"" /* How many graded is the ring's own centre below: said once. */}
           </div>
           <div class="ufc-rb">
             <div class="ufc-rb-head">Record breakdown</div>
@@ -4183,11 +4185,11 @@ async function renderUFC() {
           <div class="player">${icon('cross')} ${plural(w.missed, "fighter")} missed weight</div>
           <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:4px">Their fights are
           gated off the pick list automatically — that is what KILL IF always said and now
-          enforces. ${w.unrecorded} weigh-in(s) still unrecorded.</div></div>`;
+          enforces. ${plural(w.unrecorded, "weigh-in")} still unrecorded.</div></div>`;
       }
       if (w.unrecorded) {
         return `<div class="card" style="--tone:var(--warn);margin-bottom:12px">
-          <div class="player">${icon('clock')} ${w.unrecorded} weigh-in(s) not recorded yet</div>
+          <div class="player">${icon('clock')} ${plural(w.unrecorded, "weigh-in")} not recorded yet</div>
           <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:4px">Fighters weigh in the
           morning before the card, and the site pulls the results on its own once they publish —
           nothing for you to do. Until then these fights are graded <em>without</em> the fight-week
@@ -4233,8 +4235,12 @@ async function renderUFC() {
       if (rest.length)
         html += `<div class="section-title">Other passes</div>
           <div class="cards wide">${rest.map(passCard).join("")}</div>`;
+      // A visitor's list is locked, not empty: say so, not "Nothing to pass on".
+      const held = Number(((d.locked || {}).pass_list)) || 0;
       return html || `<div class="section-title">Pass list</div>
-        ${panelEmpty("Nothing to pass on.")}`;
+        ${held ? memberLockHTML("Why each fight was passed is for members",
+          `${plural(held, "fight")} on this card, each with the reason the model passed it.`)
+          : panelEmpty("Nothing to pass on.")}`;
     })()}
     <div id="ufc-paths"></div>
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Every fight is priced

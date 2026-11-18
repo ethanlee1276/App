@@ -563,5 +563,10 @@ def run_card(fights: list[dict]) -> dict:
             "exposure": exposure,
             "card_cap": grade_mod.CAP_PER_CARD,
             "correlation_flags": markets.correlation_flags(picks),
+            # How many were priced and run, and how many wait on a book: free
+            # counts, so a visitor whose pass list is locked is not told
+            # "Modeled 0, Awaiting prices 0" on a card of twenty (18 November 2026).
             "counts": {"fights": len(fights), "picks": len(picks),
-                       "passes": len(passes)}}
+                       "passes": len(passes),
+                       "modeled": len(picks) + sum(p.get("reason_code") in ("gate", "clamp_kill") for p in passes),
+                       "waiting": sum(p.get("reason_code") == "no_price" for p in passes)}}

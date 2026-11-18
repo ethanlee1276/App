@@ -870,7 +870,12 @@ def _strip(node: dict, paid, locked: dict, path: str = "") -> dict:
     out: dict = {}
     for key, value in node.items():
         where = f"{path}.{key}" if path else key
-        if key in paid:
+        # A COUNT IS NOT A PICK (18 November 2026). UFC's `counts` holds
+        # `"picks": 3`, the number the free tile prints; emptied to {} at this
+        # depth it printed "[object Object]" to every visitor. A whole number
+        # under a paid name passes; every container and every other value is
+        # emptied as before.
+        if key in paid and not isinstance(value, int):
             n = _size(value)
             if n:
                 locked[where] = n
