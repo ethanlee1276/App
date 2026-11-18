@@ -107,10 +107,11 @@ def test_a_game_with_no_final_and_a_college_game_say_only_what_the_table_holds()
 
 
 def test_every_football_chart_builder_adds_them():
-    for name, call in (("carries", "scoreboard(conn, sport, pick, out_games)"),
-                       ("targets", "scoreboard(conn, sport, pick, out_games)"),
+    # With the player since 2026-11-18: a college game's side is the player's box score's (carries.own_side).
+    for name, call in (("carries", "scoreboard(conn, sport, pick, out_games, player=name)"),
+                       ("targets", "scoreboard(conn, sport, pick, out_games, player=name)"),
                        # College's throws since 2026-11-17: the league's own scoreboard, as the carries'.
-                       ("passes", "scoreboard(conn, sport, pick, out_games)"),
+                       ("passes", "scoreboard(conn, sport, pick, out_games, player=name)"),
                        ("kicks", 'scoreboard(conn, "nfl", pick, out_games)')):
         src = (ROOT / "engine" / f"{name}.py").read_text(encoding="utf-8")
         i = src.index("\ndef chart(")

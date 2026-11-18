@@ -150,10 +150,11 @@ def test_every_daily_chart_builder_and_the_role_chart_read_them():
                        ("engine/mlb/charts.py", 'scoreboard(conn, "mlb", pick, out_games)'),
                        ("engine/mlb/charts.py", 'scoreboard(conn, "mlb", pick, games)'),
                        ("engine/nhl/charts.py", 'scoreboard(conn, "nhl", pick, games)'),
-                       ("engine/role.py", "scoreboard(conn, sport, pick, games)")):
+                       # The player too (2026-11-18): a college game's side is the player's box score's.
+                       ("engine/role.py", "scoreboard(conn, sport, pick, games, player=name)")):
         assert call in (ROOT / path).read_text(encoding="utf-8"), (path, call)
     role = (ROOT / "engine" / "role.py").read_text(encoding="utf-8")
-    assert role.index("scoreboard(conn, sport, pick, games)") < role.index('g.pop("leg", None)'), \
+    assert role.index("scoreboard(conn, sport, pick, games, player=name)") < role.index('g.pop("leg", None)'), \
         "the role chart reads its finals while a doubleheader's games still name their leg"
     assert CR.DAILY == ("nba", "wnba", "mlb", "nhl", "cbb")
 

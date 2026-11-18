@@ -112,7 +112,8 @@ def test_the_buttons_hop_on_a_game_page_and_switch_the_board_everywhere():
     h = h[:h.index("}));")]
     assert 'const hop = state.view === "pbp" && state.pbp && state.pbp.league !== b.dataset.sport' in h
     # A league that is already the board's still hops (a game opened from Live).
-    assert "if (state.sport === b.dataset.sport) { if (hop) pbpHop(b.dataset.sport); return; }" in h
+    # ...unless the search is on UFC's fighters (2026-11-18): then the league's button is the way back to it.
+    assert "if (state.sport === b.dataset.sport && !state.searchLeague) { if (hop) pbpHop(b.dataset.sport); return; }" in h
     assert h.index("applySport();") < h.rindex("if (hop) pbpHop(b.dataset.sport);"), "the board switches as ever"
     # A board game's or a pick's page held the sport just left: it showed
     # "That game isn't on the current slate". Back to where it was opened.
@@ -121,7 +122,8 @@ def test_the_buttons_hop_on_a_game_page_and_switch_the_board_everywhere():
 
 def test_the_row_lights_the_games_own_league():
     row = _fn(APP, "sportRowLeague")
-    assert 'state.view === "pbp" && state.pbp' in row and "g.league : state.sport" in row
+    # On the search, the search's league (UFC on a fighter's page, 2026-11-18).
+    assert 'state.view === "pbp" && state.pbp' in row and 'g.league : state.view === "players" ? searchLeague() : state.sport' in row
     assert "markSportRow();" in _fn(APP, "applySport")
     view = APP[APP.index("function _switchViewNow("):]
     view = view[:view.index('if (name === "prop") {')]

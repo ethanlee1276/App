@@ -398,7 +398,8 @@ def test_a_player_page_keeps_his_name_in_the_address():
     finished. And typing in the box clears it — a search is not a
     player page, and an address claiming to link to whoever was open
     before is worse than a generic one."""
-    assert '`#player/${encodeURIComponent(state.playerSlug)}`' in APP
+    # A fighter's address names UFC (2026-11-18), so a reload opens the fighter, not the league before the UFC tab.
+    assert '`#player/${searchLeague() === "ufc" ? "ufc/" : ""}${encodeURIComponent(state.playerSlug)}`' in APP
     assert '(name === "players" && state.playerSlug)' in APP
     i = APP.index('document.getElementById("player-search").addEventListener("input"')
     body = APP[i:i + 600]
