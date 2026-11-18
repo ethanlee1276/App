@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Parlay legs by market add up",
+      "body": "On the Record page, each league’s game parlay card counted its legs once in the headline but every ticket a leg rode in the by-market rows, so a market could show more legs than the whole card. The market rows now count each bet once and add up to the headline."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "Recent team changes show real moves only",
       "body": "The rosters page could list a player moving to a team and straight back when the players feed had the wrong club for a few days. A move that is taken back now drops off; real moves, including a player who moved twice, still show."
     },

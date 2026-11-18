@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XD. The parlay record's legs by market count each bet once** (step 740; 18 November). Nothing to run. The Record
+page's game parlay card said "Legs that hit: 109 of 180 … each leg once (539 across the tickets)" and then, under
+"Legs by market", "Rebounds 110 of 202": more rebound legs than legs in all, because the market rows counted every
+ticket a leg rode, while the line above them counted each bet once. The market rows now count each bet once too (the
+game's day, the game, the player, the market, the side and the line, the first copy journaled), so they add up to
+the legs line.
+
 **XC. A roster move the feed takes back is no move** (step 739; 18 November). Nothing to run. The NFL rosters page's
 recent team changes listed "Daiyan Henley DEN → LAC" and, below it, "LAC → DEN": the list diffs our own daily
 snapshots of the players feed, and the feed carried the wrong club for a few days. A move straight back the way it

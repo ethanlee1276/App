@@ -111,6 +111,26 @@ def test_each_league_keeps_its_tickets_and_their_legs():
     assert set(rec["nhl"]) == {"three"} and rec["nhl"]["three"]["one_away"] == 1
 
 
+def test_a_leg_on_two_tickets_counts_once_by_market():
+    """The Record page, 18 November 2026: "109 of 180 legs" (each once) over
+    "Rebounds 110 of 202", the market rows counting every ticket a leg rode."""
+    conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
+    parlayledger.ensure_schema(conn)
+    shared = ("Chase Brown", "receptions", "OVER", 3.5, -190, 0.70, "won", 5)
+    _ticket(conn, "nfl", "game_three", "2026-W10", "CIN@PIT", "lost", 0.30, 3.2, [
+        shared, ("Joe Burrow", "pass_td", "OVER", 1.5, -205, 0.68, "lost", 1),
+        ("Rico Dowdle", "receptions", "OVER", 1.5, -230, 0.70, "won", 3)])
+    _ticket(conn, "nfl", "game_three", "2026-W10", "CIN@PIT", "won", 0.28, 3.0, [
+        shared, ("Ja'Marr Chase", "receptions", "OVER", 5.5, -150, 0.62, "won", 8),
+        ("Tee Higgins", "receptions", "OVER", 3.5, -160, 0.63, "won", 5)])
+    conn.commit()
+    b = parlayledger.game_parlay_record(conn)["nfl"]["three"]
+    assert b["legs"]["once"]["graded"] == 5 and b["legs"]["graded"] == 6, b["legs"]
+    rows = {m["market"]: (m["won"], m["graded"]) for m in b["markets"]}
+    assert rows == {"receptions": (4, 4), "pass_td": (0, 1)}, rows
+    assert sum(g for _w, g in rows.values()) == b["legs"]["once"]["graded"], "the market rows add up to the legs line"
+
+
 def test_the_record_ships_it_for_the_record_page_alone():
     src = (ROOT / "engine" / "ledger.py").read_text(encoding="utf-8")
     assert '"game_parlay_record": _game_parlay_record(conn),' in src

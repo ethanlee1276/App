@@ -501,6 +501,18 @@ def _leg_tally(legs: list) -> dict:
             "fair": round(sum(fs) / len(fs), 3) if fs else None}
 
 
+def unique_legs(tickets: list, legs: list) -> list:
+    """Each bet once among ``legs``: its game's day, the game, the player, the
+    market, the side and the line, the first copy journaled (`legs_once`)."""
+    meta = {t["id"]: (str(t["date"] or ""), str(t["grade"] or "")) for t in tickets}
+    first: dict = {}
+    for l in legs:
+        k = (*meta.get(l["parlay_id"], ("", "")), str(l["player"] or "").strip().lower(),
+             str(l["market"] or ""), str(l["side"] or "").upper(), l["line"])
+        first.setdefault(k, l)
+    return list(first.values())
+
+
 def legs_once(tickets: list, legs: list) -> tuple[dict, dict]:
     """EACH LEG COUNTED ONCE, in all and by source (2026-11-16).
 
@@ -516,13 +528,7 @@ def legs_once(tickets: list, legs: list) -> tuple[dict, dict]:
     (engine/gameparlays.SOURCE_RANK: the Most Likely board, the Edge picks,
     any other priced prop); a leg journaled before the source was kept is
     "before". Each with the chance we gave and, where kept, the book's."""
-    meta = {t["id"]: (str(t["date"] or ""), str(t["grade"] or "")) for t in tickets}
-    first: dict = {}
-    for l in legs:
-        k = (*meta.get(l["parlay_id"], ("", "")), str(l["player"] or "").strip().lower(),
-             str(l["market"] or ""), str(l["side"] or "").upper(), l["line"])
-        first.setdefault(k, l)
-    uniq = list(first.values())
+    uniq = unique_legs(tickets, legs)
     pools: dict = {}
     for l in uniq:
         pools.setdefault(l["pool"] or "before", []).append(l)
@@ -577,8 +583,11 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
             net = sum(float(t["pnl_units"] or 0.0) for t in graded)
             joint = [float(t["modeled_joint"]) for t in graded if t["modeled_joint"] is not None]
             leg_p = [float(l["p_final"]) for l in done if l["p_final"] is not None]
+            # By market, each bet once, as the legs' own line above them counts
+            # them (18 November 2026: "109 of 180 legs" over "Rebounds 110 of
+            # 202", the market rows counting every ticket a leg rode).
             markets: dict = {}
-            for l in done:
+            for l in unique_legs(graded, done):
                 m = markets.setdefault(str(l["market"] or ""), {"market": str(l["market"] or ""), "won": 0,
                                                                  "graded": 0, "_p": []})
                 m["graded"] += 1
