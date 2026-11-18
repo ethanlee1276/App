@@ -359,7 +359,9 @@ def test_a_finished_game_s_page_opens_on_the_final_and_how_we_did():
     if got is None:
         return
     final, live = got
-    assert '<span class="gpr-team">Pacers 124</span>' in final and '<span class="gpr-team win">76ers 131</span>' in final
+    # The game page's own score sits right above the card (2026-11-18): the card says what it is for instead.
+    assert '<span class="gp-res-k">Final</span><span class="gpr-team">How our report did</span>' in final, final
+    assert "Pacers 124" not in final.split("gpr-rows")[0], "the score once, in the page's own header"
     # Each row in its color (GAMEFINAL1): even picks amber, half the tickets amber, a missed call red.
     assert ('<li class="gpr-row gpr-warn"><span class="gpr-mark" aria-hidden="true"><i class="ic-dash"></i></span>\n'
             '    <span class="gpr-k">Our picks</span><span class="gpr-v"><b class="gpr-won">1 won</b> · '

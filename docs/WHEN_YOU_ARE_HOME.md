@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WW. A finished game's page says each thing once** (step 733; 18 November). Nothing to run. Walking a finished
+college game's page the way a member and a visitor see it found three things. The final score sat in the page's own
+header and again at the head of the "How our report did" card right under it: the card now heads itself "How our
+report did", and the score is said once, in the header (an old game's card on its play-by-play page, which has no
+header of its own, still carries the score). The locked report's teaser said "The game report" as its heading and
+again as its first words, under a subtitle that called a game played days ago "tonight's board": the card now says
+"What it holds — … — is part of the subscription.", and on a finished game the subtitle says the report was written
+before it started. And under the final, the page still said "Books haven't posted prop prices for this game yet.": a
+finished game with no prop on its board shows no props section at all.
+
 **WV. A finished game always gets its final** (step 732; 18 November). Nothing to run. The Nuggets' team page said
 7-5 from the standings and 6-5 from the finals on file: their game at Phoenix on 30 October, a late West Coast tip,
 had a row and no score, and so did the Lakers at the Warriors that night and the Bruins at Anaheim on 16 October. A

@@ -144,7 +144,7 @@ def test_the_report_stage_reads_the_record_between_the_grade_and_the_archive():
 
 def test_the_card_is_one_function_both_pages_draw():
     detail = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
-    assert "return gprCard(g, gameReportFor(g), rows, gp, { sport: state.sport });" in detail
+    assert "return gprCard(g, gameReportFor(g), rows, gp, { sport: state.sport, scored: true });" in detail
     assert ('${gprCard(g, doc.report, rows, doc.parlays || {}, { map: doc.results || {}, sport: doc.sport, '
             'id: "pbp-our-verdict" })}') in detail, "an old game's page says the same, from its archive"
     css = (ROOT / "web" / "css" / "detail.css").read_text(encoding="utf-8")

@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "A finished game’s page says each thing once",
+      "body": "The final score no longer shows twice (the page’s header, then the report card under it): the card now heads itself “How our report did”. The locked report preview names the report once and, on a finished game, says it was written before the game rather than from tonight’s board. And a finished game no longer says books haven’t posted prop prices yet."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "Every finished game gets its final score",
       "body": "A few late games never got their final on file (the Nuggets at Phoenix and the Lakers at Golden State on 30 October, the Bruins at Anaheim on 16 October, and some hockey games with no row at all), so a team page’s record could be a game behind its standings. Each night now reads again any recent day where a game has no final, and hockey also checks each club’s own schedule for a finished game we do not have."
     },

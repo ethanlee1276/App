@@ -768,11 +768,14 @@
       <span class="sub">— ${r ? `about ${r.minutes} min to read · ` : ""}${r && r.kept
         // A started game's report is the one it had before the start (engine/reportkeep).
         ? `as written before the game started, last updated ${escapeHtml(r.kept)}`
+        // A finished game's locked teaser: it was written before the game, not from tonight's board.
+        : !r && extras && extras.results ? "the whole game written out before it started"
         : "the whole game written out from tonight’s board"}</span></div>`;
     if (!r) {
       const holds = HOLDS[(extras && extras.sport) || ""] || HOLDS.nfl;
-      return `<div id="gp-sec-report" class="gr">${head}<div class="card ms-locked"><b>The game report</b> —
-        this game written out top to bottom: ${holds} — is part of the subscription.</div></div>`;
+      // The heading above names it; the card says what it holds, once.
+      return `<div id="gp-sec-report" class="gr">${head}<div class="card ms-locked">What it holds — ${holds} — is
+        part of the subscription.</div></div>`;
     }
     RANK_OF = Number(r.rank_of) || 0;
     RESULTS = (extras && extras.results) || null;

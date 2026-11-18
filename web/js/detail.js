@@ -1597,7 +1597,8 @@ function gameReportFor(g) {
    pickResult), else the record's (engine/reportoutcome), each one listed. */
 function gpResultsHTML(g, rows) {
   const gp = (((state.data || {}).game_parlays || {}).games || []).find((x) => x && x.home === g.home && x.away === g.away) || {};
-  return gprCard(g, gameReportFor(g), rows, gp, { sport: state.sport });
+  // The game page's own score sits right above this card: the card does not say it again.
+  return gprCard(g, gameReportFor(g), rows, gp, { sport: state.sport, scored: true });
 }
 //: The card for a finished game: its report (graded), the picks the page draws and its tickets;
 //: ``opts.map`` is an old game's own verdicts (engine/reportarchive), ``opts.sport`` its league
@@ -1629,7 +1630,7 @@ function gprCard(g, rep, rows, gp, opts) {
     gprModelRow(graded.sim, "Our simulation"),
     gprLinesRow(graded.score),
   ].filter(Boolean);
-  const score = fin.home != null && fin.away != null
+  const score = o.scored ? `<span class="gpr-team">How our report did</span>` : fin.home != null && fin.away != null
     ? `<span class="gpr-team${fin.away > fin.home ? " win" : ""}">${escapeHtml(teamName(g.away))} ${fin.away}</span>
        <span class="gpr-at">at</span>
        <span class="gpr-team${fin.home > fin.away ? " win" : ""}">${escapeHtml(teamName(g.home))} ${fin.home}</span>`
@@ -2567,7 +2568,8 @@ function renderGamePage() {
           2026-09-27, crossing out the old "Player props" cards: "this is
           the old page still hiding in our new stuff") — one row each, the
           price and the EV in the pills, the full card one tap away. */""}
-    <div id="gp-sec-props">${shown.length ? `
+    ${/* A finished game has no prop to take: no "books haven't posted" under its final. */""}
+    <div id="gp-sec-props">${isFinal && !shown.length ? "" : shown.length ? `
         <div class="section-title">Edge picks · this game
           <span class="sub">— ${plural(shown.length, "prop", "props")} that clear the edge bar; tap one for the full card</span></div>
         <div class="card" style="padding:0">${shown.map(edgePropRow).sort((a, b) => b.ev - a.ev).map(edgeRowHTML).join("")}</div>`
