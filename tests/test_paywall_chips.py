@@ -77,17 +77,26 @@ def test_the_row_is_not_the_same_glyph_over_and_over():
 
 
 def test_the_two_repeats_are_the_ones_that_should_repeat():
-    """NFL and CFB are both football; NBA and WNBA are both basketball.
-    Those sharing a glyph is correct. Anything else sharing one is the
-    old bug coming back."""
+    """NFL and CFB are both football; NBA, WNBA and college basketball
+    (NCAAB) are all basketball. Those sharing a glyph is correct. Anything
+    else sharing one is the old bug coming back."""
     by_mark = {}
     for label, mark in _chips():
         by_mark.setdefault(mark, []).append(label)
     for mark, labels in by_mark.items():
         if len(labels) == 1:
             continue
-        assert set(labels) in ({"NFL", "CFB"}, {"NBA", "WNBA"}), (
+        assert set(labels) <= {"NFL", "CFB"} or set(labels) <= {"NBA", "WNBA", "NCAAB"}, (
             "%s share %s and are not the same sport" % (labels, mark))
+
+
+def test_the_row_names_every_league_the_site_prices():
+    """18 November 2026 (USEREYES1): the row stopped at six leagues — no
+    NHL and no college basketball, both priced nightly since October and
+    November. The shop names every league the app's strip does."""
+    chips = dict(_chips())
+    for label in ("NFL", "CFB", "MLB", "NBA", "NCAAB", "WNBA", "NHL", "UFC"):
+        assert label in chips, "the paywall's breadth row leaves out %s" % label
 
 
 # --- and they agree with the rest of the site -------------------------------
@@ -98,7 +107,8 @@ def test_the_real_sports_use_the_same_glyph_the_app_uses():
     assert logos, "SPORTS[].logo is gone; this test cannot check anything"
     chips = dict(_chips())
     for key, label in (("nfl", "NFL"), ("mlb", "MLB"), ("nba", "NBA"),
-                       ("wnba", "WNBA"), ("cfb", "CFB")):
+                       ("wnba", "WNBA"), ("cfb", "CFB"), ("nhl", "NHL"),
+                       ("cbb", "NCAAB")):
         if key not in logos or label not in chips:
             continue
         assert chips[label] == logos[key], (

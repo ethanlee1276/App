@@ -581,7 +581,7 @@ function renderMyBets() {
         <label>Book<select id="mb-book">${MYBETS_BOOKS.map((b) =>
           `<option>${escapeHtml(b)}</option>`).join("")}</select></label>
         <label>Sport<select id="mb-sport">${
-          ["", "NFL", "CFB", "MLB", "NBA", "WNBA", "UFC", "Other"].map((s) =>
+          ["", "NFL", "CFB", "MLB", "NBA", "NCAAB", "WNBA", "NHL", "UFC", "Other"].map((s) =>
           `<option value="${s}">${s || "—"}</option>`).join("")}</select></label>
         <label>Date<input id="mb-date" type="date" value="${today}"></label>
       </div>
@@ -817,8 +817,8 @@ function renderMyBets() {
       : `<div class="mbc-list">${shown.map(card).join("")}</div>`}`
     : `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
         <div class="es-title">No bets logged yet</div>
-        <div class="es-sub">Add the first bet you placed at a book above. It stays on this
-        device, tracks your P&L by book, and is separate from the model’s own record.</div></div>`}
+        <div class="es-sub">Add the first bet you placed at a book above. It tracks your
+        P&L by book and is separate from the model’s own record.</div></div>`}
     <details class="card mb-import">
       <summary>Bulk import — a CSV from your sportsbook, or a Juice Reel export</summary>
       <p class="mb-import-note">The free version of bet syncing: every book (and Juice
@@ -843,8 +843,9 @@ function renderMyBets() {
     </details>
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
       This is a manual log for the bets YOU place — not the model’s picks (those are on the
-      Record page) and not gambling advice. Data lives only in this browser; clearing your
-      browser data erases it, so Export now and then if you want a backup.</p>`;
+      Record page) and not gambling advice. ${typeof _acctUser !== "undefined" && _acctUser
+      && _acctUser.signed_in ? "It syncs to your account; Export keeps a copy of your own."
+      : "Data lives only in this browser; clearing your browser data erases it, so Export now and then if you want a backup."}</p>`;
   sweepRings(host);
   if (typeof mountGlossCharts === "function") mountGlossCharts(host);
   loadExtras().then((X) => X && (st.settled ? X.reportCard(document.getElementById("mb-report")) : X.riskView(document.getElementById("mb-risk"))));
@@ -1440,7 +1441,8 @@ const PLAN_EXTRAS = {
    disagreeing about what a baseball looks like. */
 const PW_SPORTS = [
   ["NFL", "🏈"], ["MLB", "⚾"], ["NBA", "🏀"],
-  ["WNBA", "🏀"], ["CFB", "🏈"], ["UFC", "🥊"],
+  ["WNBA", "🏀"], ["NHL", "🏒"], ["CFB", "🏈"],
+  ["NCAAB", "🏀"], ["UFC", "🥊"],
   ["Fantasy", "🏆"], ["Prediction markets", "📈"],
   ["Meme coins", "🪙"], ["Ask Qellys AI", "🤖"],
 ];

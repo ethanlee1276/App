@@ -518,6 +518,25 @@ def _stakeplan_priced_out(odds) -> bool:
     return priced_out("edge", odds)
 
 
+def _card_counts(path: str) -> dict:
+    """What the fight card holds, for its Status row: {"card": {"fights": n,
+    "picks": n}}, {} when the card cannot be read.
+
+    18 November 2026 (USEREYES1): UFC is not in BOARD_FILES (the card does
+    not rebuild every cycle), so its row said when it rebuilt and nothing of
+    what it holds, under seven leagues that each say what their boards
+    hold."""
+    try:
+        with open(_full_copy(path)) as fh:
+            b = json.load(fh)
+        c = b.get("counts") if isinstance(b, dict) else None
+    except Exception:                                     # noqa: BLE001
+        return {}
+    out = {k: c[k] for k in ("fights", "picks")
+           if isinstance(c, dict) and isinstance(c.get(k), int)}
+    return {"card": out} if out else {}
+
+
 def _board_counts(path: str) -> dict:
     """What a member finds on a league's two boards after a build:
     {"most_likely": rows on Most Likely, "edge": rows on the Edge board,
@@ -2487,6 +2506,8 @@ def _note_board(name: str, ok) -> bool:
             age = None
         _BOARD_RUNS[name].update(_fresh.verdict(
             name, age, offseason=bool(_BOARD_RUNS[name].get("offseason"))))
+    elif name == "ufc":
+        _BOARD_RUNS[name].update(_card_counts(UFC_OUT))
     # AFTER the run is recorded, so the heartbeat is written even if this
     # raises, and unconditional because the loop that matters is quiet.
     _warn_if_frozen(name)

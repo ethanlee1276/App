@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Every league named where the leagues are listed",
+      "body": "The About page, the plans and the search description listed six or seven leagues; they now name all eight, with About cards for the NHL and college basketball, and My Bets can file a bet under NHL or NCAAB. My Bets also says where your log is kept by whether you are signed in, and the Status page says what the UFC card holds."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "Parlay legs by market add up",
       "body": "On the Record page, each league’s game parlay card counted its legs once in the headline but every ticket a leg rode in the by-market rows, so a market could show more legs than the whole card. The market rows now count each bet once and add up to the headline."
     },

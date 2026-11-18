@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XE. Every page that lists the leagues lists all eight** (step 741; 18 November). Nothing to run. Walking the rest
+of the pages as a reader: About said "Six leagues priced nightly" over cards for six, with no NHL and no college
+basketball, and its disclaimer named every league but the NHL; the shop's row of leagues, the plan's "Every sport:"
+line and the site's search and share descriptions left out college basketball (and the shop's row the NHL); My Bets
+could not file a bet under NHL or NCAAB. All of them now name the eight, and a test holds the shop, the plan and the
+bet log to the league codes the app's own strip uses. About has a card for each (hockey's says what Scalpy NHL
+prices and how; college basketball's that it runs the NBA's engine on a 40-minute game, measured on five Division I
+seasons, and is graded in public before its picks count). The same walk fixed My Bets saying "Syncing to" your
+account above a footer that said the log lives only in this browser (the footer now says which, by whether you are
+signed in), the Lab's empty page saying weekly and nightly in one sentence, Line Shopping sending readers to a
+"Recommended" page the menu no longer has (it links Edge Picks), and the Status page's UFC row saying when the card
+rebuilt and nothing of what it holds (it now says its fights and picks, as the other leagues' rows say what their
+boards hold).
+
 **XD. The parlay record's legs by market count each bet once** (step 740; 18 November). Nothing to run. The Record
 page's game parlay card said "Legs that hit: 109 of 180 … each leg once (539 across the tickets)" and then, under
 "Legs by market", "Rebounds 110 of 202": more rebound legs than legs in all, because the market rows counted every

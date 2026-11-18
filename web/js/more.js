@@ -641,8 +641,7 @@ async function renderLab() {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
       <div class="es-title">No backtests published yet</div>
       <div class="es-sub">The Lab replays the production model over stored history
-      once a week, automatically, as part of the nightly maintenance pass. It
-      appears here after the first run.</div></div>`;
+      once a week, on its own, and appears here after its first run.</div></div>`;
     return;
   }
   const order = ["mlb", "nfl", "cfb", "nba", "cbb", "wnba", "nhl", "ufc"];
@@ -4436,7 +4435,10 @@ function buildsCardHTML(hb) {
     const r = runs[k];
     const when = r.at_epoch ? `${ageText(now - r.at_epoch)} ago` : "time unknown";
     const kept = r.ok ? "" : "the last good board";
-    const boards = r.most_likely == null && r.edge == null ? "" :
+    const card = r.card || {};
+    const boards = r.most_likely == null && r.edge == null
+      ? (card.fights != null ? sub("Fight card", `${n(card.fights, "fight", "fights")} · ${n(card.picks, "pick", "picks")}`,
+          card.picks ? "st-good" : "st-off", kept) : "") :
       sub("Most Likely board", n(r.most_likely, "pick", "picks"), r.most_likely ? "st-good" : "st-off", kept)
       + sub("Edge board", n(r.edge, "bet", "bets"), r.edge ? "st-good" : "st-off",
             r.staked ? `${r.staked} staked` : (r.edge === 0 ? "nothing priced wrong" : ""))
@@ -4599,7 +4601,7 @@ function renderAbout() {
   host.innerHTML = `
     <div class="about-lede">
       <p><strong>Qellys Book is one book for everything a sharp bettor keeps
-      open in ten tabs.</strong> Six leagues priced nightly by named models.
+      open in ten tabs.</strong> Eight leagues priced nightly by named models.
       A full fantasy football suite with its own draft room. Prediction-market
       intelligence. A live meme-coin radar. And underneath all of it, the one
       thing almost nobody else will show you: <strong>every pick this site has
@@ -4616,8 +4618,8 @@ function renderAbout() {
       often, and it is the system working rather than failing.</p>
     </div>
 
-    <div class="section-title">Six leagues, each with its own model
-      <span class="sub">— not one formula wearing six logos</span></div>
+    <div class="section-title">Eight leagues, each measured on its own games
+      <span class="sub">— not one formula wearing eight logos</span></div>
     <div class="cards wide">
       ${card("NFL — The NFL Book", `<p>The pro-bettor spec: player props with
         usage bridges and coaching-reset detection, game lines off
@@ -4632,10 +4634,19 @@ function renderAbout() {
         threes through a minutes engine with on/off inheritance — who absorbs
         the shots when the star sits — plus the same public grading as every
         other league.</p>`)}
+      ${card("NHL — Scalpy NHL", `<p>Shots, points, goals, assists and blocks
+        from each skater’s rate per 60 minutes times the ice time they will
+        get, saves for the probable starting goalie, and the moneyline, puck
+        line and total from each team’s goals for and against.</p>`)}
       ${card("College football", `<p>A market-attention model: it knows which
         games the sharps price hard and which Tuesday slates nobody is
         watching, and it refuses to grade a play whose quarterback nobody has
         confirmed.</p>`)}
+      ${card("College basketball", `<p>The NBA’s minutes engine on a 40-minute
+        game, its minutes and spreads measured on five seasons of Division I
+        box scores, every pick graded from the box score, and a tournament
+        race page beside the title futures. Like every new league, its picks
+        are graded in public before they count as bets.</p>`)}
       ${card("UFC — Scalpy MMA", `<p>Fighter dossiers with measured records,
         method and round markets, and a card that passes on most fights with
         the reason stated — because most fights deserve a pass.</p>`)}
@@ -4813,7 +4824,7 @@ function renderAbout() {
             responsibility to know the rules where you are and to follow
             them.</li>
           <li><strong>We are not affiliated with any sportsbook</strong>, and
-            not with the NFL, MLB, NBA, WNBA, UFC, the NCAA or any team,
+            not with the NFL, MLB, NBA, WNBA, NHL, UFC, the NCAA or any team,
             school or league. Book names appear only to identify where a price
             was quoted. All trademarks belong to their owners.</li>
           <li><strong>We take no bets, hold no money and process no
@@ -5045,7 +5056,7 @@ function renderScanner() {
       <span>implied ${(t.implied * 100).toFixed(1)}% here, ${(t.consensus * 100).toFixed(1)}% elsewhere</span></div></div>`;
 
   const scanFoot = `<p class="list-note">Positive-EV bets live on the
-      <b>Recommended</b> and <b>Edge Board</b> pages — that’s the model’s job. This page
+      <a href="#edge" data-view="edge">Edge Picks</a> page — that’s the model’s job. This page
       needs no model: it’s the books disagreeing with each other. Arbitrage and middle
       prices move fast; verify at the book before betting. Books limit accounts that
       only arb — mix it into normal betting.</p>`;

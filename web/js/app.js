@@ -19717,7 +19717,7 @@ const PLANS = [
    Length of commitment is the only axis, and the discount is the whole
    difference. */
 const PLAN_FEATURES = [
-  "Every sport: NFL, CFB, NBA, NHL, MLB, WNBA and UFC",
+  "Every sport: NFL, CFB, NBA, NCAAB, NHL, MLB, WNBA and UFC",
   // Second, so the longer plans' four-line summary carries it too.
   "Ask Qellys, the AI assistant — any team, player or game",
   // ZENO'S BETS (Ethan, 2026-09-26: the paywall should say it "gets access
