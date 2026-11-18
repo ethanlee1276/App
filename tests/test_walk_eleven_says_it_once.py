@@ -99,13 +99,14 @@ def test_the_last_games_list_only_adds_the_lines_verdict():
 
 
 def test_an_injury_return_is_said_once_and_as_a_day():
+    # One wording, the injuries page's (app.js injRet: "return Sun, Nov 29"), on the team page, the roster and a
+    # pick card (walk 13 joined the three walk 11 had left saying it two ways).
     row = _fn(MORE, "teamInjuryRowHTML")
-    assert "`est. return ${teamDayWords(r.return_date)}`" in row and "`back ${" not in row
-    assert "` · est. return ${escapeHtml(teamDayWords(p.return_date))}`" in MORE
+    assert "[r.injury, injRet(r)]" in row and "`back ${" not in row
+    assert 'const back = p.return_date ? ` · ${escapeHtml(injRet(p))}` : "";' in MORE
     assert "` · back ${escapeHtml(String(p.return_date).slice(5))}`" not in MORE
     note = _fn(APP, "pickInjuryNote")
-    assert "`est. return ${formatGameDate(inj.return_date) || inj.return_date}`" in note
-    assert "`expected back ${" not in note
+    assert "[inj.injury, injRet(inj)]" in note and "`expected back ${" not in note
 
 
 def test_the_chart_leaves_the_cards_numbers_for_that_game():

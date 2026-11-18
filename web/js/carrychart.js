@@ -317,10 +317,11 @@
   //: in read "1--2"; it says "1 for −2".
   const tally = (n, yds) => { const y = Math.round(yds); return y < 0 ? `${n} for −${-y}` : `${n}-${y}`; };
   const num1 = (v) => (v == null ? "—" : Number(v).toFixed(1));
-  //: A season that spans two years is named for both: the NBA's and the NHL's 2025 is "2025-26".
-  //: A fighter has no seasons: his record is his career.
+  //: A season that spans two years is named for both: the NBA's, the NHL's and college basketball's 2025 is
+  //: "2025–26", with the dash the player page and the team page write (a college shooter's chips read "2026"
+  //: and "2025" beside a page saying "2026–27 season", walk 13). A fighter has no seasons: the record is a career.
   const seasonName = (sport, y) => (sport === "ufc" ? "Career"
-    : /^(nba|nhl)$/.test(sport) ? `${y}-${String((+y + 1) % 100).padStart(2, "0")}` : `${y}`);
+    : /^(nba|nhl|cbb)$/.test(sport) ? `${y}–${String((+y + 1) % 100).padStart(2, "0")}` : `${y}`);
 
   /* ---------------- the field ---------------- */
   /* Drawn the way Ethan's renders draw it (2026-10-14): a dark turf with

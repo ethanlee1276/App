@@ -1845,10 +1845,9 @@ function rosterPlayerHTML(p, byAppearance) {
   // filed and they disagree about whether he plays — a gap the merge
   // filled is not a disagreement, and marking those would flag most of
   // the board.
-  // "est. return Nov 29", as the team page says it: "Back · back 11-29" said
-  // the word twice and the day as a code (walk 11, 2026-11-18).
-  const back = p.return_date
-    ? ` · est. return ${escapeHtml(teamDayWords(p.return_date))}` : "";
+  // "return Sun, Nov 29" (app.js injRet), as the injuries page and the team page say it: "Back · back 11-29"
+  // said the word twice and the day as a code (walk 11, 2026-11-18).
+  const back = p.return_date ? ` · ${escapeHtml(injRet(p))}` : "";
   const contested = p.injury_conflict
     ? `<span class="chip warn" title="Sleeper and the ESPN injury report
          disagree about whether the player plays. The more pessimistic reading is
@@ -2995,7 +2994,8 @@ function teamGameResult(g) {
 }
 /* The NFL's playoff rounds, by the week number nflverse files them under
    (the 18-week seasons, 2021 on). */
-const NFL_ROUNDS = { 19: "Wild Card", 20: "Divisional", 21: "Conference", 22: "Super Bowl" };
+// One table for the site: app.js NFL_ROUND (the market history's weeks say the same).
+const NFL_ROUNDS = NFL_ROUND;
 function teamGameWhen(d, g) {
   if (d.sport === "nfl" || (d.sport === "cfb" && Number.isFinite(Number(g.period)))) {
     // Stored as "001" so text sorts as numbers; read as "Wk 1".
@@ -3111,7 +3111,9 @@ function teamHomeHTML(d, p) {
   const of = (r) => (r && s.teams_ranked ? `${ordinal(r)} of ${s.teams_ranked}` : "");
   const glance = s ? `<div class="section-title">${escapeHtml(teamSeasonLabel(d.sport, s.season))} at a glance</div>
     <div class="metrics tm-glance">
-      ${tile("Record", s.record)}
+      ${/* NO RECORD TILE (walk 13, 2026-11-18): the header above says the record, the league's own where the
+            standings have it, so the tile said it again, and on a hockey page differently (the Oilers' header
+            17-3-3 with the overtime losses, the tile 17-5 off the finals on file). */ ""}
       ${tile("Scored / game", s.pf_per_game, of(s.offense_rank))}
       ${tile("Allowed / game", s.pa_per_game, of(s.defense_rank))}
       ${s.ats_w + s.ats_l + s.ats_p ? tile("Against the spread", `${s.ats_w}-${s.ats_l}${s.ats_p ? "-" + s.ats_p : ""}`) : ""}
@@ -3353,13 +3355,8 @@ function teamInjuryRowHTML(r) {
   return `<button type="button" class="tm-row" data-player-page="${escapeAttr(slugify(r.player || ""))}">
     <span class="tm-row-o">${escapeHtml(r.player || "")}<small>${escapeHtml(r.pos || r.position || "")}</small></span>
     <span class="tm-row-r"><b style="color:${injTone(r.status)}">${escapeHtml(r.status || "")}</b>
-      <small>${escapeHtml([r.injury, r.return_date ? `est. return ${teamDayWords(r.return_date)}` : ""].filter(Boolean).join(" · "))}</small></span>
+      <small>${escapeHtml([r.injury, injRet(r)].filter(Boolean).join(" · "))}</small></span>
   </button>`;
-}
-//: "Nov 22" for 2026-11-22: a day as a person writes it (the card read "return 2026-11-22").
-function teamDayWords(iso) {
-  const t = Date.parse(`${String(iso).slice(0, 10)}T12:00:00`);
-  return isNaN(t) ? String(iso) : new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 /* A SEASON AS ITS LEAGUE SAYS IT. A basketball or hockey season crosses New
    Year and is filed under the year it started, so the Cavaliers' page read

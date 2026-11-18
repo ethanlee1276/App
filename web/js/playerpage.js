@@ -561,6 +561,15 @@ function plrFill(page, d) {
   const host = page.querySelector(".plr-hero");
   if (host && d && d.bio) host.outerHTML = plrHeroHTML(d.player, d.sport, d.team, d.position,
     d.bio.headshot || page._plr.face, d.bio);
+  // THE INJURY TAG ON A PAGE OPENED FIRST (walk 13, 2026-11-18): the header reads the injury board, which only the
+  // boards had asked for, so Puka Nacua's page opened cold said "IR · Knee - MCL" under Latest and nothing by the
+  // name. The board is asked for here too (one request for every caller), and the tag filled in when it answers.
+  if (d && d.player && typeof loadInjuryBoard === "function" && typeof injTag === "function") {
+    loadInjuryBoard().then(() => {
+      const flag = page.isConnected && page.querySelector(".plr-flag");
+      if (flag && !flag.innerHTML.trim()) flag.innerHTML = injTag(d.sport, d.player);
+    }).catch(() => {});
+  }
   // The page's own answer can name the club the search did not (a roster name, an address opened cold).
   if (d && d.team && d.team !== page._plr.team && page.isConnected && _plrLive && _plrLive.page === page) {
     page._plr.team = d.team;

@@ -115,7 +115,9 @@ def test_the_page_draws_the_chips_and_reads_one_season_at_a_time():
 def test_weeks_read_as_numbers_and_playoff_weeks_by_name():
     js = app_js()
     when = section("const NFL_ROUNDS", "function teamGameDate")
-    assert 'const NFL_ROUNDS = { 19: "Wild Card", 20: "Divisional", 21: "Conference", 22: "Super Bowl" };' in when
+    # One table since 2026-11-18 (walk 13): the team page reads app.js's, which the market history says too.
+    assert "const NFL_ROUNDS = NFL_ROUND;" in when
+    assert 'const NFL_ROUND = { 19: "Wild Card", 20: "Divisional", 21: "Conference", 22: "Super Bowl" };' in js
     assert "return `Wk ${wk}`;" in when and "Number(g.period)" in when
 
 

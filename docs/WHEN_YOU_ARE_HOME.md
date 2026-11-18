@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YC. The thirteenth walk: college ranks, one name for a season, playoff weeks by their round** (step 765; 18
+November). Nothing to run. Duke's team page ranked it "62nd of 564": every small school that played a Division I one
+was counted in the field, as the game page's scan did until step XZ. College ranks among Division I now, and a small
+school keeps its numbers, unranked. A college shooter's chart chips read "2026" and "2025" beside a page saying
+"2026–27 season", and the charts wrote "2025-26" where the pages write "2025–26": one name for a split season
+everywhere a reader sees one (the NBA stats API keeps its own spelling for its query). The team page's at-a-glance
+Record tile said the header's record again, and on the Oilers' page differently: 17-3-3 above, the league's own with
+the overtime losses, and 17-5 below off the finals on file. The tile is gone; the header says it. Puka Nacua's last
+ten read "Wk 1 vs SF" and then "Wk 21 vs SEA", last January's conference final; a playoff week says its round now,
+from one table the team page shares. His page, opened first, named no injury by his name while Latest said "IR ·
+Knee - MCL": the page asks for the injury board itself now. And a return day was said three ways after step YB (team
+page, roster, pick card); all three say it as the injuries page does, "return Sun, Nov 29". Also seen and left to
+the nightly: fourteen hockey clubs are a final or two short of the league's standings (eight games, Edmonton's 5-6
+home loss among them). Step WV's re-read finds them from the clubs' own season pages, four days a night, so it
+should clear by Friday; the check-in tomorrow counts them again.
+
 **YB. The eleventh walk, and the preseason out of the basketball history** (step 764; 18 November). Two commands,
 the first a few minutes and the second seconds (RUN_NEXT 00o). Walking the Cavaliers' page, Shai
 Gilgeous-Alexander's and the NBA Record page as a reader on a phone: the team page said "2026 Schedule" and "2026 at

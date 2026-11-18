@@ -597,7 +597,7 @@ def backfill_tips(conn, today, budget: int = TIPS_PER_NIGHT, read=None) -> dict:
 # --- what the page draws -------------------------------------------------------------
 def season_label(season: int) -> str:
     """2025 → "2025-26": an NBA season is named for both its years."""
-    return f"{int(season)}-{(int(season) + 1) % 100:02d}"
+    return f"{int(season)}–{(int(season) + 1) % 100:02d}"
 
 
 def resolve(conn, player: str, league: str = "nba") -> tuple:

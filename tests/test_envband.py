@@ -102,13 +102,14 @@ function injTone(status) {
 }
 let INJ = null;
 function injFind(sport, player) { return INJ; }
+function formatGameDate(s) { return s ? `day ${s}` : ""; }
 const state = { sport: "mlb" };
 """
 
 
 def _run(script):
     src = _STUBS + "\n".join(
-        [_const(n) for n in ("ENV_AERIAL", "ENV_POWER")]
+        [_const(n) for n in ("ENV_AERIAL", "ENV_POWER", "injRet")]
         + [_fn(n) for n in ("windBand", "parkBand", "envChip", "pickInjuryNote")]
     ) + "\n" + script
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
@@ -289,6 +290,13 @@ def test_mlb_says_it_better_so_we_stand_down():
                         "pick until activated"]}
     assert _note(rec, {"status": "Out", "injury": "elbow",
                        "date": "2026-08-11"}, sport="mlb") == ""
+
+
+def test_the_return_day_reads_as_the_injuries_page_writes_it():
+    """"return Sun, Nov 29" (app.js injRet), not "expected back 2026-11-29" (walks 11 and 13)."""
+    out = _note({"player": "A Back", "warnings": []},
+                {"status": "Out", "injury": "knee", "date": "2026-08-19", "return_date": "2026-11-29"})
+    assert "knee · return day 2026-11-29" in out and "expected back" not in out, out
 
 
 def test_the_note_does_not_pretend_the_projection_knew():

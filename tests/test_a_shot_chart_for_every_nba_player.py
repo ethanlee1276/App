@@ -345,7 +345,7 @@ def test_the_chart_reads_his_line_his_zones_and_the_league():
     conn = _with_box(_conn())
     d = NS.chart(conn, "Nikola Jokic")
     assert d["player"] == "Nikola Jokić", "found without the accent"
-    assert d["season"] == 2025 and d["season_label"] == "2025-26" and d["team"] == "DEN"
+    assert d["season"] == 2025 and d["season_label"] == "2025–26" and d["team"] == "DEN"
     g = d["games"][0]
     L = g["line"]
     assert (L["fga"], L["fgm"], L["fg3a"], L["fg3m"], L["fta"], L["ftm"]) == (6, 4, 2, 1, 2, 1)

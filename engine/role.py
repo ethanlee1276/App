@@ -110,7 +110,7 @@ TWO_YEAR = ("nba", "nhl", "cbb")
 
 def season_label(sport: str, season: int) -> str:
     if sport in TWO_YEAR:
-        return f"{int(season)}-{(int(season) + 1) % 100:02d}"
+        return f"{int(season)}–{(int(season) + 1) % 100:02d}"
     return str(int(season))
 
 

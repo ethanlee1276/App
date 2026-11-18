@@ -390,12 +390,20 @@ def profile(conn, sport: str, team: str) -> dict:
         table = season_table(conn, sport, season)
         if team not in table:
             continue
-        off = _ranked(table, "pf_per_game", False)
-        dfn = _ranked(table, "pa_per_game", True)
+        # COLLEGE RANKS AMONG DIVISION I (walk 13, 2026-11-18): Duke's page read
+        # "62nd of 564", every small school that played a Division I one counted
+        # in the field (step XZ did the same for the game page's scan). A small
+        # school keeps its own numbers, unranked.
+        field = table
+        if sport == "cbb":
+            from . import cbbteams
+            field = {t: v for t, v in table.items() if cbbteams.is_division_one(t)}
+        off = _ranked(field, "pf_per_game", False)
+        dfn = _ranked(field, "pa_per_game", True)
         rows.append({**table[team], "season": season,
                      "offense_rank": off.get(team),
                      "defense_rank": dfn.get(team),
-                     "teams_ranked": len(table)})
+                     "teams_ranked": len(field)})
     career = _blank()
     for g in _finals(conn, sport, "(home=? OR away=?)", (team, team)):
         h, a = _num(g["home_score"]), _num(g["away_score"])

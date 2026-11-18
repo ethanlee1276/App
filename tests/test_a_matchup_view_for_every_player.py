@@ -261,7 +261,7 @@ def test_basketball_by_shot_zone():
     hard = M.chart(conn, "nba", "Jalen Brunson", "BOS")
     assert soft["family"] == "shots" and soft["opp"] == "BKN", "Brooklyn as BRK finds BKN"
     assert soft["fit"] > 0 > hard["fit"] and _zone(soft, "ra")["share"] == round(20 / 30, 3)
-    assert soft["fmt"] == "pct" and soft["season_label"] == "2025-26"
+    assert soft["fmt"] == "pct" and soft["season_label"] == "2025–26"
     assert hard["overall"]["rank"] == hard["overall"]["of"], "the stingiest defence is last for the shooter"
 
 

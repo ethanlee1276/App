@@ -85,7 +85,7 @@ def test_the_shot_map_counts_his_attempts_the_box_scores_way():
         d = HC.shot_map(conn, "auston matthews")
     finally:
         HC._model = keep
-    assert d["player"] == "Auston Matthews" and d["role"] == "skater" and d["season_label"] == "2025-26"
+    assert d["player"] == "Auston Matthews" and d["role"] == "skater" and d["season_label"] == "2025–26"
     g = d["games"][0]
     assert g["date"] == "2025-11-01" and g["opp"] == "NYR" and g["home"] is True
     L = g["line"]

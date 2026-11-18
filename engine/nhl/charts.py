@@ -60,7 +60,7 @@ def facing(x, y, dist) -> tuple:
 
 
 def season_label(season: int) -> str:
-    return f"{int(season)}-{(int(season) + 1) % 100:02d}"
+    return f"{int(season)}–{(int(season) + 1) % 100:02d}"
 
 
 def _resolve(conn, player: str, col: str) -> str:
