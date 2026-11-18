@@ -2029,6 +2029,10 @@ def from_watch(row: dict, sport: str = "nfl") -> dict:
     }
 
 
+
+#: A league in a sentence (18 November 2026: a college card said "sorts CBB winners").
+_LG = {"cbb": "college basketball", "cfb": "college football"}
+
 def from_game_bet(row: dict, sport: str = "nfl",
                   census: dict | None = None, floor=None) -> dict | None:
     """One likelihood row from a priced game bet, or None.
@@ -2260,7 +2264,7 @@ def from_game_bet(row: dict, sport: str = "nfl",
         own = prob_model if raw_claim is None else raw_claim
         rank_note = (
             f"Ranked on the market’s number, {prob:.0%}: the book’s de-vigged "
-            f"price sorts {sport.upper()} winners at {float(auc):.2f} measured, "
+            f"price sorts {_LG.get(sport, sport.upper())} winners at {float(auc):.2f} measured, "
             f"against {float(model_auc):.2f} for the model’s own. The model’s "
             f"own rating has this side at {own:.0%}.")
         if (raw_claim is not None and fair is not None
@@ -2274,7 +2278,7 @@ def from_game_bet(row: dict, sport: str = "nfl",
     elif source == "sharp":
         rank_note = (
             f"Ranked on the sharp book’s fair, {prob:.0%} — a market number, "
-            f"which sorts {sport.upper()} winners at {float(auc):.2f} measured.")
+            f"which sorts {_LG.get(sport, sport.upper())} winners at {float(auc):.2f} measured.")
     else:
         rank_note = ""
     return {

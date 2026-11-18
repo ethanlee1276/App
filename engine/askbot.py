@@ -143,6 +143,19 @@ LEAGUE_WORDS = {"nfl": r"\bnfl\b", "cfb": r"\b(?:cfb|college football|ncaaf?)\b"
                 "nhl": r"\b(?:nhl|hockey)\b",
                 "cbb": r"\b(?:cbb|ncaab|ncaam|college basketball|college hoops|march madness)\b"}
 
+#: A league in a sentence (18 November 2026: the notes said "for CBB").
+_COLLEGE = {"cbb": "college basketball", "cfb": "college football"}
+
+
+def _lg(sport: str) -> str:
+    """"NBA", "college basketball" — after "for"."""
+    return _COLLEGE.get(sport, str(sport or "").upper())
+
+
+def _lg_in(sport: str) -> str:
+    """"the NBA", "college basketball" — after "in"."""
+    return _COLLEGE.get(sport) or f"the {str(sport or '').upper()}"
+
 #: The lookups: rounds of tool calls one question may take, calls in all,
 #: and how much each answer carries.
 MAX_TOOL_ROUNDS = 3
@@ -1779,7 +1792,7 @@ def team_history(team: str, opponent: str = "", sport: str = "", prefer: str = "
         conn.close()
     return {"found": False, "note": f"no stored games for {team}"
             + (f" against {opponent}" if opponent else "")
-            + (f" in the {sport.upper()}" if sport else "")}
+            + (f" in {_lg_in(sport)}" if sport else "")}
 
 
 def _find_players(q: str, sport: str, prefer: str) -> list[dict]:
@@ -2206,7 +2219,7 @@ def slate(boards: dict, sport: str = "", data_dir=None, prefer: str = "") -> dic
         if games:
             out.append({"sport": s, "date": b.get("date") or "", "games": games})
     if not out:
-        return {"found": False, "note": "no games on tonight's boards" + (f" for {sport.upper()}" if sport else ""),
+        return {"found": False, "note": "no games on tonight's boards" + (f" for {_lg(sport)}" if sport else ""),
                 "leagues_with_a_board_tonight": sorted(boards)}
     return {"slates": out}
 
@@ -2302,7 +2315,7 @@ def our_picks(boards: dict, kind: str = "best_bets", sport: str = "", limit=None
     rows.sort(key=lambda x: x[0])
     if not rows:
         return {"found": False, "note": f"no {kind.replace('_', ' ')} on tonight's boards"
-                + (f" for {sport.upper()}" if sport and sport != "all" else "")}
+                + (f" for {_lg(sport)}" if sport and sport != "all" else "")}
     return {"kind": kind, "count": len(rows), "rows": [r for _, r in rows[:_limit(limit)]]}
 
 
@@ -2884,7 +2897,7 @@ def report_record(sport: str = "", prefer: str = "") -> dict:
         out[league] = {**sums, "newest_games": newest}
     if not out:
         return {"found": False, "note": "no finished game reports kept yet"
-                + (f" for {sport.upper()}" if sport in LEAGUES else "")}
+                + (f" for {_lg(sport)}" if sport in LEAGUES else "")}
     return {"leagues": out}
 
 
@@ -3383,7 +3396,7 @@ def our_picks_live(boards: dict, sport: str = "", data_dir=None, prefer: str = "
         res["parlays_as_of"] = sw.get("generated_at")
     if not res:
         return {"found": False, "note": "none of our bets is open right now"
-                + (f" in the {sport.upper()}" if sport and sport != "all" else "")}
+                + (f" in {_lg_in(sport)}" if sport and sport != "all" else "")}
     return res
 
 

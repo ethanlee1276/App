@@ -9338,6 +9338,12 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XH. A sentence names college basketball in words** (step 744; 18 November). Nothing to run. The Record page's
+chips came to say NCAAB in step XF, but sentences built on the server still upper-cased the league's code: a college
+game's pressure card said "No closing lines on file for CBB games", a college Most Likely game line "the book's de-
+vigged price sorts CBB winners", and Ask's notes "no games on tonight's boards for CBB". They say college basketball
+(and college football) now; a pro league reads as before.
+
 **XG. A hockey goalie is measured on every chance faced; a locked futures board and a school say what they are**
 (step 743; 18 November). Nothing to run: the kept shot summaries rebuild on the next NHL board by themselves. A
 hockey game page said "Darcy Kuemper · .892 save rate · −47.8 saved above expected", and every one of the night's 22
