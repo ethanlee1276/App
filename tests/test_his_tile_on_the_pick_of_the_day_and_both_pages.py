@@ -225,7 +225,12 @@ def test_in_a_browser_the_three_tiles_draw_his_photo_or_his_initials():
                         page.evaluate(f"location.hash = '#prop/{pid}'")
                         page.wait_for_selector(f"#prop-body .card-id {sel}", timeout=8000)
                         page.click("[data-player-page]")
-                        page.wait_for_selector(f".profile-head {sel}", timeout=8000)
+                        # On the player's own page the face is the header's: the card's second name
+                        # card, tile and all, is not drawn there
+                        # (tests/test_the_player_page_says_each_thing_once.py).
+                        page.wait_for_selector(".plr-hero .plr-face .avatar-stack" + (".art-on" if lit else ":not(.art-on)"),
+                                               timeout=8000)
+                        assert not page.query_selector(".plr-tonight .profile-head .ptile:visible"), "one face on the page"
                         assert page.evaluate("document.scrollingElement.scrollWidth") <= width
                         assert not errors, errors
                         ctx.close()

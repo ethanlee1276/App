@@ -408,7 +408,9 @@ def test_in_a_browser_a_name_is_a_door_to_the_page_and_back():
     assert got["back"] == {"box": "jacoby", "rows": ["Jacoby Brissett", "Jacob Rodriguez"]}, got["back"]
     assert got["priced_list_cards"] == 0, "a priced player is a name in the list too"
     card = got["card"]
-    assert card["head"] == "Tonight’s markets" and card["deep"], card
+    # The title names tonight's opponent: the card's own header, which did, is not drawn on the page
+    # (tests/test_the_player_page_says_each_thing_once.py).
+    assert card["head"] == "Tonight’s markets vs Dolphins" and card["deep"], card
     assert card["doors"] == 0 and card["arrows"] == 0, ("the card opens nothing on the page", card)
     assert card["acts"] == ["Bet it", "Ask"] and card["ask"] == "Josh Allen OVER 245.5 Passing Yards", card
     assert all(fits and lines == 1 for fits, lines in card["tiles"]), ("a form tile broke its number", card["tiles"])
