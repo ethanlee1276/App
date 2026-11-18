@@ -1371,14 +1371,6 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
             "threes_fit": len(threes), "threes_clear": len(strong3)}
 
 
-def threes_of(sport: str, game: dict, legs: list[dict], memo: dict | None = None) -> tuple[list, int, int]:
-    """A game's three-leg tickets from ``legs``: (the chosen, the
-    combinations without a conflict, the legs tried). `tickets_of` is the
-    whole of it."""
-    made = tickets_of(sport, game, legs, memo)
-    return made["threes"], made["threes_fit"], made["pool"]
-
-
 def _twos_note(made: dict, own: bool = False) -> str:
     """Why a game posts fewer two-leg tickets than TWO_PER_GAME, or none
     (``own``: the legs are its report's picks alone)."""
