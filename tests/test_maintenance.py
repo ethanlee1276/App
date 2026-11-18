@@ -67,6 +67,9 @@ def _no_feeds(monkeypatch):
     monkeypatch.setattr(nhldata, "ingest_day",
                         lambda conn, day, **kw: {"games": 0, "player_logs": 0,
                                                  "skipped": []})
+    # The clubs' season pages, read for a finished game with no row at all
+    # (FINALS1, 18 November): the same feed, the same stub.
+    monkeypatch.setattr(nhldata, "days_owed", lambda conn, season, today, **kw: [])
     monkeypatch.setattr(nbadata, "ingest_nba_date",
                         lambda conn, day, **kw: {"games": 0, "player_logs": 0,
                                                  "skipped": []})
