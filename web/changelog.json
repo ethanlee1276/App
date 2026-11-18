@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "The chat’s Big plays tab keeps your place",
+      "body": "A reaction on any play, or the game’s own refresh every few seconds, sent the Big plays tab back to the top and a play’s thread back to its end. Counts now change on their own card, and you stay where you were."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "The game chat holds still, and reactions show on a phone",
       "body": "The chat redrew its scoreboard, buttons and tabs every three seconds, so taps could miss. Now it only changes what changed. On a phone each message has a small face to tap for reactions and Reply. Message times keep up, sending keeps your keyboard open, and a reaction that doesn’t go through says so."
     },

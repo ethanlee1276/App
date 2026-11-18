@@ -553,7 +553,11 @@ function chatMount(league, event, d) {
   }
   CH.d = d || CH.d;
   chatFab();
-  if (CH.open) { chatDrawHead(); if (CH.tab === "plays" || CH.thread) chatDrawBody(); }
+  // The game's file comes again every few seconds while it is on: the
+  // plays and a thread are drawn again only when they changed, and the
+  // reader keeps their place (they went back to the top, or a thread to
+  // its foot, on every refresh).
+  if (CH.open) { chatDrawHead(); if (CH.tab === "plays" || CH.thread) chatDrawBody({ soft: true }); }
   if (!CH.timer) chatSchedule(0);
   // Karma: the tiers' colours for the levels beside names, and the
   // watching clock (chatWatchTick).
@@ -805,6 +809,11 @@ function chatPut(el, html) {
   el._html = html;
   el.innerHTML = html;
 }
+/* Drawn HTML without its pictures' own names: a team's fallback badge and a
+   player's picture name their gradients at random every time they are drawn
+   (visuals.js teamMark, playerAvatar), so the same thing drawn twice never
+   reads the same until those are set aside. Not data-id. */
+const chatNoIds = (html) => html.replace(/(\sid="|url\(#)[^")]*/g, "$1");
 /* Shown or hidden, touched only when that changes (as chatPut). */
 function chatShow(el, on) {
   if (el && el.hidden === !!on) el.hidden = !on;
@@ -1051,7 +1060,7 @@ function chatDrawHead() {
     <div class="gch-board">${side(d.away, false)}<div class="gch-mid"></div>${side(d.home, true)}</div>`;
   // The fallback badge names its gradient at random each time it is drawn
   // (visuals.js teamMark), so those names are set aside for the comparison.
-  const key = frame.replace(/(id="|url\(#)[a-z]{2}[a-z0-9]{0,5}/g, "$1");
+  const key = chatNoIds(frame);
   if (head._frame !== key) {
     head._frame = key;
     head.innerHTML = frame;
@@ -1251,11 +1260,26 @@ function chatDrawBody(opts) {
   const body = chatBody();
   if (!body) return;
   const keep = opts && opts.keep;
-  const before = keep ? body.scrollHeight - body.scrollTop : 0;
-  if (CH.thread) body.innerHTML = chatThreadHTML();
-  else if (CH.tab === "party") body.innerHTML = chatPartyHTML();
-  else if (CH.tab === "plays") body.innerHTML = chatPlaysHTML();
-  else body.innerHTML = chatListHTML(CH.tab === "game" ? (m) => !m.play : () => true);
+  // `soft`: a redraw the reader did not ask for (chatMount) — nothing when
+  // nothing changed, and their place kept when something did.
+  const soft = opts && opts.soft;
+  const html = CH.thread ? chatThreadHTML() : CH.tab === "party" ? chatPartyHTML()
+    : CH.tab === "plays" ? chatPlaysHTML() : chatListHTML(CH.tab === "game" ? (m) => !m.play : () => true);
+  const sig = chatSig(html);
+  if (soft && body._drawn === sig) return;
+  const top = body.scrollTop;
+  const before = body.scrollHeight - top;
+  const atFoot = before - body.clientHeight < 80;
+  body._drawn = sig;
+  body.innerHTML = html;
+  if (soft) {
+    // The plays read newest first: at the top, the reader sees a new one
+    // come in; further down, what they were reading stays where it was.
+    // A thread reads oldest first: at its foot it stays at its foot.
+    if (CH.tab === "plays" && !CH.thread) body.scrollTop = top < 8 ? 0 : body.scrollHeight - before;
+    else body.scrollTop = atFoot ? body.scrollHeight : top;
+    return;
+  }
   if (keep) body.scrollTop = body.scrollHeight - before;
   else if (CH.tab !== "plays" || CH.thread) body.scrollTop = body.scrollHeight;
   else body.scrollTop = 0;
@@ -1267,10 +1291,11 @@ function chatDrawBody(opts) {
 function chatAppend(fresh, v) {
   const body = chatBody();
   if (!body) return;
-  if (CH.tab === "plays" && !CH.thread) {
-    if (Object.keys(v.plays || {}).length || Object.keys(v.threads || {}).length) chatDrawBody();
-    return;
-  }
+  // A face or a reply on a play moves that play's own card. The whole list
+  // was drawn again, and sent the reader back to its top, whenever anybody
+  // reacted to any play (2026-11-18).
+  chatPlayCounts(new Set([...Object.keys(v.plays || {}), ...Object.keys(v.threads || {})]));
+  if (CH.tab === "plays" && !CH.thread) return;
   const near = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
   const want = CH.thread ? (m) => m.play === CH.thread : CH.tab === "game" ? (m) => !m.play : () => true;
   // Held for a TV delay (chatReady) until their time, then appended once.
@@ -1282,14 +1307,12 @@ function chatAppend(fresh, v) {
     if (empty) empty.remove();
     const shown = CH.msgs.filter(want).filter(chatReady);
     body.insertAdjacentHTML("beforeend", add.map((m) => chatMsgHTML(m, shown[shown.indexOf(m) - 1])).join(""));
+    // A thread's new replies are what it now shows (chatDrawBody `soft`).
+    if (CH.thread) body._drawn = chatSig(chatThreadHTML());
   }
   for (const id of Object.keys(v.reacts || {})) {
     const m = CH.byId.get(Number(id));
     if (m) chatPut(body.querySelector(`.gch-msg[data-id="${Number(id)}"] .gch-faces`), chatFacesIn(m));
-  }
-  if (CH.thread && v.plays && v.plays[CH.thread]) {
-    const top = body.querySelector(".gch-playcard .gch-faces");
-    if (top) top.outerHTML = chatPlayFacesHTML(CH.thread);
   }
   if (!add.length) return;
   if (near || add.some((m) => m.own)) body.scrollTop = body.scrollHeight;
@@ -1494,14 +1517,40 @@ function chatPlayWhen(p) {
 const chatBig = (p) => playIsBig(p);
 
 function chatPlayFacesHTML(key) {
+  return `<span class="gch-faces">${chatPlayFacesIn(key)}</span>`;
+}
+function chatPlayFacesIn(key) {
   const faces = CH.plays[key] || {};
   const mine = CH.minePlays[key] || "";
-  return `<span class="gch-faces">${CHAT_FACES.map(([k, e]) => {
+  return CHAT_FACES.map(([k, e]) => {
     const n = faces[k] || 0;
     return `<button type="button" class="gch-face${mine === k ? " mine" : ""}${n ? "" : " none"}" data-gch="playface" data-play="${chEsc(key)}" data-kind="${k}"
       aria-label="${k}${n ? ` ${n}` : ""}">${e}${n ? `<span>${n}</span>` : ""}</button>`;
-  }).join("")}</span>`;
+  }).join("");
 }
+// A play's thread button says how many replies it has.
+const chatThreadWord = (n) => (n ? `${n} repl${n === 1 ? "y" : "ies"}` : "Talk about it");
+/* The faces and the reply count on every card of these plays, in place;
+   and what the list now shows, for the game's next refresh to compare with
+   (chatDrawBody `soft`), so a count moved here draws nothing again there. */
+function chatPlayCounts(keys) {
+  const body = chatBody();
+  const list = [...keys];
+  if (!body || !list.length) return;
+  for (const k of list) {
+    body.querySelectorAll(`.gch-playcard[data-play="${CSS.escape(k)}"]`).forEach((card) => {
+      chatPut(card.querySelector(".gch-faces"), chatPlayFacesIn(k));
+      const t = card.querySelector(".gch-thread-btn");
+      const w = chatThreadWord(CH.threads[k] || 0);
+      if (t && t.textContent !== w) t.textContent = w;
+    });
+  }
+  if (CH.thread) body._drawn = chatSig(chatThreadHTML());
+  else if (CH.tab === "plays") body._drawn = chatSig(chatPlaysHTML());
+}
+/* A list's words for that comparison, without the messages' ages ("now",
+   "2m"), which chatTimes keeps up on its own. */
+const chatSig = (html) => chatNoIds(html).replace(/(<time data-at="\d+">)[^<]*/g, "$1");
 
 function chatPlayCardHTML(p, inThread) {
   const key = chatPlayKey(p);
@@ -1513,7 +1562,7 @@ function chatPlayCardHTML(p, inThread) {
     <div class="gch-play-when">${chEsc(chatPlayWhen(p))}${score ? `<span>${chEsc(score)}</span>` : ""}${pcRate(p)}</div>
     ${pcBodyHTML(p, d, chatAllPlays(), true, CH.league)}
     <div class="gch-acts">${chatPlayFacesHTML(key)}${inThread ? "" : `<button type="button" class="gch-act gch-thread-btn" data-gch="thread" data-play="${chEsc(key)}">${
-      n ? `${n} repl${n === 1 ? "y" : "ies"}` : "Talk about it"}</button>`}${pcShareHTML(CH.league, CH.event, p, `${pcTitle(p, d)}${score ? ` · ${score}` : ""}`)}</div></article>`;
+      chatThreadWord(n)}</button>`}${pcShareHTML(CH.league, CH.event, p, `${pcTitle(p, d)}${score ? ` · ${score}` : ""}`)}</div></article>`;
 }
 
 /* Real's feed, for this game: the big plays, newest first, each with its
@@ -1752,7 +1801,7 @@ async function chatClick(e) {
     CH.plays[key] = faces;
     CH.minePlays[key] = out.mine;
     chatShareCounts();
-    document.querySelectorAll(`#gch-sheet .gch-playcard[data-play="${CSS.escape(key)}"] .gch-faces`).forEach((el) => { el.outerHTML = chatPlayFacesHTML(key); });
+    chatPlayCounts([key]);
     return;
   }
   if (act === "potg") {

@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XX. The Big plays tab keeps your place** (step 760; 18 November). Nothing to run. Found while auditing the chat
+(XW): on the Big plays tab, a face or a reply on any play drew the whole list again and sent the reader back to its
+top, and so did every refresh of the game's own file (every few seconds while it is on), which also threw a play's
+thread to its foot. A play's counts now move on its own card, and the game's refresh draws the list again only when
+something on it changed, keeping the reader's place: at the top of the plays they see a new one come in, further
+down what they were reading stays put, and a thread read at its foot stays there. The comparison sets aside what
+changes on every draw without meaning anything: the messages' ages and the random names the team badges and player
+pictures give their gradients.
+
 **XW. The game chat holds still and shows its faces** (step 759; 18 November). Nothing to run. Ethan's NYK at TOR
 screenshot: "glitchy and doesn't show the reactions". Driven on a phone-sized browser against the real server, every
 three-second ask rewrote the scoreboard, the close button, Who wins?, the heat, the tickets and the tabs whether
