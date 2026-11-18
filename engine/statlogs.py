@@ -266,9 +266,11 @@ def search(sport: str, q: str, limit: int = 12, db_path=None,
         # and a league whose logs have not landed yet should not read as
         # a league with no players in it.
         return _roster_hits(sport, q, limit, set(), data_dir)
+    from .playersearch import drop_clubs
     conn = _db.connect(path)
     try:
-        return _search_conn(conn, sport, q, limit, data_dir)
+        # A club's own row is offered as a team, never again as a player (SEARCHDUP1).
+        return drop_clubs(_search_conn(conn, sport, q, limit, data_dir), sport)
     finally:
         conn.close()
 

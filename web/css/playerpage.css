@@ -48,6 +48,10 @@
 .plr-k { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .plr-num b { font-size: var(--fs-2xl); font-weight: 800; font-variant-numeric: tabular-nums; }
 .plr-rank { color: var(--text-dim); font-size: var(--fs-sm); }
+/* The season's other counts, small (playerpage.js plrSeasonPills). */
+.plr-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.plr-pill { padding: 4px 11px; border-radius: 999px; background: var(--panel-2); color: var(--text-dim);
+  font-size: var(--fs-xs); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* The previous game: his club, the result, the other club, then four of his numbers. */
 .plr-score { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; }

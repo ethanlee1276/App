@@ -14215,7 +14215,8 @@ async function renderPlayers() {
        league it looked in, or "we have nothing on them" and "you are on
        the wrong tab" become indistinguishable again, which was the
        whole 08-23 complaint about the last scoped box. */
-    host.innerHTML = `<div class="empty">No
+    // A team the box matched is the answer, drawn above (renderTeamHits): no apology under it.
+    host.innerHTML = teamSearchHits(q).length ? "" : `<div class="empty">No
       ${escapeHtml(lgCode(state.sport))}
       players match “${escapeHtml(state.search)}” — the search looks only at
       the league whose tab is lit, so switch the sport up top to look in
@@ -22318,7 +22319,7 @@ function renderTeamHits() {
       ${hits.map((t) => `<button type="button" class="al-cat tm-hit"
         data-team-sport="${escapeAttr(t.sport)}"
         data-team-open="${escapeAttr(t.sport === "cfb" ? t.abbr : t.name)}">
-        ${teamMark(t.abbr, 16, teamsForSport(t.sport), t.sport)}
+        ${teamMark(t.abbr, 26, teamsForSport(t.sport), t.sport)}
         ${escapeHtml(t.name)}${t.sport === state.sport ? "" : ` <small class="tm-hit-lg">${lgCode(t.sport)}</small>`}</button>`).join("")}
     </div>`;
 }

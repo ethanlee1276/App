@@ -594,8 +594,14 @@ def _roster(conn, sport: str, team: str, season: int) -> dict:
         "GROUP BY player, position, market", (sport, team, season)).fetchall()
     by_player: dict = {}
     short_rows: list = []
+    # The club's own row in the logs (its defence, "Detroit Lions") is the
+    # club, never one of its players (SEARCHDUP1).
+    from .playersearch import club_names, norm
+    clubs = club_names(sport)
     for r in rows:
         name = str(r["player"])
+        if clubs and norm(name) in clubs:
+            continue
         if _is_abbreviated(name):
             short_rows.append(r)
             continue

@@ -373,6 +373,41 @@ def source_order(prefer: str = "") -> list[str]:
         [s for s in SOURCES if s != prefer]
 
 
+#: Each league's clubs by their full names, as the odds feed spells them
+#: (engine/sources/oddsapi): the names a club's own row in the logs carries.
+CLUB_TABLES = {"nfl": "TEAM_ABBR", "mlb": "MLB_TEAM_ABBR", "nba": "NBA_TEAM_ABBR",
+               "wnba": "WNBA_TEAM_ABBR", "nhl": "NHL_TEAM_ABBR"}
+
+
+def club_names(sport: str) -> frozenset:
+    """A league's clubs' full names, normalized ({} when the table cannot be read)."""
+    try:
+        from .sources import oddsapi
+        table = getattr(oddsapi, CLUB_TABLES.get(str(sport or "").lower(), ""), None) or {}
+    except Exception:                                        # noqa: BLE001
+        table = {}
+    return frozenset(norm(n) for n in table)
+
+
+def drop_clubs(hits: list[dict], sport: str = "") -> list[dict]:
+    """A SEARCH NAMES EACH THING ONCE (SEARCHDUP1, 2026-11-18). Ethan, of "Lions"
+    on the search page, which offered the Detroit Lions as a team and again as
+    a player (the logs file a club's defence under its own name, "DEF"): "we
+    don't need to have search results popping up twice on this page". A club
+    is offered as a team, by the page's team chips; its row in the logs is not
+    offered again as a player. A hit with no league is read against ``sport``."""
+    out = []
+    names: dict = {}
+    for h in hits or []:
+        sp = str(h.get("sport") or sport or "").lower()
+        if sp not in names:
+            names[sp] = club_names(sp)
+        if norm(h.get("player") or "") in names[sp]:
+            continue
+        out.append(h)
+    return out
+
+
 def search(q: str, limit: int = 12, prefer: str = "",
            db_path=None, ufc_path=None) -> list[dict]:
     """Every player and fighter whose name contains ``q``."""
@@ -389,7 +424,7 @@ def search(q: str, limit: int = 12, prefer: str = "",
     # A store that is missing is not an error — see fighters.load.
     per["ufc"] = fighters.search(q, limit=limit, path=ufc_path)
     ufc_faces(per["ufc"], db_path)
-    return no_guess_beside_an_answer(merge(per, q, limit, order, prefer=prefer))
+    return drop_clubs(no_guess_beside_an_answer(merge(per, q, limit, order, prefer=prefer)))
 
 
 def ufc_faces(hits: list[dict], db_path=None) -> None:

@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WU. A search names each thing once, and the season's other counts are small pills** (step 731; 18 November).
+Nothing to run. Two of your screenshots. The search for "Lions" offered the Detroit Lions as a team chip and again
+under "Found in NFL" as a player ("Lions · DEF"): the players feed and the logs both file a club's defence under the
+club's own name, so it was on the Lions' roster, on their team page's tables and in the search. That row is the club
+now and nothing else: the league search, the logs search, every roster and the team page leave it out (a defender
+filed "DEF" stays), the page no longer says "No NFL players match ... switch the sport" under a team it found, and
+the team chips are bigger, as you asked (a bigger logo, more room, a larger name). And on a player's page, the big
+season box with the face under the route chart (your X) left the player's own page in step WP, with the repeated
+game card under it; what it said that the season card above does not, the games played and the role's other counts
+("9 games", "91 targets" for Amon-Ra St. Brown), now sits under that card as small pills, each said once, in every
+league.
+
 **WT. Quarterback completions and NBA points go on the bench, and keep learning** (step 730; 18 November). Nothing
 to run. Ethan, on the two Edge markets that had lost all season, the NFL's quarterback completions (44-53, -11.9
 units) and the NBA's points (63-71 and -10.2 units then; 67-73 and -8.8 on this morning's record): "bench and

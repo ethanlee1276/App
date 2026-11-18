@@ -2821,7 +2821,7 @@ select.calc-in { width: auto; font-weight: 600; }
    "1" are very different pages behind the same word and the reader
    should know which they are opening before they tap it. */
 
-.tm-hit { display: inline-flex; align-items: center; gap: 7px; }
+.al-cat.tm-hit { gap: 9px; padding: 9px 15px; font-size: var(--fs-md); }
 .tm-hit-lg { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .06em; }
 /* The result letter. Colour is never the whole message — W and L are
    already the words, and the tint only makes a long column scannable. */

@@ -176,7 +176,31 @@ function plrSeasonHTML(d, note = "") {
       note ? `<p class="plr-quiet">${escapeHtml(note)}</p>` : ""}
     <div class="plr-nums">${nums.map((h) => `<div class="plr-num" title="${escapeAttr(h.title)}">
       <span class="plr-k">${escapeHtml(h.label)}</span><b>${escapeHtml(plrNum(h.value, h.label, h.per_game))}</b>${
-      h.rank ? `<span class="plr-rank">${plrOrd(h.rank)}${h.low ? " fewest" : ""}</span>` : ""}</div>`).join("")}</div></section>`;
+      h.rank ? `<span class="plr-rank">${plrOrd(h.rank)}${h.low ? " fewest" : ""}</span>` : ""}</div>`).join("")}</div>${
+      plrSeasonPills(d, nums)}</section>`;
+}
+/* THE SEASON'S OTHER COUNTS, SMALL (Ethan, 2026-11-18, an X over the chart's big season box on Amon-Ra St.
+   Brown's page: "the big box with his face is not needed anymore since we have his face at the top ... find
+   somewhere else to put that information for the games, targets, receptions ... maybe put those in like smaller
+   pill boxes"). The box left the player's own page (carrychart.js, `own`); what it said that the tiles above do
+   not — the games played and the role's other counts, a target or an attempt — rides under them as pills,
+   each said once. Off the season's own line in the career table (engine/playerpage `career`). */
+const PLR_PILL_SKIP = /avg|pct|rate|per|era|whip|obp|slg|ops|gaa|sv|ba$|ypc|ypr|ypa|lng|long/i;
+function plrSeasonPills(d, nums) {
+  const c = d.career || {};
+  const row = (c.rows || []).find((r) => String(r.season) === String(d.season));
+  if (!row) return "";
+  const shown = new Set((nums || []).map((h) => String(h.key || h.label || "").toLowerCase()));
+  const group = (c.groups || []).find((g) => g.key === d.role) || (c.groups || [])[0] || {};
+  const pills = row.gp ? [`${row.gp} ${row.gp === 1 ? "game" : "games"}`] : [];
+  for (const col of group.cols || []) {
+    const v = (row.values || {})[`${group.key}.${col.key}`];
+    if (pills.length >= 4 || v == null || !Number.isInteger(Number(v)) || shown.has(String(col.key).toLowerCase())
+        || PLR_PILL_SKIP.test(col.key)) continue;
+    pills.push(`${Number(v).toLocaleString()} ${String(col.title || col.label || col.key).toLowerCase()}`);
+  }
+  return pills.length ? `<div class="plr-pills">${pills.map((x) => `<span class="plr-pill">${escapeHtml(x)}</span>`)
+    .join("")}</div>` : "";
 }
 /* A season with games on file and none played: the newest season the player did play, said as such
    (engine/playerpage `prior`; Jake Tonges' 2026 showed no season card at all). */

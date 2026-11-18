@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-11-18",
+      "kind": "fix",
+      "title": "A search names each team once, with bigger team chips",
+      "body": "Searching a team’s name showed it twice: as a team chip and again as a “player” (the feeds list a club’s defence under the club’s own name). It is the team chip alone now, and the chips are bigger. On a player’s page the season card carries the games played and the other counts (targets, attempts) as small pills, where the big season box under the chart used to repeat them."
+    },
+    {
+      "date": "2026-11-18",
       "kind": "model",
       "title": "Quarterback completions and NBA points go on the bench",
       "body": "Two Edge markets lost all season: the NFL’s quarterback completions (44-53, −11.9 units) and the NBA’s points (63-71, −10.2 units). Their picks still post and are graded, but they carry no stake, stay out of the staked record and say “Tracked · no stake” on the card. Each comes back to stakes by itself once 60 picks graded since the bench make money at flat stakes. The Record page lists the markets on the bench and where each stands."

@@ -221,11 +221,18 @@ def build_rosters(blob: dict | None, faces: dict | None = None,
     """
     keyed = face_index(faces)
     teams: dict[str, list] = {}
+    # The feed lists each club's defence as a player under the club's own
+    # name ("Detroit Lions", DEF): that is the club, and its page is the team
+    # page, never a roster row the search offers again (SEARCHDUP1).
+    from .playersearch import club_names, norm
+    clubs = club_names("nfl")
     for p in (blob or {}).values():
         row = _player_row(p)
         # Inactive-and-teamless entries (practice squad churn, retired
         # players Sleeper keeps) carry no team and drop out above.
         if row is None or not row["position"]:
+            continue
+        if clubs and norm(row["player"]) in clubs:
             continue
         row["headshot"] = _nfl_face(p, row["player"], keyed, faces_by_id)
         teams.setdefault(row["team"], []).append(row)
@@ -879,12 +886,20 @@ def from_game_logs(conn, sport: str, seasons: list[int] | None = None,
             latest[r["player"]] = str(r["last_seen"])
 
     faces = _faces(conn, sport)
+    # A CLUB IS NOT ITS OWN PLAYER (SEARCHDUP1, 2026-11-18). The logs file a
+    # club's defence under the club's own name ("Detroit Lions", DEF), and it
+    # was listed on its roster and offered again by the search beside the
+    # club's own chip. It is the club; its page is the team page.
+    from .playersearch import club_names, norm
+    clubs = club_names(sport)
 
     teams: dict[str, list] = {}
     for r in rows:
         last = str(r["last_seen"])
         if last != latest[r["player"]]:
             continue                      # an old club, not this one
+        if clubs and norm(r["player"]) in clubs:
+            continue
         cold = _dated(last) and last < cutoff
         teams.setdefault(r["team"], []).append({
             "player": r["player"],
