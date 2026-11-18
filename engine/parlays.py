@@ -879,7 +879,7 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
             fav = (game or {}).get("favorite") or ""
             backed = a.get("team") if fa == "side" else b.get("team")
             if fav and backed and fav.upper() == str(backed).upper():
-                return Relation(0.0, "a favourite covering correlates with the "
+                return Relation(0.0, "a favorite covering correlates with the "
                                      "under for a clock-draining team and the "
                                      "over for a tempo team — §6.1 requires "
                                      "adjusted tempo and run/pass identity "
@@ -968,8 +968,8 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
         bar = (RULES.get(sport) or SportRules(sport, sport)).blowout_spread
         fav = ((game or {}).get("favorite") or "").upper()
         if bar is not None and fav == line_team and spread >= bar:
-            return Relation(-0.15, f"backing a favourite laying {spread:g} "
-                                   f"alongside that favourite's own starter — "
+            return Relation(-0.15, f"backing a favorite laying {spread:g} "
+                                   f"alongside that favorite's own starter — "
                                    f"§3 Type 4, the blowout that wins leg one "
                                    f"takes leg two off the field", 4, "kill")
         if pf == "rush" and prop_up:
@@ -1354,7 +1354,7 @@ def _leg_eligible(sport: str, leg: dict, game: dict | None,
         fav = (g.get("favorite") or "").upper()
         if spread >= rules.blowout_spread and fav and fav == (leg.get("team") or "").upper():
             return (f"{fav} is laying {spread:g} — §3 Type 4: the blowout that "
-                    f"makes the favourite cover is the blowout that takes this "
+                    f"makes the favorite cover is the blowout that takes this "
                     f"player off the field")
     # §7.3: apply the NBA blowout downgrade BEFORE Gate 1, not after.
     if float(leg.get("blowout_prob") or 0.0) > 0.25:

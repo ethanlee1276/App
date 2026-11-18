@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XO. Hockey's race plays each game once, and one spelling of favorite** (step 751; 18 November). Nothing to run.
+The NHL playoff race read "330 games played, 1005 left" of a 1,312-game season: each club's season page is cached a
+day, so a page read the morning before still listed that night's games as to come, and the 23 played since were
+counted in the table and played again in the simulation. A game dated before today's Eastern day is no longer left,
+whatever a cached page says (engine/sources/nhldata.remaining_fixtures). The NBA's 1,204 of 1,230 is right: the 26
+missing are the NBA Cup games the league schedules once its group stage ends. And the site said "favourite" in some
+places and "favorite" in others, "centre" beside "center": every one a reader sees now reads favorite, favored and
+center (the pressure labels and live chips, the price bands, the disclaimer, the profile form, the scout's flags,
+the parlay reasons, the touchdown script line, the Lab's bands, the fantasy and first-touchdown notes). Colour stays
+colour; it was never spelled two ways. Defence and offence still are (the reports say defence, the scan says
+defense), left for a pass of their own.
+
 **XN. Each count on a page counts what it says** (step 750; 18 November). Nothing to run. From the eighth walk. A
 game page's matchup scan said "9 games" at the top, "10 games" over the raw numbers and "After 9 games" under them
 on IND@HOU (the Colts have played 10, the Texans 9): it says one count when the two teams' match and each team's

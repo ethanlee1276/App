@@ -191,7 +191,7 @@ FLAIRS = ("🔥", "🏈", "🏀", "⚾", "🏒", "🎯", "👑", "🐐", "💯",
 FAMILIES = (
     ("live", "Watching live", "live games watched", (1, 10, 50, 100, 250, 500)),
     ("voice", "In the chat", "game chat messages (one a minute counts)", (10, 100, 500, 1000, 5000)),
-    ("crowd", "Crowd favourite", "reactions to your messages", (10, 50, 250, 1000, 5000)),
+    ("crowd", "Crowd favorite", "reactions to your messages", (10, 50, 250, 1000, 5000)),
     ("caller", "Called it", "Call it calls right", (10, 50, 250, 1000, 2500)),
     ("hothand", "Hot hand", "Call it calls right in a row, best", (3, 5, 8, 12, 20)),
     ("trivia", "Trivia head", "trivia answers right", (5, 25, 100, 500)),

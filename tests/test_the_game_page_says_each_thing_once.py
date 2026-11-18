@@ -57,7 +57,7 @@ def test_a_card_on_its_own_game_page_drops_the_copies_and_keeps_its_own():
     for detail in ("Wind 16 mph — measured in 12–18 mph games", "26°F — cold on its own measured no clear effect"):
         assert rx.search(detail), detail
     for keep in ("Weather works against this side", "Soft run defence — +10% vs average",
-                 "Game script: favoured by 6 — +6% TD equity for a RB"):
+                 "Game script: favored by 6 — +6% TD equity for a RB"):
         assert not rx.search(keep), keep
     shot = _fn(APP, "longShotCard")
     assert "cardInGame(r) ? \"\" : `<div class=\"subtitle\">" in shot

@@ -562,12 +562,23 @@ def fetch_club_season(team: str, season: int, ttl: int = 86400) -> dict:
 FINAL_STATES = {"OFF", "FINAL"}
 
 
-def remaining_fixtures(season: int, teams, fetch=None) -> list[tuple[str, str]]:
+def remaining_fixtures(season: int, teams, fetch=None, today: str | None = None) -> list[tuple[str, str]]:
     """Every unplayed regular-season game as (home, away), from each club's
     season schedule — deduplicated by game id, since each game appears on
     both clubs' pages. A club whose page will not load is skipped (its
-    games still arrive from its opponents' pages)."""
+    games still arrive from its opponents' pages).
+
+    A GAME BEFORE TODAY IS NOT LEFT (2026-11-18). Each club's page is cached
+    a day, so a page read the morning before still listed that night's games
+    as to come: the race read 330 played and 1,005 left of a 1,312-game
+    season, the 23 played since counted in the table and played again in
+    the simulation. A game dated before today's Eastern day is played,
+    whatever a cached page says; one with no date is kept."""
     fetch = fetch or fetch_club_season
+    if today is None:
+        import datetime as _dt
+        from zoneinfo import ZoneInfo
+        today = _dt.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
     seen: dict = {}
     for team in sorted(teams):
         try:
@@ -576,6 +587,9 @@ def remaining_fixtures(season: int, teams, fetch=None) -> list[tuple[str, str]]:
             continue
         for g in (payload or {}).get("games") or []:
             if int(g.get("gameType") or 0) != 2 or str(g.get("gameState") or "") in FINAL_STATES:
+                continue
+            day = str(g.get("gameDate") or "")[:10]
+            if day and day < today:
                 continue
             home = str(((g.get("homeTeam") or {}).get("abbrev")) or "")
             away = str(((g.get("awayTeam") or {}).get("abbrev")) or "")

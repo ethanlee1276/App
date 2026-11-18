@@ -275,14 +275,14 @@ def test_the_live_line_reads_the_scoreboard_against_the_two_teams_rates():
         print("  SKIP node not installed"); return
     assert got["pre"] == "KC wins 64% of its one-score games · DEN 85%"
     assert got["final"] == got["pre"], "after the game, the season rates again"
-    assert got["favTrails"] == "KC trails as the favourite · wins 81% when favoured · DEN wins 80% as the underdog"
-    assert got["favUpLate"] == "One-score game late · KC has let 13% of these slip as the favourite · DEN wins 85% of its one-score games"
+    assert got["favTrails"] == "KC trails as the favorite · wins 81% when favored · DEN wins 80% as the underdog"
+    assert got["favUpLate"] == "One-score game late · KC has let 13% of these slip as the favorite · DEN wins 85% of its one-score games"
     assert got["tiedLate"] == got["favUpLate"], "tied late asks the favourite the same question"
     assert got["eightUp"] == got["favUpLate"], "eight points is one score — a touchdown and two"
     assert got["nineUp"] == "KC clutch 64% · DEN clutch 85%", "nine is not"
     assert got["noFavLate"] == "One-score game late · KC wins 64% of these · DEN 85%"
     assert got["early"] == "KC clutch 64% · DEN clutch 85%"
-    assert got["awayFav"] == "DEN trails as the favourite · wins 70% when favoured · KC wins 40% as the underdog"
+    assert got["awayFav"] == "DEN trails as the favorite · wins 70% when favored · KC wins 40% as the underdog"
     assert got["unknown"] == "", "a team with no rates gets no sentence, not a dash-filled one"
     assert got["noRates"] == "KC wins 64% of its one-score games · NYJ —"
     assert got["late"] == [True, True, True, True, False, False, False, False]

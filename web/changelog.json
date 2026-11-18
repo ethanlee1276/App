@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Hockey’s playoff race counts each game once",
+      "body": "The race could replay games already won and lost, because the schedule it read was a day old. A game from before today is never simulated again."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "Each team’s own game count",
       "body": "A game page’s matchup scan could say 9 games at the top and 10 below when one team had a bye. It gives each team’s count now, and says the season split once."
     },

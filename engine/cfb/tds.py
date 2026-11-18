@@ -733,7 +733,7 @@ def script_multiplier(spread_home, is_home: bool, pos: str
         return 1.0, []
     reasons = []
     if abs(lead) >= 6.0 and abs(mult - 1.0) >= 0.02:
-        side = "favoured" if lead > 0 else "underdog"
+        side = "favored" if lead > 0 else "underdog"
         # SAY WHICH SIDE OF THE HUMP, because "-9% for a 30-point
         # favourite" reads as a mistake without it.
         why = ""

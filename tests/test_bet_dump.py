@@ -76,7 +76,7 @@ def test_the_bands_are_ones_the_board_can_actually_reach():
     assert in_odds_window(-150, NFL_TD_ODDS)
     rep = B.evaluate(_settled([("A", -150, 0.70, 0), ("C", 500, 0.20, 1)]))
     out = _dump(rep)
-    assert "-150..-101 (favourite)" in out
+    assert "-150..-101 (favorite)" in out
     assert "+401..+700" in out
 
 

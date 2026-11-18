@@ -310,7 +310,7 @@ def compare(rows: list, scoring: str = "ppr") -> dict:
         if ms2["lo"] - ml["lo"] >= EDGE_RANGE:
             he, _o, sc = _they(second)
             notes.append(f"{second['player']} is the safer start: eight weeks in ten {he} {sc} at least "
-                         f"{_pts(ms2['lo'])}, to {lead['player']}'s {_pts(ml['lo'])}. Favoured this week? "
+                         f"{_pts(ms2['lo'])}, to {lead['player']}'s {_pts(ml['lo'])}. Favored this week? "
                          f"The safer start is the better one when the points are this close.")
             said = True
         if ms2["hi"] - ml["hi"] >= EDGE_RANGE:

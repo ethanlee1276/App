@@ -331,7 +331,7 @@ def profile_set(conn, user_id: int, handle, bio, name=None, color=None,
         color = 0
     team = str(team if team is not None else old.get("team", "")).strip()[:16]
     if team and not re.fullmatch(r"(nfl|cfb|mlb|nba|wnba|nhl|cbb):[A-Za-z0-9&.\- ]{2,12}", team):
-        return 400, {"error": "That favourite team is not one this site knows."}
+        return 400, {"error": "That favorite team is not one this site knows."}
     if not HANDLE_RE.match(handle):
         return 400, {"error": "A handle is 3–20 letters, numbers or underscores."}
     keep = old.get("handle", "").lower() == handle.lower()   # an owner-claimed name stays

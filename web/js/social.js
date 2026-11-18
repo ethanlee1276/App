@@ -1990,7 +1990,7 @@
           placeholder="Who you are, what you bet">${escapeHtml(m.bio || "")}</textarea></label>
         <fieldset class="fd-colors wide"><legend>Colour</legend>${[0, 1, 2, 3, 4, 5, 6, 7].map((i) =>
           `<label class="fd-swatch fd-c${i}"><input type="radio" name="fd-color" value="${i}"${(m.color || 0) === i ? " checked" : ""}><span class="sr-only">Colour ${i + 1}</span></label>`).join("")}</fieldset>
-        <label>Favourite team<select class="fd-input" id="fd-p-lg">${TEAM_LEAGUES.map(([k, t]) =>
+        <label>Favorite team<select class="fd-input" id="fd-p-lg">${TEAM_LEAGUES.map(([k, t]) =>
           `<option value="${k}"${k === (lg || "") ? " selected" : ""}>${t}</option>`).join("")}</select></label>
         <label>Team code<input class="fd-input" id="fd-p-abbr" maxlength="12" value="${escapeAttr(abbr || "")}" placeholder="DET"></label>
       </div>

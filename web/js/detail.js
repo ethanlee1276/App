@@ -195,7 +195,7 @@ function shoppedLineNote(r) {
   const edge = over ? line <= sorted[0] : line >= sorted[sorted.length - 1];
   return `<p class="pp-shopped">Shopped number: this is the ${over ? "over" : "under"} at ${line}${
     edge ? `, the ${over ? "lowest" : "highest"} number any book posts` : ""} (${oddsTxt(r.odds)});
-    the market’s centre is ${centre}. The chart and the hit rate below read against ${line}.</p>`;
+    the market’s center is ${centre}. The chart and the hit rate below read against ${line}.</p>`;
 }
 
 function propLogRows(r, logs, line, over, n) {
@@ -2771,7 +2771,7 @@ function pressureMoment({ sport, d, boardGame, pr }) {
     const unit = sport === "mlb" ? (margin === 1 ? "run" : "runs") : "points";
     chips.push(one ? "one-score game" : `${margin}-${unit.replace(/s$/, "")} game`);
     if (late) chips.push(sport === "mlb" ? "late innings" : "late");
-    if (fav && lead && lead !== fav) chips.push(`${fav} trails as the favourite`);
+    if (fav && lead && lead !== fav) chips.push(`${fav} trails as the favorite`);
     if (lv.possession) chips.push(`${lv.possession} has the ball`);
   }
   // THE STATE IN WORDS, for the card's line (2026-10-28): the chips said it
@@ -2785,7 +2785,7 @@ function pressureMoment({ sport, d, boardGame, pr }) {
     state = margin === 0 ? "Tied" : one ? (sport === "mlb" ? "One-run game" : "One-score game")
       : `${margin}-${sport === "mlb" ? "run" : "point"} game`;
     if (late) state += sport === "mlb" ? ", late innings" : ", late";
-    if (fav && lead && lead !== fav) state = `${fav} trails as the favourite`;
+    if (fav && lead && lead !== fav) state = `${fav} trails as the favorite`;
   }
   const t = (boardGame || {}).line_track;
   const market = t && t.now != null ? { home, now: t.now, opened: t.opened } : null;

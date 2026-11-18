@@ -10381,7 +10381,7 @@ function likelyCard(r) {
        (${american(r.main_odds)}); this rung is ${r.prob_source === "sharp"
          ? "priced from the sharp book’s pair"
          : r.prob_source === "anchored"
-           ? "priced on the market’s own centre with the model’s spread"
+           ? "priced on the market’s own center with the model’s spread"
            : "calibrated for this market’s shape"}.</div>`
     : r.prob_source !== "mixture" ? "" :
     `<div class="mini" style="opacity:.6;margin-top:4px">
@@ -16298,7 +16298,7 @@ function combinedLineHTML(po, need, o) {
     ? `${po.settled} of ${need || 30} graded`
     : `${sign(po.net_units || 0, 2)}u · ${fmtRoi(po.roi)} ROI`;
   return `<p class="rv-split">Combined with the Most Likely board (flat-staked
-    favourites): <b>${wl}</b> · ${tail}.</p>`;
+    favorites): <b>${wl}</b> · ${tail}.</p>`;
 }
 
 /* THE TWO BOOKS UNDER THE ONE NUMBER. Ethan, 2026-09-22: "we can show 2
@@ -20962,9 +20962,9 @@ window._stdUnitsToggle = () => { _stdUnitsAll = !_stdUnitsAll; renderStandings()
    (2026-10-31) and do not pretend otherwise. */
 const PRESSURE_RATES = [
   ["clutch", "Clutch", "one-score games won"],
-  ["reliability", "Reliability", "won as the favourite"],
+  ["reliability", "Reliability", "won as the favorite"],
   ["comeback", "Comeback", "won as the market’s underdog"],
-  ["choke", "Choke", "one-score games lost as the favourite"],
+  ["choke", "Choke", "one-score games lost as the favorite"],
 ];
 const PRESSURE_ONE_SCORE = { nfl: 8, cfb: 8, nba: 5, wnba: 5, mlb: 1, cbb: 5 };
 let _stdPressureAll = false;
@@ -21039,10 +21039,10 @@ function pressureSituation({ sport, g, pr }) {
   const lead = lv.home_score > lv.away_score ? g.home
     : lv.away_score > lv.home_score ? g.away : null;
   if (F && D && lead && lead !== fav && F.reliability != null)
-    return `${fav} trails as the favourite · wins ${pct(F.reliability)} when favoured`
+    return `${fav} trails as the favorite · wins ${pct(F.reliability)} when favored`
       + ` · ${dog} wins ${pct(D.comeback)} as the underdog`;
   if (one && late && F && D && F.choke != null)
-    return `One-score game late · ${fav} has let ${pct(F.choke)} of these slip as the favourite`
+    return `One-score game late · ${fav} has let ${pct(F.choke)} of these slip as the favorite`
       + ` · ${dog} wins ${pct(D.clutch)} of its one-score games`;
   if (one && late)
     return `One-score game late · ${g.home} wins ${pct(h.clutch)} of these · ${g.away} ${pct(a.clutch)}`;

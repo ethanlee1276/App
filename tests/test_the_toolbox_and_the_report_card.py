@@ -284,7 +284,7 @@ def test_the_report_card_grades_against_the_prices_taken():
     need = (22 * (110 / 210) + 105 / 205) / 23
     assert abs(a["need"] - need) < 1e-9 and abs(a["hit"] - 15 / 23) < 1e-9
     assert r["verdict"][0] == "good", r["verdict"]                  # 15 of 23 against ~52%: about +1.4 sd
-    assert {g["key"] for g in r["bands"]} == {"Favourites"}
+    assert {g["key"] for g in r["bands"]} == {"Favorites"}
     assert {g["key"] for g in r["sports"]} == {"NFL", "NBA"}
     c = r["clv"]
     assert c["n"] == 3 and c["ours"] == 2 and c["beat"] == 2, c     # own close on "c", ours on w1 and l1

@@ -411,7 +411,7 @@ def script_td_multiplier(game: Game, team: str,
     else:
         return 1.0, reasons
     if abs(lead) >= 3.0 and abs(mult - 1.0) >= 0.02:
-        side = "favoured" if lead > 0 else "underdog"
+        side = "favored" if lead > 0 else "underdog"
         reasons.append(
             f"Game script: {side} by {abs(lead):.0f} — "
             f"{(mult - 1) * 100:+.0f}% TD equity for a {pos}")

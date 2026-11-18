@@ -476,8 +476,8 @@
   }
 
   // ---- the report card --------------------------------------------------
-  const BANDS = [["Big favourites", "−200 or shorter", (a) => a <= -200],
-                 ["Favourites", "−199 to −101", (a) => a > -200 && a <= -101],
+  const BANDS = [["Big favorites", "−200 or shorter", (a) => a <= -200],
+                 ["Favorites", "−199 to −101", (a) => a > -200 && a <= -101],
                  ["Near even", "−100 to +149", (a) => a > -101 && a < 150],
                  ["Underdogs", "+150 to +399", (a) => a >= 150 && a < 400],
                  ["Long shots", "+400 and longer", (a) => a >= 400]];

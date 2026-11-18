@@ -83,6 +83,22 @@ def test_the_schedule_reader_keeps_unplayed_regular_season_games_once():
     assert N.remaining_fixtures(2026, ["EDM"], fetch=down) == []
 
 
+def test_a_game_before_today_on_a_cached_page_is_not_left():
+    # A club page read the morning before still says FUT for last night's
+    # game: 330 played and 1,005 left of a 1,312-game season (2026-11-18).
+    def club(team, season):
+        return {"games": [
+            {"id": 1, "gameType": 2, "gameState": "FUT", "gameDate": "2026-11-17",
+             "homeTeam": {"abbrev": "EDM"}, "awayTeam": {"abbrev": "CGY"}},
+            {"id": 2, "gameType": 2, "gameState": "FUT", "gameDate": "2026-11-18",
+             "homeTeam": {"abbrev": "EDM"}, "awayTeam": {"abbrev": "VAN"}},
+            {"id": 3, "gameType": 2, "gameState": "LIVE", "gameDate": "2026-11-18",
+             "homeTeam": {"abbrev": "SEA"}, "awayTeam": {"abbrev": "EDM"}},
+        ]}
+    got = sorted(N.remaining_fixtures(2026, ["EDM"], fetch=club, today="2026-11-18"))
+    assert got == [("EDM", "VAN"), ("SEA", "EDM")], got
+
+
 def test_the_cup_price_rides_the_weekly_one_credit_pull_and_the_page_reads_points():
     from engine.sources import oddsapi
     assert oddsapi.FUTURES_KEYS["nhl"] == "icehockey_nhl_championship_winner"

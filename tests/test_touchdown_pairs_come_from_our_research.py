@@ -65,7 +65,7 @@ def test_the_research_reads_the_matchup_the_usage_the_read_and_the_script():
     assert r["head"][:2] == ["Good matchup", "WAS’s run defence ranks 22nd of 32"], r["head"]
     # A back on a side favoured by a field goal or more: a leading team runs.
     fav = GP.research({"team": "NYG", "opponent": "WAS"}, SKATTEBO, _game(spread=-6.5), "nfl")
-    assert fav["points"]["script"] == 1 and any("favoured by 6.5" in x for x in fav["head"]), fav["head"]
+    assert fav["points"]["script"] == 1 and any("favored by 6.5" in x for x in fav["head"]), fav["head"]
     # The same back a seven-point underdog: a trailing team runs less.
     dog = GP.research({"team": "NYG", "opponent": "WAS"}, SKATTEBO, _game(spread=7.5), "nfl")
     assert dog["points"]["script"] == -1

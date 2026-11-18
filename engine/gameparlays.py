@@ -532,7 +532,7 @@ def research(leg: dict, read: dict | None, game: dict | None, sport: str) -> dic
     total = _f((game or {}).get("total"))
     if pos in ("RB", "FB") and margin is not None:
         if margin >= SCRIPT_FAVORITE:
-            script, why = 1, (f"{team} favoured by {margin:g} — a leading team runs the ball, at the goal "
+            script, why = 1, (f"{team} favored by {margin:g} — a leading team runs the ball, at the goal "
                               f"line too")
         elif margin <= -SCRIPT_BIG_DOG:
             script, why = -1, f"{team} a {abs(margin):g}-point underdog — a trailing team runs less"

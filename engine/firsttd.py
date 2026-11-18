@@ -503,7 +503,7 @@ def board(quotes: dict, games: list, sport: str = "nfl", conn=None, date: str = 
                                             f"the player's share {sh:.0%}"),
                          "reasons": [
                              f"{team} score the game's first touchdown {tf:.0%} of the time by the lines "
-                             f"(the favourite does {params(sport)['fav_rate']:.0%}, measured over "
+                             f"(the favorite does {params(sport)['fav_rate']:.0%}, measured over "
                              f"{params(sport)['games']} games).",
                              f"Holds {sh:.0%} of {team}'s first-touchdown share: two-thirds the player's share of "
                              f"their carries and targets, one-third the share of their touchdowns.",

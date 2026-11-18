@@ -1233,7 +1233,7 @@ def dump_bets(report, limit: int = 0, indent: str = "  ") -> None:
     # The last row is the one that would be a real finding: a price
     # OUTSIDE the board's own window means the window is not being
     # enforced where the picks are made.
-    bands = {"-150..-101 (favourite)": 0, "-100..+100 (coin flip)": 0,
+    bands = {"-150..-101 (favorite)": 0, "-100..+100 (coin flip)": 0,
              "+101..+250": 0, "+251..+400": 0, "+401..+700": 0,
              "OUTSIDE the odds window": 0}
     won = dict.fromkeys(bands, 0)
@@ -1244,7 +1244,7 @@ def dump_bets(report, limit: int = 0, indent: str = "  ") -> None:
         if o < -150 or o > 700:
             return "OUTSIDE the odds window"
         if o <= -101:
-            return "-150..-101 (favourite)"
+            return "-150..-101 (favorite)"
         if o <= 100:
             return "-100..+100 (coin flip)"
         if o <= 250:

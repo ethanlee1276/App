@@ -112,7 +112,7 @@ const FEATURES = [
   ["Live", "While the games are actually on",
    [["Live Now", "Every game in progress across every league we model, with the score, the clock, and your open bets on each one.", "live"],
     ["Play-by-play", "A page per live game: the field with the ball on it, drive-by-drive plays, the box score, team totals, your live props and both injury reports. Composed from the feed’s own fields, never from anybody else’s prose.", "pbp"],
-    ["Game centre", "The matchup page — park, weather, faces, the lines, and the live win-probability track.", "game"],
+    ["Game center", "The matchup page — park, weather, faces, the lines, and the live win-probability track.", "game"],
     ["The sweat", "Your open bets on a live game tracked pick by pick: cleared, busted, or how many chances are left.", null],
     ["Under pressure", "Read live on the play-by-play page: how each club performs once the game tightens.", null],
     ["Fast scoreboards", "Scores and plays ride a twelve-second loop of their own rather than the model’s build cycle. A score minutes old is not a score.", null],
@@ -4815,7 +4815,7 @@ function renderAbout() {
       <span class="sub">— please read this bit properly</span></div>
     <div class="cards wide">
       ${card(`${icon('warn')} Anything can happen. Genuinely anything.`, `
-        <p>Sports are random and betting is gambling. A 90% favourite loses
+        <p>Sports are random and betting is gambling. A 90% favorite loses
         one time in ten, and that one time can be tonight, and it can happen
         three nights in a row. A quarterback rolls an ankle on the first
         drive. A fighter who has never been stopped gets caught by a punch they

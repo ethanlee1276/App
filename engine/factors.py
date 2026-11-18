@@ -166,7 +166,7 @@ GAME_FACTORS = {
         # n edges make n+1 buckets; five labels for five edges left the
         # last one printing as "5".
         "edges": (-9.5, -3.5, 0.0, 3.5, 9.5),
-        "labels": ("big favourite", "favourite", "slight fav", "slight dog",
+        "labels": ("big favorite", "favorite", "slight fav", "slight dog",
                    "underdog", "big underdog"),
         "applied": "SCRIPT_CLAMP, +/-5%",
     },

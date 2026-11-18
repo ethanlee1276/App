@@ -157,8 +157,8 @@ def test_the_moment_says_which_rate_the_scoreboard_is_asking_of_whom():
     assert "wins 64% of its one-score games" in pre["line"]
     tr = got["trailing"]
     assert tr["live"] and _asks(tr) == [["KC", "reliability"], ["DEN", "comeback"]], tr
-    assert tr["chips"] == ["10-point game", "KC trails as the favourite"], tr["chips"]
-    assert "trails as the favourite" in tr["line"] and "81%" in tr["line"] and "80%" in tr["line"]
+    assert tr["chips"] == ["10-point game", "KC trails as the favorite"], tr["chips"]
+    assert "trails as the favorite" in tr["line"] and "81%" in tr["line"] and "80%" in tr["line"]
     ol = got["oneLate"]
     assert _asks(ol) == [["KC", "choke"], ["DEN", "clutch"]], ol
     assert ol["chips"] == ["one-score game", "late"], ol["chips"]

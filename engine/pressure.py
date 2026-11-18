@@ -259,7 +259,7 @@ def team_pressure(conn, sport: str, season: int,
     if not lined:
         league = {"cbb": "college basketball", "cfb": "college football"}.get(sport, sport.upper())
         note = (f"No closing lines on file for {league} games, so "
-                "reliability, comeback and choke — which need a favourite — "
+                "reliability, comeback and choke — which need a favorite — "
                 "are not shown. Clutch needs only the final score.")
     return {
         "sport": sport,
