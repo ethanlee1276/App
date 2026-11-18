@@ -340,10 +340,15 @@ function recRangesClosed(curve) {
 
 function recordWindowHTML(avail, rk, closed = []) {
   if (avail.length < 2 && !closed.length) return "";
-  return `<div class="rec-windows" role="group" aria-label="Time window">${avail.map(([k, , label]) =>
-    `<button type="button" class="rec-win${k === rk ? " active" : ""}" data-win="${k}"
-      aria-pressed="${k === rk ? "true" : "false"}">${label}</button>`).join("")}${closed.map(([k, , label, why]) =>
-    `<button type="button" class="rec-win off" disabled aria-disabled="true" title="${escapeAttr(why)}">${label}</button>`).join("")}${
+  // In the list's own order, a window too long for the record dimmed in its place (walk 15: the open ones first
+  // read "Lifetime, 7 days, 90 days, 30 days").
+  const order = recRanges().map(([k]) => k);
+  const chips = [...avail.map((w) => [w, false]), ...closed.map((w) => [w, true])]
+    .sort((a, b) => order.indexOf(a[0][0]) - order.indexOf(b[0][0]));
+  return `<div class="rec-windows" role="group" aria-label="Time window">${chips.map(([[k, , label, why], off]) => off
+    ? `<button type="button" class="rec-win off" disabled aria-disabled="true" title="${escapeAttr(why)}">${label}</button>`
+    : `<button type="button" class="rec-win${k === rk ? " active" : ""}" data-win="${k}"
+      aria-pressed="${k === rk ? "true" : "false"}">${label}</button>`).join("")}${
     closed.length ? `<span class="rec-win-why">${escapeHtml(closed[closed.length - 1][3])}</span>` : ""}</div>`;
 }
 
@@ -2659,7 +2664,7 @@ function recCalibrationSection(cal, era) {
   const eraNote = eraN >= 50 ? "" : `
     <p class="rec-note">
       Era note: ${cal.n - eraN} of these ${cal.n} graded picks predate the model re-tune${
-      (era || {}).since ? ` (${escapeHtml(era.since)})` : ""} — the misses above were mostly
+      (era || {}).since ? ` (${escapeHtml(formatGameDate(era.since) || era.since)})` : ""} — the misses above were mostly
       earned by gates that no longer exist. The current model gets its own chart here once
       ~50 of its picks settle (${eraN} so far). The nightly calibration refit already feeds
       these misses back into the model’s tempering.</p>`;

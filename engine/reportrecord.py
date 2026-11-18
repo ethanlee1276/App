@@ -344,12 +344,19 @@ def track_lines(t: dict, sport: str) -> dict:
         out["verdict"] = (f"Who we think wins has been right in {call[0]} of {call[1]} ({_pct(*call)})"
                           + (f", our ratings alone in {rat[0]} of {rat[1]} ({_pct(*rat)})"
                              if int(rat[1]) >= TRACK_MIN_GAMES else "") + f"{tail}.")
+    # THE PLAYERS IT LISTED, APART FROM THE REGULARS IT MISSED (2026-11-18). A regular who sat off the report is
+    # a wrong in the record's pair (engine/reportgrade._injury_summary), so college basketball, whose feed lists
+    # almost no one (schools have no reporting duty), read "0 of 5 right" for five misses and nobody listed. The
+    # share is of the players it listed; a miss is said as one.
     inj = t.get("injuries") or (0, 0)
-    if int(inj[1]) >= TRACK_MIN:
-        missed = int(t.get("missed") or 0)
-        out["injuries"] = (f"Our injury report so far: {inj[0]} of {inj[1]} right ({_pct(*inj)})"
-                           + (f", with {missed} regular{'s' if missed != 1 else ''} who sat and were not on it"
-                              if missed else "") + f"{tail}.")
+    missed = int(t.get("missed") or 0)
+    listed = (int(inj[0]), max(0, int(inj[1]) - missed))
+    regulars = f"{missed} regular{'s' if missed != 1 else ''}"
+    if listed[1] >= TRACK_MIN:
+        out["injuries"] = (f"Our injury report so far: {listed[0]} of {listed[1]} right ({_pct(*listed)})"
+                           + (f", with {regulars} who sat and were not on it" if missed else "") + f"{tail}.")
+    elif missed >= TRACK_MIN:
+        out["injuries"] = f"Our injury report so far: {regulars} sat who were not on it{tail}."
     td = t.get("tds") or (0, 0, 0.0)
     if int(td[1]) >= TRACK_MIN:
         out["redzone"] = (f"Our touchdown chances so far: {td[0]} of the {td[1]} players we gave one scored, "

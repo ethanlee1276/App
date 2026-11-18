@@ -557,7 +557,7 @@ def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
                           "opp": g["opp"], "home": g["home"], "team": g["team"],
                           "line": _line(cs), "ryoe": row and row.get("ryoe"),
                           "xyds": row and row.get("expected_yards"), "carries": cs})
-    scoreboard(conn, sport, pick, out_games)
+    scoreboard(conn, sport, pick, out_games, player=name)
     holes = sport == "nfl"
     by_hole = []
     if holes:
@@ -604,7 +604,29 @@ def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
 REG_WEEKS = 18
 
 
-def scoreboard(conn, sport: str, season: int, games: list[dict]) -> list[dict]:
+def own_side(conn, sport: str, season: int, player: str, games: list[dict]) -> list[dict]:
+    """College: each chart game's side as the player's box score has it (walk 15, 2026-11-18).
+
+    The college play file names a play's school, matched to the stored game by name
+    (`sources.cfbstats._side_of`), and in four of Texas's 2026 games the match landed
+    on the other side: Arch Manning's passing chart read "Nov 15 vs TEX", "Oct 24
+    @ TEX" and "Oct 17 @ TEX" under a Previous game card at LSU. The box score
+    (`player_game_logs`) is what the pages and the grading read, so a game whose two
+    schools are the box's, the other way round, takes the box's side; any other
+    game is left as it is."""
+    if sport != "cfb" or not games or not player:
+        return games
+    rows = conn.execute("SELECT substr(period, 1, 10), team, opponent, home FROM player_game_logs "
+                        "WHERE sport=? AND season=? AND player=? GROUP BY 1", (sport, int(season), player)).fetchall()
+    side = {str(d): (t, o, h) for d, t, o, h in rows if d and t and o}
+    for g in games:
+        got = side.get(str(g.get("date") or g.get("period") or "")[:10])
+        if got and got[0] != g.get("team") and {g.get("team"), g.get("opp")} == {got[0], got[1]}:
+            g["team"], g["opp"], g["home"] = got[0], got[1], bool(got[2])
+    return games
+
+
+def scoreboard(conn, sport: str, season: int, games: list[dict], player: str = "") -> list[dict]:
     """Each chart game's final and, in the NFL, both teams' records
     through it — for the game drawn over its stadium at the top of every
     football chart (Ethan, 2026-10-14, with two renders of the page).
@@ -623,6 +645,7 @@ def scoreboard(conn, sport: str, season: int, games: list[dict]) -> list[dict]:
     their finals too: see ``_daily_finals``."""
     if not games:
         return games
+    own_side(conn, sport, season, player, games)
     if sport in DAILY:
         return _daily_finals(conn, sport, games)
     if sport not in ("nfl", "cfb"):

@@ -117,7 +117,8 @@ def test_the_box_gives_an_example_from_its_own_league():
         assert f"{lg}: " in eg, lg
     i = APP.index("async function renderPlayers(")
     head = APP[i:APP.index("const q = state.search", i)]
-    assert 'box.placeholder = state.sport === "ufc" ? "Search a fighter' in head
+    # The search's league, which is UFC from the UFC tab (searchLeague: UFC is a tab, not a board league).
+    assert 'box.placeholder = searchLeague() === "ufc" ? "Search a fighter' in head
     assert "PLAYER_SEARCH_EG[state.sport] || PLAYER_SEARCH_EG.nfl" in head
 
 
@@ -218,7 +219,7 @@ def test_rows_drawn_from_a_board_a_league_and_a_fight_card():
         "var teamPrimaryIn = (lg, t) => ({ BUF: '#00338D', LV: '#A7A9AC' })[t] || '#888888';",
         "var injTag = (lg, p) => p === 'Josh Allen' ? ` <span class=\"inj-tag\" data-lg=\"${lg}\">Q</span>` : '';",
         "var leagueBadge = (s) => `<span class=\"lg-badge\">${s}</span>`;",
-        decl("_searchListed"), decl("searchListHTML"), decl("searchRowHTML"),
+        decl("_searchListed"), decl("searchLeague"), decl("searchListHTML"), decl("searchRowHTML"),
         """var out = {
           qb: searchRowHTML({ player: "Josh Allen", team: "BUF", position: "QB", headshot: "https://x.test/ja.png", sport: "nfl" }),
           board: searchRowHTML({ player: "James Cook", team: "BUF", position: "RB" }),

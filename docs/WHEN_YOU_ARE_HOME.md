@@ -9338,6 +9338,27 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YE. The fifteenth walk: a fighter's page found, a college chart's sides, the hockey starts, the injury tally**
+(step 767; 18 November). Two commands, seconds each (RUN_NEXT 00p). A fighter's page could not be reached: UFC is a
+tab of its own rather than a league the board switches to, so the search stayed on the league before it and answered
+"No NFL players match “Islam Makhachev”" from the UFC tab, from its own UFC chip, from a UFC pick and on a reload.
+The search has a league of its own now, the UFC tab and its chip set it, a fighter's address names UFC
+(#player/ufc/islam-makhachev) and the league row lights UFC on a fighter's page; the fighter's Career strip leaves
+the record to the header and shows the four headline rates. Arch Manning's passing chart read "Nov 15 vs TEX", "Oct
+24 @ TEX" and "Oct 17 @ TEX" under a Previous game card at LSU: the college play file's school landed on the other
+side of four stored games, so every college chart now takes a game's side from the player's own box score; and that
+game's tile said "TD–INT 1–3" under a card saying TD 0, so the card's game keeps the interceptions alone. Connor
+Hellebuyck's page read GS 0 beside seven games and Andrei Vasilevskiy's 351 saves came with six starts: many stored
+games carry no starter flag, which the goalie model counts to name each club's starter and backup. The box reader
+now names a side's starter by time in net when the box flags none, and 00p marks the games stored before. College
+basketball's How our reports did read "The injury report — 0% — 0 of 5 right": nothing had been listed (ESPN's
+college board is empty; schools have no reporting duty) and the five were regulars who sat off the report, counted
+as wrong. The share is now of the players a report listed, with the misses said beside it, on the tile, the game
+chips and each report's own line; and the empty college injuries page says the board is sparse instead of "rare, or
+the feed declined". Also: the Record's windows read in order (Lifetime, 90, 30, 7 days), the top bar's search at
+1280px no longer reads "Searcl", and six more dates read in words (the Record's recent results, its last slate and
+era note, the fantasy card's next game, the proof page's days and the Streak's).
+
 **YD. The fourteenth walk: a stadium said once, one line for one price, the Streak's league** (step 766; 18
 November). Nothing to run. The Colts at the Texans' game page said NRG Stadium's roof four times: the conditions
 chip ("Retractable roof · expected closed"), the venue panel's own chip, its note ("Retractable roof, usually closed

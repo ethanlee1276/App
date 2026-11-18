@@ -449,15 +449,15 @@ const plrRate = (r) => (r.pct ? `${Number(r.value).toFixed(0)}%` : Number(r.valu
 //: "KO/TKO", "Submission" or "Decision", as a fight site says how it ended.
 const PLR_HOW = { "KO/TKO": "KO/TKO", SUB: "Submission", DEC: "Decision" };
 function plrUfcRatesHTML(d) {
+  // The record is the header's, under the name (walk 15: "28-1-0" there and again as this strip's first tile); the
+  // strip is the four headline rates (engine/ufc/fighterpage.HEADLINE).
   const lead = (d.rates || []).filter((r) => r.lead);
-  const rec = (d.bio || {}).record;
-  if (!lead.length && !rec) return "";
+  if (!lead.length) return "";
   const tile = (k, v, t) => `<div class="plr-num"${t ? ` title="${escapeAttr(t)}"` : ""}><span class="plr-k">${escapeHtml(k)}</span><b>${
     escapeHtml(v)}</b></div>`;
   return `<section class="plr-card plr-strip"><h3>Career <span>${d.tracked ? `Rates over ${plural(d.tracked, "tracked fight")}`
       : "The fighter’s measured rates"}</span></h3>
-    <div class="plr-nums">${rec ? tile("Record", rec, "Wins, losses and draws") : ""}${lead.slice(0, rec ? 3 : 4)
-      .map((r) => tile(r.label, plrRate(r), r.title)).join("")}</div></section>`;
+    <div class="plr-nums">${lead.slice(0, 4).map((r) => tile(r.label, plrRate(r), r.title)).join("")}</div></section>`;
 }
 function plrUfcNextHTML(d) {
   const n = d.next;

@@ -467,7 +467,7 @@ def chart(conn, sport: str, player: str, season: int | None = None) -> dict:
     # The final over the game's building (the chart's frame, 2026-10-14),
     # read while a doubleheader's games still say which leg they were.
     from .carries import scoreboard
-    scoreboard(conn, sport, pick, games)
+    scoreboard(conn, sport, pick, games, player=name)
     newest = games[::-1]
     position = "" if sport in ("nba", "wnba", "cbb") else newest[0]["pos"]
     for g in games:

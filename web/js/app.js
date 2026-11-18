@@ -812,7 +812,7 @@ function applySport() {
    CFB), everywhere else the sport in force. */
 function sportRowLeague() {
   const g = state.view === "pbp" && state.pbp;
-  return g && SPORT_META[g.league] ? g.league : state.sport;
+  return g && SPORT_META[g.league] ? g.league : state.view === "players" ? searchLeague() : state.sport;
 }
 function markSportRow(lit = sportRowLeague()) {
   document.querySelectorAll(".sport-btn").forEach((b) => setSelected(b, !!b.dataset.sport && b.dataset.sport === lit));
@@ -13994,8 +13994,8 @@ function renderSearchScope() {
   const host = document.getElementById("search-scope");
   if (!host) return;
   host.innerHTML = SEARCH_SCOPES.map((s) => `<button type="button"
-      class="al-cat scope-chip${s === state.sport ? " on" : ""}"
-      data-scope="${s}" aria-pressed="${s === state.sport}">
+      class="al-cat scope-chip${s === searchLeague() ? " on" : ""}"
+      data-scope="${s}" aria-pressed="${s === searchLeague()}">
       ${(SPORT_META[s] || {}).logo || (s === "ufc" ? "🥊" : "")}
       ${escapeHtml(lgCode(s))}</button>`).join("");
 }
@@ -14009,15 +14009,18 @@ function renderSearchScope() {
    redraws the chips on every keystroke. */
 document.addEventListener("click", (e) => {
   const chip = e.target.closest && e.target.closest(".scope-chip");
-  if (!chip || chip.dataset.scope === state.sport) return;
-  const q = state.search;
-  const top = document.querySelector(
-    `.sport-btn[data-sport="${chip.dataset.scope}"]`);
-  if (!top) return;
-  top.click();
+  if (!chip || chip.dataset.scope === searchLeague()) return;
+  const q = state.search, lg = chip.dataset.scope;
+  if (STANDALONE_MODES.includes(lg)) state.searchLeague = lg;      // fighters, searched here, not the UFC tab
+  else {
+    state.searchLeague = "";
+    const top = lg !== state.sport && document.querySelector(`.sport-btn[data-sport="${lg}"]`);
+    if (top) top.click();
+  }
   state.search = q;
   const inp = document.getElementById("player-search");
   if (inp) inp.value = q;
+  markSportRow();
   renderPlayers();
 });
 
@@ -14032,7 +14035,7 @@ async function renderPlayers() {
   renderSearchRecent();
   renderTeamHits();
   const box = document.getElementById("player-search");
-  if (box) box.placeholder = state.sport === "ufc" ? "Search a fighter… (e.g. Topuria)"
+  if (box) box.placeholder = searchLeague() === "ufc" ? "Search a fighter… (e.g. Topuria)"
     : `Search a player or a team… (e.g. ${PLAYER_SEARCH_EG[state.sport] || PLAYER_SEARCH_EG.nfl})`;
   const q = state.search.trim().toLowerCase();
   /* A NAME, THEN THE PAGE. Ethan, 2026-11-17, circling the pick page a search
@@ -14219,7 +14222,7 @@ async function renderPlayers() {
        whole 08-23 complaint about the last scoped box. */
     // A team the box matched is the answer, drawn above (renderTeamHits): no apology under it.
     host.innerHTML = teamSearchHits(q).length ? "" : `<div class="empty">No
-      ${escapeHtml(lgCode(state.sport))}
+      ${escapeHtml(lgCode(searchLeague()))}
       players match “${escapeHtml(state.search)}” — the search looks only at
       the league whose tab is lit, so switch the sport up top to look in
       another one.</div>`;
@@ -14282,7 +14285,7 @@ function searchListHTML(rows) {
   }).join("")}</div>`;
 }
 function searchRowHTML(m) {
-  const lg = m.sport || state.sport;
+  const lg = m.sport || searchLeague();
   const f = m.fighter || {};
   // A school the feed knows only by ESPN's number ("espn:332") has no name to print.
   const club = /^espn:/.test(m.team || "") ? "" : m.team || "";
@@ -14295,7 +14298,7 @@ function searchRowHTML(m) {
       club ? ` style="--psr-c:${escapeAttr(teamPrimaryIn(lg, club))}"` : ""}>
     ${playerAvatar(m.player, club, { size: 44, headshot: m.headshot })}
     <span class="psr-who"><span class="psr-nm">${escapeHtml(m.player)}${
-      lg !== state.sport ? leagueBadge(m.sport) : ""}${injTag(m.sport || state.sport, m.player)}</span>
+      lg !== searchLeague() ? leagueBadge(m.sport) : ""}${injTag(m.sport || state.sport, m.player)}</span>
       <span class="psr-sub">${club ? teamMarkIn(lg, club, 14) : ""}<span>${
         escapeHtml(words.filter(Boolean).join(" · "))}</span></span></span>
     <span class="psr-go" aria-hidden="true">›</span></button>`;
@@ -14429,13 +14432,18 @@ function playerBrowseCap() {
    asked again. */
 const _leagueCache = new Map();
 const LEAGUE_RETRY_MS = 30000;
+/* THE SEARCH'S LEAGUE (walk 15, 2026-11-18): the lit league, or UFC. UFC is a tab of its own, not a league the
+   board switches to (STANDALONE_MODES), so `state.sport` stayed the league before it, and a fighter's page, the
+   search opened from the UFC tab and the search's own UFC chip all asked the NFL: "No NFL players match “Islam
+   Makhachev”". Set by the UFC tab, the chip, a UFC pick and a #player/ufc/ address; any other page clears it. */
+function searchLeague() { return state.searchLeague || state.sport; }
 async function leagueSearch(q) {
-  const key = `${state.sport}|${q}`;
+  const lg = searchLeague(), key = `${lg}|${q}`;
   const hit = _leagueCache.get(key);
   if (hit && (hit.ok || Date.now() - hit.at < LEAGUE_RETRY_MS)) return hit.players;
   let players = [], ok = false;
   try {
-    const r = await fetch(`/api/players/search?q=${encodeURIComponent(q)}&sport=${encodeURIComponent(state.sport)}&scope=sport`);
+    const r = await fetch(`/api/players/search?q=${encodeURIComponent(q)}&sport=${encodeURIComponent(lg)}&scope=sport`);
     if (r.ok) { players = (await r.json()).players || []; ok = true; }
   } catch (e) {}
   _leagueCache.set(key, { players, ok, at: Date.now() });
@@ -21634,7 +21642,7 @@ function ffProfileHTML(p, info, bio) {
         <span class="gs-at">@</span>
         <span class="ffp-upteam">${marks(up.home_team)} <b>${escapeHtml(up.home_team)}</b></span>
       </div>
-      <p class="ffd-note">${escapeHtml(up.date)}${up.kickoff ? ` · ${escapeHtml(up.kickoff)} ET` : ""}</p>
+      <p class="ffd-note">${escapeHtml(formatGameDate(up.date) || up.date)}${up.kickoff ? ` · ${escapeHtml(up.kickoff)} ET` : ""}</p>
       ${up.spread != null || up.total != null ? `<div class="ffp-upnums">
         ${up.spread != null ? `<span class="ffp-bio"><span class="k">Spread</span>
           <b>${up.home_team === p.team ? (up.spread > 0 ? "+" : "") + up.spread
@@ -24288,6 +24296,7 @@ if (typeof window !== "undefined" && window.addEventListener) {
 }
 
 function switchView(name, push = false) {
+  if (name !== "players") state.searchLeague = name === "ufc" ? "ufc" : "";
   if (name === "recommended" && isWalled()) name = "potd";   // a free Home (_switchViewNow)
   _wallFrom = wallBlocked(name) ? name : "";
   if (_wallFrom) name = "paywall";
@@ -24583,7 +24592,7 @@ function _switchViewNow(name, push, dir) {
      still naming the page you left is the bug that line exists to
      prevent. */
   if (name === "players" && state.playerSlug)
-    writeDetail(`#player/${encodeURIComponent(state.playerSlug)}`);
+    writeDetail(`#player/${searchLeague() === "ufc" ? "ufc/" : ""}${encodeURIComponent(state.playerSlug)}`);
   const subRouted = (name === "prop" && state.propId)
                  || (name === "game" && state.gameId)
                  || (name === "players" && state.playerSlug);
@@ -25763,6 +25772,10 @@ function entityRoute(h) {
   if (likely) p.pop();
   let sport = "", slug = p[1];
   if (p.length >= 3 && SPORT_CODES.includes(p[1])) { sport = p[1]; slug = p[2]; }
+  if (kind === "player") {
+    state.searchLeague = p.length >= 3 && p[1] === "ufc" ? "ufc" : "";
+    if (state.searchLeague) slug = p[2];
+  }
   if (kind === "game" && !sport) return false;   // the 2-segment form is openGame's
   if (kind === "pick" && !sport && !slug) return false;
   if (sport && sport !== state.sport) {
@@ -25787,6 +25800,7 @@ function openPlayerRoute(slug, shown, pick) {
   const name = shown || (_searchListed.get(slugify(slug)) || {}).player || deslug(slug);
   if (!name) return false;
   state.playerPick = pick ? { ...pick, slug: slugify(slug) } : null;
+  if (pick) state.searchLeague = pick.sport === "ufc" ? "ufc" : "";
   // Remembered so the address stays HIS rather than collapsing to
   // #players the moment the view switches — the same flattening the
   // prop page had. Cleared by typing in the search box, which is a
@@ -27037,8 +27051,9 @@ function bind() {
       // On a game page, another league's button opens that league's game (pbpHop).
       const hop = state.view === "pbp" && state.pbp && state.pbp.league !== b.dataset.sport
         && typeof pbpHop === "function";
-      if (state.sport === b.dataset.sport) { if (hop) pbpHop(b.dataset.sport); return; }
+      if (state.sport === b.dataset.sport && !state.searchLeague) { if (hop) pbpHop(b.dataset.sport); return; }
       state.sport = b.dataset.sport;
+      state.searchLeague = "";
       state.search = "";
       state.playerSlug = "";
       const search = document.getElementById("player-search");
@@ -27460,7 +27475,7 @@ async function renderHomePerf() {
   const tail = full.slice(-5).reverse();
   const recent = tail.length && tail.every((r) => r.w != null) ? `
     <div class="perf-recent"><div class="perf-recent-h">Recent results</div>
-      ${tail.map((r) => `<div class="perf-rrow"><span>${escapeHtml(r.date)}</span>
+      ${tail.map((r) => `<div class="perf-rrow"><span>${escapeHtml(formatGameDate(r.date) || r.date)}</span>
         <span class="rr-rec">${r.w}&#8211;${r.l}</span>
         <b style="color:${pcol(r.day_u)}">${u(r.day_u, true)}</b></div>`).join("")}
     </div>` : "";
@@ -27522,7 +27537,7 @@ async function renderHomePerf() {
           if (!lastPt || lastPt.day_u == null) return "";
           const today = etToday();
           const label = lastPt.date === today ? "Today’s profit/loss"
-            : `Last slate (${escapeHtml(lastPt.date)})`;
+            : `Last slate (${escapeHtml(formatGameDate(lastPt.date) || lastPt.date)})`;
           return `<div class="perf-day"><span class="k">${label}</span>
             <b style="color:${pcol(lastPt.day_u)}">${u(lastPt.day_u, true)}</b></div>`;
         })()}

@@ -2091,9 +2091,11 @@ async function renderInjuries() {
     (((fx || {}).waivers || {}).next_up || []).forEach((e) => _nextUp.set(nextUpKey({ player: e.hurt, team: e.team }), e));
   }
   if (!rows.length) {
-    const note = sport === "cfb"
+    // College basketball's board is college football's twin (walk 15, 2026-11-18: an empty board read "rare — or
+    // the feed declined" above news of Tyran Stokes and Neo Avdalas hurt).
+    const note = sport === "cfb" || sport === "cbb"
       ? `College programs have no duty to report, so this feed runs sparse —
-         emptiness here is the league’s opacity, not a fault to chase.`
+         emptiness here is the league’s opacity, not a fault to chase. The news below names who is hurt.`
       : `Either nobody in the league carries a designation right now — rare —
          or the feed declined on the last pull. It is retried on every
          refresh.`;
@@ -5799,7 +5801,7 @@ async function renderVerify() {
       p.height ? `block ${escapeHtml(String(p.height))}` : p.anchor ? "stamped, pending" : "not yet anchored",
       p.height ? "st-good" : "st-off",
       `sealed ${when(p.sealed)}${p.lead_min != null ? ` · ${Math.round(p.lead_min)} min before the game` : ""}`, true)).join("");
-    return `<details class="st-mech"><summary>${escapeHtml(d.date)} — ${n(d.n, "pick", "picks")}, ${d.anchored} anchored, ${d.bitcoin} on Bitcoin${
+    return `<details class="st-mech"><summary>${escapeHtml(formatGameDate(d.date) || d.date)} — ${n(d.n, "pick", "picks")}, ${d.anchored} anchored, ${d.bitcoin} on Bitcoin${
       picks ? "" : " · the picks show once the games are over"}</summary>${picks}</details>`;
   }).join("");
   host.innerHTML = `<div class="card"><p>Every pick is sealed into a hash chain the moment it is journaled: each link

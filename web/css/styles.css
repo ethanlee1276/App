@@ -9493,7 +9493,11 @@ a.ask-chip.web:hover { color: var(--text); border-color: transparent; }
   /* The search field gives way first, so no control runs off the edge. */
   .slate-meta { flex: 0 1 auto; }
   .slate-meta > * { flex-shrink: 0; }
-  .ns-field { flex-shrink: 1; min-width: 72px; }
+  .ns-field { flex-shrink: 1; min-width: 72px; container-type: inline-size; }
+  /* At its narrowest the field read "Searcl" (walk 15, 2026-11-18, at 1280px): the words end in an ellipsis, and
+     a field too narrow for "Search…" shows the glass alone. */
+  .ns-input { text-overflow: ellipsis; }
+  @container (max-width: 110px) { .ns-input::placeholder { color: transparent; } }
 }
 /* The date range steps aside first when the bar runs short. Narrower than
    the wide bar too, where the menu button took their room (2026-10-29);

@@ -190,7 +190,20 @@ def parse_boxscore(box: dict) -> list[dict]:
                 "saves": sv, "shots_against": sa, "goals_against": float(g.get("goalsAgainst") or 0),
                 "toi": toi, "started": 1.0 if g.get("starter") else 0.0,
             })
+        name_starter(rows, team)
     return rows
+
+
+def name_starter(rows: list[dict], team: str) -> None:
+    """A side always has a starter. A box that flags none of its goalies
+    (2026-11-18: Connor Hellebuyck's seven games read GS 0, Andrei
+    Vasilevskiy's 351 saves six starts) names the one with the most time in
+    net: the starter whenever one goalie played, and almost always when two
+    did. A box that flags one is believed (engine/nhlstarts repairs the
+    games stored before this)."""
+    mine = [r for r in rows if r.get("goalie") and r.get("team") == team]
+    if mine and not any(r.get("started") for r in mine):
+        max(mine, key=lambda r: r.get("toi") or 0.0)["started"] = 1.0
 
 
 def parse_player(landing: dict) -> dict:

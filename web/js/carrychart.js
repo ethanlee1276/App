@@ -576,7 +576,7 @@
      `icon`), by its label, as the renders' "GAME STATS" row does. */
   const TILE_ICON = { "Carries": "football", "Targets": "target", "Receptions": "glove", "Yards": "rising",
                       "Yds/carry": "gauge", "Yds/target": "gauge", "Yds/catch": "gauge", "Yds/att": "gauge",
-                      "TD": "star", "TD–INT": "star", "RYOE": "signal", "1st downs": "chev", "YAC": "bolt",
+                      "TD": "star", "TD–INT": "star", "INT": "cross", "RYOE": "signal", "1st downs": "chev", "YAC": "bolt",
                       "aDOT": "angle", "Separation": "scale", "Cmp/Att": "target", "Throw time": "clock",
                       "Sacked": "warn", "Catch rate": "glove", "Completion": "check", "Success": "check",
                       "Long": "rising", "10+ yd runs": "bolt", "Stuffed (0 or less)": "octagon", "Drops": "cross",
@@ -626,7 +626,7 @@
     shots: { "box.pts": "Points", "box.fg": "FG", "box.reb": "Rebounds", "box.ast": "Assists" },
     carries: { "rushing.car": "Carries", "rushing.yds": "Yards", "rushing.avg": "Yds/carry", "rushing.td": "TD" },
     routes: { "receiving.rec": "Receptions", "receiving.tgt": "Targets", "receiving.yds": "Yards", "receiving.td": "TD" },
-    passes: { "passing.yds": "Yards", "passing.pct": "Completion" },
+    passes: { "passing.yds": "Yards", "passing.pct": "Completion", "passing.td": "TD" },
     kicks: { "kicking.fg": "FG", "kicking.lng": "Long", "kicking.xp": "XP", "kicking.pts": "Points" },
     shotmap: { "skater.g": "Goals", "skater.sog": "On goal" },
     saves: { "goalie.sv": "Saves", "goalie.sa": "Shots", "goalie.svp": "Save %", "goalie.ga": "GA" },
@@ -1050,9 +1050,14 @@
     return svgWrap(cfbBands(every, "a completion", `${missed} incomplete${picks ? ` · ${picks} intercepted` : ""}`),
                    null, "cfb", every.length, "throws");
   }
+  /* The card's game says its touchdowns (walk 15, 2026-11-18: Arch Manning's card read TD 0 off the box score
+     and the chart under it "TD–INT 1–3" off the play file); that game's tile keeps the interceptions alone. */
+  function tdIntTile(line) {
+    return S && S.said && S.said.has("TD") ? tile("INT", line.int) : tile("TD–INT", `${line.td}–${line.int}`);
+  }
   function cfbPassTiles(line) {
     const t = [tile("Cmp/Att", `${line.cmp}/${line.att}`), tile("Yards", Math.round(line.yds)),
-               tile("TD–INT", `${line.td}–${line.int}`), tile("Yds/att", num1(line.ypa)),
+               tdIntTile(line), tile("Yds/att", num1(line.ypa)),
                tile("Completion", pct(line.pct)), tile("Sacked", line.sk ? `${line.sk} (${signed(line.sk_yds)})` : "0")];
     return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;
   }
@@ -1140,7 +1145,7 @@
      minimum in a game); the sacks he took where it did not. */
   function passTiles(line, ngs) {
     const t = [tile("Cmp/Att", slash(line.cmp, line.att)), tile("Yards", Math.round(line.yds)),
-               tile("TD–INT", `${line.td}–${line.int}`), tile("Yds/att", num1(line.ypa)), tile("aDOT", num1(line.adot))];
+               tdIntTile(line), tile("Yds/att", num1(line.ypa)), tile("aDOT", num1(line.adot))];
     if (ngs && ngs.time_to_throw != null) t.push(tile("Throw time", `${Number(ngs.time_to_throw).toFixed(2)}s`, "NGS"));
     else t.push(tile("Sacked", line.sk ? `${line.sk} (${signed(line.sk_yds)})` : "0"));
     return `<div class="cc-tiles cc-tiles-6">${t.join("")}</div>`;

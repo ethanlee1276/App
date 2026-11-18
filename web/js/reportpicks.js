@@ -167,6 +167,11 @@ function rpShare(pair) {
 const RP_KINDS = [["matchups", "Matchup reads"], ["candidates", "Breakout candidates"], ["fades", "Fades"],
   ["starters", "Starters"], ["angles", "The angles"], ["units", "Offense against defense"],
   ["script", "How the game would go"]];
+//: [right, of] for the players a report listed: the record's pair less the regulars who sat off it.
+function rpListed(x) {
+  const inj = (x || {}).injuries;
+  return inj ? [inj[0], Math.max(0, inj[1] - ((x || {}).missed || 0))] : [0, 0];
+}
 function rpTotalsHTML(t) {
   if (!t || !t.games) return `<p class="set-note">No finished game graded in this stretch.</p>`;
   const tile = (k, pair, sub) => pair && pair[1] ? `<div class="rpk-fact-tile"><span class="rpk-fact-k">${escapeHtml(k)}</span>
@@ -175,11 +180,19 @@ function rpTotalsHTML(t) {
       <b class="rpk-fact-v">${t.tds[0]} scored</b><span class="rpk-fact-sub">${escapeHtml(`of ${t.tds[1]}; our chances said ${Number(t.tds[2]).toFixed(1)}`)}</span></div>` : "";
   const kinds = RP_KINDS.map(([k, w]) => (t.groups || {})[k] && t.groups[k][1]
     ? `<li><b>${escapeHtml(w)}:</b> ${escapeHtml(rpShare(t.groups[k]))} right</li>` : "").join("");
-  const missed = t.missed ? `; ${plural(t.missed, "regular")} sat without being on it` : "";
+  /* The players it listed, apart from the regulars it missed (engine/reportrecord.track_lines): a miss sits in
+     the record's second number, and college basketball — whose feed lists almost no one — read "0% · 0 of 5
+     right" for five misses and nobody listed. */
+  const missedN = t.missed || 0;
+  const listed = rpListed(t);
+  const missed = missedN ? `; ${plural(missedN, "regular")} sat without being on it` : "";
+  const inj = listed[1] ? tile("The injury report", listed, `${listed[0]} of ${listed[1]} right${missed}`)
+    : missedN ? `<div class="rpk-fact-tile"><span class="rpk-fact-k">The injury report</span>
+      <b class="rpk-fact-v">${missedN} missed</b><span class="rpk-fact-sub">${escapeHtml(
+        `${plural(missedN, "regular")} sat without being on it`)}</span></div>` : "";
   return `<div class="rpk-fact-tiles">
       ${tile("Who we think wins", t.call)}${tile("The reads", t.reads)}${tile("Our ratings alone", t.ratings)}
-      ${tile("Our simulation", t.sim)}${tile("The injury report", t.injuries,
-        t.injuries && t.injuries[1] ? `${t.injuries[0]} of ${t.injuries[1]} right${missed}` : "")}${td}</div>
+      ${tile("Our simulation", t.sim)}${inj}${td}</div>
     ${kinds ? `<ul class="rpk-fact-kinds">${kinds}</ul>` : ""}
     ${rpCalibHTML(t.calibration)}
     <p class="mini rpk-fact-span">${escapeHtml(plural(t.games, "finished game"))}${t.since ? escapeHtml(`, ${formatGameDate(t.since)}`
@@ -215,7 +228,9 @@ function rpFactRowHTML(r) {
   if (r.reads && r.reads[1]) chips.push(chip(r.reads[0] * 2 >= r.reads[1], `Reads ${r.reads[0]} of ${r.reads[1]}`));
   if (r.ratings) chips.push(chip(r.ratings === "right", `Ratings ${r.ratings}`));
   if (r.sim) chips.push(chip(r.sim === "right", `Simulation ${r.sim}${r.script ? ` · Script ${r.script}` : ""}`));
-  if (r.injuries && r.injuries[1]) chips.push(chip(r.injuries[0] === r.injuries[1], `Injury report ${r.injuries[0]} of ${r.injuries[1]}`));
+  const listed = rpListed(r);
+  if (listed[1]) chips.push(chip(listed[0] === listed[1], `Injury report ${listed[0]} of ${listed[1]}`));
+  if (r.missed) chips.push(chip(false, `${plural(r.missed, "regular")} sat off the report`));
   if (r.tds && r.tds[1]) chips.push(chip(null, `TD chances ${r.tds[0]} of ${r.tds[1]} scored`));
   const ln = r.lines || {};
   const lines = [ln.cover ? `${nm(ln.cover)} covered` : ln.cover === "" ? "spread pushed" : "",

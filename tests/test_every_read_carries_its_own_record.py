@@ -65,9 +65,15 @@ def test_each_graded_section_says_how_its_kind_of_read_has_done():
     assert one == {"watch": "Our record so far: fades fell short of it 9 of 10 times (90%), on 1 finished NBA game "
                             "since Nov 12."}, one
     assert RR.track_lines({"games": 0}, "nfl") == {}
-    missed = RR.track_lines(dict(TOTALS, missed=2), "nba")["injuries"]
+    # A regular who sat off the report is in the pair's second number (reportgrade._injury_summary); the share
+    # is of the players it listed, and the misses are said beside it.
+    missed = RR.track_lines(dict(TOTALS, injuries=[76, 78], missed=2), "nba")["injuries"]
     assert missed.startswith("Our injury report so far: 76 of 76 right (100%), with 2 regulars who sat and were not "
                              "on it, on 13 finished NBA games"), missed
+    # College basketball's feed lists almost no one: twelve misses and nobody listed is not "0 of 12 right".
+    college = RR.track_lines(dict(TOTALS, injuries=[0, 12], missed=12), "cbb")["injuries"]
+    assert college.startswith("Our injury report so far: 12 regulars sat who were not on it, on 13 finished"), college
+    assert "injuries" not in RR.track_lines(dict(TOTALS, injuries=[0, 5], missed=5), "cbb"), "five are too few to say"
 
 
 def test_a_report_opens_each_section_on_its_record_once():
