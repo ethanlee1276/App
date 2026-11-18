@@ -408,7 +408,7 @@ def test_the_panel_does_not_trust_the_payload_shape_either():
     body = rp[i:rp.index("\n}", i)]
     assert "((d.game_parlays || {}).games || []).forEach((x) => {" in body, \
         "an empty or missing block is an empty list, never a crash"
-    assert "if (x && x.away && x.home && ((x.threes || []).length || (x.scorers || []).length))" in body, \
+    assert "if (x && x.away && x.home && (rpParlays(x) || (x.scorers || []).length))" in body, \
         "a game with no name or no tickets prints nothing, never 'undefined @ undefined'"
     assert "function renderParlayPage(" not in APP
 

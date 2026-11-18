@@ -136,14 +136,15 @@ def test_the_report_the_pages_and_the_record_say_it():
             '        blocks += [_h("Three-leg parlays"), _p(gp.get("threes_note") or "")]') in sec
     assert callable(gamereport.sec_parlays)
     led = (ROOT / "engine" / "parlayledger.py").read_text(encoding="utf-8")
-    assert 'keys = ("threes", "paper_threes") if kind == "three" else ("scorers",)' in led
-    assert 'kinds["three"]["paper"] = {"since": h.get("since"), "note": parlayhold.words(h)}' in led
+    assert 'keys = (("threes", "paper_threes") if kind == "three" else ("twos", "paper_twos") if kind == "two"' in led
+    assert 'kinds[kind]["paper"] = {"since": h.get("since"), "note": parlayhold.words(h)}' in led
     rj = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert ": g.threes_paper ? `<p class=\"gr-note\">Three-leg parlays: on paper for now, built and graded but not " \
            "posted.</p>`" in rj
     rp = (ROOT / "web" / "js" / "reportpicks.js").read_text(encoding="utf-8")
-    assert 'const paper = locked ? "" : ((d.game_parlays || {}).threes_paper || {}).note || "";' in rp
-    assert '${paper ? `<p class="set-note">${escapeHtml(paper)}</p>` : ""}' in rp
+    assert ('const paper = locked ? "" : ["threes_paper", "twos_paper"].map((k) => ((d.game_parlays || {})[k] || {})'
+            '.note || "")') in rp
+    assert '.filter(Boolean).map((n) => `<p class="set-note">${escapeHtml(n)}</p>`).join("");' in rp
     rec = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
     assert '${b.paper && b.paper.note ? `<p class="rec-gp-close">${escapeHtml(b.paper.note)}</p>` : ""}' in rec
     m = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")

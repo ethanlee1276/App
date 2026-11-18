@@ -35,13 +35,17 @@ function rpRecordLine(rec, sport) {
     const u = Number(r.net_units || 0);
     bits.push(`picks ${r.wins}-${r.losses}${r.pushes ? `-${r.pushes}` : ""} (${u >= 0 ? "+" : MINUS}${Math.abs(u).toFixed(2)}u)`);
   }
-  [["three", "three-leg parlays"], ["scorers", pair]].forEach(([k, w]) => {
+  [["two", "two-leg parlays"], ["three", "three-leg parlays"], ["scorers", pair]].forEach(([k, w]) => {
     const t = ((g[k] || {}).by_sport || {})[sport] || {};
     if (t.graded) bits.push(`${w} ${t.wins} of ${t.graded} hit`);
   });
   return bits.length ? `On the record so far: ${bits.join(" · ")}.` : "";
 }
 
+//: A game's parlays, both sizes: its two-leg tickets (engine/gameparlays.tickets_of, 2026-11-18) and its three-leg ones.
+function rpParlays(tix) {
+  return ((tix || {}).twos || []).length + ((tix || {}).threes || []).length;
+}
 //: Where a game stands: "live", "final", or "next" (not started yet).
 function rpPhase(g) {
   const s = ((g || {}).live || {}).state;
@@ -52,7 +56,7 @@ function rpTally(g, bets, tix) {
   const R = g ? reportResults(g) : null;
   if (!R) return null;
   const st = (bets || []).map((b) => (R.grade(b) || {}).status);
-  const tk = [...((tix || {}).threes || []), ...((tix || {}).scorers || [])]
+  const tk = [...((tix || {}).twos || []), ...((tix || {}).threes || []), ...((tix || {}).scorers || [])]
     .map((t) => (R.ticket((t || {}).legs || []) || {}).status);
   return { w: st.filter((s) => s === "won").length, l: st.filter((s) => s === "lost").length,
            hit: tk.filter((s) => s === "won").length, tickets: tk.filter((s) => s === "won" || s === "lost").length };
@@ -81,7 +85,7 @@ function rpGameHTML(d, key, bets, tix, open) {
     : whenLabel(g.date, g.kickoff);
   const pair = ["nfl", "cfb"].includes(state.sport) ? "touchdown" : state.sport === "nhl" ? "goal-scorer" : "scorer";
   const counts = [bets.length ? plural(bets.length, "pick") : "",
-                  tix && (tix.threes || []).length ? plural(tix.threes.length, "parlay") : "",
+                  tix && rpParlays(tix) ? plural(rpParlays(tix), "parlay") : "",
                   tix && (tix.scorers || []).length ? plural(tix.scorers.length, `${pair} pair`) : ""].filter(Boolean);
   const tally = fin ? rpTallyWords(rpTally(g, bets, tix)) : "";
   const rows = bets.map((r) => deckPickRow(r, { door: likelyOpen(r),
@@ -113,7 +117,7 @@ function rpTodayHTML(d, byGame, keys) {
   keys.forEach((k) => {
     const x = byGame.get(k);
     picks += x.bets.length;
-    threes += ((x.tix || {}).threes || []).length;
+    threes += rpParlays(x.tix);
     pairs += ((x.tix || {}).scorers || []).length;
     const g = rpGame(d, k);
     if (rpPhase(g) !== "final" || (typeof spoiledG === "function" && spoiledG(state.sport, g))) return;
@@ -375,7 +379,7 @@ function rpTicketWords(t) {
   return "Waiting on the box score";
 }
 function rpTicketsHTML(list, kind, sport) {
-  const name = kind === "threes" ? "Parlay" : ["nfl", "cfb"].includes(sport) ? "Touchdown pair"
+  const name = kind === "threes" ? "Parlay" : kind === "twos" ? "Two-leg parlay" : ["nfl", "cfb"].includes(sport) ? "Touchdown pair"
     : sport === "nhl" ? "Goal-scorer pair" : "Scorer pair";
   return list.map((t, i) => `<li class="rpk-bet-tix ${t.status === "won" ? "won" : t.status === "lost" ? "lost" : ""}">
       <div class="rpk-bet-tix-h">${rpMk(t.status)}<b>${escapeHtml(`${name} ${i + 1}`)}</b> <span>${
@@ -400,9 +404,11 @@ function rpEarlierHTML(x, kind, word) {
 }
 //: The game's picks and tickets: a strip of marks a kind, opening to every one by name.
 function rpBetsHTML(x, sport, open) {
-  const picks = x.picks || [], threes = x.threes || [], pairs = x.scorers || [];
+  const picks = x.picks || [], twos = x.twos || [], threes = x.threes || [], pairs = x.scorers || [];
   const pairWord = ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
-  const parts = [["Picks", picks], ["Parlays", threes], [pairWord, pairs]].filter(([, l]) => l.length);
+  // The two sizes apart, the easier one first (two picks hit together far more often than three).
+  const parts = [["Picks", picks], ["Two-leg parlays", twos], [twos.length ? "Three-leg parlays" : "Parlays", threes],
+                 [pairWord, pairs]].filter(([, l]) => l.length);
   const held = x.held ? `<p class="mini rpk-bets-held">${escapeHtml(plural(x.held, "more pick or ticket", "more picks and tickets"))
     } waiting on the box score: members see ${x.held === 1 ? "it" : "them"} now.</p>` : "";
   if (!parts.length) return held;
@@ -418,7 +424,10 @@ function rpBetsHTML(x, sport, open) {
       <summary class="rpk-bets-sum">${strip}<span class="row-fold-chev" aria-hidden="true"></span></summary>
       <div class="rpk-bets-body">
         ${picks.length ? sec("The picks", picks.map(rpPickLI).join("")) : ""}
-        ${threes.length ? sec("The parlays", rpTicketsHTML(threes, "threes", sport)) + rpEarlierHTML(x, "threes", "parlays") : ""}
+        ${twos.length ? sec("The two-leg parlays", rpTicketsHTML(twos, "twos", sport))
+          + rpEarlierHTML(x, "twos", "two-leg parlays") : ""}
+        ${threes.length ? sec(twos.length ? "The three-leg parlays" : "The parlays", rpTicketsHTML(threes, "threes", sport))
+          + rpEarlierHTML(x, "threes", "parlays") : ""}
         ${pairs.length ? sec(`The ${pairWord.toLowerCase()}`, rpTicketsHTML(pairs, "scorers", sport))
           + rpEarlierHTML(x, "scorers", pairWord.toLowerCase()) : ""}
       </div>
@@ -504,7 +513,7 @@ async function renderReportPicks() {
   const add = (key) => byGame.get(key) || byGame.set(key, { bets: [], tix: null }).get(key);
   (d.report_bets || []).forEach((r) => { if (r && r.game) add(r.game).bets.push(r); });
   ((d.game_parlays || {}).games || []).forEach((x) => {
-    if (x && x.away && x.home && ((x.threes || []).length || (x.scorers || []).length)) add(`${x.away}@${x.home}`).tix = x;
+    if (x && x.away && x.home && (rpParlays(x) || (x.scorers || []).length)) add(`${x.away}@${x.home}`).tix = x;
   });
   // The board's order (kickoff), then any game it no longer lists.
   const order = ((d.games || []).map((g) => `${g.away}@${g.home}`)).filter((k) => byGame.has(k));
@@ -518,9 +527,10 @@ async function renderReportPicks() {
         parlays land here as they are.</div></div>`
     : rpTodayHTML(d, byGame, keys);
   // A league's three-leg parlays on paper (engine/parlayhold) say why once, here.
-  const paper = locked ? "" : ((d.game_parlays || {}).threes_paper || {}).note || "";
+  const paper = locked ? "" : ["threes_paper", "twos_paper"].map((k) => ((d.game_parlays || {})[k] || {}).note || "")
+    .filter(Boolean).map((n) => `<p class="set-note">${escapeHtml(n)}</p>`).join("");
   host.innerHTML = `<p class="set-note rpk-lead">Every pick and parlay our game reports post, game by game, and how
-      they have done.</p>${paper ? `<p class="set-note">${escapeHtml(paper)}</p>` : ""}${subtabbedHTML("reportpicks", [
+      they have done.</p>${paper}${subtabbedHTML("reportpicks", [
       ["today", "Today’s picks", "Every game’s picks, then its parlays and pairs", today],
       ["record", "Record", "Every report pick and parlay, won or lost", `<div class="rpk-book" data-rpk-book="1"></div>`],
       ["facts", "How our reports did", "Every finished game’s report, fact-checked", rpFactsHTML()]])}`;

@@ -42,7 +42,7 @@ def _journaled():
     b = EG.board()
     GP.attach(b, "nfl")
     PL.journal_game_parlay_legs(conn, b, "nfl")
-    assert PL.log_game_parlays(conn, b["game_parlays"], "nfl", b["date"]) == 7
+    assert PL.log_game_parlays(conn, b["game_parlays"], "nfl", b["date"]) == 9   # with the two two-leg tickets
     return conn, b
 
 
@@ -63,7 +63,7 @@ def test_a_leg_with_no_row_gets_its_paper_row_and_grades_off_the_box():
     hit = _tickets_with(conn, "Isaiah Likely")
     assert hit, "the fixture has tickets on him"
     res = PL.settle(conn)
-    assert res["waiting"] == len(hit) and res["settled"] == 7 - len(hit), res
+    assert res["waiting"] == len(hit) and res["settled"] == 9 - len(hit), res
     rows = conn.execute("SELECT * FROM bets WHERE player='Isaiah Likely'").fetchall()
     assert rows and all(r["status"] == "open" and r["category"] == PL.PARLAY_LEG_CATEGORY
                         and r["game_day"] == "2099-11-12" for r in rows), [dict(r) for r in rows]
@@ -87,7 +87,7 @@ def test_a_ticket_graded_on_a_voided_leg_reopens_once_the_leg_has_a_row():
     conn, _b = _journaled()
     conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
     conn.commit()
-    assert PL.settle(conn)["settled"] == 7
+    assert PL.settle(conn)["settled"] == 9
     hit = _tickets_with(conn, "Isaiah Likely")
     # As the first fix graded them: his leg voided for want of a row.
     conn.execute("DELETE FROM bets WHERE player='Isaiah Likely'")
@@ -166,7 +166,7 @@ def test_the_waiting_report_says_what_each_leg_waits_on():
     conn.execute("DELETE FROM bets WHERE player='Isaiah Likely'")
     conn.commit()
     late = PL.waiting(conn, days=2, today=dt.date(2099, 11, 20))
-    assert len(late) == 7, len(late)
+    assert len(late) == 9, len(late)
     assert all(t["day"] == "2099-11-12" and t["game"] for t in late), late[0]
     states = {l["state"].split(":")[0] for t in late for l in t["legs"]}
     assert states == {"open", "no row"}, states
@@ -207,7 +207,7 @@ def _ml_ticket():
     ml = {"player": "NYG ML", "team": "NYG", "market": "moneyline", "side": "", "line": 0.0, "odds": -130,
           "book": "FanDuel", "p": 0.62, "_game_leg": True}
     t["legs"] = props + [ml]
-    x.update(threes=[t], scorers=[])
+    x.update(threes=[t], twos=[], scorers=[])
     b["game_parlays"]["games"] = [x]
     PL.journal_game_parlay_legs(conn, b, "nfl")
     assert PL.log_game_parlays(conn, b["game_parlays"], "nfl", b["date"]) == 1
@@ -260,7 +260,7 @@ def test_a_ticket_none_of_whose_legs_has_a_row_waits():
     conn.execute("DELETE FROM bets")
     conn.commit()
     res = PL.settle(conn)
-    assert res["settled"] == 0 and res["waiting"] == 7, res
+    assert res["settled"] == 0 and res["waiting"] == 9, res
 
 
 def test_a_leg_still_open_keeps_its_ticket_waiting():
@@ -285,7 +285,7 @@ def test_no_ticket_is_journaled_without_its_legs_rows():
     assert dropped == on_him and on_him, (dropped, on_him)
     assert not any(l["player"] == "Cam Skattebo" for x in gp["games"] for k in ("threes", "scorers")
                    for t in x.get(k) or [] for l in t["legs"])
-    assert PL.log_game_parlays(conn, gp, "nfl", b["date"]) == 7 - on_him
+    assert PL.log_game_parlays(conn, gp, "nfl", b["date"]) == 9 - on_him
     # The board's own copy is untouched: the report still shows every ticket.
     assert any(l["player"] == "Cam Skattebo" for x in b["game_parlays"]["games"] for k in ("threes", "scorers")
                for t in x.get(k) or [] for l in t["legs"])

@@ -1,4 +1,5 @@
-"""Each game's parlays: four 3-leg parlays and three 2-leg touchdown parlays (2026-11-14).
+"""Each game's parlays: its two strongest picks together, up to four 3-leg parlays and three
+2-leg touchdown parlays (2026-11-14; the two-leg tickets and the tickets' own bar, 2026-11-18).
 
 Ethan, 2026-11-14, of the research reports they write for themselves ("Nabers 5+
 receptions (max -250) + Skattebo 12+ rush attempts (max -200) + Daniels 25+
@@ -57,6 +58,22 @@ better").
 FOUR A GAME, FOUR IDEAS. The likeliest first; each next one shares at most
 MAX_SHARED leg with every ticket before it.
 
+THE TWO STRONGEST PICKS FIRST, AND A BAR EVERY TICKET CLEARS (GPWIN1,
+2026-11-18; `tickets_of`). Ethan, a day after GPLEGS1, on the same Monday's
+rows: "how are we winning so many picks, individual picks, but losing so many
+parlays? ... Make it so the parlays win as well." Three picks have to all hit:
+at the 68% the NBA's report picks hit, three together come in about three
+times in ten, and a night's picks at 4 of 5 still lose every ticket holding
+the one miss (85 of the NBA's 151 lost three-leg tickets lost by one leg). So
+each game now leads with its TWO strongest picks as a two-leg ticket (about
+one in two at the same 68%), and its next two as a second where they clear the
+bar and share no leg with the first; and a ticket of either size is posted
+only when our own chance for it clears a bar (TWO_FLOOR, THREE_FLOOR): a
+three-leg ticket we give under 30% is one we expect to lose seven times in
+ten, the rows he was reading. A game whose picks make fewer says why. The
+two-leg tickets are journaled apart (source `game_two`), so the record says
+how each size does.
+
 BOTH SIDES OF THE GAME (2026-11-16). A ticket whose legs are all one club's
 is taken only when it is clearly the stronger read than the best two-club
 ticket that could take its place, and no more than ONE_SIDED_MAX of a
@@ -94,9 +111,16 @@ import itertools
 
 #: The leagues this runs for: every board with player props.
 SPORTS = ("nfl", "cfb", "nba", "cbb", "wnba", "nhl", "mlb")
-#: Tickets a game posts.
+#: Tickets a game posts, at most.
 THREE_PER_GAME = 4
 SCORER_PER_GAME = 3
+#: Its two-leg tickets: the two strongest picks, then the next two (GPWIN1).
+TWO_PER_GAME = 2
+#: The least chance a ticket must have by our own numbers to be posted: two
+#: picks at 65% each, three at 67%. Under it a ticket is one we expect to lose
+#: nearly six times in ten (two legs) or seven (three), and is not made.
+TWO_FLOOR = 0.42
+THREE_FLOOR = 0.30
 #: The least chance a 3-leg ticket's leg may have.
 LEG_FLOOR = 0.60
 #: The least chance a scorer leg may have, by league.
@@ -177,7 +201,7 @@ CLOSE_GAME = {"nfl": 7.0, "cfb": 7.0}
 #: The scoring markets, by league: what a "touchdown parlay" is in each.
 SCORER_MARKETS = {"nfl": ("anytime_td",), "cfb": ("anytime_td",), "nhl": ("anytime_goal", "goals")}
 #: The journal's books (engine/parlayledger `source`).
-SOURCES = {"three": "game_three", "scorers": "game_td"}
+SOURCES = {"three": "game_three", "two": "game_two", "scorers": "game_td"}
 #: What a league's scorer pair is called on its cards.
 SCORER_WORDS = {"nfl": "touchdown", "cfb": "touchdown", "nhl": "goal scorer"}
 #: Markets whose rows say their side "Yes" for an over.
@@ -339,7 +363,8 @@ def legs_for(board: dict, sport: str, now=None) -> list[dict]:
         except Exception:                                    # noqa: BLE001
             rows = []
         for leg in rows:
-            if leg and (w or shift):
+            if leg:
+                # Its market's own shift rides on top (legfit._market_fits, GPWIN1).
                 leg = legfit.apply(leg, sport, "three", w, shift)
             # Player props only: a game line's leg journals and grades on
             # another path, and their reports' tickets are props.
@@ -375,7 +400,7 @@ def scorer_legs(board: dict, sport: str, now=None) -> list[dict]:
         p = r.get("model_prob") if r.get("model_prob") is not None else r.get("hit_prob")
         leg = T._leg(dict(r, side=r.get("side") or "Over", line=r.get("line") if r.get("line") is not None else 0.5),
                      p, "scorer")
-        if leg and (w or shift):
+        if leg:
             leg = legfit.apply(leg, sport, "scorers", w, shift)
         if not leg or leg["p"] < floor:
             continue
@@ -1133,12 +1158,14 @@ def side_bar() -> tuple:
         return SIDE_EDGE, SIDE_RESEARCH, False
 
 
-def choose(tickets: list[dict], n: int, rank=None, researched: bool = False) -> list[dict]:
+def choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
+           shared: tuple = (MAX_SHARED, None)) -> list[dict]:
     """The likeliest first (or by ``rank``, a sort key — the scorer pairs'
     research, `_by_research`); each next one shares at most MAX_SHARED legs
     with every ticket already chosen, and no leg rides on more than
     MAX_USES of them. A second pass, when the first leaves fewer than
-    ``n``, lets a ticket share all but one leg.
+    ``n``, lets a ticket share all but one leg. ``shared`` is those passes: a
+    game's two-leg tickets share no leg at all (`twos_of`: (0,)).
 
     BUILT TO WIN TOGETHER (Ethan's NFL Bet checking chats, 2026-10-25: "can
     both of these tickets hit in both situations? … We want to make sure both
@@ -1174,14 +1201,14 @@ def choose(tickets: list[dict], n: int, rank=None, researched: bool = False) -> 
             if any(uses.get(i, 0) >= MAX_USES for i in ids):
                 return False
             return not (together and pulls_apart(t, out))
-        for shared in (MAX_SHARED, None):
+        for lim in shared:
             for t in ranked:
                 if len(out) >= n:
                     return out, why
-                if t in out or not fits(t, shared):
+                if t in out or not fits(t, lim):
                     continue
                 if one_club(t):
-                    alt = next((m for m in ranked if m not in out and not one_club(m) and fits(m, shared)), None)
+                    alt = next((m for m in ranked if m not in out and not one_club(m) and fits(m, lim)), None)
                     if alt is not None and (sum(map(one_club, out)) >= ONE_SIDED_MAX or not clearly(t, alt)):
                         continue
                     why[id(t)] = side_reason(t, alt, researched)
@@ -1229,7 +1256,8 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
     price line, each leg in words with its price and why, the script it
     needs, how the legs link, the backups and the caveats."""
     joint = float(t.get("joint") or 0)
-    head = (f"Parlay {n}" if kind == "three" else f"{SCORER_WORDS.get(sport, 'Scorer').capitalize()} pair {n}")
+    head = (f"Parlay {n}" if kind == "three" else f"Two-leg parlay {n}" if kind == "two"
+            else f"{SCORER_WORDS.get(sport, 'Scorer').capitalize()} pair {n}")
     price = (f"{joint:.0%} by our numbers ({float(t.get('independent') or 0):.0%} if the legs were unrelated) · "
              f"fair {t.get('fair_words')} · take it at {t.get('take_words')} or better")
     if t.get("naive_words"):
@@ -1259,7 +1287,7 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
     # NFL Bet checking method: an anytime touchdown at 45%, or 40% with a
     # red-zone role). The floor stays where it is; a pair whose two scorers
     # are both 40% or better says so, and one that isn't says that too.
-    if kind != "three" and legs and sport in TD_RULE_SPORTS:
+    if kind not in ("three", "two") and legs and sport in TD_RULE_SPORTS:
         low = [l for l in legs if float(l.get("chance") or 0) < TD_RULE_PAIR]
         out["td_rule"] = not low
         out["rule_note"] = (f"Both scorers are {TD_RULE_PAIR:.0%} or better — our touchdown rule" if not low else
@@ -1278,18 +1306,55 @@ def game_label(game: dict) -> str:
     return f"{game.get('away')}@{game.get('home')}"
 
 
-def threes_of(sport: str, game: dict, legs: list[dict], memo: dict | None = None) -> tuple[list, int, int]:
-    """A game's three-leg tickets from ``legs``: (the chosen, the
-    combinations without a conflict, the legs tried), each chosen ticket
-    with its backups from the same legs."""
+def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = None) -> dict:
+    """A game's parlays from ``legs`` (GPWIN1): its two-leg tickets, the two
+    strongest picks first (``twos``), and its three-leg tickets (``threes``),
+    each only when our chance for it clears its bar (TWO_FLOOR, THREE_FLOOR)
+    and each three-leg one with its backups from the same legs. Beside them
+    what the notes count: the legs tried (``pool``), the combinations of each
+    size without a conflict (``twos_fit``, ``threes_fit``) and how many of
+    those clear the bar (``twos_clear``, ``threes_clear``)."""
     pool = sorted(legs, key=lambda l: -float(l["p"]))[:MAX_POOL]
     memo = {} if memo is None else memo
+    pairs = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(pool, 2)) if t]
     threes = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(pool, 3)) if t]
-    chosen = choose(threes, THREE_PER_GAME)
+    strong2 = [t for t in pairs if float(t["joint"]) >= TWO_FLOOR]
+    strong3 = [t for t in threes if float(t["joint"]) >= THREE_FLOOR]
+    # Two tickets of two legs that share one are half the same bet: none shared.
+    twos = choose(strong2, TWO_PER_GAME, shared=(0,))
+    chosen = choose(strong3, THREE_PER_GAME)
     for t in chosen:
         t["backups"] = [{"for": b["for"], "leg": slim(b["leg"])} for b in backups(sport, t, pool, game)]
+    for t in twos + chosen:
         t["legs"] = [slim(l) for l in t["legs"]]
-    return chosen, len(threes), len(pool)
+    return {"twos": twos, "threes": chosen, "pool": len(pool), "twos_fit": len(pairs), "twos_clear": len(strong2),
+            "threes_fit": len(threes), "threes_clear": len(strong3)}
+
+
+def threes_of(sport: str, game: dict, legs: list[dict], memo: dict | None = None) -> tuple[list, int, int]:
+    """A game's three-leg tickets from ``legs``: (the chosen, the
+    combinations without a conflict, the legs tried). `tickets_of` is the
+    whole of it."""
+    made = tickets_of(sport, game, legs, memo)
+    return made["threes"], made["threes_fit"], made["pool"]
+
+
+def _twos_note(made: dict, own: bool = False) -> str:
+    """Why a game posts fewer two-leg tickets than TWO_PER_GAME, or none
+    (``own``: the legs are its report's picks alone)."""
+    n = len(made["twos"])
+    head = f"{n} of {TWO_PER_GAME}: " if n else ""
+    whose = "this report's own picks" if own else "this game's picks"
+    if made["pool"] < 2:
+        return head + f"a two-leg parlay takes two of {whose} at {LEG_FLOOR:.0%} or better, and there " \
+                      f"{'is' if made['pool'] == 1 else 'are'} {made['pool']}"
+    if not made["twos_fit"]:
+        return head + f"no two of {whose} fit together without a conflict"
+    if not made["twos_clear"]:
+        return head + (f"no two of {whose} that fit together reach the {TWO_FLOOR:.0%} a two-leg parlay needs "
+                       f"by our numbers")
+    return head + (f"the two-leg parlays share no pick, and {whose} that reach {TWO_FLOOR:.0%} together make "
+                   f"no second one")
 
 
 def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
@@ -1298,14 +1363,18 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
     are fewer when there are. ``priced`` is how many priced scorers the game
     had before the research read them (`research_scorers`)."""
     memo: dict = {}
-    chosen, n_threes, n_pool = threes_of(sport, game, legs, memo)
+    made = tickets_of(sport, game, legs, memo)
+    chosen, n_threes, n_pool = made["threes"], made["threes_fit"], made["pool"]
     out = {"game": game_label(game), "home": game.get("home"), "away": game.get("away"),
            "date": game.get("date") or "", "kickoff": game.get("kickoff") or "",
-           "threes": chosen, "legs_read": n_pool, "threes_considered": n_threes}
+           "twos": made["twos"], "threes": chosen, "legs_read": n_pool, "threes_considered": n_threes}
+    if len(made["twos"]) < TWO_PER_GAME:
+        out["twos_note"] = _twos_note(made)
     if len(chosen) < THREE_PER_GAME:
         out["threes_note"] = (f"{len(chosen)} of {THREE_PER_GAME}: this game has {n_pool} pick(s) at "
-                              f"{LEG_FLOOR:.0%} or better, and only {n_threes} three-leg combination(s) of "
-                              f"them without a conflict")
+                              f"{LEG_FLOOR:.0%} or better, and only {made['threes_clear']} three-leg "
+                              f"combination(s) of them without a conflict that reach the {THREE_FLOOR:.0%} "
+                              f"a three-leg parlay needs by our numbers")
     if sport in SCORER_MARKETS:
         researched = sport in RESEARCH_SPORTS
         # THE RESEARCH FIRST (RESEARCH_SPORTS): the strongest cases are the
@@ -1386,11 +1455,19 @@ def build(board: dict, sport: str, now=None) -> dict:
         for x in out_games:
             x["paper_threes"], x["threes"] = x.get("threes") or [], []
             x["threes_note"], x["threes_paper"] = paper["note"], True
+    # The two-leg tickets have a hold of their own, on their own record (GPWIN1).
+    paper2 = two_hold(sp)
+    if paper2:
+        for x in out_games:
+            x["paper_twos"], x["twos"] = x.get("twos") or [], []
+            x["twos_note"], x["twos_paper"] = paper2["note"], True
     return {"sport": sp, "date": board.get("date") or "", "games": out_games,
-            **({"threes_paper": paper} if paper else {}),
-            "take_edge": TAKE_EDGE, "leg_floor": LEG_FLOOR,
+            **({"threes_paper": paper} if paper else {}), **({"twos_paper": paper2} if paper2 else {}),
+            "take_edge": TAKE_EDGE, "leg_floor": LEG_FLOOR, "two_floor": TWO_FLOOR, "three_floor": THREE_FLOOR,
             "counts": {"games": len(out_games), "threes": sum(len(x["threes"]) for x in out_games),
                        "paper_threes": sum(len(x.get("paper_threes") or []) for x in out_games),
+                       "twos": sum(len(x.get("twos") or []) for x in out_games),
+                       "paper_twos": sum(len(x.get("paper_twos") or []) for x in out_games),
                        "scorers": sum(len(x["scorers"]) for x in out_games),
                        # One-club tickets (`choose`), each saying why it is one.
                        "one_club_threes": sum(one_club(t) for x in out_games for t in x["threes"]),
@@ -1416,6 +1493,17 @@ def paper_hold(sport: str) -> dict | None:
     try:
         from . import parlayhold
         h = parlayhold.held(sport)
+        return {**h, "note": parlayhold.words(h)} if h else None
+    except Exception:                                        # noqa: BLE001
+        return None
+
+
+def two_hold(sport: str) -> dict | None:
+    """The hold on a league's two-leg tickets (engine/parlayhold, their own
+    record and their own bar) with its words, or None."""
+    try:
+        from . import parlayhold
+        h = parlayhold.held(sport, legs=2)
         return {**h, "note": parlayhold.words(h)} if h else None
     except Exception:                                        # noqa: BLE001
         return None
@@ -1513,9 +1601,11 @@ def _board_legs(board: dict, sport: str, now=None) -> list[dict]:
     return _BOARD_LEGS["legs"]
 
 
-def _report_note(n_ok: int, n_picks: int, chosen: int) -> str:
+def _report_note(n_ok: int, n_picks: int, chosen: int, fit: int | None = None, clear: int | None = None) -> str:
     """Why a game's report made fewer than four tickets, after "No three-leg
-    parlay:" when it made none."""
+    parlay:" when it made none. ``fit`` and ``clear``: the three-leg
+    combinations of its picks without a conflict, and those of them that
+    reach THREE_FLOOR (`tickets_of`)."""
     head = f"{chosen} of {THREE_PER_GAME}: " if chosen else ""
     if not n_picks:
         return head + "the parlays use only this report's own picks, and it has none on a player's line"
@@ -1524,7 +1614,11 @@ def _report_note(n_ok: int, n_picks: int, chosen: int) -> str:
                 f"{LEG_FLOOR:.0%} a leg needs; a ticket takes three")
     if chosen:
         return (head + f"the parlays use only this report's own picks, and the {n_ok} that clear "
-                f"{LEG_FLOOR:.0%} make no more tickets without a conflict or a leg on too many")
+                f"{LEG_FLOOR:.0%} make no more tickets that reach {THREE_FLOOR:.0%} together without a "
+                f"conflict or a leg on too many")
+    if fit and not clear:
+        return (head + f"the parlays use only this report's own picks, and no three of the {n_ok} that clear "
+                f"{LEG_FLOOR:.0%} reach the {THREE_FLOOR:.0%} a three-leg parlay needs together by our numbers")
     return (head + f"the parlays use only this report's own picks, and no three of the {n_ok} that clear "
             f"{LEG_FLOOR:.0%} fit together without a conflict")
 
@@ -1545,7 +1639,8 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
             if isinstance(b, dict) and b.get("market") and not b.get("game") and b.get("kind") != "game"}
     want.discard(("", "", "", None))
     legs = [l for l in _board_legs(board, sp, now) if _pick_key(l) in want and _game_of(l, [game])]
-    chosen, n_threes, n_pool = threes_of(sp, game, legs)
+    made = tickets_of(sp, game, legs)
+    chosen, n_threes, n_pool = made["threes"], made["threes_fit"], made["pool"]
     paper = bool(x.get("threes_paper"))
     x["paper_threes" if paper else "threes"] = chosen
     if paper:
@@ -1553,9 +1648,18 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     x.update(legs_read=n_pool, threes_considered=n_threes, legs_from=LEGS_FROM_REPORT, report_picks=len(want))
     if not paper:
         if len(chosen) < THREE_PER_GAME:
-            x["threes_note"] = _report_note(n_pool, len(want), len(chosen))
+            x["threes_note"] = _report_note(n_pool, len(want), len(chosen), n_threes, made["threes_clear"])
         else:
             x.pop("threes_note", None)
+    # Its two-leg tickets, the two strongest of the same picks first (GPWIN1).
+    paper2 = bool(x.get("twos_paper"))
+    x["paper_twos" if paper2 else "twos"] = made["twos"]
+    if paper2:
+        x["twos"] = []
+    elif len(made["twos"]) < TWO_PER_GAME:
+        x["twos_note"] = _twos_note(made, own=True)
+    else:
+        x.pop("twos_note", None)
     return x
 
 
@@ -1572,18 +1676,23 @@ def report_only(board: dict) -> int:
         if not isinstance(x, dict) or x.get("kept") or x.get("legs_from") == LEGS_FROM_REPORT:
             continue
         key = "paper_threes" if x.get("threes_paper") else "threes"
-        if x.get(key):
+        key2 = "paper_twos" if x.get("twos_paper") else "twos"
+        if x.get(key) or x.get(key2):
             n += 1
-        x[key] = []
+        x[key], x[key2] = [], []
         x["legs_from"] = LEGS_FROM_REPORT
         if not x.get("threes_paper"):
             x["threes_note"] = NO_REPORT_NOTE
+        if not x.get("twos_paper"):
+            x["twos_note"] = NO_REPORT_NOTE
     gp["from_reports"] = True
     c = gp.get("counts")
     if isinstance(c, dict):
         live = [x for x in gp.get("games") or [] if isinstance(x, dict)]
         c["threes"] = sum(len(x.get("threes") or []) for x in live)
         c["paper_threes"] = sum(len(x.get("paper_threes") or []) for x in live)
+        c["twos"] = sum(len(x.get("twos") or []) for x in live)
+        c["paper_twos"] = sum(len(x.get("paper_twos") or []) for x in live)
         c["one_club_threes"] = sum(one_club(t) for x in live for t in x.get("threes") or [])
         c["from_report"] = sum(x.get("legs_from") == LEGS_FROM_REPORT for x in live)
     return n
@@ -1592,7 +1701,8 @@ def report_only(board: dict) -> int:
 def summary(gp: dict) -> str:
     """The build log's line."""
     c = (gp or {}).get("counts") or {}
-    return (f"  Game parlays: {c.get('threes', 0)} three-leg and {c.get('scorers', 0)} scorer pair(s) "
+    return (f"  Game parlays: {c.get('twos', 0)} two-leg, {c.get('threes', 0)} three-leg and "
+            f"{c.get('scorers', 0)} scorer pair(s) "
             f"across {c.get('games', 0)} game(s); one club's alone: {c.get('one_club_threes', 0)} three-leg, "
             f"{c.get('one_club_scorers', 0)} pair(s)" + _bar_words(c.get("side_bar")))
 
@@ -1619,7 +1729,8 @@ def journal_rows(gp: dict) -> list[dict]:
         if isinstance(x, dict) and x.get("kept"):
             continue
         # Tickets on paper too (`paper_threes`): graded like every other.
-        for t in (x.get("threes") or []) + (x.get("paper_threes") or []) + (x.get("scorers") or []):
+        for t in ((x.get("twos") or []) + (x.get("paper_twos") or []) + (x.get("threes") or [])
+                  + (x.get("paper_threes") or []) + (x.get("scorers") or [])):
             for l in t.get("legs") or []:
                 k = _leg_id(l)
                 if k in seen or l.get("_game_leg"):

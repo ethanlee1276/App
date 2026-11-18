@@ -302,7 +302,7 @@ def test_the_export_ships_each_game_s_parlays_and_no_longer_the_backtest():
     src = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
     assert '"two_leg": _two_leg_record(conn)' in src and "_two_leg_backtest" not in src
     out = ledger._two_leg_record(_journal())
-    assert set(out) == {"game"} and set(out["game"]) == {"three", "scorers"}, out
+    assert set(out) == {"game"} and set(out["game"]) == {"three", "two", "scorers"}, out
     assert set(ledger.TWO_LEG_LAST) == {"report_s"}, ledger.TWO_LEG_LAST
 
 

@@ -505,6 +505,20 @@ function recStaleLadder(sv, scope) {
     <div class="card" style="padding:0">${rows.map(line).join("")}</div>`;
 }
 
+/* MARKETS ON THE BENCH (engine/stakeplan MARKET_BENCH, 2026-11-18). Ethan, of
+   the NFL's quarterback completions and the NBA's points, two Edge markets that
+   had lost all season: "bench and learn". Their picks still post and are
+   graded, on paper, and each is staked again by itself once its record since
+   the bench makes money; the plan the record ships says where each stands. */
+function recBenchNote(st, scope) {
+  const rows = Object.entries(((st || {}).plan) || {})
+    .filter(([sp]) => !scope || scope === "all" || sp === scope)
+    .flatMap(([, p]) => Object.values((p || {}).benched_markets || {}));
+  if (!rows.length) return "";
+  return `<div class="card rec-report"><div class="rr-head">Markets on the bench</div>${rows.map((b) =>
+    `<p class="rec-gp-close">${escapeHtml(b.why || "")}</p>`).join("")}</div>`;
+}
+
 function recShadowBooks(sb, scope, order) {
   const all = !scope || scope === "all";
   return recBookSections(sb, scope, {
@@ -1007,14 +1021,17 @@ const tlUnits = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x || 0).toFixed(2)}u`);
    2026-11-16). Ethan: "you did not put the 'parlays for this game' on the record
    page. We wanna see if the legs and the parlays we recommend are hitting so each
    sport needs to have a record of that on the record page." Each game report's
+   two-leg parlays (its two strongest picks together, from 18 November), its
    three-leg parlays and its touchdown, goal-scorer or scorer pairs, each kind
    apart: the tickets that hit and the units at one unit a ticket against the
    chance we gave them, the legs that hit against theirs, by market, the tickets
    that lost by one leg, and the newest tickets with every leg marked. On "All",
    one table of every league. */
-const GP_KIND = { three: "Three-leg parlays" };
+const GP_KIND = { three: "Three-leg parlays", two: "Two-leg parlays" };
+//: A league's kinds in the page's order: the two strongest picks together first (2026-11-18), the three-leg tickets, the pairs.
+const GP_KINDS = ["two", "three", "scorers"];
 function gpKindWord(kind, sport) {
-  if (kind === "three") return GP_KIND.three;
+  if (GP_KIND[kind]) return GP_KIND[kind];
   return ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
 }
 function gpDay(d) {
@@ -1107,14 +1124,14 @@ function gpParlaysHTML(rec, scope) {
   if (!rec || typeof rec !== "object" || rec.error) return "";
   if (scope) {
     const mine = rec[scope] || {};
-    return ["three", "scorers"].filter((k) => mine[k] && (mine[k].graded || mine[k].open))
+    return GP_KINDS.filter((k) => mine[k] && (mine[k].graded || mine[k].open))
       .map((k) => gpBlockHTML(mine[k], k, scope)).join("");
   }
   const rows = [];
   // The site's own league order (SPORT_META), any league it does not list last.
   const order = Object.keys(typeof SPORT_META === "object" ? SPORT_META : {});
   const rank = (sp) => (order.includes(sp) ? order.indexOf(sp) : order.length);
-  Object.keys(rec).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b)).forEach((sp) => ["three", "scorers"].forEach((k) => {
+  Object.keys(rec).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b)).forEach((sp) => GP_KINDS.forEach((k) => {
     const b = (rec[sp] || {})[k];
     if (!b || !b.graded) return;
     const legs = b.legs || {};
@@ -3603,6 +3620,7 @@ async function renderRecord() {
     + foldClose
     + verdict + ridingNote + unstaked + small + monthCard
     + foldOpen("By book, the running P&amp;L and the splits")
+    + recBenchNote(d.staked, scope)
     + recBookSections(d.book_records, scope) + `
     ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
     ${recSplitsSection(o, !!scoped)}

@@ -514,9 +514,10 @@
         ${(v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${named(w, b.names, b.marks, true)}</li>`).join("")}</ul>` : ""}
         ${v.kind ? `<p class="gr-pick-kind">${escapeHtml(v.kind)}</p>` : ""}</li>`).join("")}</ol>`;
     }
-    /* EACH GAME'S PARLAYS (engine/gameparlays, 2026-11-14): four three-leg
-       tickets and three scorer pairs, each leg with its price, our chance
-       and why, the script the ticket needs, its backups and caveats. */
+    /* EACH GAME'S PARLAYS (engine/gameparlays, 2026-11-14): its two strongest
+       picks as two-leg tickets (2026-11-18), up to four three-leg tickets and
+       three scorer pairs, each leg with its price, our chance and why, the
+       script the ticket needs, its backups and caveats. */
     if (b.type === "parlays") {
       const items = (xs) => (xs || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
       return `<div class="gr-parlays">${(b.items || []).map((t) => `<div class="gr-parlay">
@@ -793,7 +794,7 @@
       if (gp && s.key === "parlays") {
         blocks = blocks.map((b) => b.type !== "parlays" ? b : Object.assign({}, b, {
           items: (b.items || []).map((t, i) => Object.assign({}, t, {
-            bet_legs: ((gp[b.kind === "three" ? "threes" : "scorers"] || [])[i] || {}).legs || [] })) }));
+            bet_legs: ((gp[{ three: "threes", two: "twos" }[b.kind] || "scorers"] || [])[i] || {}).legs || [] })) }));
       }
       const inner = `${blocks.map(block).join("")}${extra}`;
       // ONE SECTION OPEN, THE REST ONE TAP AWAY (Ethan, 2026-11-15: "it still
@@ -838,7 +839,7 @@
   }
   function card(t, n, kind, sport) {
     const pct = (x) => `${Math.round(Number(x || 0) * 100)}%`;
-    const title = kind === "three" ? `Parlay ${n}`
+    const title = kind === "three" ? `Parlay ${n}` : kind === "two" ? `Two-leg parlay ${n}`
       : `${["nfl", "cfb"].includes(sport) ? "Touchdown" : "Scorer"} pair ${n}`;
     let price = `${pct(t.joint)} by our numbers (${pct(t.independent)} if the legs were unrelated) · fair ${
       t.fair_words || ""} · take it at ${t.take_words || ""} or better`;
@@ -847,7 +848,7 @@
       ? ` — about ${pct(t.script_chance)} likely by the lines` : ""}` : "";
     /* The touchdown rule on a pair (engine/gameparlays.card: each scorer 40%
        or better), the same words the report prints. */
-    const low = kind !== "three" && ["nfl", "cfb"].includes(sport)
+    const low = !["three", "two"].includes(kind) && ["nfl", "cfb"].includes(sport)
       ? (t.legs || []).filter((l) => Number(l.p || 0) < 0.40) : null;
     const rule = low == null ? {} : { td_rule: !low.length, rule_note: !low.length
       ? "Both scorers are 40% or better — our touchdown rule"
@@ -862,7 +863,7 @@
       bet_legs: t.legs || [],
     };
   }
-  //: One game's tickets, its three-leg parlays then its scorer pairs, each
+  //: One game's tickets, its two-leg parlays, its three-leg ones, then its scorer pairs, each
   //: graded once the game is over (opts.results: game → the grader, app.js);
   //: the Report Picks page draws them under the game's bets (js/reportpicks.js).
   function gameTickets(g, sport, opts) {
@@ -872,7 +873,14 @@
     try {
       // On paper while the league's three-leg tickets hit under 25% (engine/parlayhold): the page says why once.
       // Fewer than four: the note says why, under the ones the report made (engine/gameparlays._report_note).
-      return `${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
+      // The two strongest picks together lead (GPWIN1, engine/gameparlays.tickets_of): two legs hit far
+      // more often than three. Fewer than two, or none: the note says why.
+      const twos = (g.twos || []).length
+        ? block({ type: "parlays", items: g.twos.map((t, i) => card(t, i + 1, "two", sport)) })
+          + (g.twos_note ? `<p class="gr-note">${escapeHtml(g.twos_note)}</p>` : "")
+        : g.twos_paper ? `<p class="gr-note">Two-leg parlays: on paper for now, built and graded but not posted.</p>`
+        : g.twos_note ? `<p class="gr-note">No two-leg parlay: ${escapeHtml(g.twos_note)}</p>` : "";
+      return `${twos}${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
           + (g.threes_note ? `<p class="gr-note">${escapeHtml(g.threes_note)}</p>` : "")
         : g.threes_paper ? `<p class="gr-note">Three-leg parlays: on paper for now, built and graded but not posted.</p>`
         : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}

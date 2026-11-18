@@ -34,7 +34,7 @@ BOOKS = ("report", "likely", "board", "main", "paper", "longshot")
 #: game in place of a player.
 GAME_MARKETS = ("moneyline", "total", "spread", "team_total")
 #: The tickets' sources (engine/gameparlays.SOURCES), by the page's names.
-TICKETS = {"threes": "game_three", "scorers": "game_td"}
+TICKETS = {"twos": "game_two", "threes": "game_three", "scorers": "game_td"}
 #: A verdict the record has given; anything else is still open.
 SETTLED = ("won", "lost", "push", "void")
 #: A guard on one game's list, never a cut a real game reaches.
@@ -194,7 +194,7 @@ def tickets(conn, sport: str, date, home: str, away: str, with_key: bool = False
 
 
 def of_game(conn, sport: str, date: str, g: dict, report: dict | None = None) -> dict:
-    """{"picks": [...], "tickets": {"threes": [...], "scorers": [...]}} for one
+    """{"picks": [...], "tickets": {"twos": [...], "threes": [...], "scorers": [...]}} for one
     game, each part only when the record holds some; {} when it holds none."""
     home, away = str((g or {}).get("home") or ""), str((g or {}).get("away") or "")
     if not sport or not date or not home or not away:
@@ -219,8 +219,9 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
     For each archived game named in ``keys`` ((day, away, home), the page's
     rows; MAX_GAMES of them), the report's own picks (REPORT_BOOKS) and the
     game's tickets off the record, each with its verdict and each ticket's
-    legs with theirs: {"DAY|AWAY|HOME": {"picks": [...], "threes": [...],
-    "scorers": [...], "held": n}}, a game the record holds nothing for as {}
+    legs with theirs: {"DAY|AWAY|HOME": {"picks": [...], "twos": [...],
+    "threes": [...], "scorers": [...], "held": n}} (the two-leg tickets from
+    18 November, GPWIN1), a game the record holds nothing for as {}
     and one not archived left out. The archive says which board label the
     game's rows are filed under (its "label"; the NFL's is the week) and which
     players its report names (a pick with no club on its row).
@@ -267,9 +268,9 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
                 game["earlier"] = earlier
             if not member:
                 held = 0
-                for part in ("picks", "threes", "scorers"):
-                    keep = [x for x in game[part] if x.get("status") in SETTLED]
-                    held += len(game[part]) - len(keep)
+                for part in ("picks", *TICKETS):
+                    keep = [x for x in game.get(part) or [] if x.get("status") in SETTLED]
+                    held += len(game.get(part) or []) - len(keep)
                     game[part] = keep
                 game["held"] = held
             out[key] = {k: v for k, v in game.items() if v}

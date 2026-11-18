@@ -382,7 +382,8 @@ def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
         for kind, source in SOURCES.items():
             # A league's three-leg tickets on paper (engine/parlayhold) are
             # journaled and graded as ever: the record keeps learning on them.
-            keys = ("threes", "paper_threes") if kind == "three" else ("scorers",)
+            keys = (("threes", "paper_threes") if kind == "three" else ("twos", "paper_twos") if kind == "two"
+                    else ("scorers",))
             for t in [t for k in keys for t in x.get(k) or []]:
                 legs = t.get("legs") or []
                 if len(legs) < 2:
@@ -534,8 +535,9 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
     legs and the parlays we recommend are hitting so each sport needs to have a
     record of that on the record page."
 
-    ``{league: {kind: block}}`` for each game's three-leg parlays ("three") and
-    scorer pairs ("scorers") (engine/gameparlays.SOURCES), each block:
+    ``{league: {kind: block}}`` for each game's three-leg parlays ("three"), its
+    two-leg ones ("two": its two strongest picks, GPWIN1) and its scorer pairs
+    ("scorers") (engine/gameparlays.SOURCES), each block:
 
       * the tickets: graded, won, lost, units at one unit a ticket and ROI, open,
         our average chance on them (`modeled_joint`) and the tickets that lost
@@ -614,12 +616,14 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                 "markets": mk, "recent": news}
     # A league's three-leg tickets on paper (engine/parlayhold) say so on
     # their record: still graded here, posted nowhere until they hit 25%.
+    # Its two-leg tickets the same, on their own hold (GPWIN1).
     try:
         from . import parlayhold
         for sp, kinds in out.items():
-            h = parlayhold.held(sp)
-            if h and "three" in kinds:
-                kinds["three"]["paper"] = {"since": h.get("since"), "note": parlayhold.words(h)}
+            for kind, legs in (("three", 3), ("two", 2)):
+                h = parlayhold.held(sp, legs=legs)
+                if h and kind in kinds:
+                    kinds[kind]["paper"] = {"since": h.get("since"), "note": parlayhold.words(h)}
     except Exception:                                        # noqa: BLE001
         pass
     return out
@@ -750,7 +754,8 @@ def resettle(conn) -> dict:
 #: and a game parlay's (engine/gameparlays): its own paper bucket first,
 #: which holds every leg it posted.
 TWO_LEG_CATS = {"two_edge": ("main", "paper"), "two_likely": ("likely", "likely_live", "board"),
-                "game_three": (PARLAY_LEG_CATEGORY,), "game_td": (PARLAY_LEG_CATEGORY,)}
+                "game_three": (PARLAY_LEG_CATEGORY,), "game_two": (PARLAY_LEG_CATEGORY,),
+                "game_td": (PARLAY_LEG_CATEGORY,)}
 
 
 def _matching_bet(conn, p, leg):
@@ -968,7 +973,7 @@ def waiting(conn, days: int = 2, today=None) -> list[dict]:
 #: The tickets whose legs ride on their own paper bucket (engine/gameparlays): only
 #: there is a leg with no row a journaling gap. A Parlay Zone leg earned the board
 #: as a single, so a missing single is an error upstream, and its ticket waits.
-NO_ROW_VOID_SOURCES = ("game_three", "game_td")
+NO_ROW_VOID_SOURCES = ("game_three", "game_two", "game_td")
 
 
 def _voids_missing(p, resolved: list) -> bool:
@@ -995,7 +1000,7 @@ def _with_leg_rows(conn, gp: dict, sport: str, date: str) -> tuple[dict, int]:
         if not isinstance(x, dict):
             continue
         y = dict(x)
-        for k in ("threes", "paper_threes", "scorers"):
+        for k in ("twos", "paper_twos", "threes", "paper_threes", "scorers"):
             keep = [t for t in x.get(k) or [] if all(_has_leg_row(conn, sport, date, l) for l in t.get("legs") or [])]
             dropped += len(x.get(k) or []) - len(keep)
             if k in x:

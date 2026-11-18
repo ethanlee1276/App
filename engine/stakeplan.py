@@ -54,6 +54,20 @@ THE RULE (v4, from 2026-10-31), per league:
     at z ≥ +2.0, the bar the stale-line book had to clear before it risked a
     penny — and goes back to paper at z ≤ 0.
 
+TWO MARKETS ON THE BENCH (MKTBENCH1, 2026-11-18). Ethan, asked whether the two
+Edge markets that had lost all season should keep their stakes — the NFL's
+quarterback completions, 44-53 and −11.9 units, and the NBA's points, 63-71
+and −10.2 units — or be benched: "bench and learn". The walk-forward study
+above found that dropping losing markets as a RULE did worse, so the rule
+does not do it by itself; these two are benched by name (MARKET_BENCH), from
+the day he said so. A benched market's Edge picks still post, are journaled
+on paper and graded, so the record keeps learning on them, and they carry no
+stake and are left out of their league's evidence (as a pick past the price
+cap is). Its own record from the day of the bench is kept apart, and the
+market is staked again by itself once MARKET_RELEASE_N of its picks graded
+since then have made money at flat stakes. The board says "Tracked · no
+stake" on each (`stamp_tracked`).
+
 THE RECORD AT THESE STAKES is `staked_reports`: every graded pick of the
 headline record, at the stake it carried if this rule had it staked on the
 day it was made, and at nothing if not — each day's decision read only from
@@ -89,6 +103,18 @@ LIKELY_GO = {"n": 200, "z": 2.0, "off": 0.0}
 #: tracked on paper — the module docstring has the record behind it.
 EDGE_MAX_ODDS = 130
 
+#: THE MARKETS ON THE BENCH (MKTBENCH1; Ethan, 2026-11-18: "bench and learn").
+#: Each league's Edge picks in the market carry no stake from ``since``, and
+#: are tracked on paper; ``words`` is the market as the page says it.
+MARKET_BENCH = ({"sport": "nfl", "market": "pass_cmp", "since": "2026-11-18", "words": "quarterback completions",
+                 "was": "44-53, -11.9 units"},
+                {"sport": "nba", "market": "pts", "since": "2026-11-18", "words": "points",
+                 "was": "63-71, -10.2 units"})
+#: A benched market is staked again once this many of its picks graded since
+#: the bench have made money at flat stakes.
+MARKET_RELEASE_N = 60
+
+
 #: How many of the record's newest staked picks ride with the report, and
 #: with each league's (the first screen downloads them all).
 RECENT = 60
@@ -115,6 +141,58 @@ def priced_out(half, odds) -> bool:
         return int(float(odds)) > EDGE_MAX_ODDS
     except (TypeError, ValueError):
         return False
+
+
+def _bench(half, row: dict, day: str, benches: dict) -> dict | None:
+    """The market bench in force for this row on ``day`` (`replay`'s
+    ``benches``), or None: an Edge pick in a benched market, on or after the
+    bench began and no later than the night it was lifted."""
+    if half != "edge":
+        return None
+    b = benches.get((str(row.get("sport") or "").lower(), str(row.get("market") or "").lower()))
+    if b is None or day < b["since"] or (b["released"] and day > b["released"]):
+        return None
+    return b
+
+
+def market_benched(sport, market, _plan: dict | None = None, today=None) -> dict | None:
+    """Is this league's market on the bench now (MARKET_BENCH)? Its bench, or
+    None. The stored plan (`plan_from`) says when a bench has been lifted;
+    before it says anything, a bench whose day has come is in force."""
+    sp, mk = str(sport or "").lower(), str(market or "").lower()
+    b = next((x for x in MARKET_BENCH if x["sport"] == sp and x["market"] == mk), None)
+    if b is None:
+        return None
+    day = today if isinstance(today, str) else (today or _dt.date.today()).isoformat()
+    if day < b["since"]:
+        return None
+    got = ((((_plan or {}).get(sp) or {}).get("benched_markets")) or {}).get(mk) or {}
+    return None if got.get("released") else b
+
+
+def stamp_tracked(payload: dict, sport, _plan: dict | None = None, today=None) -> int:
+    """Mark ``tracked`` on each Edge pick of a board that carries no stake —
+    past the price cap (EDGE_MAX_ODDS) or in a benched market — so its card
+    says "Tracked · no stake" instead of a stake nobody places. Returns how
+    many were marked."""
+    if not isinstance(payload, dict):
+        return 0
+    if _plan is None:
+        try:
+            from . import ledger as L
+            _plan = L.stake_plan()
+        except Exception:                                    # noqa: BLE001
+            _plan = {}
+    n = 0
+    for key in ("recommendations", "game_bets"):
+        for r in payload.get(key) or []:
+            if not isinstance(r, dict):
+                continue
+            if priced_out("edge", r.get("odds")) or (
+                    key == "recommendations" and market_benched(sport, r.get("market"), _plan, today)):
+                r["tracked"] = True
+                n += 1
+    return n
 
 
 def sort_day(day) -> str:
@@ -223,11 +301,17 @@ def replay(rows: list) -> tuple[list, dict]:
     staked, decided from the days before it only, and its price inside
     EDGE_MAX_ODDS; ``state`` is {(half, sport): {"staked", "book"}} after the
     last day — what the rule says for the next pick. A pick past the price
-    cap is in neither a league's evidence nor its stakes."""
+    cap is in neither a league's evidence nor its stakes; nor is one in a
+    benched market (MARKET_BENCH), whose own record since the bench is kept
+    apart and lifts it (MARKET_RELEASE_N graded, making money at flat stakes)
+    from the next day. The benches ride in ``state`` under ("bench", sport)
+    keys, {market: {"since", "released", "book"}}."""
     order = sorted(range(len(rows)), key=lambda i: (sort_day(rows[i].get("day")),))
     flags = [False] * len(rows)
     staked: dict = {}
     books: dict = {}
+    benches = {(b["sport"], b["market"]): {"since": b["since"], "released": None, "book": Book()}
+               for b in MARKET_BENCH}
     i = 0
     while i < len(order):
         d = sort_day(rows[order[i]].get("day"))
@@ -243,7 +327,8 @@ def replay(rows: list) -> tuple[list, dict]:
             key = (h, str(r.get("sport") or "").lower())
             if key not in staked or staked[key] is None:
                 staked[key] = decide(h, None, books.setdefault(key, Book()))
-            flags[k] = bool(staked[key]) and not priced_out(h, r.get("odds"))
+            flags[k] = (bool(staked[key]) and not priced_out(h, r.get("odds"))
+                        and _bench(h, r, d, benches) is None)
         for k in day:
             r = rows[k]
             h = half_of(r.get("category"))
@@ -252,13 +337,22 @@ def replay(rows: list) -> tuple[list, dict]:
             x = flat_return(r.get("odds"), r.get("status"))
             if x is None or str(r.get("status")) == "push":
                 continue
+            b = _bench(h, r, d, benches)
+            if b is not None:
+                b["book"].add(x)                 # the benched market's own record, apart
+                continue
             books.setdefault((h, str(r.get("sport") or "").lower()), Book()).add(x)
         # The next day's answer, from everything graded up to tonight.
         for key, book in books.items():
             staked[key] = decide(key[0], staked.get(key), book)
+        for b in benches.values():
+            if not b["released"] and b["book"].n >= MARKET_RELEASE_N and b["book"].roi() > 0:
+                b["released"] = d
         i = j
     state = {key: {"staked": bool(staked.get(key, key[0] == "edge")), "book": book}
              for key, book in books.items()}
+    for (sp, mk), b in benches.items():
+        state.setdefault(("bench", sp), {})[mk] = b
     return flags, state
 
 
@@ -368,11 +462,34 @@ def plan_from(state: dict, sport: str | None = None) -> dict:
     for (h, s), v in sorted(state.items()):
         if sp and s != sp:
             continue
+        if h == "bench":
+            # The benched markets (MARKET_BENCH): each one's record since its
+            # bench, and whether it has been lifted.
+            for mk, b in sorted(v.items()):
+                out.setdefault(s, {}).setdefault("benched_markets", {})[mk] = bench_words(s, mk, b)
+            continue
         b = v["book"]
         out.setdefault(s, {})[h] = {"staked": v["staked"], "n": b.n,
                                     "roi": round(b.roi(), 4), "z": round(b.z(), 2),
                                     "why": why(h, v["staked"], b)}
     return out
+
+
+def bench_words(sport: str, market: str, b: dict) -> dict:
+    """A benched market as the plan stores it and the page says it."""
+    meta = next((x for x in MARKET_BENCH if x["sport"] == sport and x["market"] == market), {})
+    book = b.get("book") or Book()
+    words = meta.get("words") or market
+    day = _dt.date.fromisoformat(b["since"])
+    since = f"{day.day} {day.strftime('%B')}"
+    rec = (f"{book.n} graded since, {book.roi():+.1%} at flat stakes" if book.n else "nothing graded since yet")
+    if b.get("released"):
+        why_ = f"{sport.upper()} {words}: staked again after {b['released']} — {rec}"
+    else:
+        why_ = (f"{sport.upper()} {words}: tracked, not staked, since {since} (it was {meta.get('was', 'losing')}) — "
+                f"{rec}; staked again once {MARKET_RELEASE_N} graded since make money at flat stakes")
+    return {"since": b["since"], "released": b.get("released"), "n": book.n, "roi": round(book.roi(), 4),
+            "words": words, "why": why_}
 
 
 # --- the journal (engine/ledger) ---------------------------------------------------

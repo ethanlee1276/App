@@ -2279,7 +2279,7 @@ def our_picks(boards: dict, kind: str = "best_bets", sport: str = "", limit=None
             for g in gp.get("games") or []:
                 if not isinstance(g, dict):
                     continue
-                for key, pool in (("threes", "three-leg"), ("scorers", "scorer pair")):
+                for key, pool in (("twos", "two-leg"), ("threes", "three-leg"), ("scorers", "scorer pair")):
                     for t in g.get(key) or []:
                         if isinstance(t, dict):
                             rows.append((-float(t.get("joint") or 0), _game_ticket(t, s, pool, g)))
@@ -2707,7 +2707,7 @@ REPORT_TICKETS_SHOWN = 7
 REPORT_GAMES_SHOWN = 8
 #: A kept report's parts Ask reads beside its fact check; the rest is the night before's.
 REPORT_KEPT_PARTS = ("who_we_think_wins", "short_version", "angles")
-TICKET_POOLS = (("threes", "three-leg parlay"), ("scorers", "scorer pair"))
+TICKET_POOLS = (("twos", "two-leg parlay"), ("threes", "three-leg parlay"), ("scorers", "scorer pair"))
 
 
 def _archive_dir():

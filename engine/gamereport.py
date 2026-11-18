@@ -3856,15 +3856,30 @@ def _game_parlays(c: Ctx) -> dict | None:
 def sec_parlays(c: Ctx) -> dict | None:
     """THE PARLAYS FOR THIS GAME (engine/gameparlays; Ethan, 2026-11-14:
     "for each game ... make 4 3-leg parlays ... and 3 2-leg touchdown
-    parlays ... do the same shit that the report's doing"). Four three-leg
-    tickets and three scorer pairs off the board's own picks, each with
-    its price to take it, the script it needs, its backups and caveats —
-    and the record's word on same-game parlays."""
+    parlays ... do the same shit that the report's doing"). The report's two
+    strongest picks as two-leg tickets, up to four three-leg tickets and
+    three scorer pairs, each with its price to take it, the script it
+    needs, its backups and caveats — and the record's word on same-game
+    parlays."""
     from .gameparlays import card
     gp = _game_parlays(c)
     if not gp:
         return None
     blocks = []
+    # ITS TWO STRONGEST PICKS TOGETHER, FIRST (GPWIN1, 2026-11-18; Ethan: "how
+    # are we winning so many picks ... but losing so many parlays? ... Make it
+    # so the parlays win as well"): two picks hit together far more often than
+    # three, so the two-leg tickets lead and the three-leg ones follow.
+    twos = [card(t, i, "two", c.sport) for i, t in enumerate(gp.get("twos") or [], 1)]
+    if twos:
+        blocks += [_h("Two-leg parlays: the strongest picks together"),
+                   {"type": "parlays", "kind": "two", "items": twos}]
+        if gp.get("twos_note"):
+            blocks.append(_p(gp["twos_note"]))
+    elif gp.get("twos_paper"):
+        blocks += [_h("Two-leg parlays"), _p(gp.get("twos_note") or "")]
+    elif gp.get("twos_note"):
+        blocks.append(_p(f"No two-leg parlay: {gp['twos_note']}"))
     threes = [card(t, i, "three", c.sport) for i, t in enumerate(gp.get("threes") or [], 1)]
     if threes:
         blocks += [_h("Three-leg parlays"), {"type": "parlays", "kind": "three", "items": threes}]
@@ -3898,7 +3913,7 @@ def parlay_sentence(c: Ctx) -> str:
     if not gp:
         return ""
     bits = []
-    for key, word in (("threes", "Best three-leg parlay"),
+    for key, word in (("twos", "Strongest two-leg parlay"), ("threes", "Best three-leg parlay"),
                       ("scorers", "Best touchdown pair" if c.sport in ("nfl", "cfb") else "Best scorer pair")):
         t = next(iter(gp.get(key) or []), None)
         if t:

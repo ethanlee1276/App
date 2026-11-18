@@ -444,7 +444,7 @@ def _parlay_legs(payload) -> list:
     for x in (gp or {}).get("games") or [] if isinstance(gp, dict) else []:
         if not isinstance(x, dict):
             continue
-        for t in (x.get("threes") or []) + (x.get("scorers") or []):
+        for t in (x.get("twos") or []) + (x.get("threes") or []) + (x.get("scorers") or []):
             if isinstance(t, dict):
                 out += [l for l in t.get("legs") or [] if isinstance(l, dict) and _pick_like(l)]
     return out

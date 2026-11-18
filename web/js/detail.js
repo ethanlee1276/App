@@ -1611,6 +1611,8 @@ function gprCard(g, rep, rows, gp, opts) {
   const call = gprCall(g, rep, fin);
   const picks = gprPicks(g, rows, out, map);
   const threes = gprTickets(g, gp, out, "threes", map), pairs = gprTickets(g, gp, out, "scorers", map);
+  // Its two strongest picks together (engine/gameparlays.tickets_of, from 18 November), ahead of the three-leg tickets.
+  const twos = gprTickets(g, gp, out, "twos", map);
   const pairWord = ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs"
     : "Scorer pairs";
   const v = gprVerdict(call, graded);
@@ -1618,6 +1620,7 @@ function gprCard(g, rep, rows, gp, opts) {
     call && gprRow(call.right ? "good" : "bad", "Our pick to win", call.words),
     gprReadsRow(graded),
     gprPicksRow(picks),
+    gprTicketsRow(twos, "2-leg parlays"),
     gprTicketsRow(threes, "3-leg parlays"),
     gprTicketsRow(pairs, pairWord),
     gprInjuryRow(graded.injuries),
@@ -1638,7 +1641,7 @@ function gprCard(g, rep, rows, gp, opts) {
       <span class="gpr-badge" aria-hidden="true">${gprIcon("wait")}</span>
       <span class="gpr-say"><b>The report is graded once the box score is in</b></span></div>` : "";
   const cols = gprRightWrong(graded);
-  const fromRecord = picks.from === "record" || threes.from === "record" || pairs.from === "record";
+  const fromRecord = [picks, twos, threes, pairs].some((x) => x.from === "record");
   const note = !rowsHTML.length ? `<p class="gp-res-note">No pick of ours rode on this game.</p>`
     : `<p class="gp-res-note">${fromRecord ? "The picks and parlays are from our record, graded on the box score. "
       : "Each pick and parlay below says how it went at its own line. "}Every read in the report is marked right or

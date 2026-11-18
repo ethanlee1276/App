@@ -1471,9 +1471,11 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         # the pick, so what lands in the row is what was actually applied
         # rather than whatever the store holds by the time it settles.
         temp, bias = cal_correction(sport, r["market"])
-        # MLB edge overs go on paper (PAPER_PROP_SIDES), still sized.
-        row_book = EDGE_HELD_CATEGORY if held else \
-            edge_price_book(prop_book(category, sport, r.get("side", "OVER")), r.get("odds", -110))
+        # MLB edge overs go on paper (PAPER_PROP_SIDES), still sized; so does
+        # a benched market's pick (stakeplan.MARKET_BENCH, `market_book`).
+        row_book = EDGE_HELD_CATEGORY if held else market_book(
+            conn, edge_price_book(prop_book(category, sport, r.get("side", "OVER")), r.get("odds", -110)),
+            sport, r.get("market"))
         cur = _insert_bet(conn,
             "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, "
             "market, side, line, "
@@ -8042,6 +8044,19 @@ def edge_price_book(category: str, odds) -> str:
     if category == "main":
         from . import stakeplan as _stakeplan
         if _stakeplan.priced_out("edge", odds):
+            return "paper"
+    return category
+
+
+def market_book(conn, category: str, sport, market) -> str:
+    """A BENCHED MARKET'S EDGE PICK JOURNALS ON PAPER (engine/stakeplan
+    MARKET_BENCH; Ethan, 2026-11-18: "bench and learn"): posted, graded and
+    tracked, no dollars, until its record since the bench lifts it. The
+    staked record reads the bench itself (stakeplan.replay); stake_units
+    stays as sized, like every paper row."""
+    if category == "main":
+        from . import stakeplan as _stakeplan
+        if _stakeplan.market_benched(sport, market, _plan=stake_plan(conn)):
             return "paper"
     return category
 

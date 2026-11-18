@@ -2,6 +2,18 @@
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
     {
+      "date": "2026-11-18",
+      "kind": "model",
+      "title": "Quarterback completions and NBA points go on the bench",
+      "body": "Two Edge markets lost all season: the NFL’s quarterback completions (44-53, −11.9 units) and the NBA’s points (63-71, −10.2 units). Their picks still post and are graded, but they carry no stake, stay out of the staked record and say “Tracked · no stake” on the card. Each comes back to stakes by itself once 60 picks graded since the bench make money at flat stakes. The Record page lists the markets on the bench and where each stands."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "model",
+      "title": "A game’s parlays lead with its two strongest picks",
+      "body": "The report picks were hitting and the three-leg parlays built from them were not: three picks have to all hit, and a night’s picks at 4 of 5 still lose every ticket holding the one miss. Each game now leads with its two strongest picks as a two-leg parlay, and a three-leg parlay is made only when our own numbers give it 30% or better. The two-leg parlays have their own record on the Record page, and the parlay legs now learn market by market, so a market whose legs hit less than we said gets marked down."
+    },
+    {
       "date": "2026-11-17",
       "kind": "fix",
       "title": "A team’s page stops counting games with no betting line",

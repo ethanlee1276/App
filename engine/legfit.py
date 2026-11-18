@@ -51,6 +51,22 @@ ticket (engine/maintenance), beside the one-club bar; read by
 gameparlays.legs_for and scorer_legs before a leg is held to its floor, so a
 leg whose corrected chance falls under it is no leg.
 
+EACH MARKET LEARNS TOO (GPWIN1, 2026-11-18; Ethan, of the parlays: "track
+them and learn and make them better"). A league's correction is one number for
+all its markets, and its markets do not miss alike: the NFL's three-leg
+tickets' receptions legs hit 42% where we said 71% (each leg as often as it
+rode a ticket), its passing yards 63% where we said 71%, and hockey's shots on
+goal 79% where we said 66%. So after the league's pull and shift, each market
+with MARKET_MIN_N graded legs built the current way learns a shift of its own
+(`_market_fits`), the same way the league's was learned: from SHIFT_GRID, on
+all but its newest legs, kept only when it scores the newest better. A market
+that runs hot is pulled down until fewer of its legs clear the floor, and its
+legs that still do keep its record growing, so the correction follows it.
+
+THE TWO-LEG TICKETS' LEGS ARE THE SAME KIND (GPWIN1). A game's two-leg tickets
+(source ``game_two``) are made of the same picks as its three-leg ones, so
+their legs learn with them, as "three"; each bet once across both.
+
 Standard library only; `fit` raises nothing a caller must catch beyond a bad
 connection, and `w_for` / `apply` never raise.
 """
@@ -61,6 +77,12 @@ import math
 FILE = "leg_fit.json"
 #: The journal's ticket sources (engine/gameparlays.SOURCES), by kind.
 KINDS = {"three": "game_three", "scorers": "game_td"}
+#: Every source and the kind its legs learn as: a game's two-leg tickets are
+#: made of the same picks as its three-leg ones (GPWIN1).
+SOURCE_KIND = {"game_three": "three", "game_two": "three", "game_td": "scorers"}
+#: Graded legs built the current way a market needs before it learns a shift
+#: of its own (`_market_fits`).
+MARKET_MIN_N = 40
 #: Graded legs, each bet once and with the book's fair chance, a league and
 #: kind needs before it learns anything.
 MIN_N = 60
@@ -126,7 +148,7 @@ def _best_shift(rows, w: float) -> float:
 
 
 def graded_legs(conn) -> dict:
-    """{(league, kind): [(date, id, p, fair, won, pool)]}: every graded leg of
+    """{(league, kind): [(date, id, p, fair, won, pool, market)]}: every graded leg of
     the game parlays with the book's chance (`anchor`) and the pool it came
     from ("" before the journal named pools), each bet once (its game's day,
     the game, the player, the market, the side and the line: the first copy
@@ -136,17 +158,18 @@ def graded_legs(conn) -> dict:
         return {}
     raw = "COALESCE(l.p_raw, l.p_final)" if "p_raw" in cols else "l.p_final"
     pool = "l.pool" if "pool" in cols else "''"
-    marks = ",".join("?" * len(KINDS))
+    marks = ",".join("?" * len(SOURCE_KIND))
     rows = conn.execute(
         f"SELECT t.sport, t.source, t.date, t.grade, l.id, l.player, l.market, l.side, l.line, {raw} AS p, "
         f"l.fair, l.odds, l.status, {pool} FROM parlay_legs l JOIN parlays t ON t.id = l.parlay_id "
-        f"WHERE t.source IN ({marks}) ORDER BY t.date, l.id", tuple(KINDS.values())).fetchall()
-    kind_of = {v: k for k, v in KINDS.items()}
+        f"WHERE t.source IN ({marks}) ORDER BY t.date, l.id", tuple(SOURCE_KIND)).fetchall()
+    kind_of = SOURCE_KIND
     seen: set = set()
     out: dict = {}
     for sport, source, date, game, lid, player, market, side, line, p, fair, odds, status, from_pool in rows:
-        key = (sport, source, str(date or ""), str(game or ""), str(player or "").strip().lower(), str(market or ""),
-               str(side or "").upper(), line)
+        # Each bet once across the kind's tickets, two legs or three.
+        key = (sport, kind_of[source], str(date or ""), str(game or ""), str(player or "").strip().lower(),
+               str(market or ""), str(side or "").upper(), line)
         if key in seen:
             continue
         seen.add(key)
@@ -157,7 +180,7 @@ def graded_legs(conn) -> dict:
         if not 0 < p < 1:
             continue
         out.setdefault((str(sport), kind_of[source]), []).append(
-            (str(date or ""), lid, p, fair, status == "won", str(from_pool or "")))
+            (str(date or ""), lid, p, fair, status == "won", str(from_pool or ""), str(market or "")))
     return out
 
 
@@ -169,8 +192,8 @@ def fit(conn, write: bool = True) -> dict:
     out: dict = {"fitted_at": _dt.datetime.now().isoformat(timespec="seconds"), "min_n": MIN_N, "fits": {}}
     for (sport, kind), legs in sorted(graded_legs(conn).items()):
         n = len(legs)
-        rows = [(p, f, won) for _d, _i, p, f, won, _pool in legs]
-        current = [(p, f, won) for _d, _i, p, f, won, pool in legs if pool]
+        rows = [(p, f, won) for _d, _i, p, f, won, _pool, _m in legs]
+        current = [(p, f, won) for _d, _i, p, f, won, pool, _m in legs if pool]
         said = {"n": n, "claimed": round(sum(r[0] for r in rows) / n, 4), "fair": round(sum(r[1] for r in rows) / n, 4),
                 "hit": round(sum(1 for r in rows if r[2]) / n, 4)}
         if n < MIN_N:
@@ -190,7 +213,12 @@ def fit(conn, write: bool = True) -> dict:
                         "test_loss": [round(before, 4), round(after, 4)],
                         "why": (f"our legs claimed {said['claimed']:.0%} and hit {said['hit']:.0%} over {n}; the books "
                                 f"said {said['fair']:.0%}: each leg's chance is pulled {w:.0%} of the way to the book's")}
-        out["fits"][f"{sport}:{kind}"] = {**fit_, **_shift_fit(current, fit_["w"] if fit_.get("fitted") else 0.0)}
+        both = {**fit_, **_shift_fit(current, fit_["w"] if fit_.get("fitted") else 0.0)}
+        markets = _market_fits([leg for leg in legs if leg[5]], both["w"] if both.get("fitted") else 0.0,
+                               float(both.get("shift") or 0.0))
+        if markets:
+            both["markets"] = markets
+        out["fits"][f"{sport}:{kind}"] = both
     if write:
         import json as _json
         import os as _os
@@ -227,6 +255,40 @@ def _shift_fit(rows, w: float) -> dict:
     return {"shift": s, "shift_n": n, "shift_test": [round(before, 4), round(after, 4)],
             "shift_why": (f"legs built the current way claimed {claimed:.0%} and hit {hit:.0%} over {n}: each "
                           f"leg's chance is moved {s:+.2f} in log-odds (a 70% leg to {shifted(0.70, s):.0%})")}
+
+
+def _market_fits(legs, w: float, s: float) -> dict:
+    """Each market's own shift, on top of its league's share ``w`` and shift
+    ``s``: {market: {"shift", "n", "claimed", "hit", "why"}} for each market
+    with MARKET_MIN_N graded legs built the current way (``legs``: graded_legs'
+    rows, oldest first). A shift is kept only when it scores the market's
+    newest legs (TEST_SHARE) better than none; a market that scores no better
+    is listed at 0, so the page can say it was read."""
+    by: dict = {}
+    for _d, _i, p, f, won, _pool, market in legs:
+        by.setdefault(market or "", []).append((p, f, won))
+    out: dict = {}
+    for market, rows in sorted(by.items()):
+        n = len(rows)
+        if not market or n < MARKET_MIN_N:
+            continue
+        base = [(shifted(p - w * (p - f), s), shifted(p - w * (p - f), s), won) for p, f, won in rows]
+        claimed = sum(r[0] for r in base) / n
+        hit = sum(1 for r in base if r[2]) / n
+        cut = int(round(n * (1 - TEST_SHARE)))
+        train, test = base[:cut], base[cut:]
+        m_train = _best_shift(train, 0.0)
+        before, after = _ll(test, 0.0), _ll(test, 0.0, m_train)
+        if not m_train or after >= before:
+            out[market] = {"shift": 0.0, "n": n, "claimed": round(claimed, 4), "hit": round(hit, 4),
+                           "why": f"claimed {claimed:.0%}, hit {hit:.0%} over {n}: the league's correction holds"}
+            continue
+        m = _best_shift(base, 0.0)
+        out[market] = {"shift": m, "n": n, "claimed": round(claimed, 4), "hit": round(hit, 4),
+                       "test": [round(before, 4), round(after, 4)],
+                       "why": (f"claimed {claimed:.0%}, hit {hit:.0%} over {n}: each leg moved {m:+.2f} more "
+                               f"in log-odds (a 70% leg to {shifted(0.70, m):.0%})")}
+    return out
 
 
 _HELD: dict = {}
@@ -281,14 +343,25 @@ def shift_for(sport: str, kind: str) -> float:
         return 0.0
 
 
+def market_shift_for(sport: str, kind: str, market) -> float:
+    """A market's own shift in force on top of its league's (`_market_fits`),
+    0 when it has none. Never raises."""
+    try:
+        m = (((fits().get(f"{sport}:{kind}") or {}).get("markets") or {}).get(str(market or "")) or {})
+        return min(max(float(m.get("shift") or 0.0), SHIFT_GRID[0]), SHIFT_GRID[-1])
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def apply(leg: dict, sport: str, kind: str, w: float | None = None, shift: float | None = None) -> dict:
     """The leg with its chance corrected (``p``): pulled toward the book's by
-    the share, then moved by the shift. Ours is kept as ``p_raw``, the share as
-    ``fit_w`` and the shift as ``fit_shift``; the leg itself when nothing
-    applies. Never raises."""
+    the share, then moved by the shift and its market's own shift. Ours is
+    kept as ``p_raw``, the share as ``fit_w`` and the shifts together as
+    ``fit_shift``; the leg itself when nothing applies. Never raises."""
     try:
         w = w_for(sport, kind) if w is None else w
         s = shift_for(sport, kind) if shift is None else shift
+        s = s + market_shift_for(sport, kind, leg.get("market"))
         if leg.get("p") is None or leg.get("p_raw") is not None:
             return leg
         p = q = float(leg["p"])
@@ -312,5 +385,5 @@ def census(sport: str) -> dict:
     """The fit in force for a league, both kinds, for the board's census."""
     got = fits()
     return {kind: {k: v for k, v in (got.get(f"{sport}:{kind}") or {}).items()
-                   if k in ("w", "fitted", "n", "why", "shift", "shift_n", "shift_why")}
+                   if k in ("w", "fitted", "n", "why", "shift", "shift_n", "shift_why", "markets")}
             for kind in KINDS if got.get(f"{sport}:{kind}")}

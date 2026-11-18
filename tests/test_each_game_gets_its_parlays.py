@@ -297,9 +297,10 @@ def test_the_report_and_the_record_carry_them():
     conn.row_factory = sqlite3.Row
     gp = GP.build(board(), "nfl")
     n = PL.log_game_parlays(conn, gp, "nfl", "2099-W10")
-    assert n == 7, n
+    assert n == 9, n          # two two-leg tickets (GPWIN1), four three-leg, three scorer pairs
     rows = conn.execute("SELECT source, n_legs, stake_units FROM parlays").fetchall()
-    assert sorted({r["source"] for r in rows}) == ["game_td", "game_three"]
+    assert sorted({r["source"] for r in rows}) == ["game_td", "game_three", "game_two"]
+    assert {r["n_legs"] for r in rows if r["source"] == "game_two"} == {2}
     assert all(r["stake_units"] == 0 for r in rows)
     assert PL.log_game_parlays(conn, gp, "nfl", "2099-W10") == 0, "a ticket is journaled once"
     legs = GP.journal_rows(gp)
@@ -318,13 +319,13 @@ def test_every_ticket_grades_off_its_legs():
     legs = PL.journal_game_parlay_legs(conn, b, "nfl")
     assert legs == len(GP.journal_rows(b["game_parlays"])), legs
     n = PL.log_game_parlays(conn, b["game_parlays"], "nfl", b["date"])
-    assert n == 7
+    assert n == 9
     cats = {r[0] for r in conn.execute("SELECT DISTINCT category FROM bets")}
     assert cats == {PL.PARLAY_LEG_CATEGORY}, "the legs ride on paper in their own bucket"
     conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
     conn.commit()
     res = PL.settle(conn)
-    assert res["settled"] == 7 and res["waiting"] == 0, res
+    assert res["settled"] == 9 and res["waiting"] == 0, res
     # One leg lost loses every ticket it is on.
     conn2 = ledger.connect(os.path.join(tempfile.mkdtemp(), "t.db"))
     ledger.configure_bankroll(conn2, starting=1000, unit_pct=1.0)
@@ -347,9 +348,10 @@ def test_the_report_section_draws():
     sec = GR.sec_parlays(c)
     assert sec and sec["key"] == "parlays"
     kinds = [x.get("kind") for x in sec["blocks"] if x.get("type") == "parlays"]
-    assert kinds == ["three", "scorers"], kinds
+    assert kinds == ["two", "three", "scorers"], kinds      # the two strongest picks together lead (GPWIN1)
     line = GR.parlay_sentence(c)
-    assert line.startswith("Best three-leg parlay:") and "Best touchdown pair:" in line, line
+    assert line.startswith("Strongest two-leg parlay:") and "Best three-leg parlay:" in line, line
+    assert "Best touchdown pair:" in line, line
 
 
 def test_the_heartbeat_counts_each_leagues_tickets_and_reports():

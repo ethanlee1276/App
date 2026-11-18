@@ -107,7 +107,7 @@ def td_posted(d: dict) -> set:
             if isinstance(r, dict) and r.get("player"):
                 out.add(r["player"])
     for g in ((d.get("game_parlays") or {}).get("games")) or []:
-        for t in (g.get("scorers") or []) + (g.get("threes") or []):
+        for t in (g.get("scorers") or []) + (g.get("threes") or []) + (g.get("twos") or []):
             for leg in t.get("legs") or []:
                 if str(leg.get("market") or "") in TD_MARKETS and leg.get("player"):
                     out.add(leg["player"])

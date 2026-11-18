@@ -1048,6 +1048,17 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     betlinks.LAST.clear()
     betlinks.stamp(payload, label)
     _step("bet links")
+    # NO STAKE ON A TRACKED PICK (engine/stakeplan.stamp_tracked): an Edge
+    # pick past the price cap or in a benched market says so on its card,
+    # from one place for every board. Never costs a publish.
+    try:
+        from . import stakeplan
+        sport = betlinks.FILE_SPORT.get(public.name) or (payload.get("sport") if isinstance(payload, dict) else "")
+        if sport:
+            stakeplan.stamp_tracked(payload, sport)
+    except Exception:                                        # noqa: BLE001
+        pass
+    _step("prepare")
     # The bet-slip links' seconds, apart: reading the banked odds files and
     # matching the board's rows to them (7.1 of the NFL publish's 11.1
     # seconds at 03:20 on 9 November, 8.4 of college's, 6.5 of the NBA's).

@@ -1863,8 +1863,12 @@ def board_best(result: dict, now=None) -> tuple:
                 continue
             # Past the stake rule's price cap (engine/stakeplan
             # EDGE_MAX_ODDS, +130) a pick is tracked on paper, not staked.
-            from .stakeplan import priced_out
+            from .stakeplan import market_benched, priced_out
+            # Nor in a benched market (stakeplan.MARKET_BENCH): tracked, not
+            # staked. The NFL's board is the one that names no league.
             if stake > 0 and abs(odds) >= 100 and not priced_out("edge", odds) \
+                    and not (key == "recommendations"
+                             and market_benched(result.get("sport") or "nfl", r.get("market"))) \
                     and not _started(r, now):
                 staked.append(r)
     if not staked:

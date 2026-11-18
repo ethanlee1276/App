@@ -7086,13 +7086,14 @@ function exchangeFairLine(r) {
     · the book price above is what the pick is taken at</div>`;
 }
 
-/* THE PRICE CAP (engine/stakeplan EDGE_MAX_ODDS, 2026-10-31): an Edge pick
-   longer than +130 is tracked on paper and carries no stake — the record's
-   long prices hit 37.6% where the price itself said 41.1%. The card says so
-   instead of printing a stake nobody places. */
-const EDGE_MAX_ODDS = 130;
+/* THE PRICE CAP AND THE BENCH (engine/stakeplan): an Edge pick longer than
+   +130 (2026-10-31; the record's long prices hit 37.6% where the price said
+   41.1%), or in a benched market (2026-11-18, Ethan: "bench and learn"), is
+   tracked on paper and carries no stake. The publisher marks it `tracked`
+   (stakeplan.stamp_tracked), and the card says so instead of printing a
+   stake nobody places. */
 function edgeStakeTxt(r) {
-  return Number(r.odds) > EDGE_MAX_ODDS ? "Tracked · no stake" : `Stake ${stakeText(r.stake_units)}`;
+  return r.tracked ? "Tracked · no stake" : `Stake ${stakeText(r.stake_units)}`;
 }
 
 function gameBetCard(r) {

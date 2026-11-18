@@ -9338,6 +9338,34 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WT. Quarterback completions and NBA points go on the bench, and keep learning** (step 730; 18 November). Nothing
+to run. Ethan, on the two Edge markets that had lost all season, the NFL's quarterback completions (44-53, -11.9
+units) and the NBA's points (63-71 and -10.2 units then; 67-73 and -8.8 on this morning's record): "bench and
+learn". From 18 November their Edge picks still post and are graded, on paper: they carry no stake, are left out of
+their league's staked record and its evidence, never lead the Pick of the Day, and each card says "Tracked · no
+stake". Each market's own record since the bench is kept apart, and it is staked again by itself once 60 graded
+since then make money at flat stakes. The Record page names the markets on the bench and where each stands, from the
+first export after the deploy. The rule benches no other market by itself: the stake study found that doing so as a
+rule did worse going forward, so these two are benched by name, on your word.
+
+**WS. A game's parlays lead with its two strongest picks, and every ticket clears a bar of its own** (step 729; 18
+November). Nothing to run. Ethan, over How our reports did (picks 6 of 11 and parlays 0 of 4; picks 4 of 5 and
+parlays 0 of 3; picks 7 of 8 and parlays 2 of 9): "how are we winning so many picks ... but losing so many parlays?
+... Make it so the parlays win as well", and of the NFL's three-leg tickets on paper: "track them and learn and make
+them better". The record was right; the tickets were the problem. Three picks must all hit, and at the 68% the NBA's
+report picks hit, three together come in about three times in ten: that night three of a game's picks hit together
+one time in five (96 of 480), two of them two times in five (86 of 220) and the two shortest-priced 5 of 8, and 85
+of the NBA's 151 lost three-leg tickets lost by a single leg. So each game now leads with its two strongest picks as
+a two-leg ticket, and its next two as a second (no pick on both), each only at 42% or better by our numbers; a
+three-leg ticket is made only at 30% or better (one we give less than that we expect to lose seven times in ten),
+and a game whose picks make fewer says why. The two-leg tickets are journaled apart (game_two), graded, counted on
+the Record page, on Report Picks and on the finished game's card, and go on paper on their own record (40 graded
+under 36%), so the easier ticket never brings the harder one back. And the legs now learn market by market: the
+league's correction was one number for all its markets, and they do not miss alike (the NFL's receptions legs hit
+42% where we said 71%, hockey's shots on goal 79% where we said 66%), so each market with 40 graded legs learns a
+shift of its own, kept only when it scores the newest legs better. The NFL's and the NBA's three-leg tickets stay on
+paper until they hit 25% again; both sizes are graded either way.
+
 **WR. A team's page says only what is true, and in words** (step 728; 17 November). Nothing to run. Three team pages
 read the same way, on the live site's own data: Duke's, the Nuggets' and the Bills'. Every final with no betting
 line on file read "0 covered" or "0 missed", and the record against the spread beside it was the club's win-loss

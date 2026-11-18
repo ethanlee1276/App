@@ -126,7 +126,8 @@ def test_an_edge_pick_past_the_price_cap_is_tracked_and_left_out_of_the_evidence
 
 def test_books_outside_the_headline_are_left_alone():
     flags, state = SP.replay([_row("2026-09-01", "mlb", "stale", "won", 300)])
-    assert flags == [False] and state == {}
+    assert flags == [False] and {k: v for k, v in state.items() if k[0] != "bench"} == {}, \
+        "no league's book (the benched markets ride beside them, MKTBENCH1)"
 
 
 # --- the journal --------------------------------------------------------------
@@ -236,11 +237,18 @@ def test_open_picks_past_the_cap_are_not_counted_as_staked():
 
 
 def test_the_card_says_tracked_past_the_cap():
-    assert f"const EDGE_MAX_ODDS = {SP.EDGE_MAX_ODDS};" in APP, "the page's cap is the rule's"
+    # The publisher marks the pick (stakeplan.stamp_tracked); the card reads the mark, so the
+    # page's cap and the bench are the rule's, never a copy of them.
     i = APP.index("function edgeStakeTxt(r)")
     body = APP[i:APP.index("\n}", i)]
-    assert 'Number(r.odds) > EDGE_MAX_ODDS ? "Tracked · no stake"' in body
+    assert 'r.tracked ? "Tracked · no stake"' in body
+    assert "const EDGE_MAX_ODDS" not in APP
     assert APP.count("const stakeTxt = edgeStakeTxt(r);") == 2, "the Edge prop card and the game-bet card"
+    board = {"recommendations": [{"market": "receptions", "odds": 150}, {"market": "receptions", "odds": -110}],
+             "game_bets": [{"market": "spread", "odds": 131}, {"market": "spread", "odds": 130}]}
+    assert SP.stamp_tracked(board, "nfl", _plan={}, today="2026-11-01") == 2
+    assert [bool(r.get("tracked")) for r in board["recommendations"] + board["game_bets"]] == [
+        True, False, True, False]
 
 
 def test_the_export_ships_the_staked_record_and_stores_the_plan():
