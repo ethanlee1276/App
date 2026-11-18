@@ -91,7 +91,11 @@ def test_the_health_tab_says_whose_picks_it_scores():
 
 def test_the_average_edge_is_coloured_by_its_sign():
     assert 'pre: avgEdge >= 0 ? "+" : "", cls: "pos" }' not in APP
-    assert 'cls: avgEdge >= 0 ? "pos" : "neg"' in APP
+    assert 'cls: staked.length && (avgEdge >= 0 ? "pos" : "neg")' in APP
+    # With no new bet there is no edge to average: a dash, uncoloured, never "+0.0%" (18 November 2026).
+    assert '{ k: "Avg edge", to: staked.length ? avgEdge * 100 : null,' in APP
+    assert 'const fmt = (t) => t.to == null ? "—" :' in APP
+    assert '.forEach(countUp)' in APP and '"#stats .v:not([data-to=null])"' in APP, "the dash is not counted up to 0"
 
 
 if __name__ == "__main__":

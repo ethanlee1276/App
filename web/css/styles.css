@@ -2025,7 +2025,7 @@ main { view-transition-name: page; }
 /* pick card in-play ribbon */
 .live-ribbon {
   display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
-  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .4px; color: #fff;
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .4px;
   padding: 4px 10px; border-radius: var(--radius-sm);
   background: var(--bg); border-color: transparent; color: var(--warn);
   box-shadow: none;
@@ -9310,7 +9310,7 @@ a.ask-chip.web:hover { color: var(--text); border-color: transparent; }
    Flow; "Does it work?" runs full width.
    ============================================================ */
 
-.pmx-hero { position: relative; overflow: hidden; margin-bottom: 14px; display: flex; align-items: flex-end;
+.pmx-hero { position: relative; overflow: hidden; margin-bottom: 14px; display: flex;
   padding: 24px 30px; border-radius: var(--radius-lg); border: var(--hairline) solid transparent; background: var(--panel);
   /* Ethan, 2026-09-26: "we should make this a little smaller. it takes up
      alot of the page". The banner was a full-width band with the words

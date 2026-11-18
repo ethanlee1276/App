@@ -287,8 +287,10 @@ def test_the_page_lays_each_game_out_with_its_picks_then_its_tickets():
     assert line == "On the record so far: picks 3-2 (−0.10u) · three-leg parlays 1 of 6 hit."
     assert none == ""
     assert "R.gameTickets(x.tix, state.sport, { results: () => reportResults(rpGame(d, el.dataset.rpkTix)) })" in PAGE
-    assert 'memberLockHTML("Report Picks", "Every bet and parlay our game reports posted' in PAGE, \
-        "today's picks are a member's"
+    assert 'memberLockHTML("Today’s picks are for members", "Each one with its price and our chance' in PAGE, \
+        "today's picks are a member's, said once (the page's title already names them)"
+    assert "Every pick and parlay our game reports post" not in PAGE, \
+        "the heading's line says what the page is; no second sentence under it"
 
 
 def test_the_page_has_its_own_record_tab():

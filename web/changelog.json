@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Report Picks, Edge and quiet boards say it once and say it right",
+      "body": "The locked Report Picks page no longer repeats what it is four times. The Edge page with nothing on shows a dash for the average edge instead of a green “+0.0%”, and no “0 props · 0 game bets — all journaled”. A board waiting on props no longer says “MLB” on other leagues, and a day with no games says so."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "College basketball teams go by their school",
       "body": "College basketball pages named teams by mascot (“Cougars 85”) while college football and our reports named the school. They now say the school (“Houston 85”), with the mascot over it on the live scoreboards, and the Pick of the Day says which Wildcats it means."
     },

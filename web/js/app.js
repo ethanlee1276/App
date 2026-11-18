@@ -7270,7 +7270,6 @@ function renderStats() {
   // again. Their edge at tonight's number is precisely why they ride.
   const riding = ridingBets(sig);
   const live = staked.length + riding.length;
-  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
   const tiles = [
     /* "ON TONIGHT", NOT "RECOMMENDED BETS". Ethan, 2026-09-05: the tile
        said 20 over a grid drawing 2, and the word was the confusion —
@@ -7283,8 +7282,9 @@ function renderStats() {
       sub: riding.length
         ? `<b class="tile-split">${staked.length} new · ${plural(riding.length, "riding")}</b> at the `
           + `price we took — those ride as placed, don’t add at tonight’s number`
-        : `${plural(sig.props.length, "prop")} · ${plural(nb, "game bet")}`
-          + ` — all journaled${held}` },
+        // Nothing on: no "0 props · 0 game bets — all journaled" (18 November 2026).
+        : live ? `${plural(sig.props.length, "prop")} · ${plural(nb, "game bet")}`
+          + ` — all journaled${held}` : held.slice(3) },
     /* THE SUBTITLE CARRIES WHAT THE NUMBER CANNOT. `props_analyzed`
        counts rows that got a REAL BOOK PRICE, so on a thin menu it
        always reads as though the model considered almost nothing —
@@ -7296,7 +7296,9 @@ function renderStats() {
       sub: d.counts.props_built > d.counts.props_analyzed
         ? `of ${d.counts.props_built} built from history — the rest have no book price yet`
         : "" },
-    { k: "Avg edge", to: staked.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: avgEdge >= 0 ? "pos" : "neg" },
+    // NULL IS NOT ZERO (fmtRoi's rule): with no new bet there is no edge to average, so a dash, not "+0.0%".
+    { k: "Avg edge", to: staked.length ? avgEdge * 100 : null, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "",
+      cls: staked.length && (avgEdge >= 0 ? "pos" : "neg") },
     // A reader who set stakes to units asked not to be shown money, and
     // the tile that leads with a dollar figure is the one that would say
     // it loudest.
@@ -7307,14 +7309,14 @@ function renderStats() {
       : { k: "Suggested exposure", to: exposure, dec: 2, suf: "u",
           sub: riding.length ? "new bets only — riding money is already staked" : "" },
   ];
-  const fmt = (t) => (t.pre || "") + Number(t.to).toFixed(t.dec) + (t.suf || "");
+  const fmt = (t) => t.to == null ? "—" : (t.pre || "") + Number(t.to).toFixed(t.dec) + (t.suf || "");
   const instant = state.static || state.quiet;
   document.getElementById("stats").innerHTML = tiles.map((t) =>
     `<div class="tile${t.lead ? " lead" : ""}"><div class="k">${t.k}</div>
-       <div class="v ${t.cls || ""}" data-to="${t.to}" data-dec="${t.dec}" data-pre="${t.pre || ""}" data-suf="${t.suf || ""}">${instant ? fmt(t) : "0"}</div>
+       <div class="v ${t.cls || ""}" data-to="${t.to}" data-dec="${t.dec}" data-pre="${t.pre || ""}" data-suf="${t.suf || ""}">${instant || t.to == null ? fmt(t) : "0"}</div>
        ${t.sub ? `<div class="tile-sub">${t.sub}</div>` : ""}</div>`
   ).join("");
-  if (!instant) document.querySelectorAll("#stats .v[data-to]").forEach(countUp);
+  if (!instant) document.querySelectorAll("#stats .v:not([data-to=null])").forEach(countUp);
 }
 
 /* WHEN the slate above actually is, whenever that is not now.
@@ -16591,11 +16593,13 @@ function noMarketExplainer() {
   // should be, and the measurement is what the reader is owed.
   const quiet = pricedButQuiet();
   if (quiet) return quiet;
+  // Any league's, not "MLB props closer to first pitch"; and no games is said as that,
+  // not "checked 0 games" (MLB in November, 18 November 2026).
   if (os && os.checked && os.matched === 0)
-    return `The odds feed answered at ${os.at || "last refresh"} but had no
+    return os.events ? `The odds feed answered at ${os.at || "last refresh"} but had no
             player-prop prices yet (checked ${plural(os.events, "game")}) — books post
-            MLB props closer to first pitch. The board fills automatically as
-            real prices arrive.`;
+            props closer to the start. The board fills automatically as
+            real prices arrive.` : "No games on the books today.";
   return `Waiting on real sportsbook prices — picks are never recommended
           against placeholder lines. The board fills automatically as real
           prices arrive.`;
@@ -23872,8 +23876,8 @@ function wrapTables(root) {
    Sixteen rows drawn as div/span/td answered a click through a delegated
    listener and nothing else: no tab stop, no role, so a keyboard or a
    screen reader could not reach the team page, the weather card, the
-   game row. `doorAttrs()` is the one place a new row gets its stop;
-   `enhanceDoors()` is the net for every row drawn before it existed. It
+   game row. `enhanceDoors()` gives every such row its stop (a helper for
+   new rows, `doorAttrs`, was never called and went, 18 November 2026). It
    adds the stop and the role only where nothing set them, and Enter and
    Space go through .click() — one behaviour, the mouse's. */
 const DOOR_SELECTORS = "[data-open],[data-gid],[data-player-page],[data-team-open],[data-team-game],"
@@ -23882,9 +23886,6 @@ const DOOR_SELECTORS = "[data-open],[data-gid],[data-player-page],[data-team-ope
 /* Keyboard already handled by their own listeners: the net only adds
    the stop to these, never a second Enter. */
 const DOOR_OWN_KEYS = "[data-prop],[data-peek],[data-watch-toggle],[data-gs-toggle],[data-dossier],[data-calday],[data-calpick]";
-function doorAttrs(role) {
-  return ` tabindex="0" role="${role || "link"}"`;
-}
 function enhanceDoors(root) {
   (root || document).querySelectorAll(DOOR_SELECTORS).forEach((el) => {
     if (el.matches("a, button, input, select, textarea, summary, label, option")) return;
@@ -31087,27 +31088,13 @@ const MORE_GROUPS = [
   ["Proof", ["sport:lab", "sport:methodology", "sport:status",
              "sport:why", "sport:features", "sport:about"]],
 ];
-const TAB_BAR_VIEWS = ["recommended", "likely", "live", "ask"];
-const TAB_BAR_TOOLS = ["record"];
+// What the tab bar holds is its markup's (index.html <nav class="tabbar">); the tests read it there.
 
 /* "view:edge" → the sidebar button that opens the Edge Board. */
 function moreSelector(ref) {
   const [kind, name] = String(ref).split(":");
   const attr = kind === "view" ? "data-view" : kind === "sport" ? "data-sport" : "data-subtab";
   return `#sidebar [${attr}="${name}"]`;
-}
-
-/* Every destination the sidebar offers, as "kind:name" — the set the
-   phone must not lose. Toggles and social links are not destinations. */
-function sidebarDestinations(root) {
-  const out = [];
-  (root || document).querySelectorAll("#sidebar button[data-view], #sidebar button[data-sport], #sidebar button[data-subtab]")
-    .forEach((b) => {
-      if (b.dataset.view) out.push(`view:${b.dataset.view}`);
-      else if (b.dataset.subtab) out.push(`subtab:${b.dataset.subtab}`);
-      else if (b.dataset.kind === "tool") out.push(`sport:${b.dataset.sport}`);
-    });
-  return out;
 }
 
 function isPhone() {

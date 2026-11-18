@@ -104,9 +104,10 @@ def test_a_sheet_row_carries_the_sidebar_buttons_own_mark():
 
 
 def test_results_is_on_the_tab_bar_so_the_sheet_does_not_list_it():
+    from test_the_phone_tab_bar_ends_in_ask import tab_bar
     got = _node(f"""
       {_const("MORE_GROUPS")}
-      {_const("TAB_BAR_TOOLS")}
+      const TAB_BAR_TOOLS = {json.dumps(tab_bar(HTML)[1])};
       console.log(JSON.stringify({{ refs: [].concat(...MORE_GROUPS.map(([, r]) => r)), tools: TAB_BAR_TOOLS }}));""")
     if got is None:
         print("  SKIP node not installed"); return

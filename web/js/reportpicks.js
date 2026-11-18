@@ -519,8 +519,9 @@ async function renderReportPicks() {
   const order = ((d.games || []).map((g) => `${g.away}@${g.home}`)).filter((k) => byGame.has(k));
   const keys = [...order, ...[...byGame.keys()].filter((k) => !order.includes(k))];
   const today = locked
-    ? memberLockHTML("Report Picks", "Every bet and parlay our game reports posted, game by game, with the price and "
-      + "our chance. How they have done is free, in the Record tab.")
+    // The page's own title says what they are: the card says who they are for (18 November 2026).
+    ? memberLockHTML("Today’s picks are for members", "Each one with its price and our chance, game by game. "
+      + "How they have done is free, in the Record tab.")
     : !keys.length ? `<div class="empty-slate"><div class="es-icon">${icon("book", 30)}</div>
       <div class="es-title">No game reports on this board yet</div>
       <div class="es-sub">The reports are written with the board, one for every game on it, and their picks and
@@ -529,8 +530,8 @@ async function renderReportPicks() {
   // A league's three-leg parlays on paper (engine/parlayhold) say why once, here.
   const paper = locked ? "" : ["threes_paper", "twos_paper"].map((k) => ((d.game_parlays || {})[k] || {}).note || "")
     .filter(Boolean).map((n) => `<p class="set-note">${escapeHtml(n)}</p>`).join("");
-  host.innerHTML = `<p class="set-note rpk-lead">Every pick and parlay our game reports post, game by game, and how
-      they have done.</p>${paper}${subtabbedHTML("reportpicks", [
+  // The heading's own line says what the page is; each tab's line says the rest.
+  host.innerHTML = `${paper}${subtabbedHTML("reportpicks", [
       ["today", "Today’s picks", "Every game’s picks, then its parlays and pairs", today],
       ["record", "Record", "Every report pick and parlay, won or lost", `<div class="rpk-book" data-rpk-book="1"></div>`],
       ["facts", "How our reports did", "Every finished game’s report, fact-checked", rpFactsHTML()]])}`;

@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WZ. Three pages stop saying what is not so** (step 736; 18 November). Nothing to run. Walking the boards as a user
+found three more. The Report Picks page, locked, said what it was four times: its heading's line, a sentence under
+it, then a card titled "Report Picks" saying it again; the sentence is gone and the card now says "Today's picks are
+for members", once. The Edge page with nothing on said "0 props · 0 game bets — all journaled" and an average edge
+of "+0.0%" in green; with no bet there is nothing journaled to mention and no edge to average, so the line is left
+off and the average is a dash, as every number the engine did not compute already is. And the board's no-props note
+named MLB on every league's board ("books post MLB props closer to first pitch") and, on a day with no games, said
+"checked 0 games": it now says "props" for any league, and a day the books list no games says "No games on the books
+today." The first visit had one byte of room; these were paid for by taking out what nothing read: the tab bar's
+spec, kept in the shipped script for its tests only (the tests now read it from the bar's own markup), a keyboard
+helper nothing called, and two style lines the same rule overrode. It now has 148 bytes of room.
+
 **WY. A college basketball team goes by its school** (step 735; 18 November). Nothing to run. A finished college
 basketball game's header said "Scarlet Knights 73 @ Cougars 85" while its report said Rutgers and Houston, and the
 Pick of the Day read "Wildcats -1.5 Spread · Wildcats vs Panthers", a bet nobody could place without knowing which

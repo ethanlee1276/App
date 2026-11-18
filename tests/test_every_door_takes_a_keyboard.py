@@ -77,7 +77,7 @@ def test_enter_and_space_click_the_row_unless_it_has_its_own_keys():
     assert 'e.target.closest("[data-door-kb]")' in block and "el.matches(DOOR_OWN_KEYS)" in block
     assert "el.click();" in block and "el !== e.target" in block, "an inner control's key is its own"
     assert "enhanceDoors(root);" in _fn("enhanceSectionSubs"), "runs on every render"
-    assert _fn("doorAttrs").count('tabindex="0"') == 1
+    assert "function doorAttrs(" not in APP, "the net gives every row its stop; the helper nothing called is gone"
 
 
 def test_chips_type_and_the_composer_ring():

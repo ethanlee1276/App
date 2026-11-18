@@ -48,14 +48,32 @@ def _const(name):
     return APP[i:j + 1]
 
 
+def tab_bar(html):
+    """(views, tools) on the phone's tab bar, read from its markup in order:
+    the spec the sheet is checked against (app.js kept a copy of it, used by
+    nothing but these tests, until 18 November 2026)."""
+    bar = html[html.index('<nav class="tabbar"'):]
+    bar = bar[:bar.index("</nav>")]
+    views, tools = [], []
+    for m in re.finditer(r"<button\b([^>]*)>", bar):
+        v = re.search(r'data-view="([^"]+)"', m.group(1))
+        t = re.search(r'data-sport="([^"]+)"', m.group(1))
+        if v:
+            views.append(v.group(1))
+        elif t and 'data-kind="tool"' in m.group(1):
+            tools.append(t.group(1))
+    return views, tools
+
+
 def _node(js):
     node = shutil.which("node")
     if not node:
         return None
+    views, tools = tab_bar(HTML)
     prog = f"""
       {_const("MORE_GROUPS")}
-      {_const("TAB_BAR_VIEWS")}
-      {_const("TAB_BAR_TOOLS")}
+      const TAB_BAR_VIEWS = {json.dumps(views)};
+      const TAB_BAR_TOOLS = {json.dumps(tools)};
       {_fn("moreSelector")}
       {_fn("tourDue")}
       console.log(JSON.stringify((() => {{ {js} }})()));
@@ -81,8 +99,9 @@ def _sidebar():
 
 
 def _sidebar_destinations():
-    """The same rule as app.js's sidebarDestinations(): every button
-    that opens a view, a tool page or a sub-tab."""
+    """Every sidebar button that opens a view, a tool page or a sub-tab:
+    the set the phone must not lose (toggles and social links are not
+    destinations)."""
     out = set()
     for m in re.finditer(r"<button\b([^>]*)>", _sidebar()):
         attrs = m.group(1)
@@ -166,7 +185,9 @@ def test_a_pill_is_the_sidebar_button_it_stands_for():
     assert 'pill.addEventListener("click", () => { moreSheetOpen(false); src.click(); });' in body
     lab = _fn("morePillLabel")
     assert 'querySelectorAll("svg, .sb-badge")' in lab
-    assert 'sidebarDestinations' in APP and "#sidebar button[data-view], #sidebar button[data-sport], #sidebar button[data-subtab]" in _fn("sidebarDestinations")
+    assert tab_bar(HTML) == (["recommended", "likely", "live", "ask"], ["record"]), tab_bar(HTML)
+    assert "TAB_BAR_VIEWS" not in APP and "function sidebarDestinations(" not in APP, \
+        "the bar's spec is its markup; the copy in the shipped script nothing read is gone"
 
 
 def test_the_sheet_opens_over_the_bar_and_closes_on_any_view_change():
