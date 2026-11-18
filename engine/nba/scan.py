@@ -44,7 +44,7 @@ Standard library only.
 """
 from __future__ import annotations
 
-from .teams import FT_WEIGHT, PLAIN
+from .teams import FT_WEIGHT, PLAIN, pace_said
 
 #: What each read is called, as the other leagues' scans say it.
 LABELS = {"breakout": "Breakout spot", "good": "Good matchup", "neutral": "Neutral",
@@ -194,7 +194,8 @@ def environment(g: dict, prof: dict) -> dict:
     for t in (home, away):
         own = None if spread is None else (spread if t == home else -spread)
         out[t] = {"implied": implied.get(t), "league_pts": _f(league.get("pts")), "pace": pace,
-                  "league_pace": _f(league.get("pace")), "spread": own, "total": total}
+                  "league_pace": _f(league.get("pace")), "spread": own, "total": total,
+                  "minutes": int((prof or {}).get("minutes") or 48)}
     return out
 
 
@@ -279,10 +280,14 @@ def tape(home: str, away: str, prof: dict, env: dict | None = None, rest: dict |
                     "implied": (None if (env or {}).get(t, {}).get("implied") is None
                                 else round(env[t]["implied"], 1))}
     rows = []
+    gm = int((prof or {}).get("minutes") or 48)
     for k, label, fmt in spec:
         a, h = (teams.get(away) or {}).get(k), (teams.get(home) or {}).get(k)
         if a is None and h is None:
             continue
+        if k == "pace":
+            # Said in the league's own game, as the report beside it says it (teams.GAME_MINUTES).
+            a, h, label = pace_said(a, gm), pace_said(h, gm), f"Pace: possessions per {gm} minutes"
         rows.append({"key": k, "label": label, "a": _cell(a, fmt), "h": _cell(h, fmt),
                      "ar": (sides[away]["ranks"] or {}).get(k), "hr": (sides[home]["ranks"] or {}).get(k),
                      "plain": k in PLAIN})
@@ -414,12 +419,14 @@ def read_player(name: str, h: dict, team: str, opp: str, *, dvp: dict | None = N
             said(con, f"{team} is expected to score only {imp:.1f} by the lines — {_signed(imp - lg)} on the league's average",
                  RL.POINTS)
     elif pace is not None and lp is not None:
+        # Read per 48 in every league; said in the league's own game (teams.GAME_MINUTES).
+        gm = int(e.get("minutes") or 48)
         if pace >= lp + PACE_EDGE:
-            said(pro, f"A fast game: {team} and {opp} average {pace:.1f} possessions per 48 between them "
-                      f"({_signed(pace - lp)} on the league)", RL.PACE)
+            said(pro, f"A fast game: {team} and {opp} average {pace_said(pace, gm):.1f} possessions per {gm} "
+                      f"between them ({_signed(pace_said(pace - lp, gm))} on the league)", RL.PACE)
         elif pace <= lp - PACE_EDGE:
-            said(con, f"A slow game: {team} and {opp} average {pace:.1f} possessions per 48 between them "
-                      f"({_signed(pace - lp)} on the league)", RL.PACE)
+            said(con, f"A slow game: {team} and {opp} average {pace_said(pace, gm):.1f} possessions per {gm} "
+                      f"between them ({_signed(pace_said(pace - lp, gm))} on the league)", RL.PACE)
     role = False
     mins = [float(m) for m in (h.get("minutes") or []) if m is not None]
     m5 = _avg(mins[:5]) if len(mins) >= 5 else None

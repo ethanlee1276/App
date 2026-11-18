@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "College and WNBA pace in their own 40-minute game",
+      "body": "Pace on a college or WNBA game page read as possessions per 48 minutes, a game length neither league plays. The tale of the tape, the game report and its fact check now say possessions per 40 minutes there (the NBA stays per 48). Only the words and the numbers shown changed; our reads are the same."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "A finished game’s page says each thing once",
       "body": "The final score no longer shows twice (the page’s header, then the report card under it): the card now heads itself “How our report did”. The locked report preview names the report once and, on a finished game, says it was written before the game rather than from tonight’s board. And a finished game no longer says books haven’t posted prop prices yet."
     },

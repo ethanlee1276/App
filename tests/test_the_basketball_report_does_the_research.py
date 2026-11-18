@@ -126,15 +126,22 @@ def test_how_the_game_should_go_reads_the_pace_the_total_and_a_close_game():
 
 
 def test_a_college_game_says_division_i_and_the_same_pace_as_its_tape():
-    """College's pace is per 48 minutes like the tape's row, not its own 40-minute
-    game (that would be a second number for the same team, two lines apart),
-    and its averages are Division I's, not "the league's"."""
+    """College's pace is said in its own 40-minute game, as the tape's row on
+    the same page says it (PACE40, 18 November 2026; before, both said per 48,
+    a number no college fan reads), and its averages are Division I's, not
+    "the league's". The claim keeps the per-48 numbers it is graded on."""
     g, meta = _research()
     board = {"date": "2026-11-16", "games": [g], "scan_reads": {}, "board_games": ["MIA@BOS"],
              "teams": {"MIA": {"loc": "Miami"}, "BOS": {"loc": "Boston College"}}}
     L.attach(board, "cbb", meta={"MIA@BOS": meta})
     text = R.to_text(board["game_reports"][0])
-    assert "possessions per 48 minutes" in text and "Division I averages 99.1." in text, text
+    # 101.2, 101.9 and 99.1 per 48 are 84.3, 84.9 and 82.6 per 40.
+    assert ("Miami averages 84.3 possessions per 40 minutes (6th-fastest of 30) and Boston College 84.9 "
+            "(3rd-fastest of 30); Division I averages 82.6.") in text, text
+    assert "per 48" not in text, text
+    claim = next(cl for b in board["game_reports"][0]["sections"] if b.get("key") == "script"
+                 for blk in b["blocks"] for cl in (blk.get("claims") or []) if (cl or {}).get("kind") == "pace")
+    assert claim["league"] == 99.1 and claim["pace"] == [["MIA", 101.2], ["BOS", 101.9]] and claim["minutes"] == 40
     assert "over Division I's average game (225)" in text and "the league" not in text, text
 
 

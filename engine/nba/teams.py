@@ -49,6 +49,22 @@ MIN_GAMES = 3
 PER100_COVER = 0.8
 #: A regulation game in team minutes (five men × 48).
 TEAM_MINUTES = 240.0
+#: A game's length where it is not 48 minutes. Pace is said in the league's
+#: own game (college and the WNBA play 40, 18 November 2026: "81.6
+#: possessions per 48 minutes" read as nothing to a college fan); the model's
+#: pace stays per 48 in every league (`season_profiles`), so only the words
+#: and the numbers beside them change, never a read.
+GAME_MINUTES = {"cbb": 40, "wnba": 40}
+
+
+def game_minutes(sport: str | None) -> int:
+    """The league's regulation game in minutes: 48 unless GAME_MINUTES says."""
+    return GAME_MINUTES.get(str(sport or "").lower(), 48)
+
+
+def pace_said(v, minutes=48):
+    """A per-48 pace as a game of ``minutes`` says it; None stays None."""
+    return None if v is None else float(v) * float(minutes or 48) / 48.0
 
 #: Each rated stat and which way is better: True when more is better.
 #: Pace is listed so it is ranked; it is drawn without a colour (PLAIN).
@@ -228,7 +244,7 @@ def build(now_rows, last_rows, sport: str = "nba", before: str | None = None) ->
     rk = ranks(prof)
     for t, p in prof.items():
         p["ranks"] = rk.get(t, {})
-    return {"teams": prof, "league": league_means(prof), "n": len(prof),
+    return {"teams": prof, "league": league_means(prof), "n": len(prof), "minutes": game_minutes(sport),
             "per100": any("ortg" in p for p in prof.values()), "nights": {**last_g, **now_g}}
 
 

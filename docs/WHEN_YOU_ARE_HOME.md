@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**WX. College and WNBA pace is said per 40 minutes** (step 734; 18 November). Nothing to run. A college game's tale
+of the tape and its report said pace as "81.6 possessions per 48 minutes", a number for a game college does not
+play: college's games and the WNBA's are 40 minutes. The model still reads pace per 48 in every league (48 ×
+possessions ÷ game minutes, engine/nba/teams), so no read, rank or threshold moves; what the page says changes. The
+tape's pace row, the report's "How the game should go" line and the reasons on a fast or slow game now say per 40 in
+college and the WNBA, with the numbers converted (81.6 per 48 is 68.0 per 40), and the NBA's stay per 48. The
+report's claim keeps the per-48 numbers it is graded on and the minutes it was said in, so the fact check after the
+game says the same minutes (and "Division I's" for college, as the report does); a report written before today is
+still checked per 48, as it said.
+
 **WW. A finished game's page says each thing once** (step 733; 18 November). Nothing to run. Walking a finished
 college game's page the way a member and a visitor see it found three things. The final score sat in the page's own
 header and again at the head of the "How our report did" card right under it: the card now heads itself "How our

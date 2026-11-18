@@ -345,7 +345,7 @@ def claim_grade(sport: str, claim: dict, bx, g: dict, report: dict) -> dict | No
         return {"status": "right" if ok else "wrong", "actual": m,
                 "words": f"Right: a blowout, decided by {_num(m)}." if ok
                 else f"Wrong: not a blowout, decided by {_num(m)}."}
-    return _pace(claim, bx, g, nm)
+    return _pace(claim, bx, g, nm, sport)
 
 
 def _script(claim: dict, a: float, h: float, g: dict, nm: dict) -> dict | None:
@@ -384,7 +384,7 @@ def _script(claim: dict, a: float, h: float, g: dict, nm: dict) -> dict | None:
     return {"status": st, "right": rights, "of": 2, "words": f"{head}: {said[0]}; {said[1]}."}
 
 
-def _pace(claim: dict, bx, g: dict, nm: dict) -> dict | None:
+def _pace(claim: dict, bx, g: dict, nm: dict, sport: str = "") -> dict | None:
     """Basketball's pace on the night (engine/nba/teams.season_profiles, the
     report's own arithmetic) against the league's, or, in a tug of war, whose."""
     lp = _f(claim.get("league"))
@@ -398,21 +398,28 @@ def _pace(claim: dict, bx, g: dict, nm: dict) -> dict | None:
     if pace is None:
         return None
     read = claim.get("read")
-    said = f"{pace:.1f} possessions per 48 minutes"
+    # Graded per 48, as the claim was read; said in the minutes the report said
+    # it in (a college or WNBA claim carries 40, engine/leaguereport.nba_script).
+    gm = int(_f(claim.get("minutes")) or 48)
+    sd = lambda v: T.pace_said(v, gm)                                          # noqa: E731
+    said = f"{sd(pace):.1f} possessions per {gm} minutes"
+    # College's averages are Division I's, as its report says (leaguereport._league).
+    its = "Division I’s" if sport == "cbb" else "the league’s"
     if read in ("fast", "slow"):
         ok = pace > lp if read == "fast" else pace < lp
         return {"status": "right" if ok else "wrong", "actual": round(pace, 1), "avg": lp,
-                "words": f"{'Right' if ok else 'Wrong'}: {said}, {'over' if pace > lp else 'under'} the league’s "
-                         f"{lp:.1f}."}
+                "words": f"{'Right' if ok else 'Wrong'}: {said}, {'over' if pace > lp else 'under'} {its} "
+                         f"{sd(lp):.1f}."}
     if read == "split":
         mine = {t: _f(v) for t, v in claim.get("pace") or [] if _f(v) is not None}
         if len(mine) == 2:
             near = min(mine, key=lambda t: abs(mine[t] - pace))
             far = next(t for t in mine if t != near)
             return {"status": "info", "actual": round(pace, 1),
-                    "words": f"{nm.get(near, near)} won the tug of war: {said}, nearer its {mine[near]:.1f} than "
-                             f"{own(nm.get(far, far))} {mine[far]:.1f}."}
-    return {"status": "info", "actual": round(pace, 1), "words": f"It played at {said} (the league’s is {lp:.1f})."}
+                    "words": f"{nm.get(near, near)} won the tug of war: {said}, nearer its {sd(mine[near]):.1f} than "
+                             f"{own(nm.get(far, far))} {sd(mine[far]):.1f}."}
+    return {"status": "info", "actual": round(pace, 1),
+            "words": f"It played at {said} ({its} is {sd(lp):.1f})."}
 
 
 # --- touchdowns and the injury report ------------------------------------------------------------

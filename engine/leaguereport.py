@@ -1331,13 +1331,19 @@ def nba_script(c: Ctx) -> dict | None:
             return f" ({_ord(int(r))}-fastest of {n})" if r and n else ""
         fast = [t for t, p in ((a, pa), (h, ph)) if p >= lp + PACE_SAID]
         slow = [t for t, p in ((a, pa), (h, ph)) if p <= lp - PACE_SAID]
-        # Per 48 minutes in every league, as the tape's pace row on the same
-        # page says it (engine/nba/teams: pace is 48 x possessions / game
-        # minutes); college's own 40-minute game would be the other number
-        # for the same team, two lines apart.
-        pair = (f"{team_np(c, a)} {team_be(c, a, 'average', 'averages')} {_num(pa)} possessions per 48 minutes"
-                f"{rank(a)} and {team_np(c, h)} {_num(ph)}{rank(h)}; {_league(c)} averages {_num(lp)}")
+        # Read per 48 in every league (engine/nba/teams: pace is 48 x
+        # possessions / game minutes) and said in the league's own game, as
+        # the tape's pace row on the same page says it: per 40 in college and
+        # the WNBA (teams.GAME_MINUTES). The claim keeps the per-48 numbers it
+        # is graded on, and the minutes its fact check says them in.
+        from .nba.teams import game_minutes, pace_said
+        gm = game_minutes(c.sport)
+        pair = (f"{team_np(c, a)} {team_be(c, a, 'average', 'averages')} {_num(pace_said(pa, gm))} possessions "
+                f"per {gm} minutes{rank(a)} and {team_np(c, h)} {_num(pace_said(ph, gm))}{rank(h)}; "
+                f"{_league(c)} averages {_num(pace_said(lp, gm))}")
         claim = {"kind": "pace", "league": lp, "pace": [[a, pa], [h, ph]]}
+        if gm != 48:
+            claim["minutes"] = gm
         if len(fast) == 2:
             items.append((f"A fast game: {pair}. More possessions means more points, rebounds and assists to go "
                           f"around", dict(claim, read="fast")))
