@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XM. A team page reads its own games** (step 749; 18 November). Nothing to run. A college basketball team page
+answered in 16 to 40 seconds (measured from here on Tennessee's). The squad and the stat page read the player logs
+by team, and nothing on that table leads with the team (its key is sport, season, period, game, player, market):
+finding the latest season scanned the sport's every season, and the squad and the stat page a whole season each,
+millions of college rows to find a few hundred; and the team list built the sport's every game as a dict to read two
+names off each. A team's rows sit under its own games, which the games table lists, so engine/teamdex now goes to
+those games through the table's key, one lookup per game, and falls back to the old reads where the games table
+holds none of the team's games; the team list reads two names and the scores. The same rows come back (tested
+against the old reads); nothing is cached, so nothing can go stale.
+
 **XL. A small school's name reads once** (step 748; 18 November). Nothing to run: the next college scoreboard read
 renames the kept cards. ESPN's own records for some schools below Division I repeat a word or tack an all-caps code
 onto the end, and the college boards carried them as they came: "Regent Regent Royals", "Oklahoma Panhandle

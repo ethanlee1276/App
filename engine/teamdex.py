@@ -121,11 +121,24 @@ def _finals(conn, sport: str, where: str = "", args=()) -> list[dict]:
 
 
 def teams(conn, sport: str) -> list[str]:
-    """Every team with a final in this sport, sorted."""
+    """Every team with a final in this sport, sorted.
+
+    Two names and the same check on the scores `_finals` makes, not `_finals`
+    itself: the team page asks this on every visit, and `_finals` builds the
+    sport's every game as a dict, sorts them and folds the duplicates — tens
+    of thousands of college games — to read two names off each (2026-11-18,
+    a college team page answering in 16 to 40 seconds)."""
+    try:
+        rows = conn.execute("SELECT home, away, home_score, away_score FROM games WHERE sport=?",
+                            (sport,)).fetchall()
+    except Exception:                                         # noqa: BLE001
+        return []
     seen = set()
-    for g in _finals(conn, sport):
-        seen.add(g["home"])
-        seen.add(g["away"])
+    for home, away, hs, as_ in rows:
+        if _num(hs) is None or _num(as_) is None:
+            continue
+        seen.add(home)
+        seen.add(away)
     return sorted(x for x in seen if x)
 
 
@@ -535,11 +548,69 @@ SQUAD_PER_POSITION = 6
 RATE_MARKETS = {"snap_pct"}
 
 
+def _team_games(conn, sport: str, team: str, season: int | None = None) -> list:
+    """``[(season, period, game_id)]`` of the team's games, newest first, off the
+    games table (one season, or every season)."""
+    q = ("SELECT DISTINCT season, period, game_id FROM games WHERE sport=? AND (home=? OR away=?)"
+         + (" AND season=?" if season is not None else "") + " ORDER BY season DESC, period DESC")
+    args = (sport, team, team) + ((season,) if season is not None else ())
+    return [(r[0], str(r[1]), str(r[2])) for r in conn.execute(q, args).fetchall()
+            if r[0] is not None and r[1] is not None and r[2] is not None]
+
+
+#: THE TEAM'S OWN GAMES, NOT THE SPORT'S EVERY ROW (2026-11-18: a college
+#: basketball team page answered in 16 to 40 seconds). `player_game_logs` is
+#: keyed (sport, season, period, game_id, player, market) and nothing on it
+#: leads with the team, so "this team's rows" read the sport's every season
+#: for the latest one and a whole season twice more for the squad and the
+#: stat page: millions of college rows to find a few hundred. A team's rows
+#: sit under its own games, which the games table lists, so the reads below
+#: go to those games through the key, one game at a time — and fall back to
+#: the old reads when the games table holds none (a team filed under another
+#: code there), so nothing that read before reads less now.
+_BY_GAMES = ("WITH g(period, game_id) AS (VALUES {pairs}) "
+             "SELECT l.player AS player, l.position AS position, l.market AS market, COUNT(*) n, SUM(l.value) total, "
+             "COUNT(DISTINCT l.game_id) games FROM g JOIN player_game_logs l "
+             "ON l.sport=? AND l.season=? AND l.period=g.period AND l.game_id=g.game_id "
+             "WHERE l.team=? AND l.player<>'' GROUP BY l.player, l.position, l.market")
+
+
 def _latest_season(conn, sport: str, team: str) -> int | None:
+    by_season: dict = {}
+    for season, period, gid in _team_games(conn, sport, team):
+        by_season.setdefault(season, []).append((period, gid))
+    for season in sorted(by_season, reverse=True):
+        pairs = by_season[season]
+        for i in range(0, len(pairs), 200):
+            chunk = pairs[i:i + 200]
+            hit = conn.execute(
+                "WITH g(period, game_id) AS (VALUES " + ",".join("(?,?)" for _ in chunk) + ") "
+                "SELECT 1 FROM g JOIN player_game_logs l ON l.sport=? AND l.season=? "
+                "AND l.period=g.period AND l.game_id=g.game_id WHERE l.team=? LIMIT 1",
+                tuple(x for p in chunk for x in p) + (sport, season, team)).fetchone()
+            if hit:
+                return season
     row = conn.execute(
         "SELECT MAX(season) FROM player_game_logs WHERE sport=? AND team=?",
         (sport, team)).fetchone()
     return row[0] if row and row[0] is not None else None
+
+
+def _season_rows(conn, sport: str, team: str, season: int) -> list:
+    """The team's (player, position, market) sums for one season (`_BY_GAMES`)."""
+    pairs = [(p, g) for _s, p, g in _team_games(conn, sport, team, season)]
+    rows: list = []
+    if pairs and len(pairs) <= 400:
+        rows = conn.execute(
+            _BY_GAMES.format(pairs=",".join("(?,?)" for _ in pairs)),
+            tuple(x for p in pairs for x in p) + (sport, season, team)).fetchall()
+    if not rows:
+        rows = conn.execute(
+            "SELECT player, position, market, COUNT(*) n, SUM(value) total, "
+            "COUNT(DISTINCT game_id) games FROM player_game_logs "
+            "WHERE sport=? AND team=? AND season=? AND player<>'' "
+            "GROUP BY player, position, market", (sport, team, season)).fetchall()
+    return rows
 
 
 _ABBREV = re.compile(r"^[A-Za-z]\.")
@@ -616,11 +687,7 @@ def _roster(conn, sport: str, team: str, season: int) -> dict:
     """
     from .fantasy import _fold, _short_key
     from .rosters import shown_position           # a basketball log's starter flag is no position
-    rows = conn.execute(
-        "SELECT player, position, market, COUNT(*) n, SUM(value) total, "
-        "COUNT(DISTINCT game_id) games FROM player_game_logs "
-        "WHERE sport=? AND team=? AND season=? AND player<>'' "
-        "GROUP BY player, position, market", (sport, team, season)).fetchall()
+    rows = _season_rows(conn, sport, team, season)
     by_player: dict = {}
     short_rows: list = []
     # The club's own row in the logs (its defence, "Detroit Lions") is the

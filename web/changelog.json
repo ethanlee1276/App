@@ -4,6 +4,12 @@
     {
       "date": "2026-11-18",
       "kind": "fix",
+      "title": "Team pages open faster",
+      "body": "A college basketball team’s page could take half a minute to open, reading every season’s box scores to find one team’s. It reads that team’s own games now."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "fix",
       "title": "The record’s curve ends on its last day",
       "body": "A handful of Week 1 football bets kept their week’s label and were drawn after November on the Record page’s curve. They sit in their own week now, and the curve’s dates read as days."
     },
