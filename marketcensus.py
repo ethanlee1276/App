@@ -352,7 +352,7 @@ CENSUS_COLS = [("key", "API key"), ("what", "What it is"), ("market", "Our marke
                ("built", "Built for"), ("priced", "Priced as"), ("edge", "Edge board"),
                ("most_likely", "Most Likely"), ("settles", "Settles"), ("measured", "Measured by")]
 WIRING_COLS = [("market", "Market"), ("positions", "Positions"), ("base", "Base"), ("distribution", "Distribution"),
-               ("defence", "Defence (matchup step)"), ("weather", "Weather"), ("context", "Team tendency"),
+               ("defence", "Defense (matchup step)"), ("weather", "Weather"), ("context", "Team tendency"),
                ("usage", "Usage bridge"), ("lineup", "Lineup"), ("injuries", "Injury knock-ons"),
                ("fitters", "Self-tuning stores"), ("most_likely", "Most Likely")]
 

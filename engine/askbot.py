@@ -269,7 +269,7 @@ SYSTEM = (
     "once when you need several things, and pass the sport when you know it.\n"
     "Fantasy football questions are welcome: who to start, start/sit between players, "
     "flex calls, projected points, waiver pickups, streamers, trade value, which "
-    "defences to target. Use fantasy_points for projections and start/sit (PPR unless "
+    "defenses to target. Use fantasy_points for projections and start/sit (PPR unless "
     "the reader says half-PPR or standard), defense_vs_position for matchups against a "
     "position, and the fantasy desk for usage, waivers, streamers, trending and ranks. "
     "A team starting someone other than its usual quarterback (starting_qb_out, a "
@@ -280,7 +280,7 @@ SYSTEM = (
     "A named game's matchup_scan ranks each side's units (1 = best, out of the "
     "league's teams), names the biggest mismatches, says what each injury opens and "
     "reads every player with a prop (breakout, good, neutral, tough, avoid) with the "
-    "reasons for and against. Use it for who could shine or struggle, where a defence "
+    "reasons for and against. Use it for who could shine or struggle, where a defense "
     "is soft and how a game sets up. Tested against the NFL's 2022-2025 games, none of "
     "its reasons predicted a player's line beyond what our model already prices, so it "
     "moves none of our numbers: never present a read as our projection, our pick or an "
@@ -301,7 +301,7 @@ SYSTEM = (
     "has moved since we first wrote it (what_changed: the line, the injury report, the "
     "forecast, the reads, each stamped Eastern time). An MLB, NHL or basketball game's report "
     "carries its own sections instead: the pitching matchup, park and weather; the tale of "
-    "the tape and the goalies; rest, who carries each team and where each defence gives. "
+    "the tape and the goalies; rest, who carries each team and where each defense gives. "
     "Use it for form, history, how a game "
     "sets up and what changed, and say it comes from the game report. It carries no prop "
     "picks: never turn a line of it into one.\n"
@@ -502,12 +502,12 @@ TOOLS = [
           "is softest, who moves first.",
           {}),
     _tool("defense_vs_position",
-          "NFL defences against one position, from our stored game logs: the fantasy points (PPR) and "
-          "the yards, catches and touchdowns each defence has given up per game to QBs, RBs, WRs or TEs "
-          "this season, ranked (1 = gives up the most). For the best and worst matchups, which defences "
-          "to target or avoid in fantasy, or how one defence does against a position.",
+          "NFL defenses against one position, from our stored game logs: the fantasy points (PPR) and "
+          "the yards, catches and touchdowns each defense has given up per game to QBs, RBs, WRs or TEs "
+          "this season, ranked (1 = gives up the most). For the best and worst matchups, which defenses "
+          "to target or avoid in fantasy, or how one defense does against a position.",
           {"position": {"type": "string", "enum": list(FANTASY_POSITIONS)},
-           "team": {"type": "string", "description": "Optional: one defence."}}, "position"),
+           "team": {"type": "string", "description": "Optional: one defense."}}, "position"),
     _tool("fantasy",
           "The NFL fantasy desk: usage (target and carry shares, recent change), buy_sell (buy-low and "
           "sell-high by expected points), waivers (risers and who inherits an injured player's work), "
@@ -523,7 +523,7 @@ TOOLS = [
           "the player already in it), the touchdown chance, the chance of playing if listed (points counted "
           "at that chance, with what the player scores if they play), where eight weeks in ten land, the "
           "reasons the number moved, a bye, the season average and week-to-week swing, the opponent and that "
-          "defence's matchup line; for two or more on this week's file, compare: the call, how often each "
+          "defense's matchup line; for two or more on this week's file, compare: the call, how often each "
           "outscores the other, and when a questionable player's status is known against the other's "
           "kickoff. For who to start, start/sit between players, flex calls, or how many "
           "points a player should score. Scoring is PPR unless the reader says half-PPR or standard.",
@@ -4048,7 +4048,7 @@ def tool_source(name: str, args, result: dict) -> dict | None:
     elif name == "fantasy_points":
         label = "Fantasy projections, " + ", ".join(p["player"] for p in result.get("players") or [])[:80]
     elif name == "defense_vs_position":
-        label = f"Defences vs {result.get('position')}s, {result.get('season')}"
+        label = f"Defenses vs {result.get('position')}s, {result.get('season')}"
     elif name == "game_report":
         label = (f"{result.get('game')}, the report and how it did" if result.get("status") == "finished"
                  else f"{result.get('game')}, the game report")

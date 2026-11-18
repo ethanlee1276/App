@@ -9,7 +9,7 @@ engine/tdscenarios reads four things off what the site already carries
 for every read with a touchdown stamp — his team's implied points, the
 opponent's unit rank against his position (55/45 blend), his share of the
 targets or carries, his expected red-zone chances — scores each 0–2,
-keeps a player at SCENARIO_MIN with defence and usage both counting, and
+keeps a player at SCENARIO_MIN with defense and usage both counting, and
 ranks by OUR chance. The shelf sits under the touchdown shelf; the rows
 journal on paper under td_scenario; the paywall strips them.
 """
@@ -42,7 +42,7 @@ def test_olave_against_the_lions_is_a_scenario_and_a_thin_role_is_not():
     rz = T.score(olave, _units(30, 12), rz_own={"off": 9.1, "off_rel": 0.18}, rz_opp={"def": 8.6, "def_rel": 0.12})
     assert rz["points"]["trips"] == 2 and rz["score"] == 10
     assert "NO runs 9.1 red-zone plays a game (+18% vs the league) · DET allows 8.6 (+12%) — for the teams each has played" in rz["lines"]
-    assert s["lines"][1] == "DET’s pass defence ranks 30th of 32 (55% this season, the rest last)"
+    assert s["lines"][1] == "DET’s pass defense ranks 30th of 32 (55% this season, the rest last)"
     assert s["lines"][0] == "NO expected to score 25.5 by the lines" and "27% of the targets" in s["lines"][2]
     # Same game, a fourth receiver: the defence is soft but nobody throws to him.
     thin = _read("Fourth WR", "WR", "NO", "DET", 0.08,

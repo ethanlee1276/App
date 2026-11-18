@@ -135,7 +135,7 @@ def score(read: dict, opp_units: dict | None, n_teams: int = 32,
     if implied is not None:
         lines.append(f"{team} expected to score {float(implied):.1f} by the lines")
     if rank is not None:
-        lines.append(f"{opp}’s {'pass' if grp == 'wr' else 'run'} defence ranks {_ord(rank)} of {n_teams}"
+        lines.append(f"{opp}’s {'pass' if grp == 'wr' else 'run'} defense ranks {_ord(rank)} of {n_teams}"
                      + (f" ({blend:.0%} this season, the rest last)" if blend is not None else ""))
     if share is not None:
         lines.append(f"{float(share):.0%} of the {(u.get('share_of') or 'targets') if grp == 'wr' else 'carries'}"

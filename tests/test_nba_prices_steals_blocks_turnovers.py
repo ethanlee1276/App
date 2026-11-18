@@ -16,7 +16,7 @@ new market costs odds credits." Both NBA ingests have stored them since
     held to the high-hold bar threes are;
   * the card under the pick says what tonight's opponent gives up in each,
     in words that fit; the NBA's projection reads it at the share measured
-    on the box (2026-10-14, Ethan: "yes count the defence for those three"
+    on the box (2026-10-14, Ethan: "yes count the defense for those three"
     — pin changed that night and told to him: it held that the model left
     them out), the WNBA's still shows it and leaves it out;
   * a journaled pick settles off its own row; every reader knows the three
@@ -160,7 +160,7 @@ def test_his_rate_reads_only_the_games_that_carry_the_count():
 
 def test_the_nbas_counts_carry_a_matchup_step_the_wnbas_do_not_and_the_board_says_so():
     """Pin changed 2026-10-14 and told to Ethan: this held that the NBA's
-    three had no Matchup step; on his yes the defence is read into them."""
+    three had no Matchup step; on his yes the defense is read into them."""
     from engine.hoops import WNBA
     for m in COUNTS:
         steps = {s["key"] for s in pipeline.project(_prop(m, [1.0] * 12))["chain"]["steps"]}
@@ -208,7 +208,7 @@ def test_the_card_says_what_the_opponent_gives_up_in_words_that_fit_and_the_nba_
     mult, note = hoopsdvp.projection_mult("nba", rating, "PHX", "stl")
     f = rating["PHX"]["stl"]["factor"]
     assert f > 1 and mult == round(1.0 + (f - 1.0), 4) and note.startswith("Matchup: PHX give up 10.0 steals a game")
-    assert "the whole defence's lean reaches one player" in note
+    assert "the whole defense's lean reaches one player" in note
     bmult, bnote = hoopsdvp.projection_mult("nba", rating, "DEN", "tov")
     assert bmult > 1 and "DEN force 15.0 turnovers a game" in bnote
     assert hoopsdvp.projection_mult("wnba", rating, "PHX", "stl") == (1.0, "")

@@ -138,7 +138,7 @@ def td_matchup(row: dict, opp_units: dict | None, rz_own: dict | None, rz_opp: d
     if implied is not None:
         lines.append(f"{team} expected to score {float(implied):.1f} by the lines")
     if rank is not None:
-        lines.append(f"{opp}’s {_UNIT_WORD[unit]} defence ranks {_ord(rank)} of {n_teams}"
+        lines.append(f"{opp}’s {_UNIT_WORD[unit]} defense ranks {_ord(rank)} of {n_teams}"
                      + (" (the quarterback scores on the ground too)" if pos == "QB" else ""))
     u = usage or {}
     share = u.get("carry_share") if unit == "rushing" and pos != "QB" else u.get("tgt_share")

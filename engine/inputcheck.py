@@ -35,7 +35,7 @@ OFF_BY_DESIGN = {
 #: Steps flat on ONE market for a known reason: printed as known, not flagged.
 KNOWN = {
     ("nfl", "pass_td"): {
-        "matchup": "measured 2026-09-23: no defence rating predicted passing TDs (engine/defensevs); "
+        "matchup": "measured 2026-09-23: no defense rating predicted passing TDs (engine/defensevs); "
                    "the card shows it, the number does not use it",
     },
     # Flat BY CONSTRUCTION — each of these factors is built without a
@@ -87,7 +87,7 @@ def flat_by_construction(sport: str, market: str, step: str) -> str | None:
         from .defensevs import TRANSFER, TRANSFER_CFB
         table = TRANSFER_CFB if sport == "cfb" else TRANSFER
         if not any(m == market and t for (m, _g), t in table.items()):
-            return ("no defence rating cleared its held-out bar for this market (engine/defensevs "
+            return ("no defense rating cleared its held-out bar for this market (engine/defensevs "
                     "TRANSFER): the card shows the matchup, the number leaves it out")
     return None
 

@@ -65,7 +65,7 @@ FITS = (
     # ---- the projection and the pricer ------------------------------------------------------
     ("engine.formfit", "number", ("engine.projection",), "the form curve every projection blends with"),
     ("engine.playerfit", "number", ("engine.projection",), "per-player memory, adopted market by market"),
-    ("engine.defensefit", "number", ("engine.defensevs",), "how much of a defence's rating reaches one player (TRANSFER)"),
+    ("engine.defensefit", "number", ("engine.defensevs",), "how much of a defense's rating reaches one player (TRANSFER)"),
     ("engine.cfb.defensefit", "number", ("engine.defensevs",), "the college twin (TRANSFER_CFB)"),
     ("engine.wxfit", "number", ("engine.weather",), "wind, cold and rain, measured 2016-2025"),
     ("engine.matefit", "number", ("engine.teammates",), "a teammate out at the same position (the lineup step)"),
@@ -87,7 +87,7 @@ FITS = (
     ("bridgefit", "number", ("engine.carry",), "the usage bridge leans on last season in the volume role"),
     ("rolewindowfit", "number", ("engine.nflusage",), "the usage bridge weights the player's games by age (ROLE_HALF_LIFE)"),
     ("seasonpriorfit", "number", ("engine.carry",), "the player's own last season as the form's prior, week 4 on"),
-    ("hoopsdvpfit", "number", ("engine.hoopsdvp",), "how much of a basketball defence reaches one line"),
+    ("hoopsdvpfit", "number", ("engine.hoopsdvp",), "how much of a basketball defense reaches one line"),
     ("nbavacancy", "number", ("engine.nba.vacancy",),
      "the minutes a regular's absence opens for the teammates, once its held-out verdict holds"),
     ("tdearlyfit", "number", ("engine.touchdowns",), "September touchdown chances, graded"),
@@ -101,7 +101,7 @@ FITS = (
     ("engine.legfit", "board", ("engine.gameparlays",),
      "each league's share a game parlay leg's chance is pulled toward the book's (LEGFIT1)"),
     ("engine.tdmatchfit", "board", ("engine.tdscenarios",),
-     "a bad defence adds nothing beyond the game total, so a scenario is a selection rule, the chance unmoved"),
+     "a bad defense adds nothing beyond the game total, so a scenario is a selection rule, the chance unmoved"),
     ("scanblendfit", "board", ("engine.teamchange",), "how much of a team's rating is this season"),
     ("pricetrust", "board", ("engine.likelyboard",),
      "the NFL one board never shows a chance above the books' price (PRICE_TRUST, Ethan's yes 2026-10-17)"),
@@ -154,8 +154,8 @@ FITS = (
     ("engine.tdmanfit", "failed", (), "a man-beater against red-zone man — did not hold on the box, 2026-10-04"),
     ("engine.tdtop", "failed", (), "the top of the touchdown board too shy — did not hold on the box, 2026-10-04"),
     ("cfbbridgefit", "failed", (), "college's usage bridge — worse in every season, 2026-10-14; nothing ships"),
-    ("defoutfit", "failed", (), "a defence missing its starters — worse in a held-out season in every market, 2026-10-12"),
-    ("oloutfit", "failed", (), "an offence missing its starting linemen — worse in a held-out season in every "
+    ("defoutfit", "failed", (), "a defense missing its starters — worse in a held-out season in every market, 2026-10-12"),
+    ("oloutfit", "failed", (), "an offense missing its starting linemen — worse in a held-out season in every "
      "market, and sacks went down, 2026-10-22"),
 )
 
@@ -166,7 +166,7 @@ FINDINGS = (
      "marquee) assumes 65% survives. Game-line Edge picks still pass when a raw edge is big enough; whether to "
      "refuse them outright is Ethan's call."),
     ("engine.ml", "The learned multiplier model is opt-in (`--model`); the box never passes it, and the measured "
-     "steps (defence transfer, weather, teammates, quarterback) replaced what it did. Left off on purpose: turning "
+     "steps (defense transfer, weather, teammates, quarterback) replaced what it did. Left off on purpose: turning "
      "it on would count those effects twice."),
     ("engine.projection", "The usage bridge's `att_usage` hook is never filled for the volume markets (attempts, "
      "completions, carries) — they have no usage bridge to fill it. Harmless: an empty hook moves nothing."),

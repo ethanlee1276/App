@@ -545,7 +545,7 @@ def research(leg: dict, read: dict | None, game: dict | None, sport: str) -> dic
     # matchup (his red-zone chances, his share, the points the lines expect,
     # the trips), which the leg's own reasons may already carry.
     mine = list(m.get("lines") or [])
-    lines += [x for x in mine if "defence ranks" in x]
+    lines += [x for x in mine if "defense ranks" in x]
     if why:
         lines.append(why)
     tail = [x for x in mine if "red-zone chances" in x]
@@ -1401,7 +1401,7 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
                     f"{len(out['scorers'])} of {SCORER_PER_GAME}: {len(sc)} of the {n_priced} priced "
                     f"scorer(s) in this game at {floor} or better carry a research case — a red-zone role "
                     f"and {RESEARCH_MIN} or more of the {RESEARCH_MAX} research points (the team's expected "
-                    f"points, the defence faced, usage and red-zone work, the matchup read and the "
+                    f"points, the defense faced, usage and red-zone work, the matchup read and the "
                     f"game script)")
             else:
                 out["scorers_note"] = (f"{len(out['scorers'])} of {SCORER_PER_GAME}: {len(sc)} priced "

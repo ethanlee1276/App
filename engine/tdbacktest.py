@@ -348,7 +348,7 @@ def board_report(rows, depths=BOARD_DEPTHS, seed=3, fitter=None) -> str:
                f"claiming {sum(r['cal'] for r in best) / len(best):.1%}")
     out.append("  Replay, not a published record: every player with prior "
                "form is graded,")
-    out.append("  the board only shows priced ones, and defence and "
+    out.append("  the board only shows priced ones, and defense and "
                "weather are left neutral.")
     out.append("  This is the MODEL's number; the page shows one already "
                "shrunk toward the book,")

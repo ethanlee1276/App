@@ -414,7 +414,7 @@ def flag_hoops_correlations(recs: list[dict]) -> dict:
                 for r in stack:
                     others = sorted(players - {r.get("player")})
                     r.setdefault("correlations", []).append(
-                        f"One offence's possessions, several jerseys — "
+                        f"One offense's possessions, several jerseys — "
                         f"stacked with {', '.join(others)} ({team}). Pace "
                         f"helps both; the same shots cannot feed both")
                     flagged += 1

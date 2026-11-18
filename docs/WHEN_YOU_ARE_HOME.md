@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**XQ. Defense and offense, one spelling** (step 753; 18 November). Nothing to run. One game page said "Better
+defense" in the matchup scan and "the defence" in the report under it: the reports, the game plan, Ask's tools, the
+touchdown reasons and the scan's notes wrote defence and offence, the scan and most of the site defense and offense.
+Every sentence a reader sees now says defense and offense (66 lines). Only prose was touched: a bare key such as
+hockey's "defence" line group, a property inside a template, and the pre-registered records (engine/prereg) are as
+they were, and the one filter that matched on the words (engine/gameparlays, "defense ranks") changed with the
+sentences it reads.
+
 **XP. No pick says certain** (step 752; 18 November). Nothing to run. The NFL Record page's week card read "Toughest
 miss: Emmett Johnson under 17.5 Carries (−129) at 100%": the Most Likely board logged that under at a 100% chance
 against a price that said 54%. A number that far from the books gets on the board only through the bold check

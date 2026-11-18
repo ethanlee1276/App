@@ -155,7 +155,7 @@ def context_multiplier(profile: dict | None, league: dict,
         f = 1.0 + EPA_WEIGHT * (epa - lg_epa)
         mult *= f
         if abs(f - 1) >= 0.02:
-            reasons.append(f"Offence {epa - lg_epa:+.2f} EPA/play vs league "
+            reasons.append(f"Offense {epa - lg_epa:+.2f} EPA/play vs league "
                            f"({f - 1:+.0%})")
 
     return clamp(mult, *TOTAL_CLAMP), reasons

@@ -955,7 +955,7 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
                                    if meas else ""), 0, "ok", measured=meas)
         if not own and line_up and prop_up and line_team == (prop.get("opponent") or "").upper():
             return Relation(-0.20, "backing a player over while betting the "
-                                   "opposing offence over is not one story",
+                                   "opposing offense over is not one story",
                             2, "kill")
         return None
 

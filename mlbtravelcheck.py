@@ -342,7 +342,7 @@ def run(payloads: dict, db_path: str | None = None, say=print) -> dict:
         return {}
     phi = overdispersion(all_rows)
     say(f"MLB travel and rest, {seasons[0]}-{seasons[-1]}: {games_n:,} games, {len(all_rows):,} club-games "
-        f"(runs model per season: each club's offence and defence, each park, home field; "
+        f"(runs model per season: each club's offense and defense, each park, home field; "
         f"runs overdispersion {phi:.2f})")
     unknown = sum(1 for r in all_rows if r["park"] not in PARK_TZ)
     if unknown:

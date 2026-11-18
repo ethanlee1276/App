@@ -324,7 +324,7 @@ def study(pts: dict) -> dict:
 
 
 def report(res: dict) -> str:
-    lines = ["Touchdowns: the opponent's defence on top of the model's own number "
+    lines = ["Touchdowns: the opponent's defense on top of the model's own number "
              "(held out a season at a time; PASSES = worth putting in the number)"]
     for (name, _mk, grp), r in sorted(res.items()):
         se = f" ± {r['se']:.3f}" if r.get("se") is not None else ""
@@ -332,7 +332,7 @@ def report(res: dict) -> str:
         tc = f", clustered {r['t_cluster']:.1f}" if r.get("t_cluster") is not None else ""
         verdict = ("PASSES" if r["passes"] else "fails") if r.get("decides", True) else "(by group, reading only)"
         lines.append(f"  {name:<14} {grp:<3} b = {r['b']:+.3f}{se} (t {r['t']:.1f}{tc})  n {r['n']:>6}   "
-                     f"1 SD of defence moves the chance {100 * r['per_sd']:+.1f}%   held out {held}   "
+                     f"1 SD of defense moves the chance {100 * r['per_sd']:+.1f}%   held out {held}   "
                      f"mean {100 * r['mean_gain']:+.3f}%   {verdict}")
     return "\n".join(lines)
 
@@ -371,7 +371,7 @@ def main(argv=None) -> int:
     ap.add_argument("--seasons", nargs="*", type=int, default=None)
     args = ap.parse_args(argv)
     res = run(db.connect(), seasons=args.seasons)
-    print(report(res) if res else "  no graded rows carried a defence reading")
+    print(report(res) if res else "  no graded rows carried a defense reading")
     # A reading that joined nothing is a wiring fault, not a verdict: say so.
     for name in SIGNALS:
         if res and not any(k[0] == name for k in res):

@@ -11397,7 +11397,7 @@ function tdScenariosHTML() {
     <div class="shelf-head"><h3 class="shelf-title">Touchdown scenarios
       <span class="mini" style="opacity:.6">${rows.length}</span></h3>
       <span class="chip">built from the matchup</span></div>
-    <p class="ls-note">Scorers the matchup builds a case for — their offence, the defence they face at their
+    <p class="ls-note">Scorers the matchup builds a case for — their offense, the defense they face at their
       position, their share of the work, their red-zone looks — ranked by our chance. Not picks:
       tracked on paper, so the record says how they do.</p>
     <div class="ml-rows">${rows.map((r) => {
@@ -11750,10 +11750,10 @@ function obCardHTML(r, rank, opts = {}) {
    MATCHUP_SOURCE), said where the checks are explained. */
 function obMatchupWords() {
   const src = ((state.data || {}).likely_board || {}).matchup_source;
-  if (src === "model") return "our model’s matchup step — what tonight’s defence allows, at its measured weight — moved the number toward this side";
-  if (src === "scan+model") return `${state.sport === "mlb" ? "the matchup scan backs this side — the hitter’s split against this hand, what the starter allows to that side, the park and the wind —" : "the offence-against-defence read backs this side"} or, where it has no read, our model’s matchup step moved the number toward it`;
+  if (src === "model") return "our model’s matchup step — what tonight’s defense allows, at its measured weight — moved the number toward this side";
+  if (src === "scan+model") return `${state.sport === "mlb" ? "the matchup scan backs this side — the hitter’s split against this hand, what the starter allows to that side, the park and the wind —" : "the offense-against-defense read backs this side"} or, where it has no read, our model’s matchup step moved the number toward it`;
   if (src === "none") return "no matchup read for this sport yet, so its picks top out at Strong";
-  return "the offence-against-defence read backs this side";
+  return "the offense-against-defense read backs this side";
 }
 function obHeroHTML() {
   const art = { nfl: "football", cfb: "football", mlb: "baseball", nba: "basketball", wnba: "basketball",
@@ -12051,7 +12051,7 @@ function matchupPicksHTML() {
     <div class="shelf-head"><h3 class="shelf-title">Matchup picks
       <span class="mini" style="opacity:.6">${n}</span></h3>
       <span class="chip">game by game</span></div>
-    <p class="ls-note">Every game broken down offence against defence: the scorers the matchup
+    <p class="ls-note">Every game broken down offense against defense: the scorers the matchup
       makes a case for, and the yards and catches for the players who could shine or struggle,
       where our number agrees. Ranked by our chance. Tracked on paper.</p>
     ${foldRowsHTML(games.map((m) => matchupGameHTML(m)), { after: 3, what: "games" })}

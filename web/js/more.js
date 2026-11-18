@@ -128,7 +128,7 @@ const FEATURES = [
     ["Sim lab", "Run tonight two thousand times on any prop and watch the distribution draw itself — on the prop’s own page and on a searched player’s card. Every draw comes from the model’s curve for that pick, so it shows the number’s uncertainty rather than new information.", null],
     ["Team page", "Search a team, pick an opponent at the top of the page and read the head-to-head record with every meeting behind it — then the seasons, the leaders, the stat tables and the whole squad by position. Every game it has played opens its own page: the leaders, every scoring play with its drive, the box score and every play.", "team"],
     ["Rosters", "Every team’s roster in every league, each row opening the player.", "rosters"],
-    ["Standings & rankings", "Records, the bracket, and — for football — a ranking of every team’s offence and defence.", "standings"],
+    ["Standings & rankings", "Records, the bracket, and — for football — a ranking of every team’s offense and defense.", "standings"],
     ["The races", "The playoff races drawn as brackets — the NFL, college football, the NBA and the NHL: who is in if it started today, every contender’s chances and the games that swing it — with the NBA Cup’s groups and the NCAA tournament race beside them.", "race"],
     ["Trending", "Form movers: who is climbing and who is falling, measured rather than asserted.", "trending"],
     ["Injuries & news", "Designations league-wide, who replaces the man who is out, and a rights-clean news section.", "injuries"],

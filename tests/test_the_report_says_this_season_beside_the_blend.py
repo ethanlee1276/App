@@ -100,7 +100,7 @@ def test_the_blend_still_decides_and_running_text_reads():
 
 def test_the_plan_and_ask_say_it_too():
     lines = P.matchup_lines({"edges": [EDGE], "method": {"teams": 32}}, "NYG", "WAS")
-    assert lines[0] == ("WAS's rushing offence (19th of 32) against NYG's rushing defence "
+    assert lines[0] == ("WAS's rushing offense (19th of 32) against NYG's rushing defense "
                         "(30th; 13th this season alone) — edge WAS."), lines
     facts = A.scan_facts({}, {"scan": {"units": RATINGS, "edges": [EDGE], "method": {"teams": 32}}})
     assert facts["mismatches"] == ["WAS offense rushing 19 vs NYG defense rushing 30 (this season alone 13): "

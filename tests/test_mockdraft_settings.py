@@ -13,7 +13,7 @@ arithmetic in node:
     runs on is COMPOSED from them — half PPR takes half a catch back off
     the PPR board, a superflex slot draws the superflex share bands, a
     TE premium the TE bands;
-  * the roster decides the rounds, and the kicker and defence slots the
+  * the roster decides the rounds, and the kicker and defense slots the
     board cannot fill are counted, said, and not drafted as blanks;
   * three draft orders, chosen by name; the default is the snake;
   * the cheat sheet orders the pool, the default card and the auto-pick;
@@ -78,7 +78,7 @@ def test_kicker_and_defence_are_on_the_line_and_not_in_the_draft():
     assert '- (r.K || 0) - (r.DST || 0)' in rounds
     assert "skipped" in rounds
     panel = _fn("_mockSetupHTML")
-    assert "projects no kickers or defences" in panel
+    assert "projects no kickers or defenses" in panel
     assert "rounds.drafted" in panel and "rounds.league" in panel
 
 

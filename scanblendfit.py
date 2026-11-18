@@ -194,7 +194,7 @@ def main(argv):
         return 1
     print(f"\nSeason split, walk-forward {seasons[0]}-{seasons[-1]}, weeks {WEEKS.start}-{WEEKS.stop - 1}, "
           f"units {', '.join(UNITS)} (error in league-sd units; lower is better)\n")
-    names = {"same": "no change", "hc": "new head coach", "qb": "new starting QB (offence)"}
+    names = {"same": "no change", "hc": "new head coach", "qb": "new starting QB (offense)"}
     for group, r in report(pts).items():
         print(f"  {names[group]:<27} {r['teams']:>4} team-seasons  best this-season share "
               f"{r['best']:.2f} ± {r['se']:.2f}")

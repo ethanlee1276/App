@@ -240,8 +240,8 @@ async function renderFantasy() {
               <b>${escapeHtml(t)}</b>${role
                 ? ` <span class="gs-role">${escapeHtml(role)}</span>` : ""}</div>
             ${lean ? `<p class="gs-note">${escapeHtml(lean)}</p>` : ""}
-            <div class="gs-vs"><span>offence ${gsNum(off, 2, true)}</span>
-              <span class="gs-vs-k">into a defence allowing ${gsNum(oppDef, 2, true)}</span>
+            <div class="gs-vs"><span>offense ${gsNum(off, 2, true)}</span>
+              <span class="gs-vs-k">into a defense allowing ${gsNum(oppDef, 2, true)}</span>
               ${gsEdge(off, oppDef, s.epa_mean)}</div>
           </div>`).join("")}
       </div>
@@ -3708,7 +3708,7 @@ function _mockSetupHTML(kit) {
           ${rosterRows}
           <p class="mk-keep-note">${rounds.league} rounds in this league, ${
             rounds.drafted} drafted here${rounds.skipped
-              ? ` — the kit\u2019s board projects no kickers or defences, so those
+              ? ` — the kit\u2019s board projects no kickers or defenses, so those
                  ${rounds.skipped} round${rounds.skipped === 1 ? "" : "s"} are not
                  simulated rather than drafted as blanks`
               : ""}${rounds.drafted < rounds.wanted

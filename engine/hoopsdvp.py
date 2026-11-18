@@ -109,7 +109,7 @@ def projection_mult(sport: str, rating: dict, opponent: str, market: str) -> tup
         return 1.0, ""
     return mult, (f"Matchup: {opponent} {said(market, r['pg'])} a game "
                   f"({_ord(r['rank'])}-most of {r['of']}) — {(mult - 1) * 100:+.0f}% on the projection "
-                  f"(measured: {'the whole' if t >= 1 else f'{t:.0%} of the'} defence's lean reaches one player)")
+                  f"(measured: {'the whole' if t >= 1 else f'{t:.0%} of the'} defense's lean reaches one player)")
 
 
 def allowed_by_game(rows) -> dict:
@@ -199,7 +199,7 @@ def matchup_card(team: str, rating: dict, market: str, last_season: bool = False
             "rank": r["rank"], "of": r["of"], "games": r["games"],
             "text": (f"{team} {said(market, r['pg'])} a game, the "
                      f"{_ord(r['rank'])}-most of {r['of']} (league {r['league']:.1f}), {when}"),
-            "note": ("Read into the projection — measured on our basketball logs, the defence's lean "
+            "note": ("Read into the projection — measured on our basketball logs, the defense's lean "
                      "reaches one player (hoopsdvp.TRANSFER). Per game, not per possession." if read else
                      "Shown for you. How much of this reaches one player is not measured yet "
                      "(hoopsdvpfit.py), so the model leaves it out. Per game, not per possession.")}
@@ -298,7 +298,7 @@ def measure(rows, shrink: float = SHRINK_GAMES) -> dict:
         my = sum(y for _, y in xy) / n
         sxx = sum((x - mx) ** 2 for x, _ in xy)
         if sxx <= 0:
-            out[m] = {"rows": n, "slope": None, "se": None, "verdict": "no spread in the defences yet"}
+            out[m] = {"rows": n, "slope": None, "se": None, "verdict": "no spread in the defenses yet"}
             continue
         b = sum((x - mx) * (y - my) for x, y in xy) / sxx
         resid = sum((y - my - b * (x - mx)) ** 2 for x, y in xy) / max(1, n - 2)
@@ -306,7 +306,7 @@ def measure(rows, shrink: float = SHRINK_GAMES) -> dict:
         if n < FIT_MIN_ROWS:
             verdict = f"not enough games yet ({n} of {FIT_MIN_ROWS})"
         elif se and abs(b / se) >= FIT_MIN_Z and b > 0:
-            verdict = f"the defence reaches the player: about {min(b, 1.0):.2f} of its lean"
+            verdict = f"the defense reaches the player: about {min(b, 1.0):.2f} of its lean"
         else:
             verdict = "noise for one player — leave it out of the projection"
         out[m] = {"rows": n, "slope": round(b, 4), "se": round(se, 4), "verdict": verdict}

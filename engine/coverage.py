@@ -511,7 +511,7 @@ def nba(conn) -> SportCoverage:
               "projection assumes she plays", MISSING,
               "no feed wired — minutes come from recent games only",
               "the same gap the WNBA board has; a source would lift both"),
-        Layer("Per-possession team defence", "pace pollutes points-allowed, "
+        Layer("Per-possession team defense", "pace pollutes points-allowed, "
               "which is the matchup input the grade reads", PARTIAL,
               "points allowed per GAME, labelled as directional"),
         Layer("Line movement per prop", "§4's first-mover read — who moved "

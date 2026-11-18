@@ -261,7 +261,7 @@
       ${parts ? `<p class="ffr-key"><sup class="ffr-part">•</sup> Part of the number is the player’s season average: the
         board has no line on it. Tap the name for which part.</p>` : ""}
       <details class="ffr-how"><summary>How these numbers are built</summary>
-        <p class="rank-help">Each line is the prop board’s own projection — the defence against the
+        <p class="rank-help">Each line is the prop board’s own projection — the defense against the
           position, the game script, the weather, who is out around the player — and the touchdowns are the
           touchdown model’s. A questionable player counts at the chance to play; tap any name for
           the player’s whole week. Your league desk (My team) scores your lineup on these numbers under your

@@ -159,7 +159,7 @@ function gpMatchupHTML(g) {
   const m = ((state.data || {}).matchup_picks || []).find((x) => x && x.away === g.away && x.home === g.home);
   if (!m || !((m.td || []).length || (m.props || []).length)) return "";
   return `<div id="gp-sec-matchup" class="matchup-picks"><div class="section-title">Matchup picks
-      <span class="sub">— this game broken down offence against defence: its scorers, and the
+      <span class="sub">— this game broken down offense against defense: its scorers, and the
       yards and catches for who could shine or struggle, where our number agrees</span></div>
     ${matchupGameHTML(m, { head: false })}</div>`;
 }

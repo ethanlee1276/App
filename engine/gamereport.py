@@ -3847,7 +3847,7 @@ def sec_angles(c: Ctx) -> dict | None:
         blocks += [_h("Where to be careful"),
                    _claimed_list((f"{_sentence(r['text'])[:-1]} → {r['points_to']}", claim(r)) for r in down)]
     blocks.append({"type": "note", "text": ("This season's games, from the box scores and the charting. Shown, not "
-                                            "counted: the board's numbers price each defence against each position "
+                                            "counted: the board's numbers price each defense against each position "
                                             "on their own measured scale.")})
     return _section("angles", "The angles", blocks)
 

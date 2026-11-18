@@ -199,7 +199,7 @@ def judging_read(fighter: dict, on_the_road: bool = False) -> dict:
     cut, why = 0.0, []
     if arch in LOW_DAMAGE_ARCHETYPES:
         cut += DECISION_HAIRCUT_STYLE
-        why.append("volume-over-damage offence scores inconsistently")
+        why.append("volume-over-damage offense scores inconsistently")
     if on_the_road:
         cut += DECISION_HAIRCUT_ROAD
         why.append("close decision on the road in front of local judges")

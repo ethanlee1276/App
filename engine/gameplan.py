@@ -135,7 +135,7 @@ def script_lines(g: dict) -> tuple[dict, list]:
             lines.append(f"{fav} {ft['lean']}; {dog} {dt['lean']}.")
     else:
         lines.append(f"Pick'em at {float(d['total']):g}: the number says nothing about who leads — "
-                     f"both offences stay in it, volume props over script props.")
+                     f"both offenses stay in it, volume props over script props.")
     return d, lines
 
 
@@ -165,8 +165,8 @@ def matchup_lines(scan: dict, home: str, away: str) -> list:
         if not isinstance(e, dict):
             continue
         better = e.get("off") if (e.get("gap") or 0) > 0 else e.get("def")
-        out.append(f"{e.get('off')}'s {e.get('unit')} offence ({_ord(e.get('off_rank') or 0)} of {n}"
-                   f"{alone(e, 'off')}) against {e.get('def')}'s {e.get('unit')} defence "
+        out.append(f"{e.get('off')}'s {e.get('unit')} offense ({_ord(e.get('off_rank') or 0)} of {n}"
+                   f"{alone(e, 'off')}) against {e.get('def')}'s {e.get('unit')} defense "
                    f"({_ord(e.get('def_rank') or 0)}{alone(e, 'def')}) — edge {better}.")
     for team in (away, home):
         room = (scan.get("coverage") or {}).get(team) or {}

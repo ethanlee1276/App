@@ -128,7 +128,7 @@ def test_the_steps_come_in_a_bettors_order():
     out = [r["player"] for r in _step(p, "out")["rows"]]
     assert out == ["Charlie Kolar", "Keon Coleman"], "the ruled-out first, the questionable after"
     m = " ".join(_step(p, "matchup")["lines"])
-    assert "BUF's passing offence (3rd of 32) against LAC's passing defence (26th) — edge BUF." in m
+    assert "BUF's passing offense (3rd of 32) against LAC's passing defense (26th) — edge BUF." in m
     assert "Christian Benford (LCB) has allowed a 119 passer rating" in m
     assert "LAC's starting S Elijah Molden is out" in m and "LAC plays zone 76% of the time, blitzes 21%." in m
     assert "Gregory Rousseau (9 pressures, 4 sacks)" in m

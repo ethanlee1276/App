@@ -213,7 +213,7 @@
 
   /* ---------------- how it's drawn ---------------- */
   const NOTE = {
-    nfl: "Snap share is the share of the offence’s snaps (nflverse’s snap counts). Target and carry shares are of every target or carry the team’s players were credited with that game. Red-zone looks are targets and carries inside the 20, from the play-by-play. Air yards are how far past the line the passes thrown the player’s way travelled.",
+    nfl: "Snap share is the share of the offense’s snaps (nflverse’s snap counts). Target and carry shares are of every target or carry the team’s players were credited with that game. Red-zone looks are targets and carries inside the 20, from the play-by-play. Air yards are how far past the line the passes thrown the player’s way travelled.",
     cfb: "Carries, catches and attempts are the box score’s. Shares are of every carry or catch the team’s players were credited with that game; red-zone touches are carries and catches inside the 20, from the play file (it names no college target).",
     nba: "Minutes and starts are the box score’s; shots from the floor, threes and free throws tried are from the NBA’s play-by-play (the shot chart’s).",
     wnba: "Minutes and starts are the box score’s.",

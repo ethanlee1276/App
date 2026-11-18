@@ -434,13 +434,13 @@ def defense_td_multiplier(opponent: Team, position: str) -> tuple[float, list[st
     reasons: list[str] = []
     if position == "RB":
         val = d.vs_rb_rush
-        label = "run defence"
+        label = "run defense"
     elif position == "TE":
         val = d.vs_te
         label = "coverage vs tight ends"
     elif position == "QB":
         val = d.vs_qb
-        label = "defence vs quarterbacks"
+        label = "defense vs quarterbacks"
     else:
         val = d.vs_wr1
         label = "coverage vs top receivers"
@@ -499,7 +499,7 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
             (1.0 - XFP_SHARE_WEIGHT) * base_share + XFP_SHARE_WEIGHT * from_xfp,
             0.01, 0.55)
         share_src += (f", pulled toward a {xfp_share:.0%} share of the "
-                      f"offence's expected points")
+                      f"offense's expected points")
 
     # Red-zone work converts opportunity into touchdowns — but the share above
     # already reflects the player's role, so this is a gentle nudge, not a
@@ -558,7 +558,7 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     reasons += def_reasons + wx_reasons + script_reasons
     if depth < 1.0:
         reasons.append(f"Depth receiver: scoring rate ×{depth:.2f} — {float(xfp['xfp_share']):.0%} of the "
-                       f"offence's expected points; over 2021-2025 receivers this far down the "
+                       f"offense's expected points; over 2021-2025 receivers this far down the "
                        f"depth chart scored less than the model said")
     if pos == "RB":
         reasons.append("Running back: read on the measured back curve — over 2021-2025 the backs "

@@ -244,7 +244,7 @@ def test_three_touchdown_pairs_with_his_reasons():
     # 19 expected points, a run defence 18th, a 45% share — 3 of 13.
     assert all(l["player"] != "Rachaad White" for t in pairs for l in t["legs"]), "no research case, no leg"
     assert all(l.get("research", 0) >= GP.RESEARCH_MIN for t in pairs for l in t["legs"])
-    assert "WAS’s run defence ranks 22nd of 32" in sk, sk
+    assert "WAS’s run defense ranks 22nd of 32" in sk, sk
     # His pair, asked directly: two Giants scorers, priced as unrelated, the
     # caveat that both need the Giants to score twice, and Likely's reason
     # the defence's touchdowns to tight ends.

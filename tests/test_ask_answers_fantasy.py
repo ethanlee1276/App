@@ -201,7 +201,7 @@ def test_the_prompt_welcomes_fantasy_and_the_chips_name_the_lookup():
     got = AB.fantasy_points(BOARDS, ["Chris Olave", "Juwan Johnson"])
     assert AB.tool_source("fantasy_points", {}, got)["label"] == "Fantasy projections, Chris Olave, Juwan Johnson"
     assert AB.tool_source("defense_vs_position", {}, AB.defense_vs_position("TE"))["label"] == \
-        "Defences vs TEs, 2025-2026", "a young season reads last season with it, and says so"
+        "Defenses vs TEs, 2025-2026", "a young season reads last season with it, and says so"
 
 
 def test_the_room_says_it_does_fantasy():

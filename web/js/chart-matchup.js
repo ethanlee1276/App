@@ -106,7 +106,7 @@
     const right = d.family === "hitter" ? "the hitter’s own slugging on the pitch that ended each plate appearance"
       : d.family === "goalie" || d.family === "pitcher" ? `what ${who} does there` : `what ${who} allows there`;
     const tested = d.tested
-      ? "Context only: on the 2022-2025 seasons, where a defence allows yards by depth, side and run gap did not make our picks better on their own, so nothing here moves a price."
+      ? "Context only: on the 2022-2025 seasons, where a defense allows yards by depth, side and run gap did not make our picks better on their own, so nothing here moves a price."
       : "Context only, and not measured as a pick signal: nothing here moves a price.";
     return `<p class="cc-note">Each row is a zone of the player’s own chart. The left bar is the share of the volume that goes there (${esc(d.left.toLowerCase())}); the right is ${esc(right)}, beside the league’s, green where it is better for the player and red where it is worse. The fit is that difference weighted by the share. Each zone’s rate is pulled toward the league’s by ${d.k} plays, so a zone seen a handful of times reads near the league; the counts are in the table, in brackets.${d.his_season && d.his_season !== d.season ? ` The player’s shares are from the ${esc(String(d.his_season))} season.` : ""} ${tested}</p>`;
   }

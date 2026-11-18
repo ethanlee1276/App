@@ -966,7 +966,7 @@
   function linesHTML(d) {
     const lines = (d && d.lines) || {};
     const games = ((d && d.games) || []).filter((g) => lines[g.home] || lines[g.away]);
-    const head = `<header class="xt-card-h"><h3>Line matchups</h3><p>Each club’s forward lines and defence pairs from the
+    const head = `<header class="xt-card-h"><h3>Line matchups</h3><p>Each club’s forward lines and defense pairs from the
       shift charts of its newest games, with what each unit’s shots and its opponents’ shots were worth in expected goals
       while all of it was on the ice at even strength.</p></header>`;
     if (!games.length) {

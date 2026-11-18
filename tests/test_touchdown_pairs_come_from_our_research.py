@@ -4,7 +4,7 @@ Ethan, 2026-11-14: "make sure we are making the TD parlays based off
 reaseerach we do and the breakout canidates and game scripts and all of that
 and not just based off the player lines". A football scorer is a leg only
 when the research makes a case for him (engine/gameparlays.research: the
-matchup — expected points, the defence at his position, red-zone chances
+matchup — expected points, the defense at his position, red-zone chances
 and trips — his usage, the matchup read and the game script), with a
 red-zone role; scorers and pairs are ranked on the research first and our
 chance second. Hockey's goal-scorer pairs have no read and rank on the
@@ -62,7 +62,7 @@ def test_the_research_reads_the_matchup_the_usage_the_read_and_the_script():
     assert r["points"] == {"offense": 1, "defense": 1, "red_zone": 2, "trips": 1, "usage": 2, "read": 1,
                            "script": 0}, r["points"]
     assert r["score"] == 8 and r["red_zone"] == 2
-    assert r["head"][:2] == ["Good matchup", "WAS’s run defence ranks 22nd of 32"], r["head"]
+    assert r["head"][:2] == ["Good matchup", "WAS’s run defense ranks 22nd of 32"], r["head"]
     # A back on a side favoured by a field goal or more: a leading team runs.
     fav = GP.research({"team": "NYG", "opponent": "WAS"}, SKATTEBO, _game(spread=-6.5), "nfl")
     assert fav["points"]["script"] == 1 and any("favored by 6.5" in x for x in fav["head"]), fav["head"]
@@ -87,7 +87,7 @@ def test_no_read_or_an_avoid_read_is_no_case_and_a_go_to_scorer_keeps_a_tough_dr
     # A quarterback is read against the run defence, his share not counted.
     qb = _read("Jayden Daniels", "WAS", "QB", "good", {"carry_share": 0.25}, 0.33, 1.2, implied=19.0)
     q = GP.research({}, qb, g, "nfl")
-    assert q["points"]["usage"] == 0 and q["points"]["defense"] == 0, q["points"]   # NYG's run defence 18th
+    assert q["points"]["usage"] == 0 and q["points"]["defense"] == 0, q["points"]   # NYG's run defense 18th
 
 
 def _board(reads, scorers, game=None):

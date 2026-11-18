@@ -300,7 +300,7 @@ def tape(home: str, away: str, prof: dict, env: dict | None = None, rest: dict |
     return {"sides": sides, "rows": rows, "edges": key_matchups(home, away, prof), "teams": n,
             "per100": per100, "note": season_note(home, away, prof),
             "basis": ("Ranks out of " + str(n) + ", 1st the best — the most for, the fewest against "
-                      "(pace: 1st the fastest). None of this moves our numbers: the defence in each "
+                      "(pace: 1st the fastest). None of this moves our numbers: the defense in each "
                       "stat, the minutes and the schedule are already inside our chances; the reads "
                       "below pick a side for the Most Likely board.")}
 

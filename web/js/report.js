@@ -301,7 +301,7 @@
   /* What a league's report holds, for the reader without the paid key
      (engine/gamereport, engine/leaguereport). */
   const HOOPS = "the line and what it means, rest and travel, who carries each team, where each " +
-    "defence gives, the injury report and what to check before tip-off";
+    "defense gives, the injury report and what to check before tip-off";
   const HOLDS = {
     nfl: "the line and what it means, how the units rank, how each team plays, who is out and what it " +
       "opens, who’s guarding who, the trenches, the red zone, coaching and the schedule, how the game " +

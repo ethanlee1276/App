@@ -1,4 +1,4 @@
-"""Matchup picks: every game, offence against defence, into its touchdowns
+"""Matchup picks: every game, offense against defense, into its touchdowns
 and its yards-and-catches bets.
 
 Ethan, 2026-09-26, after listing the other AI's winners (Gibbs, St. Brown
@@ -51,7 +51,7 @@ def test_touchdowns_game_by_game_with_quarterbacks():
     assert names == ["Jahmyr Gibbs", "James Cook", "Josh Allen", "Sam LaPorta"], names
     assert len(got) == M.TD_PER_GAME == 4
     allen = got[2]
-    assert allen["position"] == "QB" and "run defence" in " ".join(allen["matchup_lines"])
+    assert allen["position"] == "QB" and "run defense" in " ".join(allen["matchup_lines"])
     assert all(r["market"] == "anytime_td" and r["side"] == "YES" and r["line"] == 0.5 for r in got)
     assert "Khalil Shakir" not in names, "anyone on the injury report is left off"
     assert "Deep Backup" not in names and "Other Game" not in names
@@ -84,7 +84,7 @@ def test_yards_and_catches_follow_the_read_where_our_number_agrees():
          "lean": ["receptions", "rec_yds"], "pro": ["DET allows the 4th-most catches to receivers"],
          "usage": {"targets_pg": 8.0}},
         {"player": "Rhamondre Stevenson", "team": "DET", "opp": "BUF", "read": "tough",
-         "label": "Tough matchup", "lean": ["rush_yds"], "con": ["BUF's run defence ranks 3rd"],
+         "label": "Tough matchup", "lean": ["rush_yds"], "con": ["BUF's run defense ranks 3rd"],
          "usage": {"carries_pg": 13.0}},
         {"player": "Coin Flip", "team": "BUF", "opp": "DET", "read": "good", "lean": ["rec_yds"],
          "usage": {"targets_pg": 5.0}},
