@@ -87,7 +87,10 @@ def test_a_rekey_that_would_collide_merges_instead_of_counting_the_game_twice():
          "home_score": 30, "away_score": 17}])
     before = standings.compute(conn, "cfb", season=2025, today="2025-12-01")
     uga = [t for g in before["groups"] for t in g["teams"] if t["team"] == "UGA"][0]
-    assert uga["record"] == "2-0", "the duplicate is exactly the hazard"
+    # The hazard this migration was written for, defused at the read since 18
+    # November 2026: the standings count a college game filed twice once
+    # (standings.once), before the rows are merged as after.
+    assert uga["record"] == "1-0", "a copy is not a second win"
     got = ingest.remap_cfb_game_ids(conn)
     assert got["merged"] == 1 and got["renamed"] == 0
     assert conn.execute("SELECT COUNT(*) FROM games").fetchone()[0] == 1
