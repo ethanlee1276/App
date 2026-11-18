@@ -9338,6 +9338,43 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YB. The eleventh walk, and the preseason out of the basketball history** (step 764; 18 November). Two commands,
+the first a few minutes and the second seconds (RUN_NEXT 00o). Walking the Cavaliers' page, Shai
+Gilgeous-Alexander's and the NBA Record page as a reader on a phone: the team page said "2026 Schedule" and "2026 at
+a glance" while the player page beside it said "2026–27 season", and basketball's and hockey's seasons now read
+2026–27 all over the team page (its chips, the History table, the footer). Its last four games sat in the schedule
+strip and again under "Last 5"; the list now shows only where it adds the line's verdict, covered or not and over or
+under, which the NBA's stored games don't carry. An injury read "Back · back Nov 29" and a pick card "expected back
+2026-11-29"; both read "est. return" and a day. The player page's shot chart said the Previous game card's 37
+points, 13-20, 2 rebounds and 2 assists again a screen lower; for that game every league's chart now leaves out what
+the card shows (another game picked keeps every tile), and a phone stacks the card's two sides, which had cut the
+Thunder and the Kings to "T…" and "Ki…". On the Record page the headline picks read "CHA moneyline 0.5" and "BOS@ORL
+total 222.5" (now "CHA moneyline", "BOS@ORL over 222.5", "DAL +4.5"); a settled list holding more than one book now
+names each row's, as it listed Matisse Thybulle's under twice with nothing saying which was the Edge pick and which
+the Most Likely one; the Process tile's "1023W 59L" read as a 95% record and now reads "1023 good 59 bad" with how
+many closed where we bet (decisions graded on the close, not results); and the verdict's claimed and landed say they
+are the Edge picks' alone. The verdict's code moved to the Record page's own file, which freed 3.6 KB of the first
+visit and paid for the pick card's day; the budget keeps the rest (388 to 385 KB). Then the History tab: the
+Cavaliers' 2025–26 row read 61-43 over 104 games, ranked "6 of 36". The 36 are the thirty clubs and the All-Star
+sides (RUN_NEXT 00j removes those); the 104 are 82, eighteen in the playoffs and four in the preseason. Every NBA
+season stored before 24 September holds its preseason, four or five games a club and one against Maccabi Ra'anana in
+2023, and so does the WNBA's 2026 season: the history backfill read ESPN's scoreboard day by day from each season's
+first day, and the nightly has skipped the preseason only since. That is starters on half minutes in every season
+average, form window, hit rate and learner. The first command lists them by the scoreboard's own word (season type
+1), reading each season's first weeks again, and writes nothing; paste back its summary lines. The second moves them
+to the preseason tables the NFL already uses (kept, out of every reader's way) and drops their shots:
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.hoopspreseason
+```
+
+```
+cd /srv/qellys && sudo -u qellys python3 -m engine.hoopspreseason --apply
+```
+
+If a line it lists is a real game of the season (a regular-season or playoff game), don't run the second; tell me
+which.
+
 **YA. Basketball's Under pressure gets its favourites** (step 763; 18 November). Nothing to run. Reliability,
 comeback and choke need to know who the market favoured, and basketball's and baseball's games are filed without a
 line (the basketball scoreboard ingest writes a 0.0 spread), so for the NBA, college basketball, the WNBA and MLB

@@ -388,7 +388,13 @@ APP_JS_BUDGET_KB = 290
 #: in the player page's room: the page's own watcher sees a board with no
 #: page in it while a cold address is still being looked up, and would send
 #: that address back to the list. Told to Ethan.
-BOOT_BUDGET_KB = 388
+#: 388 -> 385 on 2026-11-18, DOWN, in walk 11: the Record page's verdict (its
+#: tiles, the two books beneath it, the pooled line, the money split) and the
+#: reliability diagram moved to js/record.js, the only file that draws them
+#: (355 lines). That paid for a pick card's injury return said as a day
+#: ("est. return Sun, Nov 29", not "expected back 2026-11-29") and left the
+#: first visit 397,299 -> 393,654 B; the budget keeps the saving.
+BOOT_BUDGET_KB = 385
 
 
 def _gz_trimmed(rel: str) -> int:

@@ -198,4 +198,12 @@ html:not([data-theme="light"]) body.plr-on #view-players .gl-table .gl-fix {
   .plr-card { padding: 14px; }
   .plr-card .gl-scroll { margin: 0 -14px; padding: 0 14px; }
 }
+/* A PHONE STACKS EACH SIDE (walk 11, 2026-11-18): crest, name, record, then the score, under one another.
+   Side by side the score and the crest left the name a few pixels, and the Thunder and the Kings read
+   "T…" and "Ki…" on a 390-wide screen. */
+@media (max-width: 480px) {
+  .plr-side, .plr-side:last-child { flex-direction: column; text-align: center; gap: 4px; }
+  .plr-side div { align-items: center; max-width: 100%; }
+  .plr-pts, .plr-side:last-child .plr-pts { margin: 0; }
+}
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) { .plr-mark { opacity: .08; } }

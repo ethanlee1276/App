@@ -278,10 +278,12 @@ def data_items(conn=None) -> list[Item]:
 
     # Preseason: collected for the "is August priceable" question, and
     # useless without finals, which is why the finals are what is counted.
+    # The NFL's alone: the NBA's and the WNBA's stored preseasons move here too
+    # (engine/hoopspreseason, 2026-11-18), and their finals answer nothing about August.
     try:
-        games = conn.execute("SELECT COUNT(*) FROM preseason_games").fetchone()[0]
+        games = conn.execute("SELECT COUNT(*) FROM preseason_games WHERE sport='nfl'").fetchone()[0]
         finals = conn.execute(
-            "SELECT COUNT(*) FROM preseason_games WHERE completed=1 AND "
+            "SELECT COUNT(*) FROM preseason_games WHERE sport='nfl' AND completed=1 AND "
             "home_score IS NOT NULL").fetchone()[0]
     except Exception:                                          # noqa: BLE001
         games = finals = None

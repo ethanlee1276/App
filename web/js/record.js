@@ -3305,6 +3305,17 @@ function recNumberSection(x, scope) {
     </div>`;
 }
 
+/* A HEADLINE PICK AS ITS CARD SAID IT (walk 11, 2026-11-18): "DAL +4.5", "BOS@ORL over 222.5", "CHA moneyline".
+   The rows printed the stored market and line, so a moneyline read "CHA moneyline 0.5" (the book files a win
+   as over 0.5), a spread lost its sign and a total its side: "BOS@ORL total 222.5". */
+function recPotdBet(r) {
+  const m = String(r.market || ""), side = String(r.side || "").toLowerCase();
+  const n = r.line == null || r.line === "" ? null : Number(r.line);
+  if (m === "moneyline") return "moneyline";
+  if (m === "spread") return n == null || !Number.isFinite(n) ? "spread" : n === 0 ? "pick’em" : `${n > 0 ? "+" : MINUS}${Math.abs(n)}`;
+  if (m === "total" || m === "team_total") return `${m === "team_total" ? "team total " : ""}${side} ${n ?? ""}`.trim();
+  return `${side} ${n ?? ""} ${marketWord(m)}`.replace(/\s+/g, " ").trim();
+}
 function recPotdSection(rep, scope, recent, sit) {
   /* EVERY LEAGUE THAT NAMES ONE GETS ITS SECTION, an empty one included
      (Ethan, 2026-10-14: "we only show the pick of the day record for nfl
@@ -3353,8 +3364,7 @@ function recPotdSection(rep, scope, recent, sit) {
         ${rows.map((r) => `<div class="rec-row flush tight">
           <span style="width:64px;flex-shrink:0;color:var(--text-mute)">${escapeHtml(String(r.date || "").slice(5))}</span>
           <span style="flex:1;min-width:0">${escapeHtml(r.player || "")}
-            <span style="color:var(--text-mute)">${escapeHtml(String(r.market || ""))}
-              ${r.line != null ? escapeHtml(String(r.line)) : ""} · ${american(r.odds)}</span></span>
+            <span style="color:var(--text-mute)">${escapeHtml(recPotdBet(r))} · ${american(r.odds)}</span></span>
           <span style="font-weight:700;color:${
             r.status === "won" ? "var(--good)" : r.status === "lost" ? "var(--bad)" : "var(--text-mute)"}">
             ${escapeHtml(String(r.status || "").toUpperCase())}</span>
@@ -3660,8 +3670,10 @@ async function renderRecord() {
          sit beside it instead of below the fold. */""}
     <div class="rec-process-row">
       ${statCardHTML("scale", "Process",
-          nProc ? `${pr.good || 0}<i>W</i> ${pr.bad || 0}<i>L</i>` : "—",
-          nProc ? `${nProc} of ${o.settled} priced at close`
+          // "1023W 59L" read as a record of 95% (walk 11, 2026-11-18): these are decisions graded on the close —
+          // good ones beat it, bad ones closed against us, and the rest closed where we bet.
+          nProc ? `${pr.good || 0}<i>good</i> ${pr.bad || 0}<i>bad</i>` : "—",
+          nProc ? `${nProc} of ${o.settled} priced at close${pr.flat ? ` · ${pr.flat} closed where we bet` : ""}`
                 : "needs closing lines — none captured yet",
           "",
           { cardCls: "rec-process",
@@ -3966,7 +3978,22 @@ function recClvBoard(cb) {
    than copied into each — a second copy of this markup drifts from the
    first the next time either is touched, leaving two lists that disagree
    about what a "lucky" chip means. */
-function recSettledRow(b) {
+/* WHICH BOOK A ROW IS IN, where a list holds more than one (walk 11, 2026-11-18). The NBA's settled list
+   read "Matisse Thybulle UNDER 4.5 Rebounds" twice, −0.25u and −1.08u: once as a Most Likely pick and once as
+   an Edge pick, and nothing on either row said which. The grades are the books' own (engine/ledger
+   LIKELY_LIVE_GRADE and BOARD_TIERS, engine/ladder GRADE_ORDER). A list of one book says nothing extra. */
+function recBookOf(b) {
+  const g = String((b && b.grade) || "");
+  return /^likely/i.test(g) ? "Most Likely" : /^(top pick|strong|worth a look)$/i.test(g) ? "Most Likely board"
+    : g === "Pick of the Day" ? g : "Edge";
+}
+const _recMixed = new WeakMap();
+function recMixed(all) {
+  if (!Array.isArray(all)) return false;
+  if (!_recMixed.has(all)) _recMixed.set(all, new Set(all.map(recBookOf)).size > 1);
+  return _recMixed.get(all);
+}
+function recSettledRow(b, i, all) {
         const won = b.status === "won";
         const push = b.status === "push";
         const pnl = b.pnl_units || 0;
@@ -4002,6 +4029,7 @@ function recSettledRow(b) {
           <span class="rl-date">${escapeHtml(b.date || "")}</span>
           <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
             <span class="rl-bet">${escapeHtml(b.side || "")} ${lineTxt}${escapeHtml(marketWord(b.market))}${
+              recMixed(all) ? ` · ${escapeHtml(recBookOf(b))}` : ""}${
               /* The terminal's columns (audit item 17): what the model
                  said, and what the price closed at, where known. */
               b.hit_prob != null ? ` · model ${(Number(b.hit_prob) * 100).toFixed(0)}%` : ""}${
@@ -4113,4 +4141,366 @@ function recStaleSection(st) {
     </div>
     <div class="card" style="padding:0;margin-top:12px">${calib}${rows ||
       `${panelEmpty("Nothing settled yet — flags journal on every paid pull and grade as results ingest.")}`}</div>`;
+}
+
+/* THE VERDICT AND ITS PICTURE, here since 2026-11-18 (walk 11): only the Record page draws them, and in
+   app.js they were first-visit bytes every reader paid for a page most never open. */
+/* The reliability diagram — the bucket rows above as a picture.
+
+   The rows are honest but they are a table, and a table hides the one thing
+   this chart exists to show: the DIRECTION and SHAPE of the error. A model
+   that runs hot everywhere sits entirely below the diagonal, which is a
+   tempering problem with a one-line fix. A model that is hot on favourites
+   and cold on longshots crosses the diagonal, which is a different problem
+   entirely — and in a list of numbers the two look identical.
+
+   Dot area is proportional to bucket population, not radius, because radius
+   scaling triples the apparent weight of a bucket that is three times
+   bigger. Whiskers are the same ±1.96·√(p(1−p)/n) band the rows use: a dot
+   whose whisker crosses the diagonal has not missed, it just has not
+   spoken yet. */
+function reliabilityDiagram(buckets) {
+  const pts = (buckets || []).filter((b) => b.n > 0);
+  if (pts.length < 2) return "";
+  // Square plot with headroom above it. The "perfect" label belongs at the
+  // top end of the diagonal, which is also where a well-calibrated model's
+  // biggest favourites sit — inside the box it lands on a dot. padT buys it
+  // a line of its own without squashing the plot into a rectangle.
+  const w = 320, pad = 34, padT = 48;
+  const span = w - pad * 2;
+  const h = padT + span + pad;
+  const x = (v) => pad + v * span;
+  const y = (v) => padT + (1 - v) * span;
+  const maxN = Math.max(...pts.map((b) => b.n));
+  const tick = (v) => `
+    <line x1="${x(v)}" y1="${h - pad}" x2="${x(v)}" y2="${h - pad + 4}"
+          stroke="currentColor" opacity=".35"/>
+    <text x="${x(v)}" y="${h - pad + 15}" text-anchor="middle" font-size="9"
+          fill="currentColor" opacity=".45">${(v * 100).toFixed(0)}</text>
+    <line x1="${pad - 4}" y1="${y(v)}" x2="${pad}" y2="${y(v)}"
+          stroke="currentColor" opacity=".35"/>
+    <text x="${pad - 7}" y="${y(v) + 3}" text-anchor="end" font-size="9"
+          fill="currentColor" opacity=".45">${(v * 100).toFixed(0)}</text>`;
+  const dots = pts.map((b) => {
+    const r = 3 + 7 * Math.sqrt(b.n / maxN);
+    const col = b.n < 20 ? "var(--text-mute)"
+      : b.in_band ? "var(--good)" : "var(--warn)";
+    const lo = Math.max(0, b.actual - b.ci), hi = Math.min(1, b.actual + b.ci);
+    return `<line x1="${x(b.predicted).toFixed(1)}" y1="${y(lo).toFixed(1)}"
+                  x2="${x(b.predicted).toFixed(1)}" y2="${y(hi).toFixed(1)}"
+                  stroke="${col}" stroke-width="1.5" opacity=".55"/>
+      <circle cx="${x(b.predicted).toFixed(1)}" cy="${y(b.actual).toFixed(1)}"
+              r="${r.toFixed(1)}" fill="${col}" fill-opacity=".75" stroke="${col}">
+        <title>Said ${(b.predicted * 100).toFixed(0)}%, hit ${(b.actual * 100).toFixed(0)}% — ${b.n} bets</title>
+      </circle>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:340px;height:auto;display:block;margin:0 auto"
+       role="img" aria-label="Reliability diagram: forecast probability against realized hit rate">
+    <rect x="${pad}" y="${padT}" width="${span}" height="${span}" fill="none"
+          stroke="currentColor" opacity=".12"/>
+    <line x1="${x(0)}" y1="${y(0)}" x2="${x(1)}" y2="${y(1)}" stroke="currentColor"
+          stroke-width="1" stroke-dasharray="4 4" opacity=".4"/>
+    <text x="${x(1)}" y="${y(1) - 8}" text-anchor="end" font-size="9"
+          fill="currentColor" opacity=".45">perfect</text>
+    ${[0, 0.25, 0.5, 0.75, 1].map(tick).join("")}
+    ${dots}
+    <text x="${w / 2}" y="${h - 4}" text-anchor="middle" font-size="10"
+          fill="currentColor" opacity=".55">model said (%)</text>
+    <text x="11" y="${h / 2}" text-anchor="middle" font-size="10" fill="currentColor"
+          opacity=".55" transform="rotate(-90 11 ${h / 2})">actually hit (%)</text>
+  </svg>`;
+}
+
+/* ============================================================
+   THE VERDICT — "is this thing working?", in one screen
+   ============================================================ */
+/* Ethan, 2026-08-20: "Nobody visiting for the first time can tell in ten
+   seconds whether the model is good."
+
+   He is right, and the cause is not a shortage of measurement — it is a
+   surplus. Calibration by market and by horizon, CLV coverage, the
+   hypothesis lab, restated performance, blind-spot patterns: all honest,
+   all already computed, each answering its own narrow question on its own
+   page. Nowhere does the site simply say what happened.
+
+   Five numbers and one picture, in the order a sceptic asks them:
+
+     how many        a rate without a denominator is a slogan
+     claimed         what the model said would happen
+     landed          what happened
+     CLV             whether the price moved our way, which shows up
+                     before the results do
+     net             what it paid
+
+   THE READING IS DERIVED, NOT WRITTEN. Every sentence below is generated
+   from the numbers above it, so it cannot drift into optimism the data
+   does not support. "Claims more than it lands" is a subtraction.
+
+   AND IT REFUSES TO GIVE A VERDICT ON A THIN BOOK. `MIN_GRADED_FOR_SIGNAL`
+   is 30 in engine/ledger.py and the payload carries it. Under that, this
+   panel prints the count and says it is too early — because the single
+   most dishonest thing this page could do is turn a 1-0 record into
+   "landed 100%", and a panel built to be persuasive is exactly the one
+   that would. */
+/* HOW MUCH OF THIS RECORD IS REAL MONEY.
+
+   `engine/ledger.performance` has published the split since it was
+   written, and said in its own comment why:
+
+       "The two counts below say the split out loud so a reader never
+        has to infer it from a suspiciously small dollar figure beside
+        a large unit one."
+
+   Nothing ever rendered them. `money_bets` and `paper_bets` appear zero
+   times in this file, so the page showed exactly the shape that comment
+   was written to prevent: a unit figure pooling both books beside a
+   dollar figure that, by construction, counts only the picks with money
+   on them. A reader who noticed the gap had no way to explain it — and
+   on a site whose whole pitch is a public record, "is any of this real?"
+   is the first question a sceptic asks.
+
+   POOLED IN UNITS, MONEY ONLY IN DOLLARS, which is deliberate and not a
+   bug: a paper row settles with `pnl_dollars` 0 because no dollars were
+   ever at risk. Pooling the books in units is honest; pooling them in
+   dollars would run money through the bankroll that never existed. The
+   missing part was the sentence naming which number is which.
+
+   THE RECORD PAGE ONLY. `memeVerdictHTML` shares this markup and is a
+   different book with its own rules; it is not called from here.
+
+   ABSENT FIELDS RENDER NOTHING. A record.json built before this shipped
+   carries neither count, and a sentence about a split we cannot see is
+   worse than no sentence at all. */
+function moneySplitHTML(o) {
+  const money = (o || {}).money_bets;
+  /* PAPER IS WHAT SETTLED WITHOUT MONEY (audit V-5): `paper_bets` counts
+     a different population, and "1 money + 1 paper" of 1 settled was the
+     result. Read off `settled` when it is there. */
+  const paper = money != null && (o || {}).settled != null
+    ? Math.max(0, Number(o.settled) - Number(money)) : (o || {}).paper_bets;
+  if (money == null || paper == null) return "";
+  if (!money && !paper) return "";
+  const d = o.net_dollars;
+  const cash = d == null ? ""
+    : ` <b>${d < 0 ? trueMinus("-") + "$" : "+$"}${Math.abs(d).toFixed(2)}</b>`;
+  let body;
+  if (!paper) {
+    body = `Every settled pick here had real money on it${
+      cash ? `, for${cash} on the bankroll` : ""}.`;
+  } else if (!money) {
+    body = `Nothing here has had money on it yet — every pick is paper,
+      journaled at the price it was actually offered and graded the same
+      way, but never staked. The units above are real; there are no
+      dollars because none were ever at risk.`;
+  } else {
+    body = `<b>${money}</b> of these settled picks had real money on
+      them${cash ? `, for${cash}` : ""}. The other <b>${paper}</b>
+      ${paper === 1 ? "is" : "are"} paper — same prices, same grading, no
+      stake. The unit figure above pools both; the dollar figure counts
+      only the picks that were actually bet.`;
+  }
+  return `<p class="rv-split">${body}</p>`;
+}
+
+/* `opts.combinedShown`: the page's ribbon already carries the combined
+   total; `opts.likelySaid`: the Most Likely section on the same page prints
+   that book's verdict sentence (2026-10-25, the real NFL record: both were
+   said twice, word for word). */
+function recordVerdictHTML(src, scopeLabel, lk, opts) {
+  opts = opts || {};
+  const o = (src && src.overall) || {};
+  /* v5: ONE NUMBER, TWO BOOKS. When the record is pooled (adoptPooledRecord)
+     `o` is the whole journal and `edge` the edge board alone (EDGE_BOOKS —
+     not the old headline book, which also held the staked Most Likely rows
+     and would count them twice beside `lk`); `lk` is the Most Likely
+     board's own report. The tiles are the one number; the two books read
+     side by side beneath it, and they add up to it. */
+  const pooled = !!(src && src.edge && src.edge.overall);
+  const edge = pooled ? (src.edge_board || src.edge.overall) : o;
+  const cal = src && src.calibration;
+  const buckets = ((cal || {}).buckets || []).filter((b) => b.n > 0);
+  const need = src.min_graded || 30;
+  const settled = o.settled || 0;
+
+  // Claimed and landed, population-weighted across the buckets. Weighted,
+  // because an unweighted mean of bucket midpoints describes the BUCKETS
+  // rather than the book — a single 95% bucket holding two bets would
+  // count as much as a 55% bucket holding four hundred.
+  let claimed = null, landed = null, calN = 0;
+  for (const b of buckets) { calN += b.n; }
+  if (calN > 0) {
+    claimed = buckets.reduce((a, b) => a + b.predicted * b.n, 0) / calN;
+    landed = buckets.reduce((a, b) => a + b.actual * b.n, 0) / calN;
+  }
+
+  const tile = (label, value, sub, tone) => `
+    <div class="rv-tile${tone ? " " + tone : ""}">
+      <div class="rv-v">${value}</div>
+      <div class="rv-k">${escapeHtml(label)}</div>
+      ${sub ? `<div class="rv-s">${sub}</div>` : ""}
+    </div>`;
+
+  const sign = (x, d = 1) => (x >= 0 ? "+" : "") + x.toFixed(d);
+  const thin = settled < need;
+
+  /* THE READING. Built out of the same numbers the tiles show, in the
+     order that matters: calibration first (does it know what it knows),
+     then CLV (did the price agree), then money (which is the noisiest of
+     the three and therefore last). */
+  const lines = [];
+  if (calN > 0) {
+    const gap = (claimed - landed) * 100;
+    lines.push(Math.abs(gap) < 1
+      ? `Claimed and landed agree to within a point across ${calN} graded
+         pick${calN === 1 ? "" : "s"} — the model knows what it knows.`
+      : gap > 0
+        ? `The model <b>claims ${gap.toFixed(1)} points more than it
+           lands</b>, across ${calN} graded pick${calN === 1 ? "" : "s"}. An
+           over-claim of that size is the thing to fix before chasing ROI.`
+        : `The model <b>lands ${Math.abs(gap).toFixed(1)} points more than
+           it claims</b>, across ${calN} graded pick${calN === 1 ? "" : "s"} —
+           under-confident, which costs stake size rather than accuracy.`);
+  }
+  /* WHICH MARKET (audit P1-3). `brier_market` is the de-vigged price of
+     the book we bet — the outlier shopping picked — so it is named as
+     such, and the field's own fair (`brier_consensus`) is the benchmark
+     that leads when it exists. */
+  if (cal && cal.brier_model != null && cal.brier_consensus != null) {
+    const e = cal.brier_edge_consensus;
+    lines.push(e == null ? "" : e > 0
+      ? `On its own picks it out-forecasts the field’s de-vigged price
+         (Brier ${cal.brier_model} against ${cal.brier_consensus}, ${cal.n_consensus} picks).`
+      : `The field’s de-vigged price out-forecasts it on its own picks
+         (Brier ${cal.brier_model} against ${cal.brier_consensus}, ${cal.n_consensus} picks) —
+         which means the edge story is not yet supported.`);
+  }
+  if (cal && cal.brier_model != null && cal.brier_market != null) {
+    const e = cal.brier_edge;
+    lines.push(e == null ? "" : e > 0
+      ? `Against the book we bet, de-vigged, it scores better
+         (Brier ${cal.brier_model} against ${cal.brier_market}) — the easier
+         benchmark, since shopping picks the book furthest from the field.`
+      : `Even the book we bet, de-vigged, out-forecasts it
+         (Brier ${cal.brier_model} against ${cal.brier_market}).`);
+  }
+  if (o.avg_clv != null && o.clv_n) {
+    lines.push(o.avg_clv > 0
+      ? `The line moved our way by ${o.avg_clv.toFixed(2)} points on average
+         over ${o.clv_n} bet${o.clv_n === 1 ? "" : "s"}.`
+      : `The line moved against us by ${Math.abs(o.avg_clv).toFixed(2)} points
+         on average over ${o.clv_n} bet${o.clv_n === 1 ? "" : "s"}.`);
+  }
+
+  const chart = buckets.length >= 2 ? reliabilityDiagram(cal.buckets) : "";
+  const graded = (o.wins || 0) + (o.losses || 0);
+  /* ONE SUMMARY, NOT THREE. Ethan, 2026-09-06: "everything seems
+     cluttered." Under this card sat a strip of five stat cards — ROI,
+     Avg CLV, Price CLV, Record, Win rate — of which ROI and Avg CLV were
+     these tiles again, word for word. The strip is gone; the record,
+     the win rate against its break-even and the price CLV live here,
+     so a number appears once and the reader meets it once. */
+  /* "on M bets", not "overs": the price CLV has scored both sides since
+     2026-08-09 (audit V-5). And the like-for-like figure beside it — the
+     field against the field (audit P1-2) — because the shopped price
+     against the median close reads as value with no movement at all. */
+  const priceClv = (o.avg_price_clv == null ? "" : ` · price ${
+    sign(o.avg_price_clv * 100, 2)} pts on ${o.price_clv_n ?? 0} bet${
+    o.price_clv_n === 1 ? "" : "s"}`) + (o.avg_matched_clv == null ? "" : ` · field vs field ${
+    sign(o.avg_matched_clv * 100, 2)} pts on ${o.matched_clv_n ?? 0}`);
+
+  return `<section class="card rv-card">
+    <div class="section-title">The verdict
+      <span class="sub">— ${escapeHtml(scopeLabel)}, ${pooled
+        ? "the model’s edge board, " : ""}everything
+      journaled at its real price and graded in public</span></div>
+    <div class="rv-tiles">
+      ${tile("record", `${o.wins || 0}\u2011${o.losses || 0}\u2011${o.pushes || 0}`,
+             `${o.open || 0} open · ${settled} settled`)}
+      ${tile("net", sign(o.net_units || 0, 2) + "u",
+             `${o.roi == null ? "—" : sign(o.roi * 100) + "%"} ROI on ${(o.units_staked || 0).toFixed(1)}u at risk`,
+             (o.net_units || 0) >= 0 ? "good" : "warn")}
+      ${/* The break-even is read off the prices this book ACTUALLY took,
+            not assumed to be -110: a book that buys short prices needs far
+            more than 52.4%. The flat wording survives only when no odds
+            are on file to average. */ ""}
+      ${tile("Win rate", graded ? ((o.win_rate || 0) * 100).toFixed(1) + "%" : "—",
+             o.breakeven == null
+               ? "break-even ≈ 52.4% at −110"
+               : `break-even ${(o.breakeven * 100).toFixed(1)}% at the prices taken`,
+             !graded || o.breakeven == null ? ""
+               : (o.win_rate >= o.breakeven ? "good" : "warn"))}
+      ${tile("CLV", o.avg_clv == null ? "—" : sign(o.avg_clv, 2) + ' <span class="unit">pts</span>',
+             o.clv_n ? `line, on ${o.clv_n} bet${o.clv_n === 1 ? "" : "s"}${priceClv}`
+                     : "accrues as closes are captured",
+             o.avg_clv == null ? "" : (o.avg_clv >= 0 ? "good" : "warn"))}
+      ${/* WHOSE CLAIM (walk 11, 2026-11-18): on a pooled record the four tiles before these are both books, and
+            these two are the edge board's calibration alone, so "claimed 52.2% · landed 48.8%" sat beside a
+            62.4% win rate unexplained. They say whose they are. */ ""}
+      ${tile("claimed", claimed == null ? "—" : (claimed * 100).toFixed(1) + "%",
+             pooled ? `the Edge picks’ chance, ${calN} graded` : "what the model said")}
+      ${tile("landed", landed == null ? "—" : (landed * 100).toFixed(1) + "%",
+             pooled ? "how often those Edge picks hit" : "what happened",
+             claimed == null ? "" : (landed >= claimed ? "good" : "warn"))}
+    </div>
+    ${moneySplitHTML(o)}
+    ${opts.combinedShown ? "" : combinedLineHTML(src.pooled_overall, need, o)}
+    ${thin ? `<p class="rv-early">${icon("warn", 14)}
+        <b>Too early to call.</b> ${settled} graded pick${settled === 1 ? "" : "s"}
+        against the ${need} this page needs before a rate means anything.
+        The numbers above are real and they are not yet a verdict — judge the
+        process by CLV until the count catches up.</p>`
+      : pooled ? verdictBooksHTML(edge, lk, chart, lines, o, opts)
+      : `<div class="rv-read">${chart}
+          <div class="rv-says">${lines.filter(Boolean).map((t) => `<p>${t}</p>`).join("")}</div>
+        </div>`}
+  </section>`;
+}
+
+/* THE POOLED TOTAL, NAMED AND SECOND (audit P1-1). The edge board is
+   the verdict; this is the line that adds the Most Likely board to it,
+   with the same floor on its ROI. Absent pool → nothing. */
+function combinedLineHTML(po, need, o) {
+  if (!po || !po.settled || sameTally(po, o)) return "";
+  const sign = (x, d = 1) => (x >= 0 ? "+" : "") + x.toFixed(d);
+  const wl = `${po.wins || 0}\u2011${po.losses || 0}${po.pushes ? `\u2011${po.pushes}` : ""}`;
+  const tail = po.settled < (need || 30)
+    ? `${po.settled} of ${need || 30} graded`
+    : `${sign(po.net_units || 0, 2)}u · ${fmtRoi(po.roi)} ROI`;
+  return `<p class="rv-split">Combined with the Most Likely board (flat-staked
+    favorites): <b>${wl}</b> · ${tail}.</p>`;
+}
+
+/* THE TWO BOOKS UNDER THE ONE NUMBER. Ethan, 2026-09-22: "we can show 2
+   different model charts and shit side by side for most likely and edge
+   bets … but the most likely and edge record will be combined." Each
+   card is that book's own line — W-L, units, ROI — its reliability
+   diagram, and its reading: the edge board's is the verdict's own
+   sentences (calibration, Brier, CLV), the Most Likely board's is the
+   engine's verdict string. The Most Likely diagram is drawn from the
+   report's claimed-probability bands, with the same two-standard-error
+   band the edge diagram carries, so the two pictures are read the same
+   way. Nothing here is a number the page did not already hold. */
+function verdictBooksHTML(edge, lk, chart, lines, o, opts) {
+  opts = opts || {};
+  const sign = (x, d = 1) => (x >= 0 ? "+" : "") + x.toFixed(d);
+  const line = (b) => {
+    const n = ((b || {}).wins || 0) + ((b || {}).losses || 0);
+    return n ? `${b.wins || 0}\u2011${b.losses || 0}${b.pushes ? `\u2011${b.pushes}` : ""}
+      · ${sign(b.net_units || 0, 2)}u · ${fmtRoi(b.roi)} ROI`
+      : "nothing settled yet";
+  };
+  const likelyBuckets = ((lk || {}).bands || []).map((b) => {
+    const ci = b.n ? 2 * Math.sqrt(Math.max(0, b.actual * (1 - b.actual)) / b.n) : 0;
+    return { predicted: b.claimed, actual: b.actual, n: b.n, ci,
+             in_band: Math.abs(b.actual - b.claimed) <= ci };
+  });
+  const likelyChart = likelyBuckets.length >= 2 ? reliabilityDiagram(likelyBuckets) : "";
+  return `<div class="rv-books">
+    <div class="rv-book"><span class="hd-eyebrow">Edge bets</span>
+      ${sameTally(edge, o) ? "" : `<div class="rv-book-line">${line(edge)}</div>`}${chart}
+      <div class="rv-says">${lines.filter(Boolean).map((t) => `<p>${t}</p>`).join("")}</div></div>
+    <div class="rv-book"><span class="hd-eyebrow">Most likely</span>
+      <div class="rv-book-line">${lk ? line(lk) : "nothing staked yet — its paper picks are under Records by book"}</div>${likelyChart}
+      <div class="rv-says">${lk && lk.verdict && !opts.likelySaid ? `<p>${escapeHtml(String(lk.verdict))}</p>` : ""}</div></div>
+  </div>`;
 }

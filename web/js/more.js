@@ -1845,8 +1845,10 @@ function rosterPlayerHTML(p, byAppearance) {
   // filed and they disagree about whether he plays — a gap the merge
   // filled is not a disagreement, and marking those would flag most of
   // the board.
+  // "est. return Nov 29", as the team page says it: "Back · back 11-29" said
+  // the word twice and the day as a code (walk 11, 2026-11-18).
   const back = p.return_date
-    ? ` · back ${escapeHtml(String(p.return_date).slice(5))}` : "";
+    ? ` · est. return ${escapeHtml(teamDayWords(p.return_date))}` : "";
   const contested = p.injury_conflict
     ? `<span class="chip warn" title="Sleeper and the ESPN injury report
          disagree about whether the player plays. The more pessimistic reading is
@@ -2637,7 +2639,7 @@ function teamSquadHTML(sq, sport) {
       which in the first week of a season is most of a roster.</p>`;
 }
 
-function teamSeasonsHTML(p) {
+function teamSeasonsHTML(p, sport) {
   const rows = (p || {}).seasons || [];
   if (!rows.length) return "";
   return `
@@ -2650,7 +2652,7 @@ function teamSeasonsHTML(p) {
       <th>Offense</th><th>Defense</th><th>ATS</th><th>O/U</th>
       </tr></thead><tbody>
       ${rows.map((r) => `<tr>
-        <td>${r.season}</td>
+        <td>${escapeHtml(teamSeasonLabel(sport, r.season))}</td>
         <td class="rank-name">${escapeHtml(r.record)}</td>
         <td>${r.pf_per_game}</td>
         <td>${r.pa_per_game}</td>
@@ -2839,7 +2841,7 @@ function renderTeamPage() {
       ? `<p class="loading">Reading ${escapeHtml(p.name || p.team)}’s
           record against them…</p>`
       : teamH2HHTML(d.head_to_head, d.sport)}`;
-  const historyTab = `${teamSeasonsHTML(p)}`;
+  const historyTab = `${teamSeasonsHTML(p, d.sport)}`;
   const statsTab = `${teamStatsHTML(d.stats, d.sport)}`;
   const rosterTab = `${teamSquadHTML(d.squad, d.sport)}`;
   const body = {
@@ -2862,7 +2864,7 @@ function renderTeamPage() {
     <div class="tm-body" role="tabpanel">${body}</div>
     ${["home", "schedule", "vs", "history"].includes(tab) ? `<p class="rank-help">Built from the finished games this site has
       ingested${(p.seasons || []).length
-        ? ` — ${p.seasons[p.seasons.length - 1].season} to ${p.seasons[0].season}`
+        ? ` — ${teamSeasonLabel(d.sport, p.seasons[p.seasons.length - 1].season)} to ${teamSeasonLabel(d.sport, p.seasons[0].season)}`
         : ""}. Not a projection and not a pick: a record.</p>` : ""}`;
   // The schedule strip opens on the next game, the way ESPN's does.
   const strip = host.querySelector(".tm-strip");
@@ -3086,7 +3088,7 @@ async function openPastGame(el) {
 function teamHomeHTML(d, p) {
   const games = ((d.schedule || {}).games) || [];
   const next = games.findIndex((g) => !g.final);
-  const strip = games.length ? `<div class="section-title">${escapeHtml(String((d.schedule || {}).season || ""))} Schedule
+  const strip = games.length ? `<div class="section-title">${escapeHtml(teamSeasonLabel(d.sport, (d.schedule || {}).season))} Schedule
       <button type="button" class="btn-quiet tm-more" data-team-tab="schedule">Full schedule →</button></div>
     <div class="tm-strip" data-start="${next < 0 ? games.length - 1 : next}">${games.map((g, i) => `
       <button type="button" class="tm-cell${i === next ? " next" : ""}"${teamGameDoor(d, p, g)}>
@@ -3107,7 +3109,7 @@ function teamHomeHTML(d, p) {
   const tile = (k, v, note) => v == null || v === "" ? "" : `<div class="metric"><div class="k">${k}</div>
       <div class="v">${escapeHtml(String(v))}</div>${note ? `<div class="tm-sub">${escapeHtml(note)}</div>` : ""}</div>`;
   const of = (r) => (r && s.teams_ranked ? `${ordinal(r)} of ${s.teams_ranked}` : "");
-  const glance = s ? `<div class="section-title">${escapeHtml(String(s.season))} at a glance</div>
+  const glance = s ? `<div class="section-title">${escapeHtml(teamSeasonLabel(d.sport, s.season))} at a glance</div>
     <div class="metrics tm-glance">
       ${tile("Record", s.record)}
       ${tile("Scored / game", s.pf_per_game, of(s.offense_rank))}
@@ -3121,7 +3123,12 @@ function teamHomeHTML(d, p) {
       <button type="button" class="btn-quiet tm-more" data-team-tab="injuries">All ${hurt.length} →</button></div>
     <div class="card tm-list">${hurt.slice(0, 4).map(teamInjuryRowHTML).join("")}</div>` : "";
   const last = games.filter((x) => x.final).slice(-5).reverse();
-  const recent = last.length ? `<div class="section-title">Last ${last.length}</div>
+  // THE STRIP ALREADY SHOWS THEM (walk 11, 2026-11-18: a Cavaliers page listed
+  // its last four games in the schedule strip and again, the same dates,
+  // opponents and scores, under "Last 5"). The list stays where it adds the
+  // line's verdict the strip has no room for — covered or not, over or under.
+  const said = strip && !last.some((x) => x.line != null || x.ou);
+  const recent = last.length && !said ? `<div class="section-title">Last ${last.length}</div>
     <div class="card tm-list">${last.map((x) => teamScheduleRowHTML(d, x, p)).join("")}</div>` : "";
   const h = d.head_to_head;
   const vsCard = h && (h.games || []).length ? `<button type="button" class="card tm-next" data-team-tab="vs">
@@ -3170,7 +3177,7 @@ function teamSeasonChipsHTML(d, sch) {
   const on = Number(sch.season);
   return `<div class="std-chips tm-seasons" role="group" aria-label="Season">${seasons.map((y) =>
     `<button type="button" class="al-cat${Number(y) === on ? " on" : ""}" aria-pressed="${Number(y) === on}"
-      data-team-season="${escapeAttr(String(y))}">${escapeHtml(String(y))}</button>`).join("")}</div>`;
+      data-team-season="${escapeAttr(String(y))}">${escapeHtml(teamSeasonLabel(d.sport, y))}</button>`).join("")}</div>`;
 }
 
 function teamScheduleHTML(d, p) {
@@ -3178,17 +3185,17 @@ function teamScheduleHTML(d, p) {
   const games = sch.games || [];
   const chips = teamSeasonChipsHTML(d, _teamState.schedLoading ? { season: _teamState.schedLoading } : sch);
   if (_teamState.schedLoading) {
-    return `${chips}<p class="loading">Reading ${escapeHtml(String(_teamState.schedLoading))}…</p>`;
+    return `${chips}<p class="loading">Reading ${escapeHtml(teamSeasonLabel(d.sport, _teamState.schedLoading))}…</p>`;
   }
   if (!games.length) {
     return chips + teamEmptyTab("No schedule yet", sch.failed
-      ? `Couldn’t read ${sch.season} just now — tap it again.`
-      : `No ${sch.season ? `${sch.season} ` : ""}schedule on file for this team yet.`);
+      ? `Couldn’t read ${teamSeasonLabel(d.sport, sch.season)} just now — tap it again.`
+      : `No ${sch.season ? `${teamSeasonLabel(d.sport, sch.season)} ` : ""}schedule on file for this team yet.`);
   }
   const done = games.filter((g) => g.final);
   const w = done.filter((g) => g.result === "W").length, l = done.filter((g) => g.result === "L").length;
   const past = Number(sch.season) !== Number((d.schedule || {}).season);
-  return `${chips}<div class="section-title">${escapeHtml(String(sch.season || ""))} Schedule
+  return `${chips}<div class="section-title">${escapeHtml(teamSeasonLabel(d.sport, sch.season))} Schedule
       <span class="sub">— ${w}-${l}${done.length - w - l ? `-${done.length - w - l}` : ""} in the games ${past ? "played that season" : "played"};
       the line is ${escapeHtml(teamNameIn(d.sport, p.team))}${/s$/i.test(teamNameIn(d.sport, p.team)) ? "’" : "’s"} own;
       every game played opens its own page — the leaders, the scoring, the box score, every play${
@@ -3346,13 +3353,23 @@ function teamInjuryRowHTML(r) {
   return `<button type="button" class="tm-row" data-player-page="${escapeAttr(slugify(r.player || ""))}">
     <span class="tm-row-o">${escapeHtml(r.player || "")}<small>${escapeHtml(r.pos || r.position || "")}</small></span>
     <span class="tm-row-r"><b style="color:${injTone(r.status)}">${escapeHtml(r.status || "")}</b>
-      <small>${escapeHtml([r.injury, r.return_date ? `back ${teamDayWords(r.return_date)}` : ""].filter(Boolean).join(" · "))}</small></span>
+      <small>${escapeHtml([r.injury, r.return_date ? `est. return ${teamDayWords(r.return_date)}` : ""].filter(Boolean).join(" · "))}</small></span>
   </button>`;
 }
 //: "Nov 22" for 2026-11-22: a day as a person writes it (the card read "return 2026-11-22").
 function teamDayWords(iso) {
   const t = Date.parse(`${String(iso).slice(0, 10)}T12:00:00`);
   return isNaN(t) ? String(iso) : new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+/* A SEASON AS ITS LEAGUE SAYS IT. A basketball or hockey season crosses New
+   Year and is filed under the year it started, so the Cavaliers' page read
+   "2026 Schedule" and "2026 at a glance" while the player page beside it
+   said "2026–27 season" (walk 11, 2026-11-18). One rule for both pages. */
+const TEAM_TWO_YEARS = new Set(["nba", "nhl", "cbb"]);
+function teamSeasonLabel(sport, s) {
+  if (s == null || s === "") return "";
+  return TEAM_TWO_YEARS.has(sport) && /^\d{4}$/.test(String(s))
+    ? `${s}–${String((Number(s) + 1) % 100).padStart(2, "0")}` : String(s);
 }
 function teamInjuriesHTML(d, p) {
   if (!_injBoard) return `<p class="loading">Reading the injury report…</p>`;

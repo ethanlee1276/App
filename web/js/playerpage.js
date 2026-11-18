@@ -322,6 +322,8 @@ function plrChartsInto(page, d) {
   if (el) {
     el.dataset.own = "1";
     el.dataset.last = g && !g.dnp && !g.pending ? g.date || "" : "";
+    // and the card's numbers, which the chart's tiles for that game do not say again (walk 11)
+    el.dataset.said = g && !g.dnp && !g.pending ? (g.tiles || []).map((t) => t.id).join(",") : "";
   }
   if (html) mountCharts(slot);
 }

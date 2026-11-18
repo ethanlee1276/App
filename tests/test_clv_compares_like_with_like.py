@@ -22,7 +22,8 @@ sys.path.insert(0, str(ROOT))
 
 from engine import ledger, odds                                       # noqa: E402
 
-APP = (ROOT / "web" / "js" / "app.js").read_text()
+# app.js and the Record page's room, where the verdict lives since 2026-11-18 (walk 11).
+APP = "\n".join((ROOT / "web" / "js" / f).read_text() for f in ("record.js", "app.js"))
 
 
 def _bet(**kw):

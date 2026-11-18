@@ -257,6 +257,12 @@ PRESEASON_READERS = {
     # projection. Added 2026-08-20 when this guard caught it, which is the
     # guard working: a new reader has to show up in a diff as a decision.
     "engine/todo.py",
+    # MOVES THE NBA'S AND THE WNBA'S STORED PRESEASON IN, AND READS NOTHING
+    # OUT (2026-11-18, walk 11). Every NBA season stored before 24 September
+    # held its preseason games in the season tables, where every average
+    # read them; this moves each one ESPN's scoreboard calls preseason into
+    # these tables, out of every reader's way, and prices nothing.
+    "engine/hoopspreseason.py",
 }
 
 #: `preseason_games` — the finals — is under the same rule, added with the

@@ -1979,9 +1979,9 @@ def test_an_empty_book_reports_no_breakeven_rather_than_a_default():
 
 
 def test_the_page_prints_the_measured_breakeven_not_a_constant():
-    app = open(os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "web", "js", "app.js"),
-        encoding="utf-8").read()
+    # The verdict's tiles live in the Record page's room (js/record.js) since 2026-11-18 (walk 11).
+    js = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web", "js")
+    app = "\n".join(open(os.path.join(js, f), encoding="utf-8").read() for f in ("record.js", "app.js"))
     # ANCHORED ON THE CLAIM, NOT THE HELPER. This read `recTile("Win rate"`
     # and went red on 2026-08-23 when the Record KPI strip moved from
     # rule-divided tiles to stat cards — a change that did not touch the

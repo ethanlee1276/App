@@ -389,10 +389,11 @@ def test_the_opponent_picker_opens_the_page():
     # block on the page.
     picker = body.index("teamOppPickerHTML(d")
     h2h = body.index("teamH2HHTML(d.head_to_head, d.sport)")
-    for later in ("${teamSeasonsHTML(p)}", "${teamStatsHTML(d.stats, d.sport)}",
+    # The season table takes the league since 2026-11-18, to say a basketball season "2026–27" (walk 11).
+    for later in ("${teamSeasonsHTML(p, d.sport)}", "${teamStatsHTML(d.stats, d.sport)}",
                   "${teamSquadHTML(d.squad, d.sport)}"):
         assert picker < body.index(later), f"the picker still draws under {later}"
-    assert h2h < body.index("${teamSeasonsHTML(p)}"), (
+    assert h2h < body.index("${teamSeasonsHTML(p, d.sport)}"), (
         "the matchup table is below the season table again")
     # THE TABLE FOLLOWS ITS OWN PICKER, which is the one ordering inside
     # the block that matters: chips you press, then what they answered.

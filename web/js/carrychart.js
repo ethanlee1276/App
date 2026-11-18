@@ -615,7 +615,27 @@
     const n = (S && TILE_ICON[`${S.sport}:${k}`]) || TILE_ICON[k];
     return typeof icon === "function" && n ? icon(n, 13) : "";
   };
+  /* WHAT THE PAGE'S PREVIOUS GAME CARD ALREADY SAYS (walk 11, 2026-11-18). On a player's own page the
+     chart's first game is the game in the Previous game card above it, and its Game stats said that card's
+     numbers again a screen lower: Shai Gilgeous-Alexander's 37 points, 13-20, 2 rebounds and 2 assists, twice.
+     For that game a tile saying a number the card shows is left out; another game picked gets every tile.
+     The card's tiles by the game log's column ids (engine/playerpage.TILES), beside the tile on each chart
+     that says the same number: a quarterback's carries chart says rushing yards, not the card's passing. */
+  const CARD_SAYS = {
+    shots: { "box.pts": "Points", "box.fg": "FG", "box.reb": "Rebounds", "box.ast": "Assists" },
+    carries: { "rushing.car": "Carries", "rushing.yds": "Yards", "rushing.avg": "Yds/carry", "rushing.td": "TD" },
+    routes: { "receiving.rec": "Receptions", "receiving.tgt": "Targets", "receiving.yds": "Yards", "receiving.td": "TD" },
+    passes: { "passing.yds": "Yards", "passing.pct": "Completion" },
+    kicks: { "kicking.fg": "FG", "kicking.lng": "Long", "kicking.xp": "XP", "kicking.pts": "Points" },
+    shotmap: { "skater.g": "Goals", "skater.sog": "On goal" },
+    saves: { "goalie.sv": "Saves", "goalie.sa": "Shots", "goalie.svp": "Save %", "goalie.ga": "GA" },
+  };
+  function cardSaid(kind, ids) {
+    const said = (ids || []).map((id) => (CARD_SAYS[kind] || {})[id]).filter(Boolean);
+    return said.length ? new Set(said) : null;
+  }
   function tile(k, v, sub) {
+    if (S && S.said && S.said.has(k)) return "";
     return `<div class="cc-tile"><span class="cc-k">${ico(k)}${esc(k)}</span><b>${esc(v)}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</div>`;
   }
   /* RYOE where the league published it (running backs, 10+ carries);
@@ -1640,6 +1660,8 @@
     // On the player's own page, the game in its Previous game card is not carded again under it
     // (the picker's chip names it); another game picked gets its card (PLRDUP1).
     const same = !!(C.own && g && C.last && g.date === C.last);
+    // That game's tiles skip what its card says (CARD_SAYS); cleared once this render's tiles are drawn.
+    S.said = same ? cardSaid(S.kind, C.said) : null;
     const hero = same ? "" : P && P.hero ? P.hero(g, d, [count[1], count[2]])
       : P && P.only ? (C.team ? heroHTML({ team: C.team, opp: d.opp, tonight: true, home: true,
                                            label: String(d.season_label || d.season || "") },
@@ -1723,6 +1745,7 @@
     // Josh Allen's Overview said his name, club and number three times and
     // his season's totals twice (PLRDUP1).
     const card = C.own ? "" : playerHero(d, sport, S.kind);
+    S.said = null;
     box.innerHTML = (C.inline ? barRow + card + hero : head + card + hero + barRow) + tabs + rows + (hero || same ? "" : title) + main + tail
       + fold("note", "How it’s drawn", note);
     settle(box);
@@ -2381,7 +2404,9 @@
     // `own`: the slot is on the player's own page (js/playerpage.js marks it), whose header already
     // says who this is and what the season came to, so the chart draws no card of its own for that;
     // `last` is the day of the game in that page's Previous game card, whose score is not drawn again.
-    const c = { root: el, inline: true, own: d.own === "1", last: d.last || "", seq: 0, cand: kinds, kinds: null, key,
+    // `said`: the column ids of that card's tiles, which that game's tiles do not repeat (CARD_SAYS).
+    const c = { root: el, inline: true, own: d.own === "1", last: d.last || "", said: String(d.said || "").split(",").filter(Boolean),
+                seq: 0, cand: kinds, kinds: null, key,
                 S: fresh(sport, kinds[0], d.cc, { view: "game", hint: "", opp: d.opp || "", fam: kinds[0] }) };
     el._cc = use(c);
     el.innerHTML = `<div class="section-title minor cc-sec">${secHTML(c)}</div>

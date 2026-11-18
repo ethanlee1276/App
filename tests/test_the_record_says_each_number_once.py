@@ -24,8 +24,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
 REC = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
+# The verdict and its lines moved to the Record page's room on 2026-11-18 (walk 11); read both files.
+APP = REC + "\n" + (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
 
 
 def _fn(src, name):

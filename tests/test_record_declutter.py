@@ -87,6 +87,9 @@ def _node(js):
       const marketWord = (m) => ({{ hits: "Hits", moneyline: "Moneyline", total: "Game Total" }})[m] || m;
       const american = (o) => o == null ? "—" : (o > 0 ? "+" + o : String(o));
       const toneOf = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
+      const _recMixed = new WeakMap();
+      {_fn("recBookOf")}
+      {_fn("recMixed")}
       {_fn("recSettledRow")}
       console.log(JSON.stringify((() => {{ {js} }})()));
     """

@@ -169,7 +169,9 @@ def test_an_injury_says_its_word_once_and_its_day_as_a_day():
     assert espninjuries.parse_injuries(_injury("Not Specified", "Illness"))[0]["injury"] == "Illness"
     assert espninjuries.parse_injuries(_injury("Not Specified", "Not Specified"))[0]["injury"] is None
     assert espninjuries.parse_injuries(_injury("Hamstring Strain", "strain"))[0]["injury"] == "Hamstring Strain"
-    assert "`back ${teamDayWords(r.return_date)}`" in MORE and "`return ${r.return_date}`" not in MORE
+    # "est. return Nov 22" since walk 11 (2026-11-18): "Back · back Nov 29" said the word twice.
+    assert "`est. return ${teamDayWords(r.return_date)}`" in MORE and "`return ${r.return_date}`" not in MORE
+    assert "`back ${teamDayWords(r.return_date)}`" not in MORE
     assert 'toLocaleDateString("en-US", { month: "short", day: "numeric" })' in MORE[MORE.index("function teamDayWords("):][:400]
 
 
