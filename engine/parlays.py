@@ -1235,9 +1235,35 @@ def relate_prior(sport: str, a: dict, b: dict, game: dict | None = None,
         return Relation(SAME_GAME_BASELINE_RHO,
                         "one side up and the other down across the matchup — "
                         "the pace link runs the same way", 0, "ok")
+    # TWO UNDERS WANT THE SAME QUIET GAME (PARLAYWIN1, 2026-11-19). This fell to
+    # the kill below as a script clash, which §3 never names: a clash is two
+    # legs that need OPPOSITE scripts, and two unders need one. The record
+    # agrees: in the report picks of every finished game on it (read 19
+    # November), two different players' unders in one game hit together 52%
+    # of the time against 53% if unrelated (163 pairs; overs: 44% against
+    # 45%, 447 pairs), and an under hit 72-76% where an over hit 64-71%.
+    # Killing the pair kept a report's strongest picks off its parlays: a
+    # hockey report of seven unders could make no three-leg ticket at all.
+    # Two teammates under on one stat stay apart, as their overs do (§3 Type
+    # 3: one pie, so one player's big night is the other's quiet one),
+    # except hockey's scoring, where one goal is a point for up to three
+    # skaters. Baseball keeps them apart: none of its games are in that
+    # count, and a starter's under and the bats facing him pull apart.
+    if not ua and not ub:
+        if sport == "mlb":
+            return Relation(-SAME_GAME_BASELINE_RHO,
+                            "two unders in one baseball game — not measured on its games, and a "
+                            "starter's under and the bats facing him pull apart", 2, "kill")
+        if same_team and fa == fb and not (sport == "nhl" and fa in HOCKEY_SCORING):
+            return Relation(-SAME_GAME_BASELINE_RHO,
+                            f"two teammates under on one {fa} pie — §3 Type 3: "
+                            f"one player's big night is the other's quiet one", 3, "kill")
+        return Relation(SAME_GAME_BASELINE_RHO,
+                        "two unders want the same quiet game — §1.1's floor, "
+                        "as for two overs", 0, "ok")
     return Relation(-SAME_GAME_BASELINE_RHO,
-                    "two unders in one game share pace the wrong way for a "
-                    "ticket that needs both", 2, "kill")
+                    "one teammate over and another under pull one team's game "
+                    "two ways for a ticket that needs both", 2, "kill")
 
 
 def _relate_hockey(a, b, fa, fb, ua, ub, same_team) -> Relation | None:

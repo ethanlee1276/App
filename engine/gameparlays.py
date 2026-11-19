@@ -35,8 +35,10 @@ refused where every leg is made, twoleg._leg).
 NO CONFLICTS. Every pair of legs passes the clash taxonomy
 (engine/parlays.relate): no player twice, no quarterback against his own
 receiver, no quarterback and a back of one team (they want opposite
-scripts), no two unders. And no leg that needs points beside one that needs
-a quiet game (`script_need`, the board's own game-script view, js/app.js
+scripts), no two teammates on one stat's pie (two unders share a ticket
+otherwise: they want the same quiet game, PARLAYWIN1). And no leg that
+needs points beside one that needs a quiet game (`script_need`, the
+board's own game-script view, js/app.js
 scriptNeed): a quarterback's yards and a touchdown want points. Two legs
 that want opposite leads (a back's carries want his team ahead, a
 receiver's catches want it chasing) share a ticket the way his own reports
@@ -935,7 +937,10 @@ def pair_link(sport: str, a: dict, b: dict, game: dict | None) -> tuple:
     rho = float(rel.rho)
     why = plain(rel.mechanism)
     if rel.verdict in ("kill", "duplicate"):
-        same_team = (a.get("team") or "_a") == (b.get("team") or "_b")
+        # The two exceptions below are for two teammates' OVERS; two teammates
+        # under on one pie stay apart (parlays.relate_prior, PARLAYWIN1).
+        same_team = ((a.get("team") or "_a") == (b.get("team") or "_b")
+                     and P._side_up(a) and P._side_up(b))
         fam = {P._family(a), P._family(b)}
         if rel.clash == 3 and same_team and fam == {"catch"}:
             caveat = (f"{a.get('player')} and {b.get('player')} both need {a.get('team')}'s passing game — "

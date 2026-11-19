@@ -194,6 +194,46 @@ def test_the_bars_are_said_without_the_link():
     assert round(0.63 ** 3, 2) == GP.THREE_FLOOR and round(0.63 ** 2, 2) == GP.TWO_FLOOR
 
 
+def _under(player, team, market, sport_game, p=0.72, line=0.5):
+    home, away = sport_game["home"], sport_game["away"]
+    return {"player": player, "team": team, "opponent": away if team == home else home, "home": home,
+            "away": away, "market": market, "market_label": market, "side": "Under", "line": line,
+            "odds": -220, "book": "FanDuel", "p": p, "game_date": "2099-11-18"}
+
+
+def test_two_unders_in_one_game_share_a_ticket():
+    """Two unders want the same quiet game, so they share a ticket (parlays.relate_prior, PARLAYWIN1).
+    The pair was killed as a script clash, which kept a report's strongest picks off its parlays:
+    Avalanche at Utah, 18 November, a report of seven unders and no three-leg ticket."""
+    game = {"home": "UTA", "away": "COL", "date": "2099-11-18"}
+    legs = [_under("MacKenzie Weegar", "UTA", "points", game), _under("Clayton Keller", "UTA", "goals", game),
+            _under("Brock Nelson", "COL", "assists", game), _under("Artturi Lehkonen", "COL", "assists", game),
+            _under("Michael Carcone", "UTA", "points", game)]
+    made = GP.tickets_of("nhl", game, legs)
+    assert len(made["threes"]) >= GP.THREE_MIN, made
+    assert all(l["side"] == "Under" for t in made["threes"] for l in t["legs"])
+    # Basketball: two teammates under on one stat split one pie and stay apart, as their overs do;
+    # on two stats, or across the game, they pair.
+    g = {"home": "DEN", "away": "BOS"}
+    pts, pts2 = _under("A One", "DEN", "pts", g, 0.66, 18.5), _under("B Two", "DEN", "pts", g, 0.66, 9.5)
+    assert not GP.pair_link("nba", pts, pts2, g)[0], "one pie"
+    assert GP.pair_link("nba", pts, _under("B Two", "DEN", "reb", g, 0.66, 6.5), g)[0]
+    assert GP.pair_link("nba", pts, _under("C Three", "BOS", "pts", g, 0.66, 20.5), g)[0]
+    # An over beside an under still wants the game two ways.
+    assert not GP.pair_link("nba", dict(pts, side="Over"), _under("C Three", "BOS", "pts", g, 0.66, 20.5), g)[0]
+    # Two teammates' receiving unders: the shared-passing-game exception is for their overs.
+    a = _leg("Malik Nabers", "rec_yds", 0.66, side="Under", line=70.5)
+    b = _leg("Darius Slayton", "receptions", 0.66, side="Under", line=3.5)
+    assert not GP.pair_link("nfl", a, b, GAME)[0]
+    assert GP.pair_link("nfl", dict(a, side="Over"), dict(b, side="Over"), GAME)[0], "their overs still may"
+    # Baseball's games are not in the count, so its unders stay apart.
+    from engine import parlays as P
+    m = {"home": "NYY", "away": "BOS"}
+    k = dict(_under("Gerrit Cole", "NYY", "strikeouts", m, 0.62, 6.5), opponent="BOS")
+    tb = _under("Rafael Devers", "BOS", "total_bases", m, 0.62, 1.5)
+    assert P.relate("mlb", k, tb).verdict == "kill"
+
+
 if __name__ == "__main__":
     import traceback
     fails = 0

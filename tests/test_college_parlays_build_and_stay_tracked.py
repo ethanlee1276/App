@@ -8,8 +8,10 @@ on this board yet: they build with the board". It builds for college now:
 
   * from college's own Edge and Most Likely picks, same-game and two-game;
   * the same-game link reads the published priors (two overs in one game
-    share its pace, +0.10; two unders are killed), never another league's
-    measurement, until college's own games measure one;
+    share its pace, +0.10, and so do two unders since 2026-11-19, PARLAYWIN1:
+    both want the same quiet game; two teammates under on one stat are one
+    pie, killed as their overs are), never another league's measurement,
+    until college's own games measure one;
   * PROBATION, ENFORCED: college's singles are graded and never staked
     (engine/probation), so a parlay of them is tracked, never staked. The
     stake rule reads the league's record, which knows nothing of probation
@@ -74,10 +76,17 @@ def test_a_college_board_builds_both_pools_on_the_published_priors():
     sg = next(t for t in edge["tickets"] if t["kind"] == T.SAME_GAME)
     assert sg["rho"] == 0.1 and "measured at" not in sg["why"], "a prior, said as one: never a borrowed sample"
     assert {l["team"] for l in sg["legs"]} == {"DUKE"}, "two overs on one team share its pace"
+    # Two unders want the same quiet game and pair at the prior (PARLAYWIN1:
+    # the record's same-game unders hit together as often as unrelated legs)…
     two_unders = [_prop("A", "DUKE", "UNC", "pts", "UNDER", 15.5, -110, 0.58),
                   _prop("B", "DUKE", "UNC", "reb", "UNDER", 6.5, -110, 0.58)]
-    assert T.candidates("cbb", [T._leg(r, r["hit_prob"], "edge") for r in two_unders]) == [], \
-        "two unders in one game share its pace the wrong way"
+    pair = T.candidates("cbb", [T._leg(r, r["hit_prob"], "edge") for r in two_unders])
+    assert pair and pair[0]["rho"] == 0.1 and "same quiet game" in pair[0]["why"], pair
+    # …but two teammates under on one stat split one pie, and stay apart.
+    one_pie = [_prop("A", "DUKE", "UNC", "pts", "UNDER", 15.5, -110, 0.58),
+               _prop("B", "DUKE", "UNC", "pts", "UNDER", 9.5, -110, 0.58)]
+    assert T.candidates("cbb", [T._leg(r, r["hit_prob"], "edge") for r in one_pie]) == [], \
+        "two teammates under on one stat split one pie"
 
 
 def test_a_board_on_probation_tracks_every_parlay_and_says_why():

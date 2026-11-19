@@ -69,8 +69,9 @@ import json
 #: and NFL"), and college basketball (2026-11-14; Ethan, 2026-11-13: every
 #: NBA tool on college): its page showed a Parlays tab that this list never
 #: built. A league the same-game link has not measured reads the published
-#: priors (parlays.rho_for: two overs in one game share its pace, +0.10;
-#: two unders are killed), never another league's measurement. And a board
+#: priors (parlays.rho_for: two overs in one game share its pace, +0.10, as
+#: two unders do; two teammates on one stat's pie are killed), never another
+#: league's measurement. And a board
 #: on probation, as college's is, has every parlay tracked, none staked
 #: (`build`).
 SPORTS = ("nfl", "cfb", "nba", "mlb", "cbb")

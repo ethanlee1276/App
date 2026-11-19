@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YX. Two unders from one game share a ticket: the report's strongest picks reach its parlays**
+(step 786; 19 November). Nothing to run. The parlay rules killed any ticket with two unders from one game, as a
+"script clash" (two legs that need the game to go opposite ways). Two unders need the same game, a quiet one, and
+the doctrine's clash list never names them. So a report whose best picks were unders could make no three-leg ticket
+at all: Bruins at Red Wings on 18 November had seven under picks (five hit) and no parlay, and so did Avalanche at
+Utah the same night, and Kings at Bruins, Stars at Golden Knights and Ducks at Blues the night before. The finished
+games' own picks say the pair was never a clash: two different players' unders in one game hit together 52% of the
+time, against 53% if they were unrelated (163 pairs), the same as two overs (44% against 45%, 447 pairs), and an
+under picked by the report hit 72-76% where an over hit 64-71%. So two unders now share a ticket, priced like two
+overs. Two teammates under on the same stat stay apart, as their overs always have (one pie: one player's big night
+is the other's quiet one), except hockey's points, where one goal is a point for up to three skaters. An over that
+needs scoring still never shares a ticket with an under that needs a quiet game. Replayed on the hockey and NBA
+reports of 16-18 November, today's builder now makes three-leg tickets for 36 of the 41 games (27 before), and 33 of
+their 87 tickets hit (38%) where 22 of 64 did before (34%). Tonight's hockey, NBA and college football games short
+of their two tickets for a conflict (seven of them at 4:25 PM) are read again on the next build. Checked by
+tests/test_the_parlays_are_built_to_win.py and tests/test_college_parlays_build_and_stay_tracked.py.
+
 **YW. Sunday's NFL props from Thursday, so the weekend's reports have their parlays days ahead**
 (step 785; 19 November). Nothing to run. Your answer to decision 9 ("Yes ... buying Sunday's props 2 to 3 days
 early. Yes to all that") is in: the NFL's board now buys the books' player props for the games up to three days
