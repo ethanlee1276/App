@@ -226,8 +226,8 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
     game's rows are filed under (its "label"; the NFL's is the week) and which
     players its report names (a pick with no club on its row).
 
-    THE REPORT'S OWN TICKETS. The board posts a game's four parlays and
-    three pairs afresh as lines and news move, and the record journals every
+    THE REPORT'S OWN TICKETS. The board posts a game's parlays and pairs
+    afresh as lines and news move, and the record journals every
     version it posts (a week of them, for the NFL: 36 for one game). The
     archive keeps the set the report carried at the start ("parlays",
     engine/reportkeep), so those are the game's tickets here, in the report's

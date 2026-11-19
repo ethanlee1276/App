@@ -18,10 +18,6 @@ sys.path.insert(0, str(ROOT))
 
 from engine import gameparlays as GP                     # noqa: E402
 
-# These hold the builder's own choices. A league's tickets on paper (engine/
-# parlayhold: the NFL's from 17 November) leave the board by a rule with its own
-# tests (test_three_leg_parlays_go_on_paper), so here no league is held.
-GP.paper_hold = lambda sport: None
 from engine import parlaybuild as PB                     # noqa: E402
 from engine import parlays as P                          # noqa: E402
 from engine import twoleg as T                           # noqa: E402

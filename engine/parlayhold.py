@@ -1,5 +1,14 @@
-"""A league's three-leg parlays go on paper while they hit under 25%: built,
-journaled and graded every slate, never posted (2026-11-17).
+"""A league's two-leg parlays go on paper while they hit under 36%: built,
+journaled and graded every slate, never posted (2026-11-17, GPWIN1).
+
+THE THREE-LEG HOLD IS RETIRED (THREELEG1, 2026-11-19). Ethan: "for the game
+report, 3-leg parlays, we need those back immediately. I want those for every
+single game ... and then I go back and pick 2 of them." Every game report posts
+its three-leg tickets again whatever its league's three-leg record
+(engine/gameparlays), so the three-leg size is out of SIZES: no saved
+three-leg hold, the standing one included, holds anything, and the nightly
+pass measures the two-leg size alone. What follows is the hold's history and
+the two-leg rule.
 
 Ethan, asked on 2026-11-17 whether the NFL's three-leg parlays (30 of 175
 hit, 17%) should keep posting or be tracked without posting while they hit
@@ -55,15 +64,15 @@ MIN_N = 50
 #: The tickets graded since a hold began, before they can bring it back.
 RELEASE_N = 50
 
-#: The hold the question was asked on: the NFL's record on 17 November.
-STANDING = ({"sport": "nfl", "since": "2026-11-17", "n": 175, "won": 30, "source": "standing"},)
 
 #: Each size of ticket and its own bar: the journal's source, the hit rate it
 #: must reach, the graded tickets before the hold says anything, and the ones
 #: graded since a hold began before they can bring it back. Three legs are the
 #: constants above; two legs are GPWIN1's.
-SIZES = {3: {"source": SOURCE, "floor": FLOOR, "min_n": MIN_N, "release_n": RELEASE_N, "word": "three-leg"},
-         2: {"source": "game_two", "floor": 0.36, "min_n": 40, "release_n": 40, "word": "two-leg"}}
+SIZES = {2: {"source": "game_two", "floor": 0.36, "min_n": 40, "release_n": 40, "word": "two-leg"}}
+#: The sizes no longer held (THREELEG1): their saved holds are dropped on the
+#: next pass and read as nothing until then.
+RETIRED = {3: {"source": SOURCE, "floor": FLOOR, "min_n": MIN_N, "release_n": RELEASE_N, "word": "three-leg"}}
 
 
 def _legs(h: dict) -> int:
@@ -98,11 +107,10 @@ def refresh(conn, path=None, today: _dt.date | None = None) -> dict:
     (SIZES)."""
     today = today or _dt.date.today()
     prev = load(path)
-    holds = {(h["sport"], _legs(h)): dict(h) for h in prev.get("holds") or [] if h.get("sport")}
-    released = {(h["sport"], _legs(h)): dict(h) for h in prev.get("released") or [] if h.get("sport")}
-    for k in STANDING:
-        if (k["sport"], 3) not in holds and (k["sport"], 3) not in released:
-            holds[(k["sport"], 3)] = dict(k)
+    holds = {(h["sport"], _legs(h)): dict(h) for h in prev.get("holds") or []
+             if h.get("sport") and _legs(h) in SIZES}
+    released = {(h["sport"], _legs(h)): dict(h) for h in prev.get("released") or []
+                if h.get("sport") and _legs(h) in SIZES}
     for legs, cfg in SIZES.items():
         by = graded(conn, legs)
         for sp in sorted(set(by) | {s for s, n in holds if n == legs}):
@@ -125,7 +133,7 @@ def refresh(conn, path=None, today: _dt.date | None = None) -> dict:
                                      **({"legs": legs} if legs != 3 else {})}
                 released.pop((sp, legs), None)
     order = lambda h: (h["sport"], _legs(h))                                   # noqa: E731
-    out = {"measured_on": today.isoformat(), "floor": FLOOR, "window": WINDOW,
+    out = {"measured_on": today.isoformat(), "floor": SIZES[2]["floor"], "window": WINDOW,
            "holds": sorted(holds.values(), key=order), "released": sorted(released.values(), key=order)}
     save(out, path)
     return out
@@ -161,19 +169,14 @@ def save(out: dict, path=None) -> Path:
 
 
 def holds(path=None) -> list:
-    """The leagues on paper now, either size: the saved holds, and the
-    standing hold until a saved pass has released it."""
-    state = load(path)
-    out = [h for h in state.get("holds") or [] if h.get("sport")]
-    have = {h["sport"] for h in out if _legs(h) == 3} | {h.get("sport") for h in state.get("released") or []
-                                                         if _legs(h) == 3}
-    out += [dict(k) for k in STANDING if k["sport"] not in have]
-    return out
+    """The leagues on paper now: the saved holds of a size still held (SIZES);
+    a retired size's (RETIRED, the three-leg one) hold nothing."""
+    return [h for h in load(path).get("holds") or [] if h.get("sport") and _legs(h) in SIZES]
 
 
 def held(sport, path=None, legs: int = 3) -> dict | None:
-    """The hold on a league's three-leg tickets (or, ``legs=2``, its two-leg
-    ones), or None."""
+    """The hold on a league's tickets of ``legs`` legs, or None: always None
+    for three legs since THREELEG1 (RETIRED)."""
     sp = str(sport or "").lower()
     return next((h for h in holds(path) if h.get("sport") == sp and _legs(h) == legs), None)
 
@@ -182,7 +185,8 @@ def words(h: dict) -> str:
     """The hold in a reader's words, for every game it covers."""
     n, won = int(h.get("n") or 0), int(h.get("won") or 0)
     lg = str(h.get("sport") or "").upper()
-    rec = (f"have hit {won} of {n} ({won / n:.0%})" if n else f"have hit under {SIZES[_legs(h)]['floor']:.0%}")
+    rec = (f"have hit {won} of {n} ({won / n:.0%})" if n else
+           f"have hit under {({**RETIRED, **SIZES})[_legs(h)]['floor']:.0%}")
     if h.get("source") != "standing" and n:
         rec = f"have hit {won} of their last {n} ({won / n:.0%})"
     try:
@@ -190,7 +194,7 @@ def words(h: dict) -> str:
         since = f"{day.day} {day.strftime('%B')}"
     except ValueError:
         since = "the hold began"
-    cfg = SIZES[_legs(h)]
+    cfg = {**RETIRED, **SIZES}[_legs(h)]
     return (f"On paper, not posted: our {cfg['word']} parlays in the {lg} {rec}, under the {cfg['floor']:.0%} "
             f"they need. Each game's are still built and graded on the record, and they come back by themselves "
             f"once {cfg['release_n']} graded since {since} hit {cfg['floor']:.0%}.")
@@ -201,9 +205,7 @@ def verdict(out: dict) -> dict:
     with its record and its tickets since, and the ones back."""
     hs = (out or {}).get("holds") or []
     keep = ("sport", "since", "n", "won", "since_n", "since_won", "source", "legs")
-    three = [h for h in hs if _legs(h) == 3]
     two = [h for h in hs if _legs(h) == 2]
-    return {"on_paper": [h.get("sport") for h in three],
-            "back": [h.get("sport") for h in (out or {}).get("released") or [] if _legs(h) == 3],
-            **({"two_leg_on_paper": [h.get("sport") for h in two]} if two else {}),
+    return {"two_leg_on_paper": [h.get("sport") for h in two],
+            "back": [h.get("sport") for h in (out or {}).get("released") or [] if _legs(h) == 2],
             "holds": [{k: h.get(k) for k in keep if h.get(k) is not None} for h in hs]}

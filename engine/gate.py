@@ -201,8 +201,8 @@ PAID_KEYS = (
     # EVERY UFC FIGHT, WRITTEN OUT (engine/ufc/report, 2026-11-16): the
     # card's picks, chances and grades in words, so as paid as `picks`.
     "fight_reports",
-    # EACH GAME'S PARLAYS (engine/gameparlays, 2026-11-14): four three-leg
-    # tickets and three scorer pairs a game, every leg a paid pick with our
+    # EACH GAME'S PARLAYS (engine/gameparlays, 2026-11-14): two or three
+    # three-leg tickets and three scorer pairs a game, every leg a paid pick with our
     # chance — the boards under a ninth name, so a paid key.
     "game_parlays",
     "edge_board",

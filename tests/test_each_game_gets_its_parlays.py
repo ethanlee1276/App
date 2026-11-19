@@ -1,5 +1,7 @@
-"""Each game gets four 3-leg parlays and three 2-leg touchdown parlays, built
-the way Ethan's own reports build them (engine/gameparlays, 2026-11-14).
+"""Each game gets three 3-leg parlays (two at least, THREELEG1) and three 2-leg
+touchdown parlays, built the way Ethan's own reports build them
+(engine/gameparlays, 2026-11-14; Ethan, 2026-11-19: "We need 2 3-leg parlays,
+or maybe 2 to 3 3-leg parlays on the game reports").
 
 Ethan, 2026-11-14: "we need to make 3-leg or 2-leg same game parlays ... we
 throw like 8 legs in it and it's unrealistic ... making sure no legs have
@@ -24,10 +26,6 @@ sys.path.insert(0, str(ROOT))
 
 from engine import gameparlays as GP                # noqa: E402
 
-# These hold the builder's own choices. A league's tickets on paper (engine/
-# parlayhold: the NFL's from 17 November) leave the board by a rule with its own
-# tests (test_three_leg_parlays_go_on_paper), so here no league is held.
-GP.paper_hold = lambda sport: None
 
 #: The matchup scan's numbers for the game (engine/gamescan): each defence's
 #: rank against the pass and the run, and red-zone trips both ways — what the
@@ -103,10 +101,11 @@ def board():
     }
 
 
-def test_four_three_leg_parlays_with_no_conflict():
+def test_three_three_leg_parlays_with_no_conflict():
     gp = GP.build(board(), "nfl")
     g = gp["games"][0]
-    assert g["game"] == "WAS@NYG" and len(g["threes"]) == 4, (len(g["threes"]), g.get("threes_note"))
+    assert GP.THREE_PER_GAME == 3 and GP.THREE_MIN == 2
+    assert g["game"] == "WAS@NYG" and len(g["threes"]) == 3, (len(g["threes"]), g.get("threes_note"))
     for t in g["threes"]:
         names = [l["player"] for l in t["legs"]]
         assert len(names) == 3 and len(set(names)) == 3, "no player twice"
@@ -121,7 +120,7 @@ def test_four_three_leg_parlays_with_no_conflict():
         assert t["take"] > t["fair"] if t["fair"] > 0 else True
         assert 0 < t["joint"] < 1 and t["script"]
         assert not t["staked"] and t["stake_units"] == 0.0, "tracked, never staked"
-    # Four tickets, each its own: no two the same, no leg on more than two.
+    # Three tickets, each its own: no two the same, no leg on more than two.
     ids = [{GP._leg_id(l) for l in t["legs"]} for t in g["threes"]]
     for i in range(len(ids)):
         for j in range(i + 1, len(ids)):
@@ -192,7 +191,7 @@ def test_every_priced_prop_is_a_leg_inside_the_cap():
     assert {"Cam Skattebo", "Isaiah Likely", "Chig Okonkwo", "Stefon Diggs"} <= legs, legs
     assert not legs & {"Terry McLaurin", "Rachaad White", "Wan'Dale Robinson", "Daniel Jones"}, legs
     g = GP.build(b, "nfl")["games"][0]
-    assert len(g["threes"]) == 4, (len(g["threes"]), g.get("threes_note"))
+    assert len(g["threes"]) == GP.THREE_PER_GAME, (len(g["threes"]), g.get("threes_note"))
     assert len(GP.build(dict(b, recommendations=[]), "nfl")["games"][0]["threes"]) == 0, \
         "two posted picks alone make no three-leg ticket"
 
@@ -218,7 +217,8 @@ def test_the_rows_the_most_likely_seats_dropped_are_legs_and_built_once():
     assert {"Cam Skattebo", "Isaiah Likely", "Chig Okonkwo", "Stefon Diggs"} <= legs and "Terry McLaurin" not in legs
     GP.attach(b, "nfl")
     first = b["game_parlays"]
-    assert first.get("pooled") and len(first["games"][0]["threes"]) == 4, first["games"][0].get("threes_note")
+    assert first.get("pooled") and len(first["games"][0]["threes"]) == GP.THREE_PER_GAME, \
+        first["games"][0].get("threes_note")
     # College builds them again after the Pick of the Day has taken the pool:
     # the build made with it stands.
     b.pop(POOL_KEY)
@@ -297,7 +297,7 @@ def test_the_report_and_the_record_carry_them():
     conn.row_factory = sqlite3.Row
     gp = GP.build(board(), "nfl")
     n = PL.log_game_parlays(conn, gp, "nfl", "2099-W10")
-    assert n == 9, n          # two two-leg tickets (GPWIN1), four three-leg, three scorer pairs
+    assert n == 8, n          # two two-leg tickets (GPWIN1), three three-leg, three scorer pairs
     rows = conn.execute("SELECT source, n_legs, stake_units FROM parlays").fetchall()
     assert sorted({r["source"] for r in rows}) == ["game_td", "game_three", "game_two"]
     assert {r["n_legs"] for r in rows if r["source"] == "game_two"} == {2}
@@ -319,13 +319,13 @@ def test_every_ticket_grades_off_its_legs():
     legs = PL.journal_game_parlay_legs(conn, b, "nfl")
     assert legs == len(GP.journal_rows(b["game_parlays"])), legs
     n = PL.log_game_parlays(conn, b["game_parlays"], "nfl", b["date"])
-    assert n == 9
+    assert n == 8
     cats = {r[0] for r in conn.execute("SELECT DISTINCT category FROM bets")}
     assert cats == {PL.PARLAY_LEG_CATEGORY}, "the legs ride on paper in their own bucket"
     conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
     conn.commit()
     res = PL.settle(conn)
-    assert res["settled"] == 9 and res["waiting"] == 0, res
+    assert res["settled"] == 8 and res["waiting"] == 0, res
     # One leg lost loses every ticket it is on.
     conn2 = ledger.connect(os.path.join(tempfile.mkdtemp(), "t.db"))
     ledger.configure_bankroll(conn2, starting=1000, unit_pct=1.0)

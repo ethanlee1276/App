@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YH. Three-leg parlays back on every game report: two at least, three at most**
+(step 770; 19 November). Nothing to run. You: "for the game report, 3-leg parlays, we need those back immediately. I
+want those for every single game ... We need 2 3-leg parlays, or maybe 2 to 3." Two things had taken them away. From
+17 November a league whose three-leg tickets hit under 25% had them on paper, built and graded but posted nowhere
+(the NFL's from the start, the NBA's by its record); that hold is retired, and the nightly pass now measures the
+two-leg tickets alone, which keep their own hold. And since the tickets became the report's own picks (GPLEGS1), a
+game whose report had fewer than about four picks clearing 60% made none: 18 November's 15 college basketball games
+held 8 picks between them and posted no parlay. Now every game posts three, and when fewer than two clear the 30% a
+three-leg ticket is built to, it fills up to two: the report's picks first, then the game's other priced props, then
+a longer ticket down to 15%. Each filled ticket says so on its card, naming any leg that is not one of the report's
+picks ("Isaiah Likely over 3.5 receptions (70%) is not one of this report's picks: a prop the board priced") and
+when it is a longer ticket ("A longer ticket: 24.2% by our numbers, under the 30% a three-leg parlay is built to").
+A game whose books price fewer than three player props still has none, and says why. The tickets are journaled and
+graded as before, so the record shows how the filled ones do.
+
 **YG. The sixteenth walk: the race's counts, the alerts' watch line, every league in the lab and on the desk**
 (step 769; 19 November). Nothing to run. Walk 16 read the NHL's and NBA's race pages, the NHL's standings and
 futures, the NBA's long shots and alerts and the NFL's toolbox on a phone. The race pages opened on "330 games

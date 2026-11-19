@@ -91,7 +91,7 @@ const FEATURES = [
   // report card opens on this list, so it leads with them.
   ["The game reports", "A full report for every game, then its own grade",
    [["Game report", "Every game in every league gets one before it starts: who we think wins and how sure we are, the matchups that decide it, who is hurt and what that changes, the red-zone roles, the last meeting and how the game should go, in plain words. It keeps watching the injury report and the news until the start.", "reportpicks"],
-    ["The report’s picks and parlays", "Every read the numbers back becomes a pick, with its price and our chance, and each game’s three-leg parlays and touchdown pairs are built only from those picks. A report whose picks make fewer than four parlays says why.", "reportpicks"],
+    ["The report’s picks and parlays", "Every read the numbers back becomes a pick, with its price and our chance, and each game’s three-leg parlays and touchdown pairs are built from those picks first: every game gets two or three three-leg parlays, and one that leans on a prop the report did not pick says which.", "reportpicks"],
     ["How our reports did", "After the final the report grades itself: every pick and parlay with a check or an X, the call right or wrong, the injury report checked, and why a read missed. Free on the Record.", "record"],
     ["Fact checks", "Every finished game’s pre-game numbers against the box score, with running totals, and how sure we were against how often it held.", "record"]]],
 

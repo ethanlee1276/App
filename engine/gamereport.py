@@ -3861,10 +3861,10 @@ def sec_parlays(c: Ctx) -> dict | None:
     """THE PARLAYS FOR THIS GAME (engine/gameparlays; Ethan, 2026-11-14:
     "for each game ... make 4 3-leg parlays ... and 3 2-leg touchdown
     parlays ... do the same shit that the report's doing"). The report's two
-    strongest picks as two-leg tickets, up to four three-leg tickets and
-    three scorer pairs, each with its price to take it, the script it
-    needs, its backups and caveats — and the record's word on same-game
-    parlays."""
+    strongest picks as two-leg tickets, two or three three-leg tickets on every
+    game (THREELEG1, 2026-11-19: "I want those for every single game") and
+    three scorer pairs, each with its price to take it, the script it needs,
+    its backups and caveats — and the record's word on same-game parlays."""
     from .gameparlays import card
     gp = _game_parlays(c)
     if not gp:
@@ -3888,7 +3888,7 @@ def sec_parlays(c: Ctx) -> dict | None:
     if threes:
         blocks += [_h("Three-leg parlays"), {"type": "parlays", "kind": "three", "items": threes}]
         if gp.get("threes_note"):
-            # Fewer than four: why, under the ones it made (gameparlays._report_note).
+            # Fewer than two: why, under the one it made (gameparlays._report_note).
             blocks.append(_p(gp["threes_note"]))
     elif gp.get("threes_paper"):
         # On paper while the league's three-leg record is under 25% (engine/parlayhold).

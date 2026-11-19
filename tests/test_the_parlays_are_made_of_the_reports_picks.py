@@ -13,10 +13,12 @@ report's own picks hit 75% as legs, the others 62%; Rockets at Heat's tickets
 each lost on a leg the report never picked). What these hold:
 
   * a game's three-leg tickets are built inside its report, from the picks the
-    report shows and no other leg, under every rule a leg kept (the 60% floor,
-    the clash rules, the league's paper hold);
-  * a report whose picks make fewer than four tickets posts fewer and says
-    why; one with none clearing the floor posts none;
+    report shows, under every rule a leg kept (the 60% floor, the clash rules);
+  * a report whose picks make fewer than two tickets fills up to two from the
+    game's other priced props, its own picks first, each such ticket naming
+    the legs it did not pick (THREELEG1, 2026-11-19: "I want those for every
+    single game"); a game whose props make fewer still says why under the one
+    it made;
   * a game no report rebuilt posts no three-leg ticket, a started game's kept
     tickets stand, and no later pass of the parlay hook builds them again;
   * end to end: a whole NFL report's parlays, and the board's, carry only the
@@ -35,7 +37,6 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from engine import gameparlays as GP, gamereport as GR             # noqa: E402
 
-GP.paper_hold = lambda sport: None
 EG = __import__("test_each_game_gets_its_parlays")                  # the shared fixture (a sibling test file)
 
 GAME = EG.GAME
@@ -99,22 +100,37 @@ def test_a_pick_matches_its_leg_however_the_side_is_spelled():
     assert GP._pick_key({"player": "A", "market": "anytime_td", "side": "Yes", "line": 0.5})[2] == "OVER"
 
 
-def test_too_few_picks_make_no_ticket_and_say_why():
+def test_too_few_picks_fill_from_the_games_other_props_and_say_so():
     b = _built()
     x = GP.from_report(b, "nfl", GAME, PICKS[:2])
-    assert x["threes"] == [] and "takes three" in x["threes_note"], x["threes_note"]
-    assert "own picks" in x["threes_note"]
+    picked = {GP._pick_key(p) for p in PICKS[:2]}
+    assert len(x["threes"]) == GP.THREE_MIN and x.get("threes_filled") == GP.THREE_MIN, x.get("threes_note")
+    assert "threes_note" not in x
+    # The report's picks first: both on the first ticket, one at least on the
+    # next (a game's tickets share one leg before they share two: `choose`).
+    mine = [[l for l in t["legs"] if GP._pick_key(l) in picked] for t in x["threes"]]
+    assert len(mine[0]) == 2 and all(mine), [[l["player"] for l in m] for m in mine]
+    for t in x["threes"]:
+        assert any("this report's picks: " in c for c in t["caveats"]), t["caveats"]
     # A pick under the floor is no leg: Daniels's completions under, at 55%.
     low = GP.from_report(_built(), "nfl", GAME, PICKS[:2] + [_pick("Jayden Daniels", "pass_cmp", "UNDER", 19.5,
                                                                    team="WAS")])
-    assert low["threes"] == [] and low["legs_read"] == 2, low
-    # None at all on a player's line (a game bet only): says so.
+    assert low["legs_read"] == 2 and len(low["threes"]) == GP.THREE_MIN, low
+    # None at all on a player's line (a game bet only): the game's props make its two, every leg named.
     none = GP.from_report(_built(), "nfl", GAME, [{"player": "NYG", "market": "moneyline", "side": "NYG",
                                                    "game": True}])
-    assert none["threes"] == [] and "none on a player's line" in none["threes_note"], none["threes_note"]
-    # Three that fit make a ticket, and the note says why there are not four.
-    three = GP.from_report(_built(), "nfl", GAME, PICKS[:3])
-    assert len(three["threes"]) == 1 and three["threes_note"].startswith("1 of 4: "), three["threes_note"]
+    assert len(none["threes"]) == GP.THREE_MIN, none.get("threes_note")
+    assert all(any("are not this report's picks" in c for c in t["caveats"]) for t in none["threes"])
+    # A game whose props make one ticket posts it, and the note says why there is no second.
+    keys3 = {GP._pick_key(p) for p in PICKS[:3]}
+    was_legs = GP._board_legs
+    GP._board_legs = lambda board, sp, now=None: [l for l in was_legs(board, sp, now) if GP._pick_key(l) in keys3]
+    try:
+        three = GP.from_report(_built(), "nfl", GAME, PICKS[:3])
+    finally:
+        GP._board_legs = was_legs
+    assert len(three["threes"]) == 1 and three["threes_note"].startswith("1 of 2: this report's 3 picks"), \
+        three.get("threes_note")
     # ...and the report says it under the ticket it made, on the page and in the report's section.
     import types
     was = GR._game_parlays
@@ -132,14 +148,16 @@ def test_too_few_picks_make_no_ticket_and_say_why():
     assert '+ (g.threes_note ? `<p class="gr-note">${escapeHtml(g.threes_note)}</p>` : "")' in body
 
 
-def test_a_league_on_paper_keeps_the_report_built_tickets_on_paper():
+def test_an_entry_from_a_league_on_paper_posts_the_reports_tickets():
+    """The three-leg hold is retired (THREELEG1): an entry built while its league
+    was on paper posts the report's tickets on its next rebuild."""
     b = _built()
     x = GP.for_game(b, "NYG", "WAS")
     x.update(paper_threes=x.pop("threes"), threes=[], threes_paper=True, threes_note="On paper.")
     GP.from_report(b, "nfl", GAME, PICKS)
-    assert x["threes"] == [] and x["paper_threes"] and x["threes_note"] == "On paper."
+    assert x["threes"] and "paper_threes" not in x and "threes_paper" not in x and "threes_note" not in x
     picked = {GP._pick_key(p) for p in PICKS}
-    assert all(GP._pick_key(l) in picked for l in _legs(x, "paper_threes"))
+    assert all(GP._pick_key(l) in picked for l in _legs(x))
 
 
 def test_a_game_no_report_rebuilt_posts_none_and_kept_tickets_stand():

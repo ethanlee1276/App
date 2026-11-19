@@ -1,0 +1,190 @@
+"""Every game report posts its three-leg parlays: two at least, three at most
+(2026-11-19, THREELEG1).
+
+Ethan, 2026-11-19: "for the game report, 3-leg parlays, we need those back
+immediately. I want those for every single game. Just how every single report
+you went through and read gave me touchdown parlays and player prop parlays,
+3-leg parlays, and then I go back and pick 2 of them ... We need 2 3-leg
+parlays, or maybe 2 to 3 3-leg parlays on the game reports."
+
+From 17 November a league whose three-leg tickets hit under 25% had them on
+paper (engine/parlayhold): built and graded, posted nowhere, the NFL's from the
+start and the NBA's by the record. And a game whose report's picks made fewer
+than four tickets clearing 30% posted fewer, college's mostly none. What these
+hold:
+
+  * the three-leg hold is retired: no saved hold, the standing NFL one
+    included, holds a three-leg ticket, the nightly pass measures the two-leg
+    size alone, and no build moves a game's tickets to paper;
+  * a game posts THREE_PER_GAME (3) tickets at most and fills up to THREE_MIN
+    (2) when fewer clear THREE_FLOOR: from its own legs first (a report's
+    picks), then the game's other priced props, then longer tickets down to
+    LONG_FLOOR — each filled ticket saying on its card which legs are not the
+    report's picks and when it is a longer ticket;
+  * a ticket on paper from a board built before still journals and grades.
+
+    python3 tests/test_every_game_report_posts_its_three_leg_parlays.py
+"""
+import datetime as dt
+import json
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests"))
+
+from engine import gameparlays as GP, parlayhold, parlayledger  # noqa: E402
+
+EG = __import__("test_each_game_gets_its_parlays")                  # the shared fixture (a sibling test file)
+DAY = dt.date(2026, 11, 20)
+
+
+def _conn():
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    parlayledger.ensure_schema(c)
+    return c
+
+
+def _tickets(c, sport, won, lost, source, day="2026-11-01"):
+    for i in range(won + lost):
+        c.execute("INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, qualified, was_play,"
+                  " notional_units, stake_units, source, status) VALUES (?,?,?,?,?,?,?,1,0,1,0,?,?)",
+                  (f"{day}T12:00:00", sport, day, f"{sport}-{source}-{day}-{i}", "same_game",
+                   3 if source == "game_three" else 2, "A@B", source, "won" if i < won else "lost"))
+    c.commit()
+
+
+def _path():
+    return Path(tempfile.mkdtemp()) / "parlayhold.json"
+
+
+def test_the_three_leg_hold_is_retired_and_the_two_leg_one_stands():
+    c, p = _conn(), _path()
+    _tickets(c, "nba", 9, 91, "game_three")             # 9% three-leg: would have been held
+    _tickets(c, "nhl", 10, 40, "game_two")              # 20% two-leg: held on its own bar
+    out = parlayhold.refresh(c, p, today=DAY)
+    assert [(h["sport"], h.get("legs")) for h in out["holds"]] == [("nhl", 2)], out["holds"]
+    assert parlayhold.held("nba", p) is None and parlayhold.held("nfl", p) is None, "nothing holds three legs"
+    assert parlayhold.held("nhl", p, legs=2)["won"] == 10
+    assert 3 not in parlayhold.SIZES and parlayhold.RETIRED[3]["word"] == "three-leg"
+    v = parlayhold.verdict(out)
+    assert v["two_leg_on_paper"] == ["nhl"] and "on_paper" not in v, v
+    # A state saved before (the NFL's standing hold and the NBA's measured one)
+    # holds nothing now, and the next pass drops it.
+    old = _path()
+    old.write_text(json.dumps({"holds": [{"sport": "nfl", "since": "2026-11-17", "n": 175, "won": 30,
+                                          "source": "standing"},
+                                         {"sport": "nba", "since": "2026-11-17", "n": 100, "won": 9,
+                                          "source": "measured"}], "released": []}))
+    assert parlayhold.holds(old) == [] and parlayhold.held("nfl", old) is None
+    assert parlayhold.refresh(_conn(), old, today=DAY)["holds"] == []
+
+
+def test_no_build_moves_a_games_tickets_to_paper():
+    src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
+    assert "def paper_hold(" not in src and "paper_hold(sp)" not in src
+    build = src[src.index("def build(board: dict, sport: str, now=None) -> dict:"):src.index("def two_hold(")]
+    assert '"threes_paper"' not in build, "no board says its three-leg tickets are on paper"
+    old = _path()
+    old.write_text(json.dumps({"holds": [{"sport": "nfl", "since": "2026-11-17", "n": 175, "won": 30,
+                                          "source": "standing"}], "released": []}))
+    orig = parlayhold.DEFAULT_PATH
+    try:
+        parlayhold.DEFAULT_PATH = old
+        gp = GP.build(EG.board(), "nfl")
+    finally:
+        parlayhold.DEFAULT_PATH = orig
+    g = gp["games"][0]
+    assert len(g["threes"]) == GP.THREE_PER_GAME and not g.get("paper_threes") and not g.get("threes_paper")
+    assert gp["counts"]["threes"] == GP.THREE_PER_GAME and gp["counts"]["filled_threes"] == 0
+
+
+def _leg(player, market, p, team="NYG", odds=-200):
+    return {"player": player, "team": team, "opponent": "WAS" if team == "NYG" else "NYG", "home": "NYG",
+            "away": "WAS", "position": "WR", "market": market, "market_label": market, "side": "Over",
+            "line": 2.5, "odds": odds, "book": "DraftKings", "p": p, "game_date": "2099-11-12"}
+
+
+def test_a_game_fills_up_to_two_and_its_cards_say_how():
+    g = EG.GAME
+    # Four legs whose best three make 0.62^3, about 24%: under THREE_FLOOR, so
+    # none clears it, and the game fills its two with longer tickets.
+    legs = [_leg("A One", "receptions", 0.62), _leg("B Two", "rush_att", 0.62, team="WAS"),
+            _leg("C Three", "rec_yds", 0.62), _leg("D Four", "pass_cmp", 0.61, team="WAS")]
+    made = GP.tickets_of("nfl", g, legs)
+    assert made["threes_clear"] == 0 and len(made["threes"]) == GP.THREE_MIN, made
+    assert made["filled"] == GP.THREE_MIN
+    for t in made["threes"]:
+        assert GP.LONG_FLOOR <= t["joint"] < GP.THREE_FLOOR and t["filled"]
+        assert any(c.startswith(f"A longer ticket: {t['joint'] * 100:.1f}% by our numbers, under the 30% a "
+                                f"three-leg parlay is built to") for c in t["caveats"]), t["caveats"]
+    # The report's own picks first: two of them and the game's other props fill
+    # the third leg, each such ticket naming the leg that is not a pick.
+    own = legs[:2]
+    extra = [_leg("E Five", "receptions", 0.80, team="WAS"), _leg("F Six", "rush_yds", 0.78)]
+    made = GP.tickets_of("nfl", g, own, extra=extra)
+    assert len(made["threes"]) == GP.THREE_MIN and made["wider"] == 4, made
+    mine = {GP._leg_id(l) for l in own}
+    for t in made["threes"]:
+        board = [l for l in t["legs"] if GP._leg_id(l) not in mine]
+        assert len(board) == 1, "the report's two picks ride every ticket, one prop of the board's beside them"
+        assert any("is not one of this report's picks" in c for c in t["caveats"]), t["caveats"]
+    # Fewer than three legs make no ticket, and the game says why.
+    few = GP.tickets_of("nfl", g, legs[:2])
+    assert few["threes"] == [] and GP._threes_note(few).startswith("0 of 2: a three-leg parlay takes three legs")
+
+
+def test_a_ticket_on_paper_from_before_still_journals_and_grades():
+    c = _conn()
+    leg = lambda pl, m: {"player": pl, "team": "KC", "market": m, "side": "OVER", "line": 1.5, "odds": -150,
+                         "book": "DraftKings", "p": 0.7}                                        # noqa: E731
+    paper = {"legs": [leg("A", "receptions"), leg("B", "rush_att"), leg("C", "pass_yds")], "joint": 0.3,
+             "take_dec": 3.5, "naive_dec": 3.4, "independent": 0.34}
+    gp = {"games": [{"away": "DEN", "home": "KC", "game": "DEN@KC", "threes": [], "paper_threes": [paper],
+                     "threes_paper": True, "threes_note": "On paper", "scorers": []}]}
+    assert parlayledger.log_game_parlays(c, gp, "nfl", "2026-W12") == 1
+    row = c.execute("SELECT source, n_legs, stake_units FROM parlays").fetchone()
+    assert tuple(row) == ("game_three", 3, 0), tuple(row)
+    assert [r["player"] for r in GP.journal_rows(gp)] == ["A", "B", "C"], "its legs are graded too"
+
+
+def test_the_record_and_the_night_say_no_three_leg_hold():
+    c = _conn()
+    _tickets(c, "nfl", 3, 7, "game_three")
+    old = _path()
+    old.write_text(json.dumps({"holds": [{"sport": "nfl", "since": "2026-11-17", "n": 175, "won": 30,
+                                          "source": "standing"}], "released": []}))
+    orig = parlayhold.DEFAULT_PATH
+    try:
+        parlayhold.DEFAULT_PATH = old
+        rec = parlayledger.game_parlay_record(c)
+    finally:
+        parlayhold.DEFAULT_PATH = orig
+    three = rec["nfl"]["three"]
+    assert (three["graded"], three["wins"]) == (10, 3) and "paper" not in three
+    m = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
+    assert 'verdicts["two-leg parlays on paper"] = parlayhold.verdict(plh)' in m
+    assert "three-leg parlays on paper" not in m
+    # A game played while its league was on paper still says so on its page.
+    rj = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
+    assert "g.threes_paper ? `<p class=\"gr-note\">Three-leg parlays: on paper for now" in rj
+
+
+if __name__ == "__main__":
+    import traceback
+    fails = 0
+    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
+    for name, fn in tests:
+        try:
+            fn()
+            print(f"  ok  {name}")
+        except Exception:
+            fails += 1
+            print(f"FAIL {name}")
+            traceback.print_exc()
+    print(f"\n{len(tests) - fails} tests passed." if not fails else f"\n{fails} FAILED")
+    sys.exit(1 if fails else 0)

@@ -365,7 +365,7 @@ PARLAY_LEG_CATEGORY = "parlay_leg"
 
 def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
     """Journal every ticket a board's game parlays posted (engine/gameparlays:
-    four three-leg tickets and three scorer pairs a game), each under its
+    two or three three-leg tickets and three scorer pairs a game), each under its
     own source, tracked at a stake of nothing, graded at the least price
     its card says to take it at. Returns tickets newly written; a ticket
     already journaled for its day is left alone."""
@@ -516,7 +516,7 @@ def unique_legs(tickets: list, legs: list) -> list:
 def legs_once(tickets: list, legs: list) -> tuple[dict, dict]:
     """EACH LEG COUNTED ONCE, in all and by source (2026-11-16).
 
-    A game's four tickets share their legs, and every rebuild before the
+    A game's tickets share their legs, and every rebuild before the
     start can journal another ticket over the same ones, so a tally of legs
     per ticket counts one player's one bet up to a dozen times: the bets we
     were surest of (they ride the most tickets) weigh the most. Asking

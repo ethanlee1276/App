@@ -515,7 +515,7 @@
         ${v.kind ? `<p class="gr-pick-kind">${escapeHtml(v.kind)}</p>` : ""}</li>`).join("")}</ol>`;
     }
     /* EACH GAME'S PARLAYS (engine/gameparlays, 2026-11-14): its two strongest
-       picks as two-leg tickets (2026-11-18), up to four three-leg tickets and
+       picks as two-leg tickets (2026-11-18), two or three three-leg tickets and
        three scorer pairs, each leg with its price, our chance and why, the
        script the ticket needs, its backups and caveats. */
     if (b.type === "parlays") {

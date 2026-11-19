@@ -41,7 +41,6 @@ os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 from engine import gameparlays as GP, legfit as LF, parlayhold, parlayledger as PL, reportoutcome as RO  # noqa: E402
 
-GP.paper_hold = lambda sport: None
 GP.two_hold = lambda sport: None
 EG = __import__("test_each_game_gets_its_parlays")                  # the shared fixture (a sibling test file)
 GAME = EG.GAME
@@ -71,14 +70,21 @@ def test_a_ticket_under_its_bar_is_not_made_and_the_game_says_why():
     for l in legs:
         l["p"] = 0.61                     # three legs at 61% together: about 23%, under THREE_FLOOR
     made = GP.tickets_of("nfl", GAME, legs)
-    assert made["threes"] == [] and made["threes_fit"] > 0 and made["threes_clear"] == 0, made
     assert made["twos"] == [], "two at 61% together are about 37%, under TWO_FLOOR"
     note = GP._twos_note(made, own=True)
     assert "reach the 42% a two-leg parlay needs" in note and "this report's own picks" in note, note
-    rnote = GP._report_note(made["pool"], 6, 0, made["threes_fit"], made["threes_clear"])
-    assert "reach the 30% a three-leg parlay needs together by our numbers" in rnote, rnote
+    # The three-leg tickets: none clears THREE_FLOOR, so the game fills its two
+    # with longer tickets that say so (THREELEG1, 2026-11-19: "I want those for
+    # every single game").
+    assert made["threes_fit"] > 0 and made["threes_clear"] == 0, made
+    assert len(made["threes"]) == GP.THREE_MIN and made["filled"] == GP.THREE_MIN, made["threes"]
+    assert all(t["joint"] < GP.THREE_FLOOR and any(c.startswith("A longer ticket: ") for c in t["caveats"])
+               for t in made["threes"])
     one = GP.tickets_of("nfl", GAME, legs[:1])
     assert "takes two of this game's picks" in GP._twos_note(one), GP._twos_note(one)
+    # Too few legs for a three-leg ticket: the report says why.
+    rnote = GP._report_note(1, 6, one)
+    assert rnote == "a three-leg parlay takes three legs, and this report's 1 pick at 60% or better makes 1", rnote
 
 
 def test_a_reports_rebuild_makes_both_sizes_from_its_own_picks():
@@ -101,11 +107,11 @@ def test_they_are_journaled_apart_graded_and_read_back():
     b, _x = _game()
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    assert PL.log_game_parlays(conn, b["game_parlays"], "nfl", "2099-W10") == 9
+    assert PL.log_game_parlays(conn, b["game_parlays"], "nfl", "2099-W10") == 2 + GP.THREE_PER_GAME + GP.SCORER_PER_GAME
     rows = conn.execute("SELECT source, n_legs FROM parlays WHERE source='game_two'").fetchall()
     assert len(rows) == 2 and {r["n_legs"] for r in rows} == {2}
     got = RO.tickets(conn, "nfl", "2099-W10", "NYG", "WAS")
-    assert len(got["twos"]) == 2 and len(got["threes"]) == 4 and len(got["scorers"]) == 3, {k: len(v) for k, v in got.items()}
+    assert len(got["twos"]) == 2 and len(got["threes"]) == GP.THREE_PER_GAME and len(got["scorers"]) == 3, {k: len(v) for k, v in got.items()}
     assert "game_two" in PL.NO_ROW_VOID_SOURCES and PL.TWO_LEG_CATS["game_two"] == (PL.PARLAY_LEG_CATEGORY,)
     conn.execute("UPDATE parlays SET status='won' WHERE source='game_two'")
     conn.execute("UPDATE parlay_legs SET status='won'")

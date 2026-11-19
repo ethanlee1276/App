@@ -72,9 +72,9 @@ def test_a_game_that_leans_a_point_or_two_one_way_posts_both_sides():
     old = [_clubs(t) for t in before["threes"]]
     assert sum(c == ["SF"] for c in old) >= 2, ("the old way: half the game's tickets the 49ers' alone", old)
     new = [_clubs(t) for t in after["threes"]]
-    assert len(new) == 4, (new, after.get("threes_note"))
+    assert len(new) == GP.THREE_PER_GAME, (new, after.get("threes_note"))
     assert sum(len(c) == 1 for c in new) <= GP.ONE_SIDED_MAX, new
-    assert sum(c == ["DAL", "SF"] for c in new) >= 3, ("both sides on the rest", new)
+    assert sum(c == ["DAL", "SF"] for c in new) >= GP.THREE_PER_GAME - 1, ("both sides on the rest", new)
     for t in after["threes"]:
         if len(_clubs(t)) == 1:
             assert t.get("one_club") and any(c.startswith("Every leg here is SF's") for c in t["caveats"]), t["caveats"]

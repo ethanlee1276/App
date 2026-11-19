@@ -572,8 +572,8 @@ def _board_counts(path: str) -> dict:
         out["offseason"] = True
     # THE GAME PARLAYS AND THE REPORTS, COUNTED (2026-11-14). Both are paid
     # keys, stripped from the public copy, so the heartbeat is where anyone
-    # can see a league built them: four three-leg tickets and three scorer
-    # pairs a game (engine/gameparlays), one report a game. A build that
+    # can see a league built them: two or three three-leg tickets and three
+    # scorer pairs a game (engine/gameparlays), one report a game. A build that
     # failed says why. Present only when the board carries them.
     gp = b.get("game_parlays")
     if isinstance(gp, dict) and isinstance(gp.get("games"), list):
