@@ -141,7 +141,9 @@ def test_the_player_page_has_one_door_to_his_charts_in_every_league():
     assert "+ chartDoor(player, lg, priced.get(mkt) || r0)" in APP_JS
     i = APP_JS.index('e.target.closest(".cc-open")')
     assert "m.open(d.carry, d.lg, d.kind, d.face, d.mkt, d.pos, d.opp)" in APP_JS[i:i + 300]
-    assert 'ccDoor(f.name, "ufc", "fights", "Fight history")' in APP_JS
+    # The fighter column is drawn by the More menu's file since 2026-11-19 (the first visit's trim).
+    more = (ROOT / "web" / "js" / "more.js").read_text(encoding="utf-8")
+    assert 'ccDoor(f.name, "ufc", "fights", "Fight history")' in more
 
 
 def test_every_players_leg_in_the_parlay_checker_carries_the_same_door():
