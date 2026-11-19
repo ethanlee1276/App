@@ -108,15 +108,14 @@ button.rpk-rec:empty { display: none; }
 .rpk-fact-more[hidden] { display: none; }
 
 /* Ethan's featured games, apart (engine/featured, FEATURED1): each kind's line, then each game's. */
-.rpk-fx { margin: 14px 0 6px; padding: 10px 12px 4px; border-radius: var(--radius, 14px);
-  border: 1px solid color-mix(in oklab, var(--gold) 40%, transparent);
-  background: color-mix(in oklab, var(--gold) 6%, transparent); }
+.rpk-fx { margin: 14px 0 6px; padding: 10px 12px 4px; border-radius: var(--radius);
+  background: color-mix(in oklab, var(--gold) 8%, transparent); }
 .rpk-fx .rpk-fact-h { display: flex; align-items: center; gap: 6px; margin-top: 0; }
 .rpk-fx-star { color: var(--gold); }
 .rpk-fx-kinds { display: grid; gap: 8px; margin: 8px 0; }
 .rpk-fx-kind h5 { margin: 0; font-size: var(--fs-sm); display: flex; justify-content: space-between; gap: 8px; }
 .rpk-fx-kind h5 span { color: var(--text-mute); font-weight: 500; }
-.rpk-fx-kind p, .rpk-fx-game p { margin: 2px 0 0; font-size: var(--fs-sm); line-height: 1.45; }
+.rpk-fx-kind p, .rpk-fx-game p { margin: 2px 0 0; font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .rpk-fx-u.won { color: var(--good); }
 .rpk-fx-u.lost { color: var(--bad); }
 .rpk-fx-games { list-style: none; margin: 8px 0 0; padding: 0; }

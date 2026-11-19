@@ -4678,10 +4678,18 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
                 _kp = None
         _t = _clock.lap("game reports", "ideas + kicking fit", _t)
         prepared = []
+        from .featured import of_game as _featured
         for g in result.get("games") or []:
             if not isinstance(g, dict):
                 continue
             home, away = str(g.get("home") or ""), str(g.get("away") or "")
+            # Ethan's featured games, marked on the board's own row (public: who
+            # plays and when), so the game cards can say so (js/app.js gameCard).
+            kinds = _featured(g, sport)
+            if kinds:
+                g["featured"] = kinds
+            else:
+                g.pop("featured", None)
             extra = ideas_for(ideas, home, away) if sport == "nfl" else {}
             if _kp is not None:
                 try:

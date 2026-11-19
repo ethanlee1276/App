@@ -8148,7 +8148,9 @@ function gameCard(g, i) {
         venuePhotoTag(state.sport, g.home, homeTeam, i === 0, true)}${
         // The one thing the drawing carried that a photo cannot.
         mlb && isLive ? runnerOverlay(g) : ""}${badge}${
-        window._topGameId === gameId(g) && !isLive && !isFinal
+        // Ethan's featured games (engine/featured: the Lions, a Thursday or a Monday night) say so first.
+        !isLive && !isFinal && (g.featured || []).length ? `<span class="top-game-tag">Featured</span>`
+          : window._topGameId === gameId(g) && !isLive && !isFinal
           ? `<span class="top-game-tag">Top game</span>` : ""}${
         // Your team, marked. It rides the art rather than the numbers
         // row on purpose: this is a fact about YOU, not about the game,

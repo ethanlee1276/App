@@ -208,6 +208,21 @@ def test_the_league_s_record_serves_it_and_any_other_league_s_does_not():
     assert F.record(where, "nba", path) == {}
 
 
+def test_the_board_marks_its_featured_games_and_their_reports_say_so():
+    # The board's own rows carry it (public: who plays and when), for the game cards; each report its badge.
+    result = {"date": "2026-W12", "likely_board": {"rows": []},
+              "games": [{"home": "HOU", "away": "IND", "date": "2026-11-19", "kickoff": "20:15", "scan": {}},
+                        {"home": "BUF", "away": "KC", "date": "2026-11-22", "kickoff": "13:00", "scan": {},
+                         "featured": ["thursday"]}]}
+    line = GR.attach(result, sport="nfl", conn=sqlite3.connect(":memory:"))
+    assert line.startswith("Game reports: 2 game(s)"), line
+    assert [g.get("featured") for g in result["games"]] == [["thursday"], None], "a stale mark is taken off"
+    reps = {r["game"]: r for r in result["game_reports"]}
+    assert reps["IND@HOU"]["featured"]["words"] == "Thursday night" and "featured" not in reps["KC@BUF"]
+    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    assert '(g.featured || []).length ? `<span class="top-game-tag">Featured</span>`' in app, "the game card says so"
+
+
 def test_the_pages_draw_the_featured_record_and_list_only_those_games():
     assert "function rpFeaturedHTML(fx)" in RP and "${rpFeaturedHTML(fx)}" in RP
     assert 'data-rpk-list="featured"' in RP and "fxKeys.has(" in RP, "the list's own chip: the featured games alone"
