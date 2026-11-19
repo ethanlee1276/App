@@ -1124,13 +1124,26 @@ function gpBlockHTML(b, kind, sport) {
       ${recent ? `<div data-rec-flat="parlays"><div class="rr-head">Newest tickets</div><div class="rec-gp-recent">${recent}</div></div>` : ""}
     </div>`;
 }
+/* ONE SET A GAME (2026-11-19; Ethan, asked whether the parlay record should
+   count only the parlays posted at the start: "Yes"). The record counts the
+   tickets each report carried when its game started
+   (engine/parlayledger.mark_at_start); the board's other versions, replaced
+   before a game began, are graded and kept but not counted, and the page says
+   how many, once over the league's cards or the table of every league. */
+function gpOneSetHTML(blocks) {
+  const n = blocks.reduce((sum, b) => sum + Number((b || {}).not_counted || 0), 0);
+  return n > 0 ? `<p class="rec-gp-close">One set a game: the tickets each report carried when its game
+      started. The ${n.toLocaleString()} other${n === 1 ? "" : "s"} the board posted and replaced
+      before a game began ${n === 1 ? "is" : "are"} not counted.</p>` : "";
+}
 // The parlays half: a league's cards (gpBlockHTML), or on All one table of every league.
 function gpParlaysHTML(rec, scope) {
   if (!rec || typeof rec !== "object" || rec.error) return "";
   if (scope) {
     const mine = rec[scope] || {};
-    return GP_KINDS.filter((k) => mine[k] && (mine[k].graded || mine[k].open))
-      .map((k) => gpBlockHTML(mine[k], k, scope)).join("");
+    const kinds = GP_KINDS.filter((k) => mine[k] && (mine[k].graded || mine[k].open));
+    return kinds.length ? gpOneSetHTML(kinds.map((k) => mine[k]))
+      + kinds.map((k) => gpBlockHTML(mine[k], k, scope)).join("") : "";
   }
   const rows = [];
   // The site's own league order (SPORT_META), any league it does not list last.
@@ -1149,6 +1162,7 @@ function gpParlaysHTML(rec, scope) {
   }));
   if (!rows.length) return "";
   return `<div class="rr-head rec-rp-head">Parlays and pairs, league by league</div>
+    ${gpOneSetHTML(Object.values(rec).flatMap((kinds) => GP_KINDS.map((k) => (kinds || {})[k])))}
     <div class="ev-scroll"><table class="agate rec-gp-table"><thead><tr><th>League</th>
       <th class="num">Tickets hit</th><th class="num">Units</th><th class="num">Legs hit</th></tr></thead>
       <tbody>${rows.join("")}</tbody></table></div>`;

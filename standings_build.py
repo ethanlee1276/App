@@ -173,31 +173,16 @@ def build(sport: str, season: int | None = None,
             table = standings.compute(conn, sport, season=season, today=day,
                                       conferences=confs)
             table["feed_error"] = ""
+            # THE SEASON THAT FINISHED STAYS UP THROUGH THE OFFSEASON (Ethan,
+            # 2026-11-19, asked whether a league's final standings table
+            # should stay up during its offseason: "Yes"). The page still
+            # waits on the season ahead, as on 2026-08-24; the one before
+            # it rides beside the wait under its own key, labelled final,
+            # and never as the current state of the league.
+            final = _final_table(conn, sport, season - 1, day, confs)
         else:
-            # THE LEAGUE'S OWN TABLE FIRST. Counting our ingested games
-            # answers a different question, and on a partially-ingested
-            # season it answers it wrongly enough to reorder a division —
-            # which is what Ethan was looking at. The count stays as the
-            # fallback, and the payload says which one ran.
-            table, feed_error = _live_table(sport, season, confs)
-            if table is None:
-                table = standings.compute(conn, sport, season=season,
-                                          today=day, conferences=confs)
-                table["feed_error"] = feed_error
-                # THE SEASON HAS OPENED AND NOTHING IS PLAYED YET (the box,
-                # 2026-10-03: NHL inside its window, four days before the
-                # first puck, the league's table empty and ours too). Every
-                # club IS 0-0 — that is this season's table, and the page
-                # shows the league's alignment at zero instead of a blank.
-                # ONLY AT THE START: two weeks in, an empty count means a
-                # missing ingest, not an unplayed season, and 0-0 would be
-                # a lie over every game already played.
-                opened = (datetime.date.fromisoformat(day)
-                          - datetime.date.fromisoformat(start)).days
-                if (not table.get("groups") and divisions.has_divisions(sport)
-                        and 0 <= opened <= ZERO_TABLE_DAYS):
-                    table = standings.zero_table(sport, season)
-                    table["feed_error"] = feed_error
+            table = _played_table(conn, sport, season, day, start, confs)
+            final = None
         bracket = playoffs.bracket(conn, sport, season=season, today=day)
         # Ethan, 2026-09-05: "under pressure data for teams, like clutch
         # win % and reliability % and comeback % and choke %". Counted
@@ -226,13 +211,10 @@ def build(sport: str, season: int | None = None,
     if teams and table.get("source") == "computed":
         # Said on the page, not just in the log: these are OUR counted
         # games, which is a weaker claim than the league's own table.
-        table["note"] = (
-            "Counted from the "
-            f"{table.get('games_counted', 0)} finished game(s) we have "
-            f"ingested — the league's own standings feed was unavailable"
-            + (f" ({table['feed_error']})" if table.get("feed_error") else "")
-            + ". Records here can differ from the league's until the ingest "
-              "catches up.")
+        table["note"] = _counted_note(table)
+    if final and not teams:
+        table["final"] = final
+        table["note"] += f" Until then, the {final['season']} season as it finished."
     # The football unit rankings ride the same payload — derived from the
     # table's own rows, so they cannot disagree with it, and absent for
     # sports/seasons where they'd be a claim about nothing.
@@ -244,6 +226,76 @@ def build(sport: str, season: int | None = None,
     if sport == "cfb":
         table["conf_map"] = conf_seen
     return table
+
+
+def _played_table(conn, sport: str, season: int, day: str, start: str,
+                  confs: dict | None) -> dict:
+    """A season that has opened: the league's own table, or our count of it."""
+    # THE LEAGUE'S OWN TABLE FIRST. Counting our ingested games answers a
+    # different question, and on a partially-ingested season it answers it
+    # wrongly enough to reorder a division — which is what Ethan was looking
+    # at. The count stays as the fallback, and the payload says which one ran.
+    table, feed_error = _live_table(sport, season, confs)
+    if table is None:
+        table = standings.compute(conn, sport, season=season,
+                                  today=day, conferences=confs)
+        table["feed_error"] = feed_error
+        # THE SEASON HAS OPENED AND NOTHING IS PLAYED YET (the box,
+        # 2026-10-03: NHL inside its window, four days before the first
+        # puck, the league's table empty and ours too). Every club IS 0-0 —
+        # that is this season's table, and the page shows the league's
+        # alignment at zero instead of a blank. ONLY AT THE START: two weeks
+        # in, an empty count means a missing ingest, not an unplayed season,
+        # and 0-0 would be a lie over every game already played.
+        opened = (datetime.date.fromisoformat(day)
+                  - datetime.date.fromisoformat(start)).days
+        if (not table.get("groups") and divisions.has_divisions(sport)
+                and 0 <= opened <= ZERO_TABLE_DAYS):
+            table = standings.zero_table(sport, season)
+            table["feed_error"] = feed_error
+    return table
+
+
+def _counted_note(table: dict) -> str:
+    """What a table counted from our own finals says above itself."""
+    return ("Counted from the "
+            f"{table.get('games_counted', 0)} finished game(s) we have "
+            f"ingested — the league's own standings feed was unavailable"
+            + (f" ({table['feed_error']})" if table.get("feed_error") else "")
+            + ". Records here can differ from the league's until the ingest "
+              "catches up.")
+
+
+#: What the offseason page keeps of the season that finished.
+FINAL_KEYS = ("season", "groups", "source", "games_counted", "score_label", "order_note", "feed_error")
+
+
+def _final_table(conn, sport: str, season: int, day: str, confs: dict | None) -> dict | None:
+    """The finished ``season`` as it ended — its table, and its postseason
+    when one was played — or None when nothing of it is on file.
+
+    Asked of the league's feed for THAT season by number, as `--season`
+    always could: the wait never asks the feed for the season ahead
+    (tests/test_season_wait.py), and a finished season asked for by its own
+    year is history, not last season relabelled."""
+    try:
+        start, end = window_of(sport, season)
+    except ValueError:
+        return None
+    if day <= end:
+        return None
+    table = _played_table(conn, sport, season, day, start, confs)
+    teams = sum(len(g["teams"]) for g in table.get("groups") or [])
+    if not teams or table.get("source") == "alignment":
+        return None
+    out = {k: table[k] for k in FINAL_KEYS if k in table}
+    out["team_count"] = teams
+    if table.get("source") == "computed":
+        out["note"] = _counted_note(table)
+    bracket = playoffs.bracket(conn, sport, season=season, today=day)
+    if bracket.get("started"):
+        out["bracket"] = bracket
+    return out
 
 
 #: WHEN EACH LEAGUE'S SEASON OPENS, the way a person says it (FRESH1,
@@ -309,6 +361,9 @@ def main() -> None:
                 f"season {b['season']}"]
         if b["bracket"]["started"]:
             bits.append(f"bracket: {len(b['bracket']['rounds'])} round(s)")
+        if b.get("final"):
+            bits.append(f"the {b['final']['season']} final table beside the wait "
+                        f"({b['final']['team_count']} teams, {b['final'].get('source', '')})")
         print(f"Standings {sport.upper()}: " + ", ".join(bits)
               + (f" — {b['note']}" if b["note"] else "")
               # WHY THE LEAGUE'S TABLE WAS NOT USED, on the line itself.

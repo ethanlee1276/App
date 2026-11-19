@@ -35,19 +35,21 @@ from engine import ledger, parlayledger                                 # noqa: 
 RECORD = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
 
 
-def _ticket(conn, sport, source, date, game, status, joint, dec, legs):
+def _ticket(conn, sport, source, date, game, status, joint, dec, legs, at_start=1):
     """One journaled ticket and its legs: (player, market, side, line, odds,
-    our chance, status, what he did)."""
+    our chance, status, what the player did). ``at_start``: in its game's set
+    at the start (parlayledger.mark_at_start), the tickets the record counts."""
     lost = sum(1 for l in legs if l[6] == "lost")
     won = sum(1 for l in legs if l[6] == "won")
     pnl = round(dec - 1.0, 4) if status == "won" else -1.0 if status == "lost" else None
     n = conn.execute("SELECT COUNT(*) FROM parlays").fetchone()[0]
     cur = conn.execute(
         "INSERT INTO parlays (sport, date, legs_key, parlay_type, n_legs, grade, source, modeled_joint, "
-        "assumed_dec, status, pnl_units, legs_won, legs_lost, legs_void) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "assumed_dec, status, pnl_units, legs_won, legs_lost, legs_void, at_start) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (sport, date, f"{game}|{n}", "same_game", len(legs), game, source, joint, dec, status, pnl,
          won if status != "open" else None, lost if status != "open" else None,
-         sum(1 for l in legs if l[6] == "void") if status != "open" else None))
+         sum(1 for l in legs if l[6] == "void") if status != "open" else None, at_start))
     for i, l in enumerate(legs, 1):
         conn.execute("INSERT INTO parlay_legs (parlay_id, leg_no, player, market, side, line, odds, p_final, "
                      "status, actual) VALUES (?,?,?,?,?,?,?,?,?,?)", (cur.lastrowid, i, *l))

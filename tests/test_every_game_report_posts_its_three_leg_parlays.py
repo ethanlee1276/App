@@ -50,9 +50,10 @@ def _conn():
 
 
 def _tickets(c, sport, won, lost, source, day="2026-11-01"):
+    """Graded tickets, each in its game's set at the start (the ones the record counts)."""
     for i in range(won + lost):
         c.execute("INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, qualified, was_play,"
-                  " notional_units, stake_units, source, status) VALUES (?,?,?,?,?,?,?,1,0,1,0,?,?)",
+                  " notional_units, stake_units, source, status, at_start) VALUES (?,?,?,?,?,?,?,1,0,1,0,?,?,1)",
                   (f"{day}T12:00:00", sport, day, f"{sport}-{source}-{day}-{i}", "same_game",
                    3 if source == "game_three" else 2, "A@B", source, "won" if i < won else "lost"))
     c.commit()

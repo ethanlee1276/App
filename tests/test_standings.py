@@ -406,7 +406,12 @@ def test_the_division_chips_filter_and_cannot_strand_the_page():
     back to All rather than filter the page to nothing."""
     js = app_js()
     i = js.index("async function renderStandings()")
-    body = js[i:i + 6000]
+    assert "${stdGroupsHTML(groups, d.score_label)}" in js[i:i + 6000], \
+        "the season's table draws its groups through the chip helper"
+    # One helper draws the chips and the cards for the season being played
+    # and for a finished one kept through the offseason (2026-11-19).
+    j = js.index("function stdGroupsHTML(")
+    body = js[j:js.index("\n}\n", j)]
     assert "std-chips" in body and 'data-act="stdSet"' in body
     assert 'groups.length > 2' in body, "two conferences don't need chips"
     assert '_stdGroup = ""' in body, "a stale selection strands the page"

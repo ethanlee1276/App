@@ -82,10 +82,15 @@ def _legs(h: dict) -> int:
 
 def graded(conn, legs: int = 3) -> dict:
     """``{league: [(day journaled, won), ...]}``, oldest first: every graded
-    ticket of that size in the journal (three legs: ``game_three``)."""
+    ticket of that size in the journal (three legs: ``game_three``) that was
+    in its game's set at the start (parlayledger.mark_at_start, 2026-11-19:
+    the record counts one set a game, and a hold is measured on the record)."""
+    src = (SIZES.get(legs) or RETIRED.get(legs) or {}).get("source")
     try:
-        rows = conn.execute("SELECT sport, ts, status FROM parlays WHERE source=? AND status IN ('won','lost') "
-                            "ORDER BY ts, id", (SIZES[legs]["source"],)).fetchall()
+        from .parlayledger import AT_START, ensure_schema
+        ensure_schema(conn)
+        rows = conn.execute(f"SELECT sport, ts, status FROM parlays WHERE source=? AND status IN ('won','lost') "
+                            f"AND {AT_START} ORDER BY ts, id", (src,)).fetchall()
     except Exception:                                        # noqa: BLE001 (no journal yet)
         return {}
     out: dict = {}

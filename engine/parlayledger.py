@@ -158,6 +158,16 @@ def ensure_schema(conn) -> None:
                 conn.execute(f"ALTER TABLE parlay_legs ADD COLUMN {col} {kind}")
             except sqlite3.OperationalError as exc:
                 column_exists_or_raise(exc)
+    # WHETHER A GAME'S TICKET WAS IN THE SET ITS REPORT CARRIED AT THE START
+    # (`at_start`, 2026-11-19; `mark_at_start`): 1 it was, 0 an earlier
+    # version replaced before the start, NULL not known (a game still to
+    # play, or one whose starting set was never kept). The same race-tolerant
+    # ALTER as `source` above.
+    if "at_start" not in cols:
+        try:
+            conn.execute("ALTER TABLE parlays ADD COLUMN at_start INTEGER")
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
     conn.commit()
 
 
@@ -363,6 +373,92 @@ def log_twoleg(conn, two_leg: dict, sport: str, date: str) -> int:
 PARLAY_LEG_CATEGORY = "parlay_leg"
 
 
+#: The lists a game's kept set holds its tickets in (engine/reportkeep keeps the
+#: game's `game_parlays` entry as the board had it): posted, and on paper.
+KEPT_LISTS = ("threes", "twos", "scorers", "paper_threes", "paper_twos")
+
+
+def mark_at_start(conn, sport: str, dates, game: str, kept: dict) -> int:
+    """ONE SET A GAME ON THE RECORD: THE ONE ITS REPORT CARRIED AT THE START
+    (2026-11-19). Ethan, asked whether the parlay record should count only the
+    parlays posted at the start: "Yes."
+
+    The board posts a game's parlays afresh as lines and news move, and the
+    journal keeps every version it posted (a week of them for the NFL: 36 for
+    one game), so the record counted each game's tickets several times over,
+    most of them replaced before anyone could bet them at the start. A started
+    game's set is the one engine/reportkeep kept (its `game_parlays` entry as
+    the board had it at the start, ``kept``): each of the game's journaled
+    tickets in it is marked 1, every other version of the game 0, and the
+    record (`game_parlay_record`, `report_game_parlays`, the two-leg hold)
+    counts the 1s. A kept set that held no ticket held none: every version 0.
+
+    ``dates`` are the days the game's tickets may be journaled under (the
+    board's date, the NFL's week, and the game's own day); the first marking
+    stands. Returns the rows marked."""
+    from .gameparlays import SOURCES
+    days = sorted({str(d) for d in (dates or ()) if d})
+    if not sport or not game or not days or not isinstance(kept, dict):
+        return 0
+    keys = sorted({legs_key(t.get("legs") or []) for k in KEPT_LISTS for t in kept.get(k) or []
+                   if isinstance(t, dict) and len(t.get("legs") or []) >= 2})
+    srcs = sorted(set(SOURCES.values()))
+    mark = (f"CASE WHEN legs_key IN ({','.join('?' * len(keys))}) THEN 1 ELSE 0 END" if keys else "0")
+    cur = conn.execute(
+        f"UPDATE parlays SET at_start = {mark} WHERE sport=? AND grade=? AND at_start IS NULL "
+        f"AND source IN ({','.join('?' * len(srcs))}) AND date IN ({','.join('?' * len(days))})",
+        (*keys, sport, game, *srcs, *days))
+    return cur.rowcount or 0
+
+
+def mark_started_games(conn, gp: dict, sport: str, date: str) -> int:
+    """Every started game a board carries kept (engine/reportkeep marks its
+    entry `kept`) marked on the journal (`mark_at_start`). Run on the board as
+    built, before any filter: a kept ticket's legs may have no row under the
+    board's date once the board has moved on to the next day."""
+    ensure_schema(conn)
+    n = 0
+    for x in (gp or {}).get("games") or []:
+        if isinstance(x, dict) and x.get("kept"):
+            n += mark_at_start(conn, sport, (date, str(x.get("date") or "")[:10]),
+                               x.get("game") or f"{x.get('away')}@{x.get('home')}", x)
+    if n:
+        conn.commit()
+    return n
+
+
+def mark_from_archive(conn, where=None, sports=None) -> int:
+    """The starting sets of finished games already archived (engine/reportarchive
+    keeps each one's kept set under "parlays", with its board's label), marked
+    on the journal: the games that started before the journal marked them as
+    they started. Never raises; returns the rows marked."""
+    from . import reportarchive
+    if where is None:
+        from .gate import FULL_DIR
+        where = FULL_DIR
+    root = Path(where) / reportarchive.DIR
+    n = 0
+    try:
+        ensure_schema(conn)
+        for league in sorted(p.name for p in root.iterdir() if p.is_dir()) if root.exists() else []:
+            if sports and league not in sports:
+                continue
+            for day_dir in sorted(p for p in (root / league).iterdir() if p.is_dir()):
+                for f in sorted(day_dir.glob("*@*.json.gz")):
+                    away, _, home = f.name[:-len(".json.gz")].partition("@")
+                    doc = reportarchive.load(league, day_dir.name, away, home, where)
+                    kept = (doc or {}).get("parlays")
+                    if isinstance(kept, dict):
+                        n += mark_at_start(conn, league, (doc.get("label"), day_dir.name),
+                                           kept.get("game") or f"{doc.get('away') or away}@{doc.get('home') or home}",
+                                           kept)
+        if n:
+            conn.commit()
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ parlay journal: starting sets not marked from the archive ({type(exc).__name__}: {exc})")
+    return n
+
+
 def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
     """Journal every ticket a board's game parlays posted (engine/gameparlays:
     two or three three-leg tickets and three scorer pairs a game), each under its
@@ -439,23 +535,25 @@ def journal_game_parlay_legs(conn, board: dict, sport: str) -> int:
 def report_game_parlays(conn, recent: int = 12) -> dict:
     """Each game's parlays on the record (engine/gameparlays): the three-leg
     tickets and the scorer pairs, each apart, the way `report_twoleg`
-    reports its pools."""
+    reports its pools — each game's set at its start (`mark_at_start`)."""
     from .gameparlays import SOURCES
-    return report_twoleg(conn, recent, sources=SOURCES)
+    return report_twoleg(conn, recent, sources=SOURCES, where=AT_START)
 
 
-def report_twoleg(conn, recent: int = 12, sources: dict | None = None) -> dict:
+def report_twoleg(conn, recent: int = 12, sources: dict | None = None, where: str = "") -> dict:
     """The Record page's two-leg parlays, each pool apart and never blended
     with the singles: graded, won, the notional units and ROI (one unit a
     ticket), the units really staked and what they returned, by kind and by
     league, and the newest graded tickets with their legs. ``sources`` is
-    another {pool: source} to report the same way (each game's parlays)."""
+    another {pool: source} to report the same way (each game's parlays), and
+    ``where`` a condition on the rows (each game's set at its start)."""
     ensure_schema(conn)
     if sources is None:
         from .twoleg import SOURCES as sources
     out = {}
     for pool, source in sources.items():
-        rows = conn.execute("SELECT * FROM parlays WHERE source=? ORDER BY date, id", (source,)).fetchall()
+        rows = conn.execute(f"SELECT * FROM parlays WHERE source=?{f' AND {where}' if where else ''} "
+                            "ORDER BY date, id", (source,)).fetchall()
         graded = [r for r in rows if r["status"] in ("won", "lost")]
 
         def tally(rs):
@@ -535,6 +633,11 @@ def legs_once(tickets: list, legs: list) -> tuple[dict, dict]:
     return _leg_tally(uniq), {k: _leg_tally(v) for k, v in sorted(pools.items())}
 
 
+#: The tickets the game parlays' record counts: each game's set at its start
+#: (`mark_at_start`, 2026-11-19).
+AT_START = "at_start = 1"
+
+
 def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
     """THE GAME REPORTS' PARLAYS, LEAGUE BY LEAGUE (2026-11-16). Ethan: "you did
     not put the 'parlays for this game' on the record page. We wanna see if the
@@ -553,7 +656,11 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
       * the newest graded tickets, each with its game and every leg's result.
 
     A leg is graded when it won or lost (a void or a push is neither). Every
-    league in the journal, less the bench, as every figure on the page is."""
+    league in the journal, less the bench, as every figure on the page is.
+
+    ONE SET A GAME (2026-11-19, `mark_at_start`): the tickets each game's
+    report carried when it started, and no version the board replaced before
+    then; ``not_counted`` says how many graded versions were left out."""
     ensure_schema(conn)
     from .gameparlays import SOURCES
     try:
@@ -563,7 +670,11 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
             return False
     out: dict = {}
     for kind, source in SOURCES.items():
-        tickets = conn.execute("SELECT * FROM parlays WHERE source=? ORDER BY date, id", (source,)).fetchall()
+        tickets = conn.execute(f"SELECT * FROM parlays WHERE source=? AND {AT_START} ORDER BY date, id",
+                               (source,)).fetchall()
+        before = dict(conn.execute(
+            "SELECT lower(sport), count(*) FROM parlays WHERE source=? AND status IN ('won','lost') "
+            "AND at_start IS NOT 1 GROUP BY lower(sport)", (source,)).fetchall())
         by_sport: dict = {}
         for t in tickets:
             sp = str(t["sport"] or "").lower()
@@ -613,6 +724,9 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
             once, by_pool = legs_once(graded, done)
             out.setdefault(sp, {})[kind] = {
                 "graded": len(graded), "wins": wins, "losses": len(graded) - wins,
+                # The graded versions left out: replaced before their game
+                # started, or from a game whose starting set was never kept.
+                "not_counted": int(before.get(sp) or 0),
                 "net_units": round(net, 2), "roi": round(net / len(graded), 4) if graded else None,
                 "open": sum(1 for t in rows if t["status"] == "open"),
                 "since": str(rows[0]["date"] or "") if rows else "",
@@ -1714,6 +1828,8 @@ def journal_built_boards(conn, root) -> dict:
                 # ONLY A TICKET WHOSE LEGS HAVE ROWS (STUCKLEGS1): a leg the paper
                 # journal refused (its game under way) would leave it waiting for good.
                 day = board.get("date") or gp.get("date") or ""
+                # Each started game's set at the start, marked on the board as built.
+                mark_started_games(conn, gp, sport, day)
                 gp_ok, _left = _with_leg_rows(conn, gp, sport, day)
                 wrote += log_game_parlays(conn, gp_ok, sport, day)
             except sqlite3.Error as exc:

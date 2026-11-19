@@ -145,14 +145,22 @@ def test_an_explicit_season_is_honoured_finished_or_not():
 
 # --- what waiting means ---------------------------------------------------
 
-def test_the_feed_is_never_asked_while_waiting():
-    """Zero calls — not a call whose answer was thrown away. A feed that
-    returns last season relabelled would otherwise put the exact table
-    Ethan complained about back on the page."""
+def test_the_feed_is_never_asked_for_the_season_ahead():
+    """Not one call for the waited-on season — not a call whose answer was
+    thrown away. A feed that returns last season relabelled would otherwise
+    put the exact table Ethan complained about back on the page.
+
+    Since 2026-11-19 the season that FINISHED stays up beside the wait
+    (Ethan: "Yes" to keeping a league's final table up in its offseason),
+    asked for by its own year and carried under `final`, labelled final on
+    the page (tests/test_the_offseason_keeps_the_final_table.py) — never as
+    the waited-on season's table."""
     rows = [{"team": "KC", "wins": 15, "losses": 2}]
     b, feed = _build("nfl", feed=_Feed(rows))
-    assert feed.seen == [], f"the feed was asked during the wait: {feed.seen}"
-    assert b["team_count"] == 0
+    assert ("nfl", 2026) not in feed.seen, f"the feed was asked for the season ahead: {feed.seen}"
+    assert feed.seen == [("nfl", 2025)], feed.seen
+    assert b["team_count"] == 0 and b["groups"] == []
+    assert b["final"]["season"] == 2025 and b["final"]["team_count"] == 1
 
 
 def test_the_bracket_waits_too():

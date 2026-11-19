@@ -60,7 +60,7 @@ def test_the_rankings_are_drawn_first_not_last():
         "the rankings are slotted at the bottom of the page again"
     tpl = body[body.index("host.innerHTML = `\n"):]
     assert tpl.index("${rankings}") < tpl.index("Postseason"), "under the bracket"
-    assert tpl.index("${rankings}") < tpl.index('class="ros-teams"'), "under the tables"
+    assert tpl.index("${rankings}") < tpl.index("${stdGroupsHTML(groups, d.score_label)}"), "under the tables"
     assert tpl.index("${rankings}") < tpl.index("${pressureHTML(d.pressure, d)}")
     # The Teams heading keeps its top margin when something sits above it.
     assert "b.started || rankings ? \"\" : ' style=\"margin-top:0\"'" in body

@@ -116,6 +116,10 @@ def test_they_are_journaled_apart_graded_and_read_back():
     conn.execute("UPDATE parlays SET status='won' WHERE source='game_two'")
     conn.execute("UPDATE parlay_legs SET status='won'")
     conn.commit()
+    # The game starts: the set it carried then (kept, engine/reportkeep) is
+    # the set the record counts (parlayledger.mark_at_start).
+    started = {"games": [dict(g, kept="Sun 1:00 PM ET") for g in b["game_parlays"]["games"]]}
+    assert PL.mark_started_games(conn, started, "nfl", "2099-W10") == 2 + GP.THREE_PER_GAME + GP.SCORER_PER_GAME
     rec = PL.game_parlay_record(conn)
     assert rec["nfl"]["two"]["graded"] == 2 and rec["nfl"]["two"]["wins"] == 2, rec["nfl"].keys()
 
@@ -125,7 +129,8 @@ def test_the_two_leg_tickets_have_a_hold_of_their_own():
     PL.ensure_schema(conn)
     for i, (src, won) in enumerate([("game_two", i < 12) for i in range(45)] + [("game_three", True)] * 60):
         conn.execute("INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, qualified,"
-                     " was_play, notional_units, stake_units, source, status) VALUES (?,?,?,?,?,?,?,1,0,1,0,?,?)",
+                     " was_play, notional_units, stake_units, source, status, at_start)"
+                     " VALUES (?,?,?,?,?,?,?,1,0,1,0,?,?,1)",
                      ("2026-11-19T12:00:00", "nba", "2026-11-19", f"k{i}", "same_game", 2 if src == "game_two" else 3,
                       "A@B", src, "won" if won else "lost"))
     conn.commit()

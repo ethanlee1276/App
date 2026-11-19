@@ -1462,6 +1462,19 @@ def settle_open(log=print, state_path: Path | None = None,
                         f"{len(ph['released'])} back")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  paper holds skipped: {exc}")
+            # ONE SET A GAME ON THE PARLAY RECORD (2026-11-19; Ethan, asked
+            # whether the record should count only the parlays posted at the
+            # start: "Yes"). The journal marks a game's starting set as the
+            # game starts (parlayledger.mark_started_games); a game that
+            # started before that, or between two builds that both missed it,
+            # is marked here from its archived starting set.
+            try:
+                from . import parlayledger as _pl
+                _marked = _pl.mark_from_archive(lconn)
+                if _marked:
+                    log(f"  parlay record: {_marked} journaled ticket(s) marked by their game's starting set")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  parlay starting sets not marked: {exc}")
             # A LEAGUE'S TWO-LEG PARLAYS ON PAPER while they hit under 36%
             # (engine/parlayhold, GPWIN1), measured on the same fresh grades;
             # the builds read it. The three-leg hold is retired (THREELEG1:
@@ -1473,7 +1486,7 @@ def settle_open(log=print, state_path: Path | None = None,
                 if plh["holds"]:
                     log("  two-leg parlays on paper: " + ", ".join(h["sport"].upper() for h in plh["holds"]))
             except Exception as exc:  # noqa: BLE001
-                log(f"  ⚠️  three-leg parlay holds skipped: {exc}")
+                log(f"  ⚠️  two-leg parlay holds skipped: {exc}")
             # The journal fitters: temperature + player memory for every
             # sport with no deep-history harness (hoops, college, UFC).
             # A sport crosses its 200-bet floor the night it happens.

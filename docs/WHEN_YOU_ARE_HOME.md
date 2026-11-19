@@ -9338,6 +9338,32 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YJ. The parlay record counts one set a game: the one its report carried at the start**
+(step 772; 19 November). Nothing to run; the night marks what it can and the Record page follows. You, asked whether
+the parlay record should count only the parlays posted at the start: "Yes." I took "the start" as each game's start,
+the set the game's page already shows once it is over. The board posts a game's parlays afresh as lines and news
+move, and the journal kept every version, so the Record page counted each game's tickets several times over: the
+NFL's three-leg record read 314 graded tickets from two weeks of games, a game posting three or four at a time. Now
+each journaled ticket is marked as the game starts: in the set the report carried then, or a version replaced before
+it. The Record page's game parlays, the second view of them and the two-leg hold count only the starting sets, and
+the page says once how many others were left out ("One set a game: the tickets each report carried when its game
+started. The 1,234 others the board posted and replaced before a game began are not counted."). The night marks the
+games that started before this from their archived starting sets; games from 14 and 15 November, before the site
+kept a starting set, have none and drop out of the count. Every version is still graded and kept, and the learners
+(the one-club bar, the legs' correction) still learn on all of them. Checked by
+tests/test_the_parlay_record_counts_each_games_starting_set.py.
+
+**YI. A league's final standings table stays up through its offseason**
+(step 771; 19 November). Nothing to run. You, asked whether a league's final standings table should stay up during
+its offseason: "Yes." Since 24 August an offseason standings page waited on the season ahead and showed nothing
+else, so MLB's and the WNBA's read only "Waiting on the 2027 season". The wait stays, with when the league opens,
+and under it the season that finished: its table as it ended (the league's own, or our count of it, said so), its
+postseason as it was played, and the under-pressure ranks, every heading saying "final" and the year ("2026
+postseason · final", "2026 final standings"). The build asks the league's feed for that season by its own year and
+still never for the season ahead, which was the 24 August complaint: a finished table shown as the league's current
+state. A football page's rankings already say the season has not kicked off, so there the wait is said once. The
+table comes down when the new season opens. Checked by tests/test_the_offseason_keeps_the_final_table.py.
+
 **YH. Three-leg parlays back on every game report: two at least, three at most**
 (step 770; 19 November). Nothing to run. You: "for the game report, 3-leg parlays, we need those back immediately. I
 want those for every single game ... We need 2 3-leg parlays, or maybe 2 to 3." Two things had taken them away. From

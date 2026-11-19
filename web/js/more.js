@@ -2404,6 +2404,58 @@ function unitRankingsWaitHTML(d) {
     ${fallback}`;
 }
 
+/* A table's division or conference chips (past two groups) and its group
+   cards, filtered to the chip that is on. An unknown chip — one from another
+   sport, or from the other table — means "All". */
+function stdGroupsHTML(groups, scoreLabel) {
+  if (_stdGroup && !groups.some((g) =>
+      (g.label || g.conference || "") === _stdGroup)) _stdGroup = "";
+  return `${groups.length > 2 ? `<div class="std-chips">
+      <button class="al-cat${!_stdGroup ? " on" : ""}" type="button"
+        data-act="stdSet" data-arg="">All</button>
+      ${groups.map((g) => {
+        const label = g.label || g.conference || "";
+        return `<button class="al-cat${_stdGroup === label ? " on" : ""}"
+          type="button" data-act="stdSet" data-arg="${escapeAttr(label)}"
+          >${escapeHtml(label)}</button>`;
+      }).join("")}</div>` : ""}
+    <div class="ros-teams">
+      ${groups.filter((g) => !_stdGroup
+          || (g.label || g.conference || "") === _stdGroup)
+        .map((g) => standingsGroupHTML(g, scoreLabel)).join("")}
+    </div>`;
+}
+
+/* THE SEASON THAT FINISHED, THROUGH THE OFFSEASON (Ethan, 2026-11-19, asked
+   whether a league's final standings table should stay up during its
+   offseason: "Yes"). The header still waits on the season ahead; under it,
+   the one that finished, every heading saying "final" and its year — the
+   2026-08-24 complaint was a finished table shown as the league's current
+   state, and a labelled final is not that. A football page's rankings wait
+   already says the season has not kicked off, so the wait's own line is
+   said once, there. */
+function finalStandingsHTML(d, fin, rankings) {
+  const b = fin.bracket || {};
+  const groups = fin.groups || [];
+  const yr = escapeHtml(String(fin.season || ""));
+  const whose = fin.source === "league" ? "the league’s own final records"
+    : `counted from the ${Number(fin.games_counted || 0).toLocaleString()} finished games we have`;
+  return `
+    ${rankings || `<p class="rail-quiet" style="margin:0 0 14px">${escapeHtml(d.note || "")}</p>`}
+    ${fin.source === "computed" && fin.note ? `
+    <div class="card" style="--tone:var(--warn);margin-bottom:14px">
+      <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} <b>These are our
+        counted games, not the league’s table.</b> ${escapeHtml(fin.note)}</p></div>` : ""}
+    ${b.started ? `<div class="section-title tight">${yr} postseason · final
+        <span class="sub">— every matchup here was played. Series scores are
+        games won.</span></div>
+      ${bracketHTML(b)}` : ""}
+    <div class="section-title"${b.started || rankings ? "" : ' style="margin-top:0"'}>${yr} final standings
+      <span class="sub">— ${whose} · ${plural(groups.length, "group")}</span></div>
+    ${stdGroupsHTML(groups, fin.score_label)}
+    ${pressureHTML(d.pressure, d)}`;
+}
+
 async function renderStandings() {
   const host = document.getElementById("standings-body");
   if (!host) return;
@@ -2450,6 +2502,10 @@ async function renderStandings() {
      nav button that opens this page says "Rankings": the rankings are
      the first thing on it now, and an empty table cannot hide them. */
   const rankings = unitRankingsHTML(d.unit_rankings, d);
+  if (!groups.length && d.final && (d.final.groups || []).length) {
+    host.innerHTML = finalStandingsHTML(d, d.final, rankings);
+    return;
+  }
   if (!groups.length) {
     host.innerHTML = `${rankings}<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
       <h3>${d.season_wait
@@ -2459,10 +2515,6 @@ async function renderStandings() {
     return;
   }
   const b = d.bracket || {};
-  // A division chip from another sport must not filter this one to an
-  // empty page — an unknown selection means "All".
-  if (_stdGroup && !groups.some((g) =>
-      (g.label || g.conference || "") === _stdGroup)) _stdGroup = "";
   /* A fallback table that LOOKS official is the failure this page just
      had. When the league’s feed was unavailable and these are our own
      counted games, say so above the table — not only in a note the empty
@@ -2480,20 +2532,7 @@ async function renderStandings() {
       ${bracketHTML(b)}` : ""}
     <div class="section-title"${b.started || rankings ? "" : ' style="margin-top:0"'}>Teams
       <span class="sub">— ${groups.length} group(s)</span></div>
-    ${groups.length > 2 ? `<div class="std-chips">
-      <button class="al-cat${!_stdGroup ? " on" : ""}" type="button"
-        data-act="stdSet" data-arg="">All</button>
-      ${groups.map((g) => {
-        const label = g.label || g.conference || "";
-        return `<button class="al-cat${_stdGroup === label ? " on" : ""}"
-          type="button" data-act="stdSet" data-arg="${escapeAttr(label)}"
-          >${escapeHtml(label)}</button>`;
-      }).join("")}</div>` : ""}
-    <div class="ros-teams">
-      ${groups.filter((g) => !_stdGroup
-          || (g.label || g.conference || "") === _stdGroup)
-        .map((g) => standingsGroupHTML(g, d.score_label)).join("")}
-    </div>
+    ${stdGroupsHTML(groups, d.score_label)}
     ${pressureHTML(d.pressure, d)}
     ${b.started ? "" : seedsHTML(d.projected_seeds)}
     ${b.started ? "" : `<div class="ls-note">${escapeHtml(b.note || "")}</div>`}`;
