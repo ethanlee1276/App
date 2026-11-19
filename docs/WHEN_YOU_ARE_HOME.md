@@ -9350,7 +9350,7 @@ featured games keep a record apart, on Report Picks and on the Record page's NFL
 every featured game, Lions games, Thursday nights and Monday nights, each with the report's picks won and lost and
 the units at one unit a pick, the parlays its report carried at kickoff, and who we said would win; then each game;
 and a Featured games chip that lists only those games with every pick and parlay checked or crossed. It starts with
-three games from week 11: the Commanders at Giants on 12 November (nothing of its report was on the record yet), the
+three games from week 10: the Commanders at Giants on 12 November (nothing of its report was on the record yet), the
 Patriots at Lions (its tickets from before the record kept a starting set, so none count) and the Chargers at Ravens
 on Monday night (picks 2-6, its three-leg parlay and touchdown pair both lost). Ask Qellys answers from the same
 record ("how have the Monday night reports done?"). College football's Thursday games are not in it; say if you want
