@@ -72,7 +72,7 @@ def test_a_ticket_under_its_bar_is_not_made_and_the_game_says_why():
     made = GP.tickets_of("nfl", GAME, legs)
     assert made["twos"] == [], "two at 61% together are about 37%, under TWO_FLOOR"
     note = GP._twos_note(made, own=True)
-    assert "reach the 42% a two-leg parlay needs" in note and "this report's own picks" in note, note
+    assert f"reach the {GP.TWO_FLOOR:.0%} a two-leg parlay needs" in note and "this report's own picks" in note, note
     # The three-leg tickets: none clears THREE_FLOOR, so the game fills its two
     # with longer tickets that say so (THREELEG1, 2026-11-19: "I want those for
     # every single game").

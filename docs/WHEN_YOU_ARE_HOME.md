@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YR. The parlays are built to win: honest chances, the report's own picks, no losing markets**
+(step 780; 19 November). Nothing to run. You asked for parlays that win and make money. What the record says (every
+graded ticket, read 19 November): the 1,321 tickets we priced with a link between their legs ("one passing game
+feeds both") hit 382, where the link said 443 and the legs on their own said 407, so the link made our chance too
+high and pushed us toward the wrong tickets. Since the parlays were built from each report's own picks (17
+November), hockey's three-leg tickets hit 4 of 10 against about 33% said and the NBA's two-leg ones 9 of 11 against
+45%; before that, a prop the report never picked hit 62% as a leg against 75% for its picks. And the record pays a
+won ticket at the card's own "take it at" price, so a ticket makes money there exactly when it hits more often than
+we said. Four changes: (1) a ticket's chance no longer counts a link between its legs unless the record shows linked
+legs hit together; that weight is fitted every night from the graded tickets and starts at zero, so the chances on
+the cards are the legs' own and the tickets chosen are the ones with the strongest legs; (2) a game short of two
+three-leg parlays fills with the report's own picks first (down to 50%, as they hit above what we say), and takes a
+prop the report did not pick only at 60% or better, where step YN let them in at 50%; (3) a market benched for
+losing money (the NFL's completions, the NBA's points) is no parlay leg; (4) the bars a ticket clears are said
+without the link: 40% for two picks, 25% for three (two and three picks at 63%). Checked by
+tests/test_the_parlays_are_built_to_win.py; the morning check-in reads how they do.
+
 **YQ. A game whose props are still to be bought says when, even with a stray prop on file**
 (step 779; 19 November). Nothing to run. With step YO live at 12:56 the NFL board had an entry for all 13 games, and
 the heartbeat read 12 short: 2 waiting on their props, 9 with "too few props" and 1 with none that fit. The nine are

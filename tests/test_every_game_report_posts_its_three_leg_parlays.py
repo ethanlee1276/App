@@ -124,8 +124,8 @@ def test_a_game_fills_up_to_two_and_its_cards_say_how():
     assert made["filled"] == GP.THREE_MIN
     for t in made["threes"]:
         assert GP.LONG_FLOOR <= t["joint"] < GP.THREE_FLOOR and t["filled"]
-        assert any(c.startswith(f"A longer ticket: {t['joint'] * 100:.1f}% by our numbers, under the 30% a "
-                                f"three-leg parlay is built to") for c in t["caveats"]), t["caveats"]
+        assert any(c.startswith(f"A longer ticket: {t['joint'] * 100:.1f}% by our numbers, under the "
+                                f"{GP.THREE_FLOOR:.0%} a three-leg parlay is built to") for c in t["caveats"]), t["caveats"]
     # The report's own picks first: two of them and the game's other props fill
     # the third leg, each such ticket naming the leg that is not a pick.
     own = legs[:2]
@@ -283,14 +283,18 @@ def test_a_game_whose_props_all_sit_under_60_has_its_entry_and_fills_from_them()
     fifties = [_rec("P One", "receptions", 0.56, team="PHI", home="PHI", away="DAL", day="2099-11-15"),
                _rec("P Two", "rush_att", 0.55, team="DAL", home="PHI", away="DAL", day="2099-11-15"),
                _rec("P Three", "rec_yds", 0.57, team="PHI", home="PHI", away="DAL", day="2099-11-15"),
-               _rec("P Four", "pass_cmp", 0.54, team="DAL", home="PHI", away="DAL", day="2099-11-15")]
+               _rec("P Four", "rush_yds", 0.54, team="DAL", home="PHI", away="DAL", day="2099-11-15")]
     b["recommendations"] = list(b.get("recommendations") or []) + fifties
     gp = GP.build(b, "nfl")
     x = GP.for_game({"game_parlays": gp}, "PHI", "DAL")
     assert x is not None and "no_props" not in x, "priced props, under the floor: an entry, and no wait"
     assert x["threes"] == [], "no leg at 60%: nothing clears on the board's own pass"
     b["game_parlays"] = gp
+    # Props the report never picked, in the fifties: no legs (PARLAYWIN1).
     GP.from_report(b, "nfl", away, [])
+    assert x["threes"] == [], "a prop the report did not pick fills only at 60%"
+    # The report's own picks in the fifties fill its two.
+    GP.from_report(b, "nfl", away, [dict(r, side="OVER") for r in fifties])
     assert len(x["threes"]) == GP.THREE_MIN, x.get("threes_note")
     assert all(t.get("filled") for t in x["threes"]) and "threes_note" not in x
 

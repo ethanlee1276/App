@@ -1883,6 +1883,19 @@ def settle_open(log=print, state_path: Path | None = None,
                         f"research points ({(sb.get('three') or {}).get('why', '')})")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  parlay one-club bar not fitted: {exc}")
+        # THE LINK BETWEEN A TICKET'S LEGS, SET BY THE RECORD (engine/gameparlays.
+        # fit_link_weight, PARLAYWIN1): refitted the same way; said when it moves.
+        try:
+            import os as _os
+            from . import gameparlays, modelstate
+            if parlays_moved or not _os.path.exists(modelstate.path(gameparlays.LINK_FILE)):
+                was_w = gameparlays.link_weight()
+                lw = gameparlays.fit_link_weight(lconn)
+                if gameparlays.link_weight() != was_w:
+                    log(f"  parlays: a positive link between legs now counts at {gameparlays.link_weight():.0%} "
+                        f"({lw.get('why', '')})")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  parlay link weight not fitted: {exc}")
         # THE LEGS' LEARNED CORRECTION (engine/legfit; Ethan, 2026-11-16:
         # "yes"): each league's share toward the books' chances, refitted the
         # same way; said when a league's share moves.

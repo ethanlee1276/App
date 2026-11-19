@@ -220,6 +220,13 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # one-club bar's fit could not be read (<error>)" once a process and
         # sets SIDE_BAR_ERROR, which the build log's line says beside the bar.
         "side_bar",
+        # THE LINK WEIGHT IN FORCE (engine/gameparlays.link_weight, 2026-11-19,
+        # PARLAYWIN1), judged the same way: its failure is LINK_WEIGHT_DEFAULT,
+        # which a quiet day before the first fit also gives, so a missing file
+        # is quiet and any other failure prints "the parlay legs' link weight
+        # could not be read (<error>)" once a process and sets LINK_ERROR, which
+        # each board's parlay counts carry beside the weight.
+        "link_weight",
         # network/IO wrappers whose empty return IS the documented answer
         "_post", "_get_json", "settle_open",
         # THE STAKING BREAKER, added 2026-09-19 and caught by this sweep

@@ -123,17 +123,20 @@ SCORER_PER_GAME = 3
 #: Its two-leg tickets: the two strongest picks, then the next two (GPWIN1).
 TWO_PER_GAME = 2
 #: The least chance a ticket must have by our own numbers to be posted: two
-#: picks at 65% each, three at 67%. Under it a ticket is one we expect to lose
-#: nearly six times in ten (two legs) or seven (three), and is not made.
-TWO_FLOOR = 0.42
-THREE_FLOOR = 0.30
+#: picks at 63% each, three at 63%. Under it a ticket is one we expect to lose
+#: six times in ten (two legs) or three in four (three), and is not made.
+#: They were 42% and 30% while a ticket's chance carried the legs' link
+#: (`link_weight`, PARLAYWIN1): the same legs, said without it.
+TWO_FLOOR = 0.40
+THREE_FLOOR = 0.25
 #: The least chance a 3-leg ticket's leg may have.
 LEG_FLOOR = 0.60
 #: The least chance a leg may have when it fills a game up to THREE_MIN, under
 #: LEG_FLOOR (THREELEG2, 2026-11-19): the first builds after THREELEG1 left
 #: games short (the NHL's twelve made 22 tickets, the NBA's four made 3),
 #: because a game with three or four props at 60% has no two tickets that fit.
-#: A leg under LEG_FLOOR rides only a filling ticket, and its card names it.
+#: A leg under LEG_FLOOR rides only a filling ticket, and its card names it;
+#: since PARLAYWIN1 it is one of the report's own picks (`from_report`).
 FILL_LEG_FLOOR = 0.50
 #: The least chance by our numbers a ticket may have when it fills a game up to
 #: THREE_MIN (`tickets_of`): a longer ticket, said so on its card. Three legs at
@@ -190,6 +193,24 @@ SIDE_PRIOR_N = 60
 SIDE_EDGE_RANGE = (0.02, 0.10)
 SIDE_RESEARCH_RANGE = (2, 6)
 SIDE_BAR_FILE = "side_bar.json"
+
+#: THE LINK BETWEEN A TICKET'S LEGS, AS THE RECORD MEASURED IT (PARLAYWIN1,
+#: 2026-11-19; Ethan: "if the three-leg parlays aren't working and aren't
+#: making money, then we're not making good selections ... make those better").
+#: A pair of legs we read as moving together (`pair_link`: one passing game
+#: feeds both, a fast game lifts both) raised the ticket's chance. The record
+#: of every ticket graded (parlayledger.calibration, 19 November) says they do
+#: not: the 1,321 tickets priced with a positive link hit 382, against 443 the
+#: link said and 407 the legs alone said, so the link took our number further
+#: from the truth (z -3.7 with it, -1.5 without). A ticket's chance counts a
+#: positive link at this weight: 0 until the record shows the legs we link hit
+#: together more often than unrelated legs would (`fit_link_weight`, nightly).
+#: A link that pulls the legs apart (opposite scripts) is always counted.
+LINK_FILE = "gameparlays_link.json"
+LINK_WEIGHT_DEFAULT = 0.0
+#: Tickets priced with a positive link the fit waits for, and the prior it
+#: shrinks the measured weight toward LINK_WEIGHT_DEFAULT with.
+LINK_MIN_N, LINK_PRIOR_N = 200, 400
 #: TWO TEAMMATES ON ONE TICKET, priced at the same-game floor for catches
 #: and at none for touchdowns. The doctrine's possession-pie number
 #: (parlays.MEASURED, −0.56) is a PARTIAL correlation: two receivers with
@@ -407,6 +428,7 @@ def legs_for(board: dict, sport: str, now=None, floor: float = LEG_FLOOR) -> lis
     (`still_to_play`)."""
     from . import legfit
     from . import twoleg as T
+    from .stakeplan import market_benched
     got: dict = {}
     # THE LEAGUE'S LEARNED CORRECTION (engine/legfit, 2026-11-16; Ethan:
     # "yes"): each leg's chance pulled toward the book's by the share its
@@ -430,6 +452,12 @@ def legs_for(board: dict, sport: str, now=None, floor: float = LEG_FLOOR) -> lis
             if not leg or leg.get("_game_leg") or float(leg.get("p") or 0) < floor:
                 continue
             leg = _norm_side(leg)
+            # A MARKET BENCHED FOR LOSING MONEY IS NO PARLAY LEG (PARLAYWIN1;
+            # stakeplan.MARKET_BENCH: the NFL's quarterback completions and the
+            # NBA's points, benched 18 November at 44-53 and 63-71): a bet the
+            # record will not stake is no leg to stake a ticket on.
+            if market_benched(sport, leg.get("market")):
+                continue
             k = (leg.get("player"), leg.get("market"), str(leg.get("side") or "").upper(), leg.get("line"))
             if k not in got or _speaks_first(leg, got[k]):
                 got[k] = leg
@@ -966,6 +994,7 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
     from . import parlays as P
     from .twoleg import american
     rhos, whys, caveats = {}, [], []
+    weight = link_weight()
     for (i, a), (j, b) in itertools.combinations(enumerate(legs), 2):
         mk = (_leg_id(a), _leg_id(b))
         if memo is not None and mk in memo:
@@ -976,6 +1005,8 @@ def ticket(sport: str, legs: list[dict], game: dict | None, memo: dict | None = 
                 memo[mk] = (fits, rho, why, cav)
         if not fits:
             return None
+        if rho > 0:
+            rho *= weight                                   # the record's word on a positive link (LINK_FILE)
         rhos[(i, j)] = rho
         if cav:
             caveats.append(cav)
@@ -1168,6 +1199,80 @@ def fit_side_bar(conn, write: bool = True) -> dict:
             _json.dump(out, f, indent=1, sort_keys=True)
         _os.replace(tmp, p)
     return out
+
+
+def fit_link_weight(conn, write: bool = True) -> dict:
+    """The weight a positive link between two legs carries in a ticket's
+    chance, as the record supports it (LINK_FILE): from every graded ticket
+    priced with a positive link (parlayledger.calibration's positive_rho),
+    the share of the link's lift over the unrelated legs that came true,
+    shrunk toward LINK_WEIGHT_DEFAULT by LINK_PRIOR_N and held to 0..1.
+    Written to the models directory for `link_weight`."""
+    import datetime as _dt
+    from . import parlayledger as PL
+    pos = (PL.calibration(conn) or {}).get("positive_rho") or {}
+    n, won = int(pos.get("n") or 0), float(pos.get("won") or 0)
+    em, ei = float(pos.get("expected") or 0), float(pos.get("expected_independent") or 0)
+    out = {"fitted_at": _dt.datetime.now().isoformat(timespec="seconds"), "n": n, "won": int(won),
+           "expected": em, "expected_independent": ei}
+    if n < LINK_MIN_N or em <= ei:
+        out.update(weight=LINK_WEIGHT_DEFAULT, fitted=False,
+                   why=f"waiting on the record: {n} ticket(s) priced with a positive link settled, "
+                       f"{LINK_MIN_N} needed")
+    else:
+        raw = min(max((won - ei) / (em - ei), 0.0), 1.0)
+        w = LINK_WEIGHT_DEFAULT + (raw - LINK_WEIGHT_DEFAULT) * n / (n + LINK_PRIOR_N)
+        out.update(weight=round(w, 3), raw=round(raw, 3), fitted=True,
+                   why=f"{n} tickets priced with a positive link hit {int(won)}: the link said "
+                       f"{em:.0f}, the legs alone {ei:.0f}")
+    if write:
+        import json as _json
+        import os as _os
+        from . import modelstate
+        path = modelstate.path(LINK_FILE)
+        _os.makedirs(_os.path.dirname(path) or ".", exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(out, f, indent=1, sort_keys=True)
+        _os.replace(tmp, path)
+    return out
+
+
+_LINK: dict = {}
+#: Why the link's fit on file could not be read, in this process; None when it
+#: was read or there is none yet. The build log says it beside the weight.
+LINK_ERROR: str | None = None
+
+
+def link_weight() -> float:
+    """The weight in force (`fit_link_weight`): the record's fit where one
+    is on file, else LINK_WEIGHT_DEFAULT; read once per change of the file.
+    No file is the ordinary state before the first fit, and quiet; a file
+    that cannot be read gives the default too, so it is SAID: printed once a
+    process and kept in LINK_ERROR, which the build log shows."""
+    global LINK_ERROR
+    try:
+        import json as _json
+        import os as _os
+        from . import modelstate
+        path = modelstate.path(LINK_FILE)
+        try:
+            key = (path, _os.stat(path).st_mtime_ns)
+        except FileNotFoundError:
+            LINK_ERROR = None
+            return LINK_WEIGHT_DEFAULT
+        if _LINK.get("key") != key:
+            with open(path, encoding="utf-8") as f:
+                _LINK.update(key=key, data=_json.load(f))
+        w = float((_LINK.get("data") or {}).get("weight", LINK_WEIGHT_DEFAULT))
+        LINK_ERROR = None
+        return min(max(w, 0.0), 1.0)
+    except Exception as exc:                                 # noqa: BLE001
+        why = f"{type(exc).__name__}: {exc}"
+        if LINK_ERROR != why:
+            print(f"  ⚠️ the parlay legs' link weight could not be read ({why}); {LINK_WEIGHT_DEFAULT} is in force")
+        LINK_ERROR = why
+        return LINK_WEIGHT_DEFAULT
 
 
 _SIDE_BAR: dict = {}
@@ -1693,6 +1798,8 @@ def build(board: dict, sport: str, now=None) -> dict:
                        # The one-club bar in force (`side_bar`): the record's, or the defaults.
                        "side_bar": dict(zip(("edge", "research", "fitted"), side_bar()),
                                          **({"error": SIDE_BAR_ERROR} if SIDE_BAR_ERROR else {})),
+                       # The weight a positive link between legs carries (`link_weight`).
+                       "link_weight": dict({"weight": link_weight()}, **({"error": LINK_ERROR} if LINK_ERROR else {})),
                        # The legs' learned correction in force (engine/legfit), each kind.
                        "leg_fit": _leg_fit_census(sp)},
             # WHY A PRICED SCORER WAS NO LEG (`research_scorers`), football only.
@@ -1820,12 +1927,12 @@ def _report_note(n_ok: int, n_picks: int, made: dict) -> str:
     head = f"{n} of {THREE_MIN}: " if n else ""
     if not wider:
         return head + (f"this report has no pick on a player's line, and the board priced no prop in this game "
-                       f"at {FILL_LEG_FLOOR:.0%} or better" if not n_picks else
-                       f"none of this report's {n_picks} picks clears the {LEG_FLOOR:.0%} a leg needs, and the "
-                       f"board priced no other prop in this game at {FILL_LEG_FLOOR:.0%} or better")
+                       f"at {LEG_FLOOR:.0%} or better" if not n_picks else
+                       f"none of this report's {n_picks} picks is a player's line priced at {FILL_LEG_FLOOR:.0%} "
+                       f"or better, and the board priced no other prop in this game at {LEG_FLOOR:.0%} or better")
     whose = (f"this report's {n_ok} pick{'' if n_ok == 1 else 's'} at {LEG_FLOOR:.0%} or better"
-             + (f" and the {more} other prop{'' if more == 1 else 's'} the board priced in this game at "
-                f"{FILL_LEG_FLOOR:.0%} or better" if more else ""))
+             + (f" and the {more} more the game could add (the report's other picks at {FILL_LEG_FLOOR:.0%} or "
+                f"better, the board's other props at {LEG_FLOOR:.0%} or better)" if more else ""))
     if wider < 3:
         return head + f"a three-leg parlay takes three legs, and {whose} {'makes' if wider == 1 else 'make'} {wider}"
     return (head + f"{whose} make no {'more ' if n else ''}three that fit together without a conflict and "
@@ -1857,7 +1964,15 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     legs = [l for l in mine if _pick_key(l) in want and float(l.get("p") or 0) >= LEG_FLOOR]
     picked = {_leg_id(l) for l in mine if _pick_key(l) in want}
     strong = {_leg_id(l) for l in legs}
-    made = tickets_of(sp, game, legs, extra=[l for l in mine if _leg_id(l) not in strong], picks=picked)
+    # THE FILL TAKES THE REPORT'S OWN PICKS FIRST, AND ANOTHER PROP ONLY AT
+    # LEG_FLOOR (PARLAYWIN1, 2026-11-19). A pick under LEG_FLOOR is still the
+    # report's (the NBA's and NHL's Most Likely picks priced at 45-60% hit 63%
+    # and 61% on the record, above what we said); a prop the report never
+    # picked hit 62% as a leg against 75% for its picks (step WH), so one under
+    # LEG_FLOOR is no leg at all.
+    extra = [l for l in mine if _leg_id(l) not in strong
+             and (_leg_id(l) in picked or float(l.get("p") or 0) >= LEG_FLOOR)]
+    made = tickets_of(sp, game, legs, extra=extra, picks=picked)
     chosen, n_threes, n_pool = made["threes"], made["threes_fit"], made["pool"]
     x["threes"] = chosen
     x.pop("paper_threes", None)
