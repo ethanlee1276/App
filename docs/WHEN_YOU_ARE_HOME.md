@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YM. The first visit trimmed, not its budget raised: 5.4 KB of room again**
+(step 775; 19 November). Nothing to run. You, asked whether to raise the first visit's size budget or trim it, with
+856 bytes left: "probably trim it". It means the code every visitor downloads before the first page shows. I moved
+what only the Alerts page draws (its watch list, its feed, the friends' inbox, the fighter column and their helpers)
+into that page's own file, js/more.js, which loads the first time the page opens, and a pressure cell into the game
+page's file. Nothing on a page changes; the first visit went from 392,360 to 387,722 bytes compressed, under a
+budget kept at 384 KB, so the next few things that must be there from the first screen have room. Checked by
+tests/test_the_first_paint_has_a_budget.py and the tests that read those pages.
+
 **YL. College basketball players show their real positions**
 (step 774; 19 November). Nothing to run; the roster step that runs every half hour does it. You, asked whether
 college players should show their real positions: "I would assume so. Yeah." College basketball's roster page and

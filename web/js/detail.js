@@ -6655,3 +6655,13 @@ function gpRailPicksHTML(d, league) {
     ${typeof pbpPropsHTML === "function" ? pbpPropsHTML(d, league) : ""}
   </div>`;
 }
+
+/* FROM app.js, 2026-11-19 (the first visit's budget; Ethan, asked whether to raise it or trim it: "probably trim it"):
+   only this file draws these, so they load with it. */
+/* One rate's cell: the percentage and, under it, the games it came from
+   ("15 of 24"), so a number on a thin base says so where it stands. */
+function pressureCell(r, k, cls) {
+  const of = ((r && r.of) || {})[k];
+  return `<b${cls ? ` class="${cls}"` : ""}>${pressurePct((r || {})[k])}${
+    of && of[1] ? `<small class="pr-of">${of[0]} of ${of[1]}</small>` : ""}</b>`;
+}

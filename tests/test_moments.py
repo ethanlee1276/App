@@ -35,6 +35,8 @@ sys.path.insert(0, ROOT)
 from engine import ledger, moments                           # noqa: E402
 
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+#: The Alerts page's own file, where the feed zone lives since 2026-11-19.
+MORE = open(os.path.join(ROOT, "web", "js", "more.js"), encoding="utf-8").read()
 
 TODAY = "2026-08-24"
 NOW = "2026-08-24T13:05:00"
@@ -313,7 +315,7 @@ def test_the_board_ships_the_umpire():
 
 
 def test_the_page_speaks_all_four_kinds():
-    fn = APP[APP.index("async function renderFeedZone("):]
+    fn = MORE[MORE.index("async function renderFeedZone("):]
     fn = fn[:fn.index("\nfunction ")]
     for kind in ("settle_recap", "card_posted", "ump_assigned",
                  "first_pitch"):

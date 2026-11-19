@@ -209,13 +209,14 @@ def test_the_old_table_gains_the_leg_column():
 def test_the_page_draws_it_with_the_code_it_already_has():
     """The row carries exactly what the Alerts page's own `firedHTML` reads,
     and the badge reads `unseen` — no new code on the phone."""
-    src = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    src = (ROOT / "web" / "js" / "more.js").read_text(encoding="utf-8")   # the Alerts page's file
     i = src.index("function firedHTML(d)")
     body = src[i:src.index("\nfunction ", i + 1)]
     for key in ("e.player", "e.label", "e.why", "e.ts", "e.kind"):
         assert key in body, key
-    assert "alertBadge((_alertsCache || {}).unseen || 0)" in src
-    assert 'alertsPost("seen", { ts: d.newest })' in src
+    app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    assert "alertBadge((_alertsCache || {}).unseen || 0)" in src + app
+    assert 'alertsPost("seen", { ts: d.newest })' in src + app
 
 
 def test_the_runbook_says_so():

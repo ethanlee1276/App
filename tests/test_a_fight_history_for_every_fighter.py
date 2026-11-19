@@ -48,6 +48,8 @@ CC_JS = (ROOT / "web" / "js" / "carrychart.js").read_text(encoding="utf-8")
 UF_JS = (ROOT / "web" / "js" / "chart-ufc.js").read_text(encoding="utf-8")
 CC_CSS = (ROOT / "web" / "css" / "carrychart.css").read_text(encoding="utf-8")
 APP_JS = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
+#: The More menu's file, where the fighter column lives since 2026-11-19 (only its pages draw it).
+MORE_JS = (ROOT / "web" / "js" / "more.js").read_text(encoding="utf-8")
 PAGE_JS = (ROOT / "web" / "js" / "playerpage.js").read_text(encoding="utf-8")
 
 
@@ -292,8 +294,8 @@ def test_the_page_draws_every_fight():
 
 
 def test_every_fighter_block_has_the_door_and_the_module_is_clean():
-    i = APP_JS.index("function fighterColHTML(")
-    assert 'ccDoor(f.name, "ufc", "fights", "Fight history")' in APP_JS[i:i + 2400]
+    i = MORE_JS.index("function fighterColHTML(")
+    assert 'ccDoor(f.name, "ufc", "fights", "Fight history")' in MORE_JS[i:i + 2400]
     # A searched fighter opens the fighter's own page (js/playerpage.js), whose Fights menu has the door.
     assert 'ccDoor(d.player, "ufc", "fights", "Fight history chart", d.face)' in PAGE_JS, \
         "the fighter's page carries the door to the fight history"

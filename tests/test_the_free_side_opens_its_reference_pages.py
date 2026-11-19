@@ -79,11 +79,11 @@ def test_alerts_gives_a_free_account_its_own_and_no_pick():
     feed = srv[srv.index("def _alerts_feed("):]
     feed = feed[:feed.index("\n    def ")]
     assert "if not (self._entitled(conn, who) if paid is None else paid):\n                return []" in feed
-    watch = _fn(APP, "renderWatchZone")
+    watch = _fn(MORE, "renderWatchZone")
     assert "const free = isWalled();" in watch
     assert '${free ? "" : `<option value="edge">Edge at least</option>`}' in watch, "an edge size is a member's"
     assert "the site cannot reach your lock screen" not in APP, "it can: the switches above"
-    assert '${isWalled() ? "player or a team" : "player, a team, or an edge size"}' in _fn(APP, "watchChipsHTML")
+    assert '${isWalled() ? "player or a team" : "player, a team, or an edge size"}' in _fn(MORE, "watchChipsHTML")
     alerts = _fn(MORE, "renderAlerts")              # the Alerts page loads on first use
     assert 'isWalled() ? sections.join("") + memberLockHTML("Line moves and the desk are for members",' in alerts
     rows = ACCOUNT[ACCOUNT.index("const FL_ROWS = ["):ACCOUNT.index("];", ACCOUNT.index("const FL_ROWS = ["))]

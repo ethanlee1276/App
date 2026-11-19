@@ -5853,3 +5853,360 @@ async function renderVerify() {
     <div class="section-title">Anchors</div><div class="card st-card">${anchors || "<p>None yet.</p>"}</div>
     <div class="section-title">Days</div><div class="card st-card">${days || "<p>Nothing sealed in the last 45 days.</p>"}</div>`;
 }
+
+/* FROM app.js, 2026-11-19 (the first visit's budget; Ethan, asked whether to raise it or trim it: "probably trim it"):
+   only this file draws these, so they load with it. */
+async function renderWatchZone() {
+  const host = document.getElementById("watch-zone");
+  if (!host) return;
+  if (!_acctUser) await acctWho();
+  if (!_acctUser || !_acctUser.signed_in) {
+    host.innerHTML = `<div class="card"><p class="rank-help">Sign in to watch
+      a player or a team: their games reach your phone with the switches
+      above, and here they rise to the top.</p></div>`;
+    alertBadge(0);
+    return;
+  }
+  const d = await alertsFetch();
+  if (!d) { host.innerHTML = ""; return; }
+  // A free account (Alerts opened to it 2026-10-28): its watches drive its
+  // own switches (kickoff, big moments, final scores) and count on the
+  // board's alert; an edge size is a member's, the feed below being theirs.
+  const free = isWalled();
+  const n = (d.watches || []).length;
+  host.innerHTML = `
+    <div class="section-title">Watching
+      <span class="sub">${free ? "— a player or a team. Members also see which of them made tonight’s board."
+        : "— three shapes, no query builder: a player, a team, or an edge size. Matched against the same feed below, so a watch can never disagree with it."}</span></div>
+    <div class="card">
+      ${watchChipsHTML(d)}
+      <div class="al-addrow">
+        <select id="al-kind" aria-label="What to watch">
+          <option value="player">Player</option>
+          <option value="team">Team</option>
+          ${free ? "" : `<option value="edge">Edge at least</option>`}
+        </select>
+        <input id="al-val" type="text" maxlength="40"
+          placeholder="Ja’Marr Chase" aria-label="What to watch for"/>
+        <button class="btn" id="al-add">Watch</button>
+      </div>
+      <div id="al-err" class="rank-help"></div>
+      ${firedHTML(d)}
+      <p class="rank-help">${free
+        ? "Turn on the switches above, under Yours, and your phone hears when their games start, their big moments and the final scores."
+        : `Your phone hears about them with the switches above, under Yours${n ? `, and here your ${n === 1 ? "watch rises" : "watches rise"} above the rest of the feed` : ""}.`}</p>
+    </div>`;
+  const kind = document.getElementById("al-kind");
+  const val = document.getElementById("al-val");
+  const err = document.getElementById("al-err");
+  if (kind) kind.addEventListener("change", () => {
+    val.placeholder = kind.value === "team" ? "CIN"
+      : kind.value === "edge" ? "6" : "Ja’Marr Chase";
+    val.value = "";
+  });
+  const add = async () => {
+    err.textContent = "";
+    const out = await alertsPost("watch", { kind: kind.value, value: val.value });
+    if (out && out.error) { err.textContent = out.error; return; }
+    val.value = "";
+    renderWatchZone();
+  };
+  const btn = document.getElementById("al-add");
+  if (btn) btn.addEventListener("click", add);
+  if (val) val.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") add();
+  });
+  host.querySelectorAll("[data-unwatch]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      await alertsPost("unwatch", { id: Number(b.dataset.unwatch) });
+      renderWatchZone();
+    }));
+  // Marked read AFTER the rows are on the screen, and only up to the
+  // stamp we actually showed — the same rule the friends inbox follows.
+  if (d.unseen && d.newest) {
+    setTimeout(() => {
+      alertsPost("seen", { ts: d.newest }).then(() => alertBadge(0));
+    }, 1200);
+  }
+}
+
+/* THE FEED LEADS THE ALERTS PAGE. Everything below it on this page is a
+   snapshot — the current board's moves, today's designations. The feed
+   is the same signals given a MEMORY: each rebuild diffed against the
+   last, so "edge appeared twenty minutes ago" is a sentence the site
+   can finally say. Ethan, 2026-08-24: "every entry is a reason someone
+   opened the app at 2:47pm." */
+async function renderFeedZone() {
+  const host = document.getElementById("feed-zone");
+  if (!host) return;
+  if (!_feedCache || Date.now() - _feedAt > 30000) {
+    try {
+      const res = await paidFetch("feed.json");
+      if (res.ok) { _feedCache = await res.json(); _feedAt = Date.now(); }
+    } catch (e) { /* the zone just stays quiet */ }
+  }
+  const d = _feedCache || {};
+  if (state.view !== "alerts") return;
+  const evs = (d.events || []).slice(0, 40);
+  if (d.locked || !evs.length) { host.innerHTML = ""; return; }
+  const ago = (ts) => {
+    const t = Date.parse(ts && ts.endsWith("Z") ? ts : ts + "Z");
+    return isNaN(t) ? "" : ageText(Math.max(0, (Date.now() - t) / 1000)) + " ago";
+  };
+  const line = (e) => {
+    const who = `${escapeHtml(e.player || "")}`;
+    const mkt = escapeHtml(e.label || "");
+    const px = (o) => o == null ? "" : american(o);
+    switch (e.kind) {
+      case "edge_appeared": return {
+        ic: "rising", tone: "good",
+        title: `Edge appeared: ${who} ${escapeHtml(e.side || "")} ${e.line ?? ""} ${mkt}`,
+        cond: `${e.ev != null ? `+${(e.ev * 100).toFixed(1)}% EV · ` : ""}${escapeHtml(e.book || "")} ${px(e.odds)} · ${escapeHtml(lgCode(e.sport))}`,
+      };
+      case "edge_died": return {
+        ic: "falling", tone: "bad",
+        title: `Edge gone: ${who} ${mkt}`,
+        cond: { line_moved: `the line moved ${e.frm} → ${e.to}`,
+                price_moved: "the price moved against it",
+                gates: "no longer clears the gates",
+                left_board: "left the board" }[e.reason] || "off the board",
+      };
+      case "line_move": return {
+        ic: "signal", tone: e.rec ? "warn" : "",
+        title: `Line move: ${who} ${mkt} ${e.frm} → ${e.to}`,
+        cond: e.model_held && e.proj != null
+          ? `model held at ${e.proj} — the gap ${((e.side || "OVER") === "OVER") === (e.to > e.frm) ? "shrank" : "grew"}`
+          : "model moved with it",
+      };
+      case "price_move": return {
+        ic: "tag", tone: "",
+        title: `Price move: ${who} ${mkt} ${px(e.frm)} → ${px(e.to)}`,
+        cond: `${Math.abs((e.imp_delta || 0) * 100).toFixed(1)} implied pts at ${escapeHtml(e.book || "")}`,
+      };
+      case "likely_price": return {
+        ic: "tag", tone: e.worth ? "good" : "",
+        title: `Better price: ${who} ${escapeHtml(e.side || "")} ${e.line ?? ""} ${mkt} ${px(e.frm)} → ${px(e.to)}`,
+        cond: `${e.worth ? "now inside the price it is worth" : "closer to its fair price"} · ${escapeHtml(e.book || "")}${
+          e.p != null ? ` · our chance ${Math.round(e.p * 100)}%` : ""}`,
+      };
+      case "released": return {
+        ic: "list", tone: "good",
+        title: `${e.n} held prop${e.n === 1 ? "" : "s"} released — lines are up`,
+        cond: escapeHtml((e.players || []).join(", ")),
+      };
+      case "velocity_flag": return {
+        ic: "falling", tone: "warn",
+        title: `Velocity red flag: ${who} down ${Math.abs(e.delta || 0).toFixed(1)} mph on the four-seam`,
+        cond: e.rec
+          ? "on tonight’s board — the model already prices the drop; treat the pitcher’s props with care"
+          : "warm-up reading vs the season norm — a tired arm underperforms its projection",
+      };
+      case "stale_line": return {
+        ic: "clock", tone: "warn",
+        title: `Stale line: ${escapeHtml(e.book || "")} hasn’t moved ${escapeHtml(e.bet || "")}`,
+        cond: `${px(e.odds)} vs a field at ${((e.consensus || 0) * 100).toFixed(0)}% — ${((e.gap || 0) * 100).toFixed(1)} pts behind · full table on the Scanner page`,
+      };
+      /* The day's anchored moments (engine/moments.py) — the rhythm
+         events, in the same stream as the market's churn. */
+      case "settle_recap": return {
+        ic: "trophy", tone: (e.net_u || 0) >= 0 ? "good" : "bad",
+        title: `${lgCode(e.sport || "mlb")} last night: ${e.w}-${e.l}${e.p ? `-${e.p}` : ""} · ${
+          e.net_u >= 0 ? "+" : ""}${e.net_u}u`,
+        cond: `${e.date} fully graded — every pick is on the Record page`,
+      };
+      case "card_posted": return {
+        ic: "calendar", tone: "good",
+        title: `The card is up — ${e.n_picks} pick${e.n_picks === 1 ? "" : "s"} across ${e.n_games} game${e.n_games === 1 ? "" : "s"}`,
+        cond: e.best && e.best.player
+          ? `best board number: ${escapeHtml(e.best.player)} ${escapeHtml(e.best.side || "")} ${e.best.line ?? ""} ${escapeHtml(e.best.label || "")}${
+              e.best.ev != null ? ` · +${(e.best.ev * 100).toFixed(1)}% EV` : ""}`
+          : "tonight’s board is built",
+      };
+      case "ump_assigned": return {
+        ic: "shield", tone: e.k_tilt ? "warn" : "",
+        title: `Ump assigned: ${escapeHtml(e.ump)} behind the plate — ${escapeHtml(e.away)} @ ${escapeHtml(e.home)}`,
+        cond: e.k_tilt
+          ? `the umpire’s measured zone tilts K props ${e.k_tilt} (${((e.k_factor - 1) * 100).toFixed(0)}% vs league)`
+          : "no measurable K tilt in our history — neutral zone assumed",
+      };
+      case "first_pitch": return {
+        ic: "rising", tone: "good",
+        title: "First pitch — the sweat is on",
+        cond: `${e.n_live} game${e.n_live === 1 ? "" : "s"} live${
+          e.n_open ? ` · ${e.n_open} open bet${e.n_open === 1 ? "" : "s"} tracking on the Live tab` : ""}`,
+      };
+      case "autopsy_posted": return {
+        ic: "book", tone: "",
+        title: `The autopsy is up — what ${escapeHtml(e.date || "last night")} actually was`,
+        cond: e.headline
+          ? `“${escapeHtml(e.headline)}” — the full postmortem is on the Record page`
+          : "what we got wrong and why, graded in public on the Record page",
+      };
+      default: return null;
+    }
+  };
+  const rows = evs.map((e) => {
+    const r = line(e);
+    if (!r) return "";
+    return `<div class="al-row">
+      <span class="al-ic ${r.tone}">${icon(r.ic, 15)}</span>
+      <span class="al-t"><b>${r.title}</b><span class="al-c">${r.cond}</span></span>
+      <span class="feed-ago">${escapeHtml(ago(e.ts))}</span>
+    </div>`;
+  }).join("");
+  host.innerHTML = `
+    <div class="section-title">Live feed
+      <span class="sub">— every board rebuild, diffed against the one before it.
+      Edges appearing and dying, lines on the move, held props releasing —
+      as they happen, newest first.</span></div>
+    <div class="card al-list">${rows}</div>`;
+}
+
+/* One corner of a fight, as a block.
+
+   HOISTED OUT OF renderUFC, 2026-08-23. It was a closure in there, which
+   was fine while the UFC page was the only place a fighter was drawn —
+   and then player search learned to find fighters and needed the same
+   block. A second implementation of it would be a second thing to keep in
+   step with the first, and the numbers are exactly what would drift.
+
+   Reads both shapes on purpose. The card payload's brief calls the
+   counts `covered`/`career`; the search hit's calls them `ufc_fights`/
+   `career_fights`, because that is what the dossier itself calls them.
+   Renaming either would mean rewriting a payload to suit a renderer. */
+function fighterColHTML(f) {
+  const fmt = (v, suffix = "") => v == null ? "—" : `${v}${suffix}`;
+  const covered = f.covered != null ? f.covered : f.ufc_fights;
+  const career = f.career != null ? f.career : f.career_fights;
+  const flags = (f.red_flags || []).map((x) =>
+    `<span class="chip" style="color:var(--bad);border-color:currentColor"
+       title="${escapeHtml(x)}">${iconMark("warn", 11)}${escapeHtml(x.split("—")[0].trim())}</span>`).join("");
+  const stats = covered
+    ? `${fmt(f.slpm)}/${fmt(f.sapm)} strikes · TDD ${f.tdd == null ? "—" : (f.tdd * 100).toFixed(0) + "%"}
+       · TD ${fmt(f.td_per15)}/15`
+    : `<span style="color:var(--warn)">no tracked fight stats</span>`;
+  return `<div class="ufc-corner">
+    <div class="fc-name">${escapeHtml(f.name)}</div>
+    <div class="fc-meta">${f.record ? escapeHtml(f.record) : "—"}${f.age ? ` · ${f.age}y` : ""}
+      ${f.archetype ? ` · ${escapeHtml(f.archetype.replace(/_/g, " "))}` : ""}</div>
+    <div class="fc-stats">${stats}</div>
+    <div class="fc-cover">stats for ${covered || 0}${career ? ` of ${career}` : ""} fights</div>
+    ${flags ? `<div style="margin-top:5px">${flags}</div>` : ""}
+    ${ccDoor(f.name, "ufc", "fights", "Fight history")}
+  </div>`;
+}
+
+/* The inbox, at the top of Alerts. A row is a DOOR when the pick is on
+   tonight's board (same identity the permalink uses); a pick from a
+   past slate stays readable but inert — the board it pointed at is
+   gone, and a door onto nothing is worse than no door. */
+function friendInboxHTML() {
+  const soc = _socCache;
+  const shares = (soc && soc.inbox && soc.inbox.shares) || [];
+  if (!shares.length) return "";
+  // msgShareRow is the one renderer for a share row — the Messages
+  // page and this strip must not disagree about what a share looks
+  // like, and it already knows both kinds (pick and parlay).
+  return `<div class="section-title minor">From your friends
+      <span class="sub">— picks sent to you. Opening one shows it under
+      YOUR account, so what is behind the paywall stays there.
+      <a href="#messages">All messages &#8594;</a></span></div>
+    <div class="card fr-inbox">${shares.slice(0, 6)
+      .map((sh) => msgShareRow(sh, false)).join("")}</div>`;
+}
+
+/* FROM app.js, 2026-11-19 (the first visit's budget; Ethan, asked whether to raise it or trim it: "probably trim it"):
+   only this file draws these, so they load with it. */
+function msgShareRow(sh, sentSide) {
+  const who = sentSide ? sh.to : sh.from;
+  const isParlay = sh.kind === "parlay";
+  const what = sentSide
+    ? (isParlay ? `You sent a ${(sh.legs || []).length}-leg parlay`
+                : `You sent ${sh.player}`)
+    : (isParlay ? `Sent you a ${(sh.legs || []).length}-leg parlay`
+                : `Sent you a pick`);
+  let detail;
+  if (isParlay) {
+    detail = (sh.legs || []).map((l) => l.player).join(", ");
+  } else {
+    const slug = `${slugify(sh.player)}-${slugify(sh.market)}`;
+    const row = sh.sport === state.sport ? findProp(slug) : null;
+    detail = `${sh.player} — ${(row && row.market_label)
+      || sh.market.replace(/_/g, " ")}`;
+  }
+  // Every leg is a door — shareDoorAttrs decides at tap time whether it
+  // opens the prop page, the game-bet page or the player's charts.
+  const doors = isParlay
+    ? (sh.legs || []).map((l) =>
+        `<button class="chip"${shareDoorAttrs(sh.sport, l.player,
+          l.market)}>${escapeHtml(l.player)}</button>`).join("")
+    : "";
+  return `<div class="msg-row${!sentSide && !sh.seen ? " unread" : ""}">
+    ${msgAvatar(who)}
+    <span class="msg-body">
+      <b>${escapeHtml(who)}</b>
+      <span class="msg-what">${escapeHtml(what)}</span>
+      <span class="msg-note">${sh.note ? `“${escapeHtml(sh.note)}” · ` : ""}${
+        escapeHtml(detail)}</span>
+      ${doors ? `<span class="fr-legs">${doors}</span>` : ""}
+      <span class="msg-kind chip ${isParlay ? "up" : ""}">${isParlay ? "PARLAY" : "PICK"}</span>
+    </span>
+    <span class="msg-side">
+      <span class="msg-when">${escapeHtml(msgAgo(sh.created_at))}</span>
+      ${!isParlay ? `<button class="btn ghost"${shareDoorAttrs(sh.sport,
+        sh.player, sh.market)}>Charts</button>` : ""}
+      ${!sentSide && !sh.seen ? `<span class="msg-dot" aria-label="unread"></span>` : ""}
+    </span>
+  </div>`;
+}
+
+function firedHTML(d) {
+  const rows = d.fired || [];
+  if (!rows.length) {
+    return (d.watches || []).length ? `<p class="rank-help">Nothing of yours
+      has moved in the feed’s current window${d.feed_n ? ` (${d.feed_n}
+      event${d.feed_n === 1 ? "" : "s"} in it)` : ""}.</p>` : "";
+  }
+  return `<div class="card al-list">${rows.slice(0, 12).map((e) => `
+    <div class="al-row">
+      <span class="al-ic brand">${icon(feedIcon(e.kind), 15)}</span>
+      <span class="al-t"><b>${escapeHtml(e.player || e.kind || "")}${
+        e.label ? " · " + escapeHtml(e.label) : ""}</b>
+        <span class="al-c">${escapeHtml((e.why || []).join(" · "))}</span></span>
+      <span class="kx-num">${escapeHtml(feedWhen(e.ts))}</span>
+    </div>`).join("")}</div>`;
+}
+
+function watchChipsHTML(d) {
+  const ws = d.watches || [];
+  if (!ws.length) return `<p class="rank-help">Nothing watched yet — add a
+    ${isWalled() ? "player or a team" : "player, a team, or an edge size"} and the ones that matter
+    to you rise to the top of this page.</p>`;
+  return `<div class="al-watches">${ws.map((w) => `
+    <span class="chip al-watch">${escapeHtml(w.label)}
+      <button type="button" class="al-unwatch" data-unwatch="${w.id}"
+        aria-label="Stop watching ${escapeAttr(w.label)}">×</button></span>`).join("")}
+  </div>`;
+}
+
+/* FROM app.js, 2026-11-19 (the first visit's budget; Ethan, asked whether to raise it or trim it: "probably trim it"):
+   only this file draws these, so they load with it. */
+function feedWhen(ts) {
+  if (!ts) return "";
+  const t = Date.parse(String(ts).endsWith("Z") ? ts : ts + "Z");
+  if (!Number.isFinite(t)) return "";
+  const mins = Math.max(0, Math.round((Date.now() - t) / 60000));
+  return mins < 1 ? "just now" : mins < 60 ? `${mins}m ago`
+    : mins < 1440 ? `${Math.round(mins / 60)}h ago`
+    : `${Math.round(mins / 1440)}d ago`;
+}
+
+/* Best-effort shared vocabulary with the feed below. Both are icons for
+   the same five event kinds, and a second table would drift. */
+function feedIcon(kind) {
+  return kind === "edge_appeared" ? "gem"
+    : kind === "edge_died" ? "warn"
+    : kind === "line_move" ? "rising"
+    : kind === "price_move" || kind === "likely_price" ? "falling"
+    : kind === "stale_line" ? "signal" : "clock";
+}

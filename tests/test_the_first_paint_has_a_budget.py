@@ -399,6 +399,13 @@ APP_JS_BUDGET_KB = 290
 #: that draws it, with the fix that opens it on the book that has settled days.
 #: The first visit went 393,732 -> 392,085 B; the budget keeps the saving,
 #: rounded up to the kilobyte as the last one was.
+#: 384 kept on 2026-11-19, TRIMMED UNDER IT rather than raised (Ethan, asked
+#: whether to raise the first visit's budget or trim it, with 856 B left:
+#: "probably trim it"): the Alerts page's watch list, its feed, the friends'
+#: inbox, the fighter column and their helpers moved to js/more.js and a
+#: pressure cell to js/detail.js, the only files that draw them. The first
+#: visit went 392,360 -> 387,722 B, and the budget keeps the room (5.4 KB)
+#: for what comes next.
 BOOT_BUDGET_KB = 384
 
 

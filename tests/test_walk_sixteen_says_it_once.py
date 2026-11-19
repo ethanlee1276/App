@@ -67,8 +67,9 @@ def test_the_race_says_its_game_counts_with_commas():
 
 
 def test_the_alerts_page_says_where_a_watch_rises_once():
-    i = APP.index("async function renderWatchZone(")
-    body = APP[i:APP.index("\n/* THE FEED LEADS", i)]
+    more = (JS / "more.js").read_text(encoding="utf-8")      # the Alerts page's file since 2026-11-19
+    i = more.index("async function renderWatchZone(")
+    body = more[i:more.index("\n/* THE FEED LEADS", i)]
     j = body.index("Your phone hears about them")
     line = body[body.rindex("`", 0, j):body.index("</p>", j)]
     prog = "const say = (n) => " + line.rstrip("}") + ";" + """

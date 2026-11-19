@@ -37,6 +37,8 @@ sys.path.insert(0, ROOT)
 from engine import feed, gate                                # noqa: E402
 
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+#: The Alerts page's own file, where the feed zone lives since 2026-11-19.
+MORE = open(os.path.join(ROOT, "web", "js", "more.js"), encoding="utf-8").read()
 
 TS = "2026-08-24T14:41:00"
 TS2 = "2026-08-24T14:42:00"
@@ -245,10 +247,9 @@ def test_stale_lines_fire_on_arrival_and_never_repeat():
 
 
 def test_the_page_renders_the_new_kinds():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
+    # The feed zone draws them, in the Alerts page's own file since 2026-11-19.
     for kind in ("velocity_flag", "stale_line", "autopsy_posted"):
-        assert f'case "{kind}"' in app, f"{kind} events render as nothing"
+        assert f'case "{kind}"' in MORE, f"{kind} events render as nothing"
 
 
 def test_the_feed_is_a_paid_board():
@@ -294,7 +295,7 @@ def test_the_page_leads_with_the_feed():
         "the feed zone no longer sits at the head of the ambient half"
     assert "renderFeedZone()" in body, \
         "the zone div renders but nothing ever fills it"
-    fn = APP[APP.index("async function renderFeedZone("):]
+    fn = MORE[MORE.index("async function renderFeedZone("):]
     fn = fn[:fn.index("\nfunction ")]
     for kind in ("edge_appeared", "edge_died", "line_move",
                  "price_move", "released"):

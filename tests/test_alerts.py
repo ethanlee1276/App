@@ -294,7 +294,7 @@ def test_the_page_says_where_a_watch_reaches_your_phone():
     kickoff, big moments and final scores), so it now says where the
     switches are, member or free, and never that the lock screen is out
     of reach."""
-    app = _read("web", "js", "app.js")
+    app = _read("web", "js", "more.js")       # the Alerts page's own file since 2026-11-19
     i = app.index("async function renderWatchZone(")
     body = app[i:app.index("\n/* THE FEED LEADS", i)]
     assert "Your phone hears about them with the switches above, under Yours" in body
