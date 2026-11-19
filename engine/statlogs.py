@@ -588,6 +588,10 @@ def _search_conn(conn, sport: str, q: str, limit: int,
 VAGUE_POSITIONS = {"nfl": frozenset({"", "DEF"}), "cfb": frozenset({"", "DEF"}),
                    "nba": frozenset({"", "S", "B"}), "wnba": frozenset({"", "S", "B"}),
                    "cbb": frozenset({"", "S", "B"})}
+#: The marks that are no position at all (2026-11-19, real positions: the
+#: search called both Boozers "S"): where no roster lends a word, none is
+#: said, rather than a starter's or a bench player's mark as a position.
+BOX_MARKS = {"nba": frozenset({"S", "B"}), "wnba": frozenset({"S", "B"}), "cbb": frozenset({"S", "B"})}
 
 
 def _lend_roster(sport: str, hits: list, data_dir=None) -> set:
@@ -604,15 +608,17 @@ def _lend_roster(sport: str, hits: list, data_dir=None) -> set:
         return seen
     by = _roster_by_player(sport, data_dir)
     vague = VAGUE_POSITIONS.get(sport, frozenset({""}))
+    marks = BOX_MARKS.get(sport, frozenset())
     for h in hits:
         pl = by.get((h["team"], core_name(h["player"])))
-        if not pl:
-            continue
-        seen.add(pl["player"])
-        if pl["position"] and h["position"] in vague:
-            h["position"] = pl["position"]
-        if not h["headshot"] and pl["headshot"]:
-            h["headshot"] = pl["headshot"]
+        if pl:
+            seen.add(pl["player"])
+            if pl["position"] and h["position"] in vague:
+                h["position"] = pl["position"]
+            if not h["headshot"] and pl["headshot"]:
+                h["headshot"] = pl["headshot"]
+        if h["position"] in marks:
+            h["position"] = ""
     return seen
 
 

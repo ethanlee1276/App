@@ -9368,7 +9368,9 @@ ESPN (guard, forward or center, number, height), by the ids the scoreboards alre
 school on a day's cache, at most 60 new ones a run, so a cold morning spreads over the first few half-hour runs
 instead of holding the step past its three minutes. A school not read yet keeps the players who have played, and the
 page says how many are waiting. The player search and the player pages read positions from that file, so they show
-them too. The file drops its empty fields, as college football's does. Checked by
+them too. The file drops its empty fields, as college football's does. A player no current roster lists (Cameron
+Boozer, in the NBA now) shows no position in the search rather than the box score's starter mark. Live by 16:54 UTC:
+216 schools read on the first run, 3,301 players with a position, Cayden Boozer a guard. Checked by
 tests/test_college_players_show_their_real_positions.py.
 
 **YK. The Record page says the Most Likely record once**

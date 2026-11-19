@@ -101,11 +101,14 @@ def test_the_search_shows_the_rosters_position_over_the_box_scores_mark():
     real = statlogs._roster_by_player
     statlogs._roster_by_player = lambda sport, data_dir=None: {("DUKE", "cayden boozer"): {
         "player": "Cayden Boozer", "team": "DUKE", "position": "G", "headshot": "h"}}
+    hits.append({"player": "Cameron Boozer", "team": "DUKE", "position": "S", "headshot": ""})
     try:
         statlogs._lend_roster("cbb", hits)
     finally:
         statlogs._roster_by_player = real
     assert hits[0]["position"] == "G", hits
+    # Gone from the school's roster (the NBA now): a starter's mark is no position, so none is said.
+    assert hits[1]["position"] == "", hits
 
 
 if __name__ == "__main__":
