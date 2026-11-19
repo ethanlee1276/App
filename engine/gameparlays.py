@@ -139,13 +139,14 @@ LEG_FLOOR = 0.60
 #: since PARLAYWIN1 it is one of the report's own picks (`from_report`).
 FILL_LEG_FLOOR = 0.50
 #: The least chance by our numbers a ticket may have when it fills a game up to
-#: THREE_MIN (`tickets_of`): a longer ticket, said so on its card. Three legs at
-#: FILL_LEG_FLOOR, unrelated: 12.5%. It was 15% until the heartbeat's first
-#: reasons (19 November, 12:42) read the NHL's two short games and college
-#: basketball's one as "no fit": legs at 50% that the fill may take could never
-#: make a ticket it would post, three at 53% being 14.9%.
-LONG_FLOOR = FILL_LEG_FLOOR ** 3
-#: LONG_FLOOR as the notes say it ("12.5%").
+#: THREE_MIN (`tickets_of`): a longer ticket, said so on its card, one we
+#: expect to hit about one time in seven. Step YP lowered it to 12.5% (three
+#: legs at FILL_LEG_FLOOR) for the NHL's two short games and college
+#: basketball's one; the heartbeat then said what stopped them (conflicts: no
+#: three of their props fit together at any chance), so the lower floor only
+#: let longer tickets in, and it is 15% again (PARLAYWIN1).
+LONG_FLOOR = 0.15
+#: LONG_FLOOR as the notes say it ("15%").
 LONG_WORDS = f"{LONG_FLOOR * 100:g}%"
 #: The least chance a scorer leg may have, by league.
 SCORER_FLOOR = {"nfl": 0.25, "cfb": 0.30, "nhl": 0.25}
@@ -1425,8 +1426,12 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
     joint = float(t.get("joint") or 0)
     head = (f"Parlay {n}" if kind == "three" else f"Two-leg parlay {n}" if kind == "two"
             else f"{SCORER_WORDS.get(sport, 'Scorer').capitalize()} pair {n}")
-    price = (f"{joint:.0%} by our numbers ({float(t.get('independent') or 0):.0%} if the legs were unrelated) · "
-             f"fair {t.get('fair_words')} · take it at {t.get('take_words')} or better")
+    # The legs-unrelated chance only where it differs from ours (a link counted,
+    # `link_weight`): said beside an equal number it is the same number twice.
+    indep = float(t.get("independent") or 0)
+    price = (f"{joint:.0%} by our numbers"
+             + (f" ({indep:.0%} if the legs were unrelated)" if f"{indep:.0%}" != f"{joint:.0%}" else "")
+             + f" · fair {t.get('fair_words')} · take it at {t.get('take_words')} or better")
     if t.get("naive_words"):
         price += f" · the legs' own prices multiplied pay {t['naive_words']}, and a book's same-game price pays less"
     from .gameresults import bet_of

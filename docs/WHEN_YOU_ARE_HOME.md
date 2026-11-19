@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YT. Longer tickets back to one in seven, and each card says its chance once**
+(step 782; 19 November). Nothing to run. Step YP let a game fill its two three-leg parlays with longer tickets down
+to 12.5% (about one in eight) for the NHL's two short games and college basketball's one; with it live, the
+heartbeat said what stopped them: conflicts, no three of their props fitting together at any chance. So the lower
+floor only let longer tickets in, and it is 15% again. And with step YR's chances said without the link between
+legs, a card read "34% by our numbers (34% if the legs were unrelated)": the legs-unrelated chance now shows only
+where it differs. Checked by tests/test_every_game_report_posts_its_three_leg_parlays.py and
+tests/test_the_parlays_are_built_to_win.py.
+
 **YS. The Record page says how the rebuilt parlays do, apart**
 (step 781; 19 November). Nothing to run. So you can see whether step YR's parlays win without the older tickets
 mixed in, each league's parlay card on the Record page now says how the tickets built since the rebuild have done,

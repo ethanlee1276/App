@@ -299,29 +299,31 @@ def test_a_game_whose_props_all_sit_under_60_has_its_entry_and_fills_from_them()
     assert all(t.get("filled") for t in x["threes"]) and "threes_note" not in x
 
 
-def test_the_longer_tickets_floor_is_three_legs_at_the_fills_and_a_short_game_says_what_stopped_it():
-    """The heartbeat's first reasons (19 November, 12:42): the NHL's two short
-    games and college basketball's one read "no fit". Legs at 50% that the
-    fill may take could not make a ticket over the 15% it posted, three at 53%
-    being 14.9%; the floor is three legs at the fill's own floor now."""
+def test_the_longer_tickets_floor_and_a_short_game_says_what_stopped_it():
+    """The heartbeat's first reasons (19 November, 12:42) read the NHL's two
+    short games and college basketball's one as "no fit"; step YP lowered the
+    longer ticket's floor to 12.5% for them, and with it live the reasons said
+    "conflicts" (no three of their props fit at any chance). The floor is 15%
+    again (PARLAYWIN1): it only let longer tickets in."""
     import os
     import launch as L
-    assert GP.LONG_FLOOR == GP.FILL_LEG_FLOOR ** 3 == 0.125 and GP.LONG_WORDS == "12.5%"
+    assert GP.LONG_FLOOR == 0.15 and GP.LONG_WORDS == "15%"
     g = EG.GAME
-    # Four unrelated legs at 52%: every trio is 14.1%, under the old 15%.
+    # Four unrelated legs at 52%: every trio is 14.1%, under the floor.
     legs = [_leg("A One", "receptions", 0.52), _leg("B Two", "rush_att", 0.52, team="WAS"),
             _leg("C Three", "rush_att", 0.52), _leg("D Four", "receptions", 0.52, team="WAS")]
     made = GP.tickets_of("nfl", g, [], extra=legs)
-    assert len(made["threes"]) == GP.THREE_MIN, made
-    assert made["fill_fit"] == 4 and made["fill_clear"] == 4, (made["fill_fit"], made["fill_clear"])
+    assert made["threes"] == [] and made["fill_fit"] == 4 and made["fill_clear"] == 0, made
+    # At 55% they are 16.6%: a longer ticket, said so on its card.
+    made = GP.tickets_of("nfl", g, [], extra=[dict(l, p=0.55) for l in legs])
+    assert len(made["threes"]) == GP.THREE_MIN and made["fill_clear"] == 4, made
     for t in made["threes"]:
-        assert t["joint"] < 0.15 and any(c.startswith("A longer ticket: 14.1% by our numbers") for c in t["caveats"]), \
-            t["caveats"]
+        assert any(c.startswith("A longer ticket: 16.6% by our numbers") for c in t["caveats"]), t["caveats"]
     # One that clears nothing because every pair conflicts: the same player in each.
     same = [_leg("A One", m, 0.7) for m in ("receptions", "rec_yds", "rush_att")]
     none = GP.tickets_of("nfl", g, [], extra=same)
     assert none["threes"] == [] and none["fill_fit"] == 0 and none["fill_clear"] == 0
-    assert "reach 12.5% by our numbers" in GP._threes_note(dict(none, wider=3))
+    assert "reach 15% by our numbers" in GP._threes_note(dict(none, wider=3))
     # A game that needs no fill counts none.
     full = GP.tickets_of("nfl", g, [_leg("A One", "receptions", 0.9), _leg("B Two", "rush_att", 0.9, team="WAS"),
                                     _leg("C Three", "rec_yds", 0.9), _leg("D Four", "pass_cmp", 0.9, team="WAS")])

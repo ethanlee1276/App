@@ -174,6 +174,16 @@ def test_the_record_says_how_the_rebuilt_tickets_did_apart():
     assert "const nr = b.since_rules;" in js and "${tiles}</div>${close}${rebuilt}" in js
 
 
+def test_a_card_says_its_chance_once():
+    t = {"joint": 0.3412, "independent": 0.3412, "fair_words": "+193", "take_words": "+207", "legs": []}
+    line = GP.card(t, 1, "three", "nba")["price_line"]
+    assert line.startswith("34% by our numbers · fair +193") and "unrelated" not in line, line
+    linked = GP.card(dict(t, joint=0.37), 1, "three", "nba")["price_line"]
+    assert "37% by our numbers (34% if the legs were unrelated)" in linked, linked
+    js = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
+    assert "pct(t.independent) !== pct(t.joint)" in js, "the page's own card says it once too"
+
+
 def test_the_bars_are_said_without_the_link():
     assert (GP.TWO_FLOOR, GP.THREE_FLOOR) == (0.40, 0.25)
     assert round(0.63 ** 3, 2) == GP.THREE_FLOOR and round(0.63 ** 2, 2) == GP.TWO_FLOOR

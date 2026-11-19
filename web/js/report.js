@@ -844,7 +844,9 @@
     const pct = (x) => `${Math.round(Number(x || 0) * 100)}%`;
     const title = kind === "three" ? `Parlay ${n}` : kind === "two" ? `Two-leg parlay ${n}`
       : `${["nfl", "cfb"].includes(sport) ? "Touchdown" : "Scorer"} pair ${n}`;
-    let price = `${pct(t.joint)} by our numbers (${pct(t.independent)} if the legs were unrelated) · fair ${
+    // The legs-unrelated chance only where it differs (a link counted): beside an equal number it says it twice.
+    const unrel = pct(t.independent) !== pct(t.joint) ? ` (${pct(t.independent)} if the legs were unrelated)` : "";
+    let price = `${pct(t.joint)} by our numbers${unrel} · fair ${
       t.fair_words || ""} · take it at ${t.take_words || ""} or better`;
     if (t.naive_words) price += ` · the legs’ own prices multiplied pay ${t.naive_words}, and a book’s same-game price pays less`;
     const script = t.script ? `What it needs: ${t.script}${t.script_chance != null
