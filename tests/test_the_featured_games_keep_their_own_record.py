@@ -318,15 +318,16 @@ def test_in_a_browser_the_featured_record_draws_and_its_chip_lists_only_its_game
 
 
 if __name__ == "__main__":
-    fails = 0
+    fails = ran = 0
     for name, fn in sorted((k, v) for k, v in globals().items() if k.startswith("test_") and callable(v)):
         try:
             fn()
+            ran += 1
             print(f"  ok  {name}")
         except Exception as exc:                              # noqa: BLE001
             fails += 1
             import traceback
             traceback.print_exc()
             print(f"  FAIL {name}: {exc!r}")
-    print(f"\n{'All' if not fails else fails} {'tests passed' if not fails else 'failed'}.")
+    print(f"\n{ran} tests passed." if not fails else f"\n{fails} failed")
     sys.exit(1 if fails else 0)
