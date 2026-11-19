@@ -164,7 +164,9 @@ def test_a_game_short_of_props_at_60_fills_with_legs_in_the_fifties_and_names_th
     # The report's own path reads the game's legs down to the fill's floor and
     # keeps the tickets that clear THREE_FLOOR to its picks at 60%.
     src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
-    assert "legs_for(board, sport, now, floor=FILL_LEG_FLOOR)" in src
+    assert "def _board_legs(board: dict, sport: str, now=None, floor: float = FILL_LEG_FLOOR)" in src
+    assert "legs = legs_for(board, sport, now, floor=floor)" in src
+    assert GP._board_legs.__defaults__ == (None, GP.FILL_LEG_FLOOR), "the report's path reads down to the fill's floor"
     i = src.index("def from_report(")
     body = src[i:src.index("\ndef ", i + 10)]
     assert 'and float(l.get("p") or 0) >= LEG_FLOOR]' in body and "picks=picked" in body
@@ -183,9 +185,12 @@ def test_the_heartbeat_says_why_a_game_is_short_without_naming_a_pick():
              {"home": "G", "threes": [], "no_props": "props_not_bought", "legs_wider": 0},  # bought the day before
              {"home": "H", "threes": [], "no_props": "no_props_priced", "legs_wider": 0},   # no book has one yet
              # Props enough, but one of the report's own picks among them: a ticket takes two.
-             {"home": "I", "threes": [], "legs_wider": 9, "legs_own": 1, "legs_from": "report"}]
+             {"home": "I", "threes": [], "legs_wider": 9, "legs_own": 1, "legs_from": "report",
+              "report_picks": 4, "picks_priced": 3}]
+    fit = {"three": {"w": 0.4, "shift": -0.3, "fitted": True, "n": 120, "why": "scored the newest legs better",
+                     "markets": {"receptions": {"shift": -0.5, "n": 40}}}}
     board = {"most_likely": [], "recommendations": [], "game_bets": [],
-             "game_parlays": {"games": games, "counts": {"games": 9, "threes": 3}}}
+             "game_parlays": {"games": games, "counts": {"games": 9, "threes": 3, "leg_fit": fit}}}
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "b.json")
         with open(path, "w") as fh:
@@ -199,6 +204,10 @@ def test_the_heartbeat_says_why_a_game_is_short_without_naming_a_pick():
     assert got["threes_short"] == 7, got
     assert got["threes_short_why"] == {"few_props": 1, "no_fit": 1, "rebuild_failed": 1, "no_report": 1,
                                        "props_not_bought": 1, "no_props_priced": 1, "few_picks": 1}, got
+    # …and of the games short of the report's picks, how many it carries, prices, and holds at 50%.
+    assert got["threes_few_picks"] == {"games": 1, "picks": 4, "priced": 3, "at_50": 1}, got
+    # The legs' correction in force, the model's numbers only: what moved them.
+    assert got["leg_fit"] == {"three": {"w": 0.4, "shift": -0.3, "fitted": True, "markets": {"receptions": -0.5}}}, got
     assert got["rebuild_errors"] == ["KeyError"], "the error's type, never its words (a pick may ride in them)"
     assert "threes_no_fit_why" not in got, "no fill counts on these entries: nothing said"
     # The report path keeps the error on the private board's entry, and a rebuild that runs clears it.
@@ -273,6 +282,7 @@ def test_every_game_still_to_play_has_its_entry_and_one_with_no_prop_says_when()
              {"player": "Q Nobody", "market": "rec_yds", "side": "OVER", "line": 40.5}]
     GP.from_report(b4, "nfl", sunday, picks, now=thursday)
     assert "no_props" not in x4 and x4["threes"] == [] and x4["legs_own"] == 1, x4
+    assert x4["picks_priced"] == 1, "one of its two picks is priced at all: the heartbeat's few_picks counts"
     assert x4["threes_note"].startswith("a three-leg parlay takes 2 of this report's own picks, and only 1 of its "
                                         "2 picks is a player's line"), x4["threes_note"]
     assert x4["threes_note"].endswith("; the books post more of this game's props as it nears, and its parlays are "

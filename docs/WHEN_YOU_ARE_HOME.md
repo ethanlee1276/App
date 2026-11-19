@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZA. The heartbeat says why a game is short of the report's own picks**
+(step 789; 19 November). Nothing to run. With step YY live, the NFL's ten Sunday games short of their two three-leg
+tickets said why: eight are "few_picks", fewer than two of the report's own picks among the game's priced legs at
+50% or better, two have picks that do not fit together. The likeliest reason is the legs' learned correction
+(engine/legfit): it pulls each league's legs, and each market's, toward what they have hit, and the NFL's receptions
+legs hit 42% on the record where we said 71%, so a receptions pick the report likes at 62% can stand under 50% as a
+leg, and no ticket is built on a leg we expect to lose. The heartbeat now says, for the games short of picks, how
+many picks their reports carry, how many the board prices at any chance and how many stay at 50% or better once
+corrected, and the correction itself (the share toward the book, the shift, each market's shift: the model's
+numbers, no pick). The morning check-in reads them and, if the correction is holding the NFL's Sunday legs back on
+old evidence, fixes it. Checked by tests/test_every_game_report_posts_its_three_leg_parlays.py.
+
 **YZ. A report's own picks are never crowded out of its parlays by the game's other props**
 (step 788; 19 November). Nothing to run. Found while reading why the Sunday games were short. A game short of its
 two three-leg tickets fills from a pool of fourteen legs: the report's picks at 60% or better, then the rest. Every

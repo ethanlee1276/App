@@ -604,6 +604,16 @@ def _board_counts(path: str) -> dict:
             # A "no fit" game, by what stopped it (gameparlays.tickets_of's
             # counts): no three of its legs without a conflict, trios that all
             # sit under the longer ticket's floor, or a single one that clears.
+            # A game short of the report's own picks (few_picks): how many picks
+            # its reports carry, how many the board prices at any chance, and how
+            # many stay at 50% or better once corrected (engine/legfit) — counts.
+            few = [x for x in short if not x.get("rebuild_error") and not x.get("no_props")
+                   and x.get("legs_own") is not None and int(x["legs_own"]) < 2]
+            if few:
+                out["threes_few_picks"] = {"games": len(few),
+                                           "picks": sum(int(x.get("report_picks") or 0) for x in few),
+                                           "priced": sum(int(x.get("picks_priced") or 0) for x in few),
+                                           "at_50": sum(int(x.get("legs_own") or 0) for x in few)}
             nofit: dict = {}
             for x in short:
                 if x.get("rebuild_error") or x.get("no_props") or x.get("fill_fit") is None:
@@ -620,6 +630,16 @@ def _board_counts(path: str) -> dict:
                 out["rebuild_errors"] = errs[:5]
         out["sgp_twos"] = int(c.get("twos") or 0)
         out["td_pairs"] = int(c.get("scorers") or 0)
+        # The legs' learned correction in force (engine/legfit), each kind: the
+        # model's numbers, no pick (the share toward the book, the shift, each
+        # market's own shift), so a league short of legs says what moved them.
+        lf = c.get("leg_fit")
+        if isinstance(lf, dict) and lf:
+            out["leg_fit"] = {k: {f: (v.get(f) if f != "markets" else
+                                      {m: (mv or {}).get("shift") for m, mv in (v.get("markets") or {}).items()
+                                       if isinstance(mv, dict)})
+                                  for f in ("w", "shift", "fitted", "markets") if v.get(f) is not None}
+                              for k, v in lf.items() if isinstance(v, dict)}
         # Bet it on a whole ticket (engine/betlinks._parlay_legs, 2026-11-15):
         # the tickets' legs, and how many carry the books that hold them.
         legs = [l for x in gp["games"] if isinstance(x, dict)

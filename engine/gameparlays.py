@@ -1956,16 +1956,31 @@ def _pick_key(b: dict) -> tuple:
     return (norm(str((b or {}).get("player") or "")), str((b or {}).get("market") or "").lower(), side, line)
 
 
-def _board_legs(board: dict, sport: str, now=None) -> list[dict]:
-    """Every leg the board offers down to FILL_LEG_FLOOR (`legs_for`, `enrich`),
-    read once a build and shared by its reports: the same rows, so the same
-    legs. A report's tickets that clear THREE_FLOOR take the ones at LEG_FLOOR."""
+def _board_legs(board: dict, sport: str, now=None, floor: float = FILL_LEG_FLOOR) -> list[dict]:
+    """Every leg the board offers down to ``floor`` (FILL_LEG_FLOOR: `legs_for`,
+    `enrich`), read once a build and shared by its reports: the same rows, so
+    the same legs. A report's tickets that clear THREE_FLOOR take the ones at
+    LEG_FLOOR. At floor 0 (`_picks_priced`, the heartbeat's count of a short
+    game's picks) every priced leg at its corrected chance."""
     recs = board.get("recommendations")
-    key = (id(board), id(recs), len(recs or []), sport)
-    if _BOARD_LEGS.get("key") != key:
-        _BOARD_LEGS.clear()
-        _BOARD_LEGS.update(key=key, legs=enrich(legs_for(board, sport, now, floor=FILL_LEG_FLOOR), board))
-    return _BOARD_LEGS["legs"]
+    key = (id(board), id(recs), len(recs or []), sport, floor)
+    got = _BOARD_LEGS.get(floor)
+    if not got or got.get("key") != key:
+        legs = legs_for(board, sport, now, floor=floor)
+        got = _BOARD_LEGS[floor] = {"key": key, "legs": enrich(legs, board) if floor else legs}
+    return got["legs"]
+
+
+def _picks_priced(board: dict, sport: str, game: dict, want: set, now=None) -> int:
+    """How many of a report's picks (`_pick_key`s) the board prices as legs at
+    any chance, before the fill's floor: the heartbeat's word on a game short
+    of picks (PARLAYWIN1), priced but under 50% once corrected (engine/legfit),
+    or not priced at all. Never raises."""
+    try:
+        return len(want & {_pick_key(l) for l in _board_legs(board, sport, now, floor=0.0)
+                           if _game_of(l, [game])})
+    except Exception:                                        # noqa: BLE001
+        return 0
 
 
 def _report_note(n_ok: int, n_picks: int, made: dict) -> str:
@@ -2035,6 +2050,11 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
              legs_wider=int(made.get("wider") or 0),
              # The report's own picks among them: a ticket takes two at least (the heartbeat's "few_picks").
              legs_own=int(made.get("wider_own") or 0))
+    if len(chosen) < THREE_MIN and int(made.get("wider_own") or 0) < 2:
+        # …and how many of its picks the board prices at any chance (`_picks_priced`).
+        x["picks_priced"] = _picks_priced(board, sp, game, want, now)
+    else:
+        x.pop("picks_priced", None)
     # What a game short of its two had to fill from (`tickets_of`): counts, no leg.
     for k in ("fill_fit", "fill_clear"):
         if made.get(k) is None:
