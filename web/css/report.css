@@ -6,6 +6,13 @@
    card shape. */
 /* Copy the report, share the game: two quiet buttons over the contents. */
 .gr-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+/* A featured game (engine/featured): its kinds and how games like it have done, over the report. */
+.gr-featured { margin: 0 0 10px; padding: 9px 12px; border-radius: var(--radius, 12px);
+  border: 1px solid color-mix(in oklab, var(--gold, #d4af37) 45%, transparent);
+  background: color-mix(in oklab, var(--gold, #d4af37) 9%, transparent); }
+.gr-featured-tag { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: var(--fs-sm);
+  color: var(--gold, #d4af37); }
+.gr-featured-line { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--text-dim, inherit); line-height: 1.45; }
 .gr-card { padding: 18px 20px; }
 @media (max-width: 600px) { .gr-card { padding: 14px; } }
 .gr-sec { padding: 16px 0; border-top: var(--hairline) solid var(--border-soft);

@@ -245,6 +245,62 @@ function rpFactRowHTML(r) {
     <div class="rpk-fact-report" data-rpk-arch-slot="${escapeAttr(key)}"></div>
   </div>`;
 }
+/* ETHAN'S FEATURED GAMES, APART (engine/featured, FEATURED1, 2026-11-19). Ethan: "the main game reports that I
+   want to focus on is any game reports that has to do with a Lions game, any game reports on a Thursday night, or
+   any game reports on a Monday night. Those are the three main ones that we need to have dialed in completely and
+   have a separate record for." Their own record, every featured game and each kind, then each game: the report's
+   picks at one unit a pick at the price posted, the parlays its report carried at kickoff, and who we said would
+   win. The list below can show only these games, each pick and parlay with its check or X. */
+const RP_FX_TICKETS = [["threes", "Three-leg parlays"], ["twos", "Two-leg parlays"], ["scorers", "Touchdown pairs"]];
+function rpFxSigned(u) {
+  const n = Number(u) || 0;
+  return `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toFixed(1)}`;
+}
+//: One line of a featured block or game: "Picks 9-6 · +1.8 units · Three-leg parlays 1 of 4 · Who wins 2 of 3".
+function rpFxLine(b) {
+  const parts = [];
+  const [w, l, p] = b.picks || [0, 0, 0];
+  if (w + l) {
+    const tone = b.units > 0 ? "won" : b.units < 0 ? "lost" : "";
+    parts.push(`Picks <b>${w}-${l}${p ? `-${p}` : ""}</b> <span class="rpk-fx-u ${tone}">${rpFxSigned(b.units)} units</span>`);
+  }
+  RP_FX_TICKETS.forEach(([k, word]) => {
+    const t = (b.tickets || {})[k];
+    if (t && t[0] + t[1]) parts.push(`${word} <b>${t[0]} of ${t[0] + t[1]}</b>`);
+  });
+  const c = b.call || [0, 0];
+  if (c[1]) parts.push(`Who wins <b>${c[0]} of ${c[1]}</b>`);
+  const open = (b.open || 0) + (b.tickets_open || 0);
+  if (open) parts.push(escapeHtml(`${open} still waiting on the box score`));
+  return parts.length ? parts.join(" · ") : "Nothing of its report was on the record.";
+}
+function rpFeaturedHTML(fx) {
+  if (!fx || !fx.all || !fx.all.games) return "";
+  const words = fx.words || {}, plurals = fx.plural || {};
+  const kinds = (fx.order || []).filter((k) => (fx.kinds || {})[k]);
+  const kind = (title, b) => `<div class="rpk-fx-kind"><h5>${escapeHtml(title)}<span>${escapeHtml(plural(b.games, "game"))}</span></h5>
+      <p>${rpFxLine(b)}</p></div>`;
+  const games = (fx.games || []).map((g) => {
+    const nm = (t) => { const n = (g.names || {})[t]; return n && n !== t ? n : teamName(t); };
+    const f = g.final || {};
+    const score = f.home != null && f.away != null ? `${nm(g.away)} ${f.away} at ${nm(g.home)} ${f.home}`
+      : `${nm(g.away)} at ${nm(g.home)}`;
+    const tags = (g.kinds || []).map((k) => `<span class="rpk-fx-tag">${escapeHtml(words[k] || k)}</span>`).join("");
+    const one = { picks: g.picks, units: g.units, tickets: g.tickets, open: g.open, tickets_open: g.tickets_open,
+                  call: g.call ? [g.call.right ? 1 : 0, 1] : [0, 0] };
+    return `<li class="rpk-fx-game"><div class="rpk-fact-game"><b>${escapeHtml(score)}</b><span>${
+      escapeHtml(formatGameDate(g.date))}</span></div><div class="rpk-fx-tags">${tags}</div><p>${rpFxLine(one)}</p></li>`;
+  }).join("");
+  return `<section class="rpk-fx" data-rpk-fx>
+    <h4 class="rpk-fact-h"><span class="rpk-fx-star" aria-hidden="true">★</span>Featured games: Lions games, Thursday nights and Monday nights</h4>
+    <p class="mini rpk-fact-span">Kept apart from the rest: each finished featured game’s report picks, at one unit
+      a pick at the price posted, the parlays its report carried at kickoff, and who we said would win.</p>
+    <div class="rpk-fx-kinds">${kind("Every featured game", fx.all)}${kinds.map((k) => kind(plurals[k] || k, fx.kinds[k])).join("")}</div>
+    <details class="rpk-fx-each"${(fx.games || []).length <= 6 ? " open" : ""}><summary>Each featured game</summary>
+      <ul class="rpk-fx-games">${games}</ul></details>
+  </section>`;
+}
+
 async function rpFactsFill(host, league) {
   const slot = host.querySelector("[data-rpk-facts]");
   if (!slot) return;
@@ -269,12 +325,20 @@ async function rpFactsFill(host, league) {
   const recentN = (b.recent || {}).games || 0;
   // Every game and the last month, as two chips, once the archive runs past a month.
   const split = recentN && recentN < (b.totals || {}).games;
-  const games = b.games || [];
+  const every = b.games || [];
+  let games = every;
+  // The featured games' keys, for the list's own chip (FEATURED1).
+  const fx = b.featured && b.featured.all && b.featured.all.games ? b.featured : null;
+  const fxKeys = new Set(((fx || {}).games || []).map((g) => [g.date, g.away, g.home].join("|")));
   body.innerHTML = `${split ? `<div class="std-chips rpk-fact-span-chips">
       <button class="al-cat on" type="button" data-rpk-span="all">Every game</button>
       <button class="al-cat" type="button" data-rpk-span="recent">Last ${b.recent_days} days</button></div>` : ""}
     <div data-rpk-totals>${rpTotalsHTML(b.totals)}</div>
+    ${rpFeaturedHTML(fx)}
     <h4 class="rpk-fact-h">Every finished game</h4>
+    ${fxKeys.size ? `<div class="std-chips rpk-fact-span-chips">
+      <button class="al-cat on" type="button" data-rpk-list="all">Every game</button>
+      <button class="al-cat" type="button" data-rpk-list="featured">Featured games</button></div>` : ""}
     <p class="mini rpk-fact-span">Each game’s picks and parlays, ${RP_MARK_WORDS}: a parlay’s mark is the whole ticket,
       and its legs carry their own.</p>
     <div class="rpk-fact-list"></div>
@@ -301,9 +365,16 @@ async function rpFactsFill(host, league) {
     revealChildren(list);
   };
   more.addEventListener("click", page);
+  // Every game, or the featured games alone: the list starts again from its first page.
+  body.querySelectorAll("[data-rpk-list]").forEach((btn) => btn.addEventListener("click", () => {
+    body.querySelectorAll("[data-rpk-list]").forEach((x) => x.classList.toggle("on", x === btn));
+    games = btn.dataset.rpkList === "featured" ? every.filter((r) => fxKeys.has([r.date, r.away, r.home].join("|"))) : every;
+    list.innerHTML = "";
+    page();
+  }));
   page();
   revealChildren(slot);
-  return games.length;
+  return every.length;
 }
 
 /* EVERY PICK AND PARLAY, A CHECK OR AN X (2026-11-17). Ethan, on this list:

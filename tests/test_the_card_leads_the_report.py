@@ -76,6 +76,14 @@ def _report(rows=None, held=None):
     return GR.build(g, result, sport="nfl", form=form, names={"GB": "Packers", "DET": "Lions"})
 
 
+def _report_as(club):
+    """The same report with ``club`` for the Lions, on a Sunday afternoon: a game that is not featured."""
+    g, result, form = _result()
+    swap = lambda x: json.loads(json.dumps(x).replace('"DET', f'"{club}'))      # noqa: E731
+    g, result = swap(g), swap(result)
+    return GR.build(g, result, sport="nfl", form=form, names={"GB": "Packers", club: "Bears"})
+
+
 def _card(rep):
     return next((s for s in rep["sections"] if s["key"] == "card"), None)
 
@@ -88,17 +96,22 @@ def test_the_card_comes_first_and_ranks_the_games_posted_picks():
     sec = _card(rep)
     assert sec["title"] == "Our picks for this game"
     items = sec["blocks"][0]["items"]
-    assert [x["rank"] for x in items] == [1, 2, 3, 4]
+    # A Lions game is one of Ethan's featured games (engine/featured, FEATURED1): its card goes to six
+    # (gamereport.CARD_MAX_FEATURED), and this board has five of the game's players to give it.
+    assert [x["rank"] for x in items] == [1, 2, 3, 4, 5]
     picks = [x["pick"] for x in items]
-    # The board's order, one pick a player, this game's only, at most four.
+    # The board's order, one pick a player, this game's only.
     assert picks == ["Tucker Kraft over 3.5 receptions", "Jordan Love over 21.5 pass completions", "DET ML",
-                     "Jahmyr Gibbs to score a touchdown"], picks
-    assert not any("Bijan" in p or "LaPorta" in p for p in picks)
+                     "Jahmyr Gibbs to score a touchdown", "Sam LaPorta over 2.5 receptions"], picks
+    assert not any("Bijan" in p for p in picks)
+    # Any other game's card: at most four. The same board with the Bears for the Lions.
+    regular = _card(_report_as("CHI"))["blocks"][0]["items"]
+    assert [x["pick"] for x in regular] == picks[:2] + ["CHI ML"] + picks[3:4], [x["pick"] for x in regular]
 
 
 def test_each_pick_carries_what_the_research_carried():
     items = _card(_report())["blocks"][0]["items"]
-    kraft, love, ml, gibbs = items
+    kraft, love, ml, gibbs = items[:4]
     assert kraft["price"] == "DraftKings −190" and kraft["tier"] == "Top pick"
     # 78% is −355 fair; the project's gate is −250, so that is the most to pay.
     assert kraft["numbers"] == "Our chance 78% · fair −355 · play to −250", kraft["numbers"]

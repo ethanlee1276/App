@@ -279,8 +279,16 @@ def record(where, sport: str, today: str | None = None) -> dict:
         day = _dt.date.today()
     since = (day - _dt.timedelta(days=RECENT_DAYS)).isoformat()
     recent = [r for r in every if str(r.get("date") or "") >= since]
-    return {"sport": sport, "totals": totals(every), "recent": totals(recent), "recent_days": RECENT_DAYS,
-            "games": named(sport, every[:CARD_ROWS]), "more": max(0, len(every) - CARD_ROWS)}
+    out = {"sport": sport, "totals": totals(every), "recent": totals(recent), "recent_days": RECENT_DAYS,
+           "games": named(sport, every[:CARD_ROWS]), "more": max(0, len(every) - CARD_ROWS)}
+    # ETHAN'S FEATURED GAMES, APART (engine/featured; FEATURED1): the Lions'
+    # games, Thursday nights and Monday nights, with their picks and parlays.
+    from . import featured
+    if sport in featured.SPORTS:
+        fx = featured.record(where, sport)
+        if fx:
+            out["featured"] = fx
+    return out
 
 
 # --- how each kind of read has done, said on the next report -------------------------------------

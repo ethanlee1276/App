@@ -399,6 +399,10 @@ class Ctx:
         self.result = result or {}
         self.away, self.home = str(g.get("away") or ""), str(g.get("home") or "")
         self.teams = (self.away, self.home)
+        # Ethan's featured games (engine/featured): a Lions game, a Thursday
+        # night, a Monday night — [] for every other game.
+        from .featured import of_game
+        self.featured = of_game(g, sport)
         self.opp = {self.away: self.home, self.home: self.away}
         self.scan = g.get("scan") or {}
         self.units = self.scan.get("units") or {}
@@ -3572,6 +3576,13 @@ def sec_short(c: Ctx, built: dict) -> dict | None:
 #:
 #: The most picks a card ranks: a research card named three to six.
 CARD_MAX = 4
+#: A FEATURED GAME'S CARD GOES DEEPER (FEATURED1, 2026-11-19; engine/featured):
+#: Ethan's Lions games, Thursday nights and Monday nights, "dialed in
+#: completely". The research card's own top end, six picks: the game's report
+#: covers more of it, and its parlays have more of its own picks to be built
+#: from (tonight's Thursday game had no three-leg ticket because its four
+#: picks clashed with one another).
+CARD_MAX_FEATURED = 6
 #: The project's price gate: never a leg worse than this (NFL Bet checking §0).
 CARD_PRICE_GATE = -250
 #: The closest picks a card with nothing to post names, and what they need.
@@ -3605,7 +3616,9 @@ def _card_pool(c: Ctx, key: str = "rows") -> list:
 
 
 def _card_rows(c: Ctx) -> list:
-    """The card's picks: one a player, at most CARD_MAX, best first."""
+    """The card's picks: one a player, at most CARD_MAX (a featured game's
+    CARD_MAX_FEATURED), best first."""
+    most = CARD_MAX_FEATURED if c.featured else CARD_MAX
     out, seen = [], set()
     for r in _card_pool(c):
         who = str(r.get("player") or "")
@@ -3613,7 +3626,7 @@ def _card_rows(c: Ctx) -> list:
             continue
         seen.add(who)
         out.append(r)
-        if len(out) == CARD_MAX:
+        if len(out) == most:
             break
     return out
 
@@ -4500,7 +4513,21 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
             # The league's size, for the page to colour a rank in a sentence
             # ("the Patriots' big plays (3rd in the league)") by its third.
             "rank_of": TEXT_RANK_OF.get(c.sport) or c.n_teams,
+            # A featured game says so at its top, with how games like it have
+            # done (engine/featured.badge; FEATURED1).
+            **({"featured": _featured_badge(c)} if c.featured else {}),
             "sections": sections}
+
+
+def _featured_badge(c: Ctx) -> dict:
+    """engine/featured.badge for the report's game; its kinds alone where the
+    record cannot be read."""
+    from . import featured
+    try:
+        return featured.badge(c.sport, c.g) or {}
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the featured record not read for {c.away}@{c.home} ({exc})")
+        return {"kinds": c.featured, "words": featured.words(c.featured), "lines": []}
 
 
 def ideas_for(data: dict | None, home: str, away: str) -> dict:

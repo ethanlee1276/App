@@ -754,6 +754,17 @@
     </div>`;
   }
 
+  /* A FEATURED GAME SAYS SO AT ITS TOP (engine/featured.badge, FEATURED1, 2026-11-19). Ethan: "the main game
+     reports that I want to focus on is any game reports that has to do with a Lions game, any game reports on a
+     Thursday night, or any game reports on a Monday night". Its kinds, and how the reports on games like it have
+     done so far; their whole record is on the Record and Report Picks pages. */
+  function featuredHTML(f) {
+    if (!f || !f.words) return "";
+    const lines = (f.lines || []).map((l) => `<p class="gr-featured-line">${escapeHtml(l)}</p>`).join("");
+    return `<div class="gr-featured"><span class="gr-featured-tag"><span aria-hidden="true">★</span>Featured · ${
+      escapeHtml(f.words)}</span>${lines}</div>`;
+  }
+
   function html(r, extras) {
     // A UFC fight's report (engine/ufc/report, 2026-11-16; Ethan: "Yes" to a
     // written fight report), drawn inside its card on the UFC tab: several
@@ -821,7 +832,7 @@
         folded ? `<button type="button" class="btn ghost" data-gr-all="1">Open every section</button>` : ""}</div>`;
     // The watch's newest, over the report, until the game is under way.
     const watch = extras && extras.watch && !CLOSED && !solo ? watchCardHTML(extras.watch, r.watch_at, stakesOf(r)) : "";
-    return `<div${solo ? "" : ' id="gp-sec-report"'} class="gr">${head}${tools}${watch}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
+    return `<div${solo ? "" : ' id="gp-sec-report"'} class="gr">${head}${featuredHTML(r.featured)}${tools}${watch}<div class="card gr-card">${colourKey(body)}${body}</div></div>`;
   }
 
   /* EACH GAME'S PARLAYS, AS THE REPORT'S OWN CARDS (gameTickets, drawn on the
