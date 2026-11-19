@@ -285,6 +285,8 @@ def test_every_game_still_to_play_has_its_entry_and_one_with_no_prop_says_when()
     assert x4["picks_priced"] == 1, "one of its two picks is priced at all: the heartbeat's few_picks counts"
     assert x4["threes_note"].startswith("a three-leg parlay takes 2 of this report's own picks, and only 1 of its "
                                         "2 picks is a player's line"), x4["threes_note"]
+    assert "; the game's Most Likely picks at 60% or better make no three that fit together and reach 25% in " \
+        "their place" in x4["threes_note"], x4["threes_note"]
     assert x4["threes_note"].endswith("; the books post more of this game's props as it nears, and its parlays are "
                                       "read again as they do"), x4["threes_note"]
     # One fewer priced prop is still a stray or two: it waits.

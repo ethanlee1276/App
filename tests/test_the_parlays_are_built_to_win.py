@@ -209,6 +209,55 @@ def test_the_reports_own_picks_are_never_crowded_out_of_the_fill():
         assert sum(l["player"] in ("A One", "B Two", "C Three") for l in t["legs"]) >= 2, t["legs"]
 
 
+def test_the_most_likely_boards_picks_stand_in_where_a_report_has_too_few():
+    """BOARDFILL1: on the Thursday Sunday's props were bought, five Sunday games made no three-leg
+    ticket: their reports carried 15 player picks, 5 of them legs (scorers and tackles are never legs),
+    and a ticket takes two of the report's. The game's Most Likely picks at 60% or better stand in,
+    on a ticket that clears 25%, each named; any other prop still rides one a ticket."""
+    g = GAME
+    own = [_leg("A One", "receptions", 0.66)]                               # the report's one usable pick
+    likely = [dict(_leg("B Two", "rush_att", 0.68, team="WAS", pos="RB"), pool="likely"),
+              dict(_leg("C Three", "rec_yds", 0.66, pos="TE"), pool="likely"),
+              dict(_leg("D Four", "receptions", 0.64, team="WAS"), pool="likely")]
+    mine = {GP._leg_id(l) for l in own}
+    made = GP.tickets_of("nfl", g, own, extra=likely, picks=mine)
+    assert len(made["threes"]) == GP.THREE_MIN and made["board_filled"] == GP.THREE_MIN, made
+    for t in made["threes"]:
+        assert float(t["joint"]) >= GP.THREE_FLOOR, t["joint"]
+        assert any("for this game the report's card did not list, added so the game has 2 three-leg parlays" in c
+                   and "Most Likely pick" in c for c in t["caveats"]), t["caveats"]
+    assert any("A One" in {l["player"] for l in t["legs"]} for t in made["threes"]), "the report's pick rides first"
+    # The same props from any other source do not stand in: one a ticket, as before.
+    priced = [dict(l, pool="priced") for l in likely]
+    none = GP.tickets_of("nfl", g, own, extra=priced, picks=mine)
+    assert none["threes"] == [] and none["board_filled"] == 0, none["threes"]
+    # Nor a Most Likely pick under 60%, nor a ticket under 25%.
+    weak = [dict(l, p=0.58) for l in likely]
+    assert GP.tickets_of("nfl", g, own, extra=weak, picks=mine)["threes"] == []
+    assert not GP.board_pick(dict(likely[0], p=0.59)) and GP.board_pick(likely[0]) and not GP.board_pick(priced[0])
+    # A report with its two picks keeps to them: nothing stands in where the fill already made two.
+    two = [_leg("A One", "receptions", 0.66), _leg("E Five", "rush_att", 0.66, team="WAS", pos="RB"),
+           _leg("F Six", "rec_yds", 0.66, pos="TE"), _leg("G Seven", "receptions", 0.66, team="WAS")]
+    full = GP.tickets_of("nfl", g, two, extra=likely, picks={GP._leg_id(l) for l in two})
+    assert len(full["threes"]) >= GP.THREE_MIN and full["board_filled"] == 0, full
+    # The heartbeat counts the tickets they stood in on, no pick named.
+    import json
+    import launch as L
+    board = {"most_likely": [], "recommendations": [], "game_bets": [],
+             "game_parlays": {"games": [{"home": "A", "threes": [{"legs": []}, {"legs": []}], "threes_board_filled": 2}],
+                              "counts": {"games": 1, "threes": 2}}}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(board, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            assert L._board_counts(path)["threes_board_filled"] == 2
+        finally:
+            L._full_copy = was
+
+
 def _under(player, team, market, sport_game, p=0.72, line=0.5):
     home, away = sport_game["home"], sport_game["away"]
     return {"player": player, "team": team, "opponent": away if team == home else home, "home": home,

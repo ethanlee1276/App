@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZC. A game short of picks a parlay can use takes our Most Likely picks for it**
+(step 791; 19 November). Nothing to run. With step ZB live the NFL's three-leg tickets went from 5 to 11 (two-leg 0
+to 2), and four Sunday games had their two. Five Sunday games still had none: their reports carry 15 player picks,
+and 5 of those can be parlay legs. The rest are the picks a parlay never takes (touchdown scorers, which make the
+touchdown pairs; tackles; and the like), and a ticket takes two of the report's own picks. Those games do have Most
+Likely picks of ours the report's card had no room for (it lists four, one a player), and the Most Likely board's
+numbers hit what they claim (the NFL's 62.2% said, 61.7% hit, over 2,036 picks; the NBA's and hockey's run above
+what they say). So a game still short of its two after the usual fill may now take its Most Likely picks in the
+report's picks' places: only at 60% or better, only on a ticket that clears 25% by our numbers, the report's own
+picks still first, and each such leg named on the ticket ("a Most Likely pick for this game the report's card did
+not list"). Any other prop still rides one a ticket beside two of the report's, as step YU set. A game that stays
+short says so, and that its Most Likely picks made no ticket either. The heartbeat counts the tickets they stood in
+on (threes_board_filled). Checked by tests/test_the_parlays_are_built_to_win.py and
+tests/test_the_parlays_are_made_of_the_reports_picks.py.
+
 **ZB. The legs' pull toward the books learns from today's legs, not the retired ones**
 (step 790; 19 November). Nothing to run. Step ZA's counts answered it within the hour: the eight Sunday games short
 of the report's picks carry 24 player picks, 11 the parlays may use (the rest are tackles, quarterback completions,

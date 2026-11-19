@@ -85,7 +85,8 @@ def test_a_ticket_under_its_bar_is_not_made_and_the_game_says_why():
     # Too few legs for a three-leg ticket: the report says why.
     rnote = GP._report_note(1, 6, one)
     assert rnote == ("a three-leg parlay takes 2 of this report's own picks, and only 1 of its 6 picks is a "
-                     "player's line priced at 50% or better"), rnote
+                     "player's line priced at 50% or better; the game's Most Likely picks at 60% or better make "
+                     "no three that fit together and reach 25% in their place"), rnote
 
 
 def test_a_reports_rebuild_makes_both_sizes_from_its_own_picks():

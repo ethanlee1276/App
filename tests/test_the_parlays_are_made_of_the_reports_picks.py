@@ -116,18 +116,36 @@ def test_too_few_picks_fill_from_the_games_other_props_and_say_so():
     low = GP.from_report(_built(), "nfl", GAME, PICKS[:2] + [_pick("Jayden Daniels", "pass_cmp", "UNDER", 19.5,
                                                                    team="WAS")])
     assert low["legs_read"] == 2 and len(low["threes"]) == GP.THREE_MIN, low
-    # None at all on a player's line (a game bet only): no ticket, since a ticket
-    # takes two of the report's own picks and one prop it did not pick at most
-    # (PARLAYWIN1: the tickets that lost carried two or three such props).
-    none = GP.from_report(_built(), "nfl", GAME, [{"player": "NYG", "market": "moneyline", "side": "NYG",
-                                                   "game": True}])
-    assert none["threes"] == [] and none["threes_note"] == (
-        "a three-leg parlay takes 2 of this report's own picks, and it has no pick on a player's line"), \
-        none.get("threes_note")
+    # None at all on a player's line (a game bet only): the Most Likely board's
+    # picks for the game stand in (BOARDFILL1, 2026-11-19: five of the NFL's
+    # Sunday games had no ticket, their reports' picks scorers, tackles and game
+    # lines), at 60% or better, on a ticket that clears 25%, each one named.
+    game_bet = [{"player": "NYG", "market": "moneyline", "side": "NYG", "game": True}]
+    none = GP.from_report(_built(), "nfl", GAME, game_bet)
+    assert none["threes"] and none["threes_board_filled"] == len(none["threes"]), none.get("threes_note")
+    for t in none["threes"]:
+        assert all(l.get("pool") == "likely" and float(l["p"]) >= GP.LEG_FLOOR for l in t["legs"]), t["legs"]
+        assert float(t["joint"]) >= GP.THREE_FLOOR, t["joint"]
+        assert any("Most Likely picks for this game the report's card did not list" in c for c in t["caveats"]), \
+            t["caveats"]
+    # Any other prop the board priced does not stand in: a ticket takes two of the
+    # report's own picks and one such prop at most (PARLAYWIN1: the tickets that
+    # lost carried two or three of them), so this game makes none and says why.
+    was_all = GP._board_legs
+    GP._board_legs = lambda board, sp, now=None, **kw: [dict(l, pool="priced") for l in was_all(board, sp, now, **kw)]
+    try:
+        bare = GP.from_report(_built(), "nfl", GAME, game_bet)
+    finally:
+        GP._board_legs = was_all
+    assert bare["threes"] == [] and "threes_board_filled" not in bare and bare["threes_note"] == (
+        "a three-leg parlay takes 2 of this report's own picks, and it has no pick on a player's line; the game's "
+        "Most Likely picks at 60% or better make no three that fit together and reach 25% in their place"), \
+        bare.get("threes_note")
     # A game whose props make one ticket posts it, and the note says why there is no second.
     keys3 = {GP._pick_key(p) for p in PICKS[:3]}
     was_legs = GP._board_legs
-    GP._board_legs = lambda board, sp, now=None: [l for l in was_legs(board, sp, now) if GP._pick_key(l) in keys3]
+    GP._board_legs = lambda board, sp, now=None, **kw: [l for l in was_legs(board, sp, now, **kw)
+                                                        if GP._pick_key(l) in keys3]
     try:
         three = GP.from_report(_built(), "nfl", GAME, PICKS[:3])
     finally:

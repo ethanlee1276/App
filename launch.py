@@ -630,6 +630,11 @@ def _board_counts(path: str) -> dict:
                 out["rebuild_errors"] = errs[:5]
         out["sgp_twos"] = int(c.get("twos") or 0)
         out["td_pairs"] = int(c.get("scorers") or 0)
+        # Three-leg tickets the Most Likely board's picks stood in on, where a
+        # report had too few picks a parlay can use (gameparlays.board_pick).
+        stood = sum(int(x.get("threes_board_filled") or 0) for x in gp["games"] if isinstance(x, dict))
+        if stood:
+            out["threes_board_filled"] = stood
         # The legs' learned correction in force (engine/legfit), each kind: the
         # model's numbers, no pick (the share toward the book, the shift, each
         # market's own shift), so a league short of legs says what moved them.
