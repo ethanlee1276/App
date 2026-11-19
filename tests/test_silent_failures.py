@@ -142,6 +142,11 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # 2026-11-16): {} is also the quiet day before the first fit, so a
         # file it cannot read is printed once and kept in legfit.ERROR.
         "fits",
+        # A GAME'S REBUILD FROM ITS REPORT'S PICKS (engine/gamereport._parlays_from_picks,
+        # 2026-11-19): None either way, but a failure prints, is kept on the game's
+        # entry (rebuild_error) and the heartbeat counts it (threes_short_why), which
+        # no quiet day does — a game left without its tickets says why.
+        "_parlays_from_picks",
         # prints "Pick of the Day lock not applied (<error>)" and returns
         # the card unchanged — the build's own choice, not a blank card
         # (the sweep caught it when its lookup grew a loop, 2026-09-29)
