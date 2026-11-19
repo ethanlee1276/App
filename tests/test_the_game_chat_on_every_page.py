@@ -249,10 +249,16 @@ def test_in_a_browser_the_chat_opens_reacts_and_sends():
             # down on an 844 px screen: on screen at either end), so the page is
             # given room below its content first: what is asked is where the card
             # goes when it is scrolled away, not how tall the page has drawn yet.
+            #
+            # And scrolled INSTANTLY: the site scrolls smoothly (styles.css, `html { scroll-behavior:
+            # smooth }`), so a plain scrollTo starts an animation and the card's place read right
+            # after it is where it was. Gate 564 (19 Nov): the card read 761 px down on an 844 px
+            # screen on a page 4,288 px tall, every poll scrolling down and straight back up.
             p.evaluate("document.body.style.paddingBottom = '2400px'")
-            away = """(() => { window.scrollTo(0, document.scrollingElement.scrollHeight);
+            away = """(() => { const go = (y) => window.scrollTo({ top: y, left: 0, behavior: 'instant' });
+              go(document.scrollingElement.scrollHeight);
               const at = () => document.querySelector('.gch-entry').getBoundingClientRect();
-              if (at().bottom >= 0 && at().top <= innerHeight) window.scrollTo(0, 0);
+              if (at().bottom >= 0 && at().top <= innerHeight) go(0);
               const r = at(); return r.bottom < 0 || r.top > innerHeight; })()"""
             try:
                 p.wait_for_function(away, timeout=15000, polling=250)
