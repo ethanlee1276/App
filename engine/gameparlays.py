@@ -108,6 +108,7 @@ Standard library only. Never raises out of ``attach``.
 """
 from __future__ import annotations
 
+import datetime as dt
 import itertools
 
 #: The leagues this runs for: every board with player props.
@@ -1527,6 +1528,73 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
     return out
 
 
+# --- a game still to play with no priced prop (THREELEG3) ------------------------------------
+# EVERY GAME ITS ENTRY (THREELEG3, 2026-11-19; Ethan the same day: "I want those
+# for every single game"). The NFL's Thursday board held thirteen games and posted
+# parlays on three: a game had an entry only when a leg at LEG_FLOOR or a priced
+# scorer fell in it, and the books' player props are bought for tonight's games
+# and, in the two weekly leagues, the next day's (engine/oddsbudget
+# DAY_BEFORE_LEAGUES), so Sunday's ten had nothing to build from and their
+# reports dropped the parlays section without a word. A game whose props all sat
+# under LEG_FLOOR had no entry either, so the fill down to FILL_LEG_FLOOR never
+# reached it. Every game still to play has its entry now; one with no priced
+# prop says when its props are bought (`props_note`), and its report says so in
+# one line.
+#: Why a game still to play has no priced prop (`props_note`).
+PROPS_WAIT, PROPS_NONE = "props_not_bought", "no_props_priced"
+
+
+def _priced_games(board: dict, games: list) -> set:
+    """The games (`game_label`) with a player prop a book has priced: a row of
+    the board's at a real book, the proxy line's aside."""
+    out = set()
+    for key in ("recommendations", "most_likely"):
+        for r in board.get(key) or []:
+            if not isinstance(r, dict) or r.get("has_market") is False or r.get("_game_leg"):
+                continue
+            if str(r.get("book") or "").strip().lower() in ("", "proxy"):
+                continue
+            g = _game_of(r, games)
+            if g:
+                out.add(game_label(g))
+    return out
+
+
+def _slate_today(now=None) -> str:
+    """Today's slate (ISO date, Eastern, rolled at 5 AM: engine/slateday)."""
+    from .slateday import baseball_day
+    if isinstance(now, (int, float)) and not isinstance(now, bool):
+        from .oddsbudget import slate_day
+        return slate_day(float(now))
+    if isinstance(now, dt.datetime):
+        if now.tzinfo is not None:
+            from zoneinfo import ZoneInfo
+            now = now.astimezone(ZoneInfo("America/New_York"))
+        return baseball_day(now)
+    return baseball_day()
+
+
+def props_note(sport: str, game: dict, now=None) -> tuple[str, str]:
+    """Why a game still to play has no priced prop, and when it will: (reason,
+    words). The weekly leagues buy a game's props the day before it, the rest
+    on its day (engine/oddsbudget); inside that window no book has priced one
+    yet."""
+    from .oddsbudget import DAY_BEFORE_LEAGUES
+    weekly = sport in DAY_BEFORE_LEAGUES
+    try:
+        day = dt.date.fromisoformat(str(game.get("date") or "")[:10])
+        ahead = (day - dt.date.fromisoformat(_slate_today(now))).days
+    except ValueError:
+        day, ahead = None, 0
+    if day is not None and ahead >= (2 if weekly else 1):
+        when = day - dt.timedelta(days=1) if weekly else day
+        return PROPS_WAIT, (f"the books' player props for this game are bought "
+                            f"{'the day before it' if weekly else 'on its game day'}, on {when.strftime('%A')}, "
+                            f"and its parlays are built from them then")
+    return PROPS_NONE, ("no book has priced a player prop in this game yet, and its parlays are built from "
+                        "them once one does")
+
+
 def build(board: dict, sport: str, now=None) -> dict:
     """{"sport", "date", "games": [...], "counts"} for every game on the
     board still to play."""
@@ -1555,11 +1623,23 @@ def build(board: dict, sport: str, now=None) -> dict:
         if g:
             slot(g)["scorers"].append(leg)
     out_games = []
+    priced_games = _priced_games(board, games)
     for g in games:
         x = by_game.get(game_label(g))
         if not x:
-            continue
-        out_games.append(build_game(sp, x["g"], x["legs"], x["scorers"], priced=x["priced"]))
+            # Every game still to play has its entry (THREELEG3): its report's
+            # picks and the game's props under LEG_FLOOR fill it (`from_report`).
+            if game_started(g, now):
+                continue
+            x = slot(g)
+        e = build_game(sp, x["g"], x["legs"], x["scorers"], priced=x["priced"])
+        if not (x["legs"] or x["priced"]) and game_label(g) not in priced_games:
+            # No prop priced at all: when they come, said once (`props_note`).
+            why, words = props_note(sp, g, now)
+            e.update(no_props=why, props_note=words, threes_note=words)
+            e.pop("twos_note", None)
+            e.pop("scorers_note", None)
+        out_games.append(e)
     # EVERY GAME'S THREE-LEG TICKETS ARE POSTED (THREELEG1, 2026-11-19; Ethan:
     # "3-leg parlays, we need those back immediately ... for every single
     # game"): the paper hold they had from 17 November is retired
@@ -1574,6 +1654,9 @@ def build(board: dict, sport: str, now=None) -> dict:
             **({"twos_paper": paper2} if paper2 else {}),
             "take_edge": TAKE_EDGE, "leg_floor": LEG_FLOOR, "two_floor": TWO_FLOOR, "three_floor": THREE_FLOOR,
             "counts": {"games": len(out_games), "threes": sum(len(x["threes"]) for x in out_games),
+                       # Games with no prop priced yet (`props_note`), each kind.
+                       "no_props": {k: n for k in (PROPS_WAIT, PROPS_NONE)
+                                    if (n := sum(1 for x in out_games if x.get("no_props") == k))},
                        "paper_threes": sum(len(x.get("paper_threes") or []) for x in out_games),
                        "twos": sum(len(x.get("twos") or []) for x in out_games),
                        "paper_twos": sum(len(x.get("paper_twos") or []) for x in out_games),
@@ -1762,7 +1845,15 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
         x["threes_filled"] = made["filled"]
     else:
         x.pop("threes_filled", None)
-    if len(chosen) < THREE_MIN:
+    # A game with no prop priced yet keeps the build's word on when they come
+    # (THREELEG3, `props_note`); a prop priced since, and the game is read again.
+    waiting = bool(x.get("no_props")) and not made.get("wider")
+    if not waiting:
+        x.pop("no_props", None)
+        x.pop("props_note", None)
+    if waiting:
+        x["threes_note"] = x.get("props_note") or x.get("threes_note") or ""
+    elif len(chosen) < THREE_MIN:
         x["threes_note"] = _report_note(n_pool, len(want), made)
     else:
         x.pop("threes_note", None)
@@ -1771,6 +1862,8 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     x["paper_twos" if paper2 else "twos"] = made["twos"]
     if paper2:
         x["twos"] = []
+    elif waiting:
+        x.pop("twos_note", None)
     elif len(made["twos"]) < TWO_PER_GAME:
         x["twos_note"] = _twos_note(made, own=True)
     else:

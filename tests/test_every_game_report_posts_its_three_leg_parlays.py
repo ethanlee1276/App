@@ -21,7 +21,10 @@ hold:
     picks), then the game's other priced props, then longer tickets down to
     LONG_FLOOR — each filled ticket saying on its card which legs are not the
     report's picks and when it is a longer ticket;
-  * a ticket on paper from a board built before still journals and grades.
+  * a ticket on paper from a board built before still journals and grades;
+  * every game still to play has its entry (THREELEG3): one whose props all
+    sit under 60% fills from them, and one with no prop priced yet says, once,
+    when its props are bought (the NFL's Sunday games on a Thursday).
 
     python3 tests/test_every_game_report_posts_its_three_leg_parlays.py
 """
@@ -176,9 +179,11 @@ def test_the_heartbeat_says_why_a_game_is_short_without_naming_a_pick():
              {"home": "C", "threes": [t], "legs_wider": 6, "legs_from": "report"},        # none fit
              {"home": "D", "threes": [], "rebuild_error": "KeyError: 'Jalen Hurts'"},     # the rebuild failed
              {"home": "E", "threes": []},                                                # no report rebuilt it
-             {"home": "F", "threes": [], "kept": "Sun 1:00 PM ET"}]                       # started: not counted
+             {"home": "F", "threes": [], "kept": "Sun 1:00 PM ET"},                       # started: not counted
+             {"home": "G", "threes": [], "no_props": "props_not_bought", "legs_wider": 0},  # bought the day before
+             {"home": "H", "threes": [], "no_props": "no_props_priced", "legs_wider": 0}]   # no book has one yet
     board = {"most_likely": [], "recommendations": [], "game_bets": [],
-             "game_parlays": {"games": games, "counts": {"games": 6, "threes": 3}}}
+             "game_parlays": {"games": games, "counts": {"games": 8, "threes": 3}}}
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "b.json")
         with open(path, "w") as fh:
@@ -189,14 +194,89 @@ def test_the_heartbeat_says_why_a_game_is_short_without_naming_a_pick():
             got = L._board_counts(path)
         finally:
             L._full_copy = was
-    assert got["threes_short"] == 4, got
-    assert got["threes_short_why"] == {"few_props": 1, "no_fit": 1, "rebuild_failed": 1, "no_report": 1}, got
+    assert got["threes_short"] == 6, got
+    assert got["threes_short_why"] == {"few_props": 1, "no_fit": 1, "rebuild_failed": 1, "no_report": 1,
+                                       "props_not_bought": 1, "no_props_priced": 1}, got
     assert got["rebuild_errors"] == ["KeyError"], "the error's type, never its words (a pick may ride in them)"
     # The report path keeps the error on the private board's entry, and a rebuild that runs clears it.
     src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
     assert 'x["rebuild_error"] = f"{type(exc).__name__}: {exc}"[:200]' in src
     gp_src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
     assert 'x.pop("rebuild_error", None)' in gp_src and 'legs_wider=int(made.get("wider") or 0)' in gp_src
+
+
+def _rec(player, market, p, team="NYG", home="NYG", away="WAS", day="2099-11-12"):
+    """A priced prop on the board (EG._rec's shape), of any game."""
+    return {"player": player, "team": team, "opponent": away if team == home else home, "home": home,
+            "away": away, "position": "WR", "market": market, "side": "Over", "line": 2.5, "odds": -150,
+            "book": "DraftKings", "hit_prob": p, "has_market": True, "recommended": False, "game_date": day,
+            "kickoff": f"{day}T13:00:00-05:00", "reasons": ["Projection clears 2.5"]}
+
+
+def test_every_game_still_to_play_has_its_entry_and_one_with_no_prop_says_when():
+    """THREELEG3: the NFL's Thursday board (19 November) held 13 games and
+    posted parlays on 3. Sunday's props are bought the day before (Saturday),
+    and a game with no leg at 60% had no entry, so its report said nothing."""
+    from engine import gamereport as GR
+    b = EG.board()
+    sunday = {"home": "PHI", "away": "DAL", "date": "2099-11-15", "kickoff": "13:00"}
+    b["games"] = b["games"] + [sunday]
+    gp = GP.build(b, "nfl")
+    assert [x["game"] for x in gp["games"]] == ["WAS@NYG", "DAL@PHI"], [x["game"] for x in gp["games"]]
+    x = gp["games"][1]
+    sat = (dt.date(2099, 11, 15) - dt.timedelta(days=1)).strftime("%A")
+    assert x["no_props"] == GP.PROPS_WAIT and x["threes"] == [] and x["scorers"] == [], x
+    assert x["props_note"] == (f"the books' player props for this game are bought the day before it, on {sat}, "
+                               "and its parlays are built from them then"), x["props_note"]
+    assert "twos_note" not in x and "scorers_note" not in x, "said once, not three times"
+    assert gp["counts"]["no_props"] == {GP.PROPS_WAIT: 1} and gp["counts"]["games"] == 2
+    # Its report says it in one line, where the tickets will be; the rebuild keeps it.
+    b["game_parlays"] = gp
+    GP.from_report(b, "nfl", sunday, [])
+    assert x["threes_note"] == x["props_note"] and "twos_note" not in x
+    sec = GR.sec_parlays(GR.Ctx(sunday, b, sport="nfl"))
+    assert sec["title"] == "Parlays for this game" and len(sec["blocks"]) == 1, sec
+    assert sec["blocks"][0]["text"] == f"No parlays yet: {x['props_note']}.", sec["blocks"][0]
+    # A game that has started keeps no new entry (its kept one is engine/reportkeep's).
+    b2 = EG.board()
+    b2["games"] = b2["games"] + [dict(sunday, live={"state": "final"})]
+    assert [x["game"] for x in GP.build(b2, "nfl")["games"]] == ["WAS@NYG"]
+
+
+def test_when_a_games_props_come_is_said_by_its_league_and_day():
+    thu, sat = dt.datetime(2026, 11, 19, 12, 0), dt.datetime(2026, 11, 21, 12, 0)
+    why, words = GP.props_note("nfl", {"date": "2026-11-22"}, now=thu)
+    assert why == GP.PROPS_WAIT and "bought the day before it, on Saturday" in words, words
+    # The day before, the pull buys it: no book has one priced yet.
+    why, words = GP.props_note("nfl", {"date": "2026-11-22"}, now=sat)
+    assert why == GP.PROPS_NONE and words.startswith("no book has priced a player prop in this game yet"), words
+    # A daily league buys on the game's day.
+    why, words = GP.props_note("nba", {"date": "2026-11-20"}, now=thu)
+    assert why == GP.PROPS_WAIT and "bought on its game day, on Friday" in words, words
+    assert GP.props_note("cbb", {"date": "2026-11-19"}, now=thu)[0] == GP.PROPS_NONE
+    # After midnight, before the 5 AM roll, is still last night's slate.
+    late = dt.datetime(2026, 11, 20, 1, 30)
+    assert GP.props_note("nba", {"date": "2026-11-20"}, now=late)[0] == GP.PROPS_WAIT
+    assert GP.props_note("nfl", {"date": ""}, now=thu)[0] == GP.PROPS_NONE, "no date: no promise"
+
+
+def test_a_game_whose_props_all_sit_under_60_has_its_entry_and_fills_from_them():
+    b = EG.board()
+    away = {"home": "PHI", "away": "DAL", "date": "2099-11-15", "kickoff": "13:00"}
+    b["games"] = b["games"] + [away]
+    fifties = [_rec("P One", "receptions", 0.56, team="PHI", home="PHI", away="DAL", day="2099-11-15"),
+               _rec("P Two", "rush_att", 0.55, team="DAL", home="PHI", away="DAL", day="2099-11-15"),
+               _rec("P Three", "rec_yds", 0.57, team="PHI", home="PHI", away="DAL", day="2099-11-15"),
+               _rec("P Four", "pass_cmp", 0.54, team="DAL", home="PHI", away="DAL", day="2099-11-15")]
+    b["recommendations"] = list(b.get("recommendations") or []) + fifties
+    gp = GP.build(b, "nfl")
+    x = GP.for_game({"game_parlays": gp}, "PHI", "DAL")
+    assert x is not None and "no_props" not in x, "priced props, under the floor: an entry, and no wait"
+    assert x["threes"] == [], "no leg at 60%: nothing clears on the board's own pass"
+    b["game_parlays"] = gp
+    GP.from_report(b, "nfl", away, [])
+    assert len(x["threes"]) == GP.THREE_MIN, x.get("threes_note")
+    assert all(t.get("filled") for t in x["threes"]) and "threes_note" not in x
 
 
 def test_a_ticket_on_paper_from_before_still_journals_and_grades():

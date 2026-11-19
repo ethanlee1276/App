@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YO. Every game's report has its parlays section, and one with no props yet says when they come**
+(step 777; 19 November). Nothing to run. The live NFL board this Thursday held 13 games and showed parlays on 3: the
+board buys the books' player props for tonight's games and, in the NFL and college football, the next day's (the
+day-before rule from 7 November), so on a Thursday Sunday's games have no props to build from, and their reports
+dropped the parlays section without a word. A game whose props all sat between 50% and 60% had no parlays entry
+either, so step YN's fill never reached it. Every game still to play now has its entry: a game with priced props
+fills to two three-leg tickets from them, and a game with none says so once, where its tickets will be ("No parlays
+yet: the books' player props for this game are bought the day before it, on Saturday, and its parlays are built from
+them then", or, inside the window, that no book has priced one yet). The heartbeat counts these games too
+(threes_short_why: props_not_bought, no_props_priced). Sunday's NFL parlays arrive with Saturday's pulls; having
+them from Thursday means buying Sunday's props two or three days early, which is decision 9 in the report. Checked
+by tests/test_every_game_report_posts_its_three_leg_parlays.py.
+
 **YN. Games still short of two three-leg parlays fill with legs down to 50%**
 (step 776; 19 November). Nothing to run. The first builds after YH went live left games short: the heartbeat read
 the NHL's twelve games with 22 three-leg tickets, the NBA's four with 3. A game with only three or four props at 60%

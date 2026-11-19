@@ -3869,6 +3869,10 @@ def sec_parlays(c: Ctx) -> dict | None:
     gp = _game_parlays(c)
     if not gp:
         return None
+    if gp.get("no_props") and not any(gp.get(k) for k in ("twos", "threes", "scorers")):
+        # No prop priced in this game yet (THREELEG3): when its props are
+        # bought, said once, where its tickets will be.
+        return _section("parlays", "Parlays for this game", [_p(f"No parlays yet: {gp.get('props_note') or ''}")])
     blocks = []
     # ITS TWO STRONGEST PICKS TOGETHER, FIRST (GPWIN1, 2026-11-18; Ethan: "how
     # are we winning so many picks ... but losing so many parlays? ... Make it
