@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YZ. A report's own picks are never crowded out of its parlays by the game's other props**
+(step 788; 19 November). Nothing to run. Found while reading why the Sunday games were short. A game short of its
+two three-leg tickets fills from a pool of fourteen legs: the report's picks at 60% or better, then the rest. Every
+ticket takes two of the report's own picks, but the rest were sorted by our chance alone, so a game's other props at
+60% and better took the fourteen places ahead of the report's picks at 50-60%, and the fill had none of them to
+build with. A hockey game prices about a hundred props, and the NFL's Sunday games about forty once bought, so the
+more a game was priced, the likelier its own picks were pushed out. The report's picks now enter the pool first,
+then the best of the rest. Checked by tests/test_the_parlays_are_built_to_win.py (on the old order the case builds
+nothing: none of the report's three picks reached the pool).
+
 **YY. A Sunday game whose props are bought says why it is short, not that its props are still to come**
 (step 787; 19 November). Nothing to run. Sunday's props were bought this afternoon, as step YW meant: the NFL board
 now carries 453 player props priced across the 12 games through Sunday, where at 4:17 PM it had 51, all Thursday's;

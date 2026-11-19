@@ -1524,7 +1524,13 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
     chosen = choose(strong3, THREE_PER_GAME)
     in_pool = {_leg_id(l) for l in pool}
     own = set(picks) if picks is not None else in_pool
-    more = [l for l in sorted(extra or [], key=lambda l: -float(l["p"])) if _leg_id(l) not in in_pool]
+    # THE REPORT'S OWN PICKS FIRST INTO THE FILL'S POOL (PARLAYWIN1, 2026-11-19).
+    # Every ticket takes two of them (FILL_OUTSIDE_MAX), and sorted by chance
+    # alone a game's other props at 60% and better took the MAX_POOL places
+    # ahead of its picks at 50-60% (a hockey game prices a hundred props, the
+    # NFL's Sunday games forty once bought), leaving it nothing to build from.
+    more = sorted((l for l in extra or [] if _leg_id(l) not in in_pool),
+                  key=lambda l: (_leg_id(l) not in own, -float(l["p"])))
     wider = pool + more[:max(0, MAX_POOL - len(pool))]
     filled = 0
     fill_fit = fill_clear = None

@@ -194,6 +194,21 @@ def test_the_bars_are_said_without_the_link():
     assert round(0.63 ** 3, 2) == GP.THREE_FLOOR and round(0.63 ** 2, 2) == GP.TWO_FLOOR
 
 
+def test_the_reports_own_picks_are_never_crowded_out_of_the_fill():
+    """Every ticket takes two of the report's picks, so they enter the fill's
+    pool first: sorted by chance alone, a game's other props at 70% took the
+    MAX_POOL places ahead of its picks at 52-58%, and it built nothing."""
+    g = GAME
+    picks = [_leg("A One", "receptions", 0.58), _leg("B Two", "rush_att", 0.55, team="WAS"),
+             _leg("C Three", "rec_yds", 0.52, pos="TE")]
+    others = [_leg(f"Other {i}", "receptions", 0.70, team="NYG" if i % 2 else "WAS") for i in range(GP.MAX_POOL)]
+    made = GP.tickets_of("nfl", g, [], extra=picks + others, picks={GP._leg_id(l) for l in picks})
+    assert made["wider_own"] == 3, made["wider_own"]
+    assert len(made["threes"]) >= GP.THREE_MIN, made
+    for t in made["threes"]:
+        assert sum(l["player"] in ("A One", "B Two", "C Three") for l in t["legs"]) >= 2, t["legs"]
+
+
 def _under(player, team, market, sport_game, p=0.72, line=0.5):
     home, away = sport_game["home"], sport_game["away"]
     return {"player": player, "team": team, "opponent": away if team == home else home, "home": home,
