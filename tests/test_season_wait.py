@@ -91,8 +91,9 @@ def test_the_wait_says_when_the_league_opens_not_the_windows_first_day():
     so its first day is a bound: nobody plays a game that counts on it, and
     it was printed as a date off a file. The page says the part of the month
     the league opens in, and keeps the bound as data."""
+    # Hockey's: the 2026-27 season opened on 29 September (step YF).
     want = {"mlb": "late March 2027", "wnba": "May 2027", "nfl": "early September 2027",
-            "nba": "late October 2027", "nhl": "early October 2027", "cfb": "late August 2027",
+            "nba": "late October 2027", "nhl": "late September or early October 2027", "cfb": "late August 2027",
             "cbb": "early November 2027"}
     days = {"mlb": "2026-11-17", "wnba": "2026-11-17", "nfl": "2027-03-01", "nba": "2027-07-15",
             "nhl": "2027-07-15", "cfb": "2027-02-01", "cbb": "2027-05-01"}
