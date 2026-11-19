@@ -123,6 +123,14 @@ def test_a_board_that_moved_on_a_day_still_marks_the_games_own_day():
     assert c.execute("SELECT at_start FROM parlays").fetchone()[0] == 1
 
 
+def test_a_kept_entry_it_cannot_read_never_stops_the_journal():
+    c = _conn()
+    _journal_a_day(c)
+    bad = {"games": [_game([{"legs": ["not", "a", "leg"]}], [], kept="Sun 1:00 PM ET")]}
+    assert PL.mark_started_games(c, bad, "nfl", "2026-W12") == 0
+    assert set(_marks(c).values()) == {None}, "left unmarked for the night's archive pass"
+
+
 def test_a_kept_set_with_no_ticket_held_none():
     c = _conn()
     _journal_a_day(c)

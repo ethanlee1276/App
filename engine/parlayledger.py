@@ -419,9 +419,16 @@ def mark_started_games(conn, gp: dict, sport: str, date: str) -> int:
     ensure_schema(conn)
     n = 0
     for x in (gp or {}).get("games") or []:
-        if isinstance(x, dict) and x.get("kept"):
+        if not (isinstance(x, dict) and x.get("kept")):
+            continue
+        try:
             n += mark_at_start(conn, sport, (date, str(x.get("date") or "")[:10]),
                                x.get("game") or f"{x.get('away')}@{x.get('home')}", x)
+        except (AttributeError, TypeError, ValueError) as exc:
+            # A kept entry this cannot read is left unmarked (the night marks it
+            # from the archive); it never stops the board's journal.
+            print(f"  ⚠️ parlay journal: {sport} {x.get('game')} starting set not marked "
+                  f"({type(exc).__name__}: {exc})")
     if n:
         conn.commit()
     return n
