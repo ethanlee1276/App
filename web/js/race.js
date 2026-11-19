@@ -513,8 +513,8 @@ function rcNflStandingsHTML(d) {
 
 function nflHTML(d) {
   const locked = rcLocked(d);
-  return `<p class="rc-note rc-lede">Week ${escapeHtml(String(d.week || "—"))} next · ${plural(d.games_played || 0, "game")} played,
-      ${d.games_left || 0} left in the regular season.</p>
+  return `<p class="rc-note rc-lede">Week ${escapeHtml(String(d.week || "—"))} next · ${plural(Number(d.games_played || 0).toLocaleString(), "game")} played,
+      ${Number(d.games_left || 0).toLocaleString()} left in the regular season.</p>
     ${rcNflMineHTML(d)}
     ${rcNflSeedsHTML(d)}
     ${locked ? memberLockHTML("Our chances are for members",
@@ -756,7 +756,7 @@ function seasonRaceHTML(sport, d) {
   const what = sport === "nba"
     ? "Every club’s chance to make the playoffs, land in the play-in, win the conference and win the title, and its projected wins."
     : "Every club’s chance to make the playoffs, win its division, win the conference and win the Stanley Cup, and its projected points.";
-  return `<p class="rc-note rc-lede">${plural(d.games_played || 0, "game")} played, ${d.games_left || 0} left in the regular season.</p>
+  return `<p class="rc-note rc-lede">${plural(Number(d.games_played || 0).toLocaleString(), "game")} played, ${Number(d.games_left || 0).toLocaleString()} left in the regular season.</p>
     ${rcSeasonMineHTML(sport, d)}
     ${sport === "nba" ? rcNbaBracketHTML(d) : rcNhlBracketHTML(d)}
     ${locked ? memberLockHTML("Our chances are for members", what)
