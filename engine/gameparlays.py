@@ -1755,7 +1755,9 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     x["threes"] = chosen
     x.pop("paper_threes", None)
     x.pop("threes_paper", None)
-    x.update(legs_read=n_pool, threes_considered=n_threes, legs_from=LEGS_FROM_REPORT, report_picks=len(want))
+    x.update(legs_read=n_pool, threes_considered=n_threes, legs_from=LEGS_FROM_REPORT, report_picks=len(want),
+             legs_wider=int(made.get("wider") or 0))
+    x.pop("rebuild_error", None)
     if made["filled"]:
         x["threes_filled"] = made["filled"]
     else:

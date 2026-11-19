@@ -4413,6 +4413,15 @@ def _parlays_from_picks(c: Ctx, built: dict) -> None:
         gameparlays.from_report(c.result, c.sport, c.g, picks)
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ the parlays not built from the report's picks for {c.away}@{c.home} ({exc})")
+        # Kept on the game's entry (the private board), so the heartbeat can say a
+        # game was short because its rebuild failed, not for want of props.
+        try:
+            from . import gameparlays
+            x = gameparlays.for_game(c.result, c.home, c.away)
+            if isinstance(x, dict):
+                x["rebuild_error"] = f"{type(exc).__name__}: {exc}"[:200]
+        except Exception:                                    # noqa: BLE001
+            pass
 
 
 def finish(c: Ctx, sections_fns, short_fn) -> dict:

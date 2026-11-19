@@ -167,6 +167,38 @@ def test_a_game_short_of_props_at_60_fills_with_legs_in_the_fifties_and_names_th
     assert 'and float(l.get("p") or 0) >= LEG_FLOOR]' in body and "picks=picked" in body
 
 
+def test_the_heartbeat_says_why_a_game_is_short_without_naming_a_pick():
+    import os
+    import launch as L
+    t = {"legs": [{"player": "A"}, {"player": "B"}, {"player": "C"}]}
+    games = [{"home": "A", "threes": [t, t]},                                          # two: not short
+             {"home": "B", "threes": [], "legs_wider": 2, "legs_from": "report"},         # too few props
+             {"home": "C", "threes": [t], "legs_wider": 6, "legs_from": "report"},        # none fit
+             {"home": "D", "threes": [], "rebuild_error": "KeyError: 'Jalen Hurts'"},     # the rebuild failed
+             {"home": "E", "threes": []},                                                # no report rebuilt it
+             {"home": "F", "threes": [], "kept": "Sun 1:00 PM ET"}]                       # started: not counted
+    board = {"most_likely": [], "recommendations": [], "game_bets": [],
+             "game_parlays": {"games": games, "counts": {"games": 6, "threes": 3}}}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(board, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert got["threes_short"] == 4, got
+    assert got["threes_short_why"] == {"few_props": 1, "no_fit": 1, "rebuild_failed": 1, "no_report": 1}, got
+    assert got["rebuild_errors"] == ["KeyError"], "the error's type, never its words (a pick may ride in them)"
+    # The report path keeps the error on the private board's entry, and a rebuild that runs clears it.
+    src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
+    assert 'x["rebuild_error"] = f"{type(exc).__name__}: {exc}"[:200]' in src
+    gp_src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
+    assert 'x.pop("rebuild_error", None)' in gp_src and 'legs_wider=int(made.get("wider") or 0)' in gp_src
+
+
 def test_a_ticket_on_paper_from_before_still_journals_and_grades():
     c = _conn()
     leg = lambda pl, m: {"player": pl, "team": "KC", "market": m, "side": "OVER", "line": 1.5, "odds": -150,

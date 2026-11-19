@@ -582,8 +582,23 @@ def _board_counts(path: str) -> dict:
         out["sgp_threes"] = int(c.get("threes") or 0)
         # Games still to play short of their two three-leg tickets (THREELEG1/2):
         # each says why on its report; here, how many, for anyone watching.
-        out["threes_short"] = sum(1 for x in gp["games"] if isinstance(x, dict) and not x.get("kept")
-                                  and len(x.get("threes") or []) < 2)
+        short = [x for x in gp["games"] if isinstance(x, dict) and not x.get("kept")
+                 and len(x.get("threes") or []) < 2]
+        out["threes_short"] = len(short)
+        if short:
+            # Why, as counts (no pick rides here: the heartbeat is public): the
+            # rebuild failed (its error's type), no report rebuilt the game, the
+            # game's priced props were too few, or none of them fit together.
+            why: dict = {}
+            for x in short:
+                k = ("rebuild_failed" if x.get("rebuild_error")
+                     else "few_props" if int(x.get("legs_wider") or 0) < 3 and x.get("legs_wider") is not None
+                     else "no_fit" if x.get("legs_wider") is not None else "no_report")
+                why[k] = why.get(k, 0) + 1
+            out["threes_short_why"] = why
+            errs = sorted({str(x["rebuild_error"]).split(":")[0] for x in short if x.get("rebuild_error")})
+            if errs:
+                out["rebuild_errors"] = errs[:5]
         out["sgp_twos"] = int(c.get("twos") or 0)
         out["td_pairs"] = int(c.get("scorers") or 0)
         # Bet it on a whole ticket (engine/betlinks._parlay_legs, 2026-11-15):

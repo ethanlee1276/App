@@ -9345,9 +9345,12 @@ or better has no two tickets that fit (a ticket may share at most two legs with 
 two), so the fill now also takes the game's props down to 50%, only to make up the two, and the card names every leg
 under 60% ("... (55%) is under the 60% a leg is built to: this game had too few props that high to make 2 three-leg
 parlays"). The tickets that clear 30% are still made of legs at 60% or better, and the report's own picks still go
-first. A game whose books have priced fewer than three player props still has none and says why; on 19 November that
-was the three NFL games with only touchdown props up so far. The public heartbeat now counts the games short of two
-(threes_short) in each league. Checked by tests/test_every_game_report_posts_its_three_leg_parlays.py.
+first. A game whose books have priced fewer than three player props still has none and says why. The NFL's three
+games with parlays read 0 three-leg tickets on the first builds; the counts fit games with only touchdown props up
+mid-week, but a rebuild that failed would read the same, so the public heartbeat now says which: each league's games
+short of two (threes_short) and why (threes_short_why: too few props, none that fit, no report, or a failed rebuild,
+with the error's type). Tomorrow's check-in reads it. Checked by
+tests/test_every_game_report_posts_its_three_leg_parlays.py.
 
 **YM. The first visit trimmed, not its budget raised: 5.4 KB of room again**
 (step 775; 19 November). Nothing to run. You, asked whether to raise the first visit's size budget or trim it, with
