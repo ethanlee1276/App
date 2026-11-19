@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YQ. A game whose props are still to be bought says when, even with a stray prop on file**
+(step 779; 19 November). Nothing to run. With step YO live at 12:56 the NFL board had an entry for all 13 games, and
+the heartbeat read 12 short: 2 waiting on their props, 9 with "too few props" and 1 with none that fit. The nine are
+Sunday games with a prop or two already on file: their own props are still to be bought (Saturday, by the day-before
+rule), so "too few" was the wrong reason. A game that is two or more days out in the NFL or college football, or a
+day out in a daily league, and short of its two three-leg parlays now says when its props are bought, under any
+ticket it already has ("1 of 2: the books' player props for this game are bought the day before it, on Saturday, and
+its parlays are built from them then"), and the heartbeat counts it as props_not_bought. The buying schedule speaks
+for the coming ten days only. Checked by tests/test_every_game_report_posts_its_three_leg_parlays.py.
+
 **YP. A game short of two three-leg parlays can fill from any three props at 50% that fit**
 (step 778; 19 November). Nothing to run. The heartbeat's first reasons, at 12:42, read the NHL's two short games and
 college basketball's one as "no fit": each had three or more props at 50% or better, and no three of them made a

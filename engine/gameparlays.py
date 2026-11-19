@@ -1552,6 +1552,9 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
 # one line.
 #: Why a game still to play has no priced prop (`props_note`).
 PROPS_WAIT, PROPS_NONE = "props_not_bought", "no_props_priced"
+#: How far ahead the buying schedule speaks for (`props_note`): a board holds
+#: the coming week, and a game further out says only that nothing is priced.
+PROPS_WAIT_MAX_DAYS = 10
 
 
 def _priced_games(board: dict, games: list) -> set:
@@ -1571,16 +1574,17 @@ def _priced_games(board: dict, games: list) -> set:
 
 
 def _slate_today(now=None) -> str:
-    """Today's slate (ISO date, Eastern, rolled at 5 AM: engine/slateday)."""
+    """Today's slate (ISO date, Eastern, rolled at 5 AM: engine/slateday). A
+    naive ``now`` is UTC, as the builders' clock reads it
+    (losspatterns.minutes_until)."""
     from .slateday import baseball_day
     if isinstance(now, (int, float)) and not isinstance(now, bool):
         from .oddsbudget import slate_day
         return slate_day(float(now))
     if isinstance(now, dt.datetime):
-        if now.tzinfo is not None:
-            from zoneinfo import ZoneInfo
-            now = now.astimezone(ZoneInfo("America/New_York"))
-        return baseball_day(now)
+        from zoneinfo import ZoneInfo
+        aware = now if now.tzinfo is not None else now.replace(tzinfo=dt.timezone.utc)
+        return baseball_day(aware.astimezone(ZoneInfo("America/New_York")))
     return baseball_day()
 
 
@@ -1596,13 +1600,19 @@ def props_note(sport: str, game: dict, now=None) -> tuple[str, str]:
         ahead = (day - dt.date.fromisoformat(_slate_today(now))).days
     except ValueError:
         day, ahead = None, 0
-    if day is not None and ahead >= (2 if weekly else 1):
+    if day is not None and (2 if weekly else 1) <= ahead <= PROPS_WAIT_MAX_DAYS:
         when = day - dt.timedelta(days=1) if weekly else day
         return PROPS_WAIT, (f"the books' player props for this game are bought "
                             f"{'the day before it' if weekly else 'on its game day'}, on {when.strftime('%A')}, "
                             f"and its parlays are built from them then")
     return PROPS_NONE, ("no book has priced a player prop in this game yet, and its parlays are built from "
                         "them once one does")
+
+
+def _wait_note(n: int, words: str) -> str:
+    """A game short of THREE_MIN while its props are still to be bought: how
+    many it has, and when the rest come (`props_note`)."""
+    return f"{n} of {THREE_MIN}: {words}" if n else words
 
 
 def build(board: dict, sport: str, now=None) -> dict:
@@ -1643,12 +1653,16 @@ def build(board: dict, sport: str, now=None) -> dict:
                 continue
             x = slot(g)
         e = build_game(sp, x["g"], x["legs"], x["scorers"], priced=x["priced"])
+        why, words = props_note(sp, g, now)
         if not (x["legs"] or x["priced"]) and game_label(g) not in priced_games:
             # No prop priced at all: when they come, said once (`props_note`).
-            why, words = props_note(sp, g, now)
             e.update(no_props=why, props_note=words, threes_note=words)
             e.pop("twos_note", None)
             e.pop("scorers_note", None)
+        elif why == PROPS_WAIT and len(e["threes"]) < THREE_MIN:
+            # A prop or two on file, the game's own not bought yet (19 November:
+            # nine of the NFL's Sunday games read "too few props" on a Thursday).
+            e.update(no_props=why, props_note=words, threes_note=_wait_note(len(e["threes"]), words))
         out_games.append(e)
     # EVERY GAME'S THREE-LEG TICKETS ARE POSTED (THREELEG1, 2026-11-19; Ethan:
     # "3-leg parlays, we need those back immediately ... for every single
@@ -1862,13 +1876,15 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     else:
         x.pop("threes_filled", None)
     # A game with no prop priced yet keeps the build's word on when they come
-    # (THREELEG3, `props_note`); a prop priced since, and the game is read again.
-    waiting = bool(x.get("no_props")) and not made.get("wider")
+    # (THREELEG3, `props_note`), as does one short of its two while its props
+    # are still to be bought; a prop priced since, and the game is read again.
+    waiting = bool(x.get("no_props")) and (not made.get("wider") or (
+        x["no_props"] == PROPS_WAIT and len(chosen) < THREE_MIN))
     if not waiting:
         x.pop("no_props", None)
         x.pop("props_note", None)
     if waiting:
-        x["threes_note"] = x.get("props_note") or x.get("threes_note") or ""
+        x["threes_note"] = _wait_note(len(chosen), x.get("props_note") or "")
     elif len(chosen) < THREE_MIN:
         x["threes_note"] = _report_note(n_pool, len(want), made)
     else:

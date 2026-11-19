@@ -222,7 +222,8 @@ def test_every_game_still_to_play_has_its_entry_and_one_with_no_prop_says_when()
     b = EG.board()
     sunday = {"home": "PHI", "away": "DAL", "date": "2099-11-15", "kickoff": "13:00"}
     b["games"] = b["games"] + [sunday]
-    gp = GP.build(b, "nfl")
+    thursday = dt.datetime(2099, 11, 12, 14, 0)                     # 9 AM Eastern, the builders' UTC clock
+    gp = GP.build(b, "nfl", now=thursday)
     assert [x["game"] for x in gp["games"]] == ["WAS@NYG", "DAL@PHI"], [x["game"] for x in gp["games"]]
     x = gp["games"][1]
     sat = (dt.date(2099, 11, 15) - dt.timedelta(days=1)).strftime("%A")
@@ -233,7 +234,7 @@ def test_every_game_still_to_play_has_its_entry_and_one_with_no_prop_says_when()
     assert gp["counts"]["no_props"] == {GP.PROPS_WAIT: 1} and gp["counts"]["games"] == 2
     # Its report says it in one line, where the tickets will be; the rebuild keeps it.
     b["game_parlays"] = gp
-    GP.from_report(b, "nfl", sunday, [])
+    GP.from_report(b, "nfl", sunday, [], now=thursday)
     assert x["threes_note"] == x["props_note"] and "twos_note" not in x
     sec = GR.sec_parlays(GR.Ctx(sunday, b, sport="nfl"))
     assert sec["title"] == "Parlays for this game" and len(sec["blocks"]) == 1, sec
@@ -241,11 +242,24 @@ def test_every_game_still_to_play_has_its_entry_and_one_with_no_prop_says_when()
     # A game that has started keeps no new entry (its kept one is engine/reportkeep's).
     b2 = EG.board()
     b2["games"] = b2["games"] + [dict(sunday, live={"state": "final"})]
-    assert [x["game"] for x in GP.build(b2, "nfl")["games"]] == ["WAS@NYG"]
+    assert [x["game"] for x in GP.build(b2, "nfl", now=thursday)["games"]] == ["WAS@NYG"]
+    # A stray prop or two on file while the game's own are still to be bought
+    # (nine of the NFL's Sunday games, 19 November): when they come, all the same.
+    b3 = EG.board()
+    b3["games"] = b3["games"] + [sunday]
+    b3["recommendations"] = [_rec("P One", "receptions", 0.66, team="PHI", home="PHI", away="DAL", day="2099-11-15")]
+    gp3 = GP.build(b3, "nfl", now=thursday)
+    x3 = gp3["games"][1]
+    assert x3["no_props"] == GP.PROPS_WAIT and x3["threes_note"] == x3["props_note"], x3.get("threes_note")
+    b3["game_parlays"] = gp3
+    GP.from_report(b3, "nfl", sunday, [], now=thursday)
+    assert x3["no_props"] == GP.PROPS_WAIT and x3["threes_note"] == x3["props_note"], x3.get("threes_note")
+    # Far past the week the board holds, nothing is promised.
+    assert GP.props_note("nfl", sunday)[0] == GP.PROPS_NONE, "2099 is no Saturday's pull"
 
 
 def test_when_a_games_props_come_is_said_by_its_league_and_day():
-    thu, sat = dt.datetime(2026, 11, 19, 12, 0), dt.datetime(2026, 11, 21, 12, 0)
+    thu, sat = dt.datetime(2026, 11, 19, 17, 0), dt.datetime(2026, 11, 21, 17, 0)    # noon Eastern
     why, words = GP.props_note("nfl", {"date": "2026-11-22"}, now=thu)
     assert why == GP.PROPS_WAIT and "bought the day before it, on Saturday" in words, words
     # The day before, the pull buys it: no book has one priced yet.
@@ -255,8 +269,9 @@ def test_when_a_games_props_come_is_said_by_its_league_and_day():
     why, words = GP.props_note("nba", {"date": "2026-11-20"}, now=thu)
     assert why == GP.PROPS_WAIT and "bought on its game day, on Friday" in words, words
     assert GP.props_note("cbb", {"date": "2026-11-19"}, now=thu)[0] == GP.PROPS_NONE
-    # After midnight, before the 5 AM roll, is still last night's slate.
-    late = dt.datetime(2026, 11, 20, 1, 30)
+    # After midnight, before the 5 AM roll, is still last night's slate
+    # (a naive clock is UTC: 08:30 is 3:30 AM Eastern).
+    late = dt.datetime(2026, 11, 20, 8, 30)
     assert GP.props_note("nba", {"date": "2026-11-20"}, now=late)[0] == GP.PROPS_WAIT
     assert GP.props_note("nfl", {"date": ""}, now=thu)[0] == GP.PROPS_NONE, "no date: no promise"
 
