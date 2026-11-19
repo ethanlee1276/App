@@ -3,7 +3,18 @@
   - the race pages' opening line read "330 games played, 1005 left in the
     regular season" (WHEN_YOU_ARE_HOME, step XO, quoting the NHL's): a count
     past a thousand reads with its comma, as college's race already did
-    ("1,005 left"), on the NFL's, the NBA's and the NHL's alike.
+    ("1,005 left"), on the NFL's, the NBA's and the NHL's alike;
+  - the Alerts page with nothing watched said twice that your things rise to
+    the top ("rise to the top of this page", then "your own things rise above
+    the two hundred that are not"); the second line now only says where the
+    phone hears about them, and once something is watched, that it rises
+    above the rest of the feed;
+  - the Toolbox's strategy lab let a rule be tested on "NFL, College, MLB,
+    NBA, NHL, UFC": college basketball and the WNBA were missing and
+    "College" named neither college sport;
+  - the prediction-market desk read no hockey slate (pm_build.SLATE_FILES),
+    so Kalshi's NHL games carried no chance of ours, and the page's informed
+    flow could not file a hockey trade under a league of its own.
 
     python3 tests/test_walk_sixteen_says_it_once.py
 """
@@ -53,6 +64,45 @@ def test_the_race_says_its_game_counts_with_commas():
     assert nfl[0] == "Week 12 next · 1,336 games played, 1,005 left in the regular season.", nfl[0]
     assert season[0] == "1,336 games played, 1,005 left in the regular season.", season[0]
     assert season[1] == "1 game played, 0 left in the regular season.", season[1]
+
+
+def test_the_alerts_page_says_where_a_watch_rises_once():
+    i = APP.index("async function renderWatchZone(")
+    body = APP[i:APP.index("\n/* THE FEED LEADS", i)]
+    j = body.index("Your phone hears about them")
+    line = body[body.rindex("`", 0, j):body.index("</p>", j)]
+    prog = "const say = (n) => " + line.rstrip("}") + ";" + """
+      console.log(JSON.stringify([say(0), say(1), say(3)]));"""
+    got = _node(prog)
+    if got is None:
+        return
+    assert got[0] == "Your phone hears about them with the switches above, under Yours.", got[0]
+    assert got[1].endswith("under Yours, and here your watch rises above the rest of the feed."), got[1]
+    assert got[2].endswith("under Yours, and here your watches rise above the rest of the feed."), got[2]
+    assert "two hundred that are not" not in APP
+
+
+def test_the_strategy_lab_tests_a_rule_in_every_league():
+    extras = (JS / "extras.js").read_text(encoding="utf-8")
+    i = extras.index('sel("lb-sport", "League", ')
+    opts = re.findall(r'\["(\w+)", "([^"]+)"\]', extras[i:extras.index("\n", i)])
+    assert [k for k, _ in opts] == ["all", "nfl", "cfb", "mlb", "nba", "cbb", "wnba", "nhl", "ufc"], opts
+    assert dict(opts)["cfb"] == "College football" and dict(opts)["cbb"] == "College basketball"
+
+
+def test_the_prediction_market_desk_reads_hockey():
+    sys.path.insert(0, str(ROOT))
+    import pm_build
+    assert pm_build.SLATE_FILES["nhl"] == "nhl.json"
+    more = (JS / "more.js").read_text(encoding="utf-8")
+    assert '["nhl", "NHL"]' in more[more.index("const PMX_LEAGUES = "):more.index("];", more.index("const PMX_LEAGUES = "))]
+    got = _node(_fn(APP, "pmFlowLeague") + """
+      console.log(JSON.stringify([pmFlowLeague({slug: "nhl-tor-mtl-2026-11-19"}),
+        pmFlowLeague({market: "Will the Oilers win the Stanley Cup?"}), pmFlowLeague({market: "NHL: Oilers vs Flames"}),
+        pmFlowLeague({slug: "nba-lal-bos-2026-11-19"}), pmFlowLeague({market: "Mayor of Oslo"})]));""")
+    if got is None:
+        return
+    assert got == ["nhl", "nhl", "nhl", "nba", "other"], got
 
 
 if __name__ == "__main__":

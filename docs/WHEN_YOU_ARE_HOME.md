@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YG. The sixteenth walk: the race's counts, the alerts' watch line, every league in the lab and on the desk**
+(step 769; 19 November). Nothing to run. Walk 16 read the NHL's and NBA's race pages, the NHL's standings and
+futures, the NBA's long shots and alerts and the NFL's toolbox on a phone. The race pages opened on "330 games
+played, 1005 left in the regular season": a count past a thousand now reads with its comma on the NFL's, NBA's and
+NHL's races, as college's already did. The Alerts page, with nothing watched, said twice that your things rise to
+the top ("rise to the top of this page", then "your own things rise above the two hundred that are not"); its second
+line now only says where the phone hears about them, and once something is watched, that it rises above the rest of
+the feed. The Toolbox's strategy lab offered "NFL, College, MLB, NBA, NHL, UFC": college basketball and the WNBA
+were missing and "College" named neither college sport, so it now lists all eight leagues, the two college sports by
+name. And the prediction-market desk had never read the NHL's board (pm_build.SLATE_FILES), so Kalshi's NHL games
+carried no chance of ours beside them and a hockey trade in the informed flow fell under no league; both now know
+hockey. The race's own table still reads 338 games played until tonight's night moves the opening week (step YF).
+
 **YF. Hockey's opening week was filed under last season; the goalie starts mark themselves**
 (step 768; 19 November). Nothing to run: the night does both. Fifteen NHL clubs read a game short of the league's
 table, the same fifteen as the night before, though the nightly re-read of owed days (step WV) was running. The

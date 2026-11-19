@@ -16841,13 +16841,14 @@ window._pmFlowSort = (a) => { _pmFlowSort = a || "volume"; renderIntel(); };
    market about none of ours is "other" and shows under All Markets only. */
 function pmFlowLeague(f) {
   const slug = String((f && f.slug) || "").toLowerCase();
-  const m = slug.match(/^(nfl|cfb|ncaaf|mlb|nba|wnba|ufc|cbb|ncaab)-/);
+  const m = slug.match(/^(nfl|cfb|ncaaf|mlb|nba|wnba|nhl|ufc|cbb|ncaab)-/);
   if (m) return m[1] === "ncaaf" ? "cfb" : m[1] === "ncaab" ? "cbb" : m[1];
   const t = String((f && f.market) || "");
   if (/\bUFC\b|\bMMA\b/i.test(t)) return "ufc";
   if (/\bNCAAB\b|March Madness|college basketball/i.test(t)) return "cbb";
   if (/\bWNBA\b/.test(t)) return "wnba";
   if (/\bNBA\b/.test(t)) return "nba";
+  if (/\bNHL\b|Stanley Cup/i.test(t)) return "nhl";
   if (/\bMLB\b|World Series/i.test(t)) return "mlb";
   if (/\bNFL\b|Super Bowl/i.test(t)) return "nfl";
   if (/\bCFB\b|college football|NCAAF|Heisman/i.test(t)) return "cfb";
@@ -17720,7 +17721,7 @@ async function renderWatchZone() {
       ${firedHTML(d)}
       <p class="rank-help">${free
         ? "Turn on the switches above, under Yours, and your phone hears when their games start, their big moments and the final scores."
-        : `Your phone hears about them with the switches above, under Yours, and here your ${n || "own"} thing${n === 1 ? "" : "s"} rise above the two hundred that are not.`}</p>
+        : `Your phone hears about them with the switches above, under Yours${n ? `, and here your ${n === 1 ? "watch rises" : "watches rise"} above the rest of the feed` : ""}.`}</p>
     </div>`;
   const kind = document.getElementById("al-kind");
   const val = document.getElementById("al-val");

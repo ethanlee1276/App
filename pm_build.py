@@ -28,9 +28,13 @@ from engine import stageclock
 #: than recomputed: pm builds AFTER the sport refreshes in launch.py's
 #: cycle, so these are minutes old at worst, and rebuilding engines here
 #: would double every build for a comparison column.
+#: Hockey joined on 2026-11-19 (walk 16, step YG): Kalshi lists NHL games
+#: (engine/sources/kalshi, KXNHLGAME) and they reached the desk with no
+#: model number beside them, since this table never named the NHL's slate.
 SLATE_FILES = {"nfl": "recommendations.json",
                "mlb": "mlb_recommendations.json",
-               "nba": "nba.json", "wnba": "wnba.json", "cfb": "cfb.json", "cbb": "cbb.json"}
+               "nba": "nba.json", "wnba": "wnba.json", "cfb": "cfb.json", "cbb": "cbb.json",
+               "nhl": "nhl.json"}
 
 
 def _names_by_abbr(sport: str) -> dict:

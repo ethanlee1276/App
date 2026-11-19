@@ -433,7 +433,7 @@
     const sel = (name, label, opts) => `<label class="xt-f"><span>${label}</span><select data-xc="${name}">${opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select></label>`;
     return calcCard("lab", "Strategy lab", "Test a rule against every pick we have graded — and see how much of what it finds luck alone could have done.",
       `${sel("lb-book", "Book", [["all", "Whole record"], ["edge", "Edge picks"], ["likely", "Most Likely"]])}
-       ${sel("lb-sport", "League", [["all", "Every league"], ["nfl", "NFL"], ["cfb", "College"], ["mlb", "MLB"], ["nba", "NBA"], ["nhl", "NHL"], ["ufc", "UFC"]])}
+       ${sel("lb-sport", "League", [["all", "Every league"], ["nfl", "NFL"], ["cfb", "College football"], ["mlb", "MLB"], ["nba", "NBA"], ["cbb", "College basketball"], ["wnba", "WNBA"], ["nhl", "NHL"], ["ufc", "UFC"]])}
        ${sel("lb-kind", "Kind", [["all", "All kinds"], ["prop", "Props"], ["line", "Game lines"]])}
        ${sel("lb-side", "Side", [["any", "Either"], ["over", "Overs / yes"], ["under", "Unders"]])}
        ${field("Price from", "lb-o1", "", 'placeholder="−250"')}${field("Price to", "lb-o2", "", 'placeholder="+150"')}
