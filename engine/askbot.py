@@ -664,7 +664,9 @@ TOOLS = [
           "call on who wins right or wrong, how many of the reads held (by kind), our ratings' and our "
           "simulation's own picks, the injury report, the touchdown chances — over every game and the last "
           "30 days, and the newest games one by one. For how accurate our reports are, how often our calls "
-          "are right. (The report picks' won-lost record is in our_record.)",
+          "are right. The NFL's featured games (Lions games, Thursday nights, Monday nights) also carry their "
+          "own record apart: the report picks won and lost with units, the parlays carried at kickoff, the "
+          "call. (The report picks' won-lost record for every game is in our_record.)",
           {"sport": _SPORT_ARG}),
     _tool("roster",
           "A team's current roster in depth-chart order, with each player's number, position, status and "
@@ -2903,6 +2905,22 @@ def report_record(sport: str = "", prefer: str = "") -> dict:
                            "game": f"{names.get(r['away'], r['away'])} at {names.get(r['home'], r['home'])}",
                            **_how_it_did(r)})
         out[league] = {**sums, "newest_games": newest}
+        # Ethan's featured games, apart (engine/featured, FEATURED1): the Lions' games, Thursday nights and
+        # Monday nights, each kind's record and every game's, in the record's own sentences.
+        fx = rec.get("featured") or {}
+        if fx.get("all"):
+            from engine import featured
+            out[league]["featured_games"] = {
+                "every_featured_game": featured.line(fx["all"]),
+                **{featured.PLURAL[k].replace(" ", "_").lower(): featured.line(b, k)
+                   for k, b in (fx.get("kinds") or {}).items()},
+                "games": [{"date": g.get("date"), "kinds": featured.words(g.get("kinds")),
+                           "game": f"{(g.get('names') or {}).get(g['away'], g['away'])} at "
+                                   f"{(g.get('names') or {}).get(g['home'], g['home'])}",
+                           "picks_won_lost_pushed": g.get("picks"), "units": g.get("units"),
+                           "tickets_won_lost_units": g.get("tickets"),
+                           "call_right": (g.get("call") or {}).get("right")}
+                          for g in fx.get("games") or []][:REPORT_GAMES_SHOWN]}
     if not out:
         return {"found": False, "note": "no finished game reports kept yet"
                 + (f" for {_lg(sport)}" if sport in LEAGUES else "")}

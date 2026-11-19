@@ -223,6 +223,22 @@ def test_the_board_marks_its_featured_games_and_their_reports_say_so():
     assert '(g.featured || []).length ? `<span class="top-game-tag">Featured</span>`' in app, "the game card says so"
 
 
+def test_ask_says_how_the_featured_games_have_done():
+    from engine import askbot, ledger
+    path, where = _journal(), _archive()
+    keep_dir, keep_db = askbot._archive_dir, ledger.DEFAULT_DB
+    askbot._archive_dir, ledger.DEFAULT_DB = (lambda: where), path
+    try:
+        got = askbot.report_record("nfl")
+    finally:
+        askbot._archive_dir, ledger.DEFAULT_DB = keep_dir, keep_db
+    fx = got["leagues"]["nfl"]["featured_games"]
+    assert fx["every_featured_game"].startswith("Featured games so far, 4 finished games: the reports' picks 4-3-1"), fx
+    assert fx["monday_nights"].startswith("Monday nights so far, 1 finished game: the reports' picks 1-2-1"), fx
+    assert set(fx) == {"every_featured_game", "lions_games", "thursday_nights", "monday_nights", "games"}
+    assert [g["kinds"] for g in fx["games"]] == ["Lions game", "Monday night", "Lions game", "Thursday night"]
+
+
 def test_the_pages_draw_the_featured_record_and_list_only_those_games():
     assert "function rpFeaturedHTML(fx)" in RP and "${rpFeaturedHTML(fx)}" in RP
     assert 'data-rpk-list="featured"' in RP and "fxKeys.has(" in RP, "the list's own chip: the featured games alone"

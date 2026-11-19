@@ -9344,16 +9344,17 @@ own. A featured game is an NFL game the Lions play in, or one that kicks off on 
 (Eastern, from 6 PM, so Thanksgiving's day games are not Thursday nights; the Lions' Thanksgiving game is a Lions
 game). Its report's card ranks up to six picks instead of four, so its picks cover more of the game and its parlays
 have more of the report's own picks to be built from (tonight's Colts at Texans had no three-leg ticket because its
-four picks clashed). Its report says at the top what it is, "Featured · Thursday night", with how the reports on
-games like it have done so far. And the featured games keep a record apart, on Report Picks and on the Record page's
-NFL tab under How our reports did: every featured game, Lions games, Thursday nights and Monday nights, each with
-the report's picks won and lost and the units at one unit a pick, the parlays its report carried at kickoff, and who
-we said would win; then each game; and a Featured games chip that lists only those games with every pick and parlay
-checked or crossed. It starts with three games from week 11: the Commanders at Giants on 12 November (nothing of its
-report was on the record yet), the Patriots at Lions (its tickets from before the record kept a starting set, so
-none count) and the Chargers at Ravens on Monday night (picks 2-6, its three-leg parlay and touchdown pair both
-lost). College football's Thursday games are not in it; say if you want them. Checked by
-tests/test_the_featured_games_keep_their_own_record.py and tests/test_the_card_leads_the_report.py.
+four picks clashed). Its card on the NFL page wears a Featured ribbon (where Top game sits), and its report says at
+the top what it is, "Featured · Thursday night", with how the reports on games like it have done so far. And the
+featured games keep a record apart, on Report Picks and on the Record page's NFL tab under How our reports did:
+every featured game, Lions games, Thursday nights and Monday nights, each with the report's picks won and lost and
+the units at one unit a pick, the parlays its report carried at kickoff, and who we said would win; then each game;
+and a Featured games chip that lists only those games with every pick and parlay checked or crossed. It starts with
+three games from week 11: the Commanders at Giants on 12 November (nothing of its report was on the record yet), the
+Patriots at Lions (its tickets from before the record kept a starting set, so none count) and the Chargers at Ravens
+on Monday night (picks 2-6, its three-leg parlay and touchdown pair both lost). Ask Qellys answers from the same
+record ("how have the Monday night reports done?"). College football's Thursday games are not in it; say if you want
+them. Checked by tests/test_the_featured_games_keep_their_own_record.py and tests/test_the_card_leads_the_report.py.
 
 **YU. A ticket is two of the report's picks at least, and a short game may add one other prop**
 (step 783; 19 November). Nothing to run. With step YR live, the boards rebuilt under the new rules: the NBA's four
