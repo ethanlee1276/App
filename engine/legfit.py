@@ -23,8 +23,11 @@ the league's graded legs best (the log loss of each bet once, against our
 uncorrected number: the journal keeps it as `p_raw` beside the posted
 `p_final`, so a correction is never learned on top of itself), and it is used
 only when it also scores better on the newest legs it was not fitted on
-(TEST_SHARE). It waits for MIN_N graded legs with a fair chance; until then,
-and whenever the held-out legs do not get better, w is 0 and the leg is ours.
+(TEST_SHARE). It waits for MIN_N graded legs built the current way (as the
+shift below does, since 19 November: learned from the retired source, the
+NFL's share was 1.0 and held its honest legs to that source's errors); until
+then, and whenever the held-out legs do not get better, w is 0 and the leg
+is ours.
 
 THE SECOND CORRECTION: A SHIFT (FOOTCAL2, 2026-11-17; Ethan: "recalibrate
 football too"). Pulling toward the book cannot move a leg the book agreed
@@ -191,14 +194,24 @@ def fit(conn, write: bool = True) -> dict:
     import datetime as _dt
     out: dict = {"fitted_at": _dt.datetime.now().isoformat(timespec="seconds"), "min_n": MIN_N, "fits": {}}
     for (sport, kind), legs in sorted(graded_legs(conn).items()):
-        n = len(legs)
-        rows = [(p, f, won) for _d, _i, p, f, won, _pool, _m in legs]
-        current = [(p, f, won) for _d, _i, p, f, won, pool, _m in legs if pool]
-        said = {"n": n, "claimed": round(sum(r[0] for r in rows) / n, 4), "fair": round(sum(r[1] for r in rows) / n, 4),
-                "hit": round(sum(1 for r in rows if r[2]) / n, 4)}
+        # THE SHARE LEARNS FROM LEGS BUILT THE CURRENT WAY, AS THE SHIFT DOES
+        # (PARLAYWIN1, 2026-11-19). It learned from every graded leg, and the
+        # retired source (any priced prop, before gameparlays.credible_row and
+        # the named pools of 16 November) set the NFL's at 1.0: each leg pulled
+        # all the way to the book's, where the Most Likely picks the legs now
+        # are hit what they claim (62.2% said, 61.7% hit, 2,036 picks). On the
+        # Thursday the Sunday props were bought, eight games' reports had 11
+        # picks priced as legs and 5 still at 50% once pulled: no ticket.
+        rows = [(p, f, won) for _d, _i, p, f, won, pool, _m in legs if pool]
+        current = rows
+        n = len(rows)
+        said = {"n": n, "n_all": len(legs)}
+        if n:
+            said.update(claimed=round(sum(r[0] for r in rows) / n, 4), fair=round(sum(r[1] for r in rows) / n, 4),
+                        hit=round(sum(1 for r in rows if r[2]) / n, 4))
         if n < MIN_N:
             fit_ = {**said, "w": 0.0, "fitted": False,
-                    "why": f"waiting on the record: {n} graded leg(s), {MIN_N} needed"}
+                    "why": f"waiting on legs built the current way: {n} graded, {MIN_N} needed"}
         else:
             cut = int(round(n * (1 - TEST_SHARE)))
             train, test = rows[:cut], rows[cut:]
@@ -325,10 +338,14 @@ def fits() -> dict:
 
 def w_for(sport: str, kind: str) -> float:
     """The share in force for a league and kind: the fit's when it was fitted,
-    else 0. Never raises."""
+    else 0. A fit written before the share learned from legs built the current
+    way alone (it carries no ``n_all``: PARLAYWIN1, 19 November) is no share:
+    0 until the next settle pass refits it. Never raises."""
     try:
         f = fits().get(f"{sport}:{kind}") or {}
-        return min(max(float(f.get("w") or 0.0), 0.0), 1.0) if f.get("fitted") else 0.0
+        if not f.get("fitted") or "n_all" not in f:
+            return 0.0
+        return min(max(float(f.get("w") or 0.0), 0.0), 1.0)
     except (TypeError, ValueError):
         return 0.0
 
@@ -382,8 +399,18 @@ def apply(leg: dict, sport: str, kind: str, w: float | None = None, shift: float
 
 
 def census(sport: str) -> dict:
-    """The fit in force for a league, both kinds, for the board's census."""
+    """The fit in force for a league, both kinds, for the board's census: a
+    share written under the old rule (`w_for`) said as none, and why."""
     got = fits()
-    return {kind: {k: v for k, v in (got.get(f"{sport}:{kind}") or {}).items()
-                   if k in ("w", "fitted", "n", "why", "shift", "shift_n", "shift_why", "markets")}
-            for kind in KINDS if got.get(f"{sport}:{kind}")}
+    out: dict = {}
+    for kind in KINDS:
+        f = got.get(f"{sport}:{kind}")
+        if not f:
+            continue
+        c = {k: v for k, v in f.items()
+             if k in ("w", "fitted", "n", "why", "shift", "shift_n", "shift_why", "markets")}
+        if f.get("fitted") and "n_all" not in f:
+            c.update(w=0.0, fitted=False, why="fitted before the share learned from legs built the current way "
+                                              "alone: none until the next settle pass refits it")
+        out[kind] = c
+    return out

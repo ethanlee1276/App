@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZB. The legs' pull toward the books learns from today's legs, not the retired ones**
+(step 790; 19 November). Nothing to run. Step ZA's counts answered it within the hour: the eight Sunday games short
+of the report's picks carry 24 player picks, 11 the parlays may use (the rest are tackles, quarterback completions,
+benched for losing money, and the like), and 5 of those 11 stand at 50% or better once corrected. The correction was
+the NFL's learned pull toward the books: 1.0, every leg dragged all the way to the book's number. It was learned
+from every leg ever graded, mostly the retired source (any priced prop, before 16 November's credibility rule),
+which hit 13 points under what we said; the picks the legs are now, the Most Likely board's, hit what they claim
+(62.2% said, 61.7% hit, 2,036 NFL picks). The shift beside it already learned only from legs built the current way,
+so the retired source could not hold the honest legs to its errors; the pull now does too. A league with fewer than
+sixty graded legs built the current way keeps our own numbers until it has them (the NFL's 1.0 is out the moment
+this is live: a share written under the old rule is no share until the next settle pass refits it), and the
+heartbeat's leg_fit says so. Checked by tests/test_parlay_legs_learn_their_league_s_correction.py.
+
 **ZA. The heartbeat says why a game is short of the report's own picks**
 (step 789; 19 November). Nothing to run. With step YY live, the NFL's ten Sunday games short of their two three-leg
 tickets said why: eight are "few_picks", fewer than two of the report's own picks among the game's priced legs at

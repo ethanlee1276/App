@@ -58,7 +58,7 @@ def test_a_league_whose_legs_run_hot_is_pulled_toward_the_books():
     # Claimed 75%, the books said 62%, they hit 62%: ours should give way to the books'.
     conn = _journal({("nfl", "game_three"): _legs(120, 0.75, 0.62, 0.62),
                      ("cfb", "game_three"): _legs(120, 0.70, 0.62, 0.70),
-                     ("nba", "game_three"): _legs(20, 0.75, 0.62, 0.62)})
+                     ("nba", "game_three"): _legs(20, 0.75, 0.62, 0.62)}, pool="likely")
     fit = LF.fit(conn, write=False)["fits"]
     nfl = fit["nfl:three"]
     assert nfl["fitted"] and nfl["w"] >= 0.8 and nfl["n"] == 120, nfl
@@ -67,15 +67,16 @@ def test_a_league_whose_legs_run_hot_is_pulled_toward_the_books():
     assert "pulled" in nfl["why"] and "of the way to the book's" in nfl["why"]
     # Legs that hit what they claimed keep our number; a league short of MIN_N waits.
     assert fit["cfb:three"]["fitted"] is False and fit["cfb:three"]["w"] == 0.0, fit["cfb:three"]
-    assert fit["nba:three"] == {"n": 20, "claimed": 0.75, "fair": 0.62, "hit": fit["nba:three"]["hit"], "w": 0.0,
-                                "fitted": False, "why": "waiting on the record: 20 graded leg(s), 60 needed",
-                                "shift": 0.0, "shift_n": 0,
-                                "shift_why": "waiting on legs built the current way: 0 graded, 60 needed"}
+    assert fit["nba:three"] == {"n": 20, "n_all": 20, "claimed": 0.75, "fair": 0.62, "hit": fit["nba:three"]["hit"],
+                                "w": 0.0, "fitted": False,
+                                "why": "waiting on legs built the current way: 20 graded, 60 needed",
+                                "shift": 0.0, "shift_n": 20,
+                                "shift_why": "waiting on legs built the current way: 20 graded, 60 needed"}
 
 
 def test_each_bet_counts_once_and_the_kinds_learn_apart():
     conn = _journal({("nfl", "game_three"): _legs(80, 0.75, 0.62, 0.62),
-                     ("nfl", "game_td"): _legs(70, 0.40, 0.30, 0.30)})
+                     ("nfl", "game_td"): _legs(70, 0.40, 0.30, 0.30)}, pool="likely")
     got = LF.graded_legs(conn)
     assert len(got[("nfl", "three")]) == 80, "each ticket written twice over the same legs: each bet once"
     assert len(got[("nfl", "scorers")]) == 70
@@ -84,8 +85,8 @@ def test_each_bet_counts_once_and_the_kinds_learn_apart():
 
 
 def test_a_leg_journaled_before_its_fair_chance_was_kept_is_read_at_its_price():
-    """Every leg before 16 November has no `fair`; its price stands in, so the record already speaks."""
-    conn = _journal({("nfl", "game_three"): _legs(120, 0.75, None, 0.60)})
+    """A leg journaled with no `fair` (as every one before 16 November): its price stands in."""
+    conn = _journal({("nfl", "game_three"): _legs(120, 0.75, None, 0.60)}, pool="likely")
     conn.execute("UPDATE parlay_legs SET odds=-150")
     conn.commit()
     nfl = LF.fit(conn, write=False)["fits"]["nfl:three"]
@@ -94,7 +95,7 @@ def test_a_leg_journaled_before_its_fair_chance_was_kept_is_read_at_its_price():
 
 def test_the_fit_reads_our_own_number_never_the_corrected_one():
     # Posted already corrected (p_final 0.62) but ours was 0.75 (p_raw): the fit still sees 0.75.
-    conn = _journal({("nfl", "game_three"): _legs(120, 0.62, 0.62, 0.62, raw=0.75)})
+    conn = _journal({("nfl", "game_three"): _legs(120, 0.62, 0.62, 0.62, raw=0.75)}, pool="likely")
     nfl = LF.fit(conn, write=False)["fits"]["nfl:three"]
     assert nfl["claimed"] == 0.75 and nfl["fitted"], nfl
 
@@ -115,9 +116,22 @@ def test_the_fit_on_file_is_read_once_and_a_bad_file_is_said():
     path = modelstate.path(LF.FILE)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     try:
-        conn = _journal({("nfl", "game_three"): _legs(120, 0.75, 0.62, 0.62)})
+        conn = _journal({("nfl", "game_three"): _legs(120, 0.75, 0.62, 0.62)}, pool="likely")
         LF.fit(conn)
         assert LF.w_for("nfl", "three") >= 0.8 and LF.w_for("cfb", "three") == 0.0
+        # A fit written by the old rule (every leg taught the share; no n_all) is no share until refitted.
+        with open(path, encoding="utf-8") as f:
+            old = json.load(f)
+        old["fits"]["nfl:three"].pop("n_all")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(old, f)
+        os.utime(path, ns=(1, 10 ** 18 - 1))
+        assert LF.w_for("nfl", "three") == 0.0, "the old rule's share is not in force"
+        said = LF.census("nfl")["three"]
+        assert said["w"] == 0.0 and said["fitted"] is False and "next settle pass" in said["why"], said
+        LF.fit(conn)
+        os.utime(path, ns=(1, 10 ** 18 - 2))
+        assert LF.w_for("nfl", "three") >= 0.8, "refitted, it is"
         assert LF.census("nfl")["three"]["fitted"] is True and LF.census("mlb") == {}
         with open(path, "w", encoding="utf-8") as f:
             f.write("{not json")
@@ -176,13 +190,22 @@ def test_football_legs_the_books_agreed_with_are_shifted_to_what_they_hit():
     assert abs(LF.apply({"p": 0.68, "fair": 0.68}, "nfl", "three", 1.0, 0.0).get("p", 0.68) - 0.68) < 1e-9
 
 
-def test_the_retired_source_teaches_no_shift():
+def test_the_retired_source_teaches_neither_the_pull_nor_the_shift():
     """Legs from before the journal named pools came from a source the parlays no longer use
-    (gameparlays.credible_row): they still teach the pull, never the shift."""
-    conn = _journal({("nfl", "game_three"): _legs(140, 0.68, 0.68, 0.55)})
+    (gameparlays.credible_row): they teach neither the shift nor, since PARLAYWIN1 (19 November),
+    the pull. Learned from them, the NFL's pull was 1.0, every leg dragged to the book's, where
+    the Most Likely picks the legs now are hit what they claim; eight Sunday games went without
+    a ticket for it."""
+    conn = _journal({("nfl", "game_three"): _legs(140, 0.75, 0.62, 0.55)})
     nfl = LF.fit(conn, write=False)["fits"]["nfl:three"]
     assert nfl["shift"] == 0.0 and nfl["shift_n"] == 0, nfl
     assert nfl["shift_why"] == "waiting on legs built the current way: 0 graded, 60 needed", nfl
+    assert nfl["w"] == 0.0 and nfl["fitted"] is False and (nfl["n"], nfl["n_all"]) == (0, 140), nfl
+    assert nfl["why"] == "waiting on legs built the current way: 0 graded, 60 needed", nfl
+    # The same legs built the current way do teach it.
+    cur = LF.fit(_journal({("nfl", "game_three"): _legs(140, 0.75, 0.62, 0.55)}, pool="likely"),
+                 write=False)["fits"]["nfl:three"]
+    assert cur["fitted"] and cur["w"] > 0 and cur["n"] == 140, cur
 
 
 def test_legs_that_hit_what_they_claim_keep_our_number():
