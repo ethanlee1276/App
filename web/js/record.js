@@ -1102,6 +1102,12 @@ function gpBlockHTML(b, kind, sport) {
   // The near misses, said once under the tiles: a third tile wraps alone on a phone.
   const close = lostN ? `<p class="rec-gp-close">${b.one_away || 0} of the ${lostN} ${
     lostN === 1 ? "ticket that lost" : "tickets that lost"} missed by a single leg.</p>` : "";
+  // BUILT TO WIN, APART (engine/parlayledger.since_rules, 2026-11-20): the tickets built since the
+  // parlays were rebuilt on the report's strongest picks at honest chances, so the change reads on its own.
+  const nr = b.since_rules;
+  const rebuilt = nr ? `<p class="rec-gp-close">Since ${escapeHtml(gpDay(nr.from))}’s rebuild (stronger legs, honest chances): ${
+    nr.graded ? `${nr.wins} of ${nr.graded} hit${nr.chance != null ? `, where we gave them ${Math.round(nr.chance * 100)}%` : ""} · ${
+      tlUnits(nr.net_units)}` : "none graded yet"}${nr.open ? ` · ${nr.open} waiting on ${nr.open === 1 ? "its game" : "their games"}` : ""}.</p>` : "";
   const markets = (b.markets || []).map((m) => `<div class="rec-row flush tight">
       <span class="rr-what">${escapeHtml(marketWord(m.market))}</span>
       <span><b>${m.won} of ${m.graded}</b> legs hit · ${Math.round((100 * m.won) / m.graded)}%${
@@ -1125,7 +1131,7 @@ function gpBlockHTML(b, kind, sport) {
   return `<div class="card rec-report rec-gp">
       <div class="rr-head">${escapeHtml(gpKindWord(kind, sport))}${b.since ? ` <span class="rr-mute">· since ${escapeHtml(gpDay(b.since))}</span>` : ""}</div>
       ${b.paper && b.paper.note ? `<p class="rec-gp-close">${escapeHtml(b.paper.note)}</p>` : ""}
-      <div class="stats rec-kpis">${tiles}</div>${close}
+      <div class="stats rec-kpis">${tiles}</div>${close}${rebuilt}
       ${markets ? `<div class="rr-head">Legs by market</div>${markets}` : ""}
       ${recent ? `<div data-rec-flat="parlays"><div class="rr-head">Newest tickets</div><div class="rec-gp-recent">${recent}</div></div>` : ""}
     </div>`;

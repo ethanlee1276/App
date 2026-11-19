@@ -643,6 +643,21 @@ def legs_once(tickets: list, legs: list) -> tuple[dict, dict]:
 #: The tickets the game parlays' record counts: each game's set at its start
 #: (`mark_at_start`, 2026-11-19).
 AT_START = "at_start = 1"
+#: THE PARLAYS BUILT TO WIN (PARLAYWIN1, step YR, 2026-11-19): from this game
+#: day on, every ticket was built without the legs' link in its chance, from the
+#: report's own picks first and no benched market (engine/gameparlays). Each
+#: league's record says how those have done apart (`since_rules`). A game
+#: dated by its day counts from that day; a week-labelled one (the NFL's
+#: "2026-W12") by when its ticket was journaled.
+RULES_SINCE = "2026-11-20"
+
+
+def since_rules(t) -> bool:
+    """Was this ticket built under the rules since RULES_SINCE?"""
+    d = str(t["date"] or "")
+    if len(d) == 10 and d[4] == "-" and d[7] == "-":
+        return d >= RULES_SINCE
+    return str(t["ts"] or "") >= RULES_SINCE
 
 
 def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
@@ -744,6 +759,16 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                          "chance": round(sum(leg_p) / len(leg_p), 3) if leg_p else None,
                          "once": once, "by_pool": by_pool},
                 "markets": mk, "recent": news}
+            # Since the rebuild (RULES_SINCE): how the new tickets have done, apart.
+            new = [t for t in graded if since_rules(t)]
+            new_open = sum(1 for t in rows if t["status"] == "open" and since_rules(t))
+            if new or new_open:
+                nj = [float(t["modeled_joint"]) for t in new if t["modeled_joint"] is not None]
+                nn = sum(float(t["pnl_units"] or 0.0) for t in new)
+                out[sp][kind]["since_rules"] = {
+                    "from": RULES_SINCE, "graded": len(new), "wins": sum(1 for t in new if t["status"] == "won"),
+                    "chance": round(sum(nj) / len(nj), 3) if nj else None, "net_units": round(nn, 2),
+                    "roi": round(nn / len(new), 4) if new else None, "open": new_open}
     # A league's three-leg tickets on paper (engine/parlayhold) say so on
     # their record: still graded here, posted nowhere until they hit 25%.
     # Its two-leg tickets the same, on their own hold (GPWIN1).

@@ -150,6 +150,30 @@ def test_a_benched_market_is_no_leg():
     assert "pass_cmp" not in got and "pass_yds" in got, got
 
 
+def test_the_record_says_how_the_rebuilt_tickets_did_apart():
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    PL.ensure_schema(c)
+    rows = [("2026-11-18", "2026-11-18T19:00:00", "lost", 0.31), ("2026-11-20", "2026-11-20T12:00:00", "won", 0.27),
+            ("2026-11-20", "2026-11-20T12:05:00", "lost", 0.26), ("2026-11-21", "2026-11-21T12:00:00", "open", 0.28),
+            # A week-labelled league counts by when its ticket was journaled.
+            ("2026-W12", "2026-11-19T10:00:00", "won", 0.3)]
+    for i, (date, ts, st, joint) in enumerate(rows):
+        sport = "nfl" if date.startswith("2026-W") else "nba"
+        c.execute("INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, qualified, was_play,"
+                  " notional_units, stake_units, source, status, modeled_joint, pnl_units, at_start)"
+                  " VALUES (?,?,?,?,'same_game',3,'A@B',1,0,1,0,'game_three',?,?,?,1)",
+                  (ts, sport, date, f"k{i}", st, joint, {"won": 2.5, "lost": -1.0}.get(st)))
+    c.commit()
+    rec = PL.game_parlay_record(c)
+    nr = rec["nba"]["three"]["since_rules"]
+    assert (nr["from"], nr["graded"], nr["wins"], nr["open"]) == (PL.RULES_SINCE, 2, 1, 1), nr
+    assert nr["chance"] == 0.265 and nr["net_units"] == 1.5, nr
+    assert "since_rules" not in rec["nfl"]["three"], "journaled before the rebuild: not the new rules'"
+    js = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
+    assert "const nr = b.since_rules;" in js and "${tiles}</div>${close}${rebuilt}" in js
+
+
 def test_the_bars_are_said_without_the_link():
     assert (GP.TWO_FLOOR, GP.THREE_FLOOR) == (0.40, 0.25)
     assert round(0.63 ** 3, 2) == GP.THREE_FLOOR and round(0.63 ** 2, 2) == GP.TWO_FLOOR

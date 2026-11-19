@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YS. The Record page says how the rebuilt parlays do, apart**
+(step 781; 19 November). Nothing to run. So you can see whether step YR's parlays win without the older tickets
+mixed in, each league's parlay card on the Record page now says how the tickets built since the rebuild have done,
+under its totals: "Since 20 Nov's rebuild (stronger legs, honest chances): 7 of 12 hit, where we gave them 31% ·
++9.6u · 4 waiting on their games". It counts each game's starting set from 20 November's games on (the NFL's by when
+its tickets were journaled); tonight's games are left out, as some of their tickets were first journaled under the
+old rules. The record.json behind it carries the same counts (since_rules), and the morning check-in reads them.
+Checked by tests/test_the_parlays_are_built_to_win.py.
+
 **YR. The parlays are built to win: honest chances, the report's own picks, no losing markets**
 (step 780; 19 November). Nothing to run. You asked for parlays that win and make money. What the record says (every
 graded ticket, read 19 November): the 1,321 tickets we priced with a link between their legs ("one passing game
