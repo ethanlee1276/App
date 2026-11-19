@@ -221,6 +221,7 @@ def test_the_board_marks_its_featured_games_and_their_reports_say_so():
     assert reps["IND@HOU"]["featured"]["words"] == "Thursday night" and "featured" not in reps["KC@BUF"]
     app = (ROOT / "web" / "js" / "app.js").read_text(encoding="utf-8")
     assert '(g.featured || []).length ? `<span class="top-game-tag">Featured</span>`' in app, "the game card says so"
+    assert 'g && (g.featured || []).length ? ` <span class="rpk-fx-tag">Featured</span>`' in RP, "and Report Picks' game"
 
 
 def test_ask_says_how_the_featured_games_have_done():

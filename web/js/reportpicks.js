@@ -92,7 +92,9 @@ function rpGameHTML(d, key, bets, tix, open) {
     note: (r.sources || []).map((s) => RP_SOURCE[s] || s).join(" · ") })).join("");
   return `<details class="rpk-game" id="rpk-${escapeAttr(away)}-${escapeAttr(home)}"${open ? " open" : ""}>
     <summary class="rpk-head">
-      <span class="rpk-title"><b>${escapeHtml(teamName(away))} at ${escapeHtml(teamName(home))}</b>
+      <span class="rpk-title"><b>${escapeHtml(teamName(away))} at ${escapeHtml(teamName(home))}</b>${
+        // Ethan's featured games (engine/featured: the Lions, a Thursday or a Monday night), as on their cards.
+        g && (g.featured || []).length ? ` <span class="rpk-fx-tag">Featured</span>` : ""}
         <span>${escapeHtml([when, counts.join(" · ")].filter(Boolean).join(" · "))}</span>${
         tally ? `<span class="rpk-tally">${escapeHtml(tally)}</span>` : ""}</span>
       <span class="row-fold-chev" aria-hidden="true"></span>
