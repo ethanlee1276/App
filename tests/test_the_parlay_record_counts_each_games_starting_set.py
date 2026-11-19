@@ -176,6 +176,9 @@ def test_the_journal_and_the_night_mark_them():
         "marked on the board as built, before the leg-row filter drops a kept ticket"
     m = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
     assert m.index("_pl.mark_from_archive(lconn)") < m.index("plh = parlayhold.refresh(lconn)")
+    # And once a process, on its first journal pass: right after a deploy, not the night after.
+    assert body.index("mark_from_archive(conn)") < body.index("for sport, rel in BOARD_FILES.items():")
+    assert "if not _ARCHIVE_MARKED:" in body
 
 
 def test_the_record_page_says_it_once():

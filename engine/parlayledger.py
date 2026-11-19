@@ -1773,6 +1773,12 @@ BOARD_FILES = {
 }
 
 
+#: Whether this process has marked the archived games' starting sets yet
+#: (`journal_built_boards`): once a start, so the record counts one set a game
+#: from the first refresh after a deploy, not from the night after it.
+_ARCHIVE_MARKED: list = []
+
+
 def journal_built_boards(conn, root) -> dict:
     """Journal every board on disk that carries a Parlay Zone.
 
@@ -1785,6 +1791,9 @@ def journal_built_boards(conn, root) -> dict:
     from . import gate
 
     root = Path(root)
+    if not _ARCHIVE_MARKED:
+        _ARCHIVE_MARKED.append(True)
+        mark_from_archive(conn)
     wrote, skipped = 0, []
     for sport, rel in BOARD_FILES.items():
         # THE PRIVATE COPY. `parlays` is a paid key, so with QB_PAYWALL=1

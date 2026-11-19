@@ -9380,11 +9380,11 @@ NFL's three-leg record read 314 graded tickets from two weeks of games, a game p
 each journaled ticket is marked as the game starts: in the set the report carried then, or a version replaced before
 it. The Record page's game parlays, the second view of them and the two-leg hold count only the starting sets, and
 the page says once how many others were left out ("One set a game: the tickets each report carried when its game
-started. The 1,234 others the board posted and replaced before a game began are not counted."). The night marks the
-games that started before this from their archived starting sets; games from 14 and 15 November, before the site
-kept a starting set, have none and drop out of the count. Every version is still graded and kept, and the learners
-(the one-club bar, the legs' correction) still learn on all of them. Checked by
-tests/test_the_parlay_record_counts_each_games_starting_set.py.
+started. The 1,234 others the board posted and replaced before a game began are not counted."). The games that
+started before this are marked from their archived starting sets as soon as the site starts after this update, and
+every night after; games from 14 and 15 November, before the site kept a starting set, have none and drop out of the
+count. Every version is still graded and kept, and the learners (the one-club bar, the legs' correction) still learn
+on all of them. Checked by tests/test_the_parlay_record_counts_each_games_starting_set.py.
 
 **YI. A league's final standings table stays up through its offseason**
 (step 771; 19 November). Nothing to run. You, asked whether a league's final standings table should stay up during
