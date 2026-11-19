@@ -198,6 +198,7 @@ def test_the_heartbeat_says_why_a_game_is_short_without_naming_a_pick():
     assert got["threes_short_why"] == {"few_props": 1, "no_fit": 1, "rebuild_failed": 1, "no_report": 1,
                                        "props_not_bought": 1, "no_props_priced": 1}, got
     assert got["rebuild_errors"] == ["KeyError"], "the error's type, never its words (a pick may ride in them)"
+    assert "threes_no_fit_why" not in got, "no fill counts on these entries: nothing said"
     # The report path keeps the error on the private board's entry, and a rebuild that runs clears it.
     src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
     assert 'x["rebuild_error"] = f"{type(exc).__name__}: {exc}"[:200]' in src
@@ -277,6 +278,54 @@ def test_a_game_whose_props_all_sit_under_60_has_its_entry_and_fills_from_them()
     GP.from_report(b, "nfl", away, [])
     assert len(x["threes"]) == GP.THREE_MIN, x.get("threes_note")
     assert all(t.get("filled") for t in x["threes"]) and "threes_note" not in x
+
+
+def test_the_longer_tickets_floor_is_three_legs_at_the_fills_and_a_short_game_says_what_stopped_it():
+    """The heartbeat's first reasons (19 November, 12:42): the NHL's two short
+    games and college basketball's one read "no fit". Legs at 50% that the
+    fill may take could not make a ticket over the 15% it posted, three at 53%
+    being 14.9%; the floor is three legs at the fill's own floor now."""
+    import os
+    import launch as L
+    assert GP.LONG_FLOOR == GP.FILL_LEG_FLOOR ** 3 == 0.125 and GP.LONG_WORDS == "12.5%"
+    g = EG.GAME
+    # Four unrelated legs at 52%: every trio is 14.1%, under the old 15%.
+    legs = [_leg("A One", "receptions", 0.52), _leg("B Two", "rush_att", 0.52, team="WAS"),
+            _leg("C Three", "rush_att", 0.52), _leg("D Four", "receptions", 0.52, team="WAS")]
+    made = GP.tickets_of("nfl", g, [], extra=legs)
+    assert len(made["threes"]) == GP.THREE_MIN, made
+    assert made["fill_fit"] == 4 and made["fill_clear"] == 4, (made["fill_fit"], made["fill_clear"])
+    for t in made["threes"]:
+        assert t["joint"] < 0.15 and any(c.startswith("A longer ticket: 14.1% by our numbers") for c in t["caveats"]), \
+            t["caveats"]
+    # One that clears nothing because every pair conflicts: the same player in each.
+    same = [_leg("A One", m, 0.7) for m in ("receptions", "rec_yds", "rush_att")]
+    none = GP.tickets_of("nfl", g, [], extra=same)
+    assert none["threes"] == [] and none["fill_fit"] == 0 and none["fill_clear"] == 0
+    assert "reach 12.5% by our numbers" in GP._threes_note(dict(none, wider=3))
+    # A game that needs no fill counts none.
+    full = GP.tickets_of("nfl", g, [_leg("A One", "receptions", 0.9), _leg("B Two", "rush_att", 0.9, team="WAS"),
+                                    _leg("C Three", "rec_yds", 0.9), _leg("D Four", "pass_cmp", 0.9, team="WAS")])
+    assert len(full["threes"]) >= GP.THREE_MIN and full["fill_fit"] is None
+    t = {"legs": [{"player": "A"}, {"player": "B"}, {"player": "C"}]}
+    games = [{"home": "A", "threes": [], "legs_wider": 5, "fill_fit": 0, "fill_clear": 0},
+             {"home": "B", "threes": [], "legs_wider": 5, "fill_fit": 6, "fill_clear": 0},
+             {"home": "C", "threes": [t], "legs_wider": 4, "fill_fit": 3, "fill_clear": 1},
+             {"home": "D", "threes": [], "legs_wider": 2, "fill_fit": 0, "fill_clear": 0}]
+    board = {"most_likely": [], "recommendations": [], "game_bets": [],
+             "game_parlays": {"games": games, "counts": {"games": 4, "threes": 1}}}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(board, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert got["threes_short_why"] == {"no_fit": 3, "few_props": 1}, got
+    assert got["threes_no_fit_why"] == {"conflicts": 1, "under_floor": 1, "one_trio": 1}, got
 
 
 def test_a_ticket_on_paper_from_before_still_journals_and_grades():

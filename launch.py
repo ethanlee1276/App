@@ -599,6 +599,20 @@ def _board_counts(path: str) -> dict:
                      else "no_fit" if x.get("legs_wider") is not None else "no_report")
                 why[k] = why.get(k, 0) + 1
             out["threes_short_why"] = why
+            # A "no fit" game, by what stopped it (gameparlays.tickets_of's
+            # counts): no three of its legs without a conflict, trios that all
+            # sit under the longer ticket's floor, or a single one that clears.
+            nofit: dict = {}
+            for x in short:
+                if x.get("rebuild_error") or x.get("no_props") or x.get("fill_fit") is None:
+                    continue
+                if int(x.get("legs_wider") or 0) < 3:
+                    continue
+                k = ("conflicts" if not int(x["fill_fit"]) else "under_floor" if not int(x.get("fill_clear") or 0)
+                     else "one_trio")
+                nofit[k] = nofit.get(k, 0) + 1
+            if nofit:
+                out["threes_no_fit_why"] = nofit
             errs = sorted({str(x["rebuild_error"]).split(":")[0] for x in short if x.get("rebuild_error")})
             if errs:
                 out["rebuild_errors"] = errs[:5]

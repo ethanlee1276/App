@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YP. A game short of two three-leg parlays can fill from any three props at 50% that fit**
+(step 778; 19 November). Nothing to run. The heartbeat's first reasons, at 12:42, read the NHL's two short games and
+college basketball's one as "no fit": each had three or more props at 50% or better, and no three of them made a
+ticket the fill would post. The fill's longest ticket had to reach 15% by our numbers, and three unrelated legs at
+50% make 12.5% (three at 53% make 14.9%), so the legs step YN let in could rarely be used. The floor for a longer
+ticket is now three legs at the fill's own floor, 12.5%, and each such ticket still says on its card how long it is
+("A longer ticket: 14.1% by our numbers, under the 30% a three-leg parlay is built to"). A game still short says
+what stopped it on the heartbeat (threes_no_fit_why: no three props without a conflict, trios all under the floor,
+or only one that clears), as counts only. Checked by tests/test_every_game_report_posts_its_three_leg_parlays.py.
+
 **YO. Every game's report has its parlays section, and one with no props yet says when they come**
 (step 777; 19 November). Nothing to run. The live NFL board this Thursday held 13 games and showed parlays on 3: the
 board buys the books' player props for tonight's games and, in the NFL and college football, the next day's (the

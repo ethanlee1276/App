@@ -129,16 +129,21 @@ TWO_FLOOR = 0.42
 THREE_FLOOR = 0.30
 #: The least chance a 3-leg ticket's leg may have.
 LEG_FLOOR = 0.60
-#: The least chance by our numbers a ticket may have when it fills a game up to
-#: THREE_MIN (`tickets_of`): a longer ticket, said so on its card. Three legs at
-#: LEG_FLOOR make 22% unrelated, so it holds only against legs that pull apart.
-LONG_FLOOR = 0.15
 #: The least chance a leg may have when it fills a game up to THREE_MIN, under
 #: LEG_FLOOR (THREELEG2, 2026-11-19): the first builds after THREELEG1 left
 #: games short (the NHL's twelve made 22 tickets, the NBA's four made 3),
 #: because a game with three or four props at 60% has no two tickets that fit.
 #: A leg under LEG_FLOOR rides only a filling ticket, and its card names it.
 FILL_LEG_FLOOR = 0.50
+#: The least chance by our numbers a ticket may have when it fills a game up to
+#: THREE_MIN (`tickets_of`): a longer ticket, said so on its card. Three legs at
+#: FILL_LEG_FLOOR, unrelated: 12.5%. It was 15% until the heartbeat's first
+#: reasons (19 November, 12:42) read the NHL's two short games and college
+#: basketball's one as "no fit": legs at 50% that the fill may take could never
+#: make a ticket it would post, three at 53% being 14.9%.
+LONG_FLOOR = FILL_LEG_FLOOR ** 3
+#: LONG_FLOOR as the notes say it ("12.5%").
+LONG_WORDS = f"{LONG_FLOOR * 100:g}%"
 #: The least chance a scorer leg may have, by league.
 SCORER_FLOOR = {"nfl": 0.25, "cfb": 0.30, "nhl": 0.25}
 #: How many legs of a game are tried (the likeliest), and scorers.
@@ -1399,10 +1404,14 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
     more = [l for l in sorted(extra or [], key=lambda l: -float(l["p"])) if _leg_id(l) not in in_pool]
     wider = pool + more[:max(0, MAX_POOL - len(pool))]
     filled = 0
+    fill_fit = fill_clear = None
     if len(chosen) < THREE_MIN:
         outside = lambda t: sum(_leg_id(l) not in own for l in t["legs"])            # noqa: E731
-        cands = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(wider, 3))
-                 if t and float(t["joint"]) >= LONG_FLOOR]
+        trios = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(wider, 3)) if t]
+        cands = [t for t in trios if float(t["joint"]) >= LONG_FLOOR]
+        # What a game short of its two says it had (the heartbeat's reasons):
+        # trios of its legs without a conflict, and those at LONG_FLOOR.
+        fill_fit, fill_clear = len(trios), len(cands)
         got = choose(cands, THREE_MIN, rank=lambda t: (outside(t), -float(t["joint"]),
                                                         -(t.get("ev_at_naive") or -9)))
         if len(got) > len(chosen):
@@ -1418,7 +1427,8 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
     for t in twos + chosen:
         t["legs"] = [slim(l) for l in t["legs"]]
     return {"twos": twos, "threes": chosen, "pool": len(pool), "twos_fit": len(pairs), "twos_clear": len(strong2),
-            "threes_fit": len(threes), "threes_clear": len(strong3), "wider": len(wider), "filled": filled}
+            "threes_fit": len(threes), "threes_clear": len(strong3), "wider": len(wider), "filled": filled,
+            "fill_fit": fill_fit, "fill_clear": fill_clear}
 
 
 def _fill_caveats(t: dict, own: set) -> list[str]:
@@ -1453,7 +1463,7 @@ def _threes_note(made: dict, whose: str = "this game's priced props") -> str:
         return (head + f"a three-leg parlay takes three legs at {LEG_FLOOR:.0%} or better, and {whose} "
                 f"{'make' if wider != 1 else 'makes'} {wider}")
     return (head + f"the {wider} legs at {LEG_FLOOR:.0%} or better in {whose} make no "
-            f"{'more ' if n else ''}three that fit together without a conflict and reach {LONG_FLOOR:.0%} "
+            f"{'more ' if n else ''}three that fit together without a conflict and reach {LONG_WORDS} "
             f"by our numbers")
 
 
@@ -1805,7 +1815,7 @@ def _report_note(n_ok: int, n_picks: int, made: dict) -> str:
     if wider < 3:
         return head + f"a three-leg parlay takes three legs, and {whose} {'makes' if wider == 1 else 'make'} {wider}"
     return (head + f"{whose} make no {'more ' if n else ''}three that fit together without a conflict and "
-            f"reach {LONG_FLOOR:.0%} by our numbers")
+            f"reach {LONG_WORDS} by our numbers")
 
 
 def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> dict | None:
@@ -1840,6 +1850,12 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     x.pop("threes_paper", None)
     x.update(legs_read=n_pool, threes_considered=n_threes, legs_from=LEGS_FROM_REPORT, report_picks=len(want),
              legs_wider=int(made.get("wider") or 0))
+    # What a game short of its two had to fill from (`tickets_of`): counts, no leg.
+    for k in ("fill_fit", "fill_clear"):
+        if made.get(k) is None:
+            x.pop(k, None)
+        else:
+            x[k] = int(made[k])
     x.pop("rebuild_error", None)
     if made["filled"]:
         x["threes_filled"] = made["filled"]
