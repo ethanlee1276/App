@@ -132,6 +132,12 @@ LEG_FLOOR = 0.60
 #: THREE_MIN (`tickets_of`): a longer ticket, said so on its card. Three legs at
 #: LEG_FLOOR make 22% unrelated, so it holds only against legs that pull apart.
 LONG_FLOOR = 0.15
+#: The least chance a leg may have when it fills a game up to THREE_MIN, under
+#: LEG_FLOOR (THREELEG2, 2026-11-19): the first builds after THREELEG1 left
+#: games short (the NHL's twelve made 22 tickets, the NBA's four made 3),
+#: because a game with three or four props at 60% has no two tickets that fit.
+#: A leg under LEG_FLOOR rides only a filling ticket, and its card names it.
+FILL_LEG_FLOOR = 0.50
 #: The least chance a scorer leg may have, by league.
 SCORER_FLOOR = {"nfl": 0.25, "cfb": 0.30, "nhl": 0.25}
 #: How many legs of a game are tried (the likeliest), and scorers.
@@ -385,12 +391,13 @@ def still_to_play(legs: list, board: dict, now=None) -> list:
     return out
 
 
-def legs_for(board: dict, sport: str, now=None) -> list[dict]:
+def legs_for(board: dict, sport: str, now=None, floor: float = LEG_FLOOR) -> list[dict]:
     """The board's priced picks as legs — Most Likely, Edge, the Most Likely
     rows its seat caps dropped (`pool_legs`) and every other prop it priced
     at a named book whose number the Edge path stands behind (`priced_legs`,
     `credible_row`), one copy of a pick kept, the most trusted source's
-    (`SOURCE_RANK`) — at LEG_FLOOR or better, of a game still to play
+    (`SOURCE_RANK`) — at ``floor`` or better (LEG_FLOOR; FILL_LEG_FLOOR for
+    the legs a game's fill may take), of a game still to play
     (`still_to_play`)."""
     from . import legfit
     from . import twoleg as T
@@ -414,7 +421,7 @@ def legs_for(board: dict, sport: str, now=None) -> list[dict]:
                 leg = legfit.apply(leg, sport, "three", w, shift)
             # Player props only: a game line's leg journals and grades on
             # another path, and their reports' tickets are props.
-            if not leg or leg.get("_game_leg") or float(leg.get("p") or 0) < LEG_FLOOR:
+            if not leg or leg.get("_game_leg") or float(leg.get("p") or 0) < floor:
                 continue
             leg = _norm_side(leg)
             k = (leg.get("player"), leg.get("market"), str(leg.get("side") or "").upper(), leg.get("line"))
@@ -1356,7 +1363,7 @@ def game_label(game: dict) -> str:
 
 
 def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = None,
-               extra: list[dict] | None = None) -> dict:
+               extra: list[dict] | None = None, picks: set | None = None) -> dict:
     """A game's parlays from ``legs`` (GPWIN1): its two-leg tickets, the two
     strongest picks first (``twos``), and its three-leg tickets (``threes``),
     each only when our chance for it clears its bar (TWO_FLOOR, THREE_FLOOR)
@@ -1372,7 +1379,11 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
     report's game's other priced props, not its picks: `from_report`), the
     fewest such legs first, down to LONG_FLOOR. Each filled ticket says so on
     its card (`_fill_caveats`); ``wider`` counts the legs the fill could try
-    and ``filled`` the tickets it made."""
+    and ``filled`` the tickets it made. ``extra`` may hold legs down to
+    FILL_LEG_FLOOR (THREELEG2), and ``picks`` the report's picks among
+    ``legs`` and ``extra`` (by `_leg_id`), when a pick under LEG_FLOOR rides
+    in ``extra``: the fill takes the picks first and names every other leg.
+    The tickets that clear THREE_FLOOR are made of ``legs`` alone."""
     pool = sorted(legs, key=lambda l: -float(l["p"]))[:MAX_POOL]
     memo = {} if memo is None else memo
     pairs = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(pool, 2)) if t]
@@ -1382,8 +1393,9 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
     # Two tickets of two legs that share one are half the same bet: none shared.
     twos = choose(strong2, TWO_PER_GAME, shared=(0,))
     chosen = choose(strong3, THREE_PER_GAME)
-    own = {_leg_id(l) for l in pool}
-    more = [l for l in sorted(extra or [], key=lambda l: -float(l["p"])) if _leg_id(l) not in own]
+    in_pool = {_leg_id(l) for l in pool}
+    own = set(picks) if picks is not None else in_pool
+    more = [l for l in sorted(extra or [], key=lambda l: -float(l["p"])) if _leg_id(l) not in in_pool]
     wider = pool + more[:max(0, MAX_POOL - len(pool))]
     filled = 0
     if len(chosen) < THREE_MIN:
@@ -1419,6 +1431,11 @@ def _fill_caveats(t: dict, own: set) -> list[str]:
         out.append(f"{named} {'is not one of' if len(board) == 1 else 'are not'} this report's picks: "
                    f"{'a prop' if len(board) == 1 else 'props'} the board priced, added so the game has "
                    f"{THREE_MIN} three-leg parlays")
+    low = [l for l in t["legs"] if float(l.get("p") or 0) < LEG_FLOOR]
+    if low:
+        named = " and ".join(f"{pick_words(l)} ({float(l.get('p') or 0):.0%})" for l in low)
+        out.append(f"{named} {'is' if len(low) == 1 else 'are'} under the {LEG_FLOOR:.0%} a leg is built to: "
+                   f"this game had too few props that high to make {THREE_MIN} three-leg parlays")
     joint = float(t.get("joint") or 0)
     if joint < THREE_FLOOR:
         out.append(f"A longer ticket: {joint * 100:.1f}% by our numbers, under the {THREE_FLOOR:.0%} a three-leg "
@@ -1674,13 +1691,14 @@ def _pick_key(b: dict) -> tuple:
 
 
 def _board_legs(board: dict, sport: str, now=None) -> list[dict]:
-    """Every leg the board offers (`legs_for`, `enrich`), read once a build
-    and shared by its reports: the same rows, so the same legs."""
+    """Every leg the board offers down to FILL_LEG_FLOOR (`legs_for`, `enrich`),
+    read once a build and shared by its reports: the same rows, so the same
+    legs. A report's tickets that clear THREE_FLOOR take the ones at LEG_FLOOR."""
     recs = board.get("recommendations")
     key = (id(board), id(recs), len(recs or []), sport)
     if _BOARD_LEGS.get("key") != key:
         _BOARD_LEGS.clear()
-        _BOARD_LEGS.update(key=key, legs=enrich(legs_for(board, sport, now), board))
+        _BOARD_LEGS.update(key=key, legs=enrich(legs_for(board, sport, now, floor=FILL_LEG_FLOOR), board))
     return _BOARD_LEGS["legs"]
 
 
@@ -1695,12 +1713,12 @@ def _report_note(n_ok: int, n_picks: int, made: dict) -> str:
     head = f"{n} of {THREE_MIN}: " if n else ""
     if not wider:
         return head + (f"this report has no pick on a player's line, and the board priced no prop in this game "
-                       f"at {LEG_FLOOR:.0%} or better" if not n_picks else
+                       f"at {FILL_LEG_FLOOR:.0%} or better" if not n_picks else
                        f"none of this report's {n_picks} picks clears the {LEG_FLOOR:.0%} a leg needs, and the "
-                       f"board priced no other prop in this game that does")
+                       f"board priced no other prop in this game at {FILL_LEG_FLOOR:.0%} or better")
     whose = (f"this report's {n_ok} pick{'' if n_ok == 1 else 's'} at {LEG_FLOOR:.0%} or better"
-             + (f" and the {more} other prop{'' if more == 1 else 's'} the board priced in this game" if more
-                else ""))
+             + (f" and the {more} other prop{'' if more == 1 else 's'} the board priced in this game at "
+                f"{FILL_LEG_FLOOR:.0%} or better" if more else ""))
     if wider < 3:
         return head + f"a three-leg parlay takes three legs, and {whose} {'makes' if wider == 1 else 'make'} {wider}"
     return (head + f"{whose} make no {'more ' if n else ''}three that fit together without a conflict and "
@@ -1726,9 +1744,13 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     want = {_pick_key(b) for b in picks or []
             if isinstance(b, dict) and b.get("market") and not b.get("game") and b.get("kind") != "game"}
     want.discard(("", "", "", None))
+    # The game's priced props down to FILL_LEG_FLOOR (THREELEG2): its picks at
+    # LEG_FLOOR make the tickets that clear THREE_FLOOR; the rest only fill.
     mine = [l for l in _board_legs(board, sp, now) if _game_of(l, [game])]
-    legs = [l for l in mine if _pick_key(l) in want]
-    made = tickets_of(sp, game, legs, extra=[l for l in mine if _pick_key(l) not in want])
+    legs = [l for l in mine if _pick_key(l) in want and float(l.get("p") or 0) >= LEG_FLOOR]
+    picked = {_leg_id(l) for l in mine if _pick_key(l) in want}
+    strong = {_leg_id(l) for l in legs}
+    made = tickets_of(sp, game, legs, extra=[l for l in mine if _leg_id(l) not in strong], picks=picked)
     chosen, n_threes, n_pool = made["threes"], made["threes_fit"], made["pool"]
     x["threes"] = chosen
     x.pop("paper_threes", None)

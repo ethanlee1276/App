@@ -139,6 +139,34 @@ def test_a_game_fills_up_to_two_and_its_cards_say_how():
     assert few["threes"] == [] and GP._threes_note(few).startswith("0 of 2: a three-leg parlay takes three legs")
 
 
+def test_a_game_short_of_props_at_60_fills_with_legs_in_the_fifties_and_names_them():
+    """THREELEG2: the first builds after THREELEG1 left games short (the NHL's
+    twelve made 22 tickets, the NBA's four made 3): three or four props at 60%
+    make no two tickets that fit. The fill takes legs down to FILL_LEG_FLOOR,
+    each named on its card."""
+    g = EG.GAME
+    strong = [_leg("A One", "receptions", 0.72), _leg("B Two", "rush_att", 0.70, team="WAS"),
+              _leg("C Three", "rec_yds", 0.66)]
+    fifties = [_leg("D Four", "pass_cmp", 0.57, team="WAS"), _leg("E Five", "receptions", 0.55)]
+    before = GP.tickets_of("nfl", g, strong)
+    assert len(before["threes"]) == 1, "three legs at 60% make one ticket"
+    made = GP.tickets_of("nfl", g, strong, extra=fifties, picks={GP._leg_id(l) for l in strong})
+    assert len(made["threes"]) == GP.THREE_MIN, made
+    low = [t for t in made["threes"] if any(float(l["p"]) < GP.LEG_FLOOR for l in t["legs"])]
+    assert low, "a leg in the fifties fills the game"
+    for t in low:
+        assert any("under the 60% a leg is built to: this game had too few props that high" in c
+                   for c in t["caveats"]), t["caveats"]
+    assert GP.FILL_LEG_FLOOR == 0.50
+    # The report's own path reads the game's legs down to the fill's floor and
+    # keeps the tickets that clear THREE_FLOOR to its picks at 60%.
+    src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
+    assert "legs_for(board, sport, now, floor=FILL_LEG_FLOOR)" in src
+    i = src.index("def from_report(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert 'and float(l.get("p") or 0) >= LEG_FLOOR]' in body and "picks=picked" in body
+
+
 def test_a_ticket_on_paper_from_before_still_journals_and_grades():
     c = _conn()
     leg = lambda pl, m: {"player": pl, "team": "KC", "market": m, "side": "OVER", "line": 1.5, "odds": -150,

@@ -580,6 +580,10 @@ def _board_counts(path: str) -> dict:
         c = gp.get("counts") if isinstance(gp.get("counts"), dict) else {}
         out["parlay_games"] = int(c.get("games") or len(gp["games"]))
         out["sgp_threes"] = int(c.get("threes") or 0)
+        # Games still to play short of their two three-leg tickets (THREELEG1/2):
+        # each says why on its report; here, how many, for anyone watching.
+        out["threes_short"] = sum(1 for x in gp["games"] if isinstance(x, dict) and not x.get("kept")
+                                  and len(x.get("threes") or []) < 2)
         out["sgp_twos"] = int(c.get("twos") or 0)
         out["td_pairs"] = int(c.get("scorers") or 0)
         # Bet it on a whole ticket (engine/betlinks._parlay_legs, 2026-11-15):
