@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YU. A ticket is two of the report's picks at least, and a short game may add one other prop**
+(step 783; 19 November). Nothing to run. With step YR live, the boards rebuilt under the new rules: the NBA's four
+games made 5 three-leg tickets (8 before), and the NFL's Thursday game and college football's made none, their picks
+making no three that fit once props the report never picked had to be 60% or better. So the rule is now the one the
+record supports: every ticket carries at least two of the report's own picks, and a game short of its two may add
+one prop the report did not pick, at 55% or better, never two (the tickets that lost on the record carried two or
+three such props: 16 November's NBA read "pick, pick, other" losing on the other, and "other, pick, other"). A
+report with fewer than two picks on a player's line makes no three-leg ticket and says so ("a three-leg parlay takes
+2 of this report's own picks, and only 1 of its 4 picks is a player's line priced at 50% or better"). Checked by
+tests/test_the_parlays_are_built_to_win.py and tests/test_the_parlays_are_made_of_the_reports_picks.py.
+
 **YT. Longer tickets back to one in seven, and each card says its chance once**
 (step 782; 19 November). Nothing to run. Step YP let a game fill its two three-leg parlays with longer tickets down
 to 12.5% (about one in eight) for the NHL's two short games and college basketball's one; with it live, the

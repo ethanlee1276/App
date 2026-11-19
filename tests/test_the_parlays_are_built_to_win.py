@@ -124,22 +124,27 @@ def test_the_link_weight_is_fitted_on_the_record():
     assert "gameparlays.fit_link_weight(lconn)" in m, "fitted nightly with the one-club bar"
 
 
-def test_a_prop_the_report_did_not_pick_fills_only_at_60():
+def test_a_prop_the_report_did_not_pick_fills_one_a_ticket_at_55():
     b = EG.board()
     b["most_likely"] = []
     b["td_field"] = []
     recs = [EG._rec("A One", "NYG", "WR", "receptions", "Over", 2.5, 0.72, -150),
             EG._rec("B Two", "WAS", "RB", "rush_yds", "Over", 40.5, 0.70, -150),
             EG._rec("C Three", "NYG", "TE", "rec_yds", "Over", 30.5, 0.68, -150),
-            EG._rec("D Four", "WAS", "WR", "receptions", "Over", 3.5, 0.55, -150),   # no pick, under 60%
-            EG._rec("E Five", "NYG", "RB", "rush_att", "Over", 12.5, 0.62, -150)]   # no pick, at 60%+
+            EG._rec("D Four", "WAS", "WR", "receptions", "Over", 3.5, 0.53, -150),   # no pick, under 55%
+            EG._rec("E Five", "NYG", "RB", "rush_att", "Over", 12.5, 0.62, -150),   # no pick, 55% or better
+            EG._rec("F Six", "WAS", "TE", "rec_yds", "Over", 20.5, 0.60, -150)]     # no pick, 55% or better
     b["recommendations"] = recs
     b["game_parlays"] = GP.build(b, "nfl")
     picks = [{"player": r["player"], "market": r["market"], "side": "OVER", "line": r["line"]} for r in recs[:3]]
     x = GP.from_report(b, "nfl", GAME, picks)
     legs = {l["player"] for t in x["threes"] for l in t["legs"]}
-    assert "D Four" not in legs, "a prop the report never picked, under 60%, is no leg"
-    assert len(x["threes"]) == GP.THREE_MIN and "E Five" in legs, "one at 60% fills the second ticket"
+    assert "D Four" not in legs, "a prop the report never picked, under 55%, is no leg"
+    assert len(x["threes"]) == GP.THREE_MIN and "E Five" in legs, "one at 55% or better fills the second ticket"
+    picked = {"A One", "B Two", "C Three"}
+    assert all(sum(l["player"] not in picked for l in t["legs"]) <= GP.FILL_OUTSIDE_MAX for t in x["threes"]), \
+        [[l["player"] for l in t["legs"]] for t in x["threes"]]
+    assert (GP.FILL_OTHER_FLOOR, GP.FILL_OUTSIDE_MAX) == (0.55, 1)
 
 
 def test_a_benched_market_is_no_leg():

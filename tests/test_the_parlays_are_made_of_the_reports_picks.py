@@ -116,11 +116,14 @@ def test_too_few_picks_fill_from_the_games_other_props_and_say_so():
     low = GP.from_report(_built(), "nfl", GAME, PICKS[:2] + [_pick("Jayden Daniels", "pass_cmp", "UNDER", 19.5,
                                                                    team="WAS")])
     assert low["legs_read"] == 2 and len(low["threes"]) == GP.THREE_MIN, low
-    # None at all on a player's line (a game bet only): the game's props make its two, every leg named.
+    # None at all on a player's line (a game bet only): no ticket, since a ticket
+    # takes two of the report's own picks and one prop it did not pick at most
+    # (PARLAYWIN1: the tickets that lost carried two or three such props).
     none = GP.from_report(_built(), "nfl", GAME, [{"player": "NYG", "market": "moneyline", "side": "NYG",
                                                    "game": True}])
-    assert len(none["threes"]) == GP.THREE_MIN, none.get("threes_note")
-    assert all(any("are not this report's picks" in c for c in t["caveats"]) for t in none["threes"])
+    assert none["threes"] == [] and none["threes_note"] == (
+        "a three-leg parlay takes 2 of this report's own picks, and it has no pick on a player's line"), \
+        none.get("threes_note")
     # A game whose props make one ticket posts it, and the note says why there is no second.
     keys3 = {GP._pick_key(p) for p in PICKS[:3]}
     was_legs = GP._board_legs

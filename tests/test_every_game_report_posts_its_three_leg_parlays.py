@@ -309,21 +309,33 @@ def test_the_longer_tickets_floor_and_a_short_game_says_what_stopped_it():
     import launch as L
     assert GP.LONG_FLOOR == 0.15 and GP.LONG_WORDS == "15%"
     g = EG.GAME
-    # Four unrelated legs at 52%: every trio is 14.1%, under the floor.
+    # Four unrelated picks of the report's at 52%: every trio is 14.1%, under the floor.
     legs = [_leg("A One", "receptions", 0.52), _leg("B Two", "rush_att", 0.52, team="WAS"),
             _leg("C Three", "rush_att", 0.52), _leg("D Four", "receptions", 0.52, team="WAS")]
-    made = GP.tickets_of("nfl", g, [], extra=legs)
+    mine = {GP._leg_id(l) for l in legs}
+    made = GP.tickets_of("nfl", g, [], extra=legs, picks=mine)
     assert made["threes"] == [] and made["fill_fit"] == 4 and made["fill_clear"] == 0, made
     # At 55% they are 16.6%: a longer ticket, said so on its card.
-    made = GP.tickets_of("nfl", g, [], extra=[dict(l, p=0.55) for l in legs])
+    made = GP.tickets_of("nfl", g, [], extra=[dict(l, p=0.55) for l in legs], picks=mine)
     assert len(made["threes"]) == GP.THREE_MIN and made["fill_clear"] == 4, made
     for t in made["threes"]:
         assert any(c.startswith("A longer ticket: 16.6% by our numbers") for c in t["caveats"]), t["caveats"]
     # One that clears nothing because every pair conflicts: the same player in each.
     same = [_leg("A One", m, 0.7) for m in ("receptions", "rec_yds", "rush_att")]
-    none = GP.tickets_of("nfl", g, [], extra=same)
+    none = GP.tickets_of("nfl", g, [], extra=same, picks={GP._leg_id(l) for l in same})
     assert none["threes"] == [] and none["fill_fit"] == 0 and none["fill_clear"] == 0
     assert "reach 15% by our numbers" in GP._threes_note(dict(none, wider=3))
+    # Props the report did not pick ride one a ticket, beside two of its picks.
+    two_picks = legs[:2]
+    others = [dict(l, p=0.66) for l in legs[2:]]
+    made = GP.tickets_of("nfl", g, [], extra=[dict(l, p=0.66) for l in two_picks] + others,
+                         picks={GP._leg_id(l) for l in two_picks})
+    assert made["threes"] and all(sum(GP._leg_id(l) not in mine or l["player"] in ("C Three", "D Four")
+                                      for l in t["legs"]) <= GP.FILL_OUTSIDE_MAX for t in made["threes"]), made
+    alone = GP.tickets_of("nfl", g, [], extra=others + [dict(legs[0], p=0.66)], picks={GP._leg_id(legs[0])})
+    assert alone["threes"] == [] and alone["wider_own"] == 1, "one pick of the report's makes no ticket"
+    assert GP._report_note(0, 1, alone).startswith("a three-leg parlay takes 2 of this report's own picks"), \
+        GP._report_note(0, 1, alone)
     # A game that needs no fill counts none.
     full = GP.tickets_of("nfl", g, [_leg("A One", "receptions", 0.9), _leg("B Two", "rush_att", 0.9, team="WAS"),
                                     _leg("C Three", "rec_yds", 0.9), _leg("D Four", "pass_cmp", 0.9, team="WAS")])
