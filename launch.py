@@ -1024,13 +1024,17 @@ def _tonight_until(now: float | None = None) -> float | None:
         return None
 
 
-def _pick_until(sport: str | None = None, now: float | None = None) -> float | None:
+def _pick_until(sport: str | None = None, now: float | None = None, far: bool = False) -> float | None:
     """Where a league's paid pull stops pricing: the end of tonight's slate,
     or for a league priced the day before (`oddsbudget.DAY_BEFORE_LEAGUES`,
-    the NFL and college) the end of tomorrow's. None when the clock cannot
-    say."""
+    the NFL and college) the end of tomorrow's, or on a far pull (`_far_pull`,
+    the NFL's) the end of the slate FAR_DAYS after tonight's. None when the
+    clock cannot say."""
     try:
-        from engine.oddsbudget import DAY_BEFORE_LEAGUES, budget_sport, pick_window_ends
+        from engine.oddsbudget import (DAY_BEFORE_LEAGUES, budget_sport, far_days,
+                                       far_window_ends, pick_window_ends)
+        if far and sport and far_days(sport) >= 2:
+            return far_window_ends(now, far_days(sport))
         if sport and budget_sport(sport) in DAY_BEFORE_LEAGUES:
             return pick_window_ends(now)
     except Exception:                                        # noqa: BLE001
@@ -1038,13 +1042,26 @@ def _pick_until(sport: str | None = None, now: float | None = None) -> float | N
     return _tonight_until(now)
 
 
-def _tonight_args(sport: str | None = None) -> list:
+def _tonight_args(sport: str | None = None, far: bool = False) -> list:
     """``--price-until`` for a build whose board holds the week (the NFL's,
     college's): a paid pull buys tonight's games, and tomorrow's for a
-    league priced the day before (`_pick_until`), and reads the rest from
-    the cache (`_odds_affordable`'s tonight rule)."""
-    until = _pick_until(sport)
+    league priced the day before, and on a far pull the slates FAR_DAYS
+    ahead (`_pick_until`), and reads the rest from the cache
+    (`_odds_affordable`'s tonight rule)."""
+    until = _pick_until(sport, far=far)
     return ["--price-until", str(int(until))] if until else []
+
+
+def _far_pull(out_path: str, sport: str = "nfl", now: float | None = None) -> bool:
+    """Does this cycle's paid pull carry the far slates (`oddsbudget.
+    far_pull_due`, EARLYPROPS1: Sunday's NFL props from Thursday)? Asked once
+    a cycle and handed to the budget, the window and the narrowing alike.
+    False when the board's times cannot be read."""
+    try:
+        from engine.oddsbudget import far_pull_due
+        return bool(far_pull_due(sport, _slate_kickoffs(out_path), now))
+    except Exception:                                        # noqa: BLE001
+        return False
 
 
 def _slate_kickoffs(path: str) -> list:
@@ -1078,7 +1095,7 @@ def _slate_kickoffs(path: str) -> list:
     return out
 
 
-def _narrow_pull(out_path: str, sport: str | None = None) -> bool:
+def _narrow_pull(out_path: str, sport: str | None = None, far: bool = False) -> bool:
     """Should this background pull price only the six-hour window?
 
     Only when the day cannot afford the whole slate. See
@@ -1098,7 +1115,9 @@ def _narrow_pull(out_path: str, sport: str | None = None) -> bool:
     """
     try:
         from engine.oddsbudget import wide_pull_affordable, credits_per_event
-        if _day_before_pull(out_path, sport):
+        # A FAR PULL IS NEVER NARROWED EITHER (EARLYPROPS1): the six hours ahead
+        # hold none of the slates it is for.
+        if far or _day_before_pull(out_path, sport):
             return False
         return not wide_pull_affordable(_games_on_slate(out_path) + 1,
                                         share=_budget_share(sport),
@@ -1111,7 +1130,9 @@ def _day_before_pull(out_path: str, sport: str | None = None,
                      now: float | None = None) -> bool:
     """Is this league's paid pull a day-before one — a league priced the day
     before (`oddsbudget.DAY_BEFORE_LEAGUES`), no game on tonight's slate and
-    some on tomorrow's? False when the board's times cannot be read."""
+    some on tomorrow's? False when the board's times cannot be read. (A far
+    pull with no game tonight, a Friday's for Sunday, is never narrowed
+    either: `_narrow_pull` is told so by its caller.)"""
     try:
         from engine.oddsbudget import (DAY_BEFORE_LEAGUES, budget_sport,
                                        tomorrow_games, tonight_games)
@@ -1132,7 +1153,7 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
                      cost: int | None = None,
                      credits: int | None = None,
                      prices_stale: bool = False,
-                     tonight=_FROM_BOARD) -> bool:
+                     tonight=_FROM_BOARD, far: bool = False) -> bool:
     """Decide whether this refresh can afford to re-pull odds.
 
     Scores are free and always refresh; odds are metered, so they only ride
@@ -1188,6 +1209,16 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
             ahead = tomorrow_games(kicks) or 0
     except Exception:                                        # noqa: BLE001
         ahead = 0
+    # THE FAR SLATES, on a far pull (`_far_pull`, EARLYPROPS1; Ethan, 2026-11-19:
+    # Sunday's NFL props from Thursday): their games join the pull and its price.
+    far_n = 0
+    if far and from_board and tonight is not None:
+        try:
+            from engine.oddsbudget import far_games
+            far_n = far_games(kicks, sport) or 0
+        except Exception:                                    # noqa: BLE001
+            far_n = 0
+    ahead += far_n
     # What a per-game pull buys: tonight's games, and tomorrow's for a
     # day-before league (a board that holds the week buys those and reads
     # the rest, `_tonight_args`), or every game on the board when tonight
@@ -1217,19 +1248,22 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
             pass
         return False
     share = _budget_share(sport)
-    if tonight == 0 and ahead:
+    if (tonight == 0 and ahead) or far_n:
         # A day-before slate, with nothing tonight: the month's plan owes
         # this league nothing today (it funds tonight's leagues), so the
         # slate brings its own DAY_BEFORE_PULLS pulls, never more than
-        # DAY_BEFORE_SHARE_CAP of the day's allowance.
+        # DAY_BEFORE_SHARE_CAP of the day's allowance. A FAR PULL brings its
+        # own FAR_PULLS pulls the same way, on top of what the league's day
+        # already has, so tonight's game keeps its own (EARLYPROPS1).
         try:
-            from engine.oddsbudget import (DAY_BEFORE_PULLS, DAY_BEFORE_SHARE_CAP,
-                                           daily_allowance, load, refresh_credits)
+            from engine.oddsbudget import (DAY_BEFORE_PULLS, DAY_BEFORE_SHARE_CAP, FAR_PULLS,
+                                           FAR_SHARE_CAP, daily_allowance, load, refresh_credits)
             allowance = daily_allowance(load())
-            need = DAY_BEFORE_PULLS * refresh_credits(
-                cost if cost is not None else priced + 1, credits)
-            if allowance > 0:
-                share = max(share, min(DAY_BEFORE_SHARE_CAP, need / allowance))
+            pull = refresh_credits(cost if cost is not None else priced + 1, credits)
+            if allowance > 0 and far_n:
+                share = share + min(FAR_SHARE_CAP, FAR_PULLS * pull / allowance)
+            elif allowance > 0:
+                share = max(share, min(DAY_BEFORE_SHARE_CAP, DAY_BEFORE_PULLS * pull / allowance))
         except Exception:                                    # noqa: BLE001
             pass
     ok, reason = should_refresh(cost if cost is not None else priced + 1,
@@ -1246,7 +1280,7 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
                      credits=credits if credits is not None else None,
                      cost_events=cost, games=_games_on_slate(out_path),
                      kickoffs=len(kicks), share=round(share, 3),
-                     tonight=tonight, tomorrow=ahead or None)
+                     tonight=tonight, tomorrow=(ahead - far_n) or None, far=far_n or None)
     except Exception:                                        # noqa: BLE001
         pass
     # NOTE: the refresh clock is NOT stamped here. Authorization is not a
@@ -1276,15 +1310,16 @@ def _paid_pull_baseline() -> str:
 
 def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
                       label: str, sport: str | None = None,
-                      bought: int | None = None, expect: int | None = None) -> None:
-    """Confirm (or defer) an authorized paid pull after the build ran.
+                      bought: int | None = None, expect: int | None = None) -> bool:
+    """Confirm (or defer) an authorized paid pull after the build ran, and
+    say whether it landed (a far pull is counted only then, EARLYPROPS1).
 
     Landed → the refresh clock stamps now. Didn't land → a short retry
     cooldown, and the failure is printed EVEN IN QUIET MODE: the old flow
     stamped the clock at authorization time and said nothing, so a failed
     window pull silently stranded the board on stale prices for 12h."""
     if not spend:
-        return
+        return False
     # ``bought`` is what the ledger says this build spent on the lane and
     # ``expect`` the least a real pull costs; short of it the clock is
     # not stamped (oddsbudget.paid_pull_result) and the ledger says so.
@@ -1304,12 +1339,13 @@ def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
                   f"stamped; the lane asks again in "
                   f"~{SHORT_PULL_RETRY_S // 60} min")
     except Exception:
-        return
+        return False
     if not landed:
         print(f"  ⚠️  {label}: paid odds pull authorized but the API never "
               f"answered (build {'ok' if ok else 'failed'}"
               + (f": {tail}" if tail else "")
               + f") — retrying in ~{FAILED_PULL_RETRY_S // 60} min")
+    return bool(landed and enough)
 
 
 def _slate_date() -> str:
@@ -1541,7 +1577,10 @@ def refresh_nfl(quiet: bool = False) -> bool:
     # scoreboard is down.
     args = ["nfl_build.py", str(season), str(week), "--out", out,
             "--injuries", "--depth", "--carry", "--live"]
-    spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="nfl")
+    # SUNDAY'S PROPS FROM THURSDAY (EARLYPROPS1): whether this cycle's paid
+    # pull carries the far slates, asked once and handed to all three below.
+    far = _far_pull(out, "nfl")
+    spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="nfl", far=far)
     before_seen = _paid_pull_baseline() if spend else ""
     # THE CHEAP TIER, when the expensive one is declined.
     #
@@ -1563,8 +1602,9 @@ def refresh_nfl(quiet: bool = False) -> bool:
     lines_before = ""
     if spend:
         args.append("--odds")
-        args += _tonight_args("nfl")   # tonight's and tomorrow's bought, the week's read
-        if quiet and _narrow_pull(out, "nfl"):
+        # tonight's and tomorrow's bought (on a far pull, up to three days ahead), the week's read
+        args += _tonight_args("nfl", far=far)
+        if quiet and _narrow_pull(out, "nfl", far=far):
             args.append("--active-odds")
     elif _with_odds():
         args.append("--cached-odds")   # keep last paid prices; never overwrite with proxies
@@ -1583,7 +1623,11 @@ def refresh_nfl(quiet: bool = False) -> bool:
     # Ethan: "nfl keeps showing props, then not showing props, then
     # showing props, then not showing props."
     ok, tail = _run_build(args, timeout=600)
-    _finish_paid_pull(spend, before_seen, ok, tail, "NFL", sport="nfl")
+    landed = _finish_paid_pull(spend, before_seen, ok, tail, "NFL", sport="nfl")
+    if far and landed:
+        # Counted against the day's FAR_PULLS only once it bought.
+        from engine.oddsbudget import mark_far_pull
+        mark_far_pull("nfl")
     _finish_paid_pull(lines_spend, lines_before, ok, tail, "NFL game lines",
                       sport=LINES_CLOCK)
     if not ok and _slate_props(out) > 0:

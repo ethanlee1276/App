@@ -227,6 +227,11 @@ def test_no_new_whole_body_swallower_arrives_unnoticed():
         # could not be read (<error>)" once a process and sets LINK_ERROR, which
         # each board's parlay counts carry beside the weight.
         "link_weight",
+        # A FAR PULL COUNTED (engine/oddsbudget.mark_far_pull, 2026-11-19,
+        # EARLYPROPS1): it returns nothing either way, and a failure to write
+        # the count prints "the far pull not counted (<error>)"; the cost of
+        # one is a third far pull that day, which the pacer still meters.
+        "mark_far_pull",
         # network/IO wrappers whose empty return IS the documented answer
         "_post", "_get_json", "settle_open",
         # THE STAKING BREAKER, added 2026-09-19 and caught by this sweep

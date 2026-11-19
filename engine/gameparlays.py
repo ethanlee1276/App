@@ -1710,23 +1710,33 @@ def _slate_today(now=None) -> str:
     return baseball_day()
 
 
+#: When a league's props are first bought, in words (engine/oddsbudget.buy_ahead_days).
+_LEAD_WORDS = {0: "on its game day", 1: "the day before it", 2: "from two days before it",
+               3: "from three days before it"}
+
+
 def props_note(sport: str, game: dict, now=None) -> tuple[str, str]:
     """Why a game still to play has no priced prop, and when it will: (reason,
-    words). The weekly leagues buy a game's props the day before it, the rest
-    on its day (engine/oddsbudget); inside that window no book has priced one
-    yet."""
-    from .oddsbudget import DAY_BEFORE_LEAGUES
-    weekly = sport in DAY_BEFORE_LEAGUES
+    words). The NFL buys a game's props from three days before it (EARLYPROPS1:
+    Sunday's from Thursday), college football the day before it, the rest on
+    its day (engine/oddsbudget.buy_ahead_days). Further out, it says the day
+    they are first bought; inside the NFL's far days the books may not have
+    posted them yet; the day before, and on the day, no book has priced one."""
+    from .oddsbudget import buy_ahead_days
+    lead = buy_ahead_days(sport)
     try:
         day = dt.date.fromisoformat(str(game.get("date") or "")[:10])
         ahead = (day - dt.date.fromisoformat(_slate_today(now))).days
     except ValueError:
         day, ahead = None, 0
-    if day is not None and (2 if weekly else 1) <= ahead <= PROPS_WAIT_MAX_DAYS:
-        when = day - dt.timedelta(days=1) if weekly else day
-        return PROPS_WAIT, (f"the books' player props for this game are bought "
-                            f"{'the day before it' if weekly else 'on its game day'}, on {when.strftime('%A')}, "
+    words = _LEAD_WORDS.get(lead, f"from {lead} days before it")
+    if day is not None and lead + 1 <= ahead <= PROPS_WAIT_MAX_DAYS:
+        when = day - dt.timedelta(days=lead)
+        return PROPS_WAIT, (f"the books' player props for this game are bought {words}, on {when.strftime('%A')}, "
                             f"and its parlays are built from them then")
+    if day is not None and 2 <= ahead <= lead:
+        return PROPS_WAIT, (f"the books' player props for this game are bought {words}, and its parlays are "
+                            f"built from them once the books post them")
     return PROPS_NONE, ("no book has priced a player prop in this game yet, and its parlays are built from "
                         "them once one does")
 

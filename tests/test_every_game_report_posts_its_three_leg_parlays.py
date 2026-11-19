@@ -226,10 +226,12 @@ def test_every_game_still_to_play_has_its_entry_and_one_with_no_prop_says_when()
     gp = GP.build(b, "nfl", now=thursday)
     assert [x["game"] for x in gp["games"]] == ["WAS@NYG", "DAL@PHI"], [x["game"] for x in gp["games"]]
     x = gp["games"][1]
-    sat = (dt.date(2099, 11, 15) - dt.timedelta(days=1)).strftime("%A")
     assert x["no_props"] == GP.PROPS_WAIT and x["threes"] == [] and x["scorers"] == [], x
-    assert x["props_note"] == (f"the books' player props for this game are bought the day before it, on {sat}, "
-                               "and its parlays are built from them then"), x["props_note"]
+    # Since EARLYPROPS1 (19 November; Ethan: yes to buying Sunday's props from
+    # Thursday) the NFL buys them from three days before: on the Thursday, a
+    # Sunday game's are being bought, and the books may not have posted them yet.
+    assert x["props_note"] == ("the books' player props for this game are bought from three days before it, "
+                               "and its parlays are built from them once the books post them"), x["props_note"]
     assert "twos_note" not in x and "scorers_note" not in x, "said once, not three times"
     assert gp["counts"]["no_props"] == {GP.PROPS_WAIT: 1} and gp["counts"]["games"] == 2
     # Its report says it in one line, where the tickets will be; the rebuild keeps it.
@@ -260,8 +262,18 @@ def test_every_game_still_to_play_has_its_entry_and_one_with_no_prop_says_when()
 
 def test_when_a_games_props_come_is_said_by_its_league_and_day():
     thu, sat = dt.datetime(2026, 11, 19, 17, 0), dt.datetime(2026, 11, 21, 17, 0)    # noon Eastern
+    # The NFL buys from three days before (EARLYPROPS1): Sunday's from Thursday,
+    # Monday night's from Friday, the next Thursday's from Monday.
     why, words = GP.props_note("nfl", {"date": "2026-11-22"}, now=thu)
-    assert why == GP.PROPS_WAIT and "bought the day before it, on Saturday" in words, words
+    assert why == GP.PROPS_WAIT and words.startswith(
+        "the books' player props for this game are bought from three days before it, and") \
+        and "once the books post them" in words, words
+    why, words = GP.props_note("nfl", {"date": "2026-11-23"}, now=thu)
+    assert why == GP.PROPS_WAIT and "bought from three days before it, on Friday" in words, words
+    assert "bought from three days before it, on Monday" in GP.props_note("nfl", {"date": "2026-11-26"}, now=thu)[1]
+    # College football keeps the day before.
+    why, words = GP.props_note("cfb", {"date": "2026-11-21"}, now=thu)
+    assert why == GP.PROPS_WAIT and "bought the day before it, on Friday" in words, words
     # The day before, the pull buys it: no book has one priced yet.
     why, words = GP.props_note("nfl", {"date": "2026-11-22"}, now=sat)
     assert why == GP.PROPS_NONE and words.startswith("no book has priced a player prop in this game yet"), words

@@ -1201,6 +1201,109 @@ DAY_BEFORE_LEAGUES = ("nfl", "cfb")
 DAY_BEFORE_PULLS = 2
 DAY_BEFORE_SHARE_CAP = 0.25
 
+#: THREE DAYS AHEAD, THE NFL'S (EARLYPROPS1). Ethan, 2026-11-19, asked whether
+#: to buy Sunday's NFL props from Thursday: "Yes ... That means buying
+#: Sunday's props 2 to 3 days early. Yes to all that. I want parlays for today
+#: and for the games this weekend on Sunday, and obviously Thursday night."
+#: The NFL's board also buys the slates up to FAR_DAYS days after tonight's:
+#: Sunday's from Thursday, Monday night's from Friday, the next Thursday's from
+#: Monday, so their reports carry picks and parlays days before. The day
+#: before keeps its own rule above. The far slates ride at most FAR_PULLS of
+#: the league's paid pulls a day, FAR_GAP_S apart (`far_pull_due`), at their
+#: own share of the day (FAR_SHARE_CAP at most), and every other pull stays
+#: tonight's and tomorrow's: a Thursday's refreshes of the night's one game
+#: would otherwise buy Sunday's dozen each time (26 credits a game). The far
+#: pulls of the day are kept in FAR_PATH (`mark_far_pull`).
+FAR_DAYS = {"nfl": 3}
+FAR_PULLS = 2
+FAR_GAP_S = 6 * 3600
+FAR_SHARE_CAP = 0.25
+FAR_PATH = STATE_PATH.with_name("odds_far.json")
+
+
+def far_days(sport: str | None) -> int:
+    """How many days after tonight's a league's board buys (FAR_DAYS); 0 for
+    a league that buys tonight's and tomorrow's at most."""
+    return int(FAR_DAYS.get(budget_sport(sport), 0) or 0)
+
+
+def buy_ahead_days(sport: str | None) -> int:
+    """How many days before its game a league's props are first bought: a
+    far league's FAR_DAYS, a day-before league's one, a daily league's none."""
+    s = budget_sport(sport)
+    return far_days(s) or (1 if s in DAY_BEFORE_LEAGUES else 0)
+
+
+def far_window_ends(now: float | None = None, days: int = 3) -> float:
+    """The end of the slate ``days`` after tonight's: `tonight_ends` that many
+    days later on the wall clock (5 AM Eastern), as `pick_window_ends` is one."""
+    from .slateday import ROLL_HOUR
+    t = _local(time.time() if now is None else now)
+    roll = t.replace(hour=ROLL_HOUR, minute=0, second=0, microsecond=0)
+    if t >= roll:
+        roll = roll + _dt.timedelta(days=1)
+    return (roll + _dt.timedelta(days=max(0, int(days)))).timestamp()
+
+
+def far_games(kickoffs, sport: str | None, now: float | None = None) -> int | None:
+    """How many of ``kickoffs`` (epochs) are on the slates after tomorrow's,
+    up to the league's FAR_DAYS ahead; 0 for a league that buys none that
+    far, None when not one kickoff time is known (as `tonight_games`)."""
+    known = [k for k in (kickoffs or [])
+             if isinstance(k, (int, float)) and not isinstance(k, bool)]
+    if not known:
+        return None
+    days = far_days(sport)
+    if days < 2:
+        return 0
+    day = _dt.date.fromisoformat(slate_day(time.time() if now is None else now))
+    far = {(day + _dt.timedelta(days=i)).isoformat() for i in range(2, days + 1)}
+    return sum(1 for k in known if slate_day(k) in far)
+
+
+def _far_state(path=None) -> dict:
+    try:
+        x = json.loads(Path(path or FAR_PATH).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return x if isinstance(x, dict) else {}
+
+
+def far_pull_due(sport: str | None, kickoffs, now: float | None = None, path=None) -> bool:
+    """Should this paid pull carry the far slates too: the league buys that
+    far (FAR_DAYS), the board holds a game there, and today's far pulls are
+    fewer than FAR_PULLS, the last FAR_GAP_S ago or more."""
+    if far_days(sport) < 2:
+        return False
+    now = time.time() if now is None else now
+    if not far_games(kickoffs, sport, now):
+        return False
+    st = _far_state(path).get(budget_sport(sport)) or {}
+    n = int(st.get("n") or 0) if st.get("day") == slate_day(now) else 0
+    try:
+        last = float(st.get("at") or 0.0)
+    except (TypeError, ValueError):
+        last = 0.0
+    return n < FAR_PULLS and now - last >= FAR_GAP_S
+
+
+def mark_far_pull(sport: str | None, now: float | None = None, path=None) -> None:
+    """A far pull landed: counted against today's FAR_PULLS. Never raises."""
+    try:
+        now = time.time() if now is None else now
+        f = Path(path or FAR_PATH)
+        state = _far_state(f)
+        key, today = budget_sport(sport), slate_day(now)
+        st = state.get(key) or {}
+        n = int(st.get("n") or 0) if st.get("day") == today else 0
+        state[key] = {"day": today, "n": n + 1, "at": round(now, 3)}
+        f.parent.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_name(f.name + ".tmp")
+        tmp.write_text(json.dumps(state, sort_keys=True), encoding="utf-8")
+        tmp.replace(f)
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the far pull not counted ({type(exc).__name__}: {exc})")
+
 
 def tomorrow_games(kickoffs, now: float | None = None) -> int | None:
     """How many of ``kickoffs`` (epochs) are on TOMORROW's slate (the slate

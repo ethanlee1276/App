@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YW. Sunday's NFL props from Thursday, so the weekend's reports have their parlays days ahead**
+(step 785; 19 November). Nothing to run. Your answer to decision 9 ("Yes ... buying Sunday's props 2 to 3 days
+early. Yes to all that") is in: the NFL's board now buys the books' player props for the games up to three days
+after tonight's, so Sunday's games get their picks and parlays from Thursday, Monday night's from Friday and the
+next Thursday's from Monday. College football keeps the day before. So tonight's pulls do not buy Sunday's dozen
+games every time they re-price the Thursday game, the far games ride two of the NFL's pulls a day at most, six hours
+apart, counted only once a pull lands, at their own slice of the day's credits (a quarter at most) on top of what
+tonight's game already had; every other pull stays tonight's and tomorrow's. One far pull of Sunday's slate costs
+about 364 credits (thirteen or fourteen games at 26), so a normal week adds about 1,600 credits: two pulls on
+Thursday and two on Friday, and a game or two more on Saturday's, Monday's and Tuesday's. A game report waiting on
+its props now says when they come: "bought from three days before it, on Friday", or inside those three days, that
+its parlays are built once the books post them (the books post some Sunday props late in the week). The first far
+pull goes as soon as this is live, so Sunday's reports should have their parlays tonight. Checked by
+tests/test_credits_go_to_tonights_games.py and tests/test_every_game_report_posts_its_three_leg_parlays.py.
+
 **YV. Your featured games: Lions games, Thursday nights and Monday nights, dialed in with their own record**
 (step 784; 19 November). Nothing to run. Your three games now have a name, a deeper report and a record of their
 own. A featured game is an NFL game the Lions play in, or one that kicks off on a Thursday or a Monday night

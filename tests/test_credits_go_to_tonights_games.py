@@ -189,6 +189,74 @@ def test_a_day_before_pull_is_never_narrowed_to_six_hours():
     assert src.index("_day_before_pull(") < src.index("wide_pull_affordable(_games")
 
 
+# --- three days ahead, the NFL's (EARLYPROPS1) ------------------------------------------
+def test_the_nfl_buys_three_days_ahead_on_two_far_pulls_a_day():
+    """Ethan, 2026-11-19, asked whether to buy Sunday's NFL props from Thursday:
+    "Yes ... That means buying Sunday's props 2 to 3 days early. Yes to all
+    that. I want parlays for today and for the games this weekend on Sunday".
+    The slates two and three days after tonight's ride two of the league's
+    pulls a day, six hours apart, counted once a pull lands."""
+    thu = _at(2026, 11, 19, 12)                                             # Thursday noon Eastern
+    tnf, sun = _at(2026, 11, 19, 20, 15), _at(2026, 11, 22, 13)
+    mnf, next_thu = _at(2026, 11, 23, 20, 15), _at(2026, 11, 26, 20, 20)
+    kicks = [tnf] + [sun] * 12 + [mnf, next_thu]
+    assert ob.far_window_ends(thu, 3) == _at(2026, 11, 23, 5), "to 5 AM Monday: Friday's, Saturday's, Sunday's slates"
+    assert ob.far_games(kicks, "nfl", thu) == 12, "Sunday's twelve; not tonight's, not Monday night's (four days out)"
+    assert ob.far_games(kicks, "nfl", _at(2026, 11, 20, 12)) == 13, "on Friday, Sunday's and Monday night's"
+    assert ob.far_games(kicks, "cfb", thu) == 0 and ob.far_games(kicks, "nba", thu) == 0
+    assert ob.far_games([], "nfl", thu) is None
+    assert (ob.buy_ahead_days("nfl"), ob.buy_ahead_days("cfb"), ob.buy_ahead_days("nba")) == (3, 1, 0)
+    path = Path(tempfile.mkdtemp()) / "far.json"
+    assert ob.far_pull_due("nfl", kicks, thu, path) is True
+    ob.mark_far_pull("nfl", thu, path)
+    assert ob.far_pull_due("nfl", kicks, thu + 3600, path) is False, "six hours apart"
+    assert ob.far_pull_due("nfl", kicks, thu + ob.FAR_GAP_S, path) is True
+    ob.mark_far_pull("nfl", thu + ob.FAR_GAP_S, path)
+    assert ob.far_pull_due("nfl", kicks, thu + 2 * ob.FAR_GAP_S, path) is False, "two a day (midnight is still Thursday's)"
+    assert ob.far_pull_due("nfl", kicks, _at(2026, 11, 20, 12), path) is True, "Friday's own two"
+    assert ob.far_pull_due("cfb", kicks, thu, path) is False, "college keeps the day before"
+    assert ob.far_pull_due("nfl", [tnf, sun], _at(2026, 11, 21, 12), path) is False, "Sunday is tomorrow's on Saturday"
+
+
+def test_a_far_pull_buys_the_far_games_at_their_own_share_and_is_never_narrowed():
+    import launch
+    per = ob.credits_per_event("nfl")
+    tonight = [{"kickoff": _iso(ob.tonight_ends() - 3600)}]                 # tonight's one game
+    far = [{"kickoff": _iso(ob.tonight_ends() + 32 * 3600)}] * 12           # 1 PM, two days out
+    with _Swap(ob, "daily_allowance", lambda state=None, today=None, **k: 10_000), \
+            _Swap(ob, "load", lambda path=None: object()), \
+            _Swap(launch, "_budget_share", lambda sport=None: 0.05):
+        ok, asked, written = _ask_raw(_board(tonight + far), "nfl", far=True)
+        ok2, asked2, written2 = _ask_raw(_board(tonight + far), "nfl")
+        ok3, asked3, written3 = _ask_raw(_board(far), "nfl", far=True)
+        ok4, asked4, _w4 = _ask_raw(_board(far), "nfl")
+    assert ok is True and asked[0]["credits"] == (1 + 12 + 1) * per, ("tonight's game and the far twelve", asked)
+    want = 0.05 + min(ob.FAR_SHARE_CAP, ob.FAR_PULLS * (1 + 12 + 1) * per / 10_000)
+    assert abs(asked[0]["share"] - want) < 1e-9, ("its own pulls, on top of tonight's share", asked)
+    assert written[0]["tonight"] == 1 and written[0].get("tomorrow") is None and written[0]["far"] == 12, written
+    assert ok2 is True and asked2[0]["credits"] == (1 + 1) * per and asked2[0]["share"] == 0.05, \
+        "every other pull: tonight's game alone, at tonight's share"
+    assert written2[0].get("far") is None, "an ordinary pull counts no far games"
+    assert ok3 is True and asked3[0]["credits"] == (12 + 1) * per and written3[0]["far"] == 12, \
+        "a Friday, nothing tonight: the far pull buys Sunday's"
+    assert ok4 is False and not asked4, "nothing tonight and no far pull: nothing"
+    with _Swap(ob, "wide_pull_affordable", lambda *a, **k: False):
+        assert launch._narrow_pull(_board(tonight + far), "nfl", far=True) is False, "never narrowed"
+        assert launch._narrow_pull(_board(tonight + far), "nfl") is True, "an ordinary pull: as before"
+    thu = _at(2026, 11, 19, 12)
+    assert launch._pick_until("nfl", thu, far=True) == ob.far_window_ends(thu, 3)
+    assert launch._pick_until("nfl", thu) == ob.pick_window_ends(thu)
+    assert launch._pick_until("cfb", thu, far=True) == ob.pick_window_ends(thu), "college keeps the day before"
+    with _Swap(ob, "FAR_PATH", Path(tempfile.mkdtemp()) / "far.json"):
+        assert launch._far_pull(_board(tonight + far), "nfl") is True
+        assert launch._far_pull(_board(tonight), "nfl") is False, "nothing that far on the board"
+        assert launch._far_pull(_board(tonight + far), "cfb") is False
+    # The NFL's cycle asks once, hands it to all three, and counts it once the pull lands.
+    src = _fn(LAUNCH, "refresh_nfl")
+    assert 'far = _far_pull(out, "nfl")' in src and '_odds_affordable(out, quiet, sport="nfl", far=far)' in src
+    assert '_tonight_args("nfl", far=far)' in src and '_narrow_pull(out, "nfl", far=far)' in src
+    assert src.index("landed = _finish_paid_pull(") < src.index('mark_far_pull("nfl")')
+
 def test_the_day_before_window_is_tomorrows_slate():
     sat_6pm = _at(2026, 11, 7, 18)
     sun_1pm, sun_820pm, mon_815pm = _at(2026, 11, 8, 13), _at(2026, 11, 8, 20, 20), _at(2026, 11, 9, 20, 15)
@@ -319,8 +387,8 @@ def test_college_puts_tonights_games_first_and_buys_only_them():
 def test_the_launcher_hands_tonights_end_to_the_weekly_builds():
     nfl, cfb = _fn(LAUNCH, "refresh_nfl"), _fn(LAUNCH, "refresh_cfb")
     paid = nfl[nfl.index('args.append("--odds")'):]
-    assert paid.index('args += _tonight_args("nfl")') < paid.index("elif _with_odds():"), \
-        "the NFL's paid pull carries its bound (tonight's and tomorrow's)"
+    assert paid.index('args += _tonight_args("nfl", far=far)') < paid.index("elif _with_odds():"), \
+        "the NFL's paid pull carries its bound (tonight's and tomorrow's; on a far pull, three days ahead)"
     assert '"--out", CFB_OUT] + _tonight_args("cfb")' in cfb, "college's every build: tonight first"
     assert '_pick_until("cfb", now)' in _fn(LAUNCH, "_cfb_player_pull_possible")
     assert '_pick_until("cfb", now)' in _fn(LAUNCH, "_cfb_player_events_affordable")
