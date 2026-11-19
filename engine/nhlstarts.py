@@ -16,7 +16,8 @@ THIS MARKS WHAT WAS STORED, from the box itself and nothing else: for each game 
 side whose goalies are all unflagged, the goalie with the most time in net is its
 starter (the starter whenever one goalie played, and almost always when two did).
 A side already flagged is left alone. The box reader names a starter the same way
-from now on (nhldata.name_starter). Nothing is written without ``--apply``.
+from now on (nhldata.name_starter). Nothing is written without ``--apply``. The night marks
+this season's itself (engine/maintenance, step YF), so the command is for looking.
 """
 
 from __future__ import annotations

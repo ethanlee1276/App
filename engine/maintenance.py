@@ -1984,6 +1984,16 @@ def _catch_up_start(hconn, sport: str, yesterday: _dt.date) -> _dt.date:
     return max(last or floor, cap)
 
 
+def _season_start(sport: str, day: _dt.date) -> _dt.date:
+    """The first day of the season window ``day`` falls in (engine/seasons):
+    a night before it has nothing of this season to read. Hockey's night
+    opens in September for a season that opens then (FINALS2), and without
+    this floor each September night would walk the six weeks back to the
+    last final in June, preseason day by preseason day."""
+    from .seasons import season_of, window
+    return _dt.date.fromisoformat(window(sport, season_of(sport, day.isoformat()))[0])
+
+
 #: A PAST GAME WITH NO FINAL IS READ AGAIN (FINALS1, 2026-11-18). The Nuggets'
 #: team page said 7-5 from the standings and 6-5 from the finals on file: their
 #: game at Phoenix on 30 October, a late West Coast tip, had a row and no score,
@@ -3145,19 +3155,35 @@ def _run_chores(state: dict, state_path: Path, today: _dt.date, harvest: bool, l
 
     # NHL results (2026-10-03) — the NHL's own keyless feed, one date at a
     # time from the league's last stored final, in its season window
-    # (October–June). This is what settles NHL picks and grows the history
-    # the rank fit measures.
-    if today.month >= 10 or today.month <= 6:
-        hstart = _catch_up_start(_hconn, "nhl", yesterday)
+    # (September–June: the 2026-27 season opened on 29 September, FINALS2;
+    # never before the window's first day). This is what settles NHL picks
+    # and grows the history the rank fit measures.
+    if today.month >= 9 or today.month <= 6:
+        hstart = max(_catch_up_start(_hconn, "nhl", yesterday), _season_start("nhl", yesterday))
         if hstart <= yesterday:
             try:
                 from . import db as _hdb
                 from .sources import nhldata as _nhl
                 hconn2 = _hdb.connect()
+                # Every game under the season its own id names, its players'
+                # lines and shots with it (nhldata.reseason): the opening
+                # week of 2026-27 was filed under 2025 by its September date.
+                _moved = _nhl.reseason(hconn2)
+                if any(_moved.values()):
+                    log(f"  nhl results: {_moved['games']} game(s), {_moved['lines']:,} player line(s) and "
+                        f"{_moved['shots']:,} shot(s) moved to the season their games belong to")
+                from . import nhlstarts as _starts
+                from .seasons import season_of as _nhl_season
+                # Each game side's starting goalie where its box score named
+                # none, by time in net (engine/nhlstarts: step YE's repair,
+                # run by hand as RUN_NEXT 00p until it ran here each night).
+                _unnamed = _starts.found(hconn2, _nhl_season("nhl", today.isoformat()))
+                if _unnamed["sides"]:
+                    log(f"  nhl results: {_starts.apply(hconn2, _unnamed):,} starting goalie(s) the box score "
+                        f"left unnamed, marked by time in net")
                 # And the days the league's own club pages say a game finished
                 # that has no row at all (nhldata.days_owed).
                 try:
-                    from .seasons import season_of as _nhl_season
                     _owed = _nhl.days_owed(hconn2, _nhl_season("nhl", today.isoformat()), today.isoformat())
                 except Exception as exc:  # noqa: BLE001
                     _owed = []

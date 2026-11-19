@@ -330,12 +330,28 @@ def full_names(conn, pids: set, fetch=fetch_player) -> dict:
     return out
 
 
-def log_rows(players: list[dict], names: dict, date: str) -> list[dict]:
+def season_of_game(game_id, date: str) -> int:
+    """The season a game is filed under: the one its league id names
+    (2026020001 is the first game of the season that opened in 2026; the
+    id is the season's first year, the game's kind, then its number), and
+    its date's (`seasons.season_of`) only when there is no such id. FINALS2,
+    2026-11-19: the 2026-27 season opened on 29 September and its first eight
+    games went under 2025 by the date."""
+    s = str(game_id or "").strip()
+    if len(s) == 10 and s.isdigit() and s[4:6] in ("01", "02", "03", "04"):
+        return int(s[:4])
+    from ..seasons import season_of
+    return season_of("nhl", date)
+
+
+def log_rows(players: list[dict], names: dict, date: str, season: int | None = None) -> list[dict]:
     """player_game_logs rows, one per market, for one game's players. A
     player whose full name could not be found is left out rather than
-    filed under a short name no book will ever quote."""
-    from ..seasons import season_of
-    season = season_of("nhl", date)
+    filed under a short name no book will ever quote. ``season`` is the
+    game's own (`season_of_game`); without one, its date's."""
+    if season is None:
+        from ..seasons import season_of
+        season = season_of("nhl", date)
     out = []
     for p in players:
         name = (names.get(p["pid"]) or (None,))[0]
@@ -383,7 +399,6 @@ def ingest_day(conn, date: str, scores_only: bool = False, fetch_box=fetch_boxsc
     """Store one date's finals and, unless ``scores_only``, every player's
     line. Shape matches the other daily sports' ingesters (ingest._walk_days)."""
     from .. import db
-    from ..seasons import season_of
     result: dict = {"games": 0, "player_logs": 0, "assets": 0, "skipped": []}
     try:
         games = [g for g in parse_score_day(fetch_day(date)) if g["type"] in KEEP_TYPES]
@@ -397,8 +412,9 @@ def ingest_day(conn, date: str, scores_only: bool = False, fetch_box=fetch_boxsc
     for g in games:
         if not g["home"] or not g["away"]:
             continue
+        season = season_of_game(g["game_id"], date)
         grows.append({
-            "sport": "nhl", "season": season_of("nhl", date), "period": date,
+            "sport": "nhl", "season": season, "period": date,
             "game_id": f"{g['away']}@{g['home']}", "home": g["home"], "away": g["away"],
             "home_score": g["home_score"], "away_score": g["away_score"],
             "spread": 0.0, "total": None, "roof": "dome", "surface": "ice",
@@ -414,13 +430,13 @@ def ingest_day(conn, date: str, scores_only: bool = False, fetch_box=fetch_boxsc
             result["skipped"].append(f"nhl box {g['game_id']}: {exc}")
             continue
         names = full_names(conn, {p["pid"] for p in players}, fetch=fetch_person)
-        prows += log_rows(players, names, date)
+        prows += log_rows(players, names, date, season)
         # EVERY SHOT TOO (engine/sources/nhlpbp): where it came from and what
         # kind, for the expected-goals model. One more call per final; a
         # play-by-play that will not load costs the shots, not the game.
         from . import nhlpbp
         result["shots"] = result.get("shots", 0) + nhlpbp.ingest_game(
-            conn, g["game_id"], date, season_of("nhl", date),
+            conn, g["game_id"], date, season,
             **({"fetch": fetch_pbp} if fetch_pbp else {}))
         arows += [{"sport": "nhl", "player": n, "espn_id": pid, "headshot": h, "seen": date}
                   for pid, (n, h) in names.items() if n]
@@ -459,7 +475,8 @@ def backfill_lines(conn, season: int, fetch_box=fetch_boxscore, fetch_person=fet
             out["skipped"].append(f"nhl box {nhl_id}: {exc}")
             continue
         names = full_names(conn, {p["pid"] for p in players}, fetch=fetch_person)
-        rows = [r for r in log_rows(players, names, str(period)) if r["market"] in LATER_MARKETS]
+        rows = [r for r in log_rows(players, names, str(period), season_of_game(nhl_id, str(period)))
+                if r["market"] in LATER_MARKETS]
         if rows:
             out["rows"] += db.upsert_player_logs(conn, rows)
             out["games"] += 1
@@ -583,10 +600,12 @@ def remaining_fixtures(season: int, teams, fetch=None, today: str | None = None)
 
     A GAME BEFORE TODAY IS NOT LEFT (2026-11-18). Each club's page is cached
     a day, so a page read the morning before still listed that night's games
-    as to come: the race read 330 played and 1,005 left of a 1,312-game
-    season, the 23 played since counted in the table and played again in
-    the simulation. A game dated before today's Eastern day is played,
-    whatever a cached page says; one with no date is kept."""
+    as to come, counted in the table and played again in the simulation. A
+    game dated before today's Eastern day is played, whatever a cached page
+    says; one with no date is kept. (The 2026-27 season is 84 games a club,
+    1,344 in all: 346 played and 998 left on 19 November. The race's 338
+    played was eight short, its opening-week games filed under 2025:
+    `reseason`, FINALS2.)"""
     fetch = fetch or fetch_club_season
     if today is None:
         import datetime as _dt
@@ -641,6 +660,50 @@ def days_owed(conn, season: int, today: str, teams=TEAMS, fetch=None) -> list[st
         "SELECT period, home, away FROM games WHERE sport='nhl' AND home_score IS NOT NULL AND period >= ?",
         (min(d for d, _h, _a in done),)).fetchall()}
     return sorted({d for (d, h, a) in done if (d, h, a) not in have})
+
+
+def reseason(conn) -> dict:
+    """EVERY GAME UNDER THE SEASON IT BELONGS TO (FINALS2, 2026-11-19). The
+    2026-27 season opened on 29 September, and the date put its first eight
+    games (Chicago at Vegas and four more that night, Pittsburgh's 7-0 at
+    Philadelphia and two more the next) under 2025: fifteen clubs one game
+    short of the league's table, the race simulating from 338 games of 346,
+    and their players' season lines a game short. Nothing read them again,
+    since each was on file with its final (`days_owed`). A game whose row is
+    under another season than the one its league id names
+    (`season_of_game`) moves there, its players' lines that night with it,
+    and every shot goes under its game's season; a copy already under the
+    right season keeps its place and the stray goes. Cheap enough to run
+    every night: one read of the league's game rows. Returns the rows moved
+    {"games", "lines", "shots"}."""
+    moved = {"games": 0, "lines": 0, "shots": 0}
+    rows = conn.execute("SELECT season, period, game_id, home, away, extra FROM games "
+                        "WHERE sport='nhl'").fetchall()
+    for season, period, game_id, home, away, extra in rows:
+        try:
+            nhl_id = (json.loads(extra or "{}") or {}).get("nhl_id")
+        except (TypeError, ValueError, AttributeError):
+            nhl_id = None
+        right = season_of_game(nhl_id, str(period))
+        if season is None or int(season) == right:
+            continue
+        old = int(season)
+        key = ("nhl", old, period, game_id)
+        moved["games"] += conn.execute(
+            "UPDATE OR IGNORE games SET season=? WHERE sport=? AND season=? AND period=? AND game_id=?",
+            (right, *key)).rowcount
+        conn.execute("DELETE FROM games WHERE sport=? AND season=? AND period=? AND game_id=?", key)
+        sides = ("nhl", old, period, home, away)
+        moved["lines"] += conn.execute(
+            "UPDATE OR IGNORE player_game_logs SET season=? WHERE sport=? AND season=? AND period=? "
+            "AND team IN (?, ?)", (right, *sides)).rowcount
+        conn.execute("DELETE FROM player_game_logs WHERE sport=? AND season=? AND period=? AND team IN (?, ?)",
+                     sides)
+    moved["shots"] = conn.execute(
+        "UPDATE nhl_shots SET season = game_id / 1000000 WHERE game_id >= 1000000000 "
+        "AND season IS NOT game_id / 1000000").rowcount
+    conn.commit()
+    return moved
 
 
 def fetch_pp_toi(date: str, ttl: int = 86400) -> dict:

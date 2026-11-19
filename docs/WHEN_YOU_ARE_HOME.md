@@ -9338,6 +9338,25 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YF. Hockey's opening week was filed under last season; the goalie starts mark themselves**
+(step 768; 19 November). Nothing to run: the night does both. Fifteen NHL clubs read a game short of the league's
+table, the same fifteen as the night before, though the nightly re-read of owed days (step WV) was running. The
+eight games were on file, finals and all, under 2025: the 2026–27 season opened on 29 September (Chicago at Vegas,
+Florida at Carolina, Montreal at Toronto, the Rangers at Boston, Vancouver at Edmonton) and 30 September (the Kings
+at Colorado, the Islanders at Toronto, Pittsburgh's 7–0 at Philadelphia), and a hockey season began in October by
+its date. So the race simulated from 338 games of 346, those clubs' pages and their players' season lines were a
+game short, last season held eight games it never played, and nothing read them again because each was on file with
+its final. A hockey season now begins in September, every stored game takes the season its own league id names, and
+each night moves any game filed under another season to its own, its players' lines and its shots with it (the next
+night moves these eight). Hockey's night also opens with its season, in September, and never walks back past the
+season's first day. The race's 998 games left was right all along: this season is 84 games a club, 1,344 in all (346
+played and 998 left). The goalie starts the box scores left out (step YE, RUN_NEXT 00p) are now marked by the night
+as well, so 00p is only for looking. Checked live today: the NBA's 30 clubs match the league's table exactly (222
+games); 18 November's report picks went 54–20 in the NBA, 13–7 in the NHL, 5–3 in college basketball and 3–4 in
+college football; every two- and three-leg ticket was built from its report's own picks (the NBA's two-leg tickets
+went 9–1, the NHL's tickets 1–4, its scorer pair the one ticket built from the scoring research as designed); and
+college basketball's injury tile now reads "9 missed".
+
 **YE. The fifteenth walk: a fighter's page found, a college chart's sides, the hockey starts, the injury tally**
 (step 767; 18 November). Two commands, seconds each (RUN_NEXT 00p). A fighter's page could not be reached: UFC is a
 tab of its own rather than a league the board switches to, so the search stayed on the league before it and answered

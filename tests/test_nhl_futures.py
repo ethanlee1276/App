@@ -85,7 +85,8 @@ def test_the_schedule_reader_keeps_unplayed_regular_season_games_once():
 
 def test_a_game_before_today_on_a_cached_page_is_not_left():
     # A club page read the morning before still says FUT for last night's
-    # game: 330 played and 1,005 left of a 1,312-game season (2026-11-18).
+    # game, and the race played it again (2026-11-18). The season is 84 games
+    # a club, 1,344 in all (step YF).
     def club(team, season):
         return {"games": [
             {"id": 1, "gameType": 2, "gameState": "FUT", "gameDate": "2026-11-17",

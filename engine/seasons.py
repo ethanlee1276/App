@@ -45,10 +45,15 @@ SEASON_WINDOWS = {
     # not used to walk days — it is here so anything asking "has this
     # season started" gets the same answer for every sport.
     "nfl": (9, 1, 2, 20, True),
-    # Opening night in early October through the Stanley Cup Final in June.
-    # Preseason (late September) is outside the window and is never stored
-    # anyway (engine/sources/nhldata.KEEP_TYPES).
-    "nhl": (10, 1, 6, 30, True),
+    # Opening night through the Stanley Cup Final in June. THE SEASON CAN
+    # OPEN IN SEPTEMBER (FINALS2, 2026-11-19): the 2026-27 season, 84 games a
+    # club and 1,344 in all, opened on 29 September, and with October as the
+    # boundary its first eight games were filed under 2025 — fifteen clubs a
+    # game short of the league's table all season. September is this season's;
+    # its preseason games are never stored (engine/sources/nhldata.KEEP_TYPES),
+    # and each stored game takes the season its own league id names
+    # (nhldata.season_of_game).
+    "nhl": (9, 20, 6, 30, True),
     # MEN'S COLLEGE BASKETBALL (2026-11-13, Ethan: "we need to add college
     # basketball"). Opening night in the first week of November through the
     # national championship game in the first week of April. Exhibitions in

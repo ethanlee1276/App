@@ -254,7 +254,7 @@ def build(sport: str, season: int | None = None,
 #: is played, printed as a date off a file. The part of the month each
 #: league has opened in for years is what the page can stand behind.
 OPENS = {"mlb": "late March", "nba": "late October", "wnba": "May", "cfb": "late August",
-         "nfl": "early September", "nhl": "early October", "cbb": "early November"}
+         "nfl": "early September", "nhl": "late September or early October", "cbb": "early November"}
 
 
 def _opens(sport: str, season: int) -> str:
