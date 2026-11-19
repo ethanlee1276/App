@@ -222,7 +222,10 @@ def test_the_verdict_is_one_number_with_the_two_books_beneath_it():
     assert '<div class="rv-read">${chart}' in v, "an unpooled file still gets the old reading"
     b = _fn("verdictBooksHTML")
     assert '<span class="hd-eyebrow">Edge bets</span>' in b and '<span class="hd-eyebrow">Most likely</span>' in b
-    assert "${line(edge)}" in b and "${lk ? line(lk) : \"nothing staked yet" in b
+    assert "${line(edge)}" in b
+    # The Most Likely book's record is the page's top tile, said once (2026-11-19);
+    # here only "nothing staked yet" when there is none.
+    assert "line(lk)" not in b and 'lk ? "" : `<div class="rv-book-line">nothing staked yet' in b
     assert "reliabilityDiagram(likelyBuckets)" in b and "predicted: b.claimed, actual: b.actual, n: b.n, ci," in b, \
         "the Most Likely diagram is drawn from its bands, in the edge diagram's shape"
     assert "2 * Math.sqrt(Math.max(0, b.actual * (1 - b.actual)) / b.n)" in b, "the same two-standard-error band"

@@ -268,7 +268,9 @@ def test_a_week_label_in_the_curve_is_no_date():
     assert got["win"]["settled"] == 1, "the week-labelled row is in the whole record, not in a window"
 
 
-def test_the_tier_table_draws_all_tiers():
+def test_the_tier_table_draws_each_tier_and_no_total_of_its_own():
+    """Each tier's line; the "All tiers" total went (2026-11-19, Ethan: the Most
+    Likely record said once, on the page's top tile)."""
     tier = lambda name, w, l: {"tier": name, "settled": w + l, "w": w, "l": l, "push": 0, "open": 0,
                                 "claimed": 0.62, "actual": w / (w + l), "units": 0.0, "roi": -0.1}
     bd = {"settled": 300, "open": 5, "first_day": "2026-09-26",
@@ -279,7 +281,8 @@ def test_the_tier_table_draws_all_tiers():
     if got is None:
         return
     t = _text(got)
-    assert "All tiers" in t and "147–153" in t, t
+    assert "Top pick" in t and "22–23" in t and "Worth a look" in t and "84–96" in t, t
+    assert "All tiers" not in t and "147–153" not in t, t
     assert "since Sep 26" in t, t
 
 

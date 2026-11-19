@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YK. The Record page says the Most Likely record once**
+(step 773; 19 November). Nothing to run. You, asked whether the Most Likely record, on the Record page four times
+under three different counts, should be cut to one: "Yes." A league's page read it as the top tile ("Most Likely ·
+tracked for its hit rate", 1543-1114 on the NFL's: the board's picks and the list's own, each once), the by-tier
+section's "All tiers" line (1320-1010, the board's alone), the paper record card's "Settled" tile and the verdict's
+Most Likely line (1256-780 both, the list's own), and the records by book again in two halves (448-255 and 808-525).
+The top tile is the one record now. The rest keep only what they alone say: each tier's own line; the card's
+claimed-against-actual, its return and its sample, with the open picks beside the sample; the verdict's picture and
+reading; and each half's size and return ("Most Likely — real money · 1,333 graded · -4.3% ROI"). Checked by
+tests/test_the_most_likely_record_is_said_once.py.
+
 **YJ. The parlay record counts one set a game: the one its report carried at the start**
 (step 772; 19 November). Nothing to run; the night marks what it can and the Record page follows. You, asked whether
 the parlay record should count only the parlays posted at the start: "Yes." I took "the start" as each game's start,

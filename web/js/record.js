@@ -409,8 +409,14 @@ function recBookSections(br, scope, opts) {
     // record "15 settled" contradicted the verdict's "16 settled" one
     // screen up (2026-09-06). A push settles; it does not grade.
     const thin = n < _recMinGraded ? ` · ${n} graded — thin sample` : "";
-    const head = `${label} · ${b.w}-${b.l}${b.push ? `-${b.push}` : ""}`
-      + ` · ${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}% ROI${thin}`;
+    // A Most Likely half says its size and return, not a W-L of its own: the
+    // book's record is said once, on the page's top tile (2026-11-19; Ethan,
+    // asked to cut its four to one: "Yes").
+    const head = /^likely/.test(key)
+      ? `${label} · ${n.toLocaleString()} graded${n < _recMinGraded ? " — thin sample" : ""}`
+        + ` · ${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}% ROI`
+      : `${label} · ${b.w}-${b.l}${b.push ? `-${b.push}` : ""}`
+        + ` · ${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}% ROI${thin}`;
     const pretty = Object.fromEntries(Object.entries(b.markets || {})
       .map(([m, v]) => [marketWord(m), v]));
     return recBucketTable(head, pretty);
@@ -1388,11 +1394,13 @@ function recBoardSection(bd, scope) {
       <span class="rl-pnl ${t.roi == null ? "" : toneOf(t.roi)}">${t.roi == null ? "—" : `${t.roi >= 0 ? "+" : ""}${(t.roi * 100).toFixed(1)}%`}</span>
     </div>`;
   };
-  /* THE THREE TIERS SUMMED, on a line of its own (Ethan, 2026-10-02: "it
-     feels like all these numbers are not adding up"): the total a reader
-     would otherwise add in their head, from the ledger's own sum. */
-  const total = bd.total && bd.total.settled ? line("All tiers", bd.total, " rl-total") : "";
-  const rows = (bd.tiers || []).map((t) => line(t.tier, t)).join("") + total;
+  /* THE TIERS, AND NO TOTAL OF THEIR OWN (2026-11-19). An "All tiers" line
+     summed them (Ethan, 2026-10-02: "it feels like all these numbers are not
+     adding up"), and it became one of four Most Likely records on the page
+     under three different counts; Ethan, asked to cut them to one: "Yes." The
+     page's one Most Likely record is the tile at its top (each pick once, the
+     board's and the list's); this section says how each tier did. */
+  const rows = (bd.tiers || []).map((t) => line(t.tier, t)).join("");
   const waiting = !bd.settled
     ? `<p class="ls-note">${plural(bd.open, "pick is", "picks are")} waiting on their games. The first results land once
         they settle — then this shows whether Top picks hit more than the rest.</p>` : "";
@@ -1530,11 +1538,10 @@ function recLikelySection(lk, scope) {
                 money ? `at the price shown · ${stake}u a row on ${whose}`
                       : "at the price shown · no money staked",
                 { tone: toneOf(lk.roi) })}
-      ${recTile("Settled", `${lk.wins}-${lk.losses}`,
-                lk.enough ? `${lk.open} open` : `${lk.open} open · ${lk.needed} needed for a verdict`)}
+      ${/* No W-L tile of its own (2026-11-19): the Most Likely record is said once, on the page's top tile. */ ""}
       ${recTile("Sample", `${cal.n || 0}`,
-                lk.enough ? "enough to judge" :
-                  `${Math.max(0, lk.needed - (cal.n || 0))} more to go`,
+                (lk.enough ? "enough to judge" : `${Math.max(0, lk.needed - (cal.n || 0))} more to go`)
+                  + (lk.open ? ` · ${lk.open} open` : ""),
                 { tone: lk.enough ? "good" : "" })}
     </div>
     ${markets ? `<div style="opacity:.7;font-size:.9em;margin-top:14px">Most Likely picks by market —
@@ -4519,7 +4526,8 @@ function verdictBooksHTML(edge, lk, chart, lines, o, opts) {
       ${sameTally(edge, o) ? "" : `<div class="rv-book-line">${line(edge)}</div>`}${chart}
       <div class="rv-says">${lines.filter(Boolean).map((t) => `<p>${t}</p>`).join("")}</div></div>
     <div class="rv-book"><span class="hd-eyebrow">Most likely</span>
-      <div class="rv-book-line">${lk ? line(lk) : "nothing staked yet — its paper picks are under Records by book"}</div>${likelyChart}
+      ${/* Its record is the page's top tile (2026-11-19: said once); here, its picture and reading. */
+        lk ? "" : `<div class="rv-book-line">nothing staked yet — its paper picks are under Records by book</div>`}${likelyChart}
       <div class="rv-says">${lk && lk.verdict && !opts.likelySaid ? `<p>${escapeHtml(String(lk.verdict))}</p>` : ""}</div></div>
   </div>`;
 }
