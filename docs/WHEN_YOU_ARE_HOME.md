@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YY. A Sunday game whose props are bought says why it is short, not that its props are still to come**
+(step 787; 19 November). Nothing to run. Sunday's props were bought this afternoon, as step YW meant: the NFL board
+now carries 453 player props priced across the 12 games through Sunday, where at 4:17 PM it had 51, all Thursday's;
+a passing-yards line for nearly every quarterback, receptions and receiving yards for about half the players; 30
+touchdown pairs (3 before) and 82 Most Likely picks (36). The month's balance went from 48,063 to 47,656 credits
+across that hour's pulls. But the three-leg tickets stayed at five, and ten Sunday games still read "bought from
+three days before it ... once the books post them": a game inside its buying days that was short of its two kept the
+calendar's word whatever was on file (step YQ's stray prop or two). From ten priced props a game's are bought now,
+and short of its two it says the real reason, as every other game does, and that the books post more of its props as
+it nears. The heartbeat counts that reason, with a new one, few_picks: fewer than two of the report's own picks
+among its priced legs (a ticket takes two). The far pull's second run of the day and Friday's two buy what the books
+post next. Checked by tests/test_every_game_report_posts_its_three_leg_parlays.py.
+
 **YX. Two unders from one game share a ticket: the report's strongest picks reach its parlays**
 (step 786; 19 November). Nothing to run. The parlay rules killed any ticket with two unders from one game, as a
 "script clash" (two legs that need the game to go opposite ways). Two unders need the same game, a quiet one, and

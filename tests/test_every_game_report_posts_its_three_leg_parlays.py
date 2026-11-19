@@ -181,9 +181,11 @@ def test_the_heartbeat_says_why_a_game_is_short_without_naming_a_pick():
              {"home": "E", "threes": []},                                                # no report rebuilt it
              {"home": "F", "threes": [], "kept": "Sun 1:00 PM ET"},                       # started: not counted
              {"home": "G", "threes": [], "no_props": "props_not_bought", "legs_wider": 0},  # bought the day before
-             {"home": "H", "threes": [], "no_props": "no_props_priced", "legs_wider": 0}]   # no book has one yet
+             {"home": "H", "threes": [], "no_props": "no_props_priced", "legs_wider": 0},   # no book has one yet
+             # Props enough, but one of the report's own picks among them: a ticket takes two.
+             {"home": "I", "threes": [], "legs_wider": 9, "legs_own": 1, "legs_from": "report"}]
     board = {"most_likely": [], "recommendations": [], "game_bets": [],
-             "game_parlays": {"games": games, "counts": {"games": 8, "threes": 3}}}
+             "game_parlays": {"games": games, "counts": {"games": 9, "threes": 3}}}
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "b.json")
         with open(path, "w") as fh:
@@ -194,9 +196,9 @@ def test_the_heartbeat_says_why_a_game_is_short_without_naming_a_pick():
             got = L._board_counts(path)
         finally:
             L._full_copy = was
-    assert got["threes_short"] == 6, got
+    assert got["threes_short"] == 7, got
     assert got["threes_short_why"] == {"few_props": 1, "no_fit": 1, "rebuild_failed": 1, "no_report": 1,
-                                       "props_not_bought": 1, "no_props_priced": 1}, got
+                                       "props_not_bought": 1, "no_props_priced": 1, "few_picks": 1}, got
     assert got["rebuild_errors"] == ["KeyError"], "the error's type, never its words (a pick may ride in them)"
     assert "threes_no_fit_why" not in got, "no fill counts on these entries: nothing said"
     # The report path keeps the error on the private board's entry, and a rebuild that runs clears it.
@@ -256,6 +258,30 @@ def test_every_game_still_to_play_has_its_entry_and_one_with_no_prop_says_when()
     b3["game_parlays"] = gp3
     GP.from_report(b3, "nfl", sunday, [], now=thursday)
     assert x3["no_props"] == GP.PROPS_WAIT and x3["threes_note"] == x3["props_note"], x3.get("threes_note")
+    # A game whose props are bought (the far pull priced about 36 a Sunday game on
+    # the Thursday) is not waiting any more: short of its two, it says the real
+    # reason, and that the books post more of its props as it nears.
+    b4 = EG.board()
+    b4["games"] = b4["games"] + [sunday]
+    b4["recommendations"] = [_rec(f"P {i}", "receptions", 0.52, team="PHI" if i % 2 else "DAL", home="PHI",
+                                  away="DAL", day="2099-11-15") for i in range(GP.PROPS_BOUGHT_MIN)]
+    gp4 = GP.build(b4, "nfl", now=thursday)
+    x4 = gp4["games"][1]
+    assert "no_props" not in x4 and GP.PROPS_WAIT not in gp4["counts"]["no_props"], x4
+    b4["game_parlays"] = gp4
+    picks = [{"player": "P 1", "market": "receptions", "side": "OVER", "line": 2.5},
+             {"player": "Q Nobody", "market": "rec_yds", "side": "OVER", "line": 40.5}]
+    GP.from_report(b4, "nfl", sunday, picks, now=thursday)
+    assert "no_props" not in x4 and x4["threes"] == [] and x4["legs_own"] == 1, x4
+    assert x4["threes_note"].startswith("a three-leg parlay takes 2 of this report's own picks, and only 1 of its "
+                                        "2 picks is a player's line"), x4["threes_note"]
+    assert x4["threes_note"].endswith("; the books post more of this game's props as it nears, and its parlays are "
+                                      "read again as they do"), x4["threes_note"]
+    # One fewer priced prop is still a stray or two: it waits.
+    b5 = EG.board()
+    b5["games"] = b5["games"] + [sunday]
+    b5["recommendations"] = b4["recommendations"][:GP.PROPS_BOUGHT_MIN - 1]
+    assert GP.build(b5, "nfl", now=thursday)["games"][1]["no_props"] == GP.PROPS_WAIT
     # Far past the week the board holds, nothing is promised.
     assert GP.props_note("nfl", sunday)[0] == GP.PROPS_NONE, "2099 is no Saturday's pull"
 

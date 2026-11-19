@@ -589,12 +589,14 @@ def _board_counts(path: str) -> dict:
             # Why, as counts (no pick rides here: the heartbeat is public): the
             # rebuild failed (its error's type), the game has no prop priced yet
             # (its props not bought yet, or none posted: THREELEG3), no report
-            # rebuilt the game, its priced props were too few, or none of them
-            # fit together.
+            # rebuilt the game, fewer than two of the report's own picks are
+            # priced legs (a ticket takes two, PARLAYWIN1), its priced props were
+            # too few, or none of them fit together.
             why: dict = {}
             for x in short:
                 k = ("rebuild_failed" if x.get("rebuild_error")
                      else str(x["no_props"]) if x.get("no_props")
+                     else "few_picks" if x.get("legs_own") is not None and int(x["legs_own"]) < 2
                      else "few_props" if int(x.get("legs_wider") or 0) < 3 and x.get("legs_wider") is not None
                      else "no_fit" if x.get("legs_wider") is not None else "no_report")
                 why[k] = why.get(k, 0) + 1

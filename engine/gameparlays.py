@@ -1684,10 +1684,20 @@ PROPS_WAIT, PROPS_NONE = "props_not_bought", "no_props_priced"
 PROPS_WAIT_MAX_DAYS = 10
 
 
-def _priced_games(board: dict, games: list) -> set:
-    """The games (`game_label`) with a player prop a book has priced: a row of
-    the board's at a real book, the proxy line's aside."""
-    out = set()
+#: A GAME WHOSE PROPS ARE BOUGHT, BY COUNT (EARLYPROPS1, 2026-11-19). The NFL's
+#: far pull bought Sunday's props on the Thursday, about 36 a game, and the
+#: games still read "bought from three days before it ... once the books post
+#: them", ten of them, because a game inside its buying days that was short of
+#: its two kept the calendar's word whatever was on file (step YQ's stray prop
+#: or two). From this many priced props a game's are bought: short of its two,
+#: it says the real reason (`_report_note`).
+PROPS_BOUGHT_MIN = 10
+
+
+def _priced_counts(board: dict, games: list) -> dict:
+    """Each game's (`game_label`) player props a book has priced, counted once
+    each: a row of the board's at a real book, the proxy line's aside."""
+    seen: dict = {}
     for key in ("recommendations", "most_likely"):
         for r in board.get(key) or []:
             if not isinstance(r, dict) or r.get("has_market") is False or r.get("_game_leg"):
@@ -1696,8 +1706,9 @@ def _priced_games(board: dict, games: list) -> set:
                 continue
             g = _game_of(r, games)
             if g:
-                out.add(game_label(g))
-    return out
+                seen.setdefault(game_label(g), set()).add(
+                    (r.get("player"), r.get("market"), str(r.get("side") or "").upper(), r.get("line")))
+    return {k: len(v) for k, v in seen.items()}
 
 
 def _slate_today(now=None) -> str:
@@ -1780,7 +1791,7 @@ def build(board: dict, sport: str, now=None) -> dict:
         if g:
             slot(g)["scorers"].append(leg)
     out_games = []
-    priced_games = _priced_games(board, games)
+    priced_n = _priced_counts(board, games)
     for g in games:
         x = by_game.get(game_label(g))
         if not x:
@@ -1791,14 +1802,17 @@ def build(board: dict, sport: str, now=None) -> dict:
             x = slot(g)
         e = build_game(sp, x["g"], x["legs"], x["scorers"], priced=x["priced"])
         why, words = props_note(sp, g, now)
-        if not (x["legs"] or x["priced"]) and game_label(g) not in priced_games:
+        n_priced = priced_n.get(game_label(g), 0)
+        if not (x["legs"] or x["priced"]) and not n_priced:
             # No prop priced at all: when they come, said once (`props_note`).
             e.update(no_props=why, props_note=words, threes_note=words)
             e.pop("twos_note", None)
             e.pop("scorers_note", None)
-        elif why == PROPS_WAIT and len(e["threes"]) < THREE_MIN:
+        elif why == PROPS_WAIT and len(e["threes"]) < THREE_MIN and n_priced < PROPS_BOUGHT_MIN:
             # A prop or two on file, the game's own not bought yet (19 November:
             # nine of the NFL's Sunday games read "too few props" on a Thursday).
+            # A game whose props are bought (PROPS_BOUGHT_MIN) is short for a
+            # reason of its own, and its report says it (`from_report`).
             e.update(no_props=why, props_note=words, threes_note=_wait_note(len(e["threes"]), words))
         out_games.append(e)
     # EVERY GAME'S THREE-LEG TICKETS ARE POSTED (THREELEG1, 2026-11-19; Ethan:
@@ -2012,7 +2026,9 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     x.pop("paper_threes", None)
     x.pop("threes_paper", None)
     x.update(legs_read=n_pool, threes_considered=n_threes, legs_from=LEGS_FROM_REPORT, report_picks=len(want),
-             legs_wider=int(made.get("wider") or 0))
+             legs_wider=int(made.get("wider") or 0),
+             # The report's own picks among them: a ticket takes two at least (the heartbeat's "few_picks").
+             legs_own=int(made.get("wider_own") or 0))
     # What a game short of its two had to fill from (`tickets_of`): counts, no leg.
     for k in ("fill_fit", "fill_clear"):
         if made.get(k) is None:
@@ -2036,6 +2052,10 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
         x["threes_note"] = _wait_note(len(chosen), x.get("props_note") or "")
     elif len(chosen) < THREE_MIN:
         x["threes_note"] = _report_note(n_pool, len(want), made)
+        if props_note(sp, game, now)[0] == PROPS_WAIT:
+            # Its props bought days ahead (EARLYPROPS1): the books post more as it nears.
+            x["threes_note"] += ("; the books post more of this game's props as it nears, and its parlays "
+                                 "are read again as they do")
     else:
         x.pop("threes_note", None)
     # Its two-leg tickets, the two strongest of the same picks first (GPWIN1).
