@@ -135,6 +135,8 @@ def test_the_journal_keeps_each_legs_source_and_the_record_counts_each_bet_once(
     # Grade them: every leg hit but the priced ones.
     conn.execute("UPDATE parlay_legs SET status = CASE WHEN pool = 'priced' THEN 'lost' ELSE 'won' END")
     conn.execute("UPDATE parlays SET status = 'lost', legs_lost = 1")
+    # The game starts with both tickets up: the set the record counts (parlayledger.mark_at_start).
+    parlayledger.mark_started_games(conn, {"games": [dict(gp["games"][0], kept="Sun 1:00 PM ET")]}, "nfl", "2099-W10")
     rec = parlayledger.game_parlay_record(conn)["nfl"]["three"]
     legs = rec["legs"]
     assert legs["graded"] == 6, "per ticket, the shared leg twice"

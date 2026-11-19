@@ -42,10 +42,9 @@ from engine.db import connect
 from engine.seasons import season_of
 
 # Every sport this script can build, and what to say when a sport has no
-# roster source at all. MLB and CFB reach a published roster first and
-# fall back to appearances; NBA and WNBA are appearance-built outright,
-# where it costs far less — basketball counts a minute played, so anyone
-# who got off the bench is on the page.
+# roster source at all. MLB, both colleges and the LIVE_FEEDS leagues reach
+# a published roster first and fall back to appearances (basketball counts
+# a minute played, so anyone who got off the bench is on that page).
 FROM_LOGS = ("mlb", "nba", "wnba", "cfb", "nhl", "cbb")
 #: A league as the page names it, where that is not its code in capitals
 #: (the strip's NCAAB; web/js/app.js LEAGUE_LABEL).
@@ -157,6 +156,44 @@ def payload_for(conn, sport: str, today: str | None = None) -> dict:
             # reason. A silent fall-back here would put the page straight
             # back into the state Ethan reported and say nothing.
             feed_err = f"the roster feed failed ({type(exc).__name__}: {exc})"
+    if sport == "cbb":
+        # COLLEGE BASKETBALL'S PUBLISHED ROSTERS (2026-11-19). Ethan, asked
+        # whether college players should show their real positions: "I would
+        # assume so. Yeah." This page and the player search were built from
+        # appearances, so a school's roster was whoever had played and every
+        # position was the box score's starter or bench mark: the search
+        # called both Boozers "S". ESPN publishes each school's roster (guard,
+        # forward, center, number, height) on the host the scoreboards come
+        # from, read by the ids those scoreboards taught us (cbbteams.load_ids):
+        # one request a school on a day's cache, CBB_ROSTER_NEW of them a
+        # build, so a cold morning never holds the roster step past its three
+        # minutes. A school not read yet keeps its appearance rows.
+        try:
+            feed, missed = _cbb_feed()
+            if feed:
+                games = _r.games_by_player(conn, sport, GAME_MARKETS[sport], seasons=[season, season - 1])
+                out = _r.feed_rosters(sport, feed, games, faces=_r._faces(conn, sport),
+                                      injuries=_injury_board(sport), today=day)
+                base = _r.from_game_logs(conn, sport, seasons=[season], today=day)
+                for code, team in (base.get("teams") or {}).items():
+                    out["teams"].setdefault(code, team)
+                out["team_count"] = len(out["teams"])
+                out["player_count"] = sum(t["count"] for t in out["teams"].values())
+                out.update({
+                    "sport": sport, "season": season,
+                    "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+                    "feed": "live", "source": "roster",
+                    # The schools still on appearances say so as a count, not
+                    # as a page of names: most are waiting on the next build.
+                    "rosters_read": len(feed),
+                    "note": "" if not missed else (
+                        f"{len(missed)} school roster{'s' if len(missed) != 1 else ''} not read yet show who has "
+                        f"played, without positions, until the next build reads them."),
+                })
+                return out
+            feed_err = "no school roster would load"
+        except Exception as exc:                   # noqa: BLE001
+            feed_err = f"the roster feed failed ({type(exc).__name__}: {exc})"
     if sport in LIVE_FEEDS:
         try:
             feed, missed = _league_feed(sport)
@@ -217,6 +254,44 @@ def payload_for(conn, sport: str, today: str | None = None) -> dict:
     return out
 
 
+#: College basketball's rosters: read once a day a school, and at most this
+#: many schools asked for afresh a build (the rest from the day's cache, or
+#: the next build half an hour on): 365 at once would hold the roster step,
+#: every league's, past its three minutes.
+CBB_ROSTER_TTL = 24 * 3600
+CBB_ROSTER_NEW = 60
+
+
+def _cbb_feed(ids: dict | None = None, budget: int = CBB_ROSTER_NEW, fetch=None) -> tuple[dict, list]:
+    """``({school code: [people]}, [codes not read this build])`` from ESPN's
+    rosters, by the Division I ids the scoreboards have named. A school whose
+    file is past its day and over this build's budget is read from the file
+    it has (a roster changes slowly); one never read waits for the next."""
+    import time as _time
+    from engine import cbbteams
+    from engine.sources import espnrosters
+    from engine.sources.fetch import DEFAULT_AGENT, DataUnavailable, _cache_path, fetch_json
+    if ids is None:
+        ids = {code: eid for eid, code in cbbteams.load_ids().items() if code and eid}
+    get = fetch or (lambda url, name: fetch_json(url, name, ttl=CBB_ROSTER_TTL, user_agent=DEFAULT_AGENT))
+    left = [int(budget)]
+
+    def one(url, name):
+        path = _cache_path(name)
+        if path.exists() and _time.time() - path.stat().st_mtime < CBB_ROSTER_TTL:
+            return get(url, name)
+        if left[0] > 0:
+            left[0] -= 1
+            return get(url, name)
+        if path.exists():
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except ValueError:
+                pass
+        raise DataUnavailable(f"{name} waits for the next build")
+    return espnrosters.fetch_league("cbb", team_ids=ids, fetch=one)
+
+
 def _league_feed(sport: str) -> tuple[dict, list]:
     """``({team: [people]}, [teams that would not load])`` — the league's
     own current rosters, normalised to one person shape."""
@@ -249,7 +324,7 @@ def _injury_board(sport: str) -> dict:
 #: about 5.6 MB. Every reader takes a missing field as empty: the page
 #: tests flags by truth and numbers with `!= null`, and the Python readers
 #: use `.get` (tests/test_the_college_rosters_are_slim.py holds both).
-SLIM_SPORTS = ("cfb",)
+SLIM_SPORTS = ("cfb", "cbb")
 
 #: Kept on every row, empty or not: who, where, and what position.
 ALWAYS_KEPT = ("player", "team", "position")

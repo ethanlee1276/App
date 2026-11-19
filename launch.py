@@ -1723,7 +1723,9 @@ def refresh_sport_rosters(quiet: bool = False) -> bool:
     BASEBALL AND COLLEGE FOOTBALL REACH A PUBLISHED ROSTER FIRST, so this
     step is no longer network-free: one keyless request for all thirty
     MLB clubs, and one per college school on a day's cache — so the first
-    run of the day pays and the rest are free. College had to: the
+    run of the day pays and the rest are free. College basketball's too
+    since 2026-11-19 (its players' real positions), sixty schools a run at
+    most, so a cold morning spreads over the first few runs. College had to: the
     appearance markets there are `pass_yds`, `carries` and `receptions`,
     so an appearance-built college roster is the men who touched the
     ball and nobody else. Both fall back to appearances, saying why.

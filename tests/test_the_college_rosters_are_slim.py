@@ -71,7 +71,10 @@ def test_a_row_keeps_what_it_says_and_drops_what_it_does_not():
 
 
 def test_the_build_slims_college_and_only_college():
-    assert RB.SLIM_SPORTS == ("cfb",)
+    # Both colleges since 2026-11-19: college basketball's rosters come from
+    # ESPN's published ones now (tests/test_college_players_show_their_real_positions.py),
+    # five thousand rows of mostly empty fields.
+    assert RB.SLIM_SPORTS == ("cfb", "cbb")
     keep = (RB.payload_for, RB.connect)
     try:
         RB.connect = lambda: type("C", (), {"close": lambda self: None})()

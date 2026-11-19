@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**YL. College basketball players show their real positions**
+(step 774; 19 November). Nothing to run; the roster step that runs every half hour does it. You, asked whether
+college players should show their real positions: "I would assume so. Yeah." College basketball's roster page and
+the player search were built from box-score appearances, so a school's roster was whoever had played and every
+position was the box score's starter or bench mark: the search called both Boozers "S", and the live file held 7,889
+players without one position among them. The roster step now reads each Division I school's published roster from
+ESPN (guard, forward or center, number, height), by the ids the scoreboards already taught us: one keyless request a
+school on a day's cache, at most 60 new ones a run, so a cold morning spreads over the first few half-hour runs
+instead of holding the step past its three minutes. A school not read yet keeps the players who have played, and the
+page says how many are waiting. The player search and the player pages read positions from that file, so they show
+them too. The file drops its empty fields, as college football's does. Checked by
+tests/test_college_players_show_their_real_positions.py.
+
 **YK. The Record page says the Most Likely record once**
 (step 773; 19 November). Nothing to run. You, asked whether the Most Likely record, on the Record page four times
 under three different counts, should be cut to one: "Yes." A league's page read it as the top tile ("Most Likely ·
