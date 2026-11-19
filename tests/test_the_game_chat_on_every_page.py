@@ -244,7 +244,12 @@ def test_in_a_browser_the_chat_opens_reacts_and_sends():
             # the card (2026-11-15), not yet scrolled down to it.
             # Asked until it holds (8 s): on a busy box the page below the card
             # can still be drawing when this is reached, and a page not yet
-            # tall enough to scroll has the card on screen at both ends.
+            # tall enough to scroll has the card on screen at both ends. Seen in
+            # two gates of six on 19 November (1,972 px tall, the card 761 px
+            # down on an 844 px screen: on screen at either end), so the page is
+            # given room below its content first: what is asked is where the card
+            # goes when it is scrolled away, not how tall the page has drawn yet.
+            p.evaluate("document.body.style.paddingBottom = '2400px'")
             away = """(() => { window.scrollTo(0, document.scrollingElement.scrollHeight);
               const at = () => document.querySelector('.gch-entry').getBoundingClientRect();
               if (at().bottom >= 0 && at().top <= innerHeight) window.scrollTo(0, 0);
