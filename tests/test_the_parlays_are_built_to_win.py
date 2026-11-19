@@ -154,10 +154,10 @@ def test_the_record_says_how_the_rebuilt_tickets_did_apart():
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
     PL.ensure_schema(c)
-    rows = [("2026-11-18", "2026-11-18T19:00:00", "lost", 0.31), ("2026-11-20", "2026-11-20T12:00:00", "won", 0.27),
+    rows = [("2026-11-18", "2026-11-18T19:00:00", "lost", 0.31), ("2026-11-19", "2026-11-19T15:00:00", "won", 0.27),
             ("2026-11-20", "2026-11-20T12:05:00", "lost", 0.26), ("2026-11-21", "2026-11-21T12:00:00", "open", 0.28),
             # A week-labelled league counts by when its ticket was journaled.
-            ("2026-W12", "2026-11-19T10:00:00", "won", 0.3)]
+            ("2026-W12", "2026-11-18T10:00:00", "won", 0.3)]
     for i, (date, ts, st, joint) in enumerate(rows):
         sport = "nfl" if date.startswith("2026-W") else "nba"
         c.execute("INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, qualified, was_play,"

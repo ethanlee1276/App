@@ -644,12 +644,13 @@ def legs_once(tickets: list, legs: list) -> tuple[dict, dict]:
 #: (`mark_at_start`, 2026-11-19).
 AT_START = "at_start = 1"
 #: THE PARLAYS BUILT TO WIN (PARLAYWIN1, step YR, 2026-11-19): from this game
-#: day on, every ticket was built without the legs' link in its chance, from the
-#: report's own picks first and no benched market (engine/gameparlays). Each
-#: league's record says how those have done apart (`since_rules`). A game
-#: dated by its day counts from that day; a week-labelled one (the NFL's
-#: "2026-W12") by when its ticket was journaled.
-RULES_SINCE = "2026-11-20"
+#: day on, every starting set was built without the legs' link in its chance,
+#: from the report's own picks first and no benched market (engine/
+#: gameparlays): the rules went live in the afternoon of 19 November, hours
+#: before that night's first game. Each league's record says how those have
+#: done apart (`since_rules`). A game dated by its day counts from that day; a
+#: week-labelled one (the NFL's "2026-W12") by when its ticket was journaled.
+RULES_SINCE = "2026-11-19"
 
 
 def since_rules(t) -> bool:
