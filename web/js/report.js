@@ -874,8 +874,9 @@
     RESULTS = (opts && typeof opts.results === "function" && opts.results(g)) || null;
     CLOSED = !!((g && g.kept) || RESULTS);
     try {
-      // On paper while the league's three-leg tickets hit under 25% (engine/parlayhold): the page says why once.
-      // Fewer than four: the note says why, under the ones the report made (engine/gameparlays._report_note).
+      // Every game posts two or three three-leg tickets (THREELEG1, 2026-11-19); a game that could make
+      // fewer than two says why under the ones it made (engine/gameparlays._report_note). "On paper" is a
+      // game from before 19 November, when a league's three-leg tickets could be held (engine/parlayhold).
       // The two strongest picks together lead (GPWIN1, engine/gameparlays.tickets_of): two legs hit far
       // more often than three. Fewer than two, or none: the note says why.
       const twos = (g.twos || []).length
