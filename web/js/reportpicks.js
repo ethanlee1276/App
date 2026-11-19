@@ -325,8 +325,9 @@ async function rpFactsFill(host, league) {
   const recentN = (b.recent || {}).games || 0;
   // Every game and the last month, as two chips, once the archive runs past a month.
   const split = recentN && recentN < (b.totals || {}).games;
-  const every = b.games || [];
-  let games = every;
+  const games = b.games || [];
+  // The rows the list draws: every game, or the featured games alone (the chip below).
+  let shown = games;
   // The featured games' keys, for the list's own chip (FEATURED1).
   const fx = b.featured && b.featured.all && b.featured.all.games ? b.featured : null;
   const fxKeys = new Set(((fx || {}).games || []).map((g) => [g.date, g.away, g.home].join("|")));
@@ -356,9 +357,9 @@ async function rpFactsFill(host, league) {
   });
   const more = body.querySelector("[data-rpk-more]");
   const page = () => {
-    const from = list.children.length, rows = games.slice(from, from + RP_FACT_PAGE);
+    const from = list.children.length, rows = shown.slice(from, from + RP_FACT_PAGE);
     list.insertAdjacentHTML("beforeend", rows.map(rpFactRowHTML).join(""));
-    const left = games.length - list.children.length;
+    const left = shown.length - list.children.length;
     more.hidden = left <= 0;
     more.textContent = `Show ${Math.min(left, RP_FACT_PAGE)} more ${left === 1 ? "game" : "games"}`;
     rpBetsFill(list, sport, rows, !from);
@@ -368,13 +369,13 @@ async function rpFactsFill(host, league) {
   // Every game, or the featured games alone: the list starts again from its first page.
   body.querySelectorAll("[data-rpk-list]").forEach((btn) => btn.addEventListener("click", () => {
     body.querySelectorAll("[data-rpk-list]").forEach((x) => x.classList.toggle("on", x === btn));
-    games = btn.dataset.rpkList === "featured" ? every.filter((r) => fxKeys.has([r.date, r.away, r.home].join("|"))) : every;
+    shown = btn.dataset.rpkList === "featured" ? games.filter((r) => fxKeys.has([r.date, r.away, r.home].join("|"))) : games;
     list.innerHTML = "";
     page();
   }));
   page();
   revealChildren(slot);
-  return every.length;
+  return games.length;
 }
 
 /* EVERY PICK AND PARLAY, A CHECK OR AN X (2026-11-17). Ethan, on this list:
