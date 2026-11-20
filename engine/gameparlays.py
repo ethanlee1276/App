@@ -2040,7 +2040,7 @@ def _picks_priced(board: dict, sport: str, game: dict, want: set, now=None) -> i
 
 #: What became of a report's player pick as a parlay leg (`_picks_census`).
 PICK_FATES = ("strong", "fill", "low", "no_parlay", "benched", "other_line", "matchup_only", "scorer_only",
-              "refused_out", "refused_book", "refused_price", "refused_edge", "refused", "absent")
+              "refused_out", "refused_book", "refused_price", "refused_edge", "refused", PROPS_WAIT, "absent")
 
 
 def _refused_why(rows: list) -> str:
@@ -2101,6 +2101,11 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) ->
       refused…      a row a leg source holds and will not use, by why
                     (`_refused_why`): ruled out, no real book, past the price
                     cap, a number the Edge path refuses, or anything else;
+      props_not_bought  no real book because the game's props are not bought
+                    yet (fewer than PROPS_BOUGHT_MIN priced, the builder's own
+                    rule): Monday night's on a Friday, which says nothing of
+                    the pick (20 November 2026: the NFL read 19 of 47 picks
+                    "no real book" with Monday's game still to buy);
       absent        on none of the board's lists by this number.
 
     {} when the report has no player pick. Never raises."""
@@ -2131,6 +2136,7 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) ->
             if isinstance(g, dict):
                 matchup |= keys(g.get("td")) | keys(g.get("props"))
         field = {k[:2] for k in keys(board.get("td_field")) | keys(board.get("longshot_watch"))}
+        unbought = _priced_counts(board, [game]).get(game_label(game), 0) < PROPS_BOUGHT_MIN
         out: dict = {}
         for k in want:
             if k in legs:
@@ -2143,6 +2149,8 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) ->
                 fate = "other_line"
             elif k in held:
                 fate = _refused_why(held[k])
+                if fate == "refused_book" and unbought:
+                    fate = PROPS_WAIT
             elif k in matchup:
                 fate = "matchup_only"
             elif k[:2] in field:

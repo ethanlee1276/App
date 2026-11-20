@@ -119,6 +119,21 @@ def test_each_pick_is_sorted_into_one_fate():
     assert GP._picks_census({}, "nfl", SUNDAY, PICKS, now=THURSDAY).get("no_parlay") == 1, "a bare board: never raises"
 
 
+def test_a_game_whose_props_are_not_bought_says_so_not_no_book():
+    """Monday night's game on a Friday (20 November 2026: the NFL read 19 of 47 picks "no real book" with that
+    game still to buy): with fewer than PROPS_BOUGHT_MIN of its props priced, the builder's own rule, a pick held
+    only by unpriced rows waits on the props; once they are bought, the same pick has no real book."""
+    lone = [_pick("R Refused", "rush_yds")]
+    b = _board()
+    b["recommendations"] = [_rec("R Refused", "rush_yds", 0.64, book="proxy"), _rec("S Strong", "receptions", 0.66)]
+    assert GP._picks_census(b, "nfl", SUNDAY, lone, now=THURSDAY) == {GP.PROPS_WAIT: 1}
+    assert GP._picks_census(_board(), "nfl", SUNDAY, lone, now=THURSDAY) == {"refused_book": 1}
+    assert GP.PROPS_WAIT == "props_not_bought" and GP.PROPS_WAIT in GP.PICK_FATES
+    # A pick refused for its price is refused whatever the game's props: only "no real book" waits on them.
+    b["recommendations"] = [_rec("R Refused", "rush_yds", 0.64) | {"odds": -400}]
+    assert GP._picks_census(b, "nfl", SUNDAY, lone, now=THURSDAY) == {"refused_price": 1}
+
+
 def test_the_heartbeat_adds_a_leagues_up_over_its_games_still_to_play():
     import launch as L
     t = {"legs": [{"player": "A"}, {"player": "B"}, {"player": "C"}]}
