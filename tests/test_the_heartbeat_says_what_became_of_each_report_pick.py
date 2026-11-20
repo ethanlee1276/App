@@ -82,7 +82,11 @@ def test_a_refused_pick_says_why():
     number the Edge path refuses; the first of those any of its rows shows."""
     ok = _rec("X", "rec_yds", 0.6)
     assert GP._refused_why([dict(ok, injury_status="Out")]) == "refused_out"
-    assert GP._refused_why([dict(ok, book="proxy")]) == GP._refused_why([dict(ok, bettable=False)]) == "refused_book"
+    assert GP._refused_why([dict(ok, book="proxy")]) == "refused_book"
+    # A real book's price on a market our calibration does not trust: no bet, but no missing book either.
+    assert GP._refused_why([dict(ok, bettable=False)]) == "refused_unreliable"
+    assert GP._refused_why([dict(ok, bettable=False), dict(ok, injury_status="Out")]) == "refused_out"
+    assert GP._refused_why([dict(ok, bettable=False, book="proxy")]) == "refused_book", "no real price at all"
     assert GP._refused_why([dict(ok, odds=None)]) == "refused_book"
     assert GP._refused_why([dict(ok, odds=-400)]) == "refused_price", "past the -250 cap: no parlay leg"
     assert GP._refused_why([dict(ok, raw_prob=0.80, fair_prob=0.55)]) == "refused_edge", "25 points off the fair price"
@@ -96,7 +100,8 @@ def test_a_refused_pick_says_why():
     assert GP._refused_why([proj, ok]) == "refused", "priced and usable: the reason is something else"
     assert GP._refused_why([proj, dict(ok, book="proxy")]) == "refused_book", "no row with a real price"
     assert GP._refused_why([proj, dict(ok, injury_status="Out")]) == "refused_out"
-    assert {"refused_out", "refused_book", "refused_price", "refused_edge", "refused"} <= set(GP.PICK_FATES)
+    assert {"refused_out", "refused_unreliable", "refused_book", "refused_price", "refused_edge",
+            "refused"} <= set(GP.PICK_FATES)
 
 
 def test_each_pick_is_sorted_into_one_fate():

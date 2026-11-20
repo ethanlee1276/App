@@ -2281,16 +2281,25 @@ def _picks_priced(board: dict, sport: str, game: dict, want: set, now=None) -> i
 
 #: What became of a report's player pick as a parlay leg (`_picks_census`).
 PICK_FATES = ("strong", "fill", "low", "no_parlay", "benched", "other_line", "matchup_only", "scorer_only",
-              "refused_out", "refused_book", "refused_price", "refused_edge", "refused", PROPS_WAIT, "absent")
+              "refused_out", "refused_unreliable", "refused_book", "refused_price", "refused_edge", "refused",
+              PROPS_WAIT, "absent")
 
 
 def _refused_why(rows: list) -> str:
     """Why no leg source will use the rows that hold a pick, as a fate: the
-    player is ruled out (``refused_out``), no real book prices it
-    (``refused_book``: not bettable, a proxy, no price), its price is past the
-    cap or the long-price limit (``refused_price``: likely.HEAVIEST_PRICE,
-    stakeplan.priced_out), or its number is one the Edge path refuses
-    (``refused_edge``: `credible_row`); ``refused`` for anything else.
+    player is ruled out (``refused_out``), a real book prices it but our
+    calibration does not trust our number for its market
+    (``refused_unreliable``: the Most Likely board's "not bettable",
+    calibrate.is_reliable, a read on who hits rather than a bet), no real book
+    prices it (``refused_book``: a proxy, no market, no price), its price is
+    past the cap or the long-price limit (``refused_price``:
+    likely.HEAVIEST_PRICE, stakeplan.priced_out), or its number is one the
+    Edge path refuses (``refused_edge``: `credible_row`); ``refused`` for
+    anything else.
+
+    NOT BETTABLE IS NOT "NO BOOK" (20 November 2026): the NFL's 19 picks
+    counted refused_book were all Most Likely rows a real book prices on
+    markets whose calibration ran off its range (`_book_gap` said so).
 
     A ROW WITH A REAL PRICE SPEAKS FIRST (20 November 2026). A pick is held by
     every list that carries it (Most Likely, the pool, the priced props), and
@@ -2310,17 +2319,19 @@ def _refused_why(rows: list) -> str:
             odds = int(float(r.get("odds")))
         except (TypeError, ValueError):
             odds = None
-        if (odds is None or r.get("bettable") is False or r.get("has_market") is False
+        if (odds is None or r.get("has_market") is False
                 or str(r.get("book") or "").strip().lower() in ("", "proxy")):
             continue                                     # says nothing of a priced row's reason
         priced = True
-        if odds < HEAVIEST_PRICE or priced_out("edge", odds):
+        if r.get("bettable") is False:
+            why.add("unreliable")
+        elif odds < HEAVIEST_PRICE or priced_out("edge", odds):
             why.add("price")
         elif not credible_row(r):
             why.add("edge")
     if rows and not priced:
         why.add("book")
-    return next((f"refused_{w}" for w in ("out", "book", "price", "edge") if w in why), "refused")
+    return next((f"refused_{w}" for w in ("out", "unreliable", "book", "price", "edge") if w in why), "refused")
 
 
 def _book_gap(row: dict) -> str:
@@ -2361,8 +2372,9 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
                     (board["matchup_picks"]);
       scorer_only   a scorer the touchdown field prices and no leg source does;
       refused…      a row a leg source holds and will not use, by why
-                    (`_refused_why`): ruled out, no real book, past the price
-                    cap, a number the Edge path refuses, or anything else;
+                    (`_refused_why`): ruled out, a market our calibration
+                    does not trust, no real book, past the price cap, a
+                    number the Edge path refuses, or anything else;
       props_not_bought  no real book because the game's props are not bought
                     yet (fewer than PROPS_BOUGHT_MIN priced, the builder's own
                     rule): Monday night's on a Friday, which says nothing of
