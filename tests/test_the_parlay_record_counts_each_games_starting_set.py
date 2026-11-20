@@ -202,9 +202,9 @@ def test_the_record_page_says_it_once():
     out = subprocess.run([node, "-e", prog], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr
     many, one, none = json.loads(out.stdout)
-    assert many == ("One set a game: the tickets each report carried when its game started. The 1,234 others the "
-                    "board posted and replaced before a game began are not counted."), many
-    assert one.endswith("The 1 other the board posted and replaced before a game began is not counted."), one
+    # Not how many (ZP, 20 November): "The 1,234 others the board posted" read as 30 parlays a game.
+    assert many == one == ("One set a game: the parlays each report carried when its game started. Versions the "
+                           "board replaced before a game began aren’t counted."), many
     assert none == "", "nothing left out, nothing said"
 
 

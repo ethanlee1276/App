@@ -157,11 +157,25 @@ def test_a_finished_game_s_report_says_how_it_did_and_marks_each_pick_and_leg():
     three = out["report_parlays"][0]
     assert three["ticket"] == "three-leg parlay" and three["result"] == "lost"
     assert [l["result"] for l in three["legs"]] == ["won", "lost", "won"]
-    assert out["earlier_versions"] == {"three-leg parlay": "1 of 1 hit"}
-    # One set a game on the Record: Ask says the earlier versions are not in it.
-    assert out["earlier_versions_note"] == ("posted and replaced before the start: the Record counts the set the "
-                                            "report carried at the start, not these")
+    # One set a game (ZP, 20 November; Ethan: "There should only be 3 parlays made per game"): the version
+    # the board replaced before the start is neither said nor counted.
+    assert len([t for t in out["report_parlays"] if t["ticket"] == "three-leg parlay"]) == 1
+    assert not any(k.startswith("earlier") for k in out) and "parlays_note" not in out, sorted(out)
     assert AB.game_report({"nfl": {}}, "Packers", "nfl").get("found") is False
+
+
+def test_a_finished_game_whose_set_was_never_kept_says_so():
+    # A game from before 16 November: no set kept at the start, so none of the board's versions is listed
+    # as the report's parlays, and Ask says why.
+    where = _kept_archive()
+    doc = RA.load("nfl", "2026-11-15", "NE", "DET", where)
+    doc.pop("parlays")
+    RA.write(RA.path_for(where, "nfl", "2026-11-15", "NE", "DET"), doc)
+    _with_archive(where, MARKS._journal())
+    out = AB.game_report({"nfl": {}}, "Patriots", "nfl")
+    assert "report_parlays" not in out and out["report_picks"], out
+    assert out["parlays_note"] == ("the parlays this report carried at the start were not kept for this game (the "
+                                   "site keeps them from 16 November on): none are listed or counted on the Record")
 
 
 def test_a_finished_game_s_parlays_on_paper_are_said_never_posted():
@@ -177,7 +191,7 @@ def test_a_finished_game_s_parlays_on_paper_are_said_never_posted():
     assert paper[0]["ticket"] == "three-leg parlay" and paper[0]["result"] == "lost"
     assert out["on_paper"] == ["the league's three-leg parlays were on paper at the start: built and graded "
                                "to learn from, never posted"]
-    assert out["earlier_versions"] == {"three-leg parlay": "1 of 1 hit"}
+    assert not any(k.startswith("earlier") for k in out), "the replaced version is not said"
 
 
 def test_the_reports_record_totals_every_finished_game():

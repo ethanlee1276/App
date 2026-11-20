@@ -1143,12 +1143,13 @@ function gpBlockHTML(b, kind, sport) {
    tickets each report carried when its game started
    (engine/parlayledger.mark_at_start); the board's other versions, replaced
    before a game began, are graded and kept but not counted, and the page says
-   how many, once over the league's cards or the table of every league. */
+   so once over the league's cards or the table of every league. Not how many
+   (ZP, 20 November): "The 1,234 others the board posted" read as 30 parlays a
+   game to Ethan, who wants 3. */
 function gpOneSetHTML(blocks) {
   const n = blocks.reduce((sum, b) => sum + Number((b || {}).not_counted || 0), 0);
-  return n > 0 ? `<p class="rec-gp-close">One set a game: the tickets each report carried when its game
-      started. The ${n.toLocaleString()} other${n === 1 ? "" : "s"} the board posted and replaced
-      before a game began ${n === 1 ? "is" : "are"} not counted.</p>` : "";
+  return n > 0 ? `<p class="rec-gp-close">One set a game: the parlays each report carried when its game
+      started. Versions the board replaced before a game began aren’t counted.</p>` : "";
 }
 // The parlays half: a league's cards (gpBlockHTML), or on All one table of every league.
 function gpParlaysHTML(rec, scope) {

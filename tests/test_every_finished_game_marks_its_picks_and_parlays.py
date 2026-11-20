@@ -16,6 +16,13 @@ settled is free, as every settled row is; a pick or ticket still waiting on the
 box score is a member's, and the rest are told how many. The list draws twenty
 games at a time and asks for their picks a page at a time.
 
+One set a game (ZP, 2026-11-20). Ethan, on rows reading "Parlays 0 of 28" and
+"1 of 42": "why do we have 30 parlays being made per game?? There should only
+be 3 parlays made per game". A game's tickets are the set its report carried at
+the start and nothing else: the versions the board replaced before it are not
+listed or counted, and a game whose set was never kept (before 16 November)
+lists none and says why.
+
 Run directly: `python3 tests/test_every_finished_game_marks_its_picks_and_parlays.py`
 (the browser check with QB_BROWSER_TESTS=1 and /usr/bin/python3).
 """
@@ -101,6 +108,11 @@ KEPT = {"away": "NE", "home": "DET", "kept": "kept before the start",
                              {"player": "Jahmyr Gibbs", "market": "rush_yds", "side": "OVER", "line": 74.5}]}],
         "scorers": [{"legs": [{"player": "Jahmyr Gibbs", "market": "anytime_td", "side": "OVER", "line": 0.5},
                               {"player": "Amon-Ra St. Brown", "market": "anytime_td", "side": "OVER", "line": 0.5}]}]}
+#: The same game with both journaled parlays in the set kept at the start, the one that hit first.
+BOTH = dict(KEPT, threes=[{"legs": [{"player": "Jahmyr Gibbs", "market": "rush_yds", "side": "OVER", "line": 74.5},
+                                    {"player": "Jared Goff", "market": "pass_yds", "side": "OVER", "line": 230.5},
+                                    {"player": "Sam LaPorta", "market": "receptions", "side": "OVER", "line": 2.5}]},
+                          *KEPT["threes"]])
 
 
 def _archive(kept=None):
@@ -129,35 +141,55 @@ def test_each_finished_game_lists_its_report_picks_and_tickets_off_the_record():
     assert not any(p.get("book") for p in game["picks"]), "the book is the page's business, not the reader's"
     gibbs = next(p for p in game["picks"] if p["player"] == "Jahmyr Gibbs")
     assert gibbs["actual"] == 142 and gibbs["line"] == 74.5 and gibbs["side"] == "OVER"
-    assert [t["status"] for t in game["threes"]] == ["won", "lost"]
-    assert [l["status"] for l in game["threes"][1]["legs"]] == ["won", "lost", "won"], "each leg its own mark"
-    assert [t["status"] for t in game["scorers"]] == ["pending"]
-    assert game["versions"] is True and "earlier" not in game, "no set kept at the start: every version, said so"
-    assert not any("key" in t for t in game["threes"]), "the journal's key stays in the engine"
+    # No set kept at the start (before 16 November): none of the board's versions is the report's, said so.
+    assert not any(k in game for k in O.TICKETS) and game["unkept"] is True, game
     nba = O.for_games("nba", [("2026-11-16", "BOS", "NYK")], member=True, path=path, where=where)["2026-11-16|BOS|NYK"]
-    assert [p["player"] for p in nba["picks"]] == ["Jalen Brunson"] and len(nba["threes"]) == 1, "filed under its day"
+    assert [p["player"] for p in nba["picks"]] == ["Jalen Brunson"] and nba["unkept"] is True, "filed under its day"
 
 
-def test_the_report_s_own_tickets_lead_and_the_earlier_versions_are_counted():
+def test_the_report_s_own_tickets_are_listed_and_nothing_else():
     path, where = _journal(), _archive(kept=KEPT)
     game = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=where)["2026-11-15|NE|DET"]
     assert [t["status"] for t in game["threes"]] == ["lost"], "the set the report carried at the start"
     assert [l["player"] for l in game["threes"][0]["legs"]] == ["Jahmyr Gibbs", "Drake Maye", "Jared Goff"]
-    assert game["earlier"] == {"threes": [1, 1]}, "the earlier version, graded, counted beside it"
-    assert [t["status"] for t in game["scorers"]] == ["pending"] and "versions" not in game
+    assert [l["status"] for l in game["threes"][0]["legs"]] == ["won", "lost", "won"], "each leg its own mark"
+    assert not any("key" in t for t in game["threes"]), "the journal's key stays in the engine"
+    assert "earlier" not in game and "unkept" not in game, "the version the board replaced: not listed, not counted"
+    assert [t["status"] for t in game["scorers"]] == ["pending"]
+    both = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive(kept=BOTH))["2026-11-15|NE|DET"]
+    assert [t["status"] for t in both["threes"]] == ["won", "lost"], "in the report's own order"
     lone = dict(KEPT, threes=[{"legs": [{"player": "Nobody", "market": "points", "side": "OVER", "line": 1.5},
                                         {"player": "Else", "market": "points", "side": "OVER", "line": 2.5}]}], scorers=[])
     game = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive(kept=lone))["2026-11-15|NE|DET"]
-    assert len(game["threes"]) == 2 and game["versions"] is True, "a kept set the record never journaled: every version"
+    assert not any(k in game for k in O.TICKETS) and game["unkept"] is True, "a kept set the record never journaled"
+    # A game the record holds no ticket for has nothing to explain.
+    assert O._own_tickets({}, None) == {} and O._own_tickets({}, lone) == {}
+
+
+def test_the_game_page_reads_the_set_kept_at_the_start_and_nothing_else():
+    # The finished game's own page falls back to the record's tickets when the page no longer holds them
+    # (js/detail.js gprTickets): the set marked at the start, never the versions the board replaced.
+    path = _journal()
+    conn = sqlite3.connect(path)
+    g = {"home": "DET", "away": "NE"}
+    assert "tickets" not in O.of_game(conn, "nfl", "2026-W11", g), "a journal older than the marking: none"
+    assert len(O.tickets(conn, "nfl", "2026-W11", "DET", "NE")["threes"]) == 2, "every version, when asked for"
+    PL.ensure_schema(conn)
+    assert "tickets" not in O.of_game(conn, "nfl", "2026-W11", g), "no set marked at the start: none"
+    PL.mark_at_start(conn, "nfl", ("2026-W11",), "NE@DET", KEPT)
+    got = O.of_game(conn, "nfl", "2026-W11", g)["tickets"]
+    assert [t["status"] for t in got["threes"]] == ["lost"], "the set the report carried, not the replaced version"
+    assert [t["status"] for t in got["scorers"]] == ["pending"], got
+    conn.close()
 
 
 def test_what_has_settled_is_everyone_s_and_what_waits_is_a_member_s():
-    path, where = _journal(), _archive()
+    path, where = _journal(), _archive(kept=KEPT)
     free = O.for_games("nfl", [("2026-11-15", "NE", "DET")], member=False, path=path, where=where)["2026-11-15|NE|DET"]
     assert {p["status"] for p in free["picks"]} == {"won", "lost", "void"}, "LaPorta waits on the box score"
     assert "scorers" not in free, "the open pair is a member's"
     assert free["held"] == 2, "and the rest are told how many"
-    assert len(free["threes"]) == 2 and all(t["status"] in O.SETTLED for t in free["threes"])
+    assert len(free["threes"]) == 1 and all(t["status"] in O.SETTLED for t in free["threes"])
 
 
 def test_one_ask_names_a_screenful_and_a_name_that_is_not_one_is_passed_over():
@@ -171,7 +203,7 @@ def test_one_ask_names_a_screenful_and_a_name_that_is_not_one_is_passed_over():
 
 
 def test_the_answer_brings_the_reader_s_word_for_each_market():
-    path, where = _journal(), _archive()
+    path, where = _journal(), _archive(kept=KEPT)
     games = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=where)
     words = O.market_words(games)
     assert words["rush_yds"] == "Rushing Yards" and words["anytime_td"] == "Anytime TD" and "spread" in words
@@ -211,7 +243,7 @@ def _fn(name):
 
 def _render(game, sport="nfl", open_=True, words=None):
     helpers = "".join(_fn(n) for n in ("rpMk", "rpHit", "rpBetWords", "rpPickLI", "rpTicketWords", "rpTicketsHTML",
-                                       "rpEarlierHTML", "rpBetsHTML"))
+                                       "rpBetsHTML"))
     helpers += RP[RP.index("const RP_STRIP_MAX = "):RP.index("\n", RP.index("const RP_STRIP_MAX = ")) + 1]
     helpers += RP[RP.index("const RP_PAPER = "):RP.index("\n", RP.index("const RP_PAPER = ")) + 1]
     score = RP[RP.index("const RP_SCORE = "):RP.index("};", RP.index("const RP_SCORE = ")) + 3]
@@ -235,7 +267,7 @@ process.stdout.write(rpBetsHTML(%s, %s, %s));
 
 
 def test_the_page_marks_every_pick_every_ticket_and_every_leg():
-    path, where = _journal(), _archive()
+    path, where = _journal(), _archive(kept=BOTH)
     game = O.for_games("nfl", [("2026-11-15", "NE", "DET")], member=True, path=path, where=where)["2026-11-15|NE|DET"]
     html = _render(game)
     strip = html[html.index('<summary class="rpk-bets-sum">'):html.index("</summary>")]
@@ -258,25 +290,28 @@ def test_the_page_marks_every_pick_every_ticket_and_every_leg():
     assert not _render(game, open_=False).startswith('<details class="rpk-bets" open>')
 
 
-def test_the_earlier_versions_and_a_long_strip_are_said_once():
+def test_one_set_a_game_and_a_game_never_kept_says_why_it_lists_none():
+    # ZP (20 November). Ethan, on rows reading "Parlays 0 of 28" and "1 of 42": "why do we have 30 parlays being
+    # made per game?? There should only be 3 parlays made per game".
     path = _journal()
     kept = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive(kept=KEPT))["2026-11-15|NE|DET"]
-    html = _render(kept)
-    assert "Before the start the board also posted 1 earlier version of its parlays; 1 of them hit." in html
-    # ONE SET A GAME ON THE RECORD (parlayledger.mark_at_start, 19 November): the line said "Every one counts on
-    # the Record" a day after the Record stopped counting them.
-    flat = " ".join(html.split())
-    assert "The Record counts the set above, the one this report carried at the start." in flat, flat[-400:]
-    assert "Every one counts on the Record" not in html
-    every = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive())["2026-11-15|NE|DET"]
-    said = " ".join(_render(every).split())
-    assert "Every version of this game’s parlays the board posted before the start." in said
-    assert "was not kept yet on this date, so the Record counts none of them." in said, said[-400:]
-    many = {"threes": [{"status": "lost", "legs": []}] * 15}
-    strip = _render(many)
+    flat = " ".join(_render(kept).split())
+    assert "earlier version" not in flat and "Every version" not in flat and "weren’t kept" not in flat, flat[-400:]
+    assert "rpEarlierHTML" not in RP, "the versions the board replaced are not listed or counted"
+    old = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive())["2026-11-15|NE|DET"]
+    said = " ".join(_render(old).split())
+    assert re.findall(r'class="rpk-bets-k">([^<]+)<', said[:said.index("</summary>")]) == ["Picks"], said[:600]
+    assert ("The parlays this report carried at the start weren’t kept for this game (the site keeps them from 16 "
+            "November on), so none are listed here or counted on the Record.") in said, said[-400:]
+    assert said.index("The picks") < said.index("weren’t kept"), "under the picks it does list"
+    # With nothing settled to show a reader without the subscription, the note still says why.
+    assert "weren’t kept" in _render({"unkept": True, "held": 1}) and _render({}) == ""
+    # A long strip is said once: the marks a kind draws before it counts the rest.
+    pick = {"status": "lost", "player": "Jalen Brunson", "market": "points", "side": "OVER", "line": 26.5}
+    strip = _render({"picks": [pick] * 15})
     strip = strip[:strip.index("</summary>")]
     assert strip.count('class="rpk-mk lost"') == 12 and '<span class="rpk-marks-more">+3</span>' in strip, \
-        "a week of versions does not swamp a phone: the list under it has every one"
+        "a long list does not swamp a phone: the list under it has every one"
 
 
 #: Boston at New York's ticket on the record (`_journal`), as a kept set holds a ticket.
@@ -300,7 +335,7 @@ def test_a_size_on_paper_was_never_posted_and_says_so():
     path, key = _journal(), ("2026-11-16", "BOS", "NYK")
     kept = {"away": "BOS", "home": "NYK", "threes": [], "paper_threes": [BOS_NYK], "threes_paper": True}
     game = O.for_games("nba", [key], path=path, where=_archive_nba(kept))["2026-11-16|BOS|NYK"]
-    assert "threes" not in game and "versions" not in game, "never posted: not the report's parlays, nor every version"
+    assert "threes" not in game and "unkept" not in game, "never posted: not the report's parlays, nor every version"
     assert [t["status"] for t in game["paper"]["threes"]] == ["lost"] and game["on_paper"] == ["threes"], game
     html = _render(game, sport="nba")
     strip = html[:html.index("</summary>")]
@@ -309,9 +344,9 @@ def test_a_size_on_paper_was_never_posted_and_says_so():
     assert "while they hit under 25%" in html
     free = O.for_games("nba", [key], member=False, path=path, where=_archive_nba(kept))["2026-11-16|BOS|NYK"]
     assert len(free["paper"]["threes"]) == 1 and not free.get("held"), "a settled paper ticket is everyone's"
-    # A kept set on paper with no ticket of its own: none posted, and the day's versions are only counted.
+    # A kept set on paper with no ticket of its own: none posted, and the day's versions neither listed nor counted.
     none = O.for_games("nba", [key], path=path, where=_archive_nba(dict(kept, paper_threes=[])))["2026-11-16|BOS|NYK"]
-    assert "paper" not in none and "versions" not in none and none["earlier"] == {"threes": [0, 1]}, none
+    assert "paper" not in none and "unkept" not in none and "earlier" not in none, none
     assert "No three-leg parlays were posted for this game" in _render(none, sport="nba")
 
 
@@ -321,12 +356,12 @@ def test_a_report_that_carried_no_parlay_carried_none():
     path = _journal()
     kept = {"away": "BOS", "home": "NYK", "threes": [], "scorers": []}
     game = O.for_games("nba", [("2026-11-16", "BOS", "NYK")], path=path, where=_archive_nba(kept))["2026-11-16|BOS|NYK"]
-    assert "threes" not in game and "versions" not in game and "on_paper" not in game
-    assert game["earlier"] == {"threes": [0, 1]}, "the day's version still counts, on the Record"
+    assert "threes" not in game and "unkept" not in game and "on_paper" not in game
+    assert "earlier" not in game, "the day's version is the board's, not the report's: neither listed nor counted"
 
 
 def test_a_reader_without_the_subscription_is_told_what_waits():
-    path, where = _journal(), _archive()
+    path, where = _journal(), _archive(kept=KEPT)
     free = O.for_games("nfl", [("2026-11-15", "NE", "DET")], member=False, path=path, where=where)["2026-11-15|NE|DET"]
     html = _render(free)
     assert "Touchdown pairs" not in html

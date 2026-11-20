@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZP. A finished game lists one set of parlays, never a stack of versions** (step 804; 20 November). Nothing to run.
+Ethan sent two screenshots of Report Picks' "How our reports did" with rows like "Parlays 0 of 28" and "1 of 42":
+"why do we have 30 parlays being made per game?? There should only be 3 parlays made per game". Those were games
+from before 16 November, when the site began keeping the set each report carried at kickoff. With no kept set, the
+list showed every version the board posted that week as lines moved (the NFL rebuilds a game's parlays dozens of
+times between Thursday and Sunday). None of those were ever counted on the Record, but listing them made it look
+like 30 parlays a game. Now a finished game lists only the set its report carried at kickoff. A game with no kept
+set lists no parlays and says why, under its picks. The "the board also posted 19 earlier versions" line is gone
+from kept games too, and so is the Record's "The 1,234 others the board posted and replaced" count. The game's own
+page reads the same kept set from the record, and so does Ask. Each game still posts up to 3 three-leg parlays, up
+to 2 two-leg parlays and, in football, 3 touchdown pairs. The next step (ZQ) makes a game's posted parlays stay put
+until a leg actually breaks, so the board stops replacing them every time a line moves.
+
 **ZO. The pick count says which picks are waiting on their game's props** (step 803; 20 November). Nothing to run.
 After ZL went live, the NFL board rebuilt and still said 19 of its 47 report picks had "no real book", this time
 correctly: no list held them at a real price. Some of those are simply Monday night's game, whose props aren't

@@ -159,18 +159,28 @@ def picks(conn, sport: str, date, home: str, away: str, names=(), books=BOOKS) -
     return out[:MAX_PICKS]
 
 
-def tickets(conn, sport: str, date, home: str, away: str, with_key: bool = False) -> dict:
+def tickets(conn, sport: str, date, home: str, away: str, with_key: bool = False,
+            start_only: bool = False) -> dict:
     """The game's tickets on the record, by kind: each one's verdict and its legs'.
     ``date`` is a day or several (_dates); ``with_key`` gives each its journal key
-    (engine/parlayledger.legs_key), which names the same ticket on the report."""
+    (engine/parlayledger.legs_key), which names the same ticket on the report;
+    ``start_only`` keeps only the set its report carried at the start, as the
+    Record counts them (parlayledger.mark_at_start): none for a game whose set
+    was never kept."""
+    from .parlayledger import AT_START
     have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     days = _dates(date)
     if "parlays" not in have or "parlay_legs" not in have or not days:
         return {}
+    only = ""
+    if start_only:
+        if "at_start" not in {r[1] for r in conn.execute("PRAGMA table_info(parlays)")}:
+            return {}
+        only = f" AND {AT_START}"
     out: dict = {}
     for kind, source in TICKETS.items():
         rows = conn.execute(f"SELECT id, status, legs_key FROM parlays WHERE sport=? "
-                            f"AND date IN ({','.join('?' * len(days))}) AND grade=? AND source=? ORDER BY id",
+                            f"AND date IN ({','.join('?' * len(days))}) AND grade=? AND source=?{only} ORDER BY id",
                             (sport, *days, f"{away}@{home}", source)).fetchall()
         got = []
         for pid, status, key in rows:
@@ -195,7 +205,9 @@ def tickets(conn, sport: str, date, home: str, away: str, with_key: bool = False
 
 def of_game(conn, sport: str, date: str, g: dict, report: dict | None = None) -> dict:
     """{"picks": [...], "tickets": {"twos": [...], "threes": [...], "scorers": [...]}} for one
-    game, each part only when the record holds some; {} when it holds none."""
+    game, each part only when the record holds some; {} when it holds none. The tickets are
+    the set its report carried at the start, never the versions the board replaced before it
+    (ZP, 2026-11-20: a game kept before 16 November read "1 of 42")."""
     home, away = str((g or {}).get("home") or ""), str((g or {}).get("away") or "")
     if not sport or not date or not home or not away:
         return {}
@@ -203,7 +215,7 @@ def of_game(conn, sport: str, date: str, g: dict, report: dict | None = None) ->
     ps = picks(conn, sport, date, home, away, names_in(report) if report else ())
     if ps:
         out["picks"] = ps
-    ts = tickets(conn, sport, date, home, away)
+    ts = tickets(conn, sport, date, home, away, start_only=True)
     if ts:
         out["tickets"] = ts
     return out
@@ -231,9 +243,8 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
     version it posts (a week of them, for the NFL: 36 for one game). The
     archive keeps the set the report carried at the start ("parlays",
     engine/reportkeep), so those are the game's tickets here, in the report's
-    order, and the earlier versions are counted beside them ("earlier":
-    {kind: [hit, graded]}); a game kept before the start was (16 November)
-    lists every version, said so ("versions"). A kind the league had on paper
+    order, and only those; a game whose set was never kept (before 16
+    November) lists none, said so ("unkept"). A kind the league had on paper
     at the start was never posted: its kept tickets are under "paper" ({kind:
     [...]}) and the kinds are named in "on_paper" (`_own_tickets`).
 
@@ -264,10 +275,7 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
             game = {"picks": [{k: v for k, v in p.items() if k != "book"}
                               for p in picks(conn, sport, days, home, away, names_in(doc.get("report")),
                                              books=REPORT_BOOKS)]}
-            own, earlier = _own_tickets(ts, doc.get("parlays"))
-            game.update(own)
-            if earlier:
-                game["earlier"] = earlier
+            game.update(_own_tickets(ts, doc.get("parlays")))
             if not member:
                 held = 0
                 for part in ("picks", *TICKETS):
@@ -291,10 +299,18 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
 PAPER_OF = {"threes": "paper_threes", "twos": "paper_twos"}
 
 
-def _own_tickets(ts: dict, kept) -> tuple[dict, dict]:
-    """The game's tickets as the report carried them at the start, in its order,
-    and the earlier versions' count by kind ({kind: [hit, graded]}). With no kept
-    set, or none of its tickets on the record, every version, marked "versions".
+def _own_tickets(ts: dict, kept) -> dict:
+    """The game's tickets as the report carried them at the start, in its order.
+
+    ONE SET A GAME, AND NONE WHERE IT WAS NOT KEPT (ZP, 2026-11-20). Ethan, on
+    rows reading "Parlays 0 of 28" and "1 of 42": "why do we have 30 parlays
+    being made per game?? There should only be 3 parlays made per game". A game
+    whose starting set was never kept (before 16 November), or whose kept set
+    the record never journaled, listed every version the board posted as lines
+    moved, none of them known to be the report's at the start and none counted
+    on the Record; and a kept game counted the versions replaced before it
+    ("earlier"). Neither is listed now: a game with no kept set says so
+    ("unkept") when the record holds tickets for it.
 
     A KIND ITS LEAGUE HAD ON PAPER WAS NEVER POSTED (GPWIN2, 2026-11-18). The
     NBA's three-leg tickets went on paper on 17 November (9 of their last 100
@@ -309,22 +325,19 @@ def _own_tickets(ts: dict, kept) -> tuple[dict, dict]:
     strip = lambda t: {k: v for k, v in t.items() if k != "key"}       # noqa: E731
     keys = lambda lst: [legs_key(t.get("legs") or []) for t in lst or []    # noqa: E731
                         if isinstance(t, dict) and len(t.get("legs") or []) >= 2]
-    out: dict = {}
-    earlier: dict = {}
     kept = kept if isinstance(kept, dict) else {}
     wanted = {kind: keys(kept.get(kind)) for kind in TICKETS}
     paper = {kind: keys(kept.get(PAPER_OF[kind])) for kind in PAPER_OF}
     named = {k for ks in (*wanted.values(), *paper.values()) for k in ks}
     on_record = {t.get("key") for kind in TICKETS for t in ts.get(kind) or []}
     # No set kept at the start (before 16 November), or one the record never
-    # journaled: every version. A kept set that held no ticket held none.
-    every = not kept or (bool(named) and not named & on_record)
+    # journaled: none listed. A kept set that held no ticket held none.
+    if not kept or (named and not named & on_record):
+        return {"unkept": True} if on_record else {}
+    out: dict = {}
     held: dict = {}
     for kind in TICKETS:
         allk = ts.get(kind) or []
-        if every:
-            out[kind] = [strip(t) for t in allk]
-            continue
         order = {k: i for i, k in enumerate(wanted[kind])}
         out[kind] = [strip(t) for t in sorted((t for t in allk if t.get("key") in order),
                                               key=lambda t: order[t["key"]])]
@@ -332,18 +345,12 @@ def _own_tickets(ts: dict, kept) -> tuple[dict, dict]:
         mine = [strip(t) for t in sorted((t for t in allk if t.get("key") in pk), key=lambda t: pk[t["key"]])]
         if mine:
             held[kind] = mine
-        rest = [t for t in allk if t.get("key") not in order and t.get("key") not in pk
-                and t.get("status") in ("won", "lost")]
-        if rest:
-            earlier[kind] = [sum(t["status"] == "won" for t in rest), len(rest)]
-    if every and any(out.values()):
-        out["versions"] = True
     if held:
         out["paper"] = held
     on_paper = [kind for kind in PAPER_OF if kept.get(f"{kind}_paper")]
-    if on_paper and not every:
+    if on_paper:
         out["on_paper"] = on_paper
-    return out, earlier
+    return out
 
 
 def market_words(games: dict) -> dict:

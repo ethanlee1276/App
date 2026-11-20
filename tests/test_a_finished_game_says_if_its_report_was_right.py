@@ -118,16 +118,26 @@ def test_each_finished_report_carries_its_outcome_and_only_a_finished_one():
     rep = {"home": "DET", "away": "NE", "date": "2026-11-15", "sections": [{"key": "x", "blocks": [
         {"type": "list", "items": [{"player": "Hunter Henry"}]}]}]}
     other = {"home": "BUF", "away": "KC", "date": "2026-11-15", O.KEY: {"stale": 1}}
+    # No set marked at the start (a game kept before 16 November): its picks, and none of the board's versions.
     assert O.attach(result, [rep, other], "nfl", path) == 1
-    assert len(rep[O.KEY]["picks"]) == 6 and len(rep[O.KEY]["tickets"]["threes"]) == 2, rep[O.KEY]
+    assert len(rep[O.KEY]["picks"]) == 6 and "tickets" not in rep[O.KEY], rep[O.KEY]
     assert O.KEY not in other, "a game not over carries none, and an old one is taken off"
-    # Read again every build: a pick graded since is counted on the next.
+    # The set its report carried at the start, as the journal marks it (parlayledger.mark_at_start).
     conn = sqlite3.connect(path)
+    PL.ensure_schema(conn)
+    conn.execute("UPDATE parlays SET at_start = 1 WHERE grade = 'NE@DET' AND date = '2026-W11'")
+    conn.commit()
+    O.attach(result, [rep], "nfl", path)
+    assert len(rep[O.KEY]["tickets"]["threes"]) == 2, rep[O.KEY]
+    # A version the board replaced before the start (ZP: "There should only be 3 parlays made per game").
+    conn.execute("UPDATE parlays SET at_start = 0 WHERE grade = 'NE@DET' AND source = 'game_three' AND status = 'lost'")
+    # Read again every build: a pick graded since is counted on the next.
     conn.execute("UPDATE bets SET status='won', actual=6 WHERE player='Sam LaPorta'")
     conn.commit()
     conn.close()
     O.attach(result, [rep], "nfl", path)
     assert next(p for p in rep[O.KEY]["picks"] if p["player"] == "Sam LaPorta")["status"] == "won"
+    assert [t["status"] for t in rep[O.KEY]["tickets"]["threes"]] == ["won"], "the replaced version is not read"
     assert O.attach(result, [rep], "nfl", Path(tempfile.mkdtemp()) / "none.db") == 0, "no journal, nothing read"
     assert O.attach({"date": "2026-W11", "games": "not a list"}, [rep], "nfl", path) == 0, "never raises"
     assert O.of_game(sqlite3.connect(path), "nba", "2026-W11", G) == {}, "another league's record holds none of it"
