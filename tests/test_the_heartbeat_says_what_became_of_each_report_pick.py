@@ -88,6 +88,14 @@ def test_a_refused_pick_says_why():
     assert GP._refused_why([dict(ok, raw_prob=0.80, fair_prob=0.55)]) == "refused_edge", "25 points off the fair price"
     assert GP._refused_why([dict(ok, odds=-400), dict(ok, injury_status="OUT")]) == "refused_out"
     assert GP._refused_why([ok]) == "refused" and GP._refused_why([]) == "refused"
+    # A row with a real price speaks first (20 November 2026): a pick held by a priced row and a projection
+    # with no market is refused for its priced row's reason, not "no real book".
+    proj = dict(ok, has_market=False, odds=None, book="")
+    assert GP._refused_why([dict(ok, odds=-400), proj]) == "refused_price"
+    assert GP._refused_why([proj, dict(ok, raw_prob=0.80, fair_prob=0.55)]) == "refused_edge"
+    assert GP._refused_why([proj, ok]) == "refused", "priced and usable: the reason is something else"
+    assert GP._refused_why([proj, dict(ok, book="proxy")]) == "refused_book", "no row with a real price"
+    assert GP._refused_why([proj, dict(ok, injury_status="Out")]) == "refused_out"
     assert {"refused_out", "refused_book", "refused_price", "refused_edge", "refused"} <= set(GP.PICK_FATES)
 
 

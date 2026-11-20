@@ -2049,11 +2049,18 @@ def _refused_why(rows: list) -> str:
     (``refused_book``: not bettable, a proxy, no price), its price is past the
     cap or the long-price limit (``refused_price``: likely.HEAVIEST_PRICE,
     stakeplan.priced_out), or its number is one the Edge path refuses
-    (``refused_edge``: `credible_row`); ``refused`` for anything else. The
-    first of those, in that order, any of its rows shows."""
+    (``refused_edge``: `credible_row`); ``refused`` for anything else.
+
+    A ROW WITH A REAL PRICE SPEAKS FIRST (20 November 2026). A pick is held by
+    every list that carries it (Most Likely, the pool, the priced props), and
+    the first cut said "no real book" when any one of those rows was a
+    projection with no market or the proxy stand-in, ahead of the reason its
+    priced row was turned down: the NFL's census read 16 of 42 picks
+    refused_book. "No real book" now means none of its rows has a real price;
+    a ruled-out player is said first whatever the rows."""
     from .likely import HEAVIEST_PRICE
     from .stakeplan import priced_out
-    why = set()
+    why, priced = set(), False
     for r in rows or []:
         if str(r.get("injury_status") or "").strip().upper() in _OUT:
             why.add("out")
@@ -2064,11 +2071,14 @@ def _refused_why(rows: list) -> str:
             odds = None
         if (odds is None or r.get("bettable") is False or r.get("has_market") is False
                 or str(r.get("book") or "").strip().lower() in ("", "proxy")):
-            why.add("book")
-        elif odds < HEAVIEST_PRICE or priced_out("edge", odds):
+            continue                                     # says nothing of a priced row's reason
+        priced = True
+        if odds < HEAVIEST_PRICE or priced_out("edge", odds):
             why.add("price")
         elif not credible_row(r):
             why.add("edge")
+    if rows and not priced:
+        why.add("book")
     return next((f"refused_{w}" for w in ("out", "book", "price", "edge") if w in why), "refused")
 
 
