@@ -187,6 +187,13 @@ PAID_KEYS = (
     # watch built from the scan's reads — `scan_reads` under an eighth
     # name. No prop picks are in it; the reads are the paid half all the
     # same. Remembered in the edit that made it, the only time it is cheap.
+    #
+    # ALL OF IT, NOT JUST ITS PICKS (Ethan, 2026-11-20: "free accounts DO NOT
+    # get the parlays and picks in the game report ... Ok I take that back I
+    # don't want the game reports to be free"). A free version with the
+    # picks taken out was considered and turned down: the whole report is a
+    # member's, its words, its reads and its call as much as its picks and
+    # parlays. tests/test_the_game_report_is_a_members.py holds every door.
     "game_reports",
     # WHAT HAPPENED TO EACH PICK (engine/gameresults, 2026-11-16): the
     # journal's verdict on every graded pick, which names the picks.
@@ -384,6 +391,15 @@ PAID_FILES = (
 #: beside a book's line, either is a pick — and the script and the model's
 #: reads are the paid analysis. Those stay behind the plan.
 ROW_PAID_KEYS_BY_FILE = {
+    # THE DRIVE SIMULATION ON EACH NFL GAME (engine/drivesim, `games[].sim`):
+    # the model's own replay of the game, its win share, cover and over. The
+    # game report quotes it ("our simulation of the game, drive by drive,
+    # 4,000 times: the Lions 58%") and the game page's replay panel draws it,
+    # which a free account never sees (detail.js, the walled page); it rode
+    # every public game row all the same until the game reports were made a
+    # member's, all of it (Ethan, 2026-11-20: "I don't want the game reports
+    # to be free"). The rest of the row is the game's facts, and stays.
+    "recommendations.json": ("games", ("sim",)),
     # A team defense's expected sacks, takeaways and touchdowns (`dst`,
     # engine/dstproj) are its stat line: paid like a player's `proj`.
     "fantasy_week.json": ("players", ("proj", "volume", "td_prob", "td_quoted", "td_reasons",

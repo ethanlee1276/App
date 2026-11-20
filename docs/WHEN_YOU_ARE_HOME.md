@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZK. The game reports stay a member's, all of it** (step 799; 20 November). Nothing to run. Your call this morning:
+you first said free accounts should get the report without its picks and parlays, then took it back: the game
+reports are not free. That is how the site already worked, and I checked every door on the live site. The public
+board files carry no report (the NBA's says 9 reports are locked, the NFL's 13, and not one of a report's words is
+in either); a free account's game page has the report taken out with one lock card in its place; Ask refuses a free
+account before it reads anything; a finished game's report needs the membership; Report Picks is a member's page;
+the new live tickets are a count behind a lock; and the sign-up table and the plans page list the reports under
+members. One gap closed: the drive simulation the report quotes ("our simulation of the game, drive by drive, 4,000
+times: the Lions 58%") rode every public NFL game row, readable by anyone who opened the file, though the page never
+showed it to a free account. It is now cut from the public copy and stays on the members' copy. The game's facts
+stay free (the line, the venue, the weather, the injuries, the scan's numbers), and so does the Record: after a game
+ends, its graded picks and parlays show there with a check or an X, the way every book's results do, because the
+public record is the proof. Tell me if you want those hidden from free accounts too. Your decision is written beside
+the paid keys in engine/gate.py and held door by door by tests/test_the_game_report_is_a_members.py.
+
 **ZJ. The game reports' parlays, followed live** (step 798; 19 November). Nothing to run. One of my own ideas, since
 you asked for some: a member who played a report's ticket had nowhere to watch it. The Live tab followed the Edge
 and Most Likely picks and the slips a reader saved; the tickets every game report builds went quiet at kickoff, and
