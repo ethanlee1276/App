@@ -725,6 +725,18 @@ def _board_counts(path: str) -> dict:
     if any("td_rule" in r or r.get("method_note") or r.get("method_fails") for r in rows):
         out["method_capped"] = sum(1 for r in rows if r.get("method_note"))
         out["td_rule_met"] = sum(1 for r in rows if (r.get("td_rule") or {}).get("meets"))
+    # A PROP'S OWN PRICE AS ITS CEILING (engine/likelyboard PRICE_CEILING,
+    # college, step ZX): props read, with a real price, above it, moved, and
+    # how many of those were already posted — and, the board's tiers after it.
+    # Counts only; present only on a board that applies it.
+    pc = (b.get("likely_board") or {}).get("price_ceiling")
+    if isinstance(pc, dict):
+        out["price_ceiling"] = {k: int(pc.get(k) or 0) for k in ("rows", "priced", "above", "moved", "posted")}
+        if pc.get("error"):
+            out["price_ceiling"]["error"] = str(pc["error"]).split(":")[0]
+        tiers = (b.get("likely_board") or {}).get("tiers")
+        if isinstance(tiers, dict):
+            out["board_tiers"] = {str(k): int(v or 0) for k, v in tiers.items()}
     return out
 
 

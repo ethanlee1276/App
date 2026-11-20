@@ -31,7 +31,9 @@ def _read(player, team, opp, read, label, market):
 
 def _prop(player, team, opp, market, prob, side="OVER"):
     return {"kind": "prop", "player": player, "team": team, "opponent": opp, "market": market,
-            "side": side, "line": 4.5, "odds": -130, "model_prob": prob, "implied_prob": prob - 0.03}
+            # At or under its own price's chance (-240 needs 70.6%): a college prop above
+            # its price shows the price's number (likelyboard.PRICE_CEILING).
+            "side": side, "line": 4.5, "odds": -240, "model_prob": prob, "implied_prob": prob - 0.03}
 
 
 def _board(sport, home, away, rows, reads):

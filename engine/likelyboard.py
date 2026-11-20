@@ -599,6 +599,109 @@ def price_trust_rule(sport: str):
     return PRICE_TRUST.get(sp)
 
 
+#: A COLLEGE PROP IS NEVER SHOWN ABOVE ITS OWN PRICE (step ZX, 2026-11-20;
+#: Ethan: "I really want the best picks ... for NBA and for college
+#: football"). The NFL's rule above reads three books' fair price at the
+#: pick's line, and college props rarely have three: pricetrust found a
+#: market chance on 8 of 2,087 college picks (2026-10-31), so college could
+#: never join it. A prop always has its own price, though — the best any book
+#: offered — and a bet at that price needs a known chance to break even (the
+#: books' cut left in: no hold is assumed off it). Every graded prop the
+#: college board posted, 26 September to 19 November, from the public
+#: receipts (1,525 props):
+#:
+#:     shown above its own price    617   said 66.9%   hit 55.1%   the price said 57.1%
+#:     shown at or under it         908   said 57.7%   hit 58.5%
+#:
+#: Held to the price, the board's log loss fell from 0.6992 to 0.6781, better
+#: in eight of its nine weeks (one rule, nothing fitted, so every week is a
+#: week it never saw), and each day's five likeliest props hit 66.9% where
+#: the same five by our own number hit 61.1% while claiming 74.0% (175
+#: picks). So the card and the tiers read a number the record backs.
+#: Props only: 16 game lines and 9 touchdowns sat above their price, too few
+#: to judge. The NBA's and the NHL's boards hit at or above what they claim
+#: (the same test moved neither), so they keep their own numbers.
+#: A pick on paper (engine/paperhold) is left as it is: the paper record goes
+#: on measuring our own claim, which is what it releases a kind on.
+#: Off without a deploy: ``sudo ./deploy/setenv.sh QB_PRICE_CEILING off``.
+PRICE_CEILING = ("cfb",)
+PRICE_CEILING_ENV = "QB_PRICE_CEILING"
+
+
+def price_ceiling_on(sport: str) -> bool:
+    import os
+    if os.environ.get(PRICE_CEILING_ENV, "").strip().lower() in ("off", "0", "no", "false"):
+        return False
+    return str(sport or "").lower() in PRICE_CEILING
+
+
+def own_price_chance(r: dict):
+    """The chance a bet at this pick's own price needs to break even (the
+    books' cut left in), or None where it has no real price."""
+    from .odds import american_to_prob
+    try:
+        o = int(float(r.get("odds")))
+    except (TypeError, ValueError):
+        return None
+    if abs(o) < 100 or r.get("has_market") is False or str(r.get("book") or "").lower() == "proxy":
+        return None
+    return float(american_to_prob(o))
+
+
+def ceiling_back(r: dict) -> bool:
+    """Show a prop at its own price's number where ours runs above it
+    (``price_ceiling``, set by `hold_to_own_price`); True when it moved. The
+    chance before rides along as ``ceiling_from`` and ``trust_from`` (the
+    journal keeps the second, so the rule can be re-tested on what it was
+    applied to) and the first claim as ``board_raw_prob``."""
+    cap = r.get("price_ceiling")
+    if cap is None or r.get("model_prob") is None:
+        return False
+    ours, cap = float(r["model_prob"]), float(cap)
+    if cap >= ours - 1e-9:
+        return False
+    r["ceiling_from"] = r["trust_from"] = round(ours, 4)
+    r.setdefault("board_raw_prob", ours)
+    r["model_prob"] = round(cap, 4)
+    r["trust_note"] = (f"we said {ours:.0%}; a bet at its best price needs {cap:.0%} to break even, and college "
+                       f"props we rated above their price have hit what the price said, so we show the "
+                       f"price's number")
+    restate_lock(r)
+    return True
+
+
+def hold_to_own_price(rows: list, sport: str, stats: dict | None = None) -> int:
+    """PRICE_CEILING on a league's props; returns how many moved. ``stats``
+    takes the counts the board carries: props read, props with a real price,
+    props above it, props moved, and how many of those were already posted."""
+    on = price_ceiling_on(sport)
+    if stats is not None:
+        stats.update(on=on, rows=0, priced=0, above=0, moved=0, posted=0)
+    if not on:
+        return 0
+    moved = 0
+    for r in rows:
+        if lane_of(r) != "prop" or r.get("model_prob") is None or r.get("paper_hold"):
+            continue
+        if stats is not None:
+            stats["rows"] += 1
+        # One rule a pick: a prop the books' field already holds keeps that number.
+        cap = None if r.get("trust_rule") else own_price_chance(r)
+        if cap is None:
+            r.pop("price_ceiling", None)
+            continue
+        r["price_ceiling"] = round(cap, 4)
+        if stats is not None:
+            stats["priced"] += 1
+            stats["above"] += float(r["model_prob"]) > cap + 1e-9
+        if ceiling_back(r):
+            moved += 1
+            if stats is not None:
+                stats["moved"] += 1
+                stats["posted"] += bool(r.get("locked"))
+    return moved
+
+
 def book_quotes(result: dict, rows=()) -> dict:
     """``{(player, market): [quote, ...]}`` — every book's number on each
     prop the build priced (`all_lines`, then the alternate ladder), off the
@@ -1092,6 +1195,14 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         paper_held = _paper.stamp([pool[k] for k in order], sport, result)
     except Exception as exc:                                 # noqa: BLE001
         paper_error = f"{type(exc).__name__}: {exc}"
+    # A PROP'S OWN PRICE IS ITS CEILING (PRICE_CEILING, college). After the
+    # paper holds, which judge our own claim and keep the picks they hold as
+    # they are; every row left reads the number the page will show.
+    ceiling_stats: dict = {}
+    try:
+        hold_to_own_price([pool[k] for k in order], sport, stats=ceiling_stats)
+    except Exception as exc:                                 # noqa: BLE001
+        ceiling_stats["error"] = f"{type(exc).__name__}: {exc}"
     rows, tiers, lanes, held = [], {t: 0 for t, _ in TIERS}, {}, []
     for k in order:
         r = pool[k]
@@ -1118,6 +1229,13 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
             notes["matchup"] = (notes["matchup"] + " — but this pick came from the matchup read itself,"
                                 " so it does not count as a second opinion")
         checks["market"], notes["market"] = market_check(r)
+        # NOT A SECOND OPINION ON ITSELF, AGAIN. A prop shown at its price's
+        # number (`ceiling_back`) agrees with its price because it IS the
+        # price: the market check says nothing either way, so a pick we rated
+        # above its price is never a Top pick on the price's say-so.
+        if r.get("ceiling_from") is not None and checks["market"] is True:
+            checks["market"] = None
+            notes["market"] += " — the number shown is the price's own, so this does not count as a second opinion"
         checks["record"], notes["record"] = record_check(record, r.get("market"), _side(r), prob)
         why_held = held_reason(r, checks)
         if not why_held:
@@ -1191,6 +1309,8 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
     rows.sort(key=lambda r: (rank[r["tier"]], -r["matchup_strength"], -float(r["model_prob"])))
     out = {"rows": rows, "tiers": tiers, "lanes": lanes, "matchup_source": source,
            "capped": capped, "held": held, "price_trust": trust_stats, "paper_held": paper_held}
+    if ceiling_stats.get("on") or ceiling_stats.get("error"):
+        out["price_ceiling"] = ceiling_stats
     if paper_error:
         out["paper_error"] = paper_error
     return out
@@ -1424,7 +1544,7 @@ def harmonize(result: dict) -> int:
             # THE PRICE ON A POSTED PICK (`trust_price`): the list's number
             # is today's chance, so the price judges it here too, and the
             # list shows what the board shows — one bet, one chance.
-            if give_back(b):
+            if give_back(b) or ceiling_back(b):
                 src.setdefault("listed_prob", q)
                 src["model_prob"] = b["model_prob"]
                 src["trust_note"] = b["trust_note"]

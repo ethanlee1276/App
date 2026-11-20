@@ -35,8 +35,10 @@ def _rec(player, market, mult, why="NYJ allow 7.4 catches a game to slot receive
                                              {"key": "matchup", "mult": mult, "why": why}]}}
 
 
-def _ml(player, market, side="over", prob=0.64, odds=-150):
-    """Our chance and the book's within the market check's agreement."""
+def _ml(player, market, side="over", prob=0.64, odds=-180):
+    """Our chance and the book's within the market check's agreement, and our
+    chance at or under its own price's (-180 needs 64.3%): a college prop
+    above its price shows the price's number (likelyboard.PRICE_CEILING)."""
     return {"player": player, "team": "DET", "opponent": "NYJ", "market": market, "side": side,
             "line": 5.5, "model_prob": prob, "odds": odds, "implied_prob": 0.60, "kind": "prop"}
 

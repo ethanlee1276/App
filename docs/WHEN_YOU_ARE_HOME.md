@@ -9338,6 +9338,24 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZX. A college football prop is never shown above its own price** (step 812; 20 November). Nothing to run. You
+asked for the NFL's pick work on every other league, college football and the NBA first. I measured before changing
+anything, on the site's own public file of every graded pick (57,100 rows). The NBA's and hockey's boards hit at or
+above what they claim (NBA 64.5% where we said 61.1% over 3,086 picks; their report picks 70% and 73%), so their
+numbers stay. College football's did not: of 1,525 graded board props since 26 September, the 617 we showed above
+their own best price said 66.9% and hit 55.1%, where the price itself said 57.1%; the 908 at or under their price
+said 57.7% and hit 58.5%. The NFL's fix reads three books' fair price, which college props almost never have (8 of
+2,087 picks on 31 October), so college could not use it. Every prop has its own price, though, so a college prop is
+now shown at the chance a bet at its best price needs to break even whenever ours runs above it, and the card says
+so ("we said 70%; a bet at its best price needs 58% to break even..."). Tried on the same record, that number was
+closer to what happened in eight of the nine weeks, and each day's five likeliest props hit 66.9% against 61.1% when
+ranked by our own number (175 picks). The report card, the tiers and the parlay legs read the board, so they follow.
+A pick shown at its price's number is never a Top pick on the price agreeing with it. Picks already on paper are
+left alone, so the paper record keeps measuring our own claim. Props only: too few game lines (16) and touchdowns
+(9) sat above their price to judge. The heartbeat's college line now carries `price_ceiling` (props read, priced,
+above, moved, already posted) and `board_tiers`, counts only. To switch it off: `cd /srv/qellys && sudo
+./deploy/setenv.sh QB_PRICE_CEILING off && sudo systemctl restart qellys`.
+
 **ZW. Basketball's tickets say their size; a read's chance is grey** (step 811; 20 November). Nothing to run. Drawn
 and looked at, a basketball game on Report Picks: its six tickets read "Parlay 1" to "Parlay 3" and then "Two-leg
 parlay 1" to "Two-leg parlay 3" under a heading that said "Parlays and pairs", with no pairs. A game that posts both
