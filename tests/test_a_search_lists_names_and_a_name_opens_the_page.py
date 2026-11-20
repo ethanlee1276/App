@@ -389,6 +389,10 @@ def test_in_a_browser_a_name_is_a_door_to_the_page_and_back():
         out["ask"] = page.evaluate("() => askState().pick")
         page.evaluate("() => openPlayer('Tyreek Hill')")
         page.wait_for_function("() => location.hash === '#player/tyreek-hill'", timeout=8000)
+        # The page drawn for HIM: the last player's page matches any player-page selector until the new one
+        # draws, and under a busy gate the test read Josh Allen's hero (gate 604).
+        page.wait_for_function("() => ((document.querySelector('.plr-hero') || {}).innerText || '').includes('Tyreek')",
+                               timeout=30000)
         page.wait_for_selector(".plr .plr-tonight .profile", timeout=30000)
         out["trending"] = page.inner_text(".plr-hero")
         out["asked"] = len(asked)
