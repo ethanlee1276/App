@@ -44,6 +44,13 @@ const GLOSSARY = [
   ["Calibration", "Whether our percentages come true: picks we called 60% should hit about 60% of the time."],
   ["Brier", "A score for probability forecasts, lower is better. Compared against the market’s own score on the same bets."],
   ["De-vig", "Removing the book’s margin from a pair of prices so they add to 100% and read as a fair chance."],
+  ["Parlay", "Several bets on one ticket at a bigger price. It pays only if every one of them wins; a game report’s parlays are bets from that one game."],
+  ["Leg", "One bet inside a parlay. A leg that lands exactly on its number is a push and drops out; the rest of the ticket still counts."],
+  ["Push", "A bet that lands exactly on its line (say, 5 catches on a 5 line): no win, no loss, the stake comes back."],
+  ["Sharp book", "A book that takes big bets from professionals and moves its price fast, so its price is the best single guess at the real chance. The scanner measures the other books against it."],
+  ["Steam", "Several books moving the same line together inside an hour: the mark professional money leaves."],
+  ["Arbitrage", "Both sides of a bet priced at different books so that betting each side comes out ahead whichever way it lands. Rare, and gone within minutes."],
+  ["Middle", "The Over at a low line at one book and the Under at a higher line at another: if the result lands between the two lines, both bets win."],
   ["Long shot", "A bet at long odds tracked in its own bucket, never mixed into the headline record."],
   ["Prediction market", "Kalshi and Polymarket: exchanges where traders buy contracts on outcomes. Their prices are shown as a chance and as odds, beside the books’."],
   ["Zeno", "A person’s real tickets, shown beside the model’s picks and never inside them."],
@@ -5098,10 +5105,10 @@ function renderScanner() {
   // budget pull) empty sections are the norm, not a bug — say so up front.
   const os = d.odds_status || {};
   const freshness = os.source === "cache"
-    ? `<div class="ls-note">Prices are from the last budgeted pull (cached — no
-       API spend). Arbs and middles come from catching books mid-move, so a
-       single frozen snapshot rarely shows them; scanning sharpens when pulls
-       resume normal frequency after the credit reset.</div>`
+    ? `<div class="ls-note">These prices are from our last saved pull.
+       Arbitrage and middles come from catching books mid-move, so a saved
+       snapshot rarely shows them; they come back when our regular price pulls
+       resume.</div>`
     : "";
 
   // Sharp money: anchor picks (priced off the sharp book's fair value) and
@@ -5146,11 +5153,11 @@ function renderScanner() {
     <div class="hd-state" title="How much less likely this book says the bet is than the other books do, in percentage points of implied probability"><b class="hd-pl" style="color:var(--good)">${t.gap_pts.toFixed(2)} pts cheaper</b>
       <span>implied ${(t.implied * 100).toFixed(1)}% here, ${(t.consensus * 100).toFixed(1)}% elsewhere</span></div></div>`;
 
-  const scanFoot = `<p class="list-note">Positive-EV bets live on the
-      <a href="#edge" data-view="edge">Edge Picks</a> page — that’s the model’s job. This page
-      needs no model: it’s the books disagreeing with each other. Arbitrage and middle
-      prices move fast; verify at the book before betting. Books limit accounts that
-      only arb — mix it into normal betting.</p>`;
+  const scanFoot = `<p class="list-note">Bets our numbers say are worth more than their price
+      live on the <a href="#edge" data-view="edge">Edge Picks</a> page: that is the model’s job.
+      This page needs no model: it is the books disagreeing with each other. Arbitrage and
+      middle prices move fast, so check the price at the book before betting. Books limit
+      accounts that only bet arbitrage, so mix it into normal betting.</p>`;
   const stale = (d.market_scan && d.market_scan.stale) || [];
   const longs = (d.market_scan && d.market_scan.longshots) || [];
   /* v5: A QUIET BOARD IS ONE CARD. Six sections each drawing their own
@@ -5163,27 +5170,27 @@ function renderScanner() {
   if (!stale.length && !longs.length && !arbs.length && !middles.length && !lows.length
       && !anchors.length && !steam.length) {
     host.innerHTML = `${freshness}<div class="hd-quiet lv-quiet"><i class="live-dot paused"></i>Nothing out of
-      line right now — no stale lines, no plus-money props, no arbs, no middles, no low holds,
-      nothing sharp-flagged. The scanner checks every refresh; gaps open when one book moves
-      before the others, and they last minutes.</div>${boardEmptyDoors("scanner")}${scanFoot}`;
+      line right now: no stale lines, no plus-money props, no arbitrage, no middles, no low holds,
+      no sharp moves. The scanner checks every refresh; gaps open when one book moves before the
+      others, and they last minutes.</div>${boardEmptyDoors("scanner")}${scanFoot}`;
     bindEmptyDoors(host);
     return;
   }
   host.innerHTML = freshness + (arbs.length || middles.length ? stakeInput : "")
     + scanSection("Stale lines",
       staleNote()
-      + "a book pricing a side cheaper than every other book. No forecast involved — "
-      + "measured on 30,448 harvested quotes, taking these beat the closing consensus "
-      + "64.8% of the time for +1.49 points of CLV (z=11.6). Verify the price is still "
-      + "up before betting; that is the whole game here",
+      + "a book pricing a side cheaper than every other book. No forecast involved: on "
+      + "30,448 of these we saved, the price taken here beat where the market closed "
+      + "64.8% of the time, by 1.49 points on average, far too often to be luck. Check the "
+      + "price is still up before betting; that is the whole game here",
       (d.market_scan && d.market_scan.stale) || [], staleRow,
       "No book is currently out of line with the field. This fills in as books "
       + "update at different speeds — most often right after lineups post.")
     + scanSection("Priced against you — plus-money props",
-      "not a play, an avoidance rule. Measured on 27,226 settled quotes joined to real "
-      + "results: backing plus-money props cost -16.7% per unit against -6.5% for short "
-      + "prices — the books shade big payouts 2.6x harder. No forecast is involved and "
-      + "none helps; this is what the PRICE costs before anyone has a view on the player",
+      "props to avoid, not to bet. On 27,226 settled props, betting the plus-money ones "
+      + "lost 16.7 cents a dollar against 6.5 cents for short prices: the books shade a big "
+      + "payout about 2.6 times harder. No forecast is involved and none helps; this is what "
+      + "the price costs before anyone has a view on the player",
       (d.market_scan && d.market_scan.longshots) || [],
       (t) => `<div class="hd-row hd-scan">${scanMark(t)}<div class="hd-what"><b>${escapeHtml(t.bet)}</b>
           <span>${escapeHtml(t.book)} ${american(t.odds)} · implied ${(t.implied * 100).toFixed(1)}%${
@@ -5191,7 +5198,7 @@ function renderScanner() {
         <div class="hd-state"><b class="hd-pl" style="color:var(--bad)">${(t.measured_roi * 100).toFixed(1)}% historically</b>
           <span>${escapeHtml(t.band)} band</span></div></div>`,
       "No plus-money quotes on today’s board — main props or long shots. That’s the cheap place to be.")
-    + scanSection("Arbitrage", "opposite sides priced so a margin is locked whichever way it lands — IF both legs fill at the shown prices before they move. Rare across US books and gone in minutes",
+    + scanSection("Arbitrage", "both sides priced so you come out ahead whichever way it lands, if both bets go in at these prices before they move. Rare across US books and gone in minutes",
       arbs, (a) => {
         const so = stake * a.stake_over_pct, su = stake * (1 - a.stake_over_pct);
         const ret = stake * a.profit_pct;
@@ -5203,14 +5210,14 @@ function renderScanner() {
       },
       "No arbitrage pairs right now. Real arbs across legal US books appear a few times a week and last minutes — this scanner checks every refresh.")
     + (middles.length ? `<div class="section-title">Middles
-        <span class="sub">— Over at a low line + Under at a higher one: land between them and BOTH win; miss and one leg pays for the other, less the vig. Grouped by player, best first; dollars are for the stake above</span></div>
+        <span class="sub">— the Over at a low line and the Under at a higher one: land between them and both win; miss and one pays for the other, less the books’ cut. Grouped by player, best first; dollars are for the stake above</span></div>
       <div class="hd-card">${scanMiddleGroups(middles).map(({ who, list }) =>
         scanMiddleRow(list[0], stake) + (list.length > 1 ? `<details class="scan-more"><summary>${
           plural(list.length - 1, "more window")} on ${escapeHtml(who)}</summary>${
           list.slice(1).map((m) => scanMiddleRow(m, stake)).join("")}</details>` : "")).join("")}</div>`
       : scanSection("Middles", "", [], null,
         "No middle windows open — books currently agree on every line. Gaps open when one book moves before the others."))
-    + scanSection("Low holds", "two-sided quotes under 2% combined juice — a turnover feature, not a profit feature: the cheapest way to churn promo/rollover volume or keep an account looking recreational",
+    + scanSection("Low holds", "both sides priced so the books keep under 2% between them. Not a way to profit: the cheapest way to bet through a promo’s rollover, or to keep an account looking casual",
       lows, (h) => scanPairRow(h,
         `<b class="hd-pl">${(h.hold_pct * 100).toFixed(1)}% hold</b>
          <span>≈ $${(h.cost_per_1k != null ? h.cost_per_1k : h.hold_pct * 1000).toFixed(0)} per $1,000 bet through</span>`),
