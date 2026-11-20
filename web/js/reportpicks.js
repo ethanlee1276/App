@@ -556,8 +556,10 @@ function rpBetWords(p) {
   }
   const who = escapeHtml(p.player || "");
   if (RP_SCORE[m]) return `${who} ${down ? "not " : ""}${RP_SCORE[m]}`;
+  // The leg's own word first (a board's leg carries `market_label`, "3-Pointers Made"): the engine's words
+  // (marketWord) arrive with the record, after the page's first draw, and before them a key read "fg3m".
   return `${who} ${down ? "under" : "over"}${p.line == null ? "" : ` ${num(p.line)}`} ${
-    escapeHtml((RP_WORDS[m] || marketWord(m)).toLowerCase())}`;
+    escapeHtml((p.market_label || RP_WORDS[m] || marketWord(m)).toLowerCase())}`;
 }
 function rpPickLI(p) {
   const st = String(p.status || ""), m = String(p.market || ""), a = Number(p.actual);

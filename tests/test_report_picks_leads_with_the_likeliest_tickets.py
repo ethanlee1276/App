@@ -40,8 +40,13 @@ HARNESS = STUBS + """
 """
 
 
+#: The board's own words for its market keys, as a published leg carries them (gameparlays.LEG_KEYS).
+LABELS = {"reb": "Rebounds", "ast": "Assists", "fg3m": "3-Pointers Made", "stl": "Steals"}
+
+
 def _leg(player, market, side, line, team="BOS"):
-    return {"player": player, "team": team, "market": market, "side": side, "line": line, "odds": -150, "p": 0.7}
+    return {"player": player, "team": team, "market": market, "market_label": LABELS.get(market, ""),
+            "side": side, "line": line, "odds": -150, "p": 0.7}
 
 
 def _board():
@@ -50,14 +55,17 @@ def _board():
         # Still to play, its likeliest a two-leg ticket at 58% (the three-leg one is 34%).
         {"away": "IND", "home": "BOS", "twos": [two(0.58, [_leg("Jaylen Brown", "assists", "OVER", 3.5),
                                                             _leg("Pascal Siakam", "reb", "OVER", 5.5, "IND")])],
-         "threes": [two(0.34, [_leg("Jaylen Brown", "assists", "OVER", 3.5)] * 3)]},
+         "threes": [two(0.34, [_leg("Jaylen Brown", "assists", "OVER", 3.5), _leg("Derrick White", "fg3m", "OVER", 1.5),
+                               _leg("Andrew Nembhard", "ast", "OVER", 4.5, "IND")])]},
         # Still to play: its best a three-leg ticket at 41%.
         {"away": "MIA", "home": "CHI", "twos": [],
-         "threes": [two(0.41, [_leg("Bam Adebayo", "reb", "UNDER", 10.5, "MIA")] * 3, take_words="+210")]},
+         "threes": [two(0.41, [_leg("Bam Adebayo", "reb", "UNDER", 10.5, "MIA"), _leg("Josh Giddey", "stl", "UNDER", 1.5, "CHI"),
+                               _leg("Tyler Herro", "fg3m", "UNDER", 3.5, "MIA")], take_words="+210")]},
         # Still to play: likeliest by our numbers, but no book pays enough (our card says pass): not offered.
-        {"away": "DEN", "home": "UTA", "twos": [two(0.66, [_leg("Nikola Jokic", "ast", "OVER", 7.5, "DEN")] * 2,
-                                                     playable=False),
-                                                 two(0.52, [_leg("Jamal Murray", "fg3m", "OVER", 1.5, "DEN")] * 2)]},
+        {"away": "DEN", "home": "UTA", "twos": [two(0.66, [_leg("Nikola Jokic", "ast", "OVER", 7.5, "DEN"),
+                                                            _leg("Aaron Gordon", "reb", "OVER", 4.5, "DEN")], playable=False),
+                                                 two(0.52, [_leg("Jamal Murray", "fg3m", "OVER", 1.5, "DEN"),
+                                                            _leg("Lauri Markkanen", "reb", "OVER", 6.5, "UTA")])]},
         # Under way: a started game is no selection.
         {"away": "LAL", "home": "GSW", "twos": [two(0.70, [_leg("LeBron James", "reb", "OVER", 6.5, "LAL")] * 2)]},
         # Still to play, a game of scorer pairs only: none in the running.
@@ -96,6 +104,9 @@ def test_the_three_likeliest_tickets_of_the_games_still_to_play_one_a_game():
     assert "Jaylen Brown over 3.5 assists + Pascal Siakam over 5.5 rebounds" in first
     assert "<b>58%</b> by our numbers · take it at +120 or better" in first
     assert "Heat at Bulls · three legs" in html and "take it at +210 or better" in html
+    # The leg's own word for its market, before the engine's words have arrived with the record ("fg3m" was the key).
+    assert "Jamal Murray over 1.5 3-pointers made + Lauri Markkanen over 6.5 rebounds" in html
+    assert "fg3m" not in html and " reb " not in html
     assert html.index("rpk-IND-BOS") < html.index("rpk-DEN-UTA") < html.index("rpk-MIA-CHI"), "likeliest first"
     assert "The likeliest tickets today<span>by our numbers, one a game</span>" in html
     # On the tab: after the day's line, before the chips and the games.
