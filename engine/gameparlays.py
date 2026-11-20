@@ -1665,18 +1665,19 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
                   key=lambda l: (_leg_id(l) not in own, not board_pick(l), -float(l["p"])))
     wider = pool + more[:max(0, MAX_POOL - len(pool))]
     filled = board_filled = props_filled = 0
-    fill_fit = fill_clear = fill_all = None
+    fill_fit = fill_clear = None
     if len(chosen) < THREE_MIN:
         outside = lambda t: sum(_leg_id(l) not in own for l in t["legs"])            # noqa: E731
         every = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(wider, 3)) if t]
         # No more than FILL_OUTSIDE_MAX legs the report did not pick on a ticket.
         trios = [t for t in every if outside(t) <= FILL_OUTSIDE_MAX]
         cands = [t for t in trios if float(t["joint"]) >= LONG_FLOOR]
-        # What a game short of its three says it had (the heartbeat's reasons):
-        # trios of its legs without a conflict, and those at LONG_FLOOR; and
-        # every trio at LONG_FLOOR, whoever's legs (its note, `_uses_words`).
-        fill_fit, fill_clear = len(trios), len(cands)
-        fill_all = sum(1 for t in every if float(t["joint"]) >= LONG_FLOOR)
+        # What a game short of its three says it had (the heartbeat's reasons
+        # and its note's `_uses_words`): every trio of its legs without a
+        # conflict, whoever's legs (the last level tries them all, ZR), and
+        # those at LONG_FLOOR.
+        fill_fit = len(every)
+        fill_clear = sum(1 for t in every if float(t["joint"]) >= LONG_FLOOR)
         rank = lambda t: (outside(t), -float(t["joint"]), -(t.get("ev_at_naive") or -9))  # noqa: E731
         got = choose(cands, THREE_MIN, rank=rank, keep=keep)
         # Each wider level adds to what the one before it made, never in its
@@ -1737,7 +1738,7 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
             # Tickets the Most Likely board's picks stood in on (`board_pick`), and
             # tickets the game's other props made up (ZR).
             "board_filled": board_filled, "props_filled": props_filled,
-            "fill_fit": fill_fit, "fill_clear": fill_clear, "fill_clear_all": fill_all,
+            "fill_fit": fill_fit, "fill_clear": fill_clear,
             # The report's own picks among the legs a ticket could take (a ticket takes two at least).
             "wider_own": sum(1 for l in wider if _leg_id(l) in own)}
 
@@ -1796,7 +1797,7 @@ def _uses_words(made: dict) -> str:
     """What else stops a game short when more of its trios reach LONG_FLOOR
     than it made: a leg rides on MAX_USES tickets at most (`choose`)."""
     n = len(made.get("threes") or [])
-    return f" with no leg on more than {MAX_USES} tickets" if n and int(made.get("fill_clear_all") or 0) > n else ""
+    return f" with no leg on more than {MAX_USES} tickets" if n and int(made.get("fill_clear") or 0) > n else ""
 
 
 def _and(words: list) -> str:

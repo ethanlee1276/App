@@ -602,8 +602,10 @@ def _board_counts(path: str) -> dict:
                 why[k] = why.get(k, 0) + 1
             out["threes_short_why"] = why
             # A "no fit" game, by what stopped it (gameparlays.tickets_of's
-            # counts): no three of its legs without a conflict, trios that all
-            # sit under the longer ticket's floor, or a single one that clears.
+            # counts, every trio of its legs since ZR): no three of its legs
+            # without a conflict, trios that all sit under the longer ticket's
+            # floor, or trios that clear while each of its legs already rides
+            # on two of its tickets (`legs_used`, gameparlays.MAX_USES).
             # A game short of the report's own picks (few_picks): how many picks
             # its reports carry, how many the board prices at any chance, and how
             # many stay at 50% or better once corrected (engine/legfit) — counts.
@@ -621,7 +623,7 @@ def _board_counts(path: str) -> dict:
                 if int(x.get("legs_wider") or 0) < 3:
                     continue
                 k = ("conflicts" if not int(x["fill_fit"]) else "under_floor" if not int(x.get("fill_clear") or 0)
-                     else "one_trio")
+                     else "legs_used")
                 nofit[k] = nofit.get(k, 0) + 1
             if nofit:
                 out["threes_no_fit_why"] = nofit

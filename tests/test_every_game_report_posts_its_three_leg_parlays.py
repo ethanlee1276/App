@@ -408,7 +408,7 @@ def test_the_longer_tickets_floor_and_a_short_game_says_what_stopped_it():
         finally:
             L._full_copy = was
     assert got["threes_short_why"] == {"no_fit": 3, "few_props": 1}, got
-    assert got["threes_no_fit_why"] == {"conflicts": 1, "under_floor": 1, "one_trio": 1}, got
+    assert got["threes_no_fit_why"] == {"conflicts": 1, "under_floor": 1, "legs_used": 1}, got
 
 
 def test_a_ticket_on_paper_from_before_still_journals_and_grades():

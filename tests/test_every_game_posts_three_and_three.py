@@ -70,6 +70,8 @@ def test_each_wider_level_adds_to_what_the_one_before_made():
     assert own == [3, 2, 1], own
     assert [t.get("fill") for t in made["threes"]] == [None, "one", "props"]
     assert (made["filled"], made["props_filled"], made["board_filled"]) == (2, 1, 0), made
+    # The short-game counts read every trio the last level could try: ten of five legs.
+    assert (made["fill_fit"], made["fill_clear"]) == (10, 10), (made["fill_fit"], made["fill_clear"])
     last = made["threes"][-1]
     assert any("E Five over 2.5 rush_att (62%) and F Six over 2.5 rec_yds (60%) are not this report's picks: "
                "props the board priced, added so the game has 3 three-leg parlays" in c for c in last["caveats"]), \
