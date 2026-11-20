@@ -71,6 +71,33 @@ def test_the_public_board_carries_none_of_the_report():
         assert words not in text, words
 
 
+def test_a_public_file_written_before_the_cut_is_sealed_at_the_next_start():
+    """The startup seal and the server's own check read gate._paid_rows: it counts the rows still carrying a
+    paid field now (`_row_fields`), so the NFL file published before this deploy loses its simulation when the
+    server starts, not at its board's next build."""
+    import tempfile
+    full = _full_board()
+    public_then = dict(gate.redact(full, "recommendations.json"))
+    public_then["games"] = [dict(g, sim={"trials": 4000, "p_home_win": 0.58}) for g in public_then["games"]]
+    assert gate._paid_rows(public_then, "recommendations.json") == 1, "the row with the simulation is counted"
+    assert gate._paid_rows(gate.redact(public_then, "recommendations.json"), "recommendations.json") == 0
+    keep = gate.enabled
+    gate.enabled = lambda: True
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            web = Path(d) / "web" / "data"
+            web.mkdir(parents=True)
+            (web / "recommendations.json").write_text(json.dumps(public_then))
+            assert gate.unsealed(web) == [{"board": "recommendations.json", "rows": 1}]
+            res = gate.seal(web_data=web, verbose=False)
+            assert [x["board"] for x in res["sealed"]] == ["recommendations.json"]
+            after = json.loads((web / "recommendations.json").read_text())
+            assert all("sim" not in g for g in after["games"]) and gate.unsealed(web) == []
+            assert after["games"][0]["spread"] == full["games"][0]["spread"], "the game's facts stay"
+    finally:
+        gate.enabled = keep
+
+
 def test_the_games_facts_stay_free():
     public = gate.redact(_full_board(), "recommendations.json")
     g = public["games"][0]

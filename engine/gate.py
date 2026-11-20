@@ -1222,7 +1222,23 @@ def _paid_rows(payload: dict, name: str) -> int:
     if is_wholly_paid(name):
         # Sealed copies keep only the stamps plus the locked block.
         return 0 if payload.get("locked_reason") else _size(payload)
-    return _count_paid(payload, paid_keys_for(name))
+    return _count_paid(payload, paid_keys_for(name)) + _row_fields(payload, name)
+
+
+def _row_fields(payload: dict, name: str) -> int:
+    """Rows still carrying a paid FIELD (ROW_PAID_KEYS_BY_FILE): the second cut
+    `redact` makes, counted the way it makes it.
+
+    THE SAME LESSON AS `_count_paid`, ONE LEVEL DOWN (20 November 2026). The
+    count matched the key strip and not the row cut, so a public file written
+    before a field was named paid kept that field through a deploy: the startup
+    seal saw nothing to do, and the server served the file as it stood. Found
+    with the drive simulation on every public NFL game row, the morning the
+    game reports were made a member's, all of it."""
+    rows = ROW_PAID_KEYS_BY_FILE.get(Path(str(name or "")).name)
+    if not rows or not isinstance(payload.get(rows[0]), list):
+        return 0
+    return sum(1 for r in payload[rows[0]] if isinstance(r, dict) and any(k in r for k in rows[1]))
 
 
 def _count_paid(node: dict, paid, path: str = "") -> int:

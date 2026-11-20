@@ -12912,6 +12912,9 @@ def _paywall_audit_cli() -> None:
         elif still:
             bad += 1
             gated = [k for k in _gate.paid_keys_for(f.name) if doc.get(k)]
+            if _gate._row_fields(doc, f.name):
+                key, fields = _gate.ROW_PAID_KEYS_BY_FILE[f.name]
+                gated.append(f"{key}[].{'/'.join(fields)}")
             print(f"  UNSEALED  {f.name}  ->  {', '.join(gated)} "
                   f"({still} paid row(s) still on the public path)")
         else:
