@@ -467,10 +467,16 @@ def still_to_play(legs: list, board: dict, now=None) -> list:
 #:     game (`_scrambler`). A quarterback the charting has no count for is left
 #:     alone, as is one whose runs are mostly called: their own ticket of 12
 #:     November carried Jayden Daniels 25+ rushing yards.
-#:   * A backup back: a running back who is not the team's lead carrier by the
-#:     scan's carry share (`_lead_carry`); a back the scan has no usage for is
-#:     left alone, since nothing says which he is.
+#:   * A backup back: a running back behind the team's lead carrier (the
+#:     scan's carry share, `_lead_carry`) with under BACKUP_CARRIES carries a
+#:     game. v3.1's touchdown module names "a back with 8-13 carries" as a role
+#:     of its own, so the line is theirs. The first cut called every back who
+#:     was not the lead a backup, and on its first live board (20 November)
+#:     college's six games went from 12 three-leg tickets to 8: a committee
+#:     back with 45% of the carries is no backup. A back the scan has no usage
+#:     for is left alone, since nothing says which he is.
 OFF_PARLAY_SPORTS = ("nfl", "cfb")
+BACKUP_CARRIES = 8.0
 _RUSH_ATT = ("rush_att", "carries", "rush_attempts")
 _BACK_YARDS = ("rush_yds", "rec_yds", "rush_rec_yds")
 #: Scrambles as a share of a quarterback's carries from which his rushing over
@@ -538,9 +544,10 @@ def off_parlays(sport: str, leg: dict, reads: dict | None = None, lead: dict | N
     if leg.get("_qb_unrated") and mkt in _CATCH and pos != "QB":
         return "new_qb"
     if pos in ("RB", "FB") and mkt in _BACK_YARDS:
-        mine = _f((read.get("usage") or {}).get("carry_share"))
+        u = read.get("usage") or {}
+        mine, cpg = _f(u.get("carry_share")), _f(u.get("carries_pg"))
         top = (lead if lead is not None else _lead_carry(reads)).get(leg.get("team") or "")
-        if mine is not None and top is not None and mine < top - 1e-9:
+        if mine is not None and top is not None and mine < top - 1e-9 and cpg is not None and cpg < BACKUP_CARRIES:
             return "backup_back"
     return ""
 

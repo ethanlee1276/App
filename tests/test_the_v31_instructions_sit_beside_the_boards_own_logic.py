@@ -103,9 +103,13 @@ def test_the_quarterback_card_says_when_the_new_starter_cannot_be_rated():
 
 
 READS = {("jahmyr gibbs", "DET"): {"player": "Jahmyr Gibbs", "team": "DET", "pos": "RB",
-                                   "usage": {"carry_share": 0.58}},
+                                   "usage": {"carry_share": 0.58, "carries_pg": 15.5}},
+         # A second back with a role of his own (v3.1's "back with 8-13 carries"), and a backup.
          ("david montgomery", "DET"): {"player": "David Montgomery", "team": "DET", "pos": "RB",
-                                       "usage": {"carry_share": 0.34}},
+                                       "usage": {"carry_share": 0.34, "carries_pg": 9.2}},
+         ("craig reynolds", "DET"): {"player": "Craig Reynolds", "team": "DET", "pos": "RB",
+                                     "usage": {"carry_share": 0.06, "carries_pg": 1.8}},
+         ("sione vaki", "DET"): {"player": "Sione Vaki", "team": "DET", "pos": "RB", "usage": {"carry_share": 0.02}},
          # 8.4 carries a game, 2.5 of them scrambles: called runs. 3.1 a game, 2.4 scrambles: scrambles.
          ("jayden daniels", "WAS"): {"player": "Jayden Daniels", "team": "WAS", "pos": "QB",
                                      "usage": {"carries_pg": 8.4}},
@@ -133,11 +137,15 @@ def test_what_their_rules_keep_off_parlays():
     assert off(_leg("Jared Goff", "rush_yds", side="UNDER", position="QB")) == "", \
         "their list names the attempts under, not the yards under"
     assert off(_leg("Jared Goff", "pass_yds", position="QB")) == ""
-    assert off(_leg("David Montgomery", "rush_yds", position="RB")) == "backup_back"
-    assert off(_leg("David Montgomery", "rec_yds")) == "backup_back", "the read gives a leg its position"
-    assert off(_leg("David Montgomery", "rush_att", position="RB")) == "", "yardage, not carries"
+    assert off(_leg("Craig Reynolds", "rush_yds", position="RB")) == "backup_back"
+    assert off(_leg("Craig Reynolds", "rec_yds")) == "backup_back", "the read gives a leg its position"
+    assert off(_leg("Craig Reynolds", "rush_att", position="RB")) == "", "yardage, not carries"
+    assert off(_leg("David Montgomery", "rush_yds", position="RB")) == "", \
+        "9 carries a game behind the lead is a role of its own, not a backup"
     assert off(_leg("Jahmyr Gibbs", "rush_yds", position="RB")) == "", "the lead back"
-    assert off(_leg("Craig Reynolds", "rush_yds", position="RB")) == "", "no usage on file: nothing says which"
+    assert off(_leg("Sione Vaki", "rush_yds", position="RB")) == "", "no carries a game on file: nothing says"
+    assert off(_leg("Jermar Jefferson", "rush_yds", position="RB")) == "", "no usage on file: nothing says which"
+    assert G.BACKUP_CARRIES == 8.0
     assert off(_leg("Amon-Ra St. Brown", "receptions", position="WR", _qb_unrated=True)) == "new_qb"
     assert off(_leg("Amon-Ra St. Brown", "receptions", position="WR")) == ""
     assert off(_leg("Jared Goff", "rush_yds", position="QB"), "nba") == "", "football's rules only"
@@ -153,16 +161,17 @@ def _row(player, market, side, prob, position, team="DET", **kw):
 def test_the_boards_legs_leave_those_picks_out_and_the_pick_stays_a_pick():
     rows = [_row("Jahmyr Gibbs", "rush_yds", "OVER", 0.66, "RB"),
             _row("David Montgomery", "rush_yds", "OVER", 0.65, "RB"),
+            _row("Craig Reynolds", "rush_yds", "OVER", 0.64, "RB"),
             _row("Jared Goff", "rush_att", "UNDER", 0.70, "QB"),
             _row("Amon-Ra St. Brown", "receptions", "OVER", 0.68, "WR", qb_card={"unrated": True})]
     board = {"sport": "nfl", "most_likely": rows, "recommendations": [],
              "games": [{"home": "DET", "away": "NYG", "date": "2099-01-01", "kickoff": "2099-01-01T18:00:00Z"}],
              "scan_reads": {"NYG@DET": {"players": list(READS.values())}}}
     legs = {l["player"] for l in G.legs_for(board, "nfl")}
-    assert legs == {"Jahmyr Gibbs"}, legs
-    assert len(board["most_likely"]) == 4, "nothing is taken off the board"
+    assert legs == {"Jahmyr Gibbs", "David Montgomery"}, legs
+    assert len(board["most_likely"]) == 5, "nothing is taken off the board"
     hoops = dict(board, sport="nba")
-    assert len(G.legs_for(hoops, "nba")) == 4, "another league's legs are untouched"
+    assert len(G.legs_for(hoops, "nba")) == 5, "another league's legs are untouched"
     assert "our_rule" in G.PICK_FATES
 
 
