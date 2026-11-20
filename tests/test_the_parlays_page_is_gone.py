@@ -110,6 +110,19 @@ def test_ask_answers_parlays_from_each_games_report():
     got = askbot.our_picks(boards, kind="parlays", sport="nba")
     assert got["count"] == 1 and got["rows"][0]["game"] == "IND @ PHI", got
     assert got["rows"][0]["legs"] == ["Tyrese Maxey Over 24.5 points (-110)"], got
+    assert "playable" not in got["rows"][0] and "game_started" not in got["rows"][0], "said only when so"
+    # What Report Picks leaves out of the likeliest tickets (ZM) is said to Ask too, so its answer leaves it out:
+    # a ticket its own card says to pass on, and a game already under way (its tickets kept from the start).
+    leg = {"player": "Joel Embiid", "side": "Over", "line": 9.5, "market": "rebounds", "odds": -120}
+    boards["nba"]["game_parlays"]["games"] += [
+        {"game": "BOS @ NYK", "home": "NYK", "away": "BOS", "twos": [{"joint": 0.61, "legs": [leg], "playable": False}]},
+        {"game": "LAL @ GSW", "home": "GSW", "away": "LAL", "kept": True, "twos": [{"joint": 0.58, "legs": [leg]}]}]
+    rows = askbot.our_picks(boards, kind="parlays", sport="nba")["rows"]
+    assert [r["game"] for r in rows] == ["BOS @ NYK", "LAL @ GSW", "IND @ PHI"], "likeliest first"
+    assert rows[0]["playable"] is False and "game_started" not in rows[0]
+    assert rows[1]["game_started"] is True and "playable" not in rows[1]
+    assert "playable false is a ticket its own card says to pass on" in " ".join(
+        t["description"] for t in askbot.TOOLS if t["name"] == "our_picks")
 
 
 def _browser(run):

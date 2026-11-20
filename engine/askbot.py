@@ -595,8 +595,9 @@ TOOLS = [
            "stake": {"type": "number", "description": "Optional: the stake (default 100)."}}, "odds"),
     _tool("our_picks",
           "Our model's picks tonight, by kind: best_bets (staked edges), most_likely (likeliest to hit), "
-          "long_shots, game_lines (spreads, totals, moneylines), parlays (each game's three-leg parlays and scorer "
-          "pairs from its report), pick_of_the_day (each "
+          "long_shots, game_lines (spreads, totals, moneylines), parlays (each game's two- and three-leg parlays "
+          "and scorer pairs from its report, likeliest first; one marked playable false is a ticket its own card "
+          "says to pass on, and game_started true is a game already under way), pick_of_the_day (each "
           "league's) or top_pick_today (the one best pick across every league, with the ones it beat) — on "
           "one league's board or all of them, best first.",
           {"kind": {"type": "string", "enum": list(PICK_KINDS)}, "sport": _ANY_SPORT,
@@ -2289,6 +2290,13 @@ def _game_ticket(t: dict, league: str, pool: str, g: dict) -> dict:
     said = [str(c) for c in t.get("caveats") or [] if c]
     if said:
         out["its_card_says"] = said[:3]
+    # What Report Picks leaves out of "the likeliest tickets today" (js/reportpicks.js rpTopTickets), said so
+    # the answer leaves it out too: a ticket its own card says to pass on (no book likely pays enough for it),
+    # and a game already under way (its tickets kept as they stood at the start: engine/reportkeep).
+    if t.get("playable") is False:
+        out["playable"] = False
+    if g.get("kept"):
+        out["game_started"] = True
     return out
 
 
