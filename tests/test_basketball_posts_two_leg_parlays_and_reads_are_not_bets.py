@@ -197,6 +197,21 @@ def test_the_bet_carries_the_word_and_the_report_says_it():
     assert '" A read is graded on this page only."' in src
 
 
+def test_a_read_never_takes_a_bets_place_on_the_card():
+    """The card ranks four picks (six on a featured game), one a player: every bet comes before any read,
+    so a market we cannot price never pushes a bet off the card and the record."""
+    from types import SimpleNamespace
+    from engine import gamereport as GR
+    reads = [_row(player=f"Read {i}", model_prob=0.80 - i / 100) for i in range(4)]
+    bets = [_row(market="receptions", bettable=True, player=f"Bet {i}", model_prob=0.62 - i / 100)
+            for i in range(3)]
+    c = SimpleNamespace(result={"likely_board": {"rows": reads + bets}}, teams=("NYG", "WAS"), featured=False)
+    got = [r["player"] for r in GR._card_rows(c)]
+    assert got == ["Bet 0", "Bet 1", "Bet 2", "Read 0"], got
+    c.featured = True
+    assert [r["player"] for r in GR._card_rows(c)] == ["Bet 0", "Bet 1", "Bet 2", "Read 0", "Read 1", "Read 2"]
+
+
 def _sections(*bets):
     return [{"key": "card", "blocks": [{"type": "picks", "items": [{"bet": b} for b in bets]}]}]
 

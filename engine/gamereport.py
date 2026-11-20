@@ -3650,10 +3650,13 @@ def _card_pool(c: Ctx, key: str = "rows") -> list:
 
 def _card_rows(c: Ctx) -> list:
     """The card's picks: one a player, at most CARD_MAX (a featured game's
-    CARD_MAX_FEATURED), best first."""
+    CARD_MAX_FEATURED), best first, every bet ahead of any read (READ_ONLY): a
+    market we cannot price never takes a bet's place on the card, and so on
+    the record (ZT: 19 of the NFL's 47 report picks on 20 November were reads)."""
     most = CARD_MAX_FEATURED if c.featured else CARD_MAX
+    pool = _card_pool(c)
     out, seen = [], set()
-    for r in _card_pool(c):
+    for r in [r for r in pool if not read_only(r)] + [r for r in pool if read_only(r)]:
         who = str(r.get("player") or "")
         if not who or who in seen:
             continue

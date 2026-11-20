@@ -9350,7 +9350,8 @@ card and reads, with no price to take it at, and on Report Picks, which leaves i
 game's card leaves it out of "Our picks", and Ask says so too. The report book never journals one: those journaled
 before the label and still open are taken off the next time their board is journaled, and graded ones keep their
 grade. Matchup picks never carried the flag the Most Likely rows do, so a yardage matchup pick read as a bet; they
-carry it now.
+carry it now. On the picks card, which ranks four picks a game (six on a featured one), every bet now comes before
+any read, so a read never takes a bet's place on the card or the record.
 
 **ZS. Follow-ups to ZR** (step 807; 20 November). Nothing to run. The report's one-line summary names the touchdown
 pair our research ranks best (a pair with a stand-in scorer comes last), not just the likeliest one. The heartbeat's
