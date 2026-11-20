@@ -141,6 +141,11 @@ def test_the_pages_carry_the_kind():
     assert '["Two-leg parlays", twos]' in reportpicks and 'sec("The two-leg parlays", rpTicketsHTML(twos, "twos", sport))' \
         in reportpicks
     assert 'kind === "two" ? `Two-leg parlay ${n}`' in report
+    # A game that posts both sizes names both ("Three-leg parlay 1" beside "Two-leg parlay 1"); one whose
+    # pair slot holds no scorer pairs heads its tickets "Parlays", not "Parlays and pairs".
+    assert 'kind === "three" ? `${both ? "Three-leg parlay" : "Parlay"} ${n}`' in report
+    assert 'const both = (g.twos || []).length > 0;' in report
+    assert '${(tix.scorers || []).length ? "Parlays and pairs" : "Parlays"}' in reportpicks
     gr = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
     assert '("twos", "Best two-leg parlay", likeliest)' in gr and '_h("Two-leg parlays")' in gr
     from engine import askbot
@@ -279,6 +284,9 @@ def test_the_pages_mark_a_read_and_leave_it_out_of_the_counts():
     assert 'if (!r || (r.bettable === false && r.kind !== "game")) continue;' in detail
     css = (ROOT / "web" / "css" / "report.css").read_text(encoding="utf-8")
     assert ".gr-pick-read {" in css and ".gr-pick-readwhy {" in css
+    # On Report Picks a read's chance is drawn muted, not the green of a pick we stake.
+    assert "row.replace('class=\"hd-row', 'class=\"hd-row rpk-read')" in rp
+    assert ".rpk-read .hd-p {" in (ROOT / "web" / "css" / "reportpicks.css").read_text(encoding="utf-8")
     ask = (ROOT / "engine" / "askbot.py").read_text(encoding="utf-8")
     assert '"read_not_a_bet"' in ask, "Ask says it too"
 

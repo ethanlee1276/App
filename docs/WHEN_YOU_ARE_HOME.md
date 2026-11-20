@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZW. Basketball's tickets say their size; a read's chance is grey** (step 811; 20 November). Nothing to run. Drawn
+and looked at, a basketball game on Report Picks: its six tickets read "Parlay 1" to "Parlay 3" and then "Two-leg
+parlay 1" to "Two-leg parlay 3" under a heading that said "Parlays and pairs", with no pairs. A game that posts both
+sizes now names both ("Three-leg parlay 1"), the heading says "Parlays" where there are no scorer pairs, and a
+read's chance is drawn grey, as a dropped pick's is, not the green of a pick we stake. Last night's tickets with an
+under leg against those without: the NBA's three-leg 3 of 7 and 0 of 2, two-leg 2 of 4 and 1 of 1; the NHL's
+three-leg 11 of 19 and 6 of 6, two-leg 9 of 14 and 4 of 4. One night, too few to say anything about two unders
+sharing a ticket.
+
 **ZV. A matchup read's own pick carries the flag** (step 810; 20 November). Nothing to run. After ZU the heartbeat's
 pick census still counted 10 NFL report picks as `refused_unreliable` against 2 said as reads. A matchup read's own
 Most Likely pick is a short copy of the board's row (`likely._pick_brief`), and the copy left out the flag that says

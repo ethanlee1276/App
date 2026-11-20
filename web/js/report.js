@@ -896,9 +896,10 @@
       : who.length === n && n > 2 ? `If any leg is out or its number moves: ${leg}`
       : `If ${who.slice(0, -1).join(", ")} or ${who[who.length - 1]}${sep}${leg}`));
   }
-  function card(t, n, kind, sport) {
+  // ``both``: the game posts two-leg tickets beside its three-leg ones (basketball, ZT), so each says its size.
+  function card(t, n, kind, sport, both) {
     const pct = (x) => `${Math.round(Number(x || 0) * 100)}%`;
-    const title = kind === "three" ? `Parlay ${n}` : kind === "two" ? `Two-leg parlay ${n}`
+    const title = kind === "three" ? `${both ? "Three-leg parlay" : "Parlay"} ${n}` : kind === "two" ? `Two-leg parlay ${n}`
       : `${["nfl", "cfb"].includes(sport) ? "Touchdown" : "Scorer"} pair ${n}`;
     // The legs-unrelated chance only where it differs (a link counted): beside an equal number it says it twice.
     const unrel = pct(t.independent) !== pct(t.joint) ? ` (${pct(t.independent)} if the legs were unrelated)` : "";
@@ -947,7 +948,8 @@
         : g.twos_paper ? `<p class="gr-note">Two-leg parlays: on paper for now, built and graded but not posted.</p>`
         : g.twos_note ? `<p class="gr-note">No two-leg parlay: ${escapeHtml(g.twos_note)}</p>` : "";
       // The three-leg tickets first, then the pairs: basketball's two-leg tickets (ZT), the scorer pairs.
-      return `${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
+      const both = (g.twos || []).length > 0;
+      return `${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport, both)) })
           + (g.threes_note ? `<p class="gr-note">${escapeHtml(g.threes_note)}</p>` : "")
         : g.threes_paper ? `<p class="gr-note">Three-leg parlays: on paper for now, built and graded but not posted.</p>`
         : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}${twos}

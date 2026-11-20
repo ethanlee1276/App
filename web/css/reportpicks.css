@@ -26,6 +26,9 @@ button.rpk-rec:empty { display: none; }
 .rpk-title span { display: block; margin-top: 2px; color: var(--text-mute); font-size: var(--fs-sm); }
 .rpk-title .rpk-tally { margin-top: 3px; color: var(--text); font-weight: 600; }
 .rpk-body { padding: 0 14px 14px; }
+/* A read, not a bet (js/reportpicks.js RP_READ): its chance muted, not the green of a pick we stake. */
+.rpk-read .hd-p { color: var(--text-mute); border-color: transparent; background: transparent;
+  background-color: var(--fill-tone); }
 .rpk-sub { margin: 10px 0 6px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; color: var(--text-mute); }
 .rpk-open { margin-top: 12px; font-size: var(--fs-sm); }

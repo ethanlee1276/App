@@ -104,8 +104,12 @@ function rpGameHTML(d, key, bets, tix, open) {
                   tix && rpParlays(tix) ? plural(rpParlays(tix), "parlay") : "",
                   tix && (tix.scorers || []).length ? plural(tix.scorers.length, `${pair} pair`) : ""].filter(Boolean);
   const tally = fin ? rpTallyWords(rpTally(g, bets, tix)) : "";
-  const rows = bets.map((r) => deckPickRow(r, { door: likelyOpen(r),
-    note: [r && r.read_only ? RP_READ : "", rpSourceNote(r)].filter(Boolean).join(" · ") })).join("");
+  const rows = bets.map((r) => {
+    const row = deckPickRow(r, { door: likelyOpen(r),
+      note: [r && r.read_only ? RP_READ : "", rpSourceNote(r)].filter(Boolean).join(" · ") });
+    // A read's chance is drawn muted, as a dropped pick's is: our number ranks it and can't price it.
+    return r && r.read_only ? row.replace('class="hd-row', 'class="hd-row rpk-read') : row;
+  }).join("");
   return `<details class="rpk-game" id="rpk-${escapeAttr(away)}-${escapeAttr(home)}"${open ? " open" : ""}>
     <summary class="rpk-head">
       <span class="rpk-title"><b>${escapeHtml(teamName(away))} at ${escapeHtml(teamName(home))}</b>${
@@ -118,7 +122,7 @@ function rpGameHTML(d, key, bets, tix, open) {
     <div class="rpk-body">
       <h4 class="rpk-sub">Picks</h4>
       ${rows ? `<div class="hd-card tn-rows">${rows}</div>` : `<p class="set-note">No single pick on this game clears our bars.</p>`}
-      ${tix ? `<h4 class="rpk-sub">Parlays and pairs</h4><div class="rpk-tix" data-rpk-tix="${escapeAttr(key)}"></div>` : ""}
+      ${tix ? `<h4 class="rpk-sub">${(tix.scorers || []).length ? "Parlays and pairs" : "Parlays"}</h4><div class="rpk-tix" data-rpk-tix="${escapeAttr(key)}"></div>` : ""}
       ${g ? `<button type="button" class="btn ghost rpk-open" data-gid="${escapeAttr(gameId(g))}">Open the report</button>` : ""}
     </div>
   </details>`;
