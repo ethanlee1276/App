@@ -27,6 +27,11 @@ def _fn(name):
     return APP[i:APP.index("\n}\n", i) + 2]
 
 
+def _const(name):
+    i = APP.index(f"const {name} = ")
+    return APP[i:APP.index("\n", i) + 1]
+
+
 def _node(prog):
     path = os.path.join(tempfile.mkdtemp(), "t.js")
     with open(path, "w", encoding="utf-8") as fh:
@@ -38,16 +43,29 @@ def test_the_price_to_take():
     if not shutil.which("node"):
         return
     prog = ("const american = (o) => (o > 0 ? `+${o}` : `−${Math.abs(o)}`); const escapeAttr = (s) => s;\n"
-            + _fn("obShownProb") + _fn("obFairAmerican") + _fn("obImplied") + _fn("obPriceHTML")
+            + _fn("obShownProb") + _fn("obFairAmerican") + _fn("obImplied") + _const("OB_GRADE_LABEL")
+            + _fn("obGradeHTML") + _fn("obPriceHTML")
             + "\nconsole.log(JSON.stringify([obFairAmerican(0.55), obFairAmerican(0.43), obFairAmerican(0.5),"
               " obPriceHTML({model_prob: 0.55, odds: -130}), obPriceHTML({model_prob: 0.61, odds: -125}),"
-              " obPriceHTML({model_prob: 0.43, odds: 110}), obPriceHTML({model_prob: 0.6})]));")
-    f55, f43, f50, odunze, loveland, swift, none = _node(prog)
+              " obPriceHTML({model_prob: 0.43, odds: 110}), obPriceHTML({model_prob: 0.6}),"
+              # A row the board graded (engine/pricegrade: the NBA's and hockey's picks) says its grade.
+              " obPriceHTML({model_prob: 0.64, odds: -150, price_grade: {grade: 'green', words: 'G'}}),"
+              " obPriceHTML({model_prob: 0.64, odds: -220, price_grade: {grade: 'red', words: 'R'}}),"
+              # Where the ring shows the tier's real rate, the card grades that number by the same bars.
+              " obPriceHTML({model_prob: 0.58, tier_rate: 0.66, odds: -180, price_grade: {grade: 'red', words: 'R'}}),"
+              " obPriceHTML({model_prob: 0.70, tier_rate: 0.63, odds: -180, price_grade: {grade: 'green', words: 'G'}})]));")
+    f55, f43, f50, odunze, loveland, swift, none, green, red, tier_up, tier_down = _node(prog)
     assert (f55, f43, f50) == (-122, 133, -100)
     assert "take at −122 or better" in odunze and 'class="ob-fair wait"' in odunze
     assert "good price · fair −156" in loveland and 'class="ob-fair good"' in loveland
     assert "take at +133 or better" in swift, "a +110 touchdown at 43% needs +133"
     assert none == ""
+    assert 'class="ob-fair grade-green" title="G">Green price · fair −178<' in green, green
+    assert 'class="ob-fair grade-red" title="R">Red price · take at −178 or better<' in red, red
+    # -180 needs 64.3%: a tier that has hit 66% is over it (Green); one that has hit 63% is 1.3 points under (Yellow).
+    assert 'grade-green' in tier_up and "Green price · fair −194" in tier_up, tier_up
+    assert "this tier’s picks have hit 66%" in tier_up and "needs 64% to break even" in tier_up
+    assert 'grade-yellow' in tier_down and "Yellow price · take at −170 or better" in tier_down, tier_down
 
 
 def test_picks_that_ride_together():
