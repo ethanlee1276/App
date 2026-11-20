@@ -950,5 +950,76 @@
           : (g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : "")}`;
     } finally { RESULTS = was; CLOSED = shut; }
   }
-  window.QBReport = { html, block, toText, teaser, gameTickets, slipCombine };
+  /* OUR REPORT PARLAYS, LIVE (engine/reportlive, GET /api/report_live; 20 November 2026). The Live tab followed
+     the Edge and Most Likely picks and the slips a reader saved; the tickets every game report builds were
+     followed nowhere once their game started. Each game under way with its posted tickets: where each stands,
+     a dot a leg, and under it each leg's number so far beside what it still needs. The words are the engine's
+     (`words`, `need`, `pick`); this draws them, for a member: a reader without the membership never loads this
+     script for it (app.js reportLiveLockHTML draws their lock card), and a game saved for later keeps its
+     numbers to itself (opts.spoiled, app.js). */
+  const LIVE_LEG = { won: "In", lost: "Missed", push: "Push" };
+  const LIVE_TICKET = { won: "Won", lost: "Lost", push: "Push", alive: "Alive" };
+  function liveLegHTML(l, key) {
+    const under = l.side === "under" || l.side === "no";
+    // The pick's own words, the player's name set apart ("Jalen Brunson" · "over 24.5 points").
+    const who = String(l.player || ""), said = String(l.pick || "");
+    const rest = who && said.startsWith(who) ? said.slice(who.length).trim() : said;
+    const mark = LIVE_LEG[l.result];
+    const chip = mark ? `<span class="grl-chip ${escapeAttr(l.result)}">${mark}</span>`
+      : l.need ? `<span class="grl-chip">${escapeHtml(l.need)}</span>`
+      : l.note ? `<span class="grl-chip quiet">${escapeHtml(l.note)}</span>` : "";
+    const line = Number(l.line), cur = Number(l.current);
+    // The number so far ticks to its new value on the next read (visuals.js mountLiveTicks): red when an under's climbs.
+    const has = l.current == null ? "" : `<span class="grl-has">Has <b data-tick="rl:${escapeAttr(key)}" data-tick-v="${
+      escapeAttr(String(l.current))}"${under ? ' data-tick-mode="invert"' : ""}>${escapeHtml(String(l.current))}</b>${
+      line > 0.5 ? ` of ${escapeHtml(String(l.line))}` : ""}</span>`;
+    const bar = l.current != null && line > 0.5
+      ? `<span class="grl-prog" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, Math.round(100 * cur / line)))}%"></i></span>` : "";
+    return `<li class="grl-leg${l.result ? ` r-${escapeAttr(l.result)}` : ""}${under ? " under" : ""}">
+      <div class="grl-leg-h"><span class="gr-parlay-who"><span class="gr-parlay-face">${
+        playerAvatar(l.player, l.team, { size: 24, headshot: l.headshot })}</span><b>${escapeHtml(who || said)}</b></span>${
+        who && rest ? `<span class="grl-pick">${escapeHtml(rest)}</span>` : ""}${chip}</div>
+      ${has || bar ? `<div class="grl-leg-m">${has}${bar}</div>` : ""}</li>`;
+  }
+  function liveTicketHTML(t, key) {
+    const state = LIVE_TICKET[t.state] ? t.state : "alive";
+    const dots = (t.legs || []).map((l) => `<i${l.result ? ` class="${escapeAttr(l.result)}"` : ""}></i>`).join("");
+    return `<div class="grl-t s-${state}">
+      <div class="grl-t-h"><b>${escapeHtml(t.title || "Parlay")}</b><span class="grl-dots" aria-hidden="true">${dots}</span>
+        <span class="grl-t-st">${escapeHtml(t.words || LIVE_TICKET[state])}</span></div>
+      <ol class="grl-legs">${(t.legs || []).map((l, i) => liveLegHTML(l, `${key}|${i}`)).join("")}</ol></div>`;
+  }
+  function liveGameHTML(g, league, opts) {
+    const live = g.state === "live";
+    const key = `${league}|${g.away}@${g.home}`;
+    const veiled = opts && typeof opts.spoiled === "function" && opts.spoiled(league, g);
+    const score = !veiled && g.away_score != null && g.home_score != null
+      ? `${escapeHtml(g.away)} ${escapeHtml(String(g.away_score))} – ${escapeHtml(String(g.home_score))} ${escapeHtml(g.home)}`
+      : `${escapeHtml(g.away)} at ${escapeHtml(g.home)}`;
+    return `<div class="card grl-game${live ? " live" : ""}">
+      <div class="grl-game-h"><b>${score}</b><span class="grl-clock${live ? " live" : ""}">${
+        escapeHtml(veiled ? "Spoiler-free" : g.clock || (live ? "Live" : "Final"))}</span><span class="grl-lg">${
+        escapeHtml(String(league).toUpperCase())}</span></div>
+      ${veiled ? `<p class="gr-note">You saved this game for later, so its tickets wait with it: open the game to see them.</p>`
+        : (g.tickets || []).map((t, i) => liveTicketHTML(t, `${key}|${t.kind}${i}`)).join("")}</div>`;
+  }
+  function liveTickets(doc, opts) {
+    if (!doc || doc.locked || !(doc.tickets > 0)) return "";
+    const head = `<div class="section-title">Our report parlays, live
+      <span class="sub">— every game report’s tickets, leg by leg while the games are played</span></div>`;
+    const all = (doc.leagues || []).flatMap((x) => (x.games || []).flatMap((g) => g.tickets || []));
+    const tally = ["won", "alive", "lost"].map((s) => [all.filter((t) => t.state === s).length, s])
+      .filter(([n]) => n).map(([n, s]) => `${n} ${LIVE_TICKET[s].toLowerCase()}`).join(" · ");
+    return `<div class="grl">${head}${tally ? `<p class="grl-tally">${escapeHtml(tally)}</p>` : ""}
+      ${(doc.leagues || []).map((x) => (x.games || []).map((g) => liveGameHTML(g, x.league, opts)).join("")).join("")}</div>`;
+  }
+  //: One game's tickets for its live page's picks rail (app.js reportLiveSlot): the page has the score already.
+  function liveGame(doc, league, away, home) {
+    const g = ((((doc || {}).leagues || []).find((x) => x.league === league) || {}).games || [])
+      .find((x) => x.away === away && x.home === home);
+    if (!g || !(g.tickets || []).length) return "";
+    return `<div class="pbp-picks-head">Our report parlays<span class="mini">${g.tickets.length}</span></div>
+      <div class="grl grl-rail">${g.tickets.map((t, i) => liveTicketHTML(t, `${league}|${away}@${home}|${t.kind}${i}`)).join("")}</div>`;
+  }
+  window.QBReport = { html, block, toText, teaser, gameTickets, slipCombine, liveTickets, liveGame };
 })();

@@ -9338,6 +9338,25 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZJ. The game reports' parlays, followed live** (step 798; 19 November). Nothing to run. One of my own ideas, since
+you asked for some: a member who played a report's ticket had nowhere to watch it. The Live tab followed the Edge
+and Most Likely picks and the slips a reader saved; the tickets every game report builds went quiet at kickoff, and
+those are the bets you care most about. Now, for every game under way in every league, the Live tab has "Our report
+parlays, live" under the scoreboard: each posted ticket with a dot a leg and where it stands ("Alive: 1 of 3 legs
+in", "One leg to go: Scottie Barnes", "Won: all 3 legs hit", "Lost: Jalen Brunson missed"), and under it each leg
+with the player's face, the pick, the number so far against its line as a bar, and what it still needs in one line
+("Needs 2 more", "Can give up 10 more"). An under past its number is lost at once and an over past its number is in,
+whatever the clock says. The same tickets sit on each live game's own page, at the end of its picks rail, in every
+sport. A game that has ended keeps its tickets there, settled on the final box, until the board moves on. It costs
+nothing: the tickets are the board's own (a started game's are kept as they stood), and each leg's number comes off
+the scoreboard and box files the live loop already writes every twelve seconds. The page asks every 30 seconds while
+a followed game is being played, one answer serves every member for eight seconds, and the report's script is only
+loaded when there is a ticket to draw. Paper tickets are not listed. It is a member's: a free account gets the
+site's lock card saying how many tickets are being followed in how many games, and no ticket (the report's script is
+never even loaded for them). A game you saved for later keeps its numbers to itself. Ask reads the same thing ("is
+our Knicks parlay still alive?"). Checked by tests/test_a_reports_parlays_are_followed_live.py and
+tests/test_pbp_our_picks.py.
+
 **ZI. The game report's folded titles say their answers, and the wording pass** (step 797; 19 November). Nothing to
 run. I went through the game report page as a member sees it, start to end, on a phone. Three things. First, the
 report reads with our picks and the short version open and everything else folded to its title, and a title said

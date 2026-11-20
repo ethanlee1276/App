@@ -1373,6 +1373,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._report_record(parse_qs(parsed.query))
         if parsed.path in ("/api/report_tickets", "/api/report_tickets/"):
             return self._report_tickets(parse_qs(parsed.query))
+        if parsed.path in ("/api/report_live", "/api/report_live/"):
+            return self._report_live()
         if parsed.path in ("/api/explain", "/api/explain/"):
             return self._explain(parse_qs(parsed.query))
         if parsed.path.startswith("/unsubscribe/") and len(parsed.path) > 13:
@@ -6509,6 +6511,36 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
             return self._send(503, b'{"error":"the record could not be read"}', ".json")
         return self._send(200, json.dumps({"league": league, "member": member, "games": games,
                                            "words": reportoutcome.market_words(games)}).encode(), ".json")
+
+    def _report_live(self):
+        """Every game under way with its report's posted tickets: each leg's number so far, what it still
+        needs, and where the ticket stands (engine/reportlive), for the Live tab's "Our report parlays, live".
+        Ethan, 2026-11-19: "do any other work and ideas you think will help the site in any way".
+
+        A MEMBER'S: the tickets are the board's `game_parlays`, a paid key, read from the private copy
+        (gate.board_source) through the one parse Ask keeps (askbot.board_at). A reader without the membership
+        is told how many tickets are being followed in how many games, and no ticket (reportlive.counts).
+        One answer serves every member for a few seconds (reportlive.CACHE_S), so the boards are only looked
+        at when it has to be made again."""
+        from engine import askbot as AB
+        from engine import gate, reportlive
+        if self._rate_limited(RATE_GAME_PER_MIN, "report_live"):
+            return
+        member = True
+        if gate.enabled():
+            A = _acct()
+            conn = A.connect()
+            try:
+                member = bool(self._entitled(conn, self._account(conn)))
+            finally:
+                conn.close()
+        try:
+            doc = reportlive.snapshot(lambda: {sp: AB.board_at(gate.board_source(path))
+                                               for sp, path in LIVE_FILES.items()})
+        except Exception as exc:                                 # noqa: BLE001
+            print(f"  ⚠️ the reports' live tickets not read ({type(exc).__name__}: {exc})")
+            return self._send(503, b'{"error":"the live tickets could not be read"}', ".json")
+        return self._send(200, json.dumps(doc if member else reportlive.counts(doc)).encode(), ".json")
 
     def _report_archive(self, q):
         """A finished game's report, graded on its box score, with its

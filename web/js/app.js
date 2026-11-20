@@ -25232,6 +25232,74 @@ function liveSlips() {
   }
 }
 
+/* OUR REPORT PARLAYS, LIVE (20 November 2026; Ethan: "do any other work and ideas you think will help the site").
+   The Live tab followed the Edge and Most Likely picks and the slips a reader saved; the tickets every game
+   report builds were followed nowhere once their game started. One read of /api/report_live (engine/reportlive:
+   every league's games under way, each posted ticket, each leg's number off the live loop's own files) is drawn
+   in two places by js/report.js, which is only loaded when there is a ticket to draw: every followed game under
+   the Live tab's scoreboard (#live-report), and one game's own tickets on its live page's picks rail, in every
+   sport (`reportLiveSlot`, a [data-rl] slot the page's redraws make again and this fills). Asked again every
+   RL_MS while a followed game is being played and one of those pages is in view; a draw that would change
+   nothing changes nothing. A member's, as the whole game report is (Ethan, 2026-11-20: "I don't want the game
+   reports to be free"): everyone else gets the site's own lock card with how many are being followed, drawn
+   here without the report's script, and asks a quarter as often (a count changes when a game starts or ends). */
+const RL_MS = 30000;
+const _rl = { at: 0, busy: false, timer: 0, html: null, doc: null };
+async function reportLiveAsk() {
+  if (_rl.busy || (state.view !== "live" && state.view !== "pbp")) return;
+  // Out of view, nothing is asked; the wait is kept so the panel picks up where it left off.
+  const wait = _rl.doc && _rl.doc.locked ? 4 * RL_MS : RL_MS;
+  if (document.hidden) { clearTimeout(_rl.timer); _rl.timer = setTimeout(reportLiveAsk, wait); return; }
+  if (Date.now() - _rl.at < wait - 2000) return;
+  _rl.busy = true;
+  let doc = null;
+  try {
+    const res = await fetch("/api/report_live", { credentials: "same-origin" });
+    if (res.ok) doc = await res.json();
+  } catch (e) { /* the panels keep what they drew; the next turn asks again */ }
+  _rl.busy = false;
+  _rl.at = Date.now();
+  if (!doc) return;
+  _rl.doc = doc;
+  if (doc.tickets > 0 && !doc.locked) await loadReport();
+  reportLiveDraw();
+  clearTimeout(_rl.timer);
+  if (doc.live > 0) _rl.timer = setTimeout(reportLiveAsk, doc.locked ? 4 * RL_MS : RL_MS);
+}
+/* What a reader without the membership is shown: how many tickets are being followed, behind the lock. */
+function reportLiveLockHTML(doc) {
+  const n = (k, one) => `${doc[k]} ${one}${doc[k] === 1 ? "" : "s"}`;
+  return `<div class="section-title">Our report parlays, live
+      <span class="sub">— every game report’s tickets, leg by leg while the games are played</span></div>
+    ${memberLockHTML(`${n("tickets", "ticket")} being followed in ${n("games", "game")}`,
+      "Members follow every game report’s parlays leg by leg while the games are played: each leg’s number so far, what it still needs, and where each ticket stands. The reports and their picks are part of the subscription.")}`;
+}
+function reportLiveGameHTML(league, away, home) {
+  const R = window.QBReport;
+  return R && R.liveGame && _rl.doc ? R.liveGame(_rl.doc, league, away, home) : "";
+}
+function reportLiveDraw() {
+  const R = window.QBReport, h = document.getElementById("live-report"), doc = _rl.doc;
+  if (h) {
+    const html = !doc || !(doc.tickets > 0) ? "" : doc.locked ? reportLiveLockHTML(doc)
+      : R && R.liveTickets ? R.liveTickets(doc, { spoiled: spoiledG }) : "";
+    if (html !== _rl.html) h.innerHTML = _rl.html = html;
+    if (html && typeof mountLiveTicks === "function") mountLiveTicks(h);
+  }
+  document.querySelectorAll("[data-rl]").forEach((el) => {
+    const html = reportLiveGameHTML(...el.dataset.rl.split("|"));
+    if (el._rlHtml === html) return;
+    el.innerHTML = el._rlHtml = html;
+    if (html && typeof mountLiveTicks === "function") mountLiveTicks(el);
+  });
+}
+/* One game's tickets on its live page's picks rail: drawn at once from the last read, asked for again in turn. */
+function reportLiveSlot(d, league) {
+  reportLiveAsk();
+  return `<div class="pbp-picks-group" data-rl="${escapeAttr(`${league}|${d.away}|${d.home}`)}">${
+    reportLiveGameHTML(league, d.away, d.home)}</div>`;
+}
+
 /* A SLIP SHARED IN (2026-10-24): the manifest's share_target puts Qellys
    in the phone's share sheet, so a bet-slip screenshot goes straight from
    Photos or a sportsbook's own "share" to the grader. sw.js takes the
@@ -28162,17 +28230,19 @@ function pbpPropsHTML(d, league) {
     return memberLockHTML("Our picks on this game",
       "Members see the Edge picks, the Most Likely picks and the Pick of the Day on this game, each tracked live with its chance to cash.");
   }
+  // The game report's own tickets, followed leg by leg (reportLiveSlot): every league's, whichever board is open.
+  const tickets = reportLiveSlot(d, league);
   if (state.sport !== league) {
-    return `<p class="rail-quiet">Our picks are kept on each league’s own board — open the ${escapeHtml(lgCode(league))} tab to see them on this game.</p>`;
+    return `<p class="rail-quiet">Our picks are kept on each league’s own board — open the ${escapeHtml(lgCode(league))} tab to see them on this game.</p>${tickets}`;
   }
   const { potd, likely, edge } = pbpOurPicks(d);
-  if (!potd.length && !likely.length && !edge.length) return `<p class="rail-quiet">No Most Likely or edge picks on this game.</p>`;
+  if (!potd.length && !likely.length && !edge.length) return `<p class="rail-quiet">No Most Likely or edge picks on this game.</p>${tickets}`;
   const group = (list, title, book, empty) => `<div class="pbp-picks-group">
       <div class="pbp-picks-head">${title}<span class="mini">${list.length}</span></div>
       ${list.length ? list.map((x) => pbpPickRowHTML(x, book)).join("") : `<p class="rail-quiet">${empty}</p>`}</div>`;
   return `${potd.length ? group(potd, "Pick of the Day", "potd", "") : ""}
     ${group(likely, "Most Likely", "likely", "No Most Likely pick on this game.")}
-    ${group(edge, "Edge picks", "edge", "No edge pick on this game.")}`;
+    ${group(edge, "Edge picks", "edge", "No edge pick on this game.")}${tickets}`;
 }
 
 function openPbp(league, event, from) {
@@ -29821,6 +29891,7 @@ async function renderLiveBoard() {
   if (!host) return;
   renderSweatZone();
   liveSlips();
+  reportLiveAsk();
   // The first draw holds the scoreboard's place while the feeds answer:
   // filled after the bets below it were drawn, it pushed them 188px down.
   if (!host.firstElementChild) host.innerHTML = `<div class="skeleton-card lv-hold" aria-hidden="true"></div>`;

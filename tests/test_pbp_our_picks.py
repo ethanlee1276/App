@@ -52,6 +52,9 @@ def _node(js):
         "const oneBoardOn = () => _oneBoard;",
         "const oneBoardRows = () => (state.data.likely_board || {}).rows || []; const oneBoardAllRows = oneBoardRows;",
         "const showableLikelyRow = () => true; const likelyDropped = (r) => !!r.dropped;",
+        # The game report's own tickets, followed live, end the rail (app.js reportLiveSlot; its own test is
+        # tests/test_a_reports_parlays_are_followed_live.py).
+        "const reportLiveSlot = (d, league) => `<div data-rl=\"${league}|${d.away}|${d.home}\"></div>`;",
         "const passesFilters = (r) => !!r.recommended; const passesGameBet = (b) => b.grade !== 'Pass';",
         _const("OB_TIERS"),
         _fn("isLikelyBook"), _fn("propInGame"), _fn("trackerBetText"), _fn("pbpPropRows"),
@@ -132,6 +135,8 @@ def test_the_room_says_which_board_and_whether_it_was_placed():
     assert 'data-open="likely:Harrison Waylee"' in html and 'data-prop="edge:Micah Alejado"' in html, "every pick opens its page"
     assert "Elsewhere" not in html and "Other Game" not in html and "Not Recommended" not in html
     assert "open the College football tab" not in html and "Our picks are kept on each league" in got["other"]
+    assert html.rstrip().endswith('<div data-rl="cfb|WYO|HAW"></div>'), "the report's tickets end the rail"
+    assert got["other"].endswith('<div data-rl="nfl|WYO|HAW"></div>'), "and on another league's board too"
 
 
 def test_an_empty_game_and_the_older_likely_board():

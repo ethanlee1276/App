@@ -251,3 +251,47 @@
   font-size: var(--fs-xs); font-weight: 700; color: var(--warn);
   background: color-mix(in oklab, currentColor 12%, transparent); }
 .gr-news-flag.roster { color: var(--text-mute); }
+
+/* OUR REPORT PARLAYS, LIVE (js/report.js liveTickets, on the Live tab): a card a game, a block a ticket, a row a
+   leg. A ticket's tone is where it stands (gold while alive, green won, red lost), worn as a tint and by its
+   words; each leg's bar is its number so far against its line. */
+.grl { margin: 0 0 18px; }
+.grl-tally { margin: -4px 0 10px; font-size: var(--fs-sm); color: var(--text-dim); }
+.grl-game { padding: 12px 14px; margin: 0 0 10px; }
+.grl-game-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: var(--fs-md); }
+.grl-game-h b { font-weight: 800; font-variant-numeric: tabular-nums; }
+.grl-clock { font-size: var(--fs-sm); color: var(--text-dim); }
+.grl-clock.live { color: var(--good); font-weight: 700; }
+.grl-lg { margin-left: auto; font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em; color: var(--text-mute); }
+.grl-t { --tone: var(--gold); margin: 8px 0 0; padding: 9px 11px; border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--tone) 7%, var(--panel-2)); }
+.grl-t.s-won { --tone: var(--good); }
+.grl-t.s-lost { --tone: var(--bad); }
+.grl-t.s-lost .grl-legs { opacity: .72; }
+.grl-t-h { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--fs-sm); }
+.grl-t-h b { font-weight: 800; }
+.grl-t-st { margin-left: auto; font-weight: 700; color: var(--tone); }
+.grl-dots { display: inline-flex; gap: 4px; }
+.grl-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--panel-3); }
+.grl-dots i.won { background: var(--good); }
+.grl-dots i.lost { background: var(--bad); }
+.grl-dots i.push { background: var(--text-mute); }
+.grl-legs { list-style: none; margin: 7px 0 0; padding: 0; display: grid; gap: 7px; }
+.grl-leg-h { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; font-size: var(--fs-sm); }
+.grl-pick { color: var(--text-dim); }
+.grl-chip { margin-left: auto; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 700;
+  background: var(--panel-3); color: var(--text); white-space: nowrap; }
+.grl-chip.won { background: color-mix(in oklab, var(--good) 24%, transparent); color: var(--good); }
+.grl-chip.lost { background: color-mix(in oklab, var(--bad) 24%, transparent); color: var(--bad); }
+.grl-chip.quiet { padding: 0; background: none; color: var(--text-mute); font-weight: 600; white-space: normal; }
+.grl-leg-m { display: flex; align-items: center; gap: 8px; margin: 3px 0 0 30px; font-size: var(--fs-xs); color: var(--text-dim); }
+.grl-has { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.grl-has b { color: var(--text); }
+.grl-prog { position: relative; flex: 1 1 auto; height: 4px; border-radius: 2px; background: var(--panel-3); overflow: hidden; }
+.grl-prog i { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--gold); transition: width .6s ease; }
+.grl-leg.r-won .grl-prog i { background: var(--good); }
+.grl-leg.r-lost .grl-prog i { background: var(--bad); }
+@media (prefers-reduced-motion: reduce) { .grl-prog i { transition: none; } }
+/* On a live game's picks rail (liveGame): the rail's own head over the tickets, nothing between them and it. */
+.grl-rail { margin: 0; }
+.grl-rail .grl-t:first-child { margin-top: 4px; }

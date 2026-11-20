@@ -603,8 +603,9 @@ TOOLS = [
            "limit": {"type": "integer"}}, "kind"),
     _tool("our_picks_live",
           "Our open bets right now, in every league: each one's stat so far, whether it is still alive, its "
-          "live chance to win against its pregame chance, and our parlays' live chances. For how are our "
-          "picks doing, are we winning tonight.",
+          "live chance to win against its pregame chance, our parlays' live chances, and the game reports' "
+          "parlays leg by leg in games under way (where each ticket stands, each leg's number so far and what "
+          "it still needs). For how are our picks doing, are we winning tonight, is a report's parlay still alive.",
           {"sport": _ANY_SPORT}),
     _tool("our_record",
           "Our public record: all bets, a league's, the Most Likely board with its calibration, the best and "
@@ -3481,10 +3482,39 @@ def our_picks_live(boards: dict, sport: str = "", data_dir=None, prefer: str = "
     if tickets:
         res["parlays"] = tickets[:4]
         res["parlays_as_of"] = sw.get("generated_at")
+    followed = report_parlays_live(boards, sport, prefer)
+    if followed:
+        res["game_report_parlays"] = followed
     if not res:
         return {"found": False, "note": "none of our bets is open right now"
                 + (f" in {_lg_in(sport)}" if sport and sport != "all" else "")}
     return res
+
+
+#: Games' worth of report tickets one answer carries, the ones being played first.
+REPORT_LIVE_GAMES = 8
+
+
+def report_parlays_live(boards: dict, sport: str = "", prefer: str = "") -> list:
+    """The game reports' tickets in games under way or just over, leg by leg (engine/reportlive, the Live tab's
+    "Our report parlays, live"): where each ticket stands, and each leg's number so far beside what it still
+    needs or how it ended. [] when none is being followed."""
+    from . import reportlive
+    out = []
+    for s in _board_leagues(boards, sport, prefer):
+        for g in reportlive.league(s, boards[s]):
+            scored = g.get("away_score") is not None and g.get("home_score") is not None
+            out.append({
+                "league": s, "game": f"{g['away']} @ {g['home']}", "state": g["state"],
+                **({"clock": g["clock"]} if g.get("clock") else {}),
+                **({"score": f"{g['away']} {g['away_score']}, {g['home']} {g['home_score']}"} if scored else {}),
+                "tickets": [{"ticket": t["title"], "standing": t["words"], "our_chance_before_the_game": t["chance"],
+                             "legs": [{"pick": l["pick"],
+                                       **({"has": l["current"]} if l.get("current") is not None else {}),
+                                       **({k: l[k] for k in ("need", "result", "note") if l.get(k)})}
+                                      for l in t["legs"]]} for t in g["tickets"]]})
+    out.sort(key=lambda x: x["state"] != "live")
+    return out[:REPORT_LIVE_GAMES]
 
 
 def team_efficiency(sport: str = "", team: str = "", sort: str = "off_epa", order: str = "best", season=None,
