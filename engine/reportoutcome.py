@@ -295,7 +295,7 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
     return out
 
 
-#: Where a kept set holds a kind its league had on paper (engine/parlayhold, gameparlays.build).
+#: Where a kept set holds a kind its league had on paper (the holds of 17-20 November, since retired).
 PAPER_OF = {"threes": "paper_threes", "twos": "paper_twos"}
 
 

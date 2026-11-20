@@ -1032,15 +1032,25 @@ const tlUnits = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x || 0).toFixed(2)}u`);
    2026-11-16). Ethan: "you did not put the 'parlays for this game' on the record
    page. We wanna see if the legs and the parlays we recommend are hitting so each
    sport needs to have a record of that on the record page." Each game report's
-   two-leg parlays (its two strongest picks together, from 18 November), its
    three-leg parlays and its touchdown, goal-scorer or scorer pairs, each kind
    apart: the tickets that hit and the units at one unit a ticket against the
    chance we gave them, the legs that hit against theirs, by market, the tickets
    that lost by one leg, and the newest tickets with every leg marked. On "All",
-   one table of every league. */
-const GP_KIND = { three: "Three-leg parlays", two: "Two-leg parlays" };
-//: A league's kinds in the page's order: the two strongest picks together first (2026-11-18), the three-leg tickets, the pairs.
-const GP_KINDS = ["two", "three", "scorers"];
+   one table of every league. The two-leg parlays of 18-20 November are retired
+   (Ethan, 20 November: "i want 3 3 leg player prop parlays and 3 2 leg td prop
+   parlays"); the engine leaves them off the record (gameparlays.RETIRED). */
+const GP_KIND = { three: "Three-leg parlays" };
+//: A league's kinds in the page's order: the three-leg tickets, then the pairs.
+const GP_KINDS = ["three", "scorers"];
+// How a game's ticket was made up (engine/gameparlays.FILL_KINDS; "report": its own picks), in
+// words for a three-leg ticket and for a scorer pair.
+const GP_FILL_WORDS = {
+  report: ["the report’s own picks", "our researched scorers"],
+  one: ["two picks and one other prop", ""],
+  board: ["Most Likely picks standing in", ""],
+  props: ["the game’s best props", ""],
+  stand_in: ["", "with a stand-in scorer"],
+};
 function gpKindWord(kind, sport) {
   if (GP_KIND[kind]) return GP_KIND[kind];
   return ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
@@ -1110,6 +1120,13 @@ function gpBlockHTML(b, kind, sport) {
   const rebuilt = nr ? `<p class="rec-gp-close">Since ${escapeHtml(gpDay(nr.from))}’s rebuild (stronger legs, honest chances): ${
     nr.graded ? `${nr.wins} of ${nr.graded} hit${nr.chance != null ? `, where we gave them ${Math.round(nr.chance * 100)}%` : ""} · ${
       tlUnits(nr.net_units)}` : "none graded yet"}${nr.open ? ` · ${nr.open} waiting on ${nr.open === 1 ? "its game" : "their games"}` : ""}.</p>` : "";
+  // HOW EACH WAS MADE UP (engine/parlayledger by_fill, ZR 2026-11-20): a game short of the
+  // report's own tickets fills to three; each way it fills reads apart, once there are two.
+  const bf = b.by_fill || null;
+  const fillKeys = bf ? Object.keys(GP_FILL_WORDS).filter((k) => bf[k]) : [];
+  const madeUp = fillKeys.length > 1 ? `<p class="rec-gp-close">By how they were made up, since ${
+    escapeHtml(gpDay(bf.from))}: ${fillKeys.map((k) => `${GP_FILL_WORDS[k][kind === "scorers" ? 1 : 0]} ${
+      bf[k].graded ? `${bf[k].wins} of ${bf[k].graded} hit` : "none graded yet"}`).join(" · ")}.</p>` : "";
   const markets = (b.markets || []).map((m) => `<div class="rec-row flush tight">
       <span class="rr-what">${escapeHtml(marketWord(m.market))}</span>
       <span><b>${m.won} of ${m.graded}</b> legs hit · ${Math.round((100 * m.won) / m.graded)}%${
@@ -1133,7 +1150,7 @@ function gpBlockHTML(b, kind, sport) {
   return `<div class="card rec-report rec-gp">
       <div class="rr-head">${escapeHtml(gpKindWord(kind, sport))}${b.since ? ` <span class="rr-mute">· since ${escapeHtml(gpDay(b.since))}</span>` : ""}</div>
       ${b.paper && b.paper.note ? `<p class="rec-gp-close">${escapeHtml(b.paper.note)}</p>` : ""}
-      <div class="stats rec-kpis">${tiles}</div>${close}${rebuilt}
+      <div class="stats rec-kpis">${tiles}</div>${close}${rebuilt}${madeUp}
       ${markets ? `<div class="rr-head">Legs by market</div>${markets}` : ""}
       ${recent ? `<div data-rec-flat="parlays"><div class="rr-head">Newest tickets</div><div class="rec-gp-recent">${recent}</div></div>` : ""}
     </div>`;

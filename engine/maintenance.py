@@ -1475,18 +1475,6 @@ def settle_open(log=print, state_path: Path | None = None,
                     log(f"  parlay record: {_marked} journaled ticket(s) marked by their game's starting set")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  parlay starting sets not marked: {exc}")
-            # A LEAGUE'S TWO-LEG PARLAYS ON PAPER while they hit under 36%
-            # (engine/parlayhold, GPWIN1), measured on the same fresh grades;
-            # the builds read it. The three-leg hold is retired (THREELEG1:
-            # every game report posts its three-leg tickets).
-            try:
-                from . import parlayhold
-                plh = parlayhold.refresh(lconn)
-                verdicts["two-leg parlays on paper"] = parlayhold.verdict(plh)
-                if plh["holds"]:
-                    log("  two-leg parlays on paper: " + ", ".join(h["sport"].upper() for h in plh["holds"]))
-            except Exception as exc:  # noqa: BLE001
-                log(f"  ⚠️  two-leg parlay holds skipped: {exc}")
             # The journal fitters: temperature + player memory for every
             # sport with no deep-history harness (hoops, college, UFC).
             # A sport crosses its 200-bet floor the night it happens.

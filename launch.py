@@ -572,31 +572,31 @@ def _board_counts(path: str) -> dict:
         out["offseason"] = True
     # THE GAME PARLAYS AND THE REPORTS, COUNTED (2026-11-14). Both are paid
     # keys, stripped from the public copy, so the heartbeat is where anyone
-    # can see a league built them: two or three three-leg tickets and three
-    # scorer pairs a game (engine/gameparlays), one report a game. A build that
+    # can see a league built them: three three-leg tickets and three scorer
+    # pairs a game (engine/gameparlays), one report a game. A build that
     # failed says why. Present only when the board carries them.
     gp = b.get("game_parlays")
     if isinstance(gp, dict) and isinstance(gp.get("games"), list):
         c = gp.get("counts") if isinstance(gp.get("counts"), dict) else {}
         out["parlay_games"] = int(c.get("games") or len(gp["games"]))
         out["sgp_threes"] = int(c.get("threes") or 0)
-        # Games still to play short of their two three-leg tickets (THREELEG1/2):
-        # each says why on its report; here, how many, for anyone watching.
+        # Games still to play short of their three three-leg tickets (THREELEG1/2,
+        # ZR): each says why on its report; here, how many, for anyone watching.
+        from engine.gameparlays import SCORER_MARKETS, SCORER_PER_GAME, THREE_MIN
         short = [x for x in gp["games"] if isinstance(x, dict) and not x.get("kept")
-                 and len(x.get("threes") or []) < 2]
+                 and len(x.get("threes") or []) < THREE_MIN]
         out["threes_short"] = len(short)
         if short:
             # Why, as counts (no pick rides here: the heartbeat is public): the
             # rebuild failed (its error's type), the game has no prop priced yet
             # (its props not bought yet, or none posted: THREELEG3), no report
-            # rebuilt the game, fewer than two of the report's own picks are
-            # priced legs (a ticket takes two, PARLAYWIN1), its priced props were
-            # too few, or none of them fit together.
+            # rebuilt the game, its priced props were too few, or none of them
+            # fit together (since ZR a game short of the report's own picks fills
+            # from its other props, so "few picks" is no reason on its own).
             why: dict = {}
             for x in short:
                 k = ("rebuild_failed" if x.get("rebuild_error")
                      else str(x["no_props"]) if x.get("no_props")
-                     else "few_picks" if x.get("legs_own") is not None and int(x["legs_own"]) < 2
                      else "few_props" if int(x.get("legs_wider") or 0) < 3 and x.get("legs_wider") is not None
                      else "no_fit" if x.get("legs_wider") is not None else "no_report")
                 why[k] = why.get(k, 0) + 1
@@ -628,13 +628,21 @@ def _board_counts(path: str) -> dict:
             errs = sorted({str(x["rebuild_error"]).split(":")[0] for x in short if x.get("rebuild_error")})
             if errs:
                 out["rebuild_errors"] = errs[:5]
-        out["sgp_twos"] = int(c.get("twos") or 0)
         out["td_pairs"] = int(c.get("scorers") or 0)
+        # Games still to play short of their three scorer pairs (ZR), where the
+        # league has a scorer market, and the pairs a stand-in scorer filled.
+        if str(gp.get("sport") or "").lower() in SCORER_MARKETS:
+            out["td_short"] = sum(1 for x in gp["games"] if isinstance(x, dict) and not x.get("kept")
+                                  and not x.get("no_props") and len(x.get("scorers") or []) < SCORER_PER_GAME)
+            if c.get("filled_scorers"):
+                out["td_filled"] = int(c["filled_scorers"])
         # Three-leg tickets the Most Likely board's picks stood in on, where a
-        # report had too few picks a parlay can use (gameparlays.board_pick).
-        stood = sum(int(x.get("threes_board_filled") or 0) for x in gp["games"] if isinstance(x, dict))
-        if stood:
-            out["threes_board_filled"] = stood
+        # report had too few picks a parlay can use (gameparlays.board_pick),
+        # and those the game's other props made up (ZR).
+        for key in ("threes_board_filled", "threes_props_filled"):
+            n = sum(int(x.get(key) or 0) for x in gp["games"] if isinstance(x, dict))
+            if n:
+                out[key] = n
         # What became of the reports' player picks as parlay legs, games still to
         # play, as counts (gameparlays._picks_census: no pick rides here).
         fates: dict = {}

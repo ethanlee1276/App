@@ -9338,6 +9338,28 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZR. Every game posts three three-leg parlays and three scorer pairs** (step 806; 20 November). Nothing to run.
+Ethan: "We should be making the 3 best parlays possible with the data we have including the game report with the
+best possible props we have", and, asked what that meant a game: "i want 3 3 leg player prop parlays and 3 2 leg td
+prop parlays". Each game now posts exactly that. The three-leg parlays take the report's own picks first. When those
+can't make three, the game fills in this order: two of the report's picks with one other prop at 55% or better; then
+the game's Most Likely picks in the picks' places, on a ticket at 25% or better; and last the game's best props, any
+of them, on a ticket down to 15%. Each step only adds to what the one before it made, every leg that isn't one of
+the report's picks is named on its ticket, and a set of tickets that can all win together still comes ahead of one
+that can't. The scorer pairs (touchdown pairs in football, goal-scorer pairs in hockey) work the same way: a game
+short of three takes its next scorers, a weaker research case first (priced high enough but under 4 of the 13
+research points), then a longer price (down to 20% in the NFL, 22% in college, 18% in hockey), never an avoid read
+or a scorer with no red-zone role, each stand-in named on its pair. Basketball has no scorer market, so its games
+post the three three-leg parlays only. The two-leg player-prop parlays are retired, and with them the hold that kept
+them on paper (engine/parlayhold is deleted; the night no longer runs it). Their tickets stay in the journal and
+stay off the Record page. New measure: each filled ticket is journaled with how it was made up (a `fill` column:
+one, board, props or stand_in), and from today each league's parlay card on the Record page says how each way has
+done once two ways have tickets, e.g. "By how they were made up, since 20 Nov: the report's own picks 5 of 12 hit ·
+the game's best props 1 of 4 hit". That is how we'll know whether the filled tickets earn their place. The heartbeat
+drops `sgp_twos` and adds `td_short` (games still short of three pairs), `td_filled` (pairs a stand-in filled) and
+`threes_props_filled` (tickets the game's best props made up). Watch it on Sunday: `sgp_threes` should be close to 3
+a game, `td_pairs` close to 3 a football game, and `threes_short` and `td_short` small.
+
 **ZQ. A game's posted parlays stay posted until a leg breaks** (step 805; 20 November). Nothing to run. This is the
 real fix for "30 parlays a game". Every board build used to pick each game's parlays from scratch, so a line moving
 half a point could reorder them and the board posted a new set; one NFL game went through 19 versions of its three-

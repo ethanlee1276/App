@@ -106,10 +106,13 @@ def test_too_few_picks_fill_from_the_games_other_props_and_say_so():
     picked = {GP._pick_key(p) for p in PICKS[:2]}
     assert len(x["threes"]) == GP.THREE_MIN and x.get("threes_filled") == GP.THREE_MIN, x.get("threes_note")
     assert "threes_note" not in x
-    # The report's picks first: both on the first ticket, one at least on the
-    # next (a game's tickets share one leg before they share two: `choose`).
+    # The report's picks first: both on the first two tickets (a leg rides on
+    # MAX_USES tickets at most), and the game's Most Likely picks make up the
+    # third, each named (ZR: "the 3 best parlays possible with the data we have").
     mine = [[l for l in t["legs"] if GP._pick_key(l) in picked] for t in x["threes"]]
-    assert len(mine[0]) == 2 and all(mine), [[l["player"] for l in m] for m in mine]
+    assert [len(m) for m in mine] == [2, 2, 0], [[l["player"] for l in m] for m in mine]
+    assert GP.MAX_USES == 2 and x.get("threes_board_filled") == 1, x.get("threes_board_filled")
+    assert "(70%), Cam Skattebo over 11.5 rush attempts (67%) and Rachaad White" in x["threes"][2]["caveats"][-1]
     for t in x["threes"]:
         assert any("this report's picks: " in c for c in t["caveats"]), t["caveats"]
     # A pick under the floor is no leg: Daniels's completions under, at 55%.
@@ -125,22 +128,25 @@ def test_too_few_picks_fill_from_the_games_other_props_and_say_so():
     assert none["threes"] and none["threes_board_filled"] == len(none["threes"]), none.get("threes_note")
     for t in none["threes"]:
         assert all(l.get("pool") == "likely" and float(l["p"]) >= GP.LEG_FLOOR for l in t["legs"]), t["legs"]
+        assert t["fill"] == "board", t.get("fill")
         assert float(t["joint"]) >= GP.THREE_FLOOR, t["joint"]
         assert any("Most Likely picks for this game the report's card did not list" in c for c in t["caveats"]), \
             t["caveats"]
-    # Any other prop the board priced does not stand in: a ticket takes two of the
-    # report's own picks and one such prop at most (PARLAYWIN1: the tickets that
-    # lost carried two or three of them), so this game makes none and says why.
+    # Any other prop the board priced does not stand in for the report's picks
+    # (PARLAYWIN1: the tickets that lost carried two or three of them): where
+    # neither makes a ticket, the game's best props make its three, last, each
+    # leg named (ZR, Ethan: "the 3 best parlays possible with the data we have").
     was_all = GP._board_legs
     GP._board_legs = lambda board, sp, now=None, **kw: [dict(l, pool="priced") for l in was_all(board, sp, now, **kw)]
     try:
         bare = GP.from_report(_built(), "nfl", GAME, game_bet)
     finally:
         GP._board_legs = was_all
-    assert bare["threes"] == [] and "threes_board_filled" not in bare and bare["threes_note"] == (
-        "a three-leg parlay takes 2 of this report's own picks, and it has no pick on a player's line; the game's "
-        "Most Likely picks at 60% or better make no three that fit together and reach 25% in their place"), \
-        bare.get("threes_note")
+    assert len(bare["threes"]) == GP.THREE_MIN and bare["threes_props_filled"] == GP.THREE_MIN, bare
+    assert "threes_board_filled" not in bare and "threes_note" not in bare
+    for t in bare["threes"]:
+        assert any("props the board priced, added so the game has 3 three-leg parlays" in c for c in t["caveats"])
+        assert t["fill"] == "props", t.get("fill")
     # A game whose props make one ticket posts it, and the note says why there is no second.
     keys3 = {GP._pick_key(p) for p in PICKS[:3]}
     was_legs = GP._board_legs
@@ -150,8 +156,10 @@ def test_too_few_picks_fill_from_the_games_other_props_and_say_so():
         three = GP.from_report(_built(), "nfl", GAME, PICKS[:3])
     finally:
         GP._board_legs = was_legs
-    assert len(three["threes"]) == 1 and three["threes_note"].startswith("1 of 2: this report's 3 picks"), \
-        three.get("threes_note")
+    # Three legs make one trio: no more to make, whatever a leg rides on.
+    assert len(three["threes"]) == 1 and three["threes_note"] == (
+        "1 of 3: this report's picks (3 of its 3 picks are at 60% or better) make no more three that fit "
+        "together without a conflict and reach 15% by our numbers"), three.get("threes_note")
     # ...and the report says it under the ticket it made, on the page and in the report's section.
     import types
     was = GR._game_parlays

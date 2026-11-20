@@ -104,7 +104,8 @@ def board():
 def test_three_three_leg_parlays_with_no_conflict():
     gp = GP.build(board(), "nfl")
     g = gp["games"][0]
-    assert GP.THREE_PER_GAME == 3 and GP.THREE_MIN == 2
+    # Three a game, every game (ZR, 2026-11-20: "i want 3 3 leg player prop parlays and 3 2 leg td prop parlays").
+    assert GP.THREE_PER_GAME == 3 and GP.THREE_MIN == 3 and GP.SCORER_PER_GAME == 3
     assert g["game"] == "WAS@NYG" and len(g["threes"]) == 3, (len(g["threes"]), g.get("threes_note"))
     for t in g["threes"]:
         names = [l["player"] for l in t["legs"]]
@@ -297,10 +298,9 @@ def test_the_report_and_the_record_carry_them():
     conn.row_factory = sqlite3.Row
     gp = GP.build(board(), "nfl")
     n = PL.log_game_parlays(conn, gp, "nfl", "2099-W10")
-    assert n == 8, n          # two two-leg tickets (GPWIN1), three three-leg, three scorer pairs
+    assert n == 6, n          # three three-leg tickets and three scorer pairs (ZR: no two-leg ticket)
     rows = conn.execute("SELECT source, n_legs, stake_units FROM parlays").fetchall()
-    assert sorted({r["source"] for r in rows}) == ["game_td", "game_three", "game_two"]
-    assert {r["n_legs"] for r in rows if r["source"] == "game_two"} == {2}
+    assert sorted({r["source"] for r in rows}) == ["game_td", "game_three"]
     assert all(r["stake_units"] == 0 for r in rows)
     assert PL.log_game_parlays(conn, gp, "nfl", "2099-W10") == 0, "a ticket is journaled once"
     legs = GP.journal_rows(gp)
@@ -319,13 +319,13 @@ def test_every_ticket_grades_off_its_legs():
     legs = PL.journal_game_parlay_legs(conn, b, "nfl")
     assert legs == len(GP.journal_rows(b["game_parlays"])), legs
     n = PL.log_game_parlays(conn, b["game_parlays"], "nfl", b["date"])
-    assert n == 8
+    assert n == 6
     cats = {r[0] for r in conn.execute("SELECT DISTINCT category FROM bets")}
     assert cats == {PL.PARLAY_LEG_CATEGORY}, "the legs ride on paper in their own bucket"
     conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
     conn.commit()
     res = PL.settle(conn)
-    assert res["settled"] == 8 and res["waiting"] == 0, res
+    assert res["settled"] == 6 and res["waiting"] == 0, res
     # One leg lost loses every ticket it is on.
     conn2 = ledger.connect(os.path.join(tempfile.mkdtemp(), "t.db"))
     ledger.configure_bankroll(conn2, starting=1000, unit_pct=1.0)
@@ -348,9 +348,9 @@ def test_the_report_section_draws():
     sec = GR.sec_parlays(c)
     assert sec and sec["key"] == "parlays"
     kinds = [x.get("kind") for x in sec["blocks"] if x.get("type") == "parlays"]
-    assert kinds == ["two", "three", "scorers"], kinds      # the two strongest picks together lead (GPWIN1)
+    assert kinds == ["three", "scorers"], kinds      # three three-leg tickets and three pairs (ZR)
     line = GR.parlay_sentence(c)
-    assert line.startswith("Strongest two-leg parlay:") and "Best three-leg parlay:" in line, line
+    assert line.startswith("Best three-leg parlay:"), line
     assert "Best touchdown pair:" in line, line
 
 

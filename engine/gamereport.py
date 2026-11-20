@@ -3886,42 +3886,28 @@ def _game_parlays(c: Ctx) -> dict | None:
 def sec_parlays(c: Ctx) -> dict | None:
     """THE PARLAYS FOR THIS GAME (engine/gameparlays; Ethan, 2026-11-14:
     "for each game ... make 4 3-leg parlays ... and 3 2-leg touchdown
-    parlays ... do the same shit that the report's doing"). The report's two
-    strongest picks as two-leg tickets, two or three three-leg tickets on every
-    game (THREELEG1, 2026-11-19: "I want those for every single game") and
-    three scorer pairs, each with its price to take it, the script it needs,
-    its backups and caveats — and the record's word on same-game parlays."""
+    parlays ... do the same shit that the report's doing"; 2026-11-20: "i want
+    3 3 leg player prop parlays and 3 2 leg td prop parlays"). Three three-leg
+    tickets and three scorer pairs on every game, each with its price to take
+    it, the script it needs, its backups and caveats — and the record's word
+    on same-game parlays."""
     from .gameparlays import card
     gp = _game_parlays(c)
     if not gp:
         return None
-    if gp.get("no_props") and not any(gp.get(k) for k in ("twos", "threes", "scorers")):
+    if gp.get("no_props") and not any(gp.get(k) for k in ("threes", "scorers")):
         # No prop priced in this game yet (THREELEG3): when its props are
         # bought, said once, where its tickets will be.
         return _section("parlays", "Parlays for this game", [_p(f"No parlays yet: {gp.get('props_note') or ''}")])
     blocks = []
-    # ITS TWO STRONGEST PICKS TOGETHER, FIRST (GPWIN1, 2026-11-18; Ethan: "how
-    # are we winning so many picks ... but losing so many parlays? ... Make it
-    # so the parlays win as well"): two picks hit together far more often than
-    # three, so the two-leg tickets lead and the three-leg ones follow.
-    twos = [card(t, i, "two", c.sport) for i, t in enumerate(gp.get("twos") or [], 1)]
-    if twos:
-        blocks += [_h("Two-leg parlays: the strongest picks together"),
-                   {"type": "parlays", "kind": "two", "items": twos}]
-        if gp.get("twos_note"):
-            blocks.append(_p(gp["twos_note"]))
-    elif gp.get("twos_paper"):
-        blocks += [_h("Two-leg parlays"), _p(gp.get("twos_note") or "")]
-    elif gp.get("twos_note"):
-        blocks.append(_p(f"No two-leg parlay: {gp['twos_note']}"))
     threes = [card(t, i, "three", c.sport) for i, t in enumerate(gp.get("threes") or [], 1)]
     if threes:
         blocks += [_h("Three-leg parlays"), {"type": "parlays", "kind": "three", "items": threes}]
         if gp.get("threes_note"):
-            # Fewer than two: why, under the one it made (gameparlays._report_note).
+            # Fewer than three: why, under the ones it made (gameparlays._report_note).
             blocks.append(_p(gp["threes_note"]))
     elif gp.get("threes_paper"):
-        # On paper while the league's three-leg record is under 25% (engine/parlayhold).
+        # On paper (a game from before 19 November, when a league's three-leg tickets could be held).
         blocks += [_h("Three-leg parlays"), _p(gp.get("threes_note") or "")]
     elif gp.get("threes_note"):
         blocks.append(_p(f"No three-leg parlay: {gp['threes_note']}"))
@@ -3929,6 +3915,9 @@ def sec_parlays(c: Ctx) -> dict | None:
     if pairs:
         blocks += [_h("Touchdown pairs" if c.sport in ("nfl", "cfb") else "Scorer pairs"),
                    {"type": "parlays", "kind": "scorers", "items": pairs}]
+        if gp.get("scorers_note"):
+            # Fewer than three: why, under the ones it made.
+            blocks.append(_p(gp["scorers_note"]))
     elif gp.get("scorers_note"):
         blocks.append(_p(gp["scorers_note"]))
     if not blocks:
@@ -3947,9 +3936,10 @@ def parlay_sentence(c: Ctx) -> str:
     if not gp:
         return ""
     bits = []
-    for key, word in (("twos", "Strongest two-leg parlay"), ("threes", "Best three-leg parlay"),
+    for key, word in (("threes", "Best three-leg parlay"),
                       ("scorers", "Best touchdown pair" if c.sport in ("nfl", "cfb") else "Best scorer pair")):
-        t = next(iter(gp.get(key) or []), None)
+        # The likeliest, wherever it sits: a game's posted tickets keep their places (gameparlays.choose).
+        t = max(gp.get(key) or [], key=lambda x: float(x.get("joint") or 0), default=None)
         if t:
             bits.append(f"{word}: {' + '.join(pick_words(l) for l in t['legs'])} — {float(t['joint']):.0%} by our "
                         f"numbers, take it at {t['take_words']} or better")

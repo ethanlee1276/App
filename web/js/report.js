@@ -924,7 +924,7 @@
       bet_legs: t.legs || [],
     };
   }
-  //: One game's tickets, its two-leg parlays, its three-leg ones, then its scorer pairs, each
+  //: One game's tickets, its three-leg parlays then its scorer pairs (and a game kept before ZR its two-leg ones), each
   //: graded once the game is over (opts.results: game → the grader, app.js);
   //: the Report Picks page draws them under the game's bets (js/reportpicks.js).
   function gameTickets(g, sport, opts) {
@@ -932,11 +932,11 @@
     RESULTS = (opts && typeof opts.results === "function" && opts.results(g)) || null;
     CLOSED = !!((g && g.kept) || RESULTS);
     try {
-      // Every game posts two or three three-leg tickets (THREELEG1, 2026-11-19); a game that could make
-      // fewer than two says why under the ones it made (engine/gameparlays._report_note). "On paper" is a
-      // game from before 19 November, when a league's three-leg tickets could be held (engine/parlayhold).
-      // The two strongest picks together lead (GPWIN1, engine/gameparlays.tickets_of): two legs hit far
-      // more often than three. Fewer than two, or none: the note says why.
+      // Every game posts three three-leg tickets and three scorer pairs (THREELEG1, 2026-11-19; ZR,
+      // 2026-11-20); a game that could make fewer says why under the ones it made
+      // (engine/gameparlays._report_note, build_game). The two-leg tickets (GPWIN1) are retired (ZR): a
+      // game kept before then still shows the ones it posted, as "on paper" shows a game from before
+      // 19 November, when a league's tickets could be held (a hold since retired).
       const twos = (g.twos || []).length
         ? block({ type: "parlays", items: g.twos.map((t, i) => card(t, i + 1, "two", sport)) })
           + (g.twos_note ? `<p class="gr-note">${escapeHtml(g.twos_note)}</p>` : "")
@@ -946,8 +946,8 @@
           + (g.threes_note ? `<p class="gr-note">${escapeHtml(g.threes_note)}</p>` : "")
         : g.threes_paper ? `<p class="gr-note">Three-leg parlays: on paper for now, built and graded but not posted.</p>`
         : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}
-        ${(g.scorers || []).length ? block({ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) })
-          : (g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : "")}`;
+        ${(g.scorers || []).length ? block({ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) }) : ""}${
+          g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : ""}`;
     } finally { RESULTS = was; CLOSED = shut; }
   }
   /* OUR REPORT PARLAYS, LIVE (engine/reportlive, GET /api/report_live; 20 November 2026). The Live tab followed

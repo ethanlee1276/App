@@ -1,11 +1,12 @@
-"""Every game report posts its three-leg parlays: two at least, three at most
-(2026-11-19, THREELEG1).
+"""Every game report posts its three-leg parlays: three a game (2026-11-19,
+THREELEG1; three, not two at least, since ZR on 2026-11-20).
 
 Ethan, 2026-11-19: "for the game report, 3-leg parlays, we need those back
 immediately. I want those for every single game. Just how every single report
 you went through and read gave me touchdown parlays and player prop parlays,
 3-leg parlays, and then I go back and pick 2 of them ... We need 2 3-leg
-parlays, or maybe 2 to 3 3-leg parlays on the game reports."
+parlays, or maybe 2 to 3 3-leg parlays on the game reports." And on 20
+November: "i want 3 3 leg player prop parlays and 3 2 leg td prop parlays".
 
 From 17 November a league whose three-leg tickets hit under 25% had them on
 paper (engine/parlayhold): built and graded, posted nowhere, the NFL's from the
@@ -13,14 +14,14 @@ start and the NBA's by the record. And a game whose report's picks made fewer
 than four tickets clearing 30% posted fewer, college's mostly none. What these
 hold:
 
-  * the three-leg hold is retired: no saved hold, the standing NFL one
-    included, holds a three-leg ticket, the nightly pass measures the two-leg
-    size alone, and no build moves a game's tickets to paper;
-  * a game posts THREE_PER_GAME (3) tickets at most and fills up to THREE_MIN
-    (2) when fewer clear THREE_FLOOR: from its own legs first (a report's
-    picks), then the game's other priced props, then longer tickets down to
-    LONG_FLOOR — each filled ticket saying on its card which legs are not the
-    report's picks and when it is a longer ticket;
+  * the holds are retired: engine/parlayhold is gone (the two-leg tickets it
+    last held are retired with it, ZR), the nightly pass measures none, and
+    no build moves a game's tickets to paper;
+  * a game posts THREE_PER_GAME (3) tickets and fills up to THREE_MIN (3)
+    when fewer clear THREE_FLOOR: from its own legs first (a report's picks),
+    then the game's other priced props, then longer tickets down to
+    LONG_FLOOR, then the game's best props — each filled ticket saying on its
+    card which legs are not the report's picks and when it is a longer ticket;
   * a ticket on paper from a board built before still journals and grades;
   * every game still to play has its entry (THREELEG3): one whose props all
     sit under 60% fills from them, and one with no prop priced yet says, once,
@@ -39,7 +40,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
-from engine import gameparlays as GP, parlayhold, parlayledger  # noqa: E402
+from engine import gameparlays as GP, parlayledger  # noqa: E402
 
 EG = __import__("test_each_game_gets_its_parlays")                  # the shared fixture (a sibling test file)
 DAY = dt.date(2026, 11, 20)
@@ -62,46 +63,26 @@ def _tickets(c, sport, won, lost, source, day="2026-11-01"):
     c.commit()
 
 
-def _path():
-    return Path(tempfile.mkdtemp()) / "parlayhold.json"
-
-
-def test_the_three_leg_hold_is_retired_and_the_two_leg_one_stands():
-    c, p = _conn(), _path()
-    _tickets(c, "nba", 9, 91, "game_three")             # 9% three-leg: would have been held
-    _tickets(c, "nhl", 10, 40, "game_two")              # 20% two-leg: held on its own bar
-    out = parlayhold.refresh(c, p, today=DAY)
-    assert [(h["sport"], h.get("legs")) for h in out["holds"]] == [("nhl", 2)], out["holds"]
-    assert parlayhold.held("nba", p) is None and parlayhold.held("nfl", p) is None, "nothing holds three legs"
-    assert parlayhold.held("nhl", p, legs=2)["won"] == 10
-    assert 3 not in parlayhold.SIZES and parlayhold.RETIRED[3]["word"] == "three-leg"
-    v = parlayhold.verdict(out)
-    assert v["two_leg_on_paper"] == ["nhl"] and "on_paper" not in v, v
-    # A state saved before (the NFL's standing hold and the NBA's measured one)
-    # holds nothing now, and the next pass drops it.
-    old = _path()
-    old.write_text(json.dumps({"holds": [{"sport": "nfl", "since": "2026-11-17", "n": 175, "won": 30,
-                                          "source": "standing"},
-                                         {"sport": "nba", "since": "2026-11-17", "n": 100, "won": 9,
-                                          "source": "measured"}], "released": []}))
-    assert parlayhold.holds(old) == [] and parlayhold.held("nfl", old) is None
-    assert parlayhold.refresh(_conn(), old, today=DAY)["holds"] == []
+def test_the_parlay_holds_are_retired():
+    """The three-leg hold went with THREELEG1 and the two-leg one with the
+    two-leg tickets themselves (ZR): no module, no nightly pass, no build that
+    reads one."""
+    import importlib.util
+    assert importlib.util.find_spec("engine.parlayhold") is None
+    assert not (ROOT / "engine" / "parlayhold.py").exists()
+    for name in ("maintenance.py", "gameparlays.py", "parlayledger.py", "gamereport.py"):
+        src = (ROOT / "engine" / name).read_text(encoding="utf-8")
+        assert "parlayhold." not in src and "import parlayhold" not in src, name
+    gp_src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
+    assert "def two_hold(" not in gp_src and "TWO_PER_GAME" not in gp_src and GP.RETIRED == ("two",)
 
 
 def test_no_build_moves_a_games_tickets_to_paper():
     src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
     assert "def paper_hold(" not in src and "paper_hold(sp)" not in src
-    build = src[src.index("def build(board: dict, sport: str, now=None) -> dict:"):src.index("def two_hold(")]
-    assert '"threes_paper"' not in build, "no board says its three-leg tickets are on paper"
-    old = _path()
-    old.write_text(json.dumps({"holds": [{"sport": "nfl", "since": "2026-11-17", "n": 175, "won": 30,
-                                          "source": "standing"}], "released": []}))
-    orig = parlayhold.DEFAULT_PATH
-    try:
-        parlayhold.DEFAULT_PATH = old
-        gp = GP.build(EG.board(), "nfl")
-    finally:
-        parlayhold.DEFAULT_PATH = orig
+    build = src[src.index("def build(board: dict, sport: str, now=None) -> dict:"):src.index("def attach(")]
+    assert '"threes_paper"' not in build and '"paper_twos"' not in build, "no board puts its tickets on paper"
+    gp = GP.build(EG.board(), "nfl")
     g = gp["games"][0]
     assert len(g["threes"]) == GP.THREE_PER_GAME and not g.get("paper_threes") and not g.get("threes_paper")
     assert gp["counts"]["threes"] == GP.THREE_PER_GAME and gp["counts"]["filled_threes"] == 0
@@ -113,12 +94,13 @@ def _leg(player, market, p, team="NYG", odds=-200):
             "line": 2.5, "odds": odds, "book": "DraftKings", "p": p, "game_date": "2099-11-12"}
 
 
-def test_a_game_fills_up_to_two_and_its_cards_say_how():
+def test_a_game_fills_up_to_three_and_its_cards_say_how():
     g = EG.GAME
-    # Four legs whose best three make 0.62^3, about 24%: under THREE_FLOOR, so
-    # none clears it, and the game fills its two with longer tickets.
+    # Five legs whose best three make 0.62^3, about 24%: under THREE_FLOOR, so
+    # none clears it, and the game fills its three with longer tickets.
     legs = [_leg("A One", "receptions", 0.62), _leg("B Two", "rush_att", 0.62, team="WAS"),
-            _leg("C Three", "rec_yds", 0.62), _leg("D Four", "pass_cmp", 0.61, team="WAS")]
+            _leg("C Three", "rec_yds", 0.62), _leg("D Four", "pass_cmp", 0.61, team="WAS"),
+            _leg("E Nine", "receptions", 0.61, team="WAS")]
     made = GP.tickets_of("nfl", g, legs)
     assert made["threes_clear"] == 0 and len(made["threes"]) == GP.THREE_MIN, made
     assert made["filled"] == GP.THREE_MIN
@@ -127,19 +109,24 @@ def test_a_game_fills_up_to_two_and_its_cards_say_how():
         assert any(c.startswith(f"A longer ticket: {t['joint'] * 100:.1f}% by our numbers, under the "
                                 f"{GP.THREE_FLOOR:.0%} a three-leg parlay is built to") for c in t["caveats"]), t["caveats"]
     # The report's own picks first: two of them and the game's other props fill
-    # the third leg, each such ticket naming the leg that is not a pick.
+    # the third leg, each such ticket naming the leg that is not a pick; a pick
+    # rides on MAX_USES tickets at most, so the game's best props make the
+    # third, last (ZR), each named.
     own = legs[:2]
-    extra = [_leg("E Five", "receptions", 0.80, team="WAS"), _leg("F Six", "rush_yds", 0.78)]
+    extra = [_leg("E Five", "receptions", 0.80, team="WAS"), _leg("F Six", "rush_yds", 0.78),
+             _leg("G Seven", "rec_yds", 0.76, team="WAS")]
     made = GP.tickets_of("nfl", g, own, extra=extra)
-    assert len(made["threes"]) == GP.THREE_MIN and made["wider"] == 4, made
+    assert len(made["threes"]) == GP.THREE_MIN and made["wider"] == 5, made
     mine = {GP._leg_id(l) for l in own}
-    for t in made["threes"]:
-        board = [l for l in t["legs"] if GP._leg_id(l) not in mine]
-        assert len(board) == 1, "the report's two picks ride every ticket, one prop of the board's beside them"
+    board = [[l for l in t["legs"] if GP._leg_id(l) not in mine] for t in made["threes"]]
+    assert [len(b) for b in board] == [1, 1, 3], "the report's two picks ride two tickets, one prop beside them"
+    for t in made["threes"][:2]:
         assert any("is not one of this report's picks" in c for c in t["caveats"]), t["caveats"]
+    assert any("are not this report's picks: props the board priced" in c for c in made["threes"][2]["caveats"])
+    assert [t.get("fill") for t in made["threes"]] == ["one", "one", "props"] and made["props_filled"] == 1
     # Fewer than three legs make no ticket, and the game says why.
     few = GP.tickets_of("nfl", g, legs[:2])
-    assert few["threes"] == [] and GP._threes_note(few).startswith("0 of 2: a three-leg parlay takes three legs")
+    assert few["threes"] == [] and GP._threes_note(few).startswith("0 of 3: a three-leg parlay takes three legs")
 
 
 def test_a_game_short_of_props_at_60_fills_with_legs_in_the_fifties_and_names_them():
@@ -176,7 +163,7 @@ def test_the_heartbeat_says_why_a_game_is_short_without_naming_a_pick():
     import os
     import launch as L
     t = {"legs": [{"player": "A"}, {"player": "B"}, {"player": "C"}]}
-    games = [{"home": "A", "threes": [t, t]},                                          # two: not short
+    games = [{"home": "A", "threes": [t, t, t]},                                       # three: not short
              {"home": "B", "threes": [], "legs_wider": 2, "legs_from": "report"},         # too few props
              {"home": "C", "threes": [t], "legs_wider": 6, "legs_from": "report"},        # none fit
              {"home": "D", "threes": [], "rebuild_error": "KeyError: 'Jalen Hurts'"},     # the rebuild failed
@@ -184,7 +171,8 @@ def test_the_heartbeat_says_why_a_game_is_short_without_naming_a_pick():
              {"home": "F", "threes": [], "kept": "Sun 1:00 PM ET"},                       # started: not counted
              {"home": "G", "threes": [], "no_props": "props_not_bought", "legs_wider": 0},  # bought the day before
              {"home": "H", "threes": [], "no_props": "no_props_priced", "legs_wider": 0},   # no book has one yet
-             # Props enough, but one of the report's own picks among them: a ticket takes two.
+             # Props enough, one of the report's own picks among them: since ZR the
+             # game's best props fill around it, so it is short only where none fit.
              {"home": "I", "threes": [], "legs_wider": 9, "legs_own": 1, "legs_from": "report",
               "report_picks": 4, "picks_priced": 3}]
     fit = {"three": {"w": 0.4, "shift": -0.3, "fitted": True, "n": 120, "why": "scored the newest legs better",
@@ -202,8 +190,8 @@ def test_the_heartbeat_says_why_a_game_is_short_without_naming_a_pick():
         finally:
             L._full_copy = was
     assert got["threes_short"] == 7, got
-    assert got["threes_short_why"] == {"few_props": 1, "no_fit": 1, "rebuild_failed": 1, "no_report": 1,
-                                       "props_not_bought": 1, "no_props_priced": 1, "few_picks": 1}, got
+    assert got["threes_short_why"] == {"few_props": 1, "no_fit": 2, "rebuild_failed": 1, "no_report": 1,
+                                       "props_not_bought": 1, "no_props_priced": 1}, got
     # …and of the games short of the report's picks, how many it carries, prices, and holds at 50%.
     assert got["threes_few_picks"] == {"games": 1, "picks": 4, "priced": 3, "at_50": 1}, got
     # The legs' correction in force, the model's numbers only: what moved them.
@@ -282,11 +270,12 @@ def test_every_game_still_to_play_has_its_entry_and_one_with_no_prop_says_when()
              {"player": "Q Nobody", "market": "rec_yds", "side": "OVER", "line": 40.5}]
     GP.from_report(b4, "nfl", sunday, picks, now=thursday)
     assert "no_props" not in x4 and x4["threes"] == [] and x4["legs_own"] == 1, x4
-    assert x4["picks_priced"] == 1, "one of its two picks is priced at all: the heartbeat's few_picks counts"
-    assert x4["threes_note"].startswith("a three-leg parlay takes 2 of this report's own picks, and only 1 of its "
-                                        "2 picks is a player's line"), x4["threes_note"]
-    assert "; the game's Most Likely picks at 60% or better make no three that fit together and reach 25% in " \
-        "their place" in x4["threes_note"], x4["threes_note"]
+    assert x4["picks_priced"] == 1, "one of its two picks is priced at all: the heartbeat's threes_few_picks counts"
+    # Its other props sit under the 55% another prop fills at: one leg in all.
+    assert x4["threes_note"].startswith("a three-leg parlay takes three legs, and this report's picks (0 of its 2 "
+                                        "picks are at 60% or better) and the 1 more the game could add (the "
+                                        "report's other picks at 50% or better, the board's other props at 55% "
+                                        "or better) make only 1 leg"), x4["threes_note"]
     assert x4["threes_note"].endswith("; the books post more of this game's props as it nears, and its parlays are "
                                       "read again as they do"), x4["threes_note"]
     # One fewer priced prop is still a stray or two: it waits.
@@ -340,13 +329,19 @@ def test_a_game_whose_props_all_sit_under_60_has_its_entry_and_fills_from_them()
     assert x is not None and "no_props" not in x, "priced props, under the floor: an entry, and no wait"
     assert x["threes"] == [], "no leg at 60%: nothing clears on the board's own pass"
     b["game_parlays"] = gp
-    # Props the report never picked, in the fifties: no legs (PARLAYWIN1).
+    # Props the report never picked, in the fifties: the game's best props make
+    # what they can at 55% and better (ZR), a longer ticket, each leg named.
     GP.from_report(b, "nfl", away, [])
-    assert x["threes"] == [], "a prop the report did not pick fills only at 60%"
-    # The report's own picks in the fifties fill its two.
+    assert len(x["threes"]) == 1 and x["threes_props_filled"] == 1, x.get("threes_note")
+    legs = {l["player"] for l in x["threes"][0]["legs"]}
+    assert legs == {"P One", "P Two", "P Three"}, "the one at 54% is under the 55% another prop fills at"
+    assert any(c.startswith("A longer ticket: ") for c in x["threes"][0]["caveats"])
+    # The report's own picks in the fifties fill what four legs can: two, a leg
+    # riding on MAX_USES tickets at most, and the note says so.
     GP.from_report(b, "nfl", away, [dict(r, side="OVER") for r in fifties])
-    assert len(x["threes"]) == GP.THREE_MIN, x.get("threes_note")
-    assert all(t.get("filled") for t in x["threes"]) and "threes_note" not in x
+    assert len(x["threes"]) == 2 == GP.MAX_USES, x.get("threes_note")
+    assert all(t.get("filled") for t in x["threes"]) and x["threes_note"].startswith("2 of 3: ")
+    assert x["threes_note"].endswith("reach 15% by our numbers with no leg on more than 2 tickets"), x["threes_note"]
 
 
 def test_the_longer_tickets_floor_and_a_short_game_says_what_stopped_it():
@@ -365,9 +360,10 @@ def test_the_longer_tickets_floor_and_a_short_game_says_what_stopped_it():
     mine = {GP._leg_id(l) for l in legs}
     made = GP.tickets_of("nfl", g, [], extra=legs, picks=mine)
     assert made["threes"] == [] and made["fill_fit"] == 4 and made["fill_clear"] == 0, made
-    # At 55% they are 16.6%: a longer ticket, said so on its card.
+    # At 55% they are 16.6%: a longer ticket, said so on its card. Two of them:
+    # a leg rides on MAX_USES tickets, and four legs make two.
     made = GP.tickets_of("nfl", g, [], extra=[dict(l, p=0.55) for l in legs], picks=mine)
-    assert len(made["threes"]) == GP.THREE_MIN and made["fill_clear"] == 4, made
+    assert len(made["threes"]) == 2 == GP.MAX_USES and made["fill_clear"] == 4, made
     for t in made["threes"]:
         assert any(c.startswith("A longer ticket: 16.6% by our numbers") for c in t["caveats"]), t["caveats"]
     # One that clears nothing because every pair conflicts: the same player in each.
@@ -375,20 +371,24 @@ def test_the_longer_tickets_floor_and_a_short_game_says_what_stopped_it():
     none = GP.tickets_of("nfl", g, [], extra=same, picks={GP._leg_id(l) for l in same})
     assert none["threes"] == [] and none["fill_fit"] == 0 and none["fill_clear"] == 0
     assert "reach 15% by our numbers" in GP._threes_note(dict(none, wider=3))
-    # Props the report did not pick ride one a ticket, beside two of its picks.
+    # Props the report did not pick ride one a ticket beside two of its picks,
+    # and make up the game's last tickets only once those are made (ZR).
     two_picks = legs[:2]
     others = [dict(l, p=0.66) for l in legs[2:]]
     made = GP.tickets_of("nfl", g, [], extra=[dict(l, p=0.66) for l in two_picks] + others,
                          picks={GP._leg_id(l) for l in two_picks})
-    assert made["threes"] and all(sum(GP._leg_id(l) not in mine or l["player"] in ("C Three", "D Four")
-                                      for l in t["legs"]) <= GP.FILL_OUTSIDE_MAX for t in made["threes"]), made
+    outside = [sum(l["player"] in ("C Three", "D Four") for l in t["legs"]) for t in made["threes"]]
+    assert outside[:2] == [1, 1] and all(n > GP.FILL_OUTSIDE_MAX for n in outside[2:]), outside
+    # One pick of the report's and two other props: a ticket of the game's props.
     alone = GP.tickets_of("nfl", g, [], extra=others + [dict(legs[0], p=0.66)], picks={GP._leg_id(legs[0])})
-    assert alone["threes"] == [] and alone["wider_own"] == 1, "one pick of the report's makes no ticket"
-    assert GP._report_note(0, 1, alone).startswith("a three-leg parlay takes 2 of this report's own picks"), \
-        GP._report_note(0, 1, alone)
+    assert len(alone["threes"]) == 1 and alone["wider_own"] == 1 and alone["props_filled"] == 1, alone
+    assert GP._report_note(1, 1, alone).startswith("1 of 3: this report's picks (1 of its 1 pick is at 60% or "
+                                                   "better) and the 2 more the game could add"), \
+        GP._report_note(1, 1, alone)
     # A game that needs no fill counts none.
     full = GP.tickets_of("nfl", g, [_leg("A One", "receptions", 0.9), _leg("B Two", "rush_att", 0.9, team="WAS"),
-                                    _leg("C Three", "rec_yds", 0.9), _leg("D Four", "pass_cmp", 0.9, team="WAS")])
+                                    _leg("C Three", "rec_yds", 0.9), _leg("D Four", "pass_cmp", 0.9, team="WAS"),
+                                    _leg("E Five", "receptions", 0.9, team="WAS")])
     assert len(full["threes"]) >= GP.THREE_MIN and full["fill_fit"] is None
     t = {"legs": [{"player": "A"}, {"player": "B"}, {"player": "C"}]}
     games = [{"home": "A", "threes": [], "legs_wider": 5, "fill_fit": 0, "fill_clear": 0},
@@ -425,23 +425,15 @@ def test_a_ticket_on_paper_from_before_still_journals_and_grades():
     assert [r["player"] for r in GP.journal_rows(gp)] == ["A", "B", "C"], "its legs are graded too"
 
 
-def test_the_record_and_the_night_say_no_three_leg_hold():
+def test_the_record_and_the_night_say_no_hold():
     c = _conn()
     _tickets(c, "nfl", 3, 7, "game_three")
-    old = _path()
-    old.write_text(json.dumps({"holds": [{"sport": "nfl", "since": "2026-11-17", "n": 175, "won": 30,
-                                          "source": "standing"}], "released": []}))
-    orig = parlayhold.DEFAULT_PATH
-    try:
-        parlayhold.DEFAULT_PATH = old
-        rec = parlayledger.game_parlay_record(c)
-    finally:
-        parlayhold.DEFAULT_PATH = orig
+    _tickets(c, "nfl", 5, 5, "game_two")                # retired: kept in the journal, off the record
+    rec = parlayledger.game_parlay_record(c)
     three = rec["nfl"]["three"]
-    assert (three["graded"], three["wins"]) == (10, 3) and "paper" not in three
+    assert (three["graded"], three["wins"]) == (10, 3) and "paper" not in three and "two" not in rec["nfl"]
     m = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
-    assert 'verdicts["two-leg parlays on paper"] = parlayhold.verdict(plh)' in m
-    assert "three-leg parlays on paper" not in m
+    assert "parlays on paper" not in m and "parlayhold" not in m
     # A game played while its league was on paper still says so on its page.
     rj = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert "g.threes_paper ? `<p class=\"gr-note\">Three-leg parlays: on paper for now" in rj

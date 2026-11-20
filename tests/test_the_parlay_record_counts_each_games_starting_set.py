@@ -9,8 +9,8 @@ keeps every version it posted, so the Record page counted each game's tickets
 several times over (the NFL's three-leg record read 314 graded tickets from two
 weeks of games, a game posting three or four at a time). engine/parlayledger now marks each
 journaled ticket `at_start`: 1 when it was in the set engine/reportkeep kept as
-the game started, 0 when the board replaced it before then; and the record, its
-second view and the two-leg hold count the 1s. What these hold:
+the game started, 0 when the board replaced it before then; and the record and
+its second view count the 1s. What these hold:
 
   * a started game's kept set marks its own tickets 1 and every earlier
     version 0, on the board as built (before any filter), under the board's
@@ -19,11 +19,10 @@ second view and the two-leg hold count the 1s. What these hold:
   * a game that started before the journal marked it is marked from its
     archived starting set (engine/reportarchive), nightly;
   * the record counts the starting sets and says how many versions it left
-    out; the two-leg hold is measured on the same tickets.
+    out, and so does its split by how a game's tickets were made up (ZR).
 
     python3 tests/test_the_parlay_record_counts_each_games_starting_set.py
 """
-import datetime as dt
 import sqlite3
 import sys
 import tempfile
@@ -32,7 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from engine import parlayhold, parlayledger as PL, reportarchive  # noqa: E402
+from engine import parlayledger as PL, reportarchive  # noqa: E402
 
 
 def _conn():
@@ -151,21 +150,33 @@ def test_a_game_that_started_before_the_marking_is_marked_from_its_archive():
     assert PL.mark_from_archive(c, where / "nowhere") == 0, "no archive, nothing to mark"
 
 
-def test_the_two_leg_hold_is_measured_on_the_starting_sets():
+def test_the_fill_split_counts_the_starting_sets():
+    """ZR (2026-11-20): a game short of the report's own tickets fills to three,
+    and the record says how each way of filling has done, on the starting sets
+    and from the day tickets began to say how they were made up (FILL_SINCE)."""
     c = _conn()
-    for i in range(45):
-        # 45 posted at the start, 12 hit: 27%, under the 36% floor; and 45
-        # replaced versions that all hit, which the hold must not count.
-        for at_start, won in ((1, i < 12), (0, True)):
-            c.execute("INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, qualified, was_play,"
-                      " notional_units, stake_units, source, status, at_start) VALUES (?,?,?,?,?,?,?,1,0,1,0,?,?,?)",
-                      ("2026-11-19T12:00:00", "nba", "2026-11-19", f"k{i}-{at_start}", "same_game", 2, "A@B",
-                       "game_two", "won" if won else "lost", at_start))
+    rows = [("2026-11-21T12:00:00", None, "won", 1), ("2026-11-21T12:00:00", None, "lost", 1),
+            ("2026-11-21T12:00:00", "props", "lost", 1), ("2026-11-21T12:00:00", "props", "open", 1),
+            ("2026-11-21T12:00:00", "board", "won", 1),
+            ("2026-11-21T12:00:00", "props", "won", 0),            # replaced before the start: not counted
+            ("2026-11-19T12:00:00", None, "won", 1)]               # before FILL_SINCE: in the total, not the split
+    for i, (ts, fill, st, at_start) in enumerate(rows):
+        c.execute("INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, qualified, was_play,"
+                  " notional_units, stake_units, source, status, at_start, fill, modeled_joint, pnl_units)"
+                  " VALUES (?,?,?,?,?,?,?,1,0,1,0,?,?,?,?,?,?)",
+                  (ts, "nba", ts[:10], f"k{i}", "same_game", 3, "A@B", "game_three", st, at_start, fill, 0.3,
+                   {"won": 2.0, "lost": -1.0}.get(st)))
     c.commit()
-    path = Path(tempfile.mkdtemp()) / "parlayhold.json"
-    parlayhold.refresh(c, path, today=dt.date(2026, 11, 20))
-    two = parlayhold.held("nba", path, legs=2)
-    assert two and (two["n"], two["won"]) == (45, 12), two
+    three = PL.game_parlay_record(c)["nba"]["three"]
+    assert (three["graded"], three["wins"]) == (5, 3), three
+    bf = three["by_fill"]
+    assert bf["from"] == PL.FILL_SINCE == "2026-11-20"
+    assert (bf["report"]["graded"], bf["report"]["wins"], bf["report"]["net_units"]) == (2, 1, 1.0), bf
+    assert (bf["props"]["graded"], bf["props"]["wins"], bf["props"]["open"]) == (1, 0, 1), bf
+    assert (bf["board"]["graded"], bf["board"]["wins"], bf["board"]["chance"]) == (1, 1, 0.3), bf
+    assert set(bf) == {"from", "report", "props", "board"}
+    js = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
+    assert "${close}${rebuilt}${madeUp}" in js and 'props: ["the game’s best props", ""]' in js
 
 
 def test_the_journal_and_the_night_mark_them():
@@ -175,7 +186,7 @@ def test_the_journal_and_the_night_mark_them():
     assert body.index("mark_started_games(conn, gp, sport, day)") < body.index("_with_leg_rows(conn, gp, sport, day)"), \
         "marked on the board as built, before the leg-row filter drops a kept ticket"
     m = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
-    assert m.index("_pl.mark_from_archive(lconn)") < m.index("plh = parlayhold.refresh(lconn)")
+    assert "_pl.mark_from_archive(lconn)" in m
     # And once a process, on its first journal pass: right after a deploy, not the night after.
     assert body.index("mark_from_archive(conn)") < body.index("for sport, rel in BOARD_FILES.items():")
     assert "if not _ARCHIVE_MARKED:" in body

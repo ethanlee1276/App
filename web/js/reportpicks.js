@@ -598,7 +598,7 @@ const RP_STRIP_MAX = 12;
    and says why ("unkept"). A size the league had on paper at the start was
    never posted (GPWIN2): its tickets stand apart, said so, and a game with none
    says why it posted none. */
-//: A size of ticket on paper: its words and the hit rate that brings it back (engine/parlayhold.SIZES).
+//: A size of ticket on paper (the holds of 17-20 November, since retired): its words and the rate it needed.
 const RP_PAPER = { threes: ["three-leg parlays", "25%"], twos: ["two-leg parlays", "36%"] };
 //: The game's picks and tickets: a strip of marks a kind, opening to every one by name.
 function rpBetsHTML(x, sport, open) {
@@ -739,7 +739,7 @@ async function renderReportPicks() {
       <div class="es-sub">The reports are written with the board, one for every game on it, and their picks and
         parlays land here as they are.</div></div>`
     : rpTodayHTML(d, byGame, keys);
-  // A league's three-leg parlays on paper (engine/parlayhold) say why once, here.
+  // A league's three-leg parlays on paper (17-19 November, a hold since retired) say why once, here.
   const paper = locked ? "" : ["threes_paper", "twos_paper"].map((k) => ((d.game_parlays || {})[k] || {}).note || "")
     .filter(Boolean).map((n) => `<p class="set-note">${escapeHtml(n)}</p>`).join("");
   // The heading's own line says what the page is; each tab's line says the rest.

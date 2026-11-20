@@ -142,9 +142,15 @@ def test_a_prop_the_report_did_not_pick_fills_one_a_ticket_at_55():
     assert "D Four" not in legs, "a prop the report never picked, under 55%, is no leg"
     assert len(x["threes"]) == GP.THREE_MIN and "E Five" in legs, "one at 55% or better fills the second ticket"
     picked = {"A One", "B Two", "C Three"}
-    assert all(sum(l["player"] not in picked for l in t["legs"]) <= GP.FILL_OUTSIDE_MAX for t in x["threes"]), \
-        [[l["player"] for l in t["legs"]] for t in x["threes"]]
+    outside = [sum(l["player"] not in picked for l in t["legs"]) for t in x["threes"]]
+    assert outside[:2] == [0, 1], [[l["player"] for l in t["legs"]] for t in x["threes"]]
     assert (GP.FILL_OTHER_FLOOR, GP.FILL_OUTSIDE_MAX) == (0.55, 1)
+    # Three picks can ride on two such tickets at most (a leg rides on MAX_USES):
+    # the game's best props make up the third, last, each named (ZR).
+    last = x["threes"][-1]
+    assert outside[2] > GP.FILL_OUTSIDE_MAX and x["threes_props_filled"] == 1, (outside, x.get("threes_props_filled"))
+    assert any("props the board priced, added so the game has 3 three-leg parlays" in c for c in last["caveats"]), \
+        last["caveats"]
 
 
 def test_a_benched_market_is_no_leg():
@@ -190,50 +196,62 @@ def test_a_card_says_its_chance_once():
 
 
 def test_the_bars_are_said_without_the_link():
-    assert (GP.TWO_FLOOR, GP.THREE_FLOOR) == (0.40, 0.25)
-    assert round(0.63 ** 3, 2) == GP.THREE_FLOOR and round(0.63 ** 2, 2) == GP.TWO_FLOOR
+    assert GP.THREE_FLOOR == 0.25 and round(0.63 ** 3, 2) == GP.THREE_FLOOR
+    # The two-leg tickets are retired, and their bar with them (ZR).
+    assert not hasattr(GP, "TWO_FLOOR") and GP.RETIRED == ("two",)
 
 
 def test_the_reports_own_picks_are_never_crowded_out_of_the_fill():
-    """Every ticket takes two of the report's picks, so they enter the fill's
-    pool first: sorted by chance alone, a game's other props at 70% took the
-    MAX_POOL places ahead of its picks at 52-58%, and it built nothing."""
+    """The fill's tickets take two of the report's picks where they can, so the
+    picks enter its pool first: sorted by chance alone, a game's other props at
+    70% took the MAX_POOL places ahead of its picks at 52-58%, and it built
+    nothing."""
     g = GAME
     picks = [_leg("A One", "receptions", 0.58), _leg("B Two", "rush_att", 0.55, team="WAS"),
              _leg("C Three", "rec_yds", 0.52, pos="TE")]
     others = [_leg(f"Other {i}", "receptions", 0.70, team="NYG" if i % 2 else "WAS") for i in range(GP.MAX_POOL)]
     made = GP.tickets_of("nfl", g, [], extra=picks + others, picks={GP._leg_id(l) for l in picks})
     assert made["wider_own"] == 3, made["wider_own"]
-    assert len(made["threes"]) >= GP.THREE_MIN, made
-    for t in made["threes"]:
-        assert sum(l["player"] in ("A One", "B Two", "C Three") for l in t["legs"]) >= 2, t["legs"]
+    assert len(made["threes"]) == GP.THREE_MIN, made
+    # The tickets the picks make come first; the game's best props make up the
+    # place they leave, around the pick still free (ZR).
+    own = [sum(l["player"] in ("A One", "B Two", "C Three") for l in t["legs"]) for t in made["threes"]]
+    assert own == [3, 2, 1] and made["props_filled"] == 1, (own, made["props_filled"])
 
 
 def test_the_most_likely_boards_picks_stand_in_where_a_report_has_too_few():
     """BOARDFILL1: on the Thursday Sunday's props were bought, five Sunday games made no three-leg
     ticket: their reports carried 15 player picks, 5 of them legs (scorers and tackles are never legs),
     and a ticket takes two of the report's. The game's Most Likely picks at 60% or better stand in,
-    on a ticket that clears 25%, each named; any other prop still rides one a ticket."""
+    on a ticket that clears 25%, each named; any other prop rides one a ticket beside
+    two of the report's picks, or makes up the game's last tickets (ZR)."""
     g = GAME
     own = [_leg("A One", "receptions", 0.66)]                               # the report's one usable pick
     likely = [dict(_leg("B Two", "rush_att", 0.68, team="WAS", pos="RB"), pool="likely"),
               dict(_leg("C Three", "rec_yds", 0.66, pos="TE"), pool="likely"),
-              dict(_leg("D Four", "receptions", 0.64, team="WAS"), pool="likely")]
+              dict(_leg("D Four", "receptions", 0.64, team="WAS"), pool="likely"),
+              dict(_leg("E Five", "rush_yds", 0.62, pos="RB"), pool="likely")]
     mine = {GP._leg_id(l) for l in own}
     made = GP.tickets_of("nfl", g, own, extra=likely, picks=mine)
     assert len(made["threes"]) == GP.THREE_MIN and made["board_filled"] == GP.THREE_MIN, made
+    said = f"for this game the report's card did not list, added so the game has {GP.THREE_MIN} three-leg parlays"
     for t in made["threes"]:
         assert float(t["joint"]) >= GP.THREE_FLOOR, t["joint"]
-        assert any("for this game the report's card did not list, added so the game has 2 three-leg parlays" in c
-                   and "Most Likely pick" in c for c in t["caveats"]), t["caveats"]
+        assert any(said in c and "Most Likely pick" in c for c in t["caveats"]), t["caveats"]
     assert any("A One" in {l["player"] for l in t["legs"]} for t in made["threes"]), "the report's pick rides first"
-    # The same props from any other source do not stand in: one a ticket, as before.
+    # The same props from any other source do not stand in for the report's
+    # picks: they make up the game's tickets last, as its props (ZR), named so.
     priced = [dict(l, pool="priced") for l in likely]
     none = GP.tickets_of("nfl", g, own, extra=priced, picks=mine)
-    assert none["threes"] == [] and none["board_filled"] == 0, none["threes"]
-    # Nor a Most Likely pick under 60%, nor a ticket under 25%.
+    assert none["board_filled"] == 0 and none["props_filled"] == len(none["threes"]) > 0, none
+    assert all(not any("Most Likely pick" in c for c in t["caveats"]) for t in none["threes"])
+    # Nor a Most Likely pick under 60%, nor a ticket under 25%: last, each named.
     weak = [dict(l, p=0.58) for l in likely]
-    assert GP.tickets_of("nfl", g, own, extra=weak, picks=mine)["threes"] == []
+    wk = GP.tickets_of("nfl", g, own, extra=weak, picks=mine)
+    assert wk["board_filled"] == 0 and wk["props_filled"] == len(wk["threes"]) > 0, wk
+    for t in wk["threes"]:
+        assert any("under the 60% a leg is built to" in c for c in t["caveats"]), t["caveats"]
+        assert float(t["joint"]) >= GP.THREE_FLOOR or any(c.startswith("A longer ticket") for c in t["caveats"])
     assert not GP.board_pick(dict(likely[0], p=0.59)) and GP.board_pick(likely[0]) and not GP.board_pick(priced[0])
     # A report with its two picks keeps to them: nothing stands in where the fill already made two.
     two = [_leg("A One", "receptions", 0.66), _leg("E Five", "rush_att", 0.66, team="WAS", pos="RB"),

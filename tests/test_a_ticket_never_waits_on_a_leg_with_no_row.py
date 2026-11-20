@@ -32,8 +32,8 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from engine import db, gameparlays as GP, ledger, parlayledger as PL       # noqa: E402
 
-#: The fixture game's tickets: two two-leg, its three-leg ones (THREELEG1: three) and three pairs.
-ALL = 2 + GP.THREE_PER_GAME + GP.SCORER_PER_GAME
+#: The fixture game's tickets: its three-leg ones and its scorer pairs, three of each (ZR).
+ALL = GP.THREE_PER_GAME + GP.SCORER_PER_GAME
 EG = __import__("test_each_game_gets_its_parlays")                  # the shared fixture (a sibling test file)
 
 
@@ -43,7 +43,7 @@ def _journaled():
     b = EG.board()
     GP.attach(b, "nfl")
     PL.journal_game_parlay_legs(conn, b, "nfl")
-    assert PL.log_game_parlays(conn, b["game_parlays"], "nfl", b["date"]) == ALL   # with the two two-leg tickets
+    assert PL.log_game_parlays(conn, b["game_parlays"], "nfl", b["date"]) == ALL
     return conn, b
 
 

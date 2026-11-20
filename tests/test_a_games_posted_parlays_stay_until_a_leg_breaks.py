@@ -15,7 +15,7 @@ three-leg tickets between Thursday and Sunday. What these hold:
     it is still the likelier read; never fewer tickets than a fresh choice;
   * the report stage reads what each game posted from engine/reportkeep's file
     (`posted_from`) before any report is written; `from_report` posts the
-    game's three- and two-leg tickets with them first and `report_only` its
+    game's three-leg tickets with them first and `report_only` its
     scorer pairs, counting what it posted again and what it replaced
     (``posted_kept``, ``posted_replaced``), which the heartbeat sums;
   * it is all the build's working state (underscore keys), which
@@ -37,7 +37,6 @@ os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 from engine import gameparlays as GP  # noqa: E402
 
-GP.two_hold = lambda sport: None
 EG = __import__("test_each_game_gets_its_parlays")                  # the shared fixture (a sibling test file)
 TP = __import__("test_the_parlays_are_made_of_the_reports_picks")
 GAME = EG.GAME
@@ -135,7 +134,7 @@ def test_the_report_stage_posts_them_again_and_counts_what_it_kept():
     assert "posted_kept" not in x, "nothing posted before: nothing to count"
     assert GP.SCORER_PAIRS_KEY not in b and GP.POSTED_KEY not in b, "working state, gone once used"
     was = {k: _ids(x[k]) for k in GP.POSTED_LISTS}
-    assert was["threes"] and was["twos"] and was["scorers"], was
+    assert set(was) == {"threes", "scorers"} and was["threes"] and was["scorers"], was
     b2, y = _board_with({KEY: copy.deepcopy(was)})
     assert {k: _ids(y[k]) for k in GP.POSTED_LISTS} == was
     n = sum(len(v) for v in was.values())

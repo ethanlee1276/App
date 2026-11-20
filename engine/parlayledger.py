@@ -168,6 +168,14 @@ def ensure_schema(conn) -> None:
             conn.execute("ALTER TABLE parlays ADD COLUMN at_start INTEGER")
         except sqlite3.OperationalError as exc:
             column_exists_or_raise(exc)
+    # HOW A GAME'S FILLED TICKET WAS MADE UP (`fill`, ZR 2026-11-20:
+    # engine/gameparlays.FILL_KINDS); NULL for a ticket of the report's own
+    # picks, and for every ticket journaled before FILL_SINCE.
+    if "fill" not in cols:
+        try:
+            conn.execute("ALTER TABLE parlays ADD COLUMN fill TEXT")
+        except sqlite3.OperationalError as exc:
+            column_exists_or_raise(exc)
     conn.commit()
 
 
@@ -390,8 +398,7 @@ def mark_at_start(conn, sport: str, dates, game: str, kept: dict) -> int:
     game's set is the one engine/reportkeep kept (its `game_parlays` entry as
     the board had it at the start, ``kept``): each of the game's journaled
     tickets in it is marked 1, every other version of the game 0, and the
-    record (`game_parlay_record`, `report_game_parlays`, the two-leg hold)
-    counts the 1s. A kept set that held no ticket held none: every version 0.
+    record (`game_parlay_record`, `report_game_parlays`) counts the 1s. A kept set that held no ticket held none: every version 0.
 
     ``dates`` are the days the game's tickets may be journaled under (the
     board's date, the NFL's week, and the game's own day); the first marking
@@ -468,14 +475,15 @@ def mark_from_archive(conn, where=None, sports=None) -> int:
 
 def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
     """Journal every ticket a board's game parlays posted (engine/gameparlays:
-    two or three three-leg tickets and three scorer pairs a game), each under its
-    own source, tracked at a stake of nothing, graded at the least price
-    its card says to take it at. Returns tickets newly written; a ticket
-    already journaled for its day is left alone."""
+    three three-leg tickets and three scorer pairs a game), each under its
+    own source and, where it was filled, how (``fill``), tracked at a stake of
+    nothing, graded at the least price its card says to take it at. Returns
+    tickets newly written; a ticket already journaled for its day is left
+    alone."""
     ensure_schema(conn)
     if not isinstance(gp, dict) or not sport or not date:
         return 0
-    from .gameparlays import SOURCES
+    from .gameparlays import FILL_KINDS, SOURCES
     wrote = 0
     for x in gp.get("games") or []:
         # A started game's tickets, kept on the board after the start
@@ -483,8 +491,8 @@ def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
         if isinstance(x, dict) and x.get("kept"):
             continue
         for kind, source in SOURCES.items():
-            # A league's three-leg tickets on paper (engine/parlayhold) are
-            # journaled and graded as ever: the record keeps learning on them.
+            # A ticket on paper (a board from the holds of 17-20 November) is
+            # journaled and graded as ever; a retired kind is built no more.
             keys = (("threes", "paper_threes") if kind == "three" else ("twos", "paper_twos") if kind == "two"
                     else ("scorers",))
             for t in [t for k in keys for t in x.get(k) or []]:
@@ -501,14 +509,15 @@ def log_game_parlays(conn, gp: dict, sport: str, date: str) -> int:
                     "INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, qualified,"
                     " was_play, naive_product_dec, quoted_dec, assumed_dec, price_basis, book, correlation_tax,"
                     " modeled_joint, implied_joint, independent_joint, conditional_reasoning, stake_units,"
-                    " notional_units, source, status) VALUES (?,?,?,?,?,?,?,1,0,?,NULL,?,?,?,NULL,?,?,?,?,0,?,?,'open')",
+                    " notional_units, source, status, fill)"
+                    " VALUES (?,?,?,?,?,?,?,1,0,?,NULL,?,?,?,NULL,?,?,?,?,0,?,?,'open',?)",
                     (datetime.datetime.now().isoformat(timespec="seconds"), sport, date, key,
                      "same_game", len(legs), x.get("game") or "", t.get("naive_dec"), take,
                      "the least price the card says to take it at: our fair price and 5%",
                      "|".join(sorted(books)) or None, t.get("joint"),
                      round(1.0 / float(take), 4) if take else None, t.get("independent"),
                      "; ".join(t.get("links") or []) or (t.get("script") or ""),
-                     NOTIONAL_UNITS, source))
+                     NOTIONAL_UNITS, source, t.get("fill") if t.get("fill") in FILL_KINDS else None))
                 for i, l in enumerate(legs, start=1):
                     conn.execute(
                         "INSERT INTO parlay_legs (parlay_id, leg_no, player, team, market, side, line, odds, book,"
@@ -651,6 +660,9 @@ AT_START = "at_start = 1"
 #: done apart (`since_rules`). A game dated by its day counts from that day; a
 #: week-labelled one (the NFL's "2026-W12") by when its ticket was journaled.
 RULES_SINCE = "2026-11-19"
+#: The day the tickets began to say how they were filled (`fill`, ZR): the
+#: record's split by it reads only tickets journaled since.
+FILL_SINCE = "2026-11-20"
 
 
 def since_rules(t) -> bool:
@@ -667,9 +679,11 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
     legs and the parlays we recommend are hitting so each sport needs to have a
     record of that on the record page."
 
-    ``{league: {kind: block}}`` for each game's three-leg parlays ("three"), its
-    two-leg ones ("two": its two strongest picks, GPWIN1) and its scorer pairs
-    ("scorers") (engine/gameparlays.SOURCES), each block:
+    ``{league: {kind: block}}`` for each game's three-leg parlays ("three") and
+    its scorer pairs ("scorers") (engine/gameparlays.SOURCES), each block. The
+    two-leg tickets GPWIN1 built ("two") are retired (gameparlays.RETIRED, ZR:
+    Ethan asked for three three-leg parlays and three scorer pairs a game): the
+    journal keeps every one, and the record leaves them off.
 
       * the tickets: graded, won, lost, units at one unit a ticket and ROI, open,
         our average chance on them (`modeled_joint`) and the tickets that lost
@@ -685,7 +699,7 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
     report carried when it started, and no version the board replaced before
     then; ``not_counted`` says how many graded versions were left out."""
     ensure_schema(conn)
-    from .gameparlays import SOURCES
+    from .gameparlays import RETIRED, SOURCES
     try:
         from .ledger import is_benched
     except Exception:                                        # noqa: BLE001
@@ -693,6 +707,8 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
             return False
     out: dict = {}
     for kind, source in SOURCES.items():
+        if kind in RETIRED:
+            continue
         tickets = conn.execute(f"SELECT * FROM parlays WHERE source=? AND {AT_START} ORDER BY date, id",
                                (source,)).fetchall()
         before = dict(conn.execute(
@@ -760,6 +776,27 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                          "chance": round(sum(leg_p) / len(leg_p), 3) if leg_p else None,
                          "once": once, "by_pool": by_pool},
                 "markets": mk, "recent": news}
+            # HOW EACH KIND OF FILLED TICKET DOES (ZR, FILL_SINCE): the report's own
+            # tickets ("report") beside each way a game was filled up to its three.
+            fills: dict = {}
+            for t in rows:
+                if str(t["ts"] or "") < FILL_SINCE:
+                    continue
+                f = fills.setdefault(t["fill"] or "report", {"graded": 0, "wins": 0, "open": 0, "_j": [], "_n": 0.0})
+                if t["status"] in ("won", "lost"):
+                    f["graded"] += 1
+                    f["wins"] += t["status"] == "won"
+                    f["_n"] += float(t["pnl_units"] or 0.0)
+                    if t["modeled_joint"] is not None:
+                        f["_j"].append(float(t["modeled_joint"]))
+                elif t["status"] == "open":
+                    f["open"] += 1
+            if fills:
+                by_fill: dict = {"from": FILL_SINCE}
+                for k, f in fills.items():
+                    j, n = f.pop("_j"), f.pop("_n")
+                    by_fill[k] = dict(f, chance=round(sum(j) / len(j), 3) if j else None, net_units=round(n, 2))
+                out[sp][kind]["by_fill"] = by_fill
             # Since the rebuild (RULES_SINCE): how the new tickets have done, apart.
             new = [t for t in graded if since_rules(t)]
             new_open = sum(1 for t in rows if t["status"] == "open" and since_rules(t))
@@ -770,18 +807,6 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                     "from": RULES_SINCE, "graded": len(new), "wins": sum(1 for t in new if t["status"] == "won"),
                     "chance": round(sum(nj) / len(nj), 3) if nj else None, "net_units": round(nn, 2),
                     "roi": round(nn / len(new), 4) if new else None, "open": new_open}
-    # A league's three-leg tickets on paper (engine/parlayhold) say so on
-    # their record: still graded here, posted nowhere until they hit 25%.
-    # Its two-leg tickets the same, on their own hold (GPWIN1).
-    try:
-        from . import parlayhold
-        for sp, kinds in out.items():
-            for kind, legs in (("three", 3), ("two", 2)):
-                h = parlayhold.held(sp, legs=legs)
-                if h and kind in kinds:
-                    kinds[kind]["paper"] = {"since": h.get("since"), "note": parlayhold.words(h)}
-    except Exception:                                        # noqa: BLE001
-        pass
     return out
 
 

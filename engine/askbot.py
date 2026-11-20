@@ -595,8 +595,9 @@ TOOLS = [
            "stake": {"type": "number", "description": "Optional: the stake (default 100)."}}, "odds"),
     _tool("our_picks",
           "Our model's picks tonight, by kind: best_bets (staked edges), most_likely (likeliest to hit), "
-          "long_shots, game_lines (spreads, totals, moneylines), parlays (each game's two- and three-leg parlays "
-          "and scorer pairs from its report, likeliest first; one marked playable false is a ticket its own card "
+          "long_shots, game_lines (spreads, totals, moneylines), parlays (each game's three three-leg player-prop "
+          "parlays and three two-leg touchdown or goal-scorer pairs from its report, likeliest first; one marked "
+          "playable false is a ticket its own card "
           "says to pass on, and game_started true is a game already under way), pick_of_the_day (each "
           "league's) or top_pick_today (the one best pick across every league, with the ones it beat) — on "
           "one league's board or all of them, best first.",
@@ -2849,7 +2850,7 @@ def _report_tonight(board: dict, rep: dict, league: str) -> dict:
            if isinstance(t, dict)]
     if tix:
         out["report_parlays"] = tix[:REPORT_TICKETS_SHOWN]
-    # Why the game has fewer than its two three-leg parlays, or none yet, in the report's own words
+    # Why the game has fewer than its three three-leg parlays, or none yet, in the report's own words
     # (gameparlays: props still to be bought or posted, too few of the report's picks priced, none that fit).
     why = gp.get("threes_note") or gp.get("props_note")
     if isinstance(why, str) and why:
