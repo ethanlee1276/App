@@ -1386,9 +1386,13 @@ def _lean_choice(row: dict, got: list, main_ok: bool, shown: float, lean):
 
 
 def _pick_brief(r: dict) -> dict:
-    """What a read's card says about one board row."""
+    """What a read's card says about one board row — and whether the row's
+    market is one we can price (``bettable``, ZT): a read's pick on NFL
+    rushing yards carried no flag, so the report said "take it at" and the
+    record journaled it as a bet (after ZT the NFL's pick census still
+    counted 10 such picks, against 2 said as reads, 20 November 2026)."""
     return {k: r.get(k) for k in ("player", "team", "market", "market_label", "side", "line",
-                                  "odds", "book", "model_prob")}
+                                  "odds", "book", "model_prob", "bettable")}
 
 
 #: The least chance a no-pick card will call "his likeliest" number —

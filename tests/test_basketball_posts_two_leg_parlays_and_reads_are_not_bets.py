@@ -200,6 +200,20 @@ def test_the_bet_carries_the_word_and_the_report_says_it():
     assert '"tier": "" if read_only(r) else str(r.get("tier_label") or ""),' in src
 
 
+def test_a_reads_stamped_pick_keeps_the_flag():
+    """A matchup read's own Most Likely pick is a brief copy of the board's row (likely._pick_brief, stamped by
+    gamescan.stamp_picks). It dropped ``bettable``, so a read's rushing-yards pick said "take it at" and went on
+    the record as a bet; the copy keeps it now, so the read says what it is and the record passes it by."""
+    from engine import gamereport as GR, gameresults as GRS
+    from engine.likely import _pick_brief
+    brief = _pick_brief(_row())
+    assert brief["bettable"] is False and set(brief) >= {"player", "market", "side", "line", "odds", "model_prob"}
+    read = {"player": "Jayden Daniels", "team": "WAS", "pick": brief}
+    assert GR.read_pick(read).startswith("A read, not a bet: ") and "take it at" not in GR.read_pick(read)
+    assert GRS.read_bet(read)["read_only"] is True
+    assert _pick_brief(_row(bettable=True))["bettable"] is True
+
+
 def test_a_read_never_takes_a_bets_place_on_the_card():
     """The card ranks four picks (six on a featured game), one a player: every bet comes before any read,
     so a market we cannot price never pushes a bet off the card and the record."""

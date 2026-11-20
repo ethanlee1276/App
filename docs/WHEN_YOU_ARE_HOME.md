@@ -9338,6 +9338,13 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZV. A matchup read's own pick carries the flag** (step 810; 20 November). Nothing to run. After ZU the heartbeat's
+pick census still counted 10 NFL report picks as `refused_unreliable` against 2 said as reads. A matchup read's own
+Most Likely pick is a short copy of the board's row (`likely._pick_brief`), and the copy left out the flag that says
+our number can't price the market. So those picks still said "take it at" on the reads and went on the record as
+bets. The copy keeps the flag now: they say "A read, not a bet", stay off the record, and any still open are taken
+off the next time their board is journaled.
+
 **ZU. A read on the card, said once** (step 809; 20 November). Nothing to run. Drawn and looked at: on the picks
 card a read wore the board's tier ("Top pick") beside its "Read, not a bet" tag, and the line under the tag began
 with the same words. A read now wears only its tag, the line says why once ("A market we can rank but not price yet,
