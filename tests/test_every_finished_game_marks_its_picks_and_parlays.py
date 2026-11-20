@@ -296,16 +296,17 @@ def test_one_set_a_game_and_a_game_never_kept_says_why_it_lists_none():
     path = _journal()
     kept = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive(kept=KEPT))["2026-11-15|NE|DET"]
     flat = " ".join(_render(kept).split())
-    assert "earlier version" not in flat and "Every version" not in flat and "weren’t kept" not in flat, flat[-400:]
+    assert "earlier version" not in flat and "Every version" not in flat and "weren’t saved" not in flat, flat[-400:]
     assert "rpEarlierHTML" not in RP, "the versions the board replaced are not listed or counted"
     old = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive())["2026-11-15|NE|DET"]
     said = " ".join(_render(old).split())
     assert re.findall(r'class="rpk-bets-k">([^<]+)<', said[:said.index("</summary>")]) == ["Picks"], said[:600]
-    assert ("The parlays this report carried at the start weren’t kept for this game (the site keeps them from 16 "
-            "November on), so none are listed here or counted on the Record.") in said, said[-400:]
-    assert said.index("The picks") < said.index("weren’t kept"), "under the picks it does list"
+    # One short line, read once a row on a week of old games.
+    assert "Parlays weren’t saved for games before 16 November." in said, said[-400:]
+    assert said.index("The picks") < said.index("weren’t saved"), "under the picks it does list"
     # With nothing settled to show a reader without the subscription, the note still says why.
-    assert "weren’t kept" in _render({"unkept": True, "held": 1}) and _render({}) == ""
+    assert "weren’t saved" in _render({"unkept": True, "held": 1}) and _render({}) == ""
+    assert ".rpk-bets-note { margin: 8px 0 2px; color: var(--text-mute); font-size: var(--fs-sm); }" in CSS
     # A long strip is said once: the marks a kind draws before it counts the rest.
     pick = {"status": "lost", "player": "Jalen Brunson", "market": "points", "side": "OVER", "line": 26.5}
     strip = _render({"picks": [pick] * 15})

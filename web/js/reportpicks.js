@@ -620,8 +620,8 @@ function rpBetsHTML(x, sport, open) {
   }).join("");
   const held = x.held ? `<p class="mini rpk-bets-held">${escapeHtml(plural(x.held, "more pick or ticket", "more picks and tickets"))
     } waiting on the box score: members see ${x.held === 1 ? "it" : "them"} now.</p>` : "";
-  const unkept = x.unkept ? `<p class="mini rpk-bets-note">The parlays this report carried at the start weren’t kept
-    for this game (the site keeps them from 16 November on), so none are listed here or counted on the Record.</p>` : "";
+  // One short line: on a week of old games it is read once a row.
+  const unkept = x.unkept ? `<p class="mini rpk-bets-note">Parlays weren’t saved for games before 16 November.</p>` : "";
   if (!parts.length) return unkept + paperNote + held;
   const strip = parts.map(([w, l]) => {
     const h = rpHit(l);
