@@ -4416,6 +4416,22 @@ VERDICT_NOTE = {
 }
 
 
+def _posted_before(result: dict, sport: str, out) -> None:
+    """Each game's tickets as the last build posted them, for this build's
+    reports to post again while each still holds (engine/gameparlays
+    `posted_from`, ZQ): read from the file engine/reportkeep wrote at the end
+    of the last report stage, before `keep_started` writes this build's. With
+    no ``out`` none are read; never raises."""
+    if not out:
+        return
+    try:
+        from . import gameparlays, reportkeep
+        from .gate import _full_dir_for
+        result[gameparlays.POSTED_KEY] = gameparlays.posted_from(reportkeep.path_for(sport, _full_dir_for(out)))
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the parlays posted last build not read ({exc})")
+
+
 def _report_only(result: dict) -> None:
     """engine/gameparlays.report_only, never raising past the reports."""
     try:
@@ -4770,6 +4786,8 @@ def attach(result: dict, *, allowed: dict | None = None, season: int | None = No
         _t = _clock.lap("game reports", "meetings + kicking air", _t)
         logged = log_changes(result, [(g, extra, None) for g, extra, _met in prepared], sport, out, at)
         _t = _clock.lap("game reports", "what changed", _t)
+        # The parlays each game posted last build, posted again while they hold (ZQ).
+        _posted_before(result, sport, out)
         reports = []
         for g, extra, met in prepared:
             home, away = str(g.get("home") or ""), str(g.get("away") or "")

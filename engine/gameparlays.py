@@ -112,6 +112,7 @@ from __future__ import annotations
 
 import datetime as dt
 import itertools
+import re
 
 #: The leagues this runs for: every board with player props.
 SPORTS = ("nfl", "cfb", "nba", "cbb", "wnba", "nhl", "mlb")
@@ -1345,7 +1346,40 @@ def side_bar() -> tuple:
 
 
 def choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
-           shared: tuple = (MAX_SHARED, None)) -> list[dict]:
+           shared: tuple = (MAX_SHARED, None), keep=None) -> list[dict]:
+    """``n`` of ``tickets`` (`_choose`), and with ``keep`` the tickets the game
+    posted last build first, in their order (`ident`).
+
+    A POSTED TICKET STAYS UNTIL A LEG BREAKS (ZQ, 2026-11-20). Ethan, on rows
+    reading "Parlays 0 of 28" and "1 of 42": "why do we have 30 parlays being
+    made per game?? There should only be 3 parlays made per game". Every build
+    chose a game's tickets afresh, so a line moving a point reordered them and
+    the board posted another set: one NFL game posted 19 versions of its
+    three-leg tickets between Thursday and Sunday. A ticket posted last build
+    is posted again while it is still one this build would make (each leg
+    still a leg here, at a real book and its floor, the ticket clearing its own
+    and fitting the others: in ``tickets``), at the books' current numbers;
+    only the places it leaves are chosen afresh. A one-club ticket stays while
+    it is still the likelier read at all (it was posted clearly the likelier,
+    SIDE_EDGE). Never fewer tickets than a fresh choice makes."""
+    got = _choose(tickets, n, rank, researched, shared)
+    if keep:
+        mine = _choose(tickets, n, rank, researched, shared, keep)
+        if len(mine) >= len(got):
+            return mine
+    return got
+
+
+def ident(t: dict) -> tuple:
+    """A ticket's identity from one build to the next: each leg's player,
+    market and side, the line left out. A line the books move is the same bet
+    at the book's new number; a different player, market or side is another."""
+    return tuple(sorted((str(l.get("player") or ""), str(l.get("market") or ""),
+                         str(l.get("side") or "").upper()) for l in t.get("legs") or [] if isinstance(l, dict)))
+
+
+def _choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
+            shared: tuple = (MAX_SHARED, None), keep=()) -> list[dict]:
     """The likeliest first (or by ``rank``, a sort key — the scorer pairs'
     research, `_by_research`); each next one shares at most MAX_SHARED legs
     with every ticket already chosen, and no leg rides on more than
@@ -1365,14 +1399,35 @@ def choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
     than the best one that does and fewer than ONE_SIDED_MAX one-club
     tickets are chosen; it says which (`side_reason`). ``researched``: the
     tickets are scorer pairs ranked on their research, and the stronger read
-    is SIDE_RESEARCH more research points."""
+    is SIDE_RESEARCH more research points. ``keep``: the identities posted
+    last build (`choose`), tried first in their order."""
     ranked = sorted(tickets, key=rank or (lambda t: (-t["joint"], -(t.get("ev_at_naive") or -9))))
+    held: set = set()
+    if keep:
+        where = {}
+        for i, k in enumerate(keep):
+            where.setdefault(tuple(tuple(x) for x in k), i)
+        first: dict = {}
+        for t in ranked:
+            i = where.get(ident(t))
+            if i is not None and i not in first:
+                first[i] = t
+        held = {id(t) for t in first.values()}
+        ranked = [first[i] for i in sorted(first)] + [t for t in ranked if id(t) not in held]
     edge, rbar, _fitted = side_bar()
 
     def clearly(t: dict, alt: dict) -> bool:
         if researched:
             return _research_of(t) - _research_of(alt) >= rbar
         return float(t["joint"]) - float(alt["joint"]) >= edge - 1e-9
+
+    def still_ahead(t: dict, alt: dict) -> bool:
+        # A posted one-club ticket: kept while it is the likelier read at all.
+        if id(t) not in held:
+            return False
+        if researched:
+            return _research_of(t) > _research_of(alt)
+        return float(t["joint"]) > float(alt["joint"])
 
     def pick(together: bool) -> tuple:
         out: list = []
@@ -1387,15 +1442,22 @@ def choose(tickets: list[dict], n: int, rank=None, researched: bool = False,
             if any(uses.get(i, 0) >= MAX_USES for i in ids):
                 return False
             return not (together and pulls_apart(t, out))
-        for lim in shared:
+        # The posted tickets first, under the loosest pass they could have been
+        # posted in (the last of ``shared``), so a new ticket that fits a
+        # stricter pass never takes a place one of them still holds.
+        stages = ([(shared[-1], True)] if held else []) + [(lim, False) for lim in shared]
+        for lim, only_held in stages:
             for t in ranked:
                 if len(out) >= n:
                     return out, why
+                if only_held and id(t) not in held:
+                    continue
                 if t in out or not fits(t, lim):
                     continue
                 if one_club(t):
                     alt = next((m for m in ranked if m not in out and not one_club(m) and fits(m, lim)), None)
-                    if alt is not None and (sum(map(one_club, out)) >= ONE_SIDED_MAX or not clearly(t, alt)):
+                    if alt is not None and (sum(map(one_club, out)) >= ONE_SIDED_MAX
+                                            or not (clearly(t, alt) or still_ahead(t, alt))):
                         continue
                     why[id(t)] = side_reason(t, alt, researched)
                 out.append(t)
@@ -1499,7 +1561,7 @@ def game_label(game: dict) -> str:
 
 
 def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = None,
-               extra: list[dict] | None = None, picks: set | None = None) -> dict:
+               extra: list[dict] | None = None, picks: set | None = None, posted: dict | None = None) -> dict:
     """A game's parlays from ``legs`` (GPWIN1): its two-leg tickets, the two
     strongest picks first (``twos``), and its three-leg tickets (``threes``),
     each only when our chance for it clears its bar (TWO_FLOOR, THREE_FLOOR)
@@ -1519,16 +1581,20 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
     FILL_LEG_FLOOR (THREELEG2), and ``picks`` the report's picks among
     ``legs`` and ``extra`` (by `_leg_id`), when a pick under LEG_FLOOR rides
     in ``extra``: the fill takes the picks first and names every other leg.
-    The tickets that clear THREE_FLOOR are made of ``legs`` alone."""
+    The tickets that clear THREE_FLOOR are made of ``legs`` alone.
+    ``posted``: the game's tickets as the last build posted them ({kind:
+    [identity]}, `posted_for`), each posted again while it is still one of
+    these (`choose`)."""
     pool = sorted(legs, key=lambda l: -float(l["p"]))[:MAX_POOL]
     memo = {} if memo is None else memo
+    posted = posted or {}
     pairs = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(pool, 2)) if t]
     threes = [t for t in (ticket(sport, list(c), game, memo) for c in itertools.combinations(pool, 3)) if t]
     strong2 = [t for t in pairs if float(t["joint"]) >= TWO_FLOOR]
     strong3 = [t for t in threes if float(t["joint"]) >= THREE_FLOOR]
     # Two tickets of two legs that share one are half the same bet: none shared.
-    twos = choose(strong2, TWO_PER_GAME, shared=(0,))
-    chosen = choose(strong3, THREE_PER_GAME)
+    twos = choose(strong2, TWO_PER_GAME, shared=(0,), keep=posted.get("twos"))
+    chosen = choose(strong3, THREE_PER_GAME, keep=posted.get("threes"))
     in_pool = {_leg_id(l) for l in pool}
     own = set(picks) if picks is not None else in_pool
     # THE REPORT'S OWN PICKS FIRST INTO THE FILL'S POOL (PARLAYWIN1, 2026-11-19).
@@ -1552,7 +1618,7 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
         # trios of its legs without a conflict, and those at LONG_FLOOR.
         fill_fit, fill_clear = len(trios), len(cands)
         rank = lambda t: (outside(t), -float(t["joint"]), -(t.get("ev_at_naive") or -9))  # noqa: E731
-        got = choose(cands, THREE_MIN, rank=rank)
+        got = choose(cands, THREE_MIN, rank=rank, keep=posted.get("threes"))
         if len(got) < THREE_MIN:
             # THE MOST LIKELY BOARD'S PICKS STAND IN (BOARDFILL1, 2026-11-19;
             # Ethan, the day Sunday's props were bought on the Thursday: "I want
@@ -1567,7 +1633,7 @@ def tickets_of(sport: str, game: dict, legs: list[dict], memo: dict | None = Non
             stands = lambda l: _leg_id(l) in own or board_pick(l)                   # noqa: E731
             board3 = [t for t in every if outside(t) > FILL_OUTSIDE_MAX and all(stands(l) for l in t["legs"])
                       and float(t["joint"]) >= THREE_FLOOR]
-            wide = choose(cands + board3, THREE_MIN, rank=rank) if board3 else got
+            wide = choose(cands + board3, THREE_MIN, rank=rank, keep=posted.get("threes")) if board3 else got
             if len(wide) > len(got):
                 got = wide
         if len(got) > len(chosen):
@@ -1665,10 +1731,13 @@ def _twos_note(made: dict, own: bool = False) -> str:
 
 
 def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
-               priced: int | None = None) -> dict:
+               priced: int | None = None, pairs_out: dict | None = None) -> dict:
     """A game's 3-leg tickets (two at least, three at most) and three scorer
     pairs, and why there are fewer when there are. ``priced`` is how many priced scorers the game
-    had before the research read them (`research_scorers`)."""
+    had before the research read them (`research_scorers`). ``pairs_out`` is
+    given every scorer pair the game could post, under its label, so the
+    report stage can choose them again with the posted ones first
+    (`report_only`)."""
     memo: dict = {}
     made = tickets_of(sport, game, legs, memo)
     chosen, n_threes, n_pool = made["threes"], made["threes_fit"], made["pool"]
@@ -1690,6 +1759,8 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
         if researched:
             for t in pairs:
                 t["research"] = sum(int(l.get("research") or 0) for l in t["legs"])
+        if pairs_out is not None:
+            pairs_out[game_label(game)] = pairs
         out["scorers"] = choose(pairs, SCORER_PER_GAME, rank=_by_research if researched else None,
                                 researched=researched)
         for t in out["scorers"]:
@@ -1844,6 +1915,7 @@ def build(board: dict, sport: str, now=None) -> dict:
             slot(g)["scorers"].append(leg)
     out_games = []
     priced_n = _priced_counts(board, games)
+    scorer_pairs: dict = {}
     for g in games:
         x = by_game.get(game_label(g))
         if not x:
@@ -1852,7 +1924,7 @@ def build(board: dict, sport: str, now=None) -> dict:
             if game_started(g, now):
                 continue
             x = slot(g)
-        e = build_game(sp, x["g"], x["legs"], x["scorers"], priced=x["priced"])
+        e = build_game(sp, x["g"], x["legs"], x["scorers"], priced=x["priced"], pairs_out=scorer_pairs)
         why, words = props_note(sp, g, now)
         n_priced = priced_n.get(game_label(g), 0)
         if not (x["legs"] or x["priced"]) and not n_priced:
@@ -1877,6 +1949,11 @@ def build(board: dict, sport: str, now=None) -> dict:
         for x in out_games:
             x["paper_twos"], x["twos"] = x.get("twos") or [], []
             x["twos_note"], x["twos_paper"] = paper2["note"], True
+    # Every scorer pair each game could post, for the report stage (`report_only`): working state.
+    if scorer_pairs:
+        board[SCORER_PAIRS_KEY] = scorer_pairs
+    else:
+        board.pop(SCORER_PAIRS_KEY, None)
     return {"sport": sp, "date": board.get("date") or "", "games": out_games,
             **({"twos_paper": paper2} if paper2 else {}),
             "take_edge": TAKE_EDGE, "leg_floor": LEG_FLOOR, "two_floor": TWO_FLOOR, "three_floor": THREE_FLOOR,
@@ -1980,13 +2057,79 @@ def for_game(board: dict, home: str, away: str) -> dict | None:
 # only now the report's picks first. A report whose picks make fewer than two
 # tickets fills them from the game's other priced props (THREELEG1), each saying
 # so, and a game no report rebuilt posts none (`report_only`). The scorer pairs are the touchdown
-# research's own and are left as they were built.
+# research's own and are built with the board; `report_only` only puts the ones a game posted last
+# build first (ZQ, below).
 #: What a game's entry says its three-leg legs are (`from_report`).
 LEGS_FROM_REPORT = "report"
 #: Why a game no report rebuilt posts no three-leg ticket (`report_only`).
 NO_REPORT_NOTE = "the parlays use only a game report's own picks, and this game's report did not build"
 #: The legs of the board this process last read (`_board_legs`): read once a build, not once a game.
 _BOARD_LEGS: dict = {}
+
+
+# --- a posted ticket stays until a leg breaks (ZQ) ----------------------------------------------
+# Ethan, 2026-11-20, on How our reports did rows reading "Parlays 0 of 28" and
+# "1 of 42": "why do we have 30 parlays being made per game?? There should only
+# be 3 parlays made per game". Each build chose a game's tickets afresh, and a
+# line moving a point reordered them: the board posted another set, the journal
+# kept every one, and a reader who bet Thursday's tickets found others on
+# Saturday. The tickets a game posted last build are tried first (`choose`
+# ``keep``) and posted again while each is still one this build would make;
+# only a place one leaves is filled afresh. The report stage reads them from
+# the file engine/reportkeep writes at the end of every report stage (each game
+# still to play, as the board posted it), before any report is written.
+#: Where the report stage puts each game's tickets as the last build posted
+#: them (`posted_from`): an underscore key, the build's own working state, which
+#: engine/gate.publish never writes.
+POSTED_KEY = "_gp_posted"
+#: Every scorer pair each game could post this build (`build`), for
+#: `report_only` to choose again with the posted ones first: working state too.
+SCORER_PAIRS_KEY = "_gp_scorer_pairs"
+#: The kinds a game posts and the lists its entry holds each in (a size on
+#: paper keeps its own list).
+POSTED_LISTS = {"threes": ("threes", "paper_threes"), "twos": ("twos", "paper_twos"), "scorers": ("scorers",)}
+
+
+def posted_from(kept_file) -> dict:
+    """{game key (reportlog.game_key): {kind: [identity, ...]}}: each game still
+    to play as the last build posted its tickets, in order, read from the file
+    engine/reportkeep keeps. {} with no file; never raises."""
+    try:
+        from .reportlog import read
+        games = read(kept_file).get("games")
+    except Exception:                                        # noqa: BLE001
+        return {}
+    out: dict = {}
+    for k, rec in (games.items() if isinstance(games, dict) else ()):
+        gp = rec.get("parlays") if isinstance(rec, dict) else None
+        if not isinstance(gp, dict):
+            continue
+        out[k] = {kind: [ident(t) for name in lists for t in gp.get(name) or []
+                         if isinstance(t, dict) and len(t.get("legs") or []) >= 2]
+                  for kind, lists in POSTED_LISTS.items()}
+    return out
+
+
+def posted_for(board: dict, game: dict) -> dict:
+    """The game's tickets as the last build posted them ({kind: [identity]}),
+    when the report stage has read them (POSTED_KEY); {} otherwise."""
+    from .reportlog import game_key
+    posted = (board or {}).get(POSTED_KEY)
+    return (posted.get(game_key(game or {})) or {}) if isinstance(posted, dict) else {}
+
+
+def _turnover(x: dict, mine: dict) -> tuple[int, int]:
+    """(posted again, replaced): how many of the tickets the game posted last
+    build it posts again now, by identity, and how many it no longer posts."""
+    kept = gone = 0
+    for kind, lists in POSTED_LISTS.items():
+        now = {ident(t) for name in lists for t in x.get(name) or [] if isinstance(t, dict)}
+        for k in mine.get(kind) or []:
+            if tuple(tuple(v) for v in k) in now:
+                kept += 1
+            else:
+                gone += 1
+    return kept, gone
 
 
 def _pick_key(b: dict) -> tuple:
@@ -2226,7 +2369,8 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     # (step WH), so it rides only beside two of the report's (`tickets_of`).
     extra = [l for l in mine if _leg_id(l) not in strong
              and (_leg_id(l) in picked or float(l.get("p") or 0) >= FILL_OTHER_FLOOR)]
-    made = tickets_of(sp, game, legs, extra=extra, picks=picked)
+    # The tickets it posted last build first, each while it is still one of these (ZQ, `choose`).
+    made = tickets_of(sp, game, legs, extra=extra, picks=picked, posted=posted_for(board, game))
     chosen, n_threes, n_pool = made["threes"], made["threes_fit"], made["pool"]
     x["threes"] = chosen
     x.pop("paper_threes", None)
@@ -2297,22 +2441,50 @@ def report_only(board: dict) -> int:
     """After a board's reports: a game no report rebuilt (`from_report`) posts
     no three-leg ticket, since its legs would be no report's picks, and every
     count is read again. A started game's kept entry stands. Returns the games
-    cleared."""
+    cleared.
+
+    And each game's scorer pairs are chosen again with the ones it posted last
+    build first (ZQ, `choose`), from every pair it could post this build
+    (SCORER_PAIRS_KEY); each game the last build posted for says how many of
+    those it posts again and how many it replaced (``posted_kept``,
+    ``posted_replaced``: counts for the heartbeat)."""
     gp = (board or {}).get("game_parlays")
     if not isinstance(gp, dict):
         return 0
     n = 0
+    posted = board.get(POSTED_KEY) if isinstance(board.get(POSTED_KEY), dict) else {}
+    pairs = board.pop(SCORER_PAIRS_KEY, None) or {}
+    researched = str(gp.get("sport") or "").lower() in RESEARCH_SPORTS
     for x in gp.get("games") or []:
-        if not isinstance(x, dict) or x.get("kept") or x.get("legs_from") == LEGS_FROM_REPORT:
+        if not isinstance(x, dict) or x.get("kept"):
             continue
-        key2 = "paper_twos" if x.get("twos_paper") else "twos"
-        if x.get("threes") or x.get(key2):
-            n += 1
-        x["threes"], x[key2] = [], []
-        x["legs_from"] = LEGS_FROM_REPORT
-        x["threes_note"] = NO_REPORT_NOTE
-        if not x.get("twos_paper"):
-            x["twos_note"] = NO_REPORT_NOTE
+        if x.get("legs_from") != LEGS_FROM_REPORT:
+            key2 = "paper_twos" if x.get("twos_paper") else "twos"
+            if x.get("threes") or x.get(key2):
+                n += 1
+            x["threes"], x[key2] = [], []
+            x["legs_from"] = LEGS_FROM_REPORT
+            x["threes_note"] = NO_REPORT_NOTE
+            if not x.get("twos_paper"):
+                x["twos_note"] = NO_REPORT_NOTE
+        mine = posted.get(f"{x.get('away')}@{x.get('home')}|{str(x.get('date') or '')[:10]}")
+        if not isinstance(mine, dict):
+            x.pop("posted_kept", None)
+            x.pop("posted_replaced", None)
+            continue
+        cands = pairs.get(game_label(x))
+        if mine.get("scorers") and cands:
+            x["scorers"] = [dict(t, legs=[slim(l) for l in t["legs"]])
+                            for t in choose(cands, SCORER_PER_GAME, rank=_by_research if researched else None,
+                                            researched=researched, keep=mine["scorers"])]
+            # Never fewer than the build chose (`choose`); a game short of its three says how many it has.
+            note = str(x.get("scorers_note") or "")
+            if len(x["scorers"]) >= SCORER_PER_GAME:
+                x.pop("scorers_note", None)
+            elif re.match(r"\d+ of \d+: ", note):
+                x["scorers_note"] = f"{len(x['scorers'])} of {SCORER_PER_GAME}: {note.split(': ', 1)[1]}"
+        x["posted_kept"], x["posted_replaced"] = _turnover(x, mine)
+    board.pop(POSTED_KEY, None)
     gp["from_reports"] = True
     c = gp.get("counts")
     if isinstance(c, dict):
@@ -2322,6 +2494,8 @@ def report_only(board: dict) -> int:
         c["twos"] = sum(len(x.get("twos") or []) for x in live)
         c["paper_twos"] = sum(len(x.get("paper_twos") or []) for x in live)
         c["one_club_threes"] = sum(one_club(t) for x in live for t in x.get("threes") or [])
+        c["scorers"] = sum(len(x.get("scorers") or []) for x in live)
+        c["one_club_scorers"] = sum(one_club(t) for x in live for t in x.get("scorers") or [])
         c["from_report"] = sum(x.get("legs_from") == LEGS_FROM_REPORT for x in live)
     return n
 

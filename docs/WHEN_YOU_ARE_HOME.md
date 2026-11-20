@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZQ. A game's posted parlays stay posted until a leg breaks** (step 805; 20 November). Nothing to run. This is the
+real fix for "30 parlays a game". Every board build used to pick each game's parlays from scratch, so a line moving
+half a point could reorder them and the board posted a new set; one NFL game went through 19 versions of its three-
+leg parlays between Thursday and Sunday. Now the parlays a game posted last build are tried first and posted again
+for as long as each one still qualifies: every leg is still available (still in the report, a real book still prices
+it, nobody on it has been ruled out), and the parlay still clears its chance floor and fits with the others. A
+parlay is matched on player, market and side, so when a book moves a line the same parlay stays up with the new line
+and price. Only a parlay that breaks gets replaced, and only its own spot changes. This covers the three-leg and
+two-leg parlays and the scorer pairs (touchdown pairs in football, goal-scorer pairs in hockey) in every league. A
+one-team parlay stays only while it is still the likelier read, and a stand-in parlay (built from Most Likely picks
+or other props when the report was short) gives way once the report's own picks can make a real one. The heartbeat
+now shows, per league, how many of the last build's parlays were posted again and how many were replaced ("posted":
+kept and replaced, counts only). Watch it on Sunday morning: replaced should be a small number next to kept.
+
 **ZP. A finished game lists one set of parlays, never a stack of versions** (step 804; 20 November). Nothing to run.
 Ethan sent two screenshots of Report Picks' "How our reports did" with rows like "Parlays 0 of 28" and "1 of 42":
 "why do we have 30 parlays being made per game?? There should only be 3 parlays made per game". Those were games

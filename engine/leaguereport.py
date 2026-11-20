@@ -1463,6 +1463,9 @@ def attach(result: dict, sport: str, *, meta: dict | None = None, out=None, at: 
                     else nba_more(g, m))
             prepared.append((g, m, more))
         logged = log_changes(result, [(g, {}, more) for g, _m, more in prepared], sport, out, at)
+        # The parlays each game posted last build, posted again while they hold (ZQ).
+        from .gamereport import _posted_before
+        _posted_before(result, sport, out)
         reports = []
         for g, m, _more in prepared:
             r = build(g, result, sport=sport, names=names, meta=m, conn=conn,

@@ -644,6 +644,13 @@ def _board_counts(path: str) -> dict:
                     fates[k] = fates.get(k, 0) + int(v or 0)
         if fates:
             out["pick_fates"] = {"picks": sum(fates.values()), **fates}
+        # A posted ticket stays until a leg breaks (gameparlays.choose, ZQ): of the
+        # tickets the games still to play posted last build, how many they post
+        # again and how many they replaced. Counts only.
+        turn = [x for x in gp["games"] if isinstance(x, dict) and not x.get("kept") and "posted_kept" in x]
+        if turn:
+            out["posted"] = {"kept": sum(int(x.get("posted_kept") or 0) for x in turn),
+                             "replaced": sum(int(x.get("posted_replaced") or 0) for x in turn)}
         # The legs' learned correction in force (engine/legfit), each kind: the
         # model's numbers, no pick (the share toward the book, the shift, each
         # market's own shift), so a league short of legs says what moved them.
