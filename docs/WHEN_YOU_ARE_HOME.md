@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZM. Report Picks leads with the likeliest tickets today** (step 801; 20 November). Nothing to run. One of my own
+ideas, for your "make better selections". A night posts every game's two- and three-leg parlays, one fold per game,
+and nothing said which ones to look at first. The record answers that: the likeliest tickets hit most. The two-leg
+tickets have hit 26 of 36 in hockey and basketball since the 16th (hockey 14 of 20, basketball 12 of 16), against 28
+of 70 for the three-leg ones. So the Today tab now opens, under the day's line, on the three likeliest tickets of
+the games still to play, at most one per game. Each line gives the game, how many legs, the legs in words, our
+chance, and the price to take it at. Tapping a line opens that game, where the full ticket is. Scorer pairs, games
+already started, and any ticket our own card says to pass on (no book likely pays enough for it) are left out, and a
+day with fewer than two games to choose from shows nothing. It is members only, like the rest of the tab.
+
 **ZL. The pick count says why a pick missed the parlays** (step 800; 20 November). Nothing to run. The heartbeat
 counts what became of each game report pick: on a ticket, a stand-in, under the bar, or turned down and why. On this
 morning's NFL board it said 16 of 42 picks were turned down for "no real book". That number was wrong. A pick sits
