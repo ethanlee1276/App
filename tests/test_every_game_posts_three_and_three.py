@@ -49,14 +49,15 @@ def _leg(player, market, p, team="NYG", pos="WR"):
             "line": 2.5, "odds": -150, "book": "DraftKings", "p": p, "game_date": "2099-11-12"}
 
 
-def test_three_and_three_and_no_two_leg_ticket():
-    assert GP.THREE_MIN == GP.THREE_PER_GAME == GP.SCORER_PER_GAME == 3
-    assert GP.retired("two", "nfl") and GP.SOURCES["two"] == "game_two", "kept, so the journal's history reads"
+def test_three_and_three_and_three_two_leg_tickets():
+    assert GP.THREE_MIN == GP.THREE_PER_GAME == GP.SCORER_PER_GAME == GP.TWO_PER_GAME == 3
+    # ZR stopped the two-leg tickets outside basketball for a day; they are every league's since 20 November.
+    assert not GP.retired("two", "nfl") and GP.SOURCES["two"] == "game_two"
     gp = GP.build(EG.board(), "nfl")
     g = gp["games"][0]
     assert len(g["threes"]) == 3 and len(g["scorers"]) == 3, (len(g["threes"]), len(g["scorers"]))
-    assert not any(k in g for k in ("twos", "paper_twos", "twos_note")), sorted(g)
-    assert "twos" not in gp["counts"] and gp["counts"]["threes"] == 3 and gp["counts"]["scorers"] == 3
+    assert len(g["twos"]) == 3 and not any(k in g for k in ("paper_twos", "twos_note")), sorted(g)
+    assert gp["counts"]["twos"] == 3 and gp["counts"]["threes"] == 3 and gp["counts"]["scorers"] == 3
 
 
 def test_each_wider_level_adds_to_what_the_one_before_made():
@@ -179,13 +180,14 @@ def test_the_heartbeat_counts_the_short_and_the_filled():
     assert (got["sgp_threes"], got["td_pairs"], got["threes_short"]) == (6, 4, 1), got
     assert (got["td_short"], got["td_filled"]) == (1, 2), got
     assert (got["threes_props_filled"], got["threes_board_filled"]) == (1, 2), got
-    assert "sgp_twos" not in got
+    assert (got["sgp_twos"], got["twos_short"]) == (0, 2), "the two-leg tickets are counted in every league"
 
 
-def test_ask_and_the_record_page_say_three_and_three():
+def test_ask_and_the_record_page_say_three_of_each():
     from engine import askbot
     desc = " ".join(str(t.get("description") or "") for t in askbot.TOOLS)
-    assert "three three-leg player-prop parlays and three two-leg touchdown or goal-scorer pairs" in desc
+    assert ("three three-leg and three two-leg player-prop parlays from its report, and in football and hockey "
+            "its three touchdown or goal-scorer pairs") in desc
     js = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
     assert 'const GP_KINDS = ["three", "two", "scorers"];' in js and "GP_FILL_WORDS" in js
     rj = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")

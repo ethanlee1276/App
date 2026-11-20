@@ -32,8 +32,9 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from engine import db, gameparlays as GP, ledger, parlayledger as PL       # noqa: E402
 
-#: The fixture game's tickets: its three-leg ones and its scorer pairs, three of each (ZR).
-ALL = GP.THREE_PER_GAME + GP.SCORER_PER_GAME
+#: The fixture game's tickets: its three-leg ones, its two-leg ones and its scorer pairs, three of each.
+ALL = GP.THREE_PER_GAME + GP.TWO_PER_GAME + GP.SCORER_PER_GAME
+KINDS = ("threes", "twos", "scorers")
 EG = __import__("test_each_game_gets_its_parlays")                  # the shared fixture (a sibling test file)
 
 
@@ -281,14 +282,14 @@ def test_no_ticket_is_journaled_without_its_legs_rows():
     conn.execute("DELETE FROM bets WHERE player='Cam Skattebo'")
     conn.commit()
     gp, dropped = PL._with_leg_rows(conn, b["game_parlays"], "nfl", b["date"])
-    on_him = sum(1 for x in b["game_parlays"]["games"] for k in ("threes", "scorers") for t in x.get(k) or []
+    on_him = sum(1 for x in b["game_parlays"]["games"] for k in KINDS for t in x.get(k) or []
                  if any(l["player"] == "Cam Skattebo" for l in t["legs"]))
     assert dropped == on_him and on_him, (dropped, on_him)
-    assert not any(l["player"] == "Cam Skattebo" for x in gp["games"] for k in ("threes", "scorers")
+    assert not any(l["player"] == "Cam Skattebo" for x in gp["games"] for k in KINDS
                    for t in x.get(k) or [] for l in t["legs"])
     assert PL.log_game_parlays(conn, gp, "nfl", b["date"]) == ALL - on_him
     # The board's own copy is untouched: the report still shows every ticket.
-    assert any(l["player"] == "Cam Skattebo" for x in b["game_parlays"]["games"] for k in ("threes", "scorers")
+    assert any(l["player"] == "Cam Skattebo" for x in b["game_parlays"]["games"] for k in KINDS
                for t in x.get(k) or [] for l in t["legs"])
     src = (ROOT / "engine" / "parlayledger.py").read_text(encoding="utf-8")
     i = src.index("def journal_built_boards(")

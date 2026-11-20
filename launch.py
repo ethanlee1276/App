@@ -631,8 +631,8 @@ def _board_counts(path: str) -> dict:
             if errs:
                 out["rebuild_errors"] = errs[:5]
         out["td_pairs"] = int(c.get("scorers") or 0)
-        # Basketball's two-leg tickets in its pairs' place (ZT), and the games
-        # still to play short of their three.
+        # The two-leg tickets (every league's, TWO_SPORTS), and the games still
+        # to play short of their three.
         if str(gp.get("sport") or "").lower() in TWO_SPORTS:
             out["sgp_twos"] = int(c.get("twos") or 0)
             out["twos_short"] = sum(1 for x in gp["games"] if isinstance(x, dict) and not x.get("kept")

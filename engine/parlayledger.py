@@ -679,13 +679,13 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
     legs and the parlays we recommend are hitting so each sport needs to have a
     record of that on the record page."
 
-    ``{league: {kind: block}}`` for each game's three-leg parlays ("three") and
-    its scorer pairs ("scorers") (engine/gameparlays.SOURCES), each block, and
-    basketball's two-leg tickets ("two", gameparlays.TWO_SPORTS: ZT, its books
-    posting no scorer). Elsewhere the two-leg tickets GPWIN1 built are retired
-    (gameparlays.retired, ZR: Ethan asked for three three-leg parlays and three
-    scorer pairs a game): the journal keeps every one, and the record leaves
-    them off.
+    ``{league: {kind: block}}`` for each game's three-leg parlays ("three"),
+    its two-leg ones ("two") and its scorer pairs ("scorers")
+    (engine/gameparlays.SOURCES), each block. The two-leg tickets are every
+    league's (gameparlays.TWO_SPORTS; Ethan, 20 November: "we want 3 two-leg
+    parlays for each game report as well"); the day ZR stopped them outside
+    basketball left a gap in football's and hockey's, and the ones from before
+    it count with the new (`gameparlays.retired` retires none).
 
       * the tickets: graded, won, lost, units at one unit a ticket and ROI, open,
         our average chance on them (`modeled_joint`) and the tickets that lost

@@ -308,9 +308,9 @@ def test_the_report_and_the_record_carry_them():
     conn.row_factory = sqlite3.Row
     gp = GP.build(board(), "nfl")
     n = PL.log_game_parlays(conn, gp, "nfl", "2099-W10")
-    assert n == 6, n          # three three-leg tickets and three scorer pairs (ZR: no two-leg ticket)
+    assert n == 9, n          # three three-leg tickets, three two-leg ones and three scorer pairs
     rows = conn.execute("SELECT source, n_legs, stake_units FROM parlays").fetchall()
-    assert sorted({r["source"] for r in rows}) == ["game_td", "game_three"]
+    assert sorted({r["source"] for r in rows}) == ["game_td", "game_three", "game_two"]
     assert all(r["stake_units"] == 0 for r in rows)
     assert PL.log_game_parlays(conn, gp, "nfl", "2099-W10") == 0, "a ticket is journaled once"
     legs = GP.journal_rows(gp)
@@ -329,13 +329,13 @@ def test_every_ticket_grades_off_its_legs():
     legs = PL.journal_game_parlay_legs(conn, b, "nfl")
     assert legs == len(GP.journal_rows(b["game_parlays"])), legs
     n = PL.log_game_parlays(conn, b["game_parlays"], "nfl", b["date"])
-    assert n == 6
+    assert n == 9
     cats = {r[0] for r in conn.execute("SELECT DISTINCT category FROM bets")}
     assert cats == {PL.PARLAY_LEG_CATEGORY}, "the legs ride on paper in their own bucket"
     conn.execute("UPDATE bets SET status='won', pnl_units=1, actual=99")
     conn.commit()
     res = PL.settle(conn)
-    assert res["settled"] == 6 and res["waiting"] == 0, res
+    assert res["settled"] == 9 and res["waiting"] == 0, res
     # One leg lost loses every ticket it is on.
     conn2 = ledger.connect(os.path.join(tempfile.mkdtemp(), "t.db"))
     ledger.configure_bankroll(conn2, starting=1000, unit_pct=1.0)
@@ -358,10 +358,10 @@ def test_the_report_section_draws():
     sec = GR.sec_parlays(c)
     assert sec and sec["key"] == "parlays"
     kinds = [x.get("kind") for x in sec["blocks"] if x.get("type") == "parlays"]
-    assert kinds == ["three", "scorers"], kinds      # three three-leg tickets and three pairs (ZR)
+    assert kinds == ["three", "two", "scorers"], kinds      # three of each: three legs, two legs, touchdown pairs
     line = GR.parlay_sentence(c)
     assert line.startswith("Best three-leg parlay:"), line
-    assert "Best touchdown pair:" in line, line
+    assert "Best two-leg parlay:" in line and "Best touchdown pair:" in line, line
 
 
 def test_the_heartbeat_counts_each_leagues_tickets_and_reports():

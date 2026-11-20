@@ -118,18 +118,28 @@ SPORTS = ("nfl", "cfb", "nba", "cbb", "wnba", "nhl", "mlb")
 #: have". A game posts three of each wherever its props can make them: the
 #: report's own picks first, then its game's best props (`tickets_of`, the
 #: scorer pairs' fill in `build_game`), each leg the report did not pick named
-#: on its card. The two-leg player-prop tickets (GPWIN1) are built only in
-#: basketball, in its pairs' place (ZT, TWO_SPORTS; `retired`): elsewhere
-#: their record stays in the journal.
+#: on its card. Beside them every game posts three two-leg player-prop
+#: tickets (TWO_SPORTS: basketball since ZT, every league since 20 November).
 THREE_PER_GAME = 3
 THREE_MIN = 3
 SCORER_PER_GAME = 3
-#: BASKETBALL'S TWO-LEG PARLAYS (ZT, 2026-11-20; Ethan: "do 2-leg nba
-#: parlays"). Basketball's books post no anytime scorer, so its pair slot
-#: holds three two-leg player-prop tickets, built like the three-leg ones
-#: (`tickets_of` ``size=2``): the record's best on the night they were retired
-#: (the NBA's 12 of 16 since 16 November, its three-leg tickets 4 of 24).
-TWO_SPORTS = ("nba", "cbb", "wnba")
+#: THREE TWO-LEG PLAYER-PROP PARLAYS A GAME, EVERY LEAGUE (2026-11-20). Every
+#: league's games posted them from 18 November (GPWIN1); ZR stopped them on
+#: the 20th for three three-leg tickets and three scorer pairs, and ZT brought
+#: basketball's back the same day (Ethan: "do 2-leg nba parlays"), its books
+#: posting no anytime scorer. That evening, on what they did there:
+#: "we should be doing two-leg player prop parlays for our game reports,
+#: because I was looking at NBA and I see the two-leg NBA parlays win a lot
+#: ... NBA game reports, college football game reports, NFL game reports, all
+#: other game reports, and dial those in as well, just as you're doing for the
+#: three-leg ones. So we want 3 two-leg parlays for each game report as well."
+#: Started sets on the record that day: the NBA's two-leg tickets 12 of 16
+#: against its three-leg 6 of 27, hockey's two-leg 14 of 20 before ZR stopped
+#: them. Their own instructions say the same (v3.1 §1: "2-leg parlays by
+#: default"). Built like the three-leg ones (`tickets_of` ``size=2``): the
+#: report's own picks first, the same fill, the posted ones kept. Football and
+#: hockey keep their scorer pairs beside them.
+TWO_SPORTS = SPORTS
 TWO_PER_GAME = 3
 TWO_MIN = 3
 #: Two picks at 63%, as THREE_FLOOR is three of them.
@@ -141,7 +151,10 @@ TWO_LONG_FLOOR = 0.30
 def retired(kind: str, sport: str) -> bool:
     """A kind of ticket a league no longer builds (engine/parlayledger leaves
     it off the league's record; the journal keeps every one): the two-leg
-    player-prop tickets outside TWO_SPORTS (ZR)."""
+    player-prop tickets outside TWO_SPORTS. That was every league but
+    basketball for a day (ZR); since they came back everywhere it is none, and
+    the tickets football and hockey posted before ZR count on their record
+    again."""
     return kind == "two" and str(sport or "").lower() not in TWO_SPORTS
 #: The least chance a three-leg ticket must have by our own numbers to be
 #: posted ahead of the fill: three picks at 63%. Under it a ticket is one we
@@ -1991,9 +2004,8 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
     if len(chosen) < THREE_MIN:
         out["threes_note"] = _threes_note(made)
     if sport in TWO_SPORTS:
-        # BASKETBALL'S PAIR SLOT (ZT, 2026-11-20; Ethan: "do 2-leg nba
-        # parlays"): its books post no anytime scorer, so its three two-leg
-        # tickets are player props, built as its three-leg ones are.
+        # THREE TWO-LEG TICKETS (TWO_SPORTS: every league), player props built
+        # as the three-leg ones are.
         made2 = tickets_of(sport, game, legs, memo, size=2)
         out["twos"] = made2["twos"]
         if len(out["twos"]) < TWO_MIN:
@@ -2064,7 +2076,7 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
                                        f"{floor} or better, and {len(spare or [])} more down to {fill_floor}")
     else:
         out["scorers"] = []
-        if sport not in TWO_SPORTS:
+        if sport not in TWO_SPORTS:                          # (no league now: each has its two-leg tickets)
             out["scorers_note"] = "No scorer pairs in this league: its books post no anytime scorer we price"
     return out
 
@@ -2244,7 +2256,7 @@ def build(board: dict, sport: str, now=None) -> dict:
                                     if (n := sum(1 for x in out_games if x.get("no_props") == k))},
                        "paper_threes": sum(len(x.get("paper_threes") or []) for x in out_games),
                        "scorers": sum(len(x["scorers"]) for x in out_games),
-                       # Basketball's two-leg tickets (TWO_SPORTS), in its pairs' place.
+                       # The two-leg tickets (TWO_SPORTS).
                        **({"twos": sum(len(x.get("twos") or []) for x in out_games),
                            "filled_twos": sum(1 for x in out_games for t in x.get("twos") or [] if t.get("filled"))}
                           if sp in TWO_SPORTS else {}),
@@ -2767,7 +2779,7 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     else:
         x.pop("threes_note", None)
     if sp in TWO_SPORTS:
-        # BASKETBALL'S TWO-LEG TICKETS (ZT): from the same picks and props, to
+        # THE TWO-LEG TICKETS (TWO_SPORTS): from the same picks and props, to
         # their own bars, the posted ones first; a game waiting on its props
         # says so once, under its three-leg tickets.
         made2 = tickets_of(sp, game, legs, extra=extra, picks=picked, posted=posted_for(board, game), size=2)
@@ -2853,8 +2865,12 @@ def report_only(board: dict) -> int:
 def summary(gp: dict) -> str:
     """The build log's line."""
     c = (gp or {}).get("counts") or {}
-    pairs = (f"{c['twos']} two-leg" if "twos" in c else f"{c.get('scorers', 0)} scorer pair(s)")
-    return (f"  Game parlays: {c.get('threes', 0)} three-leg and {pairs} "
+    # Each kind the league builds: its three-leg tickets, its two-leg ones, and its scorer pairs where its
+    # books post a scorer.
+    kinds = [f"{c.get('threes', 0)} three-leg"] + ([f"{c['twos']} two-leg"] if "twos" in c else []) \
+        + ([f"{c.get('scorers', 0)} scorer pair(s)"] if str((gp or {}).get("sport") or "").lower() in SCORER_MARKETS
+           or "twos" not in c else [])
+    return (f"  Game parlays: {_and(kinds)} "
             f"across {c.get('games', 0)} game(s); one club's alone: {c.get('one_club_threes', 0)} three-leg, "
             f"{c.get('one_club_scorers', 0)} pair(s)" + _bar_words(c.get("side_bar")))
 

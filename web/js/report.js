@@ -896,7 +896,7 @@
       : who.length === n && n > 2 ? `If any leg is out or its number moves: ${leg}`
       : `If ${who.slice(0, -1).join(", ")} or ${who[who.length - 1]}${sep}${leg}`));
   }
-  // ``both``: the game posts two-leg tickets beside its three-leg ones (basketball, ZT), so each says its size.
+  // ``both``: the game posts two-leg tickets beside its three-leg ones (every league now), so each says its size.
   function card(t, n, kind, sport, both) {
     const pct = (x) => `${Math.round(Number(x || 0) * 100)}%`;
     const title = kind === "three" ? `${both ? "Three-leg parlay" : "Parlay"} ${n}` : kind === "two" ? `Two-leg parlay ${n}`
@@ -928,7 +928,7 @@
       bet_legs: t.legs || [],
     };
   }
-  //: One game's tickets, its three-leg parlays then its pairs (basketball's two-leg tickets, the scorer pairs), each
+  //: One game's tickets, its three-leg parlays, its two-leg ones, then its scorer pairs, each
   //: graded once the game is over (opts.results: game → the grader, app.js);
   //: the Report Picks page draws them under the game's bets (js/reportpicks.js).
   function gameTickets(g, sport, opts) {
@@ -936,18 +936,17 @@
     RESULTS = (opts && typeof opts.results === "function" && opts.results(g)) || null;
     CLOSED = !!((g && g.kept) || RESULTS);
     try {
-      // Every game posts three three-leg tickets and three scorer pairs (THREELEG1, 2026-11-19; ZR,
-      // 2026-11-20), basketball three two-leg tickets in its pairs' place (ZT); a game that could make
-      // fewer says why under the ones it made (engine/gameparlays._report_note, build_game). Elsewhere
-      // the two-leg tickets (GPWIN1) are retired (ZR): a game kept before then still shows the ones it
-      // posted, as "on paper" shows a game from before 19 November, when a league's tickets could be
-      // held (a hold since retired).
+      // Every game posts three three-leg tickets, three two-leg ones and three scorer pairs (THREELEG1,
+      // 2026-11-19; ZR and "we want 3 two-leg parlays for each game report as well", 2026-11-20;
+      // basketball has no pairs, its books posting no scorer); a game that could make fewer says why
+      // under the ones it made (engine/gameparlays._report_note, build_game). "On paper" shows a game
+      // from before 19 November, when a league's tickets could be held (a hold since retired).
       const twos = (g.twos || []).length
         ? block({ type: "parlays", items: g.twos.map((t, i) => card(t, i + 1, "two", sport)) })
           + (g.twos_note ? `<p class="gr-note">${escapeHtml(g.twos_note)}</p>` : "")
         : g.twos_paper ? `<p class="gr-note">Two-leg parlays: on paper for now, built and graded but not posted.</p>`
         : g.twos_note ? `<p class="gr-note">No two-leg parlay: ${escapeHtml(g.twos_note)}</p>` : "";
-      // The three-leg tickets first, then the pairs: basketball's two-leg tickets (ZT), the scorer pairs.
+      // The three-leg tickets first, then the two-leg ones, then the scorer pairs.
       const both = (g.twos || []).length > 0;
       return `${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport, both)) })
           + (g.threes_note ? `<p class="gr-note">${escapeHtml(g.threes_note)}</p>` : "")

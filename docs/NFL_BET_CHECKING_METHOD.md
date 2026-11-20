@@ -35,7 +35,7 @@ the site does differently, and why.
 | 11. Touchdown module | Base rates by team total; approve at 45% and at or above the price's break-even, or 40% at plus money with EV 6% and undeniable usage; never two pass catchers from one team | `likelyboard.td_rule`. **Changed 2026-11-20**: the fallback now needs a plus price paying 6% over our number (it had passed a red-zone role at any price), and two pass catchers from one team share no touchdown pair (`gameparlays.pair_link`). The 45% clause keeps no price test: see "The price grade" |
 | 12. Sides and totals | Stricter edges | The game-bet lanes keep their own bars |
 | 13–14. Live, hedge, bankroll | Their own staking | Not the site's to set; My Bets tracks a member's own |
-| 15. Output | Ranked picks with book, price, final number, take-at, what it needs, who is guarding him | The report's card and pick lines, the board's ranking (tier, matchup, chance) |
+| 15. Output | Ranked picks with book, price, final number, take-at, what it needs, who is guarding the player | The report's card and pick lines, the board's ranking (tier, matchup, chance) |
 | 16. Learning loop | Log every leg; a market 8+ points under its rate over 20+ legs drops a tier; one rule a slate | Every pick is journaled and graded. `record_check` is that rule as written: 20 settled picks, 8 points under the claim, and the pick cannot be Top or Strong |
 
 ### The price grade (Green, Yellow, Red), and why it is not on the cards
@@ -59,12 +59,12 @@ up against their prices and could carry the grade (decision 3 below).
 
 ### Decisions v3.1 leaves with them
 
-1. **Two legs by default.** v3.1 posts two-leg parlays and three only when
-   asked; on 20 November they asked the site for three three-leg tickets and
-   three scorer pairs a game, with two-leg prop tickets only in basketball.
-   Started sets so far: NBA two-leg 12 of 16, three-leg 6 of 27; NHL two-leg
-   14 of 20; NFL three-leg 0 of 3. Bring two-leg prop tickets back beside the
-   three-leg ones in football and hockey?
+1. **Two legs by default.** Answered yes, 20 November ("we want 3 two-leg
+   parlays for each game report as well"): every league's game report posts
+   three two-leg prop tickets beside its three three-leg ones, and football
+   and hockey keep their scorer pairs (step AAA, `gameparlays.TWO_SPORTS`).
+   Started sets when they asked: NBA two-leg 12 of 16, three-leg 6 of 27;
+   NHL two-leg 14 of 20, three-leg 22 of 43; NFL three-leg 0 of 3.
 2. **SAFE / BALANCED / POP on each ticket**, and one book that prices every
    leg. Display work; next batch if wanted.
 3. **The price grade on the NBA and NHL cards**, where the number has earned
@@ -77,9 +77,9 @@ up against their prices and could carry the grade (decision 3 below).
    coverage matchup no points. Our board lets the scan's coverage read back a
    receiver's pick toward Top. Stop counting it?
 
-## What his own messages add to the instructions
+## What their own messages add to the instructions
 
-Read across all 213 of his messages in the chats:
+Read across all 213 of their messages in the chats:
 
 - **Hitting matters more than edge.** "I don't care about edge I care about
   what's actually going to happen" (Oct 1). "I care more about what
@@ -106,21 +106,21 @@ Read across all 213 of his messages in the chats:
 | 0. Script discipline: no RB rushing over on a team likely to trail; no WR volume over when a blowout could take the fourth quarter; no passing over the weather or script works against | The scout flags each one (`dog_run_over`, `blowout_over`, `wind_pass_over`, `fav_pass_over`). A pick carrying one tops out at Worth a look and says which rule | `scout.FLAGS`, `likelyboard.METHOD_AVOID` |
 | 1–2. Deep matchup scan; who's guarding whom | Unit ranks, corners with the passer rating they allow, coverage shells, funnels | the report's rankings, "Who's guarding who" |
 | 3. Breakout matchups | The matchup reads: breakout, good, tough, avoid | `gamescan` reads, "Players to watch" |
-| 4. Injuries, inactives, who replaces whom | The injury list and what each absence opens ("If he sits, his 19% of DET's targets go to other players") | the report's injuries, "Before kickoff" |
+| 4. Injuries, inactives, who replaces whom | The injury list and what each absence opens ("If that player sits, the 19% of DET's targets that player gets go to others") | the report's injuries, "Before kickoff" |
 | 5. Usage and role | Target share, targets and carries a game, red-zone work | "How each team plays", the reads |
 | 6. Game scripts A–D; prefer props that hold in several | Script A (the favorite controls it), B (the underdog leads), C (a close game) and D (a blowout), each with its share of the simulator's games and who it helps. Then the game's picks ranked by how many scripts they hold in | `gamereport.script_blocks` |
 | 7. Weather: 12+ mph caution, 15+ mph a major downgrade | 15+ mph raises `wind_pass_over` on passing and receiving overs, which caps the pick | `scout.WIND` |
 | 8. Trenches | Pass protection against the pass rush; the run game against the run defense | "In the trenches" |
 | 9. Scheme and funnels | Man/zone, shells, blitz, and where each defense is weakest and strongest by position | the report's identity and coverage lines |
-| 10. Red zone; TD props need real scoring opportunity | Red-zone rates and plays, who gets the chances, and each team's touchdown chances ranked beside what the defense allows his position | `gamereport.td_chance_lines` |
+| 10. Red zone; TD props need real scoring opportunity | Red-zone rates and plays, who gets the chances, and each team's touchdown chances ranked beside what the defense allows that position | `gamereport.td_chance_lines` |
 | 11. Recent form: last 2 > last 4 > season | The models' own recency weights, measured on our seasons | the projections |
 | 12–13. Coaching; past matchups | Coaching tendencies; the last meetings with their lines | the report |
 | 14. PES output: hit rate, fair price, EV, volatility, role certainty | Our chance, the fair price and the price to take on every Most Likely row and pick line; boom-or-bust players are flagged | the board's cards |
 | 15. Prop priority: volume floors first | Not adopted as a ranking. Our graded NFL Most Likely record has completions, attempts and carries as its weakest markets (52.5%, 49.5% and 51.2% hit) and passing yards as its best (67.7%), so the record's own market check decides | `likelyboard.record_check` |
 | 16. Hard filters: no RB receiving over without a route role; no needs-a-bomb yardage over; no unstable role | Flags `rb_route_over`, `boom_bust` (yardage overs), `role_down_over` and `role_up_under` cap a pick at Worth a look | `likelyboard.METHOD_AVOID` |
-| 16. His guardrails (no Lions unders; avoid Jets and Justin Fields; no CeeDee Lamb unless asked) | Kept for his own bets; the boards serve every member and don't follow them | — |
+| 16. Their guardrails (no Lions unders; avoid Jets and Justin Fields; no CeeDee Lamb unless asked) | Kept for their own bets; the boards serve every member and don't follow them | — |
 | 17. Two-leg parlay builder (SAFE/BALANCED/POP) | Four three-leg parlays and three touchdown pairs a game, each with its joint chance, fair price, take-it-at price and backups. Built to win together, as their chats ask: no ticket needs the game to go the other way from another. A game that can't fill its tickets that way says which ticket wins in a different game | `engine/gameparlays.choose` |
-| 18. TD module: 45%, or 40% with undeniable usage | Every touchdown pick on the board is checked: 45%, or 40% with 30% of his team's red-zone chances. One that falls short tops out at Worth a look. Each touchdown pair says whether both scorers are 40% or better (decision 1 under RUN_NEXT 00f) | `likelyboard.td_rule`, `gameparlays.card` |
+| 18. TD module: 45%, or 40% with undeniable usage | Every touchdown pick on the board is checked: 45%, or 40% with 30% of the team's red-zone chances. One that falls short tops out at Worth a look. Each touchdown pair says whether both scorers are 40% or better (decision 1 under RUN_NEXT 00f) | `likelyboard.td_rule`, `gameparlays.card` |
 | 19–20. Live market; the "I checked" list | Line moves, the opener, prediction-market money, a total moving against the money | "The market" |
 | 21. Picks output: ranked, with the maximum playable price | The board ranks by tier, then how hard the matchup backs a pick, then our chance. Every pick line says the price to take it at | the board, `read_pick` |
 | 22. Sides and totals need stricter edges | The game-bet lanes keep their own bars | `likely` game lanes |
@@ -139,11 +139,11 @@ Read across all 213 of his messages in the chats:
 
 ## Why a rule caps a pick instead of removing it
 
-His own words put hitting ahead of his rules. The scout's flags were written
+Their own words put hitting ahead of their rules. The scout's flags were written
 before anything was measured. The five-season replay proved only two of
 them (a player's first game back; pass-attempt unders in projected
 shootouts). The board's graded record proved five kinds of unders, and
-those are held. A pick that breaks one of his rules therefore stays on the
+those are held. A pick that breaks one of their rules therefore stays on the
 board, tracked like every pick, but can't be Top or Strong, and its card
 says which rule. If the record shows picks breaking a rule hit at their
 claim, the rule comes off. If it shows they over-claim, `likelyctx` lowers

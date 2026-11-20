@@ -595,10 +595,9 @@ TOOLS = [
            "stake": {"type": "number", "description": "Optional: the stake (default 100)."}}, "odds"),
     _tool("our_picks",
           "Our model's picks tonight, by kind: best_bets (staked edges), most_likely (likeliest to hit), "
-          "long_shots, game_lines (spreads, totals, moneylines), parlays (each game's three three-leg player-prop "
-          "parlays and three two-leg touchdown or goal-scorer pairs from its report — basketball's three two-leg "
-          "player-prop parlays in the pairs' place — likeliest first; one marked "
-          "playable false is a ticket its own card "
+          "long_shots, game_lines (spreads, totals, moneylines), parlays (each game's three three-leg and three two-leg "
+          "player-prop parlays from its report, and in football and hockey its three touchdown or goal-scorer pairs, "
+          "likeliest first; one marked playable false is a ticket its own card "
           "says to pass on, and game_started true is a game already under way), pick_of_the_day (each "
           "league's) or top_pick_today (the one best pick across every league, with the ones it beat) — on "
           "one league's board or all of them, best first.",

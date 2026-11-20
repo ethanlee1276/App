@@ -134,8 +134,8 @@ def test_the_report_stage_posts_them_again_and_counts_what_it_kept():
     assert "posted_kept" not in x, "nothing posted before: nothing to count"
     assert GP.SCORER_PAIRS_KEY not in b and GP.POSTED_KEY not in b, "working state, gone once used"
     was = {k: _ids(x.get(k) or []) for k in GP.POSTED_LISTS}
-    # A football game posts no two-leg tickets (basketball's, ZT): its list is empty, never missing.
-    assert set(was) == {"threes", "twos", "scorers"} and was["threes"] and was["scorers"] and was["twos"] == [], was
+    # Every league posts its two-leg tickets too (20 November): all three lists are kept.
+    assert set(was) == {"threes", "twos", "scorers"} and was["threes"] and was["scorers"] and was["twos"], was
     b2, y = _board_with({KEY: copy.deepcopy(was)})
     assert {k: _ids(y.get(k) or []) for k in GP.POSTED_LISTS} == was
     n = sum(len(v) for v in was.values())

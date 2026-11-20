@@ -29,7 +29,7 @@ from . import gameparlays as GP
 from .sliplive import SCORER_MARKETS, live_state
 
 #: The board's lists a game's posted tickets sit in, with the kind `gameparlays.card` titles each by, in the
-#: order the Report Picks page draws them (js/report.js gameTickets: the two-leg tickets lead).
+#: order the live tracker lists them (the two-leg tickets lead: the likeliest to still be alive).
 LISTS = (("twos", "two"), ("threes", "three"), ("scorers", "scorers"))
 #: The live states a ticket is followed in.
 FOLLOWED = ("live", "final")

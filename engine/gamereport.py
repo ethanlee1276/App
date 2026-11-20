@@ -3916,11 +3916,12 @@ def sec_parlays(c: Ctx) -> dict | None:
     """THE PARLAYS FOR THIS GAME (engine/gameparlays; Ethan, 2026-11-14:
     "for each game ... make 4 3-leg parlays ... and 3 2-leg touchdown
     parlays ... do the same shit that the report's doing"; 2026-11-20: "i want
-    3 3 leg player prop parlays and 3 2 leg td prop parlays"). Three three-leg
-    tickets and three scorer pairs on every game (basketball's three two-leg
-    player-prop tickets in their place: "do 2-leg nba parlays", ZT), each with
-    its price to take it, the script it needs, its backups and caveats — and
-    the record's word on same-game parlays."""
+    3 3 leg player prop parlays and 3 2 leg td prop parlays"; the same evening:
+    "we want 3 two-leg parlays for each game report as well"). Three three-leg
+    tickets, three two-leg tickets and three scorer pairs on every game (no
+    pairs in basketball, whose books post no scorer), each with its price to
+    take it, the script it needs, its backups and caveats — and the record's
+    word on same-game parlays."""
     from .gameparlays import card
     gp = _game_parlays(c)
     if not gp:
@@ -3941,7 +3942,7 @@ def sec_parlays(c: Ctx) -> dict | None:
         blocks += [_h("Three-leg parlays"), _p(gp.get("threes_note") or "")]
     elif gp.get("threes_note"):
         blocks.append(_p(f"No three-leg parlay: {gp['threes_note']}"))
-    # BASKETBALL'S TWO-LEG PARLAYS (ZT), in the scorer pairs' place.
+    # THE TWO-LEG PARLAYS (basketball's since ZT, every league's since 20 November).
     twos = [card(t, i, "two", c.sport) for i, t in enumerate(gp.get("twos") or [], 1)]
     if twos:
         blocks += [_h("Two-leg parlays"), {"type": "parlays", "kind": "two", "items": twos}]
@@ -3968,7 +3969,7 @@ def sec_parlays(c: Ctx) -> dict | None:
 
 def parlay_sentence(c: Ctx) -> str:
     """The short version's parlay lines: the likeliest three-leg ticket, the
-    likeliest two-leg one (basketball, ZT) and the best scorer pair (football's
+    likeliest two-leg one and the best scorer pair (football's
     on our research, TDSGP2; hockey's the likeliest; one with a stand-in
     scorer last), each with its price to take it."""
     from .gameparlays import RESEARCH_SPORTS, pick_words, scorer_rank

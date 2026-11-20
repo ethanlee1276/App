@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAA. Three two-leg parlays on every game report, every league** (step 815; 20 November). Nothing to run. You asked
+for two-leg player-prop parlays on every game report after seeing the NBA's win, three a game, dialed in like the
+three-leg ones. Every league's reports now post them: the NFL, college football, hockey and baseball beside
+basketball. Football and hockey keep their three touchdown or goal-scorer pairs, so a football report carries nine
+tickets: three three-leg, three two-leg, three touchdown pairs. The two-leg tickets are built by the same code as
+the three-leg ones, so everything that was dialed in there applies: the report's own picks first, each ticket at 40%
+or better by our numbers (two picks at 63%), the three spread over six different picks where the game has six, a
+fill from the game's other props when its picks make fewer than three (each such leg named on the card), posted
+tickets kept until a leg breaks, the football rules from your v3.1 instructions (no backup back's yardage, no
+scrambling quarterback's rushing over, no catcher behind an unrated new quarterback), and no benched market. The
+record that led to this, started sets as of 20 November: NBA two-leg 12 of 16 beside three-leg 6 of 27; hockey two-
+leg 14 of 20 beside three-leg 22 of 43. The Record page lists two-leg parlays for every league again, and football's
+and hockey's from 18 to 20 November count with the new ones. Where to look: any game report's Parlays section,
+Report Picks, the Record's game-report section, and the heartbeat's `sgp_twos` and `twos_short` for each league.
+
 **ZZ. Your v3.1 instructions, beside the board's own logic** (step 814; 20 November). Nothing to run. You pasted
 "NFL Prop Bot — Master Instructions v3.1" and said to use it alongside what the site does, replacing nothing. I
 mapped all of it in `docs/NFL_BET_CHECKING_METHOD.md`, section by section. Most of it the site already did: the −250

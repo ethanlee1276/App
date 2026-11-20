@@ -4,12 +4,15 @@ we can rank but not price is a read, not a bet (ZT, 2026-11-20).
 Ethan, 20 November, to the two questions put to him: "yes to both, do 2-leg nba
 parlays and label the yardage picks". What these hold:
 
-  * basketball's games (TWO_SPORTS: the NBA, college and the WNBA, whose books
-    post no anytime scorer) post three two-leg player-prop tickets in the
-    scorer pairs' place, each at TWO_FLOOR or better (two legs at 63%), built
-    from the report's own picks, journaled and recorded like the three-leg
-    ones; no football or hockey game posts one, and the record leaves any of
-    theirs off (`retired`);
+  * basketball's games (the NBA, college and the WNBA, whose books post no
+    anytime scorer) post three two-leg player-prop tickets in the scorer
+    pairs' place, each at TWO_FLOOR or better (two legs at 63%), built from
+    the report's own picks, journaled and recorded like the three-leg ones.
+    That evening they became every league's (TWO_SPORTS; Ethan: "we want 3
+    two-leg parlays for each game report as well";
+    tests/test_every_league_posts_three_two_leg_parlays.py), football and
+    hockey keeping their scorer pairs beside them, and no league's are left
+    off the record (`retired`);
   * the heartbeat counts them, the report draws them under their own heading,
     and the Record and Report Picks pages list the kind;
   * a player pick on a market our calibration does not trust (calibrate:
@@ -52,7 +55,7 @@ def _js(name):
     return (ROOT / "web" / "js" / f"{name}.js").read_text(encoding="utf-8")
 
 
-def test_basketball_posts_three_two_leg_tickets_and_football_none():
+def test_basketball_posts_three_two_leg_tickets_and_football_its_three_too():
     gp = GP.build(_hoops_board(), "nba")
     g = gp["games"][0]
     assert len(g["twos"]) == GP.TWO_PER_GAME == GP.TWO_MIN == 3, g.get("twos")
@@ -64,10 +67,11 @@ def test_basketball_posts_three_two_leg_tickets_and_football_none():
     assert "3 two-leg" in GP.summary(gp), GP.summary(gp)
     for sport in ("cbb", "wnba"):
         assert len(GP.build(_hoops_board(), sport)["games"][0]["twos"]) == 3, sport
+    # Every league since that evening (Ethan: "we want 3 two-leg parlays for each game report as well").
     nfl = GP.build(EG.board(), "nfl")
-    assert "twos" not in nfl["games"][0] and "twos" not in nfl["counts"], "football posts none"
-    assert [GP.retired("two", s) for s in ("nfl", "cfb", "nhl", "nba", "cbb", "wnba")] == \
-        [True, True, True, False, False, False]
+    assert len(nfl["games"][0]["twos"]) == 3 and nfl["counts"]["twos"] == 3, "football posts its three too"
+    assert len(nfl["games"][0]["scorers"]) == 3, "beside its touchdown pairs, not in their place"
+    assert not any(GP.retired("two", s) for s in GP.SPORTS) and GP.TWO_SPORTS == GP.SPORTS
     assert not GP.retired("three", "nfl") and not GP.retired("scorers", "nhl")
 
 
@@ -88,7 +92,7 @@ def test_a_report_rebuilds_them_from_its_own_picks_and_keeps_them():
     assert set(GP.POSTED_LISTS) == {"threes", "twos", "scorers"} and GP.POSTED_LISTS["twos"] == ("twos",)
 
 
-def test_the_heartbeat_counts_basketballs_and_not_footballs():
+def test_the_heartbeat_counts_them_in_every_league():
     import launch as L
     t2 = {"legs": [{"player": "A"}, {"player": "B"}]}
     t3 = {"legs": [{"player": "A"}, {"player": "B"}, {"player": "C"}]}
@@ -114,10 +118,10 @@ def test_the_heartbeat_counts_basketballs_and_not_footballs():
     assert (got["sgp_twos"], got["twos_short"], got["twos_filled"]) == (4, 1, 1), got
     nfl = counts("nfl", [{"home": "A", "threes": [t3] * 3, "scorers": [t2] * 3}],
                  {"games": 1, "threes": 3, "scorers": 3})
-    assert "sgp_twos" not in nfl and "twos_short" not in nfl, nfl
+    assert (nfl["sgp_twos"], nfl["twos_short"]) == (0, 1), "a football game with none is short of its three"
 
 
-def test_the_record_keeps_basketballs_and_leaves_footballs_off():
+def test_the_record_keeps_every_leagues_two_leg_tickets():
     from engine import ledger
     conn = ledger.connect(":memory:")
     PL.ensure_schema(conn)
@@ -130,7 +134,8 @@ def test_the_record_keeps_basketballs_and_leaves_footballs_off():
                  "FROM parlays WHERE source='game_two' LIMIT 1")
     conn.execute("UPDATE parlays SET status='won', pnl_units=1.0, at_start=1 WHERE source='game_two'")
     rec = PL.game_parlay_record(conn)
-    assert "two" not in rec.get("nfl", {}), sorted(rec.get("nfl", {}))
+    # Football's count again, the ones from before the day they were stopped included.
+    assert rec["nfl"]["two"]["graded"] == 1 and rec["nfl"]["two"]["wins"] == 1, rec.get("nfl")
     two = rec["nba"]["two"]
     assert (two["graded"], two["wins"]) == (3, 3), two
 
@@ -150,7 +155,7 @@ def test_the_pages_carry_the_kind():
     assert '("twos", "Best two-leg parlay", likeliest)' in gr and '_h("Two-leg parlays")' in gr
     from engine import askbot
     said = " ".join(t["description"] for t in askbot.TOOLS if t["name"] == "our_picks")
-    assert "two-leg" in said and "basketball" in said, said
+    assert "three three-leg and three two-leg player-prop parlays" in said, said
 
 
 # --- a read, not a bet ---------------------------------------------------------

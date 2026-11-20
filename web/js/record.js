@@ -1032,16 +1032,15 @@ const tlUnits = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x || 0).toFixed(2)}u`);
    2026-11-16). Ethan: "you did not put the 'parlays for this game' on the record
    page. We wanna see if the legs and the parlays we recommend are hitting so each
    sport needs to have a record of that on the record page." Each game report's
-   three-leg parlays and its touchdown, goal-scorer or scorer pairs, each kind
-   apart: the tickets that hit and the units at one unit a ticket against the
-   chance we gave them, the legs that hit against theirs, by market, the tickets
-   that lost by one leg, and the newest tickets with every leg marked. On "All",
-   one table of every league. The two-leg parlays of 18-20 November are retired
-   outside basketball (Ethan, 20 November: "i want 3 3 leg player prop parlays
-   and 3 2 leg td prop parlays"; "do 2-leg nba parlays"): basketball's books post
-   no scorer, so its two-leg tickets are its pairs (gameparlays.retired). */
+   three-leg parlays, its two-leg ones and its touchdown, goal-scorer or scorer
+   pairs, each kind apart: the tickets that hit and the units at one unit a
+   ticket against the chance we gave them, the legs that hit against theirs, by
+   market, the tickets that lost by one leg, and the newest tickets with every
+   leg marked. On "All", one table of every league. The two-leg tickets are
+   every league's (Ethan, 20 November: "we want 3 two-leg parlays for each game
+   report as well"); basketball's books post no scorer, so it has no pairs. */
 const GP_KIND = { three: "Three-leg parlays", two: "Two-leg parlays" };
-//: A league's kinds in the page's order: the three-leg tickets, then the pairs (basketball's two-leg ones).
+//: A league's kinds in the page's order: the three-leg tickets, the two-leg ones, then the scorer pairs.
 const GP_KINDS = ["three", "two", "scorers"];
 // How a game's ticket was made up (engine/gameparlays.FILL_KINDS; "report": its own picks), in words, by kind.
 const GP_FILL_WORDS = {

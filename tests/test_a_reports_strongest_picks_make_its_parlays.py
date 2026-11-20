@@ -45,16 +45,21 @@ def _game():
     return b, GP.for_game(b, "NYG", "WAS")
 
 
-def test_every_ticket_clears_its_bar_and_no_two_leg_ticket_is_built():
+def test_every_ticket_clears_its_bar_three_legs_and_two():
     b, x = _game()
     threes = x["threes"]
     assert len(threes) == GP.THREE_MIN == GP.THREE_PER_GAME == 3, threes
     assert all(t["joint"] >= GP.THREE_FLOOR and len(t["legs"]) == 3 for t in threes), [t["joint"] for t in threes]
-    assert not any(k in x for k in ("twos", "paper_twos", "twos_note", "twos_paper")), sorted(x)
-    assert "twos" not in b["game_parlays"]["counts"] and "two_floor" not in b["game_parlays"]
-    assert GP.retired("two", "nfl") and GP.retired("two", "nhl") and not GP.retired("two", "nba")
-    assert GP.SOURCES["two"] == "game_two", "the journal still reads them"
-    assert GP.TWO_SPORTS == ("nba", "cbb", "wnba"), "basketball's two-leg tickets (ZT), no other league's"
+    # The two-leg tickets, every league's since 20 November (Ethan: "we want 3 two-leg parlays for each
+    # game report as well"): three a game, each to its own bar, with no note and nothing held on paper.
+    twos = x["twos"]
+    assert len(twos) == GP.TWO_MIN == GP.TWO_PER_GAME == 3, twos
+    assert all(t["joint"] >= GP.TWO_FLOOR and len(t["legs"]) == 2 for t in twos), [t["joint"] for t in twos]
+    assert not any(k in x for k in ("paper_twos", "twos_note", "twos_paper")), sorted(x)
+    assert b["game_parlays"]["counts"]["twos"] == 3 and b["game_parlays"]["two_floor"] == GP.TWO_FLOOR
+    assert not any(GP.retired("two", s) for s in GP.SPORTS), "no league's two-leg tickets are retired"
+    assert GP.SOURCES["two"] == "game_two"
+    assert GP.TWO_SPORTS == GP.SPORTS, "every league's"
     for gone in ("RETIRED", "two_hold", "_twos_note"):
         assert not hasattr(GP, gone), gone
     assert not (ROOT / "engine" / "parlayhold.py").exists(), "no kind of ticket is held on paper"
@@ -65,7 +70,7 @@ def test_a_ticket_under_its_bar_is_not_made_and_the_game_says_why():
     for l in legs:
         l["p"] = 0.61                     # three legs at 61% together: about 23%, under THREE_FLOOR
     made = GP.tickets_of("nfl", GAME, legs)
-    assert "twos" not in made
+    assert "twos" not in made, "a size's call makes that size only"
     # The three-leg tickets: none clears THREE_FLOOR, so the game fills its three
     # with longer tickets that say so (THREELEG1, 2026-11-19: "I want those for
     # every single game").
@@ -80,25 +85,28 @@ def test_a_ticket_under_its_bar_is_not_made_and_the_game_says_why():
                      "or better) make only 1 leg"), rnote
 
 
-def test_a_reports_rebuild_posts_its_three_and_no_two_leg_ticket():
+def test_a_reports_rebuild_posts_its_three_of_each_size():
     tp = __import__("test_the_parlays_are_made_of_the_reports_picks")
     b, _x = _game()
     x = GP.from_report(b, "nfl", GAME, tp.PICKS)
-    assert len(x["threes"]) == GP.THREE_MIN and "twos" not in x and "twos_note" not in x, sorted(x)
-    # A game no report rebuilt posts no ticket of its own.
+    assert len(x["threes"]) == GP.THREE_MIN and len(x["twos"]) == GP.TWO_MIN and "twos_note" not in x, sorted(x)
+    # The two-leg tickets are the report's own picks too.
+    own = {p["player"] for p in tp.PICKS}
+    assert all(l["player"] in own for t in x["twos"] for l in t["legs"]), [[l["player"] for l in t["legs"]] for t in x["twos"]]
+    # A game no report rebuilt posts no ticket of its own, of either size.
     b2, x2 = _game()
     x2.pop("legs_from", None)
     GP.report_only(b2)
-    assert x2["threes"] == [] and x2["threes_note"] == GP.NO_REPORT_NOTE and "twos" not in x2
+    assert x2["threes"] == [] and x2["threes_note"] == GP.NO_REPORT_NOTE and x2["twos"] == [] and "twos_note" not in x2
 
 
-def test_a_board_journals_no_two_leg_ticket_and_the_record_leaves_the_old_ones_off():
+def test_a_board_journals_its_two_leg_tickets_and_the_record_counts_the_old_ones_again():
     b, _x = _game()
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    assert PL.log_game_parlays(conn, b["game_parlays"], "nfl", "2099-W10") == GP.THREE_PER_GAME + GP.SCORER_PER_GAME
-    assert not conn.execute("SELECT 1 FROM parlays WHERE source='game_two'").fetchall()
-    # One journaled before ZR still grades, reads back for its finished game, and stays off the record.
+    assert PL.log_game_parlays(conn, b["game_parlays"], "nfl", "2099-W10") == GP.THREE_PER_GAME + GP.TWO_PER_GAME + GP.SCORER_PER_GAME
+    assert len(conn.execute("SELECT 1 FROM parlays WHERE source='game_two'").fetchall()) == GP.TWO_PER_GAME
+    # One journaled before ZR still grades, reads back for its finished game, and counts on the record again.
     cur = conn.execute("INSERT INTO parlays (ts, sport, date, legs_key, parlay_type, n_legs, grade, source, status,"
                        " at_start) VALUES ('2026-11-19T12:00', 'nfl', '2099-W10', 'old', 'same_game', 2, 'WAS@NYG',"
                        " 'game_two', 'won', 1)")
@@ -107,12 +115,13 @@ def test_a_board_journals_no_two_leg_ticket_and_the_record_leaves_the_old_ones_o
                      " VALUES (?, ?, ?, 'receptions', 'OVER', 2.5, 'won')", (cur.lastrowid, n, who))
     conn.commit()
     got = RO.tickets(conn, "nfl", "2099-W10", "NYG", "WAS")
-    assert len(got["twos"]) == 1 and got["twos"][0]["status"] == "won", {k: len(v) for k, v in got.items()}
+    assert [t["status"] for t in got["twos"]].count("won") == 1, {k: len(v) for k, v in got.items()}
     assert "game_two" in PL.NO_ROW_VOID_SOURCES and PL.TWO_LEG_CATS["game_two"] == (PL.PARLAY_LEG_CATEGORY,)
     started = {"games": [dict(g, kept="Sun 1:00 PM ET") for g in b["game_parlays"]["games"]]}
-    assert PL.mark_started_games(conn, started, "nfl", "2099-W10") == GP.THREE_PER_GAME + GP.SCORER_PER_GAME
+    assert PL.mark_started_games(conn, started, "nfl", "2099-W10") == GP.THREE_PER_GAME + GP.TWO_PER_GAME + GP.SCORER_PER_GAME
     rec = PL.game_parlay_record(conn)
-    assert "two" not in rec["nfl"] and set(rec["nfl"]) <= {"three", "scorers"}, rec["nfl"].keys()
+    assert set(rec["nfl"]) <= {"three", "two", "scorers"} and rec["nfl"]["two"]["graded"] == 1 \
+        and rec["nfl"]["two"]["wins"] == 1, rec["nfl"]
 
 
 def test_the_leg_learner_counts_them_once_and_learns_each_market():
@@ -163,13 +172,16 @@ def test_every_page_carries_three_of_each_and_keeps_old_two_leg_tickets_readable
     c = GR.Ctx(GAME, b, sport="nfl")
     sec = GR.sec_parlays(c)
     kinds = [x.get("kind") for x in sec["blocks"] if x.get("type") == "parlays"]
-    assert kinds == ["three", "scorers"], kinds
+    assert kinds == ["three", "two", "scorers"], kinds
     three = next(x for x in sec["blocks"] if x.get("kind") == "three")
     assert len(three["items"]) == 3 and three["items"][0]["title"] == "Parlay 1"
+    two = next(x for x in sec["blocks"] if x.get("kind") == "two")
+    assert len(two["items"]) == 3 and two["items"][0]["title"] == "Two-leg parlay 1"
+    assert "Best two-leg parlay: " in GR.parlay_sentence(c)
     assert GR.parlay_sentence(c).startswith("Best three-leg parlay: "), GR.parlay_sentence(c)
     js = {n: (ROOT / "web" / "js" / f"{n}.js").read_text(encoding="utf-8") for n in
           ("report", "reportpicks", "record", "detail")}
-    # A finished game from before still shows the two-leg tickets it carried at its start.
+    # Every page draws the two-leg tickets beside the others.
     assert 'kind === "two" ? `Two-leg parlay ${n}`' in js["report"]
     assert '["Two-leg parlays", twos]' in js["reportpicks"] and 'gprTicketsRow(twos, "2-leg parlays"),' in js["detail"]
     assert 'const GP_KINDS = ["three", "two", "scorers"];' in js["record"], "the record lists the kinds built"
@@ -177,9 +189,9 @@ def test_every_page_carries_three_of_each_and_keeps_old_two_leg_tickets_readable
     assert 'TICKET_POOLS = (("twos", "two-leg parlay"), ("threes", "three-leg parlay"), ("scorers", "scorer pair"))' in ask
     from engine import askbot
     said = " ".join(t["description"] for t in askbot.TOOLS if t["name"] == "our_picks")
-    assert "three three-leg player-prop parlays and three two-leg touchdown or goal-scorer pairs" in said, said
+    assert "three three-leg and three two-leg player-prop parlays" in said and "scorer pairs" in said, said
     launch = (ROOT / "launch.py").read_text(encoding="utf-8")
-    assert "sgp_twos" in launch and ".lower() in TWO_SPORTS:" in launch, "basketball's, counted on the heartbeat"
+    assert "sgp_twos" in launch and ".lower() in TWO_SPORTS:" in launch, "counted on the heartbeat"
 
 
 if __name__ == "__main__":

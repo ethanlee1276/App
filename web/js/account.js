@@ -3149,7 +3149,7 @@ const WF_REPORT_STEPS = [
   ["target", "Who we think wins", "Our call and how sure we are, beside our ratings’ own pick."],
   ["people", "What decides it", "The matchups, who is hurt and what that changes, the red-zone roles, the last meeting and how the game should go."],
   ["check", "The picks", "Every read the numbers back becomes a pick, with its price and our chance."],
-  ["ticket", "Parlays built on those picks", "Three three-leg parlays a game and three touchdown or goal-scorer pairs (in basketball, three two-leg parlays), the report’s own picks first; any other leg is named on its ticket."],
+  ["ticket", "Parlays built on those picks", "Three three-leg parlays and three two-leg parlays a game, and in football and hockey three touchdown or goal-scorer pairs, the report’s own picks first; any other leg is named on its ticket."],
   ["chart", "Then it grades itself", "After the final, every pick and parlay gets a check or an X, the injury report is checked, and a miss says why."],
 ];
 const WF_LEAGUE = { nfl: "NFL", cfb: "College football", nba: "NBA", cbb: "College basketball", nhl: "NHL",

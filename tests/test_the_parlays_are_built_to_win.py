@@ -197,8 +197,8 @@ def test_a_card_says_its_chance_once():
 
 def test_the_bars_are_said_without_the_link():
     assert GP.THREE_FLOOR == 0.25 and round(0.63 ** 3, 2) == GP.THREE_FLOOR
-    # The two-leg tickets are basketball's alone (ZT), at two of the same legs: 63% each.
-    assert GP.TWO_FLOOR == 0.40 and round(0.63 ** 2, 2) == GP.TWO_FLOOR and GP.retired("two", "nfl")
+    # The two-leg tickets (every league's), at two of the same legs: 63% each.
+    assert GP.TWO_FLOOR == 0.40 and round(0.63 ** 2, 2) == GP.TWO_FLOOR and not GP.retired("two", "nfl")
 
 
 def test_the_reports_own_picks_are_never_crowded_out_of_the_fill():

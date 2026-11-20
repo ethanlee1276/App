@@ -74,8 +74,8 @@ def test_the_parlay_holds_are_retired():
         src = (ROOT / "engine" / name).read_text(encoding="utf-8")
         assert "parlayhold." not in src and "import parlayhold" not in src, name
     gp_src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
-    # No hold on paper; the two-leg tickets are basketball's alone (ZT), built and posted like the rest.
-    assert "def two_hold(" not in gp_src and GP.retired("two", "nfl") and not GP.retired("two", "nba")
+    # No hold on paper; the two-leg tickets are every league's, built and posted like the rest.
+    assert "def two_hold(" not in gp_src and not GP.retired("two", "nfl") and not GP.retired("two", "nba")
 
 
 def test_no_build_moves_a_games_tickets_to_paper():
@@ -429,10 +429,11 @@ def test_a_ticket_on_paper_from_before_still_journals_and_grades():
 def test_the_record_and_the_night_say_no_hold():
     c = _conn()
     _tickets(c, "nfl", 3, 7, "game_three")
-    _tickets(c, "nfl", 5, 5, "game_two")                # retired: kept in the journal, off the record
+    _tickets(c, "nfl", 5, 5, "game_two")                # every league's since 20 November: on the record
     rec = parlayledger.game_parlay_record(c)
-    three = rec["nfl"]["three"]
-    assert (three["graded"], three["wins"]) == (10, 3) and "paper" not in three and "two" not in rec["nfl"]
+    three, two = rec["nfl"]["three"], rec["nfl"]["two"]
+    assert (three["graded"], three["wins"]) == (10, 3) and "paper" not in three
+    assert (two["graded"], two["wins"]) == (10, 5) and "paper" not in two
     m = (ROOT / "engine" / "maintenance.py").read_text(encoding="utf-8")
     assert "parlays on paper" not in m and "parlayhold" not in m
     # A game played while its league was on paper still says so on its page.

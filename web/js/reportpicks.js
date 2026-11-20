@@ -616,7 +616,7 @@ function rpBetsHTML(x, sport, open) {
   const picks = x.picks || [], twos = x.twos || [], threes = x.threes || [], pairs = x.scorers || [];
   const paper = x.paper || {}, pTwos = paper.twos || [], pThrees = paper.threes || [];
   const pairWord = ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
-  // The three-leg tickets, then the pairs: basketball's two-leg tickets (ZT) or the scorer pairs.
+  // The three-leg tickets, the two-leg ones, then the scorer pairs.
   const parts = [["Picks", picks], [twos.length ? "Three-leg parlays" : "Parlays", threes], ["Two-leg parlays", twos],
                  ["Three-leg on paper", pThrees], ["Two-leg on paper", pTwos],
                  [pairWord, pairs]].filter(([, l]) => l.length);
