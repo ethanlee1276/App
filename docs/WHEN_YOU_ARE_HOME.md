@@ -9347,11 +9347,14 @@ account before it reads anything; a finished game's report needs the membership;
 the new live tickets are a count behind a lock; and the sign-up table and the plans page list the reports under
 members. One gap closed: the drive simulation the report quotes ("our simulation of the game, drive by drive, 4,000
 times: the Lions 58%") rode every public NFL game row, readable by anyone who opened the file, though the page never
-showed it to a free account. It is now cut from the public copy and stays on the members' copy. The game's facts
-stay free (the line, the venue, the weather, the injuries, the scan's numbers), and so does the Record: after a game
-ends, its graded picks and parlays show there with a check or an X, the way every book's results do, because the
-public record is the proof. Tell me if you want those hidden from free accounts too. Your decision is written beside
-the paid keys in engine/gate.py and held door by door by tests/test_the_game_report_is_a_members.py.
+showed it to a free account. It is now cut from the public copy and stays on the members' copy. The check the site
+runs at every start, and before it serves a public board, now looks inside each row as well as at each key, so a
+field newly named paid is cut at the next restart instead of waiting for its board's next build (the public NFL file
+up this morning, built at 05:52, still had it). The game's facts stay free (the line, the venue, the weather, the
+injuries, the scan's numbers), and so does the Record: after a game ends, its graded picks and parlays show there
+with a check or an X, the way every book's results do, because the public record is the proof. Tell me if you want
+those hidden from free accounts too. Your decision is written beside the paid keys in engine/gate.py and held door
+by door by tests/test_the_game_report_is_a_members.py.
 
 **ZJ. The game reports' parlays, followed live** (step 798; 19 November). Nothing to run. One of my own ideas, since
 you asked for some: a member who played a report's ticket had nowhere to watch it. The Live tab followed the Edge
