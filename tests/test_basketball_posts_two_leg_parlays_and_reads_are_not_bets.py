@@ -246,10 +246,10 @@ if __name__ == "__main__":
     for name, fn in tests:
         try:
             fn()
-            print(f"  ok {name}")
+            print(f"  ok  {name}")
         except Exception:                                    # noqa: BLE001
             fails += 1
             print(f"FAIL {name}")
             traceback.print_exc()
-    print(f"\n{fails} FAILED" if fails else f"\nall {len(tests)} passed")
+    print(f"\n{len(tests) - fails} tests passed." if not fails else f"\n{fails} FAILED")
     sys.exit(1 if fails else 0)
