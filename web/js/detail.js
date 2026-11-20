@@ -5679,6 +5679,12 @@ async function renderPbpPage(tick) {
      past game data"). The field or the ballpark draws the play in progress;
      a final has none, so its page is ESPN's: the score, the recap, the
      leaders, the scoring and the tabs. */
+  // WHAT IS OPEN NOW STAYS OPEN THROUGH THIS REDRAW (20 November 2026). A fold remembers its state from its
+  // "toggle" event (gpWire), which comes a moment after the tap and never reaches a fold this line removes,
+  // so the ⋯ menu a reader opened just before the live poll's redraw came back shut (the gate's spoiler test
+  // caught it on a busy box). Each fold's state as it stands is kept first; a new game clears them all
+  // (gpFootballHTML, `_gpFor`).
+  host.querySelectorAll("details[data-gp-key]").forEach((el) => _gpOpen.set(el.dataset.gpKey, el.open));
   host.innerHTML = fb ? gpFootballHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event }) : `
     ${stripHTML}
     <div class="pbp-layout gp${league === "mlb" ? "" : " pbp-has-tabs"}">

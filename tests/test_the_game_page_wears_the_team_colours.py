@@ -385,6 +385,11 @@ def test_play_by_play_is_drive_by_drive_newest_first_and_the_drive_on_now_is_ope
     assert 'data-gp-key="dr-3">' in kept and 'data-gp-key="dr-1" open>' in kept, "the reader's own open and close"
     wire = _fn(GP, "gpWire")
     assert 'host.addEventListener("toggle", (e) => {' in wire and "_gpOpen.set(k, e.target.open);" in wire
+    # …and a fold opened a moment before a redraw (its "toggle" not yet in) is kept from the page as it stands,
+    # first: the ⋯ menu a reader had just opened came back shut when the live poll redrew it (20 November 2026).
+    keep = 'host.querySelectorAll("details[data-gp-key]").forEach((el) => _gpOpen.set(el.dataset.gpKey, el.open));'
+    assert DETAIL.count(keep) == 1
+    assert DETAIL.index(keep) < DETAIL.index("host.innerHTML = fb ? gpFootballHTML("), "kept before the page is replaced"
 
 
 def test_standings_are_the_two_divisions_with_the_two_clubs_lit():
