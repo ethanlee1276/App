@@ -3930,16 +3930,19 @@ def sec_parlays(c: Ctx) -> dict | None:
 
 def parlay_sentence(c: Ctx) -> str:
     """The short version's parlay lines: the likeliest three-leg ticket and
-    the likeliest scorer pair, each with its price to take it."""
-    from .gameparlays import pick_words
+    the best scorer pair (football's on our research, TDSGP2; hockey's the
+    likeliest; one with a stand-in scorer last), each with its price to take it."""
+    from .gameparlays import RESEARCH_SPORTS, pick_words, scorer_rank
     gp = _game_parlays(c)
     if not gp:
         return ""
     bits = []
-    for key, word in (("threes", "Best three-leg parlay"),
-                      ("scorers", "Best touchdown pair" if c.sport in ("nfl", "cfb") else "Best scorer pair")):
-        # The likeliest, wherever it sits: a game's posted tickets keep their places (gameparlays.choose).
-        t = max(gp.get(key) or [], key=lambda x: float(x.get("joint") or 0), default=None)
+    likeliest = lambda x: -float(x.get("joint") or 0)                               # noqa: E731
+    for key, word, rank in (("threes", "Best three-leg parlay", likeliest),
+                            ("scorers", "Best touchdown pair" if c.sport in ("nfl", "cfb") else "Best scorer pair",
+                             scorer_rank(c.sport in RESEARCH_SPORTS))):
+        # Wherever it sits: a game's posted tickets keep their places (gameparlays.choose).
+        t = min(gp.get(key) or [], key=rank, default=None)
         if t:
             bits.append(f"{word}: {' + '.join(pick_words(l) for l in t['legs'])} — {float(t['joint']):.0%} by our "
                         f"numbers, take it at {t['take_words']} or better")

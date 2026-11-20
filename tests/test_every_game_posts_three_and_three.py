@@ -114,6 +114,14 @@ def test_a_football_game_fills_its_scorer_pairs_with_its_next_scorers_each_named
         assert ("Rachaad White has a weaker research case (3 of 13 points, under the 4 a pair is built from): "
                 "added so the game has 3 touchdown pairs") in t["caveats"], t["caveats"]
     assert "scorers_note" not in g and gp["counts"]["filled_scorers"] == 2
+    # The report's one line names the research's best pair, not one with a stand-in (TDSGP2).
+    from engine import gamereport as GR
+    b = TD._board(reads, scorers)
+    b["game_parlays"] = gp
+    g["scorers"] = list(reversed(g["scorers"]))                   # posted pairs keep their places (ZQ)
+    line = GR.parlay_sentence(GR.Ctx(TD._game(), b, sport="nfl"))
+    best = line[line.index("Best touchdown pair: "):]
+    assert "Rachaad White" not in best and "Cam Skattebo" in best and "Isaiah Likely" in best, line
     # The fill floor reads lower than the pairs' own, and never an avoid read
     # or a scorer with no red-zone role, however likely.
     assert GP.SCORER_FILL_FLOOR["nfl"] < GP.SCORER_FLOOR["nfl"]
