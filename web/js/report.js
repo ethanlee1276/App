@@ -964,10 +964,11 @@
     // The pick's own words, the player's name set apart ("Jalen Brunson" · "over 24.5 points").
     const who = String(l.player || ""), said = String(l.pick || "");
     const rest = who && said.startsWith(who) ? said.slice(who.length).trim() : said;
+    // Decided: a chip by the pick. Still live: what it needs, at the end of its number's row.
     const mark = LIVE_LEG[l.result];
-    const chip = mark ? `<span class="grl-chip ${escapeAttr(l.result)}">${mark}</span>`
-      : l.need ? `<span class="grl-chip">${escapeHtml(l.need)}</span>`
-      : l.note ? `<span class="grl-chip quiet">${escapeHtml(l.note)}</span>` : "";
+    const chip = mark ? `<span class="grl-chip ${escapeAttr(l.result)}">${mark}</span>` : "";
+    const need = mark || !(l.need || l.note) ? ""
+      : `<span class="grl-need${l.need ? "" : " quiet"}">${escapeHtml(l.need || l.note)}</span>`;
     const line = Number(l.line), cur = Number(l.current);
     // The number so far ticks to its new value on the next read (visuals.js mountLiveTicks): red when an under's climbs.
     const has = l.current == null ? "" : `<span class="grl-has">Has <b data-tick="rl:${escapeAttr(key)}" data-tick-v="${
@@ -979,7 +980,7 @@
       <div class="grl-leg-h"><span class="gr-parlay-who"><span class="gr-parlay-face">${
         playerAvatar(l.player, l.team, { size: 24, headshot: l.headshot })}</span><b>${escapeHtml(who || said)}</b></span>${
         who && rest ? `<span class="grl-pick">${escapeHtml(rest)}</span>` : ""}${chip}</div>
-      ${has || bar ? `<div class="grl-leg-m">${has}${bar}</div>` : ""}</li>`;
+      ${has || bar || need ? `<div class="grl-leg-m">${has}${bar}${need}</div>` : ""}</li>`;
   }
   function liveTicketHTML(t, key) {
     const state = LIVE_TICKET[t.state] ? t.state : "alive";

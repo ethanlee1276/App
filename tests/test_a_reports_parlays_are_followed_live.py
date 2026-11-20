@@ -271,16 +271,18 @@ def test_the_live_tab_draws_each_game_ticket_and_leg():
             '<span class="grl-pick">over 24.5 points</span><span class="grl-chip won">In</span></div>') in one
     assert 'Has <b data-tick="rl:nba|NYK@TOR|three0|0" data-tick-v="26">26</b> of 24.5</span>' in one
     assert '<i style="width:100%"></i>' in one, "past its number, the bar is full and no more"
-    assert '<span class="grl-chip">Needs 2 more</span>' in one and '<i style="width:86%"></i>' in one
+    # Still live: what it needs, at the end of its number's row, beside the bar.
+    assert '<i style="width:86%"></i></span><span class="grl-need">Needs 2 more</span></div>' in one
     # An under's number climbing is bad news: its tick is inverted, its row says under.
     assert '<li class="grl-leg under">' in one and 'data-tick-v="11" data-tick-mode="invert">11</b> of 21.5' in one
-    assert '<span class="grl-chip">Can give up 10 more</span>' in one
+    assert '<span class="grl-need">Can give up 10 more</span>' in one
     assert two.startswith('lost">') and '<span class="grl-t-st">Lost: Jalen Brunson missed</span>' in two
     assert '<span class="grl-chip lost">Missed</span>' in two
     # A scorer's leg has no "of 0.5" and no bar; a player not in the box yet says so.
     pair = html.split('<div class="grl-t s-')[3]
     assert "<b>Goal scorer pair 1</b>" in pair and 'data-tick-v="1">1</b></span></div>' in pair
-    assert '<span class="grl-chip quiet">not in the box score yet</span>' in pair and "of 0.5" not in pair
+    assert '<div class="grl-leg-m"><span class="grl-need quiet">not in the box score yet</span></div>' in pair
+    assert "of 0.5" not in pair
     for bad in ("undefined", "NaN", "[object", "null"):
         assert bad not in html, bad
 

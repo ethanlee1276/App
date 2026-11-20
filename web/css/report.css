@@ -272,7 +272,7 @@
 .grl-t-h b { font-weight: 800; }
 .grl-t-st { margin-left: auto; font-weight: 700; color: var(--tone); }
 .grl-dots { display: inline-flex; gap: 4px; }
-.grl-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--panel-3); }
+.grl-dots i { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in oklab, var(--text) 24%, transparent); }
 .grl-dots i.won { background: var(--good); }
 .grl-dots i.lost { background: var(--bad); }
 .grl-dots i.push { background: var(--text-mute); }
@@ -283,7 +283,8 @@
   background: var(--panel-3); color: var(--text); white-space: nowrap; }
 .grl-chip.won { background: color-mix(in oklab, var(--good) 24%, transparent); color: var(--good); }
 .grl-chip.lost { background: color-mix(in oklab, var(--bad) 24%, transparent); color: var(--bad); }
-.grl-chip.quiet { padding: 0; background: none; color: var(--text-mute); font-weight: 600; white-space: normal; }
+.grl-need { flex: 0 0 auto; font-weight: 700; color: var(--text); white-space: nowrap; }
+.grl-need.quiet { flex: 1 1 auto; font-weight: 600; color: var(--text-mute); white-space: normal; }
 .grl-leg-m { display: flex; align-items: center; gap: 8px; margin: 3px 0 0 30px; font-size: var(--fs-xs); color: var(--text-dim); }
 .grl-has { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .grl-has b { color: var(--text); }
