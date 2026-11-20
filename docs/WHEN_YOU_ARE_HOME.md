@@ -9338,6 +9338,16 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZN. Three small fixes found while building ZM** (step 802; 20 November). Nothing to run. (1) On a live game's
+page, the ⋯ menu (Hide the score, the TV delay) could snap shut by itself if the live update redrew the page right
+as you tapped it. The test suite caught it on a busy machine. The page now keeps whatever is open before it redraws.
+(2) A parlay leg on Report Picks could read "over 1.5 fg3m" for a moment, until the record's word list arrived. A
+leg now uses its own word ("3-pointers made"). (3) Ask Qellys lists every report parlay likeliest first, but it
+wasn't told which tickets our own card says to pass on, or which games have already started, so it could name one of
+those as tonight's best. Each ticket now says so, the same way the new strip leaves them out. Also in plain words
+now: the Line Shopping page (no more "z=11.6", "arbs" or "juice"), and seven new glossary entries: parlay, leg,
+push, sharp book, steam, arbitrage and middle.
+
 **ZM. Report Picks leads with the likeliest tickets today** (step 801; 20 November). Nothing to run. One of my own
 ideas, for your "make better selections". A night posts every game's two- and three-leg parlays, one fold per game,
 and nothing said which ones to look at first. The record answers that: the likeliest tickets hit most. The two-leg
