@@ -90,11 +90,11 @@
       ? `<p class="lb-read">The middle agrees; the <b>${sec.tail_side === "over" ? "high" : "low"} end</b> does not — we make
         over ${esc(num(sec.tail_line))} ${sec.tail_gap > 0 ? "likelier" : "less likely"} than the market by ${(Math.abs(sec.tail_gap) * 100).toFixed(0)} points.</p>`
       : `<p class="lb-read">The market’s middle sits at ${esc(num(sec.market_median))}${sec.market_spread ? `, give or take ${esc(num(sec.market_spread))}` : ""}.</p>`;
-    return card("The market’s whole curve", "Every rung of the alternate ladder, de-vigged, beside our chance at the same number.", state,
+    return card("The market’s whole curve", "Every alternate line, with the book’s cut taken out, beside our chance at the same number.", state,
       `${curveSVG(sec.rungs)}<div class="lb-key"><span class="mk">Market</span><span class="us">Ours</span></div>${read}
        <div class="lb-scroll"><table class="lb-tbl"><thead><tr><th>Number</th><th>Market</th><th>Ours</th><th>Gap</th><th>Books</th></tr></thead>
        <tbody>${rows}</tbody></table></div>`,
-      "Only rungs a book prices both ways are used, each de-vigged on its own two prices. Where the two curves part at the ends is a reading; it is being scored on every settled game before anything uses it.");
+      "Only lines a book prices both ways are used, the book’s cut taken out of each pair. Where the two curves part at the ends is a reading; it is being scored on every settled game before anything uses it.");
   }
 
   // ---- 3. how each book sets his line (engine/bookrecipe) -----------------

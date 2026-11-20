@@ -4770,7 +4770,7 @@ function renderAbout() {
         must beat</strong> for the ticket to be worth anything.</p>`)}
       ${card("Live, while it plays", `<p>Every game in progress across the
         leagues on one board: score, situation, the posted lines, and a live
-        win-probability chart drawn from de-vigged in-play prices. Your open
+        win-probability chart drawn from the in-play prices with the book’s cut taken out. Your open
         bets track themselves as the games run.</p>`)}
       ${card("Long shots, priced honestly", `<p>Home runs and anytime
         touchdowns with real probabilities attached — tracked in their own
@@ -5671,13 +5671,13 @@ async function renderMethodology() {
        floor and ceiling on every card are that distribution, and the hit
        probability is the share of it on the right side of the line.`)}
     ${step(3, "Read the price honestly",
-      `The book’s number is de-vigged before it is compared to anything — a
+      `The book’s cut is taken out of its price before it is compared to anything: a
        −110/−110 market is 52.4% + 52.4% = 104.8%, and the 4.8% is the
        house’s, not information. Prices come from up to ten books; the one
        shown is the one that would actually be bet.`)}
     ${step(4, "Take the haircuts",
       `Three of them, and they all cut in the same direction — against us.
-       The model is shrunk toward the de-vigged market, because the market is
+       The model is pulled toward the market’s fair price, because the market is
        usually right and a model that ignores that is a model that has not
        met one. An edge above a ceiling is treated as a mistake rather than a
        jackpot, because in a liquid market it almost always is. And the

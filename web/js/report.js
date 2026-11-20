@@ -837,8 +837,11 @@
         return `<section class="gr-sec"${solo ? "" : ` id="gr-${escapeAttr(s.key)}"`}><h3 class="gr-title">${escapeHtml(s.title)}</h3>
         ${inner}</section>`;
       }
-      return `<details class="gr-sec gr-fold"${solo ? "" : ` id="gr-${escapeAttr(s.key)}"`}><summary class="gr-title">${
-        escapeHtml(s.title)}<span class="row-fold-chev" aria-hidden="true"></span></summary><div class="gr-fold-body">${
+      // A fold's answer beside its title (engine/gamereport.section_hint: "Who we think wins · Lions 60%"),
+      // so the folded titles read as the report's findings; hidden once the fold is open and says it itself.
+      return `<details class="gr-sec gr-fold"${solo ? "" : ` id="gr-${escapeAttr(s.key)}"`}><summary class="gr-title"><span>${
+        escapeHtml(s.title)}</span>${s.hint ? `<span class="gr-hint">${escapeHtml(s.hint)}</span>` : ""
+        }<span class="row-fold-chev" aria-hidden="true"></span></summary><div class="gr-fold-body">${
         inner}</div></details>`;
     }).join("");
     const url = (extras && extras.url) || "";

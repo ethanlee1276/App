@@ -608,7 +608,8 @@ TOOLS = [
           {"sport": _ANY_SPORT}),
     _tool("our_record",
           "Our public record: all bets, a league's, the Most Likely board with its calibration, the best and "
-          "worst markets, the game reports' picks and each league's game parlays (three-leg, two-leg, scorer "
+          "worst markets, the game reports' picks (and how each kind has done: the card's picks, matchup "
+          "reads, breakout candidates, fades) and each league's game parlays (three-leg, two-leg, scorer "
           "pairs: one set a game, with the tickets built since the 19 November rebuild said apart); a window "
           "(today, yesterday, last_7_days, last_30_days, season); and with bets the "
           "settled bets themselves, newest first, filterable by result and by props or game lines.",

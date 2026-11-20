@@ -28,6 +28,13 @@
 /* The site's own fold chevron (styles.css .row-fold-chev), turned when open. */
 .gr-fold > summary .row-fold-chev { flex: 0 0 auto; margin-right: 6px; color: var(--text-mute); }
 .gr-fold[open] > summary .row-fold-chev { transform: rotate(135deg) translateY(2px); }
+/* A fold's answer beside its title ("Who we think wins · Lions 60%"; engine/gamereport.section_hint): quiet, at
+   the chevron's side, cut short before it can push the title onto a second line, and gone once the fold is
+   open and the section says it itself. */
+.gr-fold > summary.gr-title > span:first-child { flex: 0 0 auto; max-width: 100%; }
+.gr-hint { flex: 0 1 auto; min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--text-dim); }
+.gr-fold[open] > summary .gr-hint { display: none; }
 .gr-fold-body { padding: 0 0 16px; }
 /* THE UNITS AS RANK BARS (2026-11-15): a bar's length is the rank, 1st
    the longest; its colour, the league's thirds. */
@@ -187,8 +194,12 @@
 .gr-parlay-odds b { font-size: 1.5em; line-height: 1; color: var(--tone); font-variant-numeric: tabular-nums; }
 .gr-parlay-meter { flex: 1 1 60px; max-width: 220px; height: 6px; border-radius: 999px; overflow: hidden;
   background: color-mix(in oklab, var(--text) 10%, transparent); }
-.gr-parlay-meter i { display: block; height: 100%; border-radius: inherit;
-  background: linear-gradient(90deg, color-mix(in oklab, var(--tone) 55%, transparent), var(--tone)); }
+.gr-parlay-meter i { display: block; height: 100%; border-radius: inherit; transform-origin: left;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--tone) 55%, transparent), var(--tone));
+  animation: gr-meter-in .7s cubic-bezier(.2, .7, .2, 1) both; }
+/* The bar fills as its card is drawn (a scale, the compositor's work); still for a reader who asked for less motion. */
+@keyframes gr-meter-in { from { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .gr-parlay-meter i { animation: none; } }
 /* A leg's face stays beside its name: the two wrap as one, the price and our chance after them. */
 .gr-parlay-who { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
 .gr-parlay-who b { min-width: 0; align-self: baseline; }      /* the list's number sits on the name's first line */

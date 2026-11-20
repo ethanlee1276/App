@@ -107,7 +107,7 @@ def test_the_handoff_keeps_the_price_on_a_posted_pick_and_the_list_shows_it():
     want = round(_field_over(), 4)
     assert abs(b["model_prob"] - want) < 1e-9 and b["trust_from"] == 0.82
     assert abs(listed["model_prob"] - want) < 1e-9 and listed["listed_prob"] == 0.82
-    assert "de-vigged price says" in listed["trust_note"]
+    assert "books' fair price (their cut taken out) says" in listed["trust_note"]
     assert board["price_trust"]["moved"] == 1 and board["price_trust"]["posted"] == 1
 
 
@@ -189,7 +189,7 @@ def test_the_board_checks_tiers_and_ranks_on_the_price_number():
     board = LB.build(_result([hot]), sport="nfl", calibration={}, band_verdict=None)
     (row,) = board["rows"]
     assert abs(row["model_prob"] - round(_field_over(), 4)) < 1e-9
-    assert "books' de-vigged price says" in row["check_notes"]["model"]
+    assert "books' fair price (their cut taken out) says" in row["check_notes"]["model"]
     # 0.78: above the field's 0.65 and short of the fifteen points that go
     # on paper in every league (engine/paperhold).
     mlb = LB.build(_result([_row(prob=0.78)]), sport="mlb", calibration={}, band_verdict=None)

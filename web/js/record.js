@@ -1796,10 +1796,10 @@ function calScoreBlock(cal) {
   return `<div class="rec-block">
     <div class="rec-cards">${cards}${ece}</div>
     <p style="margin:10px 0 0;font-size:.85em;opacity:.62">Lower is better for both.
-      Scored against the de-vigged closing price on the same bets — if we can’t
-      out-forecast the close on our own selections, the edge story is fiction.
-      Shown either way, because a site that hides this number is a tout with a
-      website.</p>${disagree}</div>`;
+      Scored against the closing price with the book’s cut taken out, on the same bets:
+      if our chances are not closer to what happened than the close is, on our own picks,
+      we have no edge to claim. Shown either way, because a site that hides this number
+      is a tout with a website.</p>${disagree}</div>`;
 }
 
 /* Calibration split by market and by horizon.
@@ -4426,20 +4426,20 @@ function recordVerdictHTML(src, scopeLabel, lk, opts) {
   if (cal && cal.brier_model != null && cal.brier_consensus != null) {
     const e = cal.brier_edge_consensus;
     lines.push(e == null ? "" : e > 0
-      ? `On its own picks it out-forecasts the field’s de-vigged price
-         (Brier ${cal.brier_model} against ${cal.brier_consensus}, ${cal.n_consensus} picks).`
-      : `The field’s de-vigged price out-forecasts it on its own picks
-         (Brier ${cal.brier_model} against ${cal.brier_consensus}, ${cal.n_consensus} picks) —
-         which means the edge story is not yet supported.`);
+      ? `On its own picks its chances have been closer to what happened than the books’ fair price
+         (forecast error ${cal.brier_model} against ${cal.brier_consensus} over ${cal.n_consensus} picks; lower is better).`
+      : `On its own picks the books’ fair price has been closer to what happened than its chances
+         (forecast error ${cal.brier_model} against ${cal.brier_consensus} over ${cal.n_consensus} picks; lower is better),
+         so the record does not yet show an edge.`);
   }
   if (cal && cal.brier_model != null && cal.brier_market != null) {
     const e = cal.brier_edge;
     lines.push(e == null ? "" : e > 0
-      ? `Against the book we bet, de-vigged, it scores better
-         (Brier ${cal.brier_model} against ${cal.brier_market}) — the easier
-         benchmark, since shopping picks the book furthest from the field.`
-      : `Even the book we bet, de-vigged, out-forecasts it
-         (Brier ${cal.brier_model} against ${cal.brier_market}).`);
+      ? `Against the price at the book we bet (its cut taken out) its chances have been closer
+         to what happened (forecast error ${cal.brier_model} against ${cal.brier_market}; lower is better).
+         That is the easier test: we bet whichever book is furthest from the rest.`
+      : `Even the price at the book we bet (its cut taken out) has been closer to what happened
+         than its chances (forecast error ${cal.brier_model} against ${cal.brier_market}; lower is better).`);
   }
   if (o.avg_clv != null && o.clv_n) {
     lines.push(o.avg_clv > 0

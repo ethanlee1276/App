@@ -129,9 +129,13 @@ def test_attach_stamps_the_page_and_returns_the_journal():
 def test_the_replay_panel_is_shares_not_picks():
     app = app_js()
     i = app.index("The replay")
-    block = app[i - 400:i + 2600]
+    block = app[i - 400:i + 3600]
     assert "not a pick" in block, "the panel must disclaim itself"
-    assert "prices nothing until the public" in block
+    # In plain words since 20 November 2026 (it read "the sim prices nothing until the public reconciliation
+    # says it should"), and the two-bets line says "both happen", never "+0.0pt vs independent legs".
+    assert "none of our prices come from it.</p>" in block
+    assert "vs independent legs)</p>" not in block and "both happen ${share(sim.cover_and_over)}" in block
+    assert "Math.abs(lift) < 0.5" in block, "a difference under half a point is not said"
     assert "gp-sim-bar" in block, "the histogram draws bars, not a line"
     css = styles_css()
     assert ".gp-sim {" in css and ".gp-sim-hist {" in css

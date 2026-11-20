@@ -115,7 +115,10 @@ def test_the_tickets_chance_is_drawn_and_each_leg_wears_its_face():
     css = (ROOT / "web" / "css" / "report.css").read_text(encoding="utf-8")
     for rule in (".gr-parlay-odds.mid { --tone: var(--gold); }", ".gr-parlay-odds.lo { --tone: var(--warn); }",
                  ".gr-parlay .gr-list { margin: 2px 0 0; gap: 4px; font-size: .88em; }",
-                 ".gr-parlay-who { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }"):
+                 ".gr-parlay-who { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }",
+                 # The bar fills as its card is drawn, by a scale alone; never for a reader who asked for less motion.
+                 "@keyframes gr-meter-in { from { transform: scaleX(0); } }",
+                 "@media (prefers-reduced-motion: reduce) { .gr-parlay-meter i { animation: none; } }"):
         assert rule in css, rule
 
 

@@ -126,7 +126,7 @@ def _game_sentence(sport: str) -> str:
     mkt = GAME_RANK_MARKET.get(sport, {}).get("moneyline")
     market_note = ""
     if mkt is not None and mkt > ml:
-        market_note = (f" The market’s own de-vigged price ranks them at "
+        market_note = (f" The books’ fair price (their cut taken out) ranks them at "
                        f"{mkt:.2f}, so moneyline rows are ordered on it and "
                        f"carry the model’s number beside it.")
     return (f" Who wins a game ranks at {ml:.2f} on the model.{market_note} "

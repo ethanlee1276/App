@@ -1534,7 +1534,7 @@ function scanReadHTML(x) {
 function scanMicroHTML(m) {
   const door = scanDoor({ player: m.player, team: m.team }, m.market);
   return `<div class="ms-micro"${door.attrs} role="link" tabindex="0">
-      <span class="ms-micro-bet"><b>${escapeHtml(m.player)}</b> ${escapeHtml(m.side || "")} ${escapeHtml(String(m.line ?? ""))} ${escapeHtml(m.market_label || m.market || "")}</span>
+      <span class="ms-micro-bet"><b>${escapeHtml(m.player)}</b> ${escapeHtml(m.side || "")} ${escapeHtml(String(m.line ?? ""))} ${escapeHtml(m.market_label || (m.market ? marketWord(m.market) : ""))}</span>
       <span class="ms-micro-price">${m.odds != null ? american(m.odds) : "—"}${m.book ? ` · ${escapeHtml(m.book)}` : ""}</span>
       <span class="ms-micro-p">${m.prob != null ? wholePct(m.prob) : "—"}</span>
       ${m.clears || m.edge_pick ? `<span class="ms-micro-tags">${m.clears ? `<span class="chip up">clears 65% · −250</span>` : ""}${
@@ -1561,7 +1561,7 @@ function planRowHTML(r, kind) {
      scan's "good matchup" beside "chasing last week" reads as a quarrel. */
   const base = kind === "fits" ? r : { ...r, no_read_tag: true };
   const shown = td ? { ...base, line: null, market_label: `Anytime TD${r.label ? ` · ${r.label}` : ""}` }
-    : { ...base, market_label: `${r.market_label || r.market}${kind === "fits" && r.label ? ` · ${r.label}` : ""}` };
+    : { ...base, market_label: `${r.market_label || marketWord(r.market)}${kind === "fits" && r.label ? ` · ${r.label}` : ""}` };
   const row = likelyRow(shown);
   const why = Array.isArray(r.why) ? r.why : r.why ? [r.why] : [];
   const tag = kind !== "fits" ? "" : r.on_board
@@ -2377,10 +2377,18 @@ function renderGamePage() {
   // The replay panel — the drive sim's diagnostics for THIS game, shares
   // and shape only. It prices nothing (engine/drivesim.ENABLED stays
   // False until the public reconciliation says otherwise), and the card
-  // says so in its own words.
+  // says so in its own words. PLAIN WORDS (2026-11-20, Ethan: "make sure
+  // everything is easy to read"): the line under the bars said "both 0%
+  // (+0.0pt vs independent legs)" and the note "the sim prices nothing
+  // until the public reconciliation says it should". Both happening is
+  // said only when the replay counted it, and how much likelier than two
+  // unrelated bets only when that is a real difference.
   const sim = g.sim;
   const simCard = sim ? (() => {
     const share = (v) => `${Math.round(100 * (v || 0))}%`;
+    const lift = Math.round(1000 * (sim.joint_lift || 0)) / 10;
+    const both = sim.cover_and_over == null ? "" : ` · both happen ${share(sim.cover_and_over)}${
+      Math.abs(lift) < 0.5 ? "" : `, ${Math.abs(lift).toFixed(1)} points ${lift > 0 ? "more" : "less"} often than two unrelated bets would`}`;
     const histLabels = [`${g.home} 15+`, `${g.home} 8–14`, `${g.home} 1–7`,
                         `${g.away} 1–7`, `${g.away} 8–14`, `${g.away} 15+`];
     const maxH = Math.max(...(sim.margin_hist || [0.001]), 0.001);
@@ -2406,14 +2414,11 @@ function renderGamePage() {
           <span class="gp-sim-lbl">${escapeHtml(histLabels[i])}</span>
         </div>`).join("")}</div>
       </div>
-      <p class="gp-sim-joint">${escapeHtml(g.home)} covers ${share(sim.cover)} ·
-        over ${share(sim.over)} · both ${share(sim.cover_and_over)}
-        (${(sim.joint_lift || 0) >= 0 ? "+" : "−"}${Math.abs(100 * (sim.joint_lift || 0)).toFixed(1)}pt
-        vs independent legs)</p>
-      <p class="gp-sim-note">Anchored to the posted line — the replays reproduce the
-        market’s expected points and add the shape of the game around them. This
-        panel is not a pick, and the sim prices nothing until the public
-        reconciliation says it should.</p>
+      <p class="gp-sim-joint">${escapeHtml(g.home)} covers the spread ${share(sim.cover)} ·
+        the game goes over ${share(sim.over)}${both}</p>
+      <p class="gp-sim-note">The replays start from the posted line, so they score about what
+        the books expect; what they add is how the game tends to unfold around that. A picture
+        of the game, not a pick: none of our prices come from it.</p>
     </div>`;
   })() : "";
   // Team shapes — the two-team radar (ECharts ladder, Ethan 2026-08-18).

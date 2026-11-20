@@ -414,38 +414,40 @@ const SPORT_META = {
          api: "/api/mlb/recommendations", fallback: "data/mlb_recommendations.json" },
   wnba: { logo: "🏀",
           gamesTitle: "Tonight’s slate",
-          gamesSub: "same minutes-first model as the NBA board, tuned to a "
-                    + "40-minute game — and journaled on probation until it "
-                    + "has graded enough WNBA results to earn a stake",
+          gamesSub: "each game on its home court with tonight’s lines. The "
+                    + "NBA’s model set to a 40-minute game, tracked on paper "
+                    + "until its own record earns a stake",
           api: "/api/wnba/recommendations", fallback: "data/wnba.json" },
   nba: { logo: "🏀",
          gamesTitle: "Tonight’s slate",
-         gamesSub: "minutes first, distributions not point estimates, every "
-                   + "number clamped toward the de-vigged market",
+         gamesSub: "each game on its home court with tonight’s lines. Our "
+                   + "numbers start from the minutes each player should get "
+                   + "and are pulled toward the books’ fair price",
          api: "/api/nba/recommendations", fallback: "data/nba.json" },
   // MEN'S COLLEGE BASKETBALL (2026-11-13): the NBA's minutes-first build on
   // a forty-minute game — every Division I game's lines, player props on
   // the night's biggest games, on probation until its record earns a stake.
   cbb: { logo: "🏀",
          gamesTitle: "Tonight’s slate",
-         gamesSub: "every Division I game, player props on the night’s "
-                   + "biggest, the NBA’s minutes-first model on a 40-minute "
-                   + "game — journaled on probation until it earns a stake",
+         gamesSub: "every Division I game with its lines, and player props "
+                   + "on the night’s biggest. Tracked on paper until its own "
+                   + "record earns a stake",
          api: "/api/cbb/recommendations", fallback: "data/cbb.json" },
   cfb: { logo: "🏈",
          gamesTitle: "Saturday’s board",
-         gamesSub: "134 teams, 60+ games, and no book prices a Wednesday MAC "
-                   + "game the way it prices Ohio State – Michigan — so the "
-                   + "haircut on our own edge is a dial, not a constant",
+         gamesSub: "every game with its lines. Books price a Wednesday MAC "
+                   + "game less carefully than Ohio State–Michigan, so how far "
+                   + "we trust our own number changes game by game",
          api: "/api/cfb/recommendations", fallback: "data/cfb.json" },
   // HOCKEY (2026-10-03): a per-60 rate times ice time for every skater,
   // the probable starter's saves, and the three game lines — every Edge
   // pick on paper until the league's record earns a stake.
   nhl: { logo: "🏒",
          gamesTitle: "Tonight’s slate",
-         gamesSub: "ice time × per-60 rates for every skater, the probable "
-                   + "starter’s saves, and every Edge pick on paper until "
-                   + "the league’s own record earns a stake",
+         gamesSub: "each game with tonight’s lines. Our numbers start from "
+                   + "each skater’s ice time and the likely starting goalie; "
+                   + "every Edge pick is on paper until the league’s own "
+                   + "record earns a stake",
          api: "/api/nhl/recommendations", fallback: "data/nhl.json" },
 };
 
@@ -9435,9 +9437,9 @@ function veloChip(r) {
   const mph = `${d >= 0 ? "+" : ""}${d.toFixed(1)} mph`;
   const tip = drop
     ? "Down a full mph or more on the main pitch against the pitcher’s own last "
-      + "starts. §5 treats this as a red flag: check injury and mechanics "
-      + "reporting before trusting the projection. It does not change the "
-      + "price."
+      + "starts. That is a warning sign: check the injury news and what is "
+      + "being said about the pitcher’s mechanics before trusting the "
+      + "projection. It does not change the price."
     : "Change on the main pitch against the pitcher’s own last starts. Evidence "
       + "only — nothing prices from it.";
   return `<span class="chip ${drop ? "down" : ""}" title="${tip}">`
@@ -9453,8 +9455,8 @@ function firstMoverChip(r) {
   const m = r.line_move;
   if (!m || !m.first_mover || !m.first_mover_sharp) return "";
   return `<span class="chip" title="A sharp book left its opening number `
-       + `first and the rest followed. §4 reads that as the informed side `
-       + `moving. Recorded and journaled; it does not change the price.">`
+       + `first and the rest followed, which usually means informed money `
+       + `moved it. Recorded and journaled; it does not change the price.">`
        + `${iconMark("signal", 11)}${escapeHtml(m.first_mover)} moved first</span>`;
 }
 
@@ -16225,7 +16227,7 @@ function edgeHunterHTML(r) {
   const eh = r.edge_hunter;
   if (!eh) return "";
   const rows = [
-    ["Market", `${pct(eh.market_prob)} de-vigged · ${eh.best_book || r.book || "best book"} ${american(eh.best_price)}`],
+    ["Market", `${pct(eh.market_prob)} with the book’s cut taken out · ${eh.best_book || r.book || "best book"} ${american(eh.best_price)}`],
     ["Model", pct(eh.model_prob)],
     ["Edge", `${eh.edge >= 0 ? "+" : ""}${pct(eh.edge)} (this market needs ${pct(eh.min_edge)})`],
     ["Fair odds", eh.fair_odds != null ? american(eh.fair_odds) : "—"],
@@ -22969,8 +22971,8 @@ async function renderWhy() {
   const cal = rec && rec.calibration;
   const brierLine = cal && cal.brier_edge != null
     ? (cal.brier_edge > 0
-      ? `model out-forecasts the de-vigged market on its own picks (Brier ${cal.brier_model} vs ${cal.brier_market})`
-      : `the market still forecasts our picks better (Brier ${cal.brier_model} vs ${cal.brier_market}) — shown anyway, because hiding it would make us a tout`)
+      ? `on our own picks our chances have been closer to what happened than the books’ fair prices (forecast error ${cal.brier_model} against ${cal.brier_market}; lower is better)`
+      : `on our own picks the books’ fair prices have been closer to what happened than our chances (forecast error ${cal.brier_model} against ${cal.brier_market}; lower is better). Shown anyway: hiding it would make us a tout`)
     : "accrues as picks settle";
   const tile = (k, v, sub) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div>
     ${sub ? `<div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${sub}</div>` : ""}</div>`;

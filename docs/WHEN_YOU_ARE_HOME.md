@@ -9338,6 +9338,30 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZI. The game report's folded titles say their answers, and the wording pass** (step 797; 19 November). Nothing to
+run. I went through the game report page as a member sees it, start to end, on a phone. Three things. First, the
+report reads with our picks and the short version open and everything else folded to its title, and a title said
+what a section was about, not what it found: "Who we think wins" kept its answer a tap away at the top of every
+report. Where a section's finding fits in a few words its title now carries it at the right: "Who we think wins ·
+Lions 60%", "The market · DET by 3 at home, total 52.5", "How the units rank · GB 3 edges, DET 3", "Injuries and
+availability · 2 listed, 1 out", "Parlays for this game · 8 tickets", "Players to watch · 2 breakouts, 1 fade", "Weather and venue
+· Indoors". Each is read off the section's own blocks, so it cannot disagree with the section, every league's report
+gets them, and the page hides one once its fold is open (each thing once). A started game's report is the one kept
+from before the game, so its titles gain theirs at its next game. Second, the replay panel on the game page spoke in
+the code's words: "both 0% (+0.0pt vs independent legs)" and "the sim prices nothing until the public reconciliation
+says it should". It now says "DET covers the spread 48% · the game goes over 50% · both happen 26%, 2.1 points more
+often than two unrelated bets would" (the last part only when it is a real difference), and "A picture of the game,
+not a pick: none of our prices come from it." A game plan row could show a feed's raw key ("rush_att"); it is said
+in words. Third, the wording pass you asked for, on the lines a reader meets most: every "de-vigged" outside the
+calculator that is named for it now says what it means ("the books' fair price (their cut taken out)"), a "Brier"
+comparison in a sentence says "our chances have been closer to what happened than the books' fair prices (forecast
+error 0.21 against 0.22; lower is better)", the league pages' sub-lines say what the page holds instead of how the
+model is built, and two tooltips that cited the spec's section numbers say the thing itself. The metric's name stays
+on the model scorecards, where the glossary defines it. Also here: the chance bar on a parlay card fills as the card
+is drawn (never for a reader who asked for less motion), and Ask's record tool is told it holds how each kind of
+report pick has done. Checked by tests/test_a_folded_section_says_its_answer.py, tests/test_drivesim.py,
+tests/test_a_parlay_card_says_each_thing_once.py and tests/test_the_nfl_board_trusts_the_price.py.
+
 **ZH. A parlay card you can read at a glance** (step 796; 19 November). Nothing to run. The graphics pass, started
 where you look most. A ticket's chance was the first words of a row of small grey type ("49% by our numbers · fair
 +104 · take it at +114 or better"); it now stands large beside a bar filled to it, green at 40% and up, gold from

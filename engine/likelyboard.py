@@ -664,7 +664,7 @@ def give_back(r: dict) -> bool:
     r["trust_from"] = round(ours, 4)
     r.setdefault("board_raw_prob", ours)
     r["model_prob"] = round(shown, 4)
-    r["trust_note"] = (f"we said {ours:.0%}; {r.get('market_books') or 3} books' de-vigged price says "
+    r["trust_note"] = (f"we said {ours:.0%}; {r.get('market_books') or 3} books' fair price (their cut taken out) says "
                        f"{market:.0%}, and on this board the price has been closer whenever we ran above it, "
                        f"so we show the price's number")
     restate_lock(r)

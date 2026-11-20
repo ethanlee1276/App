@@ -2592,23 +2592,36 @@ def role_blocks(c: Ctx) -> list:
     return [_h("Roles on the move"), _list(lines), {"type": "note", "text": note}]
 
 
+def _indoors(g: dict) -> bool:
+    """A game under a roof: the weather is not its story."""
+    w = g.get("weather") or {}
+    return bool(w.get("dome") or g.get("indoor") or str(g.get("roof") or "").lower() in ("dome", "closed"))
+
+
+def _air_words(w: dict, *, where: bool = True) -> list:
+    """["38°F", "wind 14 mph from the NW"] from a forecast, each only when it is known."""
+    bits = []
+    if _f(w.get("temp_f")) is not None:
+        bits.append(f"{_num(w['temp_f'], 0)}°F")
+    if _f(w.get("wind_mph")) is not None:
+        bits.append(f"wind {_num(w['wind_mph'], 0)} mph"
+                    + (f" from the {w['wind_dir']}" if where and w.get("wind_dir") else ""))
+    return bits
+
+
 def sec_weather(c: Ctx) -> dict | None:
     g = c.g
     w = g.get("weather") or {}
     cond = g.get("conditions") or {}
     st = g.get("stadium") or {}
     lines = []
-    indoors = w.get("dome") or g.get("indoor") or str(g.get("roof") or "").lower() in ("dome", "closed")
+    indoors = _indoors(g)
     if indoors:
         lines.append(st.get("plays") or "Indoors — no weather")
     elif w.get("forecast"):
         # A forecast only: the build's placeholder (measured False) and
         # today's conditions are never the game's (engine/weather, #92).
-        bits = []
-        if _f(w.get("temp_f")) is not None:
-            bits.append(f"{_num(w['temp_f'], 0)}°F")
-        if _f(w.get("wind_mph")) is not None:
-            bits.append(f"wind {_num(w['wind_mph'], 0)} mph" + (f" from the {w['wind_dir']}" if w.get("wind_dir") else ""))
+        bits = _air_words(w)
         if _f(w.get("precip_chance")) is not None and w["precip_chance"] > 0:
             bits.append(f"{_pct(w['precip_chance'])} chance of rain")
         if w.get("snow"):
@@ -4441,6 +4454,51 @@ def _parlays_from_picks(c: Ctx, built: dict) -> None:
             pass
 
 
+#: A FOLDED SECTION'S ANSWER, SAID BESIDE ITS TITLE (20 November 2026; Ethan:
+#: "go through the game report page and make any additions ... anything that
+#: would help"). The report reads with our picks and the short version open
+#: and every other section folded to its title (js/report.js OPEN_SECTIONS):
+#: the titles are its contents. A title says what a section is about, not what
+#: it found, so "Who we think wins" kept its answer a tap away. Where a
+#: section's finding fits in a few words the title now carries it ("Who we
+#: think wins · Lions 60%", "The market · DET by 3 at home, total 52.5",
+#: "Injuries and availability · 2 listed, 1 out"), read off the section's own
+#: blocks: every league's report says them (`finish`), and a hint cannot
+#: disagree with the section under it. The page hides it once the fold is open.
+def section_hint(c: Ctx, s: dict) -> str:
+    key, blocks = s.get("key"), [b for b in s.get("blocks") or [] if isinstance(b, dict)]
+    if key == "verdict":
+        w = next((b for b in blocks if b.get("type") == "winner"), None)
+        # Rounded the page's way (Math.round), so the title and the bar under it say one number.
+        return f"{w.get('name') or w.get('team')} {int(100 * float(w.get('chance') or 0) + 0.5)}%" if w else ""
+    if key == "market":
+        return line_words(c)
+    if key == "rankings":
+        # The chart's own edges, counted a club: "GB 3 edges, DET 3".
+        won = [r.get("edge") for b in blocks if b.get("type") == "matchbars"
+               for sd in b.get("sides") or [] for r in sd.get("rows") or [] if r.get("edge")]
+        by = sorted(((won.count(t), t) for t in dict.fromkeys(won)), key=lambda x: -x[0])
+        return ", ".join(f"{t} {_plural(n, 'edge')}" if i == 0 else f"{t} {n}" for i, (n, t) in enumerate(by))
+    if key == "injuries":
+        listed = [cl for b in blocks for cl in b.get("claims") or [] if isinstance(cl, dict) and cl.get("kind") == "injury"]
+        out = sum(1 for cl in listed if cl.get("status") == "out")
+        if not listed:
+            return ""
+        return f"{out} out" if out == len(listed) else f"{len(listed)} listed" + (f", {out} out" if out else "")
+    if key == "parlays":
+        n = sum(len(b.get("items") or []) for b in blocks if b.get("type") == "parlays")
+        return _plural(n, "ticket") if n else ""
+    if key == "watch":
+        from .breakouts import CANDIDATES_HEAD, FADES_HEAD
+        said = {CANDIDATES_HEAD: "breakout", FADES_HEAD: "fade"}
+        return ", ".join(_plural(len(b.get("items") or []), said[h["text"]]) for h, b in zip(blocks, blocks[1:])
+                         if h.get("type") == "h" and h.get("text") in said and b.get("type") == "verdicts" and b.get("items"))
+    if key == "weather":
+        w = c.g.get("weather") or {}
+        return "Indoors" if _indoors(c.g) else ", ".join(_air_words(w, where=False)) if w.get("forecast") else ""
+    return ""
+
+
 def finish(c: Ctx, sections_fns, short_fn) -> dict:
     """The report: every section that has something to say, the short
     version written last from what they found and put first, what changed
@@ -4486,6 +4544,10 @@ def finish(c: Ctx, sections_fns, short_fn) -> dict:
         verdict = None
     sections = plain_all([x for x in (card, verdict, short, moved, latest) if x] + list(built.values()))
     words = _words(sections)
+    for sec in sections:
+        hint = section_hint(c, sec)
+        if hint:
+            sec["hint"] = hint
     color_names(c, sections)
     mark_statuses(sections)
     # EVERY BET THE REPORT SHOWS (engine/reportbets), matched to the board

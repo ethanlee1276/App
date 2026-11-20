@@ -407,7 +407,7 @@
     const cells = [
       ["Markets priced", String(analysed), "props and game bets the model gave a number to", ""],
       ["Recommended bets", String(recs.length), "cleared every approval gate", ""],
-      ["Avg edge", signed(avg), "model probability vs the de-vigged book price",
+      ["Avg edge", signed(avg), "our chance against the book’s fair price (its cut taken out)",
        avg >= 0 ? "good" : "brick"],
       ["Suggested exposure", `${stake.toFixed(2)}u`, "flat units, quarter-Kelly capped", ""],
     ];

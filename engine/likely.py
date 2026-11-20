@@ -2263,9 +2263,10 @@ def from_game_bet(row: dict, sport: str = "nfl",
         # model" (tests/test_game_claim.py, the MIN -220 card).
         own = prob_model if raw_claim is None else raw_claim
         rank_note = (
-            f"Ranked on the market’s number, {prob:.0%}: the book’s de-vigged "
-            f"price sorts {_LG.get(sport, sport.upper())} winners at {float(auc):.2f} measured, "
-            f"against {float(model_auc):.2f} for the model’s own. The model’s "
+            f"Ranked on the market’s number, {prob:.0%}: on the record the books’ "
+            f"fair price (their cut taken out) has sorted {_LG.get(sport, sport.upper())} "
+            f"winners better than the model’s own rating ({float(auc):.2f} against "
+            f"{float(model_auc):.2f}, where 0.50 is a coin flip). The model’s "
             f"own rating has this side at {own:.0%}.")
         if (raw_claim is not None and fair is not None
                 and abs(raw_claim - float(fair)) > MAX_CREDIBLE_EDGE):
