@@ -702,6 +702,65 @@ def hold_to_own_price(rows: list, sport: str, stats: dict | None = None) -> int:
     return moved
 
 
+def one_sided_price(r: dict, quotes: dict):
+    """True where books quote this pick's number and none of them quotes both
+    sides (an over-only market: the book's whole cut sits on the side we
+    take, and nobody can say how big it is); False where one does; None
+    where no quote at its number was kept, so there is nothing to tell."""
+    from .odds import pair_is_sane
+    from .sources.oddsapi import normalize_name
+    try:
+        line = round(float(r.get("line")), 1)
+    except (TypeError, ValueError):
+        return None
+    seen = None
+    for q in quotes.get((normalize_name(r.get("player") or ""), r.get("market")), ()):
+        try:
+            if round(float(q.get("line")), 1) != line:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if str(q.get("book") or "").lower() in ("", "proxy"):
+            continue
+        if pair_is_sane(q.get("over_odds"), q.get("under_odds")):
+            return False
+        seen = True
+    return seen
+
+
+def mark_one_sided(rows: list, result: dict, sport: str, stats: dict | None = None) -> int:
+    """A PRICE WITH ONE SIDE QUOTED IS NOT A SECOND OPINION (step ZY,
+    2026-11-20), on the leagues PRICE_CEILING holds. On the public receipts
+    the college props whose best price was DraftKings' — 136 of them, every
+    one an over — hit 54.4% where we said 64.3% and the price said 67.6%,
+    short in both halves of the season (57%, then 52%). The 119 of them at
+    -180 or steeper hit 53.8% where FanDuel's 220 at those prices hit 65.0%,
+    both having said 64.9%. The receipts do not keep whether a quote
+    had one side, so that those are the over-only ones is an inference; the
+    board now counts them (``one_sided``) and the next slates will say. The
+    rule stands on its own either way: the market check reads
+    such a price with an assumed cut taken off it (odds.ONE_SIDED_HOLD), a
+    guess, and agreeing with a guess can lift a pick to Strong. So a prop
+    whose number no book quotes both sides of is marked (``price_one_sided``)
+    and `build` lets its market check say nothing either way: the pick stays,
+    on our number, the matchup and the record. Returns how many were marked."""
+    if not price_ceiling_on(sport):
+        return 0
+    quotes = book_quotes(result, rows)
+    n = 0
+    for r in rows:
+        if lane_of(r) != "prop":
+            continue
+        if one_sided_price(r, quotes) is True:
+            r["price_one_sided"] = True
+            n += 1
+        else:
+            r.pop("price_one_sided", None)
+    if stats is not None:
+        stats["one_sided"] = n
+    return n
+
+
 def book_quotes(result: dict, rows=()) -> dict:
     """``{(player, market): [quote, ...]}`` — every book's number on each
     prop the build priced (`all_lines`, then the alternate ladder), off the
@@ -1201,6 +1260,7 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
     ceiling_stats: dict = {}
     try:
         hold_to_own_price([pool[k] for k in order], sport, stats=ceiling_stats)
+        mark_one_sided([pool[k] for k in order], result, sport, stats=ceiling_stats)
     except Exception as exc:                                 # noqa: BLE001
         ceiling_stats["error"] = f"{type(exc).__name__}: {exc}"
     rows, tiers, lanes, held = [], {t: 0 for t, _ in TIERS}, {}, []
@@ -1236,6 +1296,11 @@ def build(result: dict, record: dict | None = None, sport: str = "nfl",
         if r.get("ceiling_from") is not None and checks["market"] is True:
             checks["market"] = None
             notes["market"] += " — the number shown is the price's own, so this does not count as a second opinion"
+        # …NOR IS A PRICE WITH ONE SIDE QUOTED (`mark_one_sided`).
+        elif r.get("price_one_sided") and checks["market"] is True:
+            checks["market"] = None
+            notes["market"] += (" — but no book quotes both sides of this number, so the price carries the "
+                                "book's whole cut and does not count as a second opinion")
         checks["record"], notes["record"] = record_check(record, r.get("market"), _side(r), prob)
         why_held = held_reason(r, checks)
         if not why_held:

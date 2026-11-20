@@ -731,7 +731,8 @@ def _board_counts(path: str) -> dict:
     # Counts only; present only on a board that applies it.
     pc = (b.get("likely_board") or {}).get("price_ceiling")
     if isinstance(pc, dict):
-        out["price_ceiling"] = {k: int(pc.get(k) or 0) for k in ("rows", "priced", "above", "moved", "posted")}
+        out["price_ceiling"] = {k: int(pc.get(k) or 0)
+                                for k in ("rows", "priced", "above", "moved", "posted", "one_sided")}
         if pc.get("error"):
             out["price_ceiling"]["error"] = str(pc["error"]).split(":")[0]
         tiers = (b.get("likely_board") or {}).get("tiers")

@@ -166,6 +166,50 @@ def test_a_posted_pick_takes_the_ceiling_when_the_list_hands_its_number_back():
     assert abs(res["most_likely"][0]["model_prob"] - price) < 1e-9, "one bet, one chance: the list shows the board's"
 
 
+def _quoted(rows, quotes):
+    res = _result(rows)
+    res["recommendations"] = [{"player": "Jeremiah Smith", "market": "receptions", "all_lines": quotes}]
+    return res
+
+
+OVER_ONLY = [{"book": "draftkings", "line": 5.5, "over_odds": -220, "under_odds": 0}]
+BOTH = OVER_ONLY + [{"book": "fanduel", "line": 5.5, "over_odds": -215, "under_odds": 165}]
+
+
+def test_a_price_with_one_side_quoted_is_no_second_opinion():
+    # Step ZY: 136 college props whose best price was one book's heavy over hit 54.4%
+    # where the price said 67.6%. At or under its price (-220 needs 68.8%), within the
+    # market check's agreement — and no book quotes the under at 5.5.
+    row = lambda: _row(prob=0.66, odds=-220, book="DraftKings")  # noqa: E731
+    with _Env(QB_PRICE_CEILING=None, QB_CFB_TIGHT=None):
+        lone = LB.build(_quoted([row()], OVER_ONLY), sport="cfb", calibration={}, band_verdict=None)
+        both = LB.build(_quoted([row()], BOTH), sport="cfb", calibration={}, band_verdict=None)
+        bare = LB.build(_result([row()]), sport="cfb", calibration={}, band_verdict=None)
+        nba = LB.build(_quoted([row()], OVER_ONLY), sport="nba", calibration={}, band_verdict=None)
+    r = lone["rows"][0]
+    assert r["price_one_sided"] is True and r["checks"]["market"] is None, r["checks"]
+    assert "no book quotes both sides" in r["check_notes"]["market"], r["check_notes"]["market"]
+    assert r["model_prob"] == 0.66, "the pick stays, on our own number"
+    assert lone["price_ceiling"]["one_sided"] == 1
+    assert both["rows"][0]["checks"]["market"] is True and "price_one_sided" not in both["rows"][0], \
+        "one book quoting both sides at the number is a market"
+    assert both["price_ceiling"]["one_sided"] == 0
+    assert bare["rows"][0]["checks"]["market"] is True, "no quote kept at the number: nothing to tell, as before"
+    assert nba["rows"][0]["checks"]["market"] is True and "price_one_sided" not in nba["rows"][0], \
+        "only the leagues the price ceiling holds"
+
+
+def test_one_sided_reads_the_picks_own_number():
+    q = LB.book_quotes(_quoted([], OVER_ONLY + [{"book": "fanduel", "line": 6.5, "over_odds": -110,
+                                                 "under_odds": -110}]))
+    assert LB.one_sided_price(_row(), q) is True, "the two-sided quote is at another number"
+    assert LB.one_sided_price(dict(_row(), line=6.5), q) is False
+    assert LB.one_sided_price(dict(_row(), line=7.5), q) is None
+    assert LB.one_sided_price(dict(_row(), line=None), q) is None
+    proxy = LB.book_quotes(_quoted([], [{"book": "proxy", "line": 5.5, "over_odds": -110, "under_odds": -110}]))
+    assert LB.one_sided_price(_row(), proxy) is None, "the proxy is no book"
+
+
 if __name__ == "__main__":
     import traceback
     fails = 0

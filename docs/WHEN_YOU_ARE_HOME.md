@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZY. A college price with one side quoted is not a second opinion** (step 813; 20 November). Nothing to run. The
+same record showed a second leak ZX does not reach, in picks at or under their price. The college props whose best
+price was DraftKings' (136, every one an over) hit 54.4% where we said 64.3% and the price said 67.6%, short in both
+halves of the season (57%, then 52%). The 119 of them at -180 or steeper hit 53.8%; FanDuel's 220 at those prices
+hit 65.0%, and we had said 64.9% of both. A book that quotes only the over keeps its whole cut on that side, and the
+board's market check was reading such a price with an assumed cut taken off, then counting it as the market agreeing
+with us. Now a college prop whose number no book quotes both sides of gets no credit from the market check (its card
+says "no book quotes both sides of this number"); it stays on the board on our own number, the matchup and the
+record. One thing I could not measure: the public file does not keep whether a quote had one side, so that
+DraftKings' picks are the over-only ones is my inference from their all being overs. The heartbeat's college
+`price_ceiling` now counts them (`one_sided`), so Saturday's board will say; if it reads 0 the rule is touching
+nothing and I will look again at those picks on the box's own journal. It goes off with ZX's switch.
+
 **ZX. A college football prop is never shown above its own price** (step 812; 20 November). Nothing to run. You
 asked for the NFL's pick work on every other league, college football and the NBA first. I measured before changing
 anything, on the site's own public file of every graded pick (57,100 rows). The NBA's and hockey's boards hit at or
