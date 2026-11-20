@@ -103,8 +103,9 @@ def _rep(by_market):
 
 
 def test_one_kind_is_not_a_split():
-    names = [_const(REC, n) for n in ("REC_RP_KINDS", "RP_SCORER_MARKETS", "RP_GAME_MARKETS")] + [
-        _fn(REC, n) for n in ("rpKindOf", "rpKindWord", "rpKinds", "rpPickWords", "rpPicksHTML")]
+    names = [_const(REC, n) for n in ("REC_RP_KINDS", "RP_SCORER_MARKETS", "RP_GAME_MARKETS", "RP_SOURCES",
+                                      "RP_SOURCE_BEFORE")] + [
+        _fn(REC, n) for n in ("rpKindOf", "rpKindWord", "rpKinds", "rpSourcesHTML", "rpPickWords", "rpPicksHTML")]
     recent = [{"sport": "nba", "date": "2026-11-16", "player": "Zach Edey", "side": "OVER", "line": 6.5,
                "market": "reb", "odds": -150, "status": "won"}]
     one = _rep({"reb": {"w": 40, "l": 20, "net_u": 0.2}, "ast": {"w": 29, "l": 12, "net_u": 0.14}})

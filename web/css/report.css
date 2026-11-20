@@ -179,6 +179,22 @@
 /* Bet the whole ticket (js/report.js parlayBet): the Bet it button at the head's end. */
 .gr-parlay-head .gr-betit { flex: none; margin-left: auto; align-self: center; }
 .gr-parlay-price { margin: 4px 0 6px; font-size: .86em; color: var(--text-mute); }
+/* The ticket's chance, drawn (js/report.js odds): the number, a bar filled to it, toned by how likely. */
+.gr-parlay-odds { --tone: var(--good); display: flex; align-items: center; gap: 8px; margin: 6px 0 2px;
+  font-size: .86em; color: var(--text-mute); }
+.gr-parlay-odds.mid { --tone: var(--gold); }
+.gr-parlay-odds.lo { --tone: var(--warn); }
+.gr-parlay-odds b { font-size: 1.5em; line-height: 1; color: var(--tone); font-variant-numeric: tabular-nums; }
+.gr-parlay-meter { flex: 1 1 60px; max-width: 220px; height: 6px; border-radius: 999px; overflow: hidden;
+  background: color-mix(in oklab, var(--text) 10%, transparent); }
+.gr-parlay-meter i { display: block; height: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--tone) 55%, transparent), var(--tone)); }
+/* A leg's face stays beside its name: the two wrap as one, the price and our chance after them. */
+.gr-parlay-who { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+.gr-parlay-who b { min-width: 0; align-self: baseline; }      /* the list's number sits on the name's first line */
+.gr-parlay-face { flex: none; display: inline-flex; }
+/* A ticket's backups and caveats are its small print, not the report's prose (.gr-list is the report's size). */
+.gr-parlay .gr-list { margin: 2px 0 0; gap: 4px; font-size: .88em; }
 .gr-parlay-legs { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
 .gr-parlay-legs > li { cursor: pointer; }
 .gr-parlay-pick { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }

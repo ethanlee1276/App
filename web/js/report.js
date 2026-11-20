@@ -520,13 +520,31 @@
        script the ticket needs, its backups and caveats. */
     if (b.type === "parlays") {
       const items = (xs) => (xs || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+      /* THE TICKET'S CHANCE, DRAWN (19 November 2026; Ethan: "make sure it looks the best it can and we are
+         using the best graphics"). The price line opened with the number in a row of small grey words
+         ("49% by our numbers · fair +104 · take it at +114 or better"): the one figure a reader weighs a
+         ticket by read like a footnote. The number now stands large beside a bar filled to it, toned by
+         how likely the ticket is (40% and up, 25% and up, a long shot), and the rest of the line follows.
+         The number is the line's own (the build's rounding), so the two cannot disagree. */
+      const odds = (t) => {
+        const line = String(t.price_line || "");
+        const m = /^(\d{1,3})% by our numbers\s*/.exec(line);
+        if (!m) return line ? `<p class="gr-parlay-price">${escapeHtml(line)}</p>` : "";
+        const pct = Math.min(100, Number(m[1])), rest = line.slice(m[0].length).replace(/^·\s*/, "");
+        return `<div class="gr-parlay-odds ${pct >= 40 ? "hi" : pct >= 25 ? "mid" : "lo"}"><b>${pct}%</b>
+          <span class="gr-parlay-meter" aria-hidden="true"><i style="width:${pct}%"></i></span><span>by our numbers</span></div>
+          ${rest ? `<p class="gr-parlay-price">${escapeHtml(rest)}</p>` : ""}`;
+      };
+      // Each leg wears its player's face (the club's helmet where the board has none), as the picks above do.
+      const face = (l) => (l.player && typeof playerAvatar === "function"
+        ? `<span class="gr-parlay-face">${playerAvatar(l.player, l.team, { size: 24, headshot: l.headshot })}</span>` : "");
       return `<div class="gr-parlays">${(b.items || []).map((t) => `<div class="gr-parlay">
         <div class="gr-parlay-head"><b>${escapeHtml(t.title || "")}</b>${ticketTag(t.legs)}${(t.bet_legs || []).length && !CLOSED
           ? parlayBet(t.bet_legs, `${t.title || "Parlay"} · ${(t.legs || []).map((l) => l.pick).filter(Boolean).join(" + ")}`) : ""}</div>
-        ${t.price_line ? `<p class="gr-parlay-price">${escapeHtml(t.price_line)}</p>` : ""}
+        ${odds(t)}
         <ol class="gr-parlay-legs">${(t.legs || []).map((l) => `<li${l.player
           ? ` data-open="player:${escapeAttr(slugify(l.player))}"` : ""}>
-          <span class="gr-parlay-pick"><b>${named(l.pick || "", b.names)}</b>${l.price
+          <span class="gr-parlay-pick"><span class="gr-parlay-who">${face(l)}<b>${named(l.pick || "", b.names)}</b></span>${l.price
             ? ` <span class="gr-parlay-px">${escapeHtml(l.price)}</span>` : ""}${l.chance
             ? ` <span class="gr-parlay-p">${Math.round(Number(l.chance) * 100)}%</span>` : ""}${l.research != null
             ? ` <span class="gr-parlay-r" title="Our research score: the team’s expected points, the defense faced, the usage and red-zone work, the matchup read and the game script">research score ${escapeHtml(String(l.research))} of ${escapeHtml(String(l.research_of || 13))}</span>` : ""}${
@@ -895,7 +913,7 @@
       : `Below our touchdown rule (40% a scorer): ${low.map((l) => `${l.player} ${pct(l.p)}`).join(", ")}` };
     return {
       title, price_line: price, script, links: t.links || [], caveats: t.caveats || [], ...rule,
-      legs: (t.legs || []).map((l) => ({ pick: pickWords(l), player: l.player,
+      legs: (t.legs || []).map((l) => ({ pick: pickWords(l), player: l.player, team: l.team, headshot: l.headshot,
         price: [oddsWords(l.odds), l.book || ""].filter(Boolean).join(" "), chance: l.p, why: l.why || [],
         research: l.research, research_of: l.research_of, bet: l })),
       backups: (t.backups || []).map((b) => `If ${b.for} is out or that number moves: ${pickWords(b.leg || {})} (${

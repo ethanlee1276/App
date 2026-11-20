@@ -77,6 +77,48 @@ def _node(body):
     return json.loads(out.stdout)
 
 
+def test_the_tickets_chance_is_drawn_and_each_leg_wears_its_face():
+    """The graphics pass (2026-11-19; Ethan: "make sure it looks the best it can and we are using the best
+    graphics"): a ticket's chance stands large beside a bar filled to it, toned by how likely, and is not
+    said again in the line under it; each leg wears its player's face, kept beside its name; and the
+    engine's card carries the face the board has (`enrich`)."""
+    node = shutil.which("node") or "/opt/node22/bin/node"
+    leg = lambda who, face="": {"player": who, "team": "NYG", "market": "receptions", "side": "over", "line": 3.5,  # noqa: E731
+                                "odds": -200, "book": "DraftKings", "p": 0.7, **({"headshot": face} if face else {})}
+    tick = lambda joint: {"legs": [leg("A One", "https://x/a.png"), leg("B Two"), leg("C Three")], "joint": joint,  # noqa: E731
+                          "independent": joint, "fair_words": "+191", "take_words": "+206"}
+    g = {"away": "WAS", "home": "NYG", "threes": [tick(0.34), tick(0.49), tick(0.2)], "scorers": []}
+    js = ("const vm = require('vm'); const fs = require('fs');"
+          "const esc = (s) => String(s == null ? '' : s).replace(/[&<>\"']/g, (c) => '&#' + c.charCodeAt(0) + ';');"
+          "const ctx = { window: {}, escapeHtml: esc, escapeAttr: esc, slugify: (s) => s, teamName: (t) => t,"
+          " playerAvatar: (n, t, o) => `[face ${n} ${t} ${o.size} ${o.headshot || 'none'}]` }; vm.createContext(ctx);"
+          f"vm.runInContext(fs.readFileSync({json.dumps(str(ROOT / 'web' / 'js' / 'report.js'))}, 'utf8'), ctx);"
+          f"process.stdout.write(ctx.window.QBReport.gameTickets({json.dumps(g)}, 'nfl'));")
+    out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr[-1500:]
+    html = " ".join(out.stdout.split())
+    cards = html.split('<div class="gr-parlay">')[1:]
+    assert len(cards) == 3, len(cards)
+    for card, (tone, pct) in zip(cards, (("mid", 34), ("hi", 49), ("lo", 20))):
+        assert f'<div class="gr-parlay-odds {tone}"><b>{pct}%</b>' in card, card[:300]
+        assert f'<i style="width:{pct}%"></i></span><span>by our numbers</span>' in card
+        assert card.count("by our numbers") == 1, "the number is drawn, not said again under itself"
+        assert '<p class="gr-parlay-price">fair +191 · take it at +206 or better</p>' in card, card[:500]
+    assert ('<span class="gr-parlay-who"><span class="gr-parlay-face">[face A One NYG 24 https://x/a.png]</span><b>'
+            in cards[0]), cards[0][:700]
+    assert "[face B Two NYG 24 none]" in cards[0], "the club's own mark where the board has no face"
+    # The engine's card: a leg carries the face its board row has, and its price line opens with the number.
+    b_leg = dict(leg("A One"), headshot="https://x/a.png")
+    card = GP.card(dict(_ticket([]), legs=[b_leg, leg("B Two"), leg("C Three")]), 1, "three", "nfl")
+    assert card["legs"][0]["headshot"] == "https://x/a.png" and "headshot" not in card["legs"][1]
+    assert card["price_line"].startswith("34% by our numbers · fair ") and "headshot" in GP.LEG_KEYS
+    css = (ROOT / "web" / "css" / "report.css").read_text(encoding="utf-8")
+    for rule in (".gr-parlay-odds.mid { --tone: var(--gold); }", ".gr-parlay-odds.lo { --tone: var(--warn); }",
+                 ".gr-parlay .gr-list { margin: 2px 0 0; gap: 4px; font-size: .88em; }",
+                 ".gr-parlay-who { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }"):
+        assert rule in css, rule
+
+
 def test_the_card_names_each_replacement_once():
     sep = " is out or that number moves: "
     spare, other = "D Spare over 3.5 receptions (-200, 67%)", "E Other over 40.5 receiving yards (-150, 61%)"

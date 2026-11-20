@@ -301,8 +301,11 @@ def test_the_page_lays_each_game_out_with_its_picks_then_its_tickets():
     assert '<details class="rpk-game" id="rpk-IND-BOS" open>' in bos and "<b>Pacers at Celtics</b>" in bos
     assert "Tonight 7:30 PM · 4 picks · 2 parlays · 1 scorer pair" in bos
     assert 'data-gid="2026-11-16_IND@BOS">Open the report</button>' in bos, "the game opens with its report"
-    assert '<row  data-open="likely:Jaylen Brown">Jaylen Brown|Our picks · Matchup read</row>' in bos
+    # A pick's line says where else the report makes its case: the card's own pick says nothing ("Our
+    # picks" was on every row), a card pick a read also backs says so, a read's own pick names itself.
+    assert '<row  data-open="likely:Jaylen Brown">Jaylen Brown|Also a matchup read</row>' in bos
     assert "Pascal Siakam|Breakout candidate</row>" in bos and "|Fade</row>" in bos
+    assert "|Our picks" not in bos and "BOS ML|</row>" in bos, bos
     assert bos.index(">Picks</h4>") < bos.index(">Parlays and pairs</h4>") < bos.index('data-rpk-tix="IND@BOS"')
     assert '<div class="rpk-tix" data-rpk-tix="IND@BOS"></div>' in bos, "its tickets, filled by the report's own renderer"
     assert "Final: Knicks 100, 76ers 108 · 2 picks · 2 parlays" in phi and ' open>' not in phi

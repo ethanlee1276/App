@@ -74,14 +74,14 @@ def test_a_mapped_row_and_an_unmapped_row_both_say_when():
 
 
 # --- the page --------------------------------------------------------------------
-def _node(js):
+def _node(js, tz="America/New_York"):
     node = shutil.which("node")
     if not node:
         return None
     src = "\n".join(_fn(n) for n in ("escapeHtml", "tzOpts", "tzTime", "placedStamp",
                                      "formatGameDate", "formatKickoff", "whenLabel", "ridingWhen"))
     prog = f"""
-      const settings = () => ({{ tz: "America/New_York" }});
+      const settings = () => ({{ tz: {json.dumps(tz)} }});
       {src}
       console.log(JSON.stringify((() => {{ {js} }})()));
     """
@@ -112,6 +112,24 @@ def test_the_stamp_is_utc_read_in_the_chosen_zone_weekday_included():
     # Chicago, the system zone here: the weekday has to follow the clock.
     assert got["midnight"] == "Fri 12:30 AM", got
     assert got["empty"] == "" and got["none"] == "" and got["junk"] == ""
+
+
+def test_a_tip_off_is_said_whole_in_the_readers_zone_day_and_clock_together():
+    """A game's instant (an ISO kickoff) is its day and its clock in the one zone the reader chose: the
+    slate's own date stood beside the reader's clock, so 8 PM Eastern read "Thu, Nov 19 · 1:00 AM" in
+    London. A bare "HH:MM" (football) is an Eastern clock reading: the slate's date and "ET"."""
+    got = _node("""
+      const tip = "2026-11-20T01:00:00Z";                       // 8 PM Thursday in New York
+      const east = whenLabel("2026-11-19", tip);
+      return { east, football: whenLabel("2026-11-22", "13:00"), dateOnly: whenLabel("2026-11-22", ""),
+               junk: whenLabel("2026-11-19", "Tnot-a-time") };""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["east"] == "Thu, Nov 19 · 8:00 PM", got
+    assert got["football"] == "Sun, Nov 22 · 1:00 PM ET" and got["dateOnly"] == "Sun, Nov 22", got
+    assert got["junk"].startswith("Thu, Nov 19"), "an unreadable instant keeps the slate's date"
+    london = _node("""return whenLabel("2026-11-19", "2026-11-20T01:00:00Z");""", tz="Europe/London")
+    assert london == "Fri, Nov 20 · 1:00 AM", london
 
 
 def test_the_row_reads_placed_and_game_and_prefers_the_games_own_date():

@@ -794,6 +794,10 @@ def enrich(legs: list[dict], board: dict) -> list[dict]:
         st = (row or {}).get("injury_status") or (read or {}).get("own_status") or ""
         if st:
             leg["injury_status"] = str(st).upper()
+        # The player's face, where the board has one: a ticket's card draws it beside the leg (js/report.js).
+        face = (row or {}).get("headshot") or (read or {}).get("headshot") or ""
+        if face:
+            leg["headshot"] = str(face)
     return legs
 
 
@@ -1087,7 +1091,7 @@ def _leg_id(l: dict) -> tuple:
 #: scorer's research (`research`).
 LEG_KEYS = ("player", "team", "opponent", "home", "away", "position", "market", "market_label", "side",
             "line", "odds", "book", "p", "why", "injury_status", "game_date", "research", "research_of",
-            "research_points",
+            "research_points", "headshot",
             # Where the leg came from (SOURCE_RANK) and the book's chance for it:
             # the journal keeps both (parlayledger.log_game_parlays) so the
             # record can say which source's legs hit what they said.
@@ -1455,6 +1459,7 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
              **({"bet": bet_of(l)} if bet_of(l) else {}),
              "price": " ".join(x for x in (_odds_words(l.get("odds")), l.get("book") or "") if x),
              "chance": round(float(l.get("p") or 0), 4), "why": list(l.get("why") or []),
+             **({"headshot": l["headshot"]} if l.get("headshot") else {}),
              # A scorer's research case, out of RESEARCH_MAX (`research_scorers`).
              **({"research": int(l["research"]), "research_of": int(l.get("research_of") or RESEARCH_MAX)}
                 if l.get("research") is not None else {})}

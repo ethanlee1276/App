@@ -157,6 +157,9 @@ def test_the_page_draws_it_above_today_s_picks():
     old = _draw(dict(SLATE, date="2026-11-22"), "nfl")
     assert '<h4 class="rpk-slate-h">Sunday, Nov 22<span>12 games</span></h4>' in old, old
     assert "Touchdown pairs <b>1 of 4</b>" in old
+    # Games that finished this evening are today's so far, by the reader's own calendar.
+    tonight = _draw(dict(SLATE, date="2026-11-27", games=3), "nba")
+    assert '<h4 class="rpk-slate-h">Today so far<span>3 games</span></h4>' in tonight, tonight
     # Nothing finished, nothing drawn.
     assert _draw(None, "nba") == "" and _draw({"date": "2026-11-26", "games": 0}, "nba") == ""
     # The slot sits above today's picks, is filled from the record the facts tab reads, and has its styles.

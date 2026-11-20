@@ -18,6 +18,16 @@
 
 // Where the report shows a pick (engine/reportbets.SOURCE_WORDS).
 const RP_SOURCE = { card: "Our picks", read: "Matchup read", breakout: "Breakout candidate", fade: "Fade" };
+/* A pick's line under its name says where else the report makes its case. Every row under "Picks" said "Our
+   picks", four times a game (19 November 2026): the card's own pick is the plain case and says nothing; a
+   matchup read's, a breakout candidate's or a fade's pick names itself, and a card pick a read also backs
+   says so ("Also a matchup read"), which is the one worth knowing. */
+function rpSourceNote(r) {
+  const got = (r && r.sources) || [];
+  const other = got.filter((s) => s !== "card").map((s) => RP_SOURCE[s] || s);
+  if (!other.length) return "";
+  return got.includes("card") ? `Also a ${other.join(" and a ").toLowerCase()}` : other.join(" · ");
+}
 
 //: The board's game for a report's "AWAY@HOME".
 function rpGame(d, key) {
@@ -88,8 +98,7 @@ function rpGameHTML(d, key, bets, tix, open) {
                   tix && rpParlays(tix) ? plural(rpParlays(tix), "parlay") : "",
                   tix && (tix.scorers || []).length ? plural(tix.scorers.length, `${pair} pair`) : ""].filter(Boolean);
   const tally = fin ? rpTallyWords(rpTally(g, bets, tix)) : "";
-  const rows = bets.map((r) => deckPickRow(r, { door: likelyOpen(r),
-    note: (r.sources || []).map((s) => RP_SOURCE[s] || s).join(" · ") })).join("");
+  const rows = bets.map((r) => deckPickRow(r, { door: likelyOpen(r), note: rpSourceNote(r) })).join("");
   return `<details class="rpk-game" id="rpk-${escapeAttr(away)}-${escapeAttr(home)}"${open ? " open" : ""}>
     <summary class="rpk-head">
       <span class="rpk-title"><b>${escapeHtml(teamName(away))} at ${escapeHtml(teamName(home))}</b>${
@@ -335,9 +344,13 @@ function rpSlateSeen(sport, ls) {
 }
 function rpSlateHTML(ls, sport) {
   if (!ls || !ls.games) return "";
-  const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-  const when = typeof recapDayLabel === "function" ? recapDayLabel(ls.date, y) : "Last slate";
-  const day = when === "Last night" ? when : `${when}, ${formatGameDate(ls.date).replace(/^\w+, /, "")}`;
+  // The slate's day against the reader's own calendar: games that finished this evening are today's so far,
+  // yesterday's are last night's, and an older slate is said by its day ("Sunday, Nov 22").
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const now = new Date(Date.now());
+  const y = iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+  const when = ls.date === iso(now) ? "Today so far" : typeof recapDayLabel === "function" ? recapDayLabel(ls.date, y) : "Last slate";
+  const day = /^(Today so far|Last night|Last slate)$/.test(when) ? when : `${when}, ${formatGameDate(ls.date).replace(/^\w+, /, "")}`;
   const pairs = ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
   return `<section class="rpk-slate" aria-label="How the last slate’s reports did">
     <h4 class="rpk-slate-h">${escapeHtml(day)}<span>${escapeHtml(plural(ls.games, "game"))}</span></h4>
@@ -348,9 +361,12 @@ function rpSlateHTML(ls, sport) {
 async function rpSlateFill(host, sport) {
   const slot = host.querySelector("[data-rpk-slate]");
   if (!slot) return;
+  // Drawn again only when the line changed (the kept one, then the record's), and its door bound with it.
+  let drawn = null;
   const draw = (ls) => {
     const html = rpSlateHTML(ls, sport);
-    if (slot.dataset.drawn !== html) { slot.innerHTML = html; slot.dataset.drawn = html; }
+    if (html === drawn) return;
+    slot.innerHTML = drawn = html;
     const go = slot.querySelector("[data-rpk-slate-go]");
     if (go) go.addEventListener("click", () => {
       const tab = host.querySelector('.subnav-btn[data-subtab="facts"]');

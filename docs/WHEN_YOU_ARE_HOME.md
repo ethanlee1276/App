@@ -9338,6 +9338,22 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZH. A parlay card you can read at a glance** (step 796; 19 November). Nothing to run. The graphics pass, started
+where you look most. A ticket's chance was the first words of a row of small grey type ("49% by our numbers · fair
++104 · take it at +114 or better"); it now stands large beside a bar filled to it, green at 40% and up, gold from
+25%, amber for a long shot, with the rest of the line under it. Each leg wears its player's face (the club's helmet
+where the board has none), which stays beside the name when a long pick wraps, and a ticket's backups and caveats
+are set as the small print they are: they were the largest type on the card. The same card draws on the game report
+and on Report Picks. On Report Picks every pick said "Our picks" under its name, four times a game; the card's own
+pick now says nothing, a matchup read's, a breakout candidate's or a fade's names itself, and a card pick a read
+also backs says "Also a matchup read". The last-slate card reads the slate's day against your own calendar ("Today
+so far" for games that ended this evening, "Last night", then the day). And one clock fix for readers outside the
+East: a tip-off or first pitch is said whole in your zone, its day with its clock; it read "Thu, Nov 19 · 1:00 AM"
+in London for a game at 8 PM Eastern. Football's kickoffs stay Eastern with "ET" on them, because the feed gives a
+clock reading and no instant (your open question on that still stands). Checked by
+tests/test_a_parlay_card_says_each_thing_once.py, tests/test_report_bets_have_their_own_book_and_page.py,
+tests/test_the_last_slate_s_reports_are_summed_at_a_glance.py and tests/test_riding_stamps.py.
+
 **ZG. The record says how each kind of report pick has done** (step 795; 19 November). Nothing to run. The first
 night's count of what became of each report pick as a parlay leg (step ZD) read, for the NFL's games still to play:
 39 picks, 18 of them legs a ticket can take, 8 a matchup read's own pick no ticket could take, 9 a row the board

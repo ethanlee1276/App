@@ -1999,6 +1999,16 @@ function formatKickoff(kick) {
   return kick;
 }
 function whenLabel(dateStr, kick) {
+  // AN INSTANT IS SAID WHOLE IN THE READER'S ZONE (2026-11-19): its day with its clock. The slate's own
+  // date (the game's day in the East) stood beside the reader's clock, so tip-off at 8 PM Eastern read
+  // "Thu, Nov 19 · 1:00 AM" in London, a day and a clock that never met. A bare "HH:MM" kickoff (football)
+  // is an Eastern clock reading and keeps the slate's date and its "ET".
+  const t = kick && String(kick).includes("T") ? Date.parse(kick) : NaN;
+  if (Number.isFinite(t)) {
+    const opts = tzOpts({ weekday: "short", month: "short", day: "numeric" }), fk = JSON.stringify(opts);
+    if (!whenLabel._fmt || whenLabel._fmt[0] !== fk) whenLabel._fmt = [fk, new Intl.DateTimeFormat(undefined, opts)];
+    return `${whenLabel._fmt[1].format(new Date(t))} · ${tzTime(t)}`;
+  }
   return [formatGameDate(dateStr), formatKickoff(kick)].filter(Boolean).join(" · ");
 }
 function whenChip(dateStr, kick) {
