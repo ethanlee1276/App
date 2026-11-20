@@ -9338,6 +9338,14 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZO. The pick count says which picks are waiting on their game's props** (step 803; 20 November). Nothing to run.
+After ZL went live, the NFL board rebuilt and still said 19 of its 47 report picks had "no real book", this time
+correctly: no list held them at a real price. Some of those are simply Monday night's game, whose props aren't
+bought yet, and that says nothing about the picks. So a pick in a game with fewer than 10 priced props (the same
+rule the builder already uses to decide a game's props are bought) now counts as "props not bought", and only the
+rest stay "no real book". Those remaining ones are a player and market no book prices, and that's what's worth
+chasing next. Counts only, like the rest of the heartbeat.
+
 **ZN. Three small fixes found while building ZM** (step 802; 20 November). Nothing to run. (1) On a live game's
 page, the ⋯ menu (Hide the score, the TV delay) could snap shut by itself if the live update redrew the page right
 as you tapped it. The test suite caught it on a busy machine. The page now keeps whatever is open before it redraws.
