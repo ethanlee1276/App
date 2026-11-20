@@ -268,6 +268,20 @@ def test_end_to_end_a_reports_parlays_are_its_own_picks():
     assert keys.index("parlays") > keys.index("card")
 
 
+def test_a_game_s_label_on_a_pick_is_not_the_game_bet_flag():
+    """A report's item flags a game bet ``game: True``; a row lifted onto the board carries its game's label
+    under the same key ("WAS@NYG", reportbets.attach). Read as the flag, a label dropped every pick of the
+    report, and each ticket named all three of its legs as no pick of the report's (seen in a preview render,
+    19 November: the live path passes rows before the label is added)."""
+    assert GP._player_pick({"player": "A", "market": "receptions", "game": "WAS@NYG"})
+    assert GP._player_pick({"player": "A", "market": "receptions"})
+    assert not GP._player_pick({"player": "NYG", "market": "moneyline", "game": True})
+    assert not GP._player_pick({"player": "NYG", "market": "spread", "kind": "game"})
+    assert not GP._player_pick({"player": "A"}) and not GP._player_pick(None)
+    src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
+    assert src.count("for b in picks or [] if _player_pick(b)}") == 2, "the rebuild and the census read one rule"
+
+
 if __name__ == "__main__":
     fails = 0
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

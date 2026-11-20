@@ -676,19 +676,43 @@ function pageClubOn(key) {
   _pageClub = key;
   applyTeamColors();
 }
+/* A GAME'S PAGE WEARS ITS TWO CLUBS (GAMEWASH1, 2026-11-19; Ethan: "go through the visuals of the site and
+   continue on the color work"). A live game's page sits on its two clubs' colours, a team's page and a
+   player's on their club's; the page a game has before it starts and after it ends sat on the site's gold.
+   It names both clubs ("sport:AWAY+sport:HOME", detail.js renderGamePage) and the screen wears the away
+   club's colour from the left and the home club's from the right, the same picture the whole-site wash
+   paints (styles.css html.team-wash). Each club by its real colours (clubWash); where the two firsts read as
+   one colour the away side wears its second, as the live page chooses (detail.js gpWashColours); a club
+   with no colours on file leaves the screen to the other, and a fight card (no clubs) to the site. */
+function pairWash(key) {
+  const of = (k) => {
+    const [sp, ab] = String(k || "").split(":");
+    const t = ab ? (teamsForSport(sp) || {})[ab] : null;
+    return t && t.primary ? clubWash(t) : null;
+  };
+  const [a, h] = String(key || "").split("+").map(of);
+  const home = h || a, away = a || h;
+  if (!home) return null;
+  const apart = (x, y) => { const p = okLab(x), q = okLab(y); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) >= TW_APART; };
+  const i = Math.max(0, away.deep.findIndex((c) => apart(c, home.deep[0])));
+  return { deep: [away.deep[i], home.deep[0]], paper: [away.paper[i], home.paper[0]] };
+}
 function applyTeamColors() {
   const root = document.documentElement, s = settings();
   const mode = s.teamColors === "on" || s.teamColors === "site" ? s.teamColors : "off";
-  const mine = _pageClub || (mode === "off" ? "" : teamColorsWho(s));
+  // A game's two clubs are the page's wash; the bar's tint stays yours (or the site's).
+  const pair = _pageClub.includes("+");
+  const mine = (!pair && _pageClub) || (mode === "off" ? "" : teamColorsWho(s));
   const [sport, abbr] = String(mine || "").split(":");
   const listed = abbr ? (teamsForSport(sport) || {})[abbr] : null;
   // College's team list comes with its board: until it lands, the colours last seen.
   const t = listed || (mode === "site" && !_pageClub && abbr ? twSwatch(mine) : null);
   if (listed && mode === "site" && !_pageClub) twSwatch(mine, listed);
   // The page's own club by its real colours (clubWash: a kit's white or silver trim steps aside).
-  const wash = !(t && t.primary) ? null : _pageClub ? clubWash(t) : mode === "site" ? twWash(t) : null;
+  const both = pair ? pairWash(_pageClub) : null;
+  const wash = both || (!(t && t.primary) ? null : _pageClub && !pair ? clubWash(t) : mode === "site" ? twWash(t) : null);
   root.classList.toggle("team-wash", !!wash);
-  root.classList.toggle("club-page", !!(wash && _pageClub));
+  root.classList.toggle("club-page", !!(both || (wash && _pageClub && !pair)));
   root.classList.toggle("team-tint", !!(t && t.primary));
   if (t && t.primary) {
     root.style.setProperty("--team-1", t.primary);
@@ -3881,6 +3905,33 @@ function potdLiveStrip(row) {
     <a class="potd-live-door" href="#live">Live tab →</a></div>`;
 }
 
+/* The day's Top Pick from another league, in words (escaped): a moneyline by its club, a side or a total by
+   its own label and then its market ("MEM -6.5 Spread"), a prop by the player, the side, the line and the
+   market. Spelled from a game bet's parts it read "MEM -6.5 -6.5 -6.5 Spread": its label, its side and its
+   line are the one number (19 November 2026, the NFL home page). */
+function topPickWords(pick) {
+  if (pick.market === "moneyline") return escapeHtml(`${teamName(pick.player || pick.team)} Moneyline`);
+  if (pick.kind === "game" && pick.pick_label) {
+    const said = String(pick.pick_label).toLowerCase().includes(String(pick.market_label || "").toLowerCase());
+    return [pick.pick_label, said ? "" : pick.market_label].filter(Boolean).map(escapeHtml).join(" ");
+  }
+  return [pick.player, String(pick.side || "").toUpperCase(), pick.line != null ? pick.line : "",
+          pick.market_label || pick.market].filter((x) => x !== "" && x != null).map(escapeHtml).join(" ");
+}
+
+/* THE CARRIED NOTE IN THE READER'S CLOCK AND PLAIN WORDS (2026-11-19). The build's own sentence
+   (engine/potd.carry) reads "decided 22:56 UTC, when 121 of the slate had not started — since then the day
+   has moved on and this is still the best read we have": a UTC clock on a site whose every other clock is the
+   reader's, and "121 of the slate" for 121 bets. The card carries the instant and the count, so the page
+   says them itself; a card with no instant keeps the build's sentence. */
+function potdCarriedWords(got) {
+  if (!got || !got.carried) return "";
+  const at = Date.parse(got.decided_at || "");
+  if (!Number.isFinite(at)) return String(got.carried);
+  const n = Number(got.open_candidates);
+  return `Decided at ${tzTime(at)}${n > 0 ? `, with ${plural(n, "bet")} on the board still to start` : ""}. It stands for the day.`;
+}
+
 function potdCallStrip(payload) {
   const v = (payload || {}).verdict;
   if (!v || typeof v !== "object" || !v.call) return "";
@@ -4113,7 +4164,7 @@ async function renderPickOfTheDay() {
     // very sentence the strip already prints beside NO BET, and the card
     // read "No pick today: …" two lines apart. Said once, in the strip.
     const stripWhy = String(((got.verdict || {}).why) || "").trim();
-    const noteRaw = String(got.carried || got.relocked || got.note || "No pick today.").trim();
+    const noteRaw = String(potdCarriedWords(got) || got.relocked || got.note || "No pick today.").trim();
     const why = below
       ? `We do not put the day’s name on a bet we would not place. The board below is everything the ${escapeHtml(league)} slate priced today.`
       : (stripWhy && noteRaw.replace(/\.$/, "") === stripWhy.replace(/\.$/, "") ? "" : escapeHtml(noteRaw));
@@ -4210,7 +4261,7 @@ async function renderPickOfTheDay() {
   // side, a total or a pick with no photo keeps the art alone. Last in the
   // card: styles.css places it (top right, or beside the heading on a phone).
   const tile = isTeam || !pick.headshot ? "" : playerTileHTML(pick, 140);
-  const carriedNote = got.carried ? escapeHtml(got.carried) : "";
+  const carriedNote = got.carried ? escapeHtml(potdCarriedWords(got)) : "";
   const relockNote = got.relocked
     || (pick.off_board
         ? "shown from the journal at the price it was locked at"
@@ -4402,10 +4453,7 @@ async function renderDayTopPick() {
      numbers stay on that league's own card rather than being restated
      here, so there is exactly one place on the site where this bet is
      described in full. */
-  const text = pick.market === "moneyline"
-    ? `${teamName(pick.player || pick.team)} Moneyline`
-    : `${escapeHtml(pick.player || "")} ${escapeHtml(String(pick.side || "").toUpperCase())} ${
-        pick.line != null ? pick.line : ""} ${escapeHtml(pick.market_label || pick.market || "")}`.trim();
+  const text = topPickWords(pick);
   host.innerHTML = `<span class="openable" data-top-pick-sport="${escapeHtml(from)}"
       style="color:var(--brand)">${icon('info')}
     ${escapeHtml(head)} is in the ${escapeHtml(name)}:
@@ -24131,8 +24179,8 @@ function _switchViewNow(name, push, dir) {
   if (name !== "pbp" && typeof gpWashOff === "function") gpWashOff();
   // And a player's page its club's (playerpage.js plrFrameOn/plrFrameOff).
   if (name !== "players" && typeof plrFrameOff === "function") plrFrameOff();
-  // And a team's page its own club's (pageClubOn, above): back to your colours, or the site's.
-  if (name !== "team") pageClubOn("");
+  // And a team's page its own club's, a game's its two (pageClubOn, above): back to your colours, or the site's.
+  if (name !== "team" && name !== "game") pageClubOn("");
   if (name !== "ask") document.body.classList.remove("ask-typing");
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   paneSplit(name, leaving);

@@ -535,7 +535,7 @@
         ${t.script ? `<p class="gr-parlay-script">${escapeHtml(t.script)}</p>` : ""}
         ${t.rule_note ? `<p class="gr-parlay-rule${t.td_rule ? " ok" : ""}">${escapeHtml(t.rule_note)}</p>` : ""}
         ${(t.links || []).length ? `<ul class="gr-list gr-parlay-links">${items(t.links)}</ul>` : ""}
-        ${(t.backups || []).length ? `<div class="gr-parlay-sub">Backups</div><ul class="gr-list">${items(t.backups)}</ul>` : ""}
+        ${(t.backups || []).length ? `<div class="gr-parlay-sub">Backups</div><ul class="gr-list">${items(backupLines(t))}</ul>` : ""}
         ${(t.caveats || []).length ? `<div class="gr-parlay-sub">Caveats</div><ul class="gr-list">${items(t.caveats)}</ul>` : ""}
       </div>`).join("")}</div>`;
     }
@@ -593,7 +593,7 @@
             }
             if (t.script) out.push(`    ${t.script}`);
             if (t.rule_note) out.push(`    ${t.rule_note}`);
-            (t.backups || []).forEach((x) => out.push(`    Backup: ${x}`));
+            backupLines(t).forEach((x) => out.push(`    Backup: ${x}`));
             (t.caveats || []).forEach((x) => out.push(`    Caveat: ${x}`));
           }
         }
@@ -851,6 +851,27 @@
     const n = Number(o);
     return Number.isFinite(n) && n ? (n > 0 ? `+${n}` : String(n)) : "";
   }
+  /* A TICKET'S BACKUPS, EACH REPLACEMENT ONCE (19 November 2026). Each leg names the next-best leg that fits
+     the other two, and a game with one good spare named it three times: "If Malik Nabers is out or that number
+     moves: Cam Skattebo over 11.5 rush attempts (-200, 67%)", then the same for the other two legs. The lines
+     stay one a leg in the data (the watch card finds a player's backup by its opening words, watchPicks); the
+     card joins the legs that share a replacement, and says "any leg" when all of them do. */
+  function backupLines(t) {
+    const sep = " is out or that number moves: ";
+    const by = new Map();
+    ((t && t.backups) || []).forEach((x) => {
+      const line = String(x), i = line.indexOf(sep);
+      const who = i > 3 && line.startsWith("If ") ? line.slice(3, i) : "";
+      const leg = who ? line.slice(i + sep.length) : line;
+      if (!by.has(leg)) by.set(leg, []);
+      if (who) by.get(leg).push(who);
+    });
+    const n = ((t && t.legs) || []).length;
+    return [...by].map(([leg, who]) => (!who.length ? leg
+      : who.length === 1 ? `If ${who[0]}${sep}${leg}`
+      : who.length === n && n > 2 ? `If any leg is out or its number moves: ${leg}`
+      : `If ${who.slice(0, -1).join(", ")} or ${who[who.length - 1]}${sep}${leg}`));
+  }
   function card(t, n, kind, sport) {
     const pct = (x) => `${Math.round(Number(x || 0) * 100)}%`;
     const title = kind === "three" ? `Parlay ${n}` : kind === "two" ? `Two-leg parlay ${n}`
@@ -859,7 +880,10 @@
     const unrel = pct(t.independent) !== pct(t.joint) ? ` (${pct(t.independent)} if the legs were unrelated)` : "";
     let price = `${pct(t.joint)} by our numbers${unrel} · fair ${
       t.fair_words || ""} · take it at ${t.take_words || ""} or better`;
-    if (t.naive_words) price += ` · the legs’ own prices multiplied pay ${t.naive_words}, and a book’s same-game price pays less`;
+    // Said once: a ticket no book is likely to pay enough for says so under Caveats, with both prices.
+    if (t.naive_words && !(t.caveats || []).some((c) => /own prices multiplied pay/.test(String(c)))) {
+      price += ` · the legs’ own prices multiplied pay ${t.naive_words}, and a book’s same-game price pays less`;
+    }
     const script = t.script ? `What it needs: ${t.script}${t.script_chance != null
       ? ` — about ${pct(t.script_chance)} likely by the lines` : ""}` : "";
     /* The touchdown rule on a pair (engine/gameparlays.card: each scorer 40%

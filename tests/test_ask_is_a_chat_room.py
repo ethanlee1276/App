@@ -49,6 +49,10 @@ def test_the_footer_leaves_and_the_league_row_stays_as_text_tabs():
     phone = CSS[CSS.index("body.ask-open .footer { display: none; }"):]
     phone = phone[:phone.index("\n}\n")]
     assert "body.ask-open .sportbar-in .sport-btn .crest { display: none; }" in phone
+    # Each tab as wide as its word with the spare width between them: in equal cells, eight leagues on a
+    # phone, "NCAAB" ran into "WNBA" (19 November 2026).
+    assert "body.ask-open .sportbar-in { padding: 0 8px; justify-content: space-between; }" in phone
+    assert "body.ask-open .sportbar-in .sport-btn { display: block; flex: 0 0 auto; padding: 10px 3px 9px;" in phone
     # Gold words, no underline, since "No hard lines" (2026-10-27).
     assert "body.ask-open .sportbar-in .sport-btn.active { color: var(--gold); border-bottom-color: transparent; }" in phone
     sw = _fn("_switchViewNow")

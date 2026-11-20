@@ -125,6 +125,19 @@ def test_tonight_s_game_report_brings_its_own_picks_and_parlays():
     assert [p["player"] for p in out["report_picks"]] == ["James Cook"], "only this game's picks"
     assert out["report_parlays"][0]["pool"] == "three-leg parlay" and len(out["report_parlays"][0]["legs"]) == 3
     assert AB.game_report({"nfl": _tonight()}, "Chiefs", "nfl", "Bills")["status"] == "not finished"
+    assert "report_parlays_note" not in out and "its_card_says" not in out["report_parlays"][0]
+    # A ticket's card notes ride with it (a leg that is not the report's own pick is named there), and a
+    # game short of its two says why in the report's own words.
+    b = _tonight()
+    x = b["game_parlays"]["games"][0]
+    x["threes"][0]["caveats"] = ["Travis Kelce is not one of this report's picks: a Most Likely pick for this "
+                                 "game the report's card did not list, added so the game has 2 three-leg parlays"]
+    x["threes_note"] = "1 of 2: this report's 3 picks at 60% or better make no more three that fit together"
+    out = AB.game_report({"nfl": b}, "Bills", "nfl")
+    assert out["report_parlays"][0]["its_card_says"][0].startswith("Travis Kelce is not one of this report's picks")
+    assert out["report_parlays_note"].startswith("1 of 2: this report's 3 picks")
+    x["threes"], x["threes_note"] = [], "the books' player props for this game are bought from three days before it"
+    assert AB.game_report({"nfl": b}, "Bills", "nfl")["report_parlays_note"].startswith("the books' player props")
 
 
 def test_a_finished_game_s_report_says_how_it_did_and_marks_each_pick_and_leg():
@@ -188,6 +201,25 @@ def test_the_record_brings_the_report_book_and_the_game_parlays():
     assert out["game_report_parlays"]["nfl"]["three-leg parlay"]["legs_hit"] == "18 of 27"
     assert AB.record_facts(rec, "nfl")["game_report_picks"]["wins"] == 3
     assert "game_report_parlays" not in AB.record_facts(rec, "nba")
+    # One set a game, said once beside the counts.
+    assert out["game_report_parlays_note"].startswith("one set a game: the tickets each report carried when")
+    # THE RECORD'S OWN KINDS ARE "three", "two", "scorers" (engine/gameparlays.SOURCES): Ask named a real
+    # record's three-leg parlays "three". And the tickets built since the rebuild are said apart, graded
+    # or still waiting on their games.
+    real = {"game_parlay_record": {"nba": {
+        "three": {"graded": 18, "wins": 3, "losses": 15, "net_units": -8.4, "one_away": 9, "chance": 0.318,
+                  "legs": {"graded": 54, "won": 36},
+                  "since_rules": {"from": "2026-11-19", "graded": 6, "wins": 3, "chance": 0.33, "net_units": 4.2,
+                                  "roi": 0.7, "open": 2}},
+        "two": {"graded": 0, "wins": 0, "since_rules": {"from": "2026-11-19", "graded": 0, "wins": 0, "open": 4}},
+        "scorers": {"graded": 0, "wins": 0, "since_rules": None}}}}
+    got = AB.record_facts(real, "nba")["game_report_parlays"]["nba"]
+    assert set(got) == {"three-leg parlay", "two-leg parlay"}, got
+    assert got["three-leg parlay"]["wins"] == 3 and got["three-leg parlay"]["since_the_rebuild"] == {
+        "from": "2026-11-19", "wins": 3, "graded": 6, "net_units": 4.2, "our_average_chance": 0.33,
+        "still_waiting_on_their_games": 2}, got["three-leg parlay"]
+    assert got["two-leg parlay"] == {"since_the_rebuild": {"from": "2026-11-19", "wins": 0, "graded": 0,
+                                                             "still_waiting_on_their_games": 4}}, got["two-leg parlay"]
 
 
 def test_the_playoff_race_is_read_as_its_page_draws_it():

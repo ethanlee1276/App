@@ -9338,6 +9338,41 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZF. A game's page wears its two clubs, and the cards say each thing once** (step 794; 19 November). Nothing to
+run. The colour work, continued: the page a game has before it starts and after it ends now sits on its two clubs'
+colours, the away club from the left and the home club from the right, the way the live page, a team's page and a
+player's page already wear theirs. It works with the colour setting off, sits over your own colours if you wear some
+(the bar's tint stays yours: a game has two clubs and neither is you), fades in and out like every other colour
+change, and hands the screen back when you leave. Two clubs in one colour, and the away side wears its second (Colts
+at Lions is red against blue); a fight card has no clubs and keeps the site's look. Then I drew the paid cards the
+way a member sees them and fixed what repeated or read wrong: Today's Top Pick from another league said its number
+three times ("MEM -6.5 -6.5 -6.5 Spread"); the note under a carried Pick of the Day gave the server's clock, now
+yours; a parlay card gave its price caution twice and listed one backup leg once for every leg (now once: "If any
+leg is out or its number moves: ..."); a two-leg ticket said "Both legs here is"; the level strip could read "Level
+NaN" for a moment; the Ask page's league row ran "NCAAB" into "WNBA" on phones; and the parlay builder's blurb reads
+as one sentence. One guard in the engine: a report pick that carries its game's label is no longer mistaken for the
+game bet when the parlays are built (it had not happened live; a test fixture found it). Checked by
+tests/test_a_games_page_wears_its_two_clubs.py, tests/test_a_parlay_card_says_each_thing_once.py and
+tests/test_potd_card.py.
+
+**ZE. Last night's reports at a glance, and Ask Qellys knows the rebuilt parlays** (step 793; 19 November). Nothing
+to run. One of mine, for the question you ask most days (did the picks hit, did the parlays): Report Picks now opens
+with one card above today's picks that sums the newest day with a finished game. It reads, for example, "Last night,
+12 games: Picks 54-20, +3.1 units · Three-leg parlays 9 of 20 · Two-leg parlays 8 of 12 · Goal-scorer pairs 1 of 4 ·
+Who wins 7 of 12", with a way to each game's picks and tickets, check by check. The picks are counted at one unit a
+pick at the price posted; the parlays are the set each report carried at the start, as the Record counts them; a
+slate older than yesterday is said by its day ("Sunday, Nov 22"). It is free, as everything settled is, and every
+league has it. The league's report record serves it (/api/report_record last_slate, engine/reportrecord.last_slate,
+read again only when the archive or the journal moved); the card your phone last saw is drawn at once and corrected
+when the record answers, so the page does not jump. Ask Qellys answers the same question ("how did last night's
+reports do"). Ask also learned the day's parlay changes: the record of the tickets built since the 19 November
+rebuild, said apart and including the ones still waiting on their games; that the Record counts one set a game; what
+a ticket's card says under it (a leg that is not the report's own pick is named); and why a game has fewer than two
+parlays or none yet, in the report's own words (props still to be bought, too few of the report's picks priced, none
+that fit). One bug found on the way: Ask named a league's three-leg parlays "three" and its two-leg ones "two" when
+reading the real record (its test fed it the wrong key). Checked by
+tests/test_the_last_slate_s_reports_are_summed_at_a_glance.py and tests/test_ask_reads_the_reports_and_the_races.py.
+
 **ZD. The heartbeat says what became of each report pick, and the Record's one set a game is said everywhere** (step
 792; 19 November). Nothing to run. Two things. First, a count: each game's parlays are its report's own picks, and
 on Thursday three Sunday games' reports carried 12 player picks of which the board priced 3 as legs. Steps ZB and

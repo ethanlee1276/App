@@ -269,6 +269,42 @@ def named(sport: str, rows_: list) -> list:
     return rows_
 
 
+_SLATE_MEMO: dict = {}
+
+
+def last_slate(where, sport: str, path=None) -> dict:
+    """THE LAST SLATE'S REPORTS AT A GLANCE (LASTNIGHT1, 2026-11-19). Ethan asks
+    most days whether the reports' picks hit and their parlays did not, and the
+    answer was two tabs and a scroll away, a game at a time. The newest day
+    with a finished game on the league's record, summed: {"date", "games",
+    "picks": [won, lost, pushed], "units" (one unit a pick at the price
+    posted), "open", "tickets": {kind: [won, lost, units]} (the set each report
+    carried at the start, as the Record counts them), "tickets_open", "call":
+    [right, of]}. {} with no finished game. What has settled is free, as every
+    settled row is. Read again only when the archive's index or the journal
+    moved (featured._fingerprint); never raises."""
+    try:
+        from . import featured, reportarchive
+        sport = str(sport or "").lower()
+        key = (str(where), sport, str(path or ""))
+        fp = featured._fingerprint(where, sport, path)
+        hit = _SLATE_MEMO.get(key)
+        if hit and hit[0] == fp:
+            return hit[1]
+        every = rows(where, sport, write=False)
+        day = max((str(r.get("date") or "")[:10] for r in every), default="")
+        out: dict = {}
+        if day:
+            found = [(r, reportarchive.load(sport, day, r.get("away"), r.get("home"), where) or {})
+                     for r in every if str(r.get("date") or "")[:10] == day]
+            out = {"date": day, **featured.block_of(featured.tally(sport, found, path))}
+        _SLATE_MEMO[key] = (fp, out)
+        return out
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the reports' last slate not read ({type(exc).__name__}: {exc})")
+        return {}
+
+
 def record(where, sport: str, today: str | None = None) -> dict:
     """The league's record on its reports: totals over every graded game and
     over the last RECENT_DAYS, and the newest CARD_ROWS games."""
@@ -288,6 +324,10 @@ def record(where, sport: str, today: str | None = None) -> dict:
         fx = featured.record(where, sport)
         if fx:
             out["featured"] = fx
+    # The newest day's reports, summed (`last_slate`): what the picks and the parlays did, at a glance.
+    slate = last_slate(where, sport)
+    if slate.get("games"):
+        out["last_slate"] = slate
     return out
 
 

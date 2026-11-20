@@ -1215,8 +1215,8 @@
     PB.rows = pbRows(d);
     const key = (l) => `${l.player}|${l.market}|${l.side}`;
     PB.legs = PB.legs.map((l) => PB.rows.find((x) => key(x) === key(l)) || l);
-    const head = `<header class="xt-card-h"><h3>Parlay builder</h3><p>Put tonight’s legs together and see the chance they all hit
-      with the correlation between them — the engine’s own pair rules and copula — beside the chance as if they were independent.</p></header>`;
+    const head = `<header class="xt-card-h"><h3>Parlay builder</h3><p>Put tonight’s legs together and see the chance they all hit,
+      counting how the legs move together, beside the chance as if they were unrelated.</p></header>`;
     if (!PB.rows.length) {
       const locked = d && d.locked && (d.locked.most_likely || d.locked.recommendations);
       return `<section class="xt-card xt-wide">${head}<p class="xt-hint">${locked

@@ -418,8 +418,17 @@ def test_every_graded_final_is_counted_on_the_reports_record():
     assert (t["games"], t["call"], t["reads"], t["ratings"], t["injuries"], t["missed"]) == \
         (2, [2, 2], [8, 14], [0, 2], [2, 6], 2), t
     assert (t["since"], t["through"]) == ("2026-10-21", "2026-10-22") and rec["recent"]["games"] == 2
-    # Counts and names only: nothing a member pays for leaves through it.
-    flat = json.dumps(rec)
+    # Counts and names only: nothing a member pays for leaves through it. The last slate's line (LASTNIGHT1,
+    # reportrecord.last_slate) is counts of what has settled under its own key: numbers and the day, no name.
+    slate = rec.get("last_slate") or {}
+    assert slate.get("date") == "2026-10-22" and slate.get("games") == 1, slate
+
+    def numbers(v):
+        if isinstance(v, dict):
+            return all(numbers(x) for x in v.values())
+        return all(numbers(x) for x in v) if isinstance(v, list) else isinstance(v, (int, float))
+    assert numbers({k: v for k, v in slate.items() if k != "date"}), slate
+    flat = json.dumps({k: v for k, v in rec.items() if k != "last_slate"})
     for paid in ("words", "Tyler Herro", "pick", "price", "odds", "items"):
         assert paid not in flat, paid
     # A file read again only when it changed; a file gone is gone from the index.

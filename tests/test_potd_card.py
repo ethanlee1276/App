@@ -381,6 +381,63 @@ def test_a_spread_prints_its_number_once():
     assert team_total == "SEA over 4.5 Team Total", team_total
 
 
+def test_the_top_pick_from_another_league_says_its_number_once():
+    """The NFL home page, 19 November 2026: "Today's Top Pick is in the NBA: MEM -6.5 -6.5 -6.5 Spread". A game
+    bet's label, its side and its line are the one number; the line under the card spelled all three."""
+    js = """
+    const teamName = (t) => ({ TOR: "Raptors" })[t] || t;
+    const escapeHtml = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => "&#" + c.charCodeAt(0) + ";");
+    %s
+    console.log(JSON.stringify([
+      topPickWords({ kind: "game", market: "spread", market_label: "Spread", player: "MEM -6.5", pick_label: "MEM -6.5",
+                     side: "-6.5", line: -6.5 }),
+      topPickWords({ kind: "game", market: "total", market_label: "Total", player: "Over 224.5", pick_label: "Over 224.5",
+                     side: "over", line: 224.5 }),
+      topPickWords({ kind: "game", market: "team_total", market_label: "Team Total", pick_label: "SEA Team Total over 4.5",
+                     side: "over", line: 4.5 }),
+      topPickWords({ market: "moneyline", player: "TOR", team: "TOR" }),
+      topPickWords({ kind: "prop", market: "rec_yds", market_label: "Receiving Yards", player: "Amon-Ra St. Brown",
+                     side: "Over", line: 64.5 }),
+      topPickWords({ kind: "prop", market: "anytime_td", market_label: "Anytime TD", player: "A <b>", side: "", line: null }),
+    ]));
+    """ % _fn("topPickWords")
+    out = subprocess.run(["node", "-e", js], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    spread, total, team_total, ml, prop, bare = json.loads(out.stdout)
+    assert spread == "MEM -6.5 Spread", spread
+    assert total == "Over 224.5 Total", total
+    assert team_total == "SEA Team Total over 4.5", "a label that names its market does not name it again"
+    assert ml == "Raptors Moneyline" and prop == "Amon-Ra St. Brown OVER 64.5 Receiving Yards", (ml, prop)
+    assert bare == "A &#60;b&#62; Anytime TD", "escaped, and no empty side or line leaves a gap"
+    assert "const text = topPickWords(pick);" in APP
+
+
+def test_a_carried_card_says_when_in_the_readers_clock():
+    """The build's sentence read "decided 22:56 UTC, when 121 of the slate had not started": a UTC clock on a
+    site whose every other clock is the reader's, and "121 of the slate" for 121 bets."""
+    js = """
+    const tzTime = (t) => new Date(t).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit",
+                                                                   timeZone: "America/Detroit" });
+    const plural = (n, one, many) => `${n} ${Number(n) === 1 ? one : (many || one + "s")}`;
+    %s
+    console.log(JSON.stringify([
+      potdCarriedWords({ carried: "decided 22:56 UTC, when 121 of the slate had not started", open_candidates: 121,
+                         decided_at: "2026-11-19T22:56:07Z" }),
+      potdCarriedWords({ carried: "decided 22:56 UTC, when 1 of the slate had not started", open_candidates: 1,
+                         decided_at: "2026-11-19T22:56:07Z" }),
+      potdCarriedWords({ carried: "decided 14:00 UTC, when 12 of the slate had not started" }),
+      potdCarriedWords({ decided_at: "2026-11-19T22:56:07Z", open_candidates: 9 }),
+    ]));
+    """ % _fn("potdCarriedWords")
+    out = subprocess.run(["node", "-e", js], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    many, one, old, fresh = json.loads(out.stdout)
+    assert many == "Decided at 5:56 PM, with 121 bets on the board still to start. It stands for the day.", many
+    assert one == "Decided at 5:56 PM, with 1 bet on the board still to start. It stands for the day.", one
+    assert old == "decided 14:00 UTC, when 12 of the slate had not started", "no instant on the card: the build's words"
+    assert fresh == "", "a card that was not carried says nothing"
+
+
 def test_a_model_only_lean_never_leads_with_our_own_number():
     """Ethan, 2026-09-15, on the MLB card: "it seems like it’s not
     confident in its own pick?" It was not — and it was shouting

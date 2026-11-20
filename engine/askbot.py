@@ -608,7 +608,9 @@ TOOLS = [
           {"sport": _ANY_SPORT}),
     _tool("our_record",
           "Our public record: all bets, a league's, the Most Likely board with its calibration, the best and "
-          "worst markets; a window (today, yesterday, last_7_days, last_30_days, season); and with bets the "
+          "worst markets, the game reports' picks and each league's game parlays (three-leg, two-leg, scorer "
+          "pairs: one set a game, with the tickets built since the 19 November rebuild said apart); a window "
+          "(today, yesterday, last_7_days, last_30_days, season); and with bets the "
           "settled bets themselves, newest first, filterable by result and by props or game lines.",
           {"sport": {**_SPORT_ARG, "enum": list(LEAGUES) + ["ufc"]},
            "window": {"type": "string", "enum": list(RECORD_WINDOWS)},
@@ -663,8 +665,10 @@ TOOLS = [
           "How our game reports have done, per league: every finished game's fact check totalled — our "
           "call on who wins right or wrong, how many of the reads held (by kind), our ratings' and our "
           "simulation's own picks, the injury report, the touchdown chances — over every game and the last "
-          "30 days, and the newest games one by one. For how accurate our reports are, how often our calls "
-          "are right. The NFL's featured games (Lions games, Thursday nights, Monday nights) also carry their "
+          "30 days, the newest games one by one, and the last slate summed (last_slate: that day's report "
+          "picks won and lost with units, each kind of parlay hit, the calls). For how accurate our reports "
+          "are, how often our calls are right, how last night's picks and parlays did. "
+          "The NFL's featured games (Lions games, Thursday nights, Monday nights) also carry their "
           "own record apart: the report picks won and lost with units, the parlays carried at kickoff, the "
           "call. (The report picks' won-lost record for every game is in our_record.)",
           {"sport": _SPORT_ARG}),
@@ -1653,14 +1657,28 @@ def record_facts(record: dict, sport: str = "") -> dict:
         if sport and sp != sport or not isinstance(kinds, dict):
             continue
         for kind, t in kinds.items():
-            if isinstance(t, dict) and t.get("graded"):
-                legs = t.get("legs") or {}
-                tickets.setdefault(sp, {})[dict(TICKET_POOLS).get(kind, kind)] = {
-                    "wins": t.get("wins"), "losses": t.get("losses"), "net_units": t.get("net_units"),
-                    "lost_by_one_leg": t.get("one_away"), "our_average_chance": t.get("chance"),
-                    "legs_hit": f"{legs.get('won', 0)} of {legs.get('graded', 0)}"}
+            if not isinstance(t, dict):
+                continue
+            # The tickets built since the parlays were rebuilt (parlayledger.since_rules), said apart:
+            # graded or still waiting, they answer "how are the new parlays doing".
+            nr = t.get("since_rules") if isinstance(t.get("since_rules"), dict) else {}
+            if not t.get("graded") and not (nr.get("graded") or nr.get("open")):
+                continue
+            legs = t.get("legs") or {}
+            row = {"wins": t.get("wins"), "losses": t.get("losses"), "net_units": t.get("net_units"),
+                   "lost_by_one_leg": t.get("one_away"), "our_average_chance": t.get("chance"),
+                   "legs_hit": f"{legs.get('won', 0)} of {legs.get('graded', 0)}"} if t.get("graded") else {}
+            if nr.get("graded") or nr.get("open"):
+                row["since_the_rebuild"] = {k: v for k, v in (
+                    ("from", nr.get("from")), ("wins", nr.get("wins")), ("graded", nr.get("graded")),
+                    ("net_units", nr.get("net_units")), ("our_average_chance", nr.get("chance")),
+                    ("still_waiting_on_their_games", nr.get("open"))) if v not in (None, "")}
+            tickets.setdefault(sp, {})[PARLAY_KIND_WORDS.get(kind, kind)] = row
     if tickets:
         out["game_report_parlays"] = tickets
+        # One set a game (parlayledger.mark_at_start): what the counts above are counts of.
+        out["game_report_parlays_note"] = ("one set a game: the tickets each report carried when its game started; "
+                                           "versions the board replaced before then are not counted")
     bm = head.get("by_market") or {}
     graded = [(m, v) for m, v in bm.items() if isinstance(v, dict)
               and (v.get("w") or 0) + (v.get("l") or 0) >= 10]
@@ -2252,6 +2270,11 @@ def _game_ticket(t: dict, league: str, pool: str, g: dict) -> dict:
     for k, name in (("fair_words", "fair_price"), ("take_words", "take_it_at"), ("script", "needs")):
         if t.get(k):
             out[name] = t[k]
+    # What its card says under it (gameparlays._fill_caveats and the rest): a leg that is not the
+    # report's own pick is named there, as is a longer ticket.
+    said = [str(c) for c in t.get("caveats") or [] if c]
+    if said:
+        out["its_card_says"] = said[:3]
     return out
 
 
@@ -2723,6 +2746,8 @@ REPORT_GAMES_SHOWN = 8
 #: A kept report's parts Ask reads beside its fact check; the rest is the night before's.
 REPORT_KEPT_PARTS = ("who_we_think_wins", "short_version", "angles")
 TICKET_POOLS = (("twos", "two-leg parlay"), ("threes", "three-leg parlay"), ("scorers", "scorer pair"))
+#: The record's own kinds (engine/gameparlays.SOURCES: "three", "two", "scorers") and a game entry's lists, in words.
+PARLAY_KIND_WORDS = {"three": "three-leg parlay", "two": "two-leg parlay", **dict(TICKET_POOLS)}
 
 
 def _archive_dir():
@@ -2802,6 +2827,11 @@ def _report_tonight(board: dict, rep: dict, league: str) -> dict:
            if isinstance(t, dict)]
     if tix:
         out["report_parlays"] = tix[:REPORT_TICKETS_SHOWN]
+    # Why the game has fewer than its two three-leg parlays, or none yet, in the report's own words
+    # (gameparlays: props still to be bought or posted, too few of the report's picks priced, none that fit).
+    why = gp.get("threes_note") or gp.get("props_note")
+    if isinstance(why, str) and why:
+        out["report_parlays_note"] = why
     return out
 
 
@@ -2910,6 +2940,19 @@ def report_record(sport: str = "", prefer: str = "") -> dict:
                            "game": f"{names.get(r['away'], r['away'])} at {names.get(r['home'], r['home'])}",
                            **_how_it_did(r)})
         out[league] = {**sums, "newest_games": newest}
+        # The newest day's reports summed (reportrecord.last_slate, LASTNIGHT1): "how did last night go".
+        ls = rec.get("last_slate") or {}
+        if ls.get("games"):
+            kinds = {"threes": "three-leg parlays", "twos": "two-leg parlays", "scorers": "scorer pairs"}
+            w, lost, pushed = ls.get("picks") or (0, 0, 0)
+            out[league]["last_slate"] = {k: v for k, v in (
+                ("date", ls.get("date")), ("games", ls["games"]),
+                ("report_picks", f"{w}-{lost}" + (f"-{pushed}" if pushed else "") if w + lost + pushed else None),
+                ("units_at_one_unit_a_pick", ls.get("units") if w + lost else None),
+                ("parlays_hit", {kinds[k]: f"{t[0]} of {t[0] + t[1]}" for k, t in (ls.get("tickets") or {}).items()
+                                 if k in kinds and t[0] + t[1]}),
+                ("still_waiting_on_the_box_score", (ls.get("open") or 0) + (ls.get("tickets_open") or 0)),
+                ("call_right", pair(ls.get("call")))) if v}
         # Ethan's featured games, apart (engine/featured, FEATURED1): the Lions' games, Thursday nights and
         # Monday nights, each kind's record and every game's, in the record's own sentences.
         fx = rec.get("featured") or {}

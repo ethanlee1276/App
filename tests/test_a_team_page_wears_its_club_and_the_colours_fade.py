@@ -61,7 +61,7 @@ def _node(body):
     return json.loads(out.stdout)
 
 
-HELPERS = ("".join(_fn(APP, n) for n in ("teamColorsWho", "pageClubOn", "applyTeamColors", "okLab", "okRgb",
+HELPERS = ("".join(_fn(APP, n) for n in ("teamColorsWho", "pageClubOn", "pairWash", "applyTeamColors", "okLab", "okRgb",
                                          "twWash", "clubWash", "twSwatch", "twPin"))
            + "".join(_line(APP, s) for s in ("const rgbHex = ", "const TW_DEEP_L", "const twHex6 = ", "const TW_SWATCH_KEY",
                                              "let _pageClub = "))
@@ -72,7 +72,7 @@ TABLES = {"nfl": {"DET": {"primary": "#005a8b", "secondary": "#b0b7bc", "tertiar
           "nhl": {"TOR": {"primary": "#00205b", "secondary": "#ffffff"}}}
 
 
-def _run(settings, steps):
+def _run(settings, steps, tables=None):
     """applyTeamColors after each step (a line of JS): the classes and properties then."""
     js = """
 const classes = {}, props = {}, store = {}; let barX = null;
@@ -89,7 +89,7 @@ const teamsForSport = (s) => TABLES[s] || {};
 const out = [];
 for (const step of %s) { eval(step); out.push({ classes: { ...classes }, props: { ...props } }); }
 console.log(JSON.stringify(out));
-""" % (json.dumps(settings), json.dumps(TABLES), HELPERS, json.dumps(steps))
+""" % (json.dumps(settings), json.dumps(tables or TABLES), HELPERS, json.dumps(steps))
     return _node(js)
 
 
@@ -129,7 +129,7 @@ def test_the_page_names_its_club_once_drawn_and_the_router_hands_the_screen_back
     assert 'if (state.view === "team") pageClubOn(`${d.sport}:${p.team}`);' in draw
     assert draw.index("host.innerHTML = `") < draw.index("pageClubOn("), "once the page is drawn"
     sw = _fn(APP, "_switchViewNow")
-    assert 'if (name !== "team") pageClubOn("");' in sw
+    assert 'if (name !== "team" && name !== "game") pageClubOn("");' in sw, "a game's page names its two (GAMEWASH1)"
     # One pair for every page that is one club's: the player's page asks the same function.
     assert "function plrWashPair(t) { return clubWash(t); }" in PLAYER
     assert "html.club-page:not([data-theme=\"light\"]) .tm-head.tm-band { background: none;" in MORE_CSS

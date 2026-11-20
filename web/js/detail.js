@@ -2186,6 +2186,11 @@ function renderGamePage() {
   // A deep link renders before the slate arrives; renderAll calls back.
   if (!state.data) { host.innerHTML = `<p class="loading">Loading the slate…</p>`; return; }
   let g = findGame(state.gameId);
+  // The screen wears the game's two clubs while its page is the one open (app.js pageClubOn, GAMEWASH1);
+  // a game not on the slate names none.
+  if (state.view === "game" && typeof pageClubOn === "function") {
+    pageClubOn(g && g.away && g.home ? `${state.sport}:${g.away}+${state.sport}:${g.home}` : "");
+  }
   if (!g) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("stadium", 30)}</div>
       <div class="es-title">That game isn’t on the current slate</div>

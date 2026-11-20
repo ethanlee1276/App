@@ -9048,8 +9048,10 @@ body.ask-open .footer { display: none; }
 /* The league row stays, as the render draws it: text tabs, the open one
    underlined in gold — the desktop strip's own look, on a phone too. */
 @media (max-width: 760px) {
-  body.ask-open .sportbar-in { padding: 0 8px; }
-  body.ask-open .sportbar-in .sport-btn { display: block; padding: 10px 2px 9px; font-size: var(--fs-sm);
+  /* Each tab as wide as its word, the row's spare width shared between them: in equal cells (eight
+     leagues since hockey and college basketball joined) "NCAAB" filled its 47px and ran into "WNBA". */
+  body.ask-open .sportbar-in { padding: 0 8px; justify-content: space-between; }
+  body.ask-open .sportbar-in .sport-btn { display: block; flex: 0 0 auto; padding: 10px 3px 9px; font-size: var(--fs-sm);
     border-bottom: 2px solid transparent; }
   body.ask-open .sportbar-in .sport-btn .crest { display: none; }
   body.ask-open .sportbar-in .sport-btn.active { color: var(--gold); border-bottom-color: transparent; }

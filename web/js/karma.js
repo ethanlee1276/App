@@ -55,10 +55,11 @@ async function krLoad(force) {
     .then((r) => (r.ok ? r.json() : null)).catch(() => null)
     .then((v) => {
       KR.busy = null;
-      if (v) {
-        KR.me = v; KR.at = Date.now();
-        if (v.up_from) krLevelUp(v.level);
-      }
+      // An answer with no level in it (an empty body, an error's own words) is no answer: the strip
+      // drew "Level NaN · 0 to level NaN" from one.
+      if (!v || !Number.isFinite(Number(v.level))) return null;
+      KR.me = v; KR.at = Date.now();
+      if (v.up_from) krLevelUp(v.level);
       return v;
     });
   return KR.busy;

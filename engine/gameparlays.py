@@ -1139,14 +1139,15 @@ def side_reason(t: dict, alt: dict | None, researched: bool = False) -> str:
     """Why a one-club ticket is posted (`choose`): the other club had no
     ticket that fitted, or this one is clearly the stronger read."""
     club = next(iter(_clubs(t)), "")
-    every = "Both legs" if len(t.get("legs") or []) == 2 else "Every leg"
+    # "Both legs here are NYG's", "Every leg here is NYG's": a two-leg ticket read "Both legs here is".
+    every = "Both legs here are" if len(t.get("legs") or []) == 2 else "Every leg here is"
     if alt is None:
-        return (f"{every} here is {club}'s: no ticket with the other side's picks fits this game "
+        return (f"{every} {club}'s: no ticket with the other side's picks fits this game "
                 f"(none clears {LEG_FLOOR:.0%} and the rules with these)")
     if researched:
-        return (f"{every} here is {club}'s: its research case is {_research_of(t) - _research_of(alt)} points "
+        return (f"{every} {club}'s: its research case is {_research_of(t) - _research_of(alt)} points "
                 f"stronger than the best pair with a scorer from each side")
-    return (f"{every} here is {club}'s: {(float(t['joint']) - float(alt['joint'])) * 100:.0f} points likelier "
+    return (f"{every} {club}'s: {(float(t['joint']) - float(alt['joint'])) * 100:.0f} points likelier "
             f"than the best ticket with both sides")
 
 
@@ -1445,7 +1446,8 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
     price = (f"{joint:.0%} by our numbers"
              + (f" ({indep:.0%} if the legs were unrelated)" if f"{indep:.0%}" != f"{joint:.0%}" else "")
              + f" · fair {t.get('fair_words')} · take it at {t.get('take_words')} or better")
-    if t.get("naive_words"):
+    # Said once: a ticket no book is likely to pay enough for says so among its caveats, with both prices (`ticket`).
+    if t.get("naive_words") and not any("own prices multiplied pay" in str(c) for c in t.get("caveats") or []):
         price += f" · the legs' own prices multiplied pay {t['naive_words']}, and a book's same-game price pays less"
     from .gameresults import bet_of
     legs = [{"pick": pick_words(l), "player": l.get("player"), "team": l.get("team"),
@@ -1995,6 +1997,15 @@ def _pick_key(b: dict) -> tuple:
     return (norm(str((b or {}).get("player") or "")), str((b or {}).get("market") or "").lower(), side, line)
 
 
+def _player_pick(b) -> bool:
+    """A report's pick on a player's line (engine/reportbets.bets_of): not a game bet, which a report's
+    item flags ``game: True`` and its listed row ``kind: "game"``. A row lifted onto the board carries its
+    game's label under ``game`` ("WAS@NYG", reportbets.attach): a label is no flag, and read as one it
+    dropped every pick of the report."""
+    return (isinstance(b, dict) and bool(b.get("market")) and b.get("game") is not True
+            and b.get("kind") != "game")
+
+
 def _board_legs(board: dict, sport: str, now=None, floor: float = FILL_LEG_FLOOR) -> list[dict]:
     """Every leg the board offers down to ``floor`` (FILL_LEG_FLOOR: `legs_for`,
     `enrich`), read once a build and shared by its reports: the same rows, so
@@ -2053,8 +2064,7 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) ->
         from .parlays import parlay_market
         from .potd import POOL_KEY
         from .stakeplan import market_benched
-        want = {_pick_key(b) for b in picks or []
-                if isinstance(b, dict) and b.get("market") and not b.get("game") and b.get("kind") != "game"}
+        want = {_pick_key(b) for b in picks or [] if _player_pick(b)}
         want.discard(("", "", "", None))
         if not want:
             return {}
@@ -2144,8 +2154,7 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
     x = for_game(board, (game or {}).get("home"), (game or {}).get("away"))
     if x is None or x.get("kept"):
         return x
-    want = {_pick_key(b) for b in picks or []
-            if isinstance(b, dict) and b.get("market") and not b.get("game") and b.get("kind") != "game"}
+    want = {_pick_key(b) for b in picks or [] if _player_pick(b)}
     want.discard(("", "", "", None))
     # The game's priced props down to FILL_LEG_FLOOR (THREELEG2): its picks at
     # LEG_FLOOR make the tickets that clear THREE_FLOOR; the rest only fill.

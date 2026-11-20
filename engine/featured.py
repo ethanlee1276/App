@@ -275,9 +275,43 @@ def _maybe(row: dict) -> bool:
         return False
 
 
+def tally(sport: str, found: list, path=None) -> list:
+    """Each finished game of ``found`` ((index row, archive document) pairs)
+    with what its report put on the record: its picks ([won, lost, pushed], the
+    units at one unit a pick, those still waiting), the tickets it carried at
+    the start by kind ([won, lost, units]) and its call. Any league's games: the
+    featured record's (`_record`) and a league's last slate (reportrecord.
+    last_slate) are both sums of these."""
+    from .reportoutcome import _connect
+    games = []
+    conn = _connect(path)
+    try:
+        tix = _tickets_of(conn, sport, found)
+        for i, (r, doc) in enumerate(found):
+            won_lost, units, still = _picks_of(conn, sport, r, doc)
+            t = tix.get(i) or {}
+            games.append({"date": str(r.get("date") or "")[:10], "game": r.get("game") or f"{r['away']}@{r['home']}",
+                          "away": r.get("away"), "home": r.get("home"), "names": r.get("names") or {},
+                          "final": r.get("final") or {}, "call": r.get("call") or None,
+                          "picks": won_lost, "units": units, "open": still,
+                          "tickets": {k: t["tickets"][k] for k in KINDS if k in t.get("tickets", {})},
+                          "tickets_open": int(t.get("open") or 0)})
+    finally:
+        if conn is not None:
+            conn.close()
+    return games
+
+
+def block_of(games: list) -> dict:
+    """The games' sum, as one block (`_block`'s shape)."""
+    out = _block()
+    for g in games:
+        _add(out, g)
+    return out
+
+
 def _record(where, sport: str, path) -> dict:
     from . import reportarchive, reportrecord
-    from .reportoutcome import _connect
     rows = [r for r in reportrecord.rows(where, sport, write=False) if _maybe(r)]
     found = []
     for r in rows:
@@ -287,22 +321,9 @@ def _record(where, sport: str, path) -> dict:
             found.append((r, doc, kinds))
     if not found:
         return {}
-    conn = _connect(path)
-    try:
-        tix = _tickets_of(conn, sport, [(r, doc) for r, doc, _k in found])
-        games = []
-        for i, (r, doc, kinds) in enumerate(found):
-            tally, units, still = _picks_of(conn, sport, r, doc)
-            t = tix.get(i) or {}
-            games.append({"date": str(r.get("date") or "")[:10], "game": r.get("game") or f"{r['away']}@{r['home']}",
-                          "away": r.get("away"), "home": r.get("home"), "names": r.get("names") or {},
-                          "final": r.get("final") or {}, "kinds": kinds, "call": r.get("call") or None,
-                          "picks": tally, "units": units, "open": still,
-                          "tickets": {k: t["tickets"][k] for k in KINDS if k in t.get("tickets", {})},
-                          "tickets_open": int(t.get("open") or 0)})
-    finally:
-        if conn is not None:
-            conn.close()
+    games = tally(sport, [(r, doc) for r, doc, _k in found], path)
+    for g, (_r, _doc, kinds) in zip(games, found):
+        g["kinds"] = kinds
     every, by_kind = _block(), {k: _block() for k in TAGS}
     for g in games:
         _add(every, g)

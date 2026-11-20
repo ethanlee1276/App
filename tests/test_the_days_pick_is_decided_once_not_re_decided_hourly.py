@@ -372,7 +372,7 @@ def test_the_page_says_when_a_carried_card_was_decided():
     read left the const, and deleting the placement left the const too."""
     code = _render(code_only=True)
     # The declining branch reads it, ahead of the older fallbacks.
-    assert "got.carried || got.relocked" in code, \
+    assert "potdCarriedWords(got) || got.relocked" in code, \
         "a held decline is drawn with the wrong reason, or none"
     # And the branch that names a bet places the note it builds.
     assert "const carriedNote" in code, "nothing computes the note"

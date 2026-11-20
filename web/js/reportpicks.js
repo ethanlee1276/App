@@ -259,7 +259,8 @@ function rpFxSigned(u) {
   return `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toFixed(1)}`;
 }
 //: One line of a featured block or game: "Picks 9-6 · +1.8 units · Three-leg parlays 1 of 4 · Who wins 2 of 3".
-function rpFxLine(b) {
+//: ``pairs``: the league's own word for its scorer pairs (the featured games are the NFL's: touchdown pairs).
+function rpFxLine(b, pairs) {
   const parts = [];
   const [w, l, p] = b.picks || [0, 0, 0];
   if (w + l) {
@@ -268,7 +269,7 @@ function rpFxLine(b) {
   }
   RP_FX_TICKETS.forEach(([k, word]) => {
     const t = (b.tickets || {})[k];
-    if (t && t[0] + t[1]) parts.push(`${word} <b>${t[0]} of ${t[0] + t[1]}</b>`);
+    if (t && t[0] + t[1]) parts.push(`${k === "scorers" && pairs ? pairs : word} <b>${t[0]} of ${t[0] + t[1]}</b>`);
   });
   const c = b.call || [0, 0];
   if (c[1]) parts.push(`Who wins <b>${c[0]} of ${c[1]}</b>`);
@@ -303,20 +304,71 @@ function rpFeaturedHTML(fx) {
   </section>`;
 }
 
+//: The league's report record (/api/report_record: free, as the Record is), read once and kept five minutes:
+//: How our reports did and the last slate's line both draw from it.
+function rpRecord(sport) {
+  let rec = RP_FACTS.get(sport);
+  if (!rec || Date.now() - rec.at > 5 * 60 * 1000) {
+    rec = { at: Date.now(), body: fetch(`/api/report_record?league=${encodeURIComponent(sport)}`, { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null) };
+    RP_FACTS.set(sport, rec);
+  }
+  return rec.body;
+}
+
+/* THE LAST SLATE AT A GLANCE (engine/reportrecord.last_slate, LASTNIGHT1, 2026-11-19). Ethan asks most days whether
+   the reports' picks hit and their parlays did not; the answer was two tabs and a scroll away, a game at a time. The
+   newest day with a finished game, summed in one line above today's picks: the picks at one unit a pick, each kind
+   of parlay as the Record counts it (the set each report carried at the start), and who we said would win. Free,
+   as everything settled is. The line this device last saw is drawn at once and corrected when the record answers,
+   so the page does not jump on a return visit. */
+const RP_SLATE_KEY = "qb.rpkSlate";
+function rpSlateSeen(sport, ls) {
+  let kept = {};
+  try { kept = JSON.parse(localStorage.getItem(RP_SLATE_KEY)) || {}; } catch (e) { kept = {}; }
+  if (ls === undefined) return kept[sport] || null;
+  if (JSON.stringify(kept[sport] || null) !== JSON.stringify(ls || null)) {
+    if (ls) kept[sport] = ls; else delete kept[sport];
+    try { localStorage.setItem(RP_SLATE_KEY, JSON.stringify(kept)); } catch (e) { /* drawn from the record next time */ }
+  }
+  return ls;
+}
+function rpSlateHTML(ls, sport) {
+  if (!ls || !ls.games) return "";
+  const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  const when = typeof recapDayLabel === "function" ? recapDayLabel(ls.date, y) : "Last slate";
+  const day = when === "Last night" ? when : `${when}, ${formatGameDate(ls.date).replace(/^\w+, /, "")}`;
+  const pairs = ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
+  return `<section class="rpk-slate" aria-label="How the last slate’s reports did">
+    <h4 class="rpk-slate-h">${escapeHtml(day)}<span>${escapeHtml(plural(ls.games, "game"))}</span></h4>
+    <p class="rpk-slate-line">${rpFxLine(ls, pairs)}</p>
+    <button class="rpk-slate-go" type="button" data-rpk-slate-go>Each game, pick by pick ${icon("chev", 12)}</button>
+  </section>`;
+}
+async function rpSlateFill(host, sport) {
+  const slot = host.querySelector("[data-rpk-slate]");
+  if (!slot) return;
+  const draw = (ls) => {
+    const html = rpSlateHTML(ls, sport);
+    if (slot.dataset.drawn !== html) { slot.innerHTML = html; slot.dataset.drawn = html; }
+    const go = slot.querySelector("[data-rpk-slate-go]");
+    if (go) go.addEventListener("click", () => {
+      const tab = host.querySelector('.subnav-btn[data-subtab="facts"]');
+      if (tab) tab.click();
+    });
+  };
+  draw(rpSlateSeen(sport));
+  const b = await rpRecord(sport);
+  if (!slot.isConnected || state.sport !== sport || !b) return;
+  draw(rpSlateSeen(sport, b.last_slate || null));
+}
+
 async function rpFactsFill(host, league) {
   const slot = host.querySelector("[data-rpk-facts]");
   if (!slot) return;
   const sport = league || state.sport;
-  let rec = RP_FACTS.get(sport);
-  if (!rec || Date.now() - rec.at > 5 * 60 * 1000) {
-    try {
-      const r = await fetch(`/api/report_record?league=${encodeURIComponent(sport)}`, { credentials: "same-origin" });
-      rec = { at: Date.now(), body: r.ok ? await r.json() : null };
-    } catch (e) { rec = { at: Date.now(), body: null }; }
-    RP_FACTS.set(sport, rec);
-  }
+  const b = await rpRecord(sport);
   if (!slot.isConnected || (!league && state.sport !== sport)) return;
-  const b = rec.body;
   if (!b || !(b.games || []).length) {
     slot.querySelector("[data-rpk-facts-body]").innerHTML = `<p class="set-note">No finished game of this league has been
       graded yet. Each one is checked here once its box score is in: the call, every read, the lines, the injury
@@ -644,13 +696,14 @@ async function renderReportPicks() {
     .filter(Boolean).map((n) => `<p class="set-note">${escapeHtml(n)}</p>`).join("");
   // The heading's own line says what the page is; each tab's line says the rest.
   host.innerHTML = `${paper}${subtabbedHTML("reportpicks", [
-      ["today", "Today’s picks", "Every game’s picks, then its parlays and pairs", today],
+      ["today", "Today’s picks", "Every game’s picks, then its parlays and pairs", `<div data-rpk-slate></div>${today}`],
       ["record", "Record", "Every report pick and parlay, won or lost", `<div class="rpk-book" data-rpk-book="1"></div>`],
       ["facts", "How our reports did", "Every finished game’s report, fact-checked", rpFactsHTML()]])}`;
   bindSubtabs(host);
   revealChildren(host);
   rpOnShow(host, "record", (p) => renderReportBook(p.querySelector("[data-rpk-book]"), state.sport));
   rpOnShow(host, "facts", () => rpFactsFill(host));
+  rpSlateFill(host, state.sport);
   rpFactsScroll(host);
   host.querySelectorAll("[data-rpk-jump]").forEach((b) => b.addEventListener("click", (e) => {
     const el = document.getElementById(b.dataset.rpkJump);
