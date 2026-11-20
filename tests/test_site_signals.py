@@ -54,7 +54,10 @@ def test_the_velocity_chip_says_it_does_not_change_the_price():
     indistinguishable from a coin flip."""
     src = _fn("veloChip")
     assert "does not change the price" in src or "nothing prices from it" in src
-    assert "injury and mechanics" in src, "the §5 instruction is missing"
+    # The spec's §5 instruction, said in the reader's words since the wording pass of 20 November 2026 (it read
+    # "§5 treats this as a red flag: check injury and mechanics reporting").
+    assert "check the injury news" in src and "mechanics" in src, "the §5 instruction is missing"
+    assert "§" not in src.split("title=")[-1], "a tooltip cites no spec section"
 
 
 def test_the_first_mover_chip_only_fires_for_a_SHARP_book():
