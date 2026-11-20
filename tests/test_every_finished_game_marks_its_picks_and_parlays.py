@@ -262,8 +262,15 @@ def test_the_earlier_versions_and_a_long_strip_are_said_once():
     kept = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive(kept=KEPT))["2026-11-15|NE|DET"]
     html = _render(kept)
     assert "Before the start the board also posted 1 earlier version of its parlays; 1 of them hit." in html
+    # ONE SET A GAME ON THE RECORD (parlayledger.mark_at_start, 19 November): the line said "Every one counts on
+    # the Record" a day after the Record stopped counting them.
+    flat = " ".join(html.split())
+    assert "The Record counts the set above, the one this report carried at the start." in flat, flat[-400:]
+    assert "Every one counts on the Record" not in html
     every = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive())["2026-11-15|NE|DET"]
-    assert "Every version of this game’s parlays the board posted before" in _render(every)
+    said = " ".join(_render(every).split())
+    assert "Every version of this game’s parlays the board posted before the start." in said
+    assert "was not kept yet on this date, so the Record counts none of them." in said, said[-400:]
     many = {"threes": [{"status": "lost", "legs": []}] * 15}
     strip = _render(many)
     strip = strip[:strip.index("</summary>")]

@@ -187,6 +187,15 @@ def test_a_league_sees_its_tickets_legs_and_markets():
     assert "we gave them 28% on average" in nfl and "1 open" in nfl
     assert 'k="Legs that hit" v="5 of 8"' in nfl and "we gave the legs 66% on average" in nfl
     assert "1 of the 2 tickets that lost missed by a single leg." in nfl, "the near misses, said under the tiles"
+    # One lost ticket is a sentence about it, never "1 of the 1 ticket".
+    one = json.loads(json.dumps(rec))
+    blk = one["nfl"]["three"]
+    blk.update(graded=1, wins=0, losses=1, one_away=1)
+    solo = _node(f"const R = {json.dumps(one)}; return recReportBook({{ parlays: R }}, 'nfl');")
+    assert "The one ticket that lost missed by a single leg." in solo and "of the 1 " not in solo, "one lost ticket"
+    blk.update(one_away=0)
+    solo = _node(f"const R = {json.dumps(one)}; return recReportBook({{ parlays: R }}, 'nfl');")
+    assert "The one ticket that lost missed by more than one leg." in solo
     assert "Lost by one leg" not in nfl, "a third tile wraps alone on a phone"
     assert '<span class="rl-proc bad">0 of 2 legs</span>' in nfl, "a void leg is neither hit nor miss"
     assert '<span class="rl-proc warn">2 of 3 legs</span>' in nfl and '<span class="rl-proc good">3 of 3 legs</span>' in nfl

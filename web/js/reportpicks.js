@@ -480,8 +480,9 @@ const RP_STRIP_MAX = 12;
 /* THE REPORT'S OWN TICKETS (engine/reportoutcome._own_tickets). The board posts
    a game's parlays afresh as lines and news move, and the record grades every
    version; the list is the set the report carried at the start, and a line
-   under it counts the earlier versions. A game kept before the start was (16
-   November) lists every version the board posted, and says so. A size the
+   under it counts the earlier versions, which the Record leaves out (one set a
+   game, parlayledger.mark_at_start). A game kept before the start was (16
+   November) lists every version the board posted, and says the Record counts none. A size the
    league had on paper at the start was never posted (GPWIN2): its tickets
    stand apart, said so, and a game with none says why it posted none. */
 //: A size of ticket on paper: its words and the hit rate that brings it back (engine/parlayhold.SIZES).
@@ -491,10 +492,11 @@ function rpEarlierHTML(x, kind, word) {
   if (e && e[1]) {
     const did = (x.on_paper || []).includes(kind) ? "built on paper" : "posted";
     return `<p class="mini rpk-bets-note">Before the start the board also ${did} ${escapeHtml(plural(e[1], `earlier version of its ${word}`,
-      `earlier versions of its ${word}`))}; ${e[0]} of them hit. Every one counts on the Record.</p>`;
+      `earlier versions of its ${word}`))}; ${e[0]} of them hit. The Record counts the set above, the one this
+      report carried at the start.</p>`;
   }
   return x.versions ? `<p class="mini rpk-bets-note">Every version of this game’s ${escapeHtml(word)} the board posted before
-    the start, as the record kept them: the report’s own set at the start was not yet kept on this date.</p>` : "";
+    the start. The report’s own set at the start was not kept yet on this date, so the Record counts none of them.</p>` : "";
 }
 //: The game's picks and tickets: a strip of marks a kind, opening to every one by name.
 function rpBetsHTML(x, sport, open) {

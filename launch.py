@@ -635,6 +635,15 @@ def _board_counts(path: str) -> dict:
         stood = sum(int(x.get("threes_board_filled") or 0) for x in gp["games"] if isinstance(x, dict))
         if stood:
             out["threes_board_filled"] = stood
+        # What became of the reports' player picks as parlay legs, games still to
+        # play, as counts (gameparlays._picks_census: no pick rides here).
+        fates: dict = {}
+        for x in gp["games"]:
+            if isinstance(x, dict) and not x.get("kept") and isinstance(x.get("pick_fates"), dict):
+                for k, v in x["pick_fates"].items():
+                    fates[k] = fates.get(k, 0) + int(v or 0)
+        if fates:
+            out["pick_fates"] = {"picks": sum(fates.values()), **fates}
         # The legs' learned correction in force (engine/legfit), each kind: the
         # model's numbers, no pick (the share toward the book, the shift, each
         # market's own shift), so a league short of legs says what moved them.

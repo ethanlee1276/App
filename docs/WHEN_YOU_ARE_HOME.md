@@ -9338,6 +9338,35 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZD. The heartbeat says what became of each report pick, and the Record's one set a game is said everywhere** (step
+792; 19 November). Nothing to run. Two things. First, a count: each game's parlays are its report's own picks, and
+on Thursday three Sunday games' reports carried 12 player picks of which the board priced 3 as legs. Steps ZB and
+ZC's notes said what the other nine were (tackles, a benched market, scorers) from the code, not from a count. The
+heartbeat now counts it for each league, over its games still to play (pick_fates): how many of the reports' player
+picks are legs at 60% or better (strong), legs the fill may take at 50 to 60% (fill), priced but under 50% once
+corrected (low), in a market no parlay carries (no_parlay: tackles, sacks, kicking), in a benched market (benched),
+priced as a leg only at another number (other_line), a matchup pick no leg source holds (matchup_only), a scorer
+only the touchdown field prices (scorer_only), a row a leg source holds and will not use (refused), or on none of
+the board's lists (absent). Counts only: no pick's name rides in it. If the counts show picks that should be legs
+and are not (other_line, matchup_only), that is the next fix. Second, a re-check of today's work found the one-set-
+a-game rule (step YI) said in one place and contradicted in three. Under a finished game on How our reports did, the
+line about earlier versions still ended "Every one counts on the Record"; it now says the Record counts the set the
+report carried at the start, and a game from before 16 November (every version listed) says the Record counts none
+of them. Ask Qellys says the same when asked about a finished game's parlays. And one lost ticket no longer reads "1
+of the 1 ticket that lost missed by a single leg": it reads "The one ticket that lost missed by a single leg." An
+idea measured and not built the same evening: marking a market's legs down from its Most Likely record (college
+passing yards said 65% and hit 53% over 79 picks). The Most Likely board already has a per-market correction that
+must pass a held-out test before it is saved (engine/likelycal), and one market in sixty running two standard errors
+cold is what chance alone produces, so a second, weaker correction on top would have been learning from noise. A
+replay of the current builder on every finished game since 16 November (the report's picks with the book's price
+standing in for our chance, which the free view does not carry) says what the rebuilt tickets would have done: NBA
+17 of 52 three-leg tickets (33%) against the 1 of 15 posted under the old rules, hockey 16 of 36 (44%) against 5 of
+18, two-leg tickets 25 of 45 and 18 of 29. Small samples, and partly the games the unders rule was changed on; the
+real record from 19 November's games on is what counts, and the Record page shows it apart. Checked by
+tests/test_the_heartbeat_says_what_became_of_each_report_pick.py,
+tests/test_every_finished_game_marks_its_picks_and_parlays.py, tests/test_each_league_records_its_game_parlays.py
+and tests/test_ask_reads_the_reports_and_the_races.py.
+
 **ZC. A game short of picks a parlay can use takes our Most Likely picks for it**
 (step 791; 19 November). Nothing to run. With step ZB live the NFL's three-leg tickets went from 5 to 11 (two-leg 0
 to 2), and four Sunday games had their two. Five Sunday games still had none: their reports carry 15 player picks,

@@ -2846,8 +2846,13 @@ def _report_finished(league: str, wanted) -> dict | None:
                            f"to learn from, never posted" for k in marks["on_paper"]]
     for kind, (hit, n) in (marks.get("earlier") or {}).items():
         out.setdefault("earlier_versions", {})[dict(TICKET_POOLS).get(kind, kind)] = f"{hit} of {n} hit"
+    # One set a game on the Record (parlayledger.mark_at_start): the earlier versions are not in it.
+    if out.get("earlier_versions"):
+        out["earlier_versions_note"] = ("posted and replaced before the start: the Record counts the set the report "
+                                        "carried at the start, not these")
     if marks.get("versions"):
-        out["note"] = "kept before the report's own set was kept: every version the board posted is listed"
+        out["note"] = ("kept before the report's own set was kept: every version the board posted is listed, and "
+                       "the Record counts none of them")
     return out
 
 

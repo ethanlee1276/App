@@ -145,6 +145,9 @@ def test_a_finished_game_s_report_says_how_it_did_and_marks_each_pick_and_leg():
     assert three["ticket"] == "three-leg parlay" and three["result"] == "lost"
     assert [l["result"] for l in three["legs"]] == ["won", "lost", "won"]
     assert out["earlier_versions"] == {"three-leg parlay": "1 of 1 hit"}
+    # One set a game on the Record: Ask says the earlier versions are not in it.
+    assert out["earlier_versions_note"] == ("posted and replaced before the start: the Record counts the set the "
+                                            "report carried at the start, not these")
     assert AB.game_report({"nfl": {}}, "Packers", "nfl").get("found") is False
 
 

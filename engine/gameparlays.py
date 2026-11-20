@@ -2022,6 +2022,81 @@ def _picks_priced(board: dict, sport: str, game: dict, want: set, now=None) -> i
         return 0
 
 
+#: What became of a report's player pick as a parlay leg (`_picks_census`).
+PICK_FATES = ("strong", "fill", "low", "no_parlay", "benched", "other_line", "matchup_only", "scorer_only",
+              "refused", "absent")
+
+
+def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) -> dict:
+    """What became of each of a report's player picks as a parlay leg, as counts
+    (PICKLEGS1, 2026-11-19: three Sunday games' reports carried 12 picks and the
+    board priced 3 of them as legs, and nothing said what the other nine were).
+    No pick rides here; the heartbeat adds a league's up (launch._board_counts):
+
+      strong        a leg at LEG_FLOOR or better, what a ticket is made of;
+      fill          a leg the fill may take (FILL_LEG_FLOOR up to LEG_FLOOR);
+      low           priced as a leg, under FILL_LEG_FLOOR once corrected (legfit);
+      no_parlay     a market no parlay carries (tackles, sacks, kicking);
+      benched       a market benched from stakes (stakeplan.MARKET_BENCH);
+      other_line    the board's legs carry the player's market and side at
+                    another number only;
+      matchup_only  a matchup pick's own row and no leg source's
+                    (board["matchup_picks"]);
+      scorer_only   a scorer the touchdown field prices and no leg source does;
+      refused       a row a leg source holds and will not use (not bettable, a
+                    proxy or no book, ruled out, past the price cap, a number
+                    the Edge path refuses: `priced_legs`, `credible_row`);
+      absent        on none of the board's lists by this number.
+
+    {} when the report has no player pick. Never raises."""
+    try:
+        from .parlays import parlay_market
+        from .potd import POOL_KEY
+        from .stakeplan import market_benched
+        want = {_pick_key(b) for b in picks or []
+                if isinstance(b, dict) and b.get("market") and not b.get("game") and b.get("kind") != "game"}
+        want.discard(("", "", "", None))
+        if not want:
+            return {}
+        legs = {}
+        for l in _board_legs(board, sport, now, floor=0.0):
+            if _game_of(l, [game]):
+                k = _pick_key(l)
+                legs[k] = max(float(l.get("p") or 0), legs.get(k, 0.0))
+        loose = {k[:3] for k in legs}
+
+        def keys(rows):
+            return {_pick_key(r) for r in rows or [] if isinstance(r, dict)}
+        held = keys(board.get("most_likely")) | keys(board.get(POOL_KEY)) | keys(board.get("recommendations"))
+        matchup = set()
+        for g in board.get("matchup_picks") or []:
+            if isinstance(g, dict):
+                matchup |= keys(g.get("td")) | keys(g.get("props"))
+        field = {k[:2] for k in keys(board.get("td_field")) | keys(board.get("longshot_watch"))}
+        out: dict = {}
+        for k in want:
+            if k in legs:
+                fate = "strong" if legs[k] >= LEG_FLOOR else "fill" if legs[k] >= FILL_LEG_FLOOR else "low"
+            elif not parlay_market(k[1]):
+                fate = "no_parlay"
+            elif market_benched(sport, k[1]):
+                fate = "benched"
+            elif k[:3] in loose:
+                fate = "other_line"
+            elif k in held:
+                fate = "refused"
+            elif k in matchup:
+                fate = "matchup_only"
+            elif k[:2] in field:
+                fate = "scorer_only"
+            else:
+                fate = "absent"
+            out[fate] = out.get(fate, 0) + 1
+        return out
+    except Exception:                                        # noqa: BLE001
+        return {}
+
+
 def _report_note(n_ok: int, n_picks: int, made: dict) -> str:
     """Why a game's report made fewer than THREE_MIN three-leg tickets, after
     "No three-leg parlay:" when it made none: its own picks (``n_ok`` of
@@ -2100,6 +2175,12 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
         x["picks_priced"] = _picks_priced(board, sp, game, want, now)
     else:
         x.pop("picks_priced", None)
+    # What became of each of its picks as a leg, as counts (`_picks_census`).
+    fates = _picks_census(board, sp, game, picks, now)
+    if fates:
+        x["pick_fates"] = fates
+    else:
+        x.pop("pick_fates", None)
     # What a game short of its two had to fill from (`tickets_of`): counts, no leg.
     for k in ("fill_fit", "fill_clear"):
         if made.get(k) is None:

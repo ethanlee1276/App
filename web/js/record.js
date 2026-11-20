@@ -1100,8 +1100,10 @@ function gpBlockHTML(b, kind, sport) {
         L.fair != null ? `, the books ${Math.round(L.fair * 100)}%` : ""}${
         one && one.graded < (legs.graded || 0) ? ` · each leg once (${legs.graded} across the tickets)` : ""}` : "");
   // The near misses, said once under the tiles: a third tile wraps alone on a phone.
-  const close = lostN ? `<p class="rec-gp-close">${b.one_away || 0} of the ${lostN} ${
-    lostN === 1 ? "ticket that lost" : "tickets that lost"} missed by a single leg.</p>` : "";
+  // One lost ticket reads as a sentence about it, not "1 of the 1".
+  const close = !lostN ? "" : `<p class="rec-gp-close">${lostN === 1
+    ? `The one ticket that lost missed by ${(b.one_away || 0) ? "a single leg" : "more than one leg"}.`
+    : `${b.one_away || 0} of the ${lostN} tickets that lost missed by a single leg.`}</p>`;
   // BUILT TO WIN, APART (engine/parlayledger.since_rules, 2026-11-20): the tickets built since the
   // parlays were rebuilt on the report's strongest picks at honest chances, so the change reads on its own.
   const nr = b.since_rules;
