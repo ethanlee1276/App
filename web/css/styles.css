@@ -10055,6 +10055,9 @@ button.ms-read-head { width: 100%; padding: 0; border: 0; background: none; colo
 .ob-fair { font-family: var(--font-sans); font-size: var(--fs-2xs); letter-spacing: 0; white-space: nowrap; }
 .ob-fair.good { color: var(--good); }
 .ob-fair.wait { color: var(--warn); }
+.ob-fair.grade-green { color: var(--good); }
+.ob-fair.grade-yellow { color: var(--warn); }
+.ob-fair.grade-red { color: var(--bad); }
 .ob-ringcol { grid-area: ring; display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
 .ob-ringcol .ob-ring { grid-area: auto; }
 .ob-tierword { font-size: var(--fs-2xs); font-weight: 700; color: var(--text-mute); white-space: nowrap; }

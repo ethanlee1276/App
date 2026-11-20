@@ -11674,7 +11674,28 @@ function obImplied(odds) {
   if (!o) return null;
   return o < 0 ? -o / (-o + 100) : 100 / (o + 100);
 }
+/* THE PRICE GRADE (engine/pricegrade; Ethan, 2026-11-20: yes, on the NBA's and
+   hockey's picks): Green where the price pays for our number, Yellow up to 2
+   points past it, Red further. The board says which rows are graded and grades
+   our own number; a card whose ring shows its tier's real hit rate grades that
+   number by the same bars (pricegrade.YELLOW_MAX), so the ring and the price
+   cannot disagree. "" for a row the board did not grade. */
+const OB_GRADE_LABEL = { green: "Green price", yellow: "Yellow price", red: "Red price" };
+function obGradeHTML(r) {
+  const g = r.price_grade;
+  if (!g || !OB_GRADE_LABEL[g.grade]) return "";
+  const shown = obShownProb(r), imp = obImplied(r.odds), fair = obFairAmerican(shown);
+  if (fair == null || imp == null) return "";
+  const tier = r.tier_rate != null, gap = imp - shown;
+  const grade = !tier ? g.grade : gap <= 1e-9 ? "green" : gap <= 0.02 + 1e-9 ? "yellow" : "red";
+  const words = !tier ? g.words || "" : `${OB_GRADE_LABEL[grade]}: ${american(r.odds)} needs ${
+    Math.round(imp * 100)}% to break even and this tier’s picks have hit ${Math.round(shown * 100)}%`;
+  return `<small class="ob-fair grade-${grade}" title="${escapeAttr(words)}">${OB_GRADE_LABEL[grade]}${
+    grade === "green" ? ` · fair ${american(fair)}` : ` · take at ${american(fair)} or better`}</small>`;
+}
 function obPriceHTML(r) {
+  const graded = obGradeHTML(r);
+  if (graded) return graded;
   const shown = obShownProb(r);
   const fair = obFairAmerican(shown), imp = obImplied(r.odds);
   if (fair == null || imp == null) return "";

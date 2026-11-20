@@ -3845,6 +3845,10 @@ def sec_card(c: Ctx, built: dict) -> dict | None:
                       "form": card_form(c, r), "why": card_why(c, r, angles), "kind": card_kind(c, r),
                       # A read, not a bet, said on the pick (READ_ONLY).
                       **({"read_only": READ_ONLY} if read_only(r) else {}),
+                      # Green, Yellow or Red: the price against our number, where the league
+                      # grades it (engine/pricegrade; the board stamps its rows).
+                      **({"price_grade": {k: r["price_grade"].get(k) for k in ("grade", "label", "words")}}
+                         if isinstance(r.get("price_grade"), dict) and not read_only(r) else {}),
                       # Graded on the page once the game is over (engine/gameresults).
                       **({"bet": _bet_of(r)} if _bet_of(r) else {})})
     blocks = []

@@ -639,6 +639,26 @@ def _board_counts(path: str) -> dict:
                                     and not x.get("no_props") and len(x.get("twos") or []) < TWO_MIN)
             if c.get("filled_twos"):
                 out["twos_filled"] = int(c["filled_twos"])
+        # EACH TICKET'S CLASS (gameparlays.ticket_class: safe, balanced, pop, long)
+        # by size, and how many player-prop tickets one book prices whole
+        # (`one_book`: a book has every leg, none does, or a leg has no quote on
+        # file). Games still to play; counts only.
+        classes, books = {}, {"one": 0, "none": 0, "unknown": 0}
+        for x in gp["games"]:
+            if not isinstance(x, dict) or x.get("kept"):
+                continue
+            for size, key in (("three", "threes"), ("two", "twos")):
+                for t in x.get(key) or []:
+                    if not isinstance(t, dict):
+                        continue
+                    if t.get("class"):
+                        cell = classes.setdefault(size, {})
+                        cell[str(t["class"])] = cell.get(str(t["class"]), 0) + 1
+                    ob = t.get("one_book")
+                    books["one" if isinstance(ob, dict) and ob.get("book") else "none" if ob else "unknown"] += 1
+        if classes:
+            out["ticket_classes"] = classes
+            out["one_book"] = books
         # Games still to play short of their three scorer pairs (ZR), where the
         # league has a scorer market, and the pairs a stand-in scorer filled.
         if str(gp.get("sport") or "").lower() in SCORER_MARKETS:
@@ -738,6 +758,12 @@ def _board_counts(path: str) -> dict:
         tiers = (b.get("likely_board") or {}).get("tiers")
         if isinstance(tiers, dict):
             out["board_tiers"] = {str(k): int(v or 0) for k, v in tiers.items()}
+    # THE PRICE GRADE (engine/pricegrade, the NBA's and hockey's picks): how many
+    # of the board's props sit at a Green, a Yellow and a Red price. Counts only;
+    # present only on a board that grades.
+    pg = (b.get("likely_board") or {}).get("price_grade")
+    if isinstance(pg, dict) and pg.get("on"):
+        out["price_grade"] = {k: int(pg.get(k) or 0) for k in ("rows", "green", "yellow", "red")}
     return out
 
 

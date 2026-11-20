@@ -1704,6 +1704,170 @@ def backups(sport: str, t: dict, pool: list[dict], game: dict | None) -> list[di
     return out
 
 
+# --- a ticket's class, and the one book that prices it (v3.1 sections 10 and 1) ----------------
+#: SAFE / BALANCED / POP (step AAB, 2026-11-20; Ethan: yes). Their own
+#: instructions class each two-leg ticket (NFL Prop Bot v3.1, section 10):
+#: "SAFE: 2 legs, each 64%+ and Green, joint 40%+ after correlation ...
+#: BALANCED: 2 legs, each 60%+, at least one Green, joint 36%+ ... POP: ...
+#: joint 25%+." The site says the same on each player-prop ticket, by the same
+#: bars, whatever its size: a three-leg ticket is seldom better than a Pop,
+#: which is what three legs are (their honest targets: "2-leg parlays 37-45%,
+#: 3-leg 25-30%"). Under Pop's bar a ticket is a long shot and says so.
+#:
+#: "Green" is the leg's price grade (engine/pricegrade), read only where the
+#: league grades its prices (the NBA and hockey). Football's numbers are tied
+#: to their prices, so no football leg can sit over its price and the Green
+#: half of each bar has nothing to read there: football's classes stand on the
+#: chances alone. A touchdown or goal-scorer pair is not classed (v3.1 keeps
+#: touchdown tickets apart; a pair says its own rule, `card`).
+#:
+#: A label: no ticket is built, kept or dropped by it, and the record says how
+#: each class has done (parlayledger ``by_class``, from the legs it journaled).
+CLASS_SAFE_LEG, CLASS_BALANCED_LEG = 0.64, 0.60
+CLASS_SAFE_JOINT, CLASS_BALANCED_JOINT, CLASS_POP_JOINT = 0.40, 0.36, 0.25
+CLASSES = ("safe", "balanced", "pop", "long")
+CLASS_WORDS = {"safe": "Safe", "balanced": "Balanced", "pop": "Pop", "long": "Long shot"}
+#: The lists a game's classed tickets sit in (its player-prop tickets).
+CLASS_LISTS = ("threes", "twos")
+
+
+def ticket_class(sport: str, t: dict) -> dict:
+    """``{"class", "label", "why"}`` for a player-prop ticket: Safe, Balanced, Pop or a long shot by
+    v3.1's bars (CLASS_*), with the reason it is not the class above. ``t`` needs its legs' chances
+    (``p``), its joint chance and, where the league grades prices, its legs' prices."""
+    from . import pricegrade
+    legs = [l for l in (t or {}).get("legs") or [] if isinstance(l, dict)]
+    ps = [float(l.get("p") or 0.0) for l in legs]
+    joint = float((t or {}).get("joint") or 0.0)
+    graded = pricegrade.on(sport)
+    green = [pricegrade.grade_of(l.get("p"), l.get("odds")) == "green" for l in legs] if graded else []
+    low = min(ps) if ps else 0.0
+
+    def short(leg_bar, joint_bar, greens_ok, greens_words):
+        # Why a ticket is not of a class: each bar it misses, in the order the class states them.
+        out = []
+        if low < leg_bar:
+            out.append(f"a leg under {leg_bar:.0%}")
+        if joint < joint_bar:
+            out.append(f"under {joint_bar:.0%} together")
+        if graded and not greens_ok:
+            out.append(greens_words)
+        return out
+    not_safe = short(CLASS_SAFE_LEG, CLASS_SAFE_JOINT, all(green), "not every leg at a Green price")
+    not_bal = short(CLASS_BALANCED_LEG, CLASS_BALANCED_JOINT, any(green), "no leg at a Green price")
+    if not legs:
+        return {}
+    if not not_safe:
+        cls = "safe"
+        why = (f"every leg {CLASS_SAFE_LEG:.0%} or better" + (" at a Green price" if graded else "")
+               + f", {joint:.0%} together")
+    elif not not_bal:
+        cls = "balanced"
+        why = (f"every leg {CLASS_BALANCED_LEG:.0%} or better" + (", one at a Green price" if graded else "")
+               + f", {joint:.0%} together. Not Safe: {_and(not_safe)}")
+    elif joint >= CLASS_POP_JOINT:
+        cls = "pop"
+        why = f"{joint:.0%} together. Not Balanced: {_and(not_bal)}"
+    else:
+        cls = "long"
+        why = f"{joint:.0%} together, under the {CLASS_POP_JOINT:.0%} a Pop ticket needs"
+    return {"class": cls, "label": CLASS_WORDS[cls], "why": f"{CLASS_WORDS[cls]}: {why}"}
+
+
+#: ONE BOOK THAT PRICES EVERY LEG (v3.1 section 1: "Every leg of a ticket must
+#: be on one book"). A same-game parlay is placed at one book, and a ticket's
+#: legs each show the best price across the books, so a ticket says which one
+#: book has every leg at its number (the one that pays most on them), or that
+#: none in our pull does. Read off every book's quote on the board's prop rows
+#: (engine/sliplive.quote_index); a leg we hold no quote for says nothing.
+_QUOTES: dict = {}
+
+
+def quote_index(board: dict) -> dict:
+    """Every book's number on every prop the board priced (sliplive.quote_index), read once a board."""
+    recs = (board or {}).get("recommendations")
+    if not isinstance(recs, list) or not recs:
+        return {}
+    if _QUOTES.get("recs") is not recs:
+        from . import sliplive
+        try:
+            idx = sliplive.quote_index(board)
+        except Exception:                                    # noqa: BLE001
+            idx = {}
+        _QUOTES.clear()
+        _QUOTES.update(recs=recs, index=idx)
+    return _QUOTES["index"]
+
+
+def book_prices(leg: dict, index: dict) -> dict:
+    """``{book key: (book, American price)}``: each book quoting this leg's own number on its side."""
+    from .sliplive import _key as name_key
+    e = (index or {}).get((name_key(leg.get("player")), leg.get("market")))
+    try:
+        line = float(leg.get("line"))
+    except (TypeError, ValueError):
+        return {}
+    over = str(leg.get("side") or "").upper() in ("OVER", "YES")
+    out: dict = {}
+    for q_line, book, o, u in (e or {}).get("quotes") or []:
+        price = o if over else u
+        if price and abs(float(q_line) - line) < 1e-6:
+            k = str(book).lower()
+            if k not in out or _dec(price) > _dec(out[k][1]):
+                out[k] = (str(book), int(price))
+    return out
+
+
+def one_book(legs: list, index: dict) -> dict | None:
+    """The book that has every leg at its number, the one paying most on them: ``{"book", "odds",
+    "books", "words"}``; ``{"none": True, "words"}`` where no one book does; None where a leg has no
+    book quote on file (nothing to say)."""
+    per = [book_prices(l, index) for l in legs or []]
+    if len(per) < 2 or not all(per):
+        return None
+    common = set(per[0]).intersection(*per[1:])
+    if not common:
+        n = len(per)
+        most = max({k for p in per for k in p}, key=lambda k: (sum(k in p for p in per), k))
+        got = sum(most in p for p in per)
+        name = next(p[most][0] for p in per if most in p)
+        return {"none": True,
+                "words": ("No one book in our pull has both legs at these numbers" if n == 2 else
+                          f"No one book in our pull has every leg at these numbers; {name} has {got} of the {n}")}
+
+    def pays(k):
+        d = 1.0
+        for p in per:
+            d *= _dec(p[k][1]) or 1.0
+        return d
+    best = max(common, key=lambda k: (pays(k), k))
+    odds = [p[best][1] for p in per]
+    name = per[0][best][0]
+    return {"book": name, "odds": odds, "books": len(common),
+            "words": f"One book has every leg: {name} ({', '.join(_odds_words(o) for o in odds)})"}
+
+
+def label_tickets(x: dict, sport: str, index: dict | None = None) -> dict:
+    """A game's player-prop tickets, each with its class (`ticket_class`) and the one book that prices
+    it (`one_book`). Never raises: a ticket it cannot label is left as it was built."""
+    for key in CLASS_LISTS:
+        for t in (x or {}).get(key) or []:
+            if not isinstance(t, dict):
+                continue
+            try:
+                c = ticket_class(sport, t)
+                if c:
+                    t["class"], t["class_why"] = c["class"], c["why"]
+                ob = one_book(t.get("legs") or [], index) if index else None
+            except Exception:                                # noqa: BLE001
+                continue
+            if ob:
+                t["one_book"] = ob
+            else:
+                t.pop("one_book", None)
+    return x
+
+
 # --- one game ---------------------------------------------------------------------------------
 def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
     """One ticket as the report and the Parlays page draw it: a title, the
@@ -1742,7 +1906,11 @@ def card(t: dict, n: int, kind: str, sport: str = "") -> dict:
              for b in t.get("backups") or []]
     out = {"title": head, "price_line": price, "legs": legs, "script": script,
            "links": list(t.get("links") or []), "backups": backs, "caveats": list(t.get("caveats") or []),
-           "joint": joint, "fair": t.get("fair"), "take": t.get("take")}
+           "joint": joint, "fair": t.get("fair"), "take": t.get("take"),
+           # Safe, Balanced, Pop or a long shot, and the one book that has every leg (`label_tickets`).
+           **({"cls": t["class"], "cls_label": CLASS_WORDS[t["class"]], "cls_why": t.get("class_why") or ""}
+              if t.get("class") in CLASS_WORDS else {}),
+           **({"one_book": t["one_book"]["words"]} if (t.get("one_book") or {}).get("words") else {})}
     # THE TOUCHDOWN RULE ON A PAIR (decision 1 under RUN_NEXT 00f, Ethan's
     # NFL Bet checking method: an anytime touchdown at 45%, or 40% with a
     # red-zone role). The floor stays where it is; a pair whose two scorers
@@ -2247,6 +2415,11 @@ def build(board: dict, sport: str, now=None) -> dict:
         board[SCORER_PAIRS_KEY] = scorer_pairs
     else:
         board.pop(SCORER_PAIRS_KEY, None)
+    # Each player-prop ticket's class, and the one book that prices it (`label_tickets`).
+    index = quote_index(board)
+    for e in out_games:
+        if not e.get("kept"):
+            label_tickets(e, sp, index)
     return {"sport": sp, "date": board.get("date") or "", "games": out_games,
             "take_edge": TAKE_EDGE, "leg_floor": LEG_FLOOR, "three_floor": THREE_FLOOR,
             **({"two_floor": TWO_FLOOR} if sp in TWO_SPORTS else {}),
@@ -2792,6 +2965,8 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
             x.pop("twos_note", None)
         else:
             x["twos_note"] = _report_note(n_pool, len(want), made2)
+    # Each ticket's class, and the one book that prices it (`label_tickets`).
+    label_tickets(x, sp, quote_index(board))
     return x
 
 

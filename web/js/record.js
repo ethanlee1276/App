@@ -1043,6 +1043,8 @@ const GP_KIND = { three: "Three-leg parlays", two: "Two-leg parlays" };
 //: A league's kinds in the page's order: the three-leg tickets, the two-leg ones, then the scorer pairs.
 const GP_KINDS = ["three", "two", "scorers"];
 // How a game's ticket was made up (engine/gameparlays.FILL_KINDS; "report": its own picks), in words, by kind.
+//: A ticket's class in the page's order (engine/gameparlays.CLASSES).
+const GP_CLASSES = [["safe", "Safe"], ["balanced", "Balanced"], ["pop", "Pop"], ["long", "Long shots"]];
 const GP_FILL_WORDS = {
   three: { report: "the report’s own picks", one: "two picks and one other prop",
            board: "Most Likely picks standing in", props: "the game’s best props" },
@@ -1127,6 +1129,12 @@ function gpBlockHTML(b, kind, sport) {
   const madeUp = fillKeys.length > 1 ? `<p class="rec-gp-close">By how they were made up, since ${
     escapeHtml(gpDay(bf.from))}: ${fillKeys.map((k) => `${fillWords[k]} ${
       bf[k].graded ? `${bf[k].wins} of ${bf[k].graded} hit` : "none graded yet"}`).join(" · ")}.</p>` : "";
+  // HOW EACH CLASS HAS DONE (engine/parlayledger by_class; gameparlays.ticket_class): Safe, Balanced, Pop
+  // and long shots apart, once two classes have graded tickets.
+  const bc = b.by_class || null;
+  const classKeys = bc ? GP_CLASSES.filter(([k]) => bc[k] && bc[k].graded) : [];
+  const byClass = classKeys.length > 1 ? `<p class="rec-gp-close">By class: ${classKeys.map(([k, w]) => `${w} ${
+    bc[k].wins} of ${bc[k].graded} hit${bc[k].chance != null ? ` (we gave ${Math.round(bc[k].chance * 100)}%)` : ""}`).join(" · ")}.</p>` : "";
   const markets = (b.markets || []).map((m) => `<div class="rec-row flush tight">
       <span class="rr-what">${escapeHtml(marketWord(m.market))}</span>
       <span><b>${m.won} of ${m.graded}</b> legs hit · ${Math.round((100 * m.won) / m.graded)}%${
@@ -1150,7 +1158,7 @@ function gpBlockHTML(b, kind, sport) {
   return `<div class="card rec-report rec-gp">
       <div class="rr-head">${escapeHtml(gpKindWord(kind, sport))}${b.since ? ` <span class="rr-mute">· since ${escapeHtml(gpDay(b.since))}</span>` : ""}</div>
       ${b.paper && b.paper.note ? `<p class="rec-gp-close">${escapeHtml(b.paper.note)}</p>` : ""}
-      <div class="stats rec-kpis">${tiles}</div>${close}${rebuilt}${madeUp}
+      <div class="stats rec-kpis">${tiles}</div>${close}${rebuilt}${madeUp}${byClass}
       ${markets ? `<div class="rr-head">Legs by market</div>${markets}` : ""}
       ${recent ? `<div data-rec-flat="parlays"><div class="rr-head">Newest tickets</div><div class="rec-gp-recent">${recent}</div></div>` : ""}
     </div>`;

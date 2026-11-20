@@ -597,7 +597,9 @@ TOOLS = [
           "Our model's picks tonight, by kind: best_bets (staked edges), most_likely (likeliest to hit), "
           "long_shots, game_lines (spreads, totals, moneylines), parlays (each game's three three-leg and three two-leg "
           "player-prop parlays from its report, and in football and hockey its three touchdown or goal-scorer pairs, "
-          "likeliest first; one marked playable false is a ticket its own card "
+          "likeliest first; each player-prop ticket says its class (safe: every leg 64%+ and 40%+ together; "
+          "balanced: every leg 60%+ and 36%+ together; pop: 25%+ together; long: under that) and the one book "
+          "that has every leg; one marked playable false is a ticket its own card "
           "says to pass on, and game_started true is a game already under way), pick_of_the_day (each "
           "league's) or top_pick_today (the one best pick across every league, with the ones it beat) — on "
           "one league's board or all of them, best first.",
@@ -787,6 +789,10 @@ def compact(row: dict) -> dict:
     qb = row.get("qb_card")
     if isinstance(qb, dict) and qb.get("headline"):
         out["qb_change"] = qb_line(qb)
+    # The price against our number, on the leagues that grade it (engine/pricegrade): Green, Yellow or Red.
+    pg = row.get("price_grade")
+    if isinstance(pg, dict) and pg.get("words"):
+        out["price_grade"] = pg["words"]
     mate = row.get("mate_card")
     if isinstance(mate, dict) and mate.get("headline"):
         out["teammate_back" if mate.get("back") and not mate.get("out") else "teammate_out"] = \
@@ -2298,6 +2304,14 @@ def _game_ticket(t: dict, league: str, pool: str, g: dict) -> dict:
         out["playable"] = False
     if g.get("kept"):
         out["game_started"] = True
+    # Its class, with why (gameparlays.ticket_class: safe, balanced, pop or a long shot), and the one
+    # book that has every leg at its number, or that none does (gameparlays.one_book).
+    if t.get("class"):
+        out["class"] = t["class"]
+        if t.get("class_why"):
+            out["class_why"] = t["class_why"]
+    if (t.get("one_book") or {}).get("words"):
+        out["one_book"] = t["one_book"]["words"]
     return out
 
 

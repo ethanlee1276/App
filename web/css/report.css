@@ -181,6 +181,12 @@
 .gr-pick-read { font-size: .74em; font-weight: 600; padding: 1px 7px; border-radius: 999px;
   background: color-mix(in srgb, var(--text-mute) 16%, transparent); color: var(--text-mute); }
 .gr-pick-readwhy { margin: 4px 0 0; font-size: .84em; color: var(--text-mute); }
+/* The price grade (engine/pricegrade): the price against our number, Green, Yellow or Red. */
+.gr-pick-grade { font-size: .74em; font-weight: 600; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+.gr-pick-grade.green { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+.gr-pick-grade.yellow { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.gr-pick-grade.red { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+.gr-pick-gradewhy { margin: 2px 0 0; font-size: .84em; color: var(--text-mute); font-variant-numeric: tabular-nums; }
 .gr-pick-num { margin: 4px 0 0; font-size: .9em; font-weight: 600; font-variant-numeric: tabular-nums; }
 .gr-pick-form { margin: 2px 0 0; font-size: .86em; color: var(--text-mute); font-variant-numeric: tabular-nums; }
 .gr-pick-kind { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--text-mute); }
@@ -190,6 +196,17 @@
 /* Bet the whole ticket (js/report.js parlayBet): the Bet it button at the head's end. */
 .gr-parlay-head .gr-betit { flex: none; margin-left: auto; align-self: center; }
 .gr-parlay-price { margin: 4px 0 6px; font-size: .86em; color: var(--text-mute); }
+/* A ticket's class (engine/gameparlays.ticket_class): Safe, Balanced, Pop or a long shot, beside its title;
+   why under its price; then the one book that has every leg (one_book). */
+.gr-parlay-title { display: inline-flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.gr-parlay-class { font-size: .72em; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+.gr-parlay-class.safe { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+.gr-parlay-class.balanced { background: color-mix(in srgb, var(--brand) 18%, transparent); color: var(--text); }
+.gr-parlay-class.pop { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.gr-parlay-class.long { background: color-mix(in srgb, var(--text-mute) 16%, transparent); color: var(--text-mute); }
+.gr-parlay-classwhy, .gr-parlay-book { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--text-mute);
+  font-variant-numeric: tabular-nums; }
 /* The ticket's chance, drawn (js/report.js odds): the number, a bar filled to it, toned by how likely. */
 .gr-parlay-odds { --tone: var(--good); display: flex; align-items: center; gap: 8px; margin: 6px 0 2px;
   font-size: .86em; color: var(--text-mute); }

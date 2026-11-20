@@ -1450,6 +1450,16 @@ def attach(result: dict, sport: str, conn=None) -> str:
         board = build(result, record=rec, sport=sport, tiers_seen=seen)
         result["likely_board"] = board
         harmonize(result)
+        # THE PRICE GRADE (engine/pricegrade; Ethan, 2026-11-20: yes, on the NBA's
+        # and hockey's picks): each prop's price against our number, Green, Yellow
+        # or Red, with what picks like it have done on our record. After
+        # `harmonize`, so it grades the number the pick ends up showing. A label:
+        # no pick moves, and no tier reads it.
+        from . import pricegrade
+        graded = pricegrade.record(conn, sport) if conn is not None and pricegrade.on(sport) else {}
+        board["price_grade"] = pricegrade.stamp(board["rows"], sport, graded)
+        # The Most Likely list's own rows of the same bets (Ask reads those), uncounted.
+        pricegrade.stamp([r for r in result.get("most_likely") or [] if isinstance(r, dict)], sport, graded)
         t = board["tiers"]
         held_unders = sum(1 for r in board.get("held") or [] if r.get("tight_hold"))
         on_paper = sum(1 for r in board.get("held") or [] if r.get("paper_hold"))

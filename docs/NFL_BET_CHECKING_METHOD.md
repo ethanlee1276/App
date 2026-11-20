@@ -31,14 +31,14 @@ the site does differently, and why.
 | 6. Breakout candidates | Definitions and base rates; about a one-in-four shot at best; POP legs at plus money, never the anchor | "Players to watch" names them with the reasons. The framing line (how often even the best spot gets there) is not on the report yet |
 | 7. Game script | Four scripts with their chances; what each leg needs | Scripts A to D with their shares (`gamereport.script_blocks`); each ticket says what it needs and how likely (`gameparlays.script_need`) |
 | 8. Injuries, roles, weather | Same-day status and replacements; a new starting quarterback with too few attempts to rate: no pass-catcher legs; wind 12+ caution, 15+ major | The injury list, what each absence opens, the news watch. **Added 2026-11-20**: behind a replacement with under 50 passes (`qbchange.card` `unrated`) a catch or receiving-yards pick tops out at Worth a look (`likelyboard.METHOD_NEW_QB`) and is no parlay leg. 15+ mph caps passing overs (`scout.WIND`) |
-| 10. Parlay builder | SAFE, BALANCED, POP; one anchor; no more than two tickets on a leg; fair price beside the book's | Legs ride on two tickets at most (`gameparlays.MAX_USES`); each ticket shows fair and take-it-at and says when the legs' prices multiplied fall short of it. The SAFE / BALANCED / POP names are not on the tickets yet |
+| 10. Parlay builder | SAFE, BALANCED, POP; one anchor; no more than two tickets on a leg; fair price beside the book's | Legs ride on two tickets at most (`gameparlays.MAX_USES`); each ticket shows fair and take-it-at and says when the legs' prices multiplied fall short of it. Each two-leg and three-leg ticket says Safe, Balanced, Pop or a long shot by these bars and names the one book that has every leg (`gameparlays.ticket_class`, `one_book`, step AAB); the dollar stakes are theirs and stay off the site |
 | 11. Touchdown module | Base rates by team total; approve at 45% and at or above the price's break-even, or 40% at plus money with EV 6% and undeniable usage; never two pass catchers from one team | `likelyboard.td_rule`. **Changed 2026-11-20**: the fallback now needs a plus price paying 6% over our number (it had passed a red-zone role at any price), and two pass catchers from one team share no touchdown pair (`gameparlays.pair_link`). The 45% clause keeps no price test: see "The price grade" |
 | 12. Sides and totals | Stricter edges | The game-bet lanes keep their own bars |
 | 13–14. Live, hedge, bankroll | Their own staking | Not the site's to set; My Bets tracks a member's own |
 | 15. Output | Ranked picks with book, price, final number, take-at, what it needs, who is guarding the player | The report's card and pick lines, the board's ranking (tier, matchup, chance) |
 | 16. Learning loop | Log every leg; a market 8+ points under its rate over 20+ legs drops a tier; one rule a slate | Every pick is journaled and graded. `record_check` is that rule as written: 20 settled picks, 8 points under the claim, and the pick cannot be Top or Strong |
 
-### The price grade (Green, Yellow, Red), and why it is not on the cards
+### The price grade (Green, Yellow, Red): on the NBA's and hockey's picks, not football's
 
 v3.1 posts a leg only when its number beats the price (Green), or sits within
 two points (Yellow). That needs a number that has earned the right to
@@ -54,8 +54,24 @@ college props 58.5% of 908). So where our number ran above the price, the
 price was right, and a "Green" label would have marked the picks that missed
 by the most. The site's answer is the stricter haircut in §2: show the
 price's number, post the take-at price, and let the Edge board carry the
-bets that claim a price is wrong. The NBA's and the NHL's numbers have held
-up against their prices and could carry the grade (decision 3 below).
+bets that claim a price is wrong.
+
+The NBA's and the NHL's numbers have held up against their prices, and since
+step AAB (20 November; they said yes) each of those leagues' player picks
+shows its grade (`engine/pricegrade`): on the report's pick card, Report
+Picks and the Most Likely card. Public receipts to 20 November, props at −250
+or better, each pick once, a chance of 60% or better:
+
+| | Green | Yellow | Red |
+|---|---|---|---|
+| NBA | 673 hit 62.6%, +2.6% a bet | 399 hit 66.9%, +0.3% | 804 hit 67.5%, −1.6% |
+| NHL | 1,010 hit 66.5%, +1.9% | 542 hit 68.8%, +1.9% | 744 hit 66.9%, −2.6% |
+
+A Red-priced pick hit as often as a Green one. What the grade sorted was the
+money. So v3.1's "Red: never posted, however likely" is not adopted: every
+pick stays, the grade is a label about its price, and each card says how
+picks at that chance and grade have done on our own record, once 20 have
+settled. `QB_PRICE_GRADE=off` turns it off.
 
 ### Decisions v3.1 leaves with them
 
@@ -66,9 +82,21 @@ up against their prices and could carry the grade (decision 3 below).
    Started sets when they asked: NBA two-leg 12 of 16, three-leg 6 of 27;
    NHL two-leg 14 of 20, three-leg 22 of 43; NFL three-leg 0 of 3.
 2. **SAFE / BALANCED / POP on each ticket**, and one book that prices every
-   leg. Display work; next batch if wanted.
-3. **The price grade on the NBA and NHL cards**, where the number has earned
-   it (above).
+   leg. Answered yes, 20 November; done in step AAB
+   (`gameparlays.ticket_class`, `one_book`). Every two-leg and three-leg
+   ticket says its class by v3.1's own bars, whatever its size: Safe (every
+   leg 64%+, 40%+ together), Balanced (every leg 60%+, 36%+ together), Pop
+   (25%+ together), and under that a long shot. Each says why it is not the
+   class above. In the NBA and hockey Safe also needs every leg at a Green
+   price and Balanced one, as section 10 says; football's numbers are tied to
+   their prices, so its classes stand on the chances alone. A three-leg ticket
+   is nearly always a Pop, which is what three legs are by v3.1's own targets
+   (25-30%). A touchdown pair is not classed. Each ticket names the one book
+   that has every leg at its number, or says none in our pull does; it is not
+   yet a rule that one must (the heartbeat's `one_book` counts how often one
+   does, to decide on).
+3. **The price grade on the NBA and NHL cards.** Answered yes, 20 November;
+   done in step AAB (above).
 4. **Rungs well under the average.** Their Tier 1 is completions, attempts
    and carries at 0.80x to 0.85x of the average. Ours lose at the lines we
    took. A box run can say how our picks did by rung-to-average, which would

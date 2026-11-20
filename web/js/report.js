@@ -509,9 +509,13 @@
           <b class="gr-pick-what">${named(v.pick || "", b.names)}</b>${v.price
             ? ` <span class="gr-pick-px">${escapeHtml(v.price)}</span>` : ""}${v.tier
             ? ` <span class="gr-pick-tier">${escapeHtml(v.tier)}</span>` : ""}${v.read_only
-            ? ` <span class="gr-pick-read">Read, not a bet</span>` : ""}${v.bet ? resTag(v.bet) : ""}</div>
+            ? ` <span class="gr-pick-read">Read, not a bet</span>` : ""}${v.price_grade && v.price_grade.grade
+            // The price against our number (engine/pricegrade; the NBA's and hockey's picks).
+            ? ` <span class="gr-pick-grade ${escapeAttr(v.price_grade.grade)}">${escapeHtml(v.price_grade.label || "")}</span>`
+            : ""}${v.bet ? resTag(v.bet) : ""}</div>
         ${v.read_only ? `<p class="gr-pick-readwhy">${escapeHtml(v.read_only)}</p>` : ""}
         ${v.numbers ? `<p class="gr-pick-num">${escapeHtml(v.numbers)}</p>` : ""}
+        ${v.price_grade && v.price_grade.words ? `<p class="gr-pick-gradewhy">${escapeHtml(v.price_grade.words)}</p>` : ""}
         ${v.form ? `<p class="gr-pick-form">${escapeHtml(v.form)}</p>` : ""}
         ${(v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${named(w, b.names, b.marks, true)}</li>`).join("")}</ul>` : ""}
         ${v.kind ? `<p class="gr-pick-kind">${escapeHtml(v.kind)}</p>` : ""}</li>`).join("")}</ol>`;
@@ -541,9 +545,13 @@
       const face = (l) => (l.player && typeof playerAvatar === "function"
         ? `<span class="gr-parlay-face">${playerAvatar(l.player, l.team, { size: 24, headshot: l.headshot })}</span>` : "");
       return `<div class="gr-parlays">${(b.items || []).map((t) => `<div class="gr-parlay">
-        <div class="gr-parlay-head"><b>${escapeHtml(t.title || "")}</b>${ticketTag(t.legs)}${(t.bet_legs || []).length && !CLOSED
+        <div class="gr-parlay-head"><span class="gr-parlay-title"><b>${escapeHtml(t.title || "")}</b>${t.cls
+          ? ` <span class="gr-parlay-class ${escapeAttr(t.cls)}">${escapeHtml(t.cls_label || "")}</span>` : ""}</span>${
+          ticketTag(t.legs)}${(t.bet_legs || []).length && !CLOSED
           ? parlayBet(t.bet_legs, `${t.title || "Parlay"} · ${(t.legs || []).map((l) => l.pick).filter(Boolean).join(" + ")}`) : ""}</div>
         ${odds(t)}
+        ${t.cls_why ? `<p class="gr-parlay-classwhy">${escapeHtml(t.cls_why)}</p>` : ""}
+        ${t.one_book ? `<p class="gr-parlay-book">${escapeHtml(t.one_book)}</p>` : ""}
         <ol class="gr-parlay-legs">${(t.legs || []).map((l) => `<li${l.player
           ? ` data-open="player:${escapeAttr(slugify(l.player))}"` : ""}>
           <span class="gr-parlay-pick"><span class="gr-parlay-who">${face(l)}<b>${named(l.pick || "", b.names)}</b></span>${l.price
@@ -599,7 +607,7 @@
         } else if (b.type === "picks") {
           for (const v of b.items || []) {
             out.push(`${v.rank}. ${v.pick}${v.price ? ` — ${v.price}` : ""}${v.tier ? ` [${v.tier}]` : ""}${
-              v.read_only ? " [a read, not a bet]" : ""}`);
+              v.read_only ? " [a read, not a bet]" : ""}${v.price_grade && v.price_grade.label ? ` [${v.price_grade.label}]` : ""}`);
             [v.numbers, v.form].filter(Boolean).forEach((x) => out.push(`    ${x}`));
             (v.why || []).forEach((w) => out.push(`    – ${w}`));
             if (v.kind) out.push(`    ${v.kind}`);
@@ -896,6 +904,8 @@
       : who.length === n && n > 2 ? `If any leg is out or its number moves: ${leg}`
       : `If ${who.slice(0, -1).join(", ")} or ${who[who.length - 1]}${sep}${leg}`));
   }
+  //: A ticket's class in words (engine/gameparlays.CLASS_WORDS).
+  const CLASS_WORDS = { safe: "Safe", balanced: "Balanced", pop: "Pop", long: "Long shot" };
   // ``both``: the game posts two-leg tickets beside its three-leg ones (every league now), so each says its size.
   function card(t, n, kind, sport, both) {
     const pct = (x) => `${Math.round(Number(x || 0) * 100)}%`;
@@ -918,8 +928,13 @@
     const rule = low == null ? {} : { td_rule: !low.length, rule_note: !low.length
       ? "Both scorers are 40% or better — our touchdown rule"
       : `Below our touchdown rule (40% a scorer): ${low.map((l) => `${l.player} ${pct(l.p)}`).join(", ")}` };
+    /* Safe, Balanced, Pop or a long shot, and the one book that has every leg
+       (engine/gameparlays.label_tickets; Ethan's v3.1 instructions, sections 10 and 1). */
+    const klass = t.class && CLASS_WORDS[t.class]
+      ? { cls: t.class, cls_label: CLASS_WORDS[t.class], cls_why: t.class_why || "" } : {};
     return {
-      title, price_line: price, script, links: t.links || [], caveats: t.caveats || [], ...rule,
+      title, price_line: price, script, links: t.links || [], caveats: t.caveats || [], ...rule, ...klass,
+      one_book: (t.one_book || {}).words || "",
       legs: (t.legs || []).map((l) => ({ pick: pickWords(l), player: l.player, team: l.team, headshot: l.headshot,
         price: [oddsWords(l.odds), l.book || ""].filter(Boolean).join(" "), chance: l.p, why: l.why || [],
         research: l.research, research_of: l.research_of, bet: l })),

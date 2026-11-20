@@ -9338,6 +9338,34 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAB. Every parlay says Safe, Balanced or Pop and names its one book; NBA and NHL picks show a Green, Yellow or Red
+price** (step 816; 20 November). Nothing to run. You said yes to both. (1) The class, on every two-leg and three-leg
+parlay, by the bars in your v3.1 instructions: Safe is every leg 64% or better and 40% together; Balanced is every
+leg 60% or better and 36% together; Pop is 25% together; under 25% the card says Long shot. Each card says why it is
+not the class above. In the NBA and hockey, Safe also needs every leg at a Green price and Balanced one, as your
+section 10 says. Football's classes use the chances alone: its numbers are tied to their prices now, so no football
+leg can sit over its price. A three-leg parlay comes out Pop nearly every time, which is what three legs are by your
+own targets (25-30%). Touchdown pairs are not classed. The dollar stakes in your instructions are yours and stay off
+the site. (2) The one book: each parlay names the one sportsbook that has every leg at its number (the one paying
+most on them), or says no one book in our pull does. A same-game parlay is placed at one book, and each leg shows
+the best price across the books, so this says where the whole ticket can go. It is a line on the card, not yet a
+rule; the heartbeat's `one_book` counts how many tickets have one, and that count decides whether to require it
+(decision below). (3) The price grade, on NBA and NHL player picks: Green where the price needs no more than our
+number, Yellow up to 2 points more, Red beyond that. It is on the game report's pick card, Report Picks and the Most
+Likely card. Every pick stays posted. Your instructions say never to post a Red; I did not adopt that, because Red-
+priced picks have hit as often as Green ones. What the grade sorts is the money. Public receipts to 20 November,
+props at -250 or better, each pick once, at a chance of 60% or better: NBA Green 673 picks hit 62.6% and made 2.6% a
+bet, Yellow 399 hit 66.9% and made 0.3%, Red 804 hit 67.5% and lost 1.6%; NHL Green 1,010 hit 66.5% and made 1.9%,
+Yellow 542 hit 68.8% and made 1.9%, Red 744 hit 66.9% and lost 2.6%. Each card says how picks at its chance and
+grade have done on our own record once 20 have settled. Football gets no grade: there the Green ones were the picks
+we had overrated (NFL 2,232 hit 54.6% where we said 71.7%; college 1,133 hit 53.4% where we said 72.7%). Also: the
+Record page splits each league's two-leg and three-leg parlays by class, read from the chances and prices each was
+journaled with, so earlier tickets count; and Ask Qellys can say a ticket's class, its one book and a pick's price
+grade. Where to look: any report's Parlays section and pick card; the heartbeat's `ticket_classes`, `one_book` and
+`price_grade` for each league. `QB_PRICE_GRADE=off` in the service's environment turns the grade off. Decision for
+you: should a parlay have to be one that a single book prices whole? I would look at the weekend's `one_book` counts
+first.
+
 **AAA. Three two-leg parlays on every game report, every league** (step 815; 20 November). Nothing to run. You asked
 for two-leg player-prop parlays on every game report after seeing the NBA's win, three a game, dialed in like the
 three-leg ones. Every league's reports now post them: the NFL, college football, hockey and baseball beside

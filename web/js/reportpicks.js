@@ -106,7 +106,9 @@ function rpGameHTML(d, key, bets, tix, open) {
   const tally = fin ? rpTallyWords(rpTally(g, bets, tix)) : "";
   const rows = bets.map((r) => {
     const row = deckPickRow(r, { door: likelyOpen(r),
-      note: [r && r.read_only ? RP_READ : "", rpSourceNote(r)].filter(Boolean).join(" · ") });
+      // The price grade where the league has one (engine/pricegrade): Green, Yellow or Red.
+      note: [r && r.read_only ? RP_READ : "", r && r.price_grade && !r.read_only ? r.price_grade.label : "",
+             rpSourceNote(r)].filter(Boolean).join(" · ") });
     // A read's chance is drawn muted, as a dropped pick's is: our number ranks it and can't price it.
     return r && r.read_only ? row.replace('class="hd-row', 'class="hd-row rpk-read') : row;
   }).join("");

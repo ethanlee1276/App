@@ -660,6 +660,8 @@ AT_START = "at_start = 1"
 #: done apart (`since_rules`). A game dated by its day counts from that day; a
 #: week-labelled one (the NFL's "2026-W12") by when its ticket was journaled.
 RULES_SINCE = "2026-11-19"
+#: The kinds of ticket that wear a class (gameparlays.ticket_class): a game's player-prop tickets.
+CLASS_KINDS = ("three", "two")
 #: The day the tickets began to say how they were filled (`fill`, ZR): the
 #: record's split by it reads only tickets journaled since.
 FILL_SINCE = "2026-11-20"
@@ -701,7 +703,7 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
     report carried when it started, and no version the board replaced before
     then; ``not_counted`` says how many graded versions were left out."""
     ensure_schema(conn)
-    from .gameparlays import SOURCES, retired
+    from .gameparlays import CLASSES, SOURCES, retired, ticket_class
     try:
         from .ledger import is_benched
     except Exception:                                        # noqa: BLE001
@@ -797,6 +799,32 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                     j, n = f.pop("_j"), f.pop("_n")
                     by_fill[k] = dict(f, chance=round(sum(j) / len(j), 3) if j else None, net_units=round(n, 2))
                 out[sp][kind]["by_fill"] = by_fill
+            # HOW EACH CLASS OF TICKET HAS DONE (gameparlays.ticket_class: Safe,
+            # Balanced, Pop, a long shot; step AAB, 2026-11-20), read off the chances
+            # and prices each ticket was journaled with, so every graded set counts,
+            # the ones from before a card said its class too. Player-prop tickets.
+            if kind in CLASS_KINDS:
+                mine: dict = {}
+                for l in legs:
+                    mine.setdefault(l["parlay_id"], []).append(l)
+                classes: dict = {}
+                for t in graded:
+                    ls = mine.get(t["id"]) or []
+                    if t["modeled_joint"] is None or len(ls) < 2 or any(l["p_final"] is None for l in ls):
+                        continue
+                    c = ticket_class(sp, {"joint": t["modeled_joint"],
+                                          "legs": [{"p": l["p_final"], "odds": l["odds"]} for l in ls]}).get("class")
+                    if not c:
+                        continue
+                    cell = classes.setdefault(c, {"graded": 0, "wins": 0, "_j": 0.0, "_n": 0.0})
+                    cell["graded"] += 1
+                    cell["wins"] += t["status"] == "won"
+                    cell["_j"] += float(t["modeled_joint"])
+                    cell["_n"] += float(t["pnl_units"] or 0.0)
+                if classes:
+                    out[sp][kind]["by_class"] = {
+                        c: {"graded": v["graded"], "wins": v["wins"], "chance": round(v["_j"] / v["graded"], 3),
+                            "net_units": round(v["_n"], 2)} for c in CLASSES if (v := classes.get(c))}
             # Since the rebuild (RULES_SINCE): how the new tickets have done, apart.
             new = [t for t in graded if since_rules(t)]
             new_open = sum(1 for t in rows if t["status"] == "open" and since_rules(t))
