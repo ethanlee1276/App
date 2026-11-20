@@ -177,7 +177,8 @@ def test_the_answer_brings_the_reader_s_word_for_each_market():
     assert words["rush_yds"] == "Rushing Yards" and words["anytime_td"] == "Anytime TD" and "spread" in words
     assert set(words) == {"rush_yds", "pass_yds", "receptions", "spread", "anytime_td"}, words
     assert '"words": reportoutcome.market_words(games)' in SERVER
-    assert "Object.assign(RP_WORDS, body.words)" in RP and "(RP_WORDS[m] || marketWord(m))" in RP
+    # The answer's words, after a leg's own (a board's leg carries `market_label`: ZM, 20 November 2026).
+    assert "Object.assign(RP_WORDS, body.words)" in RP and "(p.market_label || RP_WORDS[m] || marketWord(m))" in RP
 
 
 def test_the_endpoint_is_routed_rate_limited_and_gated_on_what_still_waits():
