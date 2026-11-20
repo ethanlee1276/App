@@ -87,6 +87,7 @@ def tap_chip(chip, sport="mlb", bar=("mlb", "nfl", "cfb")):
     async function pressureWarm() {{}}
     function renderSweatZone() {{}}
     function liveSlips() {{}}
+    function reportLiveAsk() {{}}
     // The tab's own five-second clock (liveTickArm), the play feed, your
     // players' strip and the threads' counts are not under test here.
     const liveSig = () => "";

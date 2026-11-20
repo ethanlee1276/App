@@ -61,7 +61,9 @@ def test_every_list_of_pages_forgot_it():
         assert gone not in APP, gone
     report = _read("web", "js", "report.js")
     assert "function gameParlays(" not in report and "function gameParlaysRecord(" not in report
-    assert "window.QBReport = { html, block, toText, teaser, gameTickets, slipCombine };" in report
+    # The report's own tickets and, since 20 November, the same tickets followed live (liveTickets, liveGame).
+    assert ("window.QBReport = { html, block, toText, teaser, gameTickets, slipCombine, liveTickets, liveGame };"
+            in report)
     assert ".tl-card" not in _read("web", "css", "styles.css")
 
 
