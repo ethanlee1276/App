@@ -119,6 +119,43 @@ def test_each_pick_is_sorted_into_one_fate():
     assert GP._picks_census({}, "nfl", SUNDAY, PICKS, now=THURSDAY).get("no_parlay") == 1, "a bare board: never raises"
 
 
+
+def test_a_pick_no_real_book_prices_says_what_its_row_lacked():
+    """20 November 2026: the NFL read 19 of 47 picks refused_book with its games' props bought, and the
+    count said no more. Each such pick now counts by the list that held it and what its row lacked."""
+    ok = _rec("X", "rec_yds", 0.6)
+    assert GP._book_gap(dict(ok, book="proxy")) == "proxy" and GP._book_gap(dict(ok, book="")) == "no_book"
+    assert GP._book_gap(dict(ok, has_market=False)) == "no_market"
+    assert GP._book_gap(dict(ok, bettable=False)) == "not_bettable"
+    assert GP._book_gap(dict(ok, odds=None)) == "no_odds" and GP._book_gap(ok) == "other"
+    b = _board()
+    b["game_parlays"] = GP.build(b, "nfl", now=THURSDAY)
+    x = GP.from_report(b, "nfl", SUNDAY, PICKS, now=THURSDAY)
+    assert x["pick_book_why"] == {"recommendations:proxy": 1}, x.get("pick_book_why")
+    assert not any(p["player"] in json.dumps(x["pick_book_why"]) for p in PICKS), "counts, no name"
+    # A rebuild with none clears it.
+    GP.from_report(b, "nfl", SUNDAY, PICKS[:1], now=THURSDAY)
+    assert "pick_book_why" not in x
+    # The heartbeat adds the games still to play up.
+    import launch as L
+    games = [{"home": "A", "threes": [], "pick_book_why": {"recommendations:no_market": 2, "pool:proxy": 1}},
+             {"home": "B", "threes": [], "pick_book_why": {"recommendations:no_market": 1}},
+             {"home": "C", "threes": [], "kept": "Sun 1:00 PM ET", "pick_book_why": {"pool:proxy": 9}}]
+    board = {"most_likely": [], "recommendations": [], "game_bets": [],
+             "game_parlays": {"games": games, "counts": {"games": 3, "threes": 0}}}
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "b.json")
+        with open(path, "w") as fh:
+            json.dump(board, fh)
+        was = L._full_copy
+        L._full_copy = lambda p: p
+        try:
+            got = L._board_counts(path)
+        finally:
+            L._full_copy = was
+    assert got["pick_book_why"] == {"recommendations:no_market": 3, "pool:proxy": 1}, got.get("pick_book_why")
+
+
 def test_a_game_whose_props_are_not_bought_says_so_not_no_book():
     """Monday night's game on a Friday (20 November 2026: the NFL read 19 of 47 picks "no real book" with that
     game still to buy): with fewer than PROPS_BOUGHT_MIN of its props priced, the builder's own rule, a pick held

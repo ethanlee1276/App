@@ -3149,7 +3149,7 @@ const WF_REPORT_STEPS = [
   ["target", "Who we think wins", "Our call and how sure we are, beside our ratings’ own pick."],
   ["people", "What decides it", "The matchups, who is hurt and what that changes, the red-zone roles, the last meeting and how the game should go."],
   ["check", "The picks", "Every read the numbers back becomes a pick, with its price and our chance."],
-  ["ticket", "Parlays made of those picks", "Three-leg parlays and touchdown pairs, built only from the report’s own picks."],
+  ["ticket", "Parlays built on those picks", "Three three-leg parlays and three touchdown pairs a game, the report’s own picks first; any other leg is named on its ticket."],
   ["chart", "Then it grades itself", "After the final, every pick and parlay gets a check or an X, the injury report is checked, and a miss says why."],
 ];
 const WF_LEAGUE = { nfl: "NFL", cfb: "College football", nba: "NBA", cbb: "College basketball", nhl: "NHL",
@@ -3206,7 +3206,7 @@ function flReportHTML(fl, key = "su") {
   return `<section class="wf-report" aria-labelledby="wf-report-h-${key}">
     <span class="fl-tag">${iconMark("book", 12)}Every game</span>
     <h2 class="fl-h2" id="wf-report-h-${key}">A game report for every game</h2>
-    <p class="wf-sub">Before every game in every league: a scouting report in plain words, the picks it makes, and parlays built only from those picks.</p>
+    <p class="wf-sub">Before every game in every league: a scouting report in plain words, the picks it makes, and parlays built on those picks.</p>
     <ol class="wf-steps">${WF_REPORT_STEPS.map(([ic, h, t]) => `<li class="wf-step">${iconMark(ic, 15)}
       <span class="wf-step-t"><b>${h}</b><span>${t}</span></span></li>`).join("")}</ol>
     ${stats.length ? `<div class="wf-stats">${stats.map(([n, w]) => `<div class="wf-stat"><b>${escapeHtml(n)}</b>

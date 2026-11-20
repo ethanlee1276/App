@@ -121,7 +121,9 @@ def test_the_page_draws_the_report_card_and_the_tiles():
     src = _between("const WF_REPORT_STEPS = [", "/* The page the account wall held back")
     full, bare, gone, tiles = _node(src + f"""console.log(JSON.stringify([flReportHTML({json.dumps(fl)}),
         flReportHTML({{}}), flReportHTML({json.dumps(lost)}), flFeaturesHTML()]));""")
-    assert "A game report for every game" in full and "Parlays made of those picks" in full
+    assert "A game report for every game" in full and "Parlays built on those picks" in full
+    # Since ZR a game short of its picks fills its three from other props, each named: not "only".
+    assert "the report’s own picks first; any other leg is named on its ticket" in full and "only from" not in full
     assert "Then it grades itself" in full and full.count('class="wf-step"') == 5
     assert "<b>80–41</b>" in full and "report picks, graded" in full
     assert "<b>13 of 22</b>" in full and "winners called" in full and "<b>95%</b>" in full

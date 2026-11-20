@@ -9338,6 +9338,18 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZS. Follow-ups to ZR** (step 807; 20 November). Nothing to run. The report's one-line summary names the touchdown
+pair our research ranks best (a pair with a stand-in scorer comes last), not just the likeliest one. The heartbeat's
+reasons a game is short now count every trio the fill could try: since ZR the last level tries them all, and two NFL
+games read "conflicts" only because the old count looked at the report's own picks. The reasons are now `conflicts`
+(no three of its legs fit), `under_floor` (none reaches 15%) and `legs_used` (trios clear, but each usable leg
+already rides on two tickets); live at 10:15 ET the three short NFL games all read `legs_used`. New heartbeat key
+`pick_book_why`: of the report picks counted `refused_book` (19 of the NFL's 47), which list held each and what its
+row lacked, e.g. `recommendations:no_market` or `pool:proxy`, counts only. Read it after the next NFL build to see
+whether those picks are projections no book prices or something to fix. The members' pitch on Report Picks and the
+More page said the parlays are built "only from" the report's picks; they now say three and three a game, the
+report's picks first, any other leg named on its ticket.
+
 **ZR. Every game posts three three-leg parlays and three scorer pairs** (step 806; 20 November). Nothing to run.
 Ethan: "We should be making the 3 best parlays possible with the data we have including the game report with the
 best possible props we have", and, asked what that meant a game: "i want 3 3 leg player prop parlays and 3 2 leg td

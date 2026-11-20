@@ -654,6 +654,15 @@ def _board_counts(path: str) -> dict:
                     fates[k] = fates.get(k, 0) + int(v or 0)
         if fates:
             out["pick_fates"] = {"picks": sum(fates.values()), **fates}
+        # …and of the picks no real book prices, the list that held each and what
+        # its row lacked (gameparlays._book_gap): "recommendations:no_market".
+        gaps: dict = {}
+        for x in gp["games"]:
+            if isinstance(x, dict) and not x.get("kept") and isinstance(x.get("pick_book_why"), dict):
+                for k, v in x["pick_book_why"].items():
+                    gaps[k] = gaps.get(k, 0) + int(v or 0)
+        if gaps:
+            out["pick_book_why"] = gaps
         # A posted ticket stays until a leg breaks (gameparlays.choose, ZQ): of the
         # tickets the games still to play posted last build, how many they post
         # again and how many they replaced. Counts only.

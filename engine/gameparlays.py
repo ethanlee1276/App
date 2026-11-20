@@ -2323,7 +2323,28 @@ def _refused_why(rows: list) -> str:
     return next((f"refused_{w}" for w in ("out", "book", "price", "edge") if w in why), "refused")
 
 
-def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) -> dict:
+def _book_gap(row: dict) -> str:
+    """What a row lacks for a real price (`_refused_why`'s ``refused_book``),
+    first by this order: the proxy stand-in, no book, no market behind the
+    number, a book that cannot be bet, no price."""
+    book = str(row.get("book") or "").strip().lower()
+    if book == "proxy":
+        return "proxy"
+    if not book:
+        return "no_book"
+    if row.get("has_market") is False:
+        return "no_market"
+    if row.get("bettable") is False:
+        return "not_bettable"
+    try:
+        int(float(row.get("odds")))
+    except (TypeError, ValueError):
+        return "no_odds"
+    return "other"
+
+
+def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
+                  book_why: dict | None = None) -> dict:
     """What became of each of a report's player picks as a parlay leg, as counts
     (PICKLEGS1, 2026-11-19: three Sunday games' reports carried 12 picks and the
     board priced 3 of them as legs, and nothing said what the other nine were).
@@ -2349,6 +2370,11 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) ->
                     "no real book" with Monday's game still to buy);
       absent        on none of the board's lists by this number.
 
+    ``book_why``, when given, counts each ``refused_book`` pick by the list
+    that held it and what its row lacked (`_book_gap`), "recommendations:
+    no_market" and the like: the NFL read 19 of 47 picks refused_book with
+    its games' props bought (20 November 2026), and the count said no more.
+
     {} when the report has no player pick. Never raises."""
     try:
         from .parlays import parlay_market
@@ -2368,10 +2394,12 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) ->
         def keys(rows):
             return {_pick_key(r) for r in rows or [] if isinstance(r, dict)}
         held: dict = {}
+        first_list: dict = {}
         for lst in ("most_likely", POOL_KEY, "recommendations"):
             for r in board.get(lst) or []:
                 if isinstance(r, dict) and _pick_key(r) in want:
                     held.setdefault(_pick_key(r), []).append(r)
+                    first_list.setdefault(_pick_key(r), (lst, r))
         matchup = set()
         for g in board.get("matchup_picks") or []:
             if isinstance(g, dict):
@@ -2392,6 +2420,10 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) ->
                 fate = _refused_why(held[k])
                 if fate == "refused_book" and unbought:
                     fate = PROPS_WAIT
+                if fate == "refused_book" and book_why is not None:
+                    lst, row = first_list[k]
+                    label = f"{'pool' if lst == POOL_KEY else lst}:{_book_gap(row)}"
+                    book_why[label] = book_why.get(label, 0) + 1
             elif k in matchup:
                 fate = "matchup_only"
             elif k[:2] in field:
@@ -2476,12 +2508,18 @@ def from_report(board: dict, sport: str, game: dict, picks: list, now=None) -> d
         x["picks_priced"] = _picks_priced(board, sp, game, want, now)
     else:
         x.pop("picks_priced", None)
-    # What became of each of its picks as a leg, as counts (`_picks_census`).
-    fates = _picks_census(board, sp, game, picks, now)
+    # What became of each of its picks as a leg, as counts (`_picks_census`),
+    # and of those no real book prices, which list held each and what it lacked.
+    book_why: dict = {}
+    fates = _picks_census(board, sp, game, picks, now, book_why=book_why)
     if fates:
         x["pick_fates"] = fates
     else:
         x.pop("pick_fates", None)
+    if book_why:
+        x["pick_book_why"] = book_why
+    else:
+        x.pop("pick_book_why", None)
     # What a game short of its three had to fill from (`tickets_of`): counts, no leg.
     for k in ("fill_fit", "fill_clear"):
         if made.get(k) is None:
