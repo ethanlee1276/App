@@ -117,9 +117,51 @@ function rpGameHTML(d, key, bets, tix, open) {
   </details>`;
 }
 
+/* THE LIKELIEST TICKETS TODAY (ZM, 20 November 2026). Ethan: "make better picks and make better
+   selections with the information we're given". A night posts a game's two- and three-leg parlays by
+   the dozen, a fold a game, and the record says the likeliest of them hit most: the two-leg tickets
+   are 26 of 36 in hockey and basketball. Above the games, each game still to play offers its likeliest
+   ticket by our numbers, and the three likeliest of those are a line each: the game and how many legs,
+   the legs in words, our chance and the price to take it at. A line is a door to its game, where the
+   ticket is drawn in full (said once). Scorer pairs are long by design, and a ticket our own card says
+   to pass on (`playable` false: no book likely pays enough for it) is not offered. Fewer than two games
+   to choose from is no ranking, and draws nothing. */
+const RP_TOP_MAX = 3;
+function rpTopTickets(d, byGame, keys) {
+  const best = [];
+  keys.forEach((k) => {
+    const g = rpGame(d, k);
+    const x = (byGame.get(k) || {}).tix;
+    if (!g || !x || rpPhase(g) !== "next") return;
+    const pick = [...(x.twos || []).map((t) => ["two", t]), ...(x.threes || []).map((t) => ["three", t])]
+      .filter(([, t]) => t && (t.legs || []).length && Number(t.joint) > 0 && t.playable !== false)
+      .sort((a, b) => Number(b[1].joint) - Number(a[1].joint))[0];
+    if (pick) best.push({ key: k, kind: pick[0], t: pick[1] });
+  });
+  best.sort((a, b) => Number(b.t.joint) - Number(a.t.joint));
+  return best.length >= 2 ? best.slice(0, RP_TOP_MAX) : [];
+}
+function rpTopHTML(items) {
+  if (!items.length) return "";
+  return `<section class="rpk-top" aria-label="The likeliest tickets today">
+    <h4 class="rpk-top-h">The likeliest tickets today<span>by our numbers, one a game</span></h4>
+    ${items.map(({ key, kind, t }) => {
+      const [away, home] = key.split("@");
+      const take = t.take_words ? ` · take it at ${escapeHtml(t.take_words)} or better` : "";
+      return `<button type="button" class="rpk-top-row" data-rpk-jump="rpk-${escapeAttr(away)}-${escapeAttr(home)}">
+        <span class="rpk-top-game">${escapeHtml(teamName(away))} at ${escapeHtml(teamName(home))} · ${
+          kind === "two" ? "two legs" : "three legs"}</span>
+        <span class="rpk-top-legs">${(t.legs || []).map(rpBetWords).join(" + ")}</span>
+        <span class="rpk-top-p"><b>${Math.round(100 * Number(t.joint))}%</b> by our numbers${take}</span>
+      </button>`;
+    }).join("")}
+  </section>`;
+}
+
 /* TODAY'S PICKS, the first tab: what the day carries and how its finished
-   games went, a chip a game, then the games by where they stand (on now,
-   still to play, finished), each folded to its line, the next one open. */
+   games went, the likeliest tickets still to play, a chip a game, then the
+   games by where they stand (on now, still to play, finished), each folded
+   to its line, the next one open. */
 const RP_PHASES = [["live", "On now"], ["next", "Still to play"], ["final", "Finished"]];
 function rpTodayHTML(d, byGame, keys) {
   const pair = ["nfl", "cfb"].includes(state.sport) ? "touchdown" : state.sport === "nhl" ? "goal-scorer" : "scorer";
@@ -156,7 +198,7 @@ function rpTodayHTML(d, byGame, keys) {
   return `<div class="rpk-summary"><b>${escapeHtml(carries)}</b>${
       sofar ? `<span>Finished so far: ${escapeHtml(sofar)}</span>` : ""}
       <button type="button" class="rpk-rec" data-rpk-rec="1" data-rpk-tab="record"></button></div>
-    ${jump}${groups}`;
+    ${rpTopHTML(rpTopTickets(d, byGame, keys))}${jump}${groups}`;
 }
 
 /* HOW OUR REPORTS DID (engine/reportrecord, 2026-11-16). Ethan: "think about

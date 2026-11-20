@@ -118,6 +118,21 @@ button.rpk-rec:empty { display: none; }
   color: var(--text-mute); font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; }
 .rpk-slate-go:hover, .rpk-slate-go:focus-visible { color: var(--gold); }
 
+/* The likeliest tickets today (reportpicks.js rpTopHTML, ZM): one card, a line a ticket, each a door to its game. */
+.rpk-top { margin: 0 0 12px; padding: 8px 12px 4px; border-radius: var(--radius);
+  background: color-mix(in oklab, var(--good) 7%, var(--panel)); }
+.rpk-top-h { margin: 0 0 2px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  font-size: var(--fs-sm); letter-spacing: .04em; text-transform: uppercase; color: var(--good); }
+.rpk-top-h span { color: var(--text-mute); font-weight: 500; letter-spacing: 0; text-transform: none; }
+.rpk-top-row { display: grid; gap: 2px; width: 100%; padding: 8px 0; border: 0; background: none; text-align: left;
+  font: inherit; color: var(--text); cursor: pointer; }
+.rpk-top-row + .rpk-top-row { border-top: 1px solid var(--border-soft); }
+.rpk-top-game { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 600; }
+.rpk-top-legs { font-size: var(--fs-sm); line-height: var(--lh-snug); transition: color .15s ease; }
+.rpk-top-p { color: var(--text-mute); font-size: var(--fs-xs); }
+.rpk-top-p b { color: var(--good); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.rpk-top-row:hover .rpk-top-legs, .rpk-top-row:focus-visible .rpk-top-legs { color: var(--gold); }
+
 /* Ethan's featured games, apart (engine/featured, FEATURED1): each kind's line, then each game's. */
 .rpk-fx { margin: 14px 0 6px; padding: 10px 12px 4px; border-radius: var(--radius);
   background: color-mix(in oklab, var(--gold) 8%, transparent); }
