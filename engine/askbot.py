@@ -1651,6 +1651,18 @@ def record_facts(record: dict, sport: str = "") -> dict:
     rp = ((record.get("report_by_sport") or {}).get(sport) if sport else record.get("report")) or {}
     if rp.get("settled"):
         out["game_report_picks"] = _wl(rp)
+        # …and by where a report shows the pick (reportbets.journal's labels, PICKSRC1): its card,
+        # a matchup read, a breakout candidate or a fade; the picks journaled before the labels were one kind.
+        from .reportbets import GRADE_BEFORE, SOURCE_WORDS
+        kinds = {g: {"wins": v.get("w"), "losses": v.get("l"), "net_units": v.get("net_u")}
+                 for g, v in (rp.get("by_grade") or {}).items()
+                 if isinstance(v, dict) and g in SOURCE_WORDS.values() and (v.get("w") or v.get("l"))}
+        if kinds:
+            before = (rp.get("by_grade") or {}).get(GRADE_BEFORE) or {}
+            if before.get("w") or before.get("l"):
+                kinds["earlier picks, every kind together"] = {
+                    "wins": before.get("w"), "losses": before.get("l"), "net_units": before.get("net_u")}
+            out["game_report_picks_by_where_the_report_showed_them"] = kinds
     gpr = record.get("game_parlay_record") if isinstance(record.get("game_parlay_record"), dict) else {}
     tickets = {}
     for sp, kinds in gpr.items():

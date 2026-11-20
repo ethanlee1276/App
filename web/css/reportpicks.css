@@ -108,8 +108,8 @@ button.rpk-rec:empty { display: none; }
 .rpk-fact-more[hidden] { display: none; }
 
 /* The last slate at a glance (engine/reportrecord.last_slate, LASTNIGHT1): one card above today's picks. */
-.rpk-slate { margin: 0 0 14px; padding: 10px 12px; border-radius: var(--radius); border: 1px solid var(--border-soft);
-  background: color-mix(in oklab, var(--gold) 6%, transparent); }
+.rpk-slate { margin: 0 0 14px; padding: 10px 12px; border-radius: var(--radius);
+  background: color-mix(in oklab, var(--gold) 8%, transparent); }
 .rpk-slate-h { margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
   font-size: var(--fs-sm); letter-spacing: .04em; text-transform: uppercase; color: var(--gold); }
 .rpk-slate-h span { color: var(--text-mute); font-weight: 500; letter-spacing: 0; text-transform: none; }

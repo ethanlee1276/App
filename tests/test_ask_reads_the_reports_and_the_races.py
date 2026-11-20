@@ -201,6 +201,14 @@ def test_the_record_brings_the_report_book_and_the_game_parlays():
     assert out["game_report_parlays"]["nfl"]["three-leg parlay"]["legs_hit"] == "18 of 27"
     assert AB.record_facts(rec, "nfl")["game_report_picks"]["wins"] == 3
     assert "game_report_parlays" not in AB.record_facts(rec, "nba")
+    # By where the report showed the pick (PICKSRC1): the book's own split by label, the old label last.
+    assert "game_report_picks_by_where_the_report_showed_them" not in out, "one old label is no split"
+    split = AB.record_facts({"report": {"settled": 12, "wins": 8, "losses": 4, "net_units": 2.6, "by_grade": {
+        "Our picks": {"w": 5, "l": 1, "net_u": 0.3}, "Matchup read": {"w": 1, "l": 2, "net_u": -0.1},
+        "Fade": {"w": 0, "l": 0, "net_u": 0}, "Report pick": {"w": 2, "l": 1, "net_u": 0.05}}}})
+    kinds = split["game_report_picks_by_where_the_report_showed_them"]
+    assert kinds["Our picks"] == {"wins": 5, "losses": 1, "net_units": 0.3} and kinds["Matchup read"]["losses"] == 2
+    assert "Fade" not in kinds and kinds["earlier picks, every kind together"]["wins"] == 2
     # One set a game, said once beside the counts.
     assert out["game_report_parlays_note"].startswith("one set a game: the tickets each report carried when")
     # THE RECORD'S OWN KINDS ARE "three", "two", "scorers" (engine/gameparlays.SOURCES): Ask named a real

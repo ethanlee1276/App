@@ -1219,6 +1219,28 @@ function rpKinds(rep) {
   });
   return out;
 }
+/* THE PICKS BY WHERE THE REPORT SHOWED THEM (PICKSRC1, 2026-11-19). A report shows picks in four places:
+   its card, its matchup reads, its breakout candidates and its fades. They were one book with one label,
+   so nothing said whether a matchup read's pick hits like the card's. Each is journaled now under the
+   first place its report shows it (engine/reportbets.journal) and the book's own split by label
+   (performance.by_grade) says how each has done; the picks from before 20 November, journaled as one
+   kind, are said last as what they are. A split is two rows or more, one of them a kind. */
+const RP_SOURCES = [["Our picks", "Our picks"], ["Matchup read", "Matchup reads"],
+                    ["Breakout candidate", "Breakout candidates"], ["Fade", "Fades"]];
+const RP_SOURCE_BEFORE = ["Report pick", "Earlier picks, every kind together"];
+function rpSourcesHTML(rep) {
+  const by = (rep && rep.by_grade) || {};
+  const graded = ([k]) => by[k] && Number(by[k].w || 0) + Number(by[k].l || 0) > 0;
+  const kinds = RP_SOURCES.filter(graded);
+  const rows = kinds.concat([RP_SOURCE_BEFORE].filter(graded));
+  if (!kinds.length || rows.length < 2) return "";
+  return rows.map(([k, word]) => {
+    const w = Number(by[k].w || 0), g = w + Number(by[k].l || 0), net = Number(by[k].net_u || 0);
+    return `<div class="rec-row flush tight"><span class="rr-what">${escapeHtml(word)}</span>
+      <span><b>${w} of ${g}</b> hit · ${Math.round((100 * w) / g)}% · <span class="${
+        net >= 0 ? "rr-pos" : "rr-neg"}">${tlUnits(net)}</span></span></div>`;
+  }).join("");
+}
 function rpPickWords(r) {
   const m = String(r.market || "");
   if (GP_SCORE[m]) return `${r.player || ""} ${GP_SCORE[m]}`;
@@ -1260,6 +1282,7 @@ function rpPicksHTML(rep, scope, recent) {
       <span><b>${x.w} of ${g}</b> hit · ${Math.round((100 * x.w) / g)}% · <span class="${
         x.net >= 0 ? "rr-pos" : "rr-neg"}">${tlUnits(x.net)}</span></span></div>`;
   }).join("");
+  const bySource = rpSourcesHTML(rep);
   const rows = (recent || []).filter((r) => !scope || r.sport === scope).slice(0, 10).map((r) => `<div class="rec-row flush tight">
       <span class="rr-date">${escapeHtml(String(r.date || "").slice(5))}</span>
       <span class="rr-what">${scope ? "" : `<b>${escapeHtml(typeof lgCode === "function" ? lgCode(r.sport) : String(r.sport || "").toUpperCase())}</b> `}${
@@ -1270,6 +1293,7 @@ function rpPicksHTML(rep, scope, recent) {
       <div class="rr-head">Picks${scope ? "" : " · every league"}</div>
       <div class="stats rec-kpis">${tiles}</div>
       ${byKind ? `<div class="rr-head">By kind</div>${byKind}` : ""}
+      ${bySource ? `<div class="rr-head">By where the report showed it</div>${bySource}` : ""}
       ${rows ? `<div data-rec-flat="picks"><div class="rr-head">Newest picks</div><div class="rr-rows">${rows}</div></div>` : ""}
     </div>`;
 }

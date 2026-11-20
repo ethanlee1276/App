@@ -77,13 +77,27 @@ PICKS = [_pick("S Strong", "receptions"), _pick("F Fill", "rush_att"), _pick("L 
          {"player": "PHI", "market": "moneyline", "side": "OVER", "line": 0.5, "game": True}]
 
 
+def test_a_refused_pick_says_why():
+    """A row a leg source holds and will not use, by why: ruled out, no real book, past the price cap, a
+    number the Edge path refuses; the first of those any of its rows shows."""
+    ok = _rec("X", "rec_yds", 0.6)
+    assert GP._refused_why([dict(ok, injury_status="Out")]) == "refused_out"
+    assert GP._refused_why([dict(ok, book="proxy")]) == GP._refused_why([dict(ok, bettable=False)]) == "refused_book"
+    assert GP._refused_why([dict(ok, odds=None)]) == "refused_book"
+    assert GP._refused_why([dict(ok, odds=-400)]) == "refused_price", "past the -250 cap: no parlay leg"
+    assert GP._refused_why([dict(ok, raw_prob=0.80, fair_prob=0.55)]) == "refused_edge", "25 points off the fair price"
+    assert GP._refused_why([dict(ok, odds=-400), dict(ok, injury_status="OUT")]) == "refused_out"
+    assert GP._refused_why([ok]) == "refused" and GP._refused_why([]) == "refused"
+    assert {"refused_out", "refused_book", "refused_price", "refused_edge", "refused"} <= set(GP.PICK_FATES)
+
+
 def test_each_pick_is_sorted_into_one_fate():
     b = _board()
     b["game_parlays"] = GP.build(b, "nfl", now=THURSDAY)
     x = GP.from_report(b, "nfl", SUNDAY, PICKS, now=THURSDAY)
     assert x["report_picks"] == 10, x["report_picks"]
     assert x["pick_fates"] == {"strong": 1, "fill": 1, "low": 1, "no_parlay": 1, "benched": 1, "other_line": 1,
-                               "refused": 1, "matchup_only": 1, "scorer_only": 1, "absent": 1}, x["pick_fates"]
+                               "refused_book": 1, "matchup_only": 1, "scorer_only": 1, "absent": 1}, x["pick_fates"]
     assert sum(x["pick_fates"].values()) == x["report_picks"], "every player pick has exactly one fate"
     assert set(x["pick_fates"]) <= set(GP.PICK_FATES)
     # Counts and nothing else: no name rides in the entry's census.

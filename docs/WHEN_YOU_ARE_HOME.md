@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZG. The record says how each kind of report pick has done** (step 795; 19 November). Nothing to run. The first
+night's count of what became of each report pick as a parlay leg (step ZD) read, for the NFL's games still to play:
+39 picks, 18 of them legs a ticket can take, 8 a matchup read's own pick no ticket could take, 9 a row the board
+holds and will not use, 2 in markets a parlay never carries, 1 benched and 1 priced at another number. Before a
+matchup read's pick becomes a parlay leg I want to know it hits like the picks on the card, and nothing could say:
+every report pick was journaled under one label. From this push each is journaled under the first place its report
+shows it (Our picks, Matchup read, Breakout candidate, Fade), and a pick still open under the old label takes its
+kind's, so Sunday's NFL picks count from the start. The Record page's game-report section shows the split once two
+rows have results ("By where the report showed it"), the earlier picks as one row, and Ask Qellys reads the same.
+The count of refused picks now says why: ruled out, no real book, past the -250 cap, or a number the Edge path
+refuses. What this decides is whether matchup-read picks join the parlays; I will make that call on the split as
+results come in, not before it. Checked by tests/test_report_bets_have_their_own_book_and_page.py,
+tests/test_the_heartbeat_says_what_became_of_each_report_pick.py and
+tests/test_ask_reads_the_reports_and_the_races.py.
+
 **ZF. A game's page wears its two clubs, and the cards say each thing once** (step 794; 19 November). Nothing to
 run. The colour work, continued: the page a game has before it starts and after it ends now sits on its two clubs'
 colours, the away club from the left and the home club from the right, the way the live page, a team's page and a

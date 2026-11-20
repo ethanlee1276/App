@@ -38,6 +38,8 @@ SOURCES = ("card", "read", "breakout", "fade")
 #: Each one in the report's own words.
 SOURCE_WORDS = {"card": "Our picks", "read": "Matchup read", "breakout": "Breakout candidate",
                 "fade": "Fade"}
+#: The label every report pick was journaled under before 20 November 2026, all kinds as one (`journal`).
+GRADE_BEFORE = "Report pick"
 #: The key a finished report carries its bets under until `attach` lifts them.
 PRIVATE = "_bets"
 #: What a row keeps: what the page shows and what the record journals.
@@ -131,6 +133,12 @@ def bets_of(sections, rows: dict | None = None) -> list:
     return list(seen.values())
 
 
+def first_source(b: dict) -> str:
+    """The first place a reader meets a pick, in SOURCES' order; "" for a row that names none."""
+    got = (b or {}).get("sources") or []
+    return next((s for s in SOURCES if s in got), "")
+
+
 def attach(result: dict) -> int:
     """KEY on the board: every report's bets (PRIVATE, lifted off each report
     so the reports carry them no more), each with its game, each pick once a
@@ -163,6 +171,46 @@ def journal(conn, board: dict, sport: str) -> int:
     if not rows or not sport:
         return 0
     from . import ledger
-    return ledger.log_most_likely(conn, {"sport": sport, "date": board.get("date") or "",
-                                         "games": board.get("games") or [], "most_likely": rows},
-                                  depth=None, category=CATEGORY, grade_label="Report pick")
+    # EACH KIND OF PICK UNDER ITS OWN LABEL (PICKSRC1, 2026-11-19). Every report pick was journaled as
+    # "Report pick", so the record could not say whether a matchup read's pick hits like the card's, and
+    # the parlays could not tell which of a report's picks have earned a leg (the heartbeat's census,
+    # gameparlays._picks_census: 8 of the NFL's 39 picks were matchup reads no ticket could take). A pick
+    # is labelled by the first place its report shows it (`first_source`, in the report's own words), and
+    # the record's split by label says the rest (ledger.performance ``by_grade``). One row a pick still:
+    # a pick keeps the label it was first written under.
+    n = 0
+    for src in (*SOURCES, ""):
+        mine = [b for b in rows if first_source(b) == src]
+        if mine:
+            if src:
+                _relabel_open(conn, sport, mine, SOURCE_WORDS[src])
+            n += ledger.log_most_likely(conn, {"sport": sport, "date": board.get("date") or "",
+                                               "games": board.get("games") or [], "most_likely": mine},
+                                        depth=None, category=CATEGORY,
+                                        grade_label=SOURCE_WORDS.get(src, GRADE_BEFORE))
+    return n
+
+
+def _relabel_open(conn, sport: str, rows: list, label: str) -> int:
+    """A pick still open under the old label takes its kind's: the NFL's Sunday picks were journaled on
+    Thursday as "Report pick" and would have sat outside the split until the week graded. Open rows only
+    (a graded row keeps what it was graded as), keyed as the journal keys them (ledger.game_row_keys for a
+    game bet). Returns rows relabelled; never raises."""
+    from . import ledger
+    n = 0
+    for b in rows:
+        try:
+            player, market = b.get("player"), str(b.get("market") or "")
+            if b.get("kind") == "game" or market in ledger.GAME_MARKETS:
+                keys = ledger.game_row_keys(b, market)
+                if keys is None:
+                    continue
+                player, market = keys[0], keys[1]
+            if not player or not market:
+                continue
+            n += conn.execute("UPDATE bets SET grade=? WHERE sport=? AND category=? AND status='open' AND grade=? "
+                              "AND player=? AND market=?",
+                              (label, sport, CATEGORY, GRADE_BEFORE, player, market)).rowcount
+        except Exception:                                    # noqa: BLE001
+            continue
+    return n

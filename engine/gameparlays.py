@@ -2035,7 +2035,36 @@ def _picks_priced(board: dict, sport: str, game: dict, want: set, now=None) -> i
 
 #: What became of a report's player pick as a parlay leg (`_picks_census`).
 PICK_FATES = ("strong", "fill", "low", "no_parlay", "benched", "other_line", "matchup_only", "scorer_only",
-              "refused", "absent")
+              "refused_out", "refused_book", "refused_price", "refused_edge", "refused", "absent")
+
+
+def _refused_why(rows: list) -> str:
+    """Why no leg source will use the rows that hold a pick, as a fate: the
+    player is ruled out (``refused_out``), no real book prices it
+    (``refused_book``: not bettable, a proxy, no price), its price is past the
+    cap or the long-price limit (``refused_price``: likely.HEAVIEST_PRICE,
+    stakeplan.priced_out), or its number is one the Edge path refuses
+    (``refused_edge``: `credible_row`); ``refused`` for anything else. The
+    first of those, in that order, any of its rows shows."""
+    from .likely import HEAVIEST_PRICE
+    from .stakeplan import priced_out
+    why = set()
+    for r in rows or []:
+        if str(r.get("injury_status") or "").strip().upper() in _OUT:
+            why.add("out")
+            continue
+        try:
+            odds = int(float(r.get("odds")))
+        except (TypeError, ValueError):
+            odds = None
+        if (odds is None or r.get("bettable") is False or r.get("has_market") is False
+                or str(r.get("book") or "").strip().lower() in ("", "proxy")):
+            why.add("book")
+        elif odds < HEAVIEST_PRICE or priced_out("edge", odds):
+            why.add("price")
+        elif not credible_row(r):
+            why.add("edge")
+    return next((f"refused_{w}" for w in ("out", "book", "price", "edge") if w in why), "refused")
 
 
 def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) -> dict:
@@ -2054,9 +2083,9 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) ->
       matchup_only  a matchup pick's own row and no leg source's
                     (board["matchup_picks"]);
       scorer_only   a scorer the touchdown field prices and no leg source does;
-      refused       a row a leg source holds and will not use (not bettable, a
-                    proxy or no book, ruled out, past the price cap, a number
-                    the Edge path refuses: `priced_legs`, `credible_row`);
+      refused…      a row a leg source holds and will not use, by why
+                    (`_refused_why`): ruled out, no real book, past the price
+                    cap, a number the Edge path refuses, or anything else;
       absent        on none of the board's lists by this number.
 
     {} when the report has no player pick. Never raises."""
@@ -2077,7 +2106,11 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) ->
 
         def keys(rows):
             return {_pick_key(r) for r in rows or [] if isinstance(r, dict)}
-        held = keys(board.get("most_likely")) | keys(board.get(POOL_KEY)) | keys(board.get("recommendations"))
+        held: dict = {}
+        for lst in ("most_likely", POOL_KEY, "recommendations"):
+            for r in board.get(lst) or []:
+                if isinstance(r, dict) and _pick_key(r) in want:
+                    held.setdefault(_pick_key(r), []).append(r)
         matchup = set()
         for g in board.get("matchup_picks") or []:
             if isinstance(g, dict):
@@ -2094,7 +2127,7 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None) ->
             elif k[:3] in loose:
                 fate = "other_line"
             elif k in held:
-                fate = "refused"
+                fate = _refused_why(held[k])
             elif k in matchup:
                 fate = "matchup_only"
             elif k[:2] in field:

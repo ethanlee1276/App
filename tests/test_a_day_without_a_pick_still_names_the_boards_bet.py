@@ -257,6 +257,10 @@ def render(card, record=None):
     for (const id of ["potd-zone", "potd-top-pick", "potd-record"]) {{
       _els[id] = {{ innerHTML: "", textContent: "", querySelector: () => null }};
     }}
+    // The card's two word helpers (the top pick's line, a carried pick's note in the reader's clock).
+    const tzTime = (t) => new Date(t).toISOString().slice(11, 16);
+    {_fn("topPickWords")}
+    {_fn("potdCarriedWords")}
     {_fn("renderDayTopPick")}
     const teamNameIn = (sp, t) => teamName(t);
     {_fn("potdBetText")}

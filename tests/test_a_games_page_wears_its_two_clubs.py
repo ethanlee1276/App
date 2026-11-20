@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tests"))
 
-import test_a_team_page_wears_its_club_and_the_colours_fade as TW  # noqa: E402
+TW = __import__("test_a_team_page_wears_its_club_and_the_colours_fade")   # the colour harness (a sibling test)
 
 APP = TW.APP
 DETAIL = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")

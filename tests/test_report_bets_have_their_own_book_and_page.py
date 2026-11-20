@@ -114,6 +114,23 @@ def test_the_record_journals_them_in_their_own_book_the_most_likely_way():
                                                  ("Pascal Siakam", "points", "OVER")}, \
         "a game bet keyed off its club; the fade's under and No Price carry no price: no bet"
     assert RB.journal(conn, board, "nba") == 0, "a pick already in the book is not written twice"
+    # Each under the first place its report shows it, in the report's words (PICKSRC1): the record's
+    # split by label then says how each kind has done. A row naming no place keeps the old label.
+    assert dict(conn.execute("SELECT player, grade FROM bets").fetchall()) == {
+        "Jaylen Brown": "Our picks", "BOS": "Our picks", "Pascal Siakam": "Breakout candidate"}
+    assert RB.first_source({"sources": ["read", "card"]}) == "card" and RB.first_source({"sources": ["fade"]}) == "fade"
+    assert RB.first_source({}) == "" and RB.SOURCE_WORDS.get("", RB.GRADE_BEFORE) == "Report pick"
+    old = {"player": "Old Row", "team": "BOS", "market": "reb", "side": "over", "line": 4.5, "odds": -120,
+           "book": "DraftKings", "model_prob": 0.6, "game": "IND@BOS"}
+    assert RB.journal(conn, {"date": "2026-11-16", "games": [], RB.KEY: [old]}, "nba") == 1
+    assert conn.execute("SELECT grade FROM bets WHERE player='Old Row'").fetchone()[0] == "Report pick"
+    # A pick still open under the old label takes its kind's the next time its board is journaled (the
+    # NFL's Sunday picks, written on Thursday); a graded row keeps what it was graded as.
+    conn.execute("UPDATE bets SET grade='Report pick'")
+    conn.execute("UPDATE bets SET status='won' WHERE player='Jaylen Brown'")
+    assert RB.journal(conn, board, "nba") == 0
+    assert dict(conn.execute("SELECT player, grade FROM bets").fetchall()) == {
+        "Jaylen Brown": "Report pick", "BOS": "Our picks", "Pascal Siakam": "Breakout candidate", "Old Row": "Report pick"}
     assert ledger.REPORT_CATEGORY == RB.CATEGORY
     assert RB.CATEGORY not in ledger.RECOMMENDED_CATEGORIES, "a lens on other books' picks: in no chip or total"
     pl = (ROOT / "engine" / "parlayledger.py").read_text(encoding="utf-8")
@@ -196,6 +213,21 @@ def test_the_record_page_draws_the_reports_picks_and_parlays_in_one_section():
     assert "13 riding" in league_rows, "a league with nothing graded yet says how many ride"
     assert "<b>NFL</b> Jahmyr Gibbs" in pooled_html and "<b>NBA</b> Jaylen Brown" in pooled_html
     assert none == ""
+    assert "By where the report showed it" not in nfl_html, "one label alone (the old one) is no split"
+    # The picks by where the report showed them (PICKSRC1): the book's own split by label.
+    split = dict(nba, by_grade={"Our picks": {"w": 9, "l": 3, "net_u": 0.2}, "Matchup read": {"w": 4, "l": 4, "net_u": -0.05},
+                                "Fade": {"w": 0, "l": 0, "net_u": 0}, "Report pick": {"w": 15, "l": 4, "net_u": 0.19}})
+    one = dict(nba, by_grade={"Report pick": {"w": 28, "l": 11, "net_u": 0.34}})
+    got2 = _node(STUBS + code + f"""
+      process.stdout.write(JSON.stringify([recReportBook({x(split)}, 'nba'), recReportBook({x(one)}, 'nba'),
+        rpSourcesHTML({{ by_grade: {{ "Our picks": {{ w: 3, l: 1, net_u: 0.1 }} }} }})]));""")
+    with_split, old_only, lone = got2
+    assert "By where the report showed it" in with_split
+    part = with_split[with_split.index("By where the report showed it"):]
+    assert "<b>9 of 12</b> hit · 75%" in part and "<b>4 of 8</b> hit · 50%" in part and "<b>15 of 19</b> hit · 79%" in part
+    assert part.index("Our picks") < part.index("Matchup reads") < part.index("Earlier picks, every kind together")
+    assert "Fades" not in part, "a kind with nothing graded has no row"
+    assert "By where the report showed it" not in old_only and lone == "", "a split is two rows or more"
     assert "const reportBook = recReportBook({ rep: scoped ? (d.report_by_sport || {})[scope] : d.report," in RECORD
     assert "    + reportBook\n" in RECORD
     assert "recReportSection" not in RECORD, "drawn once, above the folds, not again inside one"
