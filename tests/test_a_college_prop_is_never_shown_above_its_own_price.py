@@ -166,16 +166,17 @@ def test_a_posted_pick_takes_the_ceiling_when_the_list_hands_its_number_back():
     assert abs(res["most_likely"][0]["model_prob"] - price) < 1e-9, "one bet, one chance: the list shows the board's"
 
 
-tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
-fails = 0
-for t in tests:
-    try:
-        t()
-        print(f"ok   {t.__name__}")
-    except Exception as exc:                                         # noqa: BLE001
-        fails += 1
-        import traceback
-        print(f"FAIL {t.__name__}: {type(exc).__name__}: {exc}")
-        traceback.print_exc()
-print(f"\n{len(tests) - fails} tests passed." if not fails else f"\n{fails} FAILED")
-sys.exit(1 if fails else 0)
+if __name__ == "__main__":
+    import traceback
+    fails = 0
+    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
+    for name, fn in tests:
+        try:
+            fn()
+            print(f"  ok  {name}")
+        except Exception:                                    # noqa: BLE001
+            fails += 1
+            print(f"FAIL {name}")
+            traceback.print_exc()
+    print(f"\n{len(tests) - fails} tests passed." if not fails else f"\n{fails} FAILED")
+    sys.exit(1 if fails else 0)
