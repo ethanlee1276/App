@@ -9338,6 +9338,15 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZL. The pick count says why a pick missed the parlays** (step 800; 20 November). Nothing to run. The heartbeat
+counts what became of each game report pick: on a ticket, a stand-in, under the bar, or turned down and why. On this
+morning's NFL board it said 16 of 42 picks were turned down for "no real book". That number was wrong. A pick sits
+in several lists (Most Likely, the pool, the priced props), and the count said "no book" whenever one of those lists
+held it without a price, even when another list had a real price and the pick was turned down for its price or its
+number. Now a list with a real price decides the reason, "no book" means no list has one, and a player ruled out is
+still said first. Nothing on the site or in any ticket changes; the count is how I find which picks the parlays lose
+and why, and the next NFL build will say the real reasons for those 16.
+
 **ZK. The game reports stay a member's, all of it** (step 799; 20 November). Nothing to run. Your call this morning:
 you first said free accounts should get the report without its picks and parlays, then took it back: the game
 reports are not free. That is how the site already worked, and I checked every door on the live site. The public
