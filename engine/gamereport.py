@@ -301,7 +301,7 @@ TAKE_CAP = -250
 #: the yards and has not beaten the book's line), as is any market whose fit ran off its range
 #: (calibrate.is_reliable). The board still shows the likeliest number there; the report says what it is,
 #: in the Most Likely page's words for the same row, and the record passes it by (reportbets.journal).
-READ_ONLY = "A read, not a bet: a market we can rank but not price yet, so it isn't counted on the record"
+READ_ONLY = "A market we can rank but not price yet, so it isn't counted on the record"
 
 
 def read_only(r) -> bool:
@@ -3837,7 +3837,8 @@ def sec_card(c: Ctx, built: dict) -> dict | None:
     for i, r in enumerate(_card_rows(c), 1):
         leg = dict(r, _game_leg=r.get("kind") == "game")
         items.append({"rank": i, "player": r.get("player") if r.get("kind") != "game" else "",
-                      "team": r.get("team") or "", "tier": str(r.get("tier_label") or ""),
+                      # A read wears no tier: "Top pick" beside "Read, not a bet" said two things at once.
+                      "team": r.get("team") or "", "tier": "" if read_only(r) else str(r.get("tier_label") or ""),
                       "pick": pick_words(leg),
                       "price": " ".join(x for x in (str(r.get("book") or ""), _odds_word(r.get("odds"))) if x),
                       "chance": round(float(r["model_prob"]), 4), "numbers": card_numbers(r),
@@ -3862,7 +3863,8 @@ def sec_card(c: Ctx, built: dict) -> dict | None:
     if par:
         blocks.append(_list(par))
     blocks.append({"type": "note", "text": (
-        "Ranked best to worst: the board's tier, then how hard the matchup backs the pick, then our chance. "
+        "Ranked best to worst: the board's tier, then how hard the matchup backs the pick, then our chance"
+        + ("; every bet comes before a read. " if any(it.get("read_only") for it in items) else ". ") +
         "Play to is the most to pay for it — its fair price at our chance, never past −250. "
         "Every pick is graded on the record." + (" A read is graded on this page only."
                                                  if any(it.get("read_only") for it in items) else ""))})

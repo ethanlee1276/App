@@ -194,7 +194,10 @@ def test_the_bet_carries_the_word_and_the_report_says_it():
     assert not GR.read_only(dict(_row(), kind="game"))
     src = (ROOT / "engine" / "gamereport.py").read_text(encoding="utf-8")
     assert '**({"read_only": READ_ONLY} if read_only(r) else {}),' in src, "on the card's pick"
-    assert '" A read is graded on this page only."' in src
+    assert '" A read is graded on this page only."' in src and '"; every bet comes before a read. "' in src
+    # The tag says "Read, not a bet"; the line under it says why, once, and a read wears no tier beside it.
+    assert GR.READ_ONLY == "A market we can rank but not price yet, so it isn't counted on the record"
+    assert '"tier": "" if read_only(r) else str(r.get("tier_label") or ""),' in src
 
 
 def test_a_read_never_takes_a_bets_place_on_the_card():
@@ -238,6 +241,18 @@ def test_the_record_never_journals_a_read_and_takes_an_open_one_off():
     conn.execute("UPDATE bets SET status='won' WHERE player='Jayden Daniels'")
     RB.journal(conn, board, "nfl")
     assert conn.execute("SELECT status FROM bets WHERE player='Jayden Daniels'").fetchone()[0] == "won"
+
+
+def test_the_pick_census_counts_a_read_as_a_read():
+    """What became of each report pick (gameparlays._picks_census, the heartbeat's pick_fates): a read is
+    said as one, ahead of any other fate, since no ticket takes it."""
+    b = EG.board()
+    read = {"player": "Jayden Daniels", "team": "WAS", "market": "rush_yds", "side": "OVER", "line": 24.5,
+            "read_only": True}
+    bet = {"player": "Malik Nabers", "team": "NYG", "market": "receptions", "side": "OVER", "line": 4.5}
+    got = GP._picks_census(b, "nfl", GAME, [read, bet])
+    assert got.get("read") == 1 and sum(got.values()) == 2, got
+    assert GP.PICK_FATES[0] == "read"
 
 
 def test_the_pages_mark_a_read_and_leave_it_out_of_the_counts():

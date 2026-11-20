@@ -9338,6 +9338,17 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZU. A read on the card, said once** (step 809; 20 November). Nothing to run. Drawn and looked at: on the picks
+card a read wore the board's tier ("Top pick") beside its "Read, not a bet" tag, and the line under the tag began
+with the same words. A read now wears only its tag, the line says why once ("A market we can rank but not price yet,
+so it isn't counted on the record"), and the card's note says every bet comes before a read. The heartbeat's pick
+census counts a read as `read`, ahead of any other fate, since no ticket takes one. A report's header no longer
+prints a reading time it does not have. On the record (each game's starting set, read off the public record file):
+the NBA's two-leg tickets 12 of 16 (+12.3 units) and its three-leg tickets 6 of 27 (−6.0 units). Those three-leg
+tickets' legs hit 58 of 81 (72%) against the 66% we said, 19 of their 21 losses were one leg away, and 6 of 27 is
+within the noise of the 30% we stated, so their build is unchanged. Hockey's three-leg tickets are 22 of 43 (+18.1
+units) and its goal-scorer pairs 6 of 41 (+11.5 units).
+
 **ZT. Basketball's two-leg parlays, and reads that are not bets** (step 808; 20 November). Nothing to run. Ethan, to
 the two questions in the ZS report: "yes to both, do 2-leg nba parlays and label the yardage picks". Basketball's
 books post no anytime scorer, so the NBA, college basketball and the WNBA now post three two-leg player-prop parlays

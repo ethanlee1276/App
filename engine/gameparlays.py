@@ -2338,7 +2338,7 @@ def _picks_priced(board: dict, sport: str, game: dict, want: set, now=None) -> i
 
 
 #: What became of a report's player pick as a parlay leg (`_picks_census`).
-PICK_FATES = ("strong", "fill", "low", "no_parlay", "benched", "other_line", "matchup_only", "scorer_only",
+PICK_FATES = ("read", "strong", "fill", "low", "no_parlay", "benched", "other_line", "matchup_only", "scorer_only",
               "refused_out", "refused_unreliable", "refused_book", "refused_price", "refused_edge", "refused",
               PROPS_WAIT, "absent")
 
@@ -2419,6 +2419,8 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
     board priced 3 of them as legs, and nothing said what the other nine were).
     No pick rides here; the heartbeat adds a league's up (launch._board_counts):
 
+      read          a read, not a bet (gamereport.READ_ONLY: a market we can
+                    rank but not price), which no ticket takes (ZT);
       strong        a leg at LEG_FLOOR or better, what a ticket is made of;
       fill          a leg the fill may take (FILL_LEG_FLOOR up to LEG_FLOOR);
       low           priced as a leg, under FILL_LEG_FLOOR once corrected (legfit);
@@ -2452,6 +2454,7 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
         from .stakeplan import market_benched
         want = {_pick_key(b) for b in picks or [] if _player_pick(b)}
         want.discard(("", "", "", None))
+        reads = {_pick_key(b) for b in picks or [] if _player_pick(b) and b.get("read_only")}
         if not want:
             return {}
         legs = {}
@@ -2478,7 +2481,9 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
         unbought = _priced_counts(board, [game]).get(game_label(game), 0) < PROPS_BOUGHT_MIN
         out: dict = {}
         for k in want:
-            if k in legs:
+            if k in reads:
+                fate = "read"
+            elif k in legs:
                 fate = "strong" if legs[k] >= LEG_FLOOR else "fill" if legs[k] >= FILL_LEG_FLOOR else "low"
             elif not parlay_market(k[1]):
                 fate = "no_parlay"

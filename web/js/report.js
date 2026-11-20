@@ -795,9 +795,9 @@
     // page beside whatever else is open: no page-wide ids, nothing to share.
     const solo = fight || !!(extras && extras.embedded);
     const head = fight ? `<div class="section-title">The fight report
-      <span class="sub">— ${r ? `about ${r.minutes} min to read · ` : ""}the fight written out from the card’s
+      <span class="sub">— ${r && r.minutes ? `about ${r.minutes} min to read · ` : ""}the fight written out from the card’s
       own numbers</span></div>` : `<div class="section-title">The game report
-      <span class="sub">— ${r ? `about ${r.minutes} min to read · ` : ""}${r && r.kept
+      <span class="sub">— ${r && r.minutes ? `about ${r.minutes} min to read · ` : ""}${r && r.kept
         // A started game's report is the one it had before the start (engine/reportkeep).
         ? `as written before the game started, last updated ${escapeHtml(r.kept)}`
         // A finished game's locked teaser: it was written before the game, not from tonight's board.
