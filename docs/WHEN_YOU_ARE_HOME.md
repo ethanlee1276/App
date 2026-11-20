@@ -9338,6 +9338,20 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZT. Basketball's two-leg parlays, and reads that are not bets** (step 808; 20 November). Nothing to run. Ethan, to
+the two questions in the ZS report: "yes to both, do 2-leg nba parlays and label the yardage picks". Basketball's
+books post no anytime scorer, so the NBA, college basketball and the WNBA now post three two-leg player-prop parlays
+a game where football posts its scorer pairs. They are built from the report's own picks like the three-leg ones,
+two legs at 63% or better (40% together), filled the same way when a game is short, journaled and graded as two-leg
+parlays, and counted on the heartbeat (`sgp_twos`, `twos_short`). Football and hockey still post none, and the
+record leaves any old ones of theirs off. A report pick on a market our model can rank but not price (the NFL's
+rushing and receiving yards: 19 of its 47 report picks on 20 November) now says "A read, not a bet" on the report's
+card and reads, with no price to take it at, and on Report Picks, which leaves it out of its counts; a finished
+game's card leaves it out of "Our picks", and Ask says so too. The report book never journals one: those journaled
+before the label and still open are taken off the next time their board is journaled, and graded ones keep their
+grade. Matchup picks never carried the flag the Most Likely rows do, so a yardage matchup pick read as a bet; they
+carry it now.
+
 **ZS. Follow-ups to ZR** (step 807; 20 November). Nothing to run. The report's one-line summary names the touchdown
 pair our research ranks best (a pair with a stand-in scorer comes last), not just the likeliest one. The heartbeat's
 reasons a game is short now count every trio the fill could try: since ZR the last level tries them all, and two NFL

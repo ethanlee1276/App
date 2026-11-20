@@ -69,6 +69,11 @@ def bet_of(r) -> dict | None:
         out.pop("player", None)
     if r.get("leg"):
         out["leg"] = r["leg"]
+    # A read, not a bet (ZT): a player pick on a market we can rank but not price yet carries the word
+    # wherever its bet goes — the report's card and reads (gamereport.READ_ONLY), the record's journal,
+    # which passes it by (reportbets.journal), and Report Picks. Graded on a finished game's page all the same.
+    if r.get("bettable") is False and not out.get("game"):
+        out["read_only"] = True
     return out
 
 

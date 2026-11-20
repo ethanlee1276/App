@@ -1773,7 +1773,8 @@ function gprPicks(g, rows, out, map) {
   const n = { won: 0, lost: 0, push: 0, void: 0, pending: 0 };
   const seen = new Set();
   for (const r of rows || []) {
-    if (!r) continue;
+    // A read, not a bet (engine/gamereport.READ_ONLY, ZT): graded on the report, never counted as a pick.
+    if (!r || (r.bettable === false && r.kind !== "game")) continue;
     const k = [resNorm(r.player || r.team), r.market, String(r.side || "").toLowerCase(), r.line].join("|");
     if (seen.has(k)) continue;
     seen.add(k);

@@ -133,10 +133,11 @@ def test_the_report_stage_posts_them_again_and_counts_what_it_kept():
     b, x = _board_with()
     assert "posted_kept" not in x, "nothing posted before: nothing to count"
     assert GP.SCORER_PAIRS_KEY not in b and GP.POSTED_KEY not in b, "working state, gone once used"
-    was = {k: _ids(x[k]) for k in GP.POSTED_LISTS}
-    assert set(was) == {"threes", "scorers"} and was["threes"] and was["scorers"], was
+    was = {k: _ids(x.get(k) or []) for k in GP.POSTED_LISTS}
+    # A football game posts no two-leg tickets (basketball's, ZT): its list is empty, never missing.
+    assert set(was) == {"threes", "twos", "scorers"} and was["threes"] and was["scorers"] and was["twos"] == [], was
     b2, y = _board_with({KEY: copy.deepcopy(was)})
-    assert {k: _ids(y[k]) for k in GP.POSTED_LISTS} == was
+    assert {k: _ids(y.get(k) or []) for k in GP.POSTED_LISTS} == was
     n = sum(len(v) for v in was.values())
     assert (y["posted_kept"], y["posted_replaced"]) == (n, 0), (y.get("posted_kept"), y.get("posted_replaced"))
     # The scorer pairs, chosen again with the posted ones first: a reversed order holds.
@@ -158,7 +159,7 @@ def test_what_was_posted_is_read_from_the_kept_file():
                                           "MIA@BUF|2099-11-12": {"report": {}}}}), encoding="utf-8")
     got = GP.posted_from(path)
     assert set(got) == {KEY}, "a game kept without parlays posted none"
-    assert got[KEY] == {k: _ids(x[k]) for k in GP.POSTED_LISTS}
+    assert got[KEY] == {k: _ids(x.get(k) or []) for k in GP.POSTED_LISTS}
     assert GP.posted_from(path.with_name("none.json")) == {}
     assert GP.posted_for({GP.POSTED_KEY: got}, GAME) == got[KEY] and GP.posted_for({}, GAME) == {}
 

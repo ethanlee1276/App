@@ -508,7 +508,9 @@
         <div class="gr-pick-head"><span class="gr-pick-n">${escapeHtml(String(v.rank || ""))}</span>
           <b class="gr-pick-what">${named(v.pick || "", b.names)}</b>${v.price
             ? ` <span class="gr-pick-px">${escapeHtml(v.price)}</span>` : ""}${v.tier
-            ? ` <span class="gr-pick-tier">${escapeHtml(v.tier)}</span>` : ""}${v.bet ? resTag(v.bet) : ""}</div>
+            ? ` <span class="gr-pick-tier">${escapeHtml(v.tier)}</span>` : ""}${v.read_only
+            ? ` <span class="gr-pick-read">Read, not a bet</span>` : ""}${v.bet ? resTag(v.bet) : ""}</div>
+        ${v.read_only ? `<p class="gr-pick-readwhy">${escapeHtml(v.read_only)}</p>` : ""}
         ${v.numbers ? `<p class="gr-pick-num">${escapeHtml(v.numbers)}</p>` : ""}
         ${v.form ? `<p class="gr-pick-form">${escapeHtml(v.form)}</p>` : ""}
         ${(v.why || []).length ? `<ul class="gr-why">${v.why.map((w) => `<li>${named(w, b.names, b.marks, true)}</li>`).join("")}</ul>` : ""}
@@ -596,7 +598,8 @@
           }
         } else if (b.type === "picks") {
           for (const v of b.items || []) {
-            out.push(`${v.rank}. ${v.pick}${v.price ? ` — ${v.price}` : ""}${v.tier ? ` [${v.tier}]` : ""}`);
+            out.push(`${v.rank}. ${v.pick}${v.price ? ` — ${v.price}` : ""}${v.tier ? ` [${v.tier}]` : ""}${
+              v.read_only ? " [a read, not a bet]" : ""}`);
             [v.numbers, v.form].filter(Boolean).forEach((x) => out.push(`    ${x}`));
             (v.why || []).forEach((w) => out.push(`    – ${w}`));
             if (v.kind) out.push(`    ${v.kind}`);
@@ -924,7 +927,7 @@
       bet_legs: t.legs || [],
     };
   }
-  //: One game's tickets, its three-leg parlays then its scorer pairs (and a game kept before ZR its two-leg ones), each
+  //: One game's tickets, its three-leg parlays then its pairs (basketball's two-leg tickets, the scorer pairs), each
   //: graded once the game is over (opts.results: game → the grader, app.js);
   //: the Report Picks page draws them under the game's bets (js/reportpicks.js).
   function gameTickets(g, sport, opts) {
@@ -933,19 +936,21 @@
     CLOSED = !!((g && g.kept) || RESULTS);
     try {
       // Every game posts three three-leg tickets and three scorer pairs (THREELEG1, 2026-11-19; ZR,
-      // 2026-11-20); a game that could make fewer says why under the ones it made
-      // (engine/gameparlays._report_note, build_game). The two-leg tickets (GPWIN1) are retired (ZR): a
-      // game kept before then still shows the ones it posted, as "on paper" shows a game from before
-      // 19 November, when a league's tickets could be held (a hold since retired).
+      // 2026-11-20), basketball three two-leg tickets in its pairs' place (ZT); a game that could make
+      // fewer says why under the ones it made (engine/gameparlays._report_note, build_game). Elsewhere
+      // the two-leg tickets (GPWIN1) are retired (ZR): a game kept before then still shows the ones it
+      // posted, as "on paper" shows a game from before 19 November, when a league's tickets could be
+      // held (a hold since retired).
       const twos = (g.twos || []).length
         ? block({ type: "parlays", items: g.twos.map((t, i) => card(t, i + 1, "two", sport)) })
           + (g.twos_note ? `<p class="gr-note">${escapeHtml(g.twos_note)}</p>` : "")
         : g.twos_paper ? `<p class="gr-note">Two-leg parlays: on paper for now, built and graded but not posted.</p>`
         : g.twos_note ? `<p class="gr-note">No two-leg parlay: ${escapeHtml(g.twos_note)}</p>` : "";
-      return `${twos}${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
+      // The three-leg tickets first, then the pairs: basketball's two-leg tickets (ZT), the scorer pairs.
+      return `${(g.threes || []).length ? block({ type: "parlays", items: g.threes.map((t, i) => card(t, i + 1, "three", sport)) })
           + (g.threes_note ? `<p class="gr-note">${escapeHtml(g.threes_note)}</p>` : "")
         : g.threes_paper ? `<p class="gr-note">Three-leg parlays: on paper for now, built and graded but not posted.</p>`
-        : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}
+        : `<p class="gr-note">${escapeHtml(g.threes_note || "No three-leg ticket without a conflict in this game.")}</p>`}${twos}
         ${(g.scorers || []).length ? block({ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) }) : ""}${
           g.scorers_note ? `<p class="gr-note">${escapeHtml(g.scorers_note)}</p>` : ""}`;
     } finally { RESULTS = was; CLOSED = shut; }

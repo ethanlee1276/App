@@ -582,7 +582,7 @@ def _board_counts(path: str) -> dict:
         out["sgp_threes"] = int(c.get("threes") or 0)
         # Games still to play short of their three three-leg tickets (THREELEG1/2,
         # ZR): each says why on its report; here, how many, for anyone watching.
-        from engine.gameparlays import SCORER_MARKETS, SCORER_PER_GAME, THREE_MIN
+        from engine.gameparlays import SCORER_MARKETS, SCORER_PER_GAME, THREE_MIN, TWO_MIN, TWO_SPORTS
         short = [x for x in gp["games"] if isinstance(x, dict) and not x.get("kept")
                  and len(x.get("threes") or []) < THREE_MIN]
         out["threes_short"] = len(short)
@@ -631,6 +631,14 @@ def _board_counts(path: str) -> dict:
             if errs:
                 out["rebuild_errors"] = errs[:5]
         out["td_pairs"] = int(c.get("scorers") or 0)
+        # Basketball's two-leg tickets in its pairs' place (ZT), and the games
+        # still to play short of their three.
+        if str(gp.get("sport") or "").lower() in TWO_SPORTS:
+            out["sgp_twos"] = int(c.get("twos") or 0)
+            out["twos_short"] = sum(1 for x in gp["games"] if isinstance(x, dict) and not x.get("kept")
+                                    and not x.get("no_props") and len(x.get("twos") or []) < TWO_MIN)
+            if c.get("filled_twos"):
+                out["twos_filled"] = int(c["filled_twos"])
         # Games still to play short of their three scorer pairs (ZR), where the
         # league has a scorer market, and the pairs a stand-in scorer filled.
         if str(gp.get("sport") or "").lower() in SCORER_MARKETS:

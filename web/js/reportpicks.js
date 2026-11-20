@@ -62,10 +62,15 @@ function rpPhase(g) {
   return s === "live" ? "live" : s === "final" ? "final" : "next";
 }
 //: How a finished game's picks and tickets went (app.js reportResults): {w, l, hit, tickets}, or null before its final.
+/* A READ, NOT A BET (engine/gamereport.READ_ONLY, ZT; Ethan, 20 November 2026: "label the yardage
+   picks"): a pick on a market we can rank but not price. Listed with its game's picks, said so, and left out
+   of every count of picks and of a finished game's tally, as the record leaves it out (reportbets.journal). */
+const RP_READ = "Read, not a bet: a market we can rank but not price yet";
+const rpBetsOnly = (bets) => (bets || []).filter((b) => !(b && b.read_only));
 function rpTally(g, bets, tix) {
   const R = g ? reportResults(g) : null;
   if (!R) return null;
-  const st = (bets || []).map((b) => (R.grade(b) || {}).status);
+  const st = rpBetsOnly(bets).map((b) => (R.grade(b) || {}).status);
   const tk = [...((tix || {}).twos || []), ...((tix || {}).threes || []), ...((tix || {}).scorers || [])]
     .map((t) => (R.ticket((t || {}).legs || []) || {}).status);
   return { w: st.filter((s) => s === "won").length, l: st.filter((s) => s === "lost").length,
@@ -94,11 +99,13 @@ function rpGameHTML(d, key, bets, tix, open) {
       ? `Final: ${teamName(away)} ${fin.away}, ${teamName(home)} ${fin.home}` : "Final")
     : whenLabel(g.date, g.kickoff);
   const pair = ["nfl", "cfb"].includes(state.sport) ? "touchdown" : state.sport === "nhl" ? "goal-scorer" : "scorer";
-  const counts = [bets.length ? plural(bets.length, "pick") : "",
+  const nBets = rpBetsOnly(bets).length, nReads = bets.length - nBets;
+  const counts = [nBets ? plural(nBets, "pick") : "", nReads ? plural(nReads, "read") : "",
                   tix && rpParlays(tix) ? plural(rpParlays(tix), "parlay") : "",
                   tix && (tix.scorers || []).length ? plural(tix.scorers.length, `${pair} pair`) : ""].filter(Boolean);
   const tally = fin ? rpTallyWords(rpTally(g, bets, tix)) : "";
-  const rows = bets.map((r) => deckPickRow(r, { door: likelyOpen(r), note: rpSourceNote(r) })).join("");
+  const rows = bets.map((r) => deckPickRow(r, { door: likelyOpen(r),
+    note: [r && r.read_only ? RP_READ : "", rpSourceNote(r)].filter(Boolean).join(" · ") })).join("");
   return `<details class="rpk-game" id="rpk-${escapeAttr(away)}-${escapeAttr(home)}"${open ? " open" : ""}>
     <summary class="rpk-head">
       <span class="rpk-title"><b>${escapeHtml(teamName(away))} at ${escapeHtml(teamName(home))}</b>${
@@ -169,7 +176,7 @@ function rpTodayHTML(d, byGame, keys) {
   const done = { w: 0, l: 0, hit: 0, tickets: 0 };
   keys.forEach((k) => {
     const x = byGame.get(k);
-    picks += x.bets.length;
+    picks += rpBetsOnly(x.bets).length;
     threes += rpParlays(x.tix);
     pairs += ((x.tix || {}).scorers || []).length;
     const g = rpGame(d, k);
@@ -605,9 +612,9 @@ function rpBetsHTML(x, sport, open) {
   const picks = x.picks || [], twos = x.twos || [], threes = x.threes || [], pairs = x.scorers || [];
   const paper = x.paper || {}, pTwos = paper.twos || [], pThrees = paper.threes || [];
   const pairWord = ["nfl", "cfb"].includes(sport) ? "Touchdown pairs" : sport === "nhl" ? "Goal-scorer pairs" : "Scorer pairs";
-  // The two sizes apart, the easier one first (two picks hit together far more often than three).
-  const parts = [["Picks", picks], ["Two-leg parlays", twos], [twos.length ? "Three-leg parlays" : "Parlays", threes],
-                 ["Two-leg on paper", pTwos], ["Three-leg on paper", pThrees],
+  // The three-leg tickets, then the pairs: basketball's two-leg tickets (ZT) or the scorer pairs.
+  const parts = [["Picks", picks], [twos.length ? "Three-leg parlays" : "Parlays", threes], ["Two-leg parlays", twos],
+                 ["Three-leg on paper", pThrees], ["Two-leg on paper", pTwos],
                  [pairWord, pairs]].filter(([, l]) => l.length);
   // A size on paper at the start, said once: its tickets were never posted, or there were none.
   const paperNote = (x.on_paper || []).map((k) => {
@@ -636,10 +643,10 @@ function rpBetsHTML(x, sport, open) {
       <div class="rpk-bets-body">
         ${picks.length ? sec("The picks", picks.map(rpPickLI).join("")) : ""}
         ${unkept}
-        ${twos.length ? sec("The two-leg parlays", rpTicketsHTML(twos, "twos", sport)) : ""}
         ${threes.length ? sec(twos.length ? "The three-leg parlays" : "The parlays", rpTicketsHTML(threes, "threes", sport)) : ""}
-        ${pTwos.length ? sec("The two-leg parlays on paper", rpTicketsHTML(pTwos, "twos", sport)) : ""}
+        ${twos.length ? sec("The two-leg parlays", rpTicketsHTML(twos, "twos", sport)) : ""}
         ${pThrees.length ? sec("The three-leg parlays on paper", rpTicketsHTML(pThrees, "threes", sport)) : ""}
+        ${pTwos.length ? sec("The two-leg parlays on paper", rpTicketsHTML(pTwos, "twos", sport)) : ""}
         ${paperNote}
         ${pairs.length ? sec(`The ${pairWord.toLowerCase()}`, rpTicketsHTML(pairs, "scorers", sport)) : ""}
       </div>

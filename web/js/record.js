@@ -1037,19 +1037,19 @@ const tlUnits = (x) => trueMinus(`${x >= 0 ? "+" : ""}${(x || 0).toFixed(2)}u`);
    chance we gave them, the legs that hit against theirs, by market, the tickets
    that lost by one leg, and the newest tickets with every leg marked. On "All",
    one table of every league. The two-leg parlays of 18-20 November are retired
-   (Ethan, 20 November: "i want 3 3 leg player prop parlays and 3 2 leg td prop
-   parlays"); the engine leaves them off the record (gameparlays.RETIRED). */
-const GP_KIND = { three: "Three-leg parlays" };
-//: A league's kinds in the page's order: the three-leg tickets, then the pairs.
-const GP_KINDS = ["three", "scorers"];
-// How a game's ticket was made up (engine/gameparlays.FILL_KINDS; "report": its own picks), in
-// words for a three-leg ticket and for a scorer pair.
+   outside basketball (Ethan, 20 November: "i want 3 3 leg player prop parlays
+   and 3 2 leg td prop parlays"; "do 2-leg nba parlays"): basketball's books post
+   no scorer, so its two-leg tickets are its pairs (gameparlays.retired). */
+const GP_KIND = { three: "Three-leg parlays", two: "Two-leg parlays" };
+//: A league's kinds in the page's order: the three-leg tickets, then the pairs (basketball's two-leg ones).
+const GP_KINDS = ["three", "two", "scorers"];
+// How a game's ticket was made up (engine/gameparlays.FILL_KINDS; "report": its own picks), in words, by kind.
 const GP_FILL_WORDS = {
-  report: ["the report’s own picks", "our researched scorers"],
-  one: ["two picks and one other prop", ""],
-  board: ["Most Likely picks standing in", ""],
-  props: ["the game’s best props", ""],
-  stand_in: ["", "with a stand-in scorer"],
+  three: { report: "the report’s own picks", one: "two picks and one other prop",
+           board: "Most Likely picks standing in", props: "the game’s best props" },
+  two: { report: "the report’s own picks", one: "a pick and one other prop",
+         board: "Most Likely picks standing in", props: "the game’s best props" },
+  scorers: { report: "our researched scorers", stand_in: "with a stand-in scorer" },
 };
 function gpKindWord(kind, sport) {
   if (GP_KIND[kind]) return GP_KIND[kind];
@@ -1123,9 +1123,10 @@ function gpBlockHTML(b, kind, sport) {
   // HOW EACH WAS MADE UP (engine/parlayledger by_fill, ZR 2026-11-20): a game short of the
   // report's own tickets fills to three; each way it fills reads apart, once there are two.
   const bf = b.by_fill || null;
-  const fillKeys = bf ? Object.keys(GP_FILL_WORDS).filter((k) => bf[k]) : [];
+  const fillWords = GP_FILL_WORDS[kind] || GP_FILL_WORDS.three;
+  const fillKeys = bf ? Object.keys(fillWords).filter((k) => bf[k]) : [];
   const madeUp = fillKeys.length > 1 ? `<p class="rec-gp-close">By how they were made up, since ${
-    escapeHtml(gpDay(bf.from))}: ${fillKeys.map((k) => `${GP_FILL_WORDS[k][kind === "scorers" ? 1 : 0]} ${
+    escapeHtml(gpDay(bf.from))}: ${fillKeys.map((k) => `${fillWords[k]} ${
       bf[k].graded ? `${bf[k].wins} of ${bf[k].graded} hit` : "none graded yet"}`).join(" · ")}.</p>` : "";
   const markets = (b.markets || []).map((m) => `<div class="rec-row flush tight">
       <span class="rr-what">${escapeHtml(marketWord(m.market))}</span>

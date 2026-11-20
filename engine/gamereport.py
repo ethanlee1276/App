@@ -296,6 +296,20 @@ def _odds(x) -> str:
 TAKE_CAP = -250
 
 
+#: A PICK ON A MARKET WE CAN RANK BUT NOT PRICE (ZT; Ethan, 20 November 2026: "label the yardage
+#: picks"). NFL rushing and receiving yards are shut (calibrate.SHUT_MARKETS: our number ranks who gets
+#: the yards and has not beaten the book's line), as is any market whose fit ran off its range
+#: (calibrate.is_reliable). The board still shows the likeliest number there; the report says what it is,
+#: in the Most Likely page's words for the same row, and the record passes it by (reportbets.journal).
+READ_ONLY = "A read, not a bet: a market we can rank but not price yet, so it isn't counted on the record"
+
+
+def read_only(r) -> bool:
+    """A player pick on a market we can rank but not price (READ_ONLY): the row's own flag, which the Most
+    Likely board and the matchup picks set from calibrate.is_reliable. Never a game bet."""
+    return isinstance(r, dict) and r.get("bettable") is False and r.get("kind") != "game"
+
+
 def take_at(prob) -> str:
     """The price a pick is worth taking at — "−163 or better" — from our
     chance (its fair price), never heavier than TAKE_CAP: the method's
@@ -2486,7 +2500,11 @@ def read_pick(r: dict) -> str:
     "" when none of his props is priced."""
     if not isinstance(r, dict):
         return ""
+    # A read, not a bet (READ_ONLY): the number with no price to take it at.
+    rank_only = "a market we can rank but not price yet"
     if r.get("pick"):
+        if read_only(r["pick"]):
+            return f"A read, not a bet: {_pick_words(r['pick'])} — {rank_only}"
         take = take_at(r["pick"].get("model_prob"))
         return f"Most Likely pick: {_pick_words(r['pick'])}" + (f" — take it at {take}" if take else "")
     mp = r.get("matchup_pick")
@@ -2497,6 +2515,8 @@ def read_pick(r: dict) -> str:
             why = str(mp["held_note"])
             why = why[len("held back:"):].strip() if why.lower().startswith("held back:") else why
             return f"Matchup pick, held back: {_pick_words(mp)} — {why}"
+        if read_only(mp):
+            return f"A read, not a bet: {_pick_words(mp)} — {rank_only}"
         tier = f" ({mp['tier_label']})" if mp.get("tier_label") else ""
         take = take_at(mp.get("model_prob"))
         return f"Matchup pick{tier}: {_pick_words(mp)}" + (f" — take it at {take}" if take else "")
@@ -3666,7 +3686,8 @@ def card_numbers(r: dict) -> str:
     if p is None:
         return ""
     fair = _american(p)
-    if fair is None:
+    if fair is None or read_only(r):
+        # A read has no fair price to pay to (READ_ONLY): our number ranks it and cannot price it.
         return f"Our chance {_pct(p)}"
     play = max(fair, CARD_PRICE_GATE) if fair < 0 else fair
     to = f"play to {_odds_word(play)}" + (" or better" if play > 0 else "")
@@ -3818,6 +3839,8 @@ def sec_card(c: Ctx, built: dict) -> dict | None:
                       "price": " ".join(x for x in (str(r.get("book") or ""), _odds_word(r.get("odds"))) if x),
                       "chance": round(float(r["model_prob"]), 4), "numbers": card_numbers(r),
                       "form": card_form(c, r), "why": card_why(c, r, angles), "kind": card_kind(c, r),
+                      # A read, not a bet, said on the pick (READ_ONLY).
+                      **({"read_only": READ_ONLY} if read_only(r) else {}),
                       # Graded on the page once the game is over (engine/gameresults).
                       **({"bet": _bet_of(r)} if _bet_of(r) else {})})
     blocks = []
@@ -3838,7 +3861,8 @@ def sec_card(c: Ctx, built: dict) -> dict | None:
     blocks.append({"type": "note", "text": (
         "Ranked best to worst: the board's tier, then how hard the matchup backs the pick, then our chance. "
         "Play to is the most to pay for it — its fair price at our chance, never past −250. "
-        "Every pick is graded on the record.")})
+        "Every pick is graded on the record." + (" A read is graded on this page only."
+                                                 if any(it.get("read_only") for it in items) else ""))})
     return _section("card", "Our picks for this game", blocks)
 
 
@@ -3888,14 +3912,15 @@ def sec_parlays(c: Ctx) -> dict | None:
     "for each game ... make 4 3-leg parlays ... and 3 2-leg touchdown
     parlays ... do the same shit that the report's doing"; 2026-11-20: "i want
     3 3 leg player prop parlays and 3 2 leg td prop parlays"). Three three-leg
-    tickets and three scorer pairs on every game, each with its price to take
-    it, the script it needs, its backups and caveats — and the record's word
-    on same-game parlays."""
+    tickets and three scorer pairs on every game (basketball's three two-leg
+    player-prop tickets in their place: "do 2-leg nba parlays", ZT), each with
+    its price to take it, the script it needs, its backups and caveats — and
+    the record's word on same-game parlays."""
     from .gameparlays import card
     gp = _game_parlays(c)
     if not gp:
         return None
-    if gp.get("no_props") and not any(gp.get(k) for k in ("threes", "scorers")):
+    if gp.get("no_props") and not any(gp.get(k) for k in ("threes", "twos", "scorers")):
         # No prop priced in this game yet (THREELEG3): when its props are
         # bought, said once, where its tickets will be.
         return _section("parlays", "Parlays for this game", [_p(f"No parlays yet: {gp.get('props_note') or ''}")])
@@ -3911,6 +3936,14 @@ def sec_parlays(c: Ctx) -> dict | None:
         blocks += [_h("Three-leg parlays"), _p(gp.get("threes_note") or "")]
     elif gp.get("threes_note"):
         blocks.append(_p(f"No three-leg parlay: {gp['threes_note']}"))
+    # BASKETBALL'S TWO-LEG PARLAYS (ZT), in the scorer pairs' place.
+    twos = [card(t, i, "two", c.sport) for i, t in enumerate(gp.get("twos") or [], 1)]
+    if twos:
+        blocks += [_h("Two-leg parlays"), {"type": "parlays", "kind": "two", "items": twos}]
+        if gp.get("twos_note"):
+            blocks.append(_p(gp["twos_note"]))
+    elif gp.get("twos_note"):
+        blocks.append(_p(f"No two-leg parlay: {gp['twos_note']}"))
     pairs = [card(t, i, "scorers", c.sport) for i, t in enumerate(gp.get("scorers") or [], 1)]
     if pairs:
         blocks += [_h("Touchdown pairs" if c.sport in ("nfl", "cfb") else "Scorer pairs"),
@@ -3929,9 +3962,10 @@ def sec_parlays(c: Ctx) -> dict | None:
 
 
 def parlay_sentence(c: Ctx) -> str:
-    """The short version's parlay lines: the likeliest three-leg ticket and
-    the best scorer pair (football's on our research, TDSGP2; hockey's the
-    likeliest; one with a stand-in scorer last), each with its price to take it."""
+    """The short version's parlay lines: the likeliest three-leg ticket, the
+    likeliest two-leg one (basketball, ZT) and the best scorer pair (football's
+    on our research, TDSGP2; hockey's the likeliest; one with a stand-in
+    scorer last), each with its price to take it."""
     from .gameparlays import RESEARCH_SPORTS, pick_words, scorer_rank
     gp = _game_parlays(c)
     if not gp:
@@ -3939,6 +3973,7 @@ def parlay_sentence(c: Ctx) -> str:
     bits = []
     likeliest = lambda x: -float(x.get("joint") or 0)                               # noqa: E731
     for key, word, rank in (("threes", "Best three-leg parlay", likeliest),
+                            ("twos", "Best two-leg parlay", likeliest),
                             ("scorers", "Best touchdown pair" if c.sport in ("nfl", "cfb") else "Best scorer pair",
                              scorer_rank(c.sport in RESEARCH_SPORTS))):
         # Wherever it sits: a game's posted tickets keep their places (gameparlays.choose).

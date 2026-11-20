@@ -176,7 +176,7 @@ def test_the_fill_split_counts_the_starting_sets():
     assert (bf["board"]["graded"], bf["board"]["wins"], bf["board"]["chance"]) == (1, 1, 0.3), bf
     assert set(bf) == {"from", "report", "props", "board"}
     js = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
-    assert "${close}${rebuilt}${madeUp}" in js and 'props: ["the game’s best props", ""]' in js
+    assert "${close}${rebuilt}${madeUp}" in js and 'props: "the game’s best props" },' in js
 
 
 def test_the_journal_and_the_night_mark_them():

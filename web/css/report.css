@@ -177,6 +177,10 @@
 .gr-pick-px { font-size: .86em; color: var(--text-mute); font-variant-numeric: tabular-nums; }
 .gr-pick-tier { font-size: .74em; font-weight: 600; padding: 1px 7px; border-radius: 999px;
   background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+/* A read, not a bet (engine/gamereport.READ_ONLY, ZT): a market we can rank but not price, said on the pick. */
+.gr-pick-read { font-size: .74em; font-weight: 600; padding: 1px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--text-mute) 16%, transparent); color: var(--text-mute); }
+.gr-pick-readwhy { margin: 4px 0 0; font-size: .84em; color: var(--text-mute); }
 .gr-pick-num { margin: 4px 0 0; font-size: .9em; font-weight: 600; font-variant-numeric: tabular-nums; }
 .gr-pick-form { margin: 2px 0 0; font-size: .86em; color: var(--text-mute); font-variant-numeric: tabular-nums; }
 .gr-pick-kind { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--text-mute); }

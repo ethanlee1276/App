@@ -11,10 +11,12 @@ parlays". What these hold:
   * a three-leg ticket is posted ahead of the fill only at THREE_FLOOR or
     better by our numbers; a game whose tickets fall short fills to THREE_MIN
     with longer tickets that say so, and one that still falls short says why;
-  * no board builds a two-leg player-prop ticket any more, no report or page
-    posts one for a game still to play, and the record leaves the retired kind
-    off (gameparlays.RETIRED); the journal still holds every one, graded, and a
-    finished game from before still lists its own;
+  * no football or hockey board builds a two-leg player-prop ticket any more,
+    no report or page posts one for its games still to play, and the record
+    leaves the retired kind off there (gameparlays.retired); basketball posts
+    three a game in its scorer pairs' place (ZT, 20 November: "do 2-leg nba
+    parlays"); the journal still holds every one, graded, and a finished game
+    from before still lists its own;
   * the leg learner counts their legs with the three-leg ones, each bet once,
     and learns a shift for each market that runs hot (engine/legfit).
 
@@ -50,8 +52,10 @@ def test_every_ticket_clears_its_bar_and_no_two_leg_ticket_is_built():
     assert all(t["joint"] >= GP.THREE_FLOOR and len(t["legs"]) == 3 for t in threes), [t["joint"] for t in threes]
     assert not any(k in x for k in ("twos", "paper_twos", "twos_note", "twos_paper")), sorted(x)
     assert "twos" not in b["game_parlays"]["counts"] and "two_floor" not in b["game_parlays"]
-    assert GP.RETIRED == ("two",) and GP.SOURCES["two"] == "game_two", "the journal still reads them"
-    for gone in ("TWO_PER_GAME", "TWO_FLOOR", "two_hold", "_twos_note"):
+    assert GP.retired("two", "nfl") and GP.retired("two", "nhl") and not GP.retired("two", "nba")
+    assert GP.SOURCES["two"] == "game_two", "the journal still reads them"
+    assert GP.TWO_SPORTS == ("nba", "cbb", "wnba"), "basketball's two-leg tickets (ZT), no other league's"
+    for gone in ("RETIRED", "two_hold", "_twos_note"):
         assert not hasattr(GP, gone), gone
     assert not (ROOT / "engine" / "parlayhold.py").exists(), "no kind of ticket is held on paper"
 
@@ -168,14 +172,14 @@ def test_every_page_carries_three_of_each_and_keeps_old_two_leg_tickets_readable
     # A finished game from before still shows the two-leg tickets it carried at its start.
     assert 'kind === "two" ? `Two-leg parlay ${n}`' in js["report"]
     assert '["Two-leg parlays", twos]' in js["reportpicks"] and 'gprTicketsRow(twos, "2-leg parlays"),' in js["detail"]
-    assert 'const GP_KINDS = ["three", "scorers"];' in js["record"], "the record lists the kinds still built"
+    assert 'const GP_KINDS = ["three", "two", "scorers"];' in js["record"], "the record lists the kinds built"
     ask = (ROOT / "engine" / "askbot.py").read_text(encoding="utf-8")
     assert 'TICKET_POOLS = (("twos", "two-leg parlay"), ("threes", "three-leg parlay"), ("scorers", "scorer pair"))' in ask
     from engine import askbot
     said = " ".join(t["description"] for t in askbot.TOOLS if t["name"] == "our_picks")
     assert "three three-leg player-prop parlays and three two-leg touchdown or goal-scorer pairs" in said, said
     launch = (ROOT / "launch.py").read_text(encoding="utf-8")
-    assert "sgp_twos" not in launch
+    assert "sgp_twos" in launch and ".lower() in TWO_SPORTS:" in launch, "basketball's, counted on the heartbeat"
 
 
 if __name__ == "__main__":

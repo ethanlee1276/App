@@ -270,13 +270,16 @@ def test_the_card_says_it_in_words():
                           "side": "Over", "line": 4.5}) == "Malik Nabers over 4.5 receptions"
 
 
-def test_basketball_says_it_has_no_scorer_market():
+def test_basketball_posts_two_leg_tickets_where_the_scorer_pairs_go():
+    """Basketball's books post no anytime scorer, so its pair slot holds its two-leg tickets (ZT): no
+    scorer pair and no note saying so, which would only say the slot is empty when it is not."""
     b = board()
     for r in b["most_likely"]:
         r["market"], r["market_label"] = "pts", "Points"
     gp = GP.build(b, "nba")
     g = gp["games"][0]
-    assert g["scorers"] == [] and "No scorer market" in g["scorers_note"]
+    assert g["scorers"] == [] and "scorers_note" not in g, sorted(g)
+    assert "twos" in g and "twos" in gp["counts"], sorted(g)
 
 
 def test_the_report_and_the_record_carry_them():

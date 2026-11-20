@@ -24,6 +24,12 @@ the Most Likely book is written (ledger.log_most_likely: one row a pick, a flat
 without a real price), from the pass that journals every board's parlays
 (parlayledger.journal_built_boards).
 
+A READ, NOT A BET (ZT; Ethan, 20 November 2026: "label the yardage picks"). A pick
+on a market we can rank but not price (gamereport.READ_ONLY: NFL rushing and
+receiving yards, any market whose calibration ran off its range) is on the
+report and on this list as what it is, ``read_only``, and the record passes it
+by: never journaled, and one still open from before is taken off (`journal`).
+
 A LENS ON PICKS OTHER BOOKS HOLD. A card pick is a Most Likely pick too, so
 this book is shown on its own (the Record page's Report section, with the
 reports' parlays beside it) and is in no headline, no chip count and no other
@@ -128,6 +134,9 @@ def bets_of(sections, rows: dict | None = None) -> list:
                 if b.get("game"):
                     # A game bet: the record keys it off its club (ledger.game_row_keys).
                     out["kind"] = "game"
+                if b.get("read_only"):
+                    # A read, not a bet (gameresults.bet_of): shown, never journaled.
+                    out["read_only"] = True
                 out["sources"] = [src]
                 seen[k] = out
     return list(seen.values())
@@ -170,6 +179,12 @@ def journal(conn, board: dict, sport: str) -> int:
     rows = [b for b in (board or {}).get(KEY) or [] if isinstance(b, dict)]
     if not rows or not sport:
         return 0
+    # A READ IS NOT A BET (ZT): passed by, and one journaled before the report said so taken off while
+    # it is still open (a graded row keeps what it was graded as).
+    _drop_open_reads(conn, sport, [b for b in rows if b.get("read_only")])
+    rows = [b for b in rows if not b.get("read_only")]
+    if not rows:
+        return 0
     from . import ledger
     # EACH KIND OF PICK UNDER ITS OWN LABEL (PICKSRC1, 2026-11-19). Every report pick was journaled as
     # "Report pick", so the record could not say whether a matchup read's pick hits like the card's, and
@@ -188,6 +203,25 @@ def journal(conn, board: dict, sport: str) -> int:
                                                "games": board.get("games") or [], "most_likely": mine},
                                         depth=None, category=CATEGORY,
                                         grade_label=SOURCE_WORDS.get(src, GRADE_BEFORE))
+    return n
+
+
+def _drop_open_reads(conn, sport: str, rows: list) -> int:
+    """A read (``read_only``) still open in this book is taken off: the NFL's yardage picks were journaled
+    as bets until the report called them reads (ZT, 20 November 2026). Open rows only, player picks only,
+    keyed by who and the market: a market we cannot price is a read at any number and on either side.
+    A started game's report keeps what it said before the game (KEEPREPORT1), so its picks carry no
+    ``read_only`` and stay as they were journaled. Returns rows taken off; never raises."""
+    n = 0
+    for b in rows or []:
+        try:
+            player, market = b.get("player"), str(b.get("market") or "")
+            if not player or not market or b.get("kind") == "game":
+                continue
+            n += conn.execute("DELETE FROM bets WHERE sport=? AND category=? AND status='open' AND player=? "
+                              "AND market=?", (sport, CATEGORY, player, market)).rowcount
+        except Exception:                                    # noqa: BLE001
+            continue
     return n
 
 

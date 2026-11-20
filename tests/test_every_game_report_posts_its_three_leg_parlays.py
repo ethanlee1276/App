@@ -74,7 +74,8 @@ def test_the_parlay_holds_are_retired():
         src = (ROOT / "engine" / name).read_text(encoding="utf-8")
         assert "parlayhold." not in src and "import parlayhold" not in src, name
     gp_src = (ROOT / "engine" / "gameparlays.py").read_text(encoding="utf-8")
-    assert "def two_hold(" not in gp_src and "TWO_PER_GAME" not in gp_src and GP.RETIRED == ("two",)
+    # No hold on paper; the two-leg tickets are basketball's alone (ZT), built and posted like the rest.
+    assert "def two_hold(" not in gp_src and GP.retired("two", "nfl") and not GP.retired("two", "nba")
 
 
 def test_no_build_moves_a_games_tickets_to_paper():

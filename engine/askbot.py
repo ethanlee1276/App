@@ -596,7 +596,8 @@ TOOLS = [
     _tool("our_picks",
           "Our model's picks tonight, by kind: best_bets (staked edges), most_likely (likeliest to hit), "
           "long_shots, game_lines (spreads, totals, moneylines), parlays (each game's three three-leg player-prop "
-          "parlays and three two-leg touchdown or goal-scorer pairs from its report, likeliest first; one marked "
+          "parlays and three two-leg touchdown or goal-scorer pairs from its report — basketball's three two-leg "
+          "player-prop parlays in the pairs' place — likeliest first; one marked "
           "playable false is a ticket its own card "
           "says to pass on, and game_started true is a game already under way), pick_of_the_day (each "
           "league's) or top_pick_today (the one best pick across every league, with the ones it beat) — on "
@@ -2841,7 +2842,10 @@ def _report_tonight(board: dict, rep: dict, league: str) -> dict:
     g = next((x for x in board.get("games") or [] if isinstance(x, dict)
               and x.get("home") == home and x.get("away") == away), None) or {"home": home, "away": away}
     out = {"league": league, "status": "not finished", **game_facts(board, g, scan=True)}
-    picks = [compact(b) for b in board.get("report_bets") or []
+    # A read, not a bet (gamereport.READ_ONLY, ZT), said so: a market we can rank but not price.
+    picks = [dict(compact(b), **({"read_not_a_bet": "a market we can rank but not price yet; "
+                                                     "not counted on the record"} if b.get("read_only") else {}))
+             for b in board.get("report_bets") or []
              if isinstance(b, dict) and b.get("home") == home and b.get("away") == away]
     if picks:
         out["report_picks"] = picks[:REPORT_PICKS_SHOWN]

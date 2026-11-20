@@ -265,6 +265,7 @@ def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list
     homers, strikeouts and outs): each read's markets on its side, where
     our number agrees — and every leaned read the Most Likely list carries
     nothing for on its side gets its one pick at READ_PICK_MIN."""
+    from .calibrate import is_reliable
     home, away = game.get("home"), game.get("away")
     markets = (MLB_PROP_MARKETS if sport == "mlb" else HOOPS_PROP_MARKETS if sport in ("nba", "wnba", "cbb")
                else PROP_MARKETS)
@@ -335,6 +336,11 @@ def prop_picks(game: dict, reads: list, props: list, sport: str = "nfl") -> list
                 "market": mk, "market_label": r.get("market_label") or mk,
                 "side": side.upper(), "line": line, "odds": odds, "book": book,
                 "model_prob": round(prob, 4), "projection": r.get("projection"),
+                # A MARKET WE CAN RANK BUT NOT PRICE (ZT, 20 November 2026): the Most Likely
+                # board's own flag (likely._row_from), which a matchup pick never carried, so an
+                # NFL receiving-yards matchup pick read as a bet. The report shows it as a read,
+                # not a bet, and the record passes it by (gamereport.READ_ONLY, reportbets.journal).
+                "bettable": bool(is_reliable(sport, mk)),
                 "kickoff": r.get("kickoff") or game.get("kickoff") or "",
                 "game_date": r.get("game_date") or game.get("date") or "",
                 "read": x.get("read"), "label": x.get("label"),

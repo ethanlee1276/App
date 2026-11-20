@@ -7,8 +7,9 @@ and asked what that meant a game: "i want 3 3 leg player prop parlays and 3 2
 leg td prop parlays". What these hold:
 
   * three of each a game (THREE_MIN, THREE_PER_GAME, SCORER_PER_GAME) and no
-    two-leg player-prop ticket (RETIRED): the journal keeps the ones posted
-    before, and the record leaves them off;
+    two-leg player-prop ticket outside basketball (`retired`; basketball's
+    three take its pairs' place, ZT): the journal keeps the ones posted before,
+    and the record leaves them off;
   * a game short of three three-leg tickets fills: two of the report's picks
     and one other prop, then the Most Likely board's picks in the picks'
     places, then the game's best props, last; each wider level adds to what
@@ -50,7 +51,7 @@ def _leg(player, market, p, team="NYG", pos="WR"):
 
 def test_three_and_three_and_no_two_leg_ticket():
     assert GP.THREE_MIN == GP.THREE_PER_GAME == GP.SCORER_PER_GAME == 3
-    assert GP.RETIRED == ("two",) and GP.SOURCES["two"] == "game_two", "kept, so the journal's history reads"
+    assert GP.retired("two", "nfl") and GP.SOURCES["two"] == "game_two", "kept, so the journal's history reads"
     gp = GP.build(EG.board(), "nfl")
     g = gp["games"][0]
     assert len(g["threes"]) == 3 and len(g["scorers"]) == 3, (len(g["threes"]), len(g["scorers"]))
@@ -186,7 +187,7 @@ def test_ask_and_the_record_page_say_three_and_three():
     desc = " ".join(str(t.get("description") or "") for t in askbot.TOOLS)
     assert "three three-leg player-prop parlays and three two-leg touchdown or goal-scorer pairs" in desc
     js = (ROOT / "web" / "js" / "record.js").read_text(encoding="utf-8")
-    assert 'const GP_KINDS = ["three", "scorers"];' in js and "GP_FILL_WORDS" in js
+    assert 'const GP_KINDS = ["three", "two", "scorers"];' in js and "GP_FILL_WORDS" in js
     rj = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
     assert '{ type: "parlays", items: g.scorers.map((t, i) => card(t, i + 1, "scorers", sport)) }) : ""}${' in rj, \
         "a short game's scorer note shows under the pairs it made"

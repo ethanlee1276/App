@@ -680,10 +680,12 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
     record of that on the record page."
 
     ``{league: {kind: block}}`` for each game's three-leg parlays ("three") and
-    its scorer pairs ("scorers") (engine/gameparlays.SOURCES), each block. The
-    two-leg tickets GPWIN1 built ("two") are retired (gameparlays.RETIRED, ZR:
-    Ethan asked for three three-leg parlays and three scorer pairs a game): the
-    journal keeps every one, and the record leaves them off.
+    its scorer pairs ("scorers") (engine/gameparlays.SOURCES), each block, and
+    basketball's two-leg tickets ("two", gameparlays.TWO_SPORTS: ZT, its books
+    posting no scorer). Elsewhere the two-leg tickets GPWIN1 built are retired
+    (gameparlays.retired, ZR: Ethan asked for three three-leg parlays and three
+    scorer pairs a game): the journal keeps every one, and the record leaves
+    them off.
 
       * the tickets: graded, won, lost, units at one unit a ticket and ROI, open,
         our average chance on them (`modeled_joint`) and the tickets that lost
@@ -699,7 +701,7 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
     report carried when it started, and no version the board replaced before
     then; ``not_counted`` says how many graded versions were left out."""
     ensure_schema(conn)
-    from .gameparlays import RETIRED, SOURCES
+    from .gameparlays import SOURCES, retired
     try:
         from .ledger import is_benched
     except Exception:                                        # noqa: BLE001
@@ -707,8 +709,6 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
             return False
     out: dict = {}
     for kind, source in SOURCES.items():
-        if kind in RETIRED:
-            continue
         tickets = conn.execute(f"SELECT * FROM parlays WHERE source=? AND {AT_START} ORDER BY date, id",
                                (source,)).fetchall()
         before = dict(conn.execute(
@@ -717,7 +717,7 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
         by_sport: dict = {}
         for t in tickets:
             sp = str(t["sport"] or "").lower()
-            if sp and not is_benched(sp):
+            if sp and not is_benched(sp) and not retired(kind, sp):
                 by_sport.setdefault(sp, []).append(t)
         for sp, rows in by_sport.items():
             graded = [t for t in rows if t["status"] in ("won", "lost")]
