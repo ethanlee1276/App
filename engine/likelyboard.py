@@ -307,7 +307,7 @@ METHOD_AVOID = {
     "blowout_over": "our rule: no receiving or passing over when a blowout could take the fourth "
                     "quarter away",
     "wind_pass_over": "our rule: 15+ mph wind is a major downgrade for the passing game",
-    "fav_pass_over": "our rule: no passing over when the game script works against it",
+    "fav_pass_over": "our rule: on a favorite of 10 or more, pass attempts drop when the game gets out of hand",
     "boom_bust": "our rule: no yardage over that needs one or two big plays",
     "role_down_over": "our rule: no over on a role that has been shrinking",
     "role_up_under": "our rule: no under on a role that has been growing",
@@ -316,11 +316,33 @@ METHOD_AVOID = {
 #: blowout rule is about receiving and passing volume (a big favourite's back
 #: gets the clock-killing carries), and "needs a bomb" is a yardage over.
 METHOD_MARKETS = {"blowout_over": ("receptions", "rec_yds", "pass_att", "pass_cmp", "pass_yds"),
-                  "boom_bust": ("rush_yds", "rec_yds", "pass_yds")}
+                  "boom_bust": ("rush_yds", "rec_yds", "pass_yds"),
+                  # v3.1 §4 (2026-11-20): "Team wins by 14+: QB attempts fall to 0.87x ... Big
+                  # favorites' QB floors are otherwise normal; do not fade them for being
+                  # favorites." The rule was capping a big favorite's completions and yards too.
+                  "fav_pass_over": ("pass_att",)}
+#: THEIR INSTRUCTIONS, v3.1 (2026-11-20; "used alongside ... should not be
+#: replacing anything"), §8: "A new starting quarterback with too few attempts
+#: to rate: no pass-catcher legs on that team." The quarterback card says so
+#: (qbchange.card ``unrated``: a replacement with under GREEN_ATTEMPTS passes
+#: this season and last); a catch or receiving-yards pick behind one tops out
+#: at Worth a look, either side, and is no parlay leg (gameparlays.off_parlays).
+METHOD_NEW_QB = "our rule: no pass-catcher pick behind a new starting quarterback with too few passes to rate"
+METHOD_NEW_QB_MARKETS = ("receptions", "rec_yds")
 #: HIS TOUCHDOWN RULE (the TD module; decision 1 under RUN_NEXT 00f): an
 #: anytime touchdown at 45%, or at 40% with "undeniable usage" — 30% of his
 #: team's red-zone chances.
 TD_RULE_PROB, TD_RULE_FALLBACK, TD_RULE_RZ_SHARE = 0.45, 0.40, 0.30
+#: THE FALLBACK, AS v3.1 WRITES IT (§11, 2026-11-20): "40%+ at plus money with
+#: EV of 6%+ and undeniable usage." The plus price and the 6% are new. On the
+#: public receipts the NFL's touchdown picks at 40-45% (63 of them, priced at
+#: 49.4% on average, most at minus money) hit 36.5%, and the board's rule was
+#: passing the ones with a red-zone role at any price. A pick with no price is
+#: not passed by the fallback. The 45% clause stays as it was: v3.1 also asks
+#: that the pick sit at or above its price's break-even, and here the 127 NFL
+#: picks at 45%+ under their price hit 57.5%, while the 6 above theirs hit 2,
+#: so that clause is said on the card and caps nothing.
+TD_RULE_FALLBACK_EV = 0.06
 #: The rule's red-zone share is the play-by-play's measured one where it counted
 #: one (Ethan, 2026-11-15: "switch"), from after Sunday night's kickoff (01:20
 #: UTC on 16 November) and not before, so no Sunday pick moved mid-slate. Off,
@@ -344,6 +366,9 @@ def method_fails(r: dict, sport: str) -> list:
         if code == "boom_bust" and _side(r) != "over":
             continue
         out.append(why)
+    if ((r.get("qb_card") or {}).get("unrated") and r.get("market") in METHOD_NEW_QB_MARKETS
+            and str(r.get("position") or "").upper() != "QB"):
+        out.append(METHOD_NEW_QB)
     return out
 
 
@@ -359,11 +384,25 @@ def td_rule(r: dict) -> dict:
     has = f", {float(share):.0%} of the team's {what}" if share is not None else ""
     if prob >= TD_RULE_PROB:
         return {"meets": True, "why": f"{prob:.0%}{has} — meets our touchdown rule (45%)"}
-    if prob >= TD_RULE_FALLBACK and share is not None and float(share) >= TD_RULE_RZ_SHARE:
+    role = share is not None and float(share) >= TD_RULE_RZ_SHARE
+    if prob >= TD_RULE_FALLBACK and role and _plus_price_pays(prob, r.get("odds")):
         return {"meets": True, "why": f"{prob:.0%}{has} — meets our touchdown rule (40% with a red-zone "
-                                      f"role)"}
+                                      f"role, at a plus price that pays for it)"}
     return {"meets": False, "why": f"{prob:.0%}{has} — our touchdown rule asks 45%, or 40% with "
-                                   f"{TD_RULE_RZ_SHARE:.0%} of the red-zone {'work' if TD_RULE_MEASURED else 'chances'}"}
+                                   f"{TD_RULE_RZ_SHARE:.0%} of the red-zone {'work' if TD_RULE_MEASURED else 'chances'}"
+                                   f" at a plus-money price paying {TD_RULE_FALLBACK_EV:.0%} over our number"}
+
+
+def _plus_price_pays(prob: float, odds) -> bool:
+    """A plus-money price whose expected value at ``prob`` is TD_RULE_FALLBACK_EV
+    or better: the touchdown rule's fallback (v3.1 §11)."""
+    try:
+        o = int(float(odds))
+    except (TypeError, ValueError):
+        return False
+    if o < 100:
+        return False
+    return prob * (o / 100.0) - (1.0 - prob) >= TD_RULE_FALLBACK_EV - 1e-9
 
 
 def _cfb_tight() -> bool:

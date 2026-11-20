@@ -1,13 +1,81 @@
 # Ethan's NFL Bet checking method, and where it lives on the site
 
 Ethan's Claude project "NFL Bet checking" (exported 2026-11-14) holds the
-master instructions ("NFL Prop Bot — Full Master Instructions", 27 rules),
-the slate log (the cards and post-mortems from 1 October to 12 November) and
-55 game chats from 9 September to 12 November. On 2026-11-15 they asked for
-the project's reports and how they work to be built into the game reports,
-the website and how the Most Likely bets are selected. This page maps each
-part of the method to where the site does it. It also says what the site
-does differently, and why.
+master instructions, the slate log (the cards and post-mortems from 1 October
+to 12 November) and 55 game chats from 9 September to 12 November. On
+2026-11-15 they asked for the project's reports and how they work to be built
+into the game reports, the website and how the Most Likely bets are selected.
+On 2026-11-20 they pasted the current instructions, **"NFL Prop Bot — Master
+Instructions v3.1"**, with: "Those instructions should be used alongside what
+we've already talked about in finding our most likely picks and game report
+picks with all of our data ... These instructions should not be replacing
+anything."
+
+This page maps the method to where the site does it. The first table is v3.1,
+section by section. The tables under it are the 14 November mapping (the
+"Full Master Instructions", 27 rules), which still stands. It also says what
+the site does differently, and why.
+
+## v3.1 (20 November 2026), section by section
+
+| Section | What it says | On the site |
+|---|---|---|
+| Mission | A pick is a disagreement with a price; honest targets inside −250: single legs 60–68%, two-leg parlays 37–45%, three-leg 25–30%; show the real joint chance; never force a play | Every ticket shows its joint chance, fair price and take-it-at price. A game with no pick says "No qualifying plays at current lines" and names the closest three. The boards stay likelihood-first, as their own messages asked (below); see "The price grade" for why Green, Yellow and Red are not on the cards |
+| 0. Start of every card | Rebuild the comps engine and the board from the project's toolkit docs | Theirs to run. The toolkit docs (`claude/data-toolkit.md`, `claude/data-toolkit-matchup.md`) and the season audit were not in the paste, so the comps tables are known here only as the summary in §3 |
+| 1. Hard gates | −250 at the heaviest; one book a ticket; two legs by default, three only when asked; touchdown tickets apart; tickets on a game win together; kept off parlays: backup backs' yardage, quarterback rushing overs that depend on scrambles, quarterback rush-attempt unders, game totals in prop tickets | −250 caps every row and leg (`likely.HEAVIEST_PRICE`). Tickets win together (`gameparlays.choose`). Touchdown pairs are their own tickets, and prop tickets carry player props only. **Added 2026-11-20** (`gameparlays.off_parlays`): no parlay leg for a backup back's yardage (a back who is not the team's lead carrier), a quarterback's rush-attempt under, or a quarterback's rushing over where the charting has at least half the carries as scrambles. Three-leg tickets are posted because they asked the site for them (19 and 20 November). Not done: one book a ticket (each leg shows its own best book) |
+| 1. Their guardrails | No Lions unders; avoid Jets and Justin Fields; no CeeDee Lamb unless asked; no elite-quarterback passing-yard unders; no fragile unders | Kept for their own bets; the boards serve every member. The record holds the unders it has proven (`likelyboard.NFL_UNDER_CAUTIONS`, tight-end and receiving-yards unders) |
+| 2. How a leg gets its number | Comps base rate, spot and matchup adjustments (capped −10/+12), then a haircut: 30% toward the market's no-vig chance and never more than 6 points above it; a second number from Qellys; take-at price; minimum 64% (SAFE) or 60% (BALANCED) | Our projections and their measured steps make the number. The haircut here is stricter because the record asked for it: an NFL pick is never shown above three books' fair price (`trust_price`, picked on held-out weeks), and a college prop never above its own price (`PRICE_CEILING`). The take-at price is on every pick line. Parlay legs clear 60% (`gameparlays.LEG_FLOOR`; a short game's fill goes down to 50%) |
+| 3. Where legs come from | Rungs as a share of the season average (completions 0.82x hits 70%, and so on); Tier 1 volume markets, Tier 2 receptions, Tier 3 yardage as POP | The Most Likely list climbs the alternate ladder for the likeliest rung inside −250 (`likely._best_rung`). The tiers are not adopted as a ranking: on our graded record completions, attempts and carries at the lines we took are the weakest markets, so the record's own check decides (`record_check`) and completions stay benched from stakes. Their tables are about rungs well under the average, which the box can test (decision 4 below) |
+| 4. Spot rules | Lifts and cuts by total, spread and trend; no back's carries or rushing on a 7+ underdog; on a 10+ favorite, attempts drop and completions and yards hold | The scout raises each (`dog_run_over` at 7, `low_total_over` at 40, `blowout_over`, `wind_pass_over`). **Changed 2026-11-20**: the big-favorite rule caps pass attempts only (`METHOD_MARKETS["fav_pass_over"]`); it had capped a favorite's completions and yards too |
+| 5. Matchup scan | Who is guarding him, and how much each part may move the number; a cornerback matchup explains a receiver's leg and adds nothing; zero weight on touchdowns allowed to a position, streaks, revenge, primetime | The reports' rankings and "Who's guarding who". Our matchup step moves a number only by what was measured (`defensevs`, `hoopsdvp`). Not changed: the board's matchup check still lets a coverage read back a receiver's pick (decision 5 below) |
+| 6. Breakout candidates | Definitions and base rates; about a one-in-four shot at best; POP legs at plus money, never the anchor | "Players to watch" names them with the reasons. The framing line (how often even the best spot gets there) is not on the report yet |
+| 7. Game script | Four scripts with their chances; what each leg needs | Scripts A to D with their shares (`gamereport.script_blocks`); each ticket says what it needs and how likely (`gameparlays.script_need`) |
+| 8. Injuries, roles, weather | Same-day status and replacements; a new starting quarterback with too few attempts to rate: no pass-catcher legs; wind 12+ caution, 15+ major | The injury list, what each absence opens, the news watch. **Added 2026-11-20**: behind a replacement with under 50 passes (`qbchange.card` `unrated`) a catch or receiving-yards pick tops out at Worth a look (`likelyboard.METHOD_NEW_QB`) and is no parlay leg. 15+ mph caps passing overs (`scout.WIND`) |
+| 10. Parlay builder | SAFE, BALANCED, POP; one anchor; no more than two tickets on a leg; fair price beside the book's | Legs ride on two tickets at most (`gameparlays.MAX_USES`); each ticket shows fair and take-it-at and says when the legs' prices multiplied fall short of it. The SAFE / BALANCED / POP names are not on the tickets yet |
+| 11. Touchdown module | Base rates by team total; approve at 45% and at or above the price's break-even, or 40% at plus money with EV 6% and undeniable usage; never two pass catchers from one team | `likelyboard.td_rule`. **Changed 2026-11-20**: the fallback now needs a plus price paying 6% over our number (it had passed a red-zone role at any price), and two pass catchers from one team share no touchdown pair (`gameparlays.pair_link`). The 45% clause keeps no price test: see "The price grade" |
+| 12. Sides and totals | Stricter edges | The game-bet lanes keep their own bars |
+| 13–14. Live, hedge, bankroll | Their own staking | Not the site's to set; My Bets tracks a member's own |
+| 15. Output | Ranked picks with book, price, final number, take-at, what it needs, who is guarding him | The report's card and pick lines, the board's ranking (tier, matchup, chance) |
+| 16. Learning loop | Log every leg; a market 8+ points under its rate over 20+ legs drops a tier; one rule a slate | Every pick is journaled and graded. `record_check` is that rule as written: 20 settled picks, 8 points under the claim, and the pick cannot be Top or Strong |
+
+### The price grade (Green, Yellow, Red), and why it is not on the cards
+
+v3.1 posts a leg only when its number beats the price (Green), or sits within
+two points (Yellow). That needs a number that has earned the right to
+disagree with a price. On the site's public receipts it has not, in football:
+
+| Picks shown above their price | Picks | We said | Hit |
+|---|---|---|---|
+| NFL board picks | 677 | 68.5% | 56.1% |
+| College football board props | 617 | 66.9% | 55.1% |
+
+The picks at or under their price hit what we said (NFL 56.6% of 1,670,
+college props 58.5% of 908). So where our number ran above the price, the
+price was right, and a "Green" label would have marked the picks that missed
+by the most. The site's answer is the stricter haircut in §2: show the
+price's number, post the take-at price, and let the Edge board carry the
+bets that claim a price is wrong. The NBA's and the NHL's numbers have held
+up against their prices and could carry the grade (decision 3 below).
+
+### Decisions v3.1 leaves with them
+
+1. **Two legs by default.** v3.1 posts two-leg parlays and three only when
+   asked; on 20 November they asked the site for three three-leg tickets and
+   three scorer pairs a game, with two-leg prop tickets only in basketball.
+   Started sets so far: NBA two-leg 12 of 16, three-leg 6 of 27; NHL two-leg
+   14 of 20; NFL three-leg 0 of 3. Bring two-leg prop tickets back beside the
+   three-leg ones in football and hockey?
+2. **SAFE / BALANCED / POP on each ticket**, and one book that prices every
+   leg. Display work; next batch if wanted.
+3. **The price grade on the NBA and NHL cards**, where the number has earned
+   it (above).
+4. **Rungs well under the average.** Their Tier 1 is completions, attempts
+   and carries at 0.80x to 0.85x of the average. Ours lose at the lines we
+   took. A box run can say how our picks did by rung-to-average, which would
+   settle whether completions come off the bench at low rungs.
+5. **A cornerback matchup adds nothing.** Their testing gives a receiver's
+   coverage matchup no points. Our board lets the scan's coverage read back a
+   receiver's pick toward Top. Stop counting it?
 
 ## What his own messages add to the instructions
 

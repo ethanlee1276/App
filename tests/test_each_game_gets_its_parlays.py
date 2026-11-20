@@ -242,9 +242,16 @@ def test_three_touchdown_pairs_with_his_reasons():
     assert "Goal-line work" in sk and "rain" in sk.lower(), sk
     assert all(l["player"] != "Jayden Daniels" for t in pairs for l in t["legs"]), "12% is under the scorer bar"
     # (Added 2026-11-14.) White is priced at 30% and has no research case:
-    # 19 expected points, a run defence 18th, a 45% share — 3 of 13.
-    assert all(l["player"] != "Rachaad White" for t in pairs for l in t["legs"]), "no research case, no leg"
-    assert all(l.get("research", 0) >= GP.RESEARCH_MIN for t in pairs for l in t["legs"])
+    # 19 expected points, a run defence 18th, a 45% share — 3 of 13. Since v3.1's
+    # "never two pass catchers from one team" (2026-11-20) Likely and Nabers share no
+    # pair, so White stands in on the pairs the game still owes (ZR), named as one;
+    # the researched pair leads and carries no stand-in.
+    assert not any({l["player"] for l in t["legs"]} == {"Isaiah Likely", "Malik Nabers"} for t in pairs)
+    assert all(l["player"] != "Rachaad White" for l in pairs[0]["legs"]), "the researched pair has no stand-in"
+    assert all(l.get("research", 0) >= GP.RESEARCH_MIN for l in pairs[0]["legs"])
+    for t in pairs:
+        if any(l["player"] == "Rachaad White" for l in t["legs"]):
+            assert t.get("fill") == "stand_in" and any("Rachaad White" in c for c in t["caveats"]), t
     assert "WAS’s run defense ranks 22nd of 32" in sk, sk
     # His pair, asked directly: two Giants scorers, priced as unrelated, the
     # caveat that both need the Giants to score twice, and Likely's reason

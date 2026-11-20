@@ -37,7 +37,9 @@ from engine import likelyboard as B                                  # noqa: E40
 GAME = {"home": "DET", "away": "NYJ", "spread": -9.5, "total": 44.5,
         "scan": {"units": {}, "redzone": {"NYJ": {"off": 10.0}}}}
 SCORER = {"kind": "td", "player": "Breece Hall", "team": "NYJ", "opponent": "DET", "market": "anytime_td",
-          "side": "yes", "line": None, "odds": 120, "model_prob": 0.42, "implied_prob": 0.40,
+          # +170: at 42% a unit returns 13.4%, past the 6% the rule's fallback asks of a
+          # plus price (their instructions v3.1 §11, 2026-11-20).
+          "side": "yes", "line": None, "odds": 170, "model_prob": 0.42, "implied_prob": 0.36,
           "rz_chances": 2.0, "position": "RB"}
 
 
@@ -69,7 +71,7 @@ def test_a_measured_share_wins_over_the_estimate():
     assert row["rz_share"] == 0.36 and row["rz_share_measured"] is True, row
     assert row["td_rule"]["meets"] is True, row["td_rule"]
     assert row["td_rule"]["why"] == ("42%, 36% of the team's red-zone touches — meets our touchdown rule "
-                                     "(40% with a red-zone role)"), row["td_rule"]
+                                     "(40% with a red-zone role, at a plus price that pays for it)"), row["td_rule"]
 
 
 def test_with_none_measured_the_estimate_stands():
@@ -78,7 +80,7 @@ def test_with_none_measured_the_estimate_stands():
     assert row["rz_share"] == 0.2 and not row.get("rz_share_measured"), row
     assert row["td_rule"]["meets"] is False
     assert row["td_rule"]["why"] == ("42%, 20% of the team's red-zone chances — our touchdown rule asks 45%, or "
-                                     "40% with 30% of the red-zone work"), row["td_rule"]
+                                     "40% with 30% of the red-zone work at a plus-money price paying 6% over our number"), row["td_rule"]
 
 
 def test_a_low_measured_share_holds_where_the_estimate_would_not():

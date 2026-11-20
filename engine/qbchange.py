@@ -414,10 +414,16 @@ def card(ch: dict, applied: float = 1.0, own: bool = False, position: str = "") 
     if (str(position or "").upper() == "RB" and ch.get("status") != "RETURNS" and ch.get("replacement")
             and int(ch.get("replacement_attempts") or 0) < GREEN_ATTEMPTS):
         volume = (volume + ". " if volume else "") + BACKS_BEHIND_GREEN
-    return {"team": ch["team"], "starter": ch["starter"], "status": ch["status"],
-            "replacement": ch.get("replacement"), "tier": ch["tier"], "headline": headline(ch),
-            "detail": detail(ch), "applied": round(applied, 3), "note": note,
-            "reported": ch.get("reported"), "volume": volume}
+    out = {"team": ch["team"], "starter": ch["starter"], "status": ch["status"],
+           "replacement": ch.get("replacement"), "tier": ch["tier"], "headline": headline(ch),
+           "detail": detail(ch), "applied": round(applied, 3), "note": note,
+           "reported": ch.get("reported"), "volume": volume}
+    # TOO FEW PASSES TO RATE (their instructions v3.1 §8: "no pass-catcher legs
+    # on that team"; likelyboard.METHOD_NEW_QB reads it). Present only when true.
+    if (ch.get("status") != "RETURNS" and ch.get("replacement")
+            and int(ch.get("replacement_attempts") or 0) < GREEN_ATTEMPTS):
+        out["unrated"] = True
+    return out
 
 
 def effect(prop, game) -> tuple:

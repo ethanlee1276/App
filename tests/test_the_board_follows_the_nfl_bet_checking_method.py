@@ -65,7 +65,11 @@ def test_a_pick_breaking_a_rule_says_which_and_only_where_the_rule_speaks():
 
 def test_the_touchdown_rule():
     assert B.td_rule({"model_prob": 0.47})["meets"] is True
-    assert B.td_rule({"model_prob": 0.42, "rz_share": 0.35})["meets"] is True
+    # The fallback as v3.1 writes it (2026-11-20): 40% with the red-zone role, at a plus
+    # price paying 6% over our number. +170 pays 13.4% at 42%; -110 and no price do not pass.
+    assert B.td_rule({"model_prob": 0.42, "rz_share": 0.35, "odds": 170})["meets"] is True
+    assert B.td_rule({"model_prob": 0.42, "rz_share": 0.35, "odds": -110})["meets"] is False
+    assert B.td_rule({"model_prob": 0.42, "rz_share": 0.35})["meets"] is False
     got = B.td_rule({"model_prob": 0.42, "rz_share": 0.2})
     assert got["meets"] is False and "45%, or 40% with 30% of the red-zone work" in got["why"]
     assert B.td_rule({"model_prob": 0.38, "rz_share": 0.6})["meets"] is False

@@ -220,6 +220,9 @@ def _leg(r: dict, p, pool: str) -> dict | None:
             "fair": _fair_of(r),
             "game_date": r.get("game_date") or r.get("date") or "", "kickoff": r.get("kickoff") or "",
             "headline": r.get("headline") or "", "position": r.get("position") or "",
+            # Behind a new starting quarterback with too few passes to rate
+            # (qbchange.card): gameparlays.off_parlays keeps a pass catcher's leg off.
+            **({"_qb_unrated": True} if (r.get("qb_card") or {}).get("unrated") else {}),
             "_game_leg": bool(r.get("_game_leg"))}
 
 

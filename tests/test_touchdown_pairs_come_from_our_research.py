@@ -108,9 +108,20 @@ def test_a_likelier_scorer_with_no_case_is_never_a_leg():
     gp = GP.build(_board(reads, scorers), "nfl")
     g = gp["games"][0]
     on = {l["player"] for t in g["scorers"] for l in t["legs"]}
-    assert on == {"Cam Skattebo", "Isaiah Likely", "Malik Nabers"}, on
+    # NEVER TWO PASS CATCHERS FROM ONE TEAM (their instructions v3.1 §11, 2026-11-20): Likely and
+    # Nabers no longer share a pair, so the three researched Giants make two pairs with a back
+    # between them at most, and the game's third takes a stand-in from the other side (ZR's fill,
+    # and the pairs take both sides: SIDES1), named as one. A scorer with no read is still no leg.
+    assert on == {"Cam Skattebo", "Isaiah Likely", "Rachaad White"}, on
+    assert not any({l["player"] for l in t["legs"]} == {"Isaiah Likely", "Malik Nabers"} for t in g["scorers"])
+    assert "Deebo Samuel" not in on and "Terry McLaurin" not in on and "Wan'Dale Robinson" not in on
     assert len(g["scorers"]) == 3 and g["scorers_priced"] == 7 and g["scorers_read"] == 3
-    assert all(t["research"] == sum(l["research"] for l in t["legs"]) for t in g["scorers"])
+    first = g["scorers"][0]
+    assert {l["player"] for l in first["legs"]} == {"Cam Skattebo", "Isaiah Likely"} and not first.get("fill"), \
+        "the researched pair leads and is no fill"
+    for t in g["scorers"][1:]:
+        assert t.get("fill") == "stand_in" and any("weaker research case" in c for c in t["caveats"]), t
+    assert all(t["research"] == sum(int(l.get("research") or 0) for l in t["legs"]) for t in g["scorers"])
     card = GP.card(g["scorers"][0], 1, "scorers", "nfl")
     assert all(l["research_of"] == GP.RESEARCH_MAX and l["research"] >= GP.RESEARCH_MIN for l in card["legs"])
 

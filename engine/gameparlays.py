@@ -455,6 +455,96 @@ def still_to_play(legs: list, board: dict, now=None) -> list:
     return out
 
 
+#: KEPT OFF PARLAYS (their instructions v3.1 §1 and §8, 2026-11-20; "used
+#: alongside ... should not be replacing anything"). Football: "backup running
+#: backs' yardage, QB rushing overs that depend on scrambles, QB rush-attempt
+#: unders", and "a new starting quarterback with too few attempts to rate: no
+#: pass-catcher legs on that team". The pick itself stays on the board and on
+#: the report's card; it is only no leg of a ticket.
+#:   * A quarterback's rushing over "that depend[s] on scrambles": one whose
+#:     scrambles are at least half his carries, by this season's charting (the
+#:     scan's ``charting.scrambles``, engine/sources/ftn) against his carries a
+#:     game (`_scrambler`). A quarterback the charting has no count for is left
+#:     alone, as is one whose runs are mostly called: their own ticket of 12
+#:     November carried Jayden Daniels 25+ rushing yards.
+#:   * A backup back: a running back who is not the team's lead carrier by the
+#:     scan's carry share (`_lead_carry`); a back the scan has no usage for is
+#:     left alone, since nothing says which he is.
+OFF_PARLAY_SPORTS = ("nfl", "cfb")
+_RUSH_ATT = ("rush_att", "carries", "rush_attempts")
+_BACK_YARDS = ("rush_yds", "rec_yds", "rush_rec_yds")
+#: Scrambles as a share of a quarterback's carries from which his rushing over
+#: "depends on scrambles": most of them.
+SCRAMBLE_SHARE = 0.5
+OFF_PARLAY_WORDS = {"qb_rush_over": "a quarterback's rushing over that leans on scrambles",
+                    "qb_rush_att_under": "a quarterback's rush-attempt under",
+                    "backup_back": "a backup running back's yardage",
+                    "new_qb": "a pass catcher behind a new starting quarterback with too few passes to rate"}
+
+
+def _lead_carry(reads: dict | None) -> dict:
+    """{team: the biggest carry share among its running backs' reads}."""
+    out: dict = {}
+    for (_who, team), x in (reads or {}).items():
+        if str(x.get("pos") or x.get("position") or "").upper() not in ("RB", "FB"):
+            continue
+        share = _f((x.get("usage") or {}).get("carry_share"))
+        if share is not None and share > out.get(team, 0.0):
+            out[team] = share
+    return out
+
+
+def scramble_rates(board: dict) -> dict:
+    """{team: [(the charting's name for him, scrambles a game), ...]} off
+    every game's charting."""
+    out: dict = {}
+    for g in (board or {}).get("games") or []:
+        rows = (((g or {}).get("scan") or {}).get("charting") or {}).get("scrambles") if isinstance(g, dict) else None
+        for team, men in (rows or {}).items():
+            for x in men or []:
+                n = _f((x or {}).get("scrambles"))
+                if n is not None and (x or {}).get("name"):
+                    out.setdefault(team, []).append((str(x["name"]), n / max(1, int(_f(x.get("weeks")) or 1))))
+    return out
+
+
+def _scrambler(leg: dict, read: dict, scrambles: dict | None) -> bool:
+    """True when the charting says most of this quarterback's carries are
+    scrambles (SCRAMBLE_SHARE). The charting names a man "J.Daniels"
+    (angles._same_man reads it against the full name)."""
+    from .angles import _same_man
+    cpg = _f((read.get("usage") or {}).get("carries_pg"))
+    if not scrambles or not cpg:
+        return False
+    spg = next((v for name, v in scrambles.get(leg.get("team") or "", ())
+                if _same_man(str(leg.get("player") or ""), name)), None)
+    return spg is not None and spg / cpg >= SCRAMBLE_SHARE
+
+
+def off_parlays(sport: str, leg: dict, reads: dict | None = None, lead: dict | None = None,
+                scrambles: dict | None = None) -> str:
+    """Why this leg is kept off every ticket (an OFF_PARLAY_WORDS key), or ""."""
+    if sport not in OFF_PARLAY_SPORTS or not isinstance(leg, dict):
+        return ""
+    read = (reads or {}).get((_key(leg.get("player")), leg.get("team") or "")) or {}
+    pos = str(leg.get("position") or read.get("pos") or read.get("position") or "").upper()
+    mkt = str(leg.get("market") or "")
+    over = str(leg.get("side") or "").upper() in ("OVER",) + _YES
+    if pos == "QB" and mkt in _RUSH:
+        if over:
+            return "qb_rush_over" if _scrambler(leg, read, scrambles) else ""
+        if mkt in _RUSH_ATT:
+            return "qb_rush_att_under"
+    if leg.get("_qb_unrated") and mkt in _CATCH and pos != "QB":
+        return "new_qb"
+    if pos in ("RB", "FB") and mkt in _BACK_YARDS:
+        mine = _f((read.get("usage") or {}).get("carry_share"))
+        top = (lead if lead is not None else _lead_carry(reads)).get(leg.get("team") or "")
+        if mine is not None and top is not None and mine < top - 1e-9:
+            return "backup_back"
+    return ""
+
+
 def legs_for(board: dict, sport: str, now=None, floor: float = LEG_FLOOR) -> list[dict]:
     """The board's priced picks as legs — Most Likely, Edge, the Most Likely
     rows its seat caps dropped (`pool_legs`) and every other prop it priced
@@ -475,6 +565,8 @@ def legs_for(board: dict, sport: str, now=None, floor: float = LEG_FLOOR) -> lis
     # the shift its legs built the current way have earned, where the books
     # agreed with an overstated number and the pull alone could not move it.
     w, shift = legfit.w_for(sport, "three"), legfit.shift_for(sport, "three")
+    reads = reads_by_player(board) if sport in OFF_PARLAY_SPORTS else {}
+    lead, scrambles = _lead_carry(reads), scramble_rates(board) if sport in OFF_PARLAY_SPORTS else {}
     for get in (T.likely_legs, T.edge_legs, pool_legs, priced_legs):
         try:
             rows = get(board, sport, now)
@@ -494,6 +586,9 @@ def legs_for(board: dict, sport: str, now=None, floor: float = LEG_FLOOR) -> lis
             # NBA's points, benched 18 November at 44-53 and 63-71): a bet the
             # record will not stake is no leg to stake a ticket on.
             if market_benched(sport, leg.get("market")):
+                continue
+            # KEPT OFF PARLAYS BY THEIR RULES (`off_parlays`, v3.1).
+            if off_parlays(sport, leg, reads, lead, scrambles):
                 continue
             k = (leg.get("player"), leg.get("market"), str(leg.get("side") or "").upper(), leg.get("line"))
             if k not in got or _speaks_first(leg, got[k]):
@@ -695,6 +790,10 @@ def research_scorers(scorers: list[dict], board: dict, games: list, sport: str,
             census[why] = census.get(why, 0) + 1
     for leg in scorers:
         read = reads.get((_key(leg.get("player")), leg.get("team") or ""))
+        # A scorer's row often carries no position; the read does, and the
+        # pass-catcher rule on a pair reads it (`pair_link`).
+        if read and not leg.get("position") and (read.get("pos") or read.get("position")):
+            leg["position"] = str(read.get("pos") or read.get("position")).upper()
         r = research(leg, read, _game_of(leg, games), sport)
         if not r:
             no("no matchup read on the player" if not read else "the read says avoid" if read.get("read") == "avoid"
@@ -1029,6 +1128,13 @@ def pair_link(sport: str, a: dict, b: dict, game: dict | None) -> tuple:
                       f"one big day can take the other's catches")
             rho, why = SAME_TEAM_CATCH_RHO, "one passing game feeds both"
         elif rel.clash == 3 and same_team and fam <= {"td", "nhlgoal"}:
+            # NEVER TWO PASS CATCHERS FROM ONE TEAM (their instructions v3.1 §11,
+            # 2026-11-20, of touchdown parlays): they split the same passing
+            # touchdowns. A back beside a catcher, or two backs, still fit.
+            if sport in OFF_PARLAY_SPORTS and {str(a.get("position") or "").upper(),
+                                               str(b.get("position") or "").upper()} <= {"WR", "TE"}:
+                return False, rho, (f"{a.get('player')} and {b.get('player')} both catch {a.get('team')}'s passes — "
+                                    f"our rule keeps two pass catchers from one team off a touchdown ticket"), ""
             caveat = (f"{a.get('player')} and {b.get('player')} share {a.get('team')}'s scoring — "
                       f"both need {a.get('team')} to score more than once")
             rho, why = SAME_TEAM_SCORER_RHO, ""
@@ -1919,7 +2025,12 @@ def build_game(sport: str, game: dict, legs: list[dict], scorers: list[dict],
             # THREE A GAME (ZR): its next scorers fill, the fewest on a pair, each named (`stand_ins`).
             extra = sorted(spare, key=lambda l: (l.get("stand_in") != "weaker",) + by_leg(l))[:MAX_SCORERS]
             pairs = pairs_of(sc + extra, {_leg_id(l) for l in extra})
-            wide = choose(pairs, SCORER_PER_GAME, rank=rank, researched=researched)
+            # The researched pairs stay and the fill only adds to them (as the
+            # three-leg fill does, `held`): chosen afresh, a stand-in at a
+            # shorter price took a researched scorer's place once two pass
+            # catchers from one team stopped sharing a pair (`pair_link`).
+            wide = choose(pairs, SCORER_PER_GAME, rank=rank, researched=researched,
+                          keep=[ident(t) for t in got])
             if len(wide) > len(got):
                 got = wide
         if pairs_out is not None:
@@ -2338,7 +2449,8 @@ def _picks_priced(board: dict, sport: str, game: dict, want: set, now=None) -> i
 
 
 #: What became of a report's player pick as a parlay leg (`_picks_census`).
-PICK_FATES = ("read", "strong", "fill", "low", "no_parlay", "benched", "other_line", "matchup_only", "scorer_only",
+PICK_FATES = ("read", "strong", "fill", "low", "no_parlay", "benched", "our_rule", "other_line", "matchup_only",
+              "scorer_only",
               "refused_out", "refused_unreliable", "refused_book", "refused_price", "refused_edge", "refused",
               PROPS_WAIT, "absent")
 
@@ -2426,6 +2538,10 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
       low           priced as a leg, under FILL_LEG_FLOOR once corrected (legfit);
       no_parlay     a market no parlay carries (tackles, sacks, kicking);
       benched       a market benched from stakes (stakeplan.MARKET_BENCH);
+      our_rule      a pick their rules keep off parlays (`off_parlays`, v3.1: a
+                    quarterback's scramble-dependent rushing over or his
+                    rush-attempt under, a backup back's yardage, a pass
+                    catcher behind an unrated new quarterback);
       other_line    the board's legs carry the player's market and side at
                     another number only;
       matchup_only  a matchup pick's own row and no leg source's
@@ -2479,6 +2595,15 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
                 matchup |= keys(g.get("td")) | keys(g.get("props"))
         field = {k[:2] for k in keys(board.get("td_field")) | keys(board.get("longshot_watch"))}
         unbought = _priced_counts(board, [game]).get(game_label(game), 0) < PROPS_BOUGHT_MIN
+        # The picks their rules keep off parlays (`off_parlays`), read off the
+        # rows that hold them (a pick row carries its position and its
+        # quarterback card; the leg lists never made it a leg).
+        scan = reads_by_player(board)
+        lead, scrambles = _lead_carry(scan), scramble_rates(board)
+        ruled = {k for k, rows in held.items()
+                 if any(off_parlays(sport, dict(r, **({"_qb_unrated": True}
+                                                     if (r.get("qb_card") or {}).get("unrated") else {})),
+                                    scan, lead, scrambles) for r in rows)}
         out: dict = {}
         for k in want:
             if k in reads:
@@ -2489,6 +2614,8 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
                 fate = "no_parlay"
             elif market_benched(sport, k[1]):
                 fate = "benched"
+            elif k in ruled:
+                fate = "our_rule"
             elif k[:3] in loose:
                 fate = "other_line"
             elif k in held:

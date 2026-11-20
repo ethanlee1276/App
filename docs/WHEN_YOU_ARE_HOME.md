@@ -9338,6 +9338,27 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ZZ. Your v3.1 instructions, beside the board's own logic** (step 814; 20 November). Nothing to run. You pasted
+"NFL Prop Bot — Master Instructions v3.1" and said to use it alongside what the site does, replacing nothing. I
+mapped all of it in `docs/NFL_BET_CHECKING_METHOD.md`, section by section. Most of it the site already did: the −250
+cap, tickets that win together, the four scripts and what each leg needs, the take-at price, no more than two
+tickets on a leg, and your learning rule (a market 8 points under its rate over 20 legs drops a tier) is the board's
+record check as written. What was new and is now in, football only, every pick still on the board: (1) the touchdown
+rule's fallback is 40% with the red-zone role at a plus price paying 6% over our number; it had passed the role at
+any price, and the NFL's 63 touchdown picks at 40-45% hit 36.5%. (2) Kept off parlays: a backup back's yardage (a
+back who is not the team's lead carrier), a quarterback's rush-attempt under, and a quarterback's rushing over where
+the charting has at least half the carries as scrambles, so Jayden Daniels' rushing yards on your own 12 November
+ticket still count as a leg. (3) Behind a new starting quarterback with under 50 passes, a catch or receiving-yards
+pick tops out at Worth a look and is no parlay leg. (4) Two pass catchers from one team share no touchdown pair; a
+back beside a catcher still does. (5) The big-favorite rule caps pass attempts only; it had capped a favorite's
+completions and yards, which v3.1 says not to fade. The heartbeat's `pick_fates` now counts `our_rule` (picks kept
+off parlays by these). What I did not adopt, and why: the Green / Yellow / Red price grade. It posts a leg only when
+our number beats the price, and on the record our number has not earned that in football: the 677 NFL board picks
+shown above their price said 68.5% and hit 56.1%, the 617 college props 66.9% and 55.1%, while the picks at or under
+their price hit what we said. So the site keeps the stricter version (show the price's number, post the take-at
+price). The 45% touchdown clause keeps no price test for the same reason: the 127 NFL picks at 45% and under their
+price hit 57.5%, the 6 above theirs hit 2. Five decisions are listed in that doc and in my message.
+
 **ZY. A college price with one side quoted is not a second opinion** (step 813; 20 November). Nothing to run. The
 same record showed a second leak ZX does not reach, in picks at or under their price. The college props whose best
 price was DraftKings' (136, every one an over) hit 54.4% where we said 64.3% and the price said 67.6%, short in both
