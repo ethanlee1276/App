@@ -23,9 +23,13 @@ to 20 November (player props at -250 or better, each pick once, a chance of
           Red     744 picks hit 66.9%, needed 68.8%, -2.6%
 
 A red-priced pick hit as often as a green one in both leagues; what the grade
-sorted was the money. So it is a label about price, never a reason to take a
-pick down (v3.1's "Red: never posted" is not adopted: every pick stays), and
-each card says what picks like it have done on our record.
+sorted was the money. Under 60% it sorted nothing: every grade made money, and
+the NBA's Red-priced picks at 50-60% hit 66.9% where we said 57.3% (614), our
+number being the one that ran low. So it is a label about price, never a
+reason to take a pick down (v3.1's "Red: never posted" is not adopted: every
+pick stays), and each card says what picks at its own chance and grade have
+done on our record (`record`, the board's own books), which is the line to
+read beside the colour.
 
 In football the same grade marked the picks we had overrated: the NFL's Green
 props at 60% or better hit 54.6% where we said 71.7% (2,232), college's 53.4%

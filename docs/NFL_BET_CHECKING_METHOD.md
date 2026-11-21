@@ -68,7 +68,9 @@ or better, each pick once, a chance of 60% or better:
 | NHL | 1,010 hit 66.5%, +1.9% | 542 hit 68.8%, +1.9% | 744 hit 66.9%, −2.6% |
 
 A Red-priced pick hit as often as a Green one. What the grade sorted was the
-money. So v3.1's "Red: never posted, however likely" is not adopted: every
+money, and only at 60% or better: under 60% every grade made money (the NBA's
+Red-priced picks at 50-60% hit 66.9% where we said 57.3%, 614 of them: our
+number ran low there). So v3.1's "Red: never posted, however likely" is not adopted: every
 pick stays, the grade is a label about its price, and each card says how
 picks at that chance and grade have done on our own record, once 20 have
 settled. `QB_PRICE_GRADE=off` turns it off.

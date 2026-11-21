@@ -9338,6 +9338,38 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAC. Why college basketball had no props on Friday** (step 817; 21 November). One read-only command, any time;
+paste it back. College basketball posted no pick and no parlay on Friday 20 November (40 games, 7 reports,
+`no_props_priced` on every game). What the public board shows: its five bought games were pulled at 2:30pm Eastern,
+eight or nine books answered for each, and none had a standard player market up, only the alternate ladders ("15+
+points"). A prop needs a standard over/under line to be priced, so all 1,090 props it built had no real price. No
+later pull landed: the builds at 6:55pm and 7:06pm still read the 2:30pm prices, with tips at 7:30 and 8:00. Ladders
+with no standard line are common in college: four of five games on 13 November, all five here; on 15 November all
+five had standard lines and 48 props were priced. I did not make the board price a prop off its ladder alone, and I
+would not yet: a ladder rung is often quoted one way, the over only, with a cut nobody states. On college football
+the 136 props whose best price was DraftKings', every one an over, hit 54.4% where the price said 67.6% (step ZY;
+that those were one-way quotes is my inference, the receipts do not keep it). Legs like that would lose parlays. The
+command prints the pacer's college decisions over the last day (was the 6pm pull held, and why) and, for each of the
+last eight cached college pulls, every player market with its count of over prices, under prices and books (are the
+ladders one way only). If the ladders turn out to be quoted both ways at a few books, pricing off them is sound and
+I will build it; if the 6pm pull was held, that is a pacing fix.
+
+```
+cd /srv/qellys && sudo -u qellys python3 -c "
+import glob, json, os, time
+from engine import oddsbudget as ob
+for r in ob.decisions(since=time.time() - 30 * 3600, lane='cbb')[-25:]: print(r['iso'], 'bought' if r['ok'] else 'held', r.get('credits'), r['reason'][:170])
+for f in sorted(glob.glob('data/cache/odds_event_cbb_*.json'), key=os.path.getmtime)[-8:]:
+    d = json.load(open(f)); n = {}
+    for b in d.get('bookmakers') or []:
+        for m in b.get('markets') or []:
+            if str(m.get('key') or '').startswith('player_'):
+                c = n.setdefault(m['key'], [0, 0, set()]); c[2].add(b.get('key'))
+                for o in m.get('outcomes') or []: c[0 if str(o.get('name')).lower() == 'over' else 1] += 1
+    print(time.strftime('%m-%d %H:%M', time.localtime(os.path.getmtime(f))), d.get('away_team'), '@', d.get('home_team'), {k: (v[0], v[1], len(v[2])) for k, v in sorted(n.items())})
+"
+```
+
 **AAB. Every parlay says Safe, Balanced or Pop and names its one book; NBA and NHL picks show a Green, Yellow or Red
 price** (step 816; 20 November). Nothing to run. You said yes to both. (1) The class, on every two-leg and three-leg
 parlay, by the bars in your v3.1 instructions: Safe is every leg 64% or better and 40% together; Balanced is every
@@ -9356,15 +9388,17 @@ Likely card. Every pick stays posted. Your instructions say never to post a Red;
 priced picks have hit as often as Green ones. What the grade sorts is the money. Public receipts to 20 November,
 props at -250 or better, each pick once, at a chance of 60% or better: NBA Green 673 picks hit 62.6% and made 2.6% a
 bet, Yellow 399 hit 66.9% and made 0.3%, Red 804 hit 67.5% and lost 1.6%; NHL Green 1,010 hit 66.5% and made 1.9%,
-Yellow 542 hit 68.8% and made 1.9%, Red 744 hit 66.9% and lost 2.6%. Each card says how picks at its chance and
-grade have done on our own record once 20 have settled. Football gets no grade: there the Green ones were the picks
-we had overrated (NFL 2,232 hit 54.6% where we said 71.7%; college 1,133 hit 53.4% where we said 72.7%). Also: the
-Record page splits each league's two-leg and three-leg parlays by class, read from the chances and prices each was
-journaled with, so earlier tickets count; and Ask Qellys can say a ticket's class, its one book and a pick's price
-grade. Where to look: any report's Parlays section and pick card; the heartbeat's `ticket_classes`, `one_book` and
-`price_grade` for each league. `QB_PRICE_GRADE=off` in the service's environment turns the grade off. Decision for
-you: should a parlay have to be one that a single book prices whole? I would look at the weekend's `one_book` counts
-first.
+Yellow 542 hit 68.8% and made 1.9%, Red 744 hit 66.9% and lost 2.6%. Under 60% the grade sorted nothing: every grade
+made money, and the NBA's Red-priced picks at 50-60% hit 66.9% where we said 57.3% (614), so there our number is the
+one running low (the open decision on letting the record raise an NBA or NHL chance). Each card says how picks at
+its chance and grade have done on our own record once 20 have settled, which is the line to read beside the colour.
+Football gets no grade: there the Green ones were the picks we had overrated (NFL 2,232 hit 54.6% where we said
+71.7%; college 1,133 hit 53.4% where we said 72.7%). Also: the Record page splits each league's two-leg and three-
+leg parlays by class, read from the chances and prices each was journaled with, so earlier tickets count; and Ask
+Qellys can say a ticket's class, its one book and a pick's price grade. Where to look: any report's Parlays section
+and pick card; the heartbeat's `ticket_classes`, `one_book` and `price_grade` for each league. `QB_PRICE_GRADE=off`
+in the service's environment turns the grade off. Decision for you: should a parlay have to be one that a single
+book prices whole? I would look at the weekend's `one_book` counts first.
 
 **AAA. Three two-leg parlays on every game report, every league** (step 815; 20 November). Nothing to run. You asked
 for two-leg player-prop parlays on every game report after seeing the NBA's win, three a game, dialed in like the
