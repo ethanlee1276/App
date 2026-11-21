@@ -121,6 +121,10 @@ def test_in_a_browser_the_card_reads_one_thing_to_a_line():
                 page.route("**/data/live_mlb.json*", serve(strip))
                 page.route("**/data/standings_mlb.json*", serve(standings))
                 page.goto(f"http://127.0.0.1:{port}/index.html#pbp/mlb/777001", wait_until="load")
+                # The card is in the Stats tab of the one game page (every sport's, baseball's since 21
+                # November); a live game opens on its plays.
+                page.wait_for_selector('.gp .pbp-tabs [data-pbp-tab="stats"]', timeout=20000)
+                page.click('.gp .pbp-tabs [data-pbp-tab="stats"]')
                 page.wait_for_selector(".pbp-pressure .pr-tm", timeout=20000)
                 got = page.evaluate("""() => {
                   const c = document.querySelector('.pbp-pressure'), h = c.querySelector('.pbp-rail-head');
