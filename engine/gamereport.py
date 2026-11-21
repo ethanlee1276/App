@@ -4508,12 +4508,19 @@ def _posted_before(result: dict, sport: str, out) -> None:
 
 
 def _report_only(result: dict) -> None:
-    """engine/gameparlays.report_only, never raising past the reports."""
+    """engine/gameparlays.report_only, never raising past the reports; then the post time (step ABD,
+    `gameparlays.post_late`): a game still more than its lead from its start posts no parlay yet, before
+    `keep_started` keeps what each game posted."""
     try:
         from . import gameparlays
         gameparlays.report_only(result)
     except Exception as exc:                                 # noqa: BLE001
         print(f"  ⚠️ the parlays of games without a report not cleared ({exc})")
+    try:
+        from . import gameparlays
+        gameparlays.post_late(result)
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the parlays' post time not read ({exc})")
 
 
 def _parlays_from_picks(c: Ctx, built: dict) -> None:

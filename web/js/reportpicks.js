@@ -775,7 +775,8 @@ async function renderReportPicks() {
   const add = (key) => byGame.get(key) || byGame.set(key, { bets: [], tix: null }).get(key);
   (d.report_bets || []).forEach((r) => { if (r && r.game) add(r.game).bets.push(r); });
   ((d.game_parlays || {}).games || []).forEach((x) => {
-    if (x && x.away && x.home && (rpParlays(x) || (x.scorers || []).length)) add(`${x.away}@${x.home}`).tix = x;
+    // A game whose parlays post later (engine/gameparlays.hold_until_post, step ABD) says when, under its picks.
+    if (x && x.away && x.home && (rpParlays(x) || (x.scorers || []).length || x.post_note)) add(`${x.away}@${x.home}`).tix = x;
   });
   // The board's order (kickoff), then any game it no longer lists.
   const order = ((d.games || []).map((g) => `${g.away}@${g.home}`)).filter((k) => byGame.has(k));

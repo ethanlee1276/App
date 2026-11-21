@@ -2475,6 +2475,13 @@ def rank_parlays(gp: dict, sport: str) -> dict:
             for n, (_k, e) in enumerate(rows, 1):
                 e["rank"] = n
                 out[kind].append(e)
+        # Games whose parlays post later (`hold_until_post`): how many, and when the next one posts.
+        waits = sorted(str(x.get("post_at")) for x in (gp or {}).get("games") or []
+                       if isinstance(x, dict) and x.get("post_at") and not x.get("kept"))
+        if waits:
+            out["left_off"]["waiting"] = len(waits)
+            out["next_post"] = waits[0]
+            out["post_lead"] = post_lead(sp)
         RANK_ERROR = None
     except Exception as exc:                                 # noqa: BLE001
         why = f"{type(exc).__name__}: {exc}"
@@ -3306,6 +3313,100 @@ def hold_posted(x: dict, mine: dict) -> int:
     return held
 
 
+# --- a game's parlays post once, late, when the news is in (ABD) -------------------------------
+#: THE PARLAYS POST LATE, THEN NEVER CHANGE (step ABD, 21 November 2026). Ethan, the same evening: "Clearly
+#: the parlays posted the latest are doing the best ... I just want whatever parlays are on the record page
+#: doing good. We are reporting we are doing good on all the game reports yet I'm not doing good when I put
+#: the pick in." On the public record of every finished game since 16 November, the set each report carried
+#: at the start (the latest) against the versions it posted earlier and replaced:
+#:     three-leg   latest 41 of 113 (36%)   earlier 89 of 343 (26%)   (NBA 23% and 15%, CFB 58% and 30%)
+#:     two-leg     latest 47 of 88 (53%)    earlier 45 of 90 (50%)
+#:     pairs       latest 14 of 79 (18%)    earlier 4 of 55 (7%)
+#: and their legs about ten points apart (NBA 67% and 57%, college 83% and 66%): the latest set knew the
+#: day's injury news, lineups and line moves. The record counted the latest; a member who bet in the
+#: morning bet an earlier one. Now a game's parlays stay off the board until POST_LEAD before its start
+#: (the NFL's just after its inactives, 90 minutes out), are built then from the newest numbers, post once,
+#: and never change after (`hold_posted`); the report says when they post. So what a member bets is the
+#: latest set and the one the Record counts. A start that cannot be read posts as built, as before.
+#: Off without a deploy: ``sudo ./deploy/setenv.sh QB_PARLAY_POST_LATE off``.
+POST_LEAD_MIN = {"nfl": 75}
+POST_LEAD_DEFAULT = 90
+POST_LATE_ENV = "QB_PARLAY_POST_LATE"
+#: Every list a game's tickets sit in.
+POST_LISTS = ("threes", "twos", "scorers", "paper_threes", "paper_twos")
+
+
+def post_late_on() -> bool:
+    """The post time's switch (QB_PARLAY_POST_LATE=off posts each game's parlays as they are built)."""
+    return os.environ.get(POST_LATE_ENV, "on").strip().lower() not in ("off", "0", "no", "false")
+
+
+def game_start(x: dict):
+    """A game's start as an aware UTC datetime, from its ``kickoff`` (an ISO time, or the NFL board's bare
+    Eastern "20:15" beside its ``date``); None when it cannot be read."""
+    k = str((x or {}).get("kickoff") or "").strip()
+    if not k:
+        return None
+    try:
+        if "T" in k:
+            t = dt.datetime.fromisoformat(k.replace("Z", "+00:00"))
+            return (t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)).astimezone(dt.timezone.utc)
+        m = re.match(r"^(\d{1,2}):(\d{2})$", k)
+        day = dt.date.fromisoformat(str((x or {}).get("date") or "")[:10])
+        if not m:
+            return None
+        from zoneinfo import ZoneInfo
+        local = dt.datetime(day.year, day.month, day.day, int(m.group(1)), int(m.group(2)),
+                            tzinfo=ZoneInfo("America/New_York"))
+        return local.astimezone(dt.timezone.utc)
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
+def post_lead(sport: str) -> int:
+    """Minutes before its start a game's parlays post (POST_LEAD_MIN)."""
+    return int(POST_LEAD_MIN.get(str(sport or "").lower(), POST_LEAD_DEFAULT))
+
+
+def _et_clock(t) -> str:
+    try:
+        from zoneinfo import ZoneInfo
+        e = t.astimezone(ZoneInfo("America/New_York"))
+    except Exception:                                        # noqa: BLE001
+        return ""
+    return f"{e.strftime('%a')} {(e.hour % 12) or 12}:{e.minute:02d} {'PM' if e.hour >= 12 else 'AM'} ET"
+
+
+def hold_until_post(x: dict, sport: str, now=None) -> str | None:
+    """A game still more than its POST_LEAD from its start posts no parlay yet: every list emptied, and when
+    they post said (``post_at``, ``post_note``). Returns ``post_at`` when held, None when it posts. Never
+    raises: a game whose start cannot be read posts as built."""
+    if not post_late_on() or not isinstance(x, dict) or x.get("kept"):
+        return None
+    start = game_start(x)
+    if start is None:
+        return None
+    now = now or dt.datetime.now(dt.timezone.utc)
+    lead = post_lead(sport)
+    at = start - dt.timedelta(minutes=lead)
+    if now >= at:
+        x.pop("post_at", None)
+        x.pop("post_note", None)
+        return None
+    for k in POST_LISTS:
+        if x.get(k):
+            x[k] = []
+    x["post_at"] = at.strftime("%Y-%m-%dT%H:%M:%SZ")
+    words = _et_clock(at)
+    x["post_note"] = (f"This game's parlays post {('at ' + words) if words else 'before it starts'}, about "
+                      f"{lead} minutes before the start, built then from the newest injury news, lineups and "
+                      f"lines; once posted they never change, and they are the ones the Record counts")
+    x["threes_note"] = x["post_note"]
+    for k in ("twos_note", "scorers_note", "posted_kept", "posted_replaced"):
+        x.pop(k, None)
+    return x["post_at"]
+
+
 def _turnover(x: dict, mine: dict) -> tuple[int, int]:
     """(posted again, replaced): how many of the tickets the game posted last
     build it posts again now, by identity, and how many it no longer posts."""
@@ -3770,6 +3871,16 @@ def report_only(board: dict) -> int:
     board.pop(POSTED_KEY, None)
     gp["from_reports"] = True
     # The best parlays ranked again, on the tickets the reports posted (RANK_TIERS).
+    _recount(board)
+    return n
+
+
+def _recount(board: dict) -> None:
+    """The board's ranking and its game parlays' counts, read again off what each game posts."""
+    gp = (board or {}).get("game_parlays")
+    if not isinstance(gp, dict):
+        return
+    twos = str(gp.get("sport") or "").lower() in TWO_SPORTS
     attach_ranked(board, str(gp.get("sport") or ""))
     c = gp.get("counts")
     if isinstance(c, dict):
@@ -3784,7 +3895,25 @@ def report_only(board: dict) -> int:
         c["filled_scorers"] = sum(1 for x in live for t in x.get("scorers") or [] if t.get("stand_ins"))
         c["one_club_scorers"] = sum(one_club(t) for x in live for t in x.get("scorers") or [])
         c["from_report"] = sum(x.get("legs_from") == LEGS_FROM_REPORT for x in live)
-    return n
+        c["waiting"] = sum(1 for x in live if x.get("post_at") and not x.get("kept"))
+
+
+def post_late(board: dict, now=None) -> int:
+    """THE POST TIME on a built board's game parlays (step ABD, `hold_until_post`), after the reports and
+    before engine/reportkeep keeps what each game posted: every game still more than its lead from its start
+    posts nothing yet. Returns the games held. Never raises."""
+    gp = (board or {}).get("game_parlays")
+    if not isinstance(gp, dict):
+        return 0
+    try:
+        sp = str(gp.get("sport") or "").lower()
+        now = now or dt.datetime.now(dt.timezone.utc)
+        held = sum(1 for x in gp.get("games") or [] if isinstance(x, dict) and hold_until_post(x, sp, now))
+        _recount(board)
+        return held
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ the parlays' post time not read ({type(exc).__name__}: {exc}); each game posts as built")
+        return 0
 
 
 def summary(gp: dict) -> str:

@@ -590,7 +590,11 @@ def _board_counts(path: str) -> dict:
         # Games still to play short of their three three-leg tickets (THREELEG1/2,
         # ZR): each says why on its report; here, how many, for anyone watching.
         from engine.gameparlays import SCORER_MARKETS, SCORER_PER_GAME, THREE_MIN, TWO_MIN, TWO_SPORTS
-        short = [x for x in gp["games"] if isinstance(x, dict) and not x.get("kept")
+        # A game whose parlays post later (engine/gameparlays.hold_until_post, step ABD) is waiting, not short.
+        waiting = [x for x in gp["games"] if isinstance(x, dict) and not x.get("kept") and x.get("post_at")]
+        if waiting:
+            out["parlay_waiting"] = len(waiting)
+        short = [x for x in gp["games"] if isinstance(x, dict) and not x.get("kept") and not x.get("post_at")
                  and len(x.get("threes") or []) < THREE_MIN]
         out["threes_short"] = len(short)
         if short:

@@ -203,7 +203,14 @@ async function renderBestParlays() {
     : "";
   const left = ranked.left_off || {};
   const started = (d.games || []).filter(bpStarted).length;
-  const foot = [started ? `${plural(started, "game")} already under way ${started === 1 ? "is" : "are"} not listed` : "",
+  // THE POST TIME (engine/gameparlays.hold_until_post, step ABD): a game's parlays post once, shortly before
+  // it starts, from the newest news and lines, and never change; until then it is not listed, and the page
+  // says when the next one posts.
+  const nextAt = ranked.next_post ? Date.parse(ranked.next_post) : NaN;
+  const waiting = left.waiting ? `${left.waiting === 1 ? "1 game’s" : `${left.waiting} games’`} parlays post later, about ${
+    Number(ranked.post_lead) || 90} minutes before each starts, once the news is in${
+    Number.isFinite(nextAt) ? ` (the next at ${typeof tzTime === "function" ? tzTime(new Date(nextAt)) : ""})` : ""}` : "";
+  const foot = [waiting, started ? `${plural(started, "game")} already under way ${started === 1 ? "is" : "are"} not listed` : "",
                 left.gone ? `${plural(left.gone, "ticket")} with a leg no book lists now ${left.gone === 1 ? "is" : "are"} left off` : ""]
     .filter(Boolean).join(" · ");
   if (sub) sub.textContent = "— every report parlay, ranked best to worst";

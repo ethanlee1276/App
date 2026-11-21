@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABD. A game's parlays post late, when the news is in, and then never change** (step 844; 21 November). Nothing to
+run. You said, the same evening: "Clearly the parlays posted the latest are doing the best ... I just want whatever
+parlays are on the record page doing good. We are reporting we are doing good on all the game reports yet I'm not
+doing good when I put the pick in." Measured on the public record of every finished game since 16 November, the set
+each report carried at the start (its latest) against the versions it posted earlier and replaced: three-leg parlays
+hit 41 of 113 (36%) against 89 of 343 (26%), the NBA's 23% against 15% and college football's 58% against 30%;
+two-leg 47 of 88 (53%) against 45 of 90 (50%); touchdown and goal-scorer pairs 14 of 79 (18%) against 4 of 55 (7%);
+and their legs about ten points apart (the NBA's 67% against 57%, college's 83% against 66%). The latest set knew
+the day's injury news, lineups and line moves; the Record counted it, and a member who bet in the morning bet an
+earlier one. Step ABB's lock alone would have frozen the earlier one. Now a game's parlays stay off the board until
+90 minutes before it starts (75 for the NFL, just after its inactives), are built then from the newest numbers, post
+once, and never change; the boards rebuild every 8 to 30 minutes, so every game posts in time. Before then the
+game's report and Report Picks say when its parlays post, Best Parlays says how many games are waiting and when the
+next posts, and the heartbeat counts them (`parlay_waiting`). What a member bets is now the latest set and exactly
+the one the Record counts. Tomorrow's NFL parlays, posted days ahead, came down until their post time (11:45 AM ET
+for the 1:00 PM games). Off without a deploy: `sudo ./deploy/setenv.sh QB_PARLAY_POST_LATE off`.
+
 **ABC. Report Picks opens Best Parlays from the top of the day** (step 843; 21 November). Nothing to run. You said,
 the same evening: "I want the game report parlays too have its own page like the most likely picks where it ranks
 and lays out the parlays best to worst". That page is Best Parlays (built this morning, step AAL): every parlay the
