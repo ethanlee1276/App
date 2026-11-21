@@ -9338,6 +9338,21 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAH. Touchdown picks and moneylines come out of the player-prop parlays** (step 822; 21 November). Nothing to run.
+The count from step AAG answered on its first board. The NFL's 32 legs with no book at their number were 28 anytime-
+touchdown legs and 4 moneylines, all of them Most Likely picks, sitting inside the three-leg and two-leg player-prop
+parlays. A touchdown leg has no number to look a book up by, which is all the one-book line was tripping on. The
+real finding is that those legs were there at all. Your v3.1 says "TD parlays stay separate from stat parlays" and
+keeps a separate TD module, and the notes here already said the site did that. It did not: a Most Likely touchdown
+pick was a leg like any other, and a Most Likely moneyline became a leg with nothing marking it as a game line. Now,
+in football, a touchdown scorer rides the touchdown pairs and no three-leg or two-leg stat ticket, and in every
+league a moneyline, spread or total is never a leg on one. The touchdown pairs are built exactly as before. The
+tickets that held such a leg are rebuilt from player props on the next board, so some games may post fewer than
+three until their other props fill in; the heartbeat's `threes_short` and `twos_short` say how many. Hockey's goal
+scorers are left where they were, since v3.1 is football's and hockey's tickets are winning; the heartbeat now
+counts them (`scorer_legs_on_props`) and that is a decision in the list. A report's touchdown pick says where it
+went (`pick_fates` `td_apart`).
+
 **AAG. Counting why a parlay leg has no book at its number** (step 821; 21 November). Nothing to run. Step AAF's fix
 was real and small. On the next NFL board the legs with no book at their number went from 35 to 32 of 165, and the
 one-book line named a book on 46 of 67 tickets (44 before), said none had every leg on 4 and said nothing on 17. Two

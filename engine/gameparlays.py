@@ -489,6 +489,23 @@ def still_to_play(legs: list, board: dict, now=None) -> list:
 #:     back with 45% of the carries is no backup. A back the scan has no usage
 #:     for is left alone, since nothing says which he is.
 OFF_PARLAY_SPORTS = ("nfl", "cfb")
+#: TOUCHDOWN TICKETS STAY APART FROM STAT PARLAYS (step AAH, 2026-11-21). Their
+#: v3.1, section 1: "TD parlays stay separate from stat parlays"; section 11:
+#: "TD MODULE (separate from stat parlays, 2 legs maximum)". In football a
+#: touchdown scorer rides the touchdown pairs (`scorer_legs`) and no three-leg
+#: or two-leg stat ticket. Until this step a Most Likely touchdown pick was a
+#: leg like any other: 28 of the NFL's 165 stat-ticket legs on 20 November,
+#: which the heartbeat's own count of legs with no book at their number turned
+#: up (launch._board_counts ``one_book_gaps``: a scorer leg has no line).
+#: Hockey's goal scorers are left as they were (its tickets are not v3.1's, and
+#: its record is good); the heartbeat counts them (``scorer_legs_on_props``).
+SCORERS_APART = OFF_PARLAY_SPORTS
+#: A GAME LINE IS NO PLAYER PROP, in any league. A Most Likely moneyline row
+#: became a leg with nothing to say what it was (twoleg._leg reads
+#: ``_game_leg``, which only an Edge game bet carries) and rode a player-prop
+#: ticket: 4 of those 165 legs. The markets are the Most Likely board's own
+#: (likely.GAME_MARKETS).
+GAME_LINE_MARKETS = ("moneyline", "spread", "total", "team_total")
 BACKUP_CARRIES = 8.0
 _RUSH_ATT = ("rush_att", "carries", "rush_attempts")
 _BACK_YARDS = ("rush_yds", "rec_yds", "rush_rec_yds")
@@ -601,6 +618,11 @@ def legs_for(board: dict, sport: str, now=None, floor: float = LEG_FLOOR) -> lis
             if not leg or leg.get("_game_leg") or float(leg.get("p") or 0) < floor:
                 continue
             leg = _norm_side(leg)
+            market = str(leg.get("market") or "").lower()
+            # A game line is no player prop (GAME_LINE_MARKETS), and in football a
+            # touchdown scorer rides the touchdown pairs alone (SCORERS_APART).
+            if market in GAME_LINE_MARKETS or (sport in SCORERS_APART and market in _TD):
+                continue
             # A MARKET BENCHED FOR LOSING MONEY IS NO PARLAY LEG (PARLAYWIN1;
             # stakeplan.MARKET_BENCH: the NFL's quarterback completions and the
             # NBA's points, benched 18 November at 44-53 and 63-71): a bet the
@@ -1809,7 +1831,10 @@ def ticket_class(sport: str, t: dict) -> dict:
 #: cause was then found and fixed (step AAF): the quote index kept one quote a
 #: book and number, a ladder's rung replacing the main line, and a ladder is
 #: mostly the over alone, so an under's price was lost
-#: (engine/sliplive.quote_index). ``no_quote`` says what is left after it.
+#: (engine/sliplive.quote_index): 3 of the 35. The heartbeat was then made to
+#: count each such leg's kind (`leg_gap`, step AAG), and the 32 left were 28
+#: anytime-touchdown legs, which carry no line, and 4 moneylines: legs no stat
+#: ticket should hold (SCORERS_APART, GAME_LINE_MARKETS, step AAH).
 _QUOTES: dict = {}
 #: The board's lists whose rows carry every book's quotes (`all_lines`, `alt_lines`); the matchup
 #: picks' rows sit a game deep (engine/matchpicks: ``{"game", "td": [...], "props": [...]}``).
@@ -1909,7 +1934,7 @@ def leg_gap(leg: dict, board: dict) -> dict | None:
         key = (name_key((leg or {}).get("player")), (leg or {}).get("market"))
         if key not in index or book_prices(leg, index):
             return None
-        line = float(leg.get("line"))
+        line = float(_leg_line(leg))
         if key not in (reads.get("props") or ()):
             return {"why": "no_prop_row"}
         quotes = index[key].get("quotes") or []
@@ -1943,12 +1968,23 @@ def _side_quotes(leg: dict, index: dict) -> list:
     return out
 
 
+def _leg_line(leg: dict):
+    """A leg's number as the books file it: its line, or 0.5 for a scorer, who carries none (an anytime
+    touchdown or goal is "over 0.5", as engine/sliplive files it). None where there is none."""
+    line = (leg or {}).get("line")
+    if line in (None, "") and str((leg or {}).get("market") or "") in _SCORE_WORDS:
+        return 0.5
+    try:
+        return float(line)
+    except (TypeError, ValueError):
+        return None
+
+
 def book_prices(leg: dict, index: dict) -> dict:
     """``{book key: (book, American price)}``: each book a reader can bet quoting this leg's own
     number on its side."""
-    try:
-        line = float(leg.get("line"))
-    except (TypeError, ValueError):
+    line = _leg_line(leg)
+    if line is None:
         return {}
     out: dict = {}
     for q_line, book, price in _side_quotes(leg, index):
@@ -1965,11 +2001,9 @@ def _gone_words(gone: list, index: dict) -> str:
     said = []
     for l in gone:
         words = pick_words(l)
-        try:
-            line = float(l.get("line"))
-            near = min(_side_quotes(l, index), key=lambda q: (abs(q[0] - line), -(_dec(q[2]) or 0)), default=None)
-        except (TypeError, ValueError):
-            near = None
+        line = _leg_line(l)
+        near = (min(_side_quotes(l, index), key=lambda q: (abs(q[0] - line), -(_dec(q[2]) or 0)), default=None)
+                if line is not None else None)
         if near:
             words += f" (the nearest number a book has is {near[0]:g}, {near[1]} {_odds_words(near[2])})"
         said.append(words)
@@ -2875,7 +2909,8 @@ def _picks_priced(board: dict, sport: str, game: dict, want: set, now=None) -> i
 
 
 #: What became of a report's player pick as a parlay leg (`_picks_census`).
-PICK_FATES = ("read", "strong", "fill", "low", "unlisted", "no_parlay", "benched", "our_rule", "other_line",
+PICK_FATES = ("read", "td_apart", "strong", "fill", "low", "unlisted", "no_parlay", "benched", "our_rule",
+              "other_line",
               "matchup_only",
               "scorer_only",
               "refused_out", "refused_unreliable", "refused_book", "refused_price", "refused_edge", "refused",
@@ -2960,6 +2995,8 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
 
       read          a read, not a bet (gamereport.READ_ONLY: a market we can
                     rank but not price), which no ticket takes (ZT);
+      td_apart      in football, a touchdown scorer: it rides the touchdown
+                    pairs and no stat ticket (SCORERS_APART, step AAH);
       strong        a leg at LEG_FLOOR or better, what a ticket is made of;
       fill          a leg the fill may take (FILL_LEG_FLOOR up to LEG_FLOOR);
       low           priced as a leg, under FILL_LEG_FLOOR once corrected (legfit);
@@ -3040,6 +3077,8 @@ def _picks_census(board: dict, sport: str, game: dict, picks: list, now=None,
         for k in want:
             if k in reads:
                 fate = "read"
+            elif sport in SCORERS_APART and k[1] in _TD:
+                fate = "td_apart"
             elif k in legs:
                 fate = ("unlisted" if k in off else "strong" if legs[k] >= LEG_FLOOR
                         else "fill" if legs[k] >= FILL_LEG_FLOOR else "low")

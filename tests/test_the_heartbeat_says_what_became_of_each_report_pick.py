@@ -109,8 +109,13 @@ def test_each_pick_is_sorted_into_one_fate():
     b["game_parlays"] = GP.build(b, "nfl", now=THURSDAY)
     x = GP.from_report(b, "nfl", SUNDAY, PICKS, now=THURSDAY)
     assert x["report_picks"] == 10, x["report_picks"]
+    # (The scorer was "scorer_only" until step AAH: in football a touchdown pick rides the touchdown pairs
+    # and no stat ticket, their v3.1's "TD parlays stay separate from stat parlays", and says so.)
     assert x["pick_fates"] == {"strong": 1, "fill": 1, "low": 1, "no_parlay": 1, "benched": 1, "other_line": 1,
-                               "refused_book": 1, "matchup_only": 1, "scorer_only": 1, "absent": 1}, x["pick_fates"]
+                               "refused_book": 1, "matchup_only": 1, "td_apart": 1, "absent": 1}, x["pick_fates"]
+    # Hockey's goal scorers are left as they were: a scorer only the goal field prices is "scorer_only".
+    hockey = GP._picks_census(b, "nhl", SUNDAY, PICKS, now=THURSDAY)
+    assert hockey.get("scorer_only") == 1 and "td_apart" not in hockey, hockey
     assert sum(x["pick_fates"].values()) == x["report_picks"], "every player pick has exactly one fate"
     assert set(x["pick_fates"]) <= set(GP.PICK_FATES)
     # Counts and nothing else: no name rides in the entry's census.

@@ -655,6 +655,10 @@ def _board_counts(path: str) -> dict:
         except Exception:                                    # noqa: BLE001
             _idx, _carried = {}, {}
         legs_seen = dict.fromkeys(_gp.LEG_QUOTES, 0)
+        # A scorer riding a player-prop ticket (gameparlays.SCORERS_APART keeps football's off them,
+        # their v3.1: "TD parlays stay separate from stat parlays"; hockey's goal scorers still may).
+        _scorer_markets = SCORER_MARKETS.get(str(gp.get("sport") or "").lower(), ())
+        scorers_on_props = 0
         # WHY A LEG'S NUMBER HAS NO BOOK where its prop is on file (gameparlays.leg_gap,
         # LEG_GAPS), with what kind of leg it is: the source it came from, its side, its
         # market, how far the nearest number a book has is, and whether the pick is one
@@ -686,6 +690,8 @@ def _board_counts(path: str) -> dict:
                         if isinstance(l, dict):
                             where = _gp.leg_quoted(l, _idx, _carried)
                             legs_seen[where] += 1
+                            if l.get("market") in _scorer_markets:
+                                scorers_on_props += 1
                             gap = _gp.leg_gap(l, b) if where == "no_quote" else None
                             if gap:
                                 _tally("why", gap["why"])
@@ -706,6 +712,8 @@ def _board_counts(path: str) -> dict:
             out["one_book_legs"] = legs_seen
             if gaps:
                 out["one_book_gaps"] = gaps
+            if _scorer_markets:
+                out["scorer_legs_on_props"] = scorers_on_props
         # The build could not read which picks are carried (gameparlays.mark_unlisted): the kind of error only.
         if c.get("unlisted_error"):
             out["unlisted_error"] = str(c["unlisted_error"]).split(":")[0]
