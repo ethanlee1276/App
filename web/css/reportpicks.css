@@ -27,6 +27,11 @@ button.rpk-rec:empty { display: none; }
 .rpk-title .rpk-tally { margin-top: 3px; color: var(--text); font-weight: 600; }
 .rpk-body { padding: 0 14px 14px; }
 /* A read, not a bet (js/reportpicks.js RP_READ): its chance muted, not the green of a pick we stake. */
+/* A pick's price grade (engine/pricegrade): the words in the grade's own colour. */
+.rpk-grade { font-weight: 600; }
+.rpk-grade.green { color: var(--good); }
+.rpk-grade.yellow { color: var(--warn); }
+.rpk-grade.red { color: var(--bad); }
 .rpk-read .hd-p { color: var(--text-mute); border-color: transparent; background: transparent;
   background-color: var(--fill-tone); }
 .rpk-sub { margin: 10px 0 6px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em;

@@ -198,7 +198,10 @@ def test_the_grade_rides_to_the_card_report_picks_and_the_heartbeat():
     report, picks, app = _js("report"), _js("reportpicks"), _js("app")
     assert '<span class="gr-pick-grade ${escapeAttr(v.price_grade.grade)}">' in report
     assert '<p class="gr-pick-gradewhy">${escapeHtml(v.price_grade.words)}</p>' in report
-    assert "r && r.price_grade && !r.read_only ? r.price_grade.label" in picks
+    assert "const grade = r && r.price_grade && !r.read_only && r.price_grade.label ? r.price_grade : null;" in picks
+    assert '<span class="rpk-grade ${escapeAttr(grade.grade || "")}"' in picks, "the words wear the grade's colour"
+    rp_css = (ROOT / "web" / "css" / "reportpicks.css").read_text(encoding="utf-8")
+    assert all(f".rpk-grade.{g} " in rp_css for g in PG.GRADES)
     # The Most Likely card: the board's grade, or the same bars on the tier's real rate where its ring
     # shows that, so the ring and the price cannot disagree; an ungraded row keeps the old line.
     grade = app[app.index("function obGradeHTML(r)"):app.index("function obPriceHTML(r)")]

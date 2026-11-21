@@ -105,10 +105,15 @@ function rpGameHTML(d, key, bets, tix, open) {
                   tix && (tix.scorers || []).length ? plural(tix.scorers.length, `${pair} pair`) : ""].filter(Boolean);
   const tally = fin ? rpTallyWords(rpTally(g, bets, tix)) : "";
   const rows = bets.map((r) => {
-    const row = deckPickRow(r, { door: likelyOpen(r),
-      // The price grade where the league has one (engine/pricegrade): Green, Yellow or Red.
-      note: [r && r.read_only ? RP_READ : "", r && r.price_grade && !r.read_only ? r.price_grade.label : "",
-             rpSourceNote(r)].filter(Boolean).join(" · ") });
+    // The price grade where the league has one (engine/pricegrade): Green, Yellow or Red.
+    const grade = r && r.price_grade && !r.read_only && r.price_grade.label ? r.price_grade : null;
+    let row = deckPickRow(r, { door: likelyOpen(r),
+      note: [r && r.read_only ? RP_READ : "", grade ? grade.label : "", rpSourceNote(r)].filter(Boolean).join(" · ") });
+    // …in its own colour, with the grade said whole on a long press or a hover.
+    if (grade) {
+      row = row.replace(escapeHtml(grade.label), `<span class="rpk-grade ${escapeAttr(grade.grade || "")}" title="${
+        escapeAttr(grade.words || "")}">${escapeHtml(grade.label)}</span>`);
+    }
     // A read's chance is drawn muted, as a dropped pick's is: our number ranks it and can't price it.
     return r && r.read_only ? row.replace('class="hd-row', 'class="hd-row rpk-read') : row;
   }).join("");
