@@ -774,6 +774,12 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
         before = dict(conn.execute(
             "SELECT lower(sport), count(*) FROM parlays WHERE source=? AND status IN ('won','lost') "
             "AND at_start IS NOT 1 GROUP BY lower(sport)", (source,)).fetchall())
+        # EVERY VERSION POSTED, COUNTED APART (step ABB, 21 November 2026): the set at the start and every
+        # version the board replaced before it, each ticket once, so nothing posted is missing from the
+        # Record. Ethan: "it's losing me money, but then you're recording that we're winning money."
+        every_rows = {r[0]: r[1:] for r in conn.execute(
+            "SELECT lower(sport), count(*), sum(status='won'), avg(modeled_joint), sum(coalesce(pnl_units, 0)) "
+            "FROM parlays WHERE source=? AND status IN ('won','lost') GROUP BY lower(sport)", (source,)).fetchall()}
         by_sport: dict = {}
         for t in tickets:
             sp = str(t["sport"] or "").lower()
@@ -838,6 +844,12 @@ def game_parlay_record(conn, recent: int = GAME_RECORD_RECENT) -> dict:
                          "chance": round(sum(leg_p) / len(leg_p), 3) if leg_p else None,
                          "once": once, "by_pool": by_pool},
                 "markets": mk, "recent": news}
+            ev = every_rows.get(sp)
+            if ev and int(before.get(sp) or 0) > 0:
+                n_all, w_all, j_all, u_all = ev
+                out[sp][kind]["every"] = {"graded": int(n_all or 0), "wins": int(w_all or 0),
+                                          "chance": round(float(j_all), 3) if j_all is not None else None,
+                                          "net_units": round(float(u_all or 0.0), 2)}
             # HOW EACH KIND OF FILLED TICKET DOES (ZR, FILL_SINCE): the report's own
             # tickets ("report") beside each way a game was filled up to its three.
             fills: dict = {}

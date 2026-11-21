@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**ABB. A posted parlay never changes, and the Record shows every parlay we posted** (step 842; 21 November). Nothing
+to run. You found it on the 76ers at Bucks report: the parlays you bet earlier in the day were gone, others stood in
+their place, and the Record counts only the set a report carried when its game started, so your losing tickets were
+nowhere and the winning ones were counted. The cause: since 20 November a posted ticket was posted again only while
+the newest build would still make it. A pick that left the report's card, a leg the newest numbers no longer backed,
+injury news, or a rule changed during the day (three went in on the 21st) replaced it, and a line the books moved
+was shown at the new number. What changed, in every league: once a game posts a parlay, every later build posts it
+again exactly as it was (the same players, lines, prices and chances) until the game starts. A build only fills a
+place the game never filled, and never with a leg already on two of its parlays. Which book has the whole ticket is
+still read fresh, so a leg no book lists any more still says so. For the past, nothing posted is hidden: each
+league's parlay cards on the Record add a line for every parlay we posted, the ones replaced before their game too
+(with how many hit and the units), and each finished game's list adds a fold, Posted earlier, replaced before the
+game, with each one marked; neither is counted in the game's own tallies. The counted record stays one set a game,
+and from now on that set is the one posted, since it can't change. How big the gap was: the NBA's three-leg record
+counts 55 graded tickets and left out 281 replaced versions; hockey's 43 and 343; the NFL's 3 and 317. Off without a
+deploy: `sudo ./deploy/setenv.sh QB_PARLAY_LOCK off`.
+
 **ABA. Best Parlays' Top tier fills again in the NFL, college football and the NBA** (step 841; 21 November).
 Nothing to run. Found on the heartbeat: the 3:20 PM ET boards ranked no NFL, college or NBA player-prop parlay as a
 Top parlay (NFL two-leg 4 Strong and 25 Worth a look, three-leg 1 and 22; hockey had 9 and 4 Top). One of the page's

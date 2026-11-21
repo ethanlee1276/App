@@ -670,8 +670,30 @@ function rpBetsHTML(x, sport, open) {
         ${pTwos.length ? sec("The two-leg parlays on paper", rpTicketsHTML(pTwos, "twos", sport)) : ""}
         ${paperNote}
         ${pairs.length ? sec(`The ${pairWord.toLowerCase()}`, rpTicketsHTML(pairs, "scorers", sport)) : ""}
+        ${rpEarlierHTML(x.earlier, sport, pairWord)}
       </div>
     </details>${held}`;
+}
+/* POSTED EARLIER, REPLACED BEFORE THE GAME (step ABB, 21 November 2026; engine/reportoutcome `earlier`).
+   Ethan: "I put in a bet that is no longer being recorded or shown in the game reports". Until that night
+   a game's parlays could change during its day and only the set at the start was listed; every version
+   replaced before the start is listed here, each with its mark, apart from the game's own tallies. Since
+   then a posted parlay never changes, so a newer game has none. */
+function rpEarlierHTML(earlier, sport, pairWord) {
+  const e = earlier || {};
+  const parts = [["threes", "Three-leg parlays"], ["twos", "Two-leg parlays"], ["scorers", pairWord]]
+    .filter(([k]) => (e[k] || []).length);
+  if (!parts.length) return "";
+  const n = parts.reduce((a, [k]) => a + e[k].length, 0);
+  const h = rpHit(parts.flatMap(([k]) => e[k]));
+  return `<details class="rpk-earlier"><summary class="rpk-earlier-sum">Posted earlier, replaced before the game · ${
+      escapeHtml(plural(n, "parlay"))}${h.n ? ` · <b class="${h.tone}">${h.won} of ${h.n}</b> hit` : ""}</summary>
+    <p class="mini rpk-bets-note">Until 21 November a game’s parlays could change during its day. These were posted for
+      this game and replaced before it started; they aren’t in its counts above. Since then a posted parlay stays as it
+      was posted.</p>
+    ${parts.map(([k, w]) => `<h5 class="rpk-bets-h">${escapeHtml(w)} posted earlier</h5><ul class="rpk-bet-list">${
+      rpTicketsHTML(e[k], k, sport)}</ul>`).join("")}
+  </details>`;
 }
 //: A finished game's own report, graded, under its row (a member's; the rest are told what it holds).
 async function rpArchiveOpen(body, btn) {

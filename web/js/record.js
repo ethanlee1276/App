@@ -1153,6 +1153,14 @@ function gpBlockHTML(b, kind, sport) {
     tierWait ? ` · ${tierWait} waiting on ${tierWait === 1 ? "its game" : "their games"}` : ""}. Each ticket’s tier is the one it
     had when its game started; games before the page went up on ${escapeHtml(gpDay(GP_TIERS_SINCE))} are tiered by the
     same checks.</p>` : "";
+  // EVERY VERSION POSTED (step ABB, 21 November 2026; engine/parlayledger `every`): the set at the start
+  // and every version replaced before it, each once, so no ticket anyone could have bet is missing. Until
+  // that night a game's parlays could change during its day; from it a posted parlay never changes.
+  const ev = b.every && b.every.graded > (b.graded || 0) ? b.every : null;
+  const everyLine = ev ? `<p class="rec-gp-close" data-rec-every>Every one we posted, the ones replaced before their game
+    too: ${ev.wins} of ${ev.graded} hit${ev.chance != null ? ` (we gave ${Math.round(ev.chance * 100)}%)` : ""} · ${
+    tlUnits(ev.net_units)}. Until 21 November a game’s parlays could change during the day; since then a posted
+    parlay stays as it was posted.</p>` : "";
   const markets = (b.markets || []).map((m) => `<div class="rec-row flush tight">
       <span class="rr-what">${escapeHtml(marketWord(m.market))}</span>
       <span><b>${m.won} of ${m.graded}</b> legs hit · ${Math.round((100 * m.won) / m.graded)}%${
@@ -1176,7 +1184,7 @@ function gpBlockHTML(b, kind, sport) {
   return `<div class="card rec-report rec-gp">
       <div class="rr-head">${escapeHtml(gpKindWord(kind, sport))}${b.since ? ` <span class="rr-mute">· since ${escapeHtml(gpDay(b.since))}</span>` : ""}</div>
       ${b.paper && b.paper.note ? `<p class="rec-gp-close">${escapeHtml(b.paper.note)}</p>` : ""}
-      <div class="stats rec-kpis">${tiles}</div>${close}${rebuilt}${madeUp}${byClass}${byTier}
+      <div class="stats rec-kpis">${tiles}</div>${close}${rebuilt}${madeUp}${byClass}${byTier}${everyLine}
       ${markets ? `<div class="rr-head">Legs by market</div>${markets}` : ""}
       ${recent ? `<div data-rec-flat="parlays"><div class="rr-head">Newest tickets</div><div class="rec-gp-recent">${recent}</div></div>` : ""}
     </div>`;

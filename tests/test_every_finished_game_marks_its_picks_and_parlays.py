@@ -154,7 +154,12 @@ def test_the_report_s_own_tickets_are_listed_and_nothing_else():
     assert [l["player"] for l in game["threes"][0]["legs"]] == ["Jahmyr Gibbs", "Drake Maye", "Jared Goff"]
     assert [l["status"] for l in game["threes"][0]["legs"]] == ["won", "lost", "won"], "each leg its own mark"
     assert not any("key" in t for t in game["threes"]), "the journal's key stays in the engine"
-    assert "earlier" not in game and "unkept" not in game, "the version the board replaced: not listed, not counted"
+    assert "unkept" not in game
+    # The version the board replaced before the start is listed apart since step ABB (21 November: "I put in a
+    # bet that is no longer being recorded or shown"), each leg marked, and counted in none of the game's own.
+    assert [t["status"] for t in game["earlier"]["threes"]] == ["won"], game.get("earlier")
+    assert [l["player"] for l in game["earlier"]["threes"][0]["legs"]] == ["Jahmyr Gibbs", "Jared Goff", "Sam LaPorta"]
+    assert "scorers" not in game["earlier"], "the pair is the kept one"
     assert [t["status"] for t in game["scorers"]] == ["pending"]
     both = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive(kept=BOTH))["2026-11-15|NE|DET"]
     assert [t["status"] for t in both["threes"]] == ["won", "lost"], "in the report's own order"
@@ -243,7 +248,7 @@ def _fn(name):
 
 def _render(game, sport="nfl", open_=True, words=None):
     helpers = "".join(_fn(n) for n in ("rpMk", "rpHit", "rpBetWords", "rpPickLI", "rpTicketWords", "rpTicketsHTML",
-                                       "rpBetsHTML"))
+                                       "rpBetsHTML", "rpEarlierHTML"))
     helpers += RP[RP.index("const RP_STRIP_MAX = "):RP.index("\n", RP.index("const RP_STRIP_MAX = ")) + 1]
     helpers += RP[RP.index("const RP_PAPER = "):RP.index("\n", RP.index("const RP_PAPER = ")) + 1]
     score = RP[RP.index("const RP_SCORE = "):RP.index("};", RP.index("const RP_SCORE = ")) + 3]
@@ -297,7 +302,15 @@ def test_one_set_a_game_and_a_game_never_kept_says_why_it_lists_none():
     kept = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive(kept=KEPT))["2026-11-15|NE|DET"]
     flat = " ".join(_render(kept).split())
     assert "earlier version" not in flat and "Every version" not in flat and "weren’t saved" not in flat, flat[-400:]
-    assert "rpEarlierHTML" not in RP, "the versions the board replaced are not listed or counted"
+    # Since step ABB (21 November: "I put in a bet that is no longer being recorded or shown in the game
+    # reports") the versions the board replaced are listed, apart and never counted: the strip counts the set
+    # at the start alone, and the replaced version sits in its own fold under the game's own tickets.
+    strip = flat[:flat.index("</summary>")]
+    assert re.findall(r'class="rpk-bets-k">([^<]+)<', strip) == ["Picks", "Parlays", "Touchdown pairs"], strip
+    assert '<b class="lost">0 of 1</b>' in strip, "the parlay counted is the kept one, which lost"
+    assert "Posted earlier, replaced before the game · 1 parlay · <b class=\"won\">1 of 1</b> hit" in flat, flat[-900:]
+    assert flat.index("The touchdown pairs") < flat.index("Posted earlier, replaced before the game")
+    assert "they aren’t in its counts above" in flat
     old = O.for_games("nfl", [("2026-11-15", "NE", "DET")], path=path, where=_archive())["2026-11-15|NE|DET"]
     said = " ".join(_render(old).split())
     assert re.findall(r'class="rpk-bets-k">([^<]+)<', said[:said.index("</summary>")]) == ["Picks"], said[:600]
@@ -358,7 +371,9 @@ def test_a_report_that_carried_no_parlay_carried_none():
     kept = {"away": "BOS", "home": "NYK", "threes": [], "scorers": []}
     game = O.for_games("nba", [("2026-11-16", "BOS", "NYK")], path=path, where=_archive_nba(kept))["2026-11-16|BOS|NYK"]
     assert "threes" not in game and "unkept" not in game and "on_paper" not in game
-    assert "earlier" not in game, "the day's version is the board's, not the report's: neither listed nor counted"
+    # The day's version was the board's, not the report's: never counted as the report's, and since step ABB
+    # listed apart as one posted earlier and replaced before the game.
+    assert [t["status"] for t in game["earlier"]["threes"]] == ["lost"], game.get("earlier")
 
 
 def test_a_reader_without_the_subscription_is_told_what_waits():

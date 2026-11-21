@@ -159,7 +159,11 @@ def test_what_was_posted_is_read_from_the_kept_file():
                                           "MIA@BUF|2099-11-12": {"report": {}}}}), encoding="utf-8")
     got = GP.posted_from(path)
     assert set(got) == {KEY}, "a game kept without parlays posted none"
+    # Each kind's identities, and since step ABB each ticket whole, as posted, for the lock.
+    whole = got[KEY].pop(GP.POSTED_TICKETS)
     assert got[KEY] == {k: _ids(x.get(k) or []) for k in GP.POSTED_LISTS}
+    assert {k: _ids(v) for k, v in whole.items()} == {k: _ids(x.get(k) or []) for k in GP.LOCK_KINDS}
+    got[KEY][GP.POSTED_TICKETS] = whole
     assert GP.posted_from(path.with_name("none.json")) == {}
     assert GP.posted_for({GP.POSTED_KEY: got}, GAME) == got[KEY] and GP.posted_for({}, GAME) == {}
 

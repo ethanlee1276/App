@@ -111,6 +111,13 @@ button.rpk-rec:empty { display: none; }
 .rpk-bets-held { margin: 6px 0 0; color: var(--text-mute); }
 .rpk-bets-note { margin: 8px 0 2px; color: var(--text-mute); font-size: var(--fs-sm); }
 .rpk-marks-more { align-self: center; margin-left: 2px; color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; }
+/* Posted earlier, replaced before the game (step ABB): a fold under the game's own tickets, in the
+   page's muted words, its tally coloured as the strip's. */
+.rpk-earlier { margin-top: 12px; }
+.rpk-earlier-sum { cursor: pointer; color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600; }
+.rpk-earlier-sum b { font-variant-numeric: tabular-nums; color: var(--text); }
+.rpk-earlier-sum b.won { color: var(--good); }
+.rpk-earlier-sum b.lost { color: var(--bad); }
 .rpk-fact-more { margin-top: 14px; }
 .rpk-fact-h + .rpk-fact-span { margin: 0 0 14px; }
 .rpk-fact-more[hidden] { display: none; }

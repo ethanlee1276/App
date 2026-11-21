@@ -288,6 +288,12 @@ def for_games(sport: str, keys, member: bool = True, path=None, where=None) -> d
                     game["paper"][kind] = keep
                 if game.get("paper"):
                     game["paper"] = {k: v for k, v in game["paper"].items() if v}
+                for kind, lst in list((game.get("earlier") or {}).items()):
+                    keep = [x for x in lst if x.get("status") in SETTLED]
+                    held += len(lst) - len(keep)
+                    game["earlier"][kind] = keep
+                if game.get("earlier"):
+                    game["earlier"] = {k: v for k, v in game["earlier"].items() if v}
                 game["held"] = held
             out[key] = {k: v for k, v in game.items() if v}
     finally:
@@ -347,6 +353,24 @@ def _own_tickets(ts: dict, kept) -> dict:
             held[kind] = mine
     if held:
         out["paper"] = held
+    # THE VERSIONS POSTED EARLIER AND REPLACED BEFORE THE GAME (step ABB, 21 November 2026). Ethan, on the
+    # 76ers at Bucks report: "I put in a bet that is no longer being recorded or shown in the game reports
+    # ... it's losing me money, but then you're recording that we're winning money." Until that night a
+    # game's parlays could change during its day, and only the set at the start was listed. Every other
+    # version the record journaled for the game is listed too, apart ("earlier"), each with its mark;
+    # never counted in the game's own tallies. From that night a posted parlay never changes
+    # (engine/gameparlays.hold_posted), so a game posted after it has none.
+    earlier: dict = {}
+    for kind in TICKETS:
+        # A kind its league had on paper that day was never posted, its versions no more than its kept ones.
+        if kept.get(f"{kind}_paper"):
+            continue
+        named_k = set(wanted[kind]) | set(paper.get(kind) or [])
+        rest = [strip(t) for t in ts.get(kind) or [] if t.get("key") not in named_k]
+        if rest:
+            earlier[kind] = rest
+    if earlier:
+        out["earlier"] = earlier
     on_paper = [kind for kind in PAPER_OF if kept.get(f"{kind}_paper")]
     if on_paper:
         out["on_paper"] = on_paper

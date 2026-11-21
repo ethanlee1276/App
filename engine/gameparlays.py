@@ -3218,6 +3218,10 @@ def posted_from(kept_file) -> dict:
         out[k] = {kind: [ident(t) for name in lists for t in gp.get(name) or []
                          if isinstance(t, dict) and len(t.get("legs") or []) >= 2]
                   for kind, lists in POSTED_LISTS.items()}
+        # …and each ticket whole, as it was posted, for the lock (`hold_posted`, step ABB).
+        out[k][POSTED_TICKETS] = {kind: [t for t in gp.get(kind) or []
+                                         if isinstance(t, dict) and len(t.get("legs") or []) >= 2]
+                                  for kind in LOCK_KINDS}
     return out
 
 
@@ -3227,6 +3231,79 @@ def posted_for(board: dict, game: dict) -> dict:
     from .reportlog import game_key
     posted = (board or {}).get(POSTED_KEY)
     return (posted.get(game_key(game or {})) or {}) if isinstance(posted, dict) else {}
+
+
+# --- a posted ticket never changes (ABB) ---------------------------------------------------------
+#: A POSTED PARLAY STAYS AS IT WAS POSTED (step ABB, 21 November 2026). Ethan, the evening of the 21st,
+#: on the 76ers at Bucks report: "the pics are different from earlier that I put in ... You can't keep
+#: changing shit ... I put in a bet that is no longer being recorded or shown in the game reports".
+#: Since ZQ (20 November) a ticket posted last build was posted again only while it was still one this
+#: build would make: a leg the newest read no longer backed, a pick that left the report's card, or a
+#: rule changed in the day (three went in on the 21st) and the ticket was replaced, and a line the books
+#: moved was posted at the new number. Now a game's tickets, once posted, are posted again every build
+#: exactly as they were (their legs, lines, prices and chances as posted), until the game starts; this
+#: build's choice only fills a place the game never filled, and never with a ticket that would ride a
+#: leg on more than MAX_USES of them or share more than all but one leg with one. Every league. The
+#: ticket's book and class are read again each build (`label_tickets`), so a leg no book lists any more
+#: still says so. Off without a deploy: ``sudo ./deploy/setenv.sh QB_PARLAY_LOCK off``.
+POSTED_TICKETS = "_tickets"
+LOCK_KINDS = ("threes", "twos", "scorers")
+LOCK_ENV = "QB_PARLAY_LOCK"
+#: Each kind's places a game.
+LOCK_PLACES = {"threes": THREE_PER_GAME, "twos": TWO_PER_GAME, "scorers": SCORER_PER_GAME}
+
+
+def lock_on() -> bool:
+    """The lock's switch (QB_PARLAY_LOCK=off turns it off)."""
+    return os.environ.get(LOCK_ENV, "on").strip().lower() not in ("off", "0", "no", "false")
+
+
+def _fits_beside(chosen: list, t: dict) -> bool:
+    """Whether ``t`` may join ``chosen``: no leg on more than MAX_USES tickets, and no more than all but
+    one of its legs shared with any one of them (`_choose`'s second pass)."""
+    key = lambda l: (str(l.get("player") or ""), str(l.get("market") or ""), str(l.get("side") or "").upper())  # noqa: E731
+    legs = {key(l) for l in t.get("legs") or [] if isinstance(l, dict)}
+    if len(legs) < 2:
+        return False
+    for leg in legs:
+        if sum(1 for c in chosen for l in c.get("legs") or [] if isinstance(l, dict) and key(l) == leg) >= MAX_USES:
+            return False
+    return all(len({key(l) for l in c.get("legs") or [] if isinstance(l, dict)} & legs) <= len(legs) - 1
+               for c in chosen)
+
+
+def hold_posted(x: dict, mine: dict) -> int:
+    """THE LOCK on one game's entry: each kind's tickets as the game posted them, in their order, then
+    this build's choice only in a place never filled (`_fits_beside`). Returns the tickets held. A game
+    with nothing posted, or the lock off, is left as built. Never raises."""
+    if not lock_on() or not isinstance(x, dict) or not isinstance(mine, dict):
+        return 0
+    full = mine.get(POSTED_TICKETS)
+    if not isinstance(full, dict):
+        return 0
+    held = 0
+    try:
+        import copy as _copy
+        for kind in LOCK_KINDS:
+            was = [t for t in full.get(kind) or [] if isinstance(t, dict) and len(t.get("legs") or []) >= 2]
+            if not was:
+                continue
+            out = [_copy.deepcopy(t) for t in was]
+            ids = {ident(t) for t in out}
+            for t in x.get(kind) or []:
+                if len(out) >= LOCK_PLACES.get(kind, len(was)):
+                    break
+                if isinstance(t, dict) and ident(t) not in ids and _fits_beside(out, t):
+                    out.append(t)
+                    ids.add(ident(t))
+            x[kind] = out
+            held += len(was)
+            # A game whose places are full says nothing about being short.
+            if len(out) >= LOCK_PLACES.get(kind, 0):
+                x.pop(f"{kind}_note", None)
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  ⚠️ a game's posted parlays not held ({type(exc).__name__}: {exc})")
+    return held
 
 
 def _turnover(x: dict, mine: dict) -> tuple[int, int]:
@@ -3685,6 +3762,10 @@ def report_only(board: dict) -> int:
                 x.pop("scorers_note", None)
             elif re.match(r"\d+ of \d+: ", note):
                 x["scorers_note"] = f"{len(x['scorers'])} of {SCORER_PER_GAME}: {note.split(': ', 1)[1]}"
+        # THE LOCK (step ABB): what the game posted stays exactly as posted; this build only fills a gap.
+        if hold_posted(x, mine):
+            x["legs_from"] = LEGS_FROM_REPORT
+            label_tickets(x, str(gp.get("sport") or "").lower(), quote_index(board), carried_picks(board))
         x["posted_kept"], x["posted_replaced"] = _turnover(x, mine)
     board.pop(POSTED_KEY, None)
     gp["from_reports"] = True
