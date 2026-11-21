@@ -268,9 +268,10 @@ def test_in_a_browser_the_button_opens_the_sheet_with_the_whole_slip():
                 page.route(lambda u: not u.startswith(f"http://127.0.0.1:{port}/"), lambda r: r.abort())
                 for pat in ("**/api/recommendations*", "**/data/recommendations*.json*"):
                     page.route(pat, lambda r: r.fulfill(status=200, content_type="application/json", body=body))
-                # The old #parlays link (the page left every league 2026-11-16)
-                # opens Report Picks, where each game's tickets carry the button.
-                page.goto(f"http://127.0.0.1:{port}/#parlays", wait_until="load")
+                # Report Picks, where each game's tickets carry the button (an old
+                # #parlays link opens the Best Parlays page since 21 November, whose
+                # cards wear the same button: tests/test_the_best_parlays_are_ranked_on_their_own_page.py).
+                page.goto(f"http://127.0.0.1:{port}/#reportpicks", wait_until="load")
                 page.wait_for_function("document.querySelectorAll('.gr-betit .betit').length >= 2", timeout=20000)
                 assert page.evaluate("location.hash") == "#reportpicks", page.evaluate("location.hash")
                 page.evaluate("document.querySelector('.rpk-game').open = true")

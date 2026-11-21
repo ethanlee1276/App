@@ -58,7 +58,8 @@
 .bp-line b { color: var(--text); }
 .bp-book.has { color: var(--good); }
 .bp-why { color: var(--text-dim); }
-.bp-open { margin-top: 10px; }
+.bp-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.bp-acts .betit-box { margin-top: 0; }
 .bp-more { margin: 2px 0 8px; }
 .bp-foot { margin-top: 14px; }
 @media (max-width: 420px) {

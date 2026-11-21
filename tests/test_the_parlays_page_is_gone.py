@@ -65,7 +65,8 @@ def test_every_list_of_pages_forgot_it():
     report = _read("web", "js", "report.js")
     assert "function gameParlays(" not in report and "function gameParlaysRecord(" not in report
     # The report's own tickets and, since 20 November, the same tickets followed live (liveTickets, liveGame).
-    assert ("window.QBReport = { html, block, toText, teaser, gameTickets, slipCombine, liveTickets, liveGame };"
+    # parlayBet since 21 November: the Best Parlays page's cards wear the report's Bet it button.
+    assert ("window.QBReport = { html, block, toText, teaser, gameTickets, slipCombine, liveTickets, liveGame, parlayBet };"
             in report)
     assert ".tl-card" not in _read("web", "css", "styles.css")
 

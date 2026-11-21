@@ -18,7 +18,10 @@
    its game, its legs with their prices and our chance of each, our chance of
    the whole ticket, its class, the one book that has it whole, the price to
    take it at, and what keeps it out of the tier above; the card opens its
-   game and the report. A game already under way leaves the list (this page is
+   game and the report, and its Bet it button puts the ticket on a book's
+   slip (js/report.js parlayBet, the button every report parlay wears: Ethan,
+   2026-11-15, "add bet it buttons that adds the whole parlay too your sports
+   book. Both td parlays and player prop parlays"). A game already under way leaves the list (this page is
    for picking). Members only, as the reports' parlays are. */
 
 const BP_TIERS = [["top", "Top parlays", "Every check agrees."],
@@ -44,18 +47,22 @@ const BP_SCORE = { anytime_td: "to score a touchdown", anytime_goal: "to score a
 const BP_PAGE = 20;
 let _bpSize = "twos", _bpTier = { props: "all", scorers: "all" };
 const _bpAll = new Set();
+//: Each drawn card's ticket for its Bet it button, by the slot's number (filled once js/report.js is in).
+let _bpBet = [];
 
 const bpPct = (x) => `${Math.round(100 * Number(x || 0))}%`;
 const bpOdds = (o) => { const n = Number(o); return Number.isFinite(n) && n ? (n > 0 ? `+${n}` : `${MINUS}${Math.abs(n)}`) : ""; };
-function bpLegWords(l) {
+//: A leg as [who, what]: "Malik Nabers", "over 4.5 receptions" (or "to score a touchdown").
+function bpLegParts(l) {
   const m = String(l.market || "");
   const down = ["UNDER", "NO"].includes(String(l.side || "").toUpperCase());
   const num = (x) => { const v = Number(x); return Number.isInteger(v) ? String(v) : v.toFixed(1); };
-  const who = `<b>${escapeHtml(l.player || "")}</b>`;
-  if (BP_SCORE[m]) return `${who} ${down ? "not " : ""}${BP_SCORE[m]}`;
-  return `${who} ${down ? "under" : "over"}${l.line == null ? "" : ` ${num(l.line)}`} ${
-    escapeHtml(String(l.market_label || marketWord(m)).toLowerCase())}`;
+  const what = BP_SCORE[m] ? `${down ? "not " : ""}${BP_SCORE[m]}`
+    : `${down ? "under" : "over"}${l.line == null ? "" : ` ${num(l.line)}`} ${String(l.market_label || marketWord(m)).toLowerCase()}`;
+  return [String(l.player || ""), what];
 }
+const bpLegWords = (l) => { const [who, what] = bpLegParts(l); return `<b>${escapeHtml(who)}</b> ${escapeHtml(what)}`; };
+const bpLegText = (l) => bpLegParts(l).join(" ");
 //: The scorer pairs in this league: the section's name, one pair's name and the tab's line
 //: (football's touchdown pairs, hockey's goal scorers).
 function bpPairWords(sport) {
@@ -125,7 +132,9 @@ function bpCardHTML(row, n, kind, sport) {
       t.fair_words ? `${t.take_words ? " · " : ""}fair ${escapeHtml(t.fair_words)}` : ""}</p>
     ${ob.words ? `<p class="bp-book${ob.book ? " has" : ""}">${escapeHtml(ob.words)}</p>` : ""}
     ${against.length ? `<p class="bp-why">${e.tier === "strong" ? "One check against it" : "Against it"}: ${escapeHtml(against.join("; "))}.</p>` : ""}
-    ${g ? `<button type="button" class="btn ghost bp-open" data-gid="${escapeAttr(gameId(g))}">Open the game and its report</button>` : ""}
+    <div class="bp-acts"><span class="bp-bet" data-bp-bet="${_bpBet.push({ legs: t.legs || [],
+      what: `${size} · ${(t.legs || []).map(bpLegText).join(" + ")}` }) - 1}"></span>${
+      g ? `<button type="button" class="btn ghost bp-open" data-gid="${escapeAttr(gameId(g))}">Open the game and its report</button>` : ""}</div>
   </article>`;
 }
 
@@ -161,6 +170,7 @@ async function renderBestParlays() {
   if (!d) return;
   const sport = state.sport;
   const sub = document.getElementById("bestparlays-sub");
+  _bpBet = [];
   if (d.locked && d.locked.game_parlays) {
     host.innerHTML = memberLockHTML("The best parlays are for members", "Every parlay our game reports posted, ranked best to "
       + "worst, with its legs, our chance and the one book that has it whole. How the reports’ parlays have done is free, on the Record page.");
@@ -212,6 +222,14 @@ async function renderBestParlays() {
         <div class="es-sub">${escapeHtml(foot ? `${foot}.` : "The game reports post their parlays with the board; they land here, ranked, as it builds.")}</div></div>`;
   bindSubtabs(host);
   if (typeof revealChildren === "function") revealChildren(host);
+  // Each card's Bet it button, the report's own (js/report.js parlayBet), once that file is in.
+  if (_bpBet.length && typeof loadReport === "function") loadReport().then((R) => {
+    if (!R || typeof R.parlayBet !== "function") return;
+    host.querySelectorAll("[data-bp-bet]").forEach((el) => {
+      const b = _bpBet[Number(el.dataset.bpBet)];
+      el.outerHTML = b ? R.parlayBet(b.legs, b.what) || "" : "";
+    });
+  });
   host.querySelectorAll("[data-bp-size]").forEach((b) => b.addEventListener("click", () => {
     _bpSize = b.dataset.bpSize;
     renderBestParlays();

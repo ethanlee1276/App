@@ -1043,5 +1043,6 @@
     return `<div class="pbp-picks-head">Our report parlays<span class="mini">${g.tickets.length}</span></div>
       <div class="grl grl-rail">${g.tickets.map((t, i) => liveTicketHTML(t, `${league}|${away}@${home}|${t.kind}${i}`)).join("")}</div>`;
   }
-  window.QBReport = { html, block, toText, teaser, gameTickets, slipCombine, liveTickets, liveGame };
+  // parlayBet: the Best Parlays page's cards wear the same Bet it button (js/bestparlays.js, 21 November 2026).
+  window.QBReport = { html, block, toText, teaser, gameTickets, slipCombine, liveTickets, liveGame, parlayBet };
 })();

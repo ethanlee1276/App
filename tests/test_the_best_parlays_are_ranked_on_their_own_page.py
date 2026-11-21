@@ -158,6 +158,17 @@ def test_the_page_is_its_own_with_two_sections_and_most_likelys_tiers():
         assert sel in CSS, sel
 
 
+def test_each_card_wears_the_reports_bet_it_button():
+    # Ethan, 2026-11-15: "add bet it buttons that adds the whole parlay too your sports book. Both td parlays
+    # and player prop parlays". The card's button is the report's own (js/report.js parlayBet), so the sheet,
+    # its one-slip tile and its leg-by-leg tiles are the same everywhere a parlay is drawn.
+    report = (ROOT / "web" / "js" / "report.js").read_text(encoding="utf-8")
+    assert "liveTickets, liveGame, parlayBet };" in report
+    assert '<span class="bp-bet" data-bp-bet="${_bpBet.push({ legs: t.legs || [],' in PAGE
+    assert "if (_bpBet.length && typeof loadReport === \"function\") loadReport().then((R) => {" in PAGE
+    assert "el.outerHTML = b ? R.parlayBet(b.legs, b.what) || \"\" : \"\";" in PAGE
+
+
 def test_in_a_browser_the_page_ranks_both_sections():
     if os.environ.get("QB_BROWSER_TESTS") != "1":
         print("      (skipped: set QB_BROWSER_TESTS=1)")
@@ -225,6 +236,60 @@ def test_in_a_browser_the_page_ranks_both_sections():
                 n3 = page.evaluate("document.querySelectorAll('#bestparlays-body [data-subgroup=\"props\"] .bp-card').length")
                 assert n3 == want["threes"], (n3, want)
                 assert not errors, errors
+            finally:
+                browser.close()
+    finally:
+        srv.shutdown()
+
+
+def test_in_a_browser_a_cards_bet_it_puts_the_whole_ticket_on_one_slip():
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1)")
+        return
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("      (skipped: no Playwright)")
+        return
+    import rendercheck
+    BW = __import__("test_a_parlay_is_bet_whole")
+    payload, _ = BW._stamped()                     # the legs with each book's links, as the board stamps them
+    board = {"sport": "nfl", "date": "2026-11-15", "recommendations": [], "most_likely": [],
+             "games": [{"home": "BUF", "away": "LAC", "date": "2026-11-15", "kickoff": "13:00"}],
+             "game_parlays": payload["game_parlays"]}
+    GP.attach_ranked(board, "nfl")
+    body = json.dumps(board)
+    srv, port = rendercheck._serve()
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
+            try:
+                ctx = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True,
+                                          service_workers="block", bypass_csp=True)
+                page = ctx.new_page()
+                errors = []
+                page.on("pageerror", lambda e: errors.append(str(e)[:300]))
+                page.route(lambda u: not u.startswith(f"http://127.0.0.1:{port}/"), lambda r: r.abort())
+                for pat in ("**/api/recommendations*", "**/data/recommendations*.json*"):
+                    page.route(pat, lambda r: r.fulfill(status=200, content_type="application/json", body=body))
+                page.goto(f"http://127.0.0.1:{port}/#bestparlays", wait_until="load")
+                page.wait_for_function("document.querySelectorAll('#bestparlays-body .bp-card .gr-betit .betit').length >= 2",
+                                       timeout=20000)
+                # The three-leg ticket's card (no two-leg tickets here, so the page opens on three), then its sheet.
+                page.click('#bestparlays-body [data-subgroup="props"] .bp-card .gr-betit .betit')
+                page.wait_for_function("document.body.classList.contains('betit-open')", timeout=5000)
+                tiles = page.evaluate("""[...document.querySelectorAll('#betit-sheet .bk-tile')].map((a) => ({
+                    href: a.getAttribute('href'), text: a.textContent.replace(/\\s+/g, ' ').trim()}))""")
+                whole = [t for t in tiles if "one slip" in t["text"]]
+                assert len(whole) == 1 and "marketId[2]=734.3" in whole[0]["href"], tiles
+                assert sum(1 for t in tiles if "Leg " in t["text"]) == 3, tiles
+                head = page.inner_text("#betit-sheet .betit-head")
+                assert head.startswith("Bet it") and "Three-leg parlay · Josh Allen over 249.5 passing yards" in head, head
+                # The touchdown pair's card wears one too.
+                pairs = page.evaluate("document.querySelectorAll('#bestparlays-body [data-subgroup=\"scorers\"] .bp-card .betit').length")
+                assert pairs == 1, pairs
+                assert not errors, errors
+                ctx.close()
             finally:
                 browser.close()
     finally:
