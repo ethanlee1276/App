@@ -168,8 +168,12 @@ def test_in_a_browser_baseball_is_the_one_page_live_and_final():
                     page.route("**/data/live_mlb.json*", body({"games": [{"game_pk": 776655, "home": "NYY", "away": "BOS",
                                                                           "live": doc["live"]}]}))
                     page.goto(f"http://127.0.0.1:{port}/index.html#pbp/mlb/776655", wait_until="load")
-                    for _ in range(150):
-                        if page.evaluate("!!document.querySelector('.gp .pbp-hero') && !!document.querySelector('.gp-line')"):
+                    # The shared cards (js/gamecast.js) load after the page's first draw, and the page draws
+                    # again when they land: a live game waits for its last-play card too.
+                    ready = ("!!document.querySelector('.gp .pbp-hero') && !!document.querySelector('.gp-line')"
+                             + (" && !!document.querySelector('.gc-dv')" if state == "live" else " && !!window.QBGamecast"))
+                    for _ in range(300):
+                        if page.evaluate(ready):
                             break
                         page.wait_for_timeout(100)
                     got = page.evaluate("""() => { const q = (s) => document.querySelector(s);
@@ -185,7 +189,10 @@ def test_in_a_browser_baseball_is_the_one_page_live_and_final():
                         assert got["stage"], "the ballpark is the stage while the game is on"
                         assert "Teo Varga doubles off Owen Tarrant." in got["now"], got["now"]
                         page.click('.gp .pbp-tabs [data-pbp-tab="plays"]')
-                        page.wait_for_timeout(400)
+                        for _ in range(100):
+                            if page.evaluate("!!document.querySelector('details.gp-dr[open] .lb-what')"):
+                                break
+                            page.wait_for_timeout(100)
                         cards = page.evaluate("[...document.querySelectorAll('details.gp-dr .gp-dr-t > b')].map((b) => b.textContent)")
                         assert cards[:2] == ["2nd inning", "1st inning"], cards
                         said = page.evaluate("document.querySelector('details.gp-dr[open] .lb-what').textContent")
