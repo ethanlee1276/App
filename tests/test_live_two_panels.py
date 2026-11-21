@@ -91,9 +91,10 @@ def test_a_likely_row_never_prints_a_stake_or_a_riding_warning():
     """Flat-staked and never sized: printing "0.10u" or "the price has
     moved off the bar" on a likelihood row would present it as a bet."""
     body = _fn("renderLivePicks")
-    # Paper rows — the Most Likely book's and the one board's — print no units.
-    assert '!["likely", "board"].includes(r.category) && r.stake_units > 0' in body
-    assert '!isLikelyBook(r.category) && offBoard(r)' in body
+    # Paper rows — the Most Likely book's and the one board's, and since step AAS the game reports'
+    # (`live_report`, flat-staked as the Most Likely book is) — print no units and no riding warning.
+    assert '!["likely", "board", "report"].includes(r.category) && r.stake_units > 0' in body
+    assert '!isLikelyBook(r.category) && r.category !== "report" && offBoard(r)' in body
 
 
 def test_each_panel_has_its_own_empty_state():

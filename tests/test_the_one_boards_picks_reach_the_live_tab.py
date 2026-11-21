@@ -125,7 +125,8 @@ def test_the_page_draws_board_rows_in_the_most_likely_panel_without_units():
     i = APP.index("function isLikelyBook(c) {")
     body = APP[i:APP.index("}", i)]
     assert 'c === "board"' in body, body
-    assert '!["likely", "board"].includes(r.category) && r.stake_units > 0' in APP
+    # …and the game reports' own picks since step AAS, flat-staked as these are.
+    assert '!["likely", "board", "report"].includes(r.category) && r.stake_units > 0' in APP
 
 
 if __name__ == "__main__":

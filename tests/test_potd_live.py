@@ -162,7 +162,8 @@ def test_a_day_with_no_open_bets_still_shows_a_live_pick():
     open wager WAS the Pick of the Day rendered "No open bets on today's
     card" over a running bet."""
     body = _fn("renderLivePicks")
-    assert "if (!rows.length && !elsewhere && !potdRows.length) {" in body
+    # …nor over a running game report pick since step AAS (`live_report`).
+    assert "if (!rows.length && !elsewhere && !potdRows.length && !reportRows.length) {" in body
 
 
 def test_the_hero_says_live_while_the_game_runs():

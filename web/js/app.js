@@ -6194,7 +6194,7 @@ function renderLivePicks() {
     host.innerHTML = memberLockHTML("Our picks on these games, live",
       // The Pick of the Day itself is free (2026-10-30); what this locks is
       // the tracking — its live chance among the rest.
-      "Members see every Edge and Most Likely pick on the games above, tracked play by play to the final with the live chance each one cashes — the Pick of the Day’s too. The Pick of the Day itself is free, on Home.");
+      "Members see every Edge and Most Likely pick and every game report’s picks on the games above, tracked play by play to the final with the live chance each one cashes — the Pick of the Day’s too. The Pick of the Day itself is free, on Home.");
     return;
   }
   buzzOnSettle([...(((state.data || {}).live_picks) || []),
@@ -6234,6 +6234,14 @@ function renderLivePicks() {
      same ticket twice. `liveTrackerRows` promotes it from the fast
      scoreboard exactly as it promotes the rest. */
   const potdRows = liveTrackerRows((state.data || {}).live_potd || []);
+  /* THE GAME REPORTS' OWN PICKS, LIVE (step AAS, 21 November 2026). Ethan:
+     "how we're able to see our most likely bets and edge bets that are live
+     and how those bets are doing while they're live, we should be able to see
+     the same for game report bets, and parlays". Their own key and panel
+     (livepicks.REPORT_TRACKER_CATEGORIES), as the Pick of the Day's are: a
+     report's card pick is a Most Likely pick too, so it is in both panels, once
+     in each. The reports' parlays are followed leg by leg in #live-report. */
+  const reportRows = liveTrackerRows((state.data || {}).live_report || []);
   const elsewhere = (state.data || {}).open_elsewhere || 0;
   const trackerErr = (state.data || {}).live_picks_error;
   /* WHOSE BETS THESE ARE, said on every panel.
@@ -6259,7 +6267,7 @@ function renderLivePicks() {
       <code>${escapeHtml(trackerErr)}</code> — open bets still settle normally; see the Record page.</p></div>`;
     return;
   }
-  if (!rows.length && !elsewhere && !potdRows.length) {
+  if (!rows.length && !elsewhere && !potdRows.length && !reportRows.length) {
     // A full tab now — an empty day says so instead of rendering nothing.
     host.innerHTML = `
       <div class="section-title">${iconMark("target")} Open bets ${leagueTag}
@@ -6553,10 +6561,13 @@ function renderLivePicks() {
             <strong>${betTxt(r)}</strong>
             <span style="color:var(--text-mute)"> · placed ${american(r.odds)}${
               placed ? ` · ${escapeHtml(placed)}` : ""}${
-              !["likely", "board"].includes(r.category) && r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
+              // A report pick journals at a flat stake, as a Most Likely one does, and says where its report
+              // posted it ("Our picks", "Matchup read"…: livepicks.report_sources).
+              r.category === "report" && r.source ? ` · ${escapeHtml(r.source)}` : ""}${
+              !["likely", "board", "report"].includes(r.category) && r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
             <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${gameLine(r.game)}</span>
             ${situationLine(r)}
-            ${!isLikelyBook(r.category) && offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
+            ${!isLikelyBook(r.category) && r.category !== "report" && offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
               ${icon('warn')} the price has moved off the bar since this was journaled — riding at
               ${american(r.odds)} as placed (also listed under Tonight’s Picks).</span>` : ""}
             ${progressBar(r)}
@@ -6657,7 +6668,15 @@ function renderLivePicks() {
     `No open ${escapeHtml(leagueNow)} Most Likely bets on today’s card — rows journal from the Most Likely board when it publishes.`,
     `${plural(likely.length, "Most Likely row")} on today’s card. These are ranked by measured
         likelihood, not by edge against the price, and settle on the likelihood book
-        the Record page keeps separately.`);
+        the Record page keeps separately.`)
+  + panel(reportRows, "Open game report picks",
+    `every pick a game report posted on today’s card, tracked the same way: its
+      card’s picks, its matchup reads’ and its breakout and fade picks, each at a
+      flat stake and graded on the report book.`,
+    `No open ${escapeHtml(leagueNow)} game report picks on today’s card — a report’s picks journal when its report posts.`,
+    `${plural(reportRows.length, "game report pick")} on today’s card. A report’s card pick is
+        a Most Likely pick too, so it is in that panel as well. The reports’ parlays are
+        followed leg by leg near the top of this tab, under Our report parlays, live.`);
 }
 
 /* ============================================================
@@ -28229,6 +28248,8 @@ function pbpOurPicks(d) {
     potd: liveTrackerRows(pbpPropRows(data.live_potd, d)).map((r) => ({ r, placed: true })),
     likely: pbpMergePicks(placed.filter((r) => isLikelyBook(r.category)), likelyBoard),
     edge: pbpMergePicks(placed.filter((r) => !isLikelyBook(r.category)), edgeBoard),
+    // The game report's own picks on this game, tracked as the rest are (step AAS: `live_report`).
+    report: liveTrackerRows(pbpPropRows(data.live_report, d)).map((r) => ({ r, placed: true })),
   };
 }
 function pbpPickRowHTML({ r, placed }, book) {
@@ -28255,21 +28276,25 @@ function pbpPickRowHTML({ r, placed }, book) {
 function pbpPropsHTML(d, league) {
   if (isWalled()) {
     return memberLockHTML("Our picks on this game",
-      "Members see the Edge picks, the Most Likely picks and the Pick of the Day on this game, each tracked live with its chance to cash.");
+      "Members see the Edge picks, the Most Likely picks, the game report’s picks and the Pick of the Day on this game, each tracked live with its chance to cash.");
   }
   // The game report's own tickets, followed leg by leg (reportLiveSlot): every league's, whichever board is open.
   const tickets = reportLiveSlot(d, league);
   if (state.sport !== league) {
     return `<p class="rail-quiet">Our picks are kept on each league’s own board — open the ${escapeHtml(lgCode(league))} tab to see them on this game.</p>${tickets}`;
   }
-  const { potd, likely, edge } = pbpOurPicks(d);
-  if (!potd.length && !likely.length && !edge.length) return `<p class="rail-quiet">No Most Likely or edge picks on this game.</p>${tickets}`;
+  const { potd, likely, edge, report } = pbpOurPicks(d);
   const group = (list, title, book, empty) => `<div class="pbp-picks-group">
       <div class="pbp-picks-head">${title}<span class="mini">${list.length}</span></div>
       ${list.length ? list.map((x) => pbpPickRowHTML(x, book)).join("") : `<p class="rail-quiet">${empty}</p>`}</div>`;
+  // The game report's picks, just above its tickets (step AAS); a game whose report posted none shows no head.
+  const reportGroup = (list) => (list.length ? group(list, "Game report picks", "report", "") : "");
+  if (!potd.length && !likely.length && !edge.length) {
+    return `<p class="rail-quiet">No Most Likely or edge picks on this game.</p>${reportGroup(report)}${tickets}`;
+  }
   return `${potd.length ? group(potd, "Pick of the Day", "potd", "") : ""}
     ${group(likely, "Most Likely", "likely", "No Most Likely pick on this game.")}
-    ${group(edge, "Edge picks", "edge", "No edge pick on this game.")}${tickets}`;
+    ${group(edge, "Edge picks", "edge", "No edge pick on this game.")}${reportGroup(report)}${tickets}`;
 }
 
 function openPbp(league, event, from) {

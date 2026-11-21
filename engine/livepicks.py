@@ -749,6 +749,43 @@ def one_row_per_wager(rows: list[dict]) -> list[dict]:
 #: honest shape and the one the product asks for.
 POTD_TRACKER_CATEGORIES = ("potd",)
 
+#: THE GAME REPORTS' OWN PICKS, TRACKED ON THEIR OWN (step AAS, 21 November
+#: 2026). Ethan: "on the live page, how we're able to see our most likely
+#: bets and edge bets that are live and how those bets are doing while
+#: they're live, we should be able to see the same for game report bets,
+#: and parlays". A report's parlays were followed leg by leg (engine/
+#: reportlive, the tab's "Our report parlays, live"); its picks journal to a
+#: book of their own (engine/reportbets.CATEGORY) that this tracker never
+#: read, so they went quiet at kickoff. ITS OWN KEY, `live_report`, for the
+#: Pick of the Day's reason above: a report's card pick is a Most Likely pick
+#: too, and one list built from both books would draw the same wager twice
+#: in one panel. The same assembly and the same live overlay as every other
+#: row; each row says where in its report it was posted (`report_sources`).
+REPORT_TRACKER_CATEGORIES = ("report",)
+
+
+def report_sources(conn, sport: str, rows: list[dict]) -> list[dict]:
+    """``rows`` with each report pick's place in its report as ``source``:
+    the journal's grade for the book ("Our picks", "Matchup read",
+    "Breakout candidate", "Fade"; "Report pick" before 20 November). The
+    tracker's columns are every book's, and only this one files a place
+    under its grade, so it is read here. A row the journal cannot name is
+    left as it is."""
+    marks = ",".join("?" * len(REPORT_TRACKER_CATEGORIES))
+    try:
+        found = [dict(r) for r in conn.execute(
+            "SELECT player, market, side, line, date, grade FROM bets WHERE status='open' "
+            f"AND sport=? AND category IN ({marks})", (sport, *REPORT_TRACKER_CATEGORIES))]
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️ the report picks' places not read ({type(exc).__name__}: {exc})")
+        return rows
+    where = {_wager_key(r) + (str(r.get("date") or ""),): str(r.get("grade") or "") for r in found}
+    for row in rows:
+        source = where.get(_wager_key(row) + (str(row.get("date") or ""),))
+        if source:
+            row["source"] = source
+    return rows
+
 
 def shift_day(date: str, days: int) -> str:
     """An ISO date moved by ``days``; anything else comes back unchanged.
@@ -1016,6 +1053,16 @@ def _attach_tracker_once(result, sport, conn, progress, identity, fetcher, fast_
                 potd_near, recs, games, progress, shots, identity,
                 sport=sport) if r["status"] != "unmapped"]
             result["live_potd"] = potd_rows
+            # THE GAME REPORTS' OWN PICKS, under their own key for the same
+            # reason (REPORT_TRACKER_CATEGORIES, step AAS).
+            rep_today, rep_near = open_bets_for(
+                conn, sport, date, REPORT_TRACKER_CATEGORIES)
+            rep_rows = assemble_live_picks(rep_today, recs, games, progress,
+                                           shots, identity, sport=sport)
+            rep_rows += [r for r in assemble_live_picks(
+                rep_near, recs, games, progress, shots, identity,
+                sport=sport) if r["status"] != "unmapped"]
+            result["live_report"] = report_sources(conn, sport, rep_rows)
             all_open = conn.execute(
                 "SELECT COUNT(*) FROM bets WHERE status='open' "
                 "AND category IN ('main','longshot') "
@@ -1040,7 +1087,8 @@ def _attach_tracker_once(result, sport, conn, progress, identity, fetcher, fast_
     result.pop("live_picks_error", None)
     rows = result["live_picks"]
     potd = result.get("live_potd") or []
-    if not rows and not potd:
+    report = result.get("live_report") or []
+    if not rows and not potd and not report:
         return ""
     n_live = sum(1 for r in rows if r["phase"] == "live")
     n_likely = sum(1 for r in rows if r.get("category") in LIVE_LIKELY_BOOKS)
@@ -1053,6 +1101,11 @@ def _attach_tracker_once(result, sport, conn, progress, identity, fetcher, fast_
         note += (f"; pick of the day tracked ({potd[0]['status']}"
                  + (f", {potd[0]['phase']}" if potd[0]["phase"] != "upcoming"
                     else "") + ")")
+    if report:
+        # The game reports' own picks (step AAS), counted apart: a card pick
+        # is a Most Likely pick too, so it is in the count above as well.
+        note += (f"; {len(report)} report pick{'' if len(report) == 1 else 's'} tracked ("
+                 f"{sum(1 for r in report if r['phase'] == 'live')} live)")
     if result["open_elsewhere"]:
         note += f", {result['open_elsewhere']} open on other boards"
     if prog_note:

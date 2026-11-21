@@ -262,6 +262,13 @@ PAID_KEYS = (
     # was remembered in the same edit that created it, which is the only
     # time it is cheap.
     "live_potd",
+    # THE GAME REPORTS' OWN PICKS WHILE THEIR GAMES RUN (step AAS, 21
+    # November 2026; livepicks.REPORT_TRACKER_CATEGORIES): every report
+    # pick with its player, line, price and the number so far. The reports
+    # are a member's (Ethan, 2026-11-20: "I don't want the game reports to
+    # be free"), and so is following their picks. Remembered in the edit
+    # that made it, as the Pick of the Day's was.
+    "live_report",
 )
 
 #: PAID KEYS THAT BELONG TO ONE BOARD ONLY.

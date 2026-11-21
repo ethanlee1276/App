@@ -9338,6 +9338,19 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAS. The Live tab follows the game reports' own picks** (step 833; 21 November). Nothing to run. You asked to see
+the game report bets and parlays on the Live page the way the Most Likely and Edge bets are, live. The reports'
+parlays already were: "Our report parlays, live" near the top of the tab follows every posted ticket leg by leg (at
+1:56 PM ET it was following 62 tickets in 8 games, 7 of them live). The reports' own picks were not: they journal to
+a book of their own and the tracker behind the Edge and Most Likely panels never read it, so a report's picks went
+quiet at kickoff. Now they have their own panel, Open game report picks, under Open Most Likely bets, drawn with the
+same rows: the number so far, the progress bar, what it still needs, cleared or busted, the live chance where there
+is one, and where the report posted it (Our picks, Matchup read, Breakout candidate, Fade). A finished game's picks
+fold under it until the overnight settle, as the others do. Each game's own page lists them too, as Game report
+picks on its picks rail above its report's tickets. A report's card pick is a Most Likely pick as well, so it shows
+in both panels, once in each; it is counted once in each book on the Record. Members only, as the reports are
+(`live_report` is a paid key).
+
 **AAR. The NBA's tickets keep their classes under the book cap** (step 832; 21 November). Nothing to run. Step AAM
 put each NBA leg at the lower of our chance and the book's fair one, which sits under the price's own break-even by
 the book's cut, so an NBA leg could almost never grade Green, and a ticket's Safe and Balanced classes need Green
