@@ -162,8 +162,9 @@ def test_the_park_is_the_game_pages_own_art_in_the_leagues_colours():
     assert "pbpArcSVG(hitRow.hit, (boardGame || {}).park, { photo })" in body, (
         "the arc is still scaled by the park's own fences — the photo only "
         "changes which coordinates it is drawn in, never the arithmetic")
-    page = _fn("renderPbpPage")
-    assert 'r.kind === "atbat" && r.hit' in page, "the newest ball in play is the one drawn"
+    # Baseball's picture is its part of the one page since 21 November (detail.js gpBaseballKit).
+    kit = _fn("gpBaseballKit")
+    assert 'r.kind === "atbat" && r.hit' in kit, "the newest ball in play is the one drawn"
 
 
 # --- the situation strip ---------------------------------------------------------------
@@ -216,12 +217,9 @@ def test_the_rail_shows_the_newest_forty_and_offers_the_rest():
 def test_win_probability_is_the_boards_track_when_the_board_matches():
     page = _fn("renderPbpPage")
     assert "const boardGame = (state.sport === league && state.data)" in page
-    assert "boardGame && boardGame.line_track ? `<div class=\"card\">${lineTrackHTML(boardGame)}</div>` : \"\"" in page
-    # The door moved into the tabs row the page draws (pbpTabsHTML,
-    # 2026-09-05, the page's other rooms); the wiring stayed on the page.
-    # (The call carries the league's tab set: baseball's four rooms here, the
-    # one page's four for every other sport, drawn by gpPageHTML.)
-    assert 'id="pbp-game-door"' in _fn("pbpTabsHTML") and "pbpTabsHTML(tab, boardGame, tabs)" in page
+    # The track rides the Stats tab's odds card (gpOddsHTML) and the door the Our picks tab
+    # (gpPicksHTML) on the one page, every sport's since 21 November; the wiring stays on the page.
+    assert "lineTrackHTML(g)" in _fn("gpOddsHTML") and 'id="pbp-game-door"' in _fn("gpPicksHTML")
     assert "openGame(g.dataset.gid)" in page
 
 

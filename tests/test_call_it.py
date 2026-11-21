@@ -191,7 +191,7 @@ def test_the_server_reads_only_a_league_it_plays_and_an_id_of_digits():
 
 def test_the_page_the_privacy_page_and_deletion():
     det = (ROOT / "web" / "js" / "detail.js").read_text()
-    assert "${pbpCallItHTML(d, league)}" in det
+    assert "${pbpCallItHTML(d, league)}" not in det, "baseball's own layout went on 21 November: one page draws it"
     # Every sport but baseball is the one page (gpPageHTML, 21 November 2026): it draws the card while the game
     # is live, and basketball's and hockey's files bring their parts to it, never a card of their own.
     one = det[det.index("function gpPageHTML(o) {"):det.index("function gpRailPicksHTML(")]

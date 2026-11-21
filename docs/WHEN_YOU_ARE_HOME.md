@@ -9174,7 +9174,7 @@ The updater picks it up within five minutes; nothing to run. Read-only, each
 prints `1` once it is live:
 
 ```
-curl -s https://qellysbook.com/js/detail.js | grep -cF '${lv.state === "final" ? "" : `<div class="card pbp-parkcard">'
+curl -s https://qellysbook.com/js/detail.js | grep -cF 'const stage = lv.state === "final" ? "" : gpStageHTML("pbp-parkcard", ""'
 curl -s https://qellysbook.com/js/hoopscast.js | grep -cF 'const viewFor = (d) => (S.view === "live"'
 curl -s https://qellysbook.com/css/styles.css | grep -cF 'html .gch-fab { left: calc(var(--sidebar-w) + 10px); right: 10px;'
 ```
@@ -9338,6 +9338,23 @@ after it, the same day. Its line in the updater's note reads `the restart
 waits for the weekly lab in progress (... min in; waited ... of 70 min);
 the boards keep sweeping`.
 
+**AAK. Baseball's live game page is the one game page too** (step 825; 21 November). Nothing to run. Step AAI left
+baseball on four rooms of its own (Game info, Our picks, Injuries, Player stats) under its ballpark card. Now every
+sport is drawn by the same page, baseball included, so a change to the NFL's page reaches it as it reaches the
+others. Baseball brings only its own parts: the ballpark card is its picture under the score (the venue and the
+conditions, the photograph with the ball in play, who is batting and who is pitching, and the at-bat pitch by
+pitch), the newest at-bat on the same last-play card every sport uses ("Teo Varga singles off Felix Durand, 267
+ft.", with the batter's and the pitcher's lines so far), the at-bats on the Play-By-Play tab an inning to a card in
+the same sentences, the line score by inning with an R column (a half inning not batted is left empty), team stats,
+and each side's batting and pitching box from the box score. It gets what the others have: the bar that keeps the
+score in view (with the outs and the count), the ⋯ menu, Standings, the Stats tab's odds, game facts and umpire
+card. A final shows no ballpark and no last play, as every sport's final does. Gone with the old rooms: the park
+facts as tiles (roof, surface, capacity; the venue and weather stay on the ballpark card and in Game information),
+and the football box-score and fantasy-points functions only that room drew, which now nothing reaches; taking them
+out is its own step. Checked here on a made-up game built by the server's own baseball builder, live, final and
+before the first pitch, on a phone and a 1280px desktop. Baseball is out of season, so the first real game on it is
+opening day.
+
 **AAJ. Your nine answers, built** (step 824; 21 November). Nothing to run. (1) A game short of three three-leg
 parlays posts fewer; no touchdown leg comes back to fill it. The site already worked that way since step AAH, so
 nothing changed. (2) Hockey's goal scorers stay on its stat parlays: no change. (3) A parlay one sportsbook prices
@@ -9368,7 +9385,7 @@ parlay, and at 9:20 AM 33 of the 58 games still had no prop priced. Now, on the 
 gets its two day-before pulls on top of Friday's own, at most a quarter more of that day's odds allowance, each
 buying up to 12 games, the most-watched first. Next Friday night's heartbeat says how many of Saturday's games had
 props (cfb `threes_short_why` `no_props_priced`). Switch: `QB_CFB_FRIDAY=off`. Still open from the list: (10) to
-(14). Baseball's live page is moving onto the one game page next.
+(14).
 
 **AAI. Every sport's live game page is the NFL's page** (step 823; 21 November). Nothing to run. You asked for the
 NBA, college and every other sport's live page to match the NFL's, and for that to be automatic. It could not be,

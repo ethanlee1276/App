@@ -475,7 +475,7 @@ def test_an_old_game_says_its_day_and_has_no_chat():
             "  else chatMount(league, event, d);") in detail
     slot = '${d.archive ? "" : `<div class="gch-entry-slot"></div>`}'
     # Twice: baseball's own rooms, and the one page every other sport is drawn on (gpPageHTML, 21 November 2026).
-    assert detail.count(slot) == 2
+    assert detail.count(slot) == 1, "one layout for every sport since 21 November"
     one = detail[detail.index("function gpPageHTML(o) {"):detail.index("function gpRailPicksHTML(")]
     assert slot in one
     # No play's thread bubble either: one reading of the room (pbpRoom) for the rail, the drives and the

@@ -78,15 +78,16 @@ def _fn(src, name, indent=""):
 
 
 # --- one page ----------------------------------------------------------------------
-def test_one_page_function_draws_every_sport_but_baseball():
-    assert 'const pbpTabsFor = (league) => (league === "mlb" ? PBP_TABS : GP_TABS);' in DETAIL
+def test_one_page_function_draws_every_sport():
+    # Baseball too since 21 November: its four rooms went with its own layout (gpBaseballKit).
+    assert "pbpTabsFor" not in DETAIL and "PBP_TABS" not in DETAIL
     assert 'const GP_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];' in DETAIL
     page = DETAIL[DETAIL.index("async function renderPbpPage("):DETAIL.index("THE GAME PAGE IN THE CLUBS' COLOURS")]
-    assert "const one = tabs === GP_TABS;" in page
-    assert "const kit = one ? gpKit({ d, league, lv, GC, boardGame, faces, event }) : null;" in page
-    assert "host.innerHTML = one ? gpPageHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event, kit }) : `" in page
-    # Two layouts in the whole file: the one page, and baseball's own rooms.
-    assert DETAIL.count('<div class="pbp-layout') == 2 and page.count('<div class="pbp-layout gp">') == 1
+    assert "const tabs = GP_TABS;" in page
+    assert "const kit = gpKit({ d, league, lv, GC, boardGame, faces, event });" in page
+    assert "host.innerHTML = gpPageHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event, kit });" in page
+    # One layout in the whole file: the one page.
+    assert DETAIL.count('<div class="pbp-layout') == 1 and "pbp-parkcard" not in page
     # No other way in: the handover to a sport's own page is gone, from here and from the shared module.
     for gone in ("GC.hoops", "GC.panel", ".render(host", "gpFootballHTML", "GP_FB_TABS", "GC_TABS"):
         assert gone not in DETAIL, gone
@@ -105,7 +106,7 @@ def test_the_page_names_no_sport_where_it_lays_itself_out():
     order = ["${gpCompactHTML(d, league, at, tabs, tab, kit)}", "${pbpBoardHTML(d, league, at, {", "${stage}", "${gpLineHTML(d, league, at)}",
              "${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}", "${gpNowHTML(d, league, faces, boardGame, GC, !!stage, kit)}",
              "${pbpMineSlotsHTML()}", '${lv.state === "live" ? pbpCallItHTML(d, league) : ""}', '<div class="gch-entry-slot"></div>',
-             "${pbpTabsHTML(tab, null, tabs)}", '<div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>', "${back}", "${pbpFootHTML()}"]
+             "${pbpTabsHTML(tab, tabs)}", '<div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>', "${back}", "${pbpFootHTML()}"]
     at = [page.index(part) for part in order]
     assert at == sorted(at), "the page's order, top to bottom, the same for every sport"
     # Each part a sport may hand over is read by the page somewhere, by its name.

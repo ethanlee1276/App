@@ -7,7 +7,7 @@
    We should have the box score and all of that."
 
    WHAT IS HERE: the cards every sport's page draws (detail.js gpPageHTML,
-   one page for every sport but baseball since 2026-11-21) — the newest
+   one page for every sport since 2026-11-21) — the newest
    play with the people in it and their lines so far (football's from its
    drive, driveViewHTML; any other sport's through playNowHTML), the game
    leaders, the scoring plays, football's whole-game chart — and the moving

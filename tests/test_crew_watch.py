@@ -41,9 +41,9 @@ def _fn(src, name):
 
 
 def test_the_card_rides_the_football_rail():
-    rail = DETAIL[DETAIL.index('<aside class="pbp-rail">'):]
-    rail = rail[:rail.index("</aside>")]
-    assert "${pbpPressureHTML(d, league, boardGame)}\n        ${pbpCrewHTML(d, league, boardGame)}" in rail
+    # The one page's Stats tab (every sport's since 21 November): the pressure card, the game's facts, the crew.
+    stats = DETAIL[DETAIL.index("function gpStatsHTML("):DETAIL.index("function gpOddsHTML(")]
+    assert stats.index("pbpPressureHTML(d, league, boardGame)") < stats.index("pbpCrewHTML(d, league, boardGame)")
     fn = _fn(DETAIL, "pbpCrewHTML")
     assert 'if (league !== "nfl" || !o.referee || (lv.state !== "live" && lv.state !== "final")) return "";' in fn
     assert "escapeHtml(o.referee)" in fn and "escapeHtml(avg)" in fn

@@ -232,18 +232,18 @@ def _fn(name):
 def test_the_page_loads_the_gamecast_on_first_use_and_draws_the_one_pages_tabs():
     assert 'let _pbpTab = "";' in APP, "no tab chosen until the reader chooses one"
     assert "GC_TABS" not in APP, "the gamecast's own six tabs are gone"
-    assert 'const pbpTabsFor = (league) => (league === "mlb" ? PBP_TABS : GP_TABS);' in APP
+    assert "pbpTabsFor" not in APP and "PBP_TABS" not in APP, "one tab list, every sport's (baseball's too since 21 November)"
     assert 'const GP_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];' in APP
     loader = _fn("loadGamecast")
     assert 'css.href = "css/gamecast.css";' in loader and 'el.src = "js/gamecast.js";' in loader
     assert "if (window.QBGamecast) return Promise.resolve(window.QBGamecast);" in loader
     page = _fn("renderPbpPage")
-    assert "const tabs = pbpTabsFor(league);" in page
-    assert 'const GC = league === "mlb" ? null : (window.QBGamecast || null);' in page
+    assert "const tabs = GP_TABS;" in page
+    assert "const GC = window.QBGamecast || null;" in page
     assert 'loadGamecast().then((mod) => { if (mod && state.view === "pbp") renderPbpPage(); });' in page
     assert "GC.panel(" not in page and "Loading the gamecast…" not in page, "the page draws at once on what the file has"
-    assert "host.innerHTML = one ? gpPageHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event, kit })" in page
-    assert "pbpTabsHTML(tab, boardGame, tabs)" in page, "baseball's four rooms"
+    assert "host.innerHTML = gpPageHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event, kit });" in page
+    assert "pbpTabsHTML" not in page and "pbp-parkcard" not in page, "no second layout: baseball is the one page too"
     # The scoreboard: the records and the carrier, absent when unknown.
     board = _fn("pbpBoardHTML")
     assert '${rec ? `<span class="pbp-sb-rec">${escapeHtml(rec)}</span>` : ""}' in board
@@ -251,8 +251,8 @@ def test_the_page_loads_the_gamecast_on_first_use_and_draws_the_one_pages_tabs()
     assert ".pbp-sb-rec {" in CSS and ".pbp-sb-tv {" in CSS
     # Both sides' box scores are on the page at once (gpStatsHTML): no toggle to wire.
     assert "data-gc-team" not in APP and "setTeam" not in GC
-    # Baseball keeps its four rooms.
-    assert 'tab === "players" ? pbpPlayersHTML(d, league)' in page and ": infoPanel;" in page
+    # Baseball's rooms went with its own layout (21 November).
+    assert "infoPanel" not in page and "pbpPlayersHTML" not in page
 
 
 def test_the_module_draws_numbers_and_never_a_sentence():

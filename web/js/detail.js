@@ -3140,23 +3140,8 @@ function liveRowFor(sport, g) {
    near the top of the file now — see the comment there. */
 //: The tab the reader chose ("" until they choose one: the page opens on
 //: its own first tab, a live game's on its plays). stats | plays |
-//: standings | props — baseball: info | props | injuries | players.
+//: standings | props, for every sport (GP_TABS).
 let _pbpTab = "";
-/* ---------------- The page's other rooms ----------------
-   Ethan, 2026-09-05: "the play by plays other rooms". The render's
-   sub-tabs: Game info (the park facts), Our picks (the Most Likely and
-   edge picks on this game, tracked — it was "Live props", the tracker's
-   open tickets as one list, until 2026-09-26), Injuries (both clubs'
-   designations from the injury board), Player stats (the box score the
-   fast loop now writes into the deep file, from the parsers the tracker
-   trusts). Team stats and Splits are not built FOR BASEBALL: the MLB
-   deep file is the MLB builder's own shape, and a room drawn from an
-   unread shape would be the fabricated number this site exists not to
-   print. Every other sport's page is the one page (gpPageHTML, GP_TABS):
-   the summary's box and team blocks, read by livescore_build.pbp_doc. */
-const PBP_TABS = [["info", "Game info"], ["props", "Our picks"], ["injuries", "Injuries"], ["players", "Player stats"]];
-const pbpTabsFor = (league) => (league === "mlb" ? PBP_TABS : GP_TABS);
-
 /* Both clubs' designations, matched on the injury feed's own club name
    — the team table's `name` — never on a nickname. */
 function pbpInjuryRows(rows, league, d) {
@@ -3165,24 +3150,6 @@ function pbpInjuryRows(rows, league, d) {
   const want = new Set([nameOf(d.home), nameOf(d.away)].filter(Boolean));
   return (rows || []).filter((r) => r && !isReturnRow(r) && want.has(String(r.team || "").toLowerCase()));
 }
-
-/* WHAT THE ROOF AND THE FIELD ARE CALLED, in words rather than in the
-   feed's spelling. The board carries `roof` as "outdoors" and `surface`
-   as "fieldturf", and the panel printed them raw — "Roof: outdoors"
-   over "fieldturf", which is a label and a value that are not a pair
-   and a proper noun with no capital letter. Ethan, 2026-09-10: "fix the
-   wording."
-
-   An unmapped value is TITLE-CASED AND SHOWN, not swallowed: a feed
-   that starts writing "retractable-closed" should read a little oddly
-   rather than disappear. */
-const PBP_ROOF_WORD = { outdoors: "Open air", outdoor: "Open air", open: "Roof open",
-                        closed: "Roof closed", dome: "Dome", retractable: "Retractable" };
-const PBP_SURFACE_WORD = { fieldturf: "FieldTurf", grass: "Grass", turf: "Turf",
-                           astroturf: "AstroTurf", matrixturf: "MatrixTurf",
-                           sportturf: "SportTurf", a_turf: "A-Turf", dessograss: "DessoGrass" };
-const pbpTitleCase = (v) => String(v || "").replace(/[_-]+/g, " ")
-  .replace(/\b\w/g, (c) => c.toUpperCase());
 
 /* THE GAME'S WIN CHANCE, PLAY BY PLAY — the line Real does not draw. The
    feed's own number after every play (ESPN's for football and basketball,
@@ -4056,10 +4023,9 @@ function pbpInjuriesHTML(d, league) {
   return `<div class="inj-list">${rows.map((r) => injRow(r, true)).join("")}</div>`;
 }
 
-function pbpTabsHTML(active, boardGame, tabs) {
-  return `<div class="pbp-tabs">${(tabs || PBP_TABS).map(([k, label]) =>
-    `<button type="button" class="pbp-tab${k === active ? " active" : ""}" data-pbp-tab="${k}">${label}</button>`).join("")}${
-    boardGame ? `<button type="button" class="pbp-tab-door" id="pbp-game-door" data-gid="${escapeAttr(gameId(boardGame))}">Full game page →</button>` : ""}</div>`;
+function pbpTabsHTML(active, tabs) {
+  return `<div class="pbp-tabs">${(tabs || GP_TABS).map(([k, label]) =>
+    `<button type="button" class="pbp-tab${k === active ? " active" : ""}" data-pbp-tab="${k}">${label}</button>`).join("")}</div>`;
 }
 
 /* Where Back goes from the play-by-play, and what it says. The game
@@ -5668,66 +5634,17 @@ async function renderPbpPage(tick) {
   const boardGame = (state.sport === league && state.data)
     ? ((state.data.games || []).find((x) => x.home === d.home && x.away === d.away) || null) : null;
   const faces = pbpFaces(league);
-  const events = d.events || [];
-  // THE PLAY THE ART DRAWS: the newest ball actually hit, on the ballpark
-  // photograph (pbpParkHTML). The football page draws no photograph since
-  // 2026-11-15 (Ethan, circling it: "remove this since we have the other
-  // field" — the strip under the score), so football has none to find.
-  const lastPlay = PBP_FOOTBALL.has(league) ? null
-    : (events.slice().reverse().find((r) => r.kind === "atbat" && r.hit) || null);
-  const park = (boardGame || {}).park || {};
-  const wx = (boardGame || {}).weather || {};
-  /* THE TILE IS A LABEL AND A VALUE, IN THAT ORDER. These read
-     `60°F` over nothing, `6 mph` over nothing and `Roof: outdoors` over
-     `fieldturf` — three tiles where the big text was sometimes the
-     value and sometimes the label, and one where the small text was a
-     second fact with no name on it. A reader should not have to work
-     out which of the two lines is the question. */
-  const infoCards = boardGame ? [
-    park.name ? [icon("stadium", 18), "Venue", park.name] : null,
-    boardGame.roof ? [icon("field", 18), "Roof",
-      PBP_ROOF_WORD[String(boardGame.roof).toLowerCase()] || pbpTitleCase(boardGame.roof)] : null,
-    boardGame.surface ? [icon("field", 18), "Surface",
-      PBP_SURFACE_WORD[String(boardGame.surface).toLowerCase()] || pbpTitleCase(boardGame.surface)] : null,
-    wx.temp_f != null ? [icon("sun", 18), "Temperature", `${Math.round(wx.temp_f)}°F`] : null,
-    wx.wind_mph != null && !wx.dome
-      ? [icon("wind", 18), "Wind",
-         `${Math.round(wx.wind_mph)} mph${wx.wind_dir ? ` ${wx.wind_dir}` : ""}`] : null,
-    park.capacity ? [icon("users", 18), "Capacity", Number(park.capacity).toLocaleString()] : null,
-  ].filter(Boolean) : [];
-  const factsHTML = infoCards.length ? `<div class="pbp-info">${infoCards.map(([ic, label, val]) => `
-      <div class="pbp-info-card"><span class="pbp-info-ico">${ic}</span>
-        <div><div class="pbp-info-k">${escapeHtml(label)}</div>
-          <b>${escapeHtml(String(val))}</b></div></div>`).join("")}
-    </div>` : "";
-  /* THE TOTALS LEAD, because they are about the game being watched and
-     the park facts are about the building. The room used to be the
-     building alone, over half a screen of nothing. */
-  const totalsHTML = pbpTotalsHTML(d, league);
-  const infoPanel = (totalsHTML || factsHTML)
-    ? `${totalsHTML}${factsHTML}`
-    : `<p class="rail-quiet">Team totals fill in from the drives as they are played. Park and
-       weather facts come off the league’s board — open the ${
-       escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())} tab for them.</p>`;
-  /* ONE PAGE (gpPageHTML, 2026-11-21): every sport but baseball draws the
-     football page's rooms, its own parts handed in (gpKit). js/gamecast.js
-     holds the cards they share (the newest play, the leaders, the scoring):
-     loaded on the first game opened, and the page drawn again when it
-     lands. Baseball keeps its own four rooms, and loads the file too, for
-     the at-bat's pitches (QBGamecast.zone). */
-  const tabs = pbpTabsFor(league);
-  const one = tabs === GP_TABS;
-  const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab : one && lv.state === "live" ? "plays" : tabs[0][0];
-  const GC = league === "mlb" ? null : (window.QBGamecast || null);
+  /* ONE PAGE FOR EVERY SPORT (gpPageHTML; the other sports on 2026-11-21 and
+     baseball the same day): each league draws the football page's rooms, its
+     own parts handed in (gpKit). js/gamecast.js holds the cards they share
+     (the newest play, the leaders, the scoring) and baseball's pitch zone:
+     loaded on the first game opened, and the page drawn again when it lands. */
+  const tabs = GP_TABS;
+  const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab : lv.state === "live" ? "plays" : tabs[0][0];
+  const GC = window.QBGamecast || null;
   if (!window.QBGamecast) {
     loadGamecast().then((mod) => { if (mod && state.view === "pbp") renderPbpPage(); });
   }
-  const panel = one ? "" : tab === "props" ? pbpPropsHTML(d, league)
-    : tab === "injuries" ? pbpInjuriesHTML(d, league)
-    : tab === "players" ? pbpPlayersHTML(d, league)
-    : infoPanel;
-  const infoHTML = `${pbpTabsHTML(tab, boardGame, tabs)}<div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>`;
-  const winProb = boardGame && boardGame.line_track ? `<div class="card">${lineTrackHTML(boardGame)}</div>` : "";
   /* A FINISHED GAME IS ITS RECORD, NOT ITS PICTURE (Ethan, 2026-10-30, the
      field circled on yesterday's Panthers @ Packers: "why do we have the
      game cast on this screen. It's just supposed to be the espn page with the
@@ -5741,44 +5658,13 @@ async function renderPbpPage(tick) {
   // (gpPageHTML, `_gpFor`).
   host.querySelectorAll("details[data-gp-key]").forEach((el) => _gpOpen.set(el.dataset.gpKey, el.open));
   // The sport's own parts (gpKit), and what this redraw must leave as it is (gpHoldTake).
-  const kit = one ? gpKit({ d, league, lv, GC, boardGame, faces, event }) : null;
-  const held = one ? gpHoldTake(host, `${league}:${event}`) : null;
-  host.innerHTML = one ? gpPageHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event, kit }) : `
-    ${stripHTML}
-    <div class="pbp-layout gp">
-      <div class="pbp-main">
-        ${pbpBoardHTML(d, league, lv)}
-        ${pbpTvHTML(d)}${pbpSpoilHTML(d, league, event)}${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}
-        ${d.archive ? "" : `<div class="gch-entry-slot"></div>`}
-        ${pbpMineSlotsHTML()}
-        ${lv.state === "final" ? "" : `<div class="card pbp-parkcard">
-          ${pbpParkHeadHTML(league, boardGame)}
-          ${pbpParkHTML(d, league, boardGame, lastPlay)}
-          ${pbpSituationHTML(d, league, faces)}${window.QBGamecast && QBGamecast.zone ? QBGamecast.zone(d) : ""}
-        </div>`}
-        ${pbpCallItHTML(d, league)}
-        ${infoHTML}
-        ${back}
-        ${pbpFootHTML()}
-      </div>
-      <aside class="pbp-rail">
-        <div class="card pbp-railcard">
-          <div class="pbp-rail-head">Play by play <span class="mini">${(events.length || (d.plays || []).length)} on file</span></div>
-          ${pbpRailHTML(d, league)}
-        </div>
-        ${pbpWinChartHTML(d, league, boardGame)}
-        ${winProb}
-        ${pbpModelWinProbHTML(d)}
-        ${pbpPressureHTML(d, league, boardGame)}
-        ${pbpCrewHTML(d, league, boardGame)}
-      </aside>
-    </div>`;
+  const kit = gpKit({ d, league, lv, GC, boardGame, faces, event });
+  const held = gpHoldTake(host, `${league}:${event}`);
+  host.innerHTML = gpPageHTML({ d, league, lv, tab, tabs, GC, boardGame, faces, stripHTML, back, event, kit });
   gpHoldGive(host, held);
   wire();
-  if (one) {
-    gpWire(host);
-    if (kit && typeof kit.wire === "function") kit.wire(host);
-  }
+  gpWire(host);
+  if (typeof kit.wire === "function") kit.wire(host);
   // An old game's final: our report on it, graded, under the score (pbpOurReportFill).
   if (d.archive && lv.state === "final") {
     const hero = host.querySelector(".pbp-hero");
@@ -6144,7 +6030,7 @@ function gpFieldHTML(d, league, lv) {
    period with no play on file cannot be read, and then there is no line
    rather than a wrong one. */
 //: College basketball (2026-11-13): two halves.
-const GP_REG = { nfl: 4, cfb: 4, nba: 4, wnba: 4, nhl: 3, cbb: 2 };
+const GP_REG = { nfl: 4, cfb: 4, nba: 4, wnba: 4, nhl: 3, cbb: 2, mlb: 9 };
 function gpLinesFromPlays(d, lv) {
   const last = {};
   (d.plays || []).forEach((p) => {
@@ -6173,6 +6059,7 @@ function gpLines(d, league, lv) {
   const own = (t) => (Array.isArray(ls[t]) ? ls[t].map(Number) : null);
   const away = own(d.away), home = own(d.home);
   if (away && home && (away.length || home.length)) return { away, home };
+  if (league === "mlb") return gpBaseballLines(d, lv);
   return GP_REG[league] && league !== "nba" && league !== "wnba" && league !== "cbb" ? gpLinesFromPlays(d, lv) : null;
 }
 function gpPeriodNow(league, lv) {
@@ -6189,7 +6076,7 @@ function gpLineHTML(d, league, lv) {
   const reg = GP_REG[league] || 4;
   const n = Math.max(reg, L.away.length, L.home.length);
   const cols = Array.from({ length: n }, (_, i) => i + 1);
-  const name = (k) => (k <= reg ? String(k) : league === "nhl" && k > reg + 1 ? "SO" : k === reg + 1 ? "OT" : `${k - reg}OT`);
+  const name = (k) => (k <= reg || league === "mlb" ? String(k) : league === "nhl" && k > reg + 1 ? "SO" : k === reg + 1 ? "OT" : `${k - reg}OT`);
   const now = gpPeriodNow(league, lv);
   const done = lv.state === "final";
   const tot = (ha) => (ha === "home" ? lv.home_score : lv.away_score);
@@ -6202,7 +6089,7 @@ function gpLineHTML(d, league, lv) {
     }).join("")}<td class="t">${tot(ha) == null ? "" : escapeHtml(String(tot(ha)))}</td></tr>`;
   return `<div class="card gp-line"><table class="gp-ls">
       <thead><tr><th scope="col"><span class="gp-sr">Team</span></th>${cols.map((k) =>
-        `<th scope="col"${k === now ? ' class="now"' : ""}>${name(k)}</th>`).join("")}<th scope="col" class="t">T</th></tr></thead>
+        `<th scope="col"${k === now ? ' class="now"' : ""}>${name(k)}</th>`).join("")}<th scope="col" class="t">${league === "mlb" ? "R" : "T"}</th></tr></thead>
       <tbody>${row("away")}${row("home")}</tbody></table></div>`;
 }
 
@@ -6608,6 +6495,7 @@ function gpInjuriesHTML(d, league) {
 function gpPeriodWord(league, n) {
   const k = Number(n) || 0, reg = GP_REG[league] || 4;
   if (!k) return "";
+  if (league === "mlb") return `${pbpOrd(k)} inning`;
   if (k <= reg) return `${pbpOrd(k)} ${league === "nhl" ? "period" : league === "cbb" ? "half" : "quarter"}`;
   return k === reg + 1 ? "Overtime" : `${k - reg}OT`;
 }
@@ -6688,7 +6576,7 @@ function gpPeriodsHTML(d, league, o) {
     const now = per === newest && lv.state === "live";
     const [ta, th] = left[per], [pa, ph] = left[pers[pers.indexOf(per) - 1]] || [0, 0];
     const name = gpPeriodName(league, per, d);
-    const mark = per <= reg ? String(per) : name === "Shootout" ? "SO" : per === reg + 1 ? "OT" : `${per - reg}OT`;
+    const mark = per <= reg || league === "mlb" ? String(per) : name === "Shootout" ? "SO" : per === reg + 1 ? "OT" : `${per - reg}OT`;
     const id = `per-${per}`;
     return `<details class="card gp-dr${now ? " live" : ""}" data-gp-key="${id}"${gpOpenAttr(id, now)}>
         <summary class="gp-dr-head"><span class="gp-dr-per" aria-hidden="true">${escapeHtml(mark)}</span>
@@ -6821,7 +6709,7 @@ function gpPicksHTML(d, league, boardGame) {
    (css: "basketball, hockey: the same score on the wash"), so nothing done
    here ever reached them: no bar that stays when you scroll, no ⋯ menu, no
    card for the play right now, no Standings, a footer in the middle of the
-   page. Now every sport but baseball is drawn by gpPageHTML, top to bottom
+   page. Now every sport is drawn by gpPageHTML (baseball too, the same day), top to bottom
    as football's is, and a sport brings only what is its own (gpKit):
 
      stage       the picture under the score (football's field, basketball's
@@ -6841,8 +6729,8 @@ function gpPicksHTML(d, league, boardGame) {
                  newer one than the scoreboard's (`live`: hockey's);
      wire        its own buttons.
 
-   Baseball keeps its four rooms until its season: the MLB file is the MLB
-   builder's own shape.
+   Baseball's parts are made here (gpBaseballKit), from the MLB builder's own
+   file, which is a shape of its own.
    ====================================================================== */
 const GP_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];
 /* A sport's own file, loaded with its styles the first time one of its
@@ -6883,6 +6771,9 @@ function gpPlainKit(o) {
 function gpKit(o) {
   const { d, league } = o;
   if (PBP_FOOTBALL.has(league)) return { stage: gpFieldHTML(d, league, o.lv) };
+  if (league === "mlb") {
+    try { return gpBaseballKit(o); } catch (e) { console.error("gpKit", league, e); return { now: "" }; }
+  }
   const plain = gpPlainKit(o);
   const { mod, wait } = gpSportMod(league, d);
   if (!mod || typeof mod.parts !== "function") {
@@ -6891,6 +6782,118 @@ function gpKit(o) {
   // A part that throws leaves the page on the plain ones for this draw, and says so where it can be read.
   try { return { ...plain, ...mod.parts(o) }; } catch (e) { console.error("gpKit", league, e); return plain; }
 }
+/* BASEBALL'S PARTS OF THE ONE PAGE (2026-11-21; Ethan: "all other sports live
+   page to try to match nfl ... that should be automatic when we do any visual
+   changes"). Baseball drew four rooms of its own (Game info, Our picks,
+   Injuries, Player stats) under a ballpark card; it is the one page now, and
+   brings what is its own, built from the MLB builder's own file (live_build
+   .mlb_doc) and never a number that file does not hold:
+     stage      the ballpark card: the venue line, the photograph with the
+                ball in play, who is up and who is pitching, and the at-bat
+                pitch by pitch (gamecast `zone`); a final has none, as every
+                sport's final has no picture;
+     now        the newest at-bat on the shared card, in a sentence, with the
+                batter's and the pitcher's lines so far from the box score;
+     rows, say  the at-bats as the Play-By-Play tab's inning cards, each said
+                as a sentence (`gpAtBatWords`);
+     teamStats, boxes   the box score's batting and pitching lines (`players`).
+   The line score is read off the at-bats, inning by inning (`gpBaseballLines`). */
+const GP_BB_VERB = { single: "singles", double: "doubles", triple: "triples", home_run: "homers", walk: "walks",
+  intent_walk: "is walked intentionally", strikeout: "strikes out", hit_by_pitch: "is hit by a pitch",
+  sac_fly: "hits a sacrifice fly", sac_bunt: "lays down a sacrifice bunt", grounded_into_double_play: "grounds into a double play",
+  double_play: "hits into a double play", triple_play: "hits into a triple play", force_out: "is forced out",
+  fielders_choice: "reaches on a fielder's choice", fielders_choice_out: "is out on a fielder's choice",
+  field_error: "reaches on an error", strikeout_double_play: "strikes out in a double play", catcher_interf: "reaches on catcher's interference" };
+const GP_BB_OUT = { groundout: "grounds out", flyout: "flies out", lineout: "lines out", "pop out": "pops out",
+  "bunt groundout": "grounds out on a bunt", "bunt pop out": "pops out on a bunt", "bunt lineout": "lines out on a bunt" };
+//: The at-bats said against the man throwing ("doubles off …").
+const GP_BB_OFF = new Set(["singles", "doubles", "triples", "homers", "walks", "strikes out", "is hit by a pitch", "is walked intentionally"]);
+function gpAtBatWords(p) {
+  const who = String(p.batter || ""), pit = String(p.pitcher || "");
+  const e = String(p.event || "").trim();
+  const verb = GP_BB_VERB[String(p.event_type || "").toLowerCase()] || GP_BB_OUT[e.toLowerCase()] || "";
+  const b = (x) => `<b>${escapeHtml(x)}</b>`;
+  if (!who || !verb) return { text: [who, e].filter(Boolean).join(": "), html: [who ? b(who) : "", escapeHtml(e)].filter(Boolean).join(": ") };
+  const off = GP_BB_OFF.has(verb) && pit;
+  const runs = Number(p.rbi) || 0;
+  const tail = `${p.distance ? `, ${Number(p.distance)} ft` : ""}${runs ? `, ${runs === 1 ? "a run" : `${runs} runs`} in` : ""}.`;
+  return { text: `${who} ${verb}${off ? ` off ${pit}` : ""}${tail}`,
+           html: `${b(who)} ${escapeHtml(verb)}${off ? ` off ${b(pit)}` : ""}${escapeHtml(tail)}` };
+}
+/* A player's line so far, from the box score's own counts (engine/mlb/livestats `_card_line`). */
+function gpBaseballLine(row) {
+  const L = (row || {}).line || {};
+  const bat = L.batting, pit = L.pitching;
+  if (pit) return [pit.ip != null ? `${pit.ip} IP` : "", pit.k != null ? `${pit.k} K` : "", pit.er != null ? `${pit.er} ER` : ""].filter(Boolean).join(", ");
+  if (bat && bat.ab != null) {
+    return [`${bat.h || 0}-${bat.ab}`, bat.hr ? `${bat.hr} HR` : "", bat.rbi ? `${bat.rbi} RBI` : "", bat.bb ? `${bat.bb} BB` : ""].filter(Boolean).join(", ");
+  }
+  return "";
+}
+function gpBaseballLines(d, lv) {
+  const rows = (d.plays || []).filter((p) => p && Number(p.inning) > 0 && p.away_score != null && p.home_score != null);
+  if (!rows.length) return null;
+  const n = Math.max(...rows.map((p) => Number(p.inning)));
+  const away = [], home = [];
+  let a0 = 0, h0 = 0;
+  for (let k = 1; k <= n; k++) {
+    const top = rows.filter((p) => Number(p.inning) === k && p.half === "T");
+    const bot = rows.filter((p) => Number(p.inning) === k && p.half === "B");
+    // A half not batted (the home side ahead after the top of the ninth) is left empty, as a box score leaves it.
+    const a1 = top.length ? Number(top[top.length - 1].away_score) : a0;
+    const h1 = bot.length ? Number(bot[bot.length - 1].home_score) : h0;
+    away.push(top.length ? a1 - a0 : null);
+    home.push(bot.length ? h1 - h0 : null);
+    a0 = a1; h0 = h1;
+  }
+  return away.concat(home).some((v) => v != null && (!isFinite(v) || v < 0)) ? null : { away, home };
+}
+function gpBaseballKit(o) {
+  const { d, league, lv, boardGame, faces } = o;
+  const GC = o.GC || {};
+  const live = lv.state === "live";
+  const batting = (p) => (p.half === "T" ? d.away : p.half === "B" ? d.home : "");
+  const half = (p) => (p.half === "T" ? "Top" : p.half === "B" ? "Bottom" : "");
+  const people = d.players || [];
+  const rowOf = (name) => people.find((r) => r && r.player === name) || null;
+  // The picture under the score while the game is to play or on: the ballpark, who is up, the at-bat's pitches.
+  const hit = (d.events || []).slice().reverse().find((r) => r && r.kind === "atbat" && r.hit) || null;
+  const stage = lv.state === "final" ? "" : gpStageHTML("pbp-parkcard", "", `${pbpParkHeadHTML(league, boardGame)}${
+    pbpParkHTML(d, league, boardGame, hit)}${live ? pbpSituationHTML(d, league, faces) : ""}${live && GC.zone ? GC.zone(d) : ""}`);
+  const plays = (d.plays || []).filter((p) => p && p.event);
+  const last = plays[plays.length - 1];
+  let now = "";
+  if (live && last && GC.playNow) {
+    const said = gpAtBatWords(last);
+    const person = (name, role) => {
+      const r = rowOf(name);
+      return { name, line: gpBaseballLine(r), where: [r ? r.team : "", r && r.position ? r.position : role].filter(Boolean).join(", ") };
+    };
+    now = GC.playNow(d, league, faces, { team: batting(last), when: [half(last), last.inning ? pbpOrd(Number(last.inning)) : ""].filter(Boolean).join(" "),
+      kind: String(last.event || "At-bat"), said: said.text,
+      people: [last.batter ? person(last.batter, "batting") : null, last.pitcher ? person(last.pitcher, "pitching") : null].filter(Boolean) });
+  }
+  const rows = plays.map((p) => ({ ...p, kind: "atbat", period: Number(p.inning) || 0, team: batting(p) }));
+  // The box score's lines, each side's batters in their order and its pitchers.
+  const side = (team) => people.filter((r) => r && r.team === team);
+  const batRows = (team) => side(team).filter((r) => ((r.line || {}).batting || {}).ab != null)
+    .sort((x, y) => (Number(x.spot) || 99) - (Number(y.spot) || 99))
+    .map((r) => { const b = r.line.batting; return { name: r.player, pos: r.position || "", cells: [b.ab, b.h, b.rbi, b.bb, b.k, b.hr] }; });
+  const pitRows = (team) => side(team).filter((r) => (r.line || {}).pitching)
+    .map((r) => { const q = r.line.pitching; return { name: r.player, pos: "", cells: [q.ip, q.k, q.er, q.bb, q.p] }; });
+  const boxes = ["away", "home"].map((ha) => gpBoxCardHTML(league, d[ha], [
+    { key: `${ha}-bat`, title: "Batting", labels: ["AB", "H", "RBI", "BB", "K", "HR"], rows: batRows(d[ha]) },
+    { key: `${ha}-pit`, title: "Pitching", labels: ["IP", "K", "ER", "BB", "P"], rows: pitRows(d[ha]) }], false)).join("");
+  const sum = (team, k) => side(team).reduce((a, r) => a + (Number(((r.line || {}).batting || {})[k]) || 0), 0);
+  const ts = (label, k) => { const a = sum(d.away, k), h = sum(d.home, k); return gpTsRowHTML(label, String(a), String(h), a, h); };
+  const teamStats = people.length ? gpTsCardHTML(d, league, `${ts("Hits", "h")}${ts("Home runs", "hr")}${ts("Runs batted in", "rbi")}`,
+    `${ts("Walks", "bb")}${ts("Strikeouts", "k")}${ts("At-bats", "ab")}`) : "";
+  const outs = lv.outs != null ? `${lv.outs} out${lv.outs === 1 ? "" : "s"}` : "";
+  const count = lv.balls != null && lv.strikes != null ? `${lv.balls}-${lv.strikes}` : "";
+  return { stage, now, rows: rows.length ? rows : null, say: (p) => (p && p.kind === "atbat" ? { html: gpAtBatWords(p).html } : null),
+           teamStats, boxes, ballIcon: "baseball", ballTitle: "At bat", down: live && !liveHoldWord(lv) ? [outs, count].filter(Boolean).join(" · ") : "" };
+}
+
 /* THE PAGE'S OWN BOXES, FOR A SPORT'S PARTS. A sport's file writes what is
    inside its picture and its cards, in its own class names and its own
    stylesheet; the boxes themselves are the page's, made here, so their
@@ -6966,7 +6969,7 @@ function gpPageHTML(o) {
         ${pbpMineSlotsHTML()}
         ${lv.state === "live" ? pbpCallItHTML(d, league) : ""}
         ${d.archive ? "" : `<div class="gch-entry-slot"></div>`}
-        ${pbpTabsHTML(tab, null, tabs)}
+        ${pbpTabsHTML(tab, tabs)}
         <div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>
         ${back}
         ${pbpFootHTML()}

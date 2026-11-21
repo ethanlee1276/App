@@ -144,7 +144,7 @@ def test_every_place_that_draws_a_live_game_asks_about_the_hold():
         "the live tab does not draw a held game"
     # The game page's scoreboard (pbpBoardHTML since 2026-10-27): the hold's
     # word where the quarter or inning was, its reason after, no Live chip.
-    assert "${pbpBoardHTML(d, league, lv)}" in body("renderPbpPage")
+    assert "${pbpBoardHTML(d, league, at, {" in body("gpPageHTML"), "every sport's page, baseball's too since 21 November"
     mid = body("pbpBoardMidHTML")
     assert 'lv.state === "live" && liveHoldWord(lv)' in mid, "the game page still says LIVE through a hold"
     assert 'const live = hold ? "" :' in mid and "sit([stopped(quarter), ...why])" in mid

@@ -390,10 +390,10 @@ def test_between_at_bats_the_last_one_stays_with_how_it_ended_and_a_final_draws_
 
 
 def test_the_mlb_page_loads_the_module_and_draws_the_zone_under_the_at_bat():
-    # Baseball's own layout (every other sport is the one page, detail.js gpPageHTML, since 2026-11-21).
-    assert '${pbpSituationHTML(d, league, faces)}${window.QBGamecast && QBGamecast.zone ? QBGamecast.zone(d) : ""}' in APP
+    # Baseball is the one page since 21 November: the zone rides its stage (detail.js gpBaseballKit), live.
+    assert '${live ? pbpSituationHTML(d, league, faces) : ""}${live && GC.zone ? GC.zone(d) : ""}' in APP
     assert 'if (!window.QBGamecast) {\n    loadGamecast().then((mod) => { if (mod && state.view === "pbp") renderPbpPage(); });' in APP
-    assert 'const GC = league === "mlb" ? null : (window.QBGamecast || null);' in APP, "baseball keeps its own rooms"
+    assert "const GC = window.QBGamecast || null;" in APP
     assert "zone," in GC.split("window.QBGamecast = {")[1]
 
 

@@ -253,7 +253,7 @@ def test_a_college_game_from_an_alert_reads_the_college_table_once():
 def test_the_old_header_is_gone_and_the_page_draws_the_board():
     page = DETAIL[DETAIL.index("async function renderPbpPage("):]
     page = page[:page.index("\n}\n")]
-    assert "${pbpBoardHTML(d, league, lv)}" in page
+    assert "host.innerHTML = gpPageHTML(" in page
     for old in ("pbp-hero-side", "pbp-hero-score", "pbp-hero-mid", "pbp-nm-nick", "const stateWord"):
         assert old not in DETAIL and old not in CSS, old
 

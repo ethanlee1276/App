@@ -29654,13 +29654,15 @@ function playsHTML(g) {
     if (p.kind === "football") return footballRow(p);
     if (p.kind === "hoops" || p.kind === "hockey") return hoopsRow(p);
     const half = p.half && p.inning ? `${p.half}${p.inning}` : "";
-    const rbi = p.rbi ? ` <span class="lb-rbi">${p.rbi} RBI</span>` : "";
+    // The game page's own sentence for an at-bat, when it hands one in (detail.js gpAtBatWords): it says the runs.
+    const said = typeof g.say === "function" ? g.say(p) : null;
+    const rbi = p.rbi && !(said && said.html) ? ` <span class="lb-rbi">${p.rbi} RBI</span>` : "";
     const at = (p.away_score != null && p.home_score != null)
       ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
     return `<div class="lb-play${p.scoring ? " scoring" : ""}">
       <span class="lb-inn">${escapeHtml(half)}</span>
-      <span class="lb-what">${escapeHtml(p.batter || "")}${
-        p.batter && p.event ? " — " : ""}${escapeHtml(p.event)}${rbi}</span>
+      <span class="lb-what">${said && said.html ? said.html : `${escapeHtml(p.batter || "")}${
+        p.batter && p.event ? " — " : ""}${escapeHtml(p.event)}`}${rbi}</span>
       ${at}${bubble(p)}</div>`;
   };
   /* A STRIP THAT IS A MOMENT BEHIND SAYS SO. A college Saturday has

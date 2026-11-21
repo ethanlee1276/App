@@ -211,30 +211,15 @@ def test_team_totals_are_arithmetic_over_the_drives_on_the_page():
 
 
 # --- the wording ------------------------------------------------------------
-def test_the_roof_and_the_field_are_called_something():
-    i = APP.index("const PBP_ROOF_WORD = {")
-    roof = APP[i:APP.index("};", i)]
-    assert '"Open air"' in roof and "outdoors:" in roof, roof
-    j = APP.index("const PBP_SURFACE_WORD = {")
-    surf = APP[j:APP.index("};", j)]
-    assert '"FieldTurf"' in surf and "fieldturf:" in surf, surf
-    # An unmapped value is shown title-cased, never swallowed.
-    assert "pbpTitleCase(boardGame.roof)" in APP
-    assert "pbpTitleCase(boardGame.surface)" in APP
-    # And the raw "Roof: outdoors" spelling is gone.
-    assert "Roof: ${" not in APP, "the label-and-value tile is back to a sentence"
-
-
-def test_every_fact_tile_is_a_label_and_a_value():
-    """Three of these had the value as the big text and one had the
-    label there, so the reader had to work out which line was the
-    question."""
-    i = APP.index("const infoCards = boardGame ? [")
-    cards = APP[i:APP.index("].filter(Boolean)", i)]
-    for label in ("Venue", "Roof", "Surface", "Temperature", "Wind", "Capacity"):
-        assert f'"{label}"' in cards, f"{label} tile is gone"
-    assert 'class="pbp-info-k"' in APP, "the label has no class of its own"
-    assert ".pbp-info-k {" in CSS
+def test_the_old_game_info_room_is_gone_with_its_tiles():
+    """Baseball's Game info room drew the park's facts as tiles (venue, roof, surface,
+    temperature, wind, capacity). It went with baseball's own layout on 21 November: the
+    one page's Game information card says when, on what, where and the weather
+    (gpInfoHTML), and the ballpark card's head names the venue and the conditions."""
+    assert "const PBP_ROOF_WORD" not in APP and "const infoCards" not in APP
+    info = APP[APP.index("function gpInfoHTML("):APP.index("function gpInjuriesHTML(")]
+    for label in ('"Time"', '"TV"', '"Location"', '"Weather"'):
+        assert label in info, label
 
 
 def test_the_table_is_a_table_for_a_screen_reader_too():

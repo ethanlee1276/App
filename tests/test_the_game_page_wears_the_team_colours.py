@@ -290,16 +290,16 @@ def test_four_tabs_and_a_live_game_opens_on_the_plays():
     assert 'const GP_TABS = [["stats", "Stats"], ["plays", "Play-By-Play"], ["standings", "Standings"], ["props", "Our picks"]];' in GP
     page = _fn(DETAIL, "renderPbpPage")
     # Every sport but baseball draws the one page since step AAI (21 November): `one`.
-    assert "const one = tabs === GP_TABS;" in page
-    assert 'const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab : one && lv.state === "live" ? "plays" : tabs[0][0];' in page
-    assert "host.innerHTML = one ? gpPageHTML({" in page and "gpWire(host);" in page
+    assert "const tabs = GP_TABS;" in page
+    assert 'const tab = tabs.some(([k]) => k === _pbpTab) ? _pbpTab : lv.state === "live" ? "plays" : tabs[0][0];' in page
+    assert "host.innerHTML = gpPageHTML({" in page and "gpWire(host);" in page
     fb = _fn(GP, "gpPageHTML")
     # 2026-11-15 (Ethan: "re organize it so it feels good and flows nice"):
     # the play right now and your bets before the things to do, then the tabs.
     # (`at` is the clock the score shows; `stage` the sport's picture: football's field.)
     order = ["${gpCompactHTML(", "${pbpBoardHTML(d, league, at, {", "${stage}", "${gpLineHTML(d, league, at)}",
              "${gpNowHTML(", "${pbpMineSlotsHTML()}", '${lv.state === "live" ? pbpCallItHTML(d, league) : ""}',
-             '<div class="gch-entry-slot"></div>', "${pbpTabsHTML(tab, null, tabs)}", "${back}"]
+             '<div class="gch-entry-slot"></div>', "${pbpTabsHTML(tab, tabs)}", "${back}"]
     at = [fb.index(x) for x in order]
     assert at == sorted(at), "the score, the strip, the line, the play now, your action, call it, the chat, the tabs"
 
@@ -394,7 +394,7 @@ def test_play_by_play_is_drive_by_drive_newest_first_and_the_drive_on_now_is_ope
     # first: the ⋯ menu a reader had just opened came back shut when the live poll redrew it (20 November 2026).
     keep = 'host.querySelectorAll("details[data-gp-key]").forEach((el) => _gpOpen.set(el.dataset.gpKey, el.open));'
     assert DETAIL.count(keep) == 1
-    assert DETAIL.index(keep) < DETAIL.index("host.innerHTML = one ? gpPageHTML("), "kept before the page is replaced"
+    assert DETAIL.index(keep) < DETAIL.index("host.innerHTML = gpPageHTML("), "kept before the page is replaced"
 
 
 def test_standings_are_the_two_divisions_with_the_two_clubs_lit():

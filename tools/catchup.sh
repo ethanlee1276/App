@@ -968,7 +968,7 @@ run LW "The box-score pull asks for a game by its season: the ingest's seconds" 
 python3 -c "import json; d=json.load(open('/srv/qellys/web/data/heartbeat.json')); p=((d.get('chores') or {}).get('settle') or {}).get('phases', {}); print('ingest', p.get('ingest'), '| by league', p.get('ingest_parts'), '| box scores', p.get('box_parts'))"
 SH
 run IO "A finished game is ESPN's page; the chat bar at the foot" 30 <<'SH'
-curl -s https://qellysbook.com/js/detail.js | grep -cF '${lv.state === "final" ? "" : `<div class="card pbp-parkcard">'
+curl -s https://qellysbook.com/js/detail.js | grep -cF 'const stage = lv.state === "final" ? "" : gpStageHTML("pbp-parkcard", ""'
 curl -s https://qellysbook.com/js/hoopscast.js | grep -cF 'const viewFor = (d) => (S.view === "live"'
 curl -s https://qellysbook.com/css/styles.css | grep -cF 'html .gch-fab { left: calc(var(--sidebar-w) + 10px); right: 10px;'
 SH

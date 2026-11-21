@@ -119,7 +119,7 @@ def test_the_button_shows_only_while_the_game_is_live():
     assert 'watchHTML(g, sport, "lb-watch")' in card
     # The play-by-play page's header is its scoreboard (pbpBoardHTML).
     pbp = APP[APP.index("async function renderPbpPage("):]
-    assert "${pbpBoardHTML(d, league, lv)}" in pbp
+    assert "host.innerHTML = gpPageHTML(" in pbp
     board = APP[APP.index("function pbpBoardHTML("):APP.index("async function renderPbpPage(")]
     assert 'lv.state === "live" ? watchHTML(d, league, "pbp-watch") : ""' in board
     game = APP[APP.index("function renderGamePage()"):APP.index("function renderGamePage()") + 40000]

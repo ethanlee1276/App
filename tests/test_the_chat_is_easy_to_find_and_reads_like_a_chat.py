@@ -30,13 +30,11 @@ CHAT, CSS = JS("chat.js"), (ROOT / "web" / "css" / "chat.css").read_text()
 
 def test_every_game_page_leaves_the_card_a_slot_under_the_scoreboard():
     det = JS("detail.js")
-    hero = det[det.index("${pbpBoardHTML(d, league, lv)}"):]
-    assert '<div class="gch-entry-slot"></div>' in hero[:hero.index('<div class="card pbp-parkcard">')]
     # Every game being watched; an old game's page has no room and no slot
     # (2026-10-30, engine/gamearchive; tests/test_every_game_has_a_page.py).
     # The line score sits with the score since 2026-11-01 (detail.js
     # gpLineHTML, Ethan's Apple Sports screenshots); the slot is under both.
-    # One page for every sport but baseball since 2026-11-21 (gpPageHTML):
+    # One page for every sport since 2026-11-21 (gpPageHTML), baseball's too:
     # the slot is the page's, and basketball's and hockey's files draw none.
     one = det[det.index("function gpPageHTML(o) {"):]
     one = one[:one.index("\n}\n")]

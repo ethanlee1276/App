@@ -67,8 +67,9 @@ def test_the_page_warms_the_leagues_standings_and_draws_the_card_in_the_rail():
     # 2026-09-09 when our own live win probability landed between them —
     # a third card in the same rail, which is not a regression in either
     # of these. Ordered, not adjacent.
-    rail = page[page.index("${winProb}"):page.index("</aside>")]
-    assert "${pbpPressureHTML(d, league, boardGame)}" in rail, rail
+    # On the one page (every sport's since 21 November) the card is in the Stats tab, after the box scores.
+    stats = page_src = APP[APP.index("function gpStatsHTML("):APP.index("function gpOddsHTML(")]
+    assert "pbpPressureHTML(d, league, boardGame)" in stats, page_src
 
 
 def test_the_card_reads_the_cache_and_lights_the_cells_being_asked():

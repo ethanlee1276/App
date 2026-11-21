@@ -329,7 +329,7 @@ def test_the_pages_draw_it():
     gc = (ROOT / "web" / "js" / "gamecast.js").read_text(encoding="utf-8")
     assert 'cbb: "mens-college-basketball"' in gc
     det = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
-    assert "cbb: 2 }" in det
+    assert "cbb: 2, mlb: 9 }" in det
     # The one game page hands a college game to basketball's parts (detail.js gpSportMod).
     assert 'const GP_SPORT_FILE = { nba: "hoopscast", wnba: "hoopscast", cbb: "hoopscast", nhl: "rinkcast" };' in det
 

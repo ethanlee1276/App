@@ -370,9 +370,10 @@ def _card_fn():
 
 
 def test_the_card_is_drawn_in_the_play_by_play_rail():
-    page = APP[APP.index("async function renderPbpPage("):]
-    page = page[:page.index("\n}\n")]
-    assert "${pbpModelWinProbHTML(d)}" in page, page[-600:]
+    # The one page (every sport's since 21 November): with the play right now while live, in Stats after.
+    now = APP[APP.index("function gpNowHTML("):APP.index("function gpPlaysHTML(")]
+    stats = APP[APP.index("function gpStatsHTML("):APP.index("function gpOddsHTML(")]
+    assert "pbpModelWinProbHTML(d)" in now and "pbpModelWinProbHTML(d)" in stats
 
 
 def test_it_reads_the_server_side_number_and_does_not_recompute_it():

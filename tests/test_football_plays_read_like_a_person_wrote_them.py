@@ -166,7 +166,7 @@ def test_drive_heads_say_how_the_drive_ended():
 def test_the_last_play_card_keeps_the_last_real_snap():
     # The photograph kept it too until 2026-11-15, when it left the football
     # page (Ethan: "remove this since we have the other field").
-    assert "const lastPlay = PBP_FOOTBALL.has(league) ? null" in DETAIL
+    assert 'if (PBP_FOOTBALL.has(league)) return { stage: gpFieldHTML(d, league, o.lv) };' in DETAIL
     assert "find((p) => isSnap(p, d))" in GC, "the card titles the last snap"
     assert "sinceSnap(d, p)" in GC and "gc-last-since" in GC, "and names the moments after it under it"
     assert '" · penalty"' not in GC
@@ -181,7 +181,7 @@ def test_a_finished_game_says_final_whatever_the_file_froze_at():
     assert "win_prob: undefined" in DETAIL, "no 99.9% with 0:34 left on a final"
     # …and before `lv` is read, so the header, the board and the gamecast all see it.
     page = DETAIL[DETAIL.index("async function renderPbpPage("):]
-    assert page.index("const ended = ") < page.index("const lv = d.live || {};") < page.index("pbpBoardHTML(d, league, lv)")
+    assert page.index("const ended = ") < page.index("const lv = d.live || {};") < page.index("host.innerHTML = gpPageHTML(")
 
 
 def test_a_punt_is_not_drawn_flying_its_return():
@@ -193,7 +193,7 @@ def test_the_repeated_pieces_are_gone_on_a_phone():
     # One play list: the Play-By-Play tab, not the rail's copy under it. Every sport's page but baseball's is
     # the one page with that tab (gpPageHTML, 21 November 2026); baseball's own rooms have no such tab.
     assert '<div class="pbp-layout pbp-has-tabs gp" data-league="${escapeAttr(league)}">' in DETAIL
-    assert DETAIL.count("pbp-has-tabs gp") == 1 and '<div class="pbp-layout gp">' in DETAIL
+    assert DETAIL.count("pbp-has-tabs gp") == 1 and '<div class="pbp-layout gp">' not in DETAIL
     assert "@media (max-width: 980px) { .pbp-has-tabs .pbp-railcard { display: none; } }" in DETAIL_CSS
     # The club's short name where "Indianapolis Colts" ran into its score:
     # the scoreboard's big name is the nickname (a college's, its school),

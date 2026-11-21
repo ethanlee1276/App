@@ -350,7 +350,7 @@ def test_a_live_games_own_page_carries_its_tickets_in_every_sport():
     for fn in ("gpPicksHTML", "gpRailPicksHTML"):
         body = det[det.index(f"function {fn}("):]
         assert "pbpPropsHTML(d, league)" in body[:body.index("\n}\n")], fn
-    assert 'tab === "props" ? pbpPropsHTML(d, league)' in det, "baseball's tab"
+    assert "pbpPropsHTML(d, league)" in det[det.index("function gpPicksHTML("):], "the Our picks tab, every sport's"
     for page in ("gamecast.js", "hoopscast.js", "rinkcast.js"):
         assert "pbpPropsHTML(" not in (ROOT / "web" / "js" / page).read_text(encoding="utf-8"), page
     with tempfile.TemporaryDirectory() as d:

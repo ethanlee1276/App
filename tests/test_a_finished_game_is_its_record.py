@@ -36,8 +36,9 @@ CSS, CHAT_CSS = READ("web", "css", "styles.css"), READ("web", "css", "chat.css")
 
 
 def test_a_final_draws_no_field_and_no_last_play():
-    page = DETAIL[DETAIL.index("async function renderPbpPage("):]
-    assert '${lv.state === "final" ? "" : `<div class="card pbp-parkcard">' in page, "no field or ballpark on a final"
+    # Baseball's ballpark is its part of the one page (gpBaseballKit, 21 November): none on a final.
+    kit = DETAIL[DETAIL.index("function gpBaseballKit("):]
+    assert 'const stage = lv.state === "final" ? "" : gpStageHTML("pbp-parkcard", ""' in kit, "no ballpark on a final"
     # Every other sport's page is the one page (gpPageHTML, 21 November 2026): the play right now is a live
     # game's card, and a final's Stats tab opens on the scoring plays and the leaders, in every sport.
     now = DETAIL[DETAIL.index("function gpNowHTML("):DETAIL.index("function gpPlaysHTML(")]

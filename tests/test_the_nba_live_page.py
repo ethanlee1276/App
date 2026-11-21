@@ -611,8 +611,8 @@ def test_the_redraw_keeps_the_picture_and_the_scroll():
     assert '`<div class="hc-pane" data-gp-scroll="hc-${view}">${pane}</div>`' in HC
     det = (ROOT / "web" / "js" / "detail.js").read_text(encoding="utf-8")
     page = det[det.index("async function renderPbpPage("):det.index("THE GAME PAGE IN THE CLUBS' COLOURS")]
-    take, draw, give = (page.index("const held = one ? gpHoldTake(host, `${league}:${event}`) : null;"),
-                        page.index("host.innerHTML = one ? gpPageHTML({"), page.index("gpHoldGive(host, held);"))
+    take, draw, give = (page.index("const held = gpHoldTake(host, `${league}:${event}`);"),
+                        page.index("host.innerHTML = gpPageHTML({"), page.index("gpHoldGive(host, held);"))
     assert take < draw < give
     give_fn = det[det.index("function gpHoldGive(host, held) {"):det.index("let _gpFor = ")]
     assert "if (fresh && fresh !== old) fresh.replaceWith(old);" in give_fn, "the picture on the screen is put back"

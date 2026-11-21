@@ -140,7 +140,7 @@ def test_a_missing_file_says_why_and_offers_the_way_back():
 
 def test_the_header_names_the_teams_in_the_leagues_own_vocabulary():
     page = _fn("renderPbpPage")
-    assert "${pbpBoardHTML(d, league, lv)}" in page, "the page's header is the scoreboard"
+    assert "host.innerHTML = gpPageHTML(" in page and "${pbpBoardHTML(d, league, at, {" in APP, "the page's header is the scoreboard"
     body = _fn("pbpBoardHTML")
     assert "teamMarkIn(league, abbr, 56)" in body, "the basketball board's crest size"
     assert "teamNameIn(league, abbr)" in body

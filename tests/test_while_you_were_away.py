@@ -63,7 +63,7 @@ def test_it_waits_for_a_real_absence_a_live_game_and_reaches_every_page():
     assert "AWAY_MIN_MS = 4 * 60 * 1000" in DET
     assert "localStorage.setItem(AWAY_KEY" in fn and ".slice(40)" in fn, "kept on this device, forty games"
     # Twice: baseball's own layout, and the one page every other sport is drawn on (gpPageHTML, 21 November 2026).
-    assert DET.count("${pbpAwayHTML(d, league)}") == 2
+    assert DET.count("${pbpAwayHTML(d, league)}") == 1
     one = DET[DET.index("function gpPageHTML(o) {"):DET.index("function gpRailPicksHTML(")]
     assert "${pbpAwayHTML(d, league)}${pbpRecapHTML(d, league)}" in one, "football, basketball and hockey"
 

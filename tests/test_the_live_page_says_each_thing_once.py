@@ -146,12 +146,12 @@ def test_the_play_right_now_sits_above_the_tabs_and_each_thing_is_said_once():
     # the sport's own (`stage`: football's field, a court, a rink), and the play right now sits where it did.
     page = _fn(DETAIL, "function gpPageHTML(o)")
     assert "${gpNowHTML(d, league, faces, boardGame, GC, !!stage, kit)}" in page
-    assert page.index("${gpNowHTML(") < page.index("${pbpTabsHTML(tab, null, tabs)}"), "no tab takes it away"
+    assert page.index("${gpNowHTML(") < page.index("${pbpTabsHTML(tab, tabs)}"), "no tab takes it away"
     plays = _fn(DETAIL, "function gpPlaysHTML(d, league, GC, kit)")
     assert "const chart = (d.live || {}).state !== \"live\" && GC && GC.gameChart ? GC.gameChart(d, league) : \"\";" in plays, \
         "no drive chart while live"
     assert "return `${chart}${gpDrivesHTML(d, league)}`;" in plays, "the tab is the game so far, drive by drive"
-    assert "const lastPlay = PBP_FOOTBALL.has(league) ? null" in DETAIL, "football has no photograph to draw a play on"
+    assert 'if (PBP_FOOTBALL.has(league)) return { stage: gpFieldHTML(d, league, o.lv) };' in DETAIL, "football has no photograph to draw a play on"
 
 
 def test_the_rail_holds_the_picks_on_the_plays_tab_and_the_plays_elsewhere():
